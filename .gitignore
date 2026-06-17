@@ -1,0 +1,11 @@
+# dependencies & build output
+node_modules/
+dist/
+.vite/
+
+# specMech worktrees live here — they are separate checkouts, never committed
+.worktrees/
+
+# os / editor
+.DS_Store
+*.log

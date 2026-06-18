@@ -35,6 +35,25 @@ file (`node:` / `session:` / `status:` lines) that the layout linker reads.
   (`git log --follow -- <path>`); history rows come from the same log, each attributed via the
   `Session:` commit trailer. There is no separate datastore — the dashboard is a read-time aggregator.
 
+## Kinds of commit (not every commit is a spec commit)
+
+Git knows nothing about specs. A commit becomes a node's *version* **only because it changed a file
+under `.spec/`** — the entire data extraction is `git log -- .spec/.../<id>/spec.md`. The `spec:`
+message prefix is cosmetic: what counts is *which file the commit touched*, not what its subject says.
+
+Three kinds of commit coexist in history:
+
+- **Spec commit** — touches a `.spec/**/spec.md` (in the ritual, bundled with the code change it
+  justifies). Becomes a version row: subject = the "reason", `Session:` trailer = attribution.
+- **Merge commit** — `merge node/<id>: …`, the `--no-ff` gate onto `main`. Not a version itself.
+- **Plain code/docs commit** — touches code or docs but no `spec.md` (e.g. the early `spec-cli:` /
+  `spec-dashboard:` build commits, or this `CLAUDE.md`). **Invisible to the spec timeline** — just
+  ordinary git.
+
+So you *can* commit code without a spec, and the engine simply ignores it. The ritual deliberately
+fuses the code change and the `spec.md` change into one spec commit so intent and implementation move
+together — that is a project choice, not a git requirement.
+
 ## Architecture / data flow
 
 - `spec-cli/` — Hono backend, run with `tsx` (**no build step**; `npx tsc --noEmit` to type-check).

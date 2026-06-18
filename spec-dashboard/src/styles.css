@@ -148,16 +148,20 @@ body {
   border: 1px solid var(--line); border-radius: 2px; padding: 0 3px; margin-right: 3px; background: var(--paper);
 }
 .ov-hint { margin-left: auto; font-size: 11px; color: var(--muted); }
-.ov-body { flex: 1; overflow: auto; display: flex; }
+/* the panel is a fixed-size pop-out; each pane scrolls its OWN content (doc/hist below).
+   the body itself never scrolls, so the work pane can't push a horizontal bar onto the window. */
+.ov-body { flex: 1; min-width: 0; overflow: hidden; display: flex; }
 
-/* pane: work — spec (left, reference) + terminal (right, wider work surface) */
-.pane-work { flex: 1; display: flex; min-height: 0; }
-.pane-work .pane-doc { flex: 0 0 40%; border-right: 1px solid var(--line); }
-.pane-work .pane-term { flex: 1; }
+/* pane: work — spec (left, reference) + terminal (right, wider work surface).
+   min-width:0 on both columns lets them shrink to the panel width instead of growing to xterm's
+   measured content width (which is what caused the stray horizontal scrollbar). */
+.pane-work { flex: 1; display: flex; min-height: 0; min-width: 0; }
+.pane-work .pane-doc { flex: 0 0 40%; min-width: 0; border-right: 1px solid var(--line); }
+.pane-work .pane-term { flex: 1; min-width: 0; }
 
 /* pane: terminal — read-only xterm display on top, external command line docked below */
-.pane-term { flex: 1; display: flex; flex-direction: column; min-height: 0; padding: 10px; background: var(--paper); }
-.term-host { flex: 1; min-height: 0; }
+.pane-term { flex: 1; display: flex; flex-direction: column; min-height: 0; min-width: 0; padding: 10px; background: var(--paper); }
+.term-host { flex: 1; min-height: 0; min-width: 0; overflow: hidden; }
 .term-input { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding: 6px 8px; border-top: 1px solid var(--line); }
 .term-prompt { color: var(--blue); font: 13px Menlo, monospace; flex: none; }
 .term-line { flex: 1; min-width: 0; background: transparent; border: none; outline: none; color: var(--ink2); font: 13px Menlo, monospace; }
@@ -172,22 +176,46 @@ body {
 }
 .pane-doc .doc-meta { font-size: 12px; color: var(--muted); margin-bottom: 18px; }
 .pane-doc .doc-meta b { color: var(--ink2); }
-.pane-doc .doc-note { font-size: 12px; color: var(--green); }
 .pane-doc .doc-code { display: flex; flex-direction: column; gap: 3px; margin: 0 0 16px; }
 .pane-doc .doc-code-h { font-size: 11px; color: var(--muted); margin-bottom: 2px; }
 .pane-doc .doc-code-f { font-size: 12px; color: var(--blue); background: var(--panel2); padding: 1px 6px; border-radius: 3px; align-self: flex-start; }
 
-/* pane: evidence */
-.pane-ev { flex: 1; display: flex; align-items: center; justify-content: center; gap: 18px; padding: 24px; }
-.pane-ev figure { margin: 0; flex: 1; max-width: 380px; }
-.pane-ev img { width: 100%; border: 1px solid var(--line); border-radius: 5px; display: block; }
-.pane-ev figcaption { font-size: 12px; color: var(--muted); margin-top: 8px; text-align: center; }
-.pane-ev .ev-arrow { color: var(--blue); font-size: 22px; flex: none; }
+/* the rendered spec.md: lead intent, then each `## vN` revision as a separated, labeled section */
+.doc-body { border-top: 1px solid var(--line); padding-top: 14px; font-size: 13px; line-height: 1.65; color: var(--ink); }
+.doc-body p { margin: 0 0 10px; }
+.doc-body ul { margin: 0 0 10px; padding-left: 18px; }
+.doc-body li { margin: 2px 0; }
+.doc-body code { font-size: 12px; background: var(--panel2); color: var(--ink2); padding: 0 4px; border-radius: 3px; }
+.doc-body strong { color: var(--ink2); }
+.doc-h { font-size: 12px; color: var(--ink2); font-weight: 700; margin: 14px 0 6px; }
+.doc-pre { margin: 0 0 10px; padding: 10px 12px; background: var(--panel2); border-radius: 4px; overflow-x: auto; font-size: 12px; line-height: 1.5; }
+.doc-pre code { background: none; padding: 0; color: var(--ink); }
+.doc-link { color: var(--blue); }
 
-/* pane: history */
-.pane-hist { flex: 1; padding: 18px 20px; overflow: auto; }
+/* a version row — shared by recent (just the current one) and history (all of them) */
+.ver-row { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.ver-row.latest { border-left: 2px solid var(--blue); padding-left: 12px; margin-left: -14px; }
+.rec-head { display: flex; align-items: baseline; gap: 10px; font-size: 12px; }
+.rec-v { color: var(--ink2); font-weight: 700; }
+.rec-hash { color: var(--muted); font-size: 11px; }
+.rec-date { color: var(--muted); }
+.rec-diff { margin-left: auto; display: flex; gap: 8px; font-size: 12px; }
+.rec-add { color: var(--green); }
+.rec-del { color: var(--orange); }
+.rec-msg { color: var(--ink2); font-size: 13px; margin-top: 5px; word-break: break-word; }
+.rec-sub { color: var(--muted); font-size: 11px; margin-top: 3px; }
+.rec-msg.muted { color: var(--muted); }
+
+/* pane: recent — the CURRENT version + A→B proof evidence */
+.pane-recent { flex: 1; min-width: 0; padding: 16px 20px; overflow: auto; display: flex; flex-direction: column; }
+.rec-evidence { margin: 18px 0 0; padding: 16px 0 0; border-top: 1px solid var(--line); }
+.ev-pair { display: flex; align-items: center; justify-content: center; gap: 16px; }
+.ev-shot { flex: 1; max-width: 320px; }
+.ev-shot img { width: 100%; border: 1px solid var(--line); border-radius: 5px; display: block; }
+.ev-shot figcaption { font-size: 11px; color: var(--muted); margin-top: 6px; text-align: center; }
+.ev-arrow { color: var(--blue); font-size: 20px; flex: none; }
+.ev-note { font-size: 11px; color: var(--muted); text-align: center; margin-top: 12px; }
+
+/* pane: history — the full version log */
+.pane-hist { flex: 1; min-width: 0; padding: 16px 20px; overflow: auto; }
 .pane-hist.empty { color: var(--muted); font-size: 13px; }
-.hist-row { display: flex; gap: 14px; align-items: baseline; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
-.hist-v { color: var(--ink2); font-weight: 700; width: 36px; }
-.hist-sess { color: var(--magenta); width: 90px; }
-.hist-msg { color: var(--ink); }

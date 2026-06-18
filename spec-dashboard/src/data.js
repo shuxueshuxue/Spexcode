@@ -1,34 +1,8 @@
-// @@@ mock backend - everything here is what the real git/worktree/tmux/yatsu layer would feed in.
-// - spec tree   -> reading .spec on `main` (the source of truth)
+// @@@ mock backend - what's left here is the client-side view decoration + a stand-in session log.
+// - spec tree   -> reading .spec on `main` (the source of truth, via /api/specs)
 // - session     -> the worktree linker (`git worktree list` + .session file + `tmux capture-pane`)
-// - shots A/B   -> yatsu computer-use evidence, A = prev version, B = this version
-
-// @@@ svgShot - generate a fake GUI screenshot as a data-uri, no binary assets needed.
-// `after` adds a colored control + a check badge so the A->B change reads at a glance.
-function svgShot({ title, hue, after }) {
-  const accent = `hsl(${hue} 80% 60%)`
-  const btn = after ? accent : '#3a3f4b'
-  const svg = `
-<svg xmlns="http://www.w3.org/2000/svg" width="320" height="200" viewBox="0 0 320 200">
-  <rect width="320" height="200" rx="8" fill="#0d1117"/>
-  <rect width="320" height="28" rx="8" fill="#161b22"/>
-  <circle cx="16" cy="14" r="5" fill="#ff5f56"/>
-  <circle cx="34" cy="14" r="5" fill="#ffbd2e"/>
-  <circle cx="52" cy="14" r="5" fill="#27c93f"/>
-  <text x="160" y="18" fill="#8b949e" font-family="monospace" font-size="11" text-anchor="middle">${title}</text>
-  <rect x="24" y="52" width="200" height="12" rx="6" fill="#21262d"/>
-  <rect x="24" y="76" width="150" height="12" rx="6" fill="#21262d"/>
-  <rect x="24" y="120" width="110" height="34" rx="6" fill="${btn}"/>
-  <text x="79" y="142" fill="${after ? '#0d1117' : '#6e7681'}" font-family="sans-serif" font-size="12" text-anchor="middle">Submit</text>
-  ${after ? `<circle cx="250" cy="137" r="14" fill="#238636"/><path d="M243 137 l5 5 l9 -11" stroke="#fff" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>` : ''}
-  ${after ? `<rect x="24" y="100" width="180" height="10" rx="5" fill="#1f6feb" opacity="0.35"/>` : ''}
-</svg>`.trim()
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
-}
-
-function shots(title, hue) {
-  return { before: svgShot({ title, hue, after: false }), after: svgShot({ title, hue, after: true }) }
-}
+// - evidence    -> A->B links served from the backend (`evidence:` frontmatter); none until yatsu.
+//   (No placeholder screenshots are fabricated here anymore — absent evidence reads as "none".)
 
 // @@@ session log - fake tmux scrollback. for the active nodes it mirrors the REAL work from
 // our conversation; root is the meta session (this very chat) building the whole board.
@@ -114,13 +88,14 @@ function layout(nodes) {
   return pos
 }
 
-// @@@ loadSpecs - the tree now comes from the backend (spec-cli reads .spec + git history).
-// We only decorate it client-side with layout positions and placeholder yatsu screenshots.
+// @@@ loadSpecs - the tree comes from the backend (spec-cli reads .spec + git history); every field,
+// including the A->B `evidence` links, is served from there. The only thing decorated client-side is
+// the x/y tidy-tree layout, which is a pure view concern (the backend has no notion of pixels).
 export async function loadSpecs() {
   const res = await fetch('/api/specs')
   const nodes = await res.json()
   const pos = layout(nodes)
-  return nodes.map((n) => ({ ...n, ...pos[n.id], shots: shots(n.title, n.hue) }))
+  return nodes.map((n) => ({ ...n, ...pos[n.id] }))
 }
 
 export const SESSION_LOG = log

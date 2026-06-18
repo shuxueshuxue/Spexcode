@@ -10,15 +10,15 @@ code:
 ---
 # work-pane
 
-The spec tab and terminal tab were the same act split in two: the spec is the
-*intent*, the terminal is where you *change it in place*. Toggling between them
-meant you could never read the ground truth while driving the session.
+The spec and the terminal are one act split in two — the spec is the *intent*, the
+terminal is where you *change it in place* — so they share one `work` pane, two
+columns: spec left (reference, read), terminal right (the work surface that needs the
+rows/cols). The split is 40/60 so the spec stays readable while the terminal keeps the
+larger share. Tabs are **work / recent / history**; the terminal owns the keyboard
+while the pane is open, Tab cycles panes, Esc returns to the graph.
 
-Merge them into one `work` pane, two columns. Spec left (reference — read);
-terminal right (the work surface, needs the rows/cols). Tabs drop 4 -> 3
-(work / evidence / history); the terminal owns the keyboard while the work pane is
-open, Tab cycles panes, Esc returns to the graph.
-
-## v2 — wider spec
-34/66 cramped the spec text. Widened the split to 40/60 — the spec stays readable
-while the terminal keeps the larger share.
+The panel is a fixed-size pop-out (`min(900px,90vw) × min(600px,84vh)`). `min-width:0`
+runs down the flex chain (`.ov-body` → `.pane-work` → `.pane-doc`/`.pane-term` →
+`.term-host`) so the columns shrink to the panel instead of growing to xterm's measured
+width; the body is `overflow:hidden` and never scrolls itself — each pane scrolls its
+own content and the terminal clips to its host. No stray horizontal scrollbar.

@@ -5,6 +5,8 @@ import { loadSpecs } from './specs.js'
 
 // @@@ spec-lint - keeps the spec<->code GRAPH honest (the judge keeps the CONTENT honest, elsewhere):
 //   integrity (error): every file a spec lists in `code:` actually exists.
+//   living    (error): a spec body is a CURRENT-STATE document, never a changelog — no `## vN`
+//                      version headings. Version history is read from git (recent/history tabs).
 //   coverage  (warn) : every governed source file is claimed by >=1 spec — no orphan code.
 //   drift     (warn) : a governed file has commits newer than its spec's latest version -> maybe stale.
 // No file hashes are stored anywhere: git already is the hash database, so drift is derived live.
@@ -39,6 +41,20 @@ export function specLint(): Finding[] {
       if (!existsSync(join(root, f)))
         out.push({ level: 'error', rule: 'integrity', spec: s.id, file: f, msg: `spec '${s.id}' lists a missing file: ${f}` })
       owners.set(f, [...(owners.get(f) ?? []), s.id])
+    }
+  }
+
+  // living: a spec body describes the node's CURRENT intent — it is not a changelog. Version history
+  // (every content commit, its reason/session/line-diff) is read from git and shown in the dashboard's
+  // recent/history tabs, so a `## vN`-style heading in the body is duplicated, drift-prone state.
+  // Reject it. Fence-aware — a `## v2` inside a ``` block is sample text, not a heading.
+  const VER_HEADING = /^#{1,6}\s+v\d+\b/
+  for (const s of specs) {
+    let inFence = false
+    for (const line of s.body.split('\n')) {
+      if (/^\s*```/.test(line)) { inFence = !inFence; continue }
+      if (!inFence && VER_HEADING.test(line))
+        out.push({ level: 'error', rule: 'living', spec: s.id, msg: `'${s.id}' has a changelog heading "${line.trim()}" — keep the body current-state; version history lives in git (recent/history tabs)` })
     }
   }
 

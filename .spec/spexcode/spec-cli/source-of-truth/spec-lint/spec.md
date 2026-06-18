@@ -12,30 +12,25 @@ code:
 ---
 # spec-lint
 
-A spec is the ground truth for the code it governs — but nothing tied the two together, so code
-could drift away from its spec silently. Add the missing edge: a `code:` list in each node's
-frontmatter naming the files it owns, and a linter over that graph.
+A spec is the ground truth for the code it governs, but nothing tied the two together,
+so code could drift from its spec silently. The missing edge is a `code:` list in each
+node's frontmatter naming the files it owns, plus a linter over that graph.
 
-`spex lint` (the `spex` CLI, `spec-cli/src/cli.ts` → `lint.ts`) checks three things:
+`spex lint` (the `spex` CLI, `spec-cli/src/cli.ts` → `lint.ts`) checks:
 
-- **integrity** (error): every file a spec lists in `code:` actually exists. Broken links block.
+- **integrity** (error): every file a spec lists in `code:` exists — broken links block.
+- **living** (error): a body stays current-state, with no `## vN` changelog headings, since
+  version history is read from git, not duplicated in prose.
 - **coverage** (warn): every governed source file is claimed by ≥1 spec — no orphan code.
 - **drift** (warn): a governed file has commits newer than its spec's latest version → maybe stale.
 
-No file hashes are stored anywhere — git already is the hash database, so drift is derived live from
-`git log`. Storing hashes would force a spec edit on every code change and corrupt the meaning of
-"version" (which counts only commits that touch a `spec.md`).
+No file hashes are stored — git is already the hash database, so drift is derived live from
+`git log`. Anything calling git from inside the hook routes through `git.ts`'s `git()` helper,
+which strips the inherited `GIT_DIR`/`GIT_WORK_TREE`/`GIT_INDEX_FILE`; otherwise git's repo
+discovery resolves to the cwd and the lint silently sees zero specs — it did once, caught only by
+testing through the real hook, not by running `spex lint` by hand.
 
-The pre-commit hook is a thin shim over `spex lint`: it blocks on errors only (bypass with
-`SPEXCODE_SKIP_LINT=1`). The same command runs in CI for real enforcement — local hooks are advisory.
-Content alignment (does the code still match what the spec *says*?) is left to the LLM judge, which
-runs async on this graph, not in the commit path.
-
-## v2 — survive the hook's git env
-First version was a silent no-op *inside the hook*: git exports `GIT_DIR` (and `GIT_INDEX_FILE`) to
-hook processes, which overrides git's repo discovery, so `repoRoot()`'s `rev-parse --show-toplevel`
-resolved to the cwd (`spec-cli/`) instead of the worktree root → zero specs loaded → nothing linted →
-every commit passed. Caught only by testing through the real hook, not by running `spex lint` by hand.
-Fix lives in the general mechanism (`spec-cli/src/git.ts`): a single `git()` helper strips the
-inherited `GIT_DIR`/`GIT_WORK_TREE`/`GIT_INDEX_FILE` so every git call discovers the repo from the
-filesystem, hook or not. `layout.ts` routes through it too.
+The pre-commit hook is a thin shim over `spex lint`, blocking on errors only (bypass with
+`SPEXCODE_SKIP_LINT=1`); the same command runs in CI for real enforcement — local hooks are
+advisory. Whether the code still matches what the spec *says* is left to the LLM judge, which runs
+async over this graph, not in the commit path.

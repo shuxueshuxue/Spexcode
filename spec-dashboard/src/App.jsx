@@ -43,21 +43,22 @@ function Dashboard({ specs }) {
     return children.reduce((best, c) => (Math.abs(c.y - focus.y) < Math.abs(best.y - focus.y) ? c : best))
   }, [children, focus])
 
-  // @@@ vertical nav - prefer a sibling above/below; if none, jump to the spatially nearest
-  // node in that direction across the whole tree (Δy weighted, Δx as tie-break). Reversible on
-  // a tidy tree because each subtree owns a contiguous y-band.
+  // @@@ vertical nav - columns are aligned by depth (x = depth * X_GAP), so ↑/↓ move strictly
+  // within the focused node's column to the nearest node in that y-direction. They never change
+  // column or dive into a child (that's what ←/→ are for): on a border node, up jumps to the
+  // cousin above in the SAME column, not to a nearer node one column over. Trivially reversible.
   const nearestY = useCallback((dir) => {
-    const score = (s) => Math.abs(s.y - focus.y) * 2 + Math.abs(s.x - focus.x)
     let best = null
     for (const s of specs) {
+      if (s.id === focus.id || s.x !== focus.x) continue
       const dy = s.y - focus.y
-      if (s.id === focus.id || (dir === 'down' ? dy <= 0 : dy >= 0)) continue
-      if (!best || score(s) < score(best)) best = s
+      if (dir === 'down' ? dy <= 0 : dy >= 0) continue
+      if (!best || Math.abs(dy) < Math.abs(best.y - focus.y)) best = s
     }
     return best
   }, [focus])
-  const downTarget = useMemo(() => (sibIdx < siblings.length - 1 ? siblings[sibIdx + 1] : nearestY('down')), [siblings, sibIdx, nearestY])
-  const upTarget    = useMemo(() => (sibIdx > 0 ? siblings[sibIdx - 1] : nearestY('up')), [siblings, sibIdx, nearestY])
+  const downTarget = useMemo(() => nearestY('down'), [nearestY])
+  const upTarget    = useMemo(() => nearestY('up'), [nearestY])
 
   // @@@ onNav - same tree-walk the keyboard does, but driven from the overlay's terminal input
   // (its empty command line forwards ←/→ parent/child, ↑/↓ siblings). Keeps the overlay open.

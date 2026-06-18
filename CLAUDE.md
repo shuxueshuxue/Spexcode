@@ -11,7 +11,9 @@ A change isn't "done" until it's a spec node merged into `main`:
 
 1. Branch `node/<id>` off `main`.
 2. Make the code change **and** add/update the spec node (`.spec/.../<id>/spec.md`) that states the
-   intent. A repeat change to an existing node appends a `## vN — <summary>` section to its `spec.md`.
+   intent. The body is a **living current-state document** — a repeat change *rewrites* it to describe
+   the node's present intent, never appends a `## vN` changelog (version history is git's job — see
+   "Git is the database" below).
 3. Commit on the node branch: `spec: <id> — <reason>`, with a `Session: <sess-id>` trailer in the
    commit **body** — that trailer is the version's attribution (see "Git is the database" below).
 4. Merge into `main` with `--no-ff`: `merge node/<id>: <reason>`.
@@ -34,10 +36,16 @@ file (`node:` / `session:` / `status:` lines) that the layout linker reads.
   nest (children = subdirs) and co-locate assets; the id lives in the dir name, so the file is always
   `spec.md` (never `<id>.md` — that would duplicate the id).
 - `spec.md` = frontmatter (`title`, `status` ∈ merged|active|pending, `session`, `hue`, `desc`,
-  optional `code:` list) + a markdown body. Subsequent versions are appended as `## vN — …` sections.
-- **Git is the database.** A node's `version` is the number of commits that touched its `spec.md`
-  (`git log --follow -- <path>`); history rows come from the same log, each attributed via the
-  `Session:` commit trailer. There is no separate datastore — the dashboard is a read-time aggregator.
+  optional `code:` list) + a markdown body.
+- **The body is a living current-state document, never a changelog.** It always describes the node's
+  *present* intent; you rewrite it in place, you do not accrete `## vN` sections. (Markdown headings
+  `## …` / `###` are fine for *structure* — what's banned is a heading whose text is a version, i.e.
+  `## vN …`.) `spex lint`'s **living** rule enforces this. Version evolution is read from git and
+  shown in the dashboard's **recent / history** tabs (each commit's reason, session, and line-diff).
+- **Git is the database.** A node's `version` is the number of **content commits** to its `spec.md`
+  (`git log --follow`, *excluding pure renames* — moving a file in a reparent isn't a version); the
+  recent/history rows are those same commits, each attributed via the `Session:` commit trailer.
+  There is no separate datastore — the dashboard is a read-time aggregator over git.
 
 ## Kinds of commit (not every commit is a spec commit)
 
@@ -76,10 +84,11 @@ together — that is a project choice, not a git requirement.
   port (e.g. 5174) and prints `Local: http://localhost:<port>/`; read that line for the real port.
   Vite proxies `/api` → :8787, so the backend must be running too.
 - `spex lint` (CLI: `spec-cli/src/cli.ts` → `lint.ts`; or `npm run lint`) checks the spec↔code graph:
-  **integrity** (error — a `code:` path doesn't exist), **coverage** (warn — a governed source file
-  isn't claimed by any spec), **drift** (warn — a governed file changed after its spec's last version,
-  derived live from git, no stored hashes). The pre-commit hook is a thin shim over it that blocks on
-  errors only; bypass with `SPEXCODE_SKIP_LINT=1`. NOTE: anything calling git from inside a hook must
+  **integrity** (error — a `code:` path doesn't exist), **living** (error — a body contains a `## vN`
+  changelog heading instead of staying current-state; see "the body is a living document" above),
+  **coverage** (warn — a governed source file isn't claimed by any spec), **drift** (warn — a
+  governed file changed after its spec's last version, derived live from git, no stored hashes). The
+  pre-commit hook is a thin shim over it that blocks on errors only; bypass with `SPEXCODE_SKIP_LINT=1`. NOTE: anything calling git from inside a hook must
   go through `git.ts`'s `git()` helper, which strips the hook's exported `GIT_DIR`/`GIT_INDEX_FILE`
   (otherwise repo discovery resolves to the cwd and the lint silently sees zero specs).
 - A spec node declares the files it owns via a `code:` list in its frontmatter — that edge is what

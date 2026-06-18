@@ -1,6 +1,6 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { join, relative, basename } from 'node:path'
-import { repoRoot, history, type Version } from './git.js'
+import { repoRoot, history, diffstat, specStats } from './git.js'
 
 // @@@ tree from filesystem - the spec tree IS the directory tree under .spec; a node is any
 // directory holding a spec.md, its parent is the nearest ancestor that also holds one.
@@ -71,12 +71,27 @@ export function loadSpecs() {
       code: list(r.fm.code),
       version: h.length,
       reason: h[0]?.reason || '',
+      // @@@ evidence - metadata links to A->B proof frames, read from the spec's frontmatter
+      // (`evidence:` list). The backend is the source of truth here too — the dashboard never
+      // fabricates these. Empty until the yatsu package records real captures and writes the links.
+      evidence: list(r.fm.evidence),
       body: r.body.trim(),
     }
   })
 }
 
-export function specHistory(id: string): Version[] {
+// @@@ specHistory - per-node version timeline, each row's line-diff SCOPED to this node: its spec.md
+// (rename-followed via specStats) PLUS the code it governs (git show on the stable code paths). So a
+// version reads as the lines it changed in THIS node's world, not the whole repo-wide commit. The
+// two sources are added because spec.md needs rename-following that `git show -- <path>` can't do.
+export function specHistory(id: string) {
   const node = raws().find((r) => r.id === id)
-  return node ? history(ROOT, node.relPath) : []
+  if (!node) return []
+  const codePaths = list(node.fm.code)
+  const sStats = specStats(ROOT, node.relPath)
+  return history(ROOT, node.relPath).map((v) => {
+    const s = sStats.get(v.hash) ?? { additions: 0, deletions: 0, files: 0 }
+    const c = codePaths.length ? diffstat(ROOT, v.hash, codePaths) : { additions: 0, deletions: 0, files: 0 }
+    return { ...v, additions: s.additions + c.additions, deletions: s.deletions + c.deletions, files: s.files + c.files }
+  })
 }

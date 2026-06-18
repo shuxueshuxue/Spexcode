@@ -71,7 +71,40 @@ together — that is a project choice, not a git requirement.
 - Frontend: `npm run web` → Vite. **Port 5173 by default but not pinned** — it takes the next free
   port (e.g. 5174) and prints `Local: http://localhost:<port>/`; read that line for the real port.
   Vite proxies `/api` → :8787, so the backend must be running too.
+- `spex lint` (CLI: `spec-cli/src/cli.ts` → `lint.ts`; or `npm run lint`) checks the spec↔code graph:
+  **integrity** (error — a `code:` path doesn't exist), **coverage** (warn — a governed source file
+  isn't claimed by any spec), **drift** (warn — a governed file changed after its spec's last version,
+  derived live from git, no stored hashes). The pre-commit hook is a thin shim over it that blocks on
+  errors only; bypass with `SPEXCODE_SKIP_LINT=1`. NOTE: anything calling git from inside a hook must
+  go through `git.ts`'s `git()` helper, which strips the hook's exported `GIT_DIR`/`GIT_INDEX_FILE`
+  (otherwise repo discovery resolves to the cwd and the lint silently sees zero specs).
+- A spec node declares the files it owns via a `code:` list in its frontmatter — that edge is what
+  `spex lint` and (later) the LLM judge anchor to.
 - Toolchain: **npm, not pnpm**; Node is pinned via `.nvmrc` (22).
+
+## Setup / onboarding
+
+The pre-commit hook is **per-clone, not committed** (`.git/hooks/` is never in the repo), so a fresh
+clone must install it once — that's the answer to "when do we set up the hook": **at onboarding, right
+after install, before the first commit.**
+
+1. `npm install` in each package you use (`spec-cli`, `spec-dashboard`).
+2. `npm run hooks` — copies `scripts/hooks/pre-commit` into the shared git hooks dir (covers every
+   worktree). Re-run it whenever the hook source changes.
+
+The hook is **advisory** — bypassable, and absent on any machine that skipped step 2. The real gate is
+**CI running `spex lint`**; treat the hook as fast local feedback, CI as enforcement.
+
+Adopting SpexCode on an existing project (no restructure needed — the layout seam handles where things
+live):
+
+1. Add `.spec/<area>/spec.md` nodes for the parts you want governed, each with a `code:` list pointing
+   at the existing files.
+2. `npm run hooks`.
+3. Run `spex lint` — the **coverage** warnings are your adoption TODO: every source file not yet
+   claimed by a spec. Work the list down; promote coverage to an error once the graph is complete.
+4. If your layout differs from the default (main at root, worktrees in `.worktrees/`, `node/<id>`
+   branches), drop a `spexcode.json` to point the tool at your structure instead of forking it.
 
 ## Naming
 

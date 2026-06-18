@@ -158,7 +158,7 @@ body {
 
 /* pane: work — spec (left, reference) + terminal (right, wider work surface) */
 .pane-work { flex: 1; display: flex; min-height: 0; }
-.pane-work .pane-doc { flex: 0 0 34%; border-right: 1px solid var(--line); }
+.pane-work .pane-doc { flex: 0 0 40%; border-right: 1px solid var(--line); }
 .pane-work .pane-term { flex: 1; }
 
 /* pane: terminal */

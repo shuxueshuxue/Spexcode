@@ -28,9 +28,13 @@ file (`node:` / `session:` / `status:` lines) that the layout linker reads.
 ## What a spec node is
 
 - A node = a directory under `.spec/` containing a `spec.md`. `id` = directory basename; `parent` =
-  the nearest ancestor directory that also has a `spec.md`. The tree root is `.spec/spec-dashboard`.
-- `spec.md` = frontmatter (`title`, `status` ∈ merged|active|pending, `session`, `hue`, `desc`) + a
-  markdown body. Subsequent versions are appended as `## vN — …` sections in the same file.
+  the nearest ancestor directory that also has a `spec.md`. The tree root is **`.spec/spexcode`**
+  (the project), with package children `spec-dashboard` (UI), `spec-cli` (server + source-of-truth
+  guards), and `spec-yatsu` (pending). A node is a *directory*, not a file — that's what lets it both
+  nest (children = subdirs) and co-locate assets; the id lives in the dir name, so the file is always
+  `spec.md` (never `<id>.md` — that would duplicate the id).
+- `spec.md` = frontmatter (`title`, `status` ∈ merged|active|pending, `session`, `hue`, `desc`,
+  optional `code:` list) + a markdown body. Subsequent versions are appended as `## vN — …` sections.
 - **Git is the database.** A node's `version` is the number of commits that touched its `spec.md`
   (`git log --follow -- <path>`); history rows come from the same log, each attributed via the
   `Session:` commit trailer. There is no separate datastore — the dashboard is a read-time aggregator.

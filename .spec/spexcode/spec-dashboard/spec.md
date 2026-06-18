@@ -9,18 +9,13 @@ code:
 ---
 # spec-dashboard
 
-One of three SpexCode packages (alongside spec-cli and spec-yatsu).
+One of three SpexCode packages (alongside spec-cli and spec-yatsu). The front end: a
+node-graph where every node is a spec, navigated by logic. It reads `main` (the ground
+truth) and overlays in-progress worktrees; each version change is attributed to a
+Claude Code session.
 
-A node-graph where every node is a spec. Specs form a tree; each version change
-is attributed to a Claude Code session. The dashboard reads `main` (the ground
-truth) and overlays in-progress worktrees.
-
-## v2
-- Enter opens a node into switchable panes: spec / terminal / evidence / history.
-- The sidebar is split into global statistics and focused-node information.
-
-## v3 — named SpexCode
-The tool has a name now: **SpexCode**. The npm packages move to the `@spexcode/*`
-scope, the main-guard escape hatch becomes `SPEXCODE_ALLOW_MAIN`, and the optional
-layout-override file is `spexcode.json`. The package directory names (spec-cli,
-spec-dashboard, spec-yatsu) stay as they are — those are components, not the brand.
+Enter opens a node into switchable panes (**work / recent / history**), and the sidebar
+splits into global statistics and focused-node information. The tool is named
+**SpexCode**: npm packages are scoped `@spexcode/*`, the main-guard escape hatch is
+`SPEXCODE_ALLOW_MAIN`, and the optional layout override is `spexcode.json` — the package
+directory names (spec-cli, spec-dashboard, spec-yatsu) stay as components, not the brand.

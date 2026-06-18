@@ -9,19 +9,14 @@ code:
 ---
 # keyboard-nav
 
-Left/right = siblings, up = parent, down = child. Logical keys on a stable tree.
+Move by relationship on a stable, depth-aligned tree — not by raw pixel distance.
 
-## v2 — flat camera
-Replaced React Flow's Van Wijk zoom arc (the "jump too high") with a flat
-constant-zoom rAF pan that centres the focused node. +/- adjust the zoom.
+`←` / `→` go to the parent / nearest child (the child closest in y). `↑` / `↓` move
+within the focused node's **column** to the nearest node in that direction: depth
+pins x exactly (`x = depth · X_GAP`), so a column is a clean vertical line and
+vertical nav never changes column or dives into a child. Columns are aligned and
+rows aren't, so we navigate the organised axis — and it's reversible, since a
+column's nodes are already ordered in y. `+` / `-` zoom, `0` resets.
 
-## v3 — cross-subtree
-Down descends to the horizontally nearest child. Left/right fall back to the
-nearest node in that direction across the whole tree when no sibling exists —
-reversible on a tidy tree because each subtree owns a contiguous x-band.
-
-## v4 — axes follow the horizontal tree
-The graph went left->right (root at left, children right), so the keys rotate to
-match: up/down = siblings, left = parent, right = child. Same "move by
-relationship" rule, now on the y-axis — siblings fall back to the nearest node
-up/down across the tree (each subtree owns a contiguous y-band).
+The tree never re-plots. The camera flat-pans at constant zoom to centre the focused
+node — a Van Wijk zoom arc once caused a "jump too high", so it's a plain rAF pan.

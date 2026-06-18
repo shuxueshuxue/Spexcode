@@ -9,9 +9,7 @@ code:
 ---
 # session-peek
 
-tmux is client/server. Read a pane with `capture-pane -p -e`, write with
-`send-keys` — no attached terminal needed. xterm.js renders it in the browser.
-
-## v2 — esc fix
-xterm grabbed keyboard focus, so the window never saw Escape. Intercept it via
-`term.attachCustomKeyEventHandler` -> onClose. Esc now exits reliably.
+Embed the live session in the browser. tmux is client/server, so no attached
+terminal is needed: read a pane with `capture-pane -p -e`, write with `send-keys`,
+and xterm.js renders it. xterm grabs keyboard focus, so Escape is intercepted via
+`term.attachCustomKeyEventHandler` → onClose — Esc exits the peek reliably.

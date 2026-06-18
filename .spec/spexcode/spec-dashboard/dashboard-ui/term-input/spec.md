@@ -19,7 +19,7 @@ work pane meant losing ←/→ node-toggling to the terminal.
 Lift the command line *out* of xterm. The terminal becomes a read-only display
 (capture-pane output); a separate input below it mimics the prompt and echoes
 commands back into the display on Enter. Because the input is ours, the arrows are
-ours too: when the line is **empty**, ←/→ walk parent/child and ↑/↓ walk siblings
-(the same `onNav` the graph uses), so you toggle between nodes' specs + terminals
+ours too: when the line is **empty**, ←/→ walk parent/child and ↑/↓ move up/down the
+column (the same `onNav` the graph uses), so you toggle between nodes' specs + terminals
 without ever leaving the work pane. With text on the line, the arrows edit it as
 usual — empty is the signal that an arrow means "navigate", not "move the cursor".

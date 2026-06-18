@@ -10,4 +10,16 @@ if [ "$branch" = "main" ] && [ ! -f "$git_dir/MERGE_HEAD" ] && [ -z "${SPEXCODE_
   echo "  Merges pass automatically; for seeding/topology: SPEXCODE_ALLOW_MAIN=1 git commit …" >&2
   exit 1
 fi
+
+# @@@ spec-lint - the hook is just a thin shim over `spex lint`. It blocks on errors only (broken
+# spec↔code links); coverage/drift are warnings. Bypass with SPEXCODE_SKIP_LINT=1.
+if [ -z "${SPEXCODE_SKIP_LINT:-}" ]; then
+  root=$(git rev-parse --show-toplevel 2>/dev/null)
+  if [ -n "$root" ] && [ -f "$root/spec-cli/package.json" ]; then
+    if ! npm --prefix "$root/spec-cli" run -s lint >&2; then
+      echo "✗ SpexCode: spec-lint failed — fix the spec↔code links or bypass with SPEXCODE_SKIP_LINT=1." >&2
+      exit 1
+    fi
+  fi
+fi
 exit 0

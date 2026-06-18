@@ -4,6 +4,8 @@ status: merged
 session: sess-design
 hue: 175
 desc: Topology changes commit to main eagerly; node content lives long in worktrees.
+code:
+  - scripts/seed-spec-history.sh
 ---
 # topology-eager
 

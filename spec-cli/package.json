@@ -4,10 +4,11 @@
   "private": true,
   "type": "module",
   "description": "SpexCode CLI + spec server — reads the .spec tree and its git history",
-  "bin": { "spec": "src/index.ts" },
+  "bin": { "spex": "bin/spex.mjs" },
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "serve": "tsx src/index.ts"
+    "dev": "tsx watch src/cli.ts serve",
+    "serve": "tsx src/cli.ts serve",
+    "lint": "tsx src/cli.ts lint"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.7",

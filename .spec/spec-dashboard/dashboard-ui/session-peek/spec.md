@@ -4,6 +4,8 @@ status: active
 session: sess-7f3a
 hue: 150
 desc: Embed the live session via capture-pane / send-keys.
+code:
+  - spec-dashboard/src/TermPane.jsx
 ---
 # session-peek
 

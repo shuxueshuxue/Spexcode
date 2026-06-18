@@ -4,6 +4,11 @@ status: merged
 session: sess-graph
 hue: 280
 desc: A stable tree map; the viewpoint moves, the tree never re-plots.
+code:
+  - spec-dashboard/src/SpecNode.jsx
+  - spec-dashboard/src/data.js
+  - spec-dashboard/src/App.jsx
+  - spec-dashboard/src/styles.css
 ---
 # node-graph
 

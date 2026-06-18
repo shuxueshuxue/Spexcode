@@ -7,21 +7,34 @@ import { repoRoot, history, type Version } from './git.js'
 const ROOT = repoRoot()
 const SPEC_DIR = join(ROOT, '.spec')
 
-type Raw = { id: string; parent: string | null; relPath: string; fm: Record<string, string>; body: string }
+type FmValue = string | string[]
+type Raw = { id: string; parent: string | null; relPath: string; fm: Record<string, FmValue>; body: string }
 
+// @@@ frontmatter - line-based, deliberately tiny. Scalars are `key: value`; a key with an empty
+// value followed by `- item` lines becomes a list (that's how `code:` declares its governed files).
 function parseFrontmatter(src: string) {
-  const fm: Record<string, string> = {}
+  const fm: Record<string, FmValue> = {}
   let body = src
   const m = src.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/)
   if (m) {
+    let key: string | null = null
     for (const line of m[1].split('\n')) {
+      const item = line.match(/^\s*-\s+(.*)$/)
+      if (item && key) {
+        if (!Array.isArray(fm[key])) fm[key] = fm[key] ? [fm[key] as string] : []
+        ;(fm[key] as string[]).push(item[1].trim())
+        continue
+      }
       const i = line.indexOf(':')
-      if (i > 0) fm[line.slice(0, i).trim()] = line.slice(i + 1).trim()
+      if (i > 0) { key = line.slice(0, i).trim(); fm[key] = line.slice(i + 1).trim() }
     }
     body = m[2]
   }
   return { fm, body }
 }
+
+const str = (v: FmValue | undefined, d = '') => (Array.isArray(v) ? v.join(', ') : v ?? d)
+const list = (v: FmValue | undefined): string[] => (Array.isArray(v) ? v : v ? [v] : [])
 
 function walk(dir: string, parent: string | null, acc: Raw[]) {
   let myId = parent
@@ -45,14 +58,17 @@ function raws(): Raw[] {
 export function loadSpecs() {
   return raws().map((r) => {
     const h = history(ROOT, r.relPath)
+    const session = str(r.fm.session)
     return {
       id: r.id,
       parent: r.parent,
-      title: r.fm.title || r.id,
-      status: r.fm.status || 'pending',
-      session: r.fm.session && r.fm.session !== 'null' ? r.fm.session : null,
-      hue: Number(r.fm.hue || 210),
-      desc: r.fm.desc || '',
+      path: r.relPath,
+      title: str(r.fm.title, r.id),
+      status: str(r.fm.status, 'pending'),
+      session: session && session !== 'null' ? session : null,
+      hue: Number(str(r.fm.hue, '210')),
+      desc: str(r.fm.desc),
+      code: list(r.fm.code),
       version: h.length,
       reason: h[0]?.reason || '',
       body: r.body.trim(),

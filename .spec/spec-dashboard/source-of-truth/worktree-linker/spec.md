@@ -4,6 +4,8 @@ status: merged
 session: sess-design
 hue: 190
 desc: Map each worktree to its node via branch name + an untracked .session file.
+code:
+  - spec-cli/src/layout.ts
 ---
 # worktree-linker
 

@@ -6,6 +6,7 @@
   "scripts": {
     "api": "npm --prefix spec-cli run serve",
     "web": "npm --prefix spec-dashboard run dev",
+    "lint": "npm --prefix spec-cli run -s lint",
     "seed": "bash scripts/seed-spec-history.sh",
     "hooks": "bash scripts/install-hooks.sh"
   }

@@ -4,6 +4,8 @@ status: active
 session: sess-b412
 hue: 45
 desc: Render before/after inline as SVG placeholders for real yatsu captures.
+code:
+  - spec-dashboard/src/data.js
 ---
 # ab-screenshots
 

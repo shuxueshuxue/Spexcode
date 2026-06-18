@@ -6,7 +6,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-[ -e ".spec/spec-dashboard/spec.md" ] && { echo "spec tree already seeded — aborting."; exit 0; }
+[ -e ".spec/spexcode/spec-dashboard/spec.md" ] && { echo "spec tree already seeded — aborting."; exit 0; }
 
 seed() {
   local path="$1" session="$2" date="$3" subject="$4"
@@ -18,7 +18,7 @@ seed() {
   echo "  ✓ [$session] $subject"
 }
 
-seed ".spec/spec-dashboard/spec.md" sess-meta "2026-06-17T09:30:00" \
+seed ".spec/spexcode/spec-dashboard/spec.md" sess-meta "2026-06-17T09:30:00" \
   "spec: spec-dashboard — the front-end dashboard; a node-graph of specs navigated by logic" <<'EOF'
 ---
 title: spec-dashboard
@@ -36,7 +36,7 @@ is attributed to a Claude Code session. The dashboard reads `main` (the ground
 truth) and overlays in-progress worktrees.
 EOF
 
-seed ".spec/spec-dashboard/source-of-truth/spec.md" sess-design "2026-06-17T10:00:00" \
+seed ".spec/spexcode/spec-cli/source-of-truth/spec.md" sess-design "2026-06-17T10:00:00" \
   "spec: source-of-truth — .spec on main is canonical; worktrees hold session-attributed proposals" <<'EOF'
 ---
 title: source-of-truth
@@ -53,7 +53,7 @@ becomes the new version plus one entry in that node's history. The dashboard is 
 read-time aggregator over git, not a separate store.
 EOF
 
-seed ".spec/spec-dashboard/source-of-truth/worktree-linker/spec.md" sess-design "2026-06-17T10:20:00" \
+seed ".spec/spexcode/spec-cli/source-of-truth/worktree-linker/spec.md" sess-design "2026-06-17T10:20:00" \
   "spec: worktree-linker — map worktree to node via branch name + untracked .session" <<'EOF'
 ---
 title: worktree-linker
@@ -69,7 +69,7 @@ carries the live session id/status. The linker = `git worktree list` -> parse
 branch -> diff vs main -> overlay. Composable: `.spec` stays in-tree.
 EOF
 
-seed ".spec/spec-dashboard/source-of-truth/topology-eager/spec.md" sess-design "2026-06-17T10:40:00" \
+seed ".spec/spexcode/spec-cli/source-of-truth/topology-eager/spec.md" sess-design "2026-06-17T10:40:00" \
   "spec: topology-eager — topology commits to main eagerly; content lives long in worktrees" <<'EOF'
 ---
 title: topology-eager
@@ -85,7 +85,7 @@ so children are visible and child worktrees can be seeded. Content (a node's spe
 body) can live as a long-running worktree diff until merged.
 EOF
 
-seed ".spec/spec-dashboard/dashboard-ui/spec.md" sess-design "2026-06-17T11:00:00" \
+seed ".spec/spexcode/spec-dashboard/dashboard-ui/spec.md" sess-design "2026-06-17T11:00:00" \
   "spec: dashboard-ui — choose web over TUI/GUI (xterm terminal-feel + rich media)" <<'EOF'
 ---
 title: dashboard-ui
@@ -102,7 +102,7 @@ terminals but poor for media; a native GUI costs the most. Tauri optional later
 for packaging.
 EOF
 
-seed ".spec/spec-dashboard/dashboard-ui/node-graph/spec.md" sess-graph "2026-06-17T11:30:00" \
+seed ".spec/spexcode/spec-dashboard/dashboard-ui/node-graph/spec.md" sess-graph "2026-06-17T11:30:00" \
   "spec: node-graph — render a focused lens, not the whole forest" <<'EOF'
 ---
 title: node-graph
@@ -117,7 +117,7 @@ The full-forest view confused siblings with cousins. Show the local neighbourhoo
 and navigate by relationship.
 EOF
 
-seed ".spec/spec-dashboard/dashboard-ui/node-graph/spec.md" sess-graph "2026-06-17T12:00:00" \
+seed ".spec/spexcode/spec-dashboard/dashboard-ui/node-graph/spec.md" sess-graph "2026-06-17T12:00:00" \
   "spec: node-graph — stable tree; viewpoint pans, tree never re-plots" <<'EOF'
 ---
 title: node-graph
@@ -137,7 +137,7 @@ The tree sits at fixed absolute positions and never re-plots. The viewpoint move
 colour change per keystroke. Edges: bold = touches focus, faint = not.
 EOF
 
-seed ".spec/spec-dashboard/dashboard-ui/keyboard-nav/spec.md" sess-1c9d "2026-06-17T12:30:00" \
+seed ".spec/spexcode/spec-dashboard/dashboard-ui/keyboard-nav/spec.md" sess-1c9d "2026-06-17T12:30:00" \
   "spec: keyboard-nav — logical relationship nav (left/right siblings, up parent, down child)" <<'EOF'
 ---
 title: keyboard-nav
@@ -151,7 +151,7 @@ desc: Move by relationship, not geometry.
 Left/right = siblings, up = parent, down = child. Logical keys on a stable tree.
 EOF
 
-seed ".spec/spec-dashboard/dashboard-ui/keyboard-nav/spec.md" sess-1c9d "2026-06-17T13:00:00" \
+seed ".spec/spexcode/spec-dashboard/dashboard-ui/keyboard-nav/spec.md" sess-1c9d "2026-06-17T13:00:00" \
   "spec: keyboard-nav — fix camera jump: replace Van Wijk zoom arc with flat constant-zoom pan" <<'EOF'
 ---
 title: keyboard-nav
@@ -169,7 +169,7 @@ Replaced React Flow's Van Wijk zoom arc (the "jump too high") with a flat
 constant-zoom rAF pan that centres the focused node. +/- adjust the zoom.
 EOF
 
-seed ".spec/spec-dashboard/dashboard-ui/keyboard-nav/spec.md" sess-1c9d "2026-06-17T13:30:00" \
+seed ".spec/spexcode/spec-dashboard/dashboard-ui/keyboard-nav/spec.md" sess-1c9d "2026-06-17T13:30:00" \
   "spec: keyboard-nav — down picks nearest child; left/right fall back to nearest node across subtrees" <<'EOF'
 ---
 title: keyboard-nav
@@ -192,7 +192,7 @@ nearest node in that direction across the whole tree when no sibling exists —
 reversible on a tidy tree because each subtree owns a contiguous x-band.
 EOF
 
-seed ".spec/spec-dashboard/dashboard-ui/session-peek/spec.md" sess-7f3a "2026-06-17T14:00:00" \
+seed ".spec/spexcode/spec-dashboard/dashboard-ui/session-peek/spec.md" sess-7f3a "2026-06-17T14:00:00" \
   "spec: session-peek — embed the live session via capture-pane / send-keys" <<'EOF'
 ---
 title: session-peek
@@ -207,7 +207,7 @@ tmux is client/server. Read a pane with `capture-pane -p -e`, write with
 `send-keys` — no attached terminal needed. xterm.js renders it in the browser.
 EOF
 
-seed ".spec/spec-dashboard/dashboard-ui/session-peek/spec.md" sess-7f3a "2026-06-17T14:30:00" \
+seed ".spec/spexcode/spec-dashboard/dashboard-ui/session-peek/spec.md" sess-7f3a "2026-06-17T14:30:00" \
   "spec: session-peek — fix Esc: xterm captured focus; intercept via attachCustomKeyEventHandler" <<'EOF'
 ---
 title: session-peek
@@ -226,7 +226,7 @@ xterm grabbed keyboard focus, so the window never saw Escape. Intercept it via
 `term.attachCustomKeyEventHandler` -> onClose. Esc now exits reliably.
 EOF
 
-seed ".spec/spec-dashboard/yatsu-evidence/spec.md" sess-meta "2026-06-17T15:00:00" \
+seed ".spec/spexcode/spec-dashboard/yatsu-evidence/spec.md" sess-meta "2026-06-17T15:00:00" \
   "spec: yatsu-evidence — computer-use agents record A->B GUI evidence per version (pending)" <<'EOF'
 ---
 title: yatsu-evidence
@@ -242,7 +242,7 @@ agents to replay a spec's scenario and record before/after. Verification by
 looking, not by the developer testing manually. A = prev version, B = this version.
 EOF
 
-seed ".spec/spec-dashboard/yatsu-evidence/ab-screenshots/spec.md" sess-b412 "2026-06-17T15:30:00" \
+seed ".spec/spexcode/spec-dashboard/yatsu-evidence/ab-screenshots/spec.md" sess-b412 "2026-06-17T15:30:00" \
   "spec: ab-screenshots — render before/after inline as SVG placeholders" <<'EOF'
 ---
 title: ab-screenshots
@@ -258,7 +258,7 @@ evidence pane. Stored as a per-version artifact pointer (a manifest in `.spec`,
 blob content-addressed out of tree).
 EOF
 
-seed ".spec/spec-dashboard/spec.md" sess-meta "2026-06-17T16:00:00" \
+seed ".spec/spexcode/spec-dashboard/spec.md" sess-meta "2026-06-17T16:00:00" \
   "spec: spec-dashboard — multi-pane node view; sidebar split into global stats + focused info" <<'EOF'
 ---
 title: spec-dashboard

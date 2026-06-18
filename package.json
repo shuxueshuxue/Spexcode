@@ -1,8 +1,8 @@
 {
-  "name": "specmech",
+  "name": "spexcode",
   "private": true,
   "version": "0.0.0",
-  "description": "specMech — spec-driven self-developing dev tool: spec-cli, spec-dashboard, spec-yatsu",
+  "description": "SpexCode — spec-driven self-developing dev tool: spec-cli, spec-dashboard, spec-yatsu",
   "scripts": {
     "api": "npm --prefix spec-cli run serve",
     "web": "npm --prefix spec-dashboard run dev",

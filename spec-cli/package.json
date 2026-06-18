@@ -1,9 +1,9 @@
 {
-  "name": "@specmech/spec-cli",
+  "name": "@spexcode/spec-cli",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "specMech CLI + spec server — reads the .spec tree and its git history",
+  "description": "SpexCode CLI + spec server — reads the .spec tree and its git history",
   "bin": { "spec": "src/index.ts" },
   "scripts": {
     "dev": "tsx watch src/index.ts",

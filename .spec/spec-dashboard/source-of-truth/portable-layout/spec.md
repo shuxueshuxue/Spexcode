@@ -17,7 +17,7 @@ questions — where is main, how to enumerate the other checkouts, how each decl
 its node — and exposes the result at `GET /api/layout`. Everything downstream
 consumes the resolved layout, never a hardcoded path.
 
-No `specmech.json` => our convention. With it => adapt to any layout:
+No `spexcode.json` => our convention. With it => adapt to any layout:
 
 ```json
 { "main": "/elsewhere", "branchPrefix": "node/", "nodeFrom": "branch" }

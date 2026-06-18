@@ -5,7 +5,7 @@ import { repoRoot } from './git.js'
 
 // @@@ portable layout - the ONE seam where "where things live" is policy, not hardcode.
 // Mechanism (read .spec, git log) is fixed; this resolves: where is main, how to enumerate the
-// other checkouts, how each declares its node. No specmech.json => our convention. With it =>
+// other checkouts, how each declares its node. No spexcode.json => our convention. With it =>
 // adapt to any layout (main in a different folder, a different branch naming, etc.).
 
 type Config = {
@@ -21,7 +21,7 @@ export type Worktree = {
 export type Layout = { main: string; convention: Required<Config>; worktrees: Worktree[] }
 
 function readConfig(root: string): Config {
-  const p = join(root, 'specmech.json')
+  const p = join(root, 'spexcode.json')
   if (!existsSync(p)) return {}
   try { return JSON.parse(readFileSync(p, 'utf8')) } catch { return {} }
 }

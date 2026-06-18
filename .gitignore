@@ -3,7 +3,7 @@ node_modules/
 dist/
 .vite/
 
-# specMech worktrees live here — they are separate checkouts, never committed
+# SpexCode worktrees live here — they are separate checkouts, never committed
 .worktrees/
 
 # per-worktree session linker — ephemeral runtime state, not spec data

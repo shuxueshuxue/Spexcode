@@ -13,7 +13,7 @@ main, breaking the invariant. Protection is a hook, not a folder structure.
 
 A `pre-commit` hook rejects a direct commit while HEAD is `main`. Merges pass
 (MERGE_HEAD present), so the worktree -> merge flow is unaffected. Escape hatch for
-seeding / eager topology: `SPECMECH_ALLOW_MAIN=1`. Installed via `npm run hooks`
+seeding / eager topology: `SPEXCODE_ALLOW_MAIN=1`. Installed via `npm run hooks`
 into the common git dir, so it covers every worktree at once.
 
 This makes "no direct commits on main" real instead of aspirational — the cheap

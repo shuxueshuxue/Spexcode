@@ -19,7 +19,7 @@ const STATUS_TEXT = {
 function Dashboard({ specs }) {
   const [focusId, setFocusId] = useState(() => specs.find((s) => !s.parent)?.id)
   const [overlay, setOverlay] = useState(false)
-  const [pane, setPane] = useState('spec')
+  const [pane, setPane] = useState('work')
   const { getViewport, setViewport } = useReactFlow()
   const graphRef = useRef(null)
   const animRef = useRef(0)
@@ -114,8 +114,8 @@ function Dashboard({ specs }) {
       if (overlay) {
         if (e.key === 'Escape') { e.preventDefault(); setOverlay(false); return }
         if (e.key === 'Tab') { e.preventDefault(); e.stopPropagation(); cyclePane(e.shiftKey ? -1 : 1); return }
-        if (pane === 'term') return // terminal owns the rest of the keyboard
-        if (['1', '2', '3', '4'].includes(e.key)) { e.preventDefault(); e.stopPropagation(); setPane(PANE_KEYS[+e.key - 1]); return }
+        if (pane === 'work') return // the work pane's terminal owns the rest of the keyboard
+        if (['1', '2', '3'].includes(e.key)) { e.preventDefault(); e.stopPropagation(); setPane(PANE_KEYS[+e.key - 1]); return }
         if (e.key === 'ArrowLeft')  return go(leftTarget, e)
         if (e.key === 'ArrowRight') return go(rightTarget, e)
         if (e.key === 'ArrowDown')  return go(downTarget, e)

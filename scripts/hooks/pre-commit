@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# @@@ main-guard - the worktree model: never author directly on main; main only RECEIVES merges.
+# Reject a direct commit while HEAD is main. Merges pass (MERGE_HEAD present).
+# Escape hatch for seeding / eager topology: SPECMECH_ALLOW_MAIN=1 git commit …
+branch=$(git symbolic-ref --short HEAD 2>/dev/null || echo)
+git_dir=$(git rev-parse --git-dir 2>/dev/null)
+if [ "$branch" = "main" ] && [ ! -f "$git_dir/MERGE_HEAD" ] && [ -z "${SPECMECH_ALLOW_MAIN:-}" ]; then
+  echo "✗ specMech: direct commits on main are blocked." >&2
+  echo "  Work in a worktree (.worktrees/<node>, branch node/<id>) and merge back." >&2
+  echo "  Merges pass automatically; for seeding/topology: SPECMECH_ALLOW_MAIN=1 git commit …" >&2
+  exit 1
+fi
+exit 0

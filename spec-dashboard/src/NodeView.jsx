@@ -3,8 +3,7 @@ import TermPane from './TermPane.jsx'
 
 // @@@ pane registry - add a face for a spec node by adding one entry + one render case below.
 export const PANES = [
-  { key: 'spec',     label: 'spec' },
-  { key: 'term',     label: 'terminal' },
+  { key: 'work',     label: 'work' },
   { key: 'evidence', label: 'evidence' },
   { key: 'history',  label: 'history' },
 ]
@@ -17,7 +16,18 @@ function SpecPane({ node }) {
       <div className="doc-meta">
         status: <b>{node.status}</b> · version: <b>v{node.version || 0}</b> · session: <b>{node.session || 'idle'}</b>
       </div>
-      <p className="doc-note">// the spec body is the latest ground truth — open the terminal pane to change it in place.</p>
+      <p className="doc-note">// spec = the intent (left). drive the session to change it in place (right).</p>
+    </div>
+  )
+}
+
+// @@@ WorkPane - spec + terminal as one surface: intent on the left (read), the live
+// session on the right (act). Terminal is wider — it's the work surface; spec is reference.
+function WorkPane({ node, onClose }) {
+  return (
+    <div className="pane-work">
+      <SpecPane node={node} />
+      <TermPane node={node} onClose={onClose} />
     </div>
   )
 }
@@ -49,7 +59,7 @@ function HistoryPane({ node }) {
   }, [node.id])
 
   if (!rows) return <div className="pane-hist empty">loading history…</div>
-  if (!rows.length) return <div className="pane-hist empty">no versions yet — open the terminal pane to begin.</div>
+  if (!rows.length) return <div className="pane-hist empty">no versions yet — open the work pane to begin.</div>
   return (
     <div className="pane-hist">
       {rows.map((r, i) => (
@@ -79,8 +89,7 @@ export default function NodeView({ node, pane, setPane, onClose }) {
           <span className="ov-hint">tab ↹ switch · esc back</span>
         </div>
         <div className="ov-body">
-          {pane === 'spec' && <SpecPane node={node} />}
-          {pane === 'term' && <TermPane node={node} onClose={onClose} />}
+          {pane === 'work' && <WorkPane node={node} onClose={onClose} />}
           {pane === 'evidence' && <EvidencePane node={node} />}
           {pane === 'history' && <HistoryPane node={node} />}
         </div>

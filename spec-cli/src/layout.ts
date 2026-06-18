@@ -1,7 +1,6 @@
-import { execFileSync } from 'node:child_process'
 import { readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { repoRoot } from './git.js'
+import { repoRoot, git } from './git.js'
 
 // @@@ portable layout - the ONE seam where "where things live" is policy, not hardcode.
 // Mechanism (read .spec, git log) is fixed; this resolves: where is main, how to enumerate the
@@ -28,7 +27,7 @@ function readConfig(root: string): Config {
 
 function gitWorktrees(root: string): { path: string; branch: string | null }[] {
   let out = ''
-  try { out = execFileSync('git', ['-C', root, 'worktree', 'list', '--porcelain'], { encoding: 'utf8' }) } catch { return [] }
+  try { out = git(['-C', root, 'worktree', 'list', '--porcelain']) } catch { return [] }
   const list: { path: string; branch: string | null }[] = []
   let cur: { path: string; branch: string | null } | null = null
   for (const line of out.split('\n')) {

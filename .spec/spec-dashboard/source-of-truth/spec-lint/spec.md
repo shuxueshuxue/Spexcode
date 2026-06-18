@@ -30,3 +30,12 @@ The pre-commit hook is a thin shim over `spex lint`: it blocks on errors only (b
 `SPEXCODE_SKIP_LINT=1`). The same command runs in CI for real enforcement — local hooks are advisory.
 Content alignment (does the code still match what the spec *says*?) is left to the LLM judge, which
 runs async on this graph, not in the commit path.
+
+## v2 — survive the hook's git env
+First version was a silent no-op *inside the hook*: git exports `GIT_DIR` (and `GIT_INDEX_FILE`) to
+hook processes, which overrides git's repo discovery, so `repoRoot()`'s `rev-parse --show-toplevel`
+resolved to the cwd (`spec-cli/`) instead of the worktree root → zero specs loaded → nothing linted →
+every commit passed. Caught only by testing through the real hook, not by running `spex lint` by hand.
+Fix lives in the general mechanism (`spec-cli/src/git.ts`): a single `git()` helper strips the
+inherited `GIT_DIR`/`GIT_WORK_TREE`/`GIT_INDEX_FILE` so every git call discovers the repo from the
+filesystem, hook or not. `layout.ts` routes through it too.

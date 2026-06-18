@@ -1,6 +1,6 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { join, relative, basename } from 'node:path'
-import { repoRoot, history, diffstat, specStats } from './git.js'
+import { repoRoot, historyIndex, rowsFor, statsFor, diffstat } from './git.js'
 
 // @@@ tree from filesystem - the spec tree IS the directory tree under .spec; a node is any
 // directory holding a spec.md, its parent is the nearest ancestor that also holds one.
@@ -56,8 +56,9 @@ function raws(): Raw[] {
 }
 
 export function loadSpecs() {
+  const idx = historyIndex(ROOT) // one walk (cached on HEAD); every node below is a pure lookup
   return raws().map((r) => {
-    const h = history(ROOT, r.relPath)
+    const h = rowsFor(idx, r.relPath)
     const session = str(r.fm.session)
     return {
       id: r.id,
@@ -87,9 +88,10 @@ export function loadSpecs() {
 export function specHistory(id: string) {
   const node = raws().find((r) => r.id === id)
   if (!node) return []
+  const idx = historyIndex(ROOT)
   const codePaths = list(node.fm.code)
-  const sStats = specStats(ROOT, node.relPath)
-  return history(ROOT, node.relPath).map((v) => {
+  const sStats = statsFor(idx, node.relPath)
+  return rowsFor(idx, node.relPath).map((v) => {
     const s = sStats.get(v.hash) ?? { additions: 0, deletions: 0, files: 0 }
     const c = codePaths.length ? diffstat(ROOT, v.hash, codePaths) : { additions: 0, deletions: 0, files: 0 }
     return { ...v, additions: s.additions + c.additions, deletions: s.deletions + c.deletions, files: s.files + c.files }

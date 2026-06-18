@@ -1,7 +1,7 @@
 ---
 title: source-of-truth
 status: merged
-session: sess-design
+session: sess-ce4e5cc
 hue: 200
 desc: .spec on main is canonical; worktrees hold session-attributed proposals.
 code:
@@ -15,3 +15,15 @@ The canonical spec state is `.spec` on `main`. A worktree's `.spec` is never a
 rival truth — it is a pending proposal, attributed to a session. On merge it
 becomes the new version plus one entry in that node's history. The dashboard is a
 read-time aggregator over git, not a separate store.
+
+Because git *is* the database, reading it must scale with history, not with how
+many nodes ask. The aggregator therefore walks the whole `.spec` timeline in a
+**single `git log` pass** (`historyIndex` in `git.ts`), bucketing every commit's
+rows by each file's current path and following reparent renames backward
+in-memory — so a node that moved still reads as one continuous history, and a
+pure move never counts as a version. The result is cached on `HEAD`: committed
+history is immutable, so a warm read is one `rev-parse`. This replaces the old
+per-node `git log --follow` (two child processes per node, each re-walking all of
+history — `O(nodes × commits)`); `loadSpecs` now does one walk regardless of node
+count. Arbitrary non-`.spec` files (the governed *code* paths `spex lint` checks)
+keep the per-file `--follow` path, since the bulk index only covers `.spec`.

@@ -72,9 +72,11 @@ together — that is a project choice, not a git requirement.
   Reads `.spec` + git live and serves `GET /api/specs`, `GET /api/specs/:id/history`,
   `GET /api/layout`. Loader: `src/specs.ts`; git access: `src/git.ts`; portability seam:
   `src/layout.ts` (`resolveLayout()`, optional `spexcode.json` override for non-default layouts).
-- `spec-dashboard/` — Vite + React. `src/data.js` fetches `/api/specs` and **decorates client-side**:
-  it computes each node's x/y (a left→right tidy tree) and generates placeholder SVG A/B screenshots
-  and mock session logs. Treat `data.js` as a stand-in for the real git/tmux/yatsu feed.
+- `spec-dashboard/` — Vite + React. `src/data.js` fetches `/api/specs` and **decorates client-side**
+  with only the x/y tidy-tree layout (a pure view concern — the backend has no pixels). Everything
+  else, including the A→B `evidence` links, is served by the backend; the dashboard no longer
+  fabricates screenshots (absent evidence reads as "none"). `data.js` still carries a mock session
+  log as a stand-in for the real tmux/yatsu feed.
 - `spec-yatsu` — named as the third package (computer-use A→B evidence) but **not yet present**.
 
 ## Running it

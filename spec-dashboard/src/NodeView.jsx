@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import TermPane from './TermPane.jsx'
 
 // @@@ pane registry - add a face for a spec node by adding one entry + one render case below.
@@ -37,23 +38,25 @@ function EvidencePane({ node }) {
   )
 }
 
+// @@@ HistoryPane - real version history from git (spec-cli /api/specs/:id/history).
+// Each row: version, the session it was attributed to, and the commit subject (the reason).
 function HistoryPane({ node }) {
-  if (!node.version) return <div className="pane-hist empty">no versions yet — open the terminal pane to begin.</div>
-  const rows = []
-  for (let v = node.version; v >= 1; v--) {
-    rows.push({
-      v,
-      sess: v === node.version && node.session ? node.session : `sess-${node.id.slice(0, 2)}${(v * 37 % 90 + 10)}`,
-      msg: v === node.version ? 'current — latest ground truth' : 'edited spec content',
-    })
-  }
+  const [rows, setRows] = useState(null)
+  useEffect(() => {
+    let on = true
+    fetch(`/api/specs/${node.id}/history`).then((r) => r.json()).then((d) => { if (on) setRows(d) }).catch(() => on && setRows([]))
+    return () => { on = false }
+  }, [node.id])
+
+  if (!rows) return <div className="pane-hist empty">loading history…</div>
+  if (!rows.length) return <div className="pane-hist empty">no versions yet — open the terminal pane to begin.</div>
   return (
     <div className="pane-hist">
-      {rows.map((r) => (
-        <div className="hist-row" key={r.v}>
-          <span className="hist-v">v{r.v}</span>
-          <span className="hist-sess">{r.sess}</span>
-          <span className="hist-msg">{r.msg}</span>
+      {rows.map((r, i) => (
+        <div className="hist-row" key={r.hash}>
+          <span className="hist-v">v{rows.length - i}</span>
+          <span className="hist-sess">{r.session || '—'}</span>
+          <span className="hist-msg">{r.reason}</span>
         </div>
       ))}
     </div>

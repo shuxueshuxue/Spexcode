@@ -93,22 +93,6 @@ function log(node) {
   return [...lines, `\x1b[36mtype here — keystrokes forward via\x1b[0m \x1b[1msend-keys\x1b[0m`, ``]
 }
 
-// status: merged (decided / landed) | active (live session, in progress) | pending (not built yet)
-// @@@ recursive content - these nodes ARE this project's real threads: design decisions we
-// settled in chat (merged) and features we're still building (active). yatsu is honestly pending.
-const NODES = [
-  { id: 'root',     parent: null,    title: 'spec-dashboard',  status: 'active',  version: 6, session: 'sess-meta', hue: 210, desc: 'A node-graph of specs, navigated by logic — built recursively, with us, in this very chat.' },
-  { id: 'truth',    parent: 'root',  title: 'source-of-truth', status: 'merged',  version: 2, session: null,        hue: 200, desc: '.spec on main is the one canonical tree; each worktree holds a pending, session-attributed proposal.' },
-  { id: 'linker',   parent: 'truth', title: 'worktree-linker', status: 'merged',  version: 1, session: null,        hue: 190, desc: 'Map each worktree to its node via branch name + an untracked .session file — ephemeral, self-cleaning.' },
-  { id: 'topology', parent: 'truth', title: 'topology-eager',  status: 'merged',  version: 1, session: null,        hue: 175, desc: 'Topology changes (create/reparent) commit to main eagerly; node content can live long in a worktree.' },
-  { id: 'ui',       parent: 'root',  title: 'dashboard-ui',    status: 'merged',  version: 3, session: null,        hue: 265, desc: 'Web over TUI/GUI: real terminal feel via xterm, effortless rich visuals for yatsu evidence.' },
-  { id: 'graph',    parent: 'ui',    title: 'node-graph',      status: 'merged',  version: 2, session: null,        hue: 280, desc: 'A focused lens: render only the local neighborhood — parent, siblings, children — never the whole forest.' },
-  { id: 'kbnav',    parent: 'ui',    title: 'keyboard-nav',    status: 'active',  version: 2, session: 'sess-1c9d', hue: 320, desc: 'Move by relationship, not geometry: ←/→ siblings, ↑ parent, ↓ children. Flat constant-zoom framing.' },
-  { id: 'peek',     parent: 'ui',    title: 'session-peek',    status: 'active',  version: 2, session: 'sess-7f3a', hue: 150, desc: 'Embed the live session with capture-pane / send-keys; Esc returns to the graph (xterm-intercepted).' },
-  { id: 'yatsu',    parent: 'root',  title: 'yatsu-evidence',  status: 'pending', version: 0, session: null,        hue: 30,  desc: 'Computer-use agents replay a scenario and record A→B GUI evidence per version. Designed, not built yet.' },
-  { id: 'abshot',   parent: 'yatsu', title: 'ab-screenshots',  status: 'active',  version: 1, session: 'sess-b412', hue: 45,  desc: 'Before/after screenshots rendered inline as SVG — the placeholder for real yatsu captures.' },
-]
-
 // @@@ tidy-tree layout - post-order: leaves take the next column, parents center over their kids.
 // Gives an organized top-down tree instead of hand-placed coordinates.
 const X_GAP = 240, Y_GAP = 200
@@ -129,7 +113,13 @@ function layout(nodes) {
   return pos
 }
 
-const POS = layout(NODES)
-export const SPECS = NODES.map((n) => ({ ...n, ...POS[n.id], shots: shots(n.title, n.hue) }))
+// @@@ loadSpecs - the tree now comes from the backend (spec-cli reads .spec + git history).
+// We only decorate it client-side with layout positions and placeholder yatsu screenshots.
+export async function loadSpecs() {
+  const res = await fetch('/api/specs')
+  const nodes = await res.json()
+  const pos = layout(nodes)
+  return nodes.map((n) => ({ ...n, ...pos[n.id], shots: shots(n.title, n.hue) }))
+}
 
 export const SESSION_LOG = log

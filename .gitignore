@@ -6,6 +6,9 @@ dist/
 # specMech worktrees live here — they are separate checkouts, never committed
 .worktrees/
 
+# per-worktree session linker — ephemeral runtime state, not spec data
+.session
+
 # harness state
 .claude/
 

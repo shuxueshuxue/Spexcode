@@ -3,7 +3,7 @@ import { ReactFlow, Background, Controls, useReactFlow } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import SpecNode from './SpecNode.jsx'
 import NodeView, { PANES } from './NodeView.jsx'
-import { SPECS } from './data.js'
+import { loadSpecs } from './data.js'
 
 const nodeTypes = { spec: SpecNode }
 const NW = 200, NH = 145
@@ -16,19 +16,19 @@ const STATUS_TEXT = {
   pending: 'pending · not built yet',
 }
 
-export default function App() {
-  const [focusId, setFocusId] = useState('root')
+function Dashboard({ specs }) {
+  const [focusId, setFocusId] = useState(() => specs.find((s) => !s.parent)?.id)
   const [overlay, setOverlay] = useState(false)
   const [pane, setPane] = useState('spec')
   const { getViewport, setViewport } = useReactFlow()
   const graphRef = useRef(null)
   const animRef = useRef(0)
 
-  const byId = useMemo(() => Object.fromEntries(SPECS.map((s) => [s.id, s])), [])
+  const byId = useMemo(() => Object.fromEntries(specs.map((s) => [s.id, s])), [])
   const focus = byId[focusId]
 
-  const siblings = useMemo(() => SPECS.filter((s) => s.parent === focus.parent), [focus])
-  const children = useMemo(() => SPECS.filter((s) => s.parent === focus.id), [focus])
+  const siblings = useMemo(() => specs.filter((s) => s.parent === focus.parent), [focus])
+  const children = useMemo(() => specs.filter((s) => s.parent === focus.id), [focus])
   const parent = focus.parent ? byId[focus.parent] : null
   const sibIdx = siblings.findIndex((s) => s.id === focus.id)
   const trail = useMemo(() => {
@@ -48,7 +48,7 @@ export default function App() {
   const nearestX = useCallback((dir) => {
     const score = (s) => Math.abs(s.x - focus.x) * 2 + Math.abs(s.y - focus.y)
     let best = null
-    for (const s of SPECS) {
+    for (const s of specs) {
       const dx = s.x - focus.x
       if (s.id === focus.id || (dir === 'right' ? dx <= 0 : dx >= 0)) continue
       if (!best || score(s) < score(best)) best = s
@@ -59,7 +59,7 @@ export default function App() {
   const leftTarget  = useMemo(() => (sibIdx > 0 ? siblings[sibIdx - 1] : nearestX('left')), [siblings, sibIdx, nearestX])
 
   // stable nodes — positions from data, never recomputed; only selected + dim toggle.
-  const nodes = useMemo(() => SPECS.map((s) => {
+  const nodes = useMemo(() => specs.map((s) => {
     const kin = s.id === focusId || s.id === focus.parent || s.parent === focusId || s.parent === focus.parent
     return {
       id: s.id, type: 'spec', position: { x: s.x, y: s.y }, data: s,
@@ -67,7 +67,7 @@ export default function App() {
     }
   }), [focusId, focus.parent])
 
-  const edges = useMemo(() => SPECS.filter((s) => s.parent).map((s) => {
+  const edges = useMemo(() => specs.filter((s) => s.parent).map((s) => {
     const hot = s.id === focusId || s.parent === focusId
     return {
       id: `${s.parent}-${s.id}`, source: s.parent, target: s.id, type: 'smoothstep',
@@ -141,8 +141,8 @@ export default function App() {
   const stats = useMemo(() => {
     const by = { merged: 0, active: 0, pending: 0 }
     let sessions = 0, versions = 0
-    for (const s of SPECS) { by[s.status]++; if (s.session) sessions++; versions += s.version }
-    return { total: SPECS.length, ...by, sessions, versions }
+    for (const s of specs) { by[s.status]++; if (s.session) sessions++; versions += s.version }
+    return { total: specs.length, ...by, sessions, versions }
   }, [])
 
   return (
@@ -217,4 +217,12 @@ export default function App() {
       {overlay && <NodeView node={focus} pane={pane} setPane={setPane} onClose={() => setOverlay(false)} />}
     </div>
   )
+}
+
+// @@@ App - loads the spec tree from the backend, then renders the dashboard.
+export default function App() {
+  const [specs, setSpecs] = useState(null)
+  useEffect(() => { loadSpecs().then(setSpecs) }, [])
+  if (!specs) return <div className="loading">loading specs from git…</div>
+  return <Dashboard specs={specs} />
 }

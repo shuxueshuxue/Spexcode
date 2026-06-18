@@ -17,3 +17,9 @@ constant-zoom rAF pan that centres the focused node. +/- adjust the zoom.
 Down descends to the horizontally nearest child. Left/right fall back to the
 nearest node in that direction across the whole tree when no sibling exists —
 reversible on a tidy tree because each subtree owns a contiguous x-band.
+
+## v4 — axes follow the horizontal tree
+The graph went left->right (root at left, children right), so the keys rotate to
+match: up/down = siblings, left = parent, right = child. Same "move by
+relationship" rule, now on the y-axis — siblings fall back to the nearest node
+up/down across the tree (each subtree owns a contiguous y-band).

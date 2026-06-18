@@ -56,27 +56,21 @@ body {
 .react-flow__controls-button:hover { background: var(--panel); }
 .react-flow__controls-button svg { fill: var(--ink); }
 
-/* ---- node: looks like a tiny terminal window, not a web card ---- */
+/* ---- node: a single thin row (dot · title · version), like a file-tree line ---- */
 .spec-node {
-  width: 200px; background: var(--panel);
-  border: 1px solid var(--line); border-radius: 4px;
-  padding: 0; overflow: hidden;
-  transition: border-color .12s, transform .12s;
+  display: flex; align-items: center; gap: 7px;
+  width: 180px; height: 26px; padding: 0 9px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 4px;
+  transition: border-color .12s;
 }
 .spec-node.focused { border-color: var(--blue); outline: 2px solid var(--blue); outline-offset: -1px; }
 .spec-node.active.focused { border-color: var(--orange); outline-color: var(--orange); }
 
-.node-head {
-  display: flex; align-items: center; gap: 7px;
-  padding: 6px 9px; background: var(--panel2); border-bottom: 1px solid var(--line);
-}
-.node-dot { position: relative; width: 8px; height: 8px; border-radius: 2px; flex: none; } /* square tick */
+.node-dot { position: relative; width: 7px; height: 7px; border-radius: 2px; flex: none; } /* square tick */
 .pulse { position: absolute; inset: 0; border-radius: 2px; animation: pulse 1.6s ease-out infinite; }
 @keyframes pulse { 0% { transform: scale(1); opacity: .6; } 100% { transform: scale(2.6); opacity: 0; } }
 .node-title { font-size: 12px; font-weight: 600; color: var(--ink2); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.node-ver { font-size: 11px; color: var(--muted); }
-.node-thumb { width: calc(100% - 16px); height: 78px; object-fit: cover; margin: 8px; border-radius: 3px; display: block; border: 1px solid var(--line); }
-.node-status { font-size: 10px; padding: 0 9px 8px; text-transform: lowercase; letter-spacing: .4px; }
+.node-ver { font-size: 10px; color: var(--muted); flex: none; }
 
 .react-flow__handle { background: var(--muted); border: none; width: 5px; height: 5px; border-radius: 1px; }
 

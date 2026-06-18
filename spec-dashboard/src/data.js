@@ -93,21 +93,22 @@ function log(node) {
   return [...lines, `\x1b[36mtype here — keystrokes forward via\x1b[0m \x1b[1msend-keys\x1b[0m`, ``]
 }
 
-// @@@ tidy-tree layout - post-order: leaves take the next column, parents center over their kids.
-// Gives an organized top-down tree instead of hand-placed coordinates.
-const X_GAP = 240, Y_GAP = 200
+// @@@ tidy-tree layout - left->right: depth sets the column (x), post-order stacks leaves into
+// rows (y), parents centre vertically over their kids. Root at the left, subtrees extend right.
+// Rows are tight because a node is a single line, so many fit on one screen.
+const X_GAP = 230, Y_GAP = 34
 function layout(nodes) {
   const kids = {}
   nodes.forEach((n) => { if (n.parent) (kids[n.parent] ??= []).push(n.id) })
   const pos = {}
-  let col = 0
+  let row = 0
   const place = (id, depth) => {
     const cs = kids[id] || []
-    let x
-    if (cs.length === 0) { x = col * X_GAP; col++ }
-    else { const xs = cs.map((c) => place(c, depth + 1)); x = (xs[0] + xs[xs.length - 1]) / 2 }
-    pos[id] = { x, y: depth * Y_GAP }
-    return x
+    let y
+    if (cs.length === 0) { y = row * Y_GAP; row++ }
+    else { const ys = cs.map((c) => place(c, depth + 1)); y = (ys[0] + ys[ys.length - 1]) / 2 }
+    pos[id] = { x: depth * X_GAP, y }
+    return y
   }
   nodes.filter((n) => !n.parent).forEach((r) => place(r.id, 0))
   return pos

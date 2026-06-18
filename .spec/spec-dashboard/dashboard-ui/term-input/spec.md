@@ -4,6 +4,11 @@ status: active
 session: sess-cmdline
 hue: 290
 desc: The command line lives outside xterm, so the arrow keys are ours.
+code:
+  - spec-dashboard/src/TermPane.jsx
+  - spec-dashboard/src/NodeView.jsx
+  - spec-dashboard/src/App.jsx
+  - spec-dashboard/src/styles.css
 ---
 # term-input
 

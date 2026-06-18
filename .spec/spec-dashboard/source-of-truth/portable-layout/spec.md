@@ -4,6 +4,8 @@ status: active
 session: sess-merge
 hue: 160
 desc: Layout (where main is, how worktrees map to nodes) is an external interface, not a hardcode.
+code:
+  - spec-cli/src/layout.ts
 ---
 # portable-layout
 

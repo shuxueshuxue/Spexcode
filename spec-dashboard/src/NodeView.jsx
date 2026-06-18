@@ -16,6 +16,12 @@ function SpecPane({ node }) {
       <div className="doc-meta">
         status: <b>{node.status}</b> · version: <b>v{node.version || 0}</b> · session: <b>{node.session || 'idle'}</b>
       </div>
+      {node.code?.length > 0 && (
+        <div className="doc-code">
+          <span className="doc-code-h">// governs</span>
+          {node.code.map((f) => <code key={f} className="doc-code-f">{f}</code>)}
+        </div>
+      )}
       <p className="doc-note">// spec = the intent (left). drive the session to change it in place (right).</p>
     </div>
   )

@@ -4,6 +4,9 @@ status: active
 session: sess-merge
 hue: 335
 desc: Spec and terminal are one surface — intent (left) beside the live session (right).
+code:
+  - spec-dashboard/src/NodeView.jsx
+  - spec-dashboard/src/styles.css
 ---
 # work-pane
 

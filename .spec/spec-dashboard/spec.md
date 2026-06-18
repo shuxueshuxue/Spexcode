@@ -4,6 +4,8 @@ status: active
 session: sess-meta
 hue: 210
 desc: The front-end dashboard — a node-graph of specs, navigated by logic.
+code:
+  - spec-dashboard/src/main.jsx
 ---
 # spec-dashboard
 

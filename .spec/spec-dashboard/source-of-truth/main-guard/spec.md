@@ -4,6 +4,9 @@ status: active
 session: sess-merge
 hue: 145
 desc: Enforce the invariant — main only RECEIVES merges; all authoring happens in worktrees.
+code:
+  - scripts/hooks/pre-commit
+  - scripts/install-hooks.sh
 ---
 # main-guard
 

@@ -6,7 +6,7 @@ import NodeView, { PANES } from './NodeView.jsx'
 import { loadSpecs } from './data.js'
 
 const nodeTypes = { spec: SpecNode }
-const NW = 200, NH = 145
+const NW = 180, NH = 26
 const PANE_KEYS = PANES.map((p) => p.key)
 const clamp = (z) => Math.max(0.4, Math.min(1.6, z))
 
@@ -27,7 +27,7 @@ function Dashboard({ specs }) {
   const byId = useMemo(() => Object.fromEntries(specs.map((s) => [s.id, s])), [])
   const focus = byId[focusId]
 
-  const siblings = useMemo(() => specs.filter((s) => s.parent === focus.parent), [focus])
+  const siblings = useMemo(() => specs.filter((s) => s.parent === focus.parent).sort((a, b) => a.y - b.y), [focus])
   const children = useMemo(() => specs.filter((s) => s.parent === focus.id), [focus])
   const parent = focus.parent ? byId[focus.parent] : null
   const sibIdx = siblings.findIndex((s) => s.id === focus.id)
@@ -37,26 +37,27 @@ function Dashboard({ specs }) {
     return a
   }, [focus]) // eslint-disable-line
 
-  const downTarget = useMemo(() => {
+  // child is to the RIGHT; pick the one nearest in y.
+  const childTarget = useMemo(() => {
     if (!children.length) return null
-    return children.reduce((best, c) => (Math.abs(c.x - focus.x) < Math.abs(best.x - focus.x) ? c : best))
+    return children.reduce((best, c) => (Math.abs(c.y - focus.y) < Math.abs(best.y - focus.y) ? c : best))
   }, [children, focus])
 
-  // @@@ horizontal nav - prefer a sibling on that side; if none, jump to the spatially nearest
-  // node in that direction across the whole tree (Δx weighted, Δy as tie-break). Reversible on
-  // a tidy tree because each subtree owns a contiguous x-band.
-  const nearestX = useCallback((dir) => {
-    const score = (s) => Math.abs(s.x - focus.x) * 2 + Math.abs(s.y - focus.y)
+  // @@@ vertical nav - prefer a sibling above/below; if none, jump to the spatially nearest
+  // node in that direction across the whole tree (Δy weighted, Δx as tie-break). Reversible on
+  // a tidy tree because each subtree owns a contiguous y-band.
+  const nearestY = useCallback((dir) => {
+    const score = (s) => Math.abs(s.y - focus.y) * 2 + Math.abs(s.x - focus.x)
     let best = null
     for (const s of specs) {
-      const dx = s.x - focus.x
-      if (s.id === focus.id || (dir === 'right' ? dx <= 0 : dx >= 0)) continue
+      const dy = s.y - focus.y
+      if (s.id === focus.id || (dir === 'down' ? dy <= 0 : dy >= 0)) continue
       if (!best || score(s) < score(best)) best = s
     }
     return best
   }, [focus])
-  const rightTarget = useMemo(() => (sibIdx < siblings.length - 1 ? siblings[sibIdx + 1] : nearestX('right')), [siblings, sibIdx, nearestX])
-  const leftTarget  = useMemo(() => (sibIdx > 0 ? siblings[sibIdx - 1] : nearestX('left')), [siblings, sibIdx, nearestX])
+  const downTarget = useMemo(() => (sibIdx < siblings.length - 1 ? siblings[sibIdx + 1] : nearestY('down')), [siblings, sibIdx, nearestY])
+  const upTarget    = useMemo(() => (sibIdx > 0 ? siblings[sibIdx - 1] : nearestY('up')), [siblings, sibIdx, nearestY])
 
   // stable nodes — positions from data, never recomputed; only selected + dim toggle.
   const nodes = useMemo(() => specs.map((s) => {
@@ -116,16 +117,16 @@ function Dashboard({ specs }) {
         if (e.key === 'Tab') { e.preventDefault(); e.stopPropagation(); cyclePane(e.shiftKey ? -1 : 1); return }
         if (pane === 'work') return // the work pane's terminal owns the rest of the keyboard
         if (['1', '2', '3'].includes(e.key)) { e.preventDefault(); e.stopPropagation(); setPane(PANE_KEYS[+e.key - 1]); return }
-        if (e.key === 'ArrowLeft')  return go(leftTarget, e)
-        if (e.key === 'ArrowRight') return go(rightTarget, e)
+        if (e.key === 'ArrowUp')    return go(upTarget, e)
         if (e.key === 'ArrowDown')  return go(downTarget, e)
-        if (e.key === 'ArrowUp')    return go(parent, e)
+        if (e.key === 'ArrowLeft')  return go(parent, e)
+        if (e.key === 'ArrowRight') return go(childTarget, e)
         return
       }
-      if (e.key === 'ArrowLeft')  return go(leftTarget, e)
-      if (e.key === 'ArrowRight') return go(rightTarget, e)
+      if (e.key === 'ArrowUp')    return go(upTarget, e)
       if (e.key === 'ArrowDown')  return go(downTarget, e)
-      if (e.key === 'ArrowUp')    return go(parent, e)
+      if (e.key === 'ArrowLeft')  return go(parent, e)
+      if (e.key === 'ArrowRight') return go(childTarget, e)
       if (e.key === '=' || e.key === '+') { e.preventDefault(); centerOn(focus, clamp(getViewport().zoom * 1.2), 160) }
       else if (e.key === '-' || e.key === '_') { e.preventDefault(); centerOn(focus, clamp(getViewport().zoom / 1.2), 160) }
       else if (e.key === '0') { e.preventDefault(); centerOn(focus, 0.85, 200) }
@@ -133,7 +134,7 @@ function Dashboard({ specs }) {
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [overlay, pane, focus, leftTarget, rightTarget, downTarget, parent, centerOn, getViewport])
+  }, [overlay, pane, focus, upTarget, downTarget, childTarget, parent, centerOn, getViewport])
 
   const onNodeClick = useCallback((_e, n) => setFocusId(n.id), [])
 
@@ -167,9 +168,9 @@ function Dashboard({ specs }) {
         <div className="hud">
           <span className="brand">$ spec-dashboard</span>
           <div className="navhints">
-            <span><kbd>←</kbd><kbd>→</kbd> across</span>
-            <span><kbd>↑</kbd> parent</span>
-            <span><kbd>↓</kbd> child</span>
+            <span><kbd>↑</kbd><kbd>↓</kbd> siblings</span>
+            <span><kbd>←</kbd> parent</span>
+            <span><kbd>→</kbd> child</span>
             <span><kbd>+</kbd><kbd>-</kbd> zoom</span>
             <span><kbd>⏎</kbd> open · <kbd>esc</kbd> back</span>
           </div>

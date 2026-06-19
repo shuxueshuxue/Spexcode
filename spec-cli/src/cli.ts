@@ -38,7 +38,8 @@ Sessions
   ls [SEL…]             living-sessions table          [--status a,b] [--json]
   watch [SEL…]          stream actionable transitions  [--as NAME] [--status a,b] [--idle] [--interval N]
   new "<prompt>"        start a session (= session new)  [--node X]
-  session <sub>         new | list | reopen | review | done | merge | close | send | capture
+  session <sub>         new | list | reopen | review | done | merge | close | send | capture | prompt
+  session prompt <id>   print the session's originating prompt (what it was asked to do)
 
   SEL = session id (or id-prefix), node, or branch; none (or @all) = every session.`)
 }
@@ -143,8 +144,13 @@ if (cmd === 'serve') {
     console.log(await s.sendKeys(id, process.argv[5] ?? '', true) ? 'sent' : `not live ${id}`)
   } else if (sub === 'capture') {
     process.stdout.write(await s.captureSession(id))   // the session's live pane (output), for agents
+  } else if (sub === 'prompt') {
+    // print the session's full ORIGINATING prompt (what it was asked to do), captured at launch.
+    const p = await s.sessionPrompt(id)
+    if (p == null) { console.error(`no prompt recorded for ${id}`); process.exit(1) }
+    process.stdout.write(p.endsWith('\n') ? p : p + '\n')
   } else {
-    console.error('spex session: new|list|reopen|review|done|block|ask|idle|merge|close|send|capture'); process.exit(2)
+    console.error('spex session: new|list|reopen|review|done|block|ask|idle|merge|close|send|capture|prompt'); process.exit(2)
   }
 } else {
   console.error(`spex: unknown command '${cmd}' (try: spex help)`)

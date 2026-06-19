@@ -8,6 +8,8 @@ dist/
 
 # per-worktree session linker — ephemeral runtime state, not spec data
 .session
+# originating-prompt sidecar (multi-line launch request) — runtime metadata, not spec data
+.session-prompt
 
 # harness state
 .claude/

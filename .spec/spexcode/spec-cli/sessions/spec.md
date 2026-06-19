@@ -28,6 +28,14 @@ The durable unit is the worktree, not the tmux process: each session worktree ca
 of truth and survives a kill, reboot, or moving the folder. There is no in-memory map — the list is
 read from the worktrees every time, so state survives a backend restart.
 
+A session also **retains its originating prompt** — the human/manager's launch request — so a manager can
+later answer "what was this asked to do?" without transcript archaeology. Prompts are multi-line, so the
+prompt lives in its own untracked **sidecar** (`.session-prompt`) written at launch (best-effort, never
+blocking), beside the line-based `.session`. It surfaces as `prompt` (full) + `promptPreview` (one-line)
+on the `Session` object — flowing to `/api/sessions`, the `spex ls` table, and the `spex watch`
+launched/transition events — with `spex session prompt <id>` printing the full text. A session launched
+before the sidecar existed simply shows no prompt (best-effort, no error).
+
 ### State is agent-authored, not inferred
 
 External hooks only know *something* changed, never the exact transition — and the TUI has too many

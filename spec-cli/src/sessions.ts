@@ -77,6 +77,30 @@ const PROPOSAL_STATUS: Record<Proposal, DisplayStatus> = { merge: 'review', noth
 export type Session = {
   id: string; node: string | null; title: string | null; branch: string | null; path: string
   lifecycle: Lifecycle; proposal: Proposal | null; merges: number; status: DisplayStatus; note: string | null
+  prompt: string | null; promptPreview: string | null
+}
+
+// @@@ originating prompt - what the session was ASKED to do, captured at launch so a manager (human or
+// agent) can later answer "what was this session for?" WITHOUT transcript archaeology. Prompts are
+// multi-line, so they live in their own untracked SIDECAR file (`.session-prompt`) beside `.session`,
+// not as a line in the line-based `.session`. Everything here is BEST-EFFORT: a missing/old sidecar (a
+// session launched before this existed) just means no prompt is shown — never an error, never blocks a launch.
+const PROMPT_FILE = '.session-prompt'
+function writePromptFile(dir: string, prompt: string): void {
+  try { writeFileSync(join(dir, PROMPT_FILE), prompt) } catch { /* best-effort; must never block the launch */ }
+}
+function readPromptFile(dir: string): string | null {
+  try {
+    const p = join(dir, PROMPT_FILE)
+    if (!existsSync(p)) return null
+    const s = readFileSync(p, 'utf8')
+    return s.trim() ? s : null
+  } catch { return null }
+}
+// a one-line preview of the originating prompt for tables/events: first non-empty line, truncated.
+function promptPreview(prompt: string, n = 60): string {
+  const first = prompt.split('\n').map((l) => l.trim()).find(Boolean) || ''
+  return first.length > n ? first.slice(0, n - 1) + '…' : first
 }
 
 // the human label for a session row: the spec node it references, else a prompt-derived title (node-
@@ -175,7 +199,14 @@ async function findWorktree(id: string): Promise<{ path: string; branch: string 
 }
 
 function toSession(rec: SessRec, branch: string | null, path: string, status: DisplayStatus): Session {
-  return { id: rec.session!, node: rec.node, title: rec.title, branch, path, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status }
+  const prompt = readPromptFile(path)   // the originating ask, captured at launch (sidecar; null for old sessions)
+  return { id: rec.session!, node: rec.node, title: rec.title, branch, path, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, prompt, promptPreview: prompt ? promptPreview(prompt) : null }
+}
+
+// the session's full ORIGINATING prompt (what it was asked to do), or null if none was recorded.
+export async function sessionPrompt(id: string): Promise<string | null> {
+  const wt = await findWorktree(id)
+  return wt ? readPromptFile(wt.path) : null
 }
 
 // @@@ listSessions - every worktree that IS a session (has a .session id), status reconciled. Offline
@@ -382,6 +413,7 @@ export async function newSession(node: string | null, prompt: string): Promise<S
   await gitA(['-C', mainRoot(), 'worktree', 'add', '-b', branch, path, 'main'])
   const rec: SessRec = { node: ref || null, title, session: id, status: 'active', proposal: null, merges: 0, note: null }
   writeSessionFile(path, rec)
+  writePromptFile(path, prompt)   // capture the ORIGINATING prompt (the human/manager's ask) as sidecar metadata (best-effort)
   await hideClaudeMd(path)   // isolate the dispatched agent from the project CLAUDE.md (before launch)
   // perform the directive's spec-tree mutation in the worktree, then dispatch the finish-the-op prompt.
   // the mutation is uncommitted, so the board's overlay shows it instantly (added ghost / deleted mark).
@@ -544,15 +576,16 @@ export function statusLegend(color = true): string {
 export function formatTable(sessions: Session[], color = true): string {
   const c = (code: string, t: string) => (color ? `\x1b[${code}m${t}\x1b[0m` : t)
   if (!sessions.length) return c('90', '  no living sessions')
-  const header = c('90', `    ${'STATUS'.padEnd(13)} ${'NODE'.padEnd(22)} ${'ID'.padEnd(8)} ${'\u00d7'.padEnd(4)}NOTE`)
+  const header = c('90', `    ${'STATUS'.padEnd(13)} ${'NODE'.padEnd(22)} ${'ID'.padEnd(8)} ${'\u00d7'.padEnd(4)}${'PROMPT'.padEnd(42)}NOTE`)
   const rows = sessions.map((s) => {
     const g = STATUS_GLYPH[s.status] ?? '\u00b7'
     const code = ANSI[s.status] ?? '0'
     const name = sessionLabel(s).slice(0, 22).padEnd(22)
     const st = s.status.padEnd(13)
     const merges = (s.merges ? `\u00d7${s.merges}` : '').padEnd(4)
+    const prompt = c('90', (s.promptPreview ? trunc(s.promptPreview, 40) : '').padEnd(42))   // what it was asked to do
     const note = s.note ? c('90', trunc(s.note, 50)) : ''
-    return `  ${c(code, g)} ${c(code, st)} ${name} ${c('90', s.id.slice(0, 8))} ${merges}${note}`
+    return `  ${c(code, g)} ${c(code, st)} ${name} ${c('90', s.id.slice(0, 8))} ${merges}${prompt}${note}`
   })
   return [c('1', `SpexCode sessions (${sessions.length})`), header, ...rows, statusLegend(color)].join('\n')
 }
@@ -569,14 +602,16 @@ const NEXT: Record<string, string> = {
 }
 export function sessionEvent(s: Session): string {
   const note = s.note ? ` — note: ${s.note}` : ''
-  return `[spex] ${s.status} · ${sessionLabel(s)} — act: ${NEXT[s.status] || '—'}${note}  [id ${s.id}]`
+  const asked = s.promptPreview ? ` · asked: ${s.promptPreview}` : ''
+  return `[spex] ${s.status} · ${sessionLabel(s)} — act: ${NEXT[s.status] || '—'}${note}${asked}  [id ${s.id}]`
 }
 // @@@ launchEvent - a session's FIRST sighting. A launch goes straight to 'working' (not actionable), so
 // without this the watch feed would be blind to new sessions starting. Emitted ONCE per id, regardless of
 // status, so `spex watch` is a complete lifecycle feed: launched → [actionable transitions] → closed.
 export function launchEvent(s: Session): string {
   const note = s.note ? ` — note: ${s.note}` : ''
-  return `[spex] launched · ${sessionLabel(s)} — act: capture | send "<msg>"${note}  [id ${s.id}]`
+  const asked = s.promptPreview ? ` · asked: ${s.promptPreview}` : ''
+  return `[spex] launched · ${sessionLabel(s)} — act: capture | send "<msg>"${note}${asked}  [id ${s.id}]`
 }
 export type WatchOpts = { selectors?: string[]; statuses?: string[]; includeIdle?: boolean; intervalMs?: number; as?: string }
 export async function watchSessions(emit: (line: string) => void, opts: WatchOpts = {}): Promise<void> {

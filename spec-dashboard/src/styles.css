@@ -464,6 +464,7 @@ body {
 .si-content.is-session .si-term { animation: si-expand .22s ease; }
 .si-term { flex: 1; min-height: 0; display: flex; flex-direction: column; margin: 12px; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
 .si-term-head { padding: 7px 10px; background: var(--panel2); border-bottom: 1px solid var(--line); color: var(--ink2); display: flex; align-items: center; gap: 7px; font-size: 12px; }
+.si-th-prompt { padding: 4px 10px; background: var(--panel2); border-bottom: 1px solid var(--line); color: var(--ink2); font-size: 11px; opacity: 0.75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: default; }
 .si-term-body { flex: 1; min-height: 0; overflow: auto; padding: 10px 12px; background: var(--term-bg); }
 .si-line { font-size: 12px; line-height: 1.6; color: var(--ink2); white-space: pre-wrap; word-break: break-word; }
 .si-line.muted { color: var(--muted); }

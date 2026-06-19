@@ -461,6 +461,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                     <button className="si-act kill" onClick={() => act('close', () => setSel('new'))}>close</button>
                   </div>
                 </div>
+                {selSession?.promptPreview && (
+                  /* the originating prompt — "what was this session asked to do?" — full text on hover */
+                  <div className="si-th-prompt" title={selSession.prompt || ''}>asked: {selSession.promptPreview}</div>
+                )}
                 <div className="si-term-body" style={{ position: 'relative' }}>
                   {/* every opened session's terminal stays mounted; only the active one is shown */}
                   {[...opened].map((id) => (

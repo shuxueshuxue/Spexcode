@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { randomUUID } from 'node:crypto'
-import { readFileSync, writeFileSync, existsSync } from 'node:fs'
+import { readFileSync, writeFileSync, existsSync, renameSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { git, gitA, repoRoot } from './git.js'
 
@@ -139,6 +139,25 @@ export async function listSessions(): Promise<Session[]> {
 
 const slugify = (node: string | null) => (node || 'session').replace(/[^a-zA-Z0-9_-]/g, '-')
 
+// @@@ hideClaudeMd - CLAUDE.md isolation. A DISPATCHED agent should run with full SpexCode control over
+// its own behavior, not be shaped by the project CLAUDE.md the way the managing session is (auto-discovery
+// would inject it as system context). At launch we rename the worktree's CLAUDE.md → CLAUDE.spexhidden.md
+// (still on disk, fully readable — NOT deleted, NOT --bare, so auth/hooks/repo stay intact) so Claude
+// Code's auto-discovery no longer finds it, and `update-index --assume-unchanged CLAUDE.md` so the rename
+// is invisible to git and can NEVER be staged/committed/merged back to main. Default ON; disable with
+// SPEXCODE_HIDE_CLAUDE_MD=0. Best-effort: any failure here must never block the launch.
+const HIDE_CLAUDE_MD = process.env.SPEXCODE_HIDE_CLAUDE_MD !== '0' && process.env.SPEXCODE_HIDE_CLAUDE_MD !== 'false'
+async function hideClaudeMd(path: string): Promise<void> {
+  if (!HIDE_CLAUDE_MD) return
+  const src = join(path, 'CLAUDE.md')
+  if (!existsSync(src)) return
+  try {
+    // pin the tracked path assume-unchanged FIRST, so the rename's deletion is never seen by git.
+    await gitA(['-C', path, 'update-index', '--assume-unchanged', 'CLAUDE.md'])
+    renameSync(src, join(path, 'CLAUDE.spexhidden.md'))
+  } catch { /* isolation is best-effort; a failure must not block the launch */ }
+}
+
 // @@@ stopHook - injected per session via `claude --settings '<inline JSON>'` (a CLI param, so it
 // pollutes NOTHING — no global ~/.claude, not even a worktree file). The Stop hook fires when the agent
 // finishes a turn and runs `spex session done` from the worktree cwd → the worktree structurally becomes
@@ -186,6 +205,7 @@ export async function newSession(node: string | null, prompt: string): Promise<S
   await gitA(['-C', mainRoot(), 'worktree', 'add', '-b', branch, path, 'main'])
   const rec: SessRec = { node: node || null, session: id, status: 'active', proposal: null, merges: 0, note: null }
   writeSessionFile(path, rec)
+  await hideClaudeMd(path)   // isolate the dispatched agent from the project CLAUDE.md (before launch)
   const sq = `'${(prompt || '').replace(/'/g, `'\\''`)}'`
   await launch(id, path, `--session-id ${id} ${sq}`)
   return toSession(rec, branch, path, 'working')

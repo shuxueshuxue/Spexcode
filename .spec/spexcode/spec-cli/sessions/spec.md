@@ -43,8 +43,15 @@ shown as a badge), not a state — after a merge the worktree returns to active.
 
 `claude` launches with `--session-id <uuid>` (so the same conversation `--resume`s after death, and the
 id equals the `.session` id and the commit attribution — linking a spec node to its live session) on a
-private `tmux -L` socket. Four hooks are injected via a per-worktree settings file (no global settings
-touched): **`PreToolUse` → active** is the reliable freshness signal (any tool use means working; it
+private `tmux -L` socket. A dispatched agent runs with full SpexCode control over its own behavior, so it
+must **not** auto-inherit the project `CLAUDE.md` the way the managing session does: at launch (before
+`claude` starts) the worktree's `CLAUDE.md` is renamed to `CLAUDE.spexhidden.md` — still on disk and
+readable, only renamed so Claude Code's auto-discovery skips it — and the tracked path is pinned with
+`git update-index --assume-unchanged CLAUDE.md` so that rename is invisible to git and can never be
+staged/committed/merged back to main. This is a rename, never a delete and never `--bare`, so auth, the
+hooks, and the repo all keep working; it is overridable (`SPEXCODE_HIDE_CLAUDE_MD=0`) and on by default,
+and best-effort (a failure isolating never blocks the launch). Four hooks are injected via a per-worktree
+settings file (no global settings touched): **`PreToolUse` → active** is the reliable freshness signal (any tool use means working; it
 fires before the tool, so a `spex session done` declaration lands after and wins); **`UserPromptSubmit`
 → active** adds instant feedback when a prompt is sent; **`Stop` → the gate** blocks a stop while still
 `active` to force a declaration, with a hard loop-break (on the `stop_hook_active` continuation it
@@ -68,10 +75,12 @@ process is one subscriber and the selector is the subscription (many-to-many fal
 `writeSessionFile` (worktrees, not memory), `reconcile` (awaiting→proposal label; active→working or
 offline, where a pane sitting at a bare shell counts as offline so a crashed claude isn't a false
 "working"), and the lifecycle writers `markStateFromCwd` / `markDoneFromCwd` / `markErrorFromCwd`.
-Launch is implemented: `newSession` adds a `node/<slug>` worktree off main, writes `.session`, and
-starts claude on a private `tmux -L` socket with `--session-id` and per-worktree `--settings` (hooks
-written to `.spex-hooks.json`, no global pollution); `reopen` clears a proposal and `--resume`s a dead
-or crashed-to-shell pane. Human actions `mergeSession` (`--no-ff`, bump `merges`, back to active) and
+Launch is implemented: `newSession` adds a `node/<slug>` worktree off main, writes `.session`, isolates
+the worktree's `CLAUDE.md` (`hideClaudeMd`: rename → `CLAUDE.spexhidden.md` plus `update-index
+--assume-unchanged CLAUDE.md`, default on / `SPEXCODE_HIDE_CLAUDE_MD=0` to skip, best-effort so it can't
+break the launch), then starts claude on a private `tmux -L` socket with `--session-id` and per-worktree
+`--settings` (hooks written to `.spex-hooks.json`, no global pollution); `reopen` clears a proposal and
+`--resume`s a dead or crashed-to-shell pane. Human actions `mergeSession` (`--no-ff`, bump `merges`, back to active) and
 `closeSession` (the only removal) are present. `board.ts` (`buildBoard`) merges tree + overlay + the
 session list for both `/api/board` and `spex board`; `cli.ts` exposes `spex session`/`ls`/`watch`/
 `board`, and `watchSessions` emits one line per actionable transition for Monitor. The CLI surface is

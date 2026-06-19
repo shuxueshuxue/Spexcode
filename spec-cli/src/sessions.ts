@@ -42,9 +42,13 @@ export type DisplayStatus = 'working' | 'idle' | 'offline' | 'review' | 'done' |
 const PROPOSAL_STATUS: Record<Proposal, DisplayStatus> = { merge: 'review', nothing: 'done', close: 'close-pending' }
 
 export type Session = {
-  id: string; node: string | null; branch: string | null; path: string
+  id: string; node: string | null; title: string | null; branch: string | null; path: string
   lifecycle: Lifecycle; proposal: Proposal | null; merges: number; status: DisplayStatus; note: string | null
 }
+
+// the human label for a session row: the spec node it references, else a prompt-derived title (node-
+// agnostic sessions), else the branch, else the id. Used everywhere a session is named for a human.
+export const sessionLabel = (s: Session): string => s.node || s.title || s.branch || s.id
 
 async function tmux(args: string[]): Promise<string> {
   const { stdout } = await pexec('tmux', ['-L', TMUX_SOCK, ...args], { encoding: 'utf8' })
@@ -67,15 +71,16 @@ function mainRoot(): string {
   catch { return repoRoot() }
 }
 
-type SessRec = { node: string | null; session: string | null; status: Lifecycle; proposal: Proposal | null; merges: number; note: string | null }
+type SessRec = { node: string | null; title: string | null; session: string | null; status: Lifecycle; proposal: Proposal | null; merges: number; note: string | null }
 function readSessionFile(dir: string): SessRec {
-  const r: SessRec = { node: null, session: null, status: 'active', proposal: null, merges: 0, note: null }
+  const r: SessRec = { node: null, title: null, session: null, status: 'active', proposal: null, merges: 0, note: null }
   const p = join(dir, '.session')
   if (!existsSync(p)) return r
   for (const line of readFileSync(p, 'utf8').split('\n')) {
     const i = line.indexOf(':'); if (i < 0) continue
     const k = line.slice(0, i).trim(), v = line.slice(i + 1).trim()
     if (k === 'node') r.node = v || null
+    else if (k === 'title') r.title = v || null
     else if (k === 'session') r.session = v || null
     else if (k === 'status' && (v === 'active' || v === 'idle' || v === 'awaiting' || v === 'blocked' || v === 'error' || v === 'needs-input')) r.status = v
     else if (k === 'proposal' && v) r.proposal = v as Proposal
@@ -85,7 +90,9 @@ function readSessionFile(dir: string): SessRec {
   return r
 }
 function writeSessionFile(dir: string, rec: SessRec): void {
-  const lines = [`node: ${rec.node || ''}`, `session: ${rec.session || ''}`, `status: ${rec.status}`]
+  const lines = [`node: ${rec.node || ''}`]
+  if (rec.title) lines.push(`title: ${rec.title}`)
+  lines.push(`session: ${rec.session || ''}`, `status: ${rec.status}`)
   if (rec.status === 'awaiting' && rec.proposal) lines.push(`proposal: ${rec.proposal}`)
   if (rec.merges) lines.push(`merges: ${rec.merges}`)
   if (rec.note) lines.push(`note: ${rec.note}`)
@@ -135,7 +142,7 @@ async function findWorktree(id: string): Promise<{ path: string; branch: string 
 }
 
 function toSession(rec: SessRec, branch: string | null, path: string, status: DisplayStatus): Session {
-  return { id: rec.session!, node: rec.node, branch, path, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status }
+  return { id: rec.session!, node: rec.node, title: rec.title, branch, path, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status }
 }
 
 // @@@ listSessions - every worktree that IS a session (has a .session id), status reconciled. Offline
@@ -150,7 +157,21 @@ export async function listSessions(): Promise<Session[]> {
   return out
 }
 
-const slugify = (node: string | null) => (node || 'session').replace(/[^a-zA-Z0-9_-]/g, '-')
+const slugify = (s: string | null) => (s || 'session').replace(/[^a-zA-Z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'session'
+
+// @@@ node + title from the prompt - the spec node a session works on is whatever it @-mentions, NOT a UI
+// "focused node": the dashboard prefills `@<focused> ` as a deletable convenience, so the node the user
+// actually left in the prompt (changed it, or deleted it for a node-agnostic prompt) is the truth. We read
+// the FIRST `@<id>` that begins a word (same positional rule the dashboard's mention menu uses). When there
+// is none, the session is node-agnostic and we label it by the first few words of the prompt instead.
+const MENTION = /(?:^|\s)@([A-Za-z0-9_-]+)/
+const mentionedNode = (prompt: string): string | null => prompt.match(MENTION)?.[1] ?? null
+function titleFromPrompt(prompt: string): string | null {
+  const first = (prompt || '').trim().split('\n')[0].trim()
+  const words = first.split(/\s+/).filter(Boolean).slice(0, 7).join(' ')
+  if (!words) return null
+  return words.length > 50 ? words.slice(0, 49).trimEnd() + '…' : words
+}
 
 // @@@ hideClaudeMd - CLAUDE.md isolation. A DISPATCHED agent should run with full SpexCode control over
 // its own behavior, not be shaped by the project CLAUDE.md the way the managing session is (auto-discovery
@@ -224,11 +245,15 @@ async function launch(id: string, path: string, tail: string): Promise<void> {
 // with the id we chose. Backs both the dashboard POST and `spex session new`.
 export async function newSession(node: string | null, prompt: string): Promise<Session> {
   const id = randomUUID()
-  const slug = `${slugify(node)}-${id.slice(0, 4)}`
+  // explicit node (CLI --node) wins; otherwise the node is whatever the prompt @-mentions. With neither,
+  // the session is node-agnostic and labeled by a title drawn from the prompt's first words.
+  const ref = node || mentionedNode(prompt)
+  const title = ref ? null : titleFromPrompt(prompt)
+  const slug = `${slugify(ref || title)}-${id.slice(0, 4)}`
   const branch = `node/${slug}`
   const path = join(mainRoot(), '.worktrees', slug)
   await gitA(['-C', mainRoot(), 'worktree', 'add', '-b', branch, path, 'main'])
-  const rec: SessRec = { node: node || null, session: id, status: 'active', proposal: null, merges: 0, note: null }
+  const rec: SessRec = { node: ref || null, title, session: id, status: 'active', proposal: null, merges: 0, note: null }
   writeSessionFile(path, rec)
   await hideClaudeMd(path)   // isolate the dispatched agent from the project CLAUDE.md (before launch)
   const sq = `'${(prompt || '').replace(/'/g, `'\\''`)}'`
@@ -386,7 +411,7 @@ export function formatTable(sessions: Session[], color = true): string {
   const rows = sessions.map((s) => {
     const g = STATUS_GLYPH[s.status] ?? '\u00b7'
     const code = ANSI[s.status] ?? '0'
-    const name = (s.node || s.branch || s.id).slice(0, 22).padEnd(22)
+    const name = sessionLabel(s).slice(0, 22).padEnd(22)
     const st = s.status.padEnd(13)
     const merges = (s.merges ? `\u00d7${s.merges}` : '').padEnd(4)
     const note = s.note ? c('90', trunc(s.note, 50)) : ''
@@ -407,14 +432,14 @@ const NEXT: Record<string, string> = {
 }
 export function sessionEvent(s: Session): string {
   const note = s.note ? ` — note: ${s.note}` : ''
-  return `[spex] ${s.status} · ${s.node || s.branch || s.id} — act: ${NEXT[s.status] || '—'}${note}  [id ${s.id}]`
+  return `[spex] ${s.status} · ${sessionLabel(s)} — act: ${NEXT[s.status] || '—'}${note}  [id ${s.id}]`
 }
 // @@@ launchEvent - a session's FIRST sighting. A launch goes straight to 'working' (not actionable), so
 // without this the watch feed would be blind to new sessions starting. Emitted ONCE per id, regardless of
 // status, so `spex watch` is a complete lifecycle feed: launched → [actionable transitions] → closed.
 export function launchEvent(s: Session): string {
   const note = s.note ? ` — note: ${s.note}` : ''
-  return `[spex] launched · ${s.node || s.branch || s.id} — act: capture | send "<msg>"${note}  [id ${s.id}]`
+  return `[spex] launched · ${sessionLabel(s)} — act: capture | send "<msg>"${note}  [id ${s.id}]`
 }
 export type WatchOpts = { selectors?: string[]; statuses?: string[]; includeIdle?: boolean; intervalMs?: number; as?: string }
 export async function watchSessions(emit: (line: string) => void, opts: WatchOpts = {}): Promise<void> {

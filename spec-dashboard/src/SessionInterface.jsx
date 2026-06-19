@@ -110,9 +110,12 @@ export default function SessionInterface({ sessions, specs = [], focusNode, sel,
     if (!text || sending) return
     setSending(true)
     try {
+      // send only the prompt: the server derives the node from the @-mention the prompt ACTUALLY carries
+      // (the prefilled `@<focused>` is a deletable/editable default), and titles a node-agnostic session
+      // (no @) by its first words. So changing or deleting the @ here decides the node, not the focus.
       const res = await fetch('/api/sessions', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: text, node: focusNode?.id || null }),
+        body: JSON.stringify({ prompt: text }),
       })
       const data = await res.json().catch(() => null)
       setPrompt(focusNode ? `@${focusNode.id} ` : '')
@@ -218,7 +221,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, sel,
               onClick={() => setSel(s.id)}
             >
               <span className="si-dot" style={{ background: STATUS_DOT[s.status] || '#93a1a1' }} />
-              <span className="si-name">{s.node || s.branch || s.id}</span>
+              <span className="si-name">{s.node || s.title || s.branch || s.id}</span>
               <span className="si-st">{s.status}</span>
             </button>
           ))}
@@ -273,7 +276,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, sel,
               <div className="si-term">
                 <div className="si-term-head">
                   <span className="si-dot" style={{ background: STATUS_DOT[selSession?.status] || '#93a1a1' }} />
-                  <span className="si-th-name">{selSession?.node || selSession?.branch || active}</span>
+                  <span className="si-th-name">{selSession?.node || selSession?.title || selSession?.branch || active}</span>
                   <span className="si-th-st">{selSession?.status}</span>
                   {selSession?.merges > 0 && <span className="si-merges" title="times merged to main">merged ×{selSession.merges}</span>}
                   <div className="si-actions">

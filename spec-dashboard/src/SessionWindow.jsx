@@ -34,7 +34,7 @@ export default function SessionWindow({ sessions, activeId, onPick, onOpen }) {
               onClick={() => onPick(s)}
             >
               <span className="sess-dot" style={{ background: STATUS_DOT[s.status] || '#93a1a1' }} />
-              <span className="sess-id">{s.node || s.branch || s.id}</span>
+              <span className="sess-id">{s.node || s.title || s.branch || s.id}</span>
               <span className="sess-status">{s.status}</span>
               {ops && <span className="sess-ops">{ops}</span>}
             </button>

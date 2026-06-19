@@ -27,3 +27,10 @@ per-node `git log --follow` (two child processes per node, each re-walking all o
 history — `O(nodes × commits)`); `loadSpecs` now does one walk regardless of node
 count. Arbitrary non-`.spec` files (the governed *code* paths `spex lint` checks)
 keep the per-file `--follow` path, since the bulk index only covers `.spec`.
+
+Because the aggregator reads git, a node's *whole* observable state is derived here, not stored:
+`version` (content-commit count), `drift` (governed code ahead of the latest version), and now its
+**`status`** — a four-state value (`deriveStatus`) computed from version + drift, with frontmatter
+kept only as a fallback. `loadSpecs` derives the git-only part (pending/drift/merged); the live
+`active` state, which needs the worktree overlay, is layered on by the board assembler. The
+four-state model is specified in [[spec-node-states]].

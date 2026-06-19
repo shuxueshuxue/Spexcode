@@ -1,8 +1,11 @@
 import { Handle, Position } from '@xyflow/react'
 
+// the four backend-DERIVED states (specs.ts deriveStatus): merged in-sync, active in-flight,
+// drift = governed code ahead of spec, pending = no committed version. The dot takes the colour.
 const STATUS = {
   merged:  { color: '#859900' },
   active:  { color: '#cb4b16' },
+  drift:   { color: '#b58900' },
   pending: { color: '#93a1a1' },
 }
 

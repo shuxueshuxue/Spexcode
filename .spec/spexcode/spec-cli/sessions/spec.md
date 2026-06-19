@@ -31,3 +31,9 @@ to its live session for free. `buildBoard` assembles the dashboard's runtime sta
 the per-worktree overlay (ghosts for adds, edit/delete/move marks, drift), and the session list — in
 one shared module so the HTTP `/api/board` and `spex board` return identical data; the frontend only
 adds x/y pixels.
+
+`buildBoard` is also the **only** place a node's status can become `active`: it re-derives each node's
+four-state status (see [[spec-node-states]]) *with* the overlay it just computed, so a node an unmerged
+worktree is touching reads `active` and a not-yet-on-main ghost reads `active` rather than `pending`.
+The overlay's op-types (`added`/`edited`/`deleted`/`moved`) and the session list's reconciled states
+(`working`/`idle`/`offline` and the `awaiting` proposals) are carried through unchanged to the UI.

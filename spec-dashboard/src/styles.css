@@ -65,6 +65,7 @@ body {
 }
 .spec-node.focused { border-color: var(--blue); outline: 2px solid var(--blue); outline-offset: -1px; }
 .spec-node.active.focused { border-color: var(--orange); outline-color: var(--orange); }
+.spec-node.drift.focused { border-color: var(--yellow); outline-color: var(--yellow); }
 
 .node-dot { position: relative; width: 7px; height: 7px; border-radius: 2px; flex: none; } /* square tick */
 .pulse { position: absolute; inset: 0; border-radius: 2px; animation: pulse 1.6s ease-out infinite; }
@@ -94,11 +95,13 @@ body {
 .stats b { color: var(--ink2); font-weight: 600; }
 .c-merged { color: var(--green); }
 .c-active { color: var(--orange); }
+.c-drift { color: var(--yellow); }
 .c-pending { color: var(--muted); }
 
 .badge { display: inline-block; font-size: 11px; padding: 2px 0; border: none; background: none; }
 .badge.merged  { color: var(--green); }
 .badge.active  { color: var(--orange); }
+.badge.drift   { color: var(--yellow); }
 .badge.pending { color: var(--muted); }
 
 .desc { color: var(--ink); line-height: 1.55; font-size: 12.5px; margin: 12px 0 4px; }

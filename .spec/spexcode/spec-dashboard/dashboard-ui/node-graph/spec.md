@@ -23,3 +23,9 @@ kids. Each node is a thin single line (status dot · title · version) — no bo
 thumbnail — so tight rows fit far more of the tree on one screen. Edges read bold when
 they touch the focus, faint otherwise. Keys follow the same relationships (see
 [[keyboard-nav]]).
+
+The status dot reads the backend-**derived** four-state value (see [[spec-node-states]]), not
+frontmatter: green = merged, orange = active (a worktree is touching it), yellow = drift, grey =
+pending; active also pulses, and drift still shows its commits-ahead count as a separate ⚠ badge.
+A worktree's pending ops are stamped as overlay glyphs in the authoring session's colour — `+`
+added, `~` edited, `✕` deleted, `→` moved — with a dashed ring while uncommitted.

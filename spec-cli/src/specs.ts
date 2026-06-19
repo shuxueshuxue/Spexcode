@@ -36,6 +36,25 @@ function parseFrontmatter(src: string) {
 const str = (v: FmValue | undefined, d = '') => (Array.isArray(v) ? v.join(', ') : v ?? d)
 const list = (v: FmValue | undefined): string[] => (Array.isArray(v) ? v : v ? [v] : [])
 
+export type DerivedStatus = 'pending' | 'active' | 'merged' | 'drift'
+
+// @@@ deriveStatus - a node's status is DERIVED, never hand-written. Four states, in precedence:
+//   active  - an unmerged managed worktree has pending ops on this node (live, in-flight work).
+//             Only buildBoard knows the overlay, so /api/specs (no overlay) never reports active.
+//   drift   - governed code has moved ahead of the spec's latest version (drift > 0) — maybe stale.
+//   merged  - has committed version(s) on main and is in sync.
+//   pending - no committed version yet (version 0).
+// Frontmatter `status` is kept ONLY as a fallback: when git is unreadable every node would collapse
+// to version 0 / pending, so a node that DECLARED a status still shows that intent instead.
+export function deriveStatus(d: { version: number; drift: number; hasOverlay?: boolean; fmStatus?: string }): DerivedStatus {
+  if (d.hasOverlay) return 'active'
+  if (d.drift > 0) return 'drift'
+  if (d.version > 0) return 'merged'
+  const fb = d.fmStatus
+  if (fb === 'active' || fb === 'merged' || fb === 'drift') return fb
+  return 'pending'
+}
+
 function walk(dir: string, parent: string | null, acc: Raw[]) {
   let myId = parent
   if (existsSync(join(dir, 'spec.md'))) {
@@ -74,19 +93,25 @@ export function loadSpecs() {
     const driftFiles = code
       .map((f) => ({ file: f, behind: driftFor(didx, S, f) }))
       .filter((d) => d.behind > 0)
+    const drift = driftFiles.reduce((a, d) => a + d.behind, 0)
+    const fmStatus = str(r.fm.status, '') || null
     return {
       id: r.id,
       parent: r.parent,
       path: r.relPath,
       title: str(r.fm.title, r.id),
-      status: str(r.fm.status, 'pending'),
+      // @@@ derived status - computed from git (version + drift), NOT the frontmatter. Without overlay
+      // knowledge here, /api/specs reports pending|drift|merged; buildBoard re-derives with the overlay
+      // so a live worktree's nodes read `active`. fmStatus is carried through only as the fallback.
+      status: deriveStatus({ version: h.length, drift, fmStatus: fmStatus ?? undefined }),
+      fmStatus,
       session,
       hue: Number(str(r.fm.hue, '210')),
       desc: str(r.fm.desc),
       code,
       version: h.length,
       reason: h[0]?.reason || '',
-      drift: driftFiles.reduce((a, d) => a + d.behind, 0),
+      drift,
       driftFiles,
       // @@@ evidence - metadata links to A->B proof frames, read from the spec's frontmatter
       // (`evidence:` list). The backend is the source of truth here too — the dashboard never

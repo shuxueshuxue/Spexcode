@@ -27,11 +27,14 @@ function Dashboard({ specs, sessions, reload }) {
   // focus is resilient to the board reflowing under polling (a merged/closed node may vanish).
   const focus = byId[focusId] || specs.find((s) => !s.parent) || specs[0]
 
-  // @@@ node<->session link - a node's `session` IS the id of the Claude Code session that authored it
-  // (git Session: trailer; the live worktree runs under `--session-id` of that same id). So a node maps
-  // to a LIVE session by exact id match. This is the board->session half of the bidirectional link.
-  const sessionById = useMemo(() => Object.fromEntries(sessions.map((s) => [s.id, s])), [sessions])
-  const liveSessionFor = useCallback((node) => (node?.session && sessionById[node.session]) || null, [sessionById])
+  // @@@ node<->session link - a node does NOT belong to a session. `node.session` is only the LAST
+  // editor (the git Session: trailer — usually a closed session), kept purely as attribution. The LIVE
+  // link is the overlay: the board sessions CURRENTLY editing this node = those whose pending ops touch
+  // it. That set (not node.session) is what we light up and jump into; a node can have 0, 1, or many.
+  const liveEditorsOf = useCallback(
+    (node) => (node ? sessions.filter((s) => s.ops?.some((op) => op.nodeId === node.id)) : []),
+    [sessions],
+  )
 
   const children = useMemo(() => specs.filter((s) => s.parent === focus.id), [specs, focus])
   const parent = focus.parent ? byId[focus.parent] : null
@@ -70,14 +73,15 @@ function Dashboard({ specs, sessions, reload }) {
     } else {
       className = kin ? undefined : 'is-far'
     }
-    // a node whose author session is live carries a `link` so SpecNode can stamp the subtle ⏎ affordance.
-    const live = liveSessionFor(s)
+    // a node with live editor(s) carries a `link` so SpecNode stamps the subtle ⏎ affordance — Enter
+    // here crosses into that live session. Driven by the live overlay (pending ops), NOT node.session.
+    const editors = liveEditorsOf(s)
     return {
       id: s.id, type: 'spec', position: { x: s.x, y: s.y },
-      data: live ? { ...s, link: { color: live.color, status: live.status } } : s,
+      data: editors.length ? { ...s, link: { color: editors[0].color, status: editors[0].status } } : s,
       draggable: false, selected: s.id === focusId, className,
     }
-  }), [focusId, focus.parent, highlightId, specs, liveSessionFor])
+  }), [focusId, focus.parent, highlightId, specs, liveEditorsOf])
 
   const edges = useMemo(() => {
     const tree = specs.filter((s) => s.parent).map((s) => {
@@ -129,10 +133,16 @@ function Dashboard({ specs, sessions, reload }) {
     animateView({ x: el.clientWidth / 2 - (node.x + NW / 2) * z, y: el.clientHeight / 2 - (node.y + NH / 2) * z, zoom: z }, dur)
   }, [animateView, getViewport])
 
+  // @@@ initial framing only - center the root once after first paint. Thereafter ONLY keyboard nav
+  // pans (see `go` below); a mouse click sets focus WITHOUT moving the camera. Click-focus and
+  // arrow-focus are different interaction logics, so the camera follows only the keyboard one.
+  const framedRef = useRef(false)
   useEffect(() => {
-    const id = requestAnimationFrame(() => centerOn(focus, undefined, 300))
+    if (framedRef.current) return
+    framedRef.current = true
+    const id = requestAnimationFrame(() => centerOn(focus, undefined, 0))
     return () => cancelAnimationFrame(id)
-  }, [focusId]) // eslint-disable-line
+  }, [centerOn, focus])
 
   // @@@ keys - capture phase so we win over react-flow. Graph mode: ←↑↓→ walk the tree, +/-/0 zoom,
   // `i` opens the node-info popup, Enter opens the session interface. A modal (popup or session UI)
@@ -140,10 +150,24 @@ function Dashboard({ specs, sessions, reload }) {
   // blind-navigation bug); the session interface handles its own list nav / input.
   // open the session interface; if a session id is given, land on that tab (else keep the persisted one).
   const openSession = useCallback((sid) => { if (sid) setSessionSel(sid); setSessionUI(true) }, [])
+  // @@@ cross to session - from a focused node (board Enter or the node-info popup), cross from READING
+  // the node to ACTING on it. Driven by the LIVE OVERLAY (sessions editing this node), never node.session:
+  //   exactly one live editor -> jump straight into it
+  //   none                    -> New Session, prefilled with @<node-id> (start working on it in place)
+  //   several                 -> open the session interface so the user picks which editor to drive
+  // (the 'new' tab prefills @focus.id because SessionInterface reads focusNode=focus.)
+  const crossToSession = useCallback((node) => {
+    const editors = liveEditorsOf(node)
+    if (editors.length === 1) openSession(editors[0].id)
+    else if (editors.length === 0) openSession('new')
+    else setSessionUI(true)
+  }, [liveEditorsOf, openSession])
 
   useEffect(() => {
     const cyclePane = (dir) => setPane((p) => PANE_KEYS[(PANE_KEYS.indexOf(p) + dir + PANE_KEYS.length) % PANE_KEYS.length])
-    const go = (t, e) => { if (t) { e.preventDefault(); e.stopPropagation(); setFocusId(t.id) } }
+    // keyboard nav both focuses AND pans (the camera follows the keyboard). Mouse focus does not — see
+    // onNodeClick. This is the split: arrow-key focus recenters; click focus stays put.
+    const go = (t, e) => { if (t) { e.preventDefault(); e.stopPropagation(); setFocusId(t.id); centerOn(t) } }
     const onKey = (e) => {
       if (sessionUI) {
         if (e.key === 'Escape') { e.preventDefault(); setSessionUI(false) }
@@ -152,8 +176,14 @@ function Dashboard({ specs, sessions, reload }) {
       if (overlay) {
         if (e.key === 'Escape') { e.preventDefault(); setOverlay(false); return }
         if (e.key === 'Tab') { e.preventDefault(); e.stopPropagation(); cyclePane(e.shiftKey ? -1 : 1); return }
+        // ←/→ cycle the panes (alongside Tab and 1/2/3) — they switch tabs, NOT the board behind.
+        if (e.key === 'ArrowLeft')  { e.preventDefault(); e.stopPropagation(); cyclePane(-1); return }
+        if (e.key === 'ArrowRight') { e.preventDefault(); e.stopPropagation(); cyclePane(1); return }
         if (['1', '2', '3'].includes(e.key)) { e.preventDefault(); e.stopPropagation(); setPane(PANE_KEYS[+e.key - 1]); return }
-        return // arrows do NOT move the board behind the popup
+        // Enter crosses from reading the node to driving its agent — into the node's live editor(s) via
+        // the live overlay (one -> jump, none -> New Session @node, several -> pick). The popup closes behind.
+        if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); setOverlay(false); crossToSession(focus); return }
+        return // ↑/↓ (and anything else) do NOT move the board behind the popup
       }
       if (e.key === 'ArrowUp')    return go(upTarget, e)
       if (e.key === 'ArrowDown')  return go(downTarget, e)
@@ -163,20 +193,17 @@ function Dashboard({ specs, sessions, reload }) {
       else if (e.key === '-' || e.key === '_') { e.preventDefault(); centerOn(focus, clamp(getViewport().zoom / 1.2), 160) }
       else if (e.key === '0') { e.preventDefault(); centerOn(focus, 0.85, 200) }
       else if (e.key === 'i' || e.key === 'I') { e.preventDefault(); setOverlay(true) }
-      // Enter opens the session interface — focused on the focus node's live session if it has one.
-      else if (e.key === 'Enter') { e.preventDefault(); openSession(liveSessionFor(focus)?.id) }
+      // Enter crosses to the focus node's live editor(s) — jump / New Session / pick (see crossToSession).
+      else if (e.key === 'Enter') { e.preventDefault(); crossToSession(focus) }
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [overlay, sessionUI, pane, focus, upTarget, downTarget, childTarget, parent, centerOn, getViewport, openSession, liveSessionFor])
+  }, [overlay, sessionUI, focus, upTarget, downTarget, childTarget, parent, centerOn, getViewport, crossToSession])
 
-  // clicking a node focuses it; if its author session is LIVE, also open the session interface on it
-  // (the board->session half of the link, mirroring the session window's click-to-focus-node).
-  const onNodeClick = useCallback((_e, n) => {
-    setFocusId(n.id)
-    const live = liveSessionFor(n.data)
-    if (live) openSession(live.id)
-  }, [liveSessionFor, openSession])
+  // clicking a node ONLY focuses it — it does NOT pan the camera (recentering is keyboard-only, see
+  // `go`) and does NOT open a session (Enter is the deliberate cross into one). Mouse focus and
+  // keyboard focus are separate interaction logics; click moves the highlight, not the viewpoint.
+  const onNodeClick = useCallback((_e, n) => setFocusId(n.id), [])
 
   // clicking a session in the top-right window: toggle highlight of its worktree's overlays (matched
   // by source = worktree path) + jump to its first changed node (only .session-linked sessions carry

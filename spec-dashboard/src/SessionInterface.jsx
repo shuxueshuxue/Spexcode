@@ -47,6 +47,34 @@ function matchSpecs(specs, query, focusId) {
   return scored.slice(0, 8).map((x) => x.s)
 }
 
+// @@@ caretAtEdge - is the <textarea> caret on its FIRST (dir:'up') or LAST (dir:'down') VISUAL line,
+// counting WRAPPED lines, not just '\n'? The window-level ↑/↓ owns tab nav, but inside a multi-line
+// input the arrows must first walk the caret; only at the visual edge — no line to move to in that
+// direction — should they fall through to switching tabs. Browsers expose no caret-line API for a
+// textarea, so we mirror it into an off-screen div with the SAME wrapping geometry (width, padding,
+// font) and read which line the caret pixel lands on. One reused hidden node, measured synchronously.
+let mirror
+function caretAtEdge(el, dir) {
+  const cs = getComputedStyle(el)
+  if (!mirror) { mirror = document.createElement('div'); document.body.appendChild(mirror) }
+  const s = mirror.style
+  s.position = 'absolute'; s.visibility = 'hidden'; s.top = '0'; s.left = '-9999px'
+  s.whiteSpace = 'pre-wrap'; s.wordWrap = 'break-word'; s.overflow = 'hidden'
+  s.boxSizing = 'border-box'; s.border = '0'; s.width = `${el.clientWidth}px`
+  for (const p of ['paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'fontFamily', 'fontSize',
+    'fontWeight', 'fontStyle', 'letterSpacing', 'lineHeight', 'textIndent', 'textTransform', 'tabSize']) s[p] = cs[p]
+  const caret = el.selectionStart
+  mirror.textContent = el.value.slice(0, caret)
+  const mark = document.createElement('span')
+  mark.textContent = el.value.slice(caret) || '.'   // mark's box top = the caret's visual-line top
+  mirror.appendChild(mark)
+  const lh = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.2
+  const padTop = parseFloat(cs.paddingTop) || 0, padBottom = parseFloat(cs.paddingBottom) || 0
+  const top = mark.offsetTop - padTop                          // caret line top from text start; 0 = first line
+  const textHeight = mirror.scrollHeight - padTop - padBottom  // height of all (wrapped) lines
+  return dir === 'up' ? top < lh : top >= textHeight - lh - 1
+}
+
 // bold the first case-insensitive hit of the query inside a label (the part the user has typed so far).
 function highlight(text, q) {
   if (!q) return text
@@ -222,6 +250,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       // Esc closes the whole interface (App delegates it here so the menu can claim it first, above).
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onClose(); return }
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        // inside a multi-line input, ↑/↓ first walk the caret between (possibly wrapped) lines; only at
+        // the visual edge — no line to move to in that direction — do they fall through to tab nav.
+        const el = e.target
+        if (el?.tagName === 'TEXTAREA' && !caretAtEdge(el, e.key === 'ArrowUp' ? 'up' : 'down')) return
         e.preventDefault(); e.stopPropagation()
         const i = order.indexOf(active)
         const ni = Math.max(0, Math.min(order.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))

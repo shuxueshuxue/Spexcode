@@ -4,6 +4,8 @@
 // highlights that session's overlays on the board (and focuses its first changed node). The full
 // interactive surface is the session interface (Enter); this is the read-only summary.
 
+import { Avatar } from './avatar.jsx'
+
 const STATUS_DOT = { working: '#cb4b16', idle: '#93a1a1', offline: '#657b83', review: '#6c71c4', done: '#268bd2', 'close-pending': '#cb4b16', blocked: '#2aa198', error: '#dc322f', 'needs-input': '#b58900' }
 const GLYPH = { added: '+', edited: '~', deleted: '✕', moved: '→' }
 
@@ -33,6 +35,7 @@ export default function SessionWindow({ sessions, activeId, onPick, onOpen }) {
               style={{ '--ov': s.color }}
               onClick={() => onPick(s)}
             >
+              <Avatar seed={s.id} status={s.status} title={`${s.node || s.title || s.branch || s.id} · ${s.status} — ${s.id.slice(0, 8)}`} />
               <span className="sess-dot" style={{ background: STATUS_DOT[s.status] || '#93a1a1' }} />
               <span className="sess-id">{s.node || s.title || s.branch || s.id}</span>
               <span className="sess-status">{s.status}</span>

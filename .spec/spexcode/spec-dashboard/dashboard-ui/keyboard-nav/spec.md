@@ -30,7 +30,9 @@ the friction-reducer crosses into.
 node's **column** to the nearest node in that direction: depth pins x exactly (`x = depth · X_GAP`), so
 a column is a clean vertical line and vertical nav never changes column or dives into a child. Columns
 are aligned and rows aren't, so we navigate the organised axis — and it's reversible, since a column's
-nodes are already ordered in y. `+` / `-` zoom, `0` resets to the overview zoom.
+nodes are already ordered in y. **`hjkl` mirror the arrows** for the vim hand: `h`→parent, `l`→child,
+`k`→up the column, `j`→down — same `go(t)` path, same camera pan. `+` / `-` zoom, `0` resets to the
+overview zoom.
 
 A keystroke only ever changes the *viewpoint* and the highlight / dim / edge state — the tree sits at
 fixed absolute positions (see [[node-graph]]). Arrow-key focus changes recentre the camera on the new
@@ -43,7 +45,9 @@ the keys: arrows must not leak through to pan the board behind it — that was t
 
 The node-info popup keeps the keys close to the node world it overlays. Its three panes (spec / recent /
 history) switch by `←` / `→` (cycling, wrapping at the ends) just as they do by `Tab` and `1`-`3` —
-inside the popup, horizontal arrows mean "switch pane", never "move the board".
+inside the popup, horizontal arrows mean "switch pane", never "move the board". And `j` / `k` keep their
+vim sense but bind to the *content*: inside the popup they **scroll the open pane**, not the board behind
+it — so the vertical hand reads the long spec / history text while the horizontal hand flips panes.
 
 And the popup is a launchpad, not a dead end: `Enter` crosses straight from *reading* a node to
 *driving* its agent. The destination is the **live overlay** — the session(s) whose pending ops touch
@@ -55,9 +59,9 @@ reader from the node world into the session world, so inspecting a node and taki
 separate gestures. `node.session` survives only as a "last edited by" line in the popup's meta.
 
 In `App.jsx` this is one capture-phase `keydown` listener that wins over react-flow. In graph mode `↑`/`↓`
-call `nearestY('up'|'down')` (a same-x column scan for the nearest node in y), `←`→`parent`, `→`→the child
-nearest in y; all four go through `go(t)`, which sets focus **and** `centerOn(t)` — so arrow nav is the
-only thing that pans. `=`/`+` and `-`/`_` zoom by 1.2×, `0` resets to the overview zoom; `i` opens the info
+(aliased `k`/`j`) call `nearestY('up'|'down')` (a same-x column scan for the nearest node in y),
+`←`/`h`→`parent`, `→`/`l`→the child nearest in y; all four go through `go(t)`, which sets focus **and**
+`centerOn(t)` — so arrow nav is the only thing that pans. `=`/`+` and `-`/`_` zoom by 1.2×, `0` resets to the overview zoom; `i` opens the info
 popup; `Enter` calls `crossToSession(focus)`. The camera is a plain rAF pan (`animateView` → `setViewport`,
 cubic ease) that recentres at constant zoom — no fit, no arc; a `framedRef`-guarded effect frames the root
 once on mount and never re-pans on its own, and `onNodeClick` only `setFocusId(n.id)` — so polling and
@@ -70,8 +74,9 @@ one editor → `openSession(editors[0].id)`; none → `openSession('new')` (the 
 human pick. A node carrying live editor(s) gets a `link` so `SpecNode` stamps the subtle `⏎` affordance
 (first editor's colour/status). When a modal is open the handler short-circuits: the session interface
 swallows all keys but `Escape`; the info popup handles `Escape`, `Tab` / `←` / `→` / `1`-`3` (pane
-switching, `←`/`→` calling the same `cyclePane(±1)` as `Tab`) and `Enter` (which `setOverlay(false)` then
-`crossToSession(focus)`), and still drops `↑`/`↓` so they never reach the board; the key hints render in
-the HUD. `App.jsx` also hosts the graph render (node positions, edges, and the faint dashed reparent-preview
+switching, `←`/`→` calling the same `cyclePane(±1)` as `Tab`), `j`/`k` (which `scrollBy(±90)` the open
+pane — found via the lone `overflow:auto` descendant of `.ov-body`, since only one pane mounts at a time)
+and `Enter` (which `setOverlay(false)` then `crossToSession(focus)`), and still drops `↑`/`↓` so they
+never reach the board; the key hints render in the HUD. `App.jsx` also hosts the graph render (node positions, edges, and the faint dashed reparent-preview
 arrow for `moved` overlays — see [[node-graph]]), but those are view concerns that never change the
 navigation contract above.

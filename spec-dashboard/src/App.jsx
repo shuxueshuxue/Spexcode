@@ -182,6 +182,14 @@ function Dashboard({ specs, sessions, reload }) {
         if (e.key === 'ArrowLeft')  { e.preventDefault(); e.stopPropagation(); cyclePane(-1); return }
         if (e.key === 'ArrowRight') { e.preventDefault(); e.stopPropagation(); cyclePane(1); return }
         if (['1', '2', '3'].includes(e.key)) { e.preventDefault(); e.stopPropagation(); setPane(PANE_KEYS[+e.key - 1]); return }
+        // Inside the popup, j/k scroll the open pane's content (vim) rather than moving the board — only one
+        // pane is mounted at a time, so the first overflow:auto descendant of .ov-body is the scroller.
+        if (e.key === 'j' || e.key === 'k') {
+          e.preventDefault(); e.stopPropagation()
+          const sc = document.querySelector('.ov-body .pane-doc, .ov-body .pane-recent, .ov-body .pane-hist')
+          if (sc) sc.scrollBy({ top: e.key === 'j' ? 90 : -90, behavior: 'smooth' })
+          return
+        }
         // Enter crosses from reading the node to driving its agent — into the node's live editor(s) via
         // the live overlay (one -> jump, none -> New Session @node, several -> pick). The popup closes behind.
         if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); setOverlay(false); crossToSession(focus); return }
@@ -191,10 +199,11 @@ function Dashboard({ specs, sessions, reload }) {
       // sessionUI/overlay guards above, so a modal owning the keys is never disturbed by `?`/Esc here.
       if (e.key === '?') { e.preventDefault(); setLegend((v) => !v); return }
       if (e.key === 'Escape' && legend) { e.preventDefault(); setLegend(false); return }
-      if (e.key === 'ArrowUp')    return go(upTarget, e)
-      if (e.key === 'ArrowDown')  return go(downTarget, e)
-      if (e.key === 'ArrowLeft')  return go(parent, e)
-      if (e.key === 'ArrowRight') return go(childTarget, e)
+      // hjkl mirror the arrows for graph nav (vim): k/j up/down the column, h/l to parent/child.
+      if (e.key === 'ArrowUp'    || e.key === 'k') return go(upTarget, e)
+      if (e.key === 'ArrowDown'  || e.key === 'j') return go(downTarget, e)
+      if (e.key === 'ArrowLeft'  || e.key === 'h') return go(parent, e)
+      if (e.key === 'ArrowRight' || e.key === 'l') return go(childTarget, e)
       if (e.key === '=' || e.key === '+') { e.preventDefault(); centerOn(focus, clamp(getViewport().zoom * 1.2), 160) }
       else if (e.key === '-' || e.key === '_') { e.preventDefault(); centerOn(focus, clamp(getViewport().zoom / 1.2), 160) }
       else if (e.key === '0') { e.preventDefault(); centerOn(focus, 0.85, 200) }

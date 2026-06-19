@@ -11,6 +11,13 @@ import '@xterm/xterm/css/xterm.css'
 // the view, scrolling it can never block input — xterm owns its own scrollback and the wheel scrolls it
 // natively (we return false from the wheel handler so tmux's mouse mode never steals the wheel). xterm is
 // SCALED to its panel by the FitAddon; each fit sends cols×rows so tmux renders at that size.
+//
+// SCROLL: the live feed is a tmux client that REPAINTS in place at a fixed cols×rows, so xterm's own
+// scrollback is just repaint noise — useless to scroll. The real history lives in tmux (mouse on, 50k
+// lines, see pty-bridge). So when the wheel turns over the pane we synthesize SGR mouse-wheel reports
+// (ESC[<64/65;col;rowM) and send them down the SAME socket the message box uses; tmux reads them, enters
+// copy-mode and scrolls its actual pane history. We preventDefault + return false so neither the page nor
+// xterm's empty viewport moves — only tmux scrolls.
 export default function SessionTerm({ sessionId, senders }) {
   const hostRef = useRef(null)
   const termRef = useRef(null)
@@ -35,9 +42,6 @@ export default function SessionTerm({ sessionId, senders }) {
     const fit = new FitAddon()
     term.loadAddon(fit)
     term.open(hostRef.current)
-    // let the wheel scroll xterm's own viewport instead of being captured as a tmux mouse report — since
-    // we send nothing back, an un-handled wheel must fall through to the viewport's native scroll.
-    term.attachCustomWheelEventHandler(() => false)
 
     const proto = location.protocol === 'https:' ? 'wss' : 'ws'
     const ws = new WebSocket(`${proto}://${location.host}/api/sessions/${sessionId}/socket`)
@@ -74,6 +78,24 @@ export default function SessionTerm({ sessionId, senders }) {
     // Returns false when the socket isn't open yet so the caller can fall back to POST /keys.
     const send = (data) => { if (ws.readyState !== WebSocket.OPEN) return false; ws.send(enc.encode(data)); return true }
     if (senders) senders.current[sessionId] = send
+
+    // @@@ wheel → tmux copy-mode - forward the wheel as SGR mouse reports so tmux scrolls its real pane
+    // history (xterm's own scrollback is just repaint noise here). 64/65 = wheel up/down; col,row is the
+    // 1-based cell under the pointer so tmux scrolls the pane the cursor is over. We send a few reports per
+    // notch (scaled by deltaY) for a natural pace, then swallow the event so the page/viewport stay put.
+    term.attachCustomWheelEventHandler((ev) => {
+      const host = hostRef.current
+      if (!host || !term.cols || !term.rows) return false
+      const rect = host.getBoundingClientRect()
+      const clamp = (v, max) => Math.min(max, Math.max(1, v))
+      const col = clamp(Math.floor((ev.clientX - rect.left) / (rect.width / term.cols)) + 1, term.cols)
+      const row = clamp(Math.floor((ev.clientY - rect.top) / (rect.height / term.rows)) + 1, term.rows)
+      const btn = ev.deltaY < 0 ? 64 : 65  // wheel up / down
+      const ticks = Math.min(5, Math.max(1, Math.round(Math.abs(ev.deltaY) / 40)))
+      for (let i = 0; i < ticks; i++) send(`\x1b[<${btn};${col};${row}M`)
+      ev.preventDefault()
+      return false  // never let xterm's empty viewport (or the page) scroll instead
+    })
 
     const raf = requestAnimationFrame(fitAndSync) // re-fit once layout settles
     // @@@ post-entrance re-fits - the .si-term entrance (si-expand, .22s) animates via transform, which

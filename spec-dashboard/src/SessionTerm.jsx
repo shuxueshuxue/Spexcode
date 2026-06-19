@@ -44,9 +44,21 @@ export default function SessionTerm({ sessionId, senders }) {
     // socket is open (a stream of resize events would otherwise spam the backend).
     let lastCols = 0, lastRows = 0
     const fitAndSync = () => {
+      const host = hostRef.current
+      if (!host) return
+      // @@@ the shrink guard - never fit against an unsettled/animating layout. The panel opens behind a
+      // .22s entrance, fonts settle a frame late, and an inactive layer is display:none — a fit measured
+      // then would lock tmux to a tiny cols (the "narrow strip" bug) that the lastCols / bridge.cols guards
+      // would then suppress ever correcting. A near-0 host means hidden or not laid out yet: bail and let a
+      // later re-fit (animationend / scheduled / ResizeObserver / window-resize) send the real size.
+      if (host.clientWidth < 40 || host.clientHeight < 40) return
       try { fit.fit() } catch { return }
       const { cols, rows } = term
-      if (!cols || !rows || (cols === lastCols && rows === lastRows)) return
+      if (!cols || !rows) return
+      // a tiny col count while the host is plainly wide is a degenerate mid-animation measurement — skip it;
+      // a re-fit at full size will follow with the right number.
+      if (cols < 20 && host.clientWidth > 200) return
+      if (cols === lastCols && rows === lastRows) return
       lastCols = cols; lastRows = rows
       if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ t: 'resize', cols, rows }))
     }
@@ -61,12 +73,21 @@ export default function SessionTerm({ sessionId, senders }) {
     if (senders) senders.current[sessionId] = send
 
     const raf = requestAnimationFrame(fitAndSync) // re-fit once layout settles
+    // @@@ post-entrance re-fits - the .si-term entrance (si-expand, .22s) animates via transform, which
+    // ResizeObserver can't observe, so the panel can reach full size without RO ever firing to correct an
+    // early too-small fit. Re-fit explicitly when the entrance ends, and at a few points across its
+    // duration, so the FINAL fit measures the true full width regardless of how the first fits landed.
+    const termEl = hostRef.current.closest('.si-term')
+    if (termEl) termEl.addEventListener('animationend', fitAndSync)
+    const refitTimers = [60, 180, 320].map((ms) => setTimeout(fitAndSync, ms))
     const ro = new ResizeObserver(fitAndSync)
     ro.observe(hostRef.current)
     window.addEventListener('resize', fitAndSync)
 
     return () => {
       cancelAnimationFrame(raf)
+      refitTimers.forEach(clearTimeout)
+      if (termEl) termEl.removeEventListener('animationend', fitAndSync)
       ro.disconnect()
       window.removeEventListener('resize', fitAndSync)
       if (senders && senders.current[sessionId] === send) delete senders.current[sessionId]

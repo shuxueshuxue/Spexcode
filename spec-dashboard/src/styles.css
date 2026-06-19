@@ -404,7 +404,11 @@ body {
 .si-bottom .si-input:disabled { color: var(--muted); }
 
 @keyframes si-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-@keyframes si-expand { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: none; } }
+/* entrance for the session terminal — fade + a small rise, NOT scale(): a scaling transform distorts
+   xterm's getBoundingClientRect-based cell measurement mid-animation, which (with the FitAddon) is one
+   source of the "narrow strip" shrink. translateY leaves the measured box undistorted at every frame, so
+   the final/any fit measures the true full width. SessionTerm also re-fits on animationend to be sure. */
+@keyframes si-expand { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
 /* live tmux terminal inside the session view — xterm is FITTED to this box (see SessionTerm). The host
    and its wrapper clip (no horizontal scrollbar), but the xterm VIEWPORT scrolls vertically so the

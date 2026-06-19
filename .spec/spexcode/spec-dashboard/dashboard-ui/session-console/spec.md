@@ -38,8 +38,13 @@ that viewport natively (SessionTerm returns `false` from a custom wheel handler 
 steal the wheel). There is **no snapshot-plus-raw-delta splice** (the old scramble): a newly-joined viewer
 is seeded once with the current screen and then streams live from the same coherent client. The terminal
 **scales to its panel** — the FitAddon fits xterm to the container and each fit sends the new cols×rows
-over the socket so tmux re-renders at exactly that size (only when it changed). The panel clips
-horizontally; the xterm viewport is the only scrollbar. A small **copy button** floats in each terminal's
+over the socket so tmux re-renders at exactly that size (only when it changed). The fit is **robust against
+the open entrance**: the panel animates in (`si-expand`, a fade + rise — deliberately **not** a `scale()`,
+which would distort xterm's cell measurement mid-animation), and SessionTerm **never propagates a degenerate
+fit** — it skips any measurement against a near-zero (hidden / unlaid-out) host or an implausibly small col
+count for a clearly-wide host, and **re-fits after the entrance settles** (on `animationend` plus scheduled
+re-fits across the .22s) so the final size locks tmux to the true full width, never a narrow strip. The
+panel clips horizontally; the xterm viewport is the only scrollbar. A small **copy button** floats in each terminal's
 top-right corner: it copies the terminal's whole text — visible screen plus retained scrollback — to the
 clipboard via `navigator.clipboard`, flashing a brief "copied" affordance.
 
@@ -73,8 +78,9 @@ socket writer (`sendersRef`), with `POST /api/sessions/:id/keys` as the not-yet-
 header buttons map to the session's status (relaunch / merge / back-to-working / close), each a
 thin POST then a board reload (there is no `review` button — that transition is agent-proposed, not human). A window-level capture listener owns `↑`/`↓` list movement and Enter-on-New.
 `SessionTerm.jsx` opens a **read-only** (`disableStdin`) FitAddon-sized xterm, fits it to the panel on open
-and on container/window resize (sending the new cols×rows only when it changed), and wires xterm to the
-session WebSocket: incoming binary frames are written straight to xterm. It forwards **no** keyboard/mouse;
+and on container/window resize (sending the new cols×rows only when it changed) while guarding against
+degenerate measurements and re-fitting after the open animation so it reliably fills at full width, and
+wires xterm to the session WebSocket: incoming binary frames are written straight to xterm. It forwards **no** keyboard/mouse;
 instead it registers a `send(text)` writer (raw bytes over the socket) for the bottom box, scrolls via
 xterm's own scrollback (custom wheel handler returns `false`), and renders a top-right **copy** button that
 dumps the full buffer (visible + scrollback) to the clipboard. `SessionWindow.jsx` is the top-right floater of status-dot

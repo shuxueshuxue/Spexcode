@@ -33,6 +33,9 @@ body {
 .graph { position: relative; background: var(--paper); border-right: 1px solid var(--line); }
 .react-flow__attribution { display: none; }
 .react-flow__edge-path { stroke-dasharray: 0; }
+/* reparent preview: a faint dashed arrow node→proposed-parent in the author session's colour, shown
+   while a `moved` overlay is uncommitted. Subtle — it hints at the move without rivalling tree edges. */
+.move-edge .react-flow__edge-path { stroke-linecap: round; }
 
 .hud {
   position: absolute; top: 16px; left: 18px; z-index: 5;

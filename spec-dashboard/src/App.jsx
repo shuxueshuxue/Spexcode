@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ReactFlow, Background, Controls, useReactFlow } from '@xyflow/react'
+import { ReactFlow, Background, Controls, MarkerType, useReactFlow } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import SpecNode from './SpecNode.jsx'
 import NodeView, { PANES } from './NodeView.jsx'
@@ -79,13 +79,30 @@ function Dashboard({ specs, sessions, reload }) {
     }
   }), [focusId, focus.parent, highlightId, specs, liveSessionFor])
 
-  const edges = useMemo(() => specs.filter((s) => s.parent).map((s) => {
-    const hot = s.id === focusId || s.parent === focusId
-    return {
-      id: `${s.parent}-${s.id}`, source: s.parent, target: s.id, type: 'smoothstep',
-      style: { stroke: hot ? '#268bd2' : '#ded7bf', strokeWidth: hot ? 2 : 1 }, zIndex: hot ? 1 : 0,
+  const edges = useMemo(() => {
+    const tree = specs.filter((s) => s.parent).map((s) => {
+      const hot = s.id === focusId || s.parent === focusId
+      return {
+        id: `${s.parent}-${s.id}`, source: s.parent, target: s.id, type: 'smoothstep',
+        style: { stroke: hot ? '#268bd2' : '#ded7bf', strokeWidth: hot ? 2 : 1 }, zIndex: hot ? 1 : 0,
+      }
+    })
+    // @@@ reparent preview - a node with a `moved` overlay carrying `toParent` (its proposed new parent)
+    // gets a faint dashed arrow node→toParent in the author session's colour, so a human SEES the
+    // reparent before it merges. Subtle (low opacity, animated dashes) and never touches a tree edge.
+    const moves = []
+    for (const s of specs) {
+      const mv = (s.overlays || []).find((o) => o.op === 'moved' && o.toParent && byId[o.toParent])
+      if (!mv) continue
+      moves.push({
+        id: `move-${s.id}-${mv.toParent}`, source: s.id, target: mv.toParent, type: 'smoothstep',
+        animated: true, zIndex: 2, className: 'move-edge',
+        style: { stroke: mv.color, strokeWidth: 1.5, strokeDasharray: '4 4', opacity: 0.6 },
+        markerEnd: { type: MarkerType.ArrowClosed, color: mv.color, width: 14, height: 14 },
+      })
     }
-  }), [focusId, specs])
+    return [...tree, ...moves]
+  }, [focusId, specs, byId])
 
   // camera — tree is fixed; viewpoint flat-pans to centre the focused node.
   const animateView = useCallback((target, dur) => {

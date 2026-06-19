@@ -69,6 +69,10 @@ function Dashboard({ specs, sessions, reload }) {
   // close/reopen. Enter (board or node-info popup) always reopens it at the remembered tab (`sessionSel`),
   // a "boarding switch" — never a context jump based on the focused node.
   const openBoard = useCallback(() => setSessionUI(true), [])
+  // @@@ open a session's console - the session-graph's embed: clicking a graph node crosses into THAT
+  // session's console by reusing the board's open path (select its tab + show the interface), then closes
+  // the graph behind it. No new mechanism — the SessionInterface already keys its console off `sessionSel`.
+  const openSession = useCallback((id) => { setGraphView(false); setSessionSel(id); setSessionUI(true) }, [])
   // @@@ startNew - a board chord opens the session board on its New Session tab with `text` pre-seeded
   // (the @-directive). One-shot: SessionInterface applies it then clears `seed`, so a later reopen keeps
   // the user's own draft instead of re-seeding.
@@ -346,6 +350,14 @@ function Dashboard({ specs, sessions, reload }) {
             The wall of inline hints used to live here; it now lives inside that modal (see Legend.jsx). */}
         <div className="hud">
           <span className="brand">$ spec-dashboard</span>
+          {/* a discreet floating affordance for the session graph — same view the `t` key opens (now also
+              documented in the help modal). The button makes the otherwise hidden hotkey discoverable. */}
+          <button className="hud-graph" onClick={() => setGraphView(true)} title={t('hud.graphTitle')}>
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
+              <circle cx="3.5" cy="4" r="1.8" /><circle cx="12.5" cy="4" r="1.8" /><circle cx="8" cy="12.5" r="1.8" />
+              <path d="M4.9 5.1 L7 11 M11.1 5.1 L9 11 M5 4 H11" />
+            </svg>
+          </button>
           <button className="hud-help" onClick={() => setLegend((v) => !v)} title={t('hud.helpTitle')}>?</button>
         </div>
 
@@ -355,7 +367,7 @@ function Dashboard({ specs, sessions, reload }) {
         {settings && <Settings onClose={() => setSettings(false)} />}
       </div>
 
-      {graphView && <SessionGraph onClose={() => setGraphView(false)} />}
+      {graphView && <SessionGraph onClose={() => setGraphView(false)} onOpen={openSession} />}
       {overlay && <NodeView node={focus} pane={pane} setPane={setPane} onClose={() => setOverlay(false)} />}
       {/* stays MOUNTED across open/close (hidden via `open`) so the selected tab + per-tab drafts persist. */}
       <SessionInterface

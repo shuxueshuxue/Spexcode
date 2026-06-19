@@ -16,6 +16,7 @@ const BOARD_KEYS = [
   [['→', 'l'], 'legend.board.child'],
   [['+', '−', '0'], 'legend.board.zoom'],
   [['i'], 'legend.board.info'],
+  [['t'], 'legend.board.graph'],
   [['⏎'], 'legend.board.enter'],
   [['n', 'n'], 'legend.board.newChild'],
   [['d', 'd'], 'legend.board.del'],

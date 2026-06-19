@@ -52,6 +52,13 @@ body {
   background: var(--paper); border: 1px solid var(--line); border-radius: 4px;
 }
 .hud-help:hover { border-color: var(--blue); color: var(--orange); }
+/* the session-graph affordance — same chrome as the help button, sits beside it; opens the `t` view. */
+.hud-graph {
+  pointer-events: auto; align-self: flex-start; cursor: pointer;
+  width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+  color: var(--blue); background: var(--paper); border: 1px solid var(--line); border-radius: 4px;
+}
+.hud-graph:hover { border-color: var(--blue); color: var(--orange); }
 
 /* gentle focus grouping — only opacity changes, positions never move */
 .react-flow__node { transition: opacity .18s ease; }
@@ -598,6 +605,18 @@ body {
 .sg-label { color: var(--ink2); font-size: 11px; font-weight: 700; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sg-status { color: var(--muted); font-size: 10px; }
 .sg-handle { width: 8px; height: 8px; background: var(--sg); border: none; }
-/* directed subscription arrows: animated, click-to-remove (cursor signals it). */
-.sg-edge { cursor: pointer; }
+/* directed monitor arrows: live = solid; pending = dashed (asked, not yet registered — see sg-pending). */
 .sg-edge .react-flow__edge-path { stroke-linecap: round; }
+.sg-pending .react-flow__edge-path { stroke-dasharray: 5 5; }
+/* held while the first graph loads, so the view never flashes empty before it opens already-framed. */
+.sg-loading {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  color: var(--muted); font-family: var(--mono); font-size: 13px;
+}
+/* brief reassurance after a drag-to-monitor: "asked A to monitor B", auto-dismissed. */
+.sg-toast {
+  position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 6;
+  padding: 7px 14px; background: var(--panel); color: var(--ink2);
+  border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,.12);
+  font-family: var(--mono); font-size: 12px;
+}

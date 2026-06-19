@@ -34,16 +34,21 @@ External hooks only know *something* changed, never the exact transition — and
 special cases to infer reliably. So the agent **writes its own state**; hooks merely gate at boundaries
 to force the write. Lifecycle (in `.session`): `active` (working / not yet declared this turn),
 `awaiting` (a proposal — `merge`→review, `nothing`→done, `close`→close-pending), `blocked` (waiting on
-a background task; self-resumes — never mislabelled idle), `error` (a turn died on an API failure), and
+a background task; self-resumes — never mislabelled idle), `error` (a turn died on an API failure),
 `needs-input` (the agent **deliberately declared it is pausing to ask the HUMAN a question** — via `spex
-session ask --note <question>`, typically at the Stop gate; the note carries the question). `needs-input`
-is distinct from `blocked`: `blocked` self-resumes when its background task finishes, whereas
-`needs-input` resumes only when a human sends the agent a new prompt. Like `awaiting`/`blocked`/`error`
-it is an **agent-authored** state (declared, never inferred) that **wins over liveness** in `reconcile`.
-`reconcile` shows `active` as **working** if its tmux is live, else **offline**. The agent only ever
-*proposes*; **merge** and **close** are human-only, every proposal is reversible (back-to-working), and
-nothing auto-disappears, so a self-completed session is always findable. `merges` is metadata (a count,
-shown as a badge), not a state — after a merge the worktree returns to active.
+session ask --note <question>`, typically at the Stop gate; the note carries the question), and `idle`
+(claude has **stopped and is waiting at its prompt without having declared** any of the above). `idle` is
+the **one inferred state** — the Notification(`idle_prompt`) hook writes it — so unlike the agent-authored
+states it carries a **strict active-only guard** (see below). `needs-input` is distinct from `blocked`:
+`blocked` self-resumes when its background task finishes, whereas `needs-input` resumes only when a human
+sends the agent a new prompt. The agent-authored states (`awaiting`/`blocked`/`error`/`needs-input`) are
+declared, never inferred, and **win over liveness** in `reconcile`. `active` and `idle` are the **same
+live agent** — claude is the pane's foreground process whether it is churning or idle-waiting — so they
+share `reconcile`'s liveness check: **offline** if the tmux is gone or the pane fell back to a bare shell,
+else **idle** if the idle_prompt hook has fired since the last tool use, else **working**. The agent only
+ever *proposes*; **merge** and **close** are human-only, every proposal is reversible (back-to-working),
+and nothing auto-disappears, so a self-completed session is always findable. `merges` is metadata (a
+count, shown as a badge), not a state — after a merge the worktree returns to active.
 
 ### Hooks (injected per session via `--settings`, polluting nothing)
 
@@ -56,26 +61,35 @@ readable, only renamed so Claude Code's auto-discovery skips it — and the trac
 `git update-index --assume-unchanged CLAUDE.md` so that rename is invisible to git and can never be
 staged/committed/merged back to main. This is a rename, never a delete and never `--bare`, so auth, the
 hooks, and the repo all keep working; it is overridable (`SPEXCODE_HIDE_CLAUDE_MD=0`) and on by default,
-and best-effort (a failure isolating never blocks the launch). Four hooks are injected via a per-worktree
+and best-effort (a failure isolating never blocks the launch). Five hooks are injected via a per-worktree
 settings file (no global settings touched): **`PreToolUse` → active** is the reliable freshness signal (any tool use means working; it
 fires before the tool, so a `spex session done` declaration lands after and wins); **`UserPromptSubmit`
 → active** adds instant feedback when a prompt is sent; **`Stop` → the gate** blocks a stop while still
 `active` to force a declaration, with a hard loop-break (on the `stop_hook_active` continuation it
-auto-defaults and allows — at most one nudge, never a dead loop, never an undeclared leak); and
-**`StopFailure` → error**.
+auto-defaults and allows — at most one nudge, never a dead loop, never an undeclared leak);
+**`StopFailure` → error**; and **`Notification(idle_prompt)` → idle** (catch-all hook + inline payload
+filter, so it runs `spex session idle` only on the idle-prompt notification, not other notifications)
+marks the session `idle` when claude sits waiting at its prompt. `spex session idle` is **guarded
+active-only**: it overwrites `active` → `idle` and no-ops on any other status, so it can never clobber a
+deliberate declaration. The mark-active path flips `idle` back to `active` the moment real work resumes,
+so the inference is self-correcting.
 
 `needs-input` is **not** wired to a hook — it is **agent-authored** via `spex session ask --note
 <question>`, offered as a fourth option in the Stop gate's block-reason menu (alongside `done --propose
 merge|nothing|close` and `block`). When the agent stops to ask the human a question, it picks `ask`; this
 calls `markStateFromCwd('needs-input', { note })` — a deliberate declaration like `done`/`block`, so
 (unlike the other authored states' inference-proofing) it carries **no active-only guard**: the agent is
-the authority on what its stop means. The note carries the question. An earlier design wired this to
-Claude Code's **GLOBAL `Notification(idle_prompt)` hook**, but that was **removed as inert**: the Stop gate
-forces a stop-time declaration, so a question-asking agent always declares `done` (awaiting/nothing)
-*before* `idle_prompt` could fire, and the old hook's active-only guard then no-op'd — the session never
-reached `needs-input`. Moving the trigger to the gate itself is what makes it actually fire (verified
-end-to-end). The mark-active path (`PreToolUse`/`UserPromptSubmit` → active) clears `needs-input` back to
-`active` the moment the human sends the next prompt, same as it clears any other non-active state.
+the authority on what its stop means. The note carries the question. `needs-input` is deliberately **not**
+driven by Claude Code's `Notification(idle_prompt)` hook: the Stop gate forces a stop-time declaration, so
+a question-asking agent always declares `done`/`ask` *before* `idle_prompt` could fire — the gate is what
+makes the question actually surface (verified end-to-end). That same `idle_prompt` hook instead drives the
+separate, **inferred** `idle` state, which is exactly the case the gate *cannot* cover: a stop with **no
+declaration at all** (an API error killed the turn before the gate ran, or the brief window between
+stopping and declaring). `needs-input` is the agent saying "I'm asking you something"; `idle` is "I
+stopped and nobody said why". The active-only guard on `session idle` is what keeps the inferred signal
+from ever clobbering this (or any other) deliberate declaration. The mark-active path
+(`PreToolUse`/`UserPromptSubmit` → active) clears `needs-input` (and `idle`) back to `active` the moment
+the human sends the next prompt / the agent resumes work, same as it clears any other non-active state.
 Surfacing is the **manager's** job: a `needs-input` transition is one of the actionable events `spex watch`
 emits (carrying the note), and the *spoken* alert on it is the manager's `spex watch` + voice, not the session.
 
@@ -85,9 +99,10 @@ emits (carrying the note), and the *spoken* alert on it is the manager's `spex w
 (ghosts, edit/delete/move marks, drift) + the session list — in one module, served identically at HTTP
 `/api/board` and `spex board` (the frontend only adds x/y pixels). `sessions.ts` holds the whole state
 machine and is the only writer of `.session`: `readSessionFile` / `writeSessionFile` (worktrees, not
-memory), `reconcile` (awaiting→proposal label; active→working or offline, where a pane at a bare shell
-counts as offline so a crashed claude isn't a false "working"), and the lifecycle writers
-`markStateFromCwd` / `markDoneFromCwd` / `markErrorFromCwd`. `newSession` adds the `node/<slug>` worktree,
+memory), `reconcile` (authored states→their label; active/idle→working, idle, or offline, where a pane at
+a bare shell counts as offline so a crashed claude isn't a false "working"), and the lifecycle writers
+`markStateFromCwd` / `markDoneFromCwd` / `markErrorFromCwd` / `markIdleFromCwd` (the last is the
+active-only-guarded inferred writer the idle_prompt hook calls). `newSession` adds the `node/<slug>` worktree,
 writes `.session`, isolates `CLAUDE.md` (`hideClaudeMd`), and launches claude on the private socket;
 `reopen` clears a proposal and `--resume`s a dead pane; the human-only merge/close actions round out the
 lifecycle (`closeSession` is the only removal).
@@ -141,6 +156,5 @@ so working/idle toggles don't flap). On top of that it emits each actionable tra
 super-manager. Each watch process is one subscriber and the selector is the subscription (many-to-many
 falls out for free). The `cli.ts` surface is
 tuned for both humans and agents: no-args (or `spex help`) prints a grouped one-screen command summary, and
-`spex new "<prompt>" [--node X]` is shorthand for `session new`. Two things are deliberately not yet built:
-liveness has no true `idle` tier (reconcile reports only working/offline for an active session), and the
-dashboard's session-log feed is still a mock in `data.js`, not the real `watch` stream.
+`spex new "<prompt>" [--node X]` is shorthand for `session new`. One thing is deliberately not yet built:
+the dashboard's session-log feed is still a mock in `data.js`, not the real `watch` stream.

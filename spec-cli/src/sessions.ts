@@ -11,7 +11,11 @@ import { git, gitA, repoRoot } from './git.js'
 // can be `--resume`d into a fresh tmux. NO in-memory map: listSessions() reads worktrees every time.
 //
 // STATE MACHINE (only two real states; merge is an action, not a state):
-//   active   → liveness: working | idle | offline        (offline = no tmux for the recorded id)
+//   active   → liveness: working | idle | offline. working/offline are read LIVE (is the tmux alive and
+//              still running claude?); idle is PERSISTED (status: idle) by the Notification(idle_prompt)
+//              hook when claude sits waiting at its prompt — the ONE inferred state, guarded active-only so
+//              it never clobbers a declaration; the mark-active hook flips it back to active on real work.
+//              (offline = no tmux for the recorded id, or the pane fell back to a bare shell)
 //   awaiting → the agent's PROPOSAL, awaiting a human:
 //                proposal=merge   → shown "review"        ("ready, merge me")
 //                proposal=nothing → shown "done"          ("finished, your call")
@@ -32,7 +36,7 @@ const TMUX_SOCK = process.env.SPEXCODE_TMUX || 'spexcode'
 const CLAUDE_CMD = process.env.SPEXCODE_CLAUDE_CMD || 'claude --dangerously-skip-permissions'
 const COLS = 120, ROWS = 32
 
-export type Lifecycle = 'active' | 'awaiting' | 'blocked' | 'error' | 'needs-input'
+export type Lifecycle = 'active' | 'idle' | 'awaiting' | 'blocked' | 'error' | 'needs-input'
 export type Proposal = 'merge' | 'nothing' | 'close'
 export type DisplayStatus = 'working' | 'idle' | 'offline' | 'review' | 'done' | 'close-pending' | 'blocked' | 'error' | 'needs-input'
 const PROPOSAL_STATUS: Record<Proposal, DisplayStatus> = { merge: 'review', nothing: 'done', close: 'close-pending' }
@@ -73,7 +77,7 @@ function readSessionFile(dir: string): SessRec {
     const k = line.slice(0, i).trim(), v = line.slice(i + 1).trim()
     if (k === 'node') r.node = v || null
     else if (k === 'session') r.session = v || null
-    else if (k === 'status' && (v === 'active' || v === 'awaiting' || v === 'blocked' || v === 'error' || v === 'needs-input')) r.status = v
+    else if (k === 'status' && (v === 'active' || v === 'idle' || v === 'awaiting' || v === 'blocked' || v === 'error' || v === 'needs-input')) r.status = v
     else if (k === 'proposal' && v) r.proposal = v as Proposal
     else if (k === 'merges') r.merges = Number(v) || 0
     else if (k === 'note') r.note = v || null
@@ -100,22 +104,26 @@ async function listWorktrees(): Promise<{ path: string; branch: string | null }[
 }
 
 // @@@ reconcile - the shown status. awaiting → the proposal's label (review/done/close-pending),
-// shown regardless of liveness. active → its LIVENESS: offline if no tmux for the recorded id, else
-// working/idle by activity.
+// shown regardless of liveness. active/idle → their LIVENESS: offline if no tmux for the recorded id (or
+// the pane fell back to a bare shell), else idle if the idle_prompt hook has fired since the last tool
+// use, else working.
 const SHELLISH = /^-?(zsh|bash|sh|fish|dash)$/  // pane sitting at a shell = claude exited/crashed
 async function paneCmd(id: string): Promise<string> {
   try { return (await tmux(['display-message', '-p', '-t', id, '-F', '#{pane_current_command}'])).trim() } catch { return '' }
 }
 async function reconcile(rec: SessRec): Promise<DisplayStatus> {
-  // agent-authored states win; we never INFER a pause externally (the agent declares awaiting/blocked).
+  // agent-authored declarations win regardless of liveness; we never INFER these externally.
   if (rec.status === 'awaiting') return PROPOSAL_STATUS[rec.proposal || 'nothing']
   if (rec.status === 'blocked') return 'blocked'  // waiting on a background task/schedule; self-resumes
   if (rec.status === 'error') return 'error'      // turn died on an API error (StopFailure hook)
   if (rec.status === 'needs-input') return 'needs-input'  // agent declared (via `session ask`) it is asking the HUMAN a question; resumes on the next prompt
-  // active: working only if claude is actually the pane's foreground process — a bare shell means it
-  // exited/crashed, so report offline (relaunch) instead of a false "working".
+  // active/idle are the SAME live agent — claude is the pane's foreground process whether it is churning
+  // OR waiting at its prompt, so a bare shell (claude exited/crashed) or a dead tmux is offline either way.
+  // The only difference is whether the idle_prompt hook has marked it idle since the last tool use; the
+  // mark-active hook flips idle → active again on the next real work, so this stays self-correcting.
   if (!rec.session || !(await alive(rec.session))) return 'offline'
-  return SHELLISH.test(await paneCmd(rec.session)) ? 'offline' : 'working'
+  if (SHELLISH.test(await paneCmd(rec.session))) return 'offline'
+  return rec.status === 'idle' ? 'idle' : 'working'
 }
 
 async function findWorktree(id: string): Promise<{ path: string; branch: string | null; rec: SessRec } | null> {
@@ -173,20 +181,30 @@ async function hideClaudeMd(path: string): Promise<void> {
 // file (NOT inline on the command line — inline JSON containing single quotes broke the shell quoting
 // and claude read it as a missing file path). The file is ephemeral (removed with the worktree), so
 // still no global pollution. PreToolUse/UserPromptSubmit → `active` (freshness); Stop → the blocking
-// gate (with a loop-break); StopFailure → `error`. Hook commands use MAIN's tsx+cli by absolute path
-// ($SPEX) since a fresh worktree has no node_modules and `spex` may be off the session's PATH.
-// NOTE: `needs-input` is NOT wired to a hook — it is AGENT-AUTHORED via `spex session ask` at the Stop
-// gate. The old Notification(idle_prompt) wiring was removed as inert: the Stop gate forces a stop-time
-// declaration, so a question-asking agent already declared `done` before idle_prompt could fire.
+// gate (with a loop-break); StopFailure → `error`; Notification(idle_prompt) → `idle`. Hook commands use
+// MAIN's tsx+cli by absolute path ($SPEX) since a fresh worktree has no node_modules and `spex` may be
+// off the session's PATH.
+// @@@ idle hook - the Notification hook fires `session idle` (guarded active-only) when claude sits
+// WAITING at its prompt without having declared a state — the case the Stop gate misses: an API error
+// killed the turn before the gate ran, or the brief window between stopping and declaring. (claude is
+// the pane's foreground process whether churning or idle-waiting, so reconcile alone can't tell them
+// apart — only idle_prompt can.) This is DISTINCT from `needs-input`, which is the agent DELIBERATELY
+// asking the human a question via `spex session ask` at the Stop gate; idle is the inferred, undeclared
+// stop. The active-only guard in `session idle` is what keeps the two from clobbering each other (a
+// deliberate awaiting/needs-input/blocked/error declaration always survives). We use a catch-all hook +
+// inline payload filter rather than relying on Notification-matcher semantics: it only acts when the
+// notification is the idle_prompt one.
 function settingsJson(): string {
   const gate = join(mainRoot(), 'spec-cli', 'hooks', 'stop-gate.sh')
   const markCmd = `bash ${join(mainRoot(), 'spec-cli', 'hooks', 'mark-active.sh')}`
   const spex = `${join(mainRoot(), 'spec-cli', 'node_modules', '.bin', 'tsx')} ${join(mainRoot(), 'spec-cli', 'src', 'cli.ts')}`
+  const idleCmd = `p=$(cat); case "$p" in *idle_prompt*) ${spex} session idle ;; esac`
   const hooks: Record<string, unknown> = {
     UserPromptSubmit: [{ hooks: [{ type: 'command', command: markCmd }] }],
     PreToolUse: [{ hooks: [{ type: 'command', command: markCmd }] }],
     Stop: [{ hooks: [{ type: 'command', command: `SPEX='${spex}' bash ${gate}` }] }],
     StopFailure: [{ hooks: [{ type: 'command', command: `${spex} session fail` }] }],
+    Notification: [{ hooks: [{ type: 'command', command: idleCmd }] }],
   }
   return JSON.stringify({ hooks }, null, 2)
 }
@@ -257,6 +275,17 @@ export function markStateFromCwd(status: Lifecycle, opts: { proposal?: Proposal;
 }
 export const markDoneFromCwd = (proposal: Proposal = 'nothing') => markStateFromCwd('awaiting', { proposal })
 export const markErrorFromCwd = () => markStateFromCwd('error')
+// @@@ markIdleFromCwd - the ONE INFERRED state, so (unlike the agent-authored writers above) it carries a
+// strict active-only guard: the Notification(idle_prompt) hook fires it when claude is waiting at its
+// prompt, and it may ONLY overwrite `active` → `idle`. A deliberate declaration (awaiting / needs-input /
+// blocked / error) must survive — idle only fills the gap where the agent stopped WITHOUT declaring (e.g.
+// an API error killed the turn before the Stop gate). The mark-active hook flips idle → active on resume.
+export function markIdleFromCwd(): boolean {
+  const rec = readSessionFile(process.cwd())
+  if (!rec.session || rec.status !== 'active') return false  // active-only: never clobber a declaration
+  writeSessionFile(process.cwd(), { ...rec, status: 'idle' })
+  return true
+}
 // @@@ needs-input is AGENT-AUTHORED via markStateFromCwd('needs-input', { note }) — see `spex session ask`.
 // The agent deliberately declares it is pausing to ask the human a question (the note carries the question),
 // so it is NOT guarded active-only the way an inferred external signal would have to be. The mark-active path

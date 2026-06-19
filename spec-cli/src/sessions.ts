@@ -612,3 +612,23 @@ export async function sendKeys(id: string, text: string, enter: boolean): Promis
   if (enter) await tmux(['send-keys', '-t', id, 'Enter'])
   return true
 }
+
+// @@@ rawKey - the RAW-KEYSTROKE nav path, kept DELIBERATELY on `tmux send-keys` and NEVER the rendezvous
+// socket. Two channels, two jobs: the socket INJECTS a whole prompt (text + submit), which can drive the
+// agent's normal prompt but CANNOT navigate an interactive TUI select menu (e.g. `/model`'s list — ↑/↓ to
+// move, ←/→ to adjust, Enter to set, `s` for this-session, Esc to cancel). When the agent is in that
+// keystroke-navigation state its input box is replaced by the menu, so the dashboard's nav mode forwards
+// each key here in real time. send-keys is exactly right for single raw keys: named keys map to tmux's own
+// key names; a single printable char is sent literally (`-l`) so tmux doesn't reinterpret it. One key per
+// call, no socket and no Enter-synthesis — this IS the send-keys channel. False if the tmux session is gone.
+const TMUX_KEY: Record<string, string> = {
+  Up: 'Up', Down: 'Down', Left: 'Left', Right: 'Right',
+  Enter: 'Enter', Escape: 'Escape', Tab: 'Tab', Space: 'Space', Backspace: 'BSpace',
+}
+export async function rawKey(id: string, key: string): Promise<boolean> {
+  if (!key || !(await alive(id))) return false
+  const named = TMUX_KEY[key]
+  if (named) { await tmux(['send-keys', '-t', id, named]); return true }
+  if ([...key].length === 1) { await tmux(['send-keys', '-t', id, '-l', '--', key]); return true }  // single printable char
+  return false
+}

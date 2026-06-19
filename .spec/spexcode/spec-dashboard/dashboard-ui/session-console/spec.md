@@ -66,10 +66,26 @@ count for a clearly-wide host, and **re-fits after the entrance settles** (on `a
 re-fits across the .22s) so the final size locks tmux to the true full width, never a narrow strip. The
 panel clips horizontally; the xterm viewport is the only scrollbar.
 
-There is exactly **one human input**: the docked `❯` box at the bottom. Submitting it writes the typed
-line **followed by Enter** into the active session's pane over the **same socket the terminal already
-holds** (each mounted SessionTerm registers a `send` writer in the interface's `sendersRef`, keyed by
-session id), falling back to `POST /api/sessions/:id/keys` only when that socket isn't open yet.
+Human input has **two channels for two jobs**, because driving an agent splits cleanly in two. The
+default is the docked `❯` box at the bottom: a **prompt** channel. Submitting it writes the typed line
+**followed by Enter** into the active session's pane over the **same socket the terminal already holds**
+(each mounted SessionTerm registers a `send` writer in the interface's `sendersRef`, keyed by session id),
+falling back to `POST /api/sessions/:id/keys` only when that socket isn't open yet. A whole-line prompt
+cannot, however, navigate the agent's **interactive TUI menus** (e.g. `/model`'s select list — ↑/↓ to
+move, ←/→ to adjust, Enter to set, `s` for this-session, Esc to cancel): those are driven by **single raw
+keystrokes**, the second channel. So the interface has a **nav mode**: while ON, the `❯` box is **disabled**
+and every keydown (arrows, Enter, Esc, Tab, Space, Backspace, and single printable chars) is captured at
+the window level — `preventDefault`ed so it neither scrolls nor reaches list-nav — and forwarded **one key
+per keydown, in real time** via `POST /api/sessions/:id/rawkey`, which `tmux send-keys` the corresponding
+key (its tmux key name, or the char literally) into the pane. This raw-key path is **deliberately
+send-keys, not the prompt socket** — send-keys is exactly right for arrows/Enter/Esc/single chars, the
+socket is exactly right for whole prompts; each stays on its own job. Nav mode forwards keystrokes and
+**nothing else** — it adds no other behavior. The reliable trigger is **manual**: a header `⌨ nav` toggle
+button and a `⌃/⌘+I` chord enter/exit it; once in, Esc is forwarded (it cancels a menu) and a **second Esc**
+(or a click on the indicator) exits. Switching tabs or a session going offline also exits, so keystrokes can
+never leak to the wrong pane. **Additionally**, a best-effort, **non-authoritative** sniff of the pane
+(a select-caret line plus an Esc/Enter hint line) merely **suggests** nav mode by pulsing the button — it
+never seizes keys on its own, because screen-scraping is fragile and the manual toggle is the dependable path.
 
 Switching tabs is **instant** and never loses your place: every session terminal you've opened stays
 **mounted but hidden** (its WebSocket and scroll position survive), and the backend keeps a **warm tmux
@@ -96,7 +112,10 @@ socket writer (`sendersRef`), with `POST /api/sessions/:id/keys` as the not-yet-
 header buttons map to the session's status (relaunch / merge / back-to-working / close), each a
 thin POST then a board reload (there is no `review` button — that transition is agent-proposed, not human). A window-level capture listener owns `↑`/`↓` list movement and Enter-on-New; while it is open the
 interface owns **all** its keys — the board delegates `Esc` to it, which the @-mention menu claims to
-dismiss itself before it falls through to closing the interface.
+dismiss itself before it falls through to closing the interface. That same listener is where **nav mode**
+lives: when on, it short-circuits everything else and forwards each keydown raw to the active session via
+`POST /rawkey`. SessionTerm additionally reports a best-effort "looks like a menu" hint so the toggle can
+pulse a suggestion.
 `SessionTerm.jsx` opens a **read-only** (`disableStdin`) FitAddon-sized xterm, fits it to the panel on open
 and on container/window resize (sending the new cols×rows only when it changed) while guarding against
 degenerate measurements and re-fitting after the open animation so it reliably fills at full width, and

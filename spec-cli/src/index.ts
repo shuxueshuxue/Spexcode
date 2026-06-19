@@ -5,7 +5,7 @@ import { createNodeWebSocket } from '@hono/node-ws'
 import { loadSpecs, specHistory, specDiff } from './specs.js'
 import { resolveLayout } from './layout.js'
 import { buildBoard } from './board.js'
-import { newSession, listSessions, sendKeys, closeSession, reopen, propose, mergeSession } from './sessions.js'
+import { newSession, listSessions, sendKeys, rawKey, closeSession, reopen, propose, mergeSession } from './sessions.js'
 import { attachViewer, detachViewer, writeViewer, resizeBridge, superviseBridges, type Viewer } from './pty-bridge.js'
 
 const app = new Hono()
@@ -69,6 +69,15 @@ app.get('/api/sessions/:id/socket', upgradeWebSocket((c) => {
 app.post('/api/sessions/:id/keys', async (c) => {
   const body = await c.req.json().catch(() => ({}))
   const ok = await sendKeys(c.req.param('id'), typeof body?.text === 'string' ? body.text : '', body?.enter !== false)
+  return c.json({ ok }, ok ? 200 : 404)
+})
+// @@@ raw single-keystroke nav - the PRESERVED tmux send-keys path, distinct from the prompt socket the
+// ❯ box uses. The dashboard's nav mode POSTs one key per keydown so a human can drive the agent's
+// interactive TUI menus in real time: Up/Down/Left/Right/Enter/Escape/Tab/Space/Backspace + single
+// printable chars (e.g. `s`). It forwards keystrokes only — no other behavior rides on this channel.
+app.post('/api/sessions/:id/rawkey', async (c) => {
+  const body = await c.req.json().catch(() => ({}))
+  const ok = await rawKey(c.req.param('id'), typeof body?.key === 'string' ? body.key : '')
   return c.json({ ok }, ok ? 200 : 404)
 })
 app.post('/api/sessions/:id/close', async (c) => c.json({ ok: await closeSession(c.req.param('id')) }))

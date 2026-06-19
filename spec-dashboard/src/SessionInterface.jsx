@@ -21,6 +21,11 @@ import SessionTerm from './SessionTerm.jsx'
 
 const STATUS_DOT = { working: '#cb4b16', idle: '#93a1a1', offline: '#657b83', review: '#6c71c4', done: '#268bd2', 'close-pending': '#cb4b16', blocked: '#2aa198', error: '#dc322f', 'needs-input': '#b58900' }
 
+// @@@ nav-mode keymap - DOM KeyboardEvent.key → the key NAME our /rawkey backend feeds to tmux send-keys.
+// Anything not listed and length-1 (a printable char) is forwarded verbatim. Escape is handled separately
+// (it cancels a menu, and a second Esc exits nav mode), so it's intentionally absent here.
+const RAWKEY = { ArrowUp: 'Up', ArrowDown: 'Down', ArrowLeft: 'Left', ArrowRight: 'Right', Enter: 'Enter', Tab: 'Tab', Backspace: 'Backspace', ' ': 'Space' }
+
 // @@@ @-mention helpers - the spec path the menu matches against (`.spec/a/b/<id>/spec.md`), shown
 // minus the `.spec/` shell and the `/spec.md` leaf, so the row reads like the tree breadcrumb it is.
 const specPath = (p) => (p || '').replace(/^\.spec\//, '').replace(/\/spec\.md$/, '')
@@ -90,6 +95,13 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // a single shared box. Survives tab switches and close/reopen (the panel stays mounted, see `open`).
   const [drafts, setDrafts] = useState({})
   const [sending, setSending] = useState(false)
+  // @@@ nav mode - when ON, the ❯ box is disabled and every keystroke is forwarded RAW to the active
+  // session's pane (POST /rawkey → tmux send-keys) so the human drives the agent's interactive TUI menus.
+  // `menuById` is the best-effort, NON-authoritative hint (set by each SessionTerm) that a pane currently
+  // looks like a select menu — used only to SUGGEST nav mode (pulse the button), never to seize keys.
+  const [navMode, setNavMode] = useState(false)
+  const [menuById, setMenuById] = useState({})
+  const lastEscRef = useRef(0)
   const taRef = useRef(null)
   const msgRef = useRef(null)
   // each mounted SessionTerm registers its socket writer here, keyed by session id, so the bottom box can
@@ -103,6 +115,19 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // the active session tab's bottom-input draft (per-session, see `drafts`).
   const msg = drafts[active] || ''
   const setMsg = (v) => setDrafts((d) => ({ ...d, [active]: v }))
+
+  // nav mode binds to ONE live session's menu — leaving the tab (or it going offline) exits it, so raw
+  // keystrokes can never leak into the wrong pane.
+  useEffect(() => { setNavMode(false) }, [active])
+  useEffect(() => { if (selSession?.status === 'offline') setNavMode(false) }, [selSession?.status])
+  // forward one raw key to the active session's pane (fire-and-forget; the backend tmux send-keys it).
+  const sendRawKey = (key) => {
+    fetch(`/api/sessions/${active}/rawkey`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key }),
+    }).catch(() => {})
+  }
+  // each SessionTerm reports whether its pane currently looks like a select menu (best-effort hint).
+  const reportMenu = (id, likely) => setMenuById((m) => (m[id] === likely ? m : { ...m, [id]: likely }))
 
   // @@@ persistent terminals - keep every session terminal you've opened MOUNTED (hidden when inactive),
   // so its WebSocket + scroll position survive a tab switch and switching back is instant (no remount,
@@ -235,11 +260,33 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
 
   // @@@ window-level list nav - ↑/↓ move the selection regardless of focus; Enter on New launches.
   const stateRef = useRef({})
-  stateRef.current = { order, active, submit, menu, navMenu, accept, setMenu, onClose, open }
+  stateRef.current = { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, navMode, setNavMode, sendRawKey }
   useEffect(() => {
     const onKey = (e) => {
-      const { order, active, submit, menu, navMenu, accept, setMenu, onClose, open } = stateRef.current
+      const { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, navMode, setNavMode, sendRawKey } = stateRef.current
       if (!open) return   // panel hidden (board not the active surface): the graph owns the keys
+      // @@@ nav-mode toggle chord (⌃/⌘+I) - the dependable keyboard entry/exit, alongside the header button.
+      // Handled before everything else so it works whether nav mode is currently on or off.
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'i' || e.key === 'I') && active !== 'new') {
+        e.preventDefault(); e.stopPropagation(); setNavMode((v) => !v); return
+      }
+      // @@@ nav mode passthrough - while ON, EVERY key is forwarded raw to the session pane and nothing else
+      // fires (no list nav, no page scroll). Esc is forwarded too (it cancels the agent's menu); a SECOND Esc
+      // within 600ms exits nav mode. preventDefault/stopPropagation keep keys from leaking anywhere else.
+      if (navMode && active !== 'new') {
+        e.preventDefault(); e.stopPropagation()
+        if (e.key === 'Escape') {
+          sendRawKey('Escape')
+          const now = Date.now()
+          if (now - lastEscRef.current < 600) setNavMode(false)
+          lastEscRef.current = now
+          return
+        }
+        const named = RAWKEY[e.key]
+        if (named) { sendRawKey(named); return }
+        if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) sendRawKey(e.key)
+        return
+      }
       // the @-mention menu owns navigation/commit/dismiss while it's open (New Session tab only).
       if (active === 'new' && menu) {
         if (e.key === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); navMenu(1); return }
@@ -340,6 +387,13 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   <span className="si-th-st">{selSession?.status}</span>
                   {selSession?.merges > 0 && <span className="si-merges" title="times merged to main">merged ×{selSession.merges}</span>}
                   <div className="si-actions">
+                    {selSession?.status !== 'offline' && (
+                      <button
+                        className={navMode ? 'si-act nav on' : (menuById[active] ? 'si-act nav suggest' : 'si-act nav')}
+                        title="nav mode — forward raw keystrokes to drive the agent's interactive menus (⌃/⌘+I)"
+                        onClick={() => setNavMode((v) => !v)}
+                      >⌨ nav</button>
+                    )}
                     {selSession?.status === 'offline' && <button className="si-act go" onClick={() => act('resume')}>relaunch</button>}
                     {/* no manual "request review": agents propose review themselves at the stop-gate
                         (`session done --propose merge`). proposals (review/done/close-pending) resolve to
@@ -353,7 +407,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   {/* every opened session's terminal stays mounted; only the active one is shown */}
                   {[...opened].map((id) => (
                     <div key={id} className="si-term-layer" style={{ position: 'absolute', inset: 0, display: id === active ? 'block' : 'none' }}>
-                      <SessionTerm sessionId={id} senders={sendersRef} />
+                      <SessionTerm sessionId={id} senders={sendersRef} onMenu={reportMenu} />
                     </div>
                   ))}
                   {selSession?.status === 'offline' && (
@@ -365,20 +419,28 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   )}
                 </div>
               </div>
-              <div className="si-bottom">
-                <span className="si-prompt">❯</span>
-                <textarea
-                  ref={msgRef}
-                  className="si-input"
-                  rows={1}
-                  value={msg}
-                  onChange={(e) => setMsg(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); sendMsg() } }}
-                  placeholder={selSession?.status === 'offline' ? 'relaunch to message this session' : 'message this session · ⏎ to send'}
-                  spellCheck={false}
-                  disabled={selSession?.status === 'offline'}
-                />
-              </div>
+              {navMode ? (
+                // nav mode replaces the prompt box: keys go straight to the pane (handled at the window level).
+                <div className="si-bottom nav" onClick={() => setNavMode(false)} title="click to exit nav mode">
+                  <span className="si-nav-ind">⌨ nav mode</span>
+                  <span className="si-nav-help">keys go to the session · Esc-Esc or click to exit</span>
+                </div>
+              ) : (
+                <div className="si-bottom">
+                  <span className="si-prompt">❯</span>
+                  <textarea
+                    ref={msgRef}
+                    className="si-input"
+                    rows={1}
+                    value={msg}
+                    onChange={(e) => setMsg(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); sendMsg() } }}
+                    placeholder={selSession?.status === 'offline' ? 'relaunch to message this session' : 'message this session · ⏎ to send'}
+                    spellCheck={false}
+                    disabled={selSession?.status === 'offline'}
+                  />
+                </div>
+              )}
             </>
           )}
         </section>

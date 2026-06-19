@@ -18,9 +18,28 @@ import '@xterm/xterm/css/xterm.css'
 // (ESC[<64/65;col;rowM) and send them down the SAME socket the message box uses; tmux reads them, enters
 // copy-mode and scrolls its actual pane history. We preventDefault + return false so neither the page nor
 // xterm's empty viewport moves — only tmux scrolls.
-export default function SessionTerm({ sessionId, senders }) {
+// @@@ best-effort menu sniff - does the pane currently show an interactive SELECT menu (e.g. `/model`'s
+// list) rather than the normal `❯` prompt? Heuristic only and NON-authoritative — the manual nav toggle is
+// the dependable path, so this NEVER seizes keys; it only lets the interface SUGGEST nav mode (pulse the
+// button). Signature: a select-caret line (`❯ <option>`) together with a hint line mentioning Esc plus
+// Enter/arrows/select (menus print "esc to cancel · enter to confirm"); the bare prompt has no such hint.
+function looksLikeMenu(term) {
+  const buf = term.buffer.active
+  let caret = false, hint = false
+  for (let y = buf.baseY; y < buf.baseY + term.rows; y++) {
+    const line = buf.getLine(y)?.translateToString(true) || ''
+    if (/^\s{0,6}❯\s+\S/.test(line)) caret = true
+    if (/esc/i.test(line) && /(enter|↵|↑|↓|select|confirm)/i.test(line)) hint = true
+  }
+  return caret && hint
+}
+
+export default function SessionTerm({ sessionId, senders, onMenu }) {
   const hostRef = useRef(null)
   const termRef = useRef(null)
+  // keep the latest onMenu without re-running the terminal effect (it'd tear down the WebSocket every render).
+  const onMenuRef = useRef(onMenu)
+  onMenuRef.current = onMenu
 
   useEffect(() => {
     const term = new Terminal({
@@ -101,6 +120,10 @@ export default function SessionTerm({ sessionId, senders }) {
       return false  // never let xterm's empty viewport (or the page) scroll instead
     })
 
+    // @@@ menu sniff loop - poll the pane a few times a second and report whether it looks like a select
+    // menu, so the interface can SUGGEST nav mode. Best-effort and cheap; the manual toggle never needs it.
+    const sniff = setInterval(() => { try { onMenuRef.current?.(sessionId, looksLikeMenu(term)) } catch { /* */ } }, 700)
+
     const raf = requestAnimationFrame(fitAndSync) // re-fit once layout settles
     // @@@ post-entrance re-fits - the .si-term entrance (si-expand, .22s) animates via transform, which
     // ResizeObserver can't observe, so the panel can reach full size without RO ever firing to correct an
@@ -115,6 +138,8 @@ export default function SessionTerm({ sessionId, senders }) {
 
     return () => {
       cancelAnimationFrame(raf)
+      clearInterval(sniff)
+      onMenuRef.current?.(sessionId, false)   // clear the hint so a closed terminal can't leave the button pulsing
       refitTimers.forEach(clearTimeout)
       if (termEl) termEl.removeEventListener('animationend', fitAndSync)
       ro.disconnect()

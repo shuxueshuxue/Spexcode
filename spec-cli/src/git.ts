@@ -29,40 +29,21 @@ export async function gitA(args: string[]): Promise<string> {
   } catch { return '' }
 }
 
+// memoized: the repo root is constant for a process, but resolveLayout() calls this per request — without
+// the cache that's a sync `git` fork() on every /api/layout & /api/board (slow on the server's big RSS).
+let repoRootCache: string | null = null
 export function repoRoot(): string {
+  if (repoRootCache !== null) return repoRootCache
   try {
-    return git(['rev-parse', '--show-toplevel']).trim()
+    repoRootCache = git(['rev-parse', '--show-toplevel']).trim()
   } catch {
-    return process.cwd()
+    repoRootCache = process.cwd()
   }
+  return repoRootCache
 }
 
 export type Version = { hash: string; date: string; reason: string; session: string | null }
 export type DiffStat = { additions: number; deletions: number; files: number }
-
-// @@@ diffstat - lines added/removed by a commit, scoped to `paths` (a node's spec.md + the files
-// it governs) so the number reflects THIS node's slice of the commit, not the whole repo-wide diff.
-// A cross-cutting commit that only grazed this node's frontmatter then reads as the +2 it really
-// was, not the 200 lines it touched elsewhere. --numstat: adds<TAB>dels<TAB>path; binary -> '-' -> 0.
-export function diffstat(root: string, hash: string, paths: string[] = []): DiffStat {
-  let out = ''
-  try {
-    const args = ['-C', root, 'show', hash, '--numstat', '--format=']
-    if (paths.length) args.push('--', ...paths)
-    out = git(args)
-  } catch {
-    return { additions: 0, deletions: 0, files: 0 }
-  }
-  let additions = 0, deletions = 0, files = 0
-  for (const line of out.split('\n')) {
-    const m = line.match(/^(\d+|-)\t(\d+|-)\t/)
-    if (!m) continue
-    files++
-    additions += m[1] === '-' ? 0 : Number(m[1])
-    deletions += m[2] === '-' ? 0 : Number(m[2])
-  }
-  return { additions, deletions, files }
-}
 
 // @@@ fileStatsFollow - per-commit numstat for ONE file, rename-followed. `git log --follow --numstat`
 // tracks the file across the reparent's moves (which `git show -- <path>` cannot — it only knows a
@@ -139,25 +120,25 @@ let indexCache: { head: string; idx: HistoryIndex } | null = null
 // ~20s at 100, ~5min at 500). Here we walk history once, read every commit's spec.md numstat + rename
 // status, and bucket rows by each file's CURRENT (head) path, following renames BACKWARD in-memory.
 // Cached on HEAD: a node's committed history is immutable, so a warm hit costs just one rev-parse.
-export function historyIndex(root: string): HistoryIndex {
-  let head = ''
-  try { head = git(['-C', root, 'rev-parse', 'HEAD']).trim() } catch { /* no commits yet */ }
+// @@@ async git on the serving path - rev-parse/buildIndex go through gitA (async), NOT sync git().
+// execFileSync spawns via fork(), whose cost scales with the PARENT process's resident memory — in the
+// long-running API server (large RSS) every sync git spawn is slow (~0.5s) and they degrade as RSS
+// grows, so /api/specs and /history took >1s even warm. gitA uses libuv's posix_spawn (no page-table
+// copy), staying flat regardless of RSS. The cache is unchanged: a warm hit is one async rev-parse.
+export async function historyIndex(root: string): Promise<HistoryIndex> {
+  const head = (await gitA(['-C', root, 'rev-parse', 'HEAD'])).trim()
   if (indexCache && head && indexCache.head === head) return indexCache.idx
-  const idx = buildIndex(root)
+  const idx = await buildIndex(root)
   if (head) indexCache = { head, idx }
   return idx
 }
 
-function buildIndex(root: string): HistoryIndex {
+async function buildIndex(root: string): Promise<HistoryIndex> {
   const versions = new Map<string, Version[]>()
   const stats = new Map<string, Map<string, DiffStat>>()
-  let out = ''
-  try {
-    out = git(['-C', root, '-c', 'core.quotePath=false', 'log', '-M', '--numstat',
-      `--format=${RS}%H${US}%aI${US}%s${US}%b`, '--', '.spec'])
-  } catch {
-    return { versions, stats }
-  }
+  const out = await gitA(['-C', root, '-c', 'core.quotePath=false', 'log', '-M', '--numstat',
+    `--format=${RS}%H${US}%aI${US}%s${US}%b`, '--', '.spec'])
+  if (!out) return { versions, stats }
   // Walk newest -> oldest (git log default). `alias` maps a path as it exists at the current walk
   // point to its head (current) path; the first (newest) time we meet a file, that path IS its head.
   const alias = new Map<string, string>()
@@ -207,18 +188,44 @@ export function statsFor(idx: HistoryIndex, relPath: string): Map<string, DiffSt
   return idx.stats.get(relPath) ?? new Map()
 }
 
+// @@@ pathsStats - per-commit numstat summed over a SET of paths, gathered in ONE `git log` walk.
+// Replaces specHistory's old per-version `git show <hash> -- <code>` loop: that spawned one git
+// subprocess PER version, and SYNCHRONOUS subprocess spawning degrades badly inside the long-running
+// API server (each spawn gets progressively slower — a 10-version node's /history took >1s). One walk,
+// then a per-version map lookup, makes the whole request 2 spawns instead of ~N. No `--follow` (that
+// only takes a single path) — same no-rename-tracking behaviour the old `git show -- paths` had, so the
+// code-line numbers are identical; spec.md keeps its rename-followed stats via the bulk index above.
+export async function pathsStats(root: string, paths: string[]): Promise<Map<string, DiffStat>> {
+  const m = new Map<string, DiffStat>()
+  if (!paths.length) return m
+  const out = await gitA(['-C', root, '-c', 'core.quotePath=false', 'log', '--format=%H', '--numstat', '--', ...paths])
+  if (!out) return m
+  let cur = ''
+  for (const line of out.split('\n')) {
+    const t = line.trim()
+    if (/^[0-9a-f]{7,40}$/.test(t)) { cur = t; continue }
+    const n = line.match(/^(\d+|-)\t(\d+|-)\t/)
+    if (n && cur) {
+      const s = m.get(cur) ?? { additions: 0, deletions: 0, files: 0 }
+      s.files++; s.additions += n[1] === '-' ? 0 : +n[1]; s.deletions += n[2] === '-' ? 0 : +n[2]
+      m.set(cur, s)
+    }
+  }
+  return m
+}
+
 // @@@ history - a file's version timeline. `.spec` files are served from the bulk index (one walk,
 // cached); anything else (governed *code* files, asked for by lint) keeps the per-file --follow path.
 // For resolving MANY .spec nodes, prefer historyIndex()+rowsFor() to avoid a rev-parse per call.
-export function history(root: string, relPath: string): Version[] {
-  if (relPath.startsWith('.spec/')) return rowsFor(historyIndex(root), relPath)
+export async function history(root: string, relPath: string): Promise<Version[]> {
+  if (relPath.startsWith('.spec/')) return rowsFor(await historyIndex(root), relPath)
   return historyFollow(root, relPath)
 }
 
 // per-commit stat for this node's spec.md (rename-followed), exposed so specHistory can add it to
 // the governed-code stat for an accurate "this version touched N lines of THIS node" number.
-export function specStats(root: string, relPath: string): Map<string, DiffStat> {
-  if (relPath.startsWith('.spec/')) return statsFor(historyIndex(root), relPath)
+export async function specStats(root: string, relPath: string): Promise<Map<string, DiffStat>> {
+  if (relPath.startsWith('.spec/')) return statsFor(await historyIndex(root), relPath)
   return fileStatsFollow(root, relPath)
 }
 
@@ -235,16 +242,16 @@ export type DriftIndex = {
 }
 let driftIdxCache: { head: string; idx: DriftIndex } | null = null
 
-function buildDriftIndex(root: string): DriftIndex {
+async function buildDriftIndex(root: string): Promise<DriftIndex> {
   const pos = new Map<string, number>(), fileCommits = new Map<string, string[]>()
   const acks = new Map<string, Set<string>>(), specNodes = new Map<string, Set<string>>()
-  let out = ''
   // RS-delimited records: `<hash>US<comma-joined Spec-OK values>` on line 1, then the --name-only file
   // list. `valueonly,separator` collapses the trailer block to one line so it never collides with the
   // file names below it (a raw `%b` body would interleave with them and be unparseable).
-  try { out = git(['-C', root, '-c', 'core.quotePath=false', 'log', '--name-only',
-    `--format=${RS}%H${US}%(trailers:key=Spec-OK,valueonly,separator=%x2C)`, 'HEAD']) }
-  catch { return { pos, fileCommits, acks, specNodes } }
+  // gitA (async) not git(): keeps this off the fork()-on-a-big-RSS slow path — see historyIndex above.
+  const out = await gitA(['-C', root, '-c', 'core.quotePath=false', 'log', '--name-only',
+    `--format=${RS}%H${US}%(trailers:key=Spec-OK,valueonly,separator=%x2C)`, 'HEAD'])
+  if (!out) return { pos, fileCommits, acks, specNodes }
   let i = 0
   for (const rec of out.split(RS)) {
     const r = rec.replace(/^\n/, '')
@@ -267,11 +274,10 @@ function buildDriftIndex(root: string): DriftIndex {
   }
   return { pos, fileCommits, acks, specNodes }
 }
-export function driftIndex(root: string): DriftIndex {
-  let head = ''
-  try { head = git(['-C', root, 'rev-parse', 'HEAD']).trim() } catch { /* no commits */ }
+export async function driftIndex(root: string): Promise<DriftIndex> {
+  const head = (await gitA(['-C', root, 'rev-parse', 'HEAD'])).trim()
   if (driftIdxCache && driftIdxCache.head === head) return driftIdxCache.idx
-  const idx = buildDriftIndex(root)
+  const idx = await buildDriftIndex(root)
   if (head) driftIdxCache = { head, idx }
   return idx
 }

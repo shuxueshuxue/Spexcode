@@ -1,6 +1,6 @@
 import { readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { repoRoot, git, worktreeSpecDelta, type NodeOp } from './git.js'
+import { repoRoot, gitA, worktreeSpecDelta, type NodeOp } from './git.js'
 
 // @@@ portable layout - the ONE seam where "where things live" is policy, not hardcode.
 // Mechanism (read .spec, git log) is fixed; this resolves: where is main, how to enumerate the
@@ -26,9 +26,8 @@ function readConfig(root: string): Config {
   try { return JSON.parse(readFileSync(p, 'utf8')) } catch { return {} }
 }
 
-function gitWorktrees(root: string): { path: string; branch: string | null }[] {
-  let out = ''
-  try { out = git(['-C', root, 'worktree', 'list', '--porcelain']) } catch { return [] }
+async function gitWorktrees(root: string): Promise<{ path: string; branch: string | null }[]> {
+  const out = await gitA(['-C', root, 'worktree', 'list', '--porcelain']) // async: off the sync fork() path
   const list: { path: string; branch: string | null }[] = []
   let cur: { path: string; branch: string | null } | null = null
   for (const line of out.split('\n')) {
@@ -59,7 +58,7 @@ export async function resolveLayout(): Promise<Layout> {
     branchPrefix: cfg.branchPrefix ?? 'node/',
     nodeFrom: cfg.nodeFrom ?? 'branch',
   }
-  const raw = gitWorktrees(root)
+  const raw = await gitWorktrees(root)
   const mainRef = raw.find((w) => w.branch === 'main')?.branch ?? 'main'
   // each worktree's spec delta is independent — compute them all in parallel (each is async/non-blocking).
   const worktrees = await Promise.all(raw.map(async (w) => {

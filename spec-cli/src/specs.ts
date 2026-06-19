@@ -1,6 +1,6 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { join, relative, basename } from 'node:path'
-import { repoRoot, historyIndex, rowsFor, statsFor, diffstat, driftIndex, driftFor } from './git.js'
+import { repoRoot, historyIndex, rowsFor, statsFor, pathsStats, driftIndex, driftFor } from './git.js'
 
 // @@@ tree from filesystem - the spec tree IS the directory tree under .spec; a node is any
 // directory holding a spec.md, its parent is the nearest ancestor that also holds one.
@@ -118,9 +118,10 @@ function raws(): Raw[] {
   return acc
 }
 
-export function loadSpecs() {
-  const idx = historyIndex(ROOT) // one walk (cached on HEAD); every node below is a pure lookup
-  const didx = driftIndex(ROOT)  // one git-log walk (cached on HEAD); driftFor() is then pure
+export async function loadSpecs() {
+  // both indexes are one cached git walk each and independent — fetch them in parallel (async git, so
+  // they don't block the server's event loop or pay sync fork() cost). Every node below is a pure lookup.
+  const [idx, didx] = await Promise.all([historyIndex(ROOT), driftIndex(ROOT)])
   return raws().map((r) => {
     const h = rowsFor(idx, r.relPath)
     // @@@ real session attribution - the node's session IS the Claude Code session that authored its
@@ -171,18 +172,22 @@ export function loadSpecs() {
 }
 
 // @@@ specHistory - per-node version timeline, each row's line-diff SCOPED to this node: its spec.md
-// (rename-followed via specStats) PLUS the code it governs (git show on the stable code paths). So a
-// version reads as the lines it changed in THIS node's world, not the whole repo-wide commit. The
-// two sources are added because spec.md needs rename-following that `git show -- <path>` can't do.
-export function specHistory(id: string) {
+// (rename-followed via the bulk index's statsFor) PLUS the code it governs. Both stat sources are now
+// gathered in ONE git walk EACH (statsFor is a lookup into the cached HEAD index; pathsStats is one
+// `git log -- <code>` for the whole node), then summed per version. The old path ran `git show` once
+// PER version — N synchronous subprocesses, which the long-running server spawns progressively slower,
+// so a 10-version node's /history took >1s. The two sources stay separate because spec.md needs the
+// index's rename-following that a plain `git log -- <path>` can't do.
+export async function specHistory(id: string) {
   const node = raws().find((r) => r.id === id)
   if (!node) return []
-  const idx = historyIndex(ROOT)
   const codePaths = list(node.fm.code)
+  // index (cached) and the code-path walk are independent — run them in parallel, both async git.
+  const [idx, cStats] = await Promise.all([historyIndex(ROOT), pathsStats(ROOT, codePaths)])
   const sStats = statsFor(idx, node.relPath)
   return rowsFor(idx, node.relPath).map((v) => {
     const s = sStats.get(v.hash) ?? { additions: 0, deletions: 0, files: 0 }
-    const c = codePaths.length ? diffstat(ROOT, v.hash, codePaths) : { additions: 0, deletions: 0, files: 0 }
+    const c = cStats.get(v.hash) ?? { additions: 0, deletions: 0, files: 0 }
     return { ...v, additions: s.additions + c.additions, deletions: s.deletions + c.deletions, files: s.files + c.files }
   })
 }

@@ -22,8 +22,7 @@ function resolveParent(path: string, byDir: Record<string, string>): string | nu
 }
 
 export async function buildBoard() {
-  const [layout, sessions] = await Promise.all([resolveLayout(), listSessions()])
-  const specs = loadSpecs()
+  const [layout, sessions, specs] = await Promise.all([resolveLayout(), listSessions(), loadSpecs()])
   const worktrees = layout.worktrees.filter((w) => !w.isMain)
   // resolveLayout already zeroed ops for unmanaged worktrees, so this is just "has pending changes".
   const opWts = worktrees.filter((w) => w.ops && w.ops.length)

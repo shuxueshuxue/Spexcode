@@ -30,6 +30,11 @@ current path and following reparent renames backward in-memory — so a moved no
 continuous history and a pure move never counts as a version. The result is cached on `HEAD`
 (committed history is immutable, so a warm read is one `rev-parse`). This replaces the old per-node
 `git log --follow` (`O(nodes × commits)`); `loadSpecs` now does one walk regardless of node count.
+Every git read on the serving path goes through the **async** helper (`gitA`), never the sync `git()`:
+synchronous `execFileSync` spawns via `fork()`, whose cost scales with the API server's resident memory,
+so in the long-running server each sync spawn is slow and degrades as RSS grows. Async spawning keeps the
+event loop free and the reads flat regardless of process size; `loadSpecs`/`specHistory` are async and
+fetch their independent indexes in parallel.
 Arbitrary non-`.spec` files (the governed *code* paths `spex lint` checks) keep the per-file `--follow`
 path, since the bulk index only covers `.spec`.
 
@@ -46,7 +51,10 @@ on `HEAD`), then for each node under `.spec` does pure lookups — `rowsFor` for
 `driftFor` per governed file for `driftFiles`/`drift`, `deriveStatus` for `status`, and `parseParts` for
 `parts`. Session attribution comes from the latest version's `Session:` trailer, with frontmatter `session:`
 only as a fallback. `specHistory(id)` returns the per-node timeline with each row's line-diff scoped to that
-node (its `spec.md` rename-followed plus the code it governs). `git.ts` provides the git access
-(`historyIndex`, `driftIndex`/`driftFor`, `rowsFor`, `statsFor`, `diffstat`, and the hook-safe `git()`
-helper that strips a hook's exported `GIT_DIR`/`GIT_INDEX_FILE`); `index.ts` serves the results. Nothing is
+node: its `spec.md` stats come from the cached bulk index (rename-followed), and the governed-code stats from
+one `git log --numstat` walk over the node's `code` paths (`pathsStats`), looked up per version — replacing
+the old `git show`-per-version loop, so a whole node's history is two git spawns rather than one per row.
+`git.ts` provides the git access (`historyIndex`, `driftIndex`/`driftFor`, `rowsFor`, `statsFor`, `pathsStats`,
+the async `gitA`, and the hook-safe `git()` helper that strips a hook's exported `GIT_DIR`/`GIT_INDEX_FILE`);
+`index.ts` serves the results. Nothing is
 stored: no datastore, no hash files — every fact is recomputed from git on read, warm-cached on `HEAD`.

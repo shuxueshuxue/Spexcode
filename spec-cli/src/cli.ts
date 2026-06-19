@@ -49,7 +49,7 @@ if (cmd === 'serve') {
   printHelp()
 } else if (cmd === 'lint') {
   const { specLint } = await import('./lint.js')
-  const findings = specLint()
+  const findings = await specLint()
   const errors = findings.filter((f) => f.level === 'error')
   for (const f of findings) console.error(`  ${f.level === 'error' ? '✗' : '•'} ${f.rule}: ${f.msg}`)
   console.error(`spex lint: ${errors.length} error(s), ${findings.length - errors.length} warning(s)`)

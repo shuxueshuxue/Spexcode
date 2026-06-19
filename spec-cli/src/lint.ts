@@ -27,9 +27,9 @@ function sourceFiles(root: string, rel: string, acc: string[]) {
   }
 }
 
-export function specLint(): Finding[] {
+export async function specLint(): Promise<Finding[]> {
   const root = repoRoot()
-  const specs = loadSpecs()
+  const specs = await loadSpecs()
   const out: Finding[] = []
 
   // integrity + build the file -> owners map.

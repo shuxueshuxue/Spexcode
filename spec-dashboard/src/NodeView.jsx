@@ -147,8 +147,8 @@ function VersionRow({ r, v, latest }) {
 // @@@ RecentPane - the CURRENT version only: its changelog + line-diff, plus the A→B proof evidence
 // (placeholder SVG shots now; the yatsu package will record the real before/after later). The full
 // version log lives in the `history` tab — this answers "what was the latest change, and the proof".
-function RecentPane({ node }) {
-  const rows = useHistory(node.id)
+// `rows` is fetched ONCE by NodeView and shared with HistoryPane, so switching recent↔history doesn't refetch.
+function RecentPane({ node, rows }) {
   const latest = rows?.[0]
   return (
     <div className="pane-recent">
@@ -171,8 +171,8 @@ function RecentPane({ node }) {
 }
 
 // @@@ HistoryPane - the full version log, newest first. (RecentPane shows only the top of this list.)
-function HistoryPane({ node }) {
-  const rows = useHistory(node.id)
+// `rows` comes from NodeView's single fetch — shared with RecentPane so tab-switching is instant.
+function HistoryPane({ rows }) {
   if (!rows) return <div className="pane-hist empty">loading history…</div>
   if (!rows.length) return <div className="pane-hist empty">no versions yet — this spec is the latest ground truth.</div>
   return (
@@ -183,6 +183,8 @@ function HistoryPane({ node }) {
 }
 
 export default function NodeView({ node, pane, setPane, onClose }) {
+  // one fetch per node, shared by both recent + history panes (the popup's only data dependency).
+  const rows = useHistory(node.id)
   return (
     <div className="ov-backdrop" onMouseDown={onClose}>
       <div className="ov-panel" onMouseDown={(e) => e.stopPropagation()}>
@@ -199,8 +201,8 @@ export default function NodeView({ node, pane, setPane, onClose }) {
         </div>
         <div className="ov-body">
           {pane === 'spec' && <div className="pane-solo"><SpecPane node={node} /></div>}
-          {pane === 'recent' && <RecentPane node={node} />}
-          {pane === 'history' && <HistoryPane node={node} />}
+          {pane === 'recent' && <RecentPane node={node} rows={rows} />}
+          {pane === 'history' && <HistoryPane rows={rows} />}
         </div>
       </div>
     </div>

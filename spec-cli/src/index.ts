@@ -16,8 +16,8 @@ app.get('/', (c) => c.text('spec-cli — GET /api/board · /api/specs · /api/sp
 // the assembled board (merged tree + overlay + sessions) — the dashboard's single source. Same data
 // as `spex board`; the frontend only adds x/y pixels on top.
 app.get('/api/board', async (c) => c.json(await buildBoard()))
-app.get('/api/specs', (c) => c.json(loadSpecs()))
-app.get('/api/specs/:id/history', (c) => c.json(specHistory(c.req.param('id'))))
+app.get('/api/specs', async (c) => c.json(await loadSpecs()))
+app.get('/api/specs/:id/history', async (c) => c.json(await specHistory(c.req.param('id'))))
 app.get('/api/layout', async (c) => c.json(await resolveLayout()))
 
 // sessions: real tmux-backed Claude Code sessions. List + spawn, stream the live pane (WebSocket),

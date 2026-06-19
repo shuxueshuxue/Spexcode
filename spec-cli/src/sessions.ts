@@ -3,8 +3,6 @@ import { promisify } from 'node:util'
 import { randomUUID } from 'node:crypto'
 import { readFileSync, writeFileSync, existsSync, renameSync } from 'node:fs'
 import { join, dirname } from 'node:path'
-import { tmpdir } from 'node:os'
-import { createConnection } from 'node:net'
 import { git, gitA, repoRoot } from './git.js'
 
 // @@@ sessions - the WORKTREE is the durable unit; tmux is a disposable runtime handle. Each session
@@ -37,37 +35,6 @@ const pexec = promisify(execFile)
 const TMUX_SOCK = process.env.SPEXCODE_TMUX || 'spexcode'
 const CLAUDE_CMD = process.env.SPEXCODE_CLAUDE_CMD || 'claude --dangerously-skip-permissions'
 const COLS = 120, ROWS = 32
-
-// @@@ rendezvous control socket - the DETERMINISTIC input path for sessions WE launch. We start `claude`
-// with CLAUDE_BG_BACKEND=daemon + CLAUDE_BG_RENDEZVOUS_SOCK=<per-session sock> set ONLY on that one
-// spawned command (env prefix on the launch line — never global/exported, never a plugin or global
-// setting). claude opens a unix socket at that path; writing one line `{"type":"reply","text":"…"}\n` to
-// it injects the text as a prompt and submits it — no PTY typing, so multi-line input and Enters can't be
-// corrupted the way `tmux send-keys` was. The path is uniquely derived from the session id, so we only
-// ever address OUR OWN sockets (HARD ethics rule: never touch a Claude Code session outside this product).
-// tmux stays the VISIBLE stream (pty-bridge); the socket is CONTROL (input) only. The socket lives in
-// tmpdir tied to the claude process, so no extra lifecycle — claude/the OS owns it. Best-effort: if the
-// socket is absent (older/socketless session, or not yet up) or errors, sendKeys FALLS BACK to send-keys.
-const rvSock = (id: string) => join(tmpdir(), `spexcode-rv-${id}.sock`)
-// env prefix put in front of the spawned `claude` so it creates this session's rendezvous control socket.
-const rvEnv = (id: string) => `CLAUDE_BG_BACKEND=daemon CLAUDE_BG_RENDEZVOUS_SOCK=${rvSock(id)}`
-// inject `text` as a prompt by writing one reply line to the session's rendezvous socket. Resolves true
-// only on a clean connect+write; ANY error (or a 1s stall) resolves false so the caller falls back to
-// send-keys. Never throws — the socket path is strictly best-effort control.
-function replyViaSocket(sock: string, text: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    let settled = false
-    const done = (ok: boolean) => { if (!settled) { settled = true; resolve(ok) } }
-    try {
-      const c = createConnection({ path: sock })
-      const t = setTimeout(() => { try { c.destroy() } catch { /* */ } done(false) }, 1000)
-      c.on('error', () => { clearTimeout(t); done(false) })
-      c.on('connect', () => {
-        c.write(JSON.stringify({ type: 'reply', text }) + '\n', () => { clearTimeout(t); c.end(); done(true) })
-      })
-    } catch { done(false) }
-  })
-}
 
 export type Lifecycle = 'active' | 'idle' | 'awaiting' | 'blocked' | 'error' | 'needs-input'
 export type Proposal = 'merge' | 'nothing' | 'close'
@@ -270,7 +237,7 @@ function writeSettings(path: string): string {
 }
 async function launch(id: string, path: string, tail: string): Promise<void> {
   await tmux(['new-session', '-d', '-s', id, '-x', String(COLS), '-y', String(ROWS), '-c', path])
-  await tmux(['send-keys', '-t', id, '-l', '--', `${rvEnv(id)} ${CLAUDE_CMD} ${writeSettings(path)} ${tail}`])
+  await tmux(['send-keys', '-t', id, '-l', '--', `${CLAUDE_CMD} ${writeSettings(path)} ${tail}`])
   await tmux(['send-keys', '-t', id, 'Enter'])
 }
 
@@ -304,8 +271,8 @@ export async function reopen(id: string): Promise<boolean> {
   if (!hasTmux) {
     await launch(id, wt.path, `--resume ${id}`)               // no tmux → fresh window
   } else if (SHELLISH.test(await paneCmd(id))) {
-    // tmux pane exists but claude exited to a shell → resume claude IN the existing pane (with its socket)
-    await tmux(['send-keys', '-t', id, '-l', '--', `${rvEnv(id)} ${CLAUDE_CMD} ${writeSettings(wt.path)} --resume ${id}`])
+    // tmux pane exists but claude exited to a shell → resume claude IN the existing pane
+    await tmux(['send-keys', '-t', id, '-l', '--', `${CLAUDE_CMD} ${writeSettings(wt.path)} --resume ${id}`])
     await tmux(['send-keys', '-t', id, 'Enter'])
   }
   return true
@@ -495,14 +462,7 @@ export async function watchSessions(emit: (line: string) => void, opts: WatchOpt
     await sleep(intervalMs)
   }
 }
-// @@@ sendKeys - CONTROL (input) for a session. Prefer the per-session rendezvous socket (deterministic,
-// no PTY typing): if it exists and we have text, write one reply line — the socket path injects AND submits,
-// so no separate Enter. The socket only exists for sessions WE launched the new way, and its path is
-// derived from the id, so we never address another session's socket. Any socket miss/error (or an empty
-// text-only Enter, which has nothing to inject) FALLS BACK to the unchanged `tmux send-keys` behavior.
 export async function sendKeys(id: string, text: string, enter: boolean): Promise<boolean> {
-  const sock = rvSock(id)
-  if (text && existsSync(sock) && await replyViaSocket(sock, text)) return true  // injected + submitted
   if (!(await alive(id))) return false
   if (text) await tmux(['send-keys', '-t', id, '-l', '--', text])
   if (enter) await tmux(['send-keys', '-t', id, 'Enter'])

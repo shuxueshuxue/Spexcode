@@ -37,25 +37,3 @@ that cheap and honest, only **managed** SpexCode worktrees (a `.session` label o
 get a spec delta — harness scratch worktrees (e.g. `agent-*`) are skipped, both to keep them off the
 board and to stop their large diffs dominating `/api/layout` latency; the per-worktree deltas are
 computed in parallel.
-
-## current state
-
-### description
-
-`layout.ts` implements `resolveLayout()`: it reads `spexcode.json` (silent `{}` on missing/parse-fail),
-lists worktrees via `git worktree list --porcelain`, and for each builds a `Worktree`
-(`path`/`branch`/`node`/`session`/`status`/`isMain`/`ops`). `node` resolves from the stripped branch
-prefix or the `.session` file per `nodeFrom`; `readSession` parses the untracked `.session`
-(`node`/`session`/`status`) — the [[worktree-linker]] half. `ops` is `worktreeSpecDelta(path, mainRef)`
-only for managed worktrees (skipped for main and scratch checkouts), gathered with `Promise.all`. The
-resolved `Layout` (`main`, `convention`, `worktrees`) is returned and served verbatim at
-`/api/layout`. No path is hardcoded; absent `spexcode.json` yields the documented defaults.
-
-### verdict — not drifted
-
-`layout.ts` is this node's only governed file and this version re-anchors the contract to it: the
-description above (`resolveLayout`, `spexcode.json`, `readSession`, the managed-only `ops` overlay) is the
-honest read of `layout.ts` today, so the spec no longer lags. `layout.ts` is now owned here **exclusively**
-— [[worktree-linker]], the read-side link that lives inside this same seam, no longer co-claims it, so the
-seam's churn attributes to one node instead of two. [[sessions]] still owns what `buildBoard` does with
-`ops`. The raw source (layout is an external interface with a default plug) still holds.

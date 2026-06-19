@@ -25,26 +25,3 @@ This lives inside the [[portable-layout]] seam (`layout.ts`): the linker is the 
 enumerated worktrees, attaches node id + session + status + overlay to each. Keeping `.session`
 untracked is what lets the same `.spec` tree stay in-tree and canonical on main while a worktree layers
 ephemeral, session-scoped state on top without polluting history.
-
-## current state
-
-### description
-
-In `layout.ts`, `readSession(dir)` parses the untracked `.session` (`node` / `session` / `status`
-lines) for a worktree, and `resolveLayout()` joins it with `git worktree list --porcelain`: it strips
-`branchPrefix` from the branch for the node id (or takes `.session`'s `node` per `nodeFrom`), carries
-`session`/`status` through, flags `isMain`, and computes the overlay `ops` via `worktreeSpecDelta`
-against main for managed worktrees. The result is the `Worktree[]` consumed by `/api/layout` and by
-[[sessions]]' `buildBoard`. The fuller `.session` lifecycle schema (`proposal`/`note`/`merges`) and its
-writers belong to the [[sessions]] state machine in `sessions.ts`; this node owns only the read-side
-link from worktree → node that `layout.ts` performs.
-
-### verdict
-
-This node governs **no source of its own**. The read-side link it specifies (`readSession` + the
-branch→node mapping) is implemented inside `layout.ts`, and that file is owned by [[portable-layout]] —
-the seam it explicitly "lives inside." Co-claiming `layout.ts` here was pure phantom drift: every
-`resolveLayout`/`ops` change to the seam read as this node's drift too. Dropping the claim makes
-worktree-linker the read-side *contract* (branch + untracked `.session` → node + overlay), with the file's
-drift attributed once, to [[portable-layout]]. The raw source (map worktree → node via branch + untracked
-`.session`, compose by keeping `.spec` in-tree) still holds.

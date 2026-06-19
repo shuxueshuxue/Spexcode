@@ -33,27 +33,3 @@ Routes it must expose:
 - `/api/sessions` — list + spawn, plus per-session lifecycle (`resume`/`review`/`merge`/`close`),
   an SSE pane `stream`, and `keys` for keystroke forwarding. These are thin callers of the
   [[sessions]] state machine; no session logic lives in `index.ts`.
-
-## current state
-
-### description
-
-`index.ts` is the Hono app and process entry. It mounts CORS on `/api/*`, then registers
-`GET /` (a route list), `GET /api/board`, `GET /api/specs`, `GET /api/specs/:id/history`,
-`GET /api/layout`, and the full `/api/sessions` surface: `GET`/`POST` for list/spawn,
-`POST :id/resume|review|merge`, `GET :id/stream` (SSE that polls `captureSession` ~600ms and stops on
-client disconnect or `alive()` false), `POST :id/keys`, and `POST :id/close`. It listens on
-`PORT` (default 8787). It is run with `tsx`, no build step; `npx tsc --noEmit` type-checks. The `spex`
-CLI front door is `cli.ts` (see [[spec-lint]] for `spex lint`, [[sessions]] for `spex session`), which
-imports `index.js` for `spex serve`. Not in this file: the loaders, git access, and session machine —
-they live in `specs.ts`/`git.ts`/`layout.ts`/`board.ts`/`sessions.ts` under the source-of-truth subtree.
-
-### verdict — not drifted
-
-`index.ts` is this node's only governed file, and this version re-anchors the contract to it: the route
-surface the description enumerates — board, specs, history, layout, and the full `/api/sessions`
-surface — is exactly what `index.ts` exposes today, so the spec no longer lags. The session routes grew
-when [[sessions]] landed and the expanded spec names them as thin callers — that is the file's clarified
-contract, not a code change back-written to look complete; the raw source (a server that serves
-`.spec`+git and houses the guards) still holds. The `spex` CLI front door `cli.ts` is governed by
-[[sessions]] (the dispatcher's bulk is session subcommands); this node owns only the HTTP entry.

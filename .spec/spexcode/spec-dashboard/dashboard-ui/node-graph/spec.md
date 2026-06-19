@@ -53,38 +53,3 @@ id of the Claude Code session that authored it, and a live worktree runs under t
 a node stamps a subtle `⏎` in the session's colour, and **clicking it** (or `Enter` on it) opens the
 session interface focused on that session. The reverse half: clicking a session row focuses its first
 changed node. Nodes with no live session just focus on click.
-
-## current state
-
-### description
-
-The board is assembled by the backend (`buildBoard` → `/api/board`); `data.js`'s `loadBoard` is a thin
-fetch that decorates only the x/y tidy-tree layout (`X_GAP`/`Y_GAP` post-order placement) — every other
-field, including overlays, ghosts, drift and sessions, comes from the backend. `App.jsx` builds the
-react-flow `nodes`/`edges`: fixed positions, kin-vs-`is-far` dimming (or `ov-hot`/`ov-dim` when a session
-is highlighted), and a `data.link` decoration on nodes whose author session is live. The `edges` memo
-emits the solid tree edges plus, for any node whose overlays include a `moved` with a resolvable
-`toParent`, a faint dashed `move-edge` (animated, arrow-headed, session-coloured) from the node to its
-proposed new parent — the reparent preview. `SpecNode.jsx`
-renders the row: a `STATUS`-coloured dot (with a pulse for `active`), title, the `⏎` session affordance
-when `data.link` is set, the `⚠{drift}` badge when `drift > 0`, the version, and the dedup'd op glyphs;
-`ghost`/`deleted`/`has-overlay`/`ov-dirty` classes carry the overlay styling from `styles.css`.
-`Legend.jsx` is the `?`-toggled floating card; it imports `STATUS`/`GLYPH` from `SpecNode.jsx` (exported
-for exactly this) rather than re-declaring the colours. The react-flow shell that hosts these — building
-`nodes`/`edges`, the camera flat-pan, the click→focus/open-session handlers, and the `legend` state with
-its `?`/Esc keys — lives in `App.jsx`, which is governed by [[keyboard-nav]]: this node owns the four
-graph-rendering files (`SpecNode.jsx`, `Legend.jsx`, `data.js`, and the shared `styles.css`), and a
-keyboard or shell change in `App.jsx` is keyboard-nav's drift, not node-graph's.
-
-### verdict — not drifted
-
-The four governed files (`SpecNode.jsx`, `Legend.jsx`, `data.js`, `styles.css`) sit at or behind this
-node's latest version with no commits ahead after this change (`spex lint` reports no `drift` warning for
-`node-graph`); `styles.css`, `SpecNode.jsx` and `Legend.jsx` carry the `?`-toggled legend and re-anchor at
-this commit. `App.jsx` was dropped from this node's `code:` — it is the shell + keyboard handler, owned by
-[[keyboard-nav]], and its churn was the bulk of node-graph's old phantom drift. The expanded spec
-states the map's intended behavior; the description is the honest read of how the four files realise it
-today. The derived four-state dot, the drift badge, the overlay glyphs, the board↔session link, and the
-reparent-preview arrow were folded into the expanded spec as they landed, not back-written after the
-fact — the raw source (a fixed local-neighbourhood tree of thin rows, viewpoint moves not layout) still
-holds.

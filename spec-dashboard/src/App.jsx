@@ -5,6 +5,7 @@ import SpecNode from './SpecNode.jsx'
 import NodeView, { PANES } from './NodeView.jsx'
 import SessionWindow from './SessionWindow.jsx'
 import SessionInterface from './SessionInterface.jsx'
+import Legend from './Legend.jsx'
 import { loadBoard } from './data.js'
 
 const nodeTypes = { spec: SpecNode }
@@ -17,6 +18,7 @@ function Dashboard({ specs, sessions, reload }) {
   const [overlay, setOverlay] = useState(false)   // node-info popup (opened by `i`)
   const [pane, setPane] = useState('spec')
   const [sessionUI, setSessionUI] = useState(false) // session interface (opened by Enter)
+  const [legend, setLegend] = useState(false)     // floating visual-vocabulary card (toggled by `?`)
   const [sessionSel, setSessionSel] = useState('new') // persisted across open/close: last tab/session
   const [highlightId, setHighlightId] = useState(null) // session whose overlays are emphasised
   const { getViewport, setViewport } = useReactFlow()
@@ -185,6 +187,10 @@ function Dashboard({ specs, sessions, reload }) {
         if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); setOverlay(false); crossToSession(focus); return }
         return // ↑/↓ (and anything else) do NOT move the board behind the popup
       }
+      // graph mode (no modal open). `?` toggles the floating legend; Esc closes it. Placed AFTER the
+      // sessionUI/overlay guards above, so a modal owning the keys is never disturbed by `?`/Esc here.
+      if (e.key === '?') { e.preventDefault(); setLegend((v) => !v); return }
+      if (e.key === 'Escape' && legend) { e.preventDefault(); setLegend(false); return }
       if (e.key === 'ArrowUp')    return go(upTarget, e)
       if (e.key === 'ArrowDown')  return go(downTarget, e)
       if (e.key === 'ArrowLeft')  return go(parent, e)
@@ -198,7 +204,7 @@ function Dashboard({ specs, sessions, reload }) {
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [overlay, sessionUI, focus, upTarget, downTarget, childTarget, parent, centerOn, getViewport, crossToSession])
+  }, [overlay, sessionUI, legend, focus, upTarget, downTarget, childTarget, parent, centerOn, getViewport, crossToSession])
 
   // clicking a node ONLY focuses it — it does NOT pan the camera (recentering is keyboard-only, see
   // `go`) and does NOT open a session (Enter is the deliberate cross into one). Mouse focus and
@@ -247,11 +253,14 @@ function Dashboard({ specs, sessions, reload }) {
             <span><kbd>→</kbd> child</span>
             <span><kbd>+</kbd><kbd>-</kbd> zoom</span>
             <span><kbd>i</kbd> info</span>
+            <span><kbd>?</kbd> legend</span>
             <span><kbd>⏎</kbd> session · <kbd>esc</kbd> back</span>
           </div>
         </div>
 
         <SessionWindow sessions={sessions} activeId={highlightId} onPick={onPickSession} onOpen={() => setSessionUI(true)} />
+
+        {legend && <Legend onClose={() => setLegend(false)} />}
       </div>
 
       {overlay && <NodeView node={focus} pane={pane} setPane={setPane} onClose={() => setOverlay(false)} />}

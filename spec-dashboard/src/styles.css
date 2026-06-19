@@ -303,6 +303,46 @@ body {
 .sess-status { color: var(--muted); font-size: 10px; flex: none; }
 .sess-ops { color: var(--ov, var(--blue)); font-size: 11px; font-weight: 700; flex: none; }
 
+/* ---- floating legend (toggled by `?`) ---- */
+/* a small fixed corner card decoding the node vocabulary. Floats over the graph (bottom-right, clear
+   of the top HUD and the top-right session window) and never blocks graph interaction — only the card
+   itself takes pointer events, the rest of the board stays live behind it. */
+.legend {
+  position: absolute; bottom: 16px; right: 16px; z-index: 7; width: 290px;
+  max-height: calc(100vh - 32px); overflow-y: auto;
+  background: var(--paper); border: 1px solid var(--line); border-radius: 6px;
+  box-shadow: 0 6px 22px rgba(101,123,131,.18); font-size: 12px;
+}
+.legend-head {
+  position: sticky; top: 0;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 9px; background: var(--panel2); border-bottom: 1px solid var(--line);
+}
+.legend-title { color: var(--muted); font-size: 11px; letter-spacing: .5px; }
+.legend-close {
+  background: none; border: none; color: var(--muted); cursor: pointer;
+  font-family: var(--mono); font-size: 15px; line-height: 1; padding: 0 2px;
+}
+.legend-close:hover { color: var(--orange); }
+.legend-body { padding: 4px 10px 10px; }
+.legend-sec { padding: 8px 0; border-bottom: 1px solid var(--line); }
+.legend-sec:last-child { border-bottom: none; }
+.legend-h { font-size: 11px; color: var(--ink2); font-weight: 700; margin-bottom: 6px; }
+.legend-sub { color: var(--muted); font-weight: 400; }
+.legend-row { display: flex; align-items: baseline; gap: 8px; padding: 3px 0; }
+.legend-row .node-dot { position: relative; top: 1px; }
+.legend-name { color: var(--ink2); font-weight: 600; flex: none; width: 52px; }
+.legend-desc { color: var(--ink); flex: 1; line-height: 1.4; }
+.legend-glyph { color: var(--blue); font-weight: 700; flex: none; width: 18px; text-align: center; }
+.legend-glyph.legend-ver { font-size: 11px; color: var(--muted); }
+.legend .ov-mark { flex: none; width: 18px; text-align: center; }
+.legend .drift-badge { flex: none; }
+/* node-ring swatches: small boxes mirroring the .spec-node border styles. */
+.legend-ring { flex: none; width: 22px; height: 14px; border-radius: 3px; background: var(--panel); }
+.legend-ring.ring-dashed { border: 1px dashed var(--blue); }
+.legend-ring.ring-solid { border: 1px solid var(--blue); }
+.legend-ring.ring-ghost { border: 1px dashed var(--line); background: transparent; opacity: .72; }
+
 /* ---- session interface (Enter): two panes, right content morphs ---- */
 .si-backdrop {
   position: fixed; inset: 0; z-index: 30;

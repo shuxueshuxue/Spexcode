@@ -6,6 +6,7 @@ hue: 280
 desc: A stable tree map; the viewpoint moves, the tree never re-plots.
 code:
   - spec-dashboard/src/SpecNode.jsx
+  - spec-dashboard/src/Legend.jsx
   - spec-dashboard/src/data.js
   - spec-dashboard/src/App.jsx
   - spec-dashboard/src/styles.css
@@ -37,6 +38,16 @@ draws a **faint dashed arrow** from the node to that new parent, in the author s
 human can SEE the reparent before it merges. It is deliberately subtle — low opacity, animated dashes,
 an arrowhead — and overlaid on top of, never replacing, the solid tree edges of the present structure.
 
+Because this visual vocabulary is dense, a **floating legend** decodes it on demand. Pressing `?` toggles
+a small fixed corner card (Esc also closes it) that lists every symbol above: the four status-dot colours,
+the `+`/`~`/`✕`/`→` overlay-op glyphs, the `⏎` live-session affordance, the `⚠N` drift badge, the `vN`
+version, the dashed-vs-solid (uncommitted-vs-committed) ring whose colour is the author session, and the
+translucent ghost of an added node. The legend is unobtrusive — it floats over the board without blocking
+graph interaction, and it reads its swatches from the SAME `STATUS`/`GLYPH` constants the nodes render
+from, so it can never drift from the real symbols. `?`/Esc are handled in the graph-mode branch of the
+capture-phase keydown handler, below the modal guards, so the legend never disturbs (or is disturbed by)
+an open node-info popup or session interface.
+
 The board and the session console are **bidirectionally linked** by one fact: a node's `session` is the
 id of the Claude Code session that authored it, and a live worktree runs under that same id (see
 [[session-console]]). So a node whose author session is currently live maps to it by exact id match. Such
@@ -60,12 +71,16 @@ renders the row: a `STATUS`-coloured dot (with a pulse for `active`), title, the
 when `data.link` is set, the `⚠{drift}` badge when `drift > 0`, the version, and the dedup'd op glyphs;
 `ghost`/`deleted`/`has-overlay`/`ov-dirty` classes carry the overlay styling from `styles.css`. The camera
 flat-pan and the click→focus/open-session handlers live in `App.jsx` alongside [[keyboard-nav]].
+`Legend.jsx` is the `?`-toggled floating card; it imports `STATUS`/`GLYPH` from `SpecNode.jsx` (exported
+for exactly this) rather than re-declaring the colours, and `App.jsx` holds the `legend` state, the
+`?`/Esc keys in the graph-mode branch, and the `? legend` HUD hint.
 
 ### verdict — not drifted
 
-All four governed files sit at or behind this node's latest version with no commits ahead after this
-change (`spex lint` reports no `drift` warning for `node-graph`); `App.jsx` and `styles.css` carry the
-reparent-preview edge and ship in the same commit as this spec, so neither drifts. The expanded spec
+All five governed files sit at or behind this node's latest version with no commits ahead after this
+change (`spex lint` reports no `drift` warning for `node-graph`); `App.jsx`, `styles.css`, `SpecNode.jsx`
+and the new `Legend.jsx` carry the `?`-toggled legend and ship in the same commit as this spec, so none
+drifts. The expanded spec
 states the map's intended behavior; the description is the honest read of how the four files realise it
 today. The derived four-state dot, the drift badge, the overlay glyphs, the board↔session link, and the
 reparent-preview arrow were folded into the expanded spec as they landed, not back-written after the

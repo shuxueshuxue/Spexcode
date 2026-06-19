@@ -113,6 +113,13 @@ export default function SpecNode({ data, selected }) {
       <div className="node-row2">
         <EditorRow data={data} />
       </div>
+      {/* @@@ add-child + - leaves only. A SECOND entry to the `nn` new-node chord (App.addChild → startNew
+          + CHORDS.nn for THIS node's id). stopPropagation keeps onNodeClick from firing, so the click only
+          opens the create-node board — it never moves focus/selection off the current node. */}
+      {data.isLeaf && (
+        <button type="button" className="node-add" title={t('specNode.addChild')}
+          onClick={(e) => { e.stopPropagation(); data.onAddChild?.(data.id) }}>+</button>
+      )}
       <Handle type="source" position={Position.Right} />
     </div>
   )

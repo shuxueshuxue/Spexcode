@@ -129,6 +129,7 @@ export default {
     editorTitle: ({ node, status, id }) => `${node} · ${status} — ${id}`,
     driftAhead: ({ n }) => `领先 ${n}`,
     opTitle: ({ op, label, uncommitted }) => `${op} · ${label}${uncommitted ? '（未提交）' : ''}`,
+    addChild: '新建子节点（nn）',
   },
 
   sessionGraph: {

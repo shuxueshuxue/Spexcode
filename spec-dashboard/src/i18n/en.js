@@ -132,6 +132,7 @@ export default {
     editorTitle: ({ node, status, id }) => `${node} · ${status} — ${id}`,
     driftAhead: ({ n }) => `${n} ahead`,
     opTitle: ({ op, label, uncommitted }) => `${op} · ${label}${uncommitted ? ' (uncommitted)' : ''}`,
+    addChild: 'new child node (nn)',
   },
 
   sessionGraph: {

@@ -58,6 +58,12 @@ session id), so a session's face and every mark that names it always share one h
 per worktree (its live session id, else its path) and the dashboard derives the colour. A worktree with no
 session falls back to its path as the seed, so its overlays still get a stable colour.
 
+A **leaf** node (one with no children) carries a small `+` button pinned to its right edge, revealed on
+hover/focus. It is a SECOND entry to the `nn` new-node chord (see [[keyboard-nav]]): clicking it opens the
+session board's New Session tab with the *same* `@new under @<id>` directive pre-seeded for that node — the
+identical create-child path the chord fires, just keyed to the clicked node rather than the focused one. The
+click is purely additive: it opens the create affordance without moving focus/selection off the current node.
+
 A `moved` overlay also carries `toParent` (the node's *proposed* new parent); when it does, the board draws a
 **faint dashed arrow** from the node to that parent, in the author session's colour, so a human can SEE the
 reparent before it merges. It is deliberately subtle and overlaid on top of, never replacing, the solid tree

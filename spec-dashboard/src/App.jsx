@@ -64,6 +64,20 @@ function Dashboard({ specs, sessions, reload }) {
     [sessions],
   )
 
+  // @@@ open the board - the session interface is a PERSISTENT place you switch to, not a per-open modal:
+  // it stays mounted (hidden) so its selected tab AND each tab's typed-but-unsent input survive a
+  // close/reopen. Enter (board or node-info popup) always reopens it at the remembered tab (`sessionSel`),
+  // a "boarding switch" — never a context jump based on the focused node.
+  const openBoard = useCallback(() => setSessionUI(true), [])
+  // @@@ startNew - a board chord opens the session board on its New Session tab with `text` pre-seeded
+  // (the @-directive). One-shot: SessionInterface applies it then clears `seed`, so a later reopen keeps
+  // the user's own draft instead of re-seeding.
+  const startNew = useCallback((text) => { setSessionSel('new'); setSeed(text); setSessionUI(true) }, [])
+  // @@@ addChild - the + button on a LEAF node is a SECOND entry point to the `nn` new-node chord: same
+  // path (startNew + CHORDS.nn), just keyed to the clicked node's id rather than `focus`. It only opens
+  // the create-node affordance — focus/selection is untouched (the click is stopped before onNodeClick).
+  const addChild = useCallback((id) => startNew(CHORDS.nn(id)), [startNew])
+
   const children = useMemo(() => specs.filter((s) => s.parent === focus.id), [specs, focus])
   const parent = focus.parent ? byId[focus.parent] : null
 
@@ -93,7 +107,10 @@ function Dashboard({ specs, sessions, reload }) {
   // @@@ nodes - positions from data; selection + (a) focus-kin dimming, or (b) when a session is
   // highlighted, the overlay-dim: nodes touched by that session glow, the rest fade. Recomputes on
   // poll (specs identity changes) so a freshly-added ghost shows up without a manual refresh.
-  const nodes = useMemo(() => specs.map((s) => {
+  const nodes = useMemo(() => {
+    // a node is a LEAF when nothing names it as parent — leaves carry the + add-child affordance.
+    const parents = new Set(specs.map((s) => s.parent).filter(Boolean))
+    return specs.map((s) => {
     const kin = s.id === focusId || s.id === focus.parent || s.parent === focusId || s.parent === focus.parent
     let className
     if (highlightId) {
@@ -107,14 +124,17 @@ function Dashboard({ specs, sessions, reload }) {
     // each avatar needs: id (the avatar seed + tooltip), status (liveness ring), node (tooltip label).
     const editors = liveEditorsOf(s)
     const editorData = editors.map((e) => ({ id: e.id, status: e.status, node: e.node }))
+    // isLeaf + onAddChild drive the + add-child button SpecNode draws on leaves (alternate `nn` entry).
+    const extra = { editors: editorData, isLeaf: !parents.has(s.id), onAddChild: addChild }
     return {
       id: s.id, type: 'spec', position: { x: s.x, y: s.y },
       data: editors.length
-        ? { ...s, editors: editorData, link: { color: labelColor(editors[0].id), status: editors[0].status } }
-        : { ...s, editors: editorData },
+        ? { ...s, ...extra, link: { color: labelColor(editors[0].id), status: editors[0].status } }
+        : { ...s, ...extra },
       draggable: false, selected: s.id === focusId, className,
     }
-  }), [focusId, focus.parent, highlightId, specs, liveEditorsOf])
+    })
+  }, [focusId, focus.parent, highlightId, specs, liveEditorsOf, addChild])
 
   const edges = useMemo(() => {
     const tree = specs.filter((s) => s.parent).map((s) => {
@@ -182,16 +202,6 @@ function Dashboard({ specs, sessions, reload }) {
   // `i` opens the node-info popup, Enter opens the session interface. A modal (popup or session UI)
   // OWNS the keys while open — arrows no longer leak through to move the board behind it (the old
   // blind-navigation bug); the session interface handles its own list nav / input.
-  // @@@ open the board - the session interface is a PERSISTENT place you switch to, not a per-open modal:
-  // it stays mounted (hidden) so its selected tab AND each tab's typed-but-unsent input survive a
-  // close/reopen. Enter (board or node-info popup) always reopens it at the remembered tab (`sessionSel`),
-  // a "boarding switch" — never a context jump based on the focused node.
-  const openBoard = useCallback(() => setSessionUI(true), [])
-  // @@@ startNew - a board chord opens the session board on its New Session tab with `text` pre-seeded
-  // (the @-directive). One-shot: SessionInterface applies it then clears `seed`, so a later reopen keeps
-  // the user's own draft instead of re-seeding.
-  const startNew = useCallback((text) => { setSessionSel('new'); setSeed(text); setSessionUI(true) }, [])
-
   useEffect(() => {
     const cyclePane = (dir) => setPane((p) => PANE_KEYS[(PANE_KEYS.indexOf(p) + dir + PANE_KEYS.length) % PANE_KEYS.length])
     // keyboard nav both focuses AND pans (the camera follows the keyboard). Mouse focus does not — see

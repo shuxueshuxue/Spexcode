@@ -66,11 +66,25 @@ body {
 /* ---- node: two stacked rows — row 1 the thin file-tree line (dot · title · version), row 2 the
    live editors' avatars or "last edited … ago". A touch wider than the single-line era for titles. ---- */
 .spec-node {
+  position: relative;
   display: flex; flex-direction: column; justify-content: center; gap: 3px;
   width: 220px; min-height: 46px; padding: 5px 9px;
   background: var(--panel); border: 1px solid var(--line); border-radius: 4px;
   transition: border-color .12s;
 }
+
+/* @@@ add-child + - leaf-only affordance pinned to the right edge: an alternate entry to the `nn`
+   new-node flow (see SpecNode.jsx). Subtle and hidden until the node is hovered/focused so it never
+   clutters the tree; sits over the source handle but stays clickable (handle is non-interactive here). */
+.node-add {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+  width: 16px; height: 16px; padding: 0; display: grid; place-items: center;
+  font-size: 13px; line-height: 1; color: var(--muted);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 3px;
+  cursor: pointer; opacity: 0; transition: opacity .12s, color .12s, border-color .12s; z-index: 2;
+}
+.spec-node:hover .node-add, .spec-node.focused .node-add { opacity: .85; }
+.node-add:hover { color: var(--blue); border-color: var(--blue); opacity: 1; }
 .spec-node.focused { border-color: var(--blue); outline: 2px solid var(--blue); outline-offset: -1px; }
 .spec-node.active.focused { border-color: var(--orange); outline-color: var(--orange); }
 .spec-node.drift.focused { border-color: var(--yellow); outline-color: var(--yellow); }

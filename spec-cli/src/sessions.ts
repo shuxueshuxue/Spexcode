@@ -1,9 +1,8 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { randomUUID } from 'node:crypto'
-import { readFileSync, writeFileSync, existsSync, renameSync, rmSync } from 'node:fs'
+import { readFileSync, writeFileSync, existsSync, renameSync } from 'node:fs'
 import { join, dirname } from 'node:path'
-import { tmpdir } from 'node:os'
 import { git, gitA, repoRoot } from './git.js'
 
 // @@@ sessions - the WORKTREE is the durable unit; tmux is a disposable runtime handle. Each session
@@ -320,45 +319,11 @@ export async function closeSession(id: string): Promise<boolean> {
   return !!wt
 }
 
-// @@@ resizeSession - the dashboard fits xterm to its panel, then tells tmux to render the detached
-// pane at that exact cols×rows so the TUI lines up with no overflow. resize-window flips the window to
-// manual sizing, so the size sticks for a session with no attached client. Best-effort: a dead/missing
-// session just no-ops (the next fit re-sends anyway).
-export async function resizeSession(id: string, cols: number, rows: number): Promise<boolean> {
-  if (!(cols > 0 && rows > 0)) return false
-  return tmuxOk(['resize-window', '-t', id, '-x', String(cols), '-y', String(rows)])
-}
-
+// the session's live pane as a one-shot snapshot (output), for agents driving sessions via `spex capture`.
+// The dashboard no longer uses this — its live terminal is a real tmux client (see pty-bridge.ts).
 export async function captureSession(id: string): Promise<string> {
   if (!(await alive(id))) return ''
   try { return await tmux(['capture-pane', '-e', '-p', '-t', id]) } catch { return '' }
-}
-
-// @@@ pane stream - the live terminal feed. Instead of polling whole-screen snapshots, we hook the
-// pane's RAW output (ANSI + cursor moves, exactly the bytes the app writes) via `tmux pipe-pane` into a
-// per-session temp file; each SSE client tails that file by byte offset (cheap, so it can poll fast →
-// low latency) and streams the deltas to xterm. One pipe per session, ref-counted across viewers:
-// started (file truncated) on the first connect, closed + file removed on the last. NB: not `-o`, which
-// TOGGLES the pipe (a second viewer would tear down the first's); a plain re-open is idempotent enough.
-const paneStreamFile = (id: string) => join(tmpdir(), `spexcode-pane-${id}`)
-const paneClients = new Map<string, number>()
-export async function openPaneStream(id: string): Promise<string | null> {
-  if (!(await alive(id))) return null
-  const file = paneStreamFile(id)
-  const n = paneClients.get(id) || 0
-  if (n === 0) {
-    writeFileSync(file, '')  // fresh feed for this viewing session
-    await tmuxOk(['pipe-pane', '-t', id, `cat >> '${file}'`])
-  }
-  paneClients.set(id, n + 1)
-  return file
-}
-export async function closePaneStream(id: string): Promise<void> {
-  const n = (paneClients.get(id) || 1) - 1
-  if (n > 0) { paneClients.set(id, n); return }
-  paneClients.delete(id)
-  await tmuxOk(['pipe-pane', '-t', id])               // no command → close the pipe
-  try { rmSync(paneStreamFile(id), { force: true }) } catch { /* best-effort cleanup */ }
 }
 
 // @@@ watch - the event source for Claude Code's Monitor tool (first-class managing-agent support).

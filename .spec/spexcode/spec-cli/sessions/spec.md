@@ -7,6 +7,7 @@ code:
   - spec-cli/src/sessions.ts
   - spec-cli/src/board.ts
   - spec-cli/src/cli.ts
+  - spec-cli/src/pty-bridge.ts
 ---
 
 # sessions
@@ -105,6 +106,27 @@ session/agent is unreachable); the agent does the work and re-proposes or closes
 longer bumps `merges` on a click — if a merge count is still wanted it is the agent's to record after a
 verified merge. (This prompt-dispatch pattern is currently scoped to merge; other low-level ops generalize
 to it later.)
+
+### The live terminal is a real tmux client (`pty-bridge.ts`)
+
+The dashboard's live terminal is not an output tap — it is a genuine **tmux client**. For each session a
+single `node-pty` runs `tmux attach-session -t <id>`; that one PTY is the shared terminal for every viewer
+(ref-counted), so there is exactly **one client and one authoritative size** (two clients would fight over
+the pane size). Viewer input — keystrokes **and** mouse — is written raw into the PTY, so with `mouse on`
+the wheel drives tmux copy-mode and the viewer scrolls the **real pane history** (a deep `history-limit`
+is set on the socket); a viewer's fit calls `pty.resize`, last fit wins. This replaces the old
+`capture-pane`-snapshot **spliced onto** a raw `pipe-pane` byte-tail (the scramble's source — deltas
+assumed a screen the snapshot only approximated, and the tail could begin mid-escape-sequence) and the
+per-tick SSE poll. A fresh `attach`/resize repaints the screen coherently; a viewer that joins an already
+running bridge is **seeded** once with a `capture-pane` of the current screen (so a warm join paints
+instantly) and then streams live from the same client. A **supervisor** keeps a warm bridge for every
+**detached** live session so opening a tab is instant — it deliberately **skips any session a human is
+already attached to** (e.g. the managing session in its own terminal), never adding a second client that
+would resize their pane; the dashboard can still open such a session on demand (a user-initiated choice).
+The bridge is exposed over one bidirectional WebSocket (`GET /api/sessions/:id/socket`): binary frames are
+pane bytes both ways, a text frame is the `{t:'resize'}` control. `node-pty` needs no compile (it ships
+prebuilds); a `postinstall` only restores the `spawn-helper` execute bit npm drops. `captureSession`
+stays for `spex capture` (agent-facing pane snapshot); `resizeSession`/`pipe-pane`/SSE are gone.
 
 For the terminal: `spex ls` is the human-readable living-sessions table — a column header, each session's
 truncated note/prompt, and a glyph→meaning legend (`statusLegend`, built from `STATUS_GLYPH` so it can't

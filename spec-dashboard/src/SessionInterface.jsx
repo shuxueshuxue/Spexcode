@@ -28,6 +28,25 @@ export default function SessionInterface({ sessions, focusNode, sel, setSel, onC
   const focusId = focusNode?.id || null
   const selSession = sessions.find((s) => s.id === active)
 
+  // @@@ persistent terminals - keep every session terminal you've opened MOUNTED (hidden when inactive),
+  // so its WebSocket + scroll position survive a tab switch and switching back is instant (no remount,
+  // no reconnect). The backend already keeps a warm tmux client per live session, so the pair makes both
+  // first-open and re-open instant. We only mount sessions you've actually visited (bounded), and drop
+  // any that vanish or go offline (offline shows the relaunch panel, not a dead terminal).
+  const [opened, setOpened] = useState(() => new Set())
+  useEffect(() => {
+    if (active !== 'new' && selSession && selSession.status !== 'offline' && !opened.has(active)) {
+      setOpened((prev) => new Set(prev).add(active))
+    }
+  }, [active, selSession?.status])
+  useEffect(() => {
+    setOpened((prev) => {
+      const next = new Set()
+      for (const id of prev) { const s = sessions.find((x) => x.id === id); if (s && s.status !== 'offline') next.add(id) }
+      return next.size === prev.size ? prev : next
+    })
+  }, [sessions])
+
   // on the New Session tab: prefill the focused-node @prefix and focus the box. Keyed on focusId (a
   // string), NOT the focus object — polling rebuilds that object every 4s and would wipe your typing.
   useEffect(() => {
@@ -157,15 +176,19 @@ export default function SessionInterface({ sessions, focusNode, sel, setSel, onC
                     <button className="si-act kill" onClick={() => act('close', () => setSel('new'))}>close</button>
                   </div>
                 </div>
-                <div className="si-term-body">
-                  {selSession?.status === 'offline' ? (
+                <div className="si-term-body" style={{ position: 'relative' }}>
+                  {/* every opened session's terminal stays mounted; only the active one is shown */}
+                  {[...opened].map((id) => (
+                    <div key={id} className="si-term-layer" style={{ position: 'absolute', inset: 0, display: id === active ? 'block' : 'none' }}>
+                      <SessionTerm sessionId={id} />
+                    </div>
+                  ))}
+                  {selSession?.status === 'offline' && (
                     <div className="si-offline">
                       <div className="si-offline-msg">⏻ offline — no live process for this worktree.</div>
                       <div className="si-offline-sub">the worktree and its session <code>{active.slice(0, 8)}…</code> are intact. relaunch to resume the same conversation.</div>
                       <button className="si-act go big" onClick={() => act('resume')}>⏵ relaunch &amp; resume</button>
                     </div>
-                  ) : (
-                    <SessionTerm sessionId={active} />
                   )}
                 </div>
               </div>

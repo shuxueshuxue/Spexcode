@@ -509,16 +509,22 @@ body {
 /* the terminal is a read-only VIEW. */
 .st-wrap { position: relative; width: 100%; height: 100%; }
 .st-host { width: 100%; height: 100%; overflow: hidden; }
-/* one-glance copy hint, tucked in the bottom-right of the dark pane. Dim and click-through so it never
-   gets in the way of the live output; brightens to green when the copy chord fires (then fades back). */
+/* one-glance copy hint, a small LEGIBLE chip in the bottom-right of the dark pane. Click-through so it
+   never blocks the live output, but readable at a glance (no straining): a bordered pill with light text
+   on a solid dark backing. It flips to a solid GREEN "copied ✓" badge when the copy chord fires, then
+   settles back. */
 .st-copyhint {
-  position: absolute; right: 7px; bottom: 5px; pointer-events: none; z-index: 2;
-  font-family: var(--mono); font-size: 10px; line-height: 1; letter-spacing: .2px;
-  color: #93a1a1; opacity: .38; background: rgba(0, 43, 54, .72);
-  padding: 2px 6px; border-radius: 4px; transition: opacity .18s ease, color .18s ease;
+  position: absolute; right: 8px; bottom: 7px; pointer-events: none; z-index: 2;
+  font-family: var(--mono); font-size: 11px; line-height: 1.25; letter-spacing: .2px;
+  color: #cfe8e8; opacity: .85; background: rgba(7, 54, 66, .92);
+  border: 1px solid rgba(131, 148, 150, .35);
+  padding: 3px 8px; border-radius: 5px;
+  transition: opacity .15s ease, color .15s ease, background .15s ease, border-color .15s ease;
 }
-.st-wrap:hover .st-copyhint { opacity: .6; }
-.st-copyhint.copied { opacity: .95; color: #859900; }
+.st-wrap:hover .st-copyhint { opacity: 1; }
+.st-copyhint.copied {
+  opacity: 1; color: #fdf6e3; background: rgba(133, 153, 0, .95); border-color: rgba(133, 153, 0, .95);
+}
 /* DARK terminal background (matches SessionTerm's xterm theme) so the dark-designed Claude TUI renders as
    intended — no light gutter/flash around the pane while xterm paints. */
 .st-host .xterm, .st-host .xterm-screen {

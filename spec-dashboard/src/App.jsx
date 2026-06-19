@@ -205,6 +205,10 @@ function Dashboard({ specs, sessions, reload }) {
   // keyboard focus are separate interaction logics; click moves the highlight, not the viewpoint.
   const onNodeClick = useCallback((_e, n) => setFocusId(n.id), [])
 
+  // double-click is the mouse parallel to the `i` key: focus the node AND open its info popup.
+  // (single click still only focuses without panning; the camera follows the keyboard alone.)
+  const onNodeDoubleClick = useCallback((_e, n) => { setFocusId(n.id); setOverlay(true) }, [])
+
   // clicking a session in the top-right window: toggle highlight of its worktree's overlays (matched
   // by source = worktree path) + jump to its first changed node (only .session-linked sessions carry
   // ops; a bare tmux session has none, so it just toggles selection).
@@ -222,6 +226,8 @@ function Dashboard({ specs, sessions, reload }) {
           edges={edges}
           nodeTypes={nodeTypes}
           onNodeClick={onNodeClick}
+          onNodeDoubleClick={onNodeDoubleClick}
+          zoomOnDoubleClick={false}
           nodesDraggable={false}
           nodesFocusable={false}
           disableKeyboardA11y

@@ -35,8 +35,10 @@ nodes are already ordered in y. `+` / `-` zoom, `0` resets to the overview zoom.
 A keystroke only ever changes the *viewpoint* and the highlight / dim / edge state — the tree sits at
 fixed absolute positions (see [[node-graph]]). Arrow-key focus changes recentre the camera on the new
 node; **mouse-click focus does not pan** (it only moves the highlight) — same focus state, two
-interaction logics. `i` opens the node-info popup ([[work-pane]] / [[ab-screenshots]]); `Enter` crosses
-to the focus node's session (see below). While a modal (popup or session interface) is open it **owns**
+interaction logics. `i` opens the node-info popup ([[work-pane]] / [[ab-screenshots]]), and a
+**double-click is the mouse parallel to `i`** — it focuses the node *and* opens its info popup in one
+gesture (a single click still only moves the highlight, never the board); `Enter` crosses to the focus
+node's session (see below). While a modal (popup or session interface) is open it **owns**
 the keys: arrows must not leak through to pan the board behind it — that was the old blind-navigation bug.
 
 The node-info popup keeps the keys close to the node world it overlays. Its three panes (spec / recent /
@@ -59,7 +61,9 @@ only thing that pans. `=`/`+` and `-`/`_` zoom by 1.2×, `0` resets to the overv
 popup; `Enter` calls `crossToSession(focus)`. The camera is a plain rAF pan (`animateView` → `setViewport`,
 cubic ease) that recentres at constant zoom — no fit, no arc; a `framedRef`-guarded effect frames the root
 once on mount and never re-pans on its own, and `onNodeClick` only `setFocusId(n.id)` — so polling and
-mouse clicks never move the board (the camera follows the keyboard alone). `crossToSession(node)` reads the
+mouse clicks never move the board (the camera follows the keyboard alone). `onNodeDoubleClick` is the
+mouse twin of `i`: `setFocusId(n.id)` + `setOverlay(true)`, with react-flow's `zoomOnDoubleClick={false}`
+so the gesture opens the popup instead of zooming the board. `crossToSession(node)` reads the
 live overlay via `liveEditorsOf(node)` = `sessions.filter(s => s.ops?.some(op => op.nodeId === node.id))`:
 one editor → `openSession(editors[0].id)`; none → `openSession('new')` (the New Session tab prefills
 `@node.id` because `SessionInterface` reads `focusNode=focus`); several → `setSessionUI(true)` to let the

@@ -26,62 +26,62 @@ the friction-reducer crosses into.
 
 ## expanded spec
 
-`←` / `→` go to the parent / nearest child (the child closest in y). `↑` / `↓` move within the focused
-node's **column** to the nearest node in that direction: depth pins x exactly (`x = depth · X_GAP`), so
-a column is a clean vertical line and vertical nav never changes column or dives into a child. Columns
-are aligned and rows aren't, so we navigate the organised axis — and it's reversible, since a column's
-nodes are already ordered in y. **`hjkl` mirror the arrows** for the vim hand: `h`→parent, `l`→child,
-`k`→up the column, `j`→down — same `go(t)` path, same camera pan. `+` / `-` zoom, `0` resets to the
-overview zoom.
+### key map
 
-A keystroke only ever changes the *viewpoint* and the highlight / dim / edge state — the tree sits at
-fixed absolute positions (see [[node-graph]]). Arrow-key focus changes recentre the camera on the new
-node; **mouse-click focus does not pan** (it only moves the highlight) — same focus state, two
-interaction logics. `i` opens the node-info popup ([[work-pane]] / [[ab-screenshots]]), and a
-**double-click is the mouse parallel to `i`** — it focuses the node *and* opens its info popup in one
-gesture (a single click still only moves the highlight, never the board); `Enter` crosses to the focus
-node's session (see below). While a modal (popup or session interface) is open it **owns**
-the keys: arrows must not leak through to pan the board behind it — that was the old blind-navigation bug.
+On the board:
 
-The node-info popup keeps the keys close to the node world it overlays. Its three panes (spec / recent /
-history) switch by `←` / `→` — and by **`h` / `l`** (the vim horizontal hand mirrors the arrows here too) —
-cycling and wrapping at the ends, just as they do by `Tab` and `1`-`3`. Inside the popup, the horizontal
-hand means "switch pane", never "move the board". And `j` / `k` keep their vim sense but bind to the
-*content*: inside the popup they **scroll the open pane**, not the board behind it — so the vertical hand
-reads the long spec / history text while the horizontal hand flips panes. The scroll is **momentum-eased,
-not a per-press tween**: each `j` / `k` bumps an accumulating target and a single rAF loop glides
-`scrollTop` toward it, so repeated or held keys stack into one continuous motion instead of stuttering.
+- `↑` / `k` — up the focused node's column, to the nearest node above
+- `↓` / `j` — down the column, to the nearest node below
+- `←` / `h` — to the parent
+- `→` / `l` — to the nearest child (closest in y)
+- `+` / `-` — zoom in / out; `0` — back to the overview zoom
+- `i` — open the node-info popup
+- `double-click` — focus a node **and** open its popup (the mouse twin of `i`)
+- `Enter` — cross from the focus node into its live session(s)
+- `?` — toggle the legend
 
-And the popup is a launchpad, not a dead end: `Enter` crosses straight from *reading* a node to
-*driving* its agent. The destination is the **live overlay** — the session(s) whose pending ops touch
-this node — never `node.session` (which is only the last editor, usually closed). So `Enter` (in the
-popup or on the board) resolves by how many sessions are live on the focus node: **one** → jump straight
-into it; **none** → open New Session prefilled with `@<node-id>` (start working on it in place);
-**several** → open the session interface so the human picks which editor to drive. One key carries the
-reader from the node world into the session world, so inspecting a node and taking it over are not two
-separate gestures. `node.session` survives only as a "last edited by" line in the popup's meta.
+Inside the node-info popup the keys re-bind to the popup, never the board behind it:
 
-In `App.jsx` this is one capture-phase `keydown` listener that wins over react-flow. In graph mode `↑`/`↓`
-(aliased `k`/`j`) call `nearestY('up'|'down')` (a same-x column scan for the nearest node in y),
-`←`/`h`→`parent`, `→`/`l`→the child nearest in y; all four go through `go(t)`, which sets focus **and**
-`centerOn(t)` — so arrow nav is the only thing that pans. `=`/`+` and `-`/`_` zoom by 1.2×, `0` resets to the overview zoom; `i` opens the info
-popup; `Enter` calls `crossToSession(focus)`. The camera is a plain rAF pan (`animateView` → `setViewport`,
-cubic ease) that recentres at constant zoom — no fit, no arc; a `framedRef`-guarded effect frames the root
-once on mount and never re-pans on its own, and `onNodeClick` only `setFocusId(n.id)` — so polling and
-mouse clicks never move the board (the camera follows the keyboard alone). `onNodeDoubleClick` is the
-mouse twin of `i`: `setFocusId(n.id)` + `setOverlay(true)`, with react-flow's `zoomOnDoubleClick={false}`
-so the gesture opens the popup instead of zooming the board. `crossToSession(node)` reads the
-live overlay via `liveEditorsOf(node)` = `sessions.filter(s => s.ops?.some(op => op.nodeId === node.id))`:
-one editor → `openSession(editors[0].id)`; none → `openSession('new')` (the New Session tab prefills
-`@node.id` because `SessionInterface` reads `focusNode=focus`); several → `setSessionUI(true)` to let the
-human pick. A node carrying live editor(s) gets a `link` so `SpecNode` stamps the subtle `⏎` affordance
-(first editor's colour/status). When a modal is open the handler short-circuits: the session interface
-swallows all keys but `Escape`; the info popup handles `Escape`, `Tab` / `←` / `→` / `h` / `l` / `1`-`3`
-(pane switching, `←`/`h` and `→`/`l` calling the same `cyclePane(±1)` as `Tab`), `j`/`k` (which call
-`bumpScroll(±120)` on the open pane — found via the lone `overflow:auto` descendant of `.ov-body`, since
-only one pane mounts at a time; `bumpScroll` clamps an accumulating target in `scrollTargetRef` and eases
-`scrollTop` toward it by a fixed fraction per rAF frame, swapping the target when the scroller element
-changes) and `Enter` (which `setOverlay(false)` then `crossToSession(focus)`), and still drops `↑`/`↓` so
-they never reach the board; the key hints render in the HUD. `App.jsx` also hosts the graph render (node positions, edges, and the faint dashed reparent-preview
-arrow for `moved` overlays — see [[node-graph]]), but those are view concerns that never change the
-navigation contract above.
+- `←` / `→`, `h` / `l`, `Tab`, `1`-`3` — switch pane (spec / recent / history), cycling and wrapping
+- `j` / `k` — scroll the open pane's content
+- `Enter` — cross to the node's session (the popup closes behind it)
+- `Esc` — close the popup
+
+### principles
+
+- **Move by relationship, not geometry.** Navigation walks the parent/child/column structure of the
+  tree, not raw pixel distance. The tree sits at fixed absolute positions (see [[node-graph]]) and never
+  re-plots; the camera moves instead.
+- **The camera follows the keyboard, not the mouse.** Arrow nav recentres the viewport on the new node —
+  you asked to travel there. A mouse click only moves the highlight; the board stays put — you're
+  pointing, not travelling. Same focus state, two interaction logics.
+- **A modal owns the keys.** While the popup or the session interface is open, arrows never leak through
+  to pan the board behind it.
+
+### moving on the board
+
+`←` / `→` step to the parent and to the nearest child in y. `↑` / `↓` move strictly within the focused
+node's **column**: depth pins x exactly, so a column is a clean vertical line and vertical nav never
+changes column or dives into a child. Columns are the organised axis (aligned; rows aren't), and a
+column's nodes are ordered in y, so the move is reversible. **`hjkl` mirror the arrows** for the vim
+hand. Arrow nav is the *only* thing that pans: it moves the highlight and flat-pans the camera to centre
+the new node at constant zoom — no zoom-to-fit, no arc, so switching nodes never jumps. `+` / `-` zoom
+around the focus; `0` returns to the overview zoom.
+
+### the node-info popup
+
+`i` (or a double-click) opens the popup over the board to read the node ([[work-pane]] /
+[[ab-screenshots]]). It keeps the keys close to the node world it overlays: the **horizontal** hand
+(`←` / `→`, `h` / `l`, alongside `Tab` and `1`-`3`) flips between its panes, and the **vertical** hand
+(`j` / `k`) scrolls the open pane's text. Held or repeated scroll keys glide as one continuous motion.
+Arrows never reach the board; `Esc` closes the popup.
+
+### crossing into a session
+
+The popup is a launchpad, not a dead end: `Enter` — from the board or the popup — crosses from *reading*
+a node to *driving* its agent. The destination is the node's **live editor(s)**: the session(s) whose
+pending ops currently touch it — never `node.session`, which is only the last editor, kept as a "last
+edited by" line. It resolves by how many are live: **one** → jump straight in; **none** → open New
+Session prefilled with `@<node-id>` (start working on it in place); **several** → open the session
+interface so the human picks which editor to drive. A node carrying live editor(s) shows a subtle `⏎`
+affordance on the board.

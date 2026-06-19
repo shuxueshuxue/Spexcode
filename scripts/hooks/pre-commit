@@ -13,13 +13,24 @@ fi
 
 # @@@ spec-lint - the hook is just a thin shim over `spex lint`. It blocks on errors only (broken
 # spec↔code links); coverage/drift are warnings. Bypass with SPEXCODE_SKIP_LINT=1.
+#
+# A fresh session worktree has NO spec-cli/node_modules, so `npm run lint` there can't even start and
+# the lint silently never runs. Instead invoke lint through the MAIN checkout's installed tsx + cli by
+# ABSOLUTE path — main is the parent of the shared git *common* dir (same resolution the session
+# machinery uses). cwd stays the committing worktree, so lint validates THIS worktree's `.spec`
+# (repoRoot() discovers the cwd's toplevel via git.ts, which strips the hook's GIT_DIR).
 if [ -z "${SPEXCODE_SKIP_LINT:-}" ]; then
-  root=$(git rev-parse --show-toplevel 2>/dev/null)
-  if [ -n "$root" ] && [ -f "$root/spec-cli/package.json" ]; then
-    if ! npm --prefix "$root/spec-cli" run -s lint >&2; then
+  main_root=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)")
+  tsx="$main_root/spec-cli/node_modules/.bin/tsx"
+  cli="$main_root/spec-cli/src/cli.ts"
+  if [ -x "$tsx" ] && [ -f "$cli" ]; then
+    if ! "$tsx" "$cli" lint >&2; then
       echo "✗ SpexCode: spec-lint failed — fix the spec↔code links or bypass with SPEXCODE_SKIP_LINT=1." >&2
       exit 1
     fi
+  else
+    # Advisory hook: main checkout not installed (`npm install` in spec-cli) — skip, don't false-block.
+    echo "• SpexCode: spec-lint skipped — no tsx in $main_root/spec-cli (run npm install there); CI still enforces." >&2
   fi
 fi
 exit 0

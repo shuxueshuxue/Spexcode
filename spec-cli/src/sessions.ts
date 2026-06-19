@@ -285,20 +285,36 @@ export function selectSessions(all: Session[], selectors: string[], statuses?: s
   return out
 }
 
-// human-friendly aligned table (glyph + colour + status + name + id + merges + note).
+const trunc = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + '\u2026' : s)
+// short display label per status (only close-pending differs from the status name) \u2014 used by the legend.
+const SHORT: Partial<Record<DisplayStatus, string>> = { 'close-pending': 'close' }
+
+// @@@ statusLegend - one-line glyph\u2192meaning key, BUILT from STATUS_GLYPH so it can never drift from
+// the glyphs the table actually prints. Shown under `spex ls` so the symbols are self-explanatory.
+export function statusLegend(color = true): string {
+  const c = (code: string, t: string) => (color ? `\x1b[${code}m${t}\x1b[0m` : t)
+  const parts = (Object.keys(STATUS_GLYPH) as DisplayStatus[]).map(
+    (k) => `${c(ANSI[k], STATUS_GLYPH[k])} ${SHORT[k] || k}`,
+  )
+  return c('90', '  key: ') + parts.join('  ')
+}
+
+// human-friendly aligned table: header + (glyph + colour + status + name + id + merges + note) rows +
+// a status legend, so the table tells the whole story (incl. each agent's note) at a glance.
 export function formatTable(sessions: Session[], color = true): string {
   const c = (code: string, t: string) => (color ? `\x1b[${code}m${t}\x1b[0m` : t)
   if (!sessions.length) return c('90', '  no living sessions')
+  const header = c('90', `    ${'STATUS'.padEnd(13)} ${'NODE'.padEnd(22)} ${'ID'.padEnd(8)} ${'\u00d7'.padEnd(4)}NOTE`)
   const rows = sessions.map((s) => {
     const g = STATUS_GLYPH[s.status] ?? '\u00b7'
     const code = ANSI[s.status] ?? '0'
     const name = (s.node || s.branch || s.id).slice(0, 22).padEnd(22)
     const st = s.status.padEnd(13)
     const merges = (s.merges ? `\u00d7${s.merges}` : '').padEnd(4)
-    const note = s.note ? `  ${c('90', s.note)}` : ''
+    const note = s.note ? c('90', trunc(s.note, 50)) : ''
     return `  ${c(code, g)} ${c(code, st)} ${name} ${c('90', s.id.slice(0, 8))} ${merges}${note}`
   })
-  return [c('1', `SpexCode sessions (${sessions.length})`), ...rows].join('\n')
+  return [c('1', `SpexCode sessions (${sessions.length})`), header, ...rows, statusLegend(color)].join('\n')
 }
 
 const WATCH_ACTIONABLE = new Set<DisplayStatus>(['review', 'done', 'close-pending', 'offline', 'error'])

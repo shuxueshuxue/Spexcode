@@ -21,8 +21,31 @@ function positionals(from: number): string[] {
   return out
 }
 
-if (cmd === undefined || cmd === 'serve') {
+// @@@ help - tidy one-screen command summary for humans AND agents (no args or `spex help`). Grouped
+// by purpose; flags shown inline so the surface is self-explanatory without reading the source.
+function printHelp(): void {
+  console.log(`spex — SpexCode CLI (spec↔code graph + worktree session state machine)
+
+Usage: spex <command> [args]
+
+Specs / graph
+  lint                  check the spec↔code graph (integrity·living·coverage·drift)
+  serve                 run the API server (http://localhost:8787)
+  board                 dump the dashboard board state as JSON
+
+Sessions
+  ls [SEL…]             living-sessions table          [--status a,b] [--json]
+  watch [SEL…]          stream actionable transitions  [--as NAME] [--status a,b] [--idle] [--interval N]
+  new "<prompt>"        start a session (= session new)  [--node X]
+  session <sub>         new | list | reopen | review | done | merge | close | send | capture
+
+  SEL = session id (or id-prefix), node, or branch; none (or @all) = every session.`)
+}
+
+if (cmd === 'serve') {
   await import('./index.js')
+} else if (cmd === undefined || cmd === 'help' || cmd === '--help' || cmd === '-h') {
+  printHelp()
 } else if (cmd === 'lint') {
   const { specLint } = await import('./lint.js')
   const findings = specLint()
@@ -49,6 +72,11 @@ if (cmd === undefined || cmd === 'serve') {
     as: flag('as'),
     intervalMs: (Number(flag('interval')) || 5) * 1000,
   })
+} else if (cmd === 'new') {
+  // shorthand for `spex session new`: spex new "<prompt>" [--node X]  (prompt = first positional or --prompt)
+  const { newSession } = await import('./sessions.js')
+  const prompt = flag('prompt') ?? positionals(3)[0] ?? ''
+  console.log(JSON.stringify(await newSession(flag('node') ?? null, prompt), null, 2))
 } else if (cmd === 'session') {
   const sub = process.argv[3]
   const s = await import('./sessions.js')
@@ -90,6 +118,6 @@ if (cmd === undefined || cmd === 'serve') {
     console.error('spex session: new|list|reopen|review|done|merge|close|send|capture'); process.exit(2)
   }
 } else {
-  console.error(`spex: unknown command '${cmd}' (try: lint, serve, session)`)
+  console.error(`spex: unknown command '${cmd}' (try: spex help)`)
   process.exit(2)
 }

@@ -5,7 +5,7 @@ import { createNodeWebSocket } from '@hono/node-ws'
 import { loadSpecs, specHistory, specDiff } from './specs.js'
 import { resolveLayout } from './layout.js'
 import { buildBoard } from './board.js'
-import { newSession, listSessions, sendKeys, rawKey, closeSession, reopen, propose, mergeSession, sessionGraph, subscribe, unsubscribe } from './sessions.js'
+import { newSession, listSessions, sendKeys, rawKey, closeSession, reopen, propose, mergeSession, sessionGraph, registerWatch, deregisterWatch } from './sessions.js'
 import { slashCommands } from './slash-commands.js'
 import { attachViewer, detachViewer, writeViewer, resizeBridge, superviseBridges, type Viewer } from './pty-bridge.js'
 
@@ -34,18 +34,20 @@ app.get('/api/slash-commands', (c) => c.json(slashCommands()))
 // sessions: real tmux-backed Claude Code sessions. List + spawn, stream the live pane (WebSocket),
 // forward keystrokes, and close.
 app.get('/api/sessions', async (c) => c.json(await listSessions()))
-// @@@ session graph - the directed SUBSCRIPTION network (A subscribes to B). GET returns live sessions
-// as nodes + the persisted edges (pruned to live endpoints); subscribe/unsubscribe create and remove one
-// directed edge. A literal `graph` segment, so it never collides with the `:id` lifecycle routes below.
+// @@@ session graph - edges DERIVED from LIVE monitors, not a stored relationship. GET returns live
+// sessions as nodes + edges where each A→B means "agent A is running `spex watch B` right now". A running
+// `spex watch` registers + heartbeats here (watch) and deregisters on exit (unwatch); there is no
+// persisted subscription. A literal `graph` segment, so it never collides with the `:id` routes below.
 app.get('/api/sessions/graph', async (c) => c.json(await sessionGraph()))
-app.post('/api/sessions/graph/subscribe', async (c) => {
+app.post('/api/sessions/graph/watch', async (c) => {
   const b = await c.req.json().catch(() => ({}))
-  const ok = subscribe(String(b?.from || ''), String(b?.to || ''))
+  const selectors = Array.isArray(b?.selectors) ? b.selectors.map(String) : []
+  const ok = registerWatch(String(b?.token || ''), String(b?.watcher || ''), selectors, Number(b?.ttlMs) || undefined)
   return c.json({ ok }, ok ? 200 : 400)
 })
-app.post('/api/sessions/graph/unsubscribe', async (c) => {
+app.post('/api/sessions/graph/unwatch', async (c) => {
   const b = await c.req.json().catch(() => ({}))
-  const ok = unsubscribe(String(b?.from || ''), String(b?.to || ''))
+  const ok = deregisterWatch(String(b?.token || ''))
   return c.json({ ok }, ok ? 200 : 404)
 })
 app.post('/api/sessions', async (c) => {

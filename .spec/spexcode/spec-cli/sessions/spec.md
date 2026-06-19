@@ -136,18 +136,28 @@ longer bumps `merges` on a click — if a merge count is still wanted it is the 
 verified merge. (This prompt-dispatch pattern is currently scoped to merge; other low-level ops generalize
 to it later.)
 
-### Sessions can subscribe to each other (the subscription graph)
+### The session graph is LIVE monitors, not a stored relationship
 
-Sessions are not only spec-editors — they form a **directed political network**: session A may
-**subscribe** to session B (A→B). The edge set is **runtime state**, exactly like `.session` itself, so
-it persists with no datastore as **one simple untracked JSON file** in `.worktrees/` (already gitignored)
-that survives a backend restart and a page reload. Subscribing is idempotent and a self-edge is rejected.
-The graph is served at `GET /api/sessions/graph` as `{ nodes, edges }` — live sessions as nodes (the same
-`Session` objects `listSessions` returns) and the persisted directed edges, **pruned to edges whose both
-endpoints are still live**, so a closed session (its worktree gone) never leaves a dangling arrow.
-`POST /api/sessions/graph/subscribe` and `…/unsubscribe` (`{from,to}`) create and remove one edge. This
-lives in `sessions.ts` (it is session-to-session state) and stays isolated from the board assembler —
-nothing here touches `buildBoard` or the spec tree. The dashboard's [[session-graph]] view is its surface.
+Sessions form a **directed monitor network**, and an edge means exactly one thing: **A→B iff agent A is
+right now running `spex watch B`** (the Monitor tool) over B. The graph is **derived from live watches,
+never persisted** — there is no subscription store, no datastore, no file; an edge exists **only while
+that watch runs**. When a `spex watch` starts it **registers itself with the backend** — reporting its
+**own** session id (Claude Code's `CLAUDE_CODE_SESSION_ID`, falling back to the worktree `.session`) as
+the watcher and its target selectors — then **heartbeats** while it runs and **deregisters on exit**; a
+**missed heartbeat** drops the registration as a backstop. The registrations are **in-memory in the
+server process** (its single owner); the watch process, being separate, reports over HTTP: `POST
+/api/sessions/graph/watch` (register + heartbeat) and `…/unwatch` (deregister). A backend restart starts
+empty and live watches re-register on their next beat. All of this is **best-effort on the watch side**:
+a down backend never breaks the event stream — only the edge is delayed.
+
+`GET /api/sessions/graph` returns `{ nodes, edges }`: live sessions as nodes (the same `Session` objects
+`listSessions` returns) and edges **computed at read time** from the live registrations. Each watcher's
+**selectors are resolved live** with the same matcher `spex ls/watch` use, so a **global** watcher
+(`--all` / no selectors) links to **every** session — including ones launched after the watch started —
+and a node/branch selector picks up future matches too. Self-edges, edges touching a non-live session,
+and duplicate A→B all drop out, so the graph never shows a dangling or doubled arrow. This lives in
+`sessions.ts` and stays isolated from the board assembler — nothing here touches `buildBoard` or the spec
+tree. The dashboard's [[session-graph]] view is its (now **observational**) surface.
 
 ### The live terminal is a real tmux client (`pty-bridge.ts`)
 

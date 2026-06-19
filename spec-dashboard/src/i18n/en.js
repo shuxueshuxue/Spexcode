@@ -137,7 +137,7 @@ export default {
 
   sessionGraph: {
     brand: '$ session-graph',
-    hint: 'drag node→node to subscribe · click an arrow to remove · Esc to return',
+    hint: 'arrows = live monitors (A→B: A is watching B) · Esc to return',
   },
 
   session: {

@@ -255,52 +255,83 @@ export async function listSessions(): Promise<Session[]> {
   return out
 }
 
-// @@@ subscription graph - a directed POLITICAL network between sessions: A subscribes to B. The edge
-// set is runtime state, just like `.session` itself, so it persists as ONE simple untracked JSON file
-// in `.worktrees/` (already gitignored) — no datastore, survives a backend restart / page reload. Edges
-// are pruned to LIVE endpoints on read, so a closed session (its worktree gone) leaves no dangling arrow.
-// Kept isolated from the board assembler: nothing here touches buildBoard / the spec tree.
+// @@@ session graph = LIVE monitors, not a stored relationship. An edge A→B means "agent A is RIGHT NOW
+// running `spex watch B` (the Monitor tool) over B" — derived from live watch registrations, never a
+// persisted subscription. When a `spex watch` process starts it registers here and heartbeats; the edge
+// exists ONLY while that watch runs (deregistered on exit, dropped on a missed heartbeat). Single owner:
+// this in-memory map in the SERVER process — the watch process (a separate `spex watch`) talks to it over
+// HTTP (POST /api/sessions/graph/watch + …/unwatch). No datastore, no file: a backend restart starts
+// empty and live watches re-register on their next heartbeat. Kept isolated from the board assembler.
 export type Edge = { from: string; to: string }
-const graphFile = () => join(mainRoot(), '.worktrees', 'session-graph.json')
-function readGraph(): Edge[] {
-  try {
-    const p = graphFile()
-    if (!existsSync(p)) return []
-    const j = JSON.parse(readFileSync(p, 'utf8'))
-    return Array.isArray(j?.edges) ? j.edges.filter((e: any) => e && typeof e.from === 'string' && typeof e.to === 'string') : []
-  } catch { return [] }
-}
-function writeGraph(edges: Edge[]): void {
-  const p = graphFile()
-  mkdirSync(dirname(p), { recursive: true })
-  writeFileSync(p, JSON.stringify({ edges }, null, 2))
-}
-const sameEdge = (a: Edge, b: Edge) => a.from === b.from && a.to === b.to
-// subscribe A→B (idempotent). No self-edge, no empties; returns false on a bad pair.
-export function subscribe(from: string, to: string): boolean {
-  if (!from || !to || from === to) return false
-  const edges = readGraph()
-  if (edges.some((e) => sameEdge(e, { from, to }))) return true
-  edges.push({ from, to })
-  writeGraph(edges)
+// keyed by an opaque per-watch token (one per `spex watch` process), so a single agent may run several
+// monitors without them clobbering each other. `selectors` is what the watch targets (resolved LIVE at
+// read time, not frozen here); empty / @all = a GLOBAL watcher. `expires` is the heartbeat backstop.
+type WatchReg = { watcher: string; selectors: string[]; expires: number }
+const watches = new Map<string, WatchReg>()
+const DEFAULT_WATCH_TTL_MS = 15000
+// register OR heartbeat a live monitor. watcher = the watching agent's OWN session id; ttlMs = how long
+// this stays live without another beat. Returns false on a bad pair (the route answers 400).
+export function registerWatch(token: string, watcher: string, selectors: string[], ttlMs = DEFAULT_WATCH_TTL_MS): boolean {
+  if (!token || !watcher) return false
+  watches.set(token, { watcher, selectors: selectors.filter(Boolean), expires: Date.now() + Math.max(1000, ttlMs) })
   return true
 }
-// remove the A→B edge; false if it wasn't there.
-export function unsubscribe(from: string, to: string): boolean {
-  const edges = readGraph()
-  const next = edges.filter((e) => !sameEdge(e, { from, to }))
-  if (next.length === edges.length) return false
-  writeGraph(next)
-  return true
+// deregister a watch (its `spex watch` exited); false if the token wasn't registered.
+export function deregisterWatch(token: string): boolean { return watches.delete(token) }
+// the still-live registrations, pruning any whose heartbeat lapsed — the backstop for a watch that died
+// without a clean unwatch (SIGKILL, a dropped connection, a backend that was down at exit time).
+function liveWatches(): WatchReg[] {
+  const now = Date.now()
+  const out: WatchReg[] = []
+  for (const [token, reg] of watches) {
+    if (reg.expires <= now) watches.delete(token)
+    else out.push(reg)
+  }
+  return out
 }
-// the graph: live sessions as nodes + persisted edges, pruned to edges whose BOTH endpoints are still
-// live (a closed session's arrows vanish with its worktree). The frontend adds the radial layout.
+// the graph: live sessions as nodes; edges DERIVED from live monitor registrations. Edge A→B = watcher A
+// is currently watching B. Selectors are resolved LIVE here via selectSessions (the same matcher `spex
+// ls/watch` use), so a global (@all/empty) watcher links to every CURRENT session — incl. ones launched
+// after the watch started — and a node/branch selector picks up future matches too. Self-edges and edges
+// touching a non-live session are dropped; duplicate A→B (two watches over the same pair) collapse to one.
 export async function sessionGraph(): Promise<{ nodes: Session[]; edges: Edge[] }> {
   const nodes = await listSessions()
   const live = new Set(nodes.map((s) => s.id))
-  const edges = readGraph().filter((e) => live.has(e.from) && live.has(e.to))
+  const edges: Edge[] = []
+  const seen = new Set<string>()
+  for (const reg of liveWatches()) {
+    if (!live.has(reg.watcher)) continue   // the watching agent itself is gone
+    for (const t of selectSessions(nodes, reg.selectors)) {
+      if (t.id === reg.watcher) continue
+      const key = `${reg.watcher} ${t.id}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      edges.push({ from: reg.watcher, to: t.id })
+    }
+  }
   return { nodes, edges }
 }
+
+// @@@ watch registration (CLIENT side) - a `spex watch` process is separate from the server, so it
+// REPORTS itself to the backend's registration store over HTTP: register+heartbeat while it runs,
+// deregister on exit (see cli.ts `watch`). All best-effort — if the backend is down the watch still
+// streams its events; the graph edge just won't appear until a heartbeat lands. Never throws.
+const apiBase = () => process.env.SPEXCODE_API_URL || `http://127.0.0.1:${process.env.PORT || 8787}`
+// the agent's OWN session id: Claude Code's env var if set, else the worktree `.session` in the cwd (the
+// `spex watch` runs from the worker's worktree, whose .session id equals the worker claude's session id).
+export function ownSessionId(): string | null {
+  const env = process.env.CLAUDE_CODE_SESSION_ID
+  if (env && env.trim()) return env.trim()
+  return readSessionFile(process.cwd()).session
+}
+async function postJSON(path: string, body: unknown): Promise<void> {
+  try {
+    await fetch(`${apiBase()}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+  } catch { /* best-effort: backend may be down; the next heartbeat / TTL reconciles */ }
+}
+export const reportWatch = (token: string, watcher: string, selectors: string[], ttlMs: number): Promise<void> =>
+  postJSON('/api/sessions/graph/watch', { token, watcher, selectors, ttlMs })
+export const reportUnwatch = (token: string): Promise<void> => postJSON('/api/sessions/graph/unwatch', { token })
 
 const slugify = (s: string | null) => (s || 'session').replace(/[^a-zA-Z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'session'
 

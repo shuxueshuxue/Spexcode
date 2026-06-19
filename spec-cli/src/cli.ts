@@ -82,13 +82,29 @@ if (cmd === 'serve') {
 } else if (cmd === 'watch') {
   // subscribe to session events (one line per actionable transition) — the Monitor event source.
   // `spex watch [SEL...] [--status a,b] [--as NAME] [--idle] [--interval N]`. Each watch = one subscriber.
-  const { watchSessions } = await import('./sessions.js')
+  // @@@ monitor → graph edge - running this IS what creates a session-graph edge: we report watcher→targets
+  // to the backend (register + heartbeat) for as long as this process lives, and deregister on exit, so the
+  // edge exists ONLY while the watch runs. watcher = our OWN session id; selectors = the targets (empty/@all
+  // = a global watcher → every session). All best-effort: a down backend never breaks the event stream.
+  const { watchSessions, ownSessionId, reportWatch, reportUnwatch } = await import('./sessions.js')
+  const { randomUUID } = await import('node:crypto')
+  const selectors = positionals(3)
+  const intervalMs = (Number(flag('interval')) || 5) * 1000
+  const watcher = ownSessionId()
+  if (watcher) {
+    const token = randomUUID()
+    const ttlMs = intervalMs * 3   // tolerate two missed heartbeats before the edge is dropped
+    void reportWatch(token, watcher, selectors, ttlMs)
+    const hb = setInterval(() => void reportWatch(token, watcher, selectors, ttlMs), intervalMs)
+    const off = async () => { clearInterval(hb); await reportUnwatch(token); process.exit(0) }
+    process.once('SIGINT', off); process.once('SIGTERM', off)
+  }
   await watchSessions((line) => console.log(line), {
-    selectors: positionals(3),
+    selectors,
     statuses: flag('status')?.split(','),
     includeIdle: has('idle'),
     as: flag('as'),
-    intervalMs: (Number(flag('interval')) || 5) * 1000,
+    intervalMs,
   })
 } else if (cmd === 'new') {
   // shorthand for `spex session new`: spex new "<prompt>" [--node X]  (prompt = first positional or --prompt)

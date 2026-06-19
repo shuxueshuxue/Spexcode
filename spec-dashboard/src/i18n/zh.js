@@ -134,7 +134,7 @@ export default {
 
   sessionGraph: {
     brand: '$ session-graph',
-    hint: '从节点拖到节点以订阅 · 点击箭头以移除 · Esc 返回',
+    hint: '箭头 = 实时监视（A→B：A 正在监视 B）· Esc 返回',
   },
 
   session: {

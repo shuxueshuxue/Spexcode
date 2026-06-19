@@ -1,5 +1,6 @@
 import { Handle, Position } from '@xyflow/react'
 import { Avatar } from './avatar.jsx'
+import { labelColor } from './color.js'
 
 // @@@ timeAgo - compact "edited Nm/Nh/Nd ago" from an ISO date. Coarse on purpose (the row is tiny):
 // seconds→"just now", then minutes, hours, days, weeks. Returns null for a missing/unparseable date so
@@ -83,7 +84,7 @@ export default function SpecNode({ data, selected }) {
     dirty ? 'ov-dirty' : '',
   ].filter(Boolean).join(' ')
   return (
-    <div className={cls} style={lead ? { '--ov': lead.color } : undefined}>
+    <div className={cls} style={lead ? { '--ov': labelColor(lead.seed) } : undefined}>
       <Handle type="target" position={Position.Left} />
       <div className="node-row1">
         <span className="node-dot" style={{ background: s.color }}>

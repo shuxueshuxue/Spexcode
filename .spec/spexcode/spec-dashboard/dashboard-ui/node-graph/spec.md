@@ -7,6 +7,7 @@ desc: A stable tree map; the viewpoint moves, the tree never re-plots. Each node
 code:
   - spec-dashboard/src/SpecNode.jsx
   - spec-dashboard/src/avatar.jsx
+  - spec-dashboard/src/color.js
   - spec-dashboard/src/Legend.jsx
   - spec-dashboard/src/data.js
   - spec-dashboard/src/styles.css
@@ -48,6 +49,13 @@ Avatars are **deterministic and generated** from the session id: the dashboard h
 stable face (colour + glyph + shape, hashed from the id) stands in for each session with no storage. Avatar
 rendering is a **pluggable provider seam** — a higher-priority provider registered later (e.g. one mapping a
 session id to a real image asset) swaps every avatar on the board with no change to the node renderer.
+
+**One colour system.** Both a session's avatar face and its *labelling colour* — the node ring/overlay, the
+`⏎` link, the reparent edge, and the session-row stripe — derive from the SAME hash of the SAME seed (the
+session id), so a session's face and every mark that names it always share one hue (`color.js`:
+`hash → hueFor → {avatarColors, labelColor}`). The backend no longer picks colours: it emits a stable `seed`
+per worktree (its live session id, else its path) and the dashboard derives the colour. A worktree with no
+session falls back to its path as the seed, so its overlays still get a stable colour.
 
 A `moved` overlay also carries `toParent` (the node's *proposed* new parent); when it does, the board draws a
 **faint dashed arrow** from the node to that parent, in the author session's colour, so a human can SEE the

@@ -7,6 +7,7 @@ import SessionWindow from './SessionWindow.jsx'
 import SessionInterface from './SessionInterface.jsx'
 import Legend from './Legend.jsx'
 import { loadBoard } from './data.js'
+import { labelColor } from './color.js'
 
 const nodeTypes = { spec: SpecNode }
 // node box (used only to centre the camera on a node). NW/NH must track the .spec-node size in
@@ -103,7 +104,7 @@ function Dashboard({ specs, sessions, reload }) {
     return {
       id: s.id, type: 'spec', position: { x: s.x, y: s.y },
       data: editors.length
-        ? { ...s, editors: editorData, link: { color: editors[0].color, status: editors[0].status } }
+        ? { ...s, editors: editorData, link: { color: labelColor(editors[0].id), status: editors[0].status } }
         : { ...s, editors: editorData },
       draggable: false, selected: s.id === focusId, className,
     }
@@ -124,11 +125,12 @@ function Dashboard({ specs, sessions, reload }) {
     for (const s of specs) {
       const mv = (s.overlays || []).find((o) => o.op === 'moved' && o.toParent && byId[o.toParent])
       if (!mv) continue
+      const stroke = labelColor(mv.seed)
       moves.push({
         id: `move-${s.id}-${mv.toParent}`, source: s.id, target: mv.toParent, type: 'smoothstep',
         animated: true, zIndex: 2, className: 'move-edge',
-        style: { stroke: mv.color, strokeWidth: 1.5, strokeDasharray: '4 4', opacity: 0.6 },
-        markerEnd: { type: MarkerType.ArrowClosed, color: mv.color, width: 14, height: 14 },
+        style: { stroke, strokeWidth: 1.5, strokeDasharray: '4 4', opacity: 0.6 },
+        markerEnd: { type: MarkerType.ArrowClosed, color: stroke, width: 14, height: 14 },
       })
     }
     return [...tree, ...moves]

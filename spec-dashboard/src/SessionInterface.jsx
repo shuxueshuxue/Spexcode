@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import SessionTerm from './SessionTerm.jsx'
+import { Avatar } from './avatar.jsx'
+import { labelColor } from './color.js'
 
 // @@@ SessionInterface - the Enter surface. TWO panes: a left session list and a right content area
 // that MORPHS by what's focused in the list:
@@ -363,9 +365,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             <button
               key={s.id}
               className={active === s.id ? 'si-item on' : 'si-item'}
-              style={{ '--ov': s.color }}
+              style={{ '--ov': labelColor(s.id) }}
               onClick={() => setSel(s.id)}
             >
+              <Avatar seed={s.id} status={s.status} title={`${s.node || s.title || s.branch || s.id} · ${s.status}`} />
               <span className="si-dot" style={{ background: STATUS_DOT[s.status] || '#93a1a1' }} />
               <span className="si-name">{s.node || s.title || s.branch || s.id}</span>
               <span className="si-st">{s.status}</span>

@@ -8,8 +8,6 @@ import { listSessions } from './sessions.js'
 // tree, per-worktree overlay (ghosts for adds, edit/delete/move marks), drift, and the session list —
 // is computed here from the same specs/layout/sessions modules the CLI uses.
 
-const PALETTE = ['#268bd2', '#d33682', '#859900', '#b58900', '#6c71c4', '#2aa198', '#cb4b16']
-
 // a ghost (added) node's parent: the existing node whose directory is the longest prefix of the new one.
 function resolveParent(path: string, byDir: Record<string, string>): string | null {
   const dir = path.replace(/\/spec\.md$/, '')
@@ -27,10 +25,14 @@ export async function buildBoard() {
   // resolveLayout already zeroed ops for unmanaged worktrees, so this is just "has pending changes".
   const opWts = worktrees.filter((w) => w.ops && w.ops.length)
 
-  // one stable colour per worktree path, shared by its board overlays AND its session row.
-  const paths = [...new Set([...opWts.map((w) => w.path), ...sessions.map((s) => s.path)])]
-  const colorOf: Record<string, string> = {}
-  paths.forEach((p, i) => { colorOf[p] = PALETTE[i % PALETTE.length] })
+  // @@@ seed not colour - the board no longer PICKS colours. It emits a stable `seed` per worktree and the
+  // dashboard derives the colour from it (color.js), the SAME seed an avatar face is hashed from — so a
+  // session's face and every mark that names it (node ring, ⏎ link, reparent edge, session stripe) share
+  // one hue. The seed is the worktree's LIVE session id when it has one (so it matches the session-row
+  // stripe, which seeds off the same id), else the worktree path as a stable fallback.
+  const sessIdByPath: Record<string, string> = {}
+  sessions.forEach((s) => { sessIdByPath[s.path] = s.id })
+  const seedOf = (path: string): string => sessIdByPath[path] || path
 
   const byId: Record<string, any> = Object.fromEntries(specs.map((n) => [n.id, n]))
   const byDir: Record<string, string> = {}
@@ -39,10 +41,10 @@ export async function buildBoard() {
   const overlaysByNode: Record<string, any[]> = {}
   const ghostById: Record<string, any> = {}
   for (const w of opWts) {
-    const source = w.path, label = w.node || w.branch || w.path, color = colorOf[w.path]
+    const source = w.path, label = w.node || w.branch || w.path, seed = seedOf(w.path)
     for (const op of w.ops) {
       const ov = {
-        op: op.op, source, label, branch: w.branch, color,
+        op: op.op, source, label, branch: w.branch, seed,
         committed: op.committed, dirty: op.dirty,
         toParent: op.op === 'moved' ? resolveParent(op.toPath || op.path, byDir) : null,
       }
@@ -74,7 +76,9 @@ export async function buildBoard() {
   ]
   const opsByPath: Record<string, any[]> = {}
   opWts.forEach((w) => { opsByPath[w.path] = w.ops })
-  const sess = sessions.map((s) => ({ ...s, source: s.path, ops: opsByPath[s.path] || [], color: colorOf[s.path] }))
+  // session rows carry no colour — the dashboard seeds each row's stripe off the session id (labelColor),
+  // the same seed its avatar face uses, so the two always match.
+  const sess = sessions.map((s) => ({ ...s, source: s.path, ops: opsByPath[s.path] || [] }))
 
   return { nodes, sessions: sess }
 }

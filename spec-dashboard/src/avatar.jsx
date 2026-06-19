@@ -9,16 +9,11 @@
 //   <Avatar seed status … />   -> renders whatever descriptor avatarFor returns (kind switches the
 //                                 renderer, so a future kind:'image' provider drops in here untouched).
 
-// FNV-1a-ish 32-bit string hash. Deterministic, fast, well-spread — enough to slice into independent
-// picks (hue / glyph / shape) below. `Math.imul` keeps it a real 32-bit multiply.
-function hash(str) {
-  let h = 0x811c9dc5
-  for (let i = 0; i < (str || '').length; i++) {
-    h ^= str.charCodeAt(i)
-    h = Math.imul(h, 0x01000193)
-  }
-  return h >>> 0
-}
+// The face colour comes from the SHARED colour system (color.js): avatarColors(seed) yields the same hue
+// labelColor(seed) uses, so a session's face and every mark that names it (node ring, ⏎ link, session
+// stripe) always agree. The local `hash` is gone; we reuse color.js's so the glyph/shape slices below are
+// sliced from the EXACT bits the face colour is derived from.
+import { hash, avatarColors } from './color.js'
 
 // the generated-avatar vocabulary: a curated neutral-glyph set + shape set. Three independent hash
 // slices pick hue, glyph and shape, so two seeds collide only if ALL THREE match (≈ glyphs×shapes×360).
@@ -29,14 +24,12 @@ const SHAPES = ['circle', 'rounded', 'square', 'hex']
 // avatarFor always resolves to something even before any real-asset provider is registered.
 function generatedAvatar(seed) {
   const h = hash(seed)
-  const hue = h % 360
   return {
     kind: 'generated',
     seed,
     glyph: GLYPHS[(h >>> 9) % GLYPHS.length],
     shape: SHAPES[(h >>> 17) % SHAPES.length],
-    bg: `hsl(${hue} 55% 42%)`,
-    fg: `hsl(${hue} 70% 92%)`,
+    ...avatarColors(seed),   // bg/fg from the shared colour system — same hue as labelColor(seed)
   }
 }
 

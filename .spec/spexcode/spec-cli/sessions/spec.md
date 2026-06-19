@@ -139,11 +139,19 @@ per-tick SSE poll. A viewer that joins an already running bridge is **not** re-s
 tab-switch path); instead the bridge asks tmux to **`refresh-client`** its own attach client — found by
 matching `client_pid` to the PTY's pid and cached — emitting one full **in-band** redraw down the same PTY
 the deltas flow on, coherent with them by construction. It reaches every viewer of that shared client (a
-brief, harmless re-paint), and the client resets its xterm + re-sends its fitted size on (re)connect so the
-redraw lands clean and correctly sized. A **supervisor** keeps a warm bridge for every
-**detached** live session so opening a tab is instant — it deliberately **skips any session a human is
-already attached to** (e.g. the managing session in its own terminal), never adding a second client that
-would resize their pane; the dashboard can still open such a session on demand (a user-initiated choice).
+brief, harmless re-paint), and the client resets its xterm + re-sends its fitted size on (re)connect. That
+single redraw is **deferred until tmux's pane geometry actually equals the viewer's requested size**: on
+every (re)attach and every resize the bridge bumps a coalescing token, settles a rapid attach+resize burst
+to the final size, **polls `#{pane_width}x#{pane_height}` until it matches** (bounded), and only then fires
+**one** `refresh-client`. Repainting before the shrink lands was the tab-switch scramble — the redraw drew
+the pre-warm's rows while the screen was still settling to the viewer's, doubling the status bar. The fix
+removes the shrink at the source: the supervisor **pre-warms each bridge at the last-known viewer size**
+(recorded per session, with a global fallback; a fixed default only for a session no viewer has ever
+sized), so a reattach finds the bridge already at the dashboard's pane size. A **supervisor** keeps a warm
+bridge for every **detached** live session so opening a tab is instant — it deliberately **skips any
+session a human is already attached to** (e.g. the managing session in its own terminal), never adding a
+second client that would resize their pane; the dashboard can still open such a session on demand (a
+user-initiated choice).
 The bridge is exposed over one bidirectional WebSocket (`GET /api/sessions/:id/socket`): binary frames are
 pane bytes both ways, a text frame is the `{t:'resize'}` control. `node-pty` needs no compile (it ships
 prebuilds); a `postinstall` only restores the `spawn-helper` execute bit npm drops. `captureSession`

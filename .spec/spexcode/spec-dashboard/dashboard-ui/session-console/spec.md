@@ -54,8 +54,12 @@ spliced into the live stream** (that splice was the tab-switch scramble — an o
 snapshot merged into mid-flight deltas, joining at a different cursor/size and even mid-escape-sequence). On
 (re)connect the client **resets its xterm** to a blank screen and the bridge asks tmux to **`refresh-client`**
 its attach client, emitting one full in-band redraw down the same pty the live deltas flow on — coherent with
-them by construction. The redraw reaches every viewer of that shared client (a brief, harmless re-paint),
-which is acceptable; there is no per-viewer partial seed, so rapid tab-switching leaves no half-painted state.
+them by construction. That redraw is **deferred until tmux's pane has actually resized to the viewer's exact
+cols×rows** (the bridge pre-warms at the last-known viewer size and waits for the size to settle before a
+**single** repaint), so the status bar lands exactly once — never the doubled/garbled bottom that a repaint
+racing the on-attach shrink produced. The redraw reaches every viewer of that shared client (a brief, harmless
+re-paint), which is acceptable; there is no per-viewer partial seed, so rapid tab-switching leaves no
+half-painted state.
 The terminal
 **scales to its panel** — the FitAddon fits xterm to the container and each fit sends the new cols×rows
 over the socket so tmux re-renders at exactly that size (only when it changed). The fit is **robust against

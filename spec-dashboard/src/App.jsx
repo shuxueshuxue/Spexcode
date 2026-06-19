@@ -163,20 +163,11 @@ function Dashboard({ specs, sessions, reload }) {
   // `i` opens the node-info popup, Enter opens the session interface. A modal (popup or session UI)
   // OWNS the keys while open — arrows no longer leak through to move the board behind it (the old
   // blind-navigation bug); the session interface handles its own list nav / input.
-  // open the session interface; if a session id is given, land on that tab (else keep the persisted one).
-  const openSession = useCallback((sid) => { if (sid) setSessionSel(sid); setSessionUI(true) }, [])
-  // @@@ cross to session - from a focused node (board Enter or the node-info popup), cross from READING
-  // the node to ACTING on it. Driven by the LIVE OVERLAY (sessions editing this node), never node.session:
-  //   exactly one live editor -> jump straight into it
-  //   none                    -> New Session, prefilled with @<node-id> (start working on it in place)
-  //   several                 -> open the session interface so the user picks which editor to drive
-  // (the 'new' tab prefills @focus.id because SessionInterface reads focusNode=focus.)
-  const crossToSession = useCallback((node) => {
-    const editors = liveEditorsOf(node)
-    if (editors.length === 1) openSession(editors[0].id)
-    else if (editors.length === 0) openSession('new')
-    else setSessionUI(true)
-  }, [liveEditorsOf, openSession])
+  // @@@ open the board - the session interface is a PERSISTENT place you switch to, not a per-open modal:
+  // it stays mounted (hidden) so its selected tab AND each tab's typed-but-unsent input survive a
+  // close/reopen. Enter (board or node-info popup) always reopens it at the remembered tab (`sessionSel`),
+  // a "boarding switch" — never a context jump based on the focused node.
+  const openBoard = useCallback(() => setSessionUI(true), [])
 
   useEffect(() => {
     const cyclePane = (dir) => setPane((p) => PANE_KEYS[(PANE_KEYS.indexOf(p) + dir + PANE_KEYS.length) % PANE_KEYS.length])
@@ -220,9 +211,8 @@ function Dashboard({ specs, sessions, reload }) {
           bumpScroll(e.key === 'j' ? 120 : -120)
           return
         }
-        // Enter crosses from reading the node to driving its agent — into the node's live editor(s) via
-        // the live overlay (one -> jump, none -> New Session @node, several -> pick). The popup closes behind.
-        if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); setOverlay(false); crossToSession(focus); return }
+        // Enter crosses from reading the node to the session board (at the remembered tab). Popup closes behind.
+        if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); setOverlay(false); openBoard(); return }
         return // ↑/↓ (and anything else) do NOT move the board behind the popup
       }
       // graph mode (no modal open). `?` toggles the floating legend; Esc closes it. Placed AFTER the
@@ -238,12 +228,12 @@ function Dashboard({ specs, sessions, reload }) {
       else if (e.key === '-' || e.key === '_') { e.preventDefault(); centerOn(focus, clamp(getViewport().zoom / 1.2), 160) }
       else if (e.key === '0') { e.preventDefault(); centerOn(focus, 0.85, 200) }
       else if (e.key === 'i' || e.key === 'I') { e.preventDefault(); setOverlay(true) }
-      // Enter crosses to the focus node's live editor(s) — jump / New Session / pick (see crossToSession).
-      else if (e.key === 'Enter') { e.preventDefault(); crossToSession(focus) }
+      // Enter opens the session board at the remembered tab (boarding switch — see openBoard).
+      else if (e.key === 'Enter') { e.preventDefault(); openBoard() }
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [overlay, sessionUI, legend, focus, upTarget, downTarget, childTarget, parent, centerOn, getViewport, crossToSession])
+  }, [overlay, sessionUI, legend, focus, upTarget, downTarget, childTarget, parent, centerOn, getViewport, openBoard])
 
   // clicking a node ONLY focuses it — it does NOT pan the camera (recentering is keyboard-only, see
   // `go`) and does NOT open a session (Enter is the deliberate cross into one). Mouse focus and
@@ -297,23 +287,23 @@ function Dashboard({ specs, sessions, reload }) {
           </div>
         </div>
 
-        <SessionWindow sessions={sessions} activeId={highlightId} onPick={onPickSession} onOpen={() => setSessionUI(true)} />
+        <SessionWindow sessions={sessions} activeId={highlightId} onPick={onPickSession} onOpen={openBoard} />
 
         {legend && <Legend onClose={() => setLegend(false)} />}
       </div>
 
       {overlay && <NodeView node={focus} pane={pane} setPane={setPane} onClose={() => setOverlay(false)} />}
-      {sessionUI && (
-        <SessionInterface
-          sessions={sessions}
-          specs={specs}
-          focusNode={focus}
-          sel={sessionSel}
-          setSel={setSessionSel}
-          onClose={() => setSessionUI(false)}
-          onCreated={async (id) => { await reload(); if (id) setSessionSel(id) }}
-        />
-      )}
+      {/* stays MOUNTED across open/close (hidden via `open`) so the selected tab + per-tab drafts persist. */}
+      <SessionInterface
+        sessions={sessions}
+        specs={specs}
+        focusNode={focus}
+        open={sessionUI}
+        sel={sessionSel}
+        setSel={setSessionSel}
+        onClose={() => setSessionUI(false)}
+        onCreated={async (id) => { await reload(); if (id) setSessionSel(id) }}
+      />
     </div>
   )
 }

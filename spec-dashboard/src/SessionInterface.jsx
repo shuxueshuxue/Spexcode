@@ -3,15 +3,17 @@ import SessionTerm from './SessionTerm.jsx'
 
 // @@@ SessionInterface - the Enter surface. TWO panes: a left session list and a right content area
 // that MORPHS by what's focused in the list:
-//   · "New Session" focused -> input box + avatar CENTERED (terminal vibe), prefilled with the focused
-//     spec node as an editable @prefix (a CONVENIENCE — a session can reference any/all nodes, so the
-//     prefix is deletable); Enter launches a real session, then we SWITCH to it.
+//   · "New Session" focused -> input box + avatar CENTERED (terminal vibe). Nothing is prefilled — the
+//     focused spec node is instead the FIRST @-mention suggestion, so you opt into targeting it by typing
+//     `@`. Enter launches a real session, then we SWITCH to it.
 //   · an existing session focused -> the content becomes a READ-ONLY live tmux terminal (SessionTerm),
 //     with the SINGLE human input docked at the BOTTOM. The terminal never accepts typing; the bottom box
 //     is the only input — submitting writes the line + Enter into the pane over the terminal's OWN socket
 //     (each SessionTerm registers a `send` writer in `sendersRef`), falling back to POST /keys if the
 //     socket isn't open yet.
-// `sel` is LIFTED to App so the surface reopens on the SAME tab the user left.
+// "BOARDING SWITCH" not "temporary modal": the surface stays MOUNTED while the board is open AND while
+// it's hidden (driven by the `open` prop — App never unmounts it). So the selected tab (`sel`, lifted to
+// App) AND any typed-but-unsent input survive a close/reopen — you switch back to exactly where you were.
 //
 // KEY HANDLING is at the WINDOW level (capture), not the panel's onKeyDown: when you arrow off the
 // New Session tab its textarea unmounts and focus would leave the panel, which used to kill further
@@ -23,9 +25,10 @@ const STATUS_DOT = { working: '#cb4b16', idle: '#93a1a1', offline: '#657b83', re
 // minus the `.spec/` shell and the `/spec.md` leaf, so the row reads like the tree breadcrumb it is.
 const specPath = (p) => (p || '').replace(/^\.spec\//, '').replace(/\/spec\.md$/, '')
 
-// rank spec nodes for a partial @query. id beats path; a prefix beats a mid-match; shorter ids win
-// ties so the most specific node floats up. Empty query (just typed `@`) lists everything, shortest-first.
-function matchSpecs(specs, query) {
+// rank spec nodes for a partial @query. The focused node always floats to the very top (so just typing
+// `@` lists it first — the convenient default target). Otherwise id beats path; a prefix beats a mid-match;
+// shorter ids win ties so the most specific node floats up. Empty query (just typed `@`) lists everything.
+function matchSpecs(specs, query, focusId) {
   const q = query.toLowerCase()
   const scored = []
   for (const s of specs) {
@@ -37,6 +40,7 @@ function matchSpecs(specs, query) {
     else if (id.includes(q)) score = 1
     else if (path.includes(q)) score = 2
     else continue
+    if (s.id === focusId) score = -1   // focused node first whenever it's in the result set
     scored.push({ s, score })
   }
   scored.sort((a, b) => a.score - b.score || a.s.id.length - b.s.id.length || a.s.id.localeCompare(b.s.id))
@@ -51,10 +55,12 @@ function highlight(text, q) {
   return <>{text.slice(0, i)}<b className="mention-hit">{text.slice(i, i + q.length)}</b>{text.slice(i + q.length)}</>
 }
 
-export default function SessionInterface({ sessions, specs = [], focusNode, sel, setSel, onClose, onCreated }) {
-  const [prompt, setPrompt] = useState('')
+export default function SessionInterface({ sessions, specs = [], focusNode, open, sel, setSel, onClose, onCreated }) {
+  const [prompt, setPrompt] = useState('')    // the New Session tab's own draft (its boarding-switch cache)
   const [menu, setMenu] = useState(null)      // @-mention dropdown: { items, index, start, end, query }
-  const [msg, setMsg] = useState('')          // bottom input for talking to an active session
+  // bottom-input drafts, keyed by session id — each session tab keeps its OWN typed-but-unsent line, never
+  // a single shared box. Survives tab switches and close/reopen (the panel stays mounted, see `open`).
+  const [drafts, setDrafts] = useState({})
   const [sending, setSending] = useState(false)
   const taRef = useRef(null)
   const msgRef = useRef(null)
@@ -66,6 +72,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, sel,
   const active = order.includes(sel) ? sel : 'new'
   const focusId = focusNode?.id || null
   const selSession = sessions.find((s) => s.id === active)
+  // the active session tab's bottom-input draft (per-session, see `drafts`).
+  const msg = drafts[active] || ''
+  const setMsg = (v) => setDrafts((d) => ({ ...d, [active]: v }))
 
   // @@@ persistent terminals - keep every session terminal you've opened MOUNTED (hidden when inactive),
   // so its WebSocket + scroll position survive a tab switch and switching back is instant (no remount,
@@ -86,23 +95,28 @@ export default function SessionInterface({ sessions, specs = [], focusNode, sel,
     })
   }, [sessions])
 
-  // on the New Session tab: prefill the focused-node @prefix and focus the box. Keyed on focusId (a
-  // string), NOT the focus object — polling rebuilds that object every 4s and would wipe your typing.
+  // @@@ focus on tab switch - whenever the board is open and you land on a tab, focus that tab's input:
+  // the New Session prompt, or a live session's bottom message box. NOTHING is prefilled — the focused
+  // node is instead the first @-mention suggestion, so you opt into it by typing `@`. (No setPrompt here:
+  // the per-tab drafts must survive a tab switch / reopen, so we never clobber them.)
   useEffect(() => {
-    if (active !== 'new') return
-    setPrompt(focusId ? `@${focusId} ` : '')
-    const id = setTimeout(() => taRef.current?.focus(), 0)
+    if (!open) return
+    const id = setTimeout(() => {
+      if (active === 'new') taRef.current?.focus()
+      else if (selSession?.status !== 'offline') msgRef.current?.focus()
+    }, 0)
     return () => clearTimeout(id)
-  }, [active, focusId])
+  }, [open, active, selSession?.status])
 
   // @@@ auto-grow - the new-session box grows with its content (line wraps + newlines) up to the CSS
-  // max-height, then scrolls. Reset to 0/auto first so it can also shrink when text is deleted.
+  // max-height, then scrolls. Reset to 0/auto first so it can also shrink when text is deleted. Re-runs
+  // on `open` too, so a reopen with a cached multi-line draft restores its height instead of collapsing.
   useEffect(() => {
     const ta = taRef.current
-    if (!ta || active !== 'new') return
+    if (!ta || active !== 'new' || !open) return
     ta.style.height = 'auto'
     ta.style.height = `${ta.scrollHeight}px`
-  }, [prompt, active])
+  }, [prompt, active, open])
 
   // launch a real session, then SWITCH to it (onCreated reloads the board, then App sets sel to the id).
   const submit = async () => {
@@ -111,14 +125,14 @@ export default function SessionInterface({ sessions, specs = [], focusNode, sel,
     setSending(true)
     try {
       // send only the prompt: the server derives the node from the @-mention the prompt ACTUALLY carries
-      // (the prefilled `@<focused>` is a deletable/editable default), and titles a node-agnostic session
-      // (no @) by its first words. So changing or deleting the @ here decides the node, not the focus.
+      // (you add it by typing `@`, focused node first), and titles a node-agnostic session (no @) by its
+      // first words. So the @ you type decides the node — nothing is targeted by default.
       const res = await fetch('/api/sessions', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: text }),
       })
       const data = await res.json().catch(() => null)
-      setPrompt(focusNode ? `@${focusNode.id} ` : '')
+      setPrompt('')
       await onCreated?.(data?.id)
     } finally {
       setSending(false)
@@ -135,7 +149,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, sel,
     if (i < 0 || value[i] !== '@') return null
     if (i > 0 && !/\s/.test(value[i - 1])) return null        // @ must start a word, not be mid-token (email-ish)
     const query = value.slice(i + 1, caret)
-    const items = matchSpecs(specs, query)
+    const items = matchSpecs(specs, query, focusId)
     if (!items.length) return null
     return { items, index: 0, start: i, end: caret, query }
   }
@@ -180,10 +194,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, sel,
 
   // @@@ window-level list nav - ↑/↓ move the selection regardless of focus; Enter on New launches.
   const stateRef = useRef({})
-  stateRef.current = { order, active, submit, menu, navMenu, accept, setMenu, onClose }
+  stateRef.current = { order, active, submit, menu, navMenu, accept, setMenu, onClose, open }
   useEffect(() => {
     const onKey = (e) => {
-      const { order, active, submit, menu, navMenu, accept, setMenu, onClose } = stateRef.current
+      const { order, active, submit, menu, navMenu, accept, setMenu, onClose, open } = stateRef.current
+      if (!open) return   // panel hidden (board not the active surface): the graph owns the keys
       // the @-mention menu owns navigation/commit/dismiss while it's open (New Session tab only).
       if (active === 'new' && menu) {
         if (e.key === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); navMenu(1); return }
@@ -206,7 +221,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, sel,
   }, [setSel])
 
   return (
-    <div className="si-backdrop" onMouseDown={onClose}>
+    <div className="si-backdrop" onMouseDown={onClose} style={open ? undefined : { display: 'none' }}>
       <div className="si-panel" onMouseDown={(e) => e.stopPropagation()}>
         <aside className="si-list">
           <div className="si-list-head">// sessions</div>
@@ -267,8 +282,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, sel,
               </div>
               <div className="si-hint">
                 {focusNode
-                  ? <>prefixed with <code>@{focusNode.id}</code> — delete it for a node-agnostic prompt</>
-                  : 'no node focused — this prompt is node-agnostic'}
+                  ? <>type <code>@</code> to reference a spec — <code>@{focusNode.id}</code> (focused) is first</>
+                  : <>type <code>@</code> to reference a spec — otherwise this prompt is node-agnostic</>}
               </div>
             </div>
           ) : (

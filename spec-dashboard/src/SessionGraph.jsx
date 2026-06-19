@@ -5,6 +5,7 @@ import {
 } from '@xyflow/react'
 import { Avatar } from './avatar.jsx'
 import { labelColor } from './color.js'
+import { useT } from './i18n/index.jsx'
 
 // @@@ session-graph - the EXPERIMENTAL directed political network: each session is a node, each
 // subscription (A subscribes to B) a directed arrow A→B. Deliberately ISOLATED from the spec board —
@@ -13,19 +14,20 @@ import { labelColor } from './color.js'
 // seed-to-hue colour + avatar (color.js / avatar.jsx) keyed off the session id, so a face here matches
 // the same session's stripe/avatar everywhere else on the dashboard.
 
-const sessionLabel = (s) => s.node || s.title || s.branch || (s.id ? s.id.slice(0, 8) : 'session')
+const sessionLabel = (s, t) => s.node || s.title || s.branch || (s.id ? s.id.slice(0, 8) : t('common.session'))
 
 // @@@ GraphNode - a session as a network node: its avatar + label, ringed in its own hue. Two handles
 // (a target + a source) + ConnectionMode.Loose let the user drag from ANY node to ANY node to create a
 // subscription, regardless of where each sits in the radial layout.
 function GraphNode({ data }) {
+  const t = useT()
   const color = labelColor(data.id)
   return (
-    <div className="sg-node" style={{ '--sg': color }} title={data.promptPreview || sessionLabel(data)}>
+    <div className="sg-node" style={{ '--sg': color }} title={data.promptPreview || sessionLabel(data, t)}>
       <Handle type="target" position={Position.Top} className="sg-handle" />
-      <Avatar seed={data.id} status={data.status} size={34} title={`${sessionLabel(data)} · ${data.status}`} />
-      <span className="sg-label">{sessionLabel(data)}</span>
-      <span className="sg-status">{data.status}</span>
+      <Avatar seed={data.id} status={data.status} size={34} title={`${sessionLabel(data, t)} · ${t(`status.${data.status}`)}`} />
+      <span className="sg-label">{sessionLabel(data, t)}</span>
+      <span className="sg-status">{t(`status.${data.status}`)}</span>
       <Handle type="source" position={Position.Bottom} className="sg-handle" />
     </div>
   )
@@ -110,11 +112,12 @@ function GraphCanvas({ onClose }) {
 // the board's ReactFlow instance (separate camera, selection, store) — the isolation that lets it drop in
 // without touching the existing views.
 export default function SessionGraph({ onClose }) {
+  const t = useT()
   return (
     <div className="session-graph">
       <div className="sg-hud">
         <span className="brand">$ session-graph</span>
-        <span className="sg-hint">drag node→node to subscribe · click an arrow to remove · Esc to return</span>
+        <span className="sg-hint">{t('sessionGraph.hint')}</span>
       </div>
       <ReactFlowProvider>
         <GraphCanvas onClose={onClose} />

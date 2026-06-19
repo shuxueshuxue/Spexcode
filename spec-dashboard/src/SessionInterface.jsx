@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import SessionTerm from './SessionTerm.jsx'
 import { Avatar } from './avatar.jsx'
 import { labelColor } from './color.js'
+import { useT } from './i18n/index.jsx'
 
 // @@@ SessionInterface - the Enter surface. TWO panes: a left session list and a right content area
 // that MORPHS by what's focused in the list:
@@ -113,6 +114,7 @@ function highlight(text, q) {
 }
 
 export default function SessionInterface({ sessions, specs = [], focusNode, open, sel, setSel, seed, onSeedConsumed, onClose, onCreated }) {
+  const t = useT()
   const [prompt, setPrompt] = useState('')    // the New Session tab's own draft (its boarding-switch cache)
   const [menu, setMenu] = useState(null)      // completion dropdown: { kind:'mention'|'slash', items, index, start, end, query }
   const [slashCmds, setSlashCmds] = useState([])   // the `/` command list (built-in + user/project/skill), fetched once
@@ -357,9 +359,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     <div className="si-backdrop" onMouseDown={onClose} style={open ? undefined : { display: 'none' }}>
       <div className="si-panel" onMouseDown={(e) => e.stopPropagation()}>
         <aside className="si-list">
-          <div className="si-list-head">// sessions</div>
+          <div className="si-list-head">// {t('session.title')}</div>
           <button className={active === 'new' ? 'si-item new on' : 'si-item new'} onClick={() => setSel('new')}>
-            ＋ New Session
+            ＋ {t('session.newSession')}
           </button>
           {sessions.map((s) => (
             <button
@@ -368,10 +370,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               style={{ '--ov': labelColor(s.id) }}
               onClick={() => setSel(s.id)}
             >
-              <Avatar seed={s.id} status={s.status} title={`${s.node || s.title || s.branch || s.id} · ${s.status}`} />
+              <Avatar seed={s.id} status={s.status} title={`${s.node || s.title || s.branch || s.id} · ${t(`status.${s.status}`)}`} />
               <span className="si-dot" style={{ background: STATUS_DOT[s.status] || '#93a1a1' }} />
               <span className="si-name">{s.node || s.title || s.branch || s.id}</span>
-              <span className="si-st">{s.status}</span>
+              <span className="si-st">{t(`status.${s.status}`)}</span>
             </button>
           ))}
         </aside>
@@ -380,7 +382,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           {active === 'new' ? (
             <div className="si-new-center">
               <div className="si-avatar">◠‿◠</div>
-              <div className="si-ask">What would you like to do?</div>
+              <div className="si-ask">{t('session.ask')}</div>
               <div className="si-inputwrap">
                 <textarea
                   ref={taRef}
@@ -390,13 +392,13 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   onChange={(e) => { setPrompt(e.target.value); syncMenu(e.target) }}
                   onSelect={(e) => syncMenu(e.target)}
                   onBlur={() => setMenu(null)}
-                  placeholder="describe the work · @ spec · / command · ⏎ to launch · ⇧⏎ newline"
+                  placeholder={t('session.inputPlaceholder')}
                   spellCheck={false}
                   disabled={sending}
                 />
                 {menu && menu.kind === 'slash' && (
                   <ul className="mention-menu" role="listbox">
-                    <li className="mention-head">// {menu.query ? `/${menu.query}` : 'commands'} — ↑↓ pick · ⏎ insert</li>
+                    <li className="mention-head">// {menu.query ? `/${menu.query}` : t('session.menuCommands')} — {t('session.menuHint')}</li>
                     {menu.items.map((it, i) => (
                       <li
                         key={`${it.source}:${it.name}`}
@@ -415,7 +417,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 )}
                 {menu && menu.kind === 'mention' && (
                   <ul className="mention-menu" role="listbox">
-                    <li className="mention-head">// {menu.query ? `@${menu.query}` : 'spec nodes'} — ↑↓ pick · ⏎ insert</li>
+                    <li className="mention-head">// {menu.query ? `@${menu.query}` : t('session.menuSpecNodes')} — {t('session.menuHint')}</li>
                     {menu.items.map((it, i) => (
                       <li
                         key={it.id}
@@ -435,8 +437,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               </div>
               <div className="si-hint">
                 {focusNode
-                  ? <>type <code>@</code> to reference a spec — <code>@{focusNode.id}</code> (focused) is first</>
-                  : <>type <code>@</code> to reference a spec — otherwise this prompt is node-agnostic</>}
+                  ? <>{t('session.hintFocused.before')}<code>@</code>{t('session.hintFocused.mid')}<code>@{focusNode.id}</code>{t('session.hintFocused.after')}</>
+                  : <>{t('session.hintNoFocus.before')}<code>@</code>{t('session.hintNoFocus.after')}</>}
               </div>
             </div>
           ) : (
@@ -445,28 +447,28 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 <div className="si-term-head">
                   <span className="si-dot" style={{ background: STATUS_DOT[selSession?.status] || '#93a1a1' }} />
                   <span className="si-th-name">{selSession?.node || selSession?.title || selSession?.branch || active}</span>
-                  <span className="si-th-st">{selSession?.status}</span>
-                  {selSession?.merges > 0 && <span className="si-merges" title="times merged to main">merged ×{selSession.merges}</span>}
+                  <span className="si-th-st">{selSession?.status ? t(`status.${selSession.status}`) : ''}</span>
+                  {selSession?.merges > 0 && <span className="si-merges" title={t('session.mergesTitle')}>{t('session.merges', { n: selSession.merges })}</span>}
                   <div className="si-actions">
                     {selSession?.status !== 'offline' && (
                       <button
                         className={navMode ? 'si-act nav on' : (menuById[active] ? 'si-act nav suggest' : 'si-act nav')}
-                        title="nav mode — forward raw keystrokes to drive the agent's interactive menus (⌃/⌘+I)"
+                        title={t('session.navTitle')}
                         onClick={() => setNavMode((v) => !v)}
-                      >⌨ nav</button>
+                      >⌨ {t('session.navBtn')}</button>
                     )}
-                    {selSession?.status === 'offline' && <button className="si-act go" onClick={() => act('resume')}>relaunch</button>}
+                    {selSession?.status === 'offline' && <button className="si-act go" onClick={() => act('resume')}>{t('session.relaunch')}</button>}
                     {/* no manual "request review": agents propose review themselves at the stop-gate
                         (`session done --propose merge`). proposals (review/done/close-pending) resolve to
                         merge / back-to-working / close */}
-                    {(selSession?.status === 'review' || selSession?.status === 'done') && <button className="si-act go" onClick={() => act('merge')}>merge</button>}
-                    {(selSession?.status === 'review' || selSession?.status === 'done' || selSession?.status === 'close-pending') && <button className="si-act" onClick={backToWorking}>back to working</button>}
-                    <button className="si-act kill" onClick={() => act('close', () => setSel('new'))}>close</button>
+                    {(selSession?.status === 'review' || selSession?.status === 'done') && <button className="si-act go" onClick={() => act('merge')}>{t('session.merge')}</button>}
+                    {(selSession?.status === 'review' || selSession?.status === 'done' || selSession?.status === 'close-pending') && <button className="si-act" onClick={backToWorking}>{t('session.backToWorking')}</button>}
+                    <button className="si-act kill" onClick={() => act('close', () => setSel('new'))}>{t('session.close')}</button>
                   </div>
                 </div>
                 {selSession?.promptPreview && (
                   /* the originating prompt — "what was this session asked to do?" — full text on hover */
-                  <div className="si-th-prompt" title={selSession.prompt || ''}>asked: {selSession.promptPreview}</div>
+                  <div className="si-th-prompt" title={selSession.prompt || ''}>{t('session.asked', { text: selSession.promptPreview })}</div>
                 )}
                 <div className="si-term-body" style={{ position: 'relative' }}>
                   {/* every opened session's terminal stays mounted; only the active one is shown */}
@@ -477,18 +479,18 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   ))}
                   {selSession?.status === 'offline' && (
                     <div className="si-offline">
-                      <div className="si-offline-msg">⏻ offline — no live process for this worktree.</div>
-                      <div className="si-offline-sub">the worktree and its session <code>{active.slice(0, 8)}…</code> are intact. relaunch to resume the same conversation.</div>
-                      <button className="si-act go big" onClick={() => act('resume')}>⏵ relaunch &amp; resume</button>
+                      <div className="si-offline-msg">{t('session.offlineMsg')}</div>
+                      <div className="si-offline-sub">{t('session.offlineSubBefore')}<code>{active.slice(0, 8)}…</code>{t('session.offlineSubAfter')}</div>
+                      <button className="si-act go big" onClick={() => act('resume')}>{t('session.relaunchResume')}</button>
                     </div>
                   )}
                 </div>
               </div>
               {navMode ? (
                 // nav mode replaces the prompt box: keys go straight to the pane (handled at the window level).
-                <div className="si-bottom nav" onClick={() => setNavMode(false)} title="click to exit nav mode">
-                  <span className="si-nav-ind">⌨ nav mode</span>
-                  <span className="si-nav-help">keys go to the session · Esc-Esc or click to exit</span>
+                <div className="si-bottom nav" onClick={() => setNavMode(false)} title={t('session.navExit')}>
+                  <span className="si-nav-ind">{t('session.navInd')}</span>
+                  <span className="si-nav-help">{t('session.navHelp')}</span>
                 </div>
               ) : (
                 <div className="si-bottom">
@@ -500,7 +502,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                     value={msg}
                     onChange={(e) => setMsg(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); sendMsg() } }}
-                    placeholder={selSession?.status === 'offline' ? 'relaunch to message this session' : 'message this session · ⏎ to send'}
+                    placeholder={selSession?.status === 'offline' ? t('session.msgOffline') : t('session.msgPlaceholder')}
                     spellCheck={false}
                     disabled={selSession?.status === 'offline'}
                   />

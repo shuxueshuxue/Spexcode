@@ -390,6 +390,16 @@ body {
 .legend-ring.ring-solid { border: 1px solid var(--blue); }
 .legend-ring.ring-ghost { border: 1px dashed var(--line); background: transparent; opacity: .72; }
 
+/* ---- settings popup: reuses the .legend modal chrome; only the language picker is bespoke ---- */
+.set-langs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.set-lang {
+  font-family: var(--mono); font-size: 12px; color: var(--ink); cursor: pointer;
+  border: 1px solid var(--line); border-radius: 4px; padding: 4px 12px; background: var(--paper);
+}
+.set-lang:hover { border-color: var(--blue); color: var(--blue); }
+.set-lang.on { border-color: var(--blue); color: var(--blue); background: var(--panel2); font-weight: 600; }
+.set-hint { display: block; color: var(--muted); font-size: 11px; line-height: 1.4; }
+
 /* ---- session interface (Enter): two panes, right content morphs ---- */
 .si-backdrop {
   position: fixed; inset: 0; z-index: 30;

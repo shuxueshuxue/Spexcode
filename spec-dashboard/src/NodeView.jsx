@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useT } from './i18n/index.jsx'
 
 // @@@ pane registry - add a face for a spec node by adding one entry + one render case below.
 // The node popup is now PURELY a reference view (spec doc + version timeline); the live terminal
@@ -69,12 +70,12 @@ function SpecBody({ body }) {
 //   agent-authored "current state" card — what's-done is DERIVED (the status/version/drift in the meta
 //   line), never narrated, because agents hallucinate completion. Legacy bodies (parts === null) fall
 //   back to the whole-body SpecBody in SpecPane.
-function PartCard({ kind, title, owner, note, children }) {
+function PartCard({ kind, title, owner, ownerLabel, note, children }) {
   return (
     <section className={`spec-part part-${kind}`}>
       <header className="part-head">
         <span className="part-title">{title}</span>
-        <span className={`part-owner owner-${owner}`}>{owner}</span>
+        <span className={`part-owner owner-${owner}`}>{ownerLabel}</span>
         {note && <span className="part-note">{note}</span>}
       </header>
       <div className="part-body">{children}</div>
@@ -82,12 +83,13 @@ function PartCard({ kind, title, owner, note, children }) {
   )
 }
 function TwoPart({ parts }) {
+  const t = useT()
   return (
     <div className="spec-parts">
-      <PartCard kind="raw" title="raw source" owner="human" note="rarely changed · needs approval">
+      <PartCard kind="raw" title={t('nodeView.rawTitle')} owner="human" ownerLabel={t('nodeView.rawOwner')} note={t('nodeView.rawNote')}>
         <SpecBody body={parts.rawSource} />
       </PartCard>
-      <PartCard kind="expanded" title="expanded spec" owner="agent" note="versioned often · must match raw source">
+      <PartCard kind="expanded" title={t('nodeView.expandedTitle')} owner="agent" ownerLabel={t('nodeView.expandedOwner')} note={t('nodeView.expandedNote')}>
         <SpecBody body={parts.expandedSpec} />
       </PartCard>
     </div>
@@ -95,16 +97,17 @@ function TwoPart({ parts }) {
 }
 
 function SpecPane({ node }) {
+  const t = useT()
   return (
     <div className="pane-doc">
       <h1># {node.title}</h1>
       <blockquote>{node.desc}</blockquote>
       <div className="doc-meta">
-        status: <b>{node.status}</b> · version: <b>v{node.version || 0}</b> · last edited by: <b>{node.session || 'none'}</b>
+        {t('nodeView.statusLabel')} <b>{t(`status.${node.status}`)}</b> · {t('nodeView.versionLabel')} <b>v{node.version || 0}</b> · {t('nodeView.lastEditedBy')} <b>{node.session || t('common.none')}</b>
       </div>
       {node.code?.length > 0 && (
         <div className="doc-code">
-          <span className="doc-code-h">// governs</span>
+          <span className="doc-code-h">{t('nodeView.governs')}</span>
           {node.code.map((f) => <code key={f} className="doc-code-f">{f}</code>)}
         </div>
       )}
@@ -127,6 +130,7 @@ function useHistory(id) {
 
 // one version row (number · hash · date · the +adds/-dels it changed in THIS node · reason · session).
 function VersionRow({ r, v, latest }) {
+  const t = useT()
   return (
     <div className={latest ? 'ver-row latest' : 'ver-row'}>
       <div className="rec-head">
@@ -139,7 +143,7 @@ function VersionRow({ r, v, latest }) {
         </span>
       </div>
       <div className="rec-msg">{r.reason}</div>
-      <div className="rec-sub">{r.files ?? 0} file{r.files === 1 ? '' : 's'} changed · {r.session || 'idle'}</div>
+      <div className="rec-sub">{t('nodeView.filesChanged', { n: r.files ?? 0 })} · {r.session || t('common.idle')}</div>
     </div>
   )
 }
@@ -182,12 +186,13 @@ function parseDiff(patch) {
 // actual line diff its LATEST version introduced to spec.md. (When the yatsu package starts recording
 // real before/after captures, those take this slot instead — see RecentPane.)
 function DiffEvidence({ diff }) {
-  if (diff == null) return <figcaption className="ev-note">loading latest change…</figcaption>
+  const t = useT()
+  if (diff == null) return <figcaption className="ev-note">{t('nodeView.loadingChange')}</figcaption>
   const lines = diff.patch ? parseDiff(diff.patch) : []
-  if (!lines.length) return <figcaption className="ev-note">no recorded change yet — this spec is the latest ground truth.</figcaption>
+  if (!lines.length) return <figcaption className="ev-note">{t('nodeView.noChange')}</figcaption>
   return (
     <>
-      <figcaption className="ev-difflabel">latest change · spec line diff <span className="ev-note-inline">(no A→B screenshot yet — the yatsu package will record one here)</span></figcaption>
+      <figcaption className="ev-difflabel">{t('nodeView.diffLabel')} <span className="ev-note-inline">{t('nodeView.diffNote')}</span></figcaption>
       <pre className="ev-diff">{lines.map((l, i) => <div key={i} className={`dl dl-${l.t}`}>{l.s || ' '}</div>)}</pre>
     </>
   )
@@ -199,6 +204,7 @@ function DiffEvidence({ diff }) {
 // never just a "pending" note. The full version log lives in the `history` tab — this answers "what was
 // the latest change, and the proof". `rows` is fetched ONCE by NodeView and shared with HistoryPane.
 function RecentPane({ node, rows }) {
+  const t = useT()
   const latest = rows?.[0]
   const hasEvidence = node.evidence?.length > 0
   // The board ships the node's latest line-diff (node.lastDiff) up front, so the common case renders
@@ -207,14 +213,14 @@ function RecentPane({ node, rows }) {
   const diff = node.lastDiff ?? fetched
   return (
     <div className="pane-recent">
-      {!rows ? <div className="rec-msg muted">loading…</div>
+      {!rows ? <div className="rec-msg muted">{t('common.loading')}</div>
         : latest ? <VersionRow r={latest} v={rows.length} latest />
-        : <div className="rec-msg muted">no versions yet — this spec is the latest ground truth.</div>}
+        : <div className="rec-msg muted">{t('common.noVersions')}</div>}
       <figure className="rec-evidence">
         {hasEvidence ? (
           <div className="ev-pair">
             {node.evidence.map((src, i) => (
-              <div className="ev-shot" key={i}><img src={src} alt={`evidence ${i + 1}`} /></div>
+              <div className="ev-shot" key={i}><img src={src} alt={t('nodeView.evidenceAlt', { n: i + 1 })} /></div>
             ))}
           </div>
         ) : (
@@ -228,8 +234,9 @@ function RecentPane({ node, rows }) {
 // @@@ HistoryPane - the full version log, newest first. (RecentPane shows only the top of this list.)
 // `rows` comes from NodeView's single fetch — shared with RecentPane so tab-switching is instant.
 function HistoryPane({ rows }) {
-  if (!rows) return <div className="pane-hist empty">loading history…</div>
-  if (!rows.length) return <div className="pane-hist empty">no versions yet — this spec is the latest ground truth.</div>
+  const t = useT()
+  if (!rows) return <div className="pane-hist empty">{t('nodeView.loadingHistory')}</div>
+  if (!rows.length) return <div className="pane-hist empty">{t('common.noVersions')}</div>
   return (
     <div className="pane-hist">
       {rows.map((r, i) => <VersionRow key={r.hash} r={r} v={rows.length - i} latest={i === 0} />)}
@@ -237,7 +244,11 @@ function HistoryPane({ rows }) {
   )
 }
 
+// PANES keys map to localized tab labels (the key drives logic; only the label is shown).
+const PANE_LABEL = { spec: 'nodeView.paneSpec', recent: 'nodeView.paneRecent', history: 'nodeView.paneHistory' }
+
 export default function NodeView({ node, pane, setPane, onClose }) {
+  const t = useT()
   // one fetch per node, shared by both recent + history panes (the popup's only data dependency).
   const rows = useHistory(node.id)
   return (
@@ -248,11 +259,11 @@ export default function NodeView({ node, pane, setPane, onClose }) {
           <div className="ov-tabs">
             {PANES.map((p, i) => (
               <button key={p.key} className={p.key === pane ? 'ov-tab on' : 'ov-tab'} onClick={() => setPane(p.key)}>
-                <kbd>{i + 1}</kbd> {p.label}
+                <kbd>{i + 1}</kbd> {t(PANE_LABEL[p.key])}
               </button>
             ))}
           </div>
-          <span className="ov-hint">←→/hl/tab switch · j/k scroll · ⏎ session · esc back</span>
+          <span className="ov-hint">{t('nodeView.hint')}</span>
         </div>
         <div className="ov-body">
           {pane === 'spec' && <div className="pane-solo"><SpecPane node={node} /></div>}

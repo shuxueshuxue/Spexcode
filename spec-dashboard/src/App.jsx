@@ -7,8 +7,10 @@ import SessionWindow from './SessionWindow.jsx'
 import SessionInterface from './SessionInterface.jsx'
 import SessionGraph from './SessionGraph.jsx'
 import Legend from './Legend.jsx'
+import Settings from './Settings.jsx'
 import { loadBoard } from './data.js'
 import { labelColor } from './color.js'
+import { useT } from './i18n/index.jsx'
 
 const nodeTypes = { spec: SpecNode }
 // node box (used only to centre the camera on a node). NW/NH must track the .spec-node size in
@@ -32,11 +34,13 @@ function Dashboard({ specs, sessions, reload }) {
   const [pane, setPane] = useState('spec')
   const [sessionUI, setSessionUI] = useState(false) // session interface (opened by Enter)
   const [legend, setLegend] = useState(false)     // centered help modal: keymap + visual vocabulary (`?`)
+  const [settings, setSettings] = useState(false) // centered settings modal: language picker etc. (`,`)
   const [graphView, setGraphView] = useState(false) // experimental session-subscription graph (`t`)
   const [sessionSel, setSessionSel] = useState('new') // persisted across open/close: last tab/session
   const [highlightId, setHighlightId] = useState(null) // session whose overlays are emphasised
   const [seed, setSeed] = useState(null)          // one-shot text a board chord pre-fills the New Session input with
   const { getViewport, setViewport } = useReactFlow()
+  const t = useT()
   const graphRef = useRef(null)
   const animRef = useRef(0)
   const chordRef = useRef({ buf: '', timer: 0 })  // pending board-chord buffer (see onKey)
@@ -243,6 +247,14 @@ function Dashboard({ specs, sessions, reload }) {
         return
       }
       if (e.key === '?') { e.preventDefault(); setLegend(true); return }
+      // settings modal — same modal contract as the help: while open it OWNS the keys (only `,`/Esc
+      // close it), nav never leaks to the board behind. `,` opens it from the board (chosen because it
+      // collides with no existing binding — t/?/nav keys/chords are all unaffected).
+      if (settings) {
+        if (e.key === 'Escape' || e.key === ',') { e.preventDefault(); setSettings(false); return }
+        return
+      }
+      if (e.key === ',') { e.preventDefault(); setSettings(true); return }
       // @@@ chord buffer - a small vim-style key buffer for multi-key board commands. A leader letter
       // (n/d) opens a pending buffer; the matching next letter fires the chord (open the session board
       // with its @-directive pre-seeded — see CHORDS/startNew). A non-matching key (or a 700ms lull)
@@ -279,7 +291,7 @@ function Dashboard({ specs, sessions, reload }) {
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [overlay, sessionUI, legend, graphView, focus, upTarget, downTarget, childTarget, parent, centerOn, getViewport, openBoard, startNew])
+  }, [overlay, sessionUI, legend, settings, graphView, focus, upTarget, downTarget, childTarget, parent, centerOn, getViewport, openBoard, startNew])
 
   // clicking a node ONLY focuses it — it does NOT pan the camera (recentering is keyboard-only, see
   // `go`) and does NOT open a session (Enter is the deliberate cross into one). Mouse focus and
@@ -324,12 +336,13 @@ function Dashboard({ specs, sessions, reload }) {
             The wall of inline hints used to live here; it now lives inside that modal (see Legend.jsx). */}
         <div className="hud">
           <span className="brand">$ spec-dashboard</span>
-          <button className="hud-help" onClick={() => setLegend((v) => !v)} title="help — keymap & legend (?)">?</button>
+          <button className="hud-help" onClick={() => setLegend((v) => !v)} title={t('hud.helpTitle')}>?</button>
         </div>
 
         <SessionWindow sessions={sessions} activeId={highlightId} onPick={onPickSession} onOpen={openBoard} />
 
         {legend && <Legend onClose={() => setLegend(false)} />}
+        {settings && <Settings onClose={() => setSettings(false)} />}
       </div>
 
       {graphView && <SessionGraph onClose={() => setGraphView(false)} />}
@@ -354,6 +367,7 @@ function Dashboard({ specs, sessions, reload }) {
 // @@@ App - loads the board (merged spec tree + live worktree overlay) and polls it so pending
 // changes from other worktrees appear without a refresh. Keeps the last good board across reloads.
 export default function App() {
+  const t = useT()
   const [board, setBoard] = useState(null)
   const reload = useCallback(() => loadBoard().then(setBoard).catch(() => {}), [])
   useEffect(() => {
@@ -361,6 +375,6 @@ export default function App() {
     const id = setInterval(reload, 4000)
     return () => clearInterval(id)
   }, [reload])
-  if (!board) return <div className="loading">loading specs from git…</div>
+  if (!board) return <div className="loading">{t('hud.loading')}</div>
   return <Dashboard specs={board.nodes} sessions={board.sessions} reload={reload} />
 }

@@ -1,0 +1,62 @@
+---
+title: settings
+status: active
+session: 8533a220-bbd6-4529-babe-7800cda2d9f2
+hue: 160
+desc: Internationalized copy + a settings popup that picks the language.
+code:
+  - spec-dashboard/src/i18n/index.jsx
+  - spec-dashboard/src/i18n/en.js
+  - spec-dashboard/src/i18n/zh.js
+  - spec-dashboard/src/Settings.jsx
+---
+# settings
+
+## raw source
+
+The dashboard speaks the reader's language. No user-facing string is hardcoded in a component — every
+visible word lives in a per-language dictionary and is fetched at render time, so a second language is
+a file, not a refactor. English is the source of truth and the fallback; at least one more language
+(Chinese) ships alongside it.
+
+The language a reader sees is chosen for them, then overridable by them: on a first visit it follows
+the browser; an explicit pick in a settings popup overrides detection and is remembered across reloads.
+The setting changes the whole UI live — no refresh.
+
+A settings popup is the home for this and for choices like it later. It is reached by a hotkey, looks
+and behaves like the help/legend modal, and is the deliberate place future preferences accrete — adding
+one must not mean inventing a new surface.
+
+## expanded spec
+
+### the contract
+
+- **No hardcoded copy.** Components import a translator `t(key)` and never inline visible text. The copy
+  lives in `i18n/<lang>.js` dictionaries; the only literals left in components are language-neutral
+  glyphs and punctuation (`//`, `❯`, `＋`, arrow/Enter key caps, op marks).
+- **English + Chinese**, with English as both the source locale and the per-key fallback: a key missing
+  in another language degrades to English, never to a blank or a raw key.
+- **Language resolution.** An explicit saved choice always wins; absent one, auto-detect from
+  `navigator.language` (a `zh*` primary subtag → Chinese), else English. The choice persists in
+  `localStorage` and overrides detection permanently until cleared.
+- **Live switching.** Picking a language re-renders every `t()` immediately — the choice flows through
+  React context, no reload.
+- **The settings popup** opens on a hotkey that collides with no existing binding, reuses the legend
+  modal's chrome and contract (centered, backdrop-click / `×` / `Esc` close, owns the keys while open),
+  and is the single home for future settings. Today it owns the language picker.
+
+### the hotkey
+
+`,` opens settings — chosen because it is unbound on the board (the existing keymap is `t`, `?`, `i`,
+`Enter`, `hjkl`/arrows, `+`/`-`/`0`, the `n`/`d` chord leaders, `Tab`, `1`-`3`, `Esc`). It is routed by
+[[keyboard-nav]]'s keydown handler like the other modal keys; `,` or `Esc` closes the popup.
+
+### principles
+
+- **A language is data, not code.** Adding one is writing a dictionary file and an entry in the language
+  list — never editing a component.
+- **Detect, then defer to the human.** The browser is a sensible default, the explicit pick is law.
+- **Fail visible.** A missing translation falls back to English and then to the key itself, so a gap is
+  seen and fixed, not silently empty.
+- **One settings home.** Preferences accrete as sections in the one popup; a new setting is a section,
+  not a new surface.

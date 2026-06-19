@@ -3,9 +3,10 @@ title: node-graph
 status: merged
 session: sess-graph
 hue: 280
-desc: A stable tree map; the viewpoint moves, the tree never re-plots.
+desc: A stable tree map; the viewpoint moves, the tree never re-plots. Each node shows its identity and its people.
 code:
   - spec-dashboard/src/SpecNode.jsx
+  - spec-dashboard/src/avatar.jsx
   - spec-dashboard/src/Legend.jsx
   - spec-dashboard/src/data.js
   - spec-dashboard/src/App.jsx
@@ -17,72 +18,50 @@ code:
 
 Show the local neighbourhood and navigate by relationship — the full-forest view confused siblings with
 cousins. The tree sits at fixed absolute positions and never re-plots: the viewpoint moves, only
-highlight / dim / edge colour change per keystroke. A node is a thin single line, not a card, so tight
-rows fit far more of the tree on one screen.
+highlight / dim / edge colour change per keystroke.
+
+Each node is a small **two-row** tile, kept tight so the tree still fits on one screen. The top row is the
+node's **identity** — what it is and its state. The second row is its **people** — who is editing it right
+now, or, when nobody is, how long since it was last edited. A reader should see at a glance both "what is
+this node" and "who/when". Node width is sized to let longer titles read (overflow ellipsises).
 
 ## expanded spec
 
 Layout is horizontal, left→right — depth sets the column (root at the left), siblings stack as rows, and
-parents centre vertically over their kids. Each node row is `status dot · title · version` — no box, no
-thumbnail. Edges read bold when they touch the focus, faint otherwise. Keys follow the same relationships
-(see [[keyboard-nav]]).
+parents centre vertically over their kids. Row and column spacing track the two-row node box so tiles never
+touch. Edges read bold when they touch the focus, faint otherwise. Keys follow the same relationships (see
+[[keyboard-nav]]).
 
-The status dot reads the backend-**derived** four-state value (see [[spec-node-states]]), not frontmatter:
-green = merged, orange = active (a worktree is touching it), yellow = drift, grey = pending; active also
-pulses, and drift still shows its commits-ahead count as a separate ⚠ badge. A worktree's pending ops are
-stamped as overlay glyphs in the authoring session's colour — `+` added, `~` edited, `✕` deleted, `→`
-moved — with a dashed ring while uncommitted and an `added`-only node drawn as a translucent ghost.
+**Row 1 — identity.** `status dot · title · version`, plus overlay marks. The dot reads the backend-**derived**
+four-state value (see [[spec-node-states]]): green = merged, orange = active, yellow = drift, grey = pending;
+active pulses, and drift shows its commits-ahead `⚠N` badge. A worktree's pending ops are stamped as glyphs —
+`+` added, `~` edited, `✕` deleted, `→` moved — in the author session's colour, with a dashed ring while
+uncommitted and an `added`-only node drawn as a translucent ghost. A node whose author session is live also
+stamps a subtle `⏎` (click / Enter opens that session).
 
-A `moved` overlay also carries `toParent` (the node's *proposed* new parent). When it does, the board
-draws a **faint dashed arrow** from the node to that new parent, in the author session's colour, so a
-human can SEE the reparent before it merges. It is deliberately subtle — low opacity, animated dashes,
-an arrowhead — and overlaid on top of, never replacing, the solid tree edges of the present structure.
+**Row 2 — people & recency.** A node's *live editors* are the sessions whose pending ops currently touch it
+(the live overlay — never the historical `session` trailer). When there are any, the row shows one **avatar**
+per editor, ringed by that session's liveness (working / idle / offline) and capped with a `+N` overflow.
+When there are none, it falls back to **"last edited … ago"** (from the node's latest-version date), or
+"no versions yet" for a node with no committed history.
 
-Because this visual vocabulary is dense, a **floating legend** decodes it on demand. Pressing `?` toggles
-a small fixed corner card (Esc also closes it) that lists every symbol above: the four status-dot colours,
-the `+`/`~`/`✕`/`→` overlay-op glyphs, the `⏎` live-session affordance, the `⚠N` drift badge, the `vN`
-version, the dashed-vs-solid (uncommitted-vs-committed) ring whose colour is the author session, and the
-translucent ghost of an added node. The legend is unobtrusive — it floats over the board without blocking
-graph interaction, and it reads its swatches from the SAME `STATUS`/`GLYPH` constants the nodes render
-from, so it can never drift from the real symbols. `?`/Esc are handled in the graph-mode branch of the
-capture-phase keydown handler, below the modal guards, so the legend never disturbs (or is disturbed by)
-an open node-info popup or session interface.
+Avatars are **deterministic and generated** from the session id: the dashboard has no real accounts, so a
+stable face (colour + glyph + shape, hashed from the id) stands in for each session with no storage. Avatar
+rendering is a **pluggable provider seam** — a higher-priority provider registered later (e.g. one mapping a
+session id to a real image asset) swaps every avatar on the board with no change to the node renderer.
 
-The board and the session console are **bidirectionally linked** by one fact: a node's `session` is the
-id of the Claude Code session that authored it, and a live worktree runs under that same id (see
-[[session-console]]). So a node whose author session is currently live maps to it by exact id match. Such
-a node stamps a subtle `⏎` in the session's colour, and **clicking it** (or `Enter` on it) opens the
-session interface focused on that session. The reverse half: clicking a session row focuses its first
-changed node. Nodes with no live session just focus on click.
+A `moved` overlay also carries `toParent` (the node's *proposed* new parent); when it does, the board draws a
+**faint dashed arrow** from the node to that parent, in the author session's colour, so a human can SEE the
+reparent before it merges. It is deliberately subtle and overlaid on top of, never replacing, the solid tree
+edges of the present structure.
 
-## current state
+Because this visual vocabulary is dense, a **floating legend** decodes it on demand (`?` toggles it, Esc
+closes). It reads its swatches from the SAME `STATUS`/`GLYPH` constants the nodes render from, so it can never
+drift from the real symbols. `?`/Esc are handled in the graph-mode branch of the capture-phase keydown
+handler, below the modal guards, so the legend never disturbs (or is disturbed by) an open popup or session
+interface.
 
-### description
-
-The board is assembled by the backend (`buildBoard` → `/api/board`); `data.js`'s `loadBoard` is a thin
-fetch that decorates only the x/y tidy-tree layout (`X_GAP`/`Y_GAP` post-order placement) — every other
-field, including overlays, ghosts, drift and sessions, comes from the backend. `App.jsx` builds the
-react-flow `nodes`/`edges`: fixed positions, kin-vs-`is-far` dimming (or `ov-hot`/`ov-dim` when a session
-is highlighted), and a `data.link` decoration on nodes whose author session is live. The `edges` memo
-emits the solid tree edges plus, for any node whose overlays include a `moved` with a resolvable
-`toParent`, a faint dashed `move-edge` (animated, arrow-headed, session-coloured) from the node to its
-proposed new parent — the reparent preview. `SpecNode.jsx`
-renders the row: a `STATUS`-coloured dot (with a pulse for `active`), title, the `⏎` session affordance
-when `data.link` is set, the `⚠{drift}` badge when `drift > 0`, the version, and the dedup'd op glyphs;
-`ghost`/`deleted`/`has-overlay`/`ov-dirty` classes carry the overlay styling from `styles.css`. The camera
-flat-pan and the click→focus/open-session handlers live in `App.jsx` alongside [[keyboard-nav]].
-`Legend.jsx` is the `?`-toggled floating card; it imports `STATUS`/`GLYPH` from `SpecNode.jsx` (exported
-for exactly this) rather than re-declaring the colours, and `App.jsx` holds the `legend` state, the
-`?`/Esc keys in the graph-mode branch, and the `? legend` HUD hint.
-
-### verdict — not drifted
-
-All five governed files sit at or behind this node's latest version with no commits ahead after this
-change (`spex lint` reports no `drift` warning for `node-graph`); `App.jsx`, `styles.css`, `SpecNode.jsx`
-and the new `Legend.jsx` carry the `?`-toggled legend and ship in the same commit as this spec, so none
-drifts. The expanded spec
-states the map's intended behavior; the description is the honest read of how the four files realise it
-today. The derived four-state dot, the drift badge, the overlay glyphs, the board↔session link, and the
-reparent-preview arrow were folded into the expanded spec as they landed, not back-written after the
-fact — the raw source (a fixed local-neighbourhood tree of thin rows, viewpoint moves not layout) still
-holds.
+The board and the session console are **bidirectionally linked**: a node's live editors map to live sessions
+by exact id, so the same overlay that draws Row 2's avatars also drives the `⏎` affordance and Enter →
+the session interface (see [[session-console]]). The reverse half: clicking a session row focuses its first
+changed node. Nodes with no live editor just focus on click.

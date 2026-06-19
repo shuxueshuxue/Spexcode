@@ -69,8 +69,9 @@ function log(node) {
 
 // @@@ tidy-tree layout - left->right: depth sets the column (x), post-order stacks leaves into
 // rows (y), parents centre vertically over their kids. Root at the left, subtrees extend right.
-// Rows are tight because a node is a single line, so many fit on one screen.
-const X_GAP = 230, Y_GAP = 34
+// Gaps track the node box: a node is now TWO rows (title + editor/last-edited line) and a touch
+// wider for longer titles, so X_GAP/Y_GAP grew from the single-line era to keep rows from touching.
+const X_GAP = 280, Y_GAP = 54
 function layout(nodes) {
   const kids = {}
   nodes.forEach((n) => { if (n.parent) (kids[n.parent] ??= []).push(n.id) })

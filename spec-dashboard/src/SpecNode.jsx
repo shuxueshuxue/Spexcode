@@ -1,4 +1,23 @@
 import { Handle, Position } from '@xyflow/react'
+import { Avatar } from './avatar.jsx'
+
+// @@@ timeAgo - compact "edited Nm/Nh/Nd ago" from an ISO date. Coarse on purpose (the row is tiny):
+// seconds→"just now", then minutes, hours, days, weeks. Returns null for a missing/unparseable date so
+// the caller can fall back to "no versions yet".
+function timeAgo(iso) {
+  if (!iso) return null
+  const t = Date.parse(iso)
+  if (Number.isNaN(t)) return null
+  const s = Math.max(0, (Date.now() - t) / 1000)
+  if (s < 45) return 'just now'
+  const m = s / 60, h = m / 60, d = h / 24
+  if (m < 45) return `${Math.round(m)}m ago`
+  if (h < 22) return `${Math.round(h)}h ago`
+  if (d < 7) return `${Math.round(d)}d ago`
+  return `${Math.round(d / 7)}w ago`
+}
+
+const MAX_AVATARS = 4   // beyond this the row shows "+N" rather than overflow the node width
 
 // the four backend-DERIVED states (specs.ts deriveStatus): merged in-sync, active in-flight,
 // drift = governed code ahead of spec, pending = no committed version. The dot takes the colour.
@@ -13,13 +32,41 @@ export const STATUS = {
 // the pending-op glyphs an overlay can stamp on a node. Exported alongside STATUS for the Legend.
 export const GLYPH = { added: '+', edited: '~', deleted: '✕', moved: '→' }
 
-// @@@ SpecNode - one thin row, not a card: status dot + title + version. Dense file-tree feel;
-// the tree flows left->right, so handles are on the sides. When a worktree has a PENDING change to
-// this node (from /api/layout `ops`, decorated in loadBoard), it carries `overlays`: the row takes
-// the author session's colour (dashed ring = uncommitted, solid = committed) and shows op glyphs.
-// An `added` node that isn't on main yet renders as a translucent ghost. When the node's author
-// session is LIVE (App decorates `data.link`), it stamps a subtle ⏎ in that session's colour —
-// clicking the node (or Enter on it) opens the session interface focused on that session.
+// @@@ EditorRow - the node's SECOND row. When live session(s) are editing this node (App decorates
+// `data.editors` from the live overlay), it shows their avatars — deterministic faces generated from
+// each session id (see avatar.jsx; later swappable for real assets via the provider registry). With no
+// live editor it falls back to "last edited … ago" (from `data.lastEdited`), or "no versions yet" for a
+// node with no committed history. So the row always says SOMETHING about the node's people/recency.
+function EditorRow({ data }) {
+  const editors = data.editors || []
+  if (editors.length > 0) {
+    const shown = editors.slice(0, MAX_AVATARS)
+    const extra = editors.length - shown.length
+    return (
+      <span className="node-editors" title={`${editors.length} live editor${editors.length === 1 ? '' : 's'}`}>
+        {shown.map((e) => (
+          <Avatar key={e.id} seed={e.id} status={e.status}
+            title={`${e.node || 'session'} · ${e.status} — ${e.id.slice(0, 8)}`} />
+        ))}
+        {extra > 0 && <span className="av-more" title={`${extra} more`}>+{extra}</span>}
+      </span>
+    )
+  }
+  const ago = timeAgo(data.lastEdited)
+  return (
+    <span className="node-lastedit">
+      {ago ? <>last edited <b>{ago}</b></> : 'no versions yet'}
+    </span>
+  )
+}
+
+// @@@ SpecNode - two stacked rows, not a card. ROW 1 (the original thin file-tree line): status dot +
+// title + version + overlay marks. ROW 2: the live editors' avatars, or "last edited … ago" (EditorRow).
+// The tree flows left->right, so handles are on the sides. When a worktree has a PENDING change to this
+// node (from /api/board overlays), it carries `overlays`: the node takes the author session's colour
+// (dashed ring = uncommitted, solid = committed) and shows op glyphs. An `added` node not yet on main
+// renders as a translucent ghost. When the node's author session is LIVE (App decorates `data.link`), it
+// stamps a subtle ⏎ in that session's colour — clicking the node (or Enter) opens that session.
 export default function SpecNode({ data, selected }) {
   const s = STATUS[data.status] || STATUS.pending
   const overlays = data.overlays || []
@@ -38,25 +85,30 @@ export default function SpecNode({ data, selected }) {
   return (
     <div className={cls} style={lead ? { '--ov': lead.color } : undefined}>
       <Handle type="target" position={Position.Left} />
-      <span className="node-dot" style={{ background: s.color }}>
-        {data.status === 'active' && <span className="pulse" style={{ background: s.color }} />}
-      </span>
-      <span className="node-title">{data.title}</span>
-      {data.link && (
-        <span className="node-session" style={{ color: data.link.color }}
-          title={`live session (${data.link.status}) — click or ⏎ to open`}>⏎</span>
-      )}
-      {data.drift > 0 && (
-        <span className="drift-badge" title={(data.driftFiles || []).map((d) => `${d.file}: ${d.behind} ahead`).join('\n')}>
-          ⚠{data.drift}
+      <div className="node-row1">
+        <span className="node-dot" style={{ background: s.color }}>
+          {data.status === 'active' && <span className="pulse" style={{ background: s.color }} />}
         </span>
-      )}
-      <span className="node-ver">{data.version ? `v${data.version}` : ''}</span>
-      {ops.length > 0 && (
-        <span className="ov-marks" title={overlays.map((o) => `${o.op} · ${o.label}${o.committed ? '' : ' (uncommitted)'}`).join('\n')}>
-          {ops.map((op) => <span key={op} className={`ov-mark ov-${op}`}>{GLYPH[op]}</span>)}
-        </span>
-      )}
+        <span className="node-title">{data.title}</span>
+        {data.link && (
+          <span className="node-session" style={{ color: data.link.color }}
+            title={`live session (${data.link.status}) — click or ⏎ to open`}>⏎</span>
+        )}
+        {data.drift > 0 && (
+          <span className="drift-badge" title={(data.driftFiles || []).map((d) => `${d.file}: ${d.behind} ahead`).join('\n')}>
+            ⚠{data.drift}
+          </span>
+        )}
+        <span className="node-ver">{data.version ? `v${data.version}` : ''}</span>
+        {ops.length > 0 && (
+          <span className="ov-marks" title={overlays.map((o) => `${o.op} · ${o.label}${o.committed ? '' : ' (uncommitted)'}`).join('\n')}>
+            {ops.map((op) => <span key={op} className={`ov-mark ov-${op}`}>{GLYPH[op]}</span>)}
+          </span>
+        )}
+      </div>
+      <div className="node-row2">
+        <EditorRow data={data} />
+      </div>
       <Handle type="source" position={Position.Right} />
     </div>
   )

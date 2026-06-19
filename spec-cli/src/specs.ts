@@ -156,6 +156,10 @@ export async function loadSpecs() {
       code,
       version: h.length,
       reason: h[0]?.reason || '',
+      // @@@ lastEdited - ISO date of the node's latest version commit (h is newest-first), or null
+      // when it has no committed version. The board's node row shows "last edited … ago" from this
+      // when no live session is currently editing the node (see SpecNode's second row).
+      lastEdited: h[0]?.date || null,
       drift,
       driftFiles,
       // @@@ evidence - metadata links to A->B proof frames, read from the spec's frontmatter

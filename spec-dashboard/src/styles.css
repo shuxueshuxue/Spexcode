@@ -60,16 +60,20 @@ body {
 .react-flow__controls-button:hover { background: var(--panel); }
 .react-flow__controls-button svg { fill: var(--ink); }
 
-/* ---- node: a single thin row (dot · title · version), like a file-tree line ---- */
+/* ---- node: two stacked rows — row 1 the thin file-tree line (dot · title · version), row 2 the
+   live editors' avatars or "last edited … ago". A touch wider than the single-line era for titles. ---- */
 .spec-node {
-  display: flex; align-items: center; gap: 7px;
-  width: 180px; height: 26px; padding: 0 9px;
+  display: flex; flex-direction: column; justify-content: center; gap: 3px;
+  width: 220px; min-height: 46px; padding: 5px 9px;
   background: var(--panel); border: 1px solid var(--line); border-radius: 4px;
   transition: border-color .12s;
 }
 .spec-node.focused { border-color: var(--blue); outline: 2px solid var(--blue); outline-offset: -1px; }
 .spec-node.active.focused { border-color: var(--orange); outline-color: var(--orange); }
 .spec-node.drift.focused { border-color: var(--yellow); outline-color: var(--yellow); }
+
+.node-row1 { display: flex; align-items: center; gap: 7px; }
+.node-row2 { display: flex; align-items: center; min-height: 18px; }
 
 .node-dot { position: relative; width: 7px; height: 7px; border-radius: 2px; flex: none; } /* square tick */
 .pulse { position: absolute; inset: 0; border-radius: 2px; animation: pulse 1.6s ease-out infinite; }
@@ -78,6 +82,27 @@ body {
 .node-ver { font-size: 10px; color: var(--muted); flex: none; }
 /* a node whose author session is live: a subtle ⏎ in the session colour — click/Enter opens it. */
 .node-session { font-size: 10px; font-weight: 700; line-height: 1; flex: none; opacity: .85; }
+
+/* ---- row 2: editor avatars · or "last edited … ago" ---- */
+.node-editors { display: flex; align-items: center; gap: 3px; }
+.node-lastedit { font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.node-lastedit b { font-weight: 600; color: var(--ink2); }
+.av-more { font-size: 9px; font-weight: 700; color: var(--muted); margin-left: 1px; }
+
+/* @@@ avatar - the generated face (avatar.jsx). `av-face` is the coloured tile; shape variants change
+   only the corner radius. The wrapper carries a liveness ring (av-st-working/idle/offline) so the row
+   reads "who is here, and are they live" at a glance. A future kind:'image' provider reuses .av-face. */
+.avatar { display: inline-flex; border-radius: 50%; box-shadow: 0 0 0 1.5px var(--panel); }
+.av-face { display: inline-flex; align-items: center; justify-content: center; line-height: 1; font-weight: 700; overflow: hidden; }
+.av-img { object-fit: cover; }
+.av-circle  { border-radius: 50%; }
+.av-rounded { border-radius: 5px; }
+.av-square  { border-radius: 1px; }
+.av-hex     { border-radius: 50% 50% 50% 50% / 18% 18% 18% 18%; clip-path: polygon(25% 5%, 75% 5%, 100% 50%, 75% 95%, 25% 95%, 0 50%); }
+/* liveness ring on the avatar wrapper — green = working, hollow = idle, grey/dim = offline. */
+.av-st-working  { box-shadow: 0 0 0 1.5px var(--panel), 0 0 0 3px var(--green); }
+.av-st-idle     { box-shadow: 0 0 0 1.5px var(--panel), 0 0 0 3px var(--muted); }
+.av-st-offline  { box-shadow: 0 0 0 1.5px var(--panel), 0 0 0 3px var(--line); opacity: .55; }
 
 .react-flow__handle { background: var(--muted); border: none; width: 5px; height: 5px; border-radius: 1px; }
 

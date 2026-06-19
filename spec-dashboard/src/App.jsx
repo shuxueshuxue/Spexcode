@@ -9,7 +9,9 @@ import Legend from './Legend.jsx'
 import { loadBoard } from './data.js'
 
 const nodeTypes = { spec: SpecNode }
-const NW = 180, NH = 26
+// node box (used only to centre the camera on a node). NW/NH must track the .spec-node size in
+// styles.css: it's now two rows (title line + editor/last-edited line) and a bit wider for longer titles.
+const NW = 220, NH = 46
 const PANE_KEYS = PANES.map((p) => p.key)
 const clamp = (z) => Math.max(0.4, Math.min(1.6, z))
 
@@ -81,12 +83,17 @@ function Dashboard({ specs, sessions, reload }) {
     } else {
       className = kin ? undefined : 'is-far'
     }
-    // a node with live editor(s) carries a `link` so SpecNode stamps the subtle ⏎ affordance — Enter
-    // here crosses into that live session. Driven by the live overlay (pending ops), NOT node.session.
+    // a node with live editor(s) carries a `link` (SpecNode stamps the subtle ⏎ affordance — Enter
+    // crosses into that session) AND an `editors` list (SpecNode's second row draws their avatars).
+    // Both driven by the live overlay (pending ops), NOT node.session. `editors` is the minimal slice
+    // each avatar needs: id (the avatar seed + tooltip), status (liveness ring), node (tooltip label).
     const editors = liveEditorsOf(s)
+    const editorData = editors.map((e) => ({ id: e.id, status: e.status, node: e.node }))
     return {
       id: s.id, type: 'spec', position: { x: s.x, y: s.y },
-      data: editors.length ? { ...s, link: { color: editors[0].color, status: editors[0].status } } : s,
+      data: editors.length
+        ? { ...s, editors: editorData, link: { color: editors[0].color, status: editors[0].status } }
+        : { ...s, editors: editorData },
       draggable: false, selected: s.id === focusId, className,
     }
   }), [focusId, focus.parent, highlightId, specs, liveEditorsOf])

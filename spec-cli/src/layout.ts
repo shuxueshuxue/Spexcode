@@ -1,6 +1,6 @@
 import { readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { repoRoot, git } from './git.js'
+import { repoRoot, git, worktreeSpecDelta, type NodeOp } from './git.js'
 
 // @@@ portable layout - the ONE seam where "where things live" is policy, not hardcode.
 // Mechanism (read .spec, git log) is fixed; this resolves: where is main, how to enumerate the
@@ -16,6 +16,7 @@ type Config = {
 export type Worktree = {
   path: string; branch: string | null; node: string | null
   session: string | null; status: string | null; isMain: boolean
+  ops: NodeOp[]   // pending spec-node changes this worktree makes vs main (the board's overlay)
 }
 export type Layout = { main: string; convention: Required<Config>; worktrees: Worktree[] }
 
@@ -50,7 +51,7 @@ function readSession(dir: string) {
   return r
 }
 
-export function resolveLayout(): Layout {
+export async function resolveLayout(): Promise<Layout> {
   const root = repoRoot()
   const cfg = readConfig(root)
   const convention: Required<Config> = {
@@ -58,15 +59,23 @@ export function resolveLayout(): Layout {
     branchPrefix: cfg.branchPrefix ?? 'node/',
     nodeFrom: cfg.nodeFrom ?? 'branch',
   }
-  const worktrees = gitWorktrees(root).map((w) => {
+  const raw = gitWorktrees(root)
+  const mainRef = raw.find((w) => w.branch === 'main')?.branch ?? 'main'
+  // each worktree's spec delta is independent — compute them all in parallel (each is async/non-blocking).
+  const worktrees = await Promise.all(raw.map(async (w) => {
     const sess = readSession(w.path)
     const isMain = w.branch === 'main'
     const fromBranch = w.branch && w.branch.startsWith(convention.branchPrefix)
       ? w.branch.slice(convention.branchPrefix.length) : null
     const node = isMain ? null
       : convention.nodeFrom === 'session' ? sess.node : (fromBranch ?? sess.node)
-    return { path: w.path, branch: w.branch, node, session: sess.session, status: sess.status, isMain }
-  })
+    // only MANAGED SpexCode worktrees (a .session label, or a node/* branch) get a spec delta — harness
+    // scratch worktrees (e.g. agent-*) are skipped, both to keep them off the board AND to avoid their
+    // (often large) diffs dominating /api/layout latency.
+    const managed = !!sess.session || (!!w.branch && w.branch.startsWith(convention.branchPrefix))
+    const ops = isMain || !managed ? [] : await worktreeSpecDelta(w.path, mainRef)
+    return { path: w.path, branch: w.branch, node, session: sess.session, status: sess.status, isMain, ops }
+  }))
   const main = convention.main || worktrees.find((w) => w.isMain)?.path || root
   return { main, convention, worktrees }
 }

@@ -1,6 +1,6 @@
 import { readdirSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { repoRoot, history } from './git.js'
+import { repoRoot } from './git.js'
 import { loadSpecs } from './specs.js'
 
 // @@@ spec-lint - keeps the spec<->code GRAPH honest (the judge keeps the CONTENT honest, elsewhere):
@@ -26,8 +26,6 @@ function sourceFiles(root: string, rel: string, acc: string[]) {
     else if (SRC.test(e.name)) acc.push(join(rel, e.name))
   }
 }
-
-const lastChange = (root: string, path: string) => history(root, path)[0]?.date ?? ''
 
 export function specLint(): Finding[] {
   const root = repoRoot()
@@ -64,15 +62,12 @@ export function specLint(): Finding[] {
   for (const f of governed)
     if (!owners.has(f)) out.push({ level: 'warn', rule: 'coverage', file: f, msg: `no spec governs: ${f}` })
 
-  // drift: a governed file changed more recently than the spec that governs it.
+  // drift: a governed file has commits NOT yet reflected in its spec. Rigorous by git ancestry —
+  // loadSpecs computes `driftFiles` via `git rev-list <spec's last version>..HEAD -- <file>` (see
+  // commitsSince in git.ts), so each warning is "N commit(s) ahead", not a timestamp guess.
   for (const s of specs) {
-    const specDate = lastChange(root, s.path)
-    for (const f of s.code) {
-      if (!existsSync(join(root, f))) continue
-      const fileDate = lastChange(root, f)
-      if (specDate && fileDate && fileDate > specDate)
-        out.push({ level: 'warn', rule: 'drift', spec: s.id, file: f, msg: `${f} changed after spec '${s.id}' (v${s.version}) — may be stale` })
-    }
+    for (const d of s.driftFiles)
+      out.push({ level: 'warn', rule: 'drift', spec: s.id, file: d.file, msg: `${d.file} is ${d.behind} commit(s) ahead of spec '${s.id}' (v${s.version}) — may be stale` })
   }
 
   return out

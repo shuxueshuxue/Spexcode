@@ -68,8 +68,24 @@ memory), `reconcile` (awaiting→proposal label; active→working or offline, wh
 counts as offline so a crashed claude isn't a false "working"), and the lifecycle writers
 `markStateFromCwd` / `markDoneFromCwd` / `markErrorFromCwd`. `newSession` adds the `node/<slug>` worktree,
 writes `.session`, isolates `CLAUDE.md` (`hideClaudeMd`), and launches claude on the private socket;
-`reopen` clears a proposal and `--resume`s a dead pane; the human-only `mergeSession` (`--no-ff`, bump
-`merges`, back to active) and `closeSession` (the only removal) round out the lifecycle.
+`reopen` clears a proposal and `--resume`s a dead pane; the human-only merge/close actions round out the
+lifecycle (`closeSession` is the only removal).
+
+The **merge is an INTENT the human expresses, not a fixed server script**. Low-level git operations on the
+dashboard do not run server-side: the human acts at the level of intent and the session's OWN agent performs
+the operation. So `mergeSession` carries no `git merge` logic of its own — it is a DISPATCH. It reopens the
+session (clears the proposal → active, `--resume`s the agent if its tmux died, reusing `reopen`), then
+send-keys a merge prompt into the agent (reusing `sendKeys`). The injected prompt tells the agent to merge
+its branch into main, resolve any conflicts itself (it knows the intent of the work), verify that main's
+HEAD actually advanced and that no merge is left in progress, run `git merge --abort` to restore main if
+anything goes half-merged, and propose close once the merge is verified. Because the agent performs and
+verifies the merge, main is never left half-merged and a no-op is never miscounted as a merge — the
+guarantee lives in the agent's verification, not a server check. The action is **async**: `POST
+/api/sessions/:id/merge` returns 200 `{ dispatched: true }` as soon as the prompt is sent (409 only if the
+session/agent is unreachable); the agent does the work and re-proposes or closes when done. The server no
+longer bumps `merges` on a click — if a merge count is still wanted it is the agent's to record after a
+verified merge. (This prompt-dispatch pattern is currently scoped to merge; other low-level ops generalize
+to it later.)
 
 For the terminal: `spex ls` is the human-readable living-sessions table — a column header, each session's
 truncated note/prompt, and a glyph→meaning legend (`statusLegend`, built from `STATUS_GLYPH` so it can't

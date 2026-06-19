@@ -251,17 +251,30 @@ export function markStateFromCwd(status: Lifecycle, opts: { proposal?: Proposal;
 export const markDoneFromCwd = (proposal: Proposal = 'nothing') => markStateFromCwd('awaiting', { proposal })
 export const markErrorFromCwd = () => markStateFromCwd('error')
 
-// @@@ mergeSession - the dogfood merge ACTION (not a state): --no-ff the branch into main, bump the
-// `merges` count, return the worktree to active. On conflict/dirty it fails and the proposal stands.
-export async function mergeSession(id: string): Promise<{ ok: boolean; merges?: number; error?: string }> {
+// @@@ mergePrompt - the INTENT the human clicks "merge" with, written as an instruction to the session's
+// own agent. The agent (not the server) performs the merge, because only the agent knows the work's intent
+// and can resolve conflicts; the server has no fixed `git merge` logic. branch/main are substituted live.
+function mergePrompt(branch: string, main: string): string {
+  return `Merge your branch ${branch} into main now. From the main checkout at ${main}, run: ` +
+    `git -C ${main} merge --no-ff ${branch}. If it conflicts, resolve the conflicts yourself ` +
+    `(you know the intent of this work), complete the merge, and verify \`git -C ${main} rev-parse HEAD\` ` +
+    `actually advanced and that no merge is left in progress (no ${main}/.git/MERGE_HEAD present). If ` +
+    `anything goes wrong and main is left half-merged, run git -C ${main} merge --abort to restore main ` +
+    `and explain. After a verified successful merge, propose close (you're done).`
+}
+
+// @@@ mergeSession - the merge ACTION is now a DISPATCH, not a fixed server-side `git merge`. The human
+// acts at the level of INTENT; the session's OWN agent performs the operation. We reopen the session
+// (clear the proposal → active, and --resume the agent if its tmux died), then send-keys a merge prompt
+// into it. The agent runs git, resolves any conflicts using its knowledge of the work, verifies main HEAD
+// advanced (and that nothing is left mid-merge), and then re-proposes/closes. This is ASYNC: the server
+// returns once the prompt is dispatched and never touches main's tree itself.
+export async function mergeSession(id: string): Promise<{ ok: boolean; dispatched?: boolean; error?: string }> {
   const wt = await findWorktree(id)
   if (!wt || !wt.branch) return { ok: false, error: 'no such session' }
-  try {
-    await gitA(['-C', mainRoot(), 'merge', '--no-ff', '-m', `merge ${wt.branch}: review-approved`, wt.branch])
-  } catch (e) { return { ok: false, error: String(e) } }
-  const merges = wt.rec.merges + 1
-  writeSessionFile(wt.path, { ...wt.rec, status: 'active', proposal: null, merges })
-  return { ok: true, merges }
+  await reopen(id)  // clear the proposal → active, and --resume the agent if its tmux died
+  const dispatched = await sendKeys(id, mergePrompt(wt.branch, mainRoot()), true)
+  return dispatched ? { ok: true, dispatched: true } : { ok: false, error: 'agent not reachable' }
 }
 
 // @@@ closeSession - the ONLY removal (human-confirmed): kills tmux, removes the worktree + branch.

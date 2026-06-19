@@ -24,6 +24,13 @@ the CLI where they belong, not under the dashboard. Hono + tsx, **no build step*
 HTTP entrypoint — a Hono app that wires the loaders and the session state machine to routes — and is
 the file this node governs (the deeper mechanism lives in its [[source-of-truth]] subtree).
 
+The `serve` script (the `npm run api` entry) runs under `tsx watch`, so the backend **hot-reloads on
+its own source changes** (`spec-cli/src/**`) — never on `.spec/**/spec.md` or dashboard edits, which
+it reads via fs rather than importing. A reload briefly drops the live ws/pty bridges; clients
+reconnect (the tab-switch reattach is clean), and the detached tmux sessions survive a reload
+untouched. This closes the stale-server gap where a backend edit silently kept serving old code until
+a manual restart.
+
 Routes it must expose:
 
 - `GET /api/board` — the assembled board (merged tree + per-worktree overlay + session list), the

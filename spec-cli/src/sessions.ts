@@ -275,6 +275,15 @@ export async function closeSession(id: string): Promise<boolean> {
   return !!wt
 }
 
+// @@@ resizeSession - the dashboard fits xterm to its panel, then tells tmux to render the detached
+// pane at that exact cols×rows so the TUI lines up with no overflow. resize-window flips the window to
+// manual sizing, so the size sticks for a session with no attached client. Best-effort: a dead/missing
+// session just no-ops (the next fit re-sends anyway).
+export async function resizeSession(id: string, cols: number, rows: number): Promise<boolean> {
+  if (!(cols > 0 && rows > 0)) return false
+  return tmuxOk(['resize-window', '-t', id, '-x', String(cols), '-y', String(rows)])
+}
+
 export async function captureSession(id: string): Promise<string> {
   if (!(await alive(id))) return ''
   try { return await tmux(['capture-pane', '-e', '-p', '-t', id]) } catch { return '' }

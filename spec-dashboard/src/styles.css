@@ -366,10 +366,13 @@ body {
 @keyframes si-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @keyframes si-expand { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: none; } }
 
-/* live tmux terminal inside the session view */
-.si-term-body { padding: 8px 10px; }
-.st-host { width: 100%; height: 100%; }
-.st-host .xterm, .st-host .xterm-viewport { height: 100% !important; background: var(--paper) !important; }
+/* live tmux terminal inside the session view — xterm is FITTED to this box (see SessionTerm), so the
+   box clips rather than scrolls: overflow:hidden everywhere kills the double scrollbar (h + v). */
+.si-term-body { padding: 8px 10px; overflow: hidden; }
+.st-host { width: 100%; height: 100%; overflow: hidden; }
+.st-host .xterm, .st-host .xterm-viewport, .st-host .xterm-screen {
+  width: 100% !important; height: 100% !important; overflow: hidden !important; background: var(--paper) !important;
+}
 .si-bottom .si-input { color: var(--ink2); }
 
 /* session header: name + status + lifecycle actions */

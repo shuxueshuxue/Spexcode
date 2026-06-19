@@ -5,7 +5,7 @@ import { streamSSE } from 'hono/streaming'
 import { loadSpecs, specHistory } from './specs.js'
 import { resolveLayout } from './layout.js'
 import { buildBoard } from './board.js'
-import { newSession, listSessions, captureSession, sendKeys, closeSession, reopen, propose, mergeSession, alive } from './sessions.js'
+import { newSession, listSessions, captureSession, sendKeys, closeSession, reopen, propose, mergeSession, alive, resizeSession } from './sessions.js'
 
 const app = new Hono()
 app.use('/api/*', cors())
@@ -47,6 +47,12 @@ app.post('/api/sessions/:id/keys', async (c) => {
   const body = await c.req.json().catch(() => ({}))
   const ok = await sendKeys(c.req.param('id'), typeof body?.text === 'string' ? body.text : '', body?.enter !== false)
   return c.json({ ok }, ok ? 200 : 404)
+})
+// fit: the dashboard sends the cols×rows it fitted xterm to, so tmux renders the pane at that size.
+app.post('/api/sessions/:id/resize', async (c) => {
+  const body = await c.req.json().catch(() => ({}))
+  const cols = Number(body?.cols), rows = Number(body?.rows)
+  return c.json({ ok: await resizeSession(c.req.param('id'), cols, rows) })
 })
 app.post('/api/sessions/:id/close', async (c) => c.json({ ok: await closeSession(c.req.param('id')) }))
 

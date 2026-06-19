@@ -24,7 +24,11 @@ The interface is two panes: a left session list and a right content area that **
 focused. "New Session" shows a centered avatar + input, prefilled with the focus node as an editable
 `@node` reference (a convenience — a session may touch any nodes, so the prefix is deletable); launching
 switches to the new session. An existing session shows its **live tmux terminal** (SessionTerm streams
-the pane over SSE and forwards keystrokes) with the input docked at the bottom. List navigation is
+the pane over SSE and forwards keystrokes) with the input docked at the bottom. The terminal **scales to
+its panel**: xterm has no fixed size — the FitAddon fits it to the container, and each fit POSTs the
+resulting cols×rows to `POST /api/sessions/:id/resize` so tmux re-renders the detached pane at exactly
+that size. The panel clips rather than scrolls (no double scrollbar) and the TUI lines up at whatever
+size the panel happens to be. List navigation is
 handled at the **window** level so arrows keep walking the list regardless of what holds focus (xterm
 included), and the selected tab persists across open/close. Lifecycle actions
 (relaunch / request-review / merge / back-to-working / close) sit in the header per the session's state;
@@ -39,8 +43,9 @@ An existing tab renders `SessionTerm` (or the offline relaunch panel when status
 docked `❯` textarea whose Enter forwards to `POST /api/sessions/:id/keys`; the header buttons map to the
 session's status (relaunch / review / merge / back-to-working / close), each a thin POST then a board
 reload. A window-level capture listener owns `↑`/`↓` list movement and Enter-on-New. `SessionTerm.jsx`
-opens a fixed xterm, subscribes to `/api/sessions/:id/stream` (SSE), and full-repaints on each distinct
-frame. `SessionWindow.jsx` is the top-right floater of status-dot rows with a pending-op glyph count,
+opens a FitAddon-sized xterm, fits it to the panel on open and on container/window resize (re-POSTing
+the new cols×rows to `/api/sessions/:id/resize` only when the fitted size changed), subscribes to
+`/api/sessions/:id/stream` (SSE), and full-repaints on each distinct frame. `SessionWindow.jsx` is the top-right floater of status-dot rows with a pending-op glyph count,
 highlighting a worktree's overlays on pick and opening the interface on open. All of this renders only
 what `/api/board` reports — no session logic lives in the dashboard — so the raw source (a thin view
 identical to `spex board`) holds.

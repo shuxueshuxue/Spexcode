@@ -71,7 +71,11 @@ export default function SessionTerm({ sessionId, senders }) {
     }
 
     const enc = new TextEncoder()
-    ws.onopen = () => { lastCols = 0; lastRows = 0; fitAndSync() }  // send our fitted size first thing
+    // @@@ clean (re)connect - reset xterm to a blank slate so the bridge's coherent full repaint (tmux
+    // refresh-client, triggered on attach) lands on an empty screen instead of splicing onto stale cells.
+    // This is what kills the tab-switch scramble: no snapshot is merged into the mid-flight live stream;
+    // we clear, then a single in-band repaint paints the whole pane. Then send our fitted size first thing.
+    ws.onopen = () => { term.reset(); lastCols = 0; lastRows = 0; fitAndSync() }
     ws.onmessage = (e) => { if (e.data instanceof ArrayBuffer) term.write(new Uint8Array(e.data)) }
 
     // @@@ the single human input - the external message box writes into THIS pane over the SAME socket.

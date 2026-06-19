@@ -134,9 +134,13 @@ the wheel drives tmux copy-mode and the viewer scrolls the **real pane history**
 is set on the socket); a viewer's fit calls `pty.resize`, last fit wins. This replaces the old
 `capture-pane`-snapshot **spliced onto** a raw `pipe-pane` byte-tail (the scramble's source — deltas
 assumed a screen the snapshot only approximated, and the tail could begin mid-escape-sequence) and the
-per-tick SSE poll. A fresh `attach`/resize repaints the screen coherently; a viewer that joins an already
-running bridge is **seeded** once with a `capture-pane` of the current screen (so a warm join paints
-instantly) and then streams live from the same client. A **supervisor** keeps a warm bridge for every
+per-tick SSE poll. A viewer that joins an already running bridge is **not** re-seeded with an out-of-band
+`capture-pane` snapshot (splicing that into the mid-flight live stream was the same scramble, now on the
+tab-switch path); instead the bridge asks tmux to **`refresh-client`** its own attach client — found by
+matching `client_pid` to the PTY's pid and cached — emitting one full **in-band** redraw down the same PTY
+the deltas flow on, coherent with them by construction. It reaches every viewer of that shared client (a
+brief, harmless re-paint), and the client resets its xterm + re-sends its fitted size on (re)connect so the
+redraw lands clean and correctly sized. A **supervisor** keeps a warm bridge for every
 **detached** live session so opening a tab is instant — it deliberately **skips any session a human is
 already attached to** (e.g. the managing session in its own terminal), never adding a second client that
 would resize their pane; the dashboard can still open such a session on demand (a user-initiated choice).

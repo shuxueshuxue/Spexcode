@@ -27,7 +27,7 @@ const DEFAULT_COLS = 120, DEFAULT_ROWS = 40
 // a viewer: anything we can push pane bytes to (a WebSocket, wrapped).
 export type Viewer = { send: (data: Buffer) => void }
 
-type Bridge = { id: string; pty: IPty; viewers: Set<Viewer>; cols: number; rows: number; prewarmed: boolean }
+type Bridge = { id: string; pty: IPty; viewers: Set<Viewer>; cols: number; rows: number; prewarmed: boolean; clientTty?: string }
 const bridges = new Map<string, Bridge>()
 
 async function tmuxRaw(args: string[]): Promise<void> {
@@ -82,23 +82,43 @@ function killBridge(id: string): void {
   try { b.pty.kill() } catch { /* already gone */ }
 }
 
-// a browser viewer connects: subscribe it to the (warm or fresh) bridge, then SEED just this viewer with
-// the current screen so a mid-stream join paints instantly. The seed is coherent because the live feed is
-// the SAME tmux client — it's the real current screen, not the old approximate-snapshot-then-raw-delta
-// splice. capture-pane is per-viewer (not a refresh-client, which would re-flicker everyone else); the
-// live stream continues seamlessly and the viewer's open-time resize re-syncs the cursor.
+// a browser viewer connects: subscribe it to the (warm or fresh) bridge, then trigger ONE coherent full
+// repaint so the freshly-reset xterm paints in a single clean frame. We do NOT splice a capture-pane
+// snapshot into the mid-flight live stream — THAT was the tab-switch scramble: the snapshot is an
+// out-of-band screen state, the live deltas assume a different cursor/size, and the join can land
+// mid-escape-sequence, so the two splice into a garbled screen (doubled status bars, interleaved text).
+// Instead we ask tmux to `refresh-client` OUR attach client, which emits a full redraw down the SAME pty
+// the deltas flow on — coherent with them by construction. The redraw reaches every viewer of this bridge
+// (a brief, harmless re-paint for any others — far better than a persistent splice). The client resets its
+// xterm on (re)connect and its open-time resize re-syncs the size, so the repaint lands on a clean,
+// correctly-sized screen. There is no per-viewer partial seed, so rapid attach/detach can never leave a
+// half-seed behind.
 export function attachViewer(id: string, v: Viewer): boolean {
   const b = ensureBridge(id)
   if (!b) return false
   b.viewers.add(v)
-  void seedViewer(id, v)
+  void repaint(b)
   return true
 }
-async function seedViewer(id: string, v: Viewer): Promise<void> {
+// our tmux attach client's tty, matched by pid (b.pty.pid === the attach process === client_pid) and cached.
+// refresh-client must target OUR client specifically so the redraw hits only the dashboard's pty — never a
+// human's separate terminal that happens to share the same session.
+async function clientTty(b: Bridge): Promise<string | null> {
+  if (b.clientTty) return b.clientTty
   try {
-    const { stdout } = await pexec('tmux', ['-L', TMUX_SOCK, 'capture-pane', '-e', '-p', '-t', id])
-    v.send(Buffer.from('\x1b[H\x1b[2J' + stdout.replace(/\n/g, '\r\n'), 'utf8'))
-  } catch { /* fresh attach/resize will paint instead */ }
+    const { stdout } = await pexec('tmux', ['-L', TMUX_SOCK, 'list-clients', '-t', b.id, '-F', '#{client_pid} #{client_tty}'])
+    for (const line of stdout.split('\n')) {
+      const sp = line.indexOf(' ')
+      if (sp > 0 && Number(line.slice(0, sp)) === b.pty.pid) return (b.clientTty = line.slice(sp + 1).trim())
+    }
+  } catch { /* client not registered yet; a size-changing open resize will repaint instead */ }
+  return null
+}
+// force tmux to emit a full, coherent repaint of our client down the shared pty (in-band with the live
+// stream → no splice). All viewers of this bridge see it — an acceptable brief redraw, never a scramble.
+async function repaint(b: Bridge): Promise<void> {
+  const tty = await clientTty(b)
+  if (tty) await tmuxRaw(['refresh-client', '-t', tty])
 }
 export function detachViewer(id: string, v: Viewer): void {
   const b = bridges.get(id)

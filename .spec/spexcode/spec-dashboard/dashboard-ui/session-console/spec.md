@@ -49,8 +49,14 @@ steal the wheel). The pane is **dark** (a solarized-dark xterm theme on a dark b
 surrounding dashboard is light: the Claude Code TUI running inside is **designed for a dark terminal**, so a
 light pane would clash with its diff-add backgrounds, dim/faint context text, and syntax colors. The whole
 terminal area — xterm, its viewport, and the body it sits in — shares that dark background so no light gutter
-flashes around the pane. There is **no snapshot-plus-raw-delta splice** (the old scramble): a newly-joined viewer
-is seeded once with the current screen and then streams live from the same coherent client. The terminal
+flashes around the pane. A (re)joining viewer is painted by a **single coherent full repaint, never a snapshot
+spliced into the live stream** (that splice was the tab-switch scramble — an out-of-band `capture-pane`
+snapshot merged into mid-flight deltas, joining at a different cursor/size and even mid-escape-sequence). On
+(re)connect the client **resets its xterm** to a blank screen and the bridge asks tmux to **`refresh-client`**
+its attach client, emitting one full in-band redraw down the same pty the live deltas flow on — coherent with
+them by construction. The redraw reaches every viewer of that shared client (a brief, harmless re-paint),
+which is acceptable; there is no per-viewer partial seed, so rapid tab-switching leaves no half-painted state.
+The terminal
 **scales to its panel** — the FitAddon fits xterm to the container and each fit sends the new cols×rows
 over the socket so tmux re-renders at exactly that size (only when it changed). The fit is **robust against
 the open entrance**: the panel animates in (`si-expand`, a fade + rise — deliberately **not** a `scale()`,

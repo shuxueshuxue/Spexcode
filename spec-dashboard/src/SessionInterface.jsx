@@ -62,6 +62,15 @@ export default function SessionInterface({ sessions, focusNode, sel, setSel, onC
     return () => clearTimeout(id)
   }, [active, focusId])
 
+  // @@@ auto-grow - the new-session box grows with its content (line wraps + newlines) up to the CSS
+  // max-height, then scrolls. Reset to 0/auto first so it can also shrink when text is deleted.
+  useEffect(() => {
+    const ta = taRef.current
+    if (!ta || active !== 'new') return
+    ta.style.height = 'auto'
+    ta.style.height = `${ta.scrollHeight}px`
+  }, [prompt, active])
+
   // launch a real session, then SWITCH to it (onCreated reloads the board, then App sets sel to the id).
   const submit = async () => {
     const text = prompt.trim()
@@ -164,7 +173,7 @@ export default function SessionInterface({ sessions, focusNode, sel, setSel, onC
               </div>
               <div className="si-hint">
                 {focusNode
-                  ? <>prefixed with <code>@{focusNode.id}</code> — delete it for a node-agnostic prompt · launches <code>claude --dangerously-skip-permissions</code></>
+                  ? <>prefixed with <code>@{focusNode.id}</code> — delete it for a node-agnostic prompt</>
                   : 'no node focused — this prompt is node-agnostic'}
               </div>
             </div>

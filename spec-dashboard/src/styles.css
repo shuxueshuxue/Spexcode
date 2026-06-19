@@ -376,16 +376,17 @@ body {
 
 /* New Session: input + avatar centred, terminal vibe. */
 .si-content.is-new { align-items: center; justify-content: center; }
-.si-new-center { width: min(560px, 86%); display: flex; flex-direction: column; align-items: center; gap: 12px; animation: si-rise .18s ease; }
+.si-new-center { width: min(560px, 86%); display: flex; flex-direction: column; align-items: center; gap: 12px; margin-bottom: 12vh; animation: si-rise .18s ease; }
 .si-avatar { font-size: 30px; color: var(--blue); letter-spacing: 2px; }
 .si-ask { font-size: 15px; color: var(--ink2); }
 .si-inputwrap {
   width: 100%; display: flex; border: 1px solid var(--blue); border-radius: 6px;
-  background: var(--panel); padding: 10px 12px;
+  background: var(--panel); padding: 10px 12px; transition: height .12s ease;
 }
 .si-input {
   flex: 1; min-width: 0; resize: none; background: transparent; border: none; outline: none;
   color: var(--ink2); font-family: var(--mono); font-size: 13px; line-height: 1.5; max-height: 180px;
+  overflow-y: auto; transition: height .12s ease;
 }
 .si-input::placeholder { color: var(--muted); }
 .si-hint { font-size: 11px; color: var(--muted); }

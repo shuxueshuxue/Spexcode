@@ -60,44 +60,23 @@ auto-defaults and allows — at most one nudge, never a dead loop, never an unde
 
 ### Surfaces
 
-`buildBoard` assembles the dashboard's runtime state — merged tree + per-worktree overlay (ghosts,
-edit/delete/move marks, drift) + the session list — in one module, served identically at HTTP
-`/api/board` and `spex board` (the frontend only adds x/y pixels). For the terminal: `spex ls` is the
-human-readable living-sessions table; `spex watch [SEL…]` is the event source for Claude Code's Monitor
-tool (one line per actionable transition — review/done/close-pending/offline/error), where each watch
-process is one subscriber and the selector is the subscription (many-to-many falls out for free).
+`buildBoard` (`board.ts`) assembles the dashboard's runtime state — merged tree + per-worktree overlay
+(ghosts, edit/delete/move marks, drift) + the session list — in one module, served identically at HTTP
+`/api/board` and `spex board` (the frontend only adds x/y pixels). `sessions.ts` holds the whole state
+machine and is the only writer of `.session`: `readSessionFile` / `writeSessionFile` (worktrees, not
+memory), `reconcile` (awaiting→proposal label; active→working or offline, where a pane at a bare shell
+counts as offline so a crashed claude isn't a false "working"), and the lifecycle writers
+`markStateFromCwd` / `markDoneFromCwd` / `markErrorFromCwd`. `newSession` adds the `node/<slug>` worktree,
+writes `.session`, isolates `CLAUDE.md` (`hideClaudeMd`), and launches claude on the private socket;
+`reopen` clears a proposal and `--resume`s a dead pane; the human-only `mergeSession` (`--no-ff`, bump
+`merges`, back to active) and `closeSession` (the only removal) round out the lifecycle.
 
-## current state
-
-### description
-
-`sessions.ts` holds the whole state machine and is the only writer of `.session`: `readSessionFile` /
-`writeSessionFile` (worktrees, not memory), `reconcile` (awaiting→proposal label; active→working or
-offline, where a pane sitting at a bare shell counts as offline so a crashed claude isn't a false
-"working"), and the lifecycle writers `markStateFromCwd` / `markDoneFromCwd` / `markErrorFromCwd`.
-Launch is implemented: `newSession` adds a `node/<slug>` worktree off main, writes `.session`, isolates
-the worktree's `CLAUDE.md` (`hideClaudeMd`: rename → `CLAUDE.spexhidden.md` plus `update-index
---assume-unchanged CLAUDE.md`, default on / `SPEXCODE_HIDE_CLAUDE_MD=0` to skip, best-effort so it can't
-break the launch), then starts claude on a private `tmux -L` socket with `--session-id` and per-worktree
-`--settings` (hooks written to `.spex-hooks.json`, no global pollution); `reopen` clears a proposal and
-`--resume`s a dead or crashed-to-shell pane. Human actions `mergeSession` (`--no-ff`, bump `merges`, back to active) and
-`closeSession` (the only removal) are present. `board.ts` (`buildBoard`) merges tree + overlay + the
-session list for both `/api/board` and `spex board`; `cli.ts` exposes `spex session`/`ls`/`watch`/
-`board`, and `watchSessions` emits one line per actionable transition for Monitor. The CLI surface is
-tuned for both humans and agents: no-args (or `spex help`) prints a grouped one-screen command summary;
-`spex new "<prompt>" [--node X]` is shorthand for `session new`; and `spex ls` prints a column header,
-each session's note/prompt (truncated), and a glyph→meaning status legend (`statusLegend`, built from
-`STATUS_GLYPH` so it can't drift) so the table tells the whole story at a glance. Not yet: liveness
-has no true `idle` tier (reconcile reports only working/offline for active); the dashboard session-log
-feed is still a mock in `data.js` (not the real watch stream).
-
-### verdict — not drifted
-
-The three governed files all sit at or behind this node's latest version with no commits ahead (drift
-0 — confirmed by `spex lint` reporting no `drift` warning for `sessions`), so the expanded spec still
-describes the code. The expanded spec is written as behavioral intent (what a session *is* and how its
-state and hooks must behave), and the description above is the separate, honest read of how far the
-code has met it — including the two gaps (no idle tier, mock dashboard feed), which are admitted rather
-than back-written into the spec to make it look complete. This is the test that the code did not drive
-the spec in reverse: where code and intent diverge, the divergence lives in **description**, and the
-**expanded spec** keeps stating the intended behavior, which still satisfies the **raw source**.
+For the terminal: `spex ls` is the human-readable living-sessions table — a column header, each session's
+truncated note/prompt, and a glyph→meaning legend (`statusLegend`, built from `STATUS_GLYPH` so it can't
+drift). `spex watch [SEL…]` is the event source for Claude Code's Monitor tool (`watchSessions` emits one
+line per actionable transition — review/done/close-pending/offline/error), where each watch process is one
+subscriber and the selector is the subscription (many-to-many falls out for free). The `cli.ts` surface is
+tuned for both humans and agents: no-args (or `spex help`) prints a grouped one-screen command summary, and
+`spex new "<prompt>" [--node X]` is shorthand for `session new`. Two things are deliberately not yet built:
+liveness has no true `idle` tier (reconcile reports only working/offline for an active session), and the
+dashboard's session-log feed is still a mock in `data.js`, not the real `watch` stream.

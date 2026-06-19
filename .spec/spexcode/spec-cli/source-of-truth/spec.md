@@ -36,29 +36,17 @@ path, since the bulk index only covers `.spec`.
 Status is a four-state derived value (`deriveStatus`), computed from version + drift, with frontmatter
 kept only as a fallback when git is unreadable. `loadSpecs` derives the git-only part
 (pending/drift/merged); the live `active` state, which needs the worktree overlay, is layered on by the
-board assembler. The four-state model is specified in [[spec-node-states]]. `loadSpecs` also attaches
-the three-part `parts` projection (see [[three-part-body]]) — that lives with the parser, but rides out
-on the same node objects this aggregator builds.
+board assembler. The four-state model is specified in [[spec-node-states]]. `loadSpecs` also attaches the
+`parts` projection — now a **two-part** body (raw source + expanded spec), the agent-narrated current-state
+part having been dropped because what's-done is derived, never narrated (see [[three-part-body]]). The
+parser lives with `parseParts`, but the projection rides out on the same node objects this aggregator builds.
 
-## current state
-
-### description
-
-`specs.ts` is the aggregator: `loadSpecs()` calls `historyIndex`/`driftIndex` once (both cached on
-`HEAD`), then for each node under `.spec` does pure lookups — `rowsFor` for the version timeline,
-`driftFor` per governed file for `driftFiles`/`drift`, `deriveStatus` for `status`, and `parseParts`
-for `parts`. Session attribution comes from the latest version's `Session:` trailer, frontmatter
-`session:` only as a fallback. `specHistory(id)` returns the per-node timeline with each row's line-diff
-scoped to that node (its `spec.md` rename-followed plus the code it governs). `git.ts` provides the
-git access (`historyIndex`, `driftIndex`/`driftFor`, `rowsFor`, `statsFor`, `diffstat`, and the
-hook-safe `git()` helper); `index.ts` serves the results. Not stored anywhere: no datastore, no hash
-files — every fact is recomputed from git on read, warm-cached on `HEAD`.
-
-### verdict — not drifted
-
-All three governed files sit at or behind this node's latest version with no commits ahead (`spex lint`
-reports no `drift` warning for `source-of-truth`). `specs.ts` last moved when the three-part `parts`
-projection was attached; the expanded spec now names that attachment and points the detail at
-[[three-part-body]], rather than absorbing another node's contract — so the divergence was closed by
-clarifying ownership, not by back-writing code into the spec. The raw source (git-as-database, single
-canonical `.spec` on main, history-scaling reads) still holds.
+Concretely, `specs.ts` is the aggregator: `loadSpecs()` calls `historyIndex`/`driftIndex` once (both cached
+on `HEAD`), then for each node under `.spec` does pure lookups — `rowsFor` for the version timeline,
+`driftFor` per governed file for `driftFiles`/`drift`, `deriveStatus` for `status`, and `parseParts` for
+`parts`. Session attribution comes from the latest version's `Session:` trailer, with frontmatter `session:`
+only as a fallback. `specHistory(id)` returns the per-node timeline with each row's line-diff scoped to that
+node (its `spec.md` rename-followed plus the code it governs). `git.ts` provides the git access
+(`historyIndex`, `driftIndex`/`driftFor`, `rowsFor`, `statsFor`, `diffstat`, and the hook-safe `git()`
+helper that strips a hook's exported `GIT_DIR`/`GIT_INDEX_FILE`); `index.ts` serves the results. Nothing is
+stored: no datastore, no hash files — every fact is recomputed from git on read, warm-cached on `HEAD`.

@@ -29,24 +29,13 @@ fixed absolute positions (see [[node-graph]]). `i` opens the node-info popup ([[
 node's live session if it has one. While a modal (popup or session interface) is open it **owns** the
 keys: arrows must not leak through to pan the board behind it — that was the old blind-navigation bug.
 
-## current state
-
-### description
-
-`App.jsx` installs one capture-phase `keydown` listener so it wins over react-flow. Graph mode: `↑`/`↓`
-call `nearestY('up'|'down')` (a same-x column scan for the nearest node in y), `←`→`parent`,
-`→`→`childTarget` (the child nearest in y); `=`/`+` and `-`/`_` zoom by 1.2× via `centerOn`, `0` resets
-to 0.85; `i` opens the info popup; `Enter` calls `openSession(liveSessionFor(focus)?.id)`. The camera is
-a plain rAF pan (`animateView` → `setViewport`, cubic ease) that recentres the focus at constant zoom —
-no fit, no arc. When a modal is open the handler short-circuits: the session interface swallows all keys
-but `Escape`; the info popup handles only `Escape` / `Tab` / `1`-`3` and explicitly drops arrows. Click
-focuses a node (and opens its live session if any); the key hints render in the HUD.
-
-### verdict — not drifted
-
-`App.jsx` is the only governed file and, after this rewrite, sits at the node's latest version with no
-commits ahead (`spex lint` reports no `drift` warning for `keyboard-nav`). The expanded spec states the
-navigation contract as intended behavior; the description is the honest read of how `App.jsx` meets it
-today. The `Enter` / `i` / modal-owns-keys handling grew as the session interface and node popup landed —
-the expanded spec now names them and the description records them, rather than back-writing code into the
-spec. The raw source (relationship nav on a fixed tree, flat-pan camera) still holds.
+In `App.jsx` this is one capture-phase `keydown` listener that wins over react-flow. In graph mode `↑`/`↓`
+call `nearestY('up'|'down')` (a same-x column scan for the nearest node in y), `←`→`parent`, `→`→the child
+nearest in y; `=`/`+` and `-`/`_` zoom by 1.2×, `0` resets to the overview zoom; `i` opens the info popup;
+`Enter` opens the focus node's live session. The camera is a plain rAF pan (`animateView` → `setViewport`,
+cubic ease) that recentres the focus at constant zoom — no fit, no arc — so a switch flat-pans, never arcs.
+When a modal is open the handler short-circuits: the session interface swallows all keys but `Escape`; the
+info popup handles only `Escape` / `Tab` / `1`-`3` and explicitly drops the arrows. Click focuses a node
+(and opens its live session if any); the key hints render in the HUD. `App.jsx` also hosts the graph render
+(node positions, edges, and the faint dashed reparent-preview arrow for `moved` overlays — see
+[[node-graph]]), but those are view concerns that never change the navigation contract above.

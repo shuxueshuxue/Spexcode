@@ -43,12 +43,15 @@ body {
   display: flex; flex-direction: column; gap: 8px; pointer-events: none;
 }
 .brand { color: var(--ink2); font-weight: 700; letter-spacing: .5px; }
-.navhints { display: flex; flex-wrap: wrap; gap: 14px; font-size: 11px; color: var(--ink); }
-.navhints span { white-space: nowrap; }
-.navhints kbd {
-  font-family: var(--mono); font-size: 11px; color: var(--blue);
-  border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; background: var(--paper);
+/* discreet `?` affordance — the only HUD hint; opens the full keymap/legend modal. The HUD itself is
+   pointer-events:none so the board stays draggable; the button re-enables pointer events for itself. */
+.hud-help {
+  pointer-events: auto; align-self: flex-start; cursor: pointer;
+  width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: 13px; line-height: 1; color: var(--blue);
+  background: var(--paper); border: 1px solid var(--line); border-radius: 4px;
 }
+.hud-help:hover { border-color: var(--blue); color: var(--orange); }
 
 /* gentle focus grouping — only opacity changes, positions never move */
 .react-flow__node { transition: opacity .18s ease; }
@@ -338,15 +341,18 @@ body {
 .sess-status { color: var(--muted); font-size: 10px; flex: none; }
 .sess-ops { color: var(--ov, var(--blue)); font-size: 11px; font-weight: 700; flex: none; }
 
-/* ---- floating legend (toggled by `?`) ---- */
-/* a small fixed corner card decoding the node vocabulary. Floats over the graph (bottom-right, clear
-   of the top HUD and the top-right session window) and never blocks graph interaction — only the card
-   itself takes pointer events, the rest of the board stays live behind it. */
+/* ---- help modal: keymap + legend (opened by `?`) ---- */
+/* the SINGLE home for the keymap and node vocabulary. A centered, large, scrollable modal over a
+   dimmed backdrop (click-outside closes — see Legend.jsx). The HUD only carries a discreet `?`. */
+.legend-backdrop {
+  position: fixed; inset: 0; z-index: 20;
+  background: rgba(101,123,131,.25); backdrop-filter: blur(2px);
+  display: flex; align-items: center; justify-content: center;
+}
 .legend {
-  position: absolute; bottom: 16px; right: 16px; z-index: 7; width: 290px;
-  max-height: calc(100vh - 32px); overflow-y: auto;
-  background: var(--paper); border: 1px solid var(--line); border-radius: 6px;
-  box-shadow: 0 6px 22px rgba(101,123,131,.18); font-size: 12px;
+  position: relative; width: min(660px, 92vw); max-height: 86vh; overflow-y: auto;
+  background: var(--paper); border: 1px solid var(--blue); border-radius: 6px;
+  box-shadow: 0 12px 40px rgba(101,123,131,.25); font-size: 12px;
 }
 .legend-head {
   position: sticky; top: 0;
@@ -364,6 +370,12 @@ body {
 .legend-sec:last-child { border-bottom: none; }
 .legend-h { font-size: 11px; color: var(--ink2); font-weight: 700; margin-bottom: 6px; }
 .legend-sub { color: var(--muted); font-weight: 400; }
+/* keymap rows: a fixed-width cluster of kbd chips, then the description (aligns with the legend rows). */
+.keymap-keys { flex: none; width: 132px; display: flex; flex-wrap: wrap; gap: 4px; }
+.legend kbd {
+  font-family: var(--mono); font-size: 11px; color: var(--blue); line-height: 1.4;
+  border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; background: var(--paper);
+}
 .legend-row { display: flex; align-items: baseline; gap: 8px; padding: 3px 0; }
 .legend-row .node-dot { position: relative; top: 1px; }
 .legend-name { color: var(--ink2); font-weight: 600; flex: none; width: 52px; }

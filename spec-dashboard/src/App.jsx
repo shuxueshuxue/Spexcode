@@ -30,7 +30,7 @@ function Dashboard({ specs, sessions, reload }) {
   const [overlay, setOverlay] = useState(false)   // node-info popup (opened by `i`)
   const [pane, setPane] = useState('spec')
   const [sessionUI, setSessionUI] = useState(false) // session interface (opened by Enter)
-  const [legend, setLegend] = useState(false)     // floating visual-vocabulary card (toggled by `?`)
+  const [legend, setLegend] = useState(false)     // centered help modal: keymap + visual vocabulary (`?`)
   const [sessionSel, setSessionSel] = useState('new') // persisted across open/close: last tab/session
   const [highlightId, setHighlightId] = useState(null) // session whose overlays are emphasised
   const [seed, setSeed] = useState(null)          // one-shot text a board chord pre-fills the New Session input with
@@ -232,10 +232,14 @@ function Dashboard({ specs, sessions, reload }) {
         if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); setOverlay(false); openBoard(); return }
         return // ↑/↓ (and anything else) do NOT move the board behind the popup
       }
-      // graph mode (no modal open). `?` toggles the floating legend; Esc closes it. Placed AFTER the
-      // sessionUI/overlay guards above, so a modal owning the keys is never disturbed by `?`/Esc here.
-      if (e.key === '?') { e.preventDefault(); setLegend((v) => !v); return }
-      if (e.key === 'Escape' && legend) { e.preventDefault(); setLegend(false); return }
+      // graph mode (no modal open). The help modal (keymap + legend) is itself a modal: while open it
+      // OWNS the keys — only `?`/Esc close it, nav never leaks to the board behind. Placed AFTER the
+      // sessionUI/overlay guards so those modals are never disturbed; `?` opens it from the board.
+      if (legend) {
+        if (e.key === 'Escape' || e.key === '?') { e.preventDefault(); setLegend(false); return }
+        return
+      }
+      if (e.key === '?') { e.preventDefault(); setLegend(true); return }
       // @@@ chord buffer - a small vim-style key buffer for multi-key board commands. A leader letter
       // (n/d) opens a pending buffer; the matching next letter fires the chord (open the session board
       // with its @-directive pre-seeded — see CHORDS/startNew). A non-matching key (or a 700ms lull)
@@ -311,18 +315,11 @@ function Dashboard({ specs, sessions, reload }) {
           <Background variant="dots" color="#cdc6ad" gap={20} size={1} />
           <Controls showInteractive={false} />
         </ReactFlow>
+        {/* HUD is deliberately minimal: brand + a discreet `?` that opens the full keymap/legend modal.
+            The wall of inline hints used to live here; it now lives inside that modal (see Legend.jsx). */}
         <div className="hud">
           <span className="brand">$ spec-dashboard</span>
-          <div className="navhints">
-            <span><kbd>↑</kbd><kbd>↓</kbd> siblings</span>
-            <span><kbd>←</kbd> parent</span>
-            <span><kbd>→</kbd> child</span>
-            <span><kbd>+</kbd><kbd>-</kbd> zoom</span>
-            <span><kbd>i</kbd> info</span>
-            <span><kbd>nn</kbd> new · <kbd>dd</kbd> del</span>
-            <span><kbd>?</kbd> legend</span>
-            <span><kbd>⏎</kbd> session · <kbd>esc</kbd> back</span>
-          </div>
+          <button className="hud-help" onClick={() => setLegend((v) => !v)} title="help — keymap & legend (?)">?</button>
         </div>
 
         <SessionWindow sessions={sessions} activeId={highlightId} onPick={onPickSession} onOpen={openBoard} />

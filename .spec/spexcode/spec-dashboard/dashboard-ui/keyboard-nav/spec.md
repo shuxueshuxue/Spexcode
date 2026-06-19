@@ -40,7 +40,7 @@ On the board:
 - `Enter` — cross from the focus node into its live session(s)
 - `nn` — new child node under the focus (chord)
 - `dd` — delete the focused node (chord)
-- `?` — toggle the legend
+- `?` — open the help overlay (keymap + legend)
 
 Inside the node-info popup the keys re-bind to the popup, never the board behind it:
 
@@ -48,6 +48,14 @@ Inside the node-info popup the keys re-bind to the popup, never the board behind
 - `j` / `k` — scroll the open pane's content
 - `Enter` — cross to the node's session (the popup closes behind it)
 - `Esc` — close the popup
+
+### the HUD and the help overlay
+
+The on-screen HUD stays out of the way: it carries the brand and a single discreet `?` — nothing more.
+The full keymap and the node's visual vocabulary (status dots, op glyphs, badges, rings) live together in
+**one** place: a centered, large, scrollable modal overlaid on a dimmed backdrop. `?` (key or clicking the
+HUD affordance) opens it; it owns the keys while open so nav never leaks to the board behind; `Esc`, a
+backdrop click, or its `×` closes it. There is no second copy of the legend — the modal is its only home.
 
 ### principles
 

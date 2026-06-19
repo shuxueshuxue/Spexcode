@@ -1,4 +1,4 @@
-import { loadSpecs } from './specs.js'
+import { loadSpecs, deriveStatus } from './specs.js'
 import { resolveLayout } from './layout.js'
 import { listSessions } from './sessions.js'
 
@@ -49,9 +49,12 @@ export async function buildBoard() {
       }
       if (op.op === 'added' && !byId[op.nodeId]) {
         if (ghostById[op.nodeId]) { ghostById[op.nodeId].overlays.push(ov); continue }
+        // a ghost is a node being ADDED by a worktree but not yet on main -> it has a pending op,
+        // so its derived status is `active` (live, in-flight), never `pending`.
         ghostById[op.nodeId] = {
           id: op.nodeId, parent: resolveParent(op.path, byDir), path: op.path,
-          title: op.nodeId, status: 'pending', version: 0, session: null,
+          title: op.nodeId, status: deriveStatus({ version: 0, drift: 0, hasOverlay: true }),
+          version: 0, session: null, fmStatus: null,
           desc: '', code: [], evidence: [], body: '', drift: 0, driftFiles: [], ghost: true, overlays: [ov],
         }
       } else {
@@ -60,8 +63,14 @@ export async function buildBoard() {
     }
   }
 
+  // @@@ overlay-aware status - loadSpecs derived status from git alone (pending|drift|merged); here we
+  // re-derive WITH the overlay so a node an unmerged worktree is touching reads `active`. This is the
+  // one place that knows about in-flight work, so it's the only place `active` can be produced.
   const nodes = [
-    ...specs.map((n: any) => ({ ...n, overlays: overlaysByNode[n.id] || [] })),
+    ...specs.map((n: any) => {
+      const overlays = overlaysByNode[n.id] || []
+      return { ...n, overlays, status: deriveStatus({ version: n.version, drift: n.drift, hasOverlay: overlays.length > 0, fmStatus: n.fmStatus ?? undefined }) }
+    }),
     ...Object.values(ghostById),
   ]
   const opsByPath: Record<string, any[]> = {}

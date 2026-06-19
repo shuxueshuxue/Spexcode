@@ -24,6 +24,12 @@ function Dashboard({ specs, sessions, reload }) {
   const { getViewport, setViewport } = useReactFlow()
   const graphRef = useRef(null)
   const animRef = useRef(0)
+  // @@@ popup scroll momentum - j/k in the info popup ease the open pane toward an ACCUMULATING
+  // target (refs survive across keydowns), so held / repeated keys add up into one continuous glide
+  // instead of restarting a fresh `behavior:'smooth'` tween each press (which stuttered on key-repeat).
+  const scrollAnimRef = useRef(0)
+  const scrollTargetRef = useRef(null)
+  const scrollElRef = useRef(null)
 
   const byId = useMemo(() => Object.fromEntries(specs.map((s) => [s.id, s])), [specs])
   // focus is resilient to the board reflowing under polling (a merged/closed node may vanish).
@@ -170,6 +176,26 @@ function Dashboard({ specs, sessions, reload }) {
     // keyboard nav both focuses AND pans (the camera follows the keyboard). Mouse focus does not — see
     // onNodeClick. This is the split: arrow-key focus recenters; click focus stays put.
     const go = (t, e) => { if (t) { e.preventDefault(); e.stopPropagation(); setFocusId(t.id); centerOn(t) } }
+    // @@@ bumpScroll - ease the open popup pane toward an accumulating target. A press bumps the target
+    // by `delta` (clamped to the scroll range); one rAF loop eases scrollTop toward it (fixed fraction
+    // per frame = exponential glide). Repeated/held j/k stack onto the SAME target, so the motion stays
+    // one continuous flow. Switching panes swaps the scroller element, which resets the stale target.
+    const bumpScroll = (delta) => {
+      const sc = document.querySelector('.ov-body .pane-doc, .ov-body .pane-recent, .ov-body .pane-hist')
+      if (!sc) return
+      if (sc !== scrollElRef.current) { scrollElRef.current = sc; scrollTargetRef.current = null }
+      const max = sc.scrollHeight - sc.clientHeight
+      const base = scrollTargetRef.current ?? sc.scrollTop
+      scrollTargetRef.current = Math.max(0, Math.min(max, base + delta))
+      cancelAnimationFrame(scrollAnimRef.current)
+      const step = () => {
+        const d = scrollTargetRef.current - sc.scrollTop
+        if (Math.abs(d) < 0.5) { sc.scrollTop = scrollTargetRef.current; return }
+        sc.scrollTop += d * 0.2
+        scrollAnimRef.current = requestAnimationFrame(step)
+      }
+      scrollAnimRef.current = requestAnimationFrame(step)
+    }
     const onKey = (e) => {
       if (sessionUI) {
         if (e.key === 'Escape') { e.preventDefault(); setSessionUI(false) }
@@ -178,16 +204,16 @@ function Dashboard({ specs, sessions, reload }) {
       if (overlay) {
         if (e.key === 'Escape') { e.preventDefault(); setOverlay(false); return }
         if (e.key === 'Tab') { e.preventDefault(); e.stopPropagation(); cyclePane(e.shiftKey ? -1 : 1); return }
-        // ←/→ cycle the panes (alongside Tab and 1/2/3) — they switch tabs, NOT the board behind.
-        if (e.key === 'ArrowLeft')  { e.preventDefault(); e.stopPropagation(); cyclePane(-1); return }
-        if (e.key === 'ArrowRight') { e.preventDefault(); e.stopPropagation(); cyclePane(1); return }
+        // ←/→ and h/l cycle the panes (alongside Tab and 1/2/3) — vim's horizontal hand flips tabs,
+        // never moves the board behind. (j/k below are the vertical hand: they scroll the open pane.)
+        if (e.key === 'ArrowLeft'  || e.key === 'h') { e.preventDefault(); e.stopPropagation(); cyclePane(-1); return }
+        if (e.key === 'ArrowRight' || e.key === 'l') { e.preventDefault(); e.stopPropagation(); cyclePane(1); return }
         if (['1', '2', '3'].includes(e.key)) { e.preventDefault(); e.stopPropagation(); setPane(PANE_KEYS[+e.key - 1]); return }
-        // Inside the popup, j/k scroll the open pane's content (vim) rather than moving the board — only one
-        // pane is mounted at a time, so the first overflow:auto descendant of .ov-body is the scroller.
+        // Inside the popup, j/k scroll the open pane's content (vim) rather than moving the board — only
+        // one pane is mounted at a time, so the first overflow:auto descendant of .ov-body is the scroller.
         if (e.key === 'j' || e.key === 'k') {
           e.preventDefault(); e.stopPropagation()
-          const sc = document.querySelector('.ov-body .pane-doc, .ov-body .pane-recent, .ov-body .pane-hist')
-          if (sc) sc.scrollBy({ top: e.key === 'j' ? 90 : -90, behavior: 'smooth' })
+          bumpScroll(e.key === 'j' ? 120 : -120)
           return
         }
         // Enter crosses from reading the node to driving its agent — into the node's live editor(s) via

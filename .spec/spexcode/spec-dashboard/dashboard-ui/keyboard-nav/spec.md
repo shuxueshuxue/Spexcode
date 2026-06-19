@@ -44,10 +44,13 @@ node's session (see below). While a modal (popup or session interface) is open i
 the keys: arrows must not leak through to pan the board behind it — that was the old blind-navigation bug.
 
 The node-info popup keeps the keys close to the node world it overlays. Its three panes (spec / recent /
-history) switch by `←` / `→` (cycling, wrapping at the ends) just as they do by `Tab` and `1`-`3` —
-inside the popup, horizontal arrows mean "switch pane", never "move the board". And `j` / `k` keep their
-vim sense but bind to the *content*: inside the popup they **scroll the open pane**, not the board behind
-it — so the vertical hand reads the long spec / history text while the horizontal hand flips panes.
+history) switch by `←` / `→` — and by **`h` / `l`** (the vim horizontal hand mirrors the arrows here too) —
+cycling and wrapping at the ends, just as they do by `Tab` and `1`-`3`. Inside the popup, the horizontal
+hand means "switch pane", never "move the board". And `j` / `k` keep their vim sense but bind to the
+*content*: inside the popup they **scroll the open pane**, not the board behind it — so the vertical hand
+reads the long spec / history text while the horizontal hand flips panes. The scroll is **momentum-eased,
+not a per-press tween**: each `j` / `k` bumps an accumulating target and a single rAF loop glides
+`scrollTop` toward it, so repeated or held keys stack into one continuous motion instead of stuttering.
 
 And the popup is a launchpad, not a dead end: `Enter` crosses straight from *reading* a node to
 *driving* its agent. The destination is the **live overlay** — the session(s) whose pending ops touch
@@ -73,10 +76,12 @@ one editor → `openSession(editors[0].id)`; none → `openSession('new')` (the 
 `@node.id` because `SessionInterface` reads `focusNode=focus`); several → `setSessionUI(true)` to let the
 human pick. A node carrying live editor(s) gets a `link` so `SpecNode` stamps the subtle `⏎` affordance
 (first editor's colour/status). When a modal is open the handler short-circuits: the session interface
-swallows all keys but `Escape`; the info popup handles `Escape`, `Tab` / `←` / `→` / `1`-`3` (pane
-switching, `←`/`→` calling the same `cyclePane(±1)` as `Tab`), `j`/`k` (which `scrollBy(±90)` the open
-pane — found via the lone `overflow:auto` descendant of `.ov-body`, since only one pane mounts at a time)
-and `Enter` (which `setOverlay(false)` then `crossToSession(focus)`), and still drops `↑`/`↓` so they
-never reach the board; the key hints render in the HUD. `App.jsx` also hosts the graph render (node positions, edges, and the faint dashed reparent-preview
+swallows all keys but `Escape`; the info popup handles `Escape`, `Tab` / `←` / `→` / `h` / `l` / `1`-`3`
+(pane switching, `←`/`h` and `→`/`l` calling the same `cyclePane(±1)` as `Tab`), `j`/`k` (which call
+`bumpScroll(±120)` on the open pane — found via the lone `overflow:auto` descendant of `.ov-body`, since
+only one pane mounts at a time; `bumpScroll` clamps an accumulating target in `scrollTargetRef` and eases
+`scrollTop` toward it by a fixed fraction per rAF frame, swapping the target when the scroller element
+changes) and `Enter` (which `setOverlay(false)` then `crossToSession(focus)`), and still drops `↑`/`↓` so
+they never reach the board; the key hints render in the HUD. `App.jsx` also hosts the graph render (node positions, edges, and the faint dashed reparent-preview
 arrow for `moved` overlays — see [[node-graph]]), but those are view concerns that never change the
 navigation contract above.

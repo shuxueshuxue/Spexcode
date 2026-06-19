@@ -197,7 +197,7 @@ export default function NodeView({ node, pane, setPane, onClose }) {
               </button>
             ))}
           </div>
-          <span className="ov-hint">←→/tab switch · ⏎ session · esc back</span>
+          <span className="ov-hint">←→/tab switch · j/k scroll · ⏎ session · esc back</span>
         </div>
         <div className="ov-body">
           {pane === 'spec' && <div className="pane-solo"><SpecPane node={node} /></div>}

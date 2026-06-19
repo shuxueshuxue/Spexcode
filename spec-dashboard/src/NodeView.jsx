@@ -144,26 +144,77 @@ function VersionRow({ r, v, latest }) {
   )
 }
 
-// @@@ RecentPane - the CURRENT version only: its changelog + line-diff, plus the A→B proof evidence
-// (placeholder SVG shots now; the yatsu package will record the real before/after later). The full
-// version log lives in the `history` tab — this answers "what was the latest change, and the proof".
-// `rows` is fetched ONCE by NodeView and shared with HistoryPane, so switching recent↔history doesn't refetch.
+// @@@ useSpecDiff - the spec.md line changes of the node's latest version (/api/specs/:id/diff),
+// fetched ONLY when the node has no screenshot evidence (the recent pane falls back to showing the
+// diff as its proof-of-change). `enabled` gates the fetch so a node WITH evidence never asks for it.
+function useSpecDiff(id, enabled) {
+  const [diff, setDiff] = useState(null)
+  useEffect(() => {
+    if (!enabled) return
+    let on = true
+    fetch(`/api/specs/${id}/diff`).then((r) => r.json()).then((d) => { if (on) setDiff(d) }).catch(() => on && setDiff({ patch: '' }))
+    return () => { on = false }
+  }, [id, enabled])
+  return diff
+}
+
+// @@@ parseDiff - turn git's unified patch into renderable lines. Everything before the first `@@` is
+// file-header metadata (diff/index/`new file mode`/--- /+++) — skip it wholesale rather than per-prefix,
+// so an extended header line never gets mis-read as content and have its first char sliced off. In the
+// hunk body, lines start with ` `/`+`/`-` (slice that marker off); `@@` opens each hunk; `\` is git's
+// "No newline at end of file" note. Tag adds/dels so the view can colour them.
+function parseDiff(patch) {
+  const out = []
+  let inBody = false
+  for (const line of patch.split('\n')) {
+    if (line.startsWith('@@')) { inBody = true; out.push({ t: 'hunk', s: line }); continue }
+    if (!inBody || line.startsWith('\\')) continue
+    if (line.startsWith('+')) out.push({ t: 'add', s: line.slice(1) })
+    else if (line.startsWith('-')) out.push({ t: 'del', s: line.slice(1) })
+    else out.push({ t: 'ctx', s: line.slice(1) })
+  }
+  while (out.length && out[out.length - 1].t === 'ctx' && out[out.length - 1].s === '') out.pop()
+  return out
+}
+
+// @@@ DiffEvidence - the recent pane's proof-of-change when a node has no A→B screenshot yet: the
+// actual line diff its LATEST version introduced to spec.md. (When the yatsu package starts recording
+// real before/after captures, those take this slot instead — see RecentPane.)
+function DiffEvidence({ diff }) {
+  if (diff == null) return <figcaption className="ev-note">loading latest change…</figcaption>
+  const lines = diff.patch ? parseDiff(diff.patch) : []
+  if (!lines.length) return <figcaption className="ev-note">no recorded change yet — this spec is the latest ground truth.</figcaption>
+  return (
+    <>
+      <figcaption className="ev-difflabel">latest change · spec line diff <span className="ev-note-inline">(no A→B screenshot yet — the yatsu package will record one here)</span></figcaption>
+      <pre className="ev-diff">{lines.map((l, i) => <div key={i} className={`dl dl-${l.t}`}>{l.s || ' '}</div>)}</pre>
+    </>
+  )
+}
+
+// @@@ RecentPane - the CURRENT version only: its changelog + line-diff, plus the A→B proof evidence.
+// The evidence slot prefers real before/after screenshots (the yatsu package will record them later);
+// until a node has any, it falls back to the spec's own latest line diff (DiffEvidence) so the slot is
+// never just a "pending" note. The full version log lives in the `history` tab — this answers "what was
+// the latest change, and the proof". `rows` is fetched ONCE by NodeView and shared with HistoryPane.
 function RecentPane({ node, rows }) {
   const latest = rows?.[0]
+  const hasEvidence = node.evidence?.length > 0
+  const diff = useSpecDiff(node.id, !hasEvidence)
   return (
     <div className="pane-recent">
       {!rows ? <div className="rec-msg muted">loading…</div>
         : latest ? <VersionRow r={latest} v={rows.length} latest />
         : <div className="rec-msg muted">no versions yet — this spec is the latest ground truth.</div>}
       <figure className="rec-evidence">
-        {node.evidence?.length ? (
+        {hasEvidence ? (
           <div className="ev-pair">
             {node.evidence.map((src, i) => (
               <div className="ev-shot" key={i}><img src={src} alt={`evidence ${i + 1}`} /></div>
             ))}
           </div>
         ) : (
-          <figcaption className="ev-note">no proof evidence yet — the yatsu package (pending) will record the A→B here</figcaption>
+          <DiffEvidence diff={diff} />
         )}
       </figure>
     </div>

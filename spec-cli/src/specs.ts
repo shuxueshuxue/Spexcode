@@ -1,6 +1,6 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { join, relative, basename } from 'node:path'
-import { repoRoot, historyIndex, rowsFor, statsFor, pathsStats, driftIndex, driftFor } from './git.js'
+import { repoRoot, historyIndex, rowsFor, statsFor, pathsStats, driftIndex, driftFor, fileDiffAt } from './git.js'
 
 // @@@ tree from filesystem - the spec tree IS the directory tree under .spec; a node is any
 // directory holding a spec.md, its parent is the nearest ancestor that also holds one.
@@ -190,4 +190,16 @@ export async function specHistory(id: string) {
     const c = cStats.get(v.hash) ?? { additions: 0, deletions: 0, files: 0 }
     return { ...v, additions: s.additions + c.additions, deletions: s.deletions + c.deletions, files: s.files + c.files }
   })
+}
+
+// @@@ specDiff - the actual line changes the node's spec.md got in its LATEST version (the patch of
+// rows[0]'s commit, scoped to this spec.md alone). The recent pane renders this as the proof-of-change
+// when a node has no A→B screenshot evidence yet. `{ hash:'', patch:'' }` for a node with no committed
+// version; null for an unknown id.
+export async function specDiff(id: string) {
+  const node = raws().find((r) => r.id === id)
+  if (!node) return null
+  const latest = rowsFor(await historyIndex(ROOT), node.relPath)[0]
+  if (!latest) return { hash: '', patch: '' }
+  return { hash: latest.hash, patch: await fileDiffAt(ROOT, node.relPath, latest.hash) }
 }

@@ -229,6 +229,21 @@ export async function specStats(root: string, relPath: string): Promise<Map<stri
   return fileStatsFollow(root, relPath)
 }
 
+// @@@ fileDiffAt - the unified patch a spec.md received in a SINGLE commit (vs its parent), used by the
+// recent pane to show a spec's latest line changes when there's no A→B screenshot yet. The path is
+// resolved AT that commit, NOT assumed to be HEAD's: the project reparents nodes (a spec.md rename),
+// and a pure rename is not itself a version — so the latest *content* version can sit at an OLDER path
+// than now. We find it among the commit's files by the node's stable leaf dir (`…/<id>/spec.md` survives
+// reparents), then `git show` just that path. `--format=` drops the commit header so stdout is only the
+// diff; `-M` so a rename+edit commit still shows its body. Async (gitA); '' on error or an empty diff.
+export async function fileDiffAt(root: string, relPath: string, hash: string): Promise<string> {
+  if (!hash || !relPath.endsWith('/spec.md')) return ''
+  const leaf = relPath.slice(relPath.lastIndexOf('/', relPath.length - '/spec.md'.length - 1) + 1) // `<id>/spec.md`
+  const names = await gitA(['-C', root, '-c', 'core.quotePath=false', 'show', '--name-only', '--format=', '-M', hash])
+  const at = names.split('\n').map((s) => s.trim()).find((p) => p.endsWith('/' + leaf) || p === leaf) ?? relPath
+  return gitA(['-C', root, '-c', 'core.quotePath=false', 'show', '-M', '--format=', hash, '--', at])
+}
+
 // ONE cached `git log` over HEAD (mirrors historyIndex): each commit's position (0 = newest) + per
 // file the commits that touched it. driftFor() is then a pure lookup. The old per-file `git rev-list`
 // spawned ~40 subprocesses per loadSpecs (~6s); this is a single walk, cached on HEAD.

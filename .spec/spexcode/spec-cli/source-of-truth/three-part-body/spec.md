@@ -39,8 +39,8 @@ and the feature ships at 0 errors.
 exposes it verbatim. The dashboard `NodeView` renders each part as its own card with an **owner badge**
 (human vs agent) and a stability note, so the reader sees who owns each part and how often it changes;
 legacy `null`-parts nodes fall back to the whole-body view. The NodeView meta line already carries the
-derived status, version, and drift — that is where "what's done" is read, so there are no current-state
-or verdict cards to render and the parser carries no `currentState` field.
+derived status, version, and drift — that is where "what's done" is read, so there are no progress or
+self-assessment cards to render and the parser carries no `currentState` field.
 
 This is a **cross-cutting contract**, not a code-owning node: it governs no source file of its own. Its
 two halves live where their primary concern does — `parseParts` rides in `specs.ts` ([[source-of-truth]],

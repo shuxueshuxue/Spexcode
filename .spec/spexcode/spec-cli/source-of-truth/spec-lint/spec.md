@@ -54,28 +54,3 @@ A sharp edge: anything calling git from inside the hook must route through `git.
 which strips the inherited `GIT_DIR`/`GIT_WORK_TREE`/`GIT_INDEX_FILE`; otherwise git's repo discovery
 resolves to the cwd and the lint silently sees zero specs — it did once, caught only by testing through
 the real hook, not by running `spex lint` by hand.
-
-## current state
-
-### description
-
-`lint.ts`'s `specLint()` returns `Finding[]` over `loadSpecs()`: it builds a file→owners map while
-emitting **integrity** errors for missing `code:` paths, scans each body (fence-aware `VER_HEADING`)
-for **living** errors, walks `GOVERNED_ROOTS` (`spec-dashboard/src`, `spec-cli/src`; `SRC` extensions,
-skipping `node_modules`/`dist`/`.vite`) for **coverage** warnings on unclaimed files, and turns each
-node's `driftFiles` (computed in `specs.ts`) into **drift** warnings. This node now governs **only
-`lint.ts`** — the lint logic itself. The files the lint *flow* passes through are owned where their
-primary concern lives: the `spex lint`/`spex ack` dispatch sits in `cli.ts` ([[sessions]], which owns the
-shared CLI dispatcher), `loadSpecs()`/`driftFiles` in `specs.ts` ([[source-of-truth]]), and the
-`scripts/hooks/pre-commit` shim that runs `spex lint` and blocks on errors only (honoring
-`SPEXCODE_SKIP_LINT=1`, routing git through the `GIT_DIR`-stripping helper) in [[main-guard]]. Keeping
-those out of this node's `code:` is the point: a change to a session subcommand or the loader no longer
-reads as drift on the lint graph. The LLM judge over this graph is not yet built.
-
-### verdict — not drifted
-
-The sole governed file, `lint.ts`, sits at this node's latest version. The phantom drift this node used
-to show came entirely from the shared files it co-claimed — `cli.ts` and `specs.ts` advanced for session
-and loader work that was never *this* node's behavior. Making ownership exclusive (only `lint.ts`) is
-what removes that phantom: the lint graph is now scoped to its own code. The raw source (a `code:` edge
-plus a linter over the graph; content-correctness left to the judge) still holds.

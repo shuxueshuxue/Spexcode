@@ -27,32 +27,3 @@ Hooks live in the **common** git dir, so one install covers every worktree at on
 (`scripts/install-hooks.sh`, run via `npm run hooks`) copies the repo's tracked hook sources into that
 shared dir. Because `.git/hooks/` is never committed, this is a per-clone onboarding step, re-run
 whenever a hook source changes (the installed copy is a snapshot, not a symlink).
-
-## current state
-
-### description
-
-`scripts/hooks/pre-commit` is the guard: it rejects a commit when on `main` unless `MERGE_HEAD` is
-present (a merge) or `SPEXCODE_ALLOW_MAIN=1` is set, and it also runs as the thin `spex lint` shim
-(see [[spec-lint]]). The lint shim must work from **any** worktree, including a fresh session worktree
-that has no `spec-cli/node_modules` of its own — so it does not `npm run lint` locally. Instead it
-resolves the **main checkout** (the parent of the shared git *common* dir, the same way the session
-machinery locates main) and invokes that checkout's installed `tsx` + `src/cli.ts lint` by absolute
-path, leaving `cwd` on the committing worktree so lint validates *that* worktree's `.spec`. It blocks
-the commit on lint **errors** (exit 1), allows commits with only warnings, and is bypassable with
-`SPEXCODE_SKIP_LINT=1`; if the main checkout has no `tsx` installed it prints a skip note and allows
-the commit rather than false-blocking (CI remains the real enforcement). `scripts/install-hooks.sh` resolves `git rev-parse --git-common-dir`/hooks and
-`install -m 0755`s the tracked sources there — it now installs **two** hooks: `pre-commit` (this
-main-guard + lint shim) and `prepare-commit-msg` (the session-stamp that writes the `Session:` trailer
-used for [[source-of-truth]] attribution), printing a confirmation line for each. The guard is advisory
-(bypassable, and absent on any clone that skipped `npm run hooks`); the real enforcement is CI running
-`spex lint`.
-
-### verdict — not drifted
-
-Both governed files sit at this node's latest version with no commits ahead (`spex lint` reports no
-`drift` warning for `main-guard`). `install-hooks.sh` grew a second `install` line when the session
-work added the `prepare-commit-msg` stamp; the expanded spec frames the installer as "copy the tracked
-hook sources into the shared dir" and the description names both hooks it installs today — so the spec
-states the durable mechanism while the description carries the concrete inventory, not a code detail
-back-written to inflate the spec. The raw source (protect main with a hook, not a folder) still holds.

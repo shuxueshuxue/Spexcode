@@ -121,7 +121,10 @@ if (cmd === 'serve') {
     // the StopFailure hook marks ITS OWN worktree (from cwd) as error (turn died on an API error)
     console.log(s.markStateFromCwd('error') ? 'marked error' : 'no .session in cwd')
   } else if (sub === 'merge') {
-    const r = await s.mergeSession(id); console.log(r.ok ? `${id} merged (×${r.merges})` : `merge failed: ${r.error}`)
+    // merge is now a DISPATCH: the session's own agent runs git, resolves conflicts, and verifies the
+    // merge — the server never touches main's tree. Success here means the merge prompt reached the agent.
+    const r = await s.mergeSession(id)
+    console.log(r.ok ? `${id}: merge dispatched to the session's agent (it performs & verifies the merge)` : `merge failed: ${r.error}`)
     process.exit(r.ok ? 0 : 1)
   } else if (sub === 'close') {
     console.log(await s.closeSession(id) ? `closed ${id}` : `no such session ${id}`)

@@ -331,10 +331,12 @@ export async function closePaneStream(id: string): Promise<void> {
 }
 
 // @@@ watch - the event source for Claude Code's Monitor tool (first-class managing-agent support).
-// Polls the session list and emits ONE line per ACTIONABLE state transition — the states where a human
-// (or a managing agent) must decide: review / done / close-pending (agent proposals) and offline (the
-// process died, needs relaunch). Per Monitor's "silence is not success" rule it also emits removals, so
-// a vanished session pings too. Each line names the suggested next action(s). Drop straight into Monitor:
+// Polls the session list and emits the COMPLETE session lifecycle so it's a true "subscribe to all
+// session changes" feed: a LAUNCH (first sighting of an id, even though it enters at 'working', which is
+// not actionable — emitted ONCE per id so a manager learns a new session started), each ACTIONABLE state
+// transition — review / done / close-pending (agent proposals), offline (process died), error — and the
+// removal. Per Monitor's "silence is not success" rule a vanished session pings too. Net feed:
+// launched → [actionable transitions] → closed. Each line names the suggested next action(s). Drop into Monitor:
 //   Monitor({ command: 'spex watch', persistent: true, description: 'spex session state changes' })
 // @@@ presentation + selection - shared by `spex ls` (pretty), `spex watch` (events) and the API.
 export const STATUS_GLYPH: Record<DisplayStatus, string> = {
@@ -400,6 +402,13 @@ export function sessionEvent(s: Session): string {
   const note = s.note ? ` — note: ${s.note}` : ''
   return `[spex] ${s.status} · ${s.node || s.branch || s.id} — act: ${NEXT[s.status] || '—'}${note}  [id ${s.id}]`
 }
+// @@@ launchEvent - a session's FIRST sighting. A launch goes straight to 'working' (not actionable), so
+// without this the watch feed would be blind to new sessions starting. Emitted ONCE per id, regardless of
+// status, so `spex watch` is a complete lifecycle feed: launched → [actionable transitions] → closed.
+export function launchEvent(s: Session): string {
+  const note = s.note ? ` — note: ${s.note}` : ''
+  return `[spex] launched · ${s.node || s.branch || s.id} — act: capture | send "<msg>"${note}  [id ${s.id}]`
+}
 export type WatchOpts = { selectors?: string[]; statuses?: string[]; includeIdle?: boolean; intervalMs?: number; as?: string }
 export async function watchSessions(emit: (line: string) => void, opts: WatchOpts = {}): Promise<void> {
   const { selectors = [], statuses, includeIdle = false, intervalMs = 5000, as } = opts
@@ -411,6 +420,7 @@ export async function watchSessions(emit: (line: string) => void, opts: WatchOpt
       const cur = selectSessions(await listSessions(), selectors, statuses)
       const ids = new Set(cur.map((s) => s.id))
       for (const s of cur) {
+        if (!prev.has(s.id)) emit(tag + launchEvent(s)) // FIRST sighting → launched, any status (incl. 'working'), once
         if (s.status === prev.get(s.id)) continue // only on transition, not every tick
         prev.set(s.id, s.status)
         if (WATCH_ACTIONABLE.has(s.status) || (includeIdle && s.status === 'idle')) emit(tag + sessionEvent(s))

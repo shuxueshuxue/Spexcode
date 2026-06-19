@@ -100,7 +100,7 @@ function SpecPane({ node }) {
       <h1># {node.title}</h1>
       <blockquote>{node.desc}</blockquote>
       <div className="doc-meta">
-        status: <b>{node.status}</b> · version: <b>v{node.version || 0}</b> · session: <b>{node.session || 'idle'}</b>
+        status: <b>{node.status}</b> · version: <b>v{node.version || 0}</b> · last edited by: <b>{node.session || 'none'}</b>
       </div>
       {node.code?.length > 0 && (
         <div className="doc-code">
@@ -195,7 +195,7 @@ export default function NodeView({ node, pane, setPane, onClose }) {
               </button>
             ))}
           </div>
-          <span className="ov-hint">tab ↹ switch · esc back</span>
+          <span className="ov-hint">←→/tab switch · ⏎ session · esc back</span>
         </div>
         <div className="ov-body">
           {pane === 'spec' && <div className="pane-solo"><SpecPane node={node} /></div>}

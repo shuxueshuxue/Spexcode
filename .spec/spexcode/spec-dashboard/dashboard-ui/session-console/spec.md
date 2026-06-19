@@ -45,7 +45,12 @@ written straight to xterm with **no clear**, and the client sends only a single 
 typed. **No keystrokes or mouse are forwarded from the terminal itself.** Because nothing types into the
 view, scrolling it can never block input: **xterm owns its own scrollback** and the mouse wheel scrolls
 that viewport natively (SessionTerm returns `false` from a custom wheel handler so tmux's mouse mode can't
-steal the wheel). The pane is **dark** (a solarized-dark xterm theme on a dark background) even though the
+steal the wheel). Read-only governs **input**, not **extraction**: the human can still **select text and copy
+it**. Since the Claude TUI inside enables mouse tracking, a plain drag belongs to the app; holding the
+platform **force-selection modifier** (`⌥` on macOS, `⇧` elsewhere) makes xterm select **locally** without
+reporting the drag, and **`⌘`/`Ctrl`+C** writes that selection to the system clipboard
+(`navigator.clipboard`). Selection and copy never type into the pane — `disableStdin` stands — and a tiny
+corner caption names the gesture. The pane is **dark** (a solarized-dark xterm theme on a dark background) even though the
 surrounding dashboard is light: the Claude Code TUI running inside is **designed for a dark terminal**, so a
 light pane would clash with its diff-add backgrounds, dim/faint context text, and syntax colors. The whole
 terminal area — xterm, its viewport, and the body it sits in — shares that dark background so no light gutter
@@ -125,7 +130,9 @@ and on container/window resize (sending the new cols×rows only when it changed)
 degenerate measurements and re-fitting after the open animation so it reliably fills at full width, and
 wires xterm to the session WebSocket: incoming binary frames are written straight to xterm. It forwards **no** keyboard/mouse;
 instead it registers a `send(text)` writer (raw bytes over the socket) for the bottom box, and scrolls via
-xterm's own scrollback (custom wheel handler returns `false`). `SessionWindow.jsx` is the top-right floater of status-dot
+xterm's own scrollback (custom wheel handler returns `false`). It enables **force-selection** so a
+modifier+drag selects text locally despite the app's mouse tracking, and a host-level `⌘`/`Ctrl`+C copies
+`term.getSelection()` to the clipboard (no stdin re-enabled). `SessionWindow.jsx` is the top-right floater of status-dot
 rows with a pending-op glyph count, highlighting a worktree's overlays on pick and opening the interface
 on open. All of this renders only what `/api/board` reports — no session logic lives in the dashboard —
 so the raw source (a thin view identical to `spex board`) holds.

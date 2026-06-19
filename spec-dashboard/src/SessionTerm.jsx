@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
@@ -18,6 +18,16 @@ import '@xterm/xterm/css/xterm.css'
 // (ESC[<64/65;col;rowM) and send them down the SAME socket the message box uses; tmux reads them, enters
 // copy-mode and scrolls its actual pane history. We preventDefault + return false so neither the page nor
 // xterm's empty viewport moves — only tmux scrolls.
+//
+// SELECT + COPY: the pane stays read-only, but the human can still pull text OUT of it. The Claude TUI
+// inside turns ON mouse tracking, so xterm hands plain click-drags to the app and disables its OWN
+// selection — UNLESS a force-selection modifier is held, which makes xterm select LOCALLY and never
+// reports the drag to the app. xterm's modifier is platform-fixed: Shift on Linux/Windows, Option(⌥) on
+// macOS — and on macOS only when `macOptionClickForcesSelection` is set (we set it). That same option also
+// keeps the forced selection LINEWISE rather than column/block, so a multi-row drag copies as readable
+// lines. ⌘/Ctrl+C then writes term.getSelection() to the system clipboard. We listen for the copy chord on
+// the HOST element (keydown bubbles up from xterm's helper textarea, which a mousedown focuses) so stdin
+// stays disabled — we never start forwarding keystrokes to the pty just to copy.
 // @@@ best-effort menu sniff - does the pane currently show an interactive SELECT menu (e.g. `/model`'s
 // list) rather than the normal `❯` prompt? Heuristic only and NON-authoritative — the manual nav toggle is
 // the dependable path, so this NEVER seizes keys; it only lets the interface SUGGEST nav mode (pulse the
@@ -34,9 +44,18 @@ function looksLikeMenu(term) {
   return caret && hint
 }
 
+// @@@ copy hint - mirror xterm's OWN force-selection modifier per platform (Browser.isMac → Option, else
+// Shift) so the caption names the key that actually works. macOS copy chord is ⌘C, elsewhere Ctrl+C.
+const IS_MAC = /mac/i.test((typeof navigator !== 'undefined' && (navigator.userAgentData?.platform || navigator.platform)) || '')
+const SELECT_MOD = IS_MAC ? '⌥' : '⇧'
+const COPY_MOD = IS_MAC ? '⌘' : 'Ctrl'
+
 export default function SessionTerm({ sessionId, senders, onMenu }) {
   const hostRef = useRef(null)
   const termRef = useRef(null)
+  // brief "copied ✓" confirmation flashed by the copy chord; drives only the corner caption, not the term.
+  const [copied, setCopied] = useState(false)
+  const hint = useMemo(() => `${SELECT_MOD}-drag select · ${COPY_MOD}C copy`, [])
   // keep the latest onMenu without re-running the terminal effect (it'd tear down the WebSocket every render).
   const onMenuRef = useRef(onMenu)
   onMenuRef.current = onMenu
@@ -45,6 +64,9 @@ export default function SessionTerm({ sessionId, senders, onMenu }) {
     const term = new Terminal({
       fontSize: 11, fontFamily: 'Menlo, monospace',
       cursorBlink: false, disableStdin: true, scrollback: 5000,  // read-only view; xterm owns scrollback
+      // @@@ force-selection on mac - lets ⌥+drag bypass the TUI's mouse tracking to select text locally
+      // (Shift already does this off-mac); also keeps the forced selection linewise, not column/block.
+      macOptionClickForcesSelection: true,
       // @@@ DARK theme on purpose - the Claude Code TUI running inside this pane is designed for a dark
       // terminal (green diff-add backgrounds, dim/faint context text, dark code blocks). A light bg would
       // clash with all of it, so we give xterm solarized-DARK. The bright* grays (brightBlack/Green/Yellow/
@@ -120,6 +142,24 @@ export default function SessionTerm({ sessionId, senders, onMenu }) {
       return false  // never let xterm's empty viewport (or the page) scroll instead
     })
 
+    // @@@ copy chord - ⌘/Ctrl+C copies the current xterm selection to the system clipboard. We listen on
+    // the host (the chord bubbles up from xterm's focused helper textarea) and act ONLY when there's a
+    // selection, so an empty chord passes through untouched. xterm's selection isn't a DOM Selection, so the
+    // browser's native copy would grab nothing — we preventDefault and writeText getSelection() ourselves.
+    let copiedTimer
+    const host = hostRef.current
+    const onCopyKey = (ev) => {
+      if (!(ev.metaKey || ev.ctrlKey) || (ev.key !== 'c' && ev.key !== 'C')) return
+      const sel = term.getSelection()
+      if (!sel) return
+      ev.preventDefault(); ev.stopPropagation()
+      navigator.clipboard?.writeText(sel).then(() => {
+        setCopied(true)
+        clearTimeout(copiedTimer); copiedTimer = setTimeout(() => setCopied(false), 1200)
+      }).catch(() => { /* clipboard denied (e.g. insecure context) — selection still stands for manual copy */ })
+    }
+    host.addEventListener('keydown', onCopyKey)
+
     // @@@ menu sniff loop - poll the pane a few times a second and report whether it looks like a select
     // menu, so the interface can SUGGEST nav mode. Best-effort and cheap; the manual toggle never needs it.
     const sniff = setInterval(() => { try { onMenuRef.current?.(sessionId, looksLikeMenu(term)) } catch { /* */ } }, 700)
@@ -139,6 +179,8 @@ export default function SessionTerm({ sessionId, senders, onMenu }) {
     return () => {
       cancelAnimationFrame(raf)
       clearInterval(sniff)
+      clearTimeout(copiedTimer)
+      host.removeEventListener('keydown', onCopyKey)
       onMenuRef.current?.(sessionId, false)   // clear the hint so a closed terminal can't leave the button pulsing
       refitTimers.forEach(clearTimeout)
       if (termEl) termEl.removeEventListener('animationend', fitAndSync)
@@ -154,6 +196,8 @@ export default function SessionTerm({ sessionId, senders, onMenu }) {
   return (
     <div className="st-wrap">
       <div className="st-host" ref={hostRef} />
+      {/* subtle corner caption: how to grab text out of the read-only pane (flashes a copy confirmation). */}
+      <div className={copied ? 'st-copyhint copied' : 'st-copyhint'}>{copied ? 'copied ✓' : hint}</div>
     </div>
   )
 }

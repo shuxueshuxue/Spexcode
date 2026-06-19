@@ -38,6 +38,8 @@ On the board:
 - `i` — open the node-info popup
 - `double-click` — focus a node **and** open its popup (the mouse twin of `i`)
 - `Enter` — cross from the focus node into its live session(s)
+- `nn` — new child node under the focus (chord)
+- `dd` — delete the focused node (chord)
 - `?` — toggle the legend
 
 Inside the node-info popup the keys re-bind to the popup, never the board behind it:
@@ -67,6 +69,23 @@ column's nodes are ordered in y, so the move is reversible. **`hjkl` mirror the 
 hand. Arrow nav is the *only* thing that pans: it moves the highlight and flat-pans the camera to centre
 the new node at constant zoom — no zoom-to-fit, no arc, so switching nodes never jumps. `+` / `-` zoom
 around the focus; `0` returns to the overview zoom.
+
+### node chords (the key buffer)
+
+The board has a small **vim-style key buffer**: a leader letter opens a pending chord, the matching next
+letter fires it, and a non-matching key or a short lull clears the buffer and falls through (so single-key
+nav is never shadowed — chord leaders aren't nav keys). Two chords today, both **node ops on the focus**:
+
+- `nn` — **new child node** under the focus.
+- `dd` — **delete** the focused node.
+
+A chord does **not** act on the board directly. It opens the session board's New Session input pre-seeded
+with an `@`-directive (`@new under @<parent>:` / `@delete @<node>:`) that encodes the op + target; the human
+edits/confirms and submits. The backend then performs the op in a **fresh worktree** and dispatches the
+session's agent to finish it: for `nn` it writes a placeholder child node and the agent names + specs +
+implements it; for `dd` it removes the node's directory and the agent reads git history to refactor the
+governed code. The mutation is uncommitted, so the board's overlay shows it (added ghost / delete mark) at
+once. Nothing is destructive on the live tree — every op is isolated in its worktree until merged.
 
 ### the node-info popup
 

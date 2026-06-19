@@ -15,6 +15,15 @@ const NW = 220, NH = 46
 const PANE_KEYS = PANES.map((p) => p.key)
 const clamp = (z) => Math.max(0.4, Math.min(1.6, z))
 
+// @@@ board chords - vim-style multi-key sequences typed on the board (a small key buffer; see onKey).
+// A chord does NOT act directly: it opens the session board with a special @-directive PRE-SEEDED into
+// the New Session input, which the backend performs in a fresh worktree on submit. Each maps the focused
+// node id → the directive text. `nn` = new child under focus · `dd` = delete focus. Both their leader
+// letters (n/d) are otherwise unbound on the board, so single-key nav (hjkl/i/…) is never shadowed.
+const CHORDS = { nn: (id) => `@new under @${id}: `, dd: (id) => `@delete @${id}: ` }
+const CHORD_KEYS = Object.keys(CHORDS)
+const CHORD_LEADERS = new Set(CHORD_KEYS.map((c) => c[0]))
+
 function Dashboard({ specs, sessions, reload }) {
   const [focusId, setFocusId] = useState(() => specs.find((s) => !s.parent)?.id)
   const [overlay, setOverlay] = useState(false)   // node-info popup (opened by `i`)
@@ -23,9 +32,11 @@ function Dashboard({ specs, sessions, reload }) {
   const [legend, setLegend] = useState(false)     // floating visual-vocabulary card (toggled by `?`)
   const [sessionSel, setSessionSel] = useState('new') // persisted across open/close: last tab/session
   const [highlightId, setHighlightId] = useState(null) // session whose overlays are emphasised
+  const [seed, setSeed] = useState(null)          // one-shot text a board chord pre-fills the New Session input with
   const { getViewport, setViewport } = useReactFlow()
   const graphRef = useRef(null)
   const animRef = useRef(0)
+  const chordRef = useRef({ buf: '', timer: 0 })  // pending board-chord buffer (see onKey)
   // @@@ popup scroll momentum - j/k in the info popup ease the open pane toward an ACCUMULATING
   // target (refs survive across keydowns), so held / repeated keys add up into one continuous glide
   // instead of restarting a fresh `behavior:'smooth'` tween each press (which stuttered on key-repeat).
@@ -168,6 +179,10 @@ function Dashboard({ specs, sessions, reload }) {
   // close/reopen. Enter (board or node-info popup) always reopens it at the remembered tab (`sessionSel`),
   // a "boarding switch" — never a context jump based on the focused node.
   const openBoard = useCallback(() => setSessionUI(true), [])
+  // @@@ startNew - a board chord opens the session board on its New Session tab with `text` pre-seeded
+  // (the @-directive). One-shot: SessionInterface applies it then clears `seed`, so a later reopen keeps
+  // the user's own draft instead of re-seeding.
+  const startNew = useCallback((text) => { setSessionSel('new'); setSeed(text); setSessionUI(true) }, [])
 
   useEffect(() => {
     const cyclePane = (dir) => setPane((p) => PANE_KEYS[(PANE_KEYS.indexOf(p) + dir + PANE_KEYS.length) % PANE_KEYS.length])
@@ -219,6 +234,26 @@ function Dashboard({ specs, sessions, reload }) {
       // sessionUI/overlay guards above, so a modal owning the keys is never disturbed by `?`/Esc here.
       if (e.key === '?') { e.preventDefault(); setLegend((v) => !v); return }
       if (e.key === 'Escape' && legend) { e.preventDefault(); setLegend(false); return }
+      // @@@ chord buffer - a small vim-style key buffer for multi-key board commands. A leader letter
+      // (n/d) opens a pending buffer; the matching next letter fires the chord (open the session board
+      // with its @-directive pre-seeded — see CHORDS/startNew). A non-matching key (or a 700ms lull)
+      // clears the buffer and falls through, so the key still acts on its own. Plain letters only:
+      // modified keystrokes (⌘/^/⌥) never enter the buffer. Sits ABOVE single-key nav so n/d buffer
+      // first, but since neither leader is a nav key, hjkl/i/etc. are never shadowed.
+      if (!e.metaKey && !e.ctrlKey && !e.altKey && /^[a-zA-Z]$/.test(e.key)) {
+        const cur = chordRef.current
+        if (cur.buf || CHORD_LEADERS.has(e.key)) {
+          clearTimeout(cur.timer)
+          const buf = cur.buf + e.key
+          if (CHORDS[buf]) { e.preventDefault(); e.stopPropagation(); chordRef.current = { buf: '', timer: 0 }; startNew(CHORDS[buf](focus.id)); return }
+          if (CHORD_KEYS.some((c) => c.startsWith(buf))) {
+            e.preventDefault(); e.stopPropagation()
+            chordRef.current = { buf, timer: setTimeout(() => { chordRef.current = { buf: '', timer: 0 } }, 700) }
+            return
+          }
+          chordRef.current = { buf: '', timer: 0 }   // dead end → reset, fall through to single-key handling
+        }
+      }
       // hjkl mirror the arrows for graph nav (vim): k/j up/down the column, h/l to parent/child.
       if (e.key === 'ArrowUp'    || e.key === 'k') return go(upTarget, e)
       if (e.key === 'ArrowDown'  || e.key === 'j') return go(downTarget, e)
@@ -233,7 +268,7 @@ function Dashboard({ specs, sessions, reload }) {
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [overlay, sessionUI, legend, focus, upTarget, downTarget, childTarget, parent, centerOn, getViewport, openBoard])
+  }, [overlay, sessionUI, legend, focus, upTarget, downTarget, childTarget, parent, centerOn, getViewport, openBoard, startNew])
 
   // clicking a node ONLY focuses it — it does NOT pan the camera (recentering is keyboard-only, see
   // `go`) and does NOT open a session (Enter is the deliberate cross into one). Mouse focus and
@@ -282,6 +317,7 @@ function Dashboard({ specs, sessions, reload }) {
             <span><kbd>→</kbd> child</span>
             <span><kbd>+</kbd><kbd>-</kbd> zoom</span>
             <span><kbd>i</kbd> info</span>
+            <span><kbd>nn</kbd> new · <kbd>dd</kbd> del</span>
             <span><kbd>?</kbd> legend</span>
             <span><kbd>⏎</kbd> session · <kbd>esc</kbd> back</span>
           </div>
@@ -301,6 +337,8 @@ function Dashboard({ specs, sessions, reload }) {
         open={sessionUI}
         sel={sessionSel}
         setSel={setSessionSel}
+        seed={seed}
+        onSeedConsumed={() => setSeed(null)}
         onClose={() => setSessionUI(false)}
         onCreated={async (id) => { await reload(); if (id) setSessionSel(id) }}
       />

@@ -55,7 +55,7 @@ function highlight(text, q) {
   return <>{text.slice(0, i)}<b className="mention-hit">{text.slice(i, i + q.length)}</b>{text.slice(i + q.length)}</>
 }
 
-export default function SessionInterface({ sessions, specs = [], focusNode, open, sel, setSel, onClose, onCreated }) {
+export default function SessionInterface({ sessions, specs = [], focusNode, open, sel, setSel, seed, onSeedConsumed, onClose, onCreated }) {
   const [prompt, setPrompt] = useState('')    // the New Session tab's own draft (its boarding-switch cache)
   const [menu, setMenu] = useState(null)      // @-mention dropdown: { items, index, start, end, query }
   // bottom-input drafts, keyed by session id — each session tab keeps its OWN typed-but-unsent line, never
@@ -94,6 +94,19 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       return next.size === prev.size ? prev : next
     })
   }, [sessions])
+
+  // @@@ seed - a board chord (nn/dd) opens this surface with a pre-filled @-directive. Apply it to the
+  // New Session draft ONCE, land on the New tab, place the caret at the end, then clear it upstream so a
+  // later reopen restores the user's own draft instead of re-seeding. Clobbering the draft is intended
+  // here (unlike a normal tab switch): the chord is an explicit "start this op".
+  useEffect(() => {
+    if (seed == null) return
+    setSel('new')
+    setPrompt(seed)
+    setMenu(null)
+    onSeedConsumed?.()
+    requestAnimationFrame(() => { const el = taRef.current; if (el) { el.focus(); el.setSelectionRange(seed.length, seed.length) } })
+  }, [seed])
 
   // @@@ focus on tab switch - whenever the board is open and you land on a tab, focus that tab's input:
   // the New Session prompt, or a live session's bottom message box. NOTHING is prefilled — the focused

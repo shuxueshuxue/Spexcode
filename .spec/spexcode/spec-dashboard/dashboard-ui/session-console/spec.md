@@ -53,8 +53,13 @@ Switching tabs is **instant** and never loses your place: every session terminal
 client** per live session, so first-open and re-open both paint immediately instead of cold-starting a
 capture + spawn chain. List navigation is handled at the **window** level so arrows keep walking the list
 regardless of what holds focus (xterm included), and the selected tab persists across open/close.
-Lifecycle actions (relaunch / request-review / merge / back-to-working / close) sit in the header per the
-session's state; an offline session shows a relaunch panel instead of a dead terminal. SessionWindow is
+Lifecycle actions (relaunch / merge / back-to-working / close) sit in the header per the
+session's state; an offline session shows a relaunch panel instead of a dead terminal. There is **no
+manual "request review" button** — review is **agent-proposed**: an agent proposes review of its own work
+at the stop-gate (`session done --propose merge`), so a human button to force `working`/`idle` → `review`
+would be redundant. The header therefore only surfaces actions a human still drives (relaunch a dead
+worktree, accept/reject a pending proposal, close), and a session still reaches `review` purely through the
+agent's proposal. SessionWindow is
 the read-only glance: every session with its status dot and pending-op count, click to highlight that
 worktree's overlays on the board (and focus its first changed node).
 
@@ -65,8 +70,8 @@ An existing tab renders a **persistent stack** of `SessionTerm`s — one per ses
 active one shown — over the offline relaunch panel when the active session is `offline`; the docked `❯`
 textarea's Enter is the **only** input, pushing the line + Enter through the active terminal's registered
 socket writer (`sendersRef`), with `POST /api/sessions/:id/keys` as the not-yet-connected fallback. The
-header buttons map to the session's status (relaunch / review / merge / back-to-working / close), each a
-thin POST then a board reload. A window-level capture listener owns `↑`/`↓` list movement and Enter-on-New.
+header buttons map to the session's status (relaunch / merge / back-to-working / close), each a
+thin POST then a board reload (there is no `review` button — that transition is agent-proposed, not human). A window-level capture listener owns `↑`/`↓` list movement and Enter-on-New.
 `SessionTerm.jsx` opens a **read-only** (`disableStdin`) FitAddon-sized xterm, fits it to the panel on open
 and on container/window resize (sending the new cols×rows only when it changed), and wires xterm to the
 session WebSocket: incoming binary frames are written straight to xterm. It forwards **no** keyboard/mouse;

@@ -17,10 +17,10 @@ import { git, gitA, repoRoot } from './git.js'
 //                proposal=merge   → shown "review"        ("ready, merge me")
 //                proposal=nothing → shown "done"          ("finished, your call")
 //                proposal=close   → shown "close-pending" ("I suggest discarding this worktree")
-//   needs-input → an ACTIVE agent went idle waiting on a HUMAN (it asked a question and is sitting at
-//                the prompt). Authored by Claude Code's GLOBAL Notification(idle_prompt) hook, NOT inferred.
-//                Distinct from `blocked` (which waits on a background task/schedule and self-resumes); a
-//                needs-input agent resumes only when a human sends it a prompt (→ active again).
+//   needs-input → the agent DELIBERATELY declared (via `spex session ask --note <question>`, typically at
+//                the Stop gate) that it is pausing to ask the HUMAN a question. AGENT-AUTHORED, like
+//                done/block — not inferred. Distinct from `blocked` (which waits on a background task/
+//                schedule and self-resumes); a needs-input agent resumes only when a human sends it a prompt.
 //   (closed = the worktree is removed; not a stored status)
 // The agent only ever PROPOSES (awaiting); merge/close are human-only. Every proposal is reversible
 // via reopen() → active. `merges` is METADATA (how many times merged), shown as a badge, not a state.
@@ -112,7 +112,7 @@ async function reconcile(rec: SessRec): Promise<DisplayStatus> {
   if (rec.status === 'awaiting') return PROPOSAL_STATUS[rec.proposal || 'nothing']
   if (rec.status === 'blocked') return 'blocked'  // waiting on a background task/schedule; self-resumes
   if (rec.status === 'error') return 'error'      // turn died on an API error (StopFailure hook)
-  if (rec.status === 'needs-input') return 'needs-input'  // active agent idle-waiting on a HUMAN (Notification idle_prompt); resumes on the next prompt
+  if (rec.status === 'needs-input') return 'needs-input'  // agent declared (via `session ask`) it is asking the HUMAN a question; resumes on the next prompt
   // active: working only if claude is actually the pane's foreground process — a bare shell means it
   // exited/crashed, so report offline (relaunch) instead of a false "working".
   if (!rec.session || !(await alive(rec.session))) return 'offline'
@@ -153,11 +153,6 @@ const slugify = (node: string | null) => (node || 'session').replace(/[^a-zA-Z0-
 // is invisible to git and can NEVER be staged/committed/merged back to main. Default ON; disable with
 // SPEXCODE_HIDE_CLAUDE_MD=0. Best-effort: any failure here must never block the launch.
 const HIDE_CLAUDE_MD = process.env.SPEXCODE_HIDE_CLAUDE_MD !== '0' && process.env.SPEXCODE_HIDE_CLAUDE_MD !== 'false'
-// @@@ NOTIFY_HOOK - whether to wire Claude Code's GLOBAL Notification(idle_prompt) hook → `needs-input`.
-// Default ON; off when '0'/'false' (mirrors HIDE_CLAUDE_MD's env-flag style). Disabling it makes a
-// dispatched agent never surface "waiting on a human" — the path to a fully-autonomous mode where the
-// product never asks the human. Kept self-contained so the wiring can later be extracted as a plugin.
-const NOTIFY_HOOK = process.env.SPEXCODE_NOTIFY_HOOK !== '0' && process.env.SPEXCODE_NOTIFY_HOOK !== 'false'
 async function hideClaudeMd(path: string): Promise<void> {
   if (!HIDE_CLAUDE_MD) return
   const src = join(path, 'CLAUDE.md')
@@ -179,9 +174,11 @@ async function hideClaudeMd(path: string): Promise<void> {
 // file (NOT inline on the command line — inline JSON containing single quotes broke the shell quoting
 // and claude read it as a missing file path). The file is ephemeral (removed with the worktree), so
 // still no global pollution. PreToolUse/UserPromptSubmit → `active` (freshness); Stop → the blocking
-// gate (with a loop-break); StopFailure → `error`; Notification(idle_prompt) → `needs-input` (toggleable,
-// active-only). Hook commands use MAIN's tsx+cli by absolute path ($SPEX) since a fresh worktree has no
-// node_modules and `spex` may be off the session's PATH.
+// gate (with a loop-break); StopFailure → `error`. Hook commands use MAIN's tsx+cli by absolute path
+// ($SPEX) since a fresh worktree has no node_modules and `spex` may be off the session's PATH.
+// NOTE: `needs-input` is NOT wired to a hook — it is AGENT-AUTHORED via `spex session ask` at the Stop
+// gate. The old Notification(idle_prompt) wiring was removed as inert: the Stop gate forces a stop-time
+// declaration, so a question-asking agent already declared `done` before idle_prompt could fire.
 function settingsJson(): string {
   const gate = join(mainRoot(), 'spec-cli', 'hooks', 'stop-gate.sh')
   const markCmd = `bash ${join(mainRoot(), 'spec-cli', 'hooks', 'mark-active.sh')}`
@@ -192,13 +189,6 @@ function settingsJson(): string {
     Stop: [{ hooks: [{ type: 'command', command: `SPEX='${spex}' bash ${gate}` }] }],
     StopFailure: [{ hooks: [{ type: 'command', command: `${spex} session fail` }] }],
   }
-  // @@@ Notification → needs-input - Claude Code's GLOBAL Notification hook fires (notification_type
-  // 'idle_prompt', "Claude is waiting for your input") when the agent sits idle at the prompt — VERIFIED
-  // to fire even for our detached --dangerously-skip-permissions tmux agents. `$SPEX session needs-input`
-  // flips ONLY an active session → needs-input (cli guards against clobbering an authored proposal). Same
-  // PATH-independent abs tsx+cli ($SPEX) the StopFailure hook uses. Gated behind SPEXCODE_NOTIFY_HOOK so
-  // it can be turned off for a fully-autonomous mode; kept here as one self-contained block (future plugin).
-  if (NOTIFY_HOOK) hooks.Notification = [{ hooks: [{ type: 'command', command: `${spex} session needs-input` }] }]
   return JSON.stringify({ hooks }, null, 2)
 }
 // write the hooks file into the worktree and return the `--settings <file>` arg (no shell-quoting hazard).
@@ -268,20 +258,11 @@ export function markStateFromCwd(status: Lifecycle, opts: { proposal?: Proposal;
 }
 export const markDoneFromCwd = (proposal: Proposal = 'nothing') => markStateFromCwd('awaiting', { proposal })
 export const markErrorFromCwd = () => markStateFromCwd('error')
-
-// @@@ markNeedsInputFromCwd - the Notification(idle_prompt) hook fires whenever the agent goes idle at
-// the prompt, which includes the case where it ALREADY authored a more specific intent and then idled.
-// CRITICAL GUARD: only an `active` session transitions → needs-input. An authored awaiting (review/done/
-// close-pending) / blocked / error already reported what the idle MEANS and must survive (an agent that
-// proposed merge then sits idle must stay `review`, not collapse to needs-input). So read the current
-// state and no-op unless it is exactly `active`. The mark-active path (PreToolUse/UserPromptSubmit) clears
-// needs-input back to active when the human sends the next prompt — same as it clears any non-active state.
-export function markNeedsInputFromCwd(): boolean {
-  const rec = readSessionFile(process.cwd())
-  if (!rec.session || rec.status !== 'active') return false
-  writeSessionFile(process.cwd(), { ...rec, status: 'needs-input', proposal: null, note: null })
-  return true
-}
+// @@@ needs-input is AGENT-AUTHORED via markStateFromCwd('needs-input', { note }) — see `spex session ask`.
+// The agent deliberately declares it is pausing to ask the human a question (the note carries the question),
+// so it is NOT guarded active-only the way an inferred external signal would have to be. The mark-active path
+// (PreToolUse/UserPromptSubmit) clears it back to active when the human sends the next prompt, same as it
+// clears any other non-active state.
 
 // @@@ mergePrompt - the INTENT the human clicks "merge" with, written as an instruction to the session's
 // own agent. The agent (not the server) performs the merge, because only the agent knows the work's intent

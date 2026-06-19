@@ -34,10 +34,11 @@ special cases to infer reliably. So the agent **writes its own state**; hooks me
 to force the write. Lifecycle (in `.session`): `active` (working / not yet declared this turn),
 `awaiting` (a proposal — `merge`→review, `nothing`→done, `close`→close-pending), `blocked` (waiting on
 a background task; self-resumes — never mislabelled idle), `error` (a turn died on an API failure), and
-`needs-input` (an active agent that went **idle waiting on a HUMAN** — it asked a clarifying question
-and is sitting at the prompt). `needs-input` is distinct from `blocked`: `blocked` self-resumes when its
-background task finishes, whereas `needs-input` resumes only when a human sends the agent a new prompt.
-Like `awaiting`/`blocked`/`error` it is an authored state that **wins over liveness** in `reconcile`.
+`needs-input` (the agent **deliberately declared it is pausing to ask the HUMAN a question** — via `spex
+session ask --note <question>`, typically at the Stop gate; the note carries the question). `needs-input`
+is distinct from `blocked`: `blocked` self-resumes when its background task finishes, whereas
+`needs-input` resumes only when a human sends the agent a new prompt. Like `awaiting`/`blocked`/`error`
+it is an **agent-authored** state (declared, never inferred) that **wins over liveness** in `reconcile`.
 `reconcile` shows `active` as **working** if its tmux is live, else **offline**. The agent only ever
 *proposes*; **merge** and **close** are human-only, every proposal is reversible (back-to-working), and
 nothing auto-disappears, so a self-completed session is always findable. `merges` is metadata (a count,
@@ -54,28 +55,28 @@ readable, only renamed so Claude Code's auto-discovery skips it — and the trac
 `git update-index --assume-unchanged CLAUDE.md` so that rename is invisible to git and can never be
 staged/committed/merged back to main. This is a rename, never a delete and never `--bare`, so auth, the
 hooks, and the repo all keep working; it is overridable (`SPEXCODE_HIDE_CLAUDE_MD=0`) and on by default,
-and best-effort (a failure isolating never blocks the launch). Up to five hooks are injected via a per-worktree
+and best-effort (a failure isolating never blocks the launch). Four hooks are injected via a per-worktree
 settings file (no global settings touched): **`PreToolUse` → active** is the reliable freshness signal (any tool use means working; it
 fires before the tool, so a `spex session done` declaration lands after and wins); **`UserPromptSubmit`
 → active** adds instant feedback when a prompt is sent; **`Stop` → the gate** blocks a stop while still
 `active` to force a declaration, with a hard loop-break (on the `stop_hook_active` continuation it
-auto-defaults and allows — at most one nudge, never a dead loop, never an undeclared leak);
-**`StopFailure` → error**; and **`Notification` → needs-input**.
+auto-defaults and allows — at most one nudge, never a dead loop, never an undeclared leak); and
+**`StopFailure` → error**.
 
-The `Notification` hook wires in a **Claude Code GLOBAL feature** (not ours): Claude Code fires its
-`Notification` hook with `notification_type: idle_prompt` ("Claude is waiting for your input") when the
-agent sits idle at the prompt — verified to fire even for our **detached** `--dangerously-skip-permissions`
-tmux agents. The hook runs `$SPEX session needs-input` (MAIN's absolute tsx+cli, the same PATH-independent
-pattern the `Stop`/`StopFailure` hooks use). Two properties make it safe: it is **active-only** — `spex
-session needs-input` reads the current `.session` and transitions **only `active` → `needs-input`**, so an
-agent that already authored a more specific intent (a proposed `merge`/`done`/`close`, or `blocked`/`error`)
-is **never clobbered** by going idle (a session that proposed merge then idles stays `review`); and the
-existing mark-active path (`PreToolUse`/`UserPromptSubmit` → active) clears `needs-input` back to `active`
-the moment the human sends the next prompt. The hook is **toggleable** via `SPEXCODE_NOTIFY_HOOK` (default
-on; off when `0`/`false`, mirroring `SPEXCODE_HIDE_CLAUDE_MD`) so the product can disable "waiting on a
-human" for a fully-autonomous mode. The wiring is kept self-contained (a single block in `settingsJson`)
-so it can later be extracted as a plugin. Surfacing only: the *spoken* alert on a `needs-input` transition
-is the **manager's** job (its `spex watch` + voice), not this hook.
+`needs-input` is **not** wired to a hook — it is **agent-authored** via `spex session ask --note
+<question>`, offered as a fourth option in the Stop gate's block-reason menu (alongside `done --propose
+merge|nothing|close` and `block`). When the agent stops to ask the human a question, it picks `ask`; this
+calls `markStateFromCwd('needs-input', { note })` — a deliberate declaration like `done`/`block`, so
+(unlike the other authored states' inference-proofing) it carries **no active-only guard**: the agent is
+the authority on what its stop means. The note carries the question. An earlier design wired this to
+Claude Code's **GLOBAL `Notification(idle_prompt)` hook**, but that was **removed as inert**: the Stop gate
+forces a stop-time declaration, so a question-asking agent always declares `done` (awaiting/nothing)
+*before* `idle_prompt` could fire, and the old hook's active-only guard then no-op'd — the session never
+reached `needs-input`. Moving the trigger to the gate itself is what makes it actually fire (verified
+end-to-end). The mark-active path (`PreToolUse`/`UserPromptSubmit` → active) clears `needs-input` back to
+`active` the moment the human sends the next prompt, same as it clears any other non-active state.
+Surfacing is the **manager's** job: a `needs-input` transition is one of the actionable events `spex watch`
+emits (carrying the note), and the *spoken* alert on it is the manager's `spex watch` + voice, not the session.
 
 ### Surfaces
 

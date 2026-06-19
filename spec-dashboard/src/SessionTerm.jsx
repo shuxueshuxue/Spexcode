@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
+import { WebglAddon } from '@xterm/addon-webgl'
+import { CanvasAddon } from '@xterm/addon-canvas'
 import '@xterm/xterm/css/xterm.css'
 
 // @@@ SessionTerm - a READ-ONLY live view of a session's tmux pane, wired to a REAL tmux client over one
@@ -25,9 +27,20 @@ import '@xterm/xterm/css/xterm.css'
 // reports the drag to the app. xterm's modifier is platform-fixed: Shift on Linux/Windows, Option(⌥) on
 // macOS — and on macOS only when `macOptionClickForcesSelection` is set (we set it). That same option also
 // keeps the forced selection LINEWISE rather than column/block, so a multi-row drag copies as readable
-// lines. ⌘/Ctrl+C then writes term.getSelection() to the system clipboard. We listen for the copy chord on
-// the HOST element (keydown bubbles up from xterm's helper textarea, which a mousedown focuses) so stdin
-// stays disabled — we never start forwarding keystrokes to the pty just to copy.
+// lines. The selection MUST be VISIBLE so the human sees exactly what they grabbed: the theme uses a
+// bright opaque selectionBackground + a near-white selectionForeground (and the SAME colour when the term
+// is unfocused, via selectionInactiveBackground — the copy chord lands on the host while focus may sit on
+// the bottom box, so the highlight must not dim out from under it). ⌘/Ctrl+C then writes term.getSelection()
+// to the system clipboard and flashes a "copied ✓" confirmation. We listen for the copy chord on the HOST
+// element (keydown bubbles up from xterm's helper textarea, which a mousedown focuses) so stdin stays
+// disabled — we never start forwarding keystrokes to the pty just to copy.
+//
+// SPEED: render with the WebGL addon (GPU-composited glyphs — far faster than the default DOM renderer for
+// a busy TUI), falling back to the canvas addon, then to DOM, if a GL context can't be had. Incoming pane
+// bytes are BATCHED: frames that arrive in the same tick are concatenated into ONE term.write per
+// animation frame instead of one write per WebSocket message, so a burst (e.g. the full repaint) parses in
+// a single pass. The single ordered repaint is preserved — batching only COALESCES in arrival order, never
+// reorders, and the reset-then-one-repaint reconnect path (the no-scramble guarantee) is untouched.
 // @@@ best-effort menu sniff - does the pane currently show an interactive SELECT menu (e.g. `/model`'s
 // list) rather than the normal `❯` prompt? Heuristic only and NON-authoritative — the manual nav toggle is
 // the dependable path, so this NEVER seizes keys; it only lets the interface SUGGEST nav mode (pulse the
@@ -71,8 +84,13 @@ export default function SessionTerm({ sessionId, senders, onMenu }) {
       // terminal (green diff-add backgrounds, dim/faint context text, dark code blocks). A light bg would
       // clash with all of it, so we give xterm solarized-DARK. The bright* grays (brightBlack/Green/Yellow/
       // Blue/Cyan) are the base00–base1 tones the TUI uses for dimmed text — they read clearly on #002b36.
+      // @@@ VISIBLE selection - the old selectionBackground (#073642, base02) was a hair off the #002b36 bg,
+      // so a drag-selection was effectively invisible. Use a BRIGHT blue highlight + near-white foreground
+      // so the human sees the exact span they grabbed; selectionInactiveBackground matches it so the
+      // highlight stays put when focus moves to the bottom box for the copy chord (it doesn't grey out).
       theme: {
-        background: '#002b36', foreground: '#93a1a1', cursor: '#93a1a1', selectionBackground: '#073642',
+        background: '#002b36', foreground: '#93a1a1', cursor: '#93a1a1',
+        selectionBackground: '#268bd2', selectionForeground: '#fdf6e3', selectionInactiveBackground: '#268bd2',
         black: '#073642', red: '#dc322f', green: '#859900', yellow: '#b58900',
         blue: '#268bd2', magenta: '#d33682', cyan: '#2aa198', white: '#eee8d5',
         brightBlack: '#586e75', brightRed: '#cb4b16', brightGreen: '#586e75', brightYellow: '#657b83',
@@ -83,6 +101,19 @@ export default function SessionTerm({ sessionId, senders, onMenu }) {
     const fit = new FitAddon()
     term.loadAddon(fit)
     term.open(hostRef.current)
+
+    // @@@ GPU renderer - load AFTER open() (the renderer needs the live DOM/canvas). WebGL composites
+    // glyphs on the GPU — much faster repaints for a busy TUI than xterm's default DOM renderer. If a GL
+    // context can't be created (or it's lost at runtime), dispose and drop to the canvas addon; if that
+    // also throws we silently keep the DOM renderer. FitAddon measures the core, not the renderer, so the
+    // fit guards are unaffected.
+    try {
+      const webgl = new WebglAddon()
+      webgl.onContextLoss(() => { try { webgl.dispose() } catch { /* */ } ; try { term.loadAddon(new CanvasAddon()) } catch { /* DOM fallback */ } })
+      term.loadAddon(webgl)
+    } catch {
+      try { term.loadAddon(new CanvasAddon()) } catch { /* DOM renderer stays */ }
+    }
 
     const proto = location.protocol === 'https:' ? 'wss' : 'ws'
     const ws = new WebSocket(`${proto}://${location.host}/api/sessions/${sessionId}/socket`)
@@ -116,8 +147,31 @@ export default function SessionTerm({ sessionId, senders, onMenu }) {
     // refresh-client, triggered on attach) lands on an empty screen instead of splicing onto stale cells.
     // This is what kills the tab-switch scramble: no snapshot is merged into the mid-flight live stream;
     // we clear, then a single in-band repaint paints the whole pane. Then send our fitted size first thing.
-    ws.onopen = () => { term.reset(); lastCols = 0; lastRows = 0; fitAndSync() }
-    ws.onmessage = (e) => { if (e.data instanceof ArrayBuffer) term.write(new Uint8Array(e.data)) }
+    // @@@ batched writes - coalesce pane frames that land in the same tick into ONE term.write per
+    // animation frame (concatenated IN ARRIVAL ORDER), so a burst — the full repaint, a fast scroll —
+    // parses in a single pass instead of one parser invocation per WebSocket message. Order is preserved,
+    // so this never disturbs the single coherent repaint; the reset-then-repaint reconnect path is untouched.
+    let pending = []
+    let flushRaf = 0
+    const flush = () => {
+      flushRaf = 0
+      if (!pending.length) return
+      let total = 0
+      for (const c of pending) total += c.length
+      const merged = new Uint8Array(total)
+      let off = 0
+      for (const c of pending) { merged.set(c, off); off += c.length }
+      pending = []
+      term.write(merged)
+    }
+    // on (re)connect, reset xterm to a blank slate (so the in-band repaint lands clean) and DROP any frames
+    // still queued from a prior socket — they belong to the old screen and would splice onto the reset one.
+    ws.onopen = () => { pending = []; if (flushRaf) { cancelAnimationFrame(flushRaf); flushRaf = 0 } ; term.reset(); lastCols = 0; lastRows = 0; fitAndSync() }
+    ws.onmessage = (e) => {
+      if (!(e.data instanceof ArrayBuffer)) return
+      pending.push(new Uint8Array(e.data))
+      if (!flushRaf) flushRaf = requestAnimationFrame(flush)
+    }
 
     // @@@ the single human input - the external message box writes into THIS pane over the SAME socket.
     // Returns false when the socket isn't open yet so the caller can fall back to POST /keys.
@@ -178,6 +232,7 @@ export default function SessionTerm({ sessionId, senders, onMenu }) {
 
     return () => {
       cancelAnimationFrame(raf)
+      if (flushRaf) cancelAnimationFrame(flushRaf)
       clearInterval(sniff)
       clearTimeout(copiedTimer)
       host.removeEventListener('keydown', onCopyKey)

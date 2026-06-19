@@ -89,9 +89,15 @@ to it later.)
 
 For the terminal: `spex ls` is the human-readable living-sessions table — a column header, each session's
 truncated note/prompt, and a glyph→meaning legend (`statusLegend`, built from `STATUS_GLYPH` so it can't
-drift). `spex watch [SEL…]` is the event source for Claude Code's Monitor tool (`watchSessions` emits one
-line per actionable transition — review/done/close-pending/offline/error), where each watch process is one
-subscriber and the selector is the subscription (many-to-many falls out for free). The `cli.ts` surface is
+drift). `spex watch [SEL…]` is the event source for Claude Code's Monitor tool (`watchSessions` emits the
+**complete session lifecycle** — not only actionable transitions). A session's **first sighting** emits a
+`launched` event, even though a launch enters at `working` (which is not actionable); without it the feed
+would be blind to new sessions starting. It is emitted **once** per id (never re-fired on subsequent polls,
+so working/idle toggles don't flap). On top of that it emits each actionable transition
+(review/done/close-pending/offline/error) and the removal (`closed`), so the net feed is
+`launched → [actionable transitions] → closed` — a true "subscribe to all session changes" stream for a
+super-manager. Each watch process is one subscriber and the selector is the subscription (many-to-many
+falls out for free). The `cli.ts` surface is
 tuned for both humans and agents: no-args (or `spex help`) prints a grouped one-screen command summary, and
 `spex new "<prompt>" [--node X]` is shorthand for `session new`. Two things are deliberately not yet built:
 liveness has no true `idle` tier (reconcile reports only working/offline for an active session), and the

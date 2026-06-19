@@ -98,4 +98,15 @@ export async function loadSpecs() {
   return nodes.map((n) => ({ ...n, ...pos[n.id] }))
 }
 
+// @@@ loadBoard - THIN wrapper. The board (merged tree + overlay + ghosts + sessions) is assembled by
+// the backend `buildBoard()` and served at /api/board — the SAME data `spex board` prints, so human and
+// agent share one source of truth. The only thing decorated client-side is the x/y tidy-tree layout, a
+// pure view concern (the backend has no pixels). All overlay/ghost/session logic moved server-side.
+export async function loadBoard() {
+  const res = await fetch('/api/board')
+  const { nodes, sessions } = await res.json()
+  const pos = layout(nodes)
+  return { nodes: nodes.map((n) => ({ ...n, ...pos[n.id] })), sessions }
+}
+
 export const SESSION_LOG = log

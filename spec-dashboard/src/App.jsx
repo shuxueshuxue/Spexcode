@@ -3,39 +3,32 @@ import { ReactFlow, Background, Controls, useReactFlow } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import SpecNode from './SpecNode.jsx'
 import NodeView, { PANES } from './NodeView.jsx'
-import { loadSpecs } from './data.js'
+import SessionWindow from './SessionWindow.jsx'
+import SessionInterface from './SessionInterface.jsx'
+import { loadBoard } from './data.js'
 
 const nodeTypes = { spec: SpecNode }
 const NW = 180, NH = 26
 const PANE_KEYS = PANES.map((p) => p.key)
 const clamp = (z) => Math.max(0.4, Math.min(1.6, z))
 
-const STATUS_TEXT = {
-  merged:  'merged · decided & landed',
-  active:  'active · live session',
-  pending: 'pending · not built yet',
-}
-
-function Dashboard({ specs }) {
+function Dashboard({ specs, sessions, reload }) {
   const [focusId, setFocusId] = useState(() => specs.find((s) => !s.parent)?.id)
-  const [overlay, setOverlay] = useState(false)
-  const [pane, setPane] = useState('work')
+  const [overlay, setOverlay] = useState(false)   // node-info popup (opened by `i`)
+  const [pane, setPane] = useState('spec')
+  const [sessionUI, setSessionUI] = useState(false) // session interface (opened by Enter)
+  const [sessionSel, setSessionSel] = useState('new') // persisted across open/close: last tab/session
+  const [highlightId, setHighlightId] = useState(null) // session whose overlays are emphasised
   const { getViewport, setViewport } = useReactFlow()
   const graphRef = useRef(null)
   const animRef = useRef(0)
 
-  const byId = useMemo(() => Object.fromEntries(specs.map((s) => [s.id, s])), [])
-  const focus = byId[focusId]
+  const byId = useMemo(() => Object.fromEntries(specs.map((s) => [s.id, s])), [specs])
+  // focus is resilient to the board reflowing under polling (a merged/closed node may vanish).
+  const focus = byId[focusId] || specs.find((s) => !s.parent) || specs[0]
 
-  const siblings = useMemo(() => specs.filter((s) => s.parent === focus.parent).sort((a, b) => a.y - b.y), [focus])
-  const children = useMemo(() => specs.filter((s) => s.parent === focus.id), [focus])
+  const children = useMemo(() => specs.filter((s) => s.parent === focus.id), [specs, focus])
   const parent = focus.parent ? byId[focus.parent] : null
-  const sibIdx = siblings.findIndex((s) => s.id === focus.id)
-  const trail = useMemo(() => {
-    const a = []; let p = focus
-    while (p) { a.unshift(p); p = p.parent ? byId[p.parent] : null }
-    return a
-  }, [focus]) // eslint-disable-line
 
   // child is to the RIGHT; pick the one nearest in y.
   const childTarget = useMemo(() => {
@@ -56,25 +49,26 @@ function Dashboard({ specs }) {
       if (!best || Math.abs(dy) < Math.abs(best.y - focus.y)) best = s
     }
     return best
-  }, [focus])
+  }, [specs, focus])
   const downTarget = useMemo(() => nearestY('down'), [nearestY])
   const upTarget    = useMemo(() => nearestY('up'), [nearestY])
 
-  // @@@ onNav - same tree-walk the keyboard does, but driven from the overlay's terminal input
-  // (its empty command line forwards ←/→ parent/child, ↑/↓ siblings). Keeps the overlay open.
-  const onNav = useCallback((dir) => {
-    const t = { up: upTarget, down: downTarget, parent, child: childTarget }[dir]
-    if (t) setFocusId(t.id)
-  }, [upTarget, downTarget, parent, childTarget])
-
-  // stable nodes — positions from data, never recomputed; only selected + dim toggle.
+  // @@@ nodes - positions from data; selection + (a) focus-kin dimming, or (b) when a session is
+  // highlighted, the overlay-dim: nodes touched by that session glow, the rest fade. Recomputes on
+  // poll (specs identity changes) so a freshly-added ghost shows up without a manual refresh.
   const nodes = useMemo(() => specs.map((s) => {
     const kin = s.id === focusId || s.id === focus.parent || s.parent === focusId || s.parent === focus.parent
+    let className
+    if (highlightId) {
+      className = (s.overlays || []).some((o) => o.source === highlightId) ? 'ov-hot' : 'ov-dim'
+    } else {
+      className = kin ? undefined : 'is-far'
+    }
     return {
       id: s.id, type: 'spec', position: { x: s.x, y: s.y }, data: s,
-      draggable: false, selected: s.id === focusId, className: kin ? undefined : 'is-far',
+      draggable: false, selected: s.id === focusId, className,
     }
-  }), [focusId, focus.parent])
+  }), [focusId, focus.parent, highlightId, specs])
 
   const edges = useMemo(() => specs.filter((s) => s.parent).map((s) => {
     const hot = s.id === focusId || s.parent === focusId
@@ -82,7 +76,7 @@ function Dashboard({ specs }) {
       id: `${s.parent}-${s.id}`, source: s.parent, target: s.id, type: 'smoothstep',
       style: { stroke: hot ? '#268bd2' : '#ded7bf', strokeWidth: hot ? 2 : 1 }, zIndex: hot ? 1 : 0,
     }
-  }), [focusId])
+  }), [focusId, specs])
 
   // camera — tree is fixed; viewpoint flat-pans to centre the focused node.
   const animateView = useCallback((target, dur) => {
@@ -114,22 +108,23 @@ function Dashboard({ specs }) {
     return () => cancelAnimationFrame(id)
   }, [focusId]) // eslint-disable-line
 
-  // @@@ keys - capture phase so we win over xterm/react-flow. Graph mode navigates the tree;
-  // overlay mode switches panes (tab / 1-4) and, in non-terminal panes, still walks the tree.
+  // @@@ keys - capture phase so we win over react-flow. Graph mode: ←↑↓→ walk the tree, +/-/0 zoom,
+  // `i` opens the node-info popup, Enter opens the session interface. A modal (popup or session UI)
+  // OWNS the keys while open — arrows no longer leak through to move the board behind it (the old
+  // blind-navigation bug); the session interface handles its own list nav / input.
   useEffect(() => {
     const cyclePane = (dir) => setPane((p) => PANE_KEYS[(PANE_KEYS.indexOf(p) + dir + PANE_KEYS.length) % PANE_KEYS.length])
     const go = (t, e) => { if (t) { e.preventDefault(); e.stopPropagation(); setFocusId(t.id) } }
     const onKey = (e) => {
+      if (sessionUI) {
+        if (e.key === 'Escape') { e.preventDefault(); setSessionUI(false) }
+        return // the session interface owns arrows / Enter / typing
+      }
       if (overlay) {
         if (e.key === 'Escape') { e.preventDefault(); setOverlay(false); return }
         if (e.key === 'Tab') { e.preventDefault(); e.stopPropagation(); cyclePane(e.shiftKey ? -1 : 1); return }
-        if (pane === 'work') return // work pane's command line owns the keys; it walks the tree via onNav
         if (['1', '2', '3'].includes(e.key)) { e.preventDefault(); e.stopPropagation(); setPane(PANE_KEYS[+e.key - 1]); return }
-        if (e.key === 'ArrowUp')    return go(upTarget, e)
-        if (e.key === 'ArrowDown')  return go(downTarget, e)
-        if (e.key === 'ArrowLeft')  return go(parent, e)
-        if (e.key === 'ArrowRight') return go(childTarget, e)
-        return
+        return // arrows do NOT move the board behind the popup
       }
       if (e.key === 'ArrowUp')    return go(upTarget, e)
       if (e.key === 'ArrowDown')  return go(downTarget, e)
@@ -138,21 +133,23 @@ function Dashboard({ specs }) {
       if (e.key === '=' || e.key === '+') { e.preventDefault(); centerOn(focus, clamp(getViewport().zoom * 1.2), 160) }
       else if (e.key === '-' || e.key === '_') { e.preventDefault(); centerOn(focus, clamp(getViewport().zoom / 1.2), 160) }
       else if (e.key === '0') { e.preventDefault(); centerOn(focus, 0.85, 200) }
-      else if (e.key === 'Enter') { e.preventDefault(); setOverlay(true) }
+      else if (e.key === 'i' || e.key === 'I') { e.preventDefault(); setOverlay(true) }
+      else if (e.key === 'Enter') { e.preventDefault(); setSessionUI(true) }
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [overlay, pane, focus, upTarget, downTarget, childTarget, parent, centerOn, getViewport])
+  }, [overlay, sessionUI, pane, focus, upTarget, downTarget, childTarget, parent, centerOn, getViewport])
 
   const onNodeClick = useCallback((_e, n) => setFocusId(n.id), [])
 
-  // @@@ global stats - whole-tree rollup, independent of focus.
-  const stats = useMemo(() => {
-    const by = { merged: 0, active: 0, pending: 0 }
-    let sessions = 0, versions = 0
-    for (const s of specs) { by[s.status]++; if (s.session) sessions++; versions += s.version }
-    return { total: specs.length, ...by, sessions, versions }
-  }, [])
+  // clicking a session in the top-right window: toggle highlight of its worktree's overlays (matched
+  // by source = worktree path) + jump to its first changed node (only .session-linked sessions carry
+  // ops; a bare tmux session has none, so it just toggles selection).
+  const onPickSession = useCallback((s) => {
+    setHighlightId((cur) => (cur === s.source ? null : s.source))
+    const first = s.ops?.[0]
+    if (first && byId[first.nodeId]) setFocusId(first.nodeId)
+  }, [byId])
 
   return (
     <div className="app">
@@ -180,58 +177,39 @@ function Dashboard({ specs }) {
             <span><kbd>←</kbd> parent</span>
             <span><kbd>→</kbd> child</span>
             <span><kbd>+</kbd><kbd>-</kbd> zoom</span>
-            <span><kbd>⏎</kbd> open · <kbd>esc</kbd> back</span>
+            <span><kbd>i</kbd> info</span>
+            <span><kbd>⏎</kbd> session · <kbd>esc</kbd> back</span>
           </div>
         </div>
+
+        <SessionWindow sessions={sessions} activeId={highlightId} onPick={onPickSession} onOpen={() => setSessionUI(true)} />
       </div>
 
-      <aside className="side">
-        <h2>// global</h2>
-        <div className="stats">
-          <div><span>specs</span><b>{stats.total}</b></div>
-          <div><span>merged</span><b className="c-merged">{stats.merged}</b></div>
-          <div><span>active</span><b className="c-active">{stats.active}</b></div>
-          <div><span>pending</span><b className="c-pending">{stats.pending}</b></div>
-          <div><span>live sessions</span><b>{stats.sessions}</b></div>
-          <div><span>total versions</span><b>{stats.versions}</b></div>
-        </div>
-
-        <h2>// focused</h2>
-        <nav className="trail">
-          {trail.map((t, i) => (
-            <span key={t.id}>
-              {i > 0 && <span className="sep">/</span>}
-              <button className={t.id === focusId ? 'crumb here' : 'crumb'} onClick={() => setFocusId(t.id)}>{t.title}</button>
-            </span>
-          ))}
-        </nav>
-
-        <h1>{focus.title}</h1>
-        <div className={`badge ${focus.status}`}>[{STATUS_TEXT[focus.status]}]</div>
-        <p className="desc">{focus.desc}</p>
-
-        <div className="meta">
-          <div><span>version</span><b>{focus.version || '—'}</b></div>
-          <div><span>session</span><b>{focus.session || 'idle'}</b></div>
-          <div><span>worktree</span><b>{focus.session ? `node/${focus.id}` : 'main'}</b></div>
-          <div><span>sibling</span><b>{sibIdx + 1} / {siblings.length}</b></div>
-          <div><span>children</span><b>{children.length || '—'}</b></div>
-        </div>
-
-        <button className="peek-btn" onClick={() => setOverlay(true)}>
-          {focus.session ? '⏎  resume live session' : '⏎  open node'}
-        </button>
-      </aside>
-
-      {overlay && <NodeView node={focus} pane={pane} setPane={setPane} onClose={() => setOverlay(false)} onNav={onNav} />}
+      {overlay && <NodeView node={focus} pane={pane} setPane={setPane} onClose={() => setOverlay(false)} />}
+      {sessionUI && (
+        <SessionInterface
+          sessions={sessions}
+          focusNode={focus}
+          sel={sessionSel}
+          setSel={setSessionSel}
+          onClose={() => setSessionUI(false)}
+          onCreated={async (id) => { await reload(); if (id) setSessionSel(id) }}
+        />
+      )}
     </div>
   )
 }
 
-// @@@ App - loads the spec tree from the backend, then renders the dashboard.
+// @@@ App - loads the board (merged spec tree + live worktree overlay) and polls it so pending
+// changes from other worktrees appear without a refresh. Keeps the last good board across reloads.
 export default function App() {
-  const [specs, setSpecs] = useState(null)
-  useEffect(() => { loadSpecs().then(setSpecs) }, [])
-  if (!specs) return <div className="loading">loading specs from git…</div>
-  return <Dashboard specs={specs} />
+  const [board, setBoard] = useState(null)
+  const reload = useCallback(() => loadBoard().then(setBoard).catch(() => {}), [])
+  useEffect(() => {
+    reload()
+    const id = setInterval(reload, 4000)
+    return () => clearInterval(id)
+  }, [reload])
+  if (!board) return <div className="loading">loading specs from git…</div>
+  return <Dashboard specs={board.nodes} sessions={board.sessions} reload={reload} />
 }

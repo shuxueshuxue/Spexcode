@@ -1,4 +1,5 @@
-import { execFileSync } from 'node:child_process'
+import { execFileSync, execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 
 // @@@ git is the database - a spec's version history IS the git log of its spec.md.
 // %s (subject) = the reason for change; a `Session:` trailer = the attribution.
@@ -12,6 +13,20 @@ export function git(args: string[]): string {
   const env = { ...process.env }
   delete env.GIT_DIR; delete env.GIT_WORK_TREE; delete env.GIT_INDEX_FILE; delete env.GIT_OBJECT_DIRECTORY
   return execFileSync('git', args, { encoding: 'utf8', env })
+}
+
+// @@@ async git - same env-cleaning as git(), but non-blocking. The worktree-overlay diff runs many
+// git calls per /api/layout request; doing them with the SYNC git() blocks Node's one event loop for
+// the whole batch (~2s with several worktrees), starving every other request. gitA() + Promise.all
+// keeps the loop free and lets the per-worktree diffs run in parallel. Returns '' on error.
+const pexecFile = promisify(execFile)
+export async function gitA(args: string[]): Promise<string> {
+  const env = { ...process.env }
+  delete env.GIT_DIR; delete env.GIT_WORK_TREE; delete env.GIT_INDEX_FILE; delete env.GIT_OBJECT_DIRECTORY
+  try {
+    const { stdout } = await pexecFile('git', args, { encoding: 'utf8', env, maxBuffer: 1 << 24 })
+    return stdout
+  } catch { return '' }
 }
 
 export function repoRoot(): string {
@@ -205,4 +220,123 @@ export function history(root: string, relPath: string): Version[] {
 export function specStats(root: string, relPath: string): Map<string, DiffStat> {
   if (relPath.startsWith('.spec/')) return statsFor(historyIndex(root), relPath)
   return fileStatsFollow(root, relPath)
+}
+
+// ONE cached `git log` over HEAD (mirrors historyIndex): each commit's position (0 = newest) + per
+// file the commits that touched it. driftFor() is then a pure lookup. The old per-file `git rev-list`
+// spawned ~40 subprocesses per loadSpecs (~6s); this is a single walk, cached on HEAD.
+export type DriftIndex = { pos: Map<string, number>; fileCommits: Map<string, string[]> }
+let driftIdxCache: { head: string; idx: DriftIndex } | null = null
+
+function buildDriftIndex(root: string): DriftIndex {
+  const pos = new Map<string, number>(), fileCommits = new Map<string, string[]>()
+  let out = ''
+  try { out = git(['-C', root, '-c', 'core.quotePath=false', 'log', '--name-only', '--format=%H', 'HEAD']) }
+  catch { return { pos, fileCommits } }
+  let cur = '', i = 0
+  for (const line of out.split('\n')) {
+    if (/^[0-9a-f]{40}$/.test(line)) { cur = line; if (!pos.has(cur)) pos.set(cur, i++); continue }
+    if (!line) continue
+    let arr = fileCommits.get(line); if (!arr) { arr = []; fileCommits.set(line, arr) }
+    arr.push(cur)
+  }
+  return { pos, fileCommits }
+}
+export function driftIndex(root: string): DriftIndex {
+  let head = ''
+  try { head = git(['-C', root, 'rev-parse', 'HEAD']).trim() } catch { /* no commits */ }
+  if (driftIdxCache && driftIdxCache.head === head) return driftIdxCache.idx
+  const idx = buildDriftIndex(root)
+  if (head) driftIdxCache = { head, idx }
+  return idx
+}
+// pure lookup: how many commits to `path` are newer than `sinceHash` (the spec's last version). No git calls.
+export function driftFor(idx: DriftIndex, sinceHash: string, path: string): number {
+  if (!sinceHash) return 0
+  const sp = idx.pos.get(sinceHash)
+  if (sp === undefined) return 0
+  let n = 0
+  for (const h of idx.fileCommits.get(path) ?? []) { const p = idx.pos.get(h); if (p !== undefined && p < sp) n++ }
+  return n
+}
+
+// ---- pending worktree changes (the board's runtime overlay) ----
+
+// @@@ NodeOp - one pending change a worktree makes to a spec node, RELATIVE TO MAIN. `op` is the net
+// effect on the node's spec.md; `committed` = the change is on the branch (a commit), `dirty` = there
+// are still-uncommitted working-tree edits. The dashboard overlays these onto main's merged board so a
+// human watching main sees in-flight work (a node about to be added/edited/deleted/moved) before merge.
+export type NodeOp = {
+  nodeId: string
+  op: 'added' | 'edited' | 'deleted' | 'moved'
+  path: string                         // the node's spec.md path (new path for moved/added, old for deleted)
+  fromPath?: string; toPath?: string   // set for 'moved' (a reparent renames the spec.md path)
+  committed: boolean; dirty: boolean
+}
+
+// node id = the directory holding the spec.md (basename of its parent dir). git always emits
+// forward-slash paths, so split rather than node:path (which is backslash-y on Windows).
+const nodeIdOf = (p: string): string => { const s = p.split('/'); return s[s.length - 2] ?? p }
+const isSpecMd = (p: string): boolean => p.endsWith('/spec.md')
+
+// `git ... --name-status -M` rows: `A\tpath`, `M\tpath`, `D\tpath`, `R100\told\tnew`. Recover the
+// status letter plus from/to (to === from for non-renames) so callers map letter -> op uniformly.
+function parseNameStatus(out: string): { code: string; from: string; to: string }[] {
+  const rows: { code: string; from: string; to: string }[] = []
+  for (const line of out.split('\n')) {
+    if (!line) continue
+    const parts = line.split('\t')
+    const code = parts[0][0]
+    if ((code === 'R' || code === 'C') && parts.length >= 3) rows.push({ code, from: parts[1], to: parts[2] })
+    else rows.push({ code, from: parts[1], to: parts[1] })
+  }
+  return rows
+}
+
+// @@@ worktreeSpecDelta - what this worktree changes about the spec tree vs `mainRef`. The op set is
+// read from ONE diff of mainRef against the worktree's WORKING TREE (`git diff <ref>`), which already
+// folds committed + staged + unstaged into the final state (an add-then-uncommitted-delete cancels
+// out, etc.). Untracked new spec.md don't show in that diff, so a `status --porcelain` pass adds them
+// as `added` and marks which paths are dirty; a third diff vs HEAD marks what's actually committed.
+export async function worktreeSpecDelta(wtPath: string, mainRef: string): Promise<NodeOp[]> {
+  const run = (args: string[]) => gitA(['-C', wtPath, '-c', 'core.quotePath=false', ...args])
+  // the three queries are independent — run them in parallel.
+  const [workOut, commOut, statusOut] = await Promise.all([
+    run(['diff', '--name-status', '-M', mainRef, '--', '.spec']),
+    run(['diff', '--name-status', '-M', `${mainRef}...HEAD`, '--', '.spec']),
+    run(['status', '--porcelain', '--untracked-files=all', '--', '.spec']),
+  ])
+  const work = parseNameStatus(workOut)
+  const committed = new Set(parseNameStatus(commOut).map((r) => r.to))
+  // --untracked-files=all: list every untracked spec.md individually (the default collapses a wholly
+  // new node's directory to `.spec/.../node/`, which we'd never recognise as a spec.md add).
+  const dirty = new Set<string>(), untracked: string[] = []
+  for (const line of statusOut.split('\n')) {
+    if (!line) continue
+    const xy = line.slice(0, 2)
+    let path = line.slice(3)
+    const arrow = path.indexOf(' -> '); if (arrow >= 0) path = path.slice(arrow + 4)
+    dirty.add(path)
+    if (xy === '??' && isSpecMd(path)) untracked.push(path)
+  }
+
+  const codeFor: Record<string, NodeOp['op']> = { A: 'added', M: 'edited', D: 'deleted', R: 'moved', C: 'added', T: 'edited' }
+  const ops: NodeOp[] = [], seen = new Set<string>()
+  for (const r of work) {
+    const path = r.code === 'D' ? r.from : r.to
+    if (!isSpecMd(path)) continue
+    seen.add(path)
+    const op = codeFor[r.code] ?? 'edited'
+    ops.push({
+      nodeId: nodeIdOf(path), op, path,
+      ...(op === 'moved' ? { fromPath: r.from, toPath: r.to } : {}),
+      committed: committed.has(r.to) || committed.has(r.from),
+      dirty: dirty.has(path) || dirty.has(r.from),
+    })
+  }
+  for (const path of untracked) {
+    if (seen.has(path)) continue
+    ops.push({ nodeId: nodeIdOf(path), op: 'added', path, committed: false, dirty: true })
+  }
+  return ops
 }

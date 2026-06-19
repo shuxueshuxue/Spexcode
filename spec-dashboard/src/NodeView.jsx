@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import TermPane from './TermPane.jsx'
 
 // @@@ pane registry - add a face for a spec node by adding one entry + one render case below.
+// The node popup is now PURELY a reference view (spec doc + version timeline); the live terminal
+// moved out to the session interface (Enter), so there's no `work` pane and no keyboard special-case.
 export const PANES = [
-  { key: 'work',    label: 'work' },
+  { key: 'spec',    label: 'spec' },
   { key: 'recent',  label: 'recent' },
   { key: 'history', label: 'history' },
 ]
@@ -81,18 +82,6 @@ function SpecPane({ node }) {
   )
 }
 
-// @@@ WorkPane - spec + terminal as one surface: intent on the left (read), the live
-// session on the right (act). Terminal is wider — it's the work surface; spec is reference.
-// onNav lets the terminal's external command line walk the tree when the line is empty.
-function WorkPane({ node, onNav }) {
-  return (
-    <div className="pane-work">
-      <SpecPane node={node} />
-      <TermPane node={node} onNav={onNav} />
-    </div>
-  )
-}
-
 // @@@ useHistory - the node's version log from git (/api/specs/:id/history), newest first. Both
 // panes below read it: `recent` shows only row 0 (the current version), `history` shows them all.
 function useHistory(id) {
@@ -134,7 +123,7 @@ function RecentPane({ node }) {
     <div className="pane-recent">
       {!rows ? <div className="rec-msg muted">loading…</div>
         : latest ? <VersionRow r={latest} v={rows.length} latest />
-        : <div className="rec-msg muted">no versions yet — open the work pane to begin.</div>}
+        : <div className="rec-msg muted">no versions yet — this spec is the latest ground truth.</div>}
       <figure className="rec-evidence">
         {node.evidence?.length ? (
           <div className="ev-pair">
@@ -154,7 +143,7 @@ function RecentPane({ node }) {
 function HistoryPane({ node }) {
   const rows = useHistory(node.id)
   if (!rows) return <div className="pane-hist empty">loading history…</div>
-  if (!rows.length) return <div className="pane-hist empty">no versions yet — open the work pane to begin.</div>
+  if (!rows.length) return <div className="pane-hist empty">no versions yet — this spec is the latest ground truth.</div>
   return (
     <div className="pane-hist">
       {rows.map((r, i) => <VersionRow key={r.hash} r={r} v={rows.length - i} latest={i === 0} />)}
@@ -162,7 +151,7 @@ function HistoryPane({ node }) {
   )
 }
 
-export default function NodeView({ node, pane, setPane, onClose, onNav }) {
+export default function NodeView({ node, pane, setPane, onClose }) {
   return (
     <div className="ov-backdrop" onMouseDown={onClose}>
       <div className="ov-panel" onMouseDown={(e) => e.stopPropagation()}>
@@ -178,7 +167,7 @@ export default function NodeView({ node, pane, setPane, onClose, onNav }) {
           <span className="ov-hint">tab ↹ switch · esc back</span>
         </div>
         <div className="ov-body">
-          {pane === 'work' && <WorkPane node={node} onNav={onNav} />}
+          {pane === 'spec' && <div className="pane-solo"><SpecPane node={node} /></div>}
           {pane === 'recent' && <RecentPane node={node} />}
           {pane === 'history' && <HistoryPane node={node} />}
         </div>

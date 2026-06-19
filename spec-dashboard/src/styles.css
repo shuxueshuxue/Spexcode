@@ -27,7 +27,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-.app { display: grid; grid-template-columns: 1fr 380px; height: 100vh; }
+.app { display: grid; grid-template-columns: 1fr; height: 100vh; }
 
 /* ---- graph pane ---- */
 .graph { position: relative; background: var(--paper); border-right: 1px solid var(--line); }
@@ -219,3 +219,148 @@ body {
 /* pane: history — the full version log */
 .pane-hist { flex: 1; min-width: 0; padding: 16px 20px; overflow: auto; }
 .pane-hist.empty { color: var(--muted); font-size: 13px; }
+
+/* the node popup is now reference-only: a single scrolling spec doc fills the body. */
+.pane-solo { flex: 1; min-width: 0; display: flex; }
+
+/* ---- board overlay: pending changes from other worktrees ---- */
+/* a node a worktree is changing takes the author session's colour (--ov); dashed ring = the change
+   is only in the working tree (uncommitted), solid = committed on the branch. */
+.spec-node.has-overlay { border-color: var(--ov); box-shadow: 0 0 0 2px color-mix(in srgb, var(--ov) 22%, transparent); }
+.spec-node.has-overlay.ov-dirty { border-style: dashed; }
+.spec-node.has-overlay.focused { outline-color: var(--ov); }
+/* an added node not yet on main: translucent, dashed — a ghost of what's coming. */
+.spec-node.ghost { background: transparent; border-style: dashed; opacity: .72; }
+.spec-node.deleted .node-title { text-decoration: line-through; color: var(--muted); }
+
+/* drift badge: governed code is N commits ahead of this spec (rigorous, via git rev-list) */
+.drift-badge { flex: none; font-size: 10px; font-weight: 700; color: var(--yellow); border: 1px solid var(--yellow); border-radius: 3px; padding: 0 3px; line-height: 1.4; }
+
+.ov-marks { display: flex; gap: 3px; flex: none; margin-left: 2px; }
+.ov-mark { font-size: 11px; font-weight: 700; line-height: 1; color: var(--ov, var(--blue)); }
+.ov-mark.ov-deleted { color: var(--orange); }
+
+/* session highlight: clicking a session in the top-right window glows its nodes, fades the rest. */
+.react-flow__node.ov-hot { opacity: 1; }
+.react-flow__node.ov-dim { opacity: .22; }
+
+/* ---- top-right session window (always-on glance) ---- */
+.sesswin {
+  position: absolute; top: 16px; right: 16px; z-index: 6; width: 232px;
+  background: var(--paper); border: 1px solid var(--line); border-radius: 6px;
+  box-shadow: 0 6px 22px rgba(101,123,131,.16); overflow: hidden;
+  font-size: 12px;
+}
+.sesswin-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 9px; background: var(--panel2); border-bottom: 1px solid var(--line);
+}
+.sesswin-title { color: var(--muted); font-size: 11px; }
+.sesswin-new {
+  background: var(--paper); border: 1px solid var(--blue); color: var(--blue);
+  border-radius: 4px; padding: 1px 7px; cursor: pointer; font-family: var(--mono); font-size: 11px;
+}
+.sesswin-new:hover { background: var(--blue); color: var(--paper); }
+.sesswin-empty { padding: 12px 10px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.sesswin-empty kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; color: var(--blue); }
+.sess-row {
+  display: flex; align-items: center; gap: 7px; width: 100%;
+  padding: 7px 9px; background: none; border: none; border-bottom: 1px solid var(--line);
+  border-left: 2px solid var(--ov, transparent); cursor: pointer; text-align: left;
+  font-family: var(--mono); font-size: 12px; color: var(--ink2);
+}
+.sess-row:last-child { border-bottom: none; }
+.sess-row:hover { background: var(--panel); }
+.sess-row.on { background: var(--panel2); }
+.sess-dot { width: 7px; height: 7px; border-radius: 2px; flex: none; }
+.sess-id { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sess-status { color: var(--muted); font-size: 10px; flex: none; }
+.sess-ops { color: var(--ov, var(--blue)); font-size: 11px; font-weight: 700; flex: none; }
+
+/* ---- session interface (Enter): two panes, right content morphs ---- */
+.si-backdrop {
+  position: fixed; inset: 0; z-index: 30;
+  background: rgba(101,123,131,.28); backdrop-filter: blur(2px);
+  display: flex; align-items: center; justify-content: center;
+}
+.si-panel {
+  width: min(960px, 92vw); height: min(620px, 86vh);
+  background: var(--paper); border: 1px solid var(--blue); border-radius: 6px;
+  overflow: hidden; display: flex; box-shadow: 0 14px 44px rgba(101,123,131,.28);
+}
+.si-list {
+  flex: 0 0 230px; border-right: 1px solid var(--line); background: var(--panel);
+  display: flex; flex-direction: column; overflow-y: auto;
+}
+.si-list-head { padding: 9px 12px; color: var(--muted); font-size: 11px; border-bottom: 1px solid var(--line); }
+.si-item {
+  display: flex; align-items: center; gap: 7px; width: 100%;
+  padding: 9px 12px; background: none; border: none; border-bottom: 1px solid var(--line);
+  border-left: 2px solid var(--ov, transparent); cursor: pointer; text-align: left;
+  font-family: var(--mono); font-size: 12px; color: var(--ink2);
+}
+.si-item:hover { background: var(--panel2); }
+.si-item.on { background: var(--paper); border-left-color: var(--blue); }
+.si-item.new { color: var(--blue); font-weight: 600; }
+.si-dot { width: 7px; height: 7px; border-radius: 2px; flex: none; }
+.si-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.si-st { color: var(--muted); font-size: 10px; flex: none; }
+
+.si-content { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--paper); }
+
+/* New Session: input + avatar centred, terminal vibe. */
+.si-content.is-new { align-items: center; justify-content: center; }
+.si-new-center { width: min(560px, 86%); display: flex; flex-direction: column; align-items: center; gap: 12px; animation: si-rise .18s ease; }
+.si-avatar { font-size: 30px; color: var(--blue); letter-spacing: 2px; }
+.si-ask { font-size: 15px; color: var(--ink2); }
+.si-inputwrap {
+  width: 100%; display: flex; border: 1px solid var(--blue); border-radius: 6px;
+  background: var(--panel); padding: 10px 12px;
+}
+.si-input {
+  flex: 1; min-width: 0; resize: none; background: transparent; border: none; outline: none;
+  color: var(--ink2); font-family: var(--mono); font-size: 13px; line-height: 1.5; max-height: 180px;
+}
+.si-input::placeholder { color: var(--muted); }
+.si-hint { font-size: 11px; color: var(--muted); }
+.si-hint code { color: var(--blue); background: var(--panel2); padding: 0 4px; border-radius: 3px; }
+
+/* Active session: terminal fills the area (expands from centre out), input docked at the bottom. */
+.si-content.is-session .si-term { animation: si-expand .22s ease; }
+.si-term { flex: 1; min-height: 0; display: flex; flex-direction: column; margin: 12px; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.si-term-head { padding: 7px 10px; background: var(--panel2); border-bottom: 1px solid var(--line); color: var(--ink2); display: flex; align-items: center; gap: 7px; font-size: 12px; }
+.si-term-body { flex: 1; min-height: 0; overflow: auto; padding: 10px 12px; background: var(--paper); }
+.si-line { font-size: 12px; line-height: 1.6; color: var(--ink2); white-space: pre-wrap; word-break: break-word; }
+.si-line.muted { color: var(--muted); }
+.si-op { color: var(--blue); font-weight: 700; }
+.si-bottom { display: flex; align-items: center; gap: 8px; margin: 0 12px 12px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+.si-prompt { color: var(--blue); flex: none; }
+.si-bottom .si-input:disabled { color: var(--muted); }
+
+@keyframes si-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes si-expand { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: none; } }
+
+/* live tmux terminal inside the session view */
+.si-term-body { padding: 8px 10px; }
+.st-host { width: 100%; height: 100%; }
+.st-host .xterm, .st-host .xterm-viewport { height: 100% !important; background: var(--paper) !important; }
+.si-bottom .si-input { color: var(--ink2); }
+
+/* session header: name + status + lifecycle actions */
+.si-th-name { font-weight: 700; }
+.si-th-st { color: var(--muted); font-size: 11px; }
+.si-merges { font-size: 10px; color: var(--green); border: 1px solid var(--line); border-radius: 3px; padding: 0 5px; }
+.si-actions { margin-left: auto; display: flex; gap: 6px; }
+.si-act { background: var(--paper); border: 1px solid var(--line); color: var(--ink2); border-radius: 4px; padding: 1px 9px; cursor: pointer; font-family: var(--mono); font-size: 11px; }
+.si-act:hover { border-color: var(--blue); color: var(--blue); }
+.si-act.go { border-color: var(--blue); color: var(--blue); }
+.si-act.go:hover { background: var(--blue); color: var(--paper); }
+.si-act.kill { color: var(--orange); }
+.si-act.kill:hover { background: var(--orange); color: var(--paper); border-color: var(--orange); }
+.si-act.big { padding: 8px 18px; font-size: 13px; margin-top: 8px; }
+
+/* offline / lifecycle placeholder body */
+.si-offline { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center; padding: 24px; }
+.si-offline-msg { font-size: 15px; color: var(--ink2); }
+.si-offline-sub { font-size: 12px; color: var(--muted); max-width: 460px; line-height: 1.6; }
+.si-offline-sub code { color: var(--blue); background: var(--panel2); padding: 0 4px; border-radius: 3px; }

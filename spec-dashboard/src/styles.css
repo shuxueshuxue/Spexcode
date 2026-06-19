@@ -547,3 +547,27 @@ body {
 .si-offline-msg { font-size: 15px; color: var(--ink2); }
 .si-offline-sub { font-size: 12px; color: var(--muted); max-width: 460px; line-height: 1.6; }
 .si-offline-sub code { color: var(--blue); background: var(--panel2); padding: 0 4px; border-radius: 3px; }
+
+/* ---- session-graph (experimental) — the directed subscription network, a full-screen overlay over
+   the spec board. Isolated visual surface; reuses the seed-to-hue colour (color.js) per node. ---- */
+.session-graph {
+  position: fixed; inset: 0; z-index: 40; background: var(--paper);
+}
+.sg-hud {
+  position: absolute; top: 16px; left: 18px; z-index: 5;
+  display: flex; flex-direction: column; gap: 6px; pointer-events: none;
+}
+.sg-hint { color: var(--muted); font-size: 11px; }
+/* a session node: avatar + label + status, ringed in its own hue (--sg from labelColor(id)). */
+.sg-node {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 8px 10px; min-width: 96px;
+  background: var(--panel); border: 1.5px solid var(--sg); border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.08);
+}
+.sg-label { color: var(--ink2); font-size: 11px; font-weight: 700; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sg-status { color: var(--muted); font-size: 10px; }
+.sg-handle { width: 8px; height: 8px; background: var(--sg); border: none; }
+/* directed subscription arrows: animated, click-to-remove (cursor signals it). */
+.sg-edge { cursor: pointer; }
+.sg-edge .react-flow__edge-path { stroke-linecap: round; }

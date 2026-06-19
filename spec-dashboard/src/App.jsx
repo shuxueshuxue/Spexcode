@@ -5,6 +5,7 @@ import SpecNode from './SpecNode.jsx'
 import NodeView, { PANES } from './NodeView.jsx'
 import SessionWindow from './SessionWindow.jsx'
 import SessionInterface from './SessionInterface.jsx'
+import SessionGraph from './SessionGraph.jsx'
 import Legend from './Legend.jsx'
 import { loadBoard } from './data.js'
 import { labelColor } from './color.js'
@@ -31,6 +32,7 @@ function Dashboard({ specs, sessions, reload }) {
   const [pane, setPane] = useState('spec')
   const [sessionUI, setSessionUI] = useState(false) // session interface (opened by Enter)
   const [legend, setLegend] = useState(false)     // centered help modal: keymap + visual vocabulary (`?`)
+  const [graphView, setGraphView] = useState(false) // experimental session-subscription graph (`t`)
   const [sessionSel, setSessionSel] = useState('new') // persisted across open/close: last tab/session
   const [highlightId, setHighlightId] = useState(null) // session whose overlays are emphasised
   const [seed, setSeed] = useState(null)          // one-shot text a board chord pre-fills the New Session input with
@@ -212,6 +214,7 @@ function Dashboard({ specs, sessions, reload }) {
       scrollAnimRef.current = requestAnimationFrame(step)
     }
     const onKey = (e) => {
+      if (graphView) return // the session-graph view owns ALL its keys (drag/click/Esc, handled there)
       if (sessionUI) return // the session interface owns ALL its keys (arrows / Enter / typing / Esc)
       if (overlay) {
         if (e.key === 'Escape') { e.preventDefault(); setOverlay(false); return }
@@ -269,12 +272,14 @@ function Dashboard({ specs, sessions, reload }) {
       else if (e.key === '-' || e.key === '_') { e.preventDefault(); centerOn(focus, clamp(getViewport().zoom / 1.2), 160) }
       else if (e.key === '0') { e.preventDefault(); centerOn(focus, 0.85, 200) }
       else if (e.key === 'i' || e.key === 'I') { e.preventDefault(); setOverlay(true) }
+      // `t` opens the experimental session-subscription graph (an isolated full-screen view; Esc returns).
+      else if (e.key === 't' || e.key === 'T') { e.preventDefault(); setGraphView(true) }
       // Enter opens the session board at the remembered tab (boarding switch — see openBoard).
       else if (e.key === 'Enter') { e.preventDefault(); openBoard() }
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [overlay, sessionUI, legend, focus, upTarget, downTarget, childTarget, parent, centerOn, getViewport, openBoard, startNew])
+  }, [overlay, sessionUI, legend, graphView, focus, upTarget, downTarget, childTarget, parent, centerOn, getViewport, openBoard, startNew])
 
   // clicking a node ONLY focuses it — it does NOT pan the camera (recentering is keyboard-only, see
   // `go`) and does NOT open a session (Enter is the deliberate cross into one). Mouse focus and
@@ -327,6 +332,7 @@ function Dashboard({ specs, sessions, reload }) {
         {legend && <Legend onClose={() => setLegend(false)} />}
       </div>
 
+      {graphView && <SessionGraph onClose={() => setGraphView(false)} />}
       {overlay && <NodeView node={focus} pane={pane} setPane={setPane} onClose={() => setOverlay(false)} />}
       {/* stays MOUNTED across open/close (hidden via `open`) so the selected tab + per-tab drafts persist. */}
       <SessionInterface

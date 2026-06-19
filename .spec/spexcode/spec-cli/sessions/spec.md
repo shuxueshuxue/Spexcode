@@ -132,6 +132,19 @@ longer bumps `merges` on a click — if a merge count is still wanted it is the 
 verified merge. (This prompt-dispatch pattern is currently scoped to merge; other low-level ops generalize
 to it later.)
 
+### Sessions can subscribe to each other (the subscription graph)
+
+Sessions are not only spec-editors — they form a **directed political network**: session A may
+**subscribe** to session B (A→B). The edge set is **runtime state**, exactly like `.session` itself, so
+it persists with no datastore as **one simple untracked JSON file** in `.worktrees/` (already gitignored)
+that survives a backend restart and a page reload. Subscribing is idempotent and a self-edge is rejected.
+The graph is served at `GET /api/sessions/graph` as `{ nodes, edges }` — live sessions as nodes (the same
+`Session` objects `listSessions` returns) and the persisted directed edges, **pruned to edges whose both
+endpoints are still live**, so a closed session (its worktree gone) never leaves a dangling arrow.
+`POST /api/sessions/graph/subscribe` and `…/unsubscribe` (`{from,to}`) create and remove one edge. This
+lives in `sessions.ts` (it is session-to-session state) and stays isolated from the board assembler —
+nothing here touches `buildBoard` or the spec tree. The dashboard's [[session-graph]] view is its surface.
+
 ### The live terminal is a real tmux client (`pty-bridge.ts`)
 
 The dashboard's live terminal is not an output tap — it is a genuine **tmux client**. For each session a

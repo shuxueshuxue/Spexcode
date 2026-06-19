@@ -5,7 +5,7 @@ import { createNodeWebSocket } from '@hono/node-ws'
 import { loadSpecs, specHistory, specDiff } from './specs.js'
 import { resolveLayout } from './layout.js'
 import { buildBoard } from './board.js'
-import { newSession, listSessions, sendKeys, rawKey, closeSession, reopen, propose, mergeSession } from './sessions.js'
+import { newSession, listSessions, sendKeys, rawKey, closeSession, reopen, propose, mergeSession, sessionGraph, subscribe, unsubscribe } from './sessions.js'
 import { slashCommands } from './slash-commands.js'
 import { attachViewer, detachViewer, writeViewer, resizeBridge, superviseBridges, type Viewer } from './pty-bridge.js'
 
@@ -30,6 +30,20 @@ app.get('/api/slash-commands', (c) => c.json(slashCommands()))
 // sessions: real tmux-backed Claude Code sessions. List + spawn, stream the live pane (WebSocket),
 // forward keystrokes, and close.
 app.get('/api/sessions', async (c) => c.json(await listSessions()))
+// @@@ session graph - the directed SUBSCRIPTION network (A subscribes to B). GET returns live sessions
+// as nodes + the persisted edges (pruned to live endpoints); subscribe/unsubscribe create and remove one
+// directed edge. A literal `graph` segment, so it never collides with the `:id` lifecycle routes below.
+app.get('/api/sessions/graph', async (c) => c.json(await sessionGraph()))
+app.post('/api/sessions/graph/subscribe', async (c) => {
+  const b = await c.req.json().catch(() => ({}))
+  const ok = subscribe(String(b?.from || ''), String(b?.to || ''))
+  return c.json({ ok }, ok ? 200 : 400)
+})
+app.post('/api/sessions/graph/unsubscribe', async (c) => {
+  const b = await c.req.json().catch(() => ({}))
+  const ok = unsubscribe(String(b?.from || ''), String(b?.to || ''))
+  return c.json({ ok }, ok ? 200 : 404)
+})
 app.post('/api/sessions', async (c) => {
   const body = await c.req.json().catch(() => ({}))
   const prompt = typeof body?.prompt === 'string' ? body.prompt : ''

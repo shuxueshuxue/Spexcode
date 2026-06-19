@@ -221,6 +221,53 @@ export async function listSessions(): Promise<Session[]> {
   return out
 }
 
+// @@@ subscription graph - a directed POLITICAL network between sessions: A subscribes to B. The edge
+// set is runtime state, just like `.session` itself, so it persists as ONE simple untracked JSON file
+// in `.worktrees/` (already gitignored) — no datastore, survives a backend restart / page reload. Edges
+// are pruned to LIVE endpoints on read, so a closed session (its worktree gone) leaves no dangling arrow.
+// Kept isolated from the board assembler: nothing here touches buildBoard / the spec tree.
+export type Edge = { from: string; to: string }
+const graphFile = () => join(mainRoot(), '.worktrees', 'session-graph.json')
+function readGraph(): Edge[] {
+  try {
+    const p = graphFile()
+    if (!existsSync(p)) return []
+    const j = JSON.parse(readFileSync(p, 'utf8'))
+    return Array.isArray(j?.edges) ? j.edges.filter((e: any) => e && typeof e.from === 'string' && typeof e.to === 'string') : []
+  } catch { return [] }
+}
+function writeGraph(edges: Edge[]): void {
+  const p = graphFile()
+  mkdirSync(dirname(p), { recursive: true })
+  writeFileSync(p, JSON.stringify({ edges }, null, 2))
+}
+const sameEdge = (a: Edge, b: Edge) => a.from === b.from && a.to === b.to
+// subscribe A→B (idempotent). No self-edge, no empties; returns false on a bad pair.
+export function subscribe(from: string, to: string): boolean {
+  if (!from || !to || from === to) return false
+  const edges = readGraph()
+  if (edges.some((e) => sameEdge(e, { from, to }))) return true
+  edges.push({ from, to })
+  writeGraph(edges)
+  return true
+}
+// remove the A→B edge; false if it wasn't there.
+export function unsubscribe(from: string, to: string): boolean {
+  const edges = readGraph()
+  const next = edges.filter((e) => !sameEdge(e, { from, to }))
+  if (next.length === edges.length) return false
+  writeGraph(next)
+  return true
+}
+// the graph: live sessions as nodes + persisted edges, pruned to edges whose BOTH endpoints are still
+// live (a closed session's arrows vanish with its worktree). The frontend adds the radial layout.
+export async function sessionGraph(): Promise<{ nodes: Session[]; edges: Edge[] }> {
+  const nodes = await listSessions()
+  const live = new Set(nodes.map((s) => s.id))
+  const edges = readGraph().filter((e) => live.has(e.from) && live.has(e.to))
+  return { nodes, edges }
+}
+
 const slugify = (s: string | null) => (s || 'session').replace(/[^a-zA-Z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'session'
 
 // @@@ node + title from the prompt - the spec node a session works on is whatever it @-mentions, NOT a UI

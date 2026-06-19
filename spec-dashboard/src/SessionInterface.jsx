@@ -178,8 +178,9 @@ export default function SessionInterface({ sessions, focusNode, sel, setSel, onC
                   {selSession?.merges > 0 && <span className="si-merges" title="times merged to main">merged ×{selSession.merges}</span>}
                   <div className="si-actions">
                     {selSession?.status === 'offline' && <button className="si-act go" onClick={() => act('resume')}>relaunch</button>}
-                    {(selSession?.status === 'working' || selSession?.status === 'idle') && <button className="si-act" onClick={() => act('review')}>request review</button>}
-                    {/* proposals (review/done/close-pending) resolve to merge / back-to-working / close */}
+                    {/* no manual "request review": agents propose review themselves at the stop-gate
+                        (`session done --propose merge`). proposals (review/done/close-pending) resolve to
+                        merge / back-to-working / close */}
                     {(selSession?.status === 'review' || selSession?.status === 'done') && <button className="si-act go" onClick={() => act('merge')}>merge</button>}
                     {(selSession?.status === 'review' || selSession?.status === 'done' || selSession?.status === 'close-pending') && <button className="si-act" onClick={backToWorking}>back to working</button>}
                     <button className="si-act kill" onClick={() => act('close', () => setSel('new'))}>close</button>

@@ -33,7 +33,11 @@ External hooks only know *something* changed, never the exact transition — and
 special cases to infer reliably. So the agent **writes its own state**; hooks merely gate at boundaries
 to force the write. Lifecycle (in `.session`): `active` (working / not yet declared this turn),
 `awaiting` (a proposal — `merge`→review, `nothing`→done, `close`→close-pending), `blocked` (waiting on
-a background task; self-resumes — never mislabelled idle), and `error` (a turn died on an API failure).
+a background task; self-resumes — never mislabelled idle), `error` (a turn died on an API failure), and
+`needs-input` (an active agent that went **idle waiting on a HUMAN** — it asked a clarifying question
+and is sitting at the prompt). `needs-input` is distinct from `blocked`: `blocked` self-resumes when its
+background task finishes, whereas `needs-input` resumes only when a human sends the agent a new prompt.
+Like `awaiting`/`blocked`/`error` it is an authored state that **wins over liveness** in `reconcile`.
 `reconcile` shows `active` as **working** if its tmux is live, else **offline**. The agent only ever
 *proposes*; **merge** and **close** are human-only, every proposal is reversible (back-to-working), and
 nothing auto-disappears, so a self-completed session is always findable. `merges` is metadata (a count,
@@ -50,13 +54,28 @@ readable, only renamed so Claude Code's auto-discovery skips it — and the trac
 `git update-index --assume-unchanged CLAUDE.md` so that rename is invisible to git and can never be
 staged/committed/merged back to main. This is a rename, never a delete and never `--bare`, so auth, the
 hooks, and the repo all keep working; it is overridable (`SPEXCODE_HIDE_CLAUDE_MD=0`) and on by default,
-and best-effort (a failure isolating never blocks the launch). Four hooks are injected via a per-worktree
+and best-effort (a failure isolating never blocks the launch). Up to five hooks are injected via a per-worktree
 settings file (no global settings touched): **`PreToolUse` → active** is the reliable freshness signal (any tool use means working; it
 fires before the tool, so a `spex session done` declaration lands after and wins); **`UserPromptSubmit`
 → active** adds instant feedback when a prompt is sent; **`Stop` → the gate** blocks a stop while still
 `active` to force a declaration, with a hard loop-break (on the `stop_hook_active` continuation it
 auto-defaults and allows — at most one nudge, never a dead loop, never an undeclared leak);
-**`StopFailure` → error**.
+**`StopFailure` → error**; and **`Notification` → needs-input**.
+
+The `Notification` hook wires in a **Claude Code GLOBAL feature** (not ours): Claude Code fires its
+`Notification` hook with `notification_type: idle_prompt` ("Claude is waiting for your input") when the
+agent sits idle at the prompt — verified to fire even for our **detached** `--dangerously-skip-permissions`
+tmux agents. The hook runs `$SPEX session needs-input` (MAIN's absolute tsx+cli, the same PATH-independent
+pattern the `Stop`/`StopFailure` hooks use). Two properties make it safe: it is **active-only** — `spex
+session needs-input` reads the current `.session` and transitions **only `active` → `needs-input`**, so an
+agent that already authored a more specific intent (a proposed `merge`/`done`/`close`, or `blocked`/`error`)
+is **never clobbered** by going idle (a session that proposed merge then idles stays `review`); and the
+existing mark-active path (`PreToolUse`/`UserPromptSubmit` → active) clears `needs-input` back to `active`
+the moment the human sends the next prompt. The hook is **toggleable** via `SPEXCODE_NOTIFY_HOOK` (default
+on; off when `0`/`false`, mirroring `SPEXCODE_HIDE_CLAUDE_MD`) so the product can disable "waiting on a
+human" for a fully-autonomous mode. The wiring is kept self-contained (a single block in `settingsJson`)
+so it can later be extracted as a plugin. Surfacing only: the *spoken* alert on a `needs-input` transition
+is the **manager's** job (its `spex watch` + voice), not this hook.
 
 ### Surfaces
 
@@ -94,7 +113,7 @@ drift). `spex watch [SEL…]` is the event source for Claude Code's Monitor tool
 `launched` event, even though a launch enters at `working` (which is not actionable); without it the feed
 would be blind to new sessions starting. It is emitted **once** per id (never re-fired on subsequent polls,
 so working/idle toggles don't flap). On top of that it emits each actionable transition
-(review/done/close-pending/offline/error) and the removal (`closed`), so the net feed is
+(review/done/close-pending/offline/error/needs-input) and the removal (`closed`), so the net feed is
 `launched → [actionable transitions] → closed` — a true "subscribe to all session changes" stream for a
 super-manager. Each watch process is one subscriber and the selector is the subscription (many-to-many
 falls out for free). The `cli.ts` surface is

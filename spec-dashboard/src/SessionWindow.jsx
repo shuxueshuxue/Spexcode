@@ -4,7 +4,7 @@
 // highlights that session's overlays on the board (and focuses its first changed node). The full
 // interactive surface is the session interface (Enter); this is the read-only summary.
 
-const STATUS_DOT = { working: '#cb4b16', idle: '#93a1a1', offline: '#657b83', review: '#6c71c4', done: '#268bd2', 'close-pending': '#cb4b16', blocked: '#2aa198', error: '#dc322f' }
+const STATUS_DOT = { working: '#cb4b16', idle: '#93a1a1', offline: '#657b83', review: '#6c71c4', done: '#268bd2', 'close-pending': '#cb4b16', blocked: '#2aa198', error: '#dc322f', 'needs-input': '#b58900' }
 const GLYPH = { added: '+', edited: '~', deleted: '✕', moved: '→' }
 
 function opSummary(ops) {

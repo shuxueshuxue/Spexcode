@@ -3,7 +3,7 @@ title: ab-screenshots
 status: active
 session: sess-b412
 hue: 45
-desc: A→B proof frames are backend-served metadata links, shown in the recent tab — none until yatsu.
+desc: A→B proof frames are backend-served metadata links, shown in the recent tab; with none yet, the slot falls back to the spec's own latest line diff.
 code:
   - spec-dashboard/src/NodeView.jsx
 ---
@@ -13,20 +13,21 @@ code:
 
 A version's proof is a before/after pair (A = previous version, B = this version), shown in the **recent**
 tab beside the current version's changelog and line-diff. The frames are **metadata links**, never
-fabricated client-side — the dashboard shows real captures or honestly shows nothing.
+fabricated client-side. Until yatsu records any, the slot doesn't sit empty: it falls back to the spec's
+own latest line diff — the real change that version made, which the dashboard already knows from git.
 
 ## expanded spec
 
 Each node carries an `evidence` list (frontmatter today, a content-addressed manifest in `.spec` later),
-served from the backend like every other node field. The recent tab renders the images from those links at
-an evidence slot. The dashboard does not generate placeholder SVGs: when a node has no evidence links — the
-case until the yatsu package (pending) records real A→B captures — the slot honestly reads "no proof
-evidence yet". Same slot, real frames later.
+served from the backend like every other node field. The recent tab's evidence slot prefers those real
+A→B frames; the dashboard never fabricates a stand-in. When a node has no evidence links — the case until
+the yatsu package (pending) records captures — the slot shows the spec's **latest line diff** instead: the
+unified patch its newest version introduced to spec.md, served by `/api/specs/:id/diff`. That keeps the
+proof surface honest and useful (the actual lines that changed) rather than a bare "pending" note, and the
+real frames take the same slot the moment yatsu writes them.
 
-`NodeView.jsx`'s `RecentPane` is the proof surface. It renders the current version row (number · hash · date
-· `+adds`/`−dels` · reason · session, from `/api/specs/:id/history`) and then a `figure`: if
-`node.evidence?.length`, it maps the links into an `.ev-pair` of `<img>` shots; otherwise it renders the
-`.ev-note` caption "no proof evidence yet — the yatsu package (pending) will record the A→B here". No SVG is
-fabricated anywhere — absent evidence reads as none, an admitted gap (no real captures exist yet) rather than
-a back-written claim. The `evidence` field rides in on the node from the backend (`data.js` decorates only
-x/y), so when yatsu starts recording, real frames appear in the same slot with no dashboard change.
+The backend scopes the diff to the node's spec.md and resolves its path **at that version's commit**, so a
+node reparented since (a pure rename, not itself a version) still shows the right patch. The frontend
+renders only the hunk body — adds/dels coloured, file-header metadata dropped — and falls back to an honest
+"no recorded change yet" line for a node with no committed version. The proof surface stays the same
+`RecentPane` figure either way; what fills it (screenshots vs. diff) is the only thing that differs.

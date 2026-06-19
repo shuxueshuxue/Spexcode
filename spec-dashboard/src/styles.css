@@ -242,6 +242,15 @@ body {
 .ev-shot figcaption { font-size: 11px; color: var(--muted); margin-top: 6px; text-align: center; }
 .ev-arrow { color: var(--blue); font-size: 20px; flex: none; }
 .ev-note { font-size: 11px; color: var(--muted); text-align: center; margin-top: 12px; }
+/* no-screenshot fallback: the spec's latest line diff stands in as the proof-of-change. */
+.ev-difflabel { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
+.ev-note-inline { color: var(--muted); opacity: .8; }
+.ev-diff { margin: 0; font-family: var(--mono); font-size: 11px; line-height: 1.55; background: var(--panel2); border: 1px solid var(--line); border-radius: 5px; padding: 8px 0; overflow-x: auto; }
+.ev-diff .dl { padding: 0 12px; white-space: pre; }
+.dl-hunk { color: var(--blue); opacity: .75; }
+.dl-add { color: var(--green); background: rgba(133,153,0,0.10); }
+.dl-del { color: var(--orange); background: rgba(203,75,22,0.10); }
+.dl-ctx { color: var(--muted); }
 
 /* pane: history — the full version log */
 .pane-hist { flex: 1; min-width: 0; padding: 16px 20px; overflow: auto; }

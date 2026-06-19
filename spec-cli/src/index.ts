@@ -2,7 +2,7 @@ import { serve } from '@hono/node-server'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { createNodeWebSocket } from '@hono/node-ws'
-import { loadSpecs, specHistory } from './specs.js'
+import { loadSpecs, specHistory, specDiff } from './specs.js'
 import { resolveLayout } from './layout.js'
 import { buildBoard } from './board.js'
 import { newSession, listSessions, sendKeys, closeSession, reopen, propose, mergeSession } from './sessions.js'
@@ -18,6 +18,9 @@ app.get('/', (c) => c.text('spec-cli — GET /api/board · /api/specs · /api/sp
 app.get('/api/board', async (c) => c.json(await buildBoard()))
 app.get('/api/specs', async (c) => c.json(await loadSpecs()))
 app.get('/api/specs/:id/history', async (c) => c.json(await specHistory(c.req.param('id'))))
+// the spec.md line diff of the node's latest version — the recent pane's proof-of-change when a node
+// has no A→B screenshot evidence yet.
+app.get('/api/specs/:id/diff', async (c) => c.json(await specDiff(c.req.param('id'))))
 app.get('/api/layout', async (c) => c.json(await resolveLayout()))
 
 // sessions: real tmux-backed Claude Code sessions. List + spawn, stream the live pane (WebSocket),

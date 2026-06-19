@@ -30,6 +30,7 @@ Usage: spex <command> [args]
 
 Specs / graph
   lint                  check the spec↔code graph (integrity·living·coverage·drift)
+  ack <node>            stamp Spec-OK:<node> trailer on HEAD (this code change keeps <node>'s spec valid)
   serve                 run the API server (http://localhost:8787)
   board                 dump the dashboard board state as JSON
 
@@ -53,6 +54,20 @@ if (cmd === 'serve') {
   for (const f of findings) console.error(`  ${f.level === 'error' ? '✗' : '•'} ${f.rule}: ${f.msg}`)
   console.error(`spex lint: ${errors.length} error(s), ${findings.length - errors.length} warning(s)`)
   process.exit(errors.length ? 1 : 0)
+} else if (cmd === 'ack') {
+  // stamp a `Spec-OK: <node>` trailer onto HEAD: "this code change keeps <node>'s spec valid — no spec
+  // edit needed", so git.ts's drift won't count this implementation-only commit against <node>. Workflow:
+  // land the code commit, then `spex ack <node>`. --amend rewrites HEAD adding the trailer (it sits in
+  // the same block as Session:); git de-dupes an identical adjacent trailer, so re-acking is harmless.
+  const { git } = await import('./git.js')
+  const node = positionals(3)[0]
+  if (!node) { console.error('usage: spex ack <node-id>'); process.exit(2) }
+  try {
+    git(['commit', '--amend', '--no-edit', '--trailer', `Spec-OK: ${node}`])
+    console.log(`Spec-OK: ${node} → ${git(['rev-parse', '--short', 'HEAD']).trim()}`)
+  } catch (e: any) {
+    console.error(`ack failed: ${e?.message ?? e}`); process.exit(1)
+  }
 } else if (cmd === 'board') {
   const { buildBoard } = await import('./board.js')
   console.log(JSON.stringify(await buildBoard(), null, 2))

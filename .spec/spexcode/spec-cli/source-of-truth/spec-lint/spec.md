@@ -37,6 +37,22 @@ ancestry (commits a governed file moved ahead of the spec's latest version). The
 thin shim over `spex lint`, blocking on **errors only** (bypass with `SPEXCODE_SKIP_LINT=1`); the same
 command runs in CI for real enforcement — local hooks are advisory.
 
+### Spec-OK — acknowledging an implementation-only change
+
+Not every code commit ahead of a spec means the spec is stale. A refactor, a rename, a perf tweak can
+change a governed file while the spec it lives under stays exactly true. To stop those from reading as
+false drift, a code commit may carry a **`Spec-OK: <node-id>`** commit trailer, meaning *"this change
+keeps `<node>`'s spec valid — no spec edit needed."* `git.ts`'s drift count (`driftIndex`/`driftFor`)
+reads that trailer: a commit newer than `<node>`'s latest version that acknowledges `<node>` is skipped
+and does **not** count toward its drift. The acknowledged node is matched against the node whose latest
+version is the `sinceHash` drift is measured from, so `Spec-OK: A` only quiets A's drift, never B's.
+
+`spex ack <node-id>` (in `cli.ts`) stamps the trailer onto **HEAD** via `git commit --amend --trailer`
+— the workflow is: land the implementation-only commit, then `spex ack <node>` to record that it was a
+deliberate no-spec-change. The trailer sits in the same trailer block as `Session:`; both coexist. This
+is the explicit, auditable counterpart to drift: drift flags *maybe stale*, `Spec-OK` answers *checked,
+still valid*.
+
 A sharp edge: anything calling git from inside the hook must route through `git.ts`'s `git()` helper,
 which strips the inherited `GIT_DIR`/`GIT_WORK_TREE`/`GIT_INDEX_FILE`; otherwise git's repo discovery
 resolves to the cwd and the lint silently sees zero specs — it did once, caught only by testing through
@@ -51,9 +67,9 @@ emitting **integrity** errors for missing `code:` paths, scans each body (fence-
 for **living** errors, walks `GOVERNED_ROOTS` (`spec-dashboard/src`, `spec-cli/src`; `SRC` extensions,
 skipping `node_modules`/`dist`/`.vite`) for **coverage** warnings on unclaimed files, and turns each
 node's `driftFiles` (computed in `specs.ts`) into **drift** warnings. `cli.ts` dispatches `spex lint`
-(prints findings, exits non-zero on any error) alongside `serve`/`board`/`ls`/`watch`/`session`; the
-session subcommands belong to [[sessions]] but share this same CLI entry, which is why `cli.ts` is
-co-governed here. `scripts/hooks/pre-commit` is the shim: it runs `spex lint` and blocks on errors only,
+(prints findings, exits non-zero on any error) and `spex ack <node>` (stamps the `Spec-OK:` drift-ack
+trailer onto HEAD) alongside `serve`/`board`/`ls`/`watch`/`session`; the session subcommands belong to
+[[sessions]] but share this same CLI entry, which is why `cli.ts` is co-governed here. `scripts/hooks/pre-commit` is the shim: it runs `spex lint` and blocks on errors only,
 honoring `SPEXCODE_SKIP_LINT=1`, and routes git through the `GIT_DIR`-stripping helper. Current run: 0
 errors, drift warnings only. The LLM judge over this graph is not yet built.
 

@@ -225,22 +225,47 @@ export function specStats(root: string, relPath: string): Map<string, DiffStat> 
 // ONE cached `git log` over HEAD (mirrors historyIndex): each commit's position (0 = newest) + per
 // file the commits that touched it. driftFor() is then a pure lookup. The old per-file `git rev-list`
 // spawned ~40 subprocesses per loadSpecs (~6s); this is a single walk, cached on HEAD.
-export type DriftIndex = { pos: Map<string, number>; fileCommits: Map<string, string[]> }
+// `acks` / `specNodes` carry the Spec-OK convention (see driftFor): acks[hash] = node ids this commit
+// declared still-valid via `Spec-OK:` trailers; specNodes[hash] = node ids whose spec.md it touched.
+export type DriftIndex = {
+  pos: Map<string, number>
+  fileCommits: Map<string, string[]>
+  acks: Map<string, Set<string>>      // commit hash -> node ids acknowledged via `Spec-OK:` trailers
+  specNodes: Map<string, Set<string>> // commit hash -> node ids whose spec.md it touched (its versions)
+}
 let driftIdxCache: { head: string; idx: DriftIndex } | null = null
 
 function buildDriftIndex(root: string): DriftIndex {
   const pos = new Map<string, number>(), fileCommits = new Map<string, string[]>()
+  const acks = new Map<string, Set<string>>(), specNodes = new Map<string, Set<string>>()
   let out = ''
-  try { out = git(['-C', root, '-c', 'core.quotePath=false', 'log', '--name-only', '--format=%H', 'HEAD']) }
-  catch { return { pos, fileCommits } }
-  let cur = '', i = 0
-  for (const line of out.split('\n')) {
-    if (/^[0-9a-f]{40}$/.test(line)) { cur = line; if (!pos.has(cur)) pos.set(cur, i++); continue }
-    if (!line) continue
-    let arr = fileCommits.get(line); if (!arr) { arr = []; fileCommits.set(line, arr) }
-    arr.push(cur)
+  // RS-delimited records: `<hash>US<comma-joined Spec-OK values>` on line 1, then the --name-only file
+  // list. `valueonly,separator` collapses the trailer block to one line so it never collides with the
+  // file names below it (a raw `%b` body would interleave with them and be unparseable).
+  try { out = git(['-C', root, '-c', 'core.quotePath=false', 'log', '--name-only',
+    `--format=${RS}%H${US}%(trailers:key=Spec-OK,valueonly,separator=%x2C)`, 'HEAD']) }
+  catch { return { pos, fileCommits, acks, specNodes } }
+  let i = 0
+  for (const rec of out.split(RS)) {
+    const r = rec.replace(/^\n/, '')
+    if (!r) continue
+    const lines = r.split('\n')
+    const [hash, ackStr = ''] = lines[0].split(US)
+    if (!hash) continue
+    if (!pos.has(hash)) pos.set(hash, i++)
+    const ackSet = new Set(ackStr.split(',').map((s) => s.trim()).filter(Boolean))
+    if (ackSet.size) acks.set(hash, ackSet)
+    for (const line of lines.slice(1)) {
+      if (!line) continue
+      let arr = fileCommits.get(line); if (!arr) { arr = []; fileCommits.set(line, arr) }
+      arr.push(hash)
+      if (isSpecMd(line)) {
+        let ns = specNodes.get(hash); if (!ns) { ns = new Set(); specNodes.set(hash, ns) }
+        ns.add(nodeIdOf(line))
+      }
+    }
   }
-  return { pos, fileCommits }
+  return { pos, fileCommits, acks, specNodes }
 }
 export function driftIndex(root: string): DriftIndex {
   let head = ''
@@ -250,13 +275,26 @@ export function driftIndex(root: string): DriftIndex {
   if (head) driftIdxCache = { head, idx }
   return idx
 }
-// pure lookup: how many commits to `path` are newer than `sinceHash` (the spec's last version). No git calls.
+// pure lookup: how many commits to `path` are newer than `sinceHash` (the spec's last version). No git
+// calls. @@@ Spec-OK ack - a code commit ahead of the spec can carry a `Spec-OK: <node>` trailer
+// meaning "this change keeps <node>'s spec valid — no spec edit needed"; such a commit is skipped so an
+// acknowledged implementation-only change isn't false drift. `sinceHash` is the node's OWN latest
+// version commit, so the node(s) it's a version of (specNodes[sinceHash]) name the node being measured;
+// a commit counts as acknowledged only if its `Spec-OK:` set names one of those — `Spec-OK: A` quiets
+// A's drift, never B's.
 export function driftFor(idx: DriftIndex, sinceHash: string, path: string): number {
   if (!sinceHash) return 0
   const sp = idx.pos.get(sinceHash)
   if (sp === undefined) return 0
+  const targets = idx.specNodes.get(sinceHash)
   let n = 0
-  for (const h of idx.fileCommits.get(path) ?? []) { const p = idx.pos.get(h); if (p !== undefined && p < sp) n++ }
+  for (const h of idx.fileCommits.get(path) ?? []) {
+    const p = idx.pos.get(h)
+    if (p === undefined || p >= sp) continue
+    const ack = idx.acks.get(h)
+    if (ack && targets && [...targets].some((t) => ack.has(t))) continue
+    n++
+  }
   return n
 }
 

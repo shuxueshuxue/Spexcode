@@ -98,13 +98,19 @@ async function listWorktrees(): Promise<{ path: string; branch: string | null }[
 // @@@ reconcile - the shown status. awaiting → the proposal's label (review/done/close-pending),
 // shown regardless of liveness. active → its LIVENESS: offline if no tmux for the recorded id, else
 // working/idle by activity.
+const SHELLISH = /^-?(zsh|bash|sh|fish|dash)$/  // pane sitting at a shell = claude exited/crashed
+async function paneCmd(id: string): Promise<string> {
+  try { return (await tmux(['display-message', '-p', '-t', id, '-F', '#{pane_current_command}'])).trim() } catch { return '' }
+}
 async function reconcile(rec: SessRec): Promise<DisplayStatus> {
   // agent-authored states win; we never INFER a pause externally (the agent declares awaiting/blocked).
   if (rec.status === 'awaiting') return PROPOSAL_STATUS[rec.proposal || 'nothing']
   if (rec.status === 'blocked') return 'blocked'  // waiting on a background task/schedule; self-resumes
   if (rec.status === 'error') return 'error'      // turn died on an API error (StopFailure hook)
-  // active = working (or this turn not yet declared). Liveness only — no tmux-activity guesswork.
-  return rec.session && (await alive(rec.session)) ? 'working' : 'offline'
+  // active: working only if claude is actually the pane's foreground process — a bare shell means it
+  // exited/crashed, so report offline (relaunch) instead of a false "working".
+  if (!rec.session || !(await alive(rec.session))) return 'offline'
+  return SHELLISH.test(await paneCmd(rec.session)) ? 'offline' : 'working'
 }
 
 async function findWorktree(id: string): Promise<{ path: string; branch: string | null; rec: SessRec } | null> {
@@ -139,36 +145,34 @@ const slugify = (node: string | null) => (node || 'session').replace(/[^a-zA-Z0-
 // `awaiting` the human, with no reliance on the agent remembering. The command must point at MAIN's
 // tsx + cli (a fresh worktree off main has no node_modules), running with cwd = the worktree, so
 // markDoneFromCwd() writes that worktree's .session. JSON has only double quotes → safe single-quoted.
-function settingsArg(): string {
+// @@@ settingsJson - the hooks Claude Code loads via `--settings <FILE>`. Written to a per-worktree
+// file (NOT inline on the command line — inline JSON containing single quotes broke the shell quoting
+// and claude read it as a missing file path). The file is ephemeral (removed with the worktree), so
+// still no global pollution. PreToolUse/UserPromptSubmit → `active` (freshness); Stop → the blocking
+// gate (with a loop-break); StopFailure → `error`. Hook commands use MAIN's tsx+cli by absolute path
+// ($SPEX) since a fresh worktree has no node_modules and `spex` may be off the session's PATH.
+function settingsJson(): string {
   const gate = join(mainRoot(), 'spec-cli', 'hooks', 'stop-gate.sh')
-  const markActive = join(mainRoot(), 'spec-cli', 'hooks', 'mark-active.sh')
-  // FRESHNESS = mark `active` on activity. PreToolUse fires BEFORE the tool, so a `spex session done`
-  // declaration (itself a tool) lands after and wins; a real tool AFTER a declaration re-flips to active
-  // so the Stop gate forces a fresh re-declaration. Stop is the BLOCKING gate (declare-before-stop, with
-  // a loop-break); StopFailure marks `error`. All run with cwd = the worktree; `spex` is on PATH (npm link).
-  const markCmd = `bash ${markActive}`
-  // PATH-independent spex: a fresh worktree has no node_modules and `spex` may be absent from the
-  // session's shell PATH, so invoke MAIN's tsx + cli by absolute path. Passed to the gate via $SPEX so
-  // its auto-default AND the declare instruction it shows the agent both work without PATH.
-  const tsx = join(mainRoot(), 'spec-cli', 'node_modules', '.bin', 'tsx')
-  const cli = join(mainRoot(), 'spec-cli', 'src', 'cli.ts')
-  const spex = `${tsx} ${cli}`
-  const settings = JSON.stringify({
+  const markCmd = `bash ${join(mainRoot(), 'spec-cli', 'hooks', 'mark-active.sh')}`
+  const spex = `${join(mainRoot(), 'spec-cli', 'node_modules', '.bin', 'tsx')} ${join(mainRoot(), 'spec-cli', 'src', 'cli.ts')}`
+  return JSON.stringify({
     hooks: {
-      // UserPromptSubmit: instant feedback — a submitted prompt flips the session to `active` right away
-      // (responsiveness). PreToolUse: the RELIABLE backbone — covers the resume paths UserPromptSubmit
-      // misses (background-resume, non-turn-start wakeups). Both just mark active; together = robust.
       UserPromptSubmit: [{ hooks: [{ type: 'command', command: markCmd }] }],
       PreToolUse: [{ hooks: [{ type: 'command', command: markCmd }] }],
       Stop: [{ hooks: [{ type: 'command', command: `SPEX='${spex}' bash ${gate}` }] }],
       StopFailure: [{ hooks: [{ type: 'command', command: `${spex} session fail` }] }],
     },
-  })
-  return `--settings '${settings}'`
+  }, null, 2)
+}
+// write the hooks file into the worktree and return the `--settings <file>` arg (no shell-quoting hazard).
+function writeSettings(path: string): string {
+  const file = join(path, '.spex-hooks.json')
+  writeFileSync(file, settingsJson())
+  return `--settings ${file}`
 }
 async function launch(id: string, path: string, tail: string): Promise<void> {
   await tmux(['new-session', '-d', '-s', id, '-x', String(COLS), '-y', String(ROWS), '-c', path])
-  await tmux(['send-keys', '-t', id, '-l', '--', `${CLAUDE_CMD} ${settingsArg()} ${tail}`])
+  await tmux(['send-keys', '-t', id, '-l', '--', `${CLAUDE_CMD} ${writeSettings(path)} ${tail}`])
   await tmux(['send-keys', '-t', id, 'Enter'])
 }
 
@@ -193,7 +197,14 @@ export async function reopen(id: string): Promise<boolean> {
   const wt = await findWorktree(id)
   if (!wt) return false
   writeSessionFile(wt.path, { ...wt.rec, status: 'active', proposal: null })
-  if (!(await alive(id))) await launch(id, wt.path, `--resume ${id}`)
+  const hasTmux = await alive(id)
+  if (!hasTmux) {
+    await launch(id, wt.path, `--resume ${id}`)               // no tmux → fresh window
+  } else if (SHELLISH.test(await paneCmd(id))) {
+    // tmux pane exists but claude exited to a shell → resume claude IN the existing pane
+    await tmux(['send-keys', '-t', id, '-l', '--', `${CLAUDE_CMD} ${writeSettings(wt.path)} --resume ${id}`])
+    await tmux(['send-keys', '-t', id, 'Enter'])
+  }
   return true
 }
 

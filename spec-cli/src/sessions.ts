@@ -17,6 +17,10 @@ import { git, gitA, repoRoot } from './git.js'
 //                proposal=merge   → shown "review"        ("ready, merge me")
 //                proposal=nothing → shown "done"          ("finished, your call")
 //                proposal=close   → shown "close-pending" ("I suggest discarding this worktree")
+//   needs-input → an ACTIVE agent went idle waiting on a HUMAN (it asked a question and is sitting at
+//                the prompt). Authored by Claude Code's GLOBAL Notification(idle_prompt) hook, NOT inferred.
+//                Distinct from `blocked` (which waits on a background task/schedule and self-resumes); a
+//                needs-input agent resumes only when a human sends it a prompt (→ active again).
 //   (closed = the worktree is removed; not a stored status)
 // The agent only ever PROPOSES (awaiting); merge/close are human-only. Every proposal is reversible
 // via reopen() → active. `merges` is METADATA (how many times merged), shown as a badge, not a state.
@@ -29,9 +33,9 @@ const TMUX_SOCK = process.env.SPEXCODE_TMUX || 'spexcode'
 const CLAUDE_CMD = process.env.SPEXCODE_CLAUDE_CMD || 'claude --dangerously-skip-permissions'
 const COLS = 120, ROWS = 32
 
-export type Lifecycle = 'active' | 'awaiting' | 'blocked' | 'error'
+export type Lifecycle = 'active' | 'awaiting' | 'blocked' | 'error' | 'needs-input'
 export type Proposal = 'merge' | 'nothing' | 'close'
-export type DisplayStatus = 'working' | 'idle' | 'offline' | 'review' | 'done' | 'close-pending' | 'blocked' | 'error'
+export type DisplayStatus = 'working' | 'idle' | 'offline' | 'review' | 'done' | 'close-pending' | 'blocked' | 'error' | 'needs-input'
 const PROPOSAL_STATUS: Record<Proposal, DisplayStatus> = { merge: 'review', nothing: 'done', close: 'close-pending' }
 
 export type Session = {
@@ -70,7 +74,7 @@ function readSessionFile(dir: string): SessRec {
     const k = line.slice(0, i).trim(), v = line.slice(i + 1).trim()
     if (k === 'node') r.node = v || null
     else if (k === 'session') r.session = v || null
-    else if (k === 'status' && (v === 'active' || v === 'awaiting' || v === 'blocked' || v === 'error')) r.status = v
+    else if (k === 'status' && (v === 'active' || v === 'awaiting' || v === 'blocked' || v === 'error' || v === 'needs-input')) r.status = v
     else if (k === 'proposal' && v) r.proposal = v as Proposal
     else if (k === 'merges') r.merges = Number(v) || 0
     else if (k === 'note') r.note = v || null
@@ -108,6 +112,7 @@ async function reconcile(rec: SessRec): Promise<DisplayStatus> {
   if (rec.status === 'awaiting') return PROPOSAL_STATUS[rec.proposal || 'nothing']
   if (rec.status === 'blocked') return 'blocked'  // waiting on a background task/schedule; self-resumes
   if (rec.status === 'error') return 'error'      // turn died on an API error (StopFailure hook)
+  if (rec.status === 'needs-input') return 'needs-input'  // active agent idle-waiting on a HUMAN (Notification idle_prompt); resumes on the next prompt
   // active: working only if claude is actually the pane's foreground process — a bare shell means it
   // exited/crashed, so report offline (relaunch) instead of a false "working".
   if (!rec.session || !(await alive(rec.session))) return 'offline'
@@ -148,6 +153,11 @@ const slugify = (node: string | null) => (node || 'session').replace(/[^a-zA-Z0-
 // is invisible to git and can NEVER be staged/committed/merged back to main. Default ON; disable with
 // SPEXCODE_HIDE_CLAUDE_MD=0. Best-effort: any failure here must never block the launch.
 const HIDE_CLAUDE_MD = process.env.SPEXCODE_HIDE_CLAUDE_MD !== '0' && process.env.SPEXCODE_HIDE_CLAUDE_MD !== 'false'
+// @@@ NOTIFY_HOOK - whether to wire Claude Code's GLOBAL Notification(idle_prompt) hook → `needs-input`.
+// Default ON; off when '0'/'false' (mirrors HIDE_CLAUDE_MD's env-flag style). Disabling it makes a
+// dispatched agent never surface "waiting on a human" — the path to a fully-autonomous mode where the
+// product never asks the human. Kept self-contained so the wiring can later be extracted as a plugin.
+const NOTIFY_HOOK = process.env.SPEXCODE_NOTIFY_HOOK !== '0' && process.env.SPEXCODE_NOTIFY_HOOK !== 'false'
 async function hideClaudeMd(path: string): Promise<void> {
   if (!HIDE_CLAUDE_MD) return
   const src = join(path, 'CLAUDE.md')
@@ -169,20 +179,27 @@ async function hideClaudeMd(path: string): Promise<void> {
 // file (NOT inline on the command line — inline JSON containing single quotes broke the shell quoting
 // and claude read it as a missing file path). The file is ephemeral (removed with the worktree), so
 // still no global pollution. PreToolUse/UserPromptSubmit → `active` (freshness); Stop → the blocking
-// gate (with a loop-break); StopFailure → `error`. Hook commands use MAIN's tsx+cli by absolute path
-// ($SPEX) since a fresh worktree has no node_modules and `spex` may be off the session's PATH.
+// gate (with a loop-break); StopFailure → `error`; Notification(idle_prompt) → `needs-input` (toggleable,
+// active-only). Hook commands use MAIN's tsx+cli by absolute path ($SPEX) since a fresh worktree has no
+// node_modules and `spex` may be off the session's PATH.
 function settingsJson(): string {
   const gate = join(mainRoot(), 'spec-cli', 'hooks', 'stop-gate.sh')
   const markCmd = `bash ${join(mainRoot(), 'spec-cli', 'hooks', 'mark-active.sh')}`
   const spex = `${join(mainRoot(), 'spec-cli', 'node_modules', '.bin', 'tsx')} ${join(mainRoot(), 'spec-cli', 'src', 'cli.ts')}`
-  return JSON.stringify({
-    hooks: {
-      UserPromptSubmit: [{ hooks: [{ type: 'command', command: markCmd }] }],
-      PreToolUse: [{ hooks: [{ type: 'command', command: markCmd }] }],
-      Stop: [{ hooks: [{ type: 'command', command: `SPEX='${spex}' bash ${gate}` }] }],
-      StopFailure: [{ hooks: [{ type: 'command', command: `${spex} session fail` }] }],
-    },
-  }, null, 2)
+  const hooks: Record<string, unknown> = {
+    UserPromptSubmit: [{ hooks: [{ type: 'command', command: markCmd }] }],
+    PreToolUse: [{ hooks: [{ type: 'command', command: markCmd }] }],
+    Stop: [{ hooks: [{ type: 'command', command: `SPEX='${spex}' bash ${gate}` }] }],
+    StopFailure: [{ hooks: [{ type: 'command', command: `${spex} session fail` }] }],
+  }
+  // @@@ Notification → needs-input - Claude Code's GLOBAL Notification hook fires (notification_type
+  // 'idle_prompt', "Claude is waiting for your input") when the agent sits idle at the prompt — VERIFIED
+  // to fire even for our detached --dangerously-skip-permissions tmux agents. `$SPEX session needs-input`
+  // flips ONLY an active session → needs-input (cli guards against clobbering an authored proposal). Same
+  // PATH-independent abs tsx+cli ($SPEX) the StopFailure hook uses. Gated behind SPEXCODE_NOTIFY_HOOK so
+  // it can be turned off for a fully-autonomous mode; kept here as one self-contained block (future plugin).
+  if (NOTIFY_HOOK) hooks.Notification = [{ hooks: [{ type: 'command', command: `${spex} session needs-input` }] }]
+  return JSON.stringify({ hooks }, null, 2)
 }
 // write the hooks file into the worktree and return the `--settings <file>` arg (no shell-quoting hazard).
 function writeSettings(path: string): string {
@@ -251,6 +268,20 @@ export function markStateFromCwd(status: Lifecycle, opts: { proposal?: Proposal;
 }
 export const markDoneFromCwd = (proposal: Proposal = 'nothing') => markStateFromCwd('awaiting', { proposal })
 export const markErrorFromCwd = () => markStateFromCwd('error')
+
+// @@@ markNeedsInputFromCwd - the Notification(idle_prompt) hook fires whenever the agent goes idle at
+// the prompt, which includes the case where it ALREADY authored a more specific intent and then idled.
+// CRITICAL GUARD: only an `active` session transitions → needs-input. An authored awaiting (review/done/
+// close-pending) / blocked / error already reported what the idle MEANS and must survive (an agent that
+// proposed merge then sits idle must stay `review`, not collapse to needs-input). So read the current
+// state and no-op unless it is exactly `active`. The mark-active path (PreToolUse/UserPromptSubmit) clears
+// needs-input back to active when the human sends the next prompt — same as it clears any non-active state.
+export function markNeedsInputFromCwd(): boolean {
+  const rec = readSessionFile(process.cwd())
+  if (!rec.session || rec.status !== 'active') return false
+  writeSessionFile(process.cwd(), { ...rec, status: 'needs-input', proposal: null, note: null })
+  return true
+}
 
 // @@@ mergePrompt - the INTENT the human clicks "merge" with, written as an instruction to the session's
 // own agent. The agent (not the server) performs the merge, because only the agent knows the work's intent
@@ -341,10 +372,10 @@ export async function closePaneStream(id: string): Promise<void> {
 // @@@ presentation + selection - shared by `spex ls` (pretty), `spex watch` (events) and the API.
 export const STATUS_GLYPH: Record<DisplayStatus, string> = {
   working: '\u25cf', idle: '\u25cb', offline: '\u23fb', review: '\u25c6', done: '\u2713',
-  'close-pending': '\u2715', blocked: '\u29d6', error: '\u2717',
+  'close-pending': '\u2715', blocked: '\u29d6', error: '\u2717', 'needs-input': '\u2370',
 }
 const ANSI: Record<DisplayStatus, string> = {
-  working: '33', idle: '90', offline: '90', review: '35', done: '34', 'close-pending': '31', blocked: '36', error: '31',
+  working: '33', idle: '90', offline: '90', review: '35', done: '34', 'close-pending': '31', blocked: '36', error: '31', 'needs-input': '93',
 }
 
 // a session matches a selector if the selector is its id (or an id-prefix), its node, or its branch.
@@ -389,13 +420,14 @@ export function formatTable(sessions: Session[], color = true): string {
   return [c('1', `SpexCode sessions (${sessions.length})`), header, ...rows, statusLegend(color)].join('\n')
 }
 
-const WATCH_ACTIONABLE = new Set<DisplayStatus>(['review', 'done', 'close-pending', 'offline', 'error'])
+const WATCH_ACTIONABLE = new Set<DisplayStatus>(['review', 'done', 'close-pending', 'offline', 'error', 'needs-input'])
 const NEXT: Record<string, string> = {
   review: 'merge | reopen(back-to-working) | close',
   done: 'merge | reopen | close',
   'close-pending': 'close | reopen',
   offline: 'reopen (relaunch & resume)',
   error: 'reopen (relaunch & retry) | capture | close',
+  'needs-input': 'send "<msg>" | capture',
   idle: 'send "<msg>" | capture',
 }
 export function sessionEvent(s: Session): string {

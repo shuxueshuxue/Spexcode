@@ -14,6 +14,10 @@ app.use('/api/*', cors())
 const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app })
 
 app.get('/', (c) => c.text('spec-cli — GET /api/board · /api/specs · /api/specs/:id/history · /api/layout · /api/sessions · /api/slash-commands'))
+// @@@ health - the supervisor's readiness gate (src/supervise.ts). Deliberately cheap: a bare 200 with
+// no git/.spec read, so a booting child reports "serving" the instant Hono is listening and the proxy
+// can flip to it. Not under /api/* (no CORS needed) — it's loopback-only, supervisor→child.
+app.get('/health', (c) => c.text('ok'))
 // the assembled board (merged tree + overlay + sessions) — the dashboard's single source. Same data
 // as `spex board`; the frontend only adds x/y pixels on top.
 app.get('/api/board', async (c) => c.json(await buildBoard()))
@@ -105,3 +109,16 @@ const server = serve({ fetch: app.fetch, port })
 injectWebSocket(server)
 superviseBridges()   // keep a warm tmux client per live session, so opening a tab is instant
 console.log(`spec-cli serving .spec (from git) on http://localhost:${port}`)
+
+// @@@ graceful drain - the other half of the zero-downtime reload (src/supervise.ts). When the supervisor
+// retires this child it sends SIGTERM; we must NOT die mid-response or the in-flight /api/board (~1.5s of
+// git work) is RESET. So: stop accepting new connections (server.close), let active requests finish, and
+// repeatedly drop now-idle keep-alive sockets so close()'s callback fires the instant the last request
+// drains — then exit. By flip time the proxy already routes NEW traffic to our successor, so this only
+// drains the requests we already owned. A hard cap guarantees we still exit if a connection won't close.
+process.on('SIGTERM', () => {
+  const srv = server as unknown as { close(cb?: () => void): void; closeIdleConnections?(): void }
+  const sweep = setInterval(() => srv.closeIdleConnections?.(), 200)
+  srv.close(() => { clearInterval(sweep); process.exit(0) })
+  setTimeout(() => process.exit(0), 10000).unref()
+})

@@ -6,7 +6,7 @@
   "description": "SpexCode CLI + spec server — reads the .spec tree and its git history",
   "bin": { "spex": "bin/spex.mjs" },
   "scripts": {
-    "serve": "tsx watch src/cli.ts serve",
+    "serve": "tsx src/cli.ts serve",
     "lint": "tsx src/cli.ts lint",
     "postinstall": "node -e \"try{require('fs').readdirSync('node_modules/node-pty/prebuilds').forEach(d=>{try{require('fs').chmodSync('node_modules/node-pty/prebuilds/'+d+'/spawn-helper',0o755)}catch{}})}catch{}\""
   },

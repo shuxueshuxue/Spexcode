@@ -45,7 +45,9 @@ Sessions
 }
 
 if (cmd === 'serve') {
-  await import('./index.js')
+  // the supervisor owns the public port and runs index.ts as a child for zero-downtime reloads; it
+  // (not `tsx watch`) is what watches spec-cli/src, so the package `serve` script must NOT use --watch.
+  await import('./supervise.js')
 } else if (cmd === undefined || cmd === 'help' || cmd === '--help' || cmd === '-h') {
   printHelp()
 } else if (cmd === 'lint') {

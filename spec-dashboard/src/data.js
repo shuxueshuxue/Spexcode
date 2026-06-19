@@ -89,12 +89,29 @@ function layout(nodes) {
   return pos
 }
 
+// @@@ apiFetch - ride through a zero-downtime backend reload. The supervisor (spec-cli) flips port 8787
+// to a freshly health-checked child on a code change; a request landing in that sub-second window can
+// still hit a refused/reset connection. A thrown fetch error is a TRANSIENT network failure (connection
+// refused/reset) — retry it with bounded backoff (5 attempts over ~2s) so a reload is invisible. An
+// actual HTTP response (even 4xx/5xx) is NOT transient: return it, don't retry. Exhausting the backoff
+// rethrows the real error loudly rather than masking a genuinely-down backend.
+const BACKOFF = [150, 350, 600, 900]   // waits between 5 attempts (~2.0s total)
+export async function apiFetch(input, init) {
+  for (let i = 0; ; i++) {
+    try { return await fetch(input, init) }
+    catch (e) {
+      if (i >= BACKOFF.length) throw e
+      await new Promise((r) => setTimeout(r, BACKOFF[i]))
+    }
+  }
+}
+
 // @@@ loadBoard - THIN wrapper. The board (merged tree + overlay + ghosts + sessions) is assembled by
 // the backend `buildBoard()` and served at /api/board — the SAME data `spex board` prints, so human and
 // agent share one source of truth. The only thing decorated client-side is the x/y tidy-tree layout, a
 // pure view concern (the backend has no pixels). All overlay/ghost/session logic moved server-side.
 export async function loadBoard() {
-  const res = await fetch('/api/board')
+  const res = await apiFetch('/api/board')
   const { nodes, sessions } = await res.json()
   const pos = layout(nodes)
   return { nodes: nodes.map((n) => ({ ...n, ...pos[n.id] })), sessions }

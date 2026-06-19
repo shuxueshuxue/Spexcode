@@ -6,6 +6,7 @@ hue: 200
 desc: The server + CLI — reads .spec and git, serves the API, and houses the source-of-truth guards.
 code:
   - spec-cli/src/index.ts
+  - spec-cli/src/supervise.ts
   - spec-cli/src/slash-commands.ts
 ---
 # spec-cli
@@ -24,12 +25,25 @@ the CLI where they belong, not under the dashboard. Hono + tsx, **no build step*
 HTTP entrypoint — a Hono app that wires the loaders and the session state machine to routes — and is
 the file this node governs (the deeper mechanism lives in its [[source-of-truth]] subtree).
 
-The `serve` script (the `npm run api` entry) runs under `tsx watch`, so the backend **hot-reloads on
-its own source changes** (`spec-cli/src/**`) — never on `.spec/**/spec.md` or dashboard edits, which
-it reads via fs rather than importing. A reload briefly drops the live ws/pty bridges; clients
-reconnect (the tab-switch reattach is clean), and the detached tmux sessions survive a reload
-untouched. This closes the stale-server gap where a backend edit silently kept serving old code until
-a manual restart.
+The `serve` script (the `npm run api` entry) hot-reloads the backend on its own source changes
+(`spec-cli/src/**`) — never on `.spec/**/spec.md` or dashboard edits, which it reads via fs rather than
+importing. **The reload must be zero-downtime: port 8787 never has a gap.** A `tsx watch` restart left a
+~1-2s window where every API call was refused (a node merge touching backend code took the dashboard
+down); that window must not exist.
+
+The mechanism is a tiny **supervisor** (`serve` runs `supervise.ts`) that owns the public
+port as a raw-TCP proxy and runs the real Hono server as a child on a private port. On a source change it
+boots a fresh child, waits for `GET /health` (a cheap, git-free readiness probe `index.ts` exposes), then
+atomically flips the proxy to it and **gracefully drains** the old child — which stops accepting new
+connections but finishes in-flight requests before exiting, so a request mid-flight is never reset. The
+public socket never closes, so the flip is invisible. (SO_REUSEPORT — two processes sharing the port — is
+the obvious alternative but is unsupported on this platform, hence the proxy.) An unhealthy new child is
+discarded and the current one kept, so a broken edit degrades to "still serving old code", never to a
+gap. The live ws/pty bridges still drop on reload and reconnect; detached tmux sessions survive untouched.
+
+The dashboard rides through any residual blip itself: its `data.js` fetches retry a transient connection
+failure with bounded backoff (~5 tries over ~2s) before surfacing an error, so a reload is invisible to
+the UI even if a poll lands exactly on the sub-second flip.
 
 Routes it must expose:
 

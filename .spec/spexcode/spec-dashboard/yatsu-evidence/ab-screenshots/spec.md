@@ -3,7 +3,7 @@ title: ab-screenshots
 status: active
 session: sess-b412
 hue: 45
-desc: A→B proof frames are backend-served metadata links, shown in the recent tab; with none yet, the slot falls back to the spec's own latest line diff.
+desc: A→B proof frames are backend-served metadata links, shown in the recent tab; with none yet, the slot falls back to the spec's own latest line diff — shipped with the board so it renders instantly.
 ---
 # ab-screenshots
 
@@ -20,9 +20,16 @@ Each node carries an `evidence` list (frontmatter today, a content-addressed man
 served from the backend like every other node field. The recent tab's evidence slot prefers those real
 A→B frames; the dashboard never fabricates a stand-in. When a node has no evidence links — the case until
 the yatsu package (pending) records captures — the slot shows the spec's **latest line diff** instead: the
-unified patch its newest version introduced to spec.md, served by `/api/specs/:id/diff`. That keeps the
-proof surface honest and useful (the actual lines that changed) rather than a bare "pending" note, and the
-real frames take the same slot the moment yatsu writes them.
+unified patch its newest version introduced to spec.md. That keeps the proof surface honest and useful (the
+actual lines that changed) rather than a bare "pending" note, and the real frames take the same slot the
+moment yatsu writes them.
+
+The fallback diff is **instant**: if something can be instant it should be, so the recent tab never spins
+on a per-open fetch. Each node's latest diff is **precomputed and shipped with the board** (`GET /api/board`,
+and `/api/specs`), so the popup already holds it — no round-trip, no git call on open. It's **cached by the
+version's commit sha** (a commit's patch is immutable), so repeat board loads are a map lookup and only a
+node that gained a new version pays one `git show`. `/api/specs/:id/diff` stays as the on-demand fallback
+over that same cache; the frontend uses it only if a node arrives without the precomputed diff.
 
 The backend scopes the diff to the node's spec.md and resolves its path **at that version's commit**, so a
 node reparented since (a pure rename, not itself a version) still shows the right patch. The frontend

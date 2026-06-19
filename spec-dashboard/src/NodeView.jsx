@@ -144,9 +144,10 @@ function VersionRow({ r, v, latest }) {
   )
 }
 
-// @@@ useSpecDiff - the spec.md line changes of the node's latest version (/api/specs/:id/diff),
-// fetched ONLY when the node has no screenshot evidence (the recent pane falls back to showing the
-// diff as its proof-of-change). `enabled` gates the fetch so a node WITH evidence never asks for it.
+// @@@ useSpecDiff - FALLBACK fetch of the spec.md line changes of the node's latest version
+// (/api/specs/:id/diff). The common case never hits this: the board already ships each node's diff as
+// `node.lastDiff`, so the recent tab renders instantly. `enabled` gates the fetch — it stays off unless
+// a node arrives without a precomputed diff (and has no screenshot evidence to show instead).
 function useSpecDiff(id, enabled) {
   const [diff, setDiff] = useState(null)
   useEffect(() => {
@@ -200,7 +201,10 @@ function DiffEvidence({ diff }) {
 function RecentPane({ node, rows }) {
   const latest = rows?.[0]
   const hasEvidence = node.evidence?.length > 0
-  const diff = useSpecDiff(node.id, !hasEvidence)
+  // The board ships the node's latest line-diff (node.lastDiff) up front, so the common case renders
+  // INSTANTLY — no per-open fetch + git call. Only fall back to an on-demand fetch if it's truly absent.
+  const fetched = useSpecDiff(node.id, !hasEvidence && node.lastDiff == null)
+  const diff = node.lastDiff ?? fetched
   return (
     <div className="pane-recent">
       {!rows ? <div className="rec-msg muted">loading…</div>

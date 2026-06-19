@@ -118,11 +118,29 @@ function raws(): Raw[] {
   return acc
 }
 
+// @@@ diff cache - a commit's patch is immutable, so memo fileDiffAt by (version sha + spec.md path).
+// loadSpecs precomputes every node's latest line-diff for the board (so the recent tab is instant —
+// no per-open fetch + git call), and specDiff serves the SAME value on demand. A warm entry makes both
+// a Map lookup; only a node that gained a NEW version (a new sha) misses and pays a single git show.
+// `{hash:'',patch:''}` for an unversioned node — no git call, and the recent tab renders the honest
+// "no recorded change" instantly. Keyed by path too because one commit can patch several nodes' spec.md.
+const diffCache = new Map<string, { hash: string; patch: string }>()
+async function latestDiff(relPath: string, hash: string): Promise<{ hash: string; patch: string }> {
+  if (!hash) return { hash: '', patch: '' }
+  const key = `${hash}\0${relPath}`
+  const hit = diffCache.get(key)
+  if (hit) return hit
+  const val = { hash, patch: await fileDiffAt(ROOT, relPath, hash) }
+  diffCache.set(key, val)
+  return val
+}
+
 export async function loadSpecs() {
   // both indexes are one cached git walk each and independent — fetch them in parallel (async git, so
-  // they don't block the server's event loop or pay sync fork() cost). Every node below is a pure lookup.
+  // they don't block the server's event loop or pay sync fork() cost). Every node below is a pure lookup
+  // EXCEPT its precomputed latest diff, which is one cached git show that only re-runs on a new version.
   const [idx, didx] = await Promise.all([historyIndex(ROOT), driftIndex(ROOT)])
-  return raws().map((r) => {
+  return Promise.all(raws().map(async (r) => {
     const h = rowsFor(idx, r.relPath)
     // @@@ real session attribution - the node's session IS the Claude Code session that authored its
     // latest version (the commit's `Session:` trailer, auto-stamped from CLAUDE_CODE_SESSION_ID). Since
@@ -166,13 +184,17 @@ export async function loadSpecs() {
       // (`evidence:` list). The backend is the source of truth here too — the dashboard never
       // fabricates these. Empty until the yatsu package records real captures and writes the links.
       evidence: list(r.fm.evidence),
+      // @@@ lastDiff - the node's latest version's unified patch to its spec.md, PRECOMPUTED and shipped
+      // with the board (and /api/specs) so the recent tab renders the line-diff instantly, with no
+      // per-open round-trip to /api/specs/:id/diff. Cached by the version's commit sha (see latestDiff).
+      lastDiff: await latestDiff(r.relPath, S),
       body: r.body.trim(),
       // @@@ two parts - raw source (human) / expanded spec (agent), parsed from labelled `## …`
       // sections. No agent-authored current-state part — what's-done is DERIVED (status/version/drift),
       // never narrated. null for legacy bodies that aren't authored in two parts.
       parts: parseParts(r.body),
     }
-  })
+  }))
 }
 
 // @@@ specHistory - per-node version timeline, each row's line-diff SCOPED to this node: its spec.md
@@ -205,5 +227,6 @@ export async function specDiff(id: string) {
   if (!node) return null
   const latest = rowsFor(await historyIndex(ROOT), node.relPath)[0]
   if (!latest) return { hash: '', patch: '' }
-  return { hash: latest.hash, patch: await fileDiffAt(ROOT, node.relPath, latest.hash) }
+  // same sha-keyed cache loadSpecs precomputes into, so an on-demand fetch is instant after the first.
+  return latestDiff(node.relPath, latest.hash)
 }

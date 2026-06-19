@@ -16,7 +16,9 @@ const GLYPH = { added: '+', edited: '~', deleted: '✕', moved: '→' }
 // the tree flows left->right, so handles are on the sides. When a worktree has a PENDING change to
 // this node (from /api/layout `ops`, decorated in loadBoard), it carries `overlays`: the row takes
 // the author session's colour (dashed ring = uncommitted, solid = committed) and shows op glyphs.
-// An `added` node that isn't on main yet renders as a translucent ghost.
+// An `added` node that isn't on main yet renders as a translucent ghost. When the node's author
+// session is LIVE (App decorates `data.link`), it stamps a subtle ⏎ in that session's colour —
+// clicking the node (or Enter on it) opens the session interface focused on that session.
 export default function SpecNode({ data, selected }) {
   const s = STATUS[data.status] || STATUS.pending
   const overlays = data.overlays || []
@@ -39,6 +41,10 @@ export default function SpecNode({ data, selected }) {
         {data.status === 'active' && <span className="pulse" style={{ background: s.color }} />}
       </span>
       <span className="node-title">{data.title}</span>
+      {data.link && (
+        <span className="node-session" style={{ color: data.link.color }}
+          title={`live session (${data.link.status}) — click or ⏎ to open`}>⏎</span>
+      )}
       {data.drift > 0 && (
         <span className="drift-badge" title={(data.driftFiles || []).map((d) => `${d.file}: ${d.behind} ahead`).join('\n')}>
           ⚠{data.drift}

@@ -27,6 +27,12 @@ function Dashboard({ specs, sessions, reload }) {
   // focus is resilient to the board reflowing under polling (a merged/closed node may vanish).
   const focus = byId[focusId] || specs.find((s) => !s.parent) || specs[0]
 
+  // @@@ node<->session link - a node's `session` IS the id of the Claude Code session that authored it
+  // (git Session: trailer; the live worktree runs under `--session-id` of that same id). So a node maps
+  // to a LIVE session by exact id match. This is the board->session half of the bidirectional link.
+  const sessionById = useMemo(() => Object.fromEntries(sessions.map((s) => [s.id, s])), [sessions])
+  const liveSessionFor = useCallback((node) => (node?.session && sessionById[node.session]) || null, [sessionById])
+
   const children = useMemo(() => specs.filter((s) => s.parent === focus.id), [specs, focus])
   const parent = focus.parent ? byId[focus.parent] : null
 
@@ -64,11 +70,14 @@ function Dashboard({ specs, sessions, reload }) {
     } else {
       className = kin ? undefined : 'is-far'
     }
+    // a node whose author session is live carries a `link` so SpecNode can stamp the subtle ⏎ affordance.
+    const live = liveSessionFor(s)
     return {
-      id: s.id, type: 'spec', position: { x: s.x, y: s.y }, data: s,
+      id: s.id, type: 'spec', position: { x: s.x, y: s.y },
+      data: live ? { ...s, link: { color: live.color, status: live.status } } : s,
       draggable: false, selected: s.id === focusId, className,
     }
-  }), [focusId, focus.parent, highlightId, specs])
+  }), [focusId, focus.parent, highlightId, specs, liveSessionFor])
 
   const edges = useMemo(() => specs.filter((s) => s.parent).map((s) => {
     const hot = s.id === focusId || s.parent === focusId
@@ -112,6 +121,9 @@ function Dashboard({ specs, sessions, reload }) {
   // `i` opens the node-info popup, Enter opens the session interface. A modal (popup or session UI)
   // OWNS the keys while open — arrows no longer leak through to move the board behind it (the old
   // blind-navigation bug); the session interface handles its own list nav / input.
+  // open the session interface; if a session id is given, land on that tab (else keep the persisted one).
+  const openSession = useCallback((sid) => { if (sid) setSessionSel(sid); setSessionUI(true) }, [])
+
   useEffect(() => {
     const cyclePane = (dir) => setPane((p) => PANE_KEYS[(PANE_KEYS.indexOf(p) + dir + PANE_KEYS.length) % PANE_KEYS.length])
     const go = (t, e) => { if (t) { e.preventDefault(); e.stopPropagation(); setFocusId(t.id) } }
@@ -134,13 +146,20 @@ function Dashboard({ specs, sessions, reload }) {
       else if (e.key === '-' || e.key === '_') { e.preventDefault(); centerOn(focus, clamp(getViewport().zoom / 1.2), 160) }
       else if (e.key === '0') { e.preventDefault(); centerOn(focus, 0.85, 200) }
       else if (e.key === 'i' || e.key === 'I') { e.preventDefault(); setOverlay(true) }
-      else if (e.key === 'Enter') { e.preventDefault(); setSessionUI(true) }
+      // Enter opens the session interface — focused on the focus node's live session if it has one.
+      else if (e.key === 'Enter') { e.preventDefault(); openSession(liveSessionFor(focus)?.id) }
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [overlay, sessionUI, pane, focus, upTarget, downTarget, childTarget, parent, centerOn, getViewport])
+  }, [overlay, sessionUI, pane, focus, upTarget, downTarget, childTarget, parent, centerOn, getViewport, openSession, liveSessionFor])
 
-  const onNodeClick = useCallback((_e, n) => setFocusId(n.id), [])
+  // clicking a node focuses it; if its author session is LIVE, also open the session interface on it
+  // (the board->session half of the link, mirroring the session window's click-to-focus-node).
+  const onNodeClick = useCallback((_e, n) => {
+    setFocusId(n.id)
+    const live = liveSessionFor(n.data)
+    if (live) openSession(live.id)
+  }, [liveSessionFor, openSession])
 
   // clicking a session in the top-right window: toggle highlight of its worktree's overlays (matched
   // by source = worktree path) + jump to its first changed node (only .session-linked sessions carry

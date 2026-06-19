@@ -29,3 +29,11 @@ frontmatter: green = merged, orange = active (a worktree is touching it), yellow
 pending; active also pulses, and drift still shows its commits-ahead count as a separate ⚠ badge.
 A worktree's pending ops are stamped as overlay glyphs in the authoring session's colour — `+`
 added, `~` edited, `✕` deleted, `→` moved — with a dashed ring while uncommitted.
+
+The board and the session console are **bidirectionally linked** by one fact: a node's `session` is the
+id of the Claude Code session that authored it, and a live worktree runs under that same id (see
+[[session-console]]). So a node whose author session is currently live maps to it by exact id match.
+Such a node stamps a subtle `⏎` in the session's colour, and **clicking it** (or pressing Enter on it —
+the same key that opens the session interface, see [[keyboard-nav]]) opens the session interface focused
+on that session. The reverse half stays as-is: clicking a session row focuses its first changed node.
+Nodes with no live session just focus on click, so the gesture is unchanged for the rest of the tree.

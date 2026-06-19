@@ -6,6 +6,7 @@
 
 import { Avatar } from './avatar.jsx'
 import { labelColor } from './color.js'
+import { useT } from './i18n/index.jsx'
 
 const STATUS_DOT = { working: '#cb4b16', idle: '#93a1a1', offline: '#657b83', review: '#6c71c4', done: '#268bd2', 'close-pending': '#cb4b16', blocked: '#2aa198', error: '#dc322f', 'needs-input': '#b58900' }
 const GLYPH = { added: '+', edited: '~', deleted: '✕', moved: '→' }
@@ -18,14 +19,15 @@ function opSummary(ops) {
 }
 
 export default function SessionWindow({ sessions, activeId, onPick, onOpen }) {
+  const t = useT()
   return (
     <div className="sesswin">
       <div className="sesswin-head">
-        <span className="sesswin-title">// sessions</span>
-        <button className="sesswin-new" onClick={onOpen} title="open the session interface (⏎)">⏎ new</button>
+        <span className="sesswin-title">// {t('sessionWindow.title')}</span>
+        <button className="sesswin-new" onClick={onOpen} title={t('sessionWindow.newTitle')}>⏎ {t('common.new')}</button>
       </div>
       {sessions.length === 0 ? (
-        <div className="sesswin-empty">no live worktrees — press <kbd>⏎</kbd> to start one</div>
+        <div className="sesswin-empty">{t('sessionWindow.emptyBefore')}<kbd>⏎</kbd>{t('sessionWindow.emptyAfter')}</div>
       ) : (
         sessions.map((s) => {
           const ops = opSummary(s.ops)
@@ -36,10 +38,10 @@ export default function SessionWindow({ sessions, activeId, onPick, onOpen }) {
               style={{ '--ov': labelColor(s.id) }}
               onClick={() => onPick(s)}
             >
-              <Avatar seed={s.id} status={s.status} title={`${s.node || s.title || s.branch || s.id} · ${s.status} — ${s.id.slice(0, 8)}`} />
+              <Avatar seed={s.id} status={s.status} title={`${s.node || s.title || s.branch || s.id} · ${t(`status.${s.status}`)} — ${s.id.slice(0, 8)}`} />
               <span className="sess-dot" style={{ background: STATUS_DOT[s.status] || '#93a1a1' }} />
               <span className="sess-id">{s.node || s.title || s.branch || s.id}</span>
-              <span className="sess-status">{s.status}</span>
+              <span className="sess-status">{t(`status.${s.status}`)}</span>
               {ops && <span className="sess-ops">{ops}</span>}
             </button>
           )

@@ -43,8 +43,9 @@ special cases to infer reliably. So the agent **writes its own state**; hooks me
 to force the write. Lifecycle (in `.session`): `active` (working / not yet declared this turn),
 `awaiting` (a proposal — `merge`→review, `nothing`→done, `close`→close-pending), `blocked` (waiting on
 a background task; self-resumes — never mislabelled idle), `error` (a turn died on an API failure),
-`needs-input` (the agent **deliberately declared it is pausing to ask the HUMAN a question** — via `spex
-session ask --note <question>`, typically at the Stop gate; the note carries the question), and `idle`
+`needs-input` (the agent is **pausing to ask the HUMAN a question** — captured deterministically the moment
+it invokes the **AskUserQuestion** tool by the `PreToolUse` hook, the question becoming the note, and also
+self-declarable via `spex session ask --note <question>`; the note carries the question), and `idle`
 (claude has **stopped and is waiting at its prompt without having declared** any of the above). `idle` is
 the **one inferred state** — the Notification(`idle_prompt`) hook writes it — so unlike the agent-authored
 states it carries a **strict active-only guard** (see below). `needs-input` is distinct from `blocked`:
@@ -70,34 +71,36 @@ readable, only renamed so Claude Code's auto-discovery skips it — and the trac
 staged/committed/merged back to main. This is a rename, never a delete and never `--bare`, so auth, the
 hooks, and the repo all keep working; it is overridable (`SPEXCODE_HIDE_CLAUDE_MD=0`) and on by default,
 and best-effort (a failure isolating never blocks the launch). Five hooks are injected via a per-worktree
-settings file (no global settings touched): **`PreToolUse` → active** is the reliable freshness signal (any tool use means working; it
-fires before the tool, so a `spex session done` declaration lands after and wins); **`UserPromptSubmit`
-→ active** adds instant feedback when a prompt is sent; **`Stop` → the gate** blocks a stop while still
+settings file (no global settings touched): **`UserPromptSubmit` + `PreToolUse` → one branching
+`mark-active` hook** that reads the payload's `tool_name` and writes **`needs-input`** (the question → the
+note) when the tool is **AskUserQuestion**, else **`active`** — the reliable freshness signal (any other
+tool use means working; it fires before the tool, so a `spex session done` declaration lands after and
+wins, and the next tool flips back to active); **`Stop` → the gate** blocks a stop while still
 `active` to force a declaration, with a hard loop-break (on the `stop_hook_active` continuation it
 auto-defaults and allows — at most one nudge, never a dead loop, never an undeclared leak);
-**`StopFailure` → error**; and **`Notification(idle_prompt)` → idle** (catch-all hook + inline payload
-filter, so it runs `spex session idle` only on the idle-prompt notification, not other notifications)
-marks the session `idle` when claude sits waiting at its prompt. `spex session idle` is **guarded
+**`StopFailure` → error**; and **`Notification(idle_prompt)` → idle** (a catch-all hook that keys on the
+structured `notification_type` field, so it runs `spex session idle` only on the idle-prompt notification,
+not other notifications) marks the session `idle` when claude sits waiting at its prompt. `spex session idle` is **guarded
 active-only**: it overwrites `active` → `idle` and no-ops on any other status, so it can never clobber a
 deliberate declaration. The mark-active path flips `idle` back to `active` the moment real work resumes,
 so the inference is self-correcting.
 
-`needs-input` is **not** wired to a hook — it is **agent-authored** via `spex session ask --note
-<question>`, offered as a fourth option in the Stop gate's block-reason menu (alongside `done --propose
-merge|nothing|close` and `block`). When the agent stops to ask the human a question, it picks `ask`; this
-calls `markStateFromCwd('needs-input', { note })` — a deliberate declaration like `done`/`block`, so
-(unlike the other authored states' inference-proofing) it carries **no active-only guard**: the agent is
-the authority on what its stop means. The note carries the question. `needs-input` is deliberately **not**
-driven by Claude Code's `Notification(idle_prompt)` hook: the Stop gate forces a stop-time declaration, so
-a question-asking agent always declares `done`/`ask` *before* `idle_prompt` could fire — the gate is what
-makes the question actually surface (verified end-to-end). That same `idle_prompt` hook instead drives the
-separate, **inferred** `idle` state, which is exactly the case the gate *cannot* cover: a stop with **no
+`needs-input` has **two deterministic writers, neither inferred and neither active-only guarded** — both
+are definite signals, not guesses, so each may overwrite freely: (1) the `PreToolUse` mark-active hook
+captures it the instant the agent invokes the **AskUserQuestion** tool (reading `tool_name` from the
+payload; the first question becomes the note) — AskUserQuestion *is* the agent asking — and (2) the agent
+can declare it itself via `spex session ask --note <question>`, offered in the Stop gate's block-reason
+menu (alongside `done --propose merge|nothing|close` and `block`), which calls
+`markStateFromCwd('needs-input', { note })`. Both write the question as the note. `needs-input` is
+deliberately **not** driven by Claude Code's `Notification(idle_prompt)` hook: that hook instead drives the
+separate, **inferred** `idle` state — exactly the case neither of the above covers: a stop with **no
 declaration at all** (an API error killed the turn before the gate ran, or the brief window between
 stopping and declaring). `needs-input` is the agent saying "I'm asking you something"; `idle` is "I
 stopped and nobody said why". The active-only guard on `session idle` is what keeps the inferred signal
 from ever clobbering this (or any other) deliberate declaration. The mark-active path
-(`PreToolUse`/`UserPromptSubmit` → active) clears `needs-input` (and `idle`) back to `active` the moment
-the human sends the next prompt / the agent resumes work, same as it clears any other non-active state.
+(`PreToolUse`/`UserPromptSubmit` → active on any non-AskUserQuestion tool) clears `needs-input` (and
+`idle`) back to `active` the moment the agent resumes work / the human sends the next prompt, same as it
+clears any other non-active state.
 Surfacing is the **manager's** job: a `needs-input` transition is one of the actionable events `spex watch`
 emits (carrying the note), and the *spoken* alert on it is the manager's `spex watch` + voice, not the session.
 

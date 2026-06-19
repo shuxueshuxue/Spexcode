@@ -21,9 +21,12 @@ same sessions through the CLI see identical state. The dashboard never invents s
 ## expanded spec
 
 The interface is two panes: a left session list and a right content area that **morphs** by what's
-focused. "New Session" shows a centered avatar + input, prefilled with the focus node as an editable
-`@node` reference (a convenience — a session may touch any nodes, so the prefix is deletable); launching
-switches to the new session. An existing session shows its **live tmux terminal** (SessionTerm) — a
+focused. "New Session" shows a centered avatar + input (sitting a little above centre), prefilled with the
+focus node as an editable `@node` reference (a convenience — a session may touch any nodes, so the prefix is
+deletable); launching switches to the new session. The new-session box **auto-grows** to fit its content as
+lines wrap or newlines are added (and shrinks back as text is deleted), up to a max height past which it
+scrolls — the growth is smoothed. Its hint says only that the prompt is `@node`-prefixed and the prefix is
+deletable; it does not name the launch command. An existing session shows its **live tmux terminal** (SessionTerm) — a
 **read-only view** — with the **single human input** docked at the bottom.
 
 The terminal is a **real tmux client**, not an output tap, but it is a **pure scrollable view**: the

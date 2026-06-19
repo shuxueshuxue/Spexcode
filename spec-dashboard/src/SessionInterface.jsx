@@ -6,8 +6,11 @@ import SessionTerm from './SessionTerm.jsx'
 //   · "New Session" focused -> input box + avatar CENTERED (terminal vibe), prefilled with the focused
 //     spec node as an editable @prefix (a CONVENIENCE — a session can reference any/all nodes, so the
 //     prefix is deletable); Enter launches a real session, then we SWITCH to it.
-//   · an existing session focused -> the content becomes the live tmux terminal (SessionTerm), with the
-//     EXTERNAL input docked at the BOTTOM; typing + Enter forwards keystrokes to the session.
+//   · an existing session focused -> the content becomes a READ-ONLY live tmux terminal (SessionTerm),
+//     with the SINGLE human input docked at the BOTTOM. The terminal never accepts typing; the bottom box
+//     is the only input — submitting writes the line + Enter into the pane over the terminal's OWN socket
+//     (each SessionTerm registers a `send` writer in `sendersRef`), falling back to POST /keys if the
+//     socket isn't open yet.
 // `sel` is LIFTED to App so the surface reopens on the SAME tab the user left.
 //
 // KEY HANDLING is at the WINDOW level (capture), not the panel's onKeyDown: when you arrow off the
@@ -22,6 +25,9 @@ export default function SessionInterface({ sessions, focusNode, sel, setSel, onC
   const [sending, setSending] = useState(false)
   const taRef = useRef(null)
   const msgRef = useRef(null)
+  // each mounted SessionTerm registers its socket writer here, keyed by session id, so the bottom box can
+  // push the typed line into the active session's pane over the SAME socket the terminal already holds.
+  const sendersRef = useRef({})
 
   const order = useMemo(() => ['new', ...sessions.map((s) => s.id)], [sessions])
   const active = order.includes(sel) ? sel : 'new'
@@ -78,6 +84,9 @@ export default function SessionInterface({ sessions, focusNode, sel, setSel, onC
     const text = msg
     if (!text.trim() || active === 'new') return
     setMsg('')
+    // prefer the terminal's live socket (text + Enter as raw bytes); fall back to POST /keys if it isn't
+    // open yet (e.g. the terminal just mounted and the ws is still connecting).
+    if (sendersRef.current[active]?.(text + '\r')) return
     await fetch(`/api/sessions/${active}/keys`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text, enter: true }),
@@ -180,7 +189,7 @@ export default function SessionInterface({ sessions, focusNode, sel, setSel, onC
                   {/* every opened session's terminal stays mounted; only the active one is shown */}
                   {[...opened].map((id) => (
                     <div key={id} className="si-term-layer" style={{ position: 'absolute', inset: 0, display: id === active ? 'block' : 'none' }}>
-                      <SessionTerm sessionId={id} />
+                      <SessionTerm sessionId={id} senders={sendersRef} />
                     </div>
                   ))}
                   {selSession?.status === 'offline' && (

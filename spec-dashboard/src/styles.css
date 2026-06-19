@@ -410,7 +410,18 @@ body {
    and its wrapper clip (no horizontal scrollbar), but the xterm VIEWPORT scrolls vertically so the
    accumulated scrollback is reachable — that one viewport scrollbar is the only one (no double bar). */
 .si-term-body { padding: 8px 10px; overflow: hidden; }
+/* the terminal is a read-only VIEW; .st-wrap anchors the floating copy button to its top-right corner. */
+.st-wrap { position: relative; width: 100%; height: 100%; }
 .st-host { width: 100%; height: 100%; overflow: hidden; }
+/* unobtrusive copy-to-clipboard overlay, top-right of every terminal (clear of the viewport scrollbar). */
+.st-copy {
+  position: absolute; top: 5px; right: 14px; z-index: 3;
+  font: 10px/1 Menlo, monospace; color: var(--ink2);
+  background: var(--panel2); border: 1px solid var(--line); border-radius: 4px;
+  padding: 3px 7px; cursor: pointer; opacity: .35; transition: opacity .12s ease;
+}
+.st-wrap:hover .st-copy { opacity: .8; }
+.st-copy:hover { opacity: 1; }
 .st-host .xterm, .st-host .xterm-screen {
   width: 100% !important; height: 100% !important; background: var(--paper) !important;
 }

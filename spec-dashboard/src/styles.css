@@ -366,12 +366,17 @@ body {
 @keyframes si-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @keyframes si-expand { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: none; } }
 
-/* live tmux terminal inside the session view — xterm is FITTED to this box (see SessionTerm), so the
-   box clips rather than scrolls: overflow:hidden everywhere kills the double scrollbar (h + v). */
+/* live tmux terminal inside the session view — xterm is FITTED to this box (see SessionTerm). The host
+   and its wrapper clip (no horizontal scrollbar), but the xterm VIEWPORT scrolls vertically so the
+   accumulated scrollback is reachable — that one viewport scrollbar is the only one (no double bar). */
 .si-term-body { padding: 8px 10px; overflow: hidden; }
 .st-host { width: 100%; height: 100%; overflow: hidden; }
-.st-host .xterm, .st-host .xterm-viewport, .st-host .xterm-screen {
-  width: 100% !important; height: 100% !important; overflow: hidden !important; background: var(--paper) !important;
+.st-host .xterm, .st-host .xterm-screen {
+  width: 100% !important; height: 100% !important; background: var(--paper) !important;
+}
+.st-host .xterm-viewport {
+  width: 100% !important; height: 100% !important; overflow-y: auto !important; overflow-x: hidden !important;
+  background: var(--paper) !important;
 }
 .si-bottom .si-input { color: var(--ink2); }
 

@@ -75,6 +75,28 @@ function caretAtEdge(el, dir) {
   return dir === 'up' ? top < lh : top >= textHeight - lh - 1
 }
 
+// @@@ slash-command match - filter the fetched command list by the typed prefix (the text after `/`).
+// startsWith beats a mid-string include; server order (custom → built-in → skill) is preserved within a
+// score band because Array.sort is stable. Empty query (just `/`) lists everything. Mirrors CC's `/` menu.
+function matchSlash(cmds, query) {
+  const q = query.toLowerCase()
+  const scored = []
+  for (const c of cmds) {
+    const n = c.name.toLowerCase()
+    let score
+    if (!q) score = 1
+    else if (n.startsWith(q)) score = 0
+    else if (n.includes(q)) score = 1
+    else continue
+    scored.push({ c, score })
+  }
+  scored.sort((a, b) => a.score - b.score)
+  return scored.slice(0, 10).map((x) => x.c)
+}
+
+// the row's trailing source tag, mirroring CC: `(user)` / `(project)` / `[skill]` / `built-in`.
+const SRC_TAG = { user: '(user)', project: '(project)', skill: '[skill]', 'built-in': 'built-in' }
+
 // bold the first case-insensitive hit of the query inside a label (the part the user has typed so far).
 function highlight(text, q) {
   if (!q) return text
@@ -85,7 +107,8 @@ function highlight(text, q) {
 
 export default function SessionInterface({ sessions, specs = [], focusNode, open, sel, setSel, seed, onSeedConsumed, onClose, onCreated }) {
   const [prompt, setPrompt] = useState('')    // the New Session tab's own draft (its boarding-switch cache)
-  const [menu, setMenu] = useState(null)      // @-mention dropdown: { items, index, start, end, query }
+  const [menu, setMenu] = useState(null)      // completion dropdown: { kind:'mention'|'slash', items, index, start, end, query }
+  const [slashCmds, setSlashCmds] = useState([])   // the `/` command list (built-in + user/project/skill), fetched once
   // bottom-input drafts, keyed by session id — each session tab keeps its OWN typed-but-unsent line, never
   // a single shared box. Survives tab switches and close/reopen (the panel stays mounted, see `open`).
   const [drafts, setDrafts] = useState({})
@@ -103,6 +126,12 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // the active session tab's bottom-input draft (per-session, see `drafts`).
   const msg = drafts[active] || ''
   const setMsg = (v) => setDrafts((d) => ({ ...d, [active]: v }))
+
+  // fetch the `/` command list once — same data CC's own `/` menu is built from (see backend
+  // /api/slash-commands). Purely for display+insert; we never execute a command from it.
+  useEffect(() => {
+    fetch('/api/slash-commands').then((r) => r.json()).then((d) => { if (Array.isArray(d)) setSlashCmds(d) }).catch(() => {})
+  }, [])
 
   // @@@ persistent terminals - keep every session terminal you've opened MOUNTED (hidden when inactive),
   // so its WebSocket + scroll position survive a tab switch and switching back is instant (no remount,
@@ -180,11 +209,20 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     }
   }
 
-  // @@@ @-mention menu - while typing the New Session prompt, an `@` that begins a word opens a dropdown
-  // of spec nodes filtered by what follows it (matched against id + spec path). Picking one drops a clean
-  // `@<id>` token in place. The trigger is purely positional: we scan back from the caret over non-space
-  // chars; it's a mention only if we hit an `@` sitting at a word boundary with no space up to the caret.
+  // @@@ completion menus - the New Session prompt drives TWO dropdowns sharing one state machine:
+  //   · slash  - the WHOLE line is a single `/token` (no space yet): mirrors Claude Code's `/` menu,
+  //              listing commands whose name matches the prefix. Typing a space (→ args) dismisses it,
+  //              exactly like CC. DECOUPLED — picking one only inserts `/<name> ` text, nothing runs.
+  //   · mention - an `@` that begins a word opens the spec-node dropdown (matched against id + spec path).
+  // The trigger is purely positional. For mention we scan back from the caret over non-space chars; it's
+  // a mention only if we hit an `@` at a word boundary with no space up to the caret.
   const buildMenu = (value, caret) => {
+    const sm = value.match(/^\/(\S*)$/)
+    if (sm) {
+      const items = matchSlash(slashCmds, sm[1])
+      if (!items.length) return null
+      return { kind: 'slash', items, index: 0, start: 0, end: value.length, query: sm[1] }
+    }
     let i = caret - 1
     while (i >= 0 && value[i] !== '@' && !/\s/.test(value[i])) i--
     if (i < 0 || value[i] !== '@') return null
@@ -192,15 +230,16 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     const query = value.slice(i + 1, caret)
     const items = matchSpecs(specs, query, focusId)
     if (!items.length) return null
-    return { items, index: 0, start: i, end: caret, query }
+    return { kind: 'mention', items, index: 0, start: i, end: caret, query }
   }
   // recompute from the textarea's live value + caret (covers typing, deletes, and bare caret moves).
   const syncMenu = (el) => setMenu(el ? buildMenu(el.value, el.selectionStart) : null)
   const navMenu = (dir) => setMenu((m) => (m ? { ...m, index: (m.index + dir + m.items.length) % m.items.length } : m))
-  // replace the `@query` span under the caret with the picked node's `@<id> `, then drop the caret after it.
+  // replace the menu's span under the caret with the picked item's token, then drop the caret after it.
+  // slash → `/<name> ` (insert-only, never executed); mention → `@<id> `.
   const accept = (item) => {
     if (!item || !menu) return
-    const insert = `@${item.id} `
+    const insert = menu.kind === 'slash' ? `/${item.name} ` : `@${item.id} `
     const before = prompt.slice(0, menu.start)
     setPrompt(before + insert + prompt.slice(menu.end))
     setMenu(null)
@@ -301,11 +340,30 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   onChange={(e) => { setPrompt(e.target.value); syncMenu(e.target) }}
                   onSelect={(e) => syncMenu(e.target)}
                   onBlur={() => setMenu(null)}
-                  placeholder="describe the work · @ to reference a spec · ⏎ to launch · ⇧⏎ newline"
+                  placeholder="describe the work · @ spec · / command · ⏎ to launch · ⇧⏎ newline"
                   spellCheck={false}
                   disabled={sending}
                 />
-                {menu && (
+                {menu && menu.kind === 'slash' && (
+                  <ul className="mention-menu" role="listbox">
+                    <li className="mention-head">// {menu.query ? `/${menu.query}` : 'commands'} — ↑↓ pick · ⏎ insert</li>
+                    {menu.items.map((it, i) => (
+                      <li
+                        key={`${it.source}:${it.name}`}
+                        role="option"
+                        aria-selected={i === menu.index}
+                        className={i === menu.index ? 'mention-item on' : 'mention-item'}
+                        onMouseDown={(e) => { e.preventDefault(); accept(it) }}
+                        onMouseEnter={() => setMenu((m) => (m ? { ...m, index: i } : m))}
+                      >
+                        <span className="slash-name">/{highlight(it.name, menu.query)}</span>
+                        <span className="slash-desc">{it.description}</span>
+                        <span className={`slash-src src-${it.source}`}>{SRC_TAG[it.source] || it.source}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {menu && menu.kind === 'mention' && (
                   <ul className="mention-menu" role="listbox">
                     <li className="mention-head">// {menu.query ? `@${menu.query}` : 'spec nodes'} — ↑↓ pick · ⏎ insert</li>
                     {menu.items.map((it, i) => (

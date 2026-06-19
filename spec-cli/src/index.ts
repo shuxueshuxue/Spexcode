@@ -6,13 +6,14 @@ import { loadSpecs, specHistory, specDiff } from './specs.js'
 import { resolveLayout } from './layout.js'
 import { buildBoard } from './board.js'
 import { newSession, listSessions, sendKeys, closeSession, reopen, propose, mergeSession } from './sessions.js'
+import { slashCommands } from './slash-commands.js'
 import { attachViewer, detachViewer, writeViewer, resizeBridge, superviseBridges, type Viewer } from './pty-bridge.js'
 
 const app = new Hono()
 app.use('/api/*', cors())
 const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app })
 
-app.get('/', (c) => c.text('spec-cli — GET /api/board · /api/specs · /api/specs/:id/history · /api/layout · /api/sessions'))
+app.get('/', (c) => c.text('spec-cli — GET /api/board · /api/specs · /api/specs/:id/history · /api/layout · /api/sessions · /api/slash-commands'))
 // the assembled board (merged tree + overlay + sessions) — the dashboard's single source. Same data
 // as `spex board`; the frontend only adds x/y pixels on top.
 app.get('/api/board', async (c) => c.json(await buildBoard()))
@@ -22,6 +23,9 @@ app.get('/api/specs/:id/history', async (c) => c.json(await specHistory(c.req.pa
 // has no A→B screenshot evidence yet.
 app.get('/api/specs/:id/diff', async (c) => c.json(await specDiff(c.req.param('id'))))
 app.get('/api/layout', async (c) => c.json(await resolveLayout()))
+// the dashboard input's `/` dropdown — the union of built-in + user/project/skill commands, computed
+// the same way Claude Code computes its own `/` menu. Insert-only on the client; nothing executes here.
+app.get('/api/slash-commands', (c) => c.json(slashCommands()))
 
 // sessions: real tmux-backed Claude Code sessions. List + spawn, stream the live pane (WebSocket),
 // forward keystrokes, and close.

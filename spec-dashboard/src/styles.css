@@ -442,6 +442,15 @@ body {
 .mention-id { color: var(--blue); flex: none; }
 .mention-id .mention-hit { color: var(--ink2); font-weight: 700; }
 .mention-path { color: var(--muted); font-size: 11px; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* @@@ slash-command rows - mirror CC's `/` menu: `/name`, a dim description that ellipses, and a
+   right-aligned source tag. Same dropdown shell as @-mention (square, hairline, monospace). */
+.slash-name { color: var(--blue); flex: none; }
+.slash-name .mention-hit { color: var(--ink2); font-weight: 700; }
+.slash-desc { color: var(--muted); font-size: 11px; min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.slash-src { color: var(--muted); font-size: 10.5px; flex: none; opacity: .7; }
+.slash-src.src-user { color: var(--green); opacity: .85; }
+.slash-src.src-project { color: var(--cyan); opacity: .85; }
+.slash-src.src-skill { color: var(--magenta); opacity: .85; }
 .si-input {
   flex: 1; min-width: 0; resize: none; background: transparent; border: none; outline: none;
   color: var(--ink2); font-family: var(--mono); font-size: 13px; line-height: 1.5; max-height: 180px;

@@ -4,8 +4,6 @@ status: active
 session: sess-b412
 hue: 45
 desc: A→B proof frames are backend-served metadata links, shown in the recent tab — none until yatsu.
-code:
-  - spec-dashboard/src/NodeView.jsx
 ---
 # ab-screenshots
 
@@ -30,3 +28,9 @@ evidence yet". Same slot, real frames later.
 fabricated anywhere — absent evidence reads as none, an admitted gap (no real captures exist yet) rather than
 a back-written claim. The `evidence` field rides in on the node from the backend (`data.js` decorates only
 x/y), so when yatsu starts recording, real frames appear in the same slot with no dashboard change.
+
+This node governs **no source of its own**. Its rendering surface, `RecentPane`, is part of `NodeView.jsx`,
+owned by [[work-pane]] (the node popup); the `evidence` field is backend metadata; and the real A→B captures
+arrive only with the yatsu package (pending). So ab-screenshots is the proof *contract* — what evidence is
+and where it shows — and stays code-less until yatsu records the first frames, rather than co-claiming the
+popup file and reading its churn as drift.

@@ -50,9 +50,10 @@ they live in `specs.ts`/`git.ts`/`layout.ts`/`board.ts`/`sessions.ts` under the 
 
 ### verdict — not drifted
 
-`index.ts` is the only governed file and sits at this node's latest version with no commits ahead
-(`spex lint` reports no `drift` warning for `spec-cli`). The expanded spec states the route contract as
-intended behavior; the description is the honest read of how `index.ts` meets it today. The session
-routes grew when [[sessions]] landed, and the expanded spec now names them as thin callers — that is the
-file's clarified contract, not a code change back-written to look complete; the raw source (a server
-that serves `.spec`+git and houses the guards) still holds.
+`index.ts` is this node's only governed file, and this version re-anchors the contract to it: the route
+surface the description enumerates — board, specs, history, layout, and the full `/api/sessions`
+surface — is exactly what `index.ts` exposes today, so the spec no longer lags. The session routes grew
+when [[sessions]] landed and the expanded spec names them as thin callers — that is the file's clarified
+contract, not a code change back-written to look complete; the raw source (a server that serves
+`.spec`+git and houses the guards) still holds. The `spex` CLI front door `cli.ts` is governed by
+[[sessions]] (the dispatcher's bulk is session subcommands); this node owns only the HTTP entry.

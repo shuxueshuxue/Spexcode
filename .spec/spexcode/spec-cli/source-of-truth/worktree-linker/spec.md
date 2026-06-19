@@ -4,8 +4,6 @@ status: merged
 session: sess-design
 hue: 190
 desc: Map each worktree to its node via branch name + an untracked .session file.
-code:
-  - spec-cli/src/layout.ts
 ---
 # worktree-linker
 
@@ -41,11 +39,12 @@ against main for managed worktrees. The result is the `Worktree[]` consumed by `
 writers belong to the [[sessions]] state machine in `sessions.ts`; this node owns only the read-side
 link from worktree → node that `layout.ts` performs.
 
-### verdict — not drifted
+### verdict
 
-`layout.ts` is the only governed file and sits at this node's latest version with no commits ahead
-(`spex lint` reports no `drift` warning for `worktree-linker`). The file advanced with the rename and
-the board overlay; the expanded spec keeps describing the link itself (branch + `.session` → node +
-overlay) and defers the richer session lifecycle to [[sessions]], so no other node's behavior is
-back-written here. The raw source (map worktree → node via branch + untracked `.session`, compose by
-keeping `.spec` in-tree) still holds.
+This node governs **no source of its own**. The read-side link it specifies (`readSession` + the
+branch→node mapping) is implemented inside `layout.ts`, and that file is owned by [[portable-layout]] —
+the seam it explicitly "lives inside." Co-claiming `layout.ts` here was pure phantom drift: every
+`resolveLayout`/`ops` change to the seam read as this node's drift too. Dropping the claim makes
+worktree-linker the read-side *contract* (branch + untracked `.session` → node + overlay), with the file's
+drift attributed once, to [[portable-layout]]. The raw source (map worktree → node via branch + untracked
+`.session`, compose by keeping `.spec` in-tree) still holds.

@@ -6,7 +6,6 @@ hue: 335
 desc: The node popup — a reference view of intent; the live work surface moved to the session interface.
 code:
   - spec-dashboard/src/NodeView.jsx
-  - spec-dashboard/src/styles.css
 ---
 # work-pane
 
@@ -33,8 +32,9 @@ with no `work` pane and no embedded terminal. `SpecPane` renders the spec doc (`
 status/version/session meta, `// governs` code list) and dispatches the body to `TwoPart` when `node.parts`
 is present, else the flat `SpecBody`; `RecentPane`/`HistoryPane` read `/api/specs/:id/history`. The "change
 it in place" surface relocated to the session interface (`Enter`; see [[session-console]] and [[term-input]])
-— that is where the live terminal now lives, keyed to a session rather than a node. `styles.css` carries the
-sizing contract — the `.ov-panel` fixed pop-out, `.pane-solo` for the single-pane body, `min-width:0` down
-the chain, `overflow:hidden` body — and the older `.pane-work` (40/60 split) / `.pane-term` rules survive
-there for the now-dormant `TermPane`. So the original "one act split in two" intent stands, but the union is
-dissolved: intent in the popup, the changing surface with the session.
+— that is where the live terminal now lives, keyed to a session rather than a node. The sizing contract is
+expressed in CSS — the `.ov-panel` fixed pop-out, `.pane-solo` for the single-pane body, `min-width:0` down
+the chain, `overflow:hidden` body — but `styles.css` is the dashboard's shared stylesheet and is governed by
+[[node-graph]]; this node owns only `NodeView.jsx`, the popup component, so a style change elsewhere never
+reads as drift here. So the original "one act split in two" intent stands, but the union is dissolved:
+intent in the popup, the changing surface with the session.

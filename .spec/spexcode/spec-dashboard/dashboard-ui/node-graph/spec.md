@@ -8,7 +8,6 @@ code:
   - spec-dashboard/src/SpecNode.jsx
   - spec-dashboard/src/Legend.jsx
   - spec-dashboard/src/data.js
-  - spec-dashboard/src/App.jsx
   - spec-dashboard/src/styles.css
 ---
 # node-graph
@@ -69,18 +68,21 @@ emits the solid tree edges plus, for any node whose overlays include a `moved` w
 proposed new parent — the reparent preview. `SpecNode.jsx`
 renders the row: a `STATUS`-coloured dot (with a pulse for `active`), title, the `⏎` session affordance
 when `data.link` is set, the `⚠{drift}` badge when `drift > 0`, the version, and the dedup'd op glyphs;
-`ghost`/`deleted`/`has-overlay`/`ov-dirty` classes carry the overlay styling from `styles.css`. The camera
-flat-pan and the click→focus/open-session handlers live in `App.jsx` alongside [[keyboard-nav]].
+`ghost`/`deleted`/`has-overlay`/`ov-dirty` classes carry the overlay styling from `styles.css`.
 `Legend.jsx` is the `?`-toggled floating card; it imports `STATUS`/`GLYPH` from `SpecNode.jsx` (exported
-for exactly this) rather than re-declaring the colours, and `App.jsx` holds the `legend` state, the
-`?`/Esc keys in the graph-mode branch, and the `? legend` HUD hint.
+for exactly this) rather than re-declaring the colours. The react-flow shell that hosts these — building
+`nodes`/`edges`, the camera flat-pan, the click→focus/open-session handlers, and the `legend` state with
+its `?`/Esc keys — lives in `App.jsx`, which is governed by [[keyboard-nav]]: this node owns the four
+graph-rendering files (`SpecNode.jsx`, `Legend.jsx`, `data.js`, and the shared `styles.css`), and a
+keyboard or shell change in `App.jsx` is keyboard-nav's drift, not node-graph's.
 
 ### verdict — not drifted
 
-All five governed files sit at or behind this node's latest version with no commits ahead after this
-change (`spex lint` reports no `drift` warning for `node-graph`); `App.jsx`, `styles.css`, `SpecNode.jsx`
-and the new `Legend.jsx` carry the `?`-toggled legend and ship in the same commit as this spec, so none
-drifts. The expanded spec
+The four governed files (`SpecNode.jsx`, `Legend.jsx`, `data.js`, `styles.css`) sit at or behind this
+node's latest version with no commits ahead after this change (`spex lint` reports no `drift` warning for
+`node-graph`); `styles.css`, `SpecNode.jsx` and `Legend.jsx` carry the `?`-toggled legend and re-anchor at
+this commit. `App.jsx` was dropped from this node's `code:` — it is the shell + keyboard handler, owned by
+[[keyboard-nav]], and its churn was the bulk of node-graph's old phantom drift. The expanded spec
 states the map's intended behavior; the description is the honest read of how the four files realise it
 today. The derived four-state dot, the drift badge, the overlay glyphs, the board↔session link, and the
 reparent-preview arrow were folded into the expanded spec as they landed, not back-written after the

@@ -85,3 +85,12 @@ edited by" line. It resolves by how many are live: **one** → jump straight in;
 Session prefilled with `@<node-id>` (start working on it in place); **several** → open the session
 interface so the human picks which editor to drive. A node carrying live editor(s) shows a subtle `⏎`
 affordance on the board.
+
+### the governed file
+
+`App.jsx` is this node's **single** governed file — the app shell and the **capture-phase keydown
+handler** that routes every arrow/`hjkl`/`i`/`Enter`/`?`/`Esc` to navigation or the active modal. It is
+exclusively keyboard-nav's: the graph rendering it also wires up (react-flow `nodes`/`edges`, overlays,
+the legend card) is specified by [[node-graph]], but the file's reason to exist — and its churn — is the
+keyboard contract here, so [[node-graph]] no longer co-claims it and that churn stops reading as the
+graph's drift.

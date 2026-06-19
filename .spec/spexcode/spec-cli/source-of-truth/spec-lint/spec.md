@@ -6,9 +6,6 @@ hue: 175
 desc: Keep the spec↔code graph honest — every code file is claimed by a spec; `spex lint` enforces it.
 code:
   - spec-cli/src/lint.ts
-  - spec-cli/src/cli.ts
-  - spec-cli/src/specs.ts
-  - scripts/hooks/pre-commit
 ---
 # spec-lint
 
@@ -66,18 +63,19 @@ the real hook, not by running `spex lint` by hand.
 emitting **integrity** errors for missing `code:` paths, scans each body (fence-aware `VER_HEADING`)
 for **living** errors, walks `GOVERNED_ROOTS` (`spec-dashboard/src`, `spec-cli/src`; `SRC` extensions,
 skipping `node_modules`/`dist`/`.vite`) for **coverage** warnings on unclaimed files, and turns each
-node's `driftFiles` (computed in `specs.ts`) into **drift** warnings. `cli.ts` dispatches `spex lint`
-(prints findings, exits non-zero on any error) and `spex ack <node>` (stamps the `Spec-OK:` drift-ack
-trailer onto HEAD) alongside `serve`/`board`/`ls`/`watch`/`session`; the session subcommands belong to
-[[sessions]] but share this same CLI entry, which is why `cli.ts` is co-governed here. `scripts/hooks/pre-commit` is the shim: it runs `spex lint` and blocks on errors only,
-honoring `SPEXCODE_SKIP_LINT=1`, and routes git through the `GIT_DIR`-stripping helper. Current run: 0
-errors, drift warnings only. The LLM judge over this graph is not yet built.
+node's `driftFiles` (computed in `specs.ts`) into **drift** warnings. This node now governs **only
+`lint.ts`** — the lint logic itself. The files the lint *flow* passes through are owned where their
+primary concern lives: the `spex lint`/`spex ack` dispatch sits in `cli.ts` ([[sessions]], which owns the
+shared CLI dispatcher), `loadSpecs()`/`driftFiles` in `specs.ts` ([[source-of-truth]]), and the
+`scripts/hooks/pre-commit` shim that runs `spex lint` and blocks on errors only (honoring
+`SPEXCODE_SKIP_LINT=1`, routing git through the `GIT_DIR`-stripping helper) in [[main-guard]]. Keeping
+those out of this node's `code:` is the point: a change to a session subcommand or the loader no longer
+reads as drift on the lint graph. The LLM judge over this graph is not yet built.
 
 ### verdict — not drifted
 
-All four governed files sit at or behind this node's latest version with no commits ahead (`spex lint`
-reports no `drift` warning for `spec-lint`). `cli.ts` and `specs.ts` advanced for the session and
-three-part work, which is *other* nodes' behavior; this spec deliberately scopes itself to the lint
-graph and names co-governance of `cli.ts` explicitly rather than absorbing those features — so the
-contract is clarified, not back-written. The raw source (a `code:` edge plus a linter over the graph;
-content-correctness left to the judge) still holds.
+The sole governed file, `lint.ts`, sits at this node's latest version. The phantom drift this node used
+to show came entirely from the shared files it co-claimed — `cli.ts` and `specs.ts` advanced for session
+and loader work that was never *this* node's behavior. Making ownership exclusive (only `lint.ts`) is
+what removes that phantom: the lint graph is now scoped to its own code. The raw source (a `code:` edge
+plus a linter over the graph; content-correctness left to the judge) still holds.

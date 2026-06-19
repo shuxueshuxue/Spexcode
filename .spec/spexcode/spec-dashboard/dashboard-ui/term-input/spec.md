@@ -4,11 +4,6 @@ status: active
 session: sess-cmdline
 hue: 290
 desc: The command line lives outside xterm, so the arrow keys are ours.
-code:
-  - spec-dashboard/src/TermPane.jsx
-  - spec-dashboard/src/NodeView.jsx
-  - spec-dashboard/src/App.jsx
-  - spec-dashboard/src/styles.css
 ---
 # term-input
 
@@ -40,3 +35,10 @@ guarantee, now over a real pane instead of a mock. `App.jsx`'s capture-phase lis
 arrows belong to navigation while a modal owns the keys. So `TermPane.jsx` stands as the original in-popup
 realisation, presently dormant, while the contract lives on over a real session pane — the realisation moved
 surfaces, the principle (input outside xterm so arrows can navigate) did not.
+
+Because the principle is realised in files other nodes own, this node governs **no source of its own**: the
+dormant in-popup original `TermPane.jsx` is owned by [[session-peek]] (whose sole concern *is* that embed),
+the live realisation (`SessionTerm` + docked input) by [[session-console]], and the capture-phase arrow
+routing in `App.jsx` by [[keyboard-nav]]. Listing none of them here is the point — term-input is the
+cross-cutting *contract*, and a change to any of those surfaces is that surface's drift, not a phantom
+warning on this principle.

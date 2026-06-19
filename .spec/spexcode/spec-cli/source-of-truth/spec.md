@@ -7,7 +7,6 @@ desc: .spec on main is canonical; worktrees hold session-attributed proposals.
 code:
   - spec-cli/src/specs.ts
   - spec-cli/src/git.ts
-  - spec-cli/src/index.ts
 ---
 # source-of-truth
 
@@ -56,5 +55,6 @@ one `git log --numstat` walk over the node's `code` paths (`pathsStats`), looked
 the old `git show`-per-version loop, so a whole node's history is two git spawns rather than one per row.
 `git.ts` provides the git access (`historyIndex`, `driftIndex`/`driftFor`, `rowsFor`, `statsFor`, `pathsStats`,
 the async `gitA`, and the hook-safe `git()` helper that strips a hook's exported `GIT_DIR`/`GIT_INDEX_FILE`);
-`index.ts` serves the results. Nothing is
+the HTTP entrypoint that serves these results is `index.ts`, governed by [[spec-cli]] — this node owns only
+the derivation pair `specs.ts` (loader/aggregator) + `git.ts` (git access). Nothing is
 stored: no datastore, no hash files — every fact is recomputed from git on read, warm-cached on `HEAD`.

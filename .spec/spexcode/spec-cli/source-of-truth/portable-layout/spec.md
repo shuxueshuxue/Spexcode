@@ -53,9 +53,9 @@ resolved `Layout` (`main`, `convention`, `worktrees`) is returned and served ver
 
 ### verdict — not drifted
 
-`layout.ts` is the only governed file and sits at this node's latest version with no commits ahead
-(`spex lint` reports no `drift` warning for `portable-layout`). The file moved when the rename and the
-session/board work landed (the `ops` overlay and managed-worktree filtering); the expanded spec now
-states overlay production and the managed-only rule as part of this seam's behavior, with [[sessions]]
-owning what `buildBoard` does with `ops`. That keeps the contract clarified rather than back-written,
-and the raw source (layout is an external interface with a default plug) still holds.
+`layout.ts` is this node's only governed file and this version re-anchors the contract to it: the
+description above (`resolveLayout`, `spexcode.json`, `readSession`, the managed-only `ops` overlay) is the
+honest read of `layout.ts` today, so the spec no longer lags. `layout.ts` is now owned here **exclusively**
+— [[worktree-linker]], the read-side link that lives inside this same seam, no longer co-claims it, so the
+seam's churn attributes to one node instead of two. [[sessions]] still owns what `buildBoard` does with
+`ops`. The raw source (layout is an external interface with a default plug) still holds.

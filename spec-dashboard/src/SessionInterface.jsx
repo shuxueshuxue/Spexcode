@@ -14,7 +14,7 @@ import SessionTerm from './SessionTerm.jsx'
 // New Session tab its textarea unmounts and focus would leave the panel, which used to kill further
 // nav. A window listener is focus-independent, so ↑/↓ keep walking the list no matter what's focused.
 
-const STATUS_DOT = { working: '#cb4b16', idle: '#93a1a1', offline: '#657b83', review: '#6c71c4', done: '#268bd2', 'close-pending': '#cb4b16' }
+const STATUS_DOT = { working: '#cb4b16', idle: '#93a1a1', offline: '#657b83', review: '#6c71c4', done: '#268bd2', 'close-pending': '#cb4b16', blocked: '#2aa198', error: '#dc322f' }
 
 export default function SessionInterface({ sessions, focusNode, sel, setSel, onClose, onCreated }) {
   const [prompt, setPrompt] = useState('')

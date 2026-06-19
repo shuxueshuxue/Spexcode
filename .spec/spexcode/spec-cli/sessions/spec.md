@@ -74,7 +74,11 @@ written to `.spex-hooks.json`, no global pollution); `reopen` clears a proposal 
 or crashed-to-shell pane. Human actions `mergeSession` (`--no-ff`, bump `merges`, back to active) and
 `closeSession` (the only removal) are present. `board.ts` (`buildBoard`) merges tree + overlay + the
 session list for both `/api/board` and `spex board`; `cli.ts` exposes `spex session`/`ls`/`watch`/
-`board`, and `watchSessions` emits one line per actionable transition for Monitor. Not yet: liveness
+`board`, and `watchSessions` emits one line per actionable transition for Monitor. The CLI surface is
+tuned for both humans and agents: no-args (or `spex help`) prints a grouped one-screen command summary;
+`spex new "<prompt>" [--node X]` is shorthand for `session new`; and `spex ls` prints a column header,
+each session's note/prompt (truncated), and a glyph→meaning status legend (`statusLegend`, built from
+`STATUS_GLYPH` so it can't drift) so the table tells the whole story at a glance. Not yet: liveness
 has no true `idle` tier (reconcile reports only working/offline for active); the dashboard session-log
 feed is still a mock in `data.js` (not the real watch stream).
 

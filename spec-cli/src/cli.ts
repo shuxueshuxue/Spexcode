@@ -120,11 +120,11 @@ if (cmd === 'serve') {
   } else if (sub === 'fail') {
     // the StopFailure hook marks ITS OWN worktree (from cwd) as error (turn died on an API error)
     console.log(s.markStateFromCwd('error') ? 'marked error' : 'no .session in cwd')
-  } else if (sub === 'needs-input') {
-    // the Notification(idle_prompt) hook: the agent is idle at the prompt, waiting on a HUMAN. GUARDED to
-    // only flip active → needs-input (it must NOT clobber an authored awaiting/blocked/error — a proposed
-    // merge that then idles stays 'review'). So this is a no-op unless the CWD session is currently active.
-    console.log(s.markNeedsInputFromCwd() ? 'needs-input' : 'no-op (not active, or no .session in cwd)')
+  } else if (sub === 'ask') {
+    // the agent DELIBERATELY declares it is pausing to ask the human a question (like `done`/`block`, an
+    // authored state — NOT guarded active-only). The --note carries the question. Distinct from `block`
+    // (waiting on a background task, self-resumes): a needs-input agent resumes only when the human replies.
+    console.log(s.markStateFromCwd('needs-input', { note: flag('note') }) ? 'needs-input' : 'no .session in cwd')
   } else if (sub === 'merge') {
     // merge is now a DISPATCH: the session's own agent runs git, resolves conflicts, and verifies the
     // merge — the server never touches main's tree. Success here means the merge prompt reached the agent.
@@ -138,7 +138,7 @@ if (cmd === 'serve') {
   } else if (sub === 'capture') {
     process.stdout.write(await s.captureSession(id))   // the session's live pane (output), for agents
   } else {
-    console.error('spex session: new|list|reopen|review|done|merge|close|send|capture'); process.exit(2)
+    console.error('spex session: new|list|reopen|review|done|block|ask|merge|close|send|capture'); process.exit(2)
   }
 } else {
   console.error(`spex: unknown command '${cmd}' (try: spex help)`)

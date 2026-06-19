@@ -195,6 +195,24 @@ body {
 .doc-pre code { background: none; padding: 0; color: var(--ink); }
 .doc-link { color: var(--blue); }
 
+/* three-part spec body — raw source (human) / expanded spec (agent) / current state (agent).
+   Each part is a card with an owner badge so the reader sees who owns it and how stable it is. */
+.spec-parts { display: flex; flex-direction: column; gap: 14px; margin-top: 14px; }
+.spec-part { border: 1px solid var(--line); border-radius: 6px; border-left-width: 3px; overflow: hidden; }
+.spec-part.part-raw { border-left-color: var(--green); }
+.spec-part.part-expanded { border-left-color: var(--blue); }
+.spec-part.part-state { border-left-color: var(--orange); }
+.part-head { display: flex; align-items: baseline; gap: 10px; padding: 8px 12px; background: var(--panel2); flex-wrap: wrap; }
+.part-title { font-size: 12px; font-weight: 700; color: var(--ink2); text-transform: uppercase; letter-spacing: 0.04em; }
+.part-owner { font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 9px; text-transform: uppercase; letter-spacing: 0.03em; }
+.part-owner.owner-human { background: rgba(133,153,0,0.18); color: var(--green); }
+.part-owner.owner-agent { background: rgba(38,139,210,0.18); color: var(--blue); }
+.part-note { font-size: 11px; color: var(--muted); margin-left: auto; }
+.part-body { padding: 4px 14px 12px; }
+.part-body .doc-body { border-top: none; padding-top: 8px; }
+.cs-sub + .cs-sub { margin-top: 6px; }
+.cs-label { font-size: 11px; font-weight: 700; color: var(--orange); text-transform: uppercase; letter-spacing: 0.04em; margin: 12px 0 0; }
+
 /* a version row — shared by recent (just the current one) and history (all of them) */
 .ver-row { padding: 10px 0; border-bottom: 1px solid var(--line); }
 .ver-row.latest { border-left: 2px solid var(--blue); padding-left: 12px; margin-left: -14px; }

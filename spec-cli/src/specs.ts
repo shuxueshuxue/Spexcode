@@ -36,6 +36,61 @@ function parseFrontmatter(src: string) {
 const str = (v: FmValue | undefined, d = '') => (Array.isArray(v) ? v.join(', ') : v ?? d)
 const list = (v: FmValue | undefined): string[] => (Array.isArray(v) ? v : v ? [v] : [])
 
+// @@@ three-part body - a spec body may be authored as three clearly-labelled parts, each with a
+// different owner and change-cadence:
+//   raw source    (human) — the short, rarely-changed human intent/decisions; editing it needs human
+//                            approval. This is the ground truth the other two parts must satisfy.
+//   expanded spec (agent) — the detailed BEHAVIORAL understanding (not implementation); versioned
+//                            often, but must always still match the raw source.
+//   current state (agent) — split in two: `description` (what the code does now / progress / what's
+//                            unimplemented) and `verdict` (why code & spec are NOT drifted, and a
+//                            confirmation the code did not drive the spec in reverse).
+// Detected by `## raw source` / `## expanded spec` / `## current state` level-2 headings; the current
+// state's two pieces are `### description` (alias `### progress`) and `### verdict`. A body WITHOUT
+// these headings parses to null — the dashboard then renders the whole body as before (back-compat).
+// These are STRUCTURE headings, not `## vN` changelog headings, so `spex lint`'s living rule is happy.
+export type SpecParts = {
+  rawSource: string
+  expandedSpec: string
+  currentState: { description: string; verdict: string }
+}
+const PART_ALIASES: Record<string, 'rawSource' | 'expandedSpec' | 'currentState'> = {
+  'raw source': 'rawSource',
+  'expanded spec': 'expandedSpec',
+  'current state': 'currentState',
+}
+function parseParts(body: string): SpecParts | null {
+  const acc = { rawSource: [] as string[], expandedSpec: [] as string[], description: [] as string[], verdict: [] as string[] }
+  let cur: 'rawSource' | 'expandedSpec' | 'currentState' | null = null
+  let sub: 'description' | 'verdict' = 'description'
+  let inFence = false
+  let any = false
+  for (const line of body.split('\n')) {
+    const fence = /^\s*```/.test(line)
+    if (!inFence && !fence) {
+      const h2 = line.match(/^##\s+(.+?)\s*$/)   // exactly two hashes — `###` won't match
+      const h3 = line.match(/^###\s+(.+?)\s*$/)
+      if (h2) {
+        const key = PART_ALIASES[h2[1].trim().toLowerCase()]
+        if (key) { cur = key; sub = 'description'; any = true; continue }
+        // an unrecognized `## …` heading is just content of the current part — fall through.
+      } else if (h3 && cur === 'currentState') {
+        // lenient on trailing text — `### verdict — not drifted` still keys on its leading word.
+        const s = h3[1].trim().toLowerCase()
+        if (s.startsWith('description') || s.startsWith('progress')) { sub = 'description'; continue }
+        if (s.startsWith('verdict')) { sub = 'verdict'; continue }
+      }
+    }
+    if (fence) inFence = !inFence
+    if (cur === 'rawSource') acc.rawSource.push(line)
+    else if (cur === 'expandedSpec') acc.expandedSpec.push(line)
+    else if (cur === 'currentState') (sub === 'verdict' ? acc.verdict : acc.description).push(line)
+  }
+  if (!any) return null
+  const t = (a: string[]) => a.join('\n').trim()
+  return { rawSource: t(acc.rawSource), expandedSpec: t(acc.expandedSpec), currentState: { description: t(acc.description), verdict: t(acc.verdict) } }
+}
+
 export type DerivedStatus = 'pending' | 'active' | 'merged' | 'drift'
 
 // @@@ deriveStatus - a node's status is DERIVED, never hand-written. Four states, in precedence:
@@ -118,6 +173,9 @@ export function loadSpecs() {
       // fabricates these. Empty until the yatsu package records real captures and writes the links.
       evidence: list(r.fm.evidence),
       body: r.body.trim(),
+      // @@@ three parts - raw source (human) / expanded spec (agent) / current state (agent), parsed
+      // from labelled `## …` sections. null for legacy bodies that aren't authored in three parts.
+      parts: parseParts(r.body),
     }
   })
 }

@@ -1,6 +1,7 @@
 import { readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { repoRoot, gitA, headSha, worktreeSpecSig, worktreeSpecDelta, type NodeOp } from './git.js'
+import { guardWorktree } from './resilience.js'
 
 // @@@ portable layout - the ONE seam where "where things live" is policy, not hardcode.
 // Mechanism (read .spec, git log) is fixed; this resolves: where is main, how to enumerate the
@@ -92,8 +93,10 @@ export async function resolveLayout(): Promise<Layout> {
   // main's HEAD (filesystem read, no subprocess) keys every worktree's overlay: the deltas diff against
   // main, so when main advances (a merge) every cached delta must recompute.
   const mainHead = mainWt ? safeHead(mainWt.path) : ''
-  // each worktree's spec delta is independent — compute (or cache-hit) them all in parallel.
-  const worktrees = await Promise.all(raw.map(async (w) => {
+  // each worktree's spec delta is independent — compute (or cache-hit) them all in parallel. Each read is
+  // wrapped: a worktree removed mid-read (a worker self-merged and retired it) is SKIPPED, never thrown out
+  // of the request — see resilience.guardWorktree.
+  const rows = await Promise.all(raw.map((w) => guardWorktree(w.path, async (): Promise<Worktree> => {
     const sess = readSession(w.path)
     const isMain = w.branch === 'main'
     const fromBranch = w.branch && w.branch.startsWith(convention.branchPrefix)
@@ -106,7 +109,8 @@ export async function resolveLayout(): Promise<Layout> {
     const managed = !!sess.session || (!!w.branch && w.branch.startsWith(convention.branchPrefix))
     const ops = isMain || !managed ? [] : await cachedDelta(w.path, mainRef, mainHead)
     return { path: w.path, branch: w.branch, node, session: sess.session, status: sess.status, isMain, ops }
-  }))
+  })))
+  const worktrees = rows.filter((w): w is Worktree => w !== null)
   // drop cache entries for worktrees that no longer exist (a closed session), so the map stays bounded.
   const live = new Set(raw.map((w) => w.path))
   for (const k of [...deltaCache.keys()]) if (!live.has(k)) deltaCache.delete(k)

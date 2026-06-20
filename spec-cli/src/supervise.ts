@@ -13,6 +13,11 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { watch } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
+import { installProcessGuards } from './resilience.js'
+
+// the supervisor OWNS the public port, so it must outlive any transient throw: an uncaught error here is
+// logged and survived, never an exit that closes the port (and the tmux session) and takes the frontend down.
+installProcessGuards()
 
 const here = dirname(fileURLToPath(import.meta.url))
 const tsx = join(here, '..', 'node_modules', '.bin', 'tsx')   // this package's own tsx (no build step)

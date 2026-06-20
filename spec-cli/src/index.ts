@@ -8,6 +8,11 @@ import { buildBoard } from './board.js'
 import { newSession, listSessions, sendKeys, rawKey, closeSession, reopen, propose, mergeSession, sessionGraph, registerWatch, deregisterWatch, superviseQueue } from './sessions.js'
 import { slashCommands } from './slash-commands.js'
 import { attachViewer, detachViewer, writeViewer, resizeBridge, superviseBridges, type Viewer } from './pty-bridge.js'
+import { installProcessGuards } from './resilience.js'
+
+// last-resort net: an unforeseen async throw (e.g. a worktree vanishing mid-read during a worker
+// self-merge) is logged and the server KEEPS SERVING instead of exiting and dropping the public port.
+installProcessGuards()
 
 const app = new Hono()
 app.use('/api/*', cors())

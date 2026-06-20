@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { createConnection } from 'node:net'
 import { fileURLToPath } from 'node:url'
 import { git, gitA, repoRoot } from './git.js'
+import { guardWorktree } from './resilience.js'
 import { loadSystemConfig, type ConfigPreset } from './specs.js'
 
 // @@@ sessions - the WORKTREE is the durable unit; tmux is a disposable runtime handle. Each session
@@ -335,13 +336,14 @@ export async function listSessions(): Promise<Session[]> {
   // ONE worktree enumeration + ONE tmux liveness snapshot for the whole list (both independent), then
   // every session reconciles by a pure set lookup + one existsSync — no per-session tmux spawn.
   const [wts, live] = await Promise.all([listWorktrees(), liveTmux()])
-  const out: Session[] = []
-  for (const w of wts) {
+  // each row reads that worktree's .session + prompt sidecar; a worktree removed mid-read (a worker
+  // self-merged and retired it) is SKIPPED, never fatal — see resilience.guardWorktree.
+  const rows = await Promise.all(wts.map((w) => guardWorktree(w.path, () => {
     const rec = readSessionFile(w.path)
-    if (!rec.session) continue
-    out.push(toSession(rec, w.branch, w.path, reconcile(rec, live)))
-  }
-  return out
+    if (!rec.session) return null
+    return toSession(rec, w.branch, w.path, reconcile(rec, live))
+  })))
+  return rows.filter((s): s is Session => s !== null)
 }
 
 // @@@ session graph = LIVE monitors, not a stored relationship. An edge A→B means "agent A is RIGHT NOW

@@ -61,7 +61,7 @@ export default {
       child: 'to the nearest child',
       zoom: 'zoom in / out · reset to overview',
       info: 'open the node-info popup (or double-click a node)',
-      graph: 'open the session graph (live monitor network)',
+      graph: 'toggle the session graph (live monitor network)',
       enter: 'cross into the focus node’s live session',
       newChild: 'new child node under the focus (chord)',
       del: 'delete the focused node (chord)',
@@ -139,7 +139,7 @@ export default {
 
   sessionGraph: {
     brand: '$ session-graph',
-    hint: 'arrows = live monitors (A→B: A is watching B) · drag A→B to ask A to monitor B · click a node to open it · Esc to return',
+    hint: 'arrows = live monitors (A→B: A is watching B) · drag A→B to ask A to monitor B · click a node to open it · t to switch back',
     asked: ({ a, b }) => `asked ${a} to monitor ${b}`,
     monitorPrompt: ({ label, id }) => `Please monitor session ${label} (${id}): run \`spex watch ${id}\` in the background and keep it running so its transitions surface to me.`,
   },

@@ -70,9 +70,11 @@ function Dashboard({ specs, sessions, reload }) {
   // a "boarding switch" — never a context jump based on the focused node.
   const openBoard = useCallback(() => setSessionUI(true), [])
   // @@@ open a session's console - the session-graph's embed: clicking a graph node crosses into THAT
-  // session's console by reusing the board's open path (select its tab + show the interface), then closes
-  // the graph behind it. No new mechanism — the SessionInterface already keys its console off `sessionSel`.
-  const openSession = useCallback((id) => { setGraphView(false); setSessionSel(id); setSessionUI(true) }, [])
+  // session's console by reusing the board's open path (select its tab + show the interface). It does NOT
+  // touch `graphView`: the console opens ON TOP of whichever graph you're in, and closing it returns you
+  // to that same graph. Switching between the two graphs is `t`'s job alone (see onKey) — never a side
+  // effect of opening a session. No new mechanism — SessionInterface already keys its console off `sessionSel`.
+  const openSession = useCallback((id) => { setSessionSel(id); setSessionUI(true) }, [])
   // @@@ startNew - a board chord opens the session board on its New Session tab with `text` pre-seeded
   // (the @-directive). One-shot: SessionInterface applies it then clears `seed`, so a later reopen keeps
   // the user's own draft instead of re-seeding.
@@ -232,7 +234,15 @@ function Dashboard({ specs, sessions, reload }) {
       scrollAnimRef.current = requestAnimationFrame(step)
     }
     const onKey = (e) => {
-      if (graphView) return // the session-graph view owns ALL its keys (drag/click/Esc, handled there)
+      // @@@ graph toggle - `t` is the ONE switch between the spec graph and the session graph, and it
+      // toggles BOTH ways. It is the only crossing: Esc never switches graphs, and opening a session
+      // console leaves `graphView` untouched (you return to the graph you were in). It sits ABOVE the
+      // guards below so it still fires while the session graph owns the board — but it is suppressed
+      // while a modal/console captures keys, where a `t` is just a keystroke (e.g. typed into an input).
+      if (!sessionUI && !overlay && !legend && !settings && (e.key === 't' || e.key === 'T')) {
+        e.preventDefault(); e.stopPropagation(); setGraphView((v) => !v); return
+      }
+      if (graphView) return // the session-graph view owns its remaining keys (drag/click, handled there)
       if (sessionUI) return // the session interface owns ALL its keys (arrows / Enter / typing / Esc)
       if (overlay) {
         if (e.key === 'Escape') { e.preventDefault(); setOverlay(false); return }
@@ -298,8 +308,7 @@ function Dashboard({ specs, sessions, reload }) {
       else if (e.key === '-' || e.key === '_') { e.preventDefault(); centerOn(focus, clamp(getViewport().zoom / 1.2), 160) }
       else if (e.key === '0') { e.preventDefault(); centerOn(focus, 0.85, 200) }
       else if (e.key === 'i' || e.key === 'I') { e.preventDefault(); setOverlay(true) }
-      // `t` opens the experimental session-subscription graph (an isolated full-screen view; Esc returns).
-      else if (e.key === 't' || e.key === 'T') { e.preventDefault(); setGraphView(true) }
+      // (`t` toggles the session graph — handled at the top of onKey so it works from either graph.)
       // Enter opens the session board at the remembered tab (boarding switch — see openBoard).
       else if (e.key === 'Enter') { e.preventDefault(); openBoard() }
     }
@@ -367,7 +376,7 @@ function Dashboard({ specs, sessions, reload }) {
         {settings && <Settings onClose={() => setSettings(false)} />}
       </div>
 
-      {graphView && <SessionGraph onClose={() => setGraphView(false)} onOpen={openSession} />}
+      {graphView && <SessionGraph onOpen={openSession} />}
       {overlay && <NodeView node={focus} pane={pane} setPane={setPane} onClose={() => setOverlay(false)} />}
       {/* stays MOUNTED across open/close (hidden via `open`) so the selected tab + per-tab drafts persist. */}
       <SessionInterface

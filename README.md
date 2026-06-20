@@ -1,4 +1,3 @@
-There are a lot of principles to follow here.
 (Notice a principle is not a spec.)
 
 <img src="docs/sdd-tuxedo-pooh.png" alt="Writing code vs. authoring a living, executable specification artifact" width="420">

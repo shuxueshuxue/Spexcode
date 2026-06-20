@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useT } from './i18n/index.jsx'
 
 // @@@ pane registry - add a face for a spec node by adding one entry + one render case below.
@@ -6,7 +6,6 @@ import { useT } from './i18n/index.jsx'
 // moved out to the session interface (Enter), so there's no `work` pane and no keyboard special-case.
 export const PANES = [
   { key: 'spec',    label: 'spec' },
-  { key: 'recent',  label: 'recent' },
   { key: 'history', label: 'history' },
 ]
 
@@ -116,8 +115,8 @@ function SpecPane({ node }) {
   )
 }
 
-// @@@ useHistory - the node's version log from git (/api/specs/:id/history), newest first. Both
-// panes below read it: `recent` shows only row 0 (the current version), `history` shows them all.
+// @@@ useHistory - the node's version log from git (/api/specs/:id/history), newest first. The single
+// `history` tab below reads it: the latest version is expanded, older ones reveal as the reader scrolls.
 function useHistory(id) {
   const [rows, setRows] = useState(null)
   useEffect(() => {
@@ -128,38 +127,17 @@ function useHistory(id) {
   return rows
 }
 
-// one version row (number · hash · date · the +adds/-dels it changed in THIS node · reason · session).
-function VersionRow({ r, v, latest }) {
-  const t = useT()
-  return (
-    <div className={latest ? 'ver-row latest' : 'ver-row'}>
-      <div className="rec-head">
-        <span className="rec-v">v{v}</span>
-        <code className="rec-hash">{r.hash.slice(0, 7)}</code>
-        <span className="rec-date">{(r.date || '').slice(0, 10)}</span>
-        <span className="rec-diff">
-          <b className="rec-add">+{r.additions ?? 0}</b>
-          <b className="rec-del">−{r.deletions ?? 0}</b>
-        </span>
-      </div>
-      <div className="rec-msg">{r.reason}</div>
-      <div className="rec-sub">{t('nodeView.filesChanged', { n: r.files ?? 0 })} · {r.session || t('common.idle')}</div>
-    </div>
-  )
-}
-
-// @@@ useSpecDiff - FALLBACK fetch of the spec.md line changes of the node's latest version
-// (/api/specs/:id/diff). The common case never hits this: the board already ships each node's diff as
-// `node.lastDiff`, so the recent tab renders instantly. `enabled` gates the fetch — it stays off unless
-// a node arrives without a precomputed diff (and has no screenshot evidence to show instead).
-function useSpecDiff(id, enabled) {
+// @@@ useVersionDiff - one version's spec.md line-diff (/api/specs/:id/diff/:hash), fetched LAZILY the
+// first time its history item expands. `enabled` keeps collapsed items from ever fetching; the latest
+// item never uses this (the board already ships its diff as node.lastDiff, so it renders instantly).
+function useVersionDiff(id, hash, enabled) {
   const [diff, setDiff] = useState(null)
   useEffect(() => {
     if (!enabled) return
     let on = true
-    fetch(`/api/specs/${id}/diff`).then((r) => r.json()).then((d) => { if (on) setDiff(d) }).catch(() => on && setDiff({ patch: '' }))
+    fetch(`/api/specs/${id}/diff/${hash}`).then((r) => r.json()).then((d) => { if (on) setDiff(d) }).catch(() => on && setDiff({ patch: '' }))
     return () => { on = false }
-  }, [id, enabled])
+  }, [id, hash, enabled])
   return diff
 }
 
@@ -182,9 +160,10 @@ function parseDiff(patch) {
   return out
 }
 
-// @@@ DiffEvidence - the recent pane's proof-of-change when a node has no A→B screenshot yet: the
-// actual line diff its LATEST version introduced to spec.md. (When the yatsu package starts recording
-// real before/after captures, those take this slot instead — see RecentPane.)
+// @@@ DiffEvidence - a version's proof-of-change: the actual line diff it introduced to spec.md. When a
+// version also has A→B screenshots they render ABOVE this (see HistoryItem); when it has none, nothing is
+// said about it — the diff alone stands as the proof. `diff == null` = still loading (older items fetch
+// lazily on expand); an empty patch = a version with no recorded spec.md change.
 function DiffEvidence({ diff }) {
   const t = useT()
   if (diff == null) return <figcaption className="ev-note">{t('nodeView.loadingChange')}</figcaption>
@@ -192,64 +171,112 @@ function DiffEvidence({ diff }) {
   if (!lines.length) return <figcaption className="ev-note">{t('nodeView.noChange')}</figcaption>
   return (
     <>
-      <figcaption className="ev-difflabel">{t('nodeView.diffLabel')} <span className="ev-note-inline">{t('nodeView.diffNote')}</span></figcaption>
+      <figcaption className="ev-difflabel">{t('nodeView.diffLabel')}</figcaption>
       <pre className="ev-diff">{lines.map((l, i) => <div key={i} className={`dl dl-${l.t}`}>{l.s || ' '}</div>)}</pre>
     </>
   )
 }
 
-// @@@ RecentPane - the CURRENT version only: its changelog + line-diff, plus the A→B proof evidence.
-// The evidence slot prefers real before/after screenshots (the yatsu package will record them later);
-// until a node has any, it falls back to the spec's own latest line diff (DiffEvidence) so the slot is
-// never just a "pending" note. The full version log lives in the `history` tab — this answers "what was
-// the latest change, and the proof". `rows` is fetched ONCE by NodeView and shared with HistoryPane.
-function RecentPane({ node, rows }) {
+// @@@ HistoryItem - one version in the merged history. Always its row header (number · hash · date · the
+// +adds/−dels it changed in THIS node · reason · session), and — when expanded — its proof below: the
+// A→B screenshots (the latest version only, until yatsu records per-version frames) then the spec.md line
+// diff that version introduced. The latest item renders its diff instantly from node.lastDiff; older
+// items fetch theirs lazily the first time they open. Clicking the header toggles the item by hand.
+function HistoryItem({ node, r, v, latest, open, onToggle }) {
   const t = useT()
-  const latest = rows?.[0]
-  const hasEvidence = node.evidence?.length > 0
-  // The board ships the node's latest line-diff (node.lastDiff) up front, so the common case renders
-  // INSTANTLY — no per-open fetch + git call. Only fall back to an on-demand fetch if it's truly absent.
-  const fetched = useSpecDiff(node.id, !hasEvidence && node.lastDiff == null)
-  const diff = node.lastDiff ?? fetched
+  const fetched = useVersionDiff(node.id, r.hash, open && !latest)
+  const diff = latest ? (node.lastDiff ?? fetched) : fetched
+  const shots = latest ? (node.evidence || []) : []
   return (
-    <div className="pane-recent">
-      {!rows ? <div className="rec-msg muted">{t('common.loading')}</div>
-        : latest ? <VersionRow r={latest} v={rows.length} latest />
-        : <div className="rec-msg muted">{t('common.noVersions')}</div>}
-      <figure className="rec-evidence">
-        {hasEvidence ? (
-          <div className="ev-pair">
-            {node.evidence.map((src, i) => (
-              <div className="ev-shot" key={i}><img src={src} alt={t('nodeView.evidenceAlt', { n: i + 1 })} /></div>
-            ))}
-          </div>
-        ) : (
+    <div className={`ver-row${latest ? ' latest' : ''}${open ? ' open' : ''}`}>
+      <button className="rec-toggle" onClick={onToggle} aria-expanded={open}>
+        <div className="rec-head">
+          <span className="rec-caret">{open ? '▾' : '▸'}</span>
+          <span className="rec-v">v{v}</span>
+          <code className="rec-hash">{r.hash.slice(0, 7)}</code>
+          <span className="rec-date">{(r.date || '').slice(0, 10)}</span>
+          <span className="rec-diff">
+            <b className="rec-add">+{r.additions ?? 0}</b>
+            <b className="rec-del">−{r.deletions ?? 0}</b>
+          </span>
+        </div>
+        <div className="rec-msg">{r.reason}</div>
+        <div className="rec-sub">{t('nodeView.filesChanged', { n: r.files ?? 0 })} · {r.session || t('common.idle')}</div>
+      </button>
+      {open && (
+        <figure className="rec-evidence">
+          {shots.length > 0 && (
+            <div className="ev-pair">
+              {shots.map((src, i) => (
+                <div className="ev-shot" key={i}><img src={src} alt={t('nodeView.evidenceAlt', { n: i + 1 })} /></div>
+              ))}
+            </div>
+          )}
           <DiffEvidence diff={diff} />
-        )}
-      </figure>
+        </figure>
+      )}
     </div>
   )
 }
 
-// @@@ HistoryPane - the full version log, newest first. (RecentPane shows only the top of this list.)
-// `rows` comes from NodeView's single fetch — shared with RecentPane so tab-switching is instant.
-function HistoryPane({ rows }) {
+// @@@ HistoryPane - the merged version log (the old `recent` + `history` tabs, now one). The latest
+// version opens expanded with its proof; older ones start collapsed and REVEAL progressively as the
+// reader scrolls — once the end of the deepest open item is in view (they've finished reading it), the
+// next item expands. A header click toggles any item by hand. `rows` is NodeView's one fetch, newest-first.
+function HistoryPane({ node, rows }) {
   const t = useT()
+  const scRef = useRef(null)
+  const [open, setOpen] = useState(() => new Set([0]))   // latest expanded; the rest reveal on scroll
+  const toggle = useCallback((i) => setOpen((prev) => {
+    const next = new Set(prev)
+    if (next.has(i)) next.delete(i); else next.add(i)
+    return next
+  }), [])
+  // @@@ progressive reveal - reveal the next collapsed version as the reader scrolls DOWN past the one
+  // they're reading. On each scroll-down, if the END of the deepest contiguously-open item (0..frontier)
+  // has come into view (they've finished reading it), open the next — ONE per event, so a slow scroll
+  // reveals one at a time while an eased/momentum scroll (many events) cascades smoothly. Never fires on
+  // mount or on scroll-up, so the rest genuinely start collapsed. getBoundingClientRect (not offsetTop)
+  // is correct regardless of the scroller's own positioning.
+  useEffect(() => {
+    const sc = scRef.current
+    if (!sc || !rows?.length) return
+    let prevTop = sc.scrollTop
+    const onScroll = () => {
+      const top = sc.scrollTop, down = top > prevTop
+      prevTop = top
+      if (!down) return
+      setOpen((prev) => {
+        let f = -1
+        while (prev.has(f + 1)) f++
+        if (f < 0 || f >= rows.length - 1) return prev
+        const el = sc.querySelector(`[data-i="${f}"]`)
+        if (!el || el.getBoundingClientRect().bottom - sc.getBoundingClientRect().top > sc.clientHeight + 40) return prev
+        return new Set(prev).add(f + 1)
+      })
+    }
+    sc.addEventListener('scroll', onScroll, { passive: true })
+    return () => sc.removeEventListener('scroll', onScroll)
+  }, [rows])
   if (!rows) return <div className="pane-hist empty">{t('nodeView.loadingHistory')}</div>
   if (!rows.length) return <div className="pane-hist empty">{t('common.noVersions')}</div>
   return (
-    <div className="pane-hist">
-      {rows.map((r, i) => <VersionRow key={r.hash} r={r} v={rows.length - i} latest={i === 0} />)}
+    <div className="pane-hist" ref={scRef}>
+      {rows.map((r, i) => (
+        <div data-i={i} key={r.hash}>
+          <HistoryItem node={node} r={r} v={rows.length - i} latest={i === 0} open={open.has(i)} onToggle={() => toggle(i)} />
+        </div>
+      ))}
     </div>
   )
 }
 
 // PANES keys map to localized tab labels (the key drives logic; only the label is shown).
-const PANE_LABEL = { spec: 'nodeView.paneSpec', recent: 'nodeView.paneRecent', history: 'nodeView.paneHistory' }
+const PANE_LABEL = { spec: 'nodeView.paneSpec', history: 'nodeView.paneHistory' }
 
 export default function NodeView({ node, pane, setPane, onClose }) {
   const t = useT()
-  // one fetch per node, shared by both recent + history panes (the popup's only data dependency).
+  // one fetch per node, feeding the single history pane (the popup's only data dependency).
   const rows = useHistory(node.id)
   return (
     <div className="ov-backdrop" onMouseDown={onClose}>
@@ -267,8 +294,7 @@ export default function NodeView({ node, pane, setPane, onClose }) {
         </div>
         <div className="ov-body">
           {pane === 'spec' && <div className="pane-solo"><SpecPane node={node} /></div>}
-          {pane === 'recent' && <RecentPane node={node} rows={rows} />}
-          {pane === 'history' && <HistoryPane rows={rows} />}
+          {pane === 'history' && <HistoryPane node={node} rows={rows} />}
         </div>
       </div>
     </div>

@@ -119,10 +119,10 @@ function raws(): Raw[] {
 }
 
 // @@@ diff cache - a commit's patch is immutable, so memo fileDiffAt by (version sha + spec.md path).
-// loadSpecs precomputes every node's latest line-diff for the board (so the recent tab is instant —
-// no per-open fetch + git call), and specDiff serves the SAME value on demand. A warm entry makes both
-// a Map lookup; only a node that gained a NEW version (a new sha) misses and pays a single git show.
-// `{hash:'',patch:''}` for an unversioned node — no git call, and the recent tab renders the honest
+// loadSpecs precomputes every node's latest line-diff for the board (so the latest history item is
+// instant — no per-open fetch + git call), and specDiffAt serves any version's diff on demand over the
+// SAME cache. A warm entry makes both a Map lookup; only a sha not seen before pays a single git show.
+// `{hash:'',patch:''}` for an unversioned node — no git call, and the history item renders the honest
 // "no recorded change" instantly. Keyed by path too because one commit can patch several nodes' spec.md.
 const diffCache = new Map<string, { hash: string; patch: string }>()
 async function latestDiff(relPath: string, hash: string): Promise<{ hash: string; patch: string }> {
@@ -185,8 +185,9 @@ export async function loadSpecs() {
       // fabricates these. Empty until the yatsu package records real captures and writes the links.
       evidence: list(r.fm.evidence),
       // @@@ lastDiff - the node's latest version's unified patch to its spec.md, PRECOMPUTED and shipped
-      // with the board (and /api/specs) so the recent tab renders the line-diff instantly, with no
-      // per-open round-trip to /api/specs/:id/diff. Cached by the version's commit sha (see latestDiff).
+      // with the board (and /api/specs) so the history tab's expanded-by-default latest item renders its
+      // line-diff instantly, with no round-trip (older items fetch theirs via /api/specs/:id/diff/:hash).
+      // Cached by the version's commit sha (see latestDiff).
       lastDiff: await latestDiff(r.relPath, S),
       body: r.body.trim(),
       // @@@ two parts - raw source (human) / expanded spec (agent), parsed from labelled `## …`
@@ -218,15 +219,15 @@ export async function specHistory(id: string) {
   })
 }
 
-// @@@ specDiff - the actual line changes the node's spec.md got in its LATEST version (the patch of
-// rows[0]'s commit, scoped to this spec.md alone). The recent pane renders this as the proof-of-change
-// when a node has no A→B screenshot evidence yet. `{ hash:'', patch:'' }` for a node with no committed
-// version; null for an unknown id.
-export async function specDiff(id: string) {
+// @@@ specDiffAt - the unified line-diff one specific version introduced to a node's spec.md, by commit
+// hash. The history tab fetches it lazily when an OLDER version's item expands (the latest version's diff
+// already ships with the board as node.lastDiff, so it never needs this). Uses the SAME sha-keyed cache
+// loadSpecs precomputes into, so a hash already seen as some node's lastDiff is an instant map hit, and
+// fileDiffAt resolves the spec.md path AT that commit so a since-reparented node still shows the right
+// patch. `{ hash:'', patch:'' }` for an empty hash; null for an unknown id.
+export async function specDiffAt(id: string, hash: string) {
   const node = raws().find((r) => r.id === id)
   if (!node) return null
-  const latest = rowsFor(await historyIndex(ROOT), node.relPath)[0]
-  if (!latest) return { hash: '', patch: '' }
-  // same sha-keyed cache loadSpecs precomputes into, so an on-demand fetch is instant after the first.
-  return latestDiff(node.relPath, latest.hash)
+  if (!hash) return { hash: '', patch: '' }
+  return latestDiff(node.relPath, hash)
 }

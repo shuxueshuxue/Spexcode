@@ -218,7 +218,7 @@ function Dashboard({ specs, sessions, reload }) {
     // per frame = exponential glide). Repeated/held j/k stack onto the SAME target, so the motion stays
     // one continuous flow. Switching panes swaps the scroller element, which resets the stale target.
     const bumpScroll = (delta) => {
-      const sc = document.querySelector('.ov-body .pane-doc, .ov-body .pane-recent, .ov-body .pane-hist')
+      const sc = document.querySelector('.ov-body .pane-doc, .ov-body .pane-hist')
       if (!sc) return
       if (sc !== scrollElRef.current) { scrollElRef.current = sc; scrollTargetRef.current = null }
       const max = sc.scrollHeight - sc.clientHeight
@@ -247,21 +247,23 @@ function Dashboard({ specs, sessions, reload }) {
       if (overlay) {
         if (e.key === 'Escape') { e.preventDefault(); setOverlay(false); return }
         if (e.key === 'Tab') { e.preventDefault(); e.stopPropagation(); cyclePane(e.shiftKey ? -1 : 1); return }
-        // ←/→ and h/l cycle the panes (alongside Tab and 1/2/3) — vim's horizontal hand flips tabs,
-        // never moves the board behind. (j/k below are the vertical hand: they scroll the open pane.)
+        // ←/→ and h/l cycle the panes (alongside Tab and 1/2) — vim's horizontal hand flips tabs,
+        // never moves the board behind. (j/k and ↑/↓ below are the vertical hand: they scroll the open pane.)
         if (e.key === 'ArrowLeft'  || e.key === 'h') { e.preventDefault(); e.stopPropagation(); cyclePane(-1); return }
         if (e.key === 'ArrowRight' || e.key === 'l') { e.preventDefault(); e.stopPropagation(); cyclePane(1); return }
-        if (['1', '2', '3'].includes(e.key)) { e.preventDefault(); e.stopPropagation(); setPane(PANE_KEYS[+e.key - 1]); return }
-        // Inside the popup, j/k scroll the open pane's content (vim) rather than moving the board — only
-        // one pane is mounted at a time, so the first overflow:auto descendant of .ov-body is the scroller.
-        if (e.key === 'j' || e.key === 'k') {
+        if (/^[1-9]$/.test(e.key) && +e.key <= PANE_KEYS.length) { e.preventDefault(); e.stopPropagation(); setPane(PANE_KEYS[+e.key - 1]); return }
+        // Inside the popup, j/k AND ↑/↓ scroll the open pane's content (vim's and the arrow hand both go
+        // vertical here) rather than moving the board — only one pane is mounted at a time, so the first
+        // overflow:auto descendant of .ov-body is the scroller. In the history pane this scroll also drives
+        // the progressive reveal: reaching the end of the open version expands the next (see HistoryPane).
+        if (e.key === 'j' || e.key === 'k' || e.key === 'ArrowDown' || e.key === 'ArrowUp') {
           e.preventDefault(); e.stopPropagation()
-          bumpScroll(e.key === 'j' ? 120 : -120)
+          bumpScroll(e.key === 'j' || e.key === 'ArrowDown' ? 120 : -120)
           return
         }
         // Enter crosses from reading the node to the session board (at the remembered tab). Popup closes behind.
         if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); setOverlay(false); openBoard(); return }
-        return // ↑/↓ (and anything else) do NOT move the board behind the popup
+        return // anything else does NOT move the board behind the popup
       }
       // graph mode (no modal open). The help modal (keymap + legend) is itself a modal: while open it
       // OWNS the keys — only `?`/Esc close it, nav never leaks to the board behind. Placed AFTER the

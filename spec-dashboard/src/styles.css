@@ -269,9 +269,12 @@ body {
 .cs-sub + .cs-sub { margin-top: 6px; }
 .cs-label { font-size: 11px; font-weight: 700; color: var(--orange); text-transform: uppercase; letter-spacing: 0.04em; margin: 12px 0 0; }
 
-/* a version row — shared by recent (just the current one) and history (all of them) */
+/* a version row in the history tab — header always shown, proof revealed when `.open` */
 .ver-row { padding: 10px 0; border-bottom: 1px solid var(--line); }
 .ver-row.latest { border-left: 2px solid var(--blue); padding-left: 12px; margin-left: -14px; }
+/* the whole header is the expand/collapse toggle — strip the native button chrome so it reads as the row */
+.rec-toggle { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 0; margin: 0; cursor: pointer; font: inherit; color: inherit; }
+.rec-caret { color: var(--muted); font-size: 9px; width: 9px; flex: none; }
 .rec-head { display: flex; align-items: baseline; gap: 10px; font-size: 12px; }
 .rec-v { color: var(--ink2); font-weight: 700; }
 .rec-hash { color: var(--muted); font-size: 11px; }
@@ -283,18 +286,16 @@ body {
 .rec-sub { color: var(--muted); font-size: 11px; margin-top: 3px; }
 .rec-msg.muted { color: var(--muted); }
 
-/* pane: recent — the CURRENT version + A→B proof evidence */
-.pane-recent { flex: 1; min-width: 0; padding: 16px 20px; overflow: auto; display: flex; flex-direction: column; }
-.rec-evidence { margin: 18px 0 0; padding: 16px 0 0; border-top: 1px solid var(--line); }
-.ev-pair { display: flex; align-items: center; justify-content: center; gap: 16px; }
+/* an expanded item's proof: A→B screenshots (latest only) above its spec line diff */
+.rec-evidence { margin: 12px 0 2px; padding: 14px 0 0; border-top: 1px solid var(--line); }
+.ev-pair { display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 14px; }
 .ev-shot { flex: 1; max-width: 320px; }
 .ev-shot img { width: 100%; border: 1px solid var(--line); border-radius: 5px; display: block; }
 .ev-shot figcaption { font-size: 11px; color: var(--muted); margin-top: 6px; text-align: center; }
 .ev-arrow { color: var(--blue); font-size: 20px; flex: none; }
 .ev-note { font-size: 11px; color: var(--muted); text-align: center; margin-top: 12px; }
-/* no-screenshot fallback: the spec's latest line diff stands in as the proof-of-change. */
+/* the version's spec.md line diff — its proof-of-change (sits under the screenshots when there are any). */
 .ev-difflabel { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
-.ev-note-inline { color: var(--muted); opacity: .8; }
 .ev-diff { margin: 0; font-family: var(--mono); font-size: 11px; line-height: 1.55; background: var(--panel2); border: 1px solid var(--line); border-radius: 5px; padding: 8px 0; overflow-x: auto; }
 .ev-diff .dl { padding: 0 12px; white-space: pre; }
 .dl-hunk { color: var(--blue); opacity: .75; }

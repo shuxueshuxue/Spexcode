@@ -70,10 +70,6 @@ body {
 .react-flow__controls-button:hover { background: var(--panel); }
 .react-flow__controls-button svg { fill: var(--ink); }
 
-/* light-themed minimap — the bottom-left navigator that replaced the +/−/fit Controls on both graphs.
-   A visible panel chrome so the (status-/lineage-tinted) node rects read against the dotted background. */
-.react-flow__minimap { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; }
-
 /* ---- node: two stacked rows — row 1 the thin file-tree line (dot · title · version), row 2 the
    live editors' avatars or "last edited … ago". A touch wider than the single-line era for titles. ---- */
 .spec-node {

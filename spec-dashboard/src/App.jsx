@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ReactFlow, Background, MiniMap, MarkerType, useReactFlow } from '@xyflow/react'
+import { ReactFlow, Background, Controls, MarkerType, useReactFlow } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import SpecNode, { STATUS } from './SpecNode.jsx'
+import SpecNode from './SpecNode.jsx'
 import NodeView, { PANES } from './NodeView.jsx'
 import SessionWindow from './SessionWindow.jsx'
 import SessionInterface from './SessionInterface.jsx'
@@ -133,10 +133,7 @@ function Dashboard({ specs, sessions, reload }) {
     // isLeaf + onAddChild drive the + add-child button SpecNode draws on leaves (alternate `nn` entry).
     const extra = { editors: editorData, isLeaf: !parents.has(s.id), onAddChild: addChild }
     return {
-      // explicit width/height (matching .spec-node's 220×46 CSS box) so the MiniMap can draw each node's
-      // rect on first paint — without them @xyflow has no dimensions until the DOM is measured and the map
-      // renders blank.
-      id: s.id, type: 'spec', position: { x: s.x, y: s.y }, width: 220, height: 46,
+      id: s.id, type: 'spec', position: { x: s.x, y: s.y },
       data: editors.length
         ? { ...s, ...extra, link: { color: labelColor(editors[0].id), status: editors[0].status } }
         : { ...s, ...extra },
@@ -362,9 +359,7 @@ function Dashboard({ specs, sessions, reload }) {
           proOptions={{ hideAttribution: true }}
         >
           <Background variant="dots" color="#cdc6ad" gap={20} size={1} />
-          {/* mini-map replaces the +/−/fit button cluster — scroll/pinch zoom stays on (ReactFlow default).
-              Each node is tinted by its live status; drag the map to pan, scroll over it to zoom. */}
-          <MiniMap position="bottom-left" pannable zoomable nodeColor={(n) => (STATUS[n.data?.status] || STATUS.pending).color} nodeStrokeWidth={2} maskColor="rgba(0,0,0,0.06)" />
+          <Controls showInteractive={false} />
         </ReactFlow>
         {/* HUD is deliberately minimal: brand + a discreet `?` that opens the full keymap/legend modal.
             The wall of inline hints used to live here; it now lives inside that modal (see Legend.jsx). */}

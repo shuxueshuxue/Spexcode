@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ReactFlow, ReactFlowProvider, Background, MiniMap, Handle, Position,
+  ReactFlow, ReactFlowProvider, Background, Controls, Handle, Position,
   MarkerType, useReactFlow,
 } from '@xyflow/react'
 import { Avatar } from './avatar.jsx'
@@ -102,9 +102,7 @@ function GraphCanvas({ onOpen, active, legend, setLegend }) {
   const pos = useMemo(() => radial(graph.nodes), [graph.nodes])
   const byId = useMemo(() => Object.fromEntries(graph.nodes.map((s) => [s.id, s])), [graph.nodes])
   const rfNodes = useMemo(() => graph.nodes.map((s) => ({
-    // explicit width/height (≈ .sg-node's rendered box) so the MiniMap can draw each node before the DOM is
-    // measured — without dimensions @xyflow gives the map nothing to paint and it comes up blank.
-    id: s.id, type: 'session', position: pos[s.id] || { x: 0, y: 0 }, width: 112, height: 60,
+    id: s.id, type: 'session', position: pos[s.id] || { x: 0, y: 0 },
     data: { ...s, focus: s.id === focusId }, draggable: true,
   })), [graph.nodes, pos, focusId])
 
@@ -248,9 +246,7 @@ function GraphCanvas({ onOpen, active, legend, setLegend }) {
         proOptions={{ hideAttribution: true }}
       >
         <Background variant="dots" color="#cdc6ad" gap={20} size={1} />
-        {/* mini-map replaces the +/−/fit button cluster — scroll/pinch zoom stays on (ReactFlow default).
-            Each session shows in its own hue; drag the map to pan, scroll over it to zoom. */}
-        <MiniMap position="bottom-left" pannable zoomable nodeColor={(n) => labelColor(n.id)} nodeStrokeWidth={2} maskColor="rgba(0,0,0,0.06)" />
+        <Controls showInteractive={false} />
       </ReactFlow>
       {toast && <div className="sg-toast">{toast}</div>}
     </>

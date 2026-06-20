@@ -312,6 +312,14 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       if ((e.ctrlKey || e.metaKey) && (e.key === 'i' || e.key === 'I') && active !== 'new') {
         e.preventDefault(); e.stopPropagation(); setNavMode((v) => !v); return
       }
+      // @@@ jump to New Session - ⌃/⌘+N (also ⌃/⌘+↑/Home) snaps the selection to the New Session tab from
+      // anywhere in the panel, no arrowing up the whole list. Handled before the nav-mode passthrough so it
+      // works even while raw-key mode is forwarding keystrokes to a session pane. The tab-switch focus effect
+      // then drops the caret into the prompt box. (⌘+N is OS-reserved on macOS; ⌃+N is the dependable one.)
+      if (((e.ctrlKey || e.metaKey) && (e.key === 'n' || e.key === 'N')) ||
+          ((e.ctrlKey || e.metaKey) && (e.key === 'ArrowUp' || e.key === 'Home'))) {
+        e.preventDefault(); e.stopPropagation(); setSel('new'); return
+      }
       // @@@ nav mode passthrough - while ON, EVERY key is forwarded raw to the session pane and nothing else
       // fires (no list nav, no page scroll). Esc is forwarded too (it cancels the agent's menu); a SECOND Esc
       // within 600ms exits nav mode. preventDefault/stopPropagation keep keys from leaking anywhere else.
@@ -359,7 +367,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       <div className="si-panel" onMouseDown={(e) => e.stopPropagation()}>
         <aside className="si-list">
           <div className="si-list-head">// {t('session.title')}</div>
-          <button className={active === 'new' ? 'si-item new on' : 'si-item new'} onClick={() => setSel('new')}>
+          <button className={active === 'new' ? 'si-item new on' : 'si-item new'} title={t('session.newSessionTitle')} onClick={() => setSel('new')}>
             ＋ {t('session.newSession')}
           </button>
           {sessions.map((s) => (

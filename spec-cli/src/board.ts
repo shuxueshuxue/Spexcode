@@ -74,7 +74,7 @@ export async function buildBoard() {
   const nodes = [
     ...specs.map((n: any) => {
       const overlays = overlaysByNode[n.id] || []
-      return { ...n, overlays, status: deriveStatus({ version: n.version, drift: n.drift, hasOverlay: overlays.length > 0, fmStatus: n.fmStatus ?? undefined }) }
+      return { ...n, overlays, status: deriveStatus({ version: n.version, drift: n.drift, hasOverlay: overlays.length > 0, hasCode: (n.code?.length ?? 0) > 0, fmStatus: n.fmStatus ?? undefined }) }
     }),
     ...Object.values(ghostById),
   ]

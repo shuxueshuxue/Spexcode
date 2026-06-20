@@ -80,11 +80,12 @@ body {
   transition: border-color .12s;
 }
 
-/* @@@ add-child + - leaf-only affordance pinned to the right edge: an alternate entry to the `nn`
-   new-node flow (see SpecNode.jsx). Subtle and hidden until the node is hovered/focused so it never
-   clutters the tree; sits over the source handle but stays clickable (handle is non-interactive here). */
+/* @@@ add-child + - leaf-only affordance that OCCUPIES the source handle's spot: an alternate entry to
+   the `nn` new-node flow (see SpecNode.jsx). Centred ON the right edge (right:0 + translate(50%,-50%)) so
+   it lands exactly where the Position.Right handle sits, not beside it. Subtle and hidden until the node is
+   hovered/focused so it never clutters the tree; stays clickable (the handle is non-interactive here). */
 .node-add {
-  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+  position: absolute; right: 0; top: 50%; transform: translate(50%, -50%);
   width: 16px; height: 16px; padding: 0; display: grid; place-items: center;
   font-size: 13px; line-height: 1; color: var(--muted);
   background: var(--panel); border: 1px solid var(--line); border-radius: 3px;

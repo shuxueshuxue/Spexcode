@@ -48,7 +48,9 @@ to force the write. Lifecycle (in `.session`): `active` (working / not yet decla
 a background task; self-resumes — never mislabelled idle), `error` (a turn died on an API failure),
 `needs-input` (the agent is **pausing to ask the HUMAN a question** — captured deterministically the moment
 it invokes the **AskUserQuestion** tool by the `PreToolUse` hook, the question becoming the note, and also
-self-declarable via `spex session ask --note <question>`; the note carries the question), and `idle`
+self-declarable via `spex session ask --note <question>`; the note carries the question), `queued` (a
+**prepared-but-not-yet-launched** session held below the concurrency cap — see *Concurrency cap* below),
+and `idle`
 (claude has **stopped and is waiting at its prompt without having declared** any of the above). `idle` is
 the **one inferred state** — the Notification(`idle_prompt`) hook writes it — so unlike the agent-authored
 states it carries a **strict active-only guard** (see below). `needs-input` is distinct from `blocked`:
@@ -131,6 +133,22 @@ clears any other non-active state.
 Surfacing is the **manager's** job: a `needs-input` transition is one of the actionable events `spex watch`
 emits (carrying the note), and the *spoken* alert on it is the manager's `spex watch` + voice, not the session.
 
+### Concurrency cap (bounded working set)
+
+At most **`SPEXCODE_MAX_ACTIVE`** sessions (default **6**) run as working agents at once — the guard
+against the resource-pressure crashes heavy multi-agent load caused. A session **occupies a slot** while
+its claude is genuinely live (tmux *and* rendezvous socket present) and it has not yet handed the work to a
+human; it **frees** the slot the moment it proposes (review/done/close-pending), goes offline, or is
+closed — so an authored `blocked`/`error`/`needs-input` whose claude has since died does not pin a slot.
+A launch beyond the cap never crashes or runs: it lands as a durable **`queued`** worktree — fully prepared
+(branch, `.session`, isolated `CLAUDE.md`, any directive mutation) with claude *not* started and its exact
+launch prompt parked in a `.session-launch` sidecar. A **drainer** starts queued sessions oldest-first the
+instant a slot frees: it runs on every slot-freeing action the server performs (`newSession` / close /
+propose) **and** on a periodic tick, which is what catches the slot-frees the server never sees directly —
+an agent proposing done or going blocked writes its `.session` from a hook *subprocess*, and a crash merely
+makes a socket vanish. `newSession` therefore queues-then-drains, returning `working` if it launched under
+the cap, else `queued`. The queue is durable: a backend restart re-drains the surviving `queued` worktrees.
+
 ### Surfaces
 
 `buildBoard` (`board.ts`) assembles the dashboard's runtime state — merged tree + per-worktree overlay
@@ -143,11 +161,13 @@ whose **rendezvous socket is absent** counts as offline so a crashed/exited clau
 lifecycle writers
 `markStateFromCwd` / `markDoneFromCwd` / `markErrorFromCwd` / `markIdleFromCwd` (the last is the
 active-only-guarded inferred writer the idle_prompt hook calls). `newSession` adds the `node/<slug>` worktree,
-writes `.session`, isolates `CLAUDE.md` (`hideClaudeMd`), and launches claude on the private socket;
+writes `.session`, isolates `CLAUDE.md` (`hideClaudeMd`), and **queues it for launch** (the drainer starts it
+at once when under the concurrency cap, else it waits — see *Concurrency cap*), on the private socket;
 `reopen` clears a proposal and relaunches when claude is no longer up (no tmux, or no rendezvous socket) —
 and **when it relaunches it waits for the resumed agent's rendezvous socket to come up** (bounded poll) before returning, so a follow-on dispatch
 addresses a live socket rather than racing the boot; the human-only merge/close actions round out the
-lifecycle (`closeSession` is the only removal).
+lifecycle (`closeSession` is the only removal — it also **sweeps the session's rendezvous socket** from the
+tmpdir, which lives outside the worktree, so removing the worktree alone would leak a stale control endpoint).
 
 The **merge is an INTENT the human expresses, not a fixed server script**. Low-level git operations on the
 dashboard do not run server-side: the human acts at the level of intent and the session's OWN agent performs

@@ -5,7 +5,7 @@ import { createNodeWebSocket } from '@hono/node-ws'
 import { loadSpecs, specHistory, specDiffAt, loadConfig } from './specs.js'
 import { resolveLayout } from './layout.js'
 import { buildBoard } from './board.js'
-import { newSession, listSessions, sendKeys, rawKey, closeSession, reopen, propose, mergeSession, sessionGraph, registerWatch, deregisterWatch } from './sessions.js'
+import { newSession, listSessions, sendKeys, rawKey, closeSession, reopen, propose, mergeSession, sessionGraph, registerWatch, deregisterWatch, superviseQueue } from './sessions.js'
 import { slashCommands } from './slash-commands.js'
 import { attachViewer, detachViewer, writeViewer, resizeBridge, superviseBridges, type Viewer } from './pty-bridge.js'
 
@@ -120,6 +120,7 @@ const port = Number(process.env.PORT || 8787)
 const server = serve({ fetch: app.fetch, port })
 injectWebSocket(server)
 superviseBridges()   // keep a warm tmux client per live session, so opening a tab is instant
+superviseQueue()     // launch queued sessions as slots free (catches agent-authored proposals/crashes the server never sees directly)
 console.log(`spec-cli serving .spec (from git) on http://localhost:${port}`)
 
 // @@@ graceful drain - the other half of the zero-downtime reload (src/supervise.ts). When the supervisor

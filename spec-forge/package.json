@@ -7,7 +7,8 @@
   "scripts": {
     "proof": "tsx src/proof.ts",
     "outbound-proof": "tsx src/outbound-proof.ts",
-    "inbound-proof": "tsx src/inbound-proof.ts"
+    "inbound-proof": "tsx src/inbound-proof.ts",
+    "seam-proof": "tsx src/seam-proof.ts"
   },
   "devDependencies": {
     "@types/node": "^20.16.0",

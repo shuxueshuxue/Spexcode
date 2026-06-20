@@ -6,7 +6,7 @@ import { join, dirname, relative } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createConnection } from 'node:net'
 import { git, gitA, repoRoot } from './git.js'
-import { loadConfig } from './specs.js'
+import { loadConfig, type ConfigPreset } from './specs.js'
 
 // @@@ sessions - the WORKTREE is the durable unit; tmux is a disposable runtime handle. Each session
 // worktree carries an untracked `.session` file (the source of truth) that survives a kill / reboot /
@@ -45,26 +45,39 @@ const COLS = 120, ROWS = 32
 // slot frees (an agent proposes/dies). Configurable; default 6. Floored at 1 so a bad env can't wedge it to 0.
 const MAX_ACTIVE = Math.max(1, Number(process.env.SPEXCODE_MAX_ACTIVE) || 6)
 
-// @@@ appendSysArg - a dashboard/CLI-launched session gets ONLY the human's terse prompt; nothing else
-// carries SpexCode's always-on contracts (the dogfood ritual, voice-before-ask, …), so agents kept e.g.
-// proposing merge with UNCOMMITTED work. We inject those contracts via --append-system-prompt on EVERY
-// launch/resume (both go through launch() below). There is NO hardcoded base text here: the system prompt
-// is gathered ENTIRELY from the ACTIVE `surface: system` config nodes' bodies. The dogfood ritual itself is
-// one such node (`.spec/spexcode/.config/ritual`) — so changing a standing contract is a spec edit, not a
-// code change to this launcher. This is the `system` gather-point of the surface mechanism: a config node
-// opts in by declaring `surface: system`, and its body becomes an always-on contract on every launch/resume
-// (no slash, no agent choice). Pending plugins are filtered out by loadConfig, so a `status: pending` stub
-// is declared intent and never injected. Built fresh per launch so editing a system node takes effect on the
-// next launch with no restart. The combined text is single-quoted onto the launch line and shell-escaped the
-// same way the prompt is; the launch line is written to a script file (see launch()), so the length is
-// unbounded — it no longer rides the ~2KB tmux send-keys limit that capped the inline prompt (the
-// launch-prompt-limit lesson). No active system node → no flag at all (empty string).
-function appendSysArg(): string {
-  const parts: string[] = []
-  for (const cfg of loadConfig()) {
+// @@@ CORE_CONTRACT - the BAKED product default: the minimal contract ANY SpexCode project needs, injected
+// FIRST into every launched/resumed agent regardless of config. This is the ground base — the product works
+// on it alone. It deliberately does NOT mention our specific git flow (branch names, merge style, trailers);
+// that opinionated scaffold lives in the `.config/ritual` config node and layers on TOP via the surface
+// gather below. The split matters: a user who deletes every config plugin STILL gets agents that honor the
+// core (commit before declaring done; specs stay living current-state docs) — the core is product, not
+// removable scaffold. Edit the opinion in the spec tree; edit this ground floor here.
+const CORE_CONTRACT = `Commit your spec node and the code it justifies BEFORE you declare done or propose merge — the commit comes first, never as an afterthought to a declaration.
+
+A spec body is a living current-state document: it states the node's PRESENT intent and is rewritten in place. Never accrete a "## vN" changelog heading, and never add current-state or verdict sections — version history is git's job, not the body's.`
+
+// @@@ appendSysArg - the system prompt folded into EVERY launched/resumed agent (both paths go through
+// launch() below), assembled in TWO layers:
+//   1. CORE_CONTRACT (above) — the BAKED product default, always first, present even with ZERO config.
+//   2. each ACTIVE `surface: system` config node's body — the OPINIONATED scaffold, layered on top.
+// Without this a dashboard/CLI-launched session gets ONLY the human's terse prompt and carries none of
+// SpexCode's standing contracts (agents kept proposing merge with UNCOMMITTED work). Layer 2 is the
+// `system` gather-point of the surface mechanism: a config node opts in by declaring `surface: system` and
+// its body becomes an always-on contract (no slash, no agent choice) — our git flow lives there
+// (`.spec/spexcode/.config/ritual`), so changing the OPINIONATED specifics is a spec edit, not a code change
+// here; the baked core guarantees the ground rules hold even when that node is absent. Pending plugins are
+// filtered out by loadConfig, so a `status: pending` stub never injects. Built fresh per launch, so editing
+// a system node (or this core) takes effect on the next launch with no restart. The combined text is
+// single-quoted onto the launch line and shell-escaped like the prompt; the launch line is written to a
+// script file (see launch()), so length is unbounded — it no longer rides the ~2KB tmux send-keys limit
+// that capped the inline prompt (the launch-prompt-limit lesson). There is ALWAYS a flag (the baked core is
+// non-empty), so a config-less instance still gets the core injected. `cfgs` defaults to the live config
+// load — it's a parameter only so the layering (baked core present even with NO system nodes) is testable.
+export function appendSysArg(cfgs: ConfigPreset[] = loadConfig()): string {
+  const parts: string[] = [CORE_CONTRACT]
+  for (const cfg of cfgs) {
     if (cfg.surface.includes('system') && cfg.body.trim()) parts.push(cfg.body.trim())
   }
-  if (!parts.length) return ''
   const full = parts.join('\n\n')
   return `--append-system-prompt '${full.replace(/'/g, `'\\''`)}'`
 }

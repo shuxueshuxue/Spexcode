@@ -2,7 +2,7 @@
 title: dashboard-issues
 status: active
 hue: 280
-desc: Surfaces each node's bound OPEN issues on the dashboard — one glance badge (count) that reveals a popover of the issues on hover/focus. Fed by a resident ForgeCache folded into /api/board; non-blocking and silent without a forge.
+desc: Surfaces each node's bound OPEN issues on the dashboard — a glance count badge, and a detail card revealed by hovering/focusing the WHOLE node. Fed by a resident ForgeCache folded into /api/board; non-blocking and silent without a forge.
 code:
   - spec-forge/src/resident.ts
   - spec-cli/src/board.ts
@@ -23,7 +23,8 @@ Surface each spec node's bound open issues on the dashboard. Backend: fold each 
 count + list into the board via a resident `ForgeCache`, served on the existing `/api/board` nodes —
 non-blocking (serve the last reconcile, refresh in the background) and silent when there's no forge/`gh`
 (no badge, no error). Frontend: one glance badge (count, hue distinct from the status dot, like the
-drift-badge), only when > 0; on hover **or** focus, reveal one popover of each issue (num, state, title,
+drift-badge), only when > 0; the detail is a card revealed by hovering **or** focusing the **whole node**
+(focus = clicked or keyboard-navigated to), listing each issue as a small card (num, state, full title,
 url). No second detail pane — one surface. The badge is WORK, distinct from the derived status dot.
 
 ## expanded spec
@@ -38,13 +39,15 @@ construction**: with no `gh`, no repo, or no auth the reconcile throws, is swall
 empty — so the board reads exactly as before, no badge and no error. Read-only throughout: the fold never
 touches a node's git-derived status.
 
-**Frontend — one glance badge, one popover.** When a node carries open issues, its first row gains a
+**Frontend — one glance badge, one detail card.** When a node carries open issues, its first row gains a
 single badge: the **count**, in a hue distinct from the status dot and from the drift-badge (so the three
 signals never blur). Status dot = derived state; drift-badge = code ahead of spec; this badge = **bound
-work**. The badge is absent at zero. On **hover or keyboard focus** it reveals one small popover listing
-each issue — number, state, title — each a clickable link to its url. That popover is the **only** detail
-surface this feature adds: no second detail pane, no extra route. Clicking an issue link opens the forge,
-never the node's session.
+work**. The badge is absent at zero. The detail is owned by the **whole node**, not the badge: hovering the
+node **or** focusing it (clicking or keyboard-navigating to it) reveals a **card** — slightly wider than a
+node, a header plus one mini-card per issue (number and state on top, the **full title wrapping** beneath,
+not a single clipped line), each a link to its url. The card is the **only** detail surface this feature
+adds: no second detail pane, no extra route. Clicking an issue link opens the forge, never the node's
+session.
 
 Out of scope (future siblings, per node granularity): surfacing open **PRs** the same way (PRs already
 read on the board as session/overlay state); any live push of forge deltas (that is [[freshness]]'s

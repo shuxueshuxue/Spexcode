@@ -16,6 +16,10 @@ dist/
 # harness state
 .claude/
 
+# machine-local claude binary symlink (points into a per-machine install); the session
+# launcher resolves `claude` from PATH (SPEXCODE_CLAUDE_CMD), so this is never vendored
+spec-cli/bin/claude
+
 # os / editor
 .DS_Store
 *.log

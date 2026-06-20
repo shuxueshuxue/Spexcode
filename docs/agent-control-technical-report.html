@@ -1,0 +1,803 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Claude Code / Codex TUI 外部控制链路技术报告</title>
+  <style>
+    :root {
+      --bg: #f7f7f4;
+      --ink: #202124;
+      --muted: #5f6368;
+      --line: #d8d8d0;
+      --panel: #ffffff;
+      --code: #111827;
+      --code-bg: #eef0ec;
+      --accent: #0b6b60;
+      --warn: #9a3412;
+      --good: #166534;
+      --bad: #991b1b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 16px/1.58 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      width: min(1120px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 48px 0 80px;
+    }
+    h1, h2, h3 { line-height: 1.2; margin: 0; }
+    h1 { font-size: 34px; letter-spacing: 0; }
+    h2 {
+      font-size: 24px;
+      margin-top: 42px;
+      padding-top: 26px;
+      border-top: 1px solid var(--line);
+    }
+    h3 { font-size: 18px; margin-top: 28px; }
+    p { margin: 12px 0; }
+    a { color: var(--accent); }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      background: var(--code-bg);
+      padding: 0.12em 0.34em;
+      border-radius: 4px;
+      font-size: 0.92em;
+    }
+    pre {
+      background: var(--code-bg);
+      color: var(--code);
+      padding: 14px 16px;
+      border-radius: 8px;
+      overflow-x: auto;
+      border: 1px solid #d9ddd5;
+    }
+    pre code { background: transparent; padding: 0; }
+    ul, ol { padding-left: 22px; }
+    li { margin: 6px 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0 24px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+    }
+    th, td {
+      text-align: left;
+      vertical-align: top;
+      border-bottom: 1px solid var(--line);
+      padding: 10px 12px;
+    }
+    th { background: #eceee8; font-weight: 650; }
+    tr:last-child td { border-bottom: 0; }
+    .lede {
+      font-size: 18px;
+      color: #333;
+      margin-top: 16px;
+      max-width: 900px;
+    }
+    .meta {
+      margin-top: 18px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .callout {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--accent);
+      padding: 14px 16px;
+      border-radius: 8px;
+      margin: 18px 0;
+    }
+    .warn { border-left-color: var(--warn); }
+    .good { border-left-color: var(--good); }
+    .bad { border-left-color: var(--bad); }
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: #e0ebe7;
+      color: #075c53;
+      font-size: 13px;
+      margin-right: 6px;
+    }
+    .small { color: var(--muted); font-size: 14px; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 14px;
+      margin: 18px 0;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 16px;
+    }
+    .card h3 { margin-top: 0; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Claude Code / Codex TUI 外部控制链路技术报告</h1>
+  <p class="lede">
+    本报告整理一次针对 Claude Code 和 Codex TUI 的底层控制面探索。重点不是 hook、transcript、读屏、模拟键盘，
+    而是运行时 inspector、内部队列、本地 rendezvous socket、Codex app-server JSON-RPC、以及 Claude Channels 插件通道。
+  </p>
+  <p class="meta">
+    生成时间：2026-06-14 CST。主要 transcript：
+    <code>~/.codex/sessions/2026/06/13/rollout-2026-06-13T16-16-56-019ec00e-31e5-7dd2-885a-df7e7dbad818.jsonl</code>。
+    AgentBridge 源码快照：<code>/tmp/agent-bridge</code>，HEAD <code>1dc5e4f53568af77c5facabaae9b04f35a1e0626</code>。
+  </p>
+
+  <div class="callout warn">
+    <strong>敏感性边界。</strong>
+    Bun heap snapshot、进程环境、debug log、app-server thread/read 都可能包含 token、prompt、路径、账号和会话内容。
+    本报告只记录结构、marker 和脱敏后的事实，不保留原始 heap dump、完整 env、完整 transcript 或远端请求正文。
+  </div>
+
+  <h2>一页结论</h2>
+  <div class="grid">
+    <div class="card">
+      <h3>Claude Code 最硬链路</h3>
+      <p><code>CLAUDE_BG_BACKEND=daemon</code> + <code>CLAUDE_BG_RENDEZVOUS_SOCK</code> 会打开 Unix socket。</p>
+      <p>外部进程写入一行 <code>{"type":"reply","text":"..."}</code>，会进入 TUI 内部 <code>hw(...)</code> command queue，不碰 PTY。</p>
+    </div>
+    <div class="card">
+      <h3>Codex 最硬链路</h3>
+      <p>Codex TUI 可以连接 app-server。外部客户端通过同一个 app-server JSON-RPC 发 <code>turn/start</code>、<code>turn/steer</code>、<code>thread/inject_items</code>。</p>
+      <p>更隐蔽的是 plain <code>codex</code> 在默认 Unix socket 已存在时会自动复用本地 app-server。</p>
+    </div>
+    <div class="card">
+      <h3>AgentBridge 链路</h3>
+      <p>Codex 侧用 app-server/proxy 截获 agent message；Claude 侧用 Claude Code Channels Research Preview。</p>
+      <p>最后一跳是 MCP stdio notification：<code>notifications/claude/channel</code>。</p>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>链路</th>
+        <th>是否 TUI 有头</th>
+        <th>是否不碰 PTY 输入</th>
+        <th>能做什么</th>
+        <th>主要限制</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Claude Bun inspector</td>
+        <td>是</td>
+        <td>是</td>
+        <td>读 runtime、源码 bundle、heap snapshot、状态痕迹</td>
+        <td>必须启动时打开；Bun CDP 域不完整</td>
+      </tr>
+      <tr>
+        <td>Claude bg rendezvous socket</td>
+        <td>是</td>
+        <td>是</td>
+        <td>注入 user prompt、slash command、bash mode、compact</td>
+        <td>必须启动时带 bg env；只接受 reply 等有限协议</td>
+      </tr>
+      <tr>
+        <td>Codex explicit app-server</td>
+        <td>是</td>
+        <td>是</td>
+        <td>turn/start、turn/steer、thread/read、raw assistant inject</td>
+        <td>TUI 必须用 <code>--remote</code> 接入该 server</td>
+      </tr>
+      <tr>
+        <td>Codex implicit daemon reuse</td>
+        <td>是</td>
+        <td>是</td>
+        <td>plain <code>codex</code> 自动挂默认 socket 后可被外部控制</td>
+        <td>前提是默认 socket 已存在；若带 <code>-c</code> 等覆盖会失效</td>
+      </tr>
+      <tr>
+        <td>AgentBridge Claude channel</td>
+        <td>是</td>
+        <td>是</td>
+        <td>把 Codex agent message push 到 Claude Code channel</td>
+        <td>Claude 必须加载 AgentBridge plugin/channel</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>证据来源和方法</h2>
+  <p>
+    这次探索用了三类证据：本机真实进程实验、源码定位、以及 transcript 回放校对。核心原则是先打印事实，再判断；
+    对失败实验也明确丢弃，不把时序 bug 包装成产品结论。
+  </p>
+  <ul>
+    <li>本机 Claude Code：<code>/opt/homebrew/bin/claude -> /opt/homebrew/Caskroom/claude-code/2.1.150/claude</code>。</li>
+    <li>Claude Code 2.1.150 是 213MB arm64 Mach-O，带 <code>__BUN</code> 段，运行时是 Bun/JSC/WebKit 堆。</li>
+    <li>本机还存在 npm 版 <code>@anthropic-ai/claude-code@2.0.28</code>，但它不是当前 PATH 里的 TUI 工件。</li>
+    <li>本机 Codex：实验时为 <code>0.137.0</code>；源码审查另拉了 <code>openai/codex</code> 上游快照。</li>
+    <li>AgentBridge：clone 到 <code>/tmp/agent-bridge</code>，读源码而不是只读 README。</li>
+  </ul>
+
+  <h2>Claude Code 工件形态</h2>
+  <p>
+    当前 Homebrew Cask 版不是普通 <code>node cli.js</code>。它是 Bun 打包单文件，入口被编译进 Mach-O。
+    这让 <code>NODE_OPTIONS=--inspect</code>、Node preload、CommonJS require hook 这类路基本不适用于当前真实 TUI。
+  </p>
+  <pre><code>which claude
+/opt/homebrew/bin/claude
+
+ls -l /opt/homebrew/bin/claude
+/opt/homebrew/bin/claude -> /opt/homebrew/Caskroom/claude-code/2.1.150/claude</code></pre>
+  <p>
+    <code>vmmap</code> 和 <code>sample</code> 看到 <code>JS VM Gigacage</code>、<code>JS JIT generated code</code>、<code>WebKit Malloc</code>、
+    Bun Pool、HTTP Client 线程、临时 <code>.node</code> 和 <code>tokio-rt-worker</code>。这说明 Claude Code 有 JS/TUI 层，也有 native async 层。
+  </p>
+
+  <h2>Claude Bun Inspector 链路</h2>
+  <h3>入口</h3>
+  <p>
+    <code>--inspect</code> 作为 CLI 参数没有打开 inspector；真正有效的是 Bun 环境变量。
+    关键写法是指定端口和固定 WebSocket path：
+  </p>
+  <pre><code>BUN_INSPECT=9235/inspect claude --dangerously-skip-permissions
+
+# CDP websocket:
+ws://[::1]:9235/inspect
+
+# version endpoint:
+curl --noproxy '*' -g 'http://[::1]:9235/json/version'</code></pre>
+  <p>
+    注意两点：Bun inspector 监听 IPv6 loopback <code>::1</code>；本机代理环境可能劫持 loopback HTTP，所以 curl 需要 <code>--noproxy '*'</code>。
+  </p>
+
+  <h3>实测能力</h3>
+  <table>
+    <thead>
+      <tr><th>CDP / Runtime 面</th><th>结果</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>Runtime.evaluate</code></td><td>可用，可读 <code>process.argv</code>、<code>process.cwd()</code>、<code>process.memoryUsage()</code>、<code>Object.keys(Bun)</code> 等。</td></tr>
+      <tr><td><code>Debugger.enable</code></td><td>可用，能收到 <code>scriptParsed</code>。</td></tr>
+      <tr><td><code>Debugger.getScriptSource</code></td><td>可用，能拉出主 bundle。</td></tr>
+      <tr><td><code>HeapProfiler</code></td><td>CDP domain 不存在。</td></tr>
+      <tr><td><code>Runtime.getHeapUsage</code> / <code>getIsolateId</code></td><td>不存在。</td></tr>
+      <tr><td><code>Runtime.queryObjects</code></td><td>不存在，不能像 V8/Chrome 那样枚举活对象。</td></tr>
+      <tr><td><code>Debugger.setBreakpointOnFunctionCall</code></td><td>不存在，抢闭包变量困难。</td></tr>
+    </tbody>
+  </table>
+
+  <h3>主 bundle 抽取</h3>
+  <p>
+    inspector 里能看到当前运行中的 BunFS 主脚本，而不是磁盘上的 npm 版源码：
+  </p>
+  <pre><code>url: /$bunfs/root/src/entrypoints/cli.js
+length: 15313127 bytes</code></pre>
+  <p>
+    这条很重要。Cask 单文件看起来不可读，但运行时通过 <code>Debugger.getScriptSource</code> 能把 bundle 原文拿出来。
+    实验中主 bundle 被抽到 <code>/tmp/claude-2.1.150-cli.js</code> 做静态索引。
+  </p>
+
+  <h3>Heap snapshot</h3>
+  <p>
+    虽然 Bun CDP 没暴露 <code>HeapProfiler</code>，但目标进程内存在 Bun 自己的 API：
+  </p>
+  <pre><code>Bun.generateHeapSnapshot("v8")</code></pre>
+  <p>实测 snapshot 约 34.9MB；一次结构统计如下：</p>
+  <pre><code>{
+  "nodeCount": 523187,
+  "edgeCount": 1879745,
+  "totalSelf": 65320272,
+  "byType": {
+    "code": 116340,
+    "object": 93494,
+    "closure": 192480,
+    "string": 55499,
+    "native": 72,
+    "regexp": 1676
+  }
+}</code></pre>
+  <p>字符串痕迹计数能看到产品对象和工具面，但不能输出真实值：</p>
+  <pre><code>{
+  "Claude Code": 131,
+  "local-jsx": 2,
+  "todos": 3,
+  "bashes": 2,
+  "toolUseContext": 2,
+  "InternalStdinContext": 2,
+  "ANTHROPIC_API_KEY": 28,
+  "Remote Control": 1,
+  "SendUserMessage": 1
+}</code></pre>
+  <div class="callout warn">
+    Heap snapshot 不是普通日志，可能含真实 secret value、prompt、账号和会话内容。实验中只做内存内解析或临时文件解析，报告不保存原始 dump。
+  </div>
+
+  <h2>不用 PTY 输入获取 <code>/status</code> 数据</h2>
+  <p>
+    <code>/status</code> 不是 shell 命令，而是 Claude Code 内部 React/local-jsx slash command。
+    源码定位到 command object：
+  </p>
+  <pre><code>{
+  type: "local-jsx",
+  name: "status",
+  description: "Show Claude Code status...",
+  immediate: true,
+  load: () =&gt; ...
+}</code></pre>
+  <p>
+    组件路径被拆成：
+  </p>
+  <pre><code>Status tab = Sm3() + bm3({ mainLoopModel, mcp, theme, context }) + await sWK()</code></pre>
+  <p>
+    其中静态行来自类似 <code>Sm3()</code> 的模块状态：version、session name、session id、cwd、auth/provider。
+    live state 来自 app store：<code>mainLoopModel</code>、effort、<code>mcp.clients</code>。
+  </p>
+  <p>一次 heap 侧实验拿到的数据：</p>
+  <pre><code>mainLoopModel: GLM-X-Preview
+effortValue: xhigh
+mcp.clients: []
+cwd: /Users/lexicalmathical/Codebase/homeworks/llm
+Version: 2.1.150</code></pre>
+  <p>
+    这条路径不向 PTY 发送 <code>/status</code>，也不解析屏幕。它从源码和 heap/app state 还原 <code>/status</code> 会展示的数据。
+    限制是 Bun inspector 缺少 V8 的活对象枚举和作用域读取能力，闭包变量不能随便从 global eval 里取出来。
+  </p>
+
+  <h2>Claude bg rendezvous socket 注入链路</h2>
+  <h3>启动条件</h3>
+  <p>
+    Claude Code 内部有一个 background daemon rendezvous 通道。普通前台 <code>claude</code> 默认不打开；
+    但如果启动时带下面两个环境变量，TUI 进程会创建 Unix socket：
+  </p>
+  <pre><code>CLAUDE_BG_BACKEND=daemon
+CLAUDE_BG_RENDEZVOUS_SOCK=/tmp/cc.sock
+claude --dangerously-skip-permissions</code></pre>
+  <p>另一个进程写一行 JSON，以换行结束：</p>
+  <pre><code>{"type":"reply","text":"hello from socket"}</code></pre>
+  <p>内部链路是：</p>
+  <pre><code>Unix socket line
+  -&gt; bg rendezvous parser
+  -&gt; kb3(...)
+  -&gt; if type === "reply"
+  -&gt; hw({ mode: YR(text), value: Qy(text), priority: "next" })
+  -&gt; Claude TUI command queue
+  -&gt; normal slash parser / prompt runner / bash mode</code></pre>
+
+  <h3>协议语义</h3>
+  <p>源码和实验显示它至少接受这些消息类型：</p>
+  <ul>
+    <li><code>{ "type": "reply", "text": "..." }</code>：把用户回复塞进内部队列。</li>
+    <li><code>{ "type": "repaint" }</code>：请求 repaint。</li>
+    <li><code>{ "type": "shutdown" }</code>：管理器关闭后台进程。</li>
+    <li><code>{ "type": "attacher-caps", "caps": ... }</code>：外部 attacher 更新能力。</li>
+  </ul>
+  <p>
+    这是后台 agent / daemon 管理器和 Claude Code 子进程之间的 rendezvous，不是隐藏后门。正常用途是让后台任务没有稳定交互终端时仍能接收用户回复、重绘、关停和上报状态。
+  </p>
+
+  <h3>实验 1：注入 <code>/status</code></h3>
+  <p>写入：</p>
+  <pre><code>{"type":"reply","text":"/status CODEX_BG_RV_1781343378"}</code></pre>
+  <p>debug log 证明入队：</p>
+  <pre><code>[bg-rv] enqueued reply: /status CODEX_BG_RV_1781343378</code></pre>
+  <p>heap 里看到真实队列对象：</p>
+  <pre><code>{
+  value: "/status CODEX_BG_RV_1781343378",
+  mode: "prompt"
+}</code></pre>
+
+  <h3>实验 2：真实 user prompt 触发 API</h3>
+  <p>写入普通 prompt：</p>
+  <pre><code>{"type":"reply","text":"CODEX_NORMAL_USER_1781343432: reply with OK only"}</code></pre>
+  <p>heap 中出现：</p>
+  <pre><code>{
+  role: "user",
+  content: "CODEX_NORMAL_USER_1781343432: reply with OK only"
+}</code></pre>
+  <p>
+    实验中曾试图把 <code>ANTHROPIC_BASE_URL</code> 指向本机空端口避免真实请求，但 Claude 从配置恢复到了原 provider，
+    debug log 出现 <code>[API REQUEST] /api/anthropic/v1/messages source=repl_main_thread</code>。这说明注入走了真实主循环。
+  </p>
+
+  <h3>实验 3：tmux 可见真实 agent</h3>
+  <p>起可见 TUI：</p>
+  <pre><code>tmux new -s cc-bg-rv-real
+CLAUDE_BG_BACKEND=daemon \
+CLAUDE_BG_RENDEZVOUS_SOCK=/tmp/cc-bg-rv-real.sock \
+claude --dangerously-skip-permissions</code></pre>
+  <p>外部 socket 注入：</p>
+  <pre><code>BG_RV_REAL_1781343848
+BG_RV_WATCH_174450
+BG_RV_STOP_174826</code></pre>
+  <p>debug 证据：</p>
+  <pre><code>[bg-rv] enqueued reply: ...
+[API REQUEST] /api/anthropic/v1/messages source=repl_main_thread</code></pre>
+  <p>
+    这证明它不是只改 UI state，而是把 message 送进真实 agent loop 并触发真实 API。
+  </p>
+
+  <h3>实验 4：bash mode</h3>
+  <p>
+    <code>reply.text</code> 以 <code>!</code> 开头会被 <code>YR(text)</code> / <code>Qy(text)</code> 识别为 bash mode。
+    实验注入：
+  </p>
+  <pre><code>!printf '%s\n' 'BG_RV_BASH_175429' &gt; '/tmp/cc-bg-rv-real.bash-proof.txt'</code></pre>
+  <p>结果文件：</p>
+  <pre><code>/tmp/cc-bg-rv-real.bash-proof.txt
+BG_RV_BASH_175429</code></pre>
+  <p>
+    这说明同一非 PTY 通道不只可以发 prompt，还可以进入 Claude Code 的 bash 工具链。
+  </p>
+
+  <h3>实验 5：slash command 和 compact</h3>
+  <p>
+    先按用户拼写原样发 <code>/comapct</code>，只证明入队，不触发 compact。随后发正确的：
+  </p>
+  <pre><code>/compact BG_RV_COMPACT_175922</code></pre>
+  <p>debug 证据：</p>
+  <pre><code>[bg-rv] enqueued reply: /compact BG_RV_COMPACT_175922
+[API REQUEST] /api/anthropic/v1/messages source=compact
+Forked agent [compact] received message: type=assistant
+Forked agent [compact] finished: 1 messages, types=[assistant],
+  totalUsage: input=1300 output=3219 cacheRead=71424 cacheCreate=0</code></pre>
+  <p>
+    结论：socket 注入会经过 Claude Code 自己的 slash parser；<code>/compact</code> 被识别为内部 compact source，
+    发起专门的 compact API 请求并完成 forked compact agent。
+  </p>
+
+  <h3>还没打穿的事</h3>
+  <p>
+    直接伪造 assistant message 没打穿。bg rendezvous 的公开消息类型里，<code>reply</code> 最终是 user/prompt 队列。
+    要硬插 assistant 需要拿到 live message array、React state setter、transcript mirror writer 或 agent core 的 history handle。
+    Bun inspector 目前缺 <code>Runtime.queryObjects</code>、function-call breakpoint、启动暂停，导致纯 inspector 抢闭包路线卡住。
+  </p>
+
+  <h2>Codex explicit app-server TUI 控制链路</h2>
+  <p>
+    Codex 这边比 Claude 更直接：开源代码里有 app-server JSON-RPC 控制面，TUI 自己也可以作为 app-server client。
+    这不是 <code>codex exec</code> 无头模式，而是有头 TUI 连接远端 app-server。
+  </p>
+  <pre><code>codex app-server --listen ws://127.0.0.1:19325
+codex --remote ws://127.0.0.1:19325 \
+  --dangerously-bypass-approvals-and-sandbox \
+  -C "$PWD" \
+  --no-alt-screen</code></pre>
+  <p>外部第三进程也连同一个 WebSocket，发 JSON-RPC。</p>
+
+  <h3>实验：外部 turn/start + turn/steer</h3>
+  <pre><code>thread/loaded/list
+-&gt; ["019ec071-280d-7a83-91ac-aa49561360be"]
+
+turn/start:
+  turnId = 019ec072-3044-77a1-b617-5a39ed47a550
+  clientUserMessageId = CODEX_REMOTE_EXT_START_180608
+
+turn/steer:
+  turnId = 019ec072-3044-77a1-b617-5a39ed47a550
+  clientUserMessageId = CODEX_REMOTE_EXT_STEER_180608</code></pre>
+  <p>再用 <code>thread/read</code> 读结构化状态，最后一个 turn 内确实出现两个 user message：</p>
+  <pre><code>USER_ITEM clientId=CODEX_REMOTE_EXT_START_180608
+USER_ITEM clientId=CODEX_REMOTE_EXT_STEER_180608
+AGENT_ITEM text="CODEX_REMOTE_EXT_START_180608
+CODEX_REMOTE_EXT_STEER_180608"</code></pre>
+  <p>
+    这证明外部进程在 TUI 正在承载的 Codex turn 中途插入了 user input，且模型最终把两个 marker 都响应出来。
+  </p>
+
+  <h3>实验：raw assistant 注入</h3>
+  <p>Codex app-server 还有更直接的 <code>thread/inject_items</code>：</p>
+  <pre><code>thread/inject_items:
+  assistant message = CODEX_REMOTE_RAW_ASSISTANT_180739
+
+next turn asks model to repeat injected assistant token
+
+AGENT_ITEM text="CODEX_REMOTE_RAW_ASSISTANT_180739"</code></pre>
+  <p>
+    这比 Claude bg rendezvous 更强：Codex 官方控制面支持向 thread 结构注入 raw assistant item，
+    后续模型上下文会看到这条被注入的 assistant message。
+  </p>
+
+  <h2>Codex 配置和默认 remote 问题</h2>
+  <p>
+    用户追问 <code>--remote</code> 等参数能否通过环境变量或配置固化，让普通 <code>codex</code> 不手动加参数也连到外部控制面。
+    结论分两层。
+  </p>
+  <h3>明确不能配置的部分</h3>
+  <p>
+    <code>--remote</code> 是纯 CLI option，TUI 启动收到的是已经解析好的 <code>explicit_remote_endpoint</code>。
+    当前没有官方 <code>config.toml</code> 或环境变量把任意 remote endpoint 变成默认。
+  </p>
+  <p>隔离 <code>CODEX_HOME</code> 反证实验：</p>
+  <pre><code>remote = "ws://127.0.0.1:19325"
+
+[app_server]
+listen = "ws://127.0.0.1:19325"</code></pre>
+  <p><code>codex --strict-config exec ...</code> 报未知配置字段：</p>
+  <pre><code>unknown configuration field `remote`
+unknown configuration field `app_server`</code></pre>
+
+  <h3>可配置的外围参数</h3>
+  <pre><code># ~/.codex/config.toml
+approval_policy = "never"
+sandbox_mode = "danger-full-access"
+
+[tui]
+alternate_screen = "never"</code></pre>
+  <p>
+    这些能固化审批、沙箱、alternate screen 等体验参数，但不能固化最关键的 remote endpoint。
+  </p>
+
+  <h2>Codex implicit local daemon reuse</h2>
+  <p>
+    这条是后续严查出来的关键。plain <code>codex</code> 在没有显式 <code>--remote</code> 时，并不总是自己启动 embedded server。
+    如果默认 Unix socket 已存在且可连接，它会复用这个本地 app-server。外部客户端连同一个 socket，就能控制 plain TUI 的 loaded thread。
+  </p>
+
+  <h3>默认 socket</h3>
+  <pre><code>~/.codex/app-server-control/app-server-control.sock</code></pre>
+  <p>实验启动：</p>
+  <pre><code># 先启动默认 socket app-server
+codex app-server --listen unix://
+
+# 再启动完全不带 --remote 的 TUI
+codex</code></pre>
+  <p>
+    TUI 清掉 update modal 之后，外部 WebSocket-over-Unix-socket probe 连接默认 socket，
+    <code>thread/loaded/list</code> 看到了 plain TUI thread：
+  </p>
+  <pre><code>019ec084-f4a3-7fd3-96bd-32d66b3c6a3a</code></pre>
+
+  <h3>外部 turn/start 证据</h3>
+  <pre><code>clientUserMessageId = CODEX_IMPLICIT_DAEMON_TURN_182701</code></pre>
+  <p><code>thread/read includeTurns</code> 读回：</p>
+  <pre><code>userMessage.clientId = CODEX_IMPLICIT_DAEMON_TURN_182701
+agentMessage.text   = CODEX_IMPLICIT_DAEMON_TURN_182701
+turn.status         = completed
+durationMs          = 3560</code></pre>
+  <p>
+    这证明 plain TUI 被外部 socket 注入 user turn，真实 API 跑完，并且结果进入 TUI thread 历史。
+  </p>
+
+  <h3>源码条件和负例</h3>
+  <p>
+    自动复用探测很朴素：默认 socket 文件存在，并且 <code>UnixStream</code> 在短时间内 connect 成功，就选择 local daemon。
+    它不是 JSON-RPC health check，所以假 socket 也可能诱导 TUI 走这条路，然后后续协议失败。
+  </p>
+  <p>成立条件：</p>
+  <ul>
+    <li>Unix 平台。</li>
+    <li>默认 socket 存在：<code>$CODEX_HOME/app-server-control/app-server-control.sock</code>。</li>
+    <li>没有显式 <code>--remote</code>。</li>
+    <li>没有 <code>-c key=value</code>。</li>
+    <li>没有 <code>--strict-config</code>、loader override、ignore-user-config、profile-v2 等。</li>
+    <li>没有 <code>--dangerously-bypass-hook-trust</code>。</li>
+  </ul>
+  <p>
+    负例实测：<code>codex -c 'web_search="live"'</code> 启动后没有接入默认 socket；
+    server socket fd 数不变，外部 <code>thread/loaded/list</code> 没有多出它的 thread。
+  </p>
+
+  <h3>官方 daemon lifecycle 限制</h3>
+  <p>
+    本机 <code>codex app-server daemon start</code> 和 <code>codex remote-control start</code> 当时失败，原因是安装形态：
+  </p>
+  <pre><code>managed standalone Codex install not found at
+~/.codex/packages/standalone/current/codex</code></pre>
+  <p>
+    daemon 子命令要求 install.sh 管理的 standalone Codex。npm 版仍可手动跑
+    <code>codex app-server --listen unix://</code>，只是不能使用官方 daemon lifecycle。
+  </p>
+
+  <h2>AgentBridge push to Claude Code 链路</h2>
+  <p>
+    AgentBridge 的 Claude 侧不是利用 bg rendezvous，也不是找现有 Claude 进程打洞。
+    它使用 Claude Code 的 Channels Research Preview：Claude Code 启动时主动加载 AgentBridge plugin，
+    plugin 里的 MCP server 作为 Claude 的 child process 通过 stdio 与宿主通讯。
+  </p>
+
+  <h3>启动与 plugin</h3>
+  <p>plugin MCP manifest：</p>
+  <pre><code>{
+  "mcpServers": {
+    "agentbridge": {
+      "command": "bun",
+      "args": ["run", "${CLAUDE_PLUGIN_ROOT}/server/bridge-server.js"],
+      "env": {
+        "AGENTBRIDGE_DAEMON_ENTRY": "./daemon.js"
+      }
+    }
+  }
+}</code></pre>
+  <p><code>agentbridge claude</code> 启动 Claude 时加入：</p>
+  <pre><code>--dangerously-load-development-channels plugin:agentbridge@agentbridge</code></pre>
+  <p>MCP server 声明 experimental channel capability：</p>
+  <pre><code>capabilities: {
+  experimental: { "claude/channel": {} },
+  tools: {},
+}</code></pre>
+
+  <h3>Codex to Claude push 链路</h3>
+  <pre><code>Codex TUI
+  --remote ws://127.0.0.1:&lt;agentbridge-proxy&gt;
+      |
+AgentBridge Codex proxy
+  intercept item/agentMessage/delta + item/completed
+      |
+AgentBridge daemon
+  WS frame: { type: "codex_to_claude", message }
+      |
+Claude plugin foreground bridge
+  MCP stdio server
+      |
+server.notification({
+  method: "notifications/claude/channel",
+  params: { content, meta }
+})
+      |
+Claude Code channel message</code></pre>
+  <p>真正 push 代码形状：</p>
+  <pre><code>await this.server.notification({
+  method: "notifications/claude/channel",
+  params: {
+    content: message.content,
+    meta: {
+      chat_id: this.sessionId,
+      message_id: message.id,
+      delivery_attempt_id: deliveryAttemptId,
+      user: "Codex",
+      user_id: "codex",
+      ts,
+      source_type: "codex",
+    },
+  },
+});</code></pre>
+  <p>
+    最后一跳是 MCP server notification，不是 PTY、输入框、transcript 或 hook。
+  </p>
+
+  <h3>Codex 侧来源</h3>
+  <p>
+    AgentBridge 自己启动 <code>codex app-server --listen &lt;listen&gt;</code>，
+    再让 Codex TUI 连自己的 proxy：
+  </p>
+  <pre><code>--enable tui_app_server --remote &lt;proxyUrl&gt;</code></pre>
+  <p>
+    proxy 监听 app-server 通知：<code>item/started</code>、<code>item/agentMessage/delta</code>、<code>item/completed</code>。
+    当 <code>item.type === "agentMessage"</code> 完成时 emit：
+  </p>
+  <pre><code>{
+  id: item.id,
+  source: "codex",
+  content,
+  timestamp: Date.now()
+}</code></pre>
+  <p>
+    daemon 再把它转成 control WS 消息：
+  </p>
+  <pre><code>{ type: "codex_to_claude", message }</code></pre>
+
+  <h3>Claude to Codex 反向路径</h3>
+  <p>Claude plugin 暴露 MCP tools：<code>reply</code>、<code>get_messages</code>、<code>get_budget</code>。</p>
+  <pre><code>Claude reply tool
+  -&gt; daemonClient.sendReply(...)
+  -&gt; WS { type: "claude_to_codex", ... }
+  -&gt; daemon
+  -&gt; codex.injectMessage(...)
+  -&gt; app-server JSON-RPC turn/start 或 turn/steer</code></pre>
+
+  <h3>对比我们的 Claude bg rendezvous 链路</h3>
+  <p>
+    AgentBridge 很干净、产品化，但 Claude 侧控制权来自“Claude 主动加载 plugin/channel”。
+    它不能控制一个未加载 AgentBridge channel 的普通 Claude TUI。
+  </p>
+  <p>
+    bg rendezvous 更接近底层外部控制：TUI 背后本来就有 daemon/background rendezvous primitive，
+    外部进程只要有 socket 就能贴进内部队列。Codex implicit daemon reuse 则更进一步：
+    普通 <code>codex</code> 可以在无显式参数时复用预先存在的 app-server control socket。
+  </p>
+
+  <h2>技术路径总图</h2>
+  <pre><code>Claude Code Cask 2.1.150
+  |
+  +-- Bun inspector at startup
+  |     BUN_INSPECT=PORT/path
+  |     -&gt; Runtime.evaluate
+  |     -&gt; Debugger.getScriptSource
+  |     -&gt; Bun.generateHeapSnapshot("v8")
+  |
+  +-- bg rendezvous socket at startup
+        CLAUDE_BG_BACKEND=daemon
+        CLAUDE_BG_RENDEZVOUS_SOCK=/tmp/x.sock
+        -&gt; {"type":"reply","text":"..."}
+        -&gt; internal hw(...) queue
+        -&gt; prompt / slash / bash / compact
+
+Codex TUI
+  |
+  +-- explicit app-server
+  |     codex app-server --listen ws://...
+  |     codex --remote ws://...
+  |     external JSON-RPC client
+  |     -&gt; turn/start, turn/steer, thread/inject_items
+  |
+  +-- implicit local daemon reuse
+        preexisting ~/.codex/app-server-control/app-server-control.sock
+        plain codex
+        external JSON-RPC client controls loaded thread
+
+AgentBridge
+  |
+  +-- Codex side: app-server proxy intercepts agentMessage
+  +-- Claude side: plugin MCP stdio server
+        -&gt; notifications/claude/channel</code></pre>
+
+  <h2>失败实验和排除项</h2>
+  <ul>
+    <li><code>claude --inspect</code> 没打开 Bun inspector；有效入口是 <code>BUN_INSPECT</code>。</li>
+    <li><code>BUN_INSPECT=端口</code> 不指定 path 时 WebSocket path 随机或不便直接连接；<code>PORT/inspect</code> 更稳。</li>
+    <li><code>expect</code> PTY 下主动触发 <code>/status</code> 时 CDP backend 曾卡在 <code>Runtime.evaluate</code>；该结果被丢弃。后续用 Python pty harness 验证 CDP 正常。</li>
+    <li>Bun inspector 缺少 <code>Runtime.queryObjects</code>、<code>setBreakpointOnFunctionCall</code> 和可靠启动暂停，导致直接抢 bundle closure 变量没有完成。</li>
+    <li>只设置 <code>CLAUDE_BG_RENDEZVOUS_SOCK</code> 不够；必须同时设置 <code>CLAUDE_BG_BACKEND=daemon</code>。</li>
+    <li>Claude assistant message 直接插入未打穿；当前可证实的是 user/prompt 队列注入、slash command、bash mode。</li>
+    <li>Codex TUI stdout 不是 terminal 时会拒绝启动；实验中改用 tmux 真 PTY，证据仍从 app-server 取。</li>
+    <li>plain <code>codex</code> 可能先被 update modal 阻塞；清掉 modal 后才能进入正常 TUI loop 并加载 thread。</li>
+    <li><code>codex app-server daemon start</code> 在 npm 安装形态下失败，需要 standalone managed install；手动 <code>app-server --listen unix://</code> 仍可验证协议。</li>
+  </ul>
+
+  <h2>安全和操作建议</h2>
+  <ul>
+    <li>所有 socket path、debug port、heap dump 都应按本机高权限调试入口处理，避免放到共享目录或 repo。</li>
+    <li>对 Claude rendezvous socket，启动脚本应使用私有目录，例如 <code>mktemp -d</code> 下的 socket，而不是固定公共路径。</li>
+    <li>对 Codex app-server，默认 Unix socket 一旦存在，plain <code>codex</code> 可能自动复用；这对本机自动化很强，对误接入也有风险。</li>
+    <li>保存 proof 时只保存 marker、状态摘要、结构化字段，不保存完整 <code>thread/read</code>、env、heap snapshot、debug log。</li>
+    <li>如果要做长期工具，应把 transport、source of truth、wake/event contract 分清，不要把 WebSocket/Unix socket 当成架构本身。</li>
+  </ul>
+
+  <h2>后续最值得打的方向</h2>
+  <ol>
+    <li>
+      <strong>Claude assistant message 注入。</strong>
+      需要越过 bg rendezvous 的 user-only reply 语义，找到 live message store 或 agent history primitive。
+      可能路线是启动期源码改写、BunFS bundle patch、或更强的 JSC/Bun debug hook。
+    </li>
+    <li>
+      <strong>Claude <code>/status</code> 完整结构化重建。</strong>
+      已拿到 model、effort、mcp、cwd、version 等核心项；还可继续把 auth/provider、permission mode、session name、diagnostics promise 分层还原。
+    </li>
+    <li>
+      <strong>Codex implicit daemon 自动化。</strong>
+      写一个最小 control socket supervisor：先起 app-server unix socket，再启动 plain <code>codex</code>，外部进程订阅 <code>thread/loaded/list</code> 和 turn lifecycle。
+    </li>
+    <li>
+      <strong>AgentBridge channel 落点验证。</strong>
+      需要确认 <code>notifications/claude/channel</code> 在 Claude Code 内部是 UI channel、model context channel，还是能触发 agent loop。
+      目前源码只证明它是 sanctioned push channel，不证明等价于 user turn 注入。
+    </li>
+    <li>
+      <strong>敏感 artifact 管理。</strong>
+      为 heap/debug/proof 建 out-of-repo 临时目录和自动 scrubber，避免把 token、prompt、session dump 混进项目。
+    </li>
+  </ol>
+
+  <h2>最终判断</h2>
+  <p>
+    这次探索证明，Claude Code 和 Codex 都有不经过输入框的真实控制面，但性质不同。
+  </p>
+  <p>
+    Claude Code 的强路径是 background daemon rendezvous：它原本用于后台 agent 管理，手动挂到可见 TUI 后，
+    就变成 user prompt、slash command、bash mode 的本地 socket 注入通道。它官方意味很强，但不是普通前台默认暴露。
+  </p>
+  <p>
+    Codex 的强路径是 app-server：这是明确的 JSON-RPC 控制平面。显式 <code>--remote</code> 已经足够强；
+    默认 Unix socket implicit reuse 则更接近“普通 TUI 被外部控制”的形态。
+  </p>
+  <p>
+    AgentBridge 是一条产品化桥接：Codex 侧借 app-server，Claude 侧借 Channels preview。它干净、可包装，
+    但 Claude 侧需要 plugin/channel 预加载，所以底层控制力不如 bg rendezvous 或 Codex implicit daemon reuse。
+  </p>
+</main>
+</body>
+</html>

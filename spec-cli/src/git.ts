@@ -442,6 +442,51 @@ function parseNameStatus(out: string): { code: string; from: string; to: string 
   return rows
 }
 
+// @@@ mergeBaseDiff - the worker's REAL changes vs main, for the manager cockpit's review payload.
+// Anchored at the FORK POINT (`git merge-base main HEAD`), then `base..HEAD` — the SAME staleness reasoning
+// as worktreeSpecDelta but over the WHOLE tree, not just `.spec`: diffing against main's HEAD would show
+// main's post-fork commits as phantom edits the worker never made. Flattened to per-file status + line
+// counts (one numstat + one name-status walk, merged by final path). '' base (no common ancestor) → [].
+export type ReviewDiffFile = { path: string; status: string; additions: number; deletions: number }
+const DIFF_STATUS: Record<string, string> = { A: 'added', M: 'modified', D: 'deleted', R: 'renamed', C: 'copied', T: 'type-changed' }
+export async function mergeBaseDiff(wtPath: string, mainRef = 'main'): Promise<ReviewDiffFile[]> {
+  const run = (args: string[]) => gitA(['-C', wtPath, '-c', 'core.quotePath=false', ...args])
+  const base = (await run(['merge-base', mainRef, 'HEAD'])).trim()
+  if (!base) return []
+  const [numstatOut, statusOut] = await Promise.all([
+    run(['diff', '--numstat', '-M', `${base}..HEAD`]),
+    run(['diff', '--name-status', '-M', `${base}..HEAD`]),
+  ])
+  const status = new Map<string, string>()
+  for (const r of parseNameStatus(statusOut)) status.set(r.to, DIFF_STATUS[r.code] ?? r.code)
+  const files: ReviewDiffFile[] = []
+  for (const line of numstatOut.split('\n')) {
+    const m = line.match(/^(-|\d+)\t(-|\d+)\t(.+)$/)
+    if (!m) continue
+    const { to } = parseStatPath(m[3])   // numstat renders a rename as `{old => new}`; keep the final path
+    files.push({ path: to, status: status.get(to) ?? 'modified', additions: m[1] === '-' ? 0 : +m[1], deletions: m[2] === '-' ? 0 : +m[2] })
+  }
+  return files
+}
+
+// @@@ mergeConflicts - would merging this branch into main conflict, computed WITHOUT touching any working
+// tree. `git merge-tree --write-tree` performs the merge entirely in the object store (no checkout, no
+// index, nothing to abort) and exits 1 on conflicts / 0 on a clean merge — the SAFE dry-run the cockpit's
+// conflict gate needs (vs a real `git merge --no-commit` that would mutate main's tree). Any OTHER exit (bad
+// refs, a too-old git without --write-tree) resolves to false: a gate must not invent a conflict it could
+// not actually determine. env stripped like git()/gitA() so a hook's exported GIT_DIR can't misdirect it.
+export function mergeConflicts(wtPath: string, mainRef = 'main'): Promise<boolean> {
+  return new Promise((resolve) => {
+    const env = { ...process.env }
+    delete env.GIT_DIR; delete env.GIT_WORK_TREE; delete env.GIT_INDEX_FILE; delete env.GIT_OBJECT_DIRECTORY
+    execFile('git', ['-C', wtPath, 'merge-tree', '--write-tree', '--no-messages', mainRef, 'HEAD'],
+      { encoding: 'utf8', env, maxBuffer: 1 << 24 },
+      // execFile sets err.code to the numeric EXIT code on a non-zero exit (1 = conflicts), or a string
+      // errno (e.g. 'ENOENT') if git can't be spawned — only the exit-1 case is a real conflict verdict.
+      (err) => resolve(!!err && err.code === 1))
+  })
+}
+
 // @@@ worktreeSpecDelta - what this worktree changes about the spec tree vs main. The op set is read
 // from ONE diff of the FORK POINT against the worktree's WORKING TREE (`git diff <base>`), which folds
 // committed + staged + unstaged into the final state (an add-then-uncommitted-delete cancels out, etc.).

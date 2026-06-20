@@ -7,17 +7,28 @@ agent the most time to rediscover.
 
 ## The dogfood ritual (how every change lands)
 
-A change isn't "done" until it's a spec node merged into `main`:
+A change isn't "done" until it's a spec node merged into `main`. The work splits across two roles: the
+**doer** (the agent/worker in a `node/<id>` worktree) builds the change and *proposes* the merge; the
+**manager** (the human reviewer) reviews, performs the merge, and cleans up. Keeping the merge in human
+hands is deliberate — the doer never merges itself.
 
-1. Branch `node/<id>` off `main`.
+Doer (in the `node/<id>` worktree):
+
+1. Branch `node/<id>` off `main`. For a dispatched worker the backend already did this.
 2. Make the code change **and** add/update the spec node (`.spec/.../<id>/spec.md`) that states the
    intent. The body is a **living current-state document** — a repeat change *rewrites* it to describe
    the node's present intent, never appends a `## vN` changelog (version history is git's job — see
    "Git is the database" below).
 3. Commit on the node branch: `spec: <id> — <reason>`, with a `Session: <sess-id>` trailer in the
    commit **body** — that trailer is the version's attribution (see "Git is the database" below).
-4. Merge into `main` with `--no-ff`: `merge node/<id>: <reason>`.
-5. Delete the node branch; retire the worktree.
+4. **Propose** the merge — don't merge yourself: commit first, then `spex done --propose merge`. (A
+   manual `git merge` from the worktree trips the safety gate, which expects the branch to still be
+   ahead of `main`.) The doer's job ends here, with the proposal awaiting review.
+
+Manager (the human reviewer, after reviewing the proposal):
+
+5. Merge into `main` with `--no-ff`: `merge node/<id>: <reason>`.
+6. Delete the node branch; retire the worktree.
 
 `main-guard` (a pre-commit hook) **blocks direct commits on `main`**; merges pass because `MERGE_HEAD`
 is set, and node-branch commits pass because they aren't on `main`. Escape hatch for seeding/topology

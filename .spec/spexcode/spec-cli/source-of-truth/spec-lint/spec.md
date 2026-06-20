@@ -14,7 +14,9 @@ code:
 A spec is the ground truth for the code it governs, but nothing tied the two together, so code could
 drift from its spec silently. The missing edge is a `code:` list in each node's frontmatter naming the
 files it owns, plus a linter over that graph. Keep the spec↔code **graph** honest; whether the code
-still matches what the spec *says* is the LLM judge's job, async, not in the commit path.
+still matches what the spec *says* is the LLM judge's job, async, not in the commit path. The linter
+also flags a body that has slid **below contract altitude** into an implementation dump, so specs stay
+intent, not mechanics.
 
 ## expanded spec
 

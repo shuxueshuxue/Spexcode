@@ -15,7 +15,9 @@ Our convention — main at the repo root, worktrees in `.worktrees/`, branch `no
 `.session` file — should be the *default plug*, not an assumption baked into the tool. **Mechanism vs
 policy:** reading `.spec` and `git log` is mechanism; *where those live* is policy. Someone whose main
 lives elsewhere, or who names branches differently, should point the tool at their structure without
-forking it.
+forking it. A fresh clone reproduces the tool **identically** — the Node version is pinned, lockfiles
+are tracked, nothing machine-specific leaks into the tree, and config is seeded — so a clean checkout
+never diverges from "works on my machine".
 
 ## expanded spec
 

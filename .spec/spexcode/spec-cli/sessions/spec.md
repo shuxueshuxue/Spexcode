@@ -19,7 +19,10 @@ A SpexCode **session** is a unit of work the dashboard and the CLI launch, drive
 durable thing, not the tmux process — a session must survive a kill, a reboot, or a moved folder. The
 **agent writes its own state**; it may only *propose* merge or close, and a **human** makes those
 calls. Nothing a session does should auto-disappear: a self-finished session stays findable. The
-dashboard and the terminal are two faces of the **same** state.
+dashboard and the terminal are two faces of the **same** state. Three standing guarantees: at most a
+bounded number of sessions run **active** at once (the rest queue and start as slots free); a launch
+prompt is delivered **whole**, never truncated by the transport; and closing a session **sweeps its
+rendezvous socket** so no stale control endpoint lingers.
 
 ## expanded spec
 

@@ -6,21 +6,27 @@ desc: A node's status is a backend-DERIVED four-state value (pending/active/merg
 ---
 # spec-node-states
 
-A spec node's `status` is no longer hand-typed in frontmatter — it is **derived in the backend**
-from what git and the live worktrees actually say. There are exactly four states, evaluated in this
-precedence (`deriveStatus` in [[source-of-truth]]'s `specs.ts`):
+A spec node's `status` is mostly **derived in the backend** from what git and the live worktrees
+actually say — with one declared exception (pending todos, below). There are four states, evaluated
+in this precedence (`deriveStatus` in [[source-of-truth]]'s `specs.ts`):
 
-- **active** — an unmerged managed worktree has pending ops on this node (it carries a board
-  *overlay*). This is live, in-flight work, so it wins over the others. Only the board assembler
-  knows the overlay, so this state can only be produced there.
+- **pending (declared todo)** — a node whose frontmatter says `status: pending` **and** has no
+  implementing code yet (empty/absent `code:`, no drift) is a *written-but-unbuilt* spec. It reads
+  pending **regardless of how many `spec.md` commits it has**, and even while a worktree is merely
+  adding its text (overlay). This is checked **first** so authoring a roadmap spec doesn't flip it to
+  `active`/`merged` just by existing in git. The arrival of governed code (a non-empty `code:` list,
+  or drift) graduates it — from then on it derives like any coded node.
+- **active** — an unmerged managed worktree has pending ops on a *coded* node (it carries a board
+  *overlay*). Live, in-flight work. Only the board assembler knows the overlay, so this state can
+  only be produced there.
 - **drift** — the governed code has moved ahead of the spec's latest version (`drift > 0`, by git
   ancestry). The spec may be stale.
 - **merged** — the node has committed version(s) and is in sync (no drift, no in-flight work).
-- **pending** — no committed version yet (`version === 0`).
 
-Frontmatter `status` survives only as a **fallback**: if git is unreadable every node would collapse
-to version 0 / pending, so a node that *declared* a status still shows that intent. Otherwise the
-declared value is ignored — the derivation is authoritative.
+A node with no committed version and no declared status also reads **pending** (the empty default).
+Frontmatter `status` otherwise survives only as a **fallback**: if git is unreadable every node would
+collapse to version 0, so a node that *declared* `active`/`merged`/`drift` still shows that intent.
+For coded nodes the declared value is otherwise ignored — the derivation is authoritative.
 
 Because `active` needs the overlay, the derivation runs in two places over one shared helper:
 `loadSpecs` derives from git alone (so `/api/specs` reports pending/drift/merged), and `buildBoard`

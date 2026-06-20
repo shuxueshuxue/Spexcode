@@ -82,15 +82,21 @@ function parseParts(body: string): SpecParts | null {
 
 export type DerivedStatus = 'pending' | 'active' | 'merged' | 'drift'
 
-// @@@ deriveStatus - a node's status is DERIVED, never hand-written. Four states, in precedence:
+// @@@ deriveStatus - a node's status is DERIVED, never hand-written. States, in precedence:
+//   pending - DECLARED todo: a node whose frontmatter says `status: pending` AND has no implementing
+//             code yet (empty/absent code:, no drift) is a written-but-unbuilt spec — it reads pending
+//             REGARDLESS of how many spec.md commits it has, and even while a worktree is merely adding
+//             its text (overlay). The arrival of governed code (a non-empty code: list, or drift) is
+//             what graduates it: from then on it derives active/drift/merged like any coded node. This
+//             check is FIRST so a todo isn't flipped to `active`/`merged` just by existing in git.
 //   active  - an unmerged managed worktree has pending ops on this node (live, in-flight work).
 //             Only buildBoard knows the overlay, so /api/specs (no overlay) never reports active.
 //   drift   - governed code has moved ahead of the spec's latest version (drift > 0) — maybe stale.
 //   merged  - has committed version(s) on main and is in sync.
-//   pending - no committed version yet (version 0).
-// Frontmatter `status` is kept ONLY as a fallback: when git is unreadable every node would collapse
-// to version 0 / pending, so a node that DECLARED a status still shows that intent instead.
-export function deriveStatus(d: { version: number; drift: number; hasOverlay?: boolean; fmStatus?: string }): DerivedStatus {
+//   pending (fallback) - no committed version yet (version 0), or a DECLARED status when git is
+//             unreadable and every node would otherwise collapse to version 0 / pending.
+export function deriveStatus(d: { version: number; drift: number; hasOverlay?: boolean; hasCode?: boolean; fmStatus?: string }): DerivedStatus {
+  if (d.fmStatus === 'pending' && !d.hasCode && d.drift === 0) return 'pending'
   if (d.hasOverlay) return 'active'
   if (d.drift > 0) return 'drift'
   if (d.version > 0) return 'merged'
@@ -166,7 +172,7 @@ export async function loadSpecs() {
       // @@@ derived status - computed from git (version + drift), NOT the frontmatter. Without overlay
       // knowledge here, /api/specs reports pending|drift|merged; buildBoard re-derives with the overlay
       // so a live worktree's nodes read `active`. fmStatus is carried through only as the fallback.
-      status: deriveStatus({ version: h.length, drift, fmStatus: fmStatus ?? undefined }),
+      status: deriveStatus({ version: h.length, drift, hasCode: code.length > 0, fmStatus: fmStatus ?? undefined }),
       fmStatus,
       session,
       hue: Number(str(r.fm.hue, '210')),

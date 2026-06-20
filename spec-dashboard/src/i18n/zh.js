@@ -166,7 +166,6 @@ export default {
     navTitle: '导航模式——转发原始按键以操作智能体的交互菜单（⌃/⌘+I）',
     relaunch: '重新启动',
     merge: '合并',
-    backToWorking: '返回工作',
     close: '关闭',
     relaunchResume: '⏵ 重新启动并恢复',
     merges: ({ n }) => `已合并 ×${n}`,

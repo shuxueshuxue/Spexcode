@@ -169,7 +169,6 @@ export default {
     navTitle: "nav mode — forward raw keystrokes to drive the agent's interactive menus (⌃/⌘+I)",
     relaunch: 'relaunch',
     merge: 'merge',
-    backToWorking: 'back to working',
     close: 'close',
     relaunchResume: '⏵ relaunch & resume',
     merges: ({ n }) => `merged ×${n}`,

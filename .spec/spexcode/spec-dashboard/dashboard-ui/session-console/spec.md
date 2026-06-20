@@ -56,7 +56,7 @@ all along. Switching tabs therefore **never loses your place** (socket and scrol
 including **New Session**, which only hides its pane, never unmounts it. The backend keeps a warm tmux client
 per live session. List navigation lives at the
 **window level**, so arrows walk the list regardless of what holds focus (xterm included). Header lifecycle
-actions (relaunch / merge / back-to-working / close) follow the session's state; an offline session shows a
+actions (relaunch / merge / close) follow the session's state; an offline session shows a
 relaunch panel instead of a dead terminal. There is **no manual "request review"** — review is
 **agent-proposed** at the stop-gate, so the header only surfaces actions a human still drives.
 

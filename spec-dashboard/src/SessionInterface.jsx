@@ -425,12 +425,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     if (after) after()
     await onCreated?.(null)
   }
-  // "back to working": clear the proposal (server reopens + relaunches if offline), then focus the input.
-  const backToWorking = async () => {
-    await act('resume')
-    setTimeout(() => msgRef.current?.focus(), 80)
-  }
-
   // @@@ window-level list nav - ↑/↓ move the selection regardless of focus; Enter on New launches.
   const stateRef = useRef({})
   stateRef.current = { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, navMode, setNavMode, sendRawKey }
@@ -588,9 +582,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                     {selSession?.status === 'offline' && <button className="si-act go" onClick={() => act('resume')}>{t('session.relaunch')}</button>}
                     {/* no manual "request review": agents propose review themselves at the stop-gate
                         (`session done --propose merge`). proposals (review/done/close-pending) resolve to
-                        merge / back-to-working / close */}
+                        merge / close */}
                     {(selSession?.status === 'review' || selSession?.status === 'done') && <button className="si-act go" onClick={() => act('merge')}>{t('session.merge')}</button>}
-                    {(selSession?.status === 'review' || selSession?.status === 'done' || selSession?.status === 'close-pending') && <button className="si-act" onClick={backToWorking}>{t('session.backToWorking')}</button>}
                     <button className="si-act kill" onClick={() => act('close', () => setSel('new'))}>{t('session.close')}</button>
                   </div>
                 </div>

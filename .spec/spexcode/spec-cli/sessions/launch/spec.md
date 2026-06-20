@@ -34,11 +34,13 @@ update-index --assume-unchanged`, so it can never be staged or merged to main. A
 or `--bare`; overridable (`SPEXCODE_HIDE_CLAUDE_MD=0`), best-effort, never blocking the launch.
 
 **Non-truncating delivery:** because a dispatched agent gets only the human's terse launch prompt, every
-launch and resume appends a **system prompt** (`--append-system-prompt`) built in two layers: a **baked
-minimal core** (the universal spec-discipline contract every adopter needs — present even with zero
-config) followed by each active `surface: system` config node's body (the opinionated, spec-editable
-layer). It is built fresh per launch and written to the **launch script file** (not a tmux arg), so
-neither the contract nor the launch prompt hits the ~2KB tmux limit.
+launch and resume appends a **system prompt** (`--append-system-prompt`) gathered **entirely** from the
+`surface: system` config nodes — there is **no baked-in core**. Each active system node's body (in name
+order) is concatenated into the appended prompt: the ground spec-discipline contract lives in the
+`core/spec` system node, opinionated rules like `voice-before-ask` sit alongside it, so adding or editing
+any always-on contract is a spec edit, not a code change. It is built fresh per launch and written to the
+**launch script file** (not a tmux arg), so neither the contract nor the launch prompt hits the ~2KB tmux
+limit. With **zero** system nodes the flag is omitted entirely.
 
 **Self-locating paths:** every path the launch script and its injected hooks reference — the hook
 scripts (`stop-gate.sh`, `mark-active.sh`), the `tsx` runner, and `cli.ts` — resolves from the CLI

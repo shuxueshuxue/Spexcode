@@ -47,42 +47,28 @@ const COLS = 120, ROWS = 32
 // slot frees (an agent proposes/dies). Configurable; default 6. Floored at 1 so a bad env can't wedge it to 0.
 const MAX_ACTIVE = Math.max(1, Number(process.env.SPEXCODE_MAX_ACTIVE) || 6)
 
-// @@@ CORE_CONTRACT - the BAKED product default: the minimal contract ANY SpexCode project needs, injected
-// FIRST into every launched/resumed agent regardless of config. This is the ground base — the product works
-// on it alone. It deliberately does NOT spell out the git flow's mechanics (branch names, merge style,
-// trailers): those are carried by PRODUCT MECHANISM, not injected prose — newSession makes the `node/<id>`
-// branch, the prepare-commit-msg hook stamps the `Session:` trailer, and mergePrompt states the `--no-ff`
-// merge style at merge time. So a user who deletes every config plugin STILL gets agents that honor the core
-// (commit before declaring done; specs stay living current-state docs) AND the full dogfood flow. Layer 2
-// system config nodes (gathered below) add OPINION on top; edit that opinion in the spec tree, this floor here.
-const CORE_CONTRACT = `Commit your spec node and the code it justifies BEFORE you declare done or propose merge — the commit comes first, never as an afterthought to a declaration.
-
-A spec body is a living current-state document: it states the node's PRESENT intent and is rewritten in place. Never accrete a "## vN" changelog heading, and never add current-state or verdict sections — version history is git's job, not the body's.
-
-An independently-scoped feature gets its OWN spec node: if you build something separately scoped while working, create a sibling node for it rather than bundling it into your assigned node's commit (cosmetic polish riding along is the smell).`
-
 // @@@ appendSysArg - the system prompt folded into EVERY launched/resumed agent (both paths go through
-// launch() below), assembled in TWO layers:
-//   1. CORE_CONTRACT (above) — the BAKED product default, always first, present even with ZERO config.
-//   2. each ACTIVE system config node's body — the OPINIONATED scaffold, layered on top.
-// Without this a dashboard/CLI-launched session gets ONLY the human's terse prompt and carries none of
-// SpexCode's standing contracts (agents kept proposing merge with UNCOMMITTED work). Layer 2 is the
-// system surface, gathered by loadSystemConfig: a config node opts in by LIVING under a `system/` dir and
-// its body becomes an always-on contract (no slash, no agent choice) — e.g. `voice-before-ask`, so adding an
-// OPINIONATED always-on rule is a spec edit, not a code change here; the baked core guarantees the ground
-// rules hold even when zero system nodes are present. Pending plugins
-// are filtered out by loadSystemConfig, so a `status: pending` stub never injects. Built fresh per launch, so
-// editing a system node (or this core) takes effect on the next launch with no restart. The combined text is
-// single-quoted onto the launch line and shell-escaped like the prompt; the launch line is written to a
-// script file (see launch()), so length is unbounded — it no longer rides the ~2KB tmux send-keys limit
-// that capped the inline prompt (the launch-prompt-limit lesson). There is ALWAYS a flag (the baked core is
-// non-empty), so a config-less instance still gets the core injected. `cfgs` defaults to the live system
-// load — it's a parameter only so the layering (baked core present even with NO system nodes) is testable.
+// launch() below), assembled ENTIRELY from the system config surface — there is NO baked-in core. The
+// contract lives as DATA in the spec tree, not as a string constant here: each ACTIVE node under a
+// `system/` dir (gathered by loadSystemConfig) contributes its body, in name order. Without this a
+// dashboard/CLI-launched session gets ONLY the human's terse prompt and carries none of SpexCode's standing
+// contracts (agents kept proposing merge with UNCOMMITTED work). The core spec-discipline rules now live in
+// the `core/spec` system node, alongside opinionated rules like `voice-before-ask`; adding or editing ANY
+// always-on rule is a spec edit, not a code change here. A config node opts in by LIVING under a `system/`
+// dir — no slash, no agent choice. Pending plugins are filtered out by loadSystemConfig, so a `status:
+// pending` stub never injects. Built fresh per launch, so editing a system node takes effect on the next
+// launch with no restart. The combined text is single-quoted onto the launch line and shell-escaped like the
+// prompt; the launch line is written to a script file (see launch()), so length is unbounded — it no longer
+// rides the ~2KB tmux send-keys limit that capped the inline prompt (the launch-prompt-limit lesson). If
+// ZERO system nodes are present, NO flag is emitted at all (empty string) — the launcher tolerates a missing
+// flag, so a config-less instance launches without an appended contract. `cfgs` defaults to the live system
+// load — it's a parameter only so the gathering is testable.
 export function appendSysArg(cfgs: ConfigPreset[] = loadSystemConfig()): string {
-  const parts: string[] = [CORE_CONTRACT]
+  const parts: string[] = []
   for (const cfg of cfgs) {
     if (cfg.body.trim()) parts.push(cfg.body.trim())
   }
+  if (parts.length === 0) return ''
   const full = parts.join('\n\n')
   return `--append-system-prompt '${full.replace(/'/g, `'\\''`)}'`
 }
@@ -600,9 +586,10 @@ function removeNode(wtPath: string, nodeId: string): string | null {
 // refactor). Like mergePrompt, the op is a DISPATCH: the server never authors specs or refactors code.
 // These state only the TASK — they deliberately do NOT restate the git flow's mechanics (commit format, the
 // Session: trailer, the node-branch flow, the merge style). Those are carried by product MECHANISM, not a
-// dispatch string: newSession makes the branch, the prepare-commit-msg hook stamps the trailer, the baked
-// CORE_CONTRACT (appendSysArg) demands commit-before-declare, and mergePrompt states the merge style at
-// merge time. The only handoff detail kept here is "propose merge, don't merge yourself" (the human triggers
+// dispatch string: newSession makes the branch, the prepare-commit-msg hook stamps the trailer, the
+// `core/spec` system contract (gathered into appendSysArg) demands commit-before-declare, and mergePrompt
+// states the merge style at merge time. The only handoff detail kept here is "propose merge, don't merge
+// yourself" (the human triggers
 // the merge later, see mergePrompt).
 function newNodePrompt(placeholderId: string, parentId: string, relPath: string, rest: string): string {
   return `A placeholder spec node \`${placeholderId}\` was created under parent \`${parentId}\` at ${relPath} in this worktree. ` +

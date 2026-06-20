@@ -151,6 +151,15 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // keystrokes can never leak into the wrong pane.
   useEffect(() => { setNavMode(false); setSendErr(false); setMenu(null) }, [active])
   useEffect(() => { if (selSession?.status === 'offline') setNavMode(false) }, [selSession?.status])
+  // @@@ refocus on nav exit - leaving nav mode (chord, double-Esc, header button, or bottom-bar click)
+  // hands the keyboard back to the bottom message box, so you can type without re-clicking it. Guarded to
+  // the on→off edge for a live session tab; a tab switch or going offline exits nav too, but the tab-focus
+  // effect owns focus there (and an offline tab has no input box to land in).
+  const wasNavRef = useRef(false)
+  useEffect(() => {
+    if (wasNavRef.current && !navMode && active !== 'new' && selSession?.status !== 'offline') msgRef.current?.focus()
+    wasNavRef.current = navMode
+  }, [navMode])
   // forward one raw key to the active session's pane (fire-and-forget; the backend tmux send-keys it).
   const sendRawKey = (key) => {
     fetch(`/api/sessions/${active}/rawkey`, {

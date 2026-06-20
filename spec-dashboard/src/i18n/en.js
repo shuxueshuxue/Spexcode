@@ -147,6 +147,7 @@ export default {
   session: {
     title: 'sessions',
     newSession: 'New Session',
+    newSessionTitle: 'jump to New Session (⌃/⌘+N · also ⌃/⌘+↑)',
     ask: 'What would you like to do?',
     inputPlaceholder: 'describe the work · @ spec · / command · ⏎ to launch · ⇧⏎ newline',
     menuCommands: 'commands',

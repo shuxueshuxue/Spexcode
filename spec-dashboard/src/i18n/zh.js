@@ -144,6 +144,7 @@ export default {
   session: {
     title: '会话',
     newSession: '新建会话',
+    newSessionTitle: '跳转到新建会话（⌃/⌘+N · 或 ⌃/⌘+↑）',
     ask: '你想做点什么？',
     inputPlaceholder: '描述工作 · @ 规格 · / 命令 · ⏎ 启动 · ⇧⏎ 换行',
     menuCommands: '命令',

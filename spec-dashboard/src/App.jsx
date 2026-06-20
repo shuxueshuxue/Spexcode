@@ -186,6 +186,10 @@ function Dashboard({ specs, sessions, reload }) {
     animRef.current = requestAnimationFrame(step)
   }, [getViewport, setViewport])
 
+  // @@@ centerOn - recentre on a node. When `zoom` is omitted (the arrow-nav path) the CURRENT zoom is
+  // reused, so switching nodes is a pure flat-pan — never a zoom-to-fit. An earlier Van Wijk zoom arc
+  // zoomed out then back in to frame each node and made switching "jump too high"; holding zoom constant
+  // kills the jump. Explicit zoom is passed only by +/-/0.
   const centerOn = useCallback((node, zoom, dur = 300) => {
     const el = graphRef.current
     if (!el) return

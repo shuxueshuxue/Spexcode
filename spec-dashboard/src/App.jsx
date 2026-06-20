@@ -8,7 +8,7 @@ import SessionInterface from './SessionInterface.jsx'
 import SessionGraph from './SessionGraph.jsx'
 import Legend from './Legend.jsx'
 import Settings from './Settings.jsx'
-import { loadBoard } from './data.js'
+import { loadBoard, X_GAP, Y_GAP } from './data.js'
 import { labelColor } from './color.js'
 import { useT } from './i18n/index.jsx'
 
@@ -92,6 +92,24 @@ function Dashboard({ specs, sessions, reload }) {
     if (!children.length) return null
     return children.reduce((best, c) => (Math.abs(c.y - focus.y) < Math.abs(best.y - focus.y) ? c : best))
   }, [children, focus])
+
+  // @@@ leaf right-step - a leaf has no child to dive into, so → falls back to the nearest node in
+  // the columns to the RIGHT (dx>0) instead of dead-ending. Distance is weighted into grid cells
+  // (dx/X_GAP, dy/Y_GAP) so the wide 280px column gap and the narrow 54px row gap compete fairly —
+  // raw pixels would snap every press to the next column regardless of how far up/down a candidate
+  // sits. Strictly rightward, so it never doubles as ↑/↓ and ← still steps back the way you came.
+  const rightTarget = useMemo(() => {
+    if (childTarget) return childTarget
+    let best = null, bestD = Infinity
+    for (const s of specs) {
+      const dx = s.x - focus.x
+      if (dx <= 0) continue
+      const dy = s.y - focus.y
+      const d = (dx / X_GAP) ** 2 + (dy / Y_GAP) ** 2
+      if (d < bestD) { bestD = d; best = s }
+    }
+    return best
+  }, [childTarget, specs, focus])
 
   // @@@ vertical nav - columns are aligned by depth (x = depth * X_GAP), so ↑/↓ move strictly
   // within the focused node's column to the nearest node in that y-direction. They never change
@@ -309,7 +327,7 @@ function Dashboard({ specs, sessions, reload }) {
       if (e.key === 'ArrowUp'    || e.key === 'k') return go(upTarget, e)
       if (e.key === 'ArrowDown'  || e.key === 'j') return go(downTarget, e)
       if (e.key === 'ArrowLeft'  || e.key === 'h') return go(parent, e)
-      if (e.key === 'ArrowRight' || e.key === 'l') return go(childTarget, e)
+      if (e.key === 'ArrowRight' || e.key === 'l') return go(rightTarget, e)
       if (e.key === '=' || e.key === '+') { e.preventDefault(); centerOn(focus, clamp(getViewport().zoom * 1.2), 160) }
       else if (e.key === '-' || e.key === '_') { e.preventDefault(); centerOn(focus, clamp(getViewport().zoom / 1.2), 160) }
       else if (e.key === '0') { e.preventDefault(); centerOn(focus, 0.85, 200) }
@@ -320,7 +338,7 @@ function Dashboard({ specs, sessions, reload }) {
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [overlay, sessionUI, legend, settings, graphView, focus, upTarget, downTarget, childTarget, parent, centerOn, getViewport, openBoard, startNew])
+  }, [overlay, sessionUI, legend, settings, graphView, focus, upTarget, downTarget, rightTarget, parent, centerOn, getViewport, openBoard, startNew])
 
   // clicking a node ONLY focuses it — it does NOT pan the camera (recentering is keyboard-only, see
   // `go`) and does NOT open a session (Enter is the deliberate cross into one). Mouse focus and

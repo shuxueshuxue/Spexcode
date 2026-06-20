@@ -247,7 +247,12 @@ export async function specDiffAt(id: string, hash: string) {
 // The launcher lists these in the new-session `/` dropdown and composes body + targets + free text + the
 // folder path into the launched agent's prompt, so the agent can reach its own scripts. `kind` ∈
 // mutating|report tells the launcher whether the preset edits the graph or only reports on it.
-export type ConfigPreset = { name: string; title: string; desc: string; kind: string; dir: string; files: string[]; body: string }
+// @@@ surface - WHERE a config node plugs in, one OR a list of: slash | system | skill | setup (default
+// slash). It is the single axis the engine routes on: `slash` nodes are offered in the new-session `/`
+// dropdown; `system` nodes have their body folded into a launched agent's --append-system-prompt; `skill`
+// and `setup` are recognized values reserved for later gather-points (a skill bundle / an init script).
+// A node may declare several surfaces — the body and bundle mean the same thing, only the delivery differs.
+export type ConfigPreset = { name: string; title: string; desc: string; kind: string; surface: string[]; dir: string; files: string[]; body: string }
 const CONFIG_DIR = join(SPEC_DIR, 'spexcode', 'config')
 // co-located bundle files = everything under the node folder except its spec.md, repo-relative, recursive.
 function bundleFiles(dir: string): string[] {
@@ -269,11 +274,13 @@ export function loadConfig(): ConfigPreset[] {
     const nodeDir = join(CONFIG_DIR, e.name)
     if (!e.isDirectory() || !existsSync(join(nodeDir, 'spec.md'))) continue
     const { fm, body } = parseFrontmatter(readFileSync(join(nodeDir, 'spec.md'), 'utf8'))
+    const surface = list(fm.surface)
     out.push({
       name: e.name,
       title: str(fm.title, e.name),
       desc: str(fm.desc),
       kind: str(fm.kind, 'mutating'),
+      surface: surface.length ? surface : ['slash'],   // no surface declared → today's behavior: a slash preset
       dir: relative(ROOT, nodeDir),
       files: bundleFiles(nodeDir),
       body: body.trim(),

@@ -12,6 +12,8 @@ dist/
 .session-prompt
 # per-worktree generated hook settings (writeSettings() writes absolute paths) — runtime, not spec data
 .spex-hooks.json
+# per-worktree generated launch script (launchScript() writes the claude invocation) — runtime, not spec data
+.spex-launch.sh
 
 # harness state
 .claude/

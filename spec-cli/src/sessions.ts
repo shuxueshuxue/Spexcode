@@ -6,6 +6,7 @@ import { join, dirname, relative } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createConnection } from 'node:net'
 import { git, gitA, repoRoot } from './git.js'
+import { loadConfig } from './specs.js'
 
 // @@@ sessions - the WORKTREE is the durable unit; tmux is a disposable runtime handle. Each session
 // worktree carries an untracked `.session` file (the source of truth) that survives a kill / reboot /
@@ -43,13 +44,27 @@ const COLS = 120, ROWS = 32
 // system prompt carrying the dogfood ritual, so agents kept proposing merge with UNCOMMITTED work. We inject
 // a CONCISE imperative via --append-system-prompt on EVERY launch/resume (both go through launch() below).
 // The Stop gate's commit check is the deterministic backstop; this makes the agent commit FIRST the normal
-// way. Kept SHORT and single-quote-free: the launch line is typed via tmux send-keys and truncates past ~2KB
-// (see the launch-prompt-limit lesson), and the value is single-quoted into that line.
+// way. This base text is the always-on floor; the `surface: system` config nodes' bodies are folded in on
+// top of it (see appendSysArg) so SpexCode's always-on contracts are configured as spec nodes, not hardcoded.
 const SYSTEM_PROMPT =
   'Every change lands as a git commit on your node branch BEFORE you declare done / propose merge. ' +
   'The spec body is a living current-state document (no ## vN sections, no current-state/verdict). ' +
   'See CLAUDE.spexhidden.md for the dogfood ritual.'
-const appendSysArg = `--append-system-prompt '${SYSTEM_PROMPT}'`
+// @@@ surface:system gather - the launched agent's system prompt is the base floor PLUS every `surface:
+// system` config node's body. This is the `system` gather-point of the surface mechanism: a config node
+// opts in by declaring `surface: system`, and its body becomes an always-on contract on every launch/resume
+// (no slash, no agent choice). Built fresh per launch so editing a system node takes effect on the next
+// launch with no restart. Single-quoted onto the launch line and shell-escaped the same way the prompt is;
+// the launch line is written to a script file (see launch()), so the combined length is unbounded — it no
+// longer rides the ~2KB tmux send-keys limit that capped the inline prompt (the launch-prompt-limit lesson).
+function appendSysArg(): string {
+  const parts = [SYSTEM_PROMPT]
+  for (const cfg of loadConfig()) {
+    if (cfg.surface.includes('system') && cfg.body.trim()) parts.push(cfg.body.trim())
+  }
+  const full = parts.join('\n\n')
+  return `--append-system-prompt '${full.replace(/'/g, `'\\''`)}'`
+}
 
 // @@@ rendezvous control socket - the DETERMINISTIC, ONLY input path for PROMPTS to sessions WE launch. We
 // start `claude` with CLAUDE_BG_BACKEND=daemon + CLAUDE_BG_RENDEZVOUS_SOCK=<per-session sock> set ONLY on
@@ -451,9 +466,24 @@ function writeSettings(path: string): string {
   writeFileSync(file, settingsJson())
   return `--settings ${file}`
 }
+// @@@ launchScript - the WHOLE launch invocation (rendezvous env prefix + claude + --append-system-prompt
+// + --settings + the human prompt) is written to an ephemeral `.spex-launch.sh` in the worktree and run via
+// `bash <file>`, NOT typed inline. Inline send-keys TRUNCATES past ~2KB (the launch-prompt-limit trap), and
+// the surface:system gather can make --append-system-prompt arbitrarily large; a file has no length limit
+// and the only thing send-keys types is the short `bash <file>` line. It's the SAME command the inline path
+// ran (env prefix exports the rendezvous vars to the claude child), just relocated to a file: bash runs
+// claude as its foreground child, so the pane's `pane_current_command` is still `claude` (liveness detection
+// in reconcile is unchanged), and on claude's exit bash returns to a shell → SHELLISH → offline, exactly as
+// before. The file is a RUNTIME_FILE (gitignored, ignored by the merge gate, removed with the worktree) so
+// it never pollutes the spec/code work.
+function launchScript(id: string, path: string, tail: string): string {
+  const file = join(path, '.spex-launch.sh')
+  writeFileSync(file, `${rvEnv(id)} ${CLAUDE_CMD} ${appendSysArg()} ${writeSettings(path)} ${tail}\n`)
+  return file
+}
 async function launch(id: string, path: string, tail: string): Promise<void> {
   await tmux(['new-session', '-d', '-s', id, '-x', String(COLS), '-y', String(ROWS), '-c', path])
-  await tmux(['send-keys', '-t', id, '-l', '--', `${rvEnv(id)} ${CLAUDE_CMD} ${appendSysArg} ${writeSettings(path)} ${tail}`])
+  await tmux(['send-keys', '-t', id, '-l', '--', `bash ${launchScript(id, path, tail)}`])
   await tmux(['send-keys', '-t', id, 'Enter'])
 }
 
@@ -670,7 +700,7 @@ export function markIdleFromCwd(): boolean {
 // cwd = the session worktree; ALL git goes through git() so the hook's exported GIT_DIR/GIT_INDEX_FILE can't
 // misdirect repo discovery to the cwd (the same trap git.ts documents). `main` resolves via the shared refs,
 // so `main..HEAD` works from any linked worktree regardless of where main is checked out.
-const RUNTIME_FILES = new Set(['.session', '.session-prompt', '.spex-hooks.json', 'CLAUDE.spexhidden.md'])
+const RUNTIME_FILES = new Set(['.session', '.session-prompt', '.spex-hooks.json', '.spex-launch.sh', 'CLAUDE.spexhidden.md'])
 export function mergeReadiness(): { ready: boolean; reason?: string } {
   let dirty: string[] = []
   try {

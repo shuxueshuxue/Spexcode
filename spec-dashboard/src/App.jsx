@@ -133,7 +133,10 @@ function Dashboard({ specs, sessions, reload }) {
     // isLeaf + onAddChild drive the + add-child button SpecNode draws on leaves (alternate `nn` entry).
     const extra = { editors: editorData, isLeaf: !parents.has(s.id), onAddChild: addChild }
     return {
-      id: s.id, type: 'spec', position: { x: s.x, y: s.y },
+      // explicit width/height (matching .spec-node's 220×46 CSS box) so the MiniMap can draw each node's
+      // rect on first paint — without them @xyflow has no dimensions until the DOM is measured and the map
+      // renders blank.
+      id: s.id, type: 'spec', position: { x: s.x, y: s.y }, width: 220, height: 46,
       data: editors.length
         ? { ...s, ...extra, link: { color: labelColor(editors[0].id), status: editors[0].status } }
         : { ...s, ...extra },
@@ -361,7 +364,7 @@ function Dashboard({ specs, sessions, reload }) {
           <Background variant="dots" color="#cdc6ad" gap={20} size={1} />
           {/* mini-map replaces the +/−/fit button cluster — scroll/pinch zoom stays on (ReactFlow default).
               Each node is tinted by its live status; drag the map to pan, scroll over it to zoom. */}
-          <MiniMap pannable zoomable nodeColor={(n) => (STATUS[n.data?.status] || STATUS.pending).color} nodeStrokeWidth={2} maskColor="rgba(0,0,0,0.06)" />
+          <MiniMap position="bottom-left" pannable zoomable nodeColor={(n) => (STATUS[n.data?.status] || STATUS.pending).color} nodeStrokeWidth={2} maskColor="rgba(0,0,0,0.06)" />
         </ReactFlow>
         {/* HUD is deliberately minimal: brand + a discreet `?` that opens the full keymap/legend modal.
             The wall of inline hints used to live here; it now lives inside that modal (see Legend.jsx). */}

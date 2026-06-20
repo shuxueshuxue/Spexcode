@@ -9,6 +9,8 @@ import { loadSpecs } from './specs.js'
 //                      version headings. Version history is read from git (recent/history tabs).
 //   coverage  (warn) : every governed source file is claimed by >=1 spec — no orphan code.
 //   drift     (warn) : a governed file has commits newer than its spec's latest version -> maybe stale.
+//   altitude  (warn) : a body has slid BELOW contract altitude into a mechanics dump (too long, and/or
+//                      too dense with code identifiers, and/or step-by-step how-to) — see altitude().
 // No file hashes are stored anywhere: git already is the hash database, so drift is derived live.
 
 export type Finding = { level: 'error' | 'warn'; rule: string; spec?: string; file?: string; msg: string }
@@ -25,6 +27,43 @@ function sourceFiles(root: string, rel: string, acc: string[]) {
     if (e.isDirectory()) { if (!SKIP_DIRS.has(e.name)) sourceFiles(root, join(rel, e.name), acc) }
     else if (SRC.test(e.name)) acc.push(join(rel, e.name))
   }
+}
+
+// @@@ altitude - a spec body should state CONTRACT and INTENT, not re-narrate the implementation. A body
+// that has slid below that altitude reads like a how-to dump: it grows long, it thickens with code
+// identifiers (camelCase, snake_case, `backticked` symbols, foo( calls, file/paths), and it slips into
+// step-by-step phrasing. We can't judge meaning deterministically, but these are cheap, honest PROXIES.
+// Thresholds are tuned against today's tree: the concise specs top out at ~41 non-blank lines / ~3.6k
+// chars; genuine mechanics dumps start well above. Soft budgets, so it's a WARN — lint stays 0 errors.
+// Returns a one-line reason naming whichever proxy(ies) tripped, or null when the body is at altitude.
+const LINE_BUDGET = 50      // non-blank body lines before the body is "too long"
+const CHAR_BUDGET = 4200    // body chars before "too long"
+const SIZEABLE = 35         // density / step phrasing only count once the body is also this long…
+const DENSE = 1.3           // …and identifier signals per non-blank line exceed this
+const STEPS = 3             // …or it has this many step-by-step how-to lines
+// code-identifier signals: camelCase | snake_case | foo( call | `backticked` | /a/path.ext | bare file.ext
+const IDENT = /[a-z][A-Za-z0-9]*[A-Z][A-Za-z0-9]*|\b[a-z]+_[a-z0-9_]+\b|\b\w+\(|`[^`]+`|\/[\w./-]+\.\w+|\b[\w-]+\.(ts|tsx|js|jsx|json|md)\b/g
+// step-by-step how-to phrasing: numbered steps, or sequencing connectives that walk through mechanics.
+const STEP_LINE = /^\s*(\d+[.)]\s|[-*]\s*(first|then|next|finally)\b)|(^|[,;]\s*)(first|then|next|finally),/i
+function altitude(body: string): string | null {
+  const lines = body.split('\n')
+  const nb = lines.filter((l) => l.trim()).length
+  const chars = body.length
+  // identifiers and step phrasing are read from PROSE only — a fenced code sample is acknowledged code,
+  // not low-altitude narration, so it inflates length but not density.
+  let inFence = false, signals = 0, steps = 0
+  for (const l of lines) {
+    if (/^\s*```/.test(l)) { inFence = !inFence; continue }
+    if (inFence || !l.trim()) continue
+    signals += l.match(IDENT)?.length ?? 0
+    if (STEP_LINE.test(l)) steps++
+  }
+  const density = signals / Math.max(1, nb)
+  const why: string[] = []
+  if (nb > LINE_BUDGET || chars > CHAR_BUDGET) why.push(`${nb} non-blank lines / ${chars} chars over budget (${LINE_BUDGET}/${CHAR_BUDGET})`)
+  if (nb > SIZEABLE && density > DENSE) why.push(`code-identifier density ${density.toFixed(2)}/line over ${DENSE}`)
+  if (nb > SIZEABLE && steps >= STEPS) why.push(`${steps} step-by-step how-to lines`)
+  return why.length ? why.join('; ') : null
 }
 
 export async function specLint(): Promise<Finding[]> {
@@ -54,6 +93,12 @@ export async function specLint(): Promise<Finding[]> {
       if (!inFence && VER_HEADING.test(line))
         out.push({ level: 'error', rule: 'living', spec: s.id, msg: `'${s.id}' has a changelog heading "${line.trim()}" — keep the body current-state; version history lives in git (recent/history tabs)` })
     }
+  }
+
+  // altitude: a body that re-narrates mechanics instead of stating contract/intent (WARN — soft budget).
+  for (const s of specs) {
+    const why = altitude(s.body)
+    if (why) out.push({ level: 'warn', rule: 'altitude', spec: s.id, msg: `'${s.id}' body reads low-altitude (mechanics, not contract): ${why}` })
   }
 
   // coverage: every governed source file must be claimed by at least one spec.

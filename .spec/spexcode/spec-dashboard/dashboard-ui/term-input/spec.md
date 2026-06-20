@@ -13,13 +13,15 @@ A terminal is for *driving* a session, but xterm swallows every keystroke — in
 navigate the tree with. So the command line must live **outside** xterm: the terminal is a read-only
 display, and a separate input owns the keys. Because the input is ours, an arrow can mean "navigate" when
 the line is empty and "edit" when it isn't — empty is the signal. The same ownership lets an input wear
-**completion menus** keyed off the first character — but the two menus belong to **different inputs**,
-because they answer different questions. The **New Session** prompt wears the `@` menu (which spec node does
-this new session target?). A **running session's `❯` inbox** wears the `/` menu — a command palette that
-mirrors Claude Code's own `/` menu, which is where `/`-commands actually make sense: you are talking *to a
-live agent*. Both stay **decoupled**: choosing a row only inserts its token text (`@<id> ` / `/<name> `),
-it never runs anything. (The New Session line keeps no `/` menu of its own — that surface gets its own
-bespoke command set later, so the generic CC palette does not squat there in the meantime.)
+**completion menus** keyed off the first character — and `@` and `/` answer **different questions**, so a
+row only ever inserts its token text (`@<id> ` / `/<name> `), never runs anything. The **New Session**
+prompt wears **both**: `@` lists spec nodes (which node does this new session target?) and `/` lists the
+**config presets** (its own bespoke command set — `tidy`/`health`/…, served by `GET /api/config`), *not*
+Claude Code's palette. A **running session's `❯` inbox** instead wears the `/` menu that mirrors Claude
+Code's own, because there you are talking *to a live agent* where CC `/`-commands make sense. The New
+Session `/` is more than insertion: it **composes** at launch — `/tidy @a @b extra text` assembles ONE
+prompt = the preset's `body` with its `{{targets}}` placeholder filled by the `@`-resolved nodes, then the
+free text — but the dropdown itself stays decoupled (picking a preset only inserts `/<name> `).
 
 ## expanded spec
 
@@ -51,10 +53,20 @@ realisation, presently dormant, while the contract lives on over a real session 
 surfaces, the principle (input outside xterm so arrows can navigate) did not.
 
 The `/` command palette is the same idea, one rung up: a leading `/` on a **running session's `❯` inbox**
-opens a dropdown that **mirrors Claude Code's `/` menu** for this CC version. (It lives on the session inbox,
-not the New Session prompt — `/`-commands address a live agent, which is exactly what that box talks to; the
-New Session line is reserved for a bespoke command set of our own.) The inbox is docked at the bottom of the
-panel, so the dropdown opens **upward**, above the box. Its rows are the union of CC's
+opens a dropdown that **mirrors Claude Code's `/` menu** for this CC version, because `/`-commands address a
+live agent, which is exactly what that box talks to. The inbox is docked at the bottom of the
+panel, so the dropdown opens **upward**, above the box.
+
+The **New Session** box wears its own `/` palette — the **config presets** (`GET /api/config` → the
+skill-shaped preset nodes under `.spec/spexcode/config/*`, each `{name, desc, kind, body}`), *not* the CC
+command set. It reuses the same dropdown shell and trigger as the inbox `/` (whole-line `/token`, no space
+yet; the row's right-hand tag is the preset's `kind` — `mutating`/`report`). The payoff is **composition at
+launch**: the grammar `/<preset> @<node>… <free text>` assembles ONE prompt — the preset's `body` with its
+`{{targets}}` placeholder replaced by the `@`-resolved nodes (each kept as `@id — path`, so the server still
+derives the session's node from the first `@id`), then the human's free text appended. No `@` leaves a
+"current/focused node" note for the body to handle. A leading `/` that names no known preset, and any plain
+or `@`-only prompt, launch verbatim — the existing paths are untouched. The dropdown stays decoupled:
+picking a preset only inserts `/<name> `; the body is woven in only when **Enter** launches the session. Its rows are the union of CC's
 **built-in** commands (a seed constant captured from a live `claude` `/` menu, so it is refreshable per
 version), the **user** commands under `~/.claude/commands/**` and **project** commands under
 `<repo>/.claude/commands/**` (name = path under `commands/` minus `.md`, subdirs namespaced `a:b`,
@@ -69,8 +81,9 @@ a second control plane over the session.
 Because the principle is realised in files other nodes own, this node governs **no source of its own**: the
 dormant in-popup original `TermPane.jsx` is owned by [[session-peek]] (whose sole concern *is* that embed),
 the live realisation (`SessionTerm` + docked input) by [[session-console]], and the capture-phase arrow
-routing in `App.jsx` by [[keyboard-nav]]. The `/`-palette and `@`-mention completions live the same way:
-their UI sits in `SessionInterface.jsx` (owned by [[session-console]]) and the command union is computed in
-`slash-commands.ts` (owned by [[spec-cli]]). Listing none of them here is the point — term-input is the
+routing in `App.jsx` by [[keyboard-nav]]. The `/`-palettes and `@`-mention completions live the same way:
+their UI sits in `SessionInterface.jsx` (owned by [[session-console]]); the CC command union is computed in
+`slash-commands.ts` and the config presets in `specs.ts`/`loadConfig` (both [[spec-cli]], served at
+`/api/slash-commands` and `/api/config`). Listing none of them here is the point — term-input is the
 cross-cutting *contract*, and a change to any of those surfaces is that surface's drift, not a phantom
 warning on this principle.

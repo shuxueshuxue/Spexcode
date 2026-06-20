@@ -151,6 +151,7 @@ export default {
     ask: 'What would you like to do?',
     inputPlaceholder: 'describe the work · @ spec · / command · ⏎ to launch · ⇧⏎ newline',
     menuCommands: 'commands',
+    menuPresets: 'config presets',
     menuSpecNodes: 'spec nodes',
     menuHint: '↑↓ pick · ⏎ insert',
     hintFocused: { before: 'type ', mid: ' to reference a spec — ', after: ' (focused) is first' },

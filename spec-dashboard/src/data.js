@@ -117,4 +117,13 @@ export async function loadBoard() {
   return { nodes: nodes.map((n) => ({ ...n, ...pos[n.id] })), sessions }
 }
 
+// @@@ loadConfig - the reflexive, skill-shaped config presets (.spec/spexcode/config/*) the backend serves
+// at /api/config: [{ name, title, desc, kind, dir, files, body }]. The new-session box lists these under its
+// `/` palette and composes the picked preset's `body` (its {{targets}} filled by @-resolved nodes) into the
+// launch prompt. Rides the same zero-downtime backoff as the board fetch.
+export async function loadConfig() {
+  const res = await apiFetch('/api/config')
+  return res.json()
+}
+
 export const SESSION_LOG = log

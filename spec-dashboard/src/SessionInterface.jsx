@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import SessionTerm from './SessionTerm.jsx'
+import { loadConfig } from './data.js'
 import { Avatar } from './avatar.jsx'
 import { labelColor } from './color.js'
 import { STATUS_DOT, sessionName } from './session.js'
@@ -102,6 +103,24 @@ function matchSlash(cmds, query) {
   return scored.slice(0, 10).map((x) => x.c)
 }
 
+// @@@ config-preset match - the New Session `/` palette: same prefix-rank shape as matchSlash, over the
+// config presets (GET /api/config). startsWith beats a mid-string include; empty query (just `/`) lists all.
+function matchConfig(presets, query) {
+  const q = query.toLowerCase()
+  const scored = []
+  for (const p of presets) {
+    const n = p.name.toLowerCase()
+    let score
+    if (!q) score = 1
+    else if (n.startsWith(q)) score = 0
+    else if (n.includes(q)) score = 1
+    else continue
+    scored.push({ p, score })
+  }
+  scored.sort((a, b) => a.score - b.score)
+  return scored.slice(0, 10).map((x) => x.p)
+}
+
 // the row's trailing source tag, mirroring CC: `(user)` / `(project)` / `[skill]` / `built-in`.
 const SRC_TAG = { user: '(user)', project: '(project)', skill: '[skill]', 'built-in': 'built-in' }
 
@@ -116,8 +135,9 @@ function highlight(text, q) {
 export default function SessionInterface({ sessions, specs = [], focusNode, open, sel, setSel, seed, onSeedConsumed, onClose, onCreated }) {
   const t = useT()
   const [prompt, setPrompt] = useState('')    // the New Session tab's own draft (its boarding-switch cache)
-  const [menu, setMenu] = useState(null)      // completion dropdown: { kind:'mention'|'slash', items, index, start, end, query }
+  const [menu, setMenu] = useState(null)      // completion dropdown: { kind:'mention'|'config'|'slash', items, index, start, end, query }
   const [slashCmds, setSlashCmds] = useState([])   // the `/` command list (built-in + user/project/skill), fetched once
+  const [presets, setPresets] = useState([])       // the config presets (GET /api/config) — the New Session box's `/` palette
   // bottom-input drafts, keyed by session id — each session tab keeps its OWN typed-but-unsent line, never
   // a single shared box. Survives tab switches and close/reopen (the panel stays mounted, see `open`).
   const [drafts, setDrafts] = useState({})
@@ -145,6 +165,12 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // /api/slash-commands). Purely for display+insert; we never execute a command from it.
   useEffect(() => {
     fetch('/api/slash-commands').then((r) => r.json()).then((d) => { if (Array.isArray(d)) setSlashCmds(d) }).catch(() => {})
+  }, [])
+
+  // fetch the config presets once — the New Session box's `/` palette (tidy/health/…). Picking one composes
+  // its body into the launch prompt (see submit); listing is display-only, like the slash menu.
+  useEffect(() => {
+    loadConfig().then((d) => { if (Array.isArray(d)) setPresets(d) }).catch(() => {})
   }, [])
 
   // nav mode binds to ONE live session's menu — leaving the tab (or it going offline) exits it, so raw
@@ -224,15 +250,44 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     ta.style.height = `${ta.scrollHeight}px`
   }, [prompt, active, open])
 
+  // @@@ composeLaunch - the grammar `/<preset> @<node>… <free text>` assembles ONE launch prompt:
+  //   · /<preset>  → a config preset (GET /api/config) whose `body` is the contract the agent runs.
+  //   · @<node>…   → the targets; resolved (via the @-mention specs) to `@id — path` lines that REPLACE the
+  //                  body's {{targets}} placeholder. No @ = a "current/focused" note (the body handles it).
+  //   · free text  → appended after the body as the human's extra steer.
+  // Keeping each target as `@id` in the targets block is load-bearing: the server derives the session's node
+  // from the FIRST `@<id>` it sees, so the composed prompt stays node-associated for free. A leading `/` that
+  // names no known preset is left verbatim (no hijack) — and a plain or @-only prompt returns unchanged, so
+  // the existing launch paths keep working.
+  const composeLaunch = (raw) => {
+    const m = raw.match(/^\/(\S+)\s*([\s\S]*)$/)
+    if (!m) return raw
+    const preset = presets.find((p) => p.name === m[1])
+    if (!preset) return raw
+    const ids = []
+    const free = m[2].replace(/(^|\s)@([A-Za-z0-9_-]+)/g, (_, sp, id) => { ids.push(id); return sp }).trim()
+    const targets = ids.length
+      ? ids.map((id) => {
+          const s = specs.find((x) => x.id === id)
+          return s ? `- @${s.id} — ${specPath(s.path)}` : `- @${id}`
+        }).join('\n')
+      : '(no target specified — operate on the current/focused node.)'
+    const body = preset.body.includes('{{targets}}')
+      ? preset.body.replace('{{targets}}', targets)
+      : `${preset.body}\n\n${targets}`
+    return free ? `${body}\n\n${free}` : body
+  }
+
   // launch a real session, then SWITCH to it (onCreated reloads the board, then App sets sel to the id).
   const submit = async () => {
-    const text = prompt.trim()
-    if (!text || sending) return
+    const raw = prompt.trim()
+    if (!raw || sending) return
     setSending(true)
     try {
-      // send only the prompt: the server derives the node from the @-mention the prompt ACTUALLY carries
-      // (you add it by typing `@`, focused node first), and titles a node-agnostic session (no @) by its
-      // first words. So the @ you type decides the node — nothing is targeted by default.
+      // compose a `/preset @node text` prompt into the preset's body (targets filled); a plain/@-only prompt
+      // passes through unchanged. The server then derives the node from the @-mention the prompt carries and
+      // titles a node-agnostic session by its first words — so the @ you type decides the node.
+      const text = composeLaunch(raw)
       const res = await fetch('/api/sessions', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: text }),
@@ -245,10 +300,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     }
   }
 
-  // @@@ completion menus - one state machine, but each input surface drives ONE kind of dropdown:
-  //   · New Session prompt → mention - an `@` that begins a word opens the spec-node dropdown (matched
-  //     against id + spec path), so you opt into the node a new session targets. (The `/` slash menu is
-  //     intentionally NOT here anymore — the New Session box gets its own bespoke command set later.)
+  // @@@ completion menus - one state machine, but each input surface drives its own dropdowns:
+  //   · New Session prompt → mention + config - an `@` that begins a word opens the spec-node dropdown
+  //     (the node a new session targets); a leading `/token` (whole line, no space yet) opens the CONFIG
+  //     PRESET palette (tidy/health/…, GET /api/config). The two compose: `/tidy @node text` picks a preset
+  //     and its targets (see submit). Picking a preset only inserts `/<name> ` — composition happens at launch.
   //   · a session's ❯ inbox → slash - the WHOLE line is a single `/token` (no space yet): mirrors Claude
   //     Code's `/` menu, listing commands whose name matches the prefix. Typing a space (→ args) dismisses
   //     it, exactly like CC. DECOUPLED — picking one only inserts `/<name> ` text into the draft, nothing
@@ -259,12 +315,19 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     if (active === 'new') {
       let i = caret - 1
       while (i >= 0 && value[i] !== '@' && !/\s/.test(value[i])) i--
-      if (i < 0 || value[i] !== '@') return null
-      if (i > 0 && !/\s/.test(value[i - 1])) return null        // @ must start a word, not be mid-token (email-ish)
-      const query = value.slice(i + 1, caret)
-      const items = matchSpecs(specs, query, focusId)
-      if (!items.length) return null
-      return { kind: 'mention', items, index: 0, start: i, end: caret, query }
+      if (i >= 0 && value[i] === '@' && (i === 0 || /\s/.test(value[i - 1]))) {   // @ at a word boundary → mention
+        const query = value.slice(i + 1, caret)
+        const items = matchSpecs(specs, query, focusId)
+        if (!items.length) return null
+        return { kind: 'mention', items, index: 0, start: i, end: caret, query }
+      }
+      const cm = value.match(/^\/(\S*)$/)   // leading `/preset` (no space yet) → config-preset palette
+      if (cm) {
+        const items = matchConfig(presets, cm[1])
+        if (!items.length) return null
+        return { kind: 'config', items, index: 0, start: 0, end: value.length, query: cm[1] }
+      }
+      return null
     }
     const sm = value.match(/^\/(\S*)$/)
     if (sm) {
@@ -291,13 +354,41 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       requestAnimationFrame(() => { const el = msgRef.current; if (el) { el.focus(); el.setSelectionRange(caret, caret) } })
       return
     }
-    const insert = `@${item.id} `
+    // config preset and mention both write the New Session prompt (taRef); the preset is composed at launch.
+    const insert = menu.kind === 'config' ? `/${item.name} ` : `@${item.id} `
     const before = prompt.slice(0, menu.start)
     setPrompt(before + insert + prompt.slice(menu.end))
     setMenu(null)
     const caret = before.length + insert.length
     requestAnimationFrame(() => { const el = taRef.current; if (el) { el.focus(); el.setSelectionRange(caret, caret) } })
   }
+
+  // @@@ slash dropdown - ONE render for both `/` palettes: the session inbox's CC-command menu (`up`, opens
+  // above the docked box) and the New Session box's config-preset menu (opens downward). Same markup, keys,
+  // and CSS; only the right-hand tag differs — a command's source (user/project/skill/built-in) vs a preset's
+  // kind (mutating/report). `head` is the dim title row's label.
+  const slashMenu = (up, head) => (
+    <ul className={up ? 'mention-menu up' : 'mention-menu'} role="listbox">
+      <li className="mention-head">// {head} — {t('session.menuHint')}</li>
+      {menu.items.map((it, i) => {
+        const tag = it.source ?? it.kind   // command → source; preset → kind
+        return (
+          <li
+            key={`${tag}:${it.name}`}
+            role="option"
+            aria-selected={i === menu.index}
+            className={i === menu.index ? 'mention-item on' : 'mention-item'}
+            onMouseDown={(e) => { e.preventDefault(); accept(it) }}
+            onMouseEnter={() => setMenu((m) => (m ? { ...m, index: i } : m))}
+          >
+            <span className="slash-name">/{highlight(it.name, menu.query)}</span>
+            <span className="slash-desc">{it.description ?? it.desc}</span>
+            <span className={`slash-src src-${tag}`}>{SRC_TAG[tag] || tag}</span>
+          </li>
+        )
+      })}
+    </ul>
+  )
 
   // @@@ control-socket dispatch - the message ALWAYS goes through the rendezvous CONTROL SOCKET
   // (POST /keys → daemon socket, bypassing tmux), NEVER by writing into the tmux pane. Writing pane bytes
@@ -459,6 +550,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                     ))}
                   </ul>
                 )}
+                {/* config-preset palette — same `/` dropdown, opening downward under the centered box. */}
+                {menu && menu.kind === 'config' && slashMenu(false, menu.query ? `/${menu.query}` : t('session.menuPresets'))}
               </div>
               <div className="si-hint">
                 {focusNode
@@ -535,25 +628,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   />
                   {sendErr && <span className="si-send-err" role="alert">{t('session.msgError')}</span>}
                   {/* slash-command menu — docked at the bottom, so it opens UPWARD (`up`) above the ❯ box. */}
-                  {menu && menu.kind === 'slash' && (
-                    <ul className="mention-menu up" role="listbox">
-                      <li className="mention-head">// {menu.query ? `/${menu.query}` : t('session.menuCommands')} — {t('session.menuHint')}</li>
-                      {menu.items.map((it, i) => (
-                        <li
-                          key={`${it.source}:${it.name}`}
-                          role="option"
-                          aria-selected={i === menu.index}
-                          className={i === menu.index ? 'mention-item on' : 'mention-item'}
-                          onMouseDown={(e) => { e.preventDefault(); accept(it) }}
-                          onMouseEnter={() => setMenu((m) => (m ? { ...m, index: i } : m))}
-                        >
-                          <span className="slash-name">/{highlight(it.name, menu.query)}</span>
-                          <span className="slash-desc">{it.description}</span>
-                          <span className={`slash-src src-${it.source}`}>{SRC_TAG[it.source] || it.source}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+                  {menu && menu.kind === 'slash' && slashMenu(true, menu.query ? `/${menu.query}` : t('session.menuCommands'))}
                 </div>
               )}
             </>

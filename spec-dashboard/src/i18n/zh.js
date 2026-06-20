@@ -148,6 +148,7 @@ export default {
     ask: '你想做点什么？',
     inputPlaceholder: '描述工作 · @ 规格 · / 命令 · ⏎ 启动 · ⇧⏎ 换行',
     menuCommands: '命令',
+    menuPresets: '配置预设',
     menuSpecNodes: '规格节点',
     menuHint: '↑↓ 选择 · ⏎ 插入',
     hintFocused: { before: '输入 ', mid: ' 以引用规格——', after: '（聚焦）排在最前' },

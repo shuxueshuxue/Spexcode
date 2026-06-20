@@ -17,9 +17,10 @@ What it plants, both resolved from the CLI package's OWN location via `import.me
 when the package is installed outside the dogfood repo — never a hardcoded repo path):
 
 - **The seed spec tree** — `templates/spec/*` copied into `<dir>/.spec/`: a root `project` node plus a
-  default `.config` of dev-flow plugins. The `.config` carries the `system/core` contract and the
-  `slash/tidy` + `slash/health` presets, each a verbatim copy of the dogfood `.config` node. The
-  dogfood-specific `system/voice-before-ask` is deliberately NOT seeded.
+  default `.config` of dev-flow plugins. The plugins are flat child nodes, each tagged with a `surface`
+  field: `core` (`surface: system`, the contract) plus `tidy` + `health` (`surface: slash`, presets),
+  each a verbatim copy of the dogfood `.config` node. The dogfood-specific `voice-before-ask` is
+  deliberately NOT seeded.
 - **The git hooks** — `templates/hooks/*` (the main-guard pre-commit and session-stamp
   prepare-commit-msg, mirroring `scripts/hooks/`) copied into the target's resolved common hooks dir,
   the same dir `scripts/install-hooks.sh` targets. They ship inside the package so a relocated install

@@ -238,7 +238,9 @@ export async function specDiffAt(id: string, hash: string) {
   return latestDiff(node.relPath, hash)
 }
 
-// @@@ config presets - REFLEXIVE, SKILL-SHAPED preset nodes under .spec/spexcode/config/*. Each is an
+// @@@ config presets - REFLEXIVE, SKILL-SHAPED preset nodes under .spec/spexcode/.config/* (the INSTANCE
+// tree — the DIY dev-flow plugins; the sibling config/ tree is the SPEC of the config system, not plugins,
+// so it is NOT scanned here). Each is an
 // ordinary spec node (it also shows on the board, parented to spexcode) BUT its folder is also a skill
 // bundle: `spec.md`'s body is the agent prompt/contract (with a {{targets}} placeholder the launcher fills
 // with the @-referenced nodes), and the SAME folder may co-locate auxiliary files — scripts, assets — that
@@ -253,7 +255,7 @@ export async function specDiffAt(id: string, hash: string) {
 // and `setup` are recognized values reserved for later gather-points (a skill bundle / an init script).
 // A node may declare several surfaces — the body and bundle mean the same thing, only the delivery differs.
 export type ConfigPreset = { name: string; title: string; desc: string; kind: string; surface: string[]; dir: string; files: string[]; body: string }
-const CONFIG_DIR = join(SPEC_DIR, 'spexcode', 'config')
+const CONFIG_DIR = join(SPEC_DIR, 'spexcode', '.config')
 // co-located bundle files = everything under the node folder except its spec.md, repo-relative, recursive.
 function bundleFiles(dir: string): string[] {
   const out: string[] = []
@@ -274,6 +276,10 @@ export function loadConfig(): ConfigPreset[] {
     const nodeDir = join(CONFIG_DIR, e.name)
     if (!e.isDirectory() || !existsSync(join(nodeDir, 'spec.md'))) continue
     const { fm, body } = parseFrontmatter(readFileSync(join(nodeDir, 'spec.md'), 'utf8'))
+    // @@@ skip pending - a `status: pending` plugin is DECLARED INTENT, not yet an active plugin. It still
+    // renders on the board (via loadSpecs), but it must NOT gather: not offered as a slash preset, not folded
+    // into a system prompt. Only built/active plugins surface here, so pending voice/ritual stubs are inert.
+    if (str(fm.status) === 'pending') continue
     const surface = list(fm.surface)
     out.push({
       name: e.name,

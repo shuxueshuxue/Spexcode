@@ -12,8 +12,10 @@ A config node declares **where it plugs in** with a `surface` field — one valu
 `surface` is the single axis the engine routes on: a node's body and co-located bundle mean the same
 thing across surfaces — only the *delivery* differs.
 
-`loadConfig` (in [[source-of-truth]]'s `specs.ts`) parses `surface` onto every preset, defaulting to
-`['slash']`, and `/api/config` ([[spec-cli]]) ships it. Two gather-points consume it today:
+`loadConfig` (in [[source-of-truth]]'s `specs.ts`) reads the plugin instances from the [[.config]] tree,
+parses `surface` onto every preset (defaulting to `['slash']`), and `/api/config` ([[spec-cli]]) ships
+them. Only **built/active** plugins gather — a `status: pending` node is declared intent, so it is filtered
+out and reaches no gather-point. Two gather-points consume the rest today:
 
 - **slash** — the new-session `/` dropdown lists **only** `surface: slash` config nodes as launchable
   presets. The dashboard ([[session-console]]'s `SessionInterface.jsx`) filters to slash nodes for both

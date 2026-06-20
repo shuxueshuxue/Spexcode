@@ -50,9 +50,11 @@ const SYSTEM_PROMPT =
   'Every change lands as a git commit on your node branch BEFORE you declare done / propose merge. ' +
   'The spec body is a living current-state document (no ## vN sections, no current-state/verdict). ' +
   'See CLAUDE.spexhidden.md for the dogfood ritual.'
-// @@@ surface:system gather - the launched agent's system prompt is the base floor PLUS every `surface:
-// system` config node's body. This is the `system` gather-point of the surface mechanism: a config node
-// opts in by declaring `surface: system`, and its body becomes an always-on contract on every launch/resume
+// @@@ surface:system gather - the launched agent's system prompt is the base floor PLUS every ACTIVE
+// `surface: system` config node's body (pending plugins are filtered out by loadConfig, so a `status:
+// pending` ritual/voice stub is declared intent and never injected). This is the `system` gather-point of
+// the surface mechanism: a config node opts in by declaring `surface: system`, and its body becomes an
+// always-on contract on every launch/resume
 // (no slash, no agent choice). Built fresh per launch so editing a system node takes effect on the next
 // launch with no restart. Single-quoted onto the launch line and shell-escaped the same way the prompt is;
 // the launch line is written to a script file (see launch()), so the combined length is unbounded — it no

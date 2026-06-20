@@ -45,4 +45,7 @@ The reproducibility contract is concrete: `.nvmrc` pins Node (22) and is tracked
 (`spec-cli/`, `spec-dashboard/`) are tracked, so installs are deterministic. Machine-local artifacts
 never enter the tree — the `claude` binary the launcher drives is a per-machine install resolved from
 `PATH` (override via `SPEXCODE_CLAUDE_CMD`), so the `spec-cli/bin/claude` symlink some installs leave
-is `.gitignore`d, not committed. No absolute machine path is baked anywhere in the checkout.
+is `.gitignore`d, not committed. The per-worktree runtime files a launch generates — `.session`, the
+generated launch/hook scripts, and the hidden `CLAUDE.spexhidden.md` copy `hideClaudeMd` renames
+`CLAUDE.md` to so Claude Code won't auto-load it — are likewise ignored, never committed. No absolute
+machine path is baked anywhere in the checkout.

@@ -16,6 +16,8 @@ dist/
 .spex-hooks.json
 # per-worktree generated launch script (launchScript() writes the claude invocation) — runtime, not spec data
 .spex-launch.sh
+# per-worktree hidden CLAUDE.md copy (hideClaudeMd renames CLAUDE.md so Claude Code won't auto-load it) — runtime, not spec data
+CLAUDE.spexhidden.md
 
 # harness state
 .claude/

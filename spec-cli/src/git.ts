@@ -498,11 +498,12 @@ export function mergeConflicts(wtPath: string, mainRef = 'main'): Promise<boolea
 // the fork point means main's post-fork commits live on main's side of the merge-base and never enter the
 // diff, so staleness registers as nothing — while EVERY genuine worktree change (committed on the branch
 // AND uncommitted/dirty, distinction preserved) still appears, since those live on the worktree's side.
-export async function worktreeSpecDelta(wtPath: string, mainRef: string): Promise<NodeOp[]> {
+export async function worktreeSpecDelta(wtPath: string, mainRef: string, baseHint?: string): Promise<NodeOp[]> {
   const run = (args: string[]) => gitA(['-C', wtPath, '-c', 'core.quotePath=false', ...args])
   // fork point = where this worktree branched from main; '' (no common ancestor / unreadable ref) falls
-  // back to mainRef so we still surface changes rather than going silent.
-  const base = (await run(['merge-base', mainRef, 'HEAD'])).trim() || mainRef
+  // back to mainRef so we still surface changes rather than going silent. The caller (cachedDelta) already
+  // computes this same merge-base to key its cache, so it passes it in to avoid a redundant subprocess.
+  const base = baseHint || (await run(['merge-base', mainRef, 'HEAD'])).trim() || mainRef
   // the three queries are independent — run them in parallel.
   const [workOut, commOut, statusOut] = await Promise.all([
     run(['diff', '--name-status', '-M', base, '--', '.spec']),

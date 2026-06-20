@@ -53,28 +53,37 @@ function readSession(dir: string) {
 
 // @@@ overlay cache - the board overlay (each managed worktree's spec-delta vs main) is the expensive
 // part of /api/layout: `worktreeSpecDelta` spawns 3 git diffs PER worktree, and warm that WAS the whole
-// cost (the result is ~2KB, so the ~230ms was pure spawn overhead). The delta is a pure function of
-// main's HEAD, the worktree's HEAD, and its `.spec` working-tree state, so we memo `ops` per worktree
-// keyed on those three — all read from the FILESYSTEM (headSha + worktreeSpecSig), no git subprocess. A
-// warm /api/layout then spawns only the single `git worktree list`; a worktree's diffs re-run ONLY when
-// its key changes (a commit moves a HEAD, a spec edit / new untracked spec.md moves the sig). Correctness
-// over speed: the key reflects every real change, so a new commit or a new session reflects at once —
-// never stale; the cheap fields (node/session/status from `.session`) are re-read fresh, never cached.
+// cost (the result is ~2KB, so the ~230ms was pure spawn overhead). The delta is anchored at the worktree's
+// FORK POINT — `git merge-base main HEAD`, NOT main's HEAD — so it shows strictly what THIS worktree changed
+// and never a phantom for files it never touched when main advances (see git.worktreeSpecDelta). The ops are
+// therefore a pure function of that merge-base, the worktree's HEAD, and its `.spec` working-tree state, so
+// we memo `ops` per worktree keyed on those three. The merge-base (not main's HEAD) is the right key field:
+// when main advances on UNRELATED branches the fork point is unchanged, so the overlay is a cache HIT — keying
+// on main's raw HEAD would needlessly recompute every worktree's 3 diffs on every merge. The trade is one cheap
+// `git merge-base` per managed worktree to compute the key (its result is reused as the diff base on a miss, so
+// no redundant subprocess); HEAD + sig come from the FILESYSTEM (headSha + worktreeSpecSig). A worktree's diffs
+// re-run ONLY when its key changes (its branch advances, main moves the fork point, or a spec edit / new
+// untracked spec.md moves the sig). Correctness over speed: the key reflects every real change — never stale;
+// the cheap fields (node/session/status from `.session`) are re-read fresh, never cached.
 const deltaCache = new Map<string, { key: string; ops: NodeOp[] }>()
 const safeHead = (p: string): string => { try { return headSha(p) } catch { return '' } }
+const safeMergeBase = async (wtPath: string, mainRef: string): Promise<string> => {
+  try { return (await gitA(['-C', wtPath, 'merge-base', mainRef, 'HEAD'])).trim() } catch { return '' }
+}
 let layoutHeadWarned = false
-async function cachedDelta(wtPath: string, mainRef: string, mainHead: string): Promise<NodeOp[]> {
+async function cachedDelta(wtPath: string, mainRef: string): Promise<NodeOp[]> {
   const wtHead = safeHead(wtPath)
-  // fail loud, never stale: if a HEAD can't be read the key is untrustworthy — bypass the cache and
-  // recompute (warn once) rather than risk serving a delta keyed on an empty sha across a real change.
-  if (!mainHead || !wtHead) {
-    if (!layoutHeadWarned) { layoutHeadWarned = true; console.warn('spec-cli: layout overlay cache bypassed (unreadable HEAD), recomputing every read') }
+  const base = await safeMergeBase(wtPath, mainRef)
+  // fail loud, never stale: if the merge-base or HEAD can't be read the key is untrustworthy — bypass the
+  // cache and recompute (warn once) rather than risk serving a delta keyed on an empty sha across a real change.
+  if (!base || !wtHead) {
+    if (!layoutHeadWarned) { layoutHeadWarned = true; console.warn('spec-cli: layout overlay cache bypassed (unreadable merge-base/HEAD), recomputing every read') }
     return worktreeSpecDelta(wtPath, mainRef)
   }
-  const key = `${mainHead}\0${wtHead}\0${worktreeSpecSig(wtPath)}`
+  const key = `${base}\0${wtHead}\0${worktreeSpecSig(wtPath)}`
   const hit = deltaCache.get(wtPath)
   if (hit && hit.key === key) return hit.ops
-  const ops = await worktreeSpecDelta(wtPath, mainRef)
+  const ops = await worktreeSpecDelta(wtPath, mainRef, base)
   deltaCache.set(wtPath, { key, ops })
   return ops
 }
@@ -90,9 +99,6 @@ export async function resolveLayout(): Promise<Layout> {
   const raw = await gitWorktrees(root)
   const mainWt = raw.find((w) => w.branch === 'main')
   const mainRef = mainWt?.branch ?? 'main'
-  // main's HEAD (filesystem read, no subprocess) keys every worktree's overlay: the deltas diff against
-  // main, so when main advances (a merge) every cached delta must recompute.
-  const mainHead = mainWt ? safeHead(mainWt.path) : ''
   // each worktree's spec delta is independent — compute (or cache-hit) them all in parallel. Each read is
   // wrapped: a worktree removed mid-read (a worker self-merged and retired it) is SKIPPED, never thrown out
   // of the request — see resilience.guardWorktree.
@@ -107,7 +113,7 @@ export async function resolveLayout(): Promise<Layout> {
     // scratch worktrees (e.g. agent-*) are skipped, both to keep them off the board AND to avoid their
     // (often large) diffs dominating /api/layout latency.
     const managed = !!sess.session || (!!w.branch && w.branch.startsWith(convention.branchPrefix))
-    const ops = isMain || !managed ? [] : await cachedDelta(w.path, mainRef, mainHead)
+    const ops = isMain || !managed ? [] : await cachedDelta(w.path, mainRef)
     return { path: w.path, branch: w.branch, node, session: sess.session, status: sess.status, isMain, ops }
   })))
   const worktrees = rows.filter((w): w is Worktree => w !== null)

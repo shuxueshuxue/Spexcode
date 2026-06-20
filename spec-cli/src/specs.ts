@@ -186,10 +186,6 @@ export async function loadSpecs() {
       lastEdited: h[0]?.date || null,
       drift,
       driftFiles,
-      // @@@ evidence - metadata links to A->B proof frames, read from the spec's frontmatter
-      // (`evidence:` list). The backend is the source of truth here too — the dashboard never
-      // fabricates these. Empty until the yatsu package records real captures and writes the links.
-      evidence: list(r.fm.evidence),
       // @@@ lastDiff - the node's latest version's unified patch to its spec.md, PRECOMPUTED and shipped
       // with the board (and /api/specs) so the history tab's expanded-by-default latest item renders its
       // line-diff instantly, with no round-trip (older items fetch theirs via /api/specs/:id/diff/:hash).

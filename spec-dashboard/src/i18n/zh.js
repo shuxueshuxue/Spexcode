@@ -119,7 +119,6 @@ export default {
     noChange: '尚无记录的改动——此规格即最新的事实依据。',
     diffLabel: '规格行差异',
     loadingHistory: '正在加载历史…',
-    evidenceAlt: ({ n }) => `证据 ${n}`,
   },
 
   specNode: {

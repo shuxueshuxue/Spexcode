@@ -122,7 +122,6 @@ export default {
     noChange: 'no recorded change yet — this spec is the latest ground truth.',
     diffLabel: 'spec line diff',
     loadingHistory: 'loading history…',
-    evidenceAlt: ({ n }) => `evidence ${n}`,
   },
 
   specNode: {

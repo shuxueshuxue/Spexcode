@@ -15,10 +15,11 @@ code:
 ## raw source
 
 A manager — human or agent — shouldn't have to `cd` into a worktree and hand-run git to decide what to do
-with a session. The **server** does that work and hands back one ready-made answer. The cockpit is the set
-of such verbs; **review** is the first. It answers "should I merge this session?" in a single payload, so
-the dashboard and `spex review` are thin callers of identical data. **merge / close / dispatch** follow as
-later verbs on the same surface; they already exist as lifecycle actions and migrate under this contract.
+with a session, NOR to land it. The **server** does that work and hands back one ready-made answer. The
+cockpit is the set of such verbs. **review** decides ("should I merge this session?") in a single payload;
+**merge** is its sequel — it ACTS on the same gates the review reports, landing the session atomically.
+Both are thin-called by the dashboard and `spex`. **close / dispatch** remain lifecycle actions on the same
+surface.
 
 ## expanded spec
 
@@ -39,6 +40,18 @@ later verbs on the same surface; they already exist as lifecycle actions and mig
   package's own tree, where the command runs.
 - **proposal** — the session's standing proposal kind + note, read from its `.session`.
 
+`mergeSession(id)` is the ACT verb, served at `POST /api/sessions/:id/merge` (`?keep=1`) and run by
+`spex merge <id> [--keep]`. It re-runs review's three gates fresh (via `reviewPayload`, so the decision and
+the action read identical data) and, if ANY fails, merges NOTHING — returning `{merged:false, reason}`
+(HTTP 409 / non-zero exit). A manager must never land a session that wouldn't pass its own review, so the
+gate is fail-loud, not advisory. When all gates pass the SERVER runs `git -C <mainRoot> merge --no-ff
+<branch>` with an auto-composed `merge <branch>: <reason>` message — reason = the node branch's latest
+commit subject, minus a leading `spec: ` (the branch ref is visible from the main checkout, so no worktree
+path is needed). It then CONFIRMS main's HEAD advanced to the new merge commit and aborts any half-merge,
+so main is never left mid-state. On success it closes the session (worktree + branch) unless `--keep`, and
+returns `{merged, head, closed}`. This makes landing a session ONE gated server transaction, not an
+instruction dispatched to the session's agent — the agent never touches main.
+
 Paths resolve from the CLI package's OWN location (`pkgRoot`), never a hardcoded repo layout, so the cockpit
-works wherever the package lives. The server only ever READS here — computing a verdict, never mutating a
-worktree or main; acting on the verdict (merge/close) stays a human-triggered lifecycle transition.
+works wherever the package lives. review only READS; merge is the cockpit's one deliberate WRITE, and it
+mutates main only after every gate passes and only through the atomic transaction above.

@@ -35,6 +35,7 @@ Specs / graph
   serve                 run the API server (http://localhost:8787)
   board                 dump the dashboard board state as JSON
   review <id>           manager cockpit: review a session (ahead·merge-base diff·gates·proposal)  [--json]
+  merge <id>            manager cockpit: gated atomic merge into main (re-checks gates, then closes)  [--keep]
 
 Sessions
   ls [SEL…]             living-sessions table          [--status a,b] [--json]
@@ -102,6 +103,18 @@ if (cmd === 'serve') {
     console.log(`  diff (merge-base, ${r.diff.length} file(s)):`)
     for (const f of r.diff) console.log(`    ${f.status.padEnd(12)} +${f.additions} -${f.deletions}  ${f.path}`)
   }
+} else if (cmd === 'merge') {
+  // @@@ merge - the cockpit's ACT verb (review's sequel): the SERVER lands the session atomically. It
+  // re-checks review's gates (conflicts/typecheck/lint) and, only if all pass, runs the --no-ff merge into
+  // main, confirms HEAD advanced, and closes the session (--keep leaves it). Any failing gate merges
+  // NOTHING and prints the reason (fail-loud, non-zero exit). The agent never touches main here.
+  const { mergeSession } = await import('./sessions.js')
+  const id = positionals(3)[0]
+  if (!id) { console.error('usage: spex merge <id> [--keep]'); process.exit(2) }
+  const r = await mergeSession(id, { keep: has('keep') })
+  if (r.merged) console.log(`merged ${id} → ${r.head?.slice(0, 9)}${r.closed ? ' (session closed)' : ''}`)
+  else console.error(`merge blocked: ${r.reason}`)
+  process.exit(r.merged ? 0 : 1)
 } else if (cmd === 'board') {
   const { buildBoard } = await import('./board.js')
   console.log(JSON.stringify(await buildBoard(), null, 2))
@@ -190,11 +203,13 @@ if (cmd === 'serve') {
     // (the agent deliberately asking the human) — idle is the undeclared stop the Stop gate missed.
     console.log(s.markIdleFromCwd() ? 'idle' : 'noop (no .session in cwd, or not active)')
   } else if (sub === 'merge') {
-    // merge is now a DISPATCH: the session's own agent runs git, resolves conflicts, and verifies the
-    // merge — the server never touches main's tree. Success here means the merge prompt reached the agent.
-    const r = await s.mergeSession(id)
-    console.log(r.ok ? `${id}: merge dispatched to the session's agent (it performs & verifies the merge)` : `merge failed: ${r.error}`)
-    process.exit(r.ok ? 0 : 1)
+    // server-side atomic gated merge (same as top-level `spex merge`): re-checks the review gates, merges
+    // --no-ff into main, confirms HEAD advanced, then closes the session unless --keep. Any failing gate
+    // merges nothing (fail-loud). The SERVER performs the merge — the session's agent never touches main.
+    const r = await s.mergeSession(id, { keep: has('keep') })
+    if (r.merged) console.log(`merged ${id} → ${r.head?.slice(0, 9)}${r.closed ? ' (session closed)' : ''}`)
+    else console.error(`merge blocked: ${r.reason}`)
+    process.exit(r.merged ? 0 : 1)
   } else if (sub === 'close') {
     console.log(await s.closeSession(id) ? `closed ${id}` : `no such session ${id}`)
   } else if (sub === 'send') {

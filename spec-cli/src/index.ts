@@ -79,7 +79,13 @@ app.get('/api/sessions/:id/review', async (c) => {
 // lifecycle transitions (thin callers of the session state machine)
 app.post('/api/sessions/:id/resume', async (c) => c.json({ ok: await reopen(c.req.param('id')) }))   // back-to-working / relaunch
 app.post('/api/sessions/:id/review', async (c) => c.json({ ok: await propose(c.req.param('id'), 'merge') }))
-app.post('/api/sessions/:id/merge', async (c) => { const r = await mergeSession(c.req.param('id')); return c.json(r, r.ok ? 200 : 409) })
+// @@@ merge - the cockpit's atomic gated merge (NOT a worker dispatch): re-checks the review gates and, only
+// if all pass, the SERVER runs the --no-ff merge into main, confirms HEAD advanced, and closes the session
+// (?keep=1 leaves it). A blocked merge is a real failure → 409 + {merged:false, reason}; see mergeSession.
+app.post('/api/sessions/:id/merge', async (c) => {
+  const r = await mergeSession(c.req.param('id'), { keep: c.req.query('keep') === '1' })
+  return c.json(r, r.merged ? 200 : 409)
+})
 
 // @@@ terminal socket - ONE bidirectional WebSocket replaces the old SSE-down + POST/keys + POST/resize
 // trio. The browser is wired to a shared tmux client (pty-bridge): server→client = raw pane bytes

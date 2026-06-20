@@ -58,7 +58,7 @@ export default {
       child: '前往最近的子节点',
       zoom: '放大 / 缩小 · 重置为概览',
       info: '打开节点信息弹窗（或双击节点）',
-      graph: '打开会话图（实时监视网络）',
+      graph: '切换会话图（实时监视网络）',
       enter: '进入聚焦节点的实时会话',
       newChild: '在聚焦节点下新建子节点（连击）',
       del: '删除聚焦节点（连击）',
@@ -136,7 +136,7 @@ export default {
 
   sessionGraph: {
     brand: '$ session-graph',
-    hint: '箭头 = 实时监视（A→B：A 正在监视 B）· 拖动 A→B 让 A 监视 B · 点击节点打开会话 · Esc 返回',
+    hint: '箭头 = 实时监视（A→B：A 正在监视 B）· 拖动 A→B 让 A 监视 B · 点击节点打开会话 · 按 t 切换返回',
     asked: ({ a, b }) => `已请求 ${a} 监视 ${b}`,
     monitorPrompt: ({ label, id }) => `请监视会话 ${label}（${id}）：在后台运行 \`spex watch ${id}\` 并保持运行，让其状态变化反馈给我。`,
   },

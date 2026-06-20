@@ -15,7 +15,9 @@ import { useT } from './i18n/index.jsx'
 // gesture is optimistic — a pending dashed edge + a toast appear immediately so the user never wonders if
 // it worked — and the edge goes solid once A's real `spex watch` registration shows up on the next poll.
 // Deliberately ISOLATED from the spec board — its own ReactFlowProvider (so it never shares the board's
-// camera/selection state), its own data, its own keys. `t` (and a HUD button) toggles it; Esc returns.
+// camera/selection state), its own data, its own keys. `t` is the ONLY switch in or out (it toggles both
+// graphs, owned by App so it works from either) — Esc does nothing here, and opening a session console
+// over this view never closes it (you return to this graph when the console closes).
 // Nodes REUSE the shared seed-to-hue colour + avatar (color.js / avatar.jsx) keyed off the session id, so
 // a face here matches the same session's stripe/avatar everywhere else on the dashboard.
 
@@ -68,7 +70,7 @@ function frameViewport(pos, sessions) {
   return { x: w / 2 - ((minX + maxX) / 2) * zoom, y: h / 2 - ((minY + maxY) / 2) * zoom, zoom }
 }
 
-function GraphCanvas({ onClose, onOpen }) {
+function GraphCanvas({ onOpen }) {
   const t = useT()
   const [graph, setGraph] = useState({ nodes: [], edges: [] })
   const [loaded, setLoaded] = useState(false)        // first fetch done → safe to mount already-framed
@@ -87,12 +89,9 @@ function GraphCanvas({ onClose, onOpen }) {
   }, [])
   useEffect(() => { reload(); const id = setInterval(reload, 4000); return () => clearInterval(id) }, [reload])
 
-  // Esc returns to the spec board. Owned here so nav never leaks to the board behind.
-  useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onClose() } }
-    window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
-  }, [onClose])
+  // No key handler here: `t` (the only switch between the two graphs) is owned by App so it toggles both
+  // ways from one place and stays suppressed while the session console captures keys. Esc deliberately
+  // does NOT leave this view — switching graphs is `t` alone.
 
   const pos = useMemo(() => radial(graph.nodes), [graph.nodes])
   const byId = useMemo(() => Object.fromEntries(graph.nodes.map((s) => [s.id, s])), [graph.nodes])
@@ -156,8 +155,9 @@ function GraphCanvas({ onClose, onOpen }) {
   }, [byId, t, flash])
 
   // clicking a node crosses into that session's console — reuse of the board's open-session path (no new
-  // mechanism); the graph closes behind it. A single click is unambiguously "open": connectOnClick is OFF
-  // (below), so only a handle DRAG asks-to-monitor — a click never doubles as a connect.
+  // mechanism). The session graph stays mounted BEHIND the console (graphView is untouched), so closing
+  // the console returns here, not to the spec graph. A single click is unambiguously "open": connectOnClick
+  // is OFF (below), so only a handle DRAG asks-to-monitor — a click never doubles as a connect.
   const onNodeClick = useCallback((_e, n) => onOpen?.(n.id), [onOpen])
 
   // re-frame gently when the session count changes AFTER the first paint (a watch/session appeared); the
@@ -191,7 +191,7 @@ function GraphCanvas({ onClose, onOpen }) {
 // @@@ SessionGraph - full-screen overlay. Wrapped in its OWN ReactFlowProvider so it shares NOTHING with
 // the board's ReactFlow instance (separate camera, selection, store) — the isolation that lets it drop in
 // without touching the existing views. onOpen crosses a clicked node into its session console (board path).
-export default function SessionGraph({ onClose, onOpen }) {
+export default function SessionGraph({ onOpen }) {
   const t = useT()
   return (
     <div className="session-graph">
@@ -200,7 +200,7 @@ export default function SessionGraph({ onClose, onOpen }) {
         <span className="sg-hint">{t('sessionGraph.hint')}</span>
       </div>
       <ReactFlowProvider>
-        <GraphCanvas onClose={onClose} onOpen={onOpen} />
+        <GraphCanvas onOpen={onOpen} />
       </ReactFlowProvider>
     </div>
   )

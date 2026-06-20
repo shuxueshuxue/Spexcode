@@ -423,8 +423,10 @@ body {
 .set-hint { display: block; color: var(--muted); font-size: 11px; line-height: 1.4; }
 
 /* ---- session interface (Enter): two panes, right content morphs ---- */
+/* z-index 50 is ABOVE the session graph (40): a session opened FROM the graph must overlay it, not hide
+   behind it — the graph stays mounted underneath (graphView untouched) and reappears when this closes. */
 .si-backdrop {
-  position: fixed; inset: 0; z-index: 30;
+  position: fixed; inset: 0; z-index: 50;
   background: rgba(101,123,131,.28); backdrop-filter: blur(2px);
   display: flex; align-items: center; justify-content: center;
 }

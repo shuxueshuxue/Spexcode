@@ -5,7 +5,7 @@ import { createNodeWebSocket } from '@hono/node-ws'
 import { loadSpecs, specHistory, specDiffAt, loadConfig } from './specs.js'
 import { resolveLayout } from './layout.js'
 import { buildBoard } from './board.js'
-import { newSession, listSessions, sendKeys, rawKey, closeSession, reopen, propose, mergeSession, sessionGraph, registerWatch, deregisterWatch, superviseQueue } from './sessions.js'
+import { newSession, listSessions, sendKeys, rawKey, closeSession, reopen, propose, mergeSession, reviewPayload, sessionGraph, registerWatch, deregisterWatch, superviseQueue } from './sessions.js'
 import { slashCommands } from './slash-commands.js'
 import { attachViewer, detachViewer, writeViewer, resizeBridge, superviseBridges, type Viewer } from './pty-bridge.js'
 import { installProcessGuards } from './resilience.js'
@@ -68,6 +68,13 @@ app.post('/api/sessions', async (c) => {
   const prompt = typeof body?.prompt === 'string' ? body.prompt : ''
   if (!prompt.trim()) return c.json({ error: 'empty prompt' }, 400)
   return c.json(await newSession(typeof body?.node === 'string' ? body.node : null, prompt), 201)
+})
+// @@@ manager cockpit - the review payload (the cockpit's first verb; see the manager-cockpit spec node).
+// ONE server-side bundle for "should I merge this session?": ahead/dirty/diff(merge-base)/gates/proposal,
+// computed in reviewPayload so the dashboard and `spex review` are thin callers. 404 for an unknown id.
+app.get('/api/sessions/:id/review', async (c) => {
+  const r = await reviewPayload(c.req.param('id'))
+  return r ? c.json(r) : c.json({ error: 'no such session' }, 404)
 })
 // lifecycle transitions (thin callers of the session state machine)
 app.post('/api/sessions/:id/resume', async (c) => c.json({ ok: await reopen(c.req.param('id')) }))   // back-to-working / relaunch

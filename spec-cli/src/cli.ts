@@ -34,6 +34,7 @@ Specs / graph
   ack <node>            stamp Spec-OK:<node> trailer on HEAD (this code change keeps <node>'s spec valid)
   serve                 run the API server (http://localhost:8787)
   board                 dump the dashboard board state as JSON
+  review <id>           manager cockpit: review a session (ahead·merge-base diff·gates·proposal)  [--json]
 
 Sessions
   ls [SEL…]             living-sessions table          [--status a,b] [--json]
@@ -77,6 +78,30 @@ if (cmd === 'serve') {
   // into <targetDir> (default cwd). spex init [targetDir]
   const { specInit } = await import('./init.js')
   await specInit(positionals(3)[0])
+} else if (cmd === 'review') {
+  // @@@ review - the manager cockpit's first verb: print ONE review payload for a session (ahead, the
+  // merge-base diff = its REAL changes, the merge/typecheck/lint gates, and its standing proposal) so a
+  // manager can decide whether to merge without hand-running git. `--json` for the raw payload. This is
+  // the human-facing INSPECT verb; `spex session review` is the distinct agent action "propose merge".
+  const { reviewPayload } = await import('./sessions.js')
+  const id = positionals(3)[0]
+  if (!id) { console.error('usage: spex review <session-id>'); process.exit(2) }
+  const r = await reviewPayload(id)
+  if (!r) { console.error(`no such session ${id}`); process.exit(1) }
+  if (has('json')) { console.log(JSON.stringify(r, null, 2)) }
+  else {
+    const g = r.gates
+    console.log(`review ${r.node || r.branch || r.id}  [${r.id}]`)
+    console.log(`  ahead of main : ${r.ahead} commit(s)`)
+    console.log(`  uncommitted   : ${r.dirtyNonRuntime} non-runtime file(s)`)
+    console.log(`  proposal      : ${r.proposal.kind ?? '—'}${r.proposal.note ? ` — ${r.proposal.note}` : ''}`)
+    console.log('  gates:')
+    console.log(`    conflicts w/ main : ${g.conflictsWithMain ? 'YES' : 'no'}`)
+    console.log(`    typecheck         : ${g.typecheck.ok ? 'ok' : `${g.typecheck.errorCount} error(s)`}`)
+    console.log(`    lint              : ${g.lint.errorCount} error(s), ${g.lint.warningCount} warning(s)`)
+    console.log(`  diff (merge-base, ${r.diff.length} file(s)):`)
+    for (const f of r.diff) console.log(`    ${f.status.padEnd(12)} +${f.additions} -${f.deletions}  ${f.path}`)
+  }
 } else if (cmd === 'board') {
   const { buildBoard } = await import('./board.js')
   console.log(JSON.stringify(await buildBoard(), null, 2))

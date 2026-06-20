@@ -6,7 +6,7 @@ import { join, dirname, relative } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createConnection } from 'node:net'
 import { fileURLToPath } from 'node:url'
-import { git, gitA, repoRoot } from './git.js'
+import { git, gitA, repoRoot, mergeBaseDiff, mergeConflicts, type ReviewDiffFile } from './git.js'
 import { guardWorktree } from './resilience.js'
 import { loadSystemConfig, type ConfigPreset } from './specs.js'
 
@@ -826,11 +826,8 @@ const RUNTIME_FILES = new Set(['.session', '.session-prompt', '.session-launch',
 export function mergeReadiness(): { ready: boolean; reason?: string } {
   let dirty: string[] = []
   try {
-    dirty = git(['status', '--porcelain', '--untracked-files=all']).split('\n').filter(Boolean).map((line) => {
-      let p = line.slice(3)                                  // strip the `XY ` status, keep the path
-      const arrow = p.indexOf(' -> '); if (arrow >= 0) p = p.slice(arrow + 4)   // a rename: keep the new path
-      return p
-    }).filter((p) => !RUNTIME_FILES.has(p))
+    dirty = git(['status', '--porcelain', '--untracked-files=all']).split('\n').filter(Boolean)
+      .map(porcelainPath).filter((p) => !RUNTIME_FILES.has(p))
   } catch { /* git status failed — fall through to the ahead check, still a real guard */ }
   if (dirty.length) {
     const shown = dirty.slice(0, 8).join(', ') + (dirty.length > 8 ? ', …' : '')
@@ -840,6 +837,83 @@ export function mergeReadiness(): { ready: boolean; reason?: string } {
   try { ahead = Number(git(['rev-list', '--count', 'main..HEAD']).trim()) || 0 } catch { ahead = 0 }
   if (ahead === 0) return { ready: false, reason: 'your node branch is 0 commits ahead of main — nothing is committed to merge' }
   return { ready: true }
+}
+
+// the path a `git status --porcelain` line refers to: strip the `XY ` status, and for a rename keep the
+// NEW path (after ` -> `). Shared by the dirty-file counters (mergeReadiness above, reviewPayload below).
+function porcelainPath(line: string): string {
+  let p = line.slice(3)
+  const arrow = p.indexOf(' -> '); if (arrow >= 0) p = p.slice(arrow + 4)
+  return p
+}
+
+// @@@ MANAGER COCKPIT - the review payload (the cockpit's first verb; see the manager-cockpit spec node).
+// One server-side bundle that lets a manager (human or agent) decide whether to merge a session WITHOUT
+// hand-running git: how far ahead it is, its REAL changes (merge-base diff, never a phantom main..HEAD one),
+// whether uncommitted non-runtime work remains, the merge/typecheck/lint gates, and the agent's standing
+// proposal. ahead/dirty/diff/conflicts are computed against the SESSION's worktree (per id); typecheck and
+// lint reflect the CLI package's OWN location (where this runs) — the spec-cli that's actually live. null
+// when no session has that id.
+export type ReviewGates = {
+  conflictsWithMain: boolean                       // a dry-run merge into main would conflict (in-memory, safe)
+  typecheck: { ok: boolean; errorCount: number }   // `tsc --noEmit` on the CLI package
+  lint: { errorCount: number; warningCount: number } // the spec↔code graph lint
+}
+export type ReviewPayload = {
+  id: string; node: string | null; branch: string | null
+  ahead: number              // commits the node branch is ahead of main
+  dirtyNonRuntime: number    // uncommitted files excluding SpexCode's own runtime files
+  diff: ReviewDiffFile[]     // the worker's real changes, anchored at the merge-base
+  gates: ReviewGates
+  proposal: { kind: Proposal | null; note: string | null }   // the session's standing proposal + its note
+}
+
+// @@@ typecheckPkg - `tsc --noEmit` on the CLI package at its OWN location (pkgRoot — never a hardcoded
+// path), using the tsc binary from that package's node_modules. errorCount counts `error TSxxxx` lines; ok
+// is the exit status. If tsc can't be spawned at all (no node_modules) it resolves ok:false / 0 errors — a
+// loud "couldn't typecheck" rather than a false green.
+function typecheckPkg(): Promise<{ ok: boolean; errorCount: number }> {
+  const root = pkgRoot()
+  const tsc = join(root, 'node_modules', '.bin', 'tsc')
+  return new Promise((resolve) => {
+    execFile(tsc, ['--noEmit'], { cwd: root, encoding: 'utf8', maxBuffer: 1 << 24 }, (err, stdout) => {
+      const out = (stdout || '') + (err && (err as unknown as { stdout?: string }).stdout || '')
+      resolve({ ok: !err, errorCount: (out.match(/error TS\d+/g) || []).length })
+    })
+  })
+}
+
+// @@@ reviewPayload - assemble the cockpit review for one session. The five session-specific reads
+// (ahead / dirty / diff / conflict gate) plus the two location gates (typecheck / lint) are all
+// independent, so they run in parallel. lint is the existing spec-lint module run in-process (it reports
+// over this process's repo — the CLI package's own tree).
+export async function reviewPayload(id: string): Promise<ReviewPayload | null> {
+  const wt = await findWorktree(id)
+  if (!wt) return null
+  const { specLint } = await import('./lint.js')
+  const [aheadOut, statusOut, diff, conflictsWithMain, typecheck, findings] = await Promise.all([
+    gitA(['-C', wt.path, 'rev-list', '--count', 'main..HEAD']),
+    gitA(['-C', wt.path, 'status', '--porcelain', '--untracked-files=all']),
+    mergeBaseDiff(wt.path, 'main'),
+    mergeConflicts(wt.path, 'main'),
+    typecheckPkg(),
+    specLint(),
+  ])
+  const dirtyNonRuntime = statusOut.split('\n').filter(Boolean)
+    .map(porcelainPath).filter((p) => !RUNTIME_FILES.has(p)).length
+  return {
+    id, node: wt.rec.node, branch: wt.branch,
+    ahead: Number(aheadOut.trim()) || 0,
+    dirtyNonRuntime, diff,
+    gates: {
+      conflictsWithMain, typecheck,
+      lint: {
+        errorCount: findings.filter((f) => f.level === 'error').length,
+        warningCount: findings.filter((f) => f.level === 'warn').length,
+      },
+    },
+    proposal: { kind: wt.rec.proposal, note: wt.rec.note },
+  }
 }
 
 // @@@ mergePrompt - the INTENT the human clicks "merge" with, written as an instruction to the session's

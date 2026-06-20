@@ -10,6 +10,8 @@ dist/
 .session
 # originating-prompt sidecar (multi-line launch request) — runtime metadata, not spec data
 .session-prompt
+# per-worktree generated hook settings (writeSettings() writes absolute paths) — runtime, not spec data
+.spex-hooks.json
 
 # harness state
 .claude/

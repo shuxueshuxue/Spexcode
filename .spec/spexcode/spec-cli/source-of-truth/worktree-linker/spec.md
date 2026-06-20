@@ -25,3 +25,6 @@ This lives inside the [[portable-layout]] seam (`layout.ts`): the linker is the 
 enumerated worktrees, attaches node id + session + status + overlay to each. Keeping `.session`
 untracked is what lets the same `.spec` tree stay in-tree and canonical on main while a worktree layers
 ephemeral, session-scoped state on top without polluting history.
+
+The per-worktree generated runtime files — `.session`, `.session-prompt`, and `.spex-hooks.json`
+(the last written by `writeSettings()` with absolute paths) — are **gitignored**, never tracked.

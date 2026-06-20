@@ -979,37 +979,39 @@ export async function reviewPayload(id: string): Promise<ReviewPayload | null> {
   }
 }
 
-// @@@ mergeSession - the cockpit's ACT verb, the sequel to review: the SERVER lands the session atomically
-// (NOT the session's agent). It re-runs review's three gates via reviewPayload — conflictsWithMain (the safe
-// dry-run), typecheck, lint — and if ANY fails it merges NOTHING and returns {merged:false, reason}: a
-// manager never lands a session that wouldn't pass its own review (fail-loud). When all gates pass it runs
-// `git -C <mainRoot> merge --no-ff <branch>` with an auto-composed `merge <branch>: <reason>` message —
-// reason = the node branch's latest commit subject, minus a leading `spec: ` (the branch ref is visible
-// from the main checkout, no worktree path needed). It then CONFIRMS main's HEAD advanced to the new merge
-// commit (and aborts any half-merge so main is never left mid-state — the conflict gate should already
-// preclude this, but a merge that fails for any other reason must not strand main). Finally it closes the
-// session (worktree + branch) unless keep. Returns {merged, head, closed}.
-export async function mergeSession(id: string, opts: { keep?: boolean } = {}): Promise<{ merged: boolean; head?: string; closed?: boolean; reason?: string }> {
-  const r = await reviewPayload(id)
-  if (!r || !r.branch) return { merged: false, reason: 'no such session' }
-  const branch = r.branch, g = r.gates, main = mainRoot()
-  // re-check the gates fresh — any failing gate aborts the merge, nothing is touched
-  if (g.conflictsWithMain) return { merged: false, reason: 'would conflict with main' }
-  if (!g.typecheck.ok) return { merged: false, reason: `typecheck failed (${g.typecheck.errorCount} error(s))` }
-  if (g.lint.errorCount) return { merged: false, reason: `lint failed (${g.lint.errorCount} error(s))` }
+// @@@ mergePrompt - the human's merge INTENT, handed to the session's OWN agent. Merge is a DISPATCH, not a
+// server git script: the agent knows the work, so IT runs the merge, resolves any conflicts, and VERIFIES the
+// outcome — the guarantee lives in that verification, never a server-side gate. This is also the ONE place the
+// merge STYLE is stated (no other mechanism carries it): a --no-ff merge commit `merge <branch>: <reason>`
+// into main. The agent runs git from the MAIN checkout (`-C <mainPath>`; its own cwd is the node worktree).
+// After a clean merge the branch is 0 ahead of main, so the agent proposes CLOSE — not merge (the commit gate
+// would block a merge proposal; propose-close is exempt) — and the human confirms the close.
+function mergePrompt(mainPath: string, branch: string, reason: string): string {
+  return `Merge your branch \`${branch}\` into main, then propose close. You know this work, so resolve any conflicts yourself.\n\n` +
+    `1. Merge from the main checkout with a no-ff merge commit:\n   git -C ${mainPath} merge --no-ff -m "merge ${branch}: ${reason}" ${branch}\n` +
+    `2. If it conflicts, resolve the conflicts (you know the intent) and complete the merge commit. ` +
+    `3. Verify it landed: main's HEAD must now be the new merge commit and no merge may be left in progress — if anything went half-merged, run \`git -C ${mainPath} merge --abort\` and report it rather than leaving main mid-state. ` +
+    `4. Once you've verified main advanced cleanly, propose close for the human — do NOT close it yourself.`
+}
 
+// @@@ mergeSession - the cockpit's ACT verb, the sequel to review — but a DISPATCH, not a server script: the
+// SESSION'S OWN agent lands the merge, never the server (it carries no `git merge` logic and never touches
+// main's tree). It reopens the session (clears the proposal → active, `--resume`s via reopen if tmux died —
+// which waits for the rendezvous socket, closing the just-relaunched-no-socket race) and dispatches mergePrompt
+// through sendKeys. The reason = the node branch's latest commit subject minus a leading `spec: ` (visible from
+// the main checkout, no worktree path needed). Async + fail-loud: returns {dispatched:true} once the prompt is
+// CONFIRMED accepted, else {dispatched:false, reason} (the loud DispatchResult error). The server no longer
+// re-checks gates, runs git, bumps `merges`, or closes the session — review shows the gates; the agent verifies.
+export async function mergeSession(id: string): Promise<{ dispatched: boolean; reason?: string }> {
+  const wt = await findWorktree(id)
+  if (!wt || !wt.branch) return { dispatched: false, reason: 'no such session' }
+  const branch = wt.branch, main = mainRoot()
+  if (!(await reopen(id))) return { dispatched: false, reason: 'could not reopen session' }
   const subject = (await gitA(['-C', main, 'log', '-1', '--format=%s', branch])).trim()
   const reason = subject.replace(/^spec:\s+/, '') || branch
-  const before = (await gitA(['-C', main, 'rev-parse', 'HEAD'])).trim()
-  const m = await gitTry(['-C', main, 'merge', '--no-ff', '-m', `merge ${branch}: ${reason}`, branch])
-  if (!m.ok) {
-    await gitTry(['-C', main, 'merge', '--abort'])   // never leave main half-merged
-    return { merged: false, reason: `git merge failed: ${(m.stderr || m.stdout).trim().split('\n')[0]}` }
-  }
-  const head = (await gitA(['-C', main, 'rev-parse', 'HEAD'])).trim()
-  if (!head || head === before) return { merged: false, reason: 'merge did not advance HEAD' }
-  const closed = opts.keep ? false : await closeSession(id)
-  return { merged: true, head, closed }
+  const r = await sendKeys(id, mergePrompt(main, branch, reason))
+  if (!r.ok) return { dispatched: false, reason: r.error }
+  return { dispatched: true }
 }
 
 // @@@ closeSession - the ONLY removal (human-confirmed): kills tmux, sweeps the rendezvous socket, removes

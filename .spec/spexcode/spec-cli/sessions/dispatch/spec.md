@@ -38,10 +38,11 @@ session send` prints the reason, and `mergeSession` returns it.
 **Merge is a dispatch, not a script.** `mergeSession` carries no `git merge` logic: it reopens the
 session (clears the proposal → active, `--resume`s via `reopen` if tmux died — which waits for the
 rendezvous socket, closing the just-relaunched-no-socket race), then dispatches a **merge prompt**
-through this same `sendKeys`. The prompt tells the **agent** to merge its branch into main, resolve any
-conflicts (it knows the work's intent), verify main's HEAD advanced and no merge is left in progress,
-`git merge --abort` if anything went half-merged, and propose close once verified — so the guarantee
-lives in the agent's verification, never a server check, and main is never left half-merged. The action
+through this same `sendKeys`. The prompt tells the **agent** to merge its branch into main from the **main
+checkout** (`-C <main>`, not its node worktree), resolve any conflicts (it knows the work's
+intent), verify main's HEAD advanced and no merge is left in progress, `git merge --abort` if anything went
+half-merged, and propose close once verified — so the guarantee lives in the agent's verification, never a
+server check, and main is never left half-merged. The action
 is async: `POST /api/sessions/:id/merge` returns 200 `{dispatched:true}` once the prompt is **confirmed
 accepted** (409 if unreachable). The server no longer bumps `merges` on a click.
 

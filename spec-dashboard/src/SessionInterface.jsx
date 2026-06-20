@@ -199,22 +199,23 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // each SessionTerm reports whether its pane currently looks like a select menu (best-effort hint).
   const reportMenu = (id, likely) => setMenuById((m) => (m[id] === likely ? m : { ...m, [id]: likely }))
 
-  // @@@ persistent terminals - keep every session terminal you've opened MOUNTED (hidden when inactive),
-  // so its WebSocket + scroll position survive a tab switch and switching back is instant (no remount,
-  // no reconnect). The backend already keeps a warm tmux client per live session, so the pair makes both
-  // first-open and re-open instant. We only mount sessions you've actually visited (bounded), and drop
-  // any that vanish or go offline (offline shows the relaunch panel, not a dead terminal).
+  // @@@ warm, always-connected terminals - mount EVERY live session's terminal as soon as the board data
+  // arrives, not lazily on first focus. Each SessionTerm opens its WebSocket on mount, so by the time you
+  // click a tab the socket + scroll are already live and switching is instant — never a focus-triggered
+  // cold load. And because App keeps this whole surface mounted (hidden via `open`, never unmounted), the
+  // sockets stay connected even while the session console is CLOSED — reopening the board reveals panes
+  // that are already warm. Mounting while hidden is safe: SessionTerm's fit bails on a near-0 host (its
+  // shrink guard) and re-fits via ResizeObserver/animationend the instant a layer is revealed. We track
+  // exactly the set of live sessions, dropping any that vanish or go offline (an offline tab shows the
+  // relaunch panel, not a dead terminal). This is the key experience — no warmth is traded for laziness.
   const [opened, setOpened] = useState(() => new Set())
-  useEffect(() => {
-    if (active !== 'new' && selSession && selSession.status !== 'offline' && !opened.has(active)) {
-      setOpened((prev) => new Set(prev).add(active))
-    }
-  }, [active, selSession?.status])
   useEffect(() => {
     setOpened((prev) => {
       const next = new Set()
-      for (const id of prev) { const s = sessions.find((x) => x.id === id); if (s && s.status !== 'offline') next.add(id) }
-      return next.size === prev.size ? prev : next
+      for (const s of sessions) if (s.status !== 'offline') next.add(s.id)
+      if (next.size !== prev.size) return next
+      for (const id of next) if (!prev.has(id)) return next
+      return prev
     })
   }, [sessions])
 
@@ -518,7 +519,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         </aside>
 
         <section className={active === 'new' ? 'si-content is-new' : 'si-content is-session'}>
-          {active === 'new' ? (
+          {active === 'new' && (
             <div className="si-new-center">
               <div className="si-avatar">◠‿◠</div>
               <div className="si-ask">{t('session.ask')}</div>
@@ -561,8 +562,15 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 {t('session.hint.before')}<code>@</code>{t('session.hint.mid')}<code>/</code>{t('session.hint.after')}
               </div>
             </div>
-          ) : (
-            <>
+          )}
+          {/* @@@ persistent session pane - stays MOUNTED even while the "new session" tab is active
+              (just hidden via display:none) so the terminals' WebSockets + scroll survive the tab
+              switch. Earlier this branch was a ternary alternative to "new", so visiting "new" tore
+              down every SessionTerm and coming back forced a reconnect/repaint — the "reload" feel. */}
+          <div
+            className="si-session-wrap"
+            style={{ display: active === 'new' ? 'none' : 'flex', flexDirection: 'column', flex: 1, minWidth: 0, minHeight: 0 }}
+          >
               <div className="si-term">
                 <div className="si-term-head">
                   <span className="si-dot" style={{ background: STATUS_DOT[selSession?.status] || '#93a1a1' }} />
@@ -633,8 +641,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   {menu && menu.kind === 'slash' && slashMenu(true, menu.query ? `/${menu.query}` : t('session.menuCommands'))}
                 </div>
               )}
-            </>
-          )}
+          </div>
         </section>
       </div>
     </div>

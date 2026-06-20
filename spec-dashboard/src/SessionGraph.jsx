@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ReactFlow, ReactFlowProvider, Background, Controls, Handle, Position,
+  ReactFlow, ReactFlowProvider, Background, Handle, Position,
   MarkerType, useReactFlow,
 } from '@xyflow/react'
 import { Avatar } from './avatar.jsx'
@@ -246,7 +246,6 @@ function GraphCanvas({ onOpen, active, legend, setLegend }) {
         proOptions={{ hideAttribution: true }}
       >
         <Background variant="dots" color="#cdc6ad" gap={20} size={1} />
-        <Controls showInteractive={false} />
       </ReactFlow>
       {toast && <div className="sg-toast">{toast}</div>}
     </>

@@ -39,6 +39,12 @@ active `surface: system` config nodes' bodies — no hardcoded base, so a standi
 edit, not a code change. It is built fresh per launch and written to the **launch script file** (not a
 tmux arg), so neither the contract nor the launch prompt hits the ~2KB tmux limit.
 
+**Self-locating paths:** every path the launch script and its injected hooks reference — the hook
+scripts (`stop-gate.sh`, `mark-active.sh`), the `tsx` runner, and `cli.ts` — resolves from the CLI
+package's **own** on-disk location (derived from the running module's URL), never from a hardcoded
+`<repoRoot>/spec-cli`. Renaming or relocating the package therefore can't break a launch, and no config
+knob is introduced for it.
+
 ### Concurrency cap (bounded working set)
 
 At most **`SPEXCODE_MAX_ACTIVE`** sessions (default **6**) run as working agents at once. A session holds

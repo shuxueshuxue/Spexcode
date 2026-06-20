@@ -5,6 +5,7 @@ import { readFileSync, writeFileSync, existsSync, renameSync, mkdirSync, rmSync,
 import { join, dirname, relative } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createConnection } from 'node:net'
+import { fileURLToPath } from 'node:url'
 import { git, gitA, repoRoot } from './git.js'
 import { loadConfig, type ConfigPreset } from './specs.js'
 
@@ -221,6 +222,14 @@ export async function alive(id: string): Promise<boolean> { return tmuxOk(['has-
 function mainRoot(): string {
   try { return dirname(git(['rev-parse', '--path-format=absolute', '--git-common-dir']).trim()) }
   catch { return repoRoot() }
+}
+
+// @@@ pkgRoot - the CLI package's OWN directory, derived from this module's location, never a hardcoded
+// repoRoot()+'spec-cli'. This file lives at <pkgRoot>/src/sessions.ts, so `..` from it is the package
+// root — making the launch-script paths (hooks/, node_modules/.bin/tsx, src/cli.ts) survive the package
+// being renamed or relocated out of the default <repo>/spec-cli layout.
+function pkgRoot(): string {
+  return fileURLToPath(new URL('..', import.meta.url))
 }
 
 type SessRec = { node: string | null; title: string | null; session: string | null; status: Lifecycle; proposal: Proposal | null; merges: number; note: string | null }
@@ -473,9 +482,10 @@ async function hideClaudeMd(path: string): Promise<void> {
 // many reasons, so the command keys on the structured `notification_type` field — acting only on the
 // idle_prompt one — rather than sniffing the payload blob for the bare word.
 function settingsJson(): string {
-  const gate = join(mainRoot(), 'spec-cli', 'hooks', 'stop-gate.sh')
-  const markCmd = `bash ${join(mainRoot(), 'spec-cli', 'hooks', 'mark-active.sh')}`
-  const spex = `${join(mainRoot(), 'spec-cli', 'node_modules', '.bin', 'tsx')} ${join(mainRoot(), 'spec-cli', 'src', 'cli.ts')}`
+  const root = pkgRoot()
+  const gate = join(root, 'hooks', 'stop-gate.sh')
+  const markCmd = `bash ${join(root, 'hooks', 'mark-active.sh')}`
+  const spex = `${join(root, 'node_modules', '.bin', 'tsx')} ${join(root, 'src', 'cli.ts')}`
   const idleCmd = `p=$(cat); case "$p" in *'"notification_type":"idle_prompt"'*) ${spex} session idle ;; esac`
   const hooks: Record<string, unknown> = {
     UserPromptSubmit: [{ hooks: [{ type: 'command', command: markCmd }] }],

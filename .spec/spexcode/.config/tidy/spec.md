@@ -1,5 +1,6 @@
 ---
 title: tidy
+surface: slash
 status: active
 hue: 140
 desc: Rewrite a node's body to contract altitude — push mechanics into code comments, keep the contract.

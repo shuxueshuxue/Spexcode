@@ -245,13 +245,14 @@ export async function specDiffAt(id: string, hash: string) {
 // (repo-relative) and its `files` (co-located paths, spec.md excluded) alongside name/title/desc/kind/body.
 // `kind` ∈ mutating|report tells the launcher whether the preset edits the graph or only reports on it.
 export type ConfigPreset = { name: string; title: string; desc: string; kind: string; dir: string; files: string[]; body: string }
-// @@@ path-driven surface - a config node's surface is its LOCATION, not a frontmatter field:
-// <root>/slash/<name>/spec.md is a slash preset (offered in the new-session `/` dropdown);
-// <root>/system/<name>/spec.md is a system contract (its body folded into a launched agent's
-// --append-system-prompt). BOTH config roots participate: `.config` (the instance — DIY dev-flow plugins)
-// and `config` (the project system spec). loadConfig gathers the slash surface, loadSystemConfig the
-// system surface; each scans the same-named subdir under every root. The presets still show on the board as
-// ordinary spec nodes (via loadSpecs) — the slash/system dir is just routing, not itself a node.
+// @@@ field-driven surface - a config plugin is a FLAT direct child of a config root (`<root>/<name>/spec.md`)
+// that carries a `surface: system|slash` frontmatter field naming where it plugs in. There are no `slash/` or
+// `system/` bucket dirs (those were graph-invisible grouping dirs with no spec.md, so the spec graph skipped
+// them — path != graph); the surface is a FIELD on the node, so the plugin is a real graph child of its root.
+// BOTH config roots participate: `.config` (the instance — DIY dev-flow plugins) and `config` (the project
+// system spec). loadConfig gathers the `slash` surface, loadSystemConfig the `system` surface; each scans the
+// flat children under every root and filters by the field. The plugins also show on the board as ordinary
+// spec nodes (via loadSpecs).
 const CONFIG_ROOTS = ['.config', 'config'].map((r) => join(SPEC_DIR, 'spexcode', r))
 // co-located bundle files = everything under the node folder except its spec.md, repo-relative, recursive.
 function bundleFiles(dir: string): string[] {
@@ -266,16 +267,18 @@ function bundleFiles(dir: string): string[] {
   walk(dir)
   return out.sort()
 }
-// gather the preset nodes living under `<root>/<surface>/*` across every config root.
+// gather the preset nodes that are flat children of a config root and declare `surface: <surface>`.
 function loadSurface(surface: 'slash' | 'system'): ConfigPreset[] {
   const out: ConfigPreset[] = []
   for (const root of CONFIG_ROOTS) {
-    const dir = join(root, surface)
-    if (!existsSync(dir)) continue
-    for (const e of readdirSync(dir, { withFileTypes: true })) {
-      const nodeDir = join(dir, e.name)
+    if (!existsSync(root)) continue
+    for (const e of readdirSync(root, { withFileTypes: true })) {
+      const nodeDir = join(root, e.name)
       if (!e.isDirectory() || !existsSync(join(nodeDir, 'spec.md'))) continue
       const { fm, body } = parseFrontmatter(readFileSync(join(nodeDir, 'spec.md'), 'utf8'))
+      // surface is a FIELD: only nodes declaring this surface gather; the rest (other surface, or none —
+      // e.g. a doc node like `config/surface`) are skipped.
+      if (str(fm.surface) !== surface) continue
       // @@@ skip pending - a `status: pending` plugin is DECLARED INTENT, not yet an active plugin. It still
       // renders on the board (via loadSpecs), but it must NOT gather: neither offered as a slash preset nor
       // folded into a system prompt. Only built/active plugins surface here, so pending stubs stay inert.

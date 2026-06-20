@@ -49,13 +49,13 @@ const MAX_ACTIVE = Math.max(1, Number(process.env.SPEXCODE_MAX_ACTIVE) || 6)
 
 // @@@ appendSysArg - the system prompt folded into EVERY launched/resumed agent (both paths go through
 // launch() below), assembled ENTIRELY from the system config surface — there is NO baked-in core. The
-// contract lives as DATA in the spec tree, not as a string constant here: each ACTIVE node under a
-// `system/` dir (gathered by loadSystemConfig) contributes its body, in name order. Without this a
+// contract lives as DATA in the spec tree, not as a string constant here: each ACTIVE node declaring
+// `surface: system` (gathered by loadSystemConfig) contributes its body, in name order. Without this a
 // dashboard/CLI-launched session gets ONLY the human's terse prompt and carries none of SpexCode's standing
 // contracts (agents kept proposing merge with UNCOMMITTED work). The core spec-discipline rules now live in
 // the `core/spec` system node, alongside opinionated rules like `voice-before-ask`; adding or editing ANY
-// always-on rule is a spec edit, not a code change here. A config node opts in by LIVING under a `system/`
-// dir — no slash, no agent choice. Pending plugins are filtered out by loadSystemConfig, so a `status:
+// always-on rule is a spec edit, not a code change here. A config node opts in by declaring `surface:
+// system` — no slash, no agent choice. Pending plugins are filtered out by loadSystemConfig, so a `status:
 // pending` stub never injects. Built fresh per launch, so editing a system node takes effect on the next
 // launch with no restart. The combined text is single-quoted onto the launch line and shell-escaped like the
 // prompt; the launch line is written to a script file (see launch()), so length is unbounded — it no longer

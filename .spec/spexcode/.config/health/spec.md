@@ -1,5 +1,6 @@
 ---
 title: health
+surface: slash
 status: active
 hue: 200
 desc: Report a node's health — lint, drift, and body altitude — without changing anything.

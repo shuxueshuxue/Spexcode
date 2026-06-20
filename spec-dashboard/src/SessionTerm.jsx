@@ -23,12 +23,13 @@ import '@xterm/xterm/css/xterm.css'
 // xterm's empty viewport moves — only tmux scrolls.
 //
 // SELECT + COPY: the pane stays read-only, but the human can still pull text OUT of it. The Claude TUI
-// inside turns ON mouse tracking, so xterm hands plain click-drags to the app and disables its OWN
-// selection — UNLESS a force-selection modifier is held, which makes xterm select LOCALLY and never
-// reports the drag to the app. xterm's modifier is platform-fixed: Shift on Linux/Windows, Option(⌥) on
-// macOS — and on macOS only when `macOptionClickForcesSelection` is set (we set it). That same option also
-// keeps the forced selection LINEWISE rather than column/block, so a multi-row drag copies as readable
-// lines. The selection MUST be VISIBLE so the human sees exactly what they grabbed: the theme uses a
+// inside turns ON mouse tracking, so xterm would normally hand plain click-drags to the app and disable its
+// OWN selection unless a force-selection modifier (Shift on Linux/Windows, ⌥ on macOS) were held. But this
+// view NEVER forwards mouse reports to tmux, so respecting the app's mouse mode buys nothing and only costs
+// text selection — so we force selection ALWAYS ON (see the shouldForceSelection override after open()):
+// every plain left-drag selects locally, no modifier needed. Plain drags stay LINEWISE rather than column/
+// block (column-select keys off altKey directly), so a multi-row drag copies as readable lines. The
+// selection MUST be VISIBLE so the human sees exactly what they grabbed: the theme uses a
 // bright opaque selectionBackground + a near-white selectionForeground (and the SAME colour when the term
 // is unfocused, via selectionInactiveBackground — the copy chord lands on the host while focus may sit on
 // the bottom box, so the highlight must not dim out from under it). ⌘/Ctrl+C then writes term.getSelection()
@@ -58,10 +59,9 @@ function looksLikeMenu(term) {
   return caret && hint
 }
 
-// @@@ copy hint - mirror xterm's OWN force-selection modifier per platform (Browser.isMac → Option, else
-// Shift) so the caption names the key that actually works. macOS copy chord is ⌘C, elsewhere Ctrl+C.
+// @@@ copy hint - drag selects with no modifier (forced always-on below), so the caption only names the
+// copy chord: ⌘C on macOS, Ctrl+C elsewhere.
 const IS_MAC = /mac/i.test((typeof navigator !== 'undefined' && (navigator.userAgentData?.platform || navigator.platform)) || '')
-const SELECT_MOD = IS_MAC ? '⌥' : '⇧'
 const COPY_MOD = IS_MAC ? '⌘' : 'Ctrl'
 
 export default function SessionTerm({ sessionId, onMenu }) {
@@ -69,7 +69,7 @@ export default function SessionTerm({ sessionId, onMenu }) {
   const termRef = useRef(null)
   // brief "copied ✓" confirmation flashed by the copy chord; drives only the corner caption, not the term.
   const [copied, setCopied] = useState(false)
-  const hint = useMemo(() => `${SELECT_MOD}-drag select · ${COPY_MOD}C copy`, [])
+  const hint = useMemo(() => `drag select · ${COPY_MOD}C copy`, [])
   // keep the latest onMenu without re-running the terminal effect (it'd tear down the WebSocket every render).
   const onMenuRef = useRef(onMenu)
   onMenuRef.current = onMenu
@@ -78,8 +78,9 @@ export default function SessionTerm({ sessionId, onMenu }) {
     const term = new Terminal({
       fontSize: 11, fontFamily: 'Menlo, monospace',
       cursorBlink: false, disableStdin: true, scrollback: 5000,  // read-only view; xterm owns scrollback
-      // @@@ force-selection on mac - lets ⌥+drag bypass the TUI's mouse tracking to select text locally
-      // (Shift already does this off-mac); also keeps the forced selection linewise, not column/block.
+      // @@@ keep ⌥-drag linewise on mac - selection is forced always-on below regardless of modifier, but
+      // this still matters: it stops a held ⌥ during a drag from flipping into column/block select, so an
+      // accidental Option keeps the same readable linewise grab as a plain drag.
       macOptionClickForcesSelection: true,
       // @@@ DARK theme on purpose - the Claude Code TUI running inside this pane is designed for a dark
       // terminal (green diff-add backgrounds, dim/faint context text, dark code blocks). A light bg would
@@ -102,6 +103,15 @@ export default function SessionTerm({ sessionId, onMenu }) {
     const fit = new FitAddon()
     term.loadAddon(fit)
     term.open(hostRef.current)
+
+    // @@@ always-on drag select - the Claude TUI inside enables mouse tracking, so by default xterm routes a
+    // plain drag to the app and only selects locally when its force-selection modifier (⌥/⇧) is held. But
+    // this pane NEVER forwards mouse reports to tmux (the socket is read-only + the synthetic wheel), so
+    // honouring the app's mouse mode buys nothing and just blocks selection. xterm has no public "always
+    // select" option; its one gate is the selection service's shouldForceSelection(), so we pin it true —
+    // every plain left-drag now selects with NO modifier. Plain drags stay linewise (column-select keys off
+    // altKey, not this). Guarded: a future xterm could rename the private path — then modifier-drag still works.
+    try { term._core._selectionService.shouldForceSelection = () => true } catch { /* fall back to ⌥/⇧-drag */ }
 
     // @@@ GPU renderer - load AFTER open() (the renderer needs the live DOM/canvas). WebGL composites
     // glyphs on the GPU — much faster repaints for a busy TUI than xterm's default DOM renderer. If a GL

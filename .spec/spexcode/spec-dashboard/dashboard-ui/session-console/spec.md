@@ -47,9 +47,13 @@ typed. **No keystrokes or mouse are forwarded from the terminal itself.** Becaus
 view, scrolling it can never block input: **xterm owns its own scrollback** and the mouse wheel scrolls
 that viewport natively (SessionTerm returns `false` from a custom wheel handler so tmux's mouse mode can't
 steal the wheel). Read-only governs **input**, not **extraction**: the human can still **select text and copy
-it**. Since the Claude TUI inside enables mouse tracking, a plain drag belongs to the app; holding the
-platform **force-selection modifier** (`⌥` on macOS, `⇧` elsewhere) makes xterm select **locally** without
-reporting the drag. That local selection is drawn in a **bright, clearly visible highlight** (a saturated
+it**, and selection is **always on** — a **plain drag with no modifier** selects. The Claude TUI inside
+enables mouse tracking, which would normally hand a drag to the app and reserve local selection for a held
+**force-selection modifier** (`⌥`/`⇧`); but this view **never forwards mouse reports** to the pane, so
+honouring that mode would only cost selection and buy nothing. SessionTerm therefore **forces selection
+unconditionally** (overriding xterm's selection gate), so every plain left-drag selects **locally** without
+reporting the drag — and stays **linewise**, not column/block, so a multi-row grab copies as readable lines.
+That local selection is drawn in a **bright, clearly visible highlight** (a saturated
 selection background with a near-white foreground, kept visible even when the term is unfocused) so the
 human sees exactly the span they grabbed. **`⌘`/`Ctrl`+C** copies *that exact selection*
 (`term.getSelection()`) to the system clipboard (`navigator.clipboard`) and **flashes a "copied"
@@ -146,9 +150,10 @@ degenerate measurements and re-fitting after the open animation so it reliably f
 wires xterm to the session WebSocket: incoming binary frames are **batched into one write per animation
 frame** and rendered by a **GPU renderer addon** (WebGL, canvas/DOM fallback) for fast paint. It forwards **no** keyboard/mouse;
 instead it registers a `send(text)` writer (raw bytes over the socket) for the bottom box, and scrolls via
-xterm's own scrollback (custom wheel handler returns `false`). It enables **force-selection** so a
-modifier+drag selects text locally despite the app's mouse tracking — drawn in a **bright visible highlight**
-— and a host-level `⌘`/`Ctrl`+C copies the exact `term.getSelection()` to the clipboard and flashes a
+xterm's own scrollback (custom wheel handler returns `false`). It **forces selection always-on** (pinning xterm's
+selection gate true) so a **plain drag with no modifier** selects text locally despite the app's mouse
+tracking — drawn in a **bright visible highlight** — and a host-level `⌘`/`Ctrl`+C copies the exact
+`term.getSelection()` to the clipboard and flashes a
 **copied confirmation** in the legible corner caption (no stdin re-enabled). `SessionWindow.jsx` is the top-right floater of status-dot
 rows with a pending-op glyph count; a row's `locked` state matches its **source** (worktree path) against
 the board's `highlightId` — not its session id — so the lock the row paints is the exact selection the

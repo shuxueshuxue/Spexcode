@@ -31,11 +31,20 @@ import '@xterm/xterm/css/xterm.css'
 // block (column-select keys off altKey directly), so a multi-row drag copies as readable lines. The
 // selection MUST be VISIBLE so the human sees exactly what they grabbed: the theme uses a
 // bright opaque selectionBackground + a near-white selectionForeground (and the SAME colour when the term
-// is unfocused, via selectionInactiveBackground — the copy chord lands on the host while focus may sit on
-// the bottom box, so the highlight must not dim out from under it). ⌘/Ctrl+C then writes term.getSelection()
-// to the system clipboard and flashes a "copied ✓" confirmation. We listen for the copy chord on the HOST
-// element (keydown bubbles up from xterm's helper textarea, which a mousedown focuses) so stdin stays
-// disabled — we never start forwarding keystrokes to the pty just to copy.
+// is unfocused, via selectionInactiveBackground — focus never sits on the pane, so the highlight must read
+// fully bright while focus stays in the bottom box). ⌘/Ctrl+C then writes term.getSelection() to the system
+// clipboard and flashes a "copied ✓" confirmation.
+//
+// NEVER STEAL FOCUS (terminal-like select+copy): a real terminal lets you click-drag to select without
+// yanking your keyboard focus elsewhere. xterm breaks that — on every mousedown its core does
+// `e.preventDefault(); this.focus()`, focusing a hidden helper <textarea>, which BLURS the ❯ box the human
+// is typing into. (A capture-phase preventDefault can't stop a programmatic .focus().) Since stdin is
+// disabled and the copy chord listens at document level (below), the pane needs focus for NOTHING — so we
+// neutralise the core focus() (after open(), below) and a click now SELECTS without moving activeElement.
+// The copy chord therefore can't rely on a focused helper textarea bubbling keydown to the host; instead it
+// listens on `document`, gated to the VISIBLE pane (offsetParent !== null) so the active terminal alone
+// answers, and it stands down when the focused field has its OWN non-empty selection (so ⌘C in the ❯ box
+// copies the box, not the pane). stdin stays disabled throughout — we never forward keystrokes to the pty.
 //
 // SPEED: render with the WebGL addon (GPU-composited glyphs — far faster than the default DOM renderer for
 // a busy TUI), falling back to the canvas addon, then to DOM, if a GL context can't be had. Incoming pane
@@ -106,6 +115,15 @@ export default function SessionTerm({ sessionId, onMenu }) {
     // every plain left-drag now selects with NO modifier. Plain drags stay linewise (column-select keys off
     // altKey, not this). Guarded: a future xterm could rename the private path — then modifier-drag still works.
     try { term._core._selectionService.shouldForceSelection = () => true } catch { /* fall back to ⌥/⇧-drag */ }
+
+    // @@@ never steal focus - xterm focuses its hidden helper <textarea> on every mousedown (its core runs
+    // `e.preventDefault(); this.focus()`), which would blur the ❯ box the human is typing into the instant
+    // they click the pane to select text. This view is read-only (stdin disabled) and the copy chord lives
+    // at document level (below), so the pane needs keyboard focus for NOTHING — neutralise the core focus()
+    // so a click SELECTS without ever moving activeElement, exactly like selecting static text in a div.
+    // Instance prop shadows the prototype method, so xterm's own `this.focus()` call hits this no-op.
+    // Guarded: a renamed private path just falls back to the old focus-stealing behaviour, never a crash.
+    try { term._core.focus = () => {} } catch { /* pane may still grab focus on a future xterm */ }
 
     // @@@ GPU renderer - load AFTER open() (the renderer needs the live DOM/canvas). WebGL composites
     // glyphs on the GPU — much faster repaints for a busy TUI than xterm's default DOM renderer. If a GL
@@ -202,23 +220,30 @@ export default function SessionTerm({ sessionId, onMenu }) {
       return false  // never let xterm's empty viewport (or the page) scroll instead
     })
 
-    // @@@ copy chord - ⌘/Ctrl+C copies the current xterm selection to the system clipboard. We listen on
-    // the host (the chord bubbles up from xterm's focused helper textarea) and act ONLY when there's a
-    // selection, so an empty chord passes through untouched. xterm's selection isn't a DOM Selection, so the
-    // browser's native copy would grab nothing — we preventDefault and writeText getSelection() ourselves.
+    // @@@ copy chord - ⌘/Ctrl+C copies the current xterm selection to the system clipboard. Because clicking
+    // the pane no longer focuses it (the focus no-op above), the chord can't ride a focused helper textarea
+    // up to the host — focus is sitting in the ❯ box. So we listen on `document` and act ONLY when there's a
+    // pane selection. Two gates keep it from misfiring across the always-mounted sibling terminals and the
+    // input box: (1) VISIBLE pane only — inactive layers are display:none, so offsetParent is null; (2) the
+    // human's OWN field selection wins — if a focused input/textarea has a non-empty selection, that's what
+    // ⌘C should copy, so we stand down and let the browser handle it. xterm's selection isn't a DOM
+    // Selection, so the browser's native copy would grab nothing — we preventDefault + writeText ourselves.
     let copiedTimer
     const host = hostRef.current
     const onCopyKey = (ev) => {
       if (!(ev.metaKey || ev.ctrlKey) || (ev.key !== 'c' && ev.key !== 'C')) return
+      if (!host || host.offsetParent === null) return        // not the visible terminal — let it pass
       const sel = term.getSelection()
       if (!sel) return
+      const el = document.activeElement
+      if (el && (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') && el.selectionStart !== el.selectionEnd) return
       ev.preventDefault(); ev.stopPropagation()
       navigator.clipboard?.writeText(sel).then(() => {
         setCopied(true)
         clearTimeout(copiedTimer); copiedTimer = setTimeout(() => setCopied(false), 1200)
       }).catch(() => { /* clipboard denied (e.g. insecure context) — selection still stands for manual copy */ })
     }
-    host.addEventListener('keydown', onCopyKey)
+    document.addEventListener('keydown', onCopyKey)
 
     // @@@ menu sniff loop - poll the pane a few times a second and report whether it looks like a select
     // menu, so the interface can SUGGEST nav mode. Best-effort and cheap; the manual toggle never needs it.
@@ -241,7 +266,7 @@ export default function SessionTerm({ sessionId, onMenu }) {
       if (flushRaf) cancelAnimationFrame(flushRaf)
       clearInterval(sniff)
       clearTimeout(copiedTimer)
-      host.removeEventListener('keydown', onCopyKey)
+      document.removeEventListener('keydown', onCopyKey)
       onMenuRef.current?.(sessionId, false)   // clear the hint so a closed terminal can't leave the button pulsing
       refitTimers.forEach(clearTimeout)
       if (termEl) termEl.removeEventListener('animationend', fitAndSync)

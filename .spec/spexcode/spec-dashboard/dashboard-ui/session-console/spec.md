@@ -34,9 +34,11 @@ tab's prompt deliberately has **no** `/` slash-command menu (that surface is res
 An existing session shows its **live tmux terminal** (SessionTerm) with the **single human input** docked at
 the bottom. The terminal is a **real tmux client but a pure read-only scrollable view** — the human never
 types into it. Read-only governs **input, not extraction**: text still selects and copies, and the wheel
-scrolls tmux's real pane history. The pane is **dark** (for the Claude Code TUI inside) and **scales to its
-panel**. A (re)joining viewer gets a **single coherent full repaint**, never a snapshot spliced into the
-live stream — so tab-switching never half-paints.
+scrolls tmux's real pane history. Extraction is **terminal-like**: selecting and copying in the pane **never
+steal keyboard focus** from the docked `❯` box, so a human grabs scrollback text mid-sentence and keeps
+typing. The pane is **dark** (for the Claude Code TUI inside) and **scales to its panel**. A (re)joining
+viewer gets a **single coherent full repaint**, never a snapshot spliced into the live stream — so
+tab-switching never half-paints.
 
 Human input has **two channels for two jobs**. The docked **`❯` box** is the *prompt* channel: submitting
 dispatches the line through the **control socket** — never by typing into the pane — so it lands even while

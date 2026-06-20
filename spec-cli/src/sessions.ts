@@ -49,11 +49,12 @@ const MAX_ACTIVE = Math.max(1, Number(process.env.SPEXCODE_MAX_ACTIVE) || 6)
 
 // @@@ CORE_CONTRACT - the BAKED product default: the minimal contract ANY SpexCode project needs, injected
 // FIRST into every launched/resumed agent regardless of config. This is the ground base — the product works
-// on it alone. It deliberately does NOT mention our specific git flow (branch names, merge style, trailers);
-// that opinionated scaffold lives in the `.config/system/ritual` config node and layers on TOP via the
-// system gather below. The split matters: a user who deletes every config plugin STILL gets agents that honor the
-// core (commit before declaring done; specs stay living current-state docs) — the core is product, not
-// removable scaffold. Edit the opinion in the spec tree; edit this ground floor here.
+// on it alone. It deliberately does NOT spell out the git flow's mechanics (branch names, merge style,
+// trailers): those are carried by PRODUCT MECHANISM, not injected prose — newSession makes the `node/<id>`
+// branch, the prepare-commit-msg hook stamps the `Session:` trailer, and mergePrompt states the `--no-ff`
+// merge style at merge time. So a user who deletes every config plugin STILL gets agents that honor the core
+// (commit before declaring done; specs stay living current-state docs) AND the full dogfood flow. Layer 2
+// system config nodes (gathered below) add OPINION on top; edit that opinion in the spec tree, this floor here.
 const CORE_CONTRACT = `Commit your spec node and the code it justifies BEFORE you declare done or propose merge — the commit comes first, never as an afterthought to a declaration.
 
 A spec body is a living current-state document: it states the node's PRESENT intent and is rewritten in place. Never accrete a "## vN" changelog heading, and never add current-state or verdict sections — version history is git's job, not the body's.`
@@ -65,9 +66,9 @@ A spec body is a living current-state document: it states the node's PRESENT int
 // Without this a dashboard/CLI-launched session gets ONLY the human's terse prompt and carries none of
 // SpexCode's standing contracts (agents kept proposing merge with UNCOMMITTED work). Layer 2 is the
 // system surface, gathered by loadSystemConfig: a config node opts in by LIVING under a `system/` dir and
-// its body becomes an always-on contract (no slash, no agent choice) — our git flow lives there
-// (`.spec/spexcode/.config/system/ritual`), so changing the OPINIONATED specifics is a spec edit, not a code
-// change here; the baked core guarantees the ground rules hold even when that node is absent. Pending plugins
+// its body becomes an always-on contract (no slash, no agent choice) — e.g. `voice-before-ask`, so adding an
+// OPINIONATED always-on rule is a spec edit, not a code change here; the baked core guarantees the ground
+// rules hold even when zero system nodes are present. Pending plugins
 // are filtered out by loadSystemConfig, so a `status: pending` stub never injects. Built fresh per launch, so
 // editing a system node (or this core) takes effect on the next launch with no restart. The combined text is
 // single-quoted onto the launch line and shell-escaped like the prompt; the launch line is written to a
@@ -595,13 +596,12 @@ function removeNode(wtPath: string, nodeId: string): string | null {
 // @@@ directive prompts - the INTENT handed to the dispatched agent. The server did the mechanical
 // spec-tree mutation; the agent does the intelligent rest (name + spec + code, or history-driven
 // refactor). Like mergePrompt, the op is a DISPATCH: the server never authors specs or refactors code.
-// These state only the TASK — they deliberately do NOT restate the git ritual (commit format, the
-// Session: trailer, the node-branch flow, the merge style). That standing contract reaches the agent ONCE,
-// via the gathered system prompt (appendSysArg: the baked CORE_CONTRACT + the active `system/` config
-// nodes, our `.config/system/ritual` among them), so it is a spec edit, not duplicated string here — and a
-// standalone adopter with a different ritual is governed by THEIR config, not OUR hardcoded instructions.
-// The only handoff detail kept is "propose merge, don't merge yourself": that OVERRIDES the ritual's
-// merge-it-yourself step for the dispatch phase (the human triggers the merge later, see mergePrompt).
+// These state only the TASK — they deliberately do NOT restate the git flow's mechanics (commit format, the
+// Session: trailer, the node-branch flow, the merge style). Those are carried by product MECHANISM, not a
+// dispatch string: newSession makes the branch, the prepare-commit-msg hook stamps the trailer, the baked
+// CORE_CONTRACT (appendSysArg) demands commit-before-declare, and mergePrompt states the merge style at
+// merge time. The only handoff detail kept here is "propose merge, don't merge yourself" (the human triggers
+// the merge later, see mergePrompt).
 function newNodePrompt(placeholderId: string, parentId: string, relPath: string, rest: string): string {
   return `A placeholder spec node \`${placeholderId}\` was created under parent \`${parentId}\` at ${relPath} in this worktree. ` +
     `Turn it into a real node and build it, per this request:\n\n${rest || '(no extra description — infer the intent from the parent and the codebase)'}\n\n` +
@@ -855,13 +855,14 @@ export function mergeReadiness(): { ready: boolean; reason?: string } {
 
 // @@@ mergePrompt - the INTENT the human clicks "merge" with, written as an instruction to the session's
 // own agent. The agent (not the server) performs the merge, because only the agent knows the work's intent
-// and can resolve conflicts; the server has no fixed `git merge` logic. It states only the TASK + the safety
-// loop (verify HEAD advanced, abort if half-merged) — the merge STYLE (\`--no-ff\`, the \`merge node/<id>:
-// <reason>\` message) is NOT hardcoded here: it reaches the agent via the gathered ritual in its system
-// prompt (appendSysArg → \`.config/system/ritual\`), so an adopter with a different merge style is governed
-// by their config, not ours. branch/main are substituted live.
+// and can resolve conflicts; the server has no fixed `git merge` logic. It states the TASK, the merge STYLE
+// (the BAKED product default: `--no-ff` with a `merge node/<id>: <reason>` message), and the safety loop
+// (verify HEAD advanced, abort if half-merged). The style is stated here rather than gathered from a config
+// node because it is the one piece of the dogfood flow that no product mechanism otherwise carries (the
+// node branch is made by newSession, the `Session:` trailer is auto-stamped by the prepare-commit-msg hook).
+// branch/main are substituted live.
 function mergePrompt(branch: string, main: string): string {
-  return `Merge your branch ${branch} into main now, following the project's merge ritual. ` +
+  return `Merge your branch ${branch} into main now with \`--no-ff\` and a \`merge ${branch}: <reason>\` message. ` +
     `Main is checked out at ${main} (operate on it with \`git -C ${main}\`). If it conflicts, resolve the ` +
     `conflicts yourself (you know the intent of this work), complete the merge, and verify ` +
     `\`git -C ${main} rev-parse HEAD\` actually advanced and that no merge is left in progress (no ` +

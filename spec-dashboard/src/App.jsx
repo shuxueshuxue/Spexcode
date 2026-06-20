@@ -376,7 +376,7 @@ function Dashboard({ specs, sessions, reload }) {
         {settings && <Settings onClose={() => setSettings(false)} />}
       </div>
 
-      {graphView && <SessionGraph onOpen={openSession} />}
+      {graphView && <SessionGraph onOpen={openSession} active={!sessionUI} />}
       {overlay && <NodeView node={focus} pane={pane} setPane={setPane} onClose={() => setOverlay(false)} />}
       {/* stays MOUNTED across open/close (hidden via `open`) so the selected tab + per-tab drafts persist. */}
       <SessionInterface

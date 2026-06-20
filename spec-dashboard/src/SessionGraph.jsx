@@ -15,9 +15,11 @@ import { useT } from './i18n/index.jsx'
 // gesture is optimistic — a pending dashed edge + a toast appear immediately so the user never wonders if
 // it worked — and the edge goes solid once A's real `spex watch` registration shows up on the next poll.
 // Deliberately ISOLATED from the spec board — its own ReactFlowProvider (so it never shares the board's
-// camera/selection state), its own data, its own keys. `t` is the ONLY switch in or out (it toggles both
-// graphs, owned by App so it works from either) — Esc does nothing here, and opening a session console
-// over this view never closes it (you return to this graph when the console closes).
+// camera/selection state), its own data, its own keys: a keyboard cursor walks the web (arrows/hjkl move
+// to the nearest node in that direction, the camera following) and ⏎ opens the focused session, the twin
+// of a click. `t` is the ONLY switch in or out (it toggles both graphs, owned by App so it works from
+// either) — Esc does nothing here, and opening a session console over this view never closes it (you
+// return to this graph when the console closes; while it is open it owns the keys, so our nav goes quiet).
 // Nodes REUSE the shared seed-to-hue colour + avatar (color.js / avatar.jsx) keyed off the session id, so
 // a face here matches the same session's stripe/avatar everywhere else on the dashboard.
 
@@ -29,8 +31,9 @@ const sessionLabel = (s, t) => s.node || s.title || s.branch || (s.id ? s.id.sli
 function GraphNode({ data }) {
   const t = useT()
   const color = labelColor(data.id)
+  // `focus` rings the node the keyboard targets: the one under the cursor, which ⏎ opens (see onNodeMouseEnter).
   return (
-    <div className="sg-node" style={{ '--sg': color }} title={data.promptPreview || sessionLabel(data, t)}>
+    <div className={`sg-node${data.focus ? ' sg-node--focus' : ''}`} style={{ '--sg': color }} title={data.promptPreview || sessionLabel(data, t)}>
       <Handle type="target" position={Position.Top} className="sg-handle" />
       <Avatar seed={data.id} status={data.status} size={34} title={`${sessionLabel(data, t)} · ${t(`status.${data.status}`)}`} />
       <span className="sg-label">{sessionLabel(data, t)}</span>
@@ -70,13 +73,14 @@ function frameViewport(pos, sessions) {
   return { x: w / 2 - ((minX + maxX) / 2) * zoom, y: h / 2 - ((minY + maxY) / 2) * zoom, zoom }
 }
 
-function GraphCanvas({ onOpen }) {
+function GraphCanvas({ onOpen, active }) {
   const t = useT()
   const [graph, setGraph] = useState({ nodes: [], edges: [] })
   const [loaded, setLoaded] = useState(false)        // first fetch done → safe to mount already-framed
   const [pending, setPending] = useState([])         // optimistic monitor edges, awaiting the live watch
   const [toast, setToast] = useState(null)           // brief "asked A to monitor B" reassurance
-  const { fitView } = useReactFlow()
+  const [focusId, setFocusId] = useState(null)       // keyboard cursor: the node arrows move and ⏎ opens
+  const { fitView, setCenter, getViewport } = useReactFlow()
   const framedRef = useRef(false)
   const toastTimer = useRef(0)
 
@@ -89,15 +93,17 @@ function GraphCanvas({ onOpen }) {
   }, [])
   useEffect(() => { reload(); const id = setInterval(reload, 4000); return () => clearInterval(id) }, [reload])
 
-  // No key handler here: `t` (the only switch between the two graphs) is owned by App so it toggles both
-  // ways from one place and stays suppressed while the session console captures keys. Esc deliberately
-  // does NOT leave this view — switching graphs is `t` alone.
+  // `t` (the only switch between the two graphs) stays owned by App so it toggles both ways from one place
+  // and is suppressed while the session console captures keys; Esc still does NOT leave this view. The
+  // REMAINING keys (arrow/hjkl nav + ⏎ to open) are this graph's own and handled below — App bails to us
+  // for them (`if (graphView) return`). See the nav effect after onNodeClick.
 
   const pos = useMemo(() => radial(graph.nodes), [graph.nodes])
   const byId = useMemo(() => Object.fromEntries(graph.nodes.map((s) => [s.id, s])), [graph.nodes])
   const rfNodes = useMemo(() => graph.nodes.map((s) => ({
-    id: s.id, type: 'session', position: pos[s.id] || { x: 0, y: 0 }, data: s, draggable: true,
-  })), [graph.nodes, pos])
+    id: s.id, type: 'session', position: pos[s.id] || { x: 0, y: 0 },
+    data: { ...s, focus: s.id === focusId }, draggable: true,
+  })), [graph.nodes, pos, focusId])
 
   // a live monitor A→B already registered drops its optimistic twin — the pending edge has become real.
   useEffect(() => {
@@ -160,6 +166,57 @@ function GraphCanvas({ onOpen }) {
   // is OFF (below), so only a handle DRAG asks-to-monitor — a click never doubles as a connect.
   const onNodeClick = useCallback((_e, n) => onOpen?.(n.id), [onOpen])
 
+  // keep a keyboard cursor alive: once the graph loads, focus the first node so arrows/⏎ have a start
+  // point; if the focused session disappears between polls (closed/merged), fall back to the first node.
+  useEffect(() => {
+    if (!graph.nodes.length) { if (focusId !== null) setFocusId(null); return }
+    if (!focusId || !graph.nodes.some((s) => s.id === focusId)) setFocusId(graph.nodes[0].id)
+  }, [graph.nodes, focusId])
+
+  // @@@ directional nav - the radial layout is a network, not a tree, so there is no parent/child to walk:
+  // an arrow (or its hjkl twin) moves the cursor to the NEAREST node inside a 45° cone in that screen
+  // direction, which reads naturally on a ring. We pan the camera to follow (keyboard-only — click never
+  // moves it). ⏎ opens the focused session (the keyboard twin of a click). pos/byId are flow coords, the
+  // same space setCenter wants, so no projection is needed.
+  const CONES = useMemo(() => ({
+    ArrowRight: (dx, dy) => dx > 0 && dx >= Math.abs(dy), l: (dx, dy) => dx > 0 && dx >= Math.abs(dy),
+    ArrowLeft:  (dx, dy) => dx < 0 && -dx >= Math.abs(dy), h: (dx, dy) => dx < 0 && -dx >= Math.abs(dy),
+    ArrowDown:  (dx, dy) => dy > 0 && dy >= Math.abs(dx), j: (dx, dy) => dy > 0 && dy >= Math.abs(dx),
+    ArrowUp:    (dx, dy) => dy < 0 && -dy >= Math.abs(dx), k: (dx, dy) => dy < 0 && -dy >= Math.abs(dx),
+  }), [])
+  const focusRef = useRef(focusId); focusRef.current = focusId
+  useEffect(() => {
+    if (!active) return // a session console is open over this graph — it owns the keys (incl. ⏎ and arrows)
+    const onKey = (e) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      const cur = byId[focusRef.current]
+      if (e.key === 'Enter') {
+        if (cur) { e.preventDefault(); e.stopPropagation(); onOpen?.(cur.id) }
+        return
+      }
+      const cone = CONES[e.key]
+      if (!cone || !cur) return
+      e.preventDefault(); e.stopPropagation()
+      const c = pos[cur.id] || { x: 0, y: 0 }
+      let best = null, bestD = Infinity
+      for (const s of graph.nodes) {
+        if (s.id === cur.id) continue
+        const p = pos[s.id] || { x: 0, y: 0 }
+        const dx = p.x - c.x, dy = p.y - c.y
+        if (!cone(dx, dy)) continue
+        const d = dx * dx + dy * dy
+        if (d < bestD) { bestD = d; best = s.id }
+      }
+      if (best) {
+        setFocusId(best)
+        const p = pos[best]
+        if (p) setCenter(p.x, p.y, { zoom: getViewport().zoom, duration: 160 })
+      }
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [active, byId, pos, graph.nodes, CONES, onOpen, setCenter, getViewport])
+
   // re-frame gently when the session count changes AFTER the first paint (a watch/session appeared); the
   // first paint is already framed by the computed defaultViewport, so we skip it to avoid a redundant pan.
   useEffect(() => {
@@ -191,7 +248,7 @@ function GraphCanvas({ onOpen }) {
 // @@@ SessionGraph - full-screen overlay. Wrapped in its OWN ReactFlowProvider so it shares NOTHING with
 // the board's ReactFlow instance (separate camera, selection, store) — the isolation that lets it drop in
 // without touching the existing views. onOpen crosses a clicked node into its session console (board path).
-export default function SessionGraph({ onOpen }) {
+export default function SessionGraph({ onOpen, active = true }) {
   const t = useT()
   return (
     <div className="session-graph">
@@ -200,7 +257,7 @@ export default function SessionGraph({ onOpen }) {
         <span className="sg-hint">{t('sessionGraph.hint')}</span>
       </div>
       <ReactFlowProvider>
-        <GraphCanvas onOpen={onOpen} />
+        <GraphCanvas onOpen={onOpen} active={active} />
       </ReactFlowProvider>
     </div>
   )

@@ -139,7 +139,7 @@ export default {
 
   sessionGraph: {
     brand: '$ session-graph',
-    hint: 'arrows = live monitors (A→B: A is watching B) · drag A→B to ask A to monitor B · click a node to open it · t to switch back',
+    hint: 'edges = live monitors (A→B: A is watching B) · arrows/hjkl move · ⏎ or click opens · drag A→B to ask A to monitor B · t to switch back',
     asked: ({ a, b }) => `asked ${a} to monitor ${b}`,
     monitorPrompt: ({ label, id }) => `Please monitor session ${label} (${id}): run \`spex watch ${id}\` in the background and keep it running so its transitions surface to me.`,
   },

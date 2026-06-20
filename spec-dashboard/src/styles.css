@@ -608,6 +608,8 @@ body {
   background: var(--panel); border: 1.5px solid var(--sg); border-radius: 8px;
   box-shadow: 0 1px 3px rgba(0,0,0,.08);
 }
+/* the keyboard cursor: the node arrows move and ⏎ opens, lifted with a hue-tinted ring + glow. */
+.sg-node--focus { border-width: 2.5px; box-shadow: 0 0 0 3px color-mix(in srgb, var(--sg) 35%, transparent), 0 2px 8px rgba(0,0,0,.14); }
 .sg-label { color: var(--ink2); font-size: 11px; font-weight: 700; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sg-status { color: var(--muted); font-size: 10px; }
 .sg-handle { width: 8px; height: 8px; background: var(--sg); border: none; }

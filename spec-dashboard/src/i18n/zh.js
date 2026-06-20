@@ -136,7 +136,7 @@ export default {
 
   sessionGraph: {
     brand: '$ session-graph',
-    hint: '箭头 = 实时监视（A→B：A 正在监视 B）· 拖动 A→B 让 A 监视 B · 点击节点打开会话 · 按 t 切换返回',
+    hint: '连线 = 实时监视（A→B：A 正在监视 B）· 方向键/hjkl 移动 · ⏎ 或点击打开 · 拖动 A→B 让 A 监视 B · 按 t 切换返回',
     asked: ({ a, b }) => `已请求 ${a} 监视 ${b}`,
     monitorPrompt: ({ label, id }) => `请监视会话 ${label}（${id}）：在后台运行 \`spex watch ${id}\` 并保持运行，让其状态变化反馈给我。`,
   },

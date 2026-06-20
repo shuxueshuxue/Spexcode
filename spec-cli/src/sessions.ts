@@ -582,11 +582,35 @@ export async function newSession(node: string | null, prompt: string): Promise<S
   return toSession(rec, branch, path, 'working')
 }
 
+// @@@ waitForSocket - after a relaunch, the resumed claude needs SEVERAL SECONDS to boot and recreate its
+// rendezvous control socket; launch() only TYPES the start line via send-keys and returns immediately, so
+// the socket does not exist yet on return. Poll existsSync(rvSock(id)) at a small interval up to a bounded
+// timeout so a resumed agent counts as "ready" only once its socket is up — then a follow-on dispatch
+// (merge / send) lands in a LIVE socket instead of racing a not-yet-booted daemon and failing loud (409)
+// on a session that is actually recovering. BOUNDED + fail-loud preserved: a genuinely dead/unrecoverable
+// agent never creates the socket, so after the timeout we return and the caller's own socket-existence
+// check (sendKeys) fails loud exactly as before — this only closes the startup race, it adds no fallback.
+const SOCKET_READY_TIMEOUT_MS = 15000
+const SOCKET_POLL_MS = 200
+async function waitForSocket(id: string, timeoutMs = SOCKET_READY_TIMEOUT_MS): Promise<boolean> {
+  const sock = rvSock(id)
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (existsSync(sock)) return true
+    await new Promise((r) => setTimeout(r, SOCKET_POLL_MS))
+  }
+  return existsSync(sock)
+}
+
 // @@@ reopen - "back to working": clear any proposal → active, then ONE relaunch path. claude needs
 // (re)starting iff it isn't running for this id — no tmux, or the pane fell back to a bare shell after a
 // crash; in both cases we drop any stale pane and launch a fresh window that --resume's the SAME
-// conversation (with its rendezvous socket, via launch). If claude is still live we only cleared the
-// proposal. Also serves the plain "relaunch" of an offline (already-active) one.
+// conversation (with its rendezvous socket, via launch). When we DO relaunch we then WAIT for that socket
+// to come up (waitForSocket) before returning, so a caller that dispatches immediately after reopen (e.g.
+// mergeSession) addresses a live socket rather than racing the boot. If claude is still live we only
+// cleared the proposal — no wait, the socket already exists. Also serves the plain "relaunch" of an
+// offline (already-active) one. Fail-loud is unchanged: if the socket never appears, the later sendKeys
+// existsSync check still fails loud.
 export async function reopen(id: string): Promise<boolean> {
   const wt = await findWorktree(id)
   if (!wt) return false
@@ -594,6 +618,7 @@ export async function reopen(id: string): Promise<boolean> {
   if (!(await alive(id)) || SHELLISH.test(await paneCmd(id))) {
     await tmuxOk(['kill-session', '-t', id])   // drop a dead/bare-shell pane if any (no-op when none)
     await launch(id, wt.path, `--resume ${id}`)
+    await waitForSocket(id)   // a relaunched agent is "ready" only once its rendezvous socket is up
   }
   return true
 }
@@ -679,10 +704,13 @@ function mergePrompt(branch: string, main: string): string {
 
 // @@@ mergeSession - the merge ACTION is now a DISPATCH, not a fixed server-side `git merge`. The human
 // acts at the level of INTENT; the session's OWN agent performs the operation. We reopen the session
-// (clear the proposal → active, and --resume the agent if its tmux died), then send-keys a merge prompt
-// into it. The agent runs git, resolves any conflicts using its knowledge of the work, verifies main HEAD
-// advanced (and that nothing is left mid-merge), and then re-proposes/closes. This is ASYNC: the server
-// returns once the prompt is dispatched and never touches main's tree itself.
+// (clear the proposal → active, and --resume the agent if its tmux died — reopen WAITS for the resumed
+// agent's rendezvous socket to come up before returning, closing the startup race where dispatching into
+// a not-yet-booted daemon failed loud 409), then dispatch a merge prompt through the socket-only sendKeys.
+// The agent runs git, resolves any conflicts using its knowledge of the work, verifies main HEAD advanced
+// (and that nothing is left mid-merge), and then re-proposes/closes. This is ASYNC: the server returns
+// once the prompt is confirmed accepted and never touches main's tree itself. Fail-loud preserved: a truly
+// dead agent never recreates its socket within reopen's timeout, so sendKeys still returns the loud error.
 export async function mergeSession(id: string): Promise<{ ok: boolean; dispatched?: boolean; error?: string }> {
   const wt = await findWorktree(id)
   if (!wt || !wt.branch) return { ok: false, error: 'no such session' }

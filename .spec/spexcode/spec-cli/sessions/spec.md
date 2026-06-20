@@ -133,15 +133,20 @@ a bare shell counts as offline so a crashed claude isn't a false "working"), and
 `markStateFromCwd` / `markDoneFromCwd` / `markErrorFromCwd` / `markIdleFromCwd` (the last is the
 active-only-guarded inferred writer the idle_prompt hook calls). `newSession` adds the `node/<slug>` worktree,
 writes `.session`, isolates `CLAUDE.md` (`hideClaudeMd`), and launches claude on the private socket;
-`reopen` clears a proposal and `--resume`s a dead pane; the human-only merge/close actions round out the
+`reopen` clears a proposal and `--resume`s a dead pane — and **when it relaunches it waits for the
+resumed agent's rendezvous socket to come up** (bounded poll) before returning, so a follow-on dispatch
+addresses a live socket rather than racing the boot; the human-only merge/close actions round out the
 lifecycle (`closeSession` is the only removal).
 
 The **merge is an INTENT the human expresses, not a fixed server script**. Low-level git operations on the
 dashboard do not run server-side: the human acts at the level of intent and the session's OWN agent performs
 the operation. So `mergeSession` carries no `git merge` logic of its own — it is a DISPATCH. It reopens the
-session (clears the proposal → active, `--resume`s the agent if its tmux died, reusing `reopen`), then
-dispatches a merge prompt into the agent (reusing `sendKeys`, the socket-only fail-loud prompt path — see
-below). The injected prompt tells the agent to merge
+session (clears the proposal → active, `--resume`s the agent if its tmux died, reusing `reopen`, which
+**waits for the resumed agent's rendezvous socket** before returning — closing the startup race where a
+just-relaunched, not-yet-booted agent had no socket and the dispatch failed loud 409), then dispatches a
+merge prompt into the agent (reusing `sendKeys`, the socket-only fail-loud prompt path — see below). A
+truly dead agent never recreates its socket within that bounded wait, so the fail-loud is preserved. The
+injected prompt tells the agent to merge
 its branch into main, resolve any conflicts itself (it knows the intent of the work), verify that main's
 HEAD actually advanced and that no merge is left in progress, run `git merge --abort` to restore main if
 anything goes half-merged, and propose close once the merge is verified. Because the agent performs and

@@ -270,7 +270,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     const preset = slashPresets.find((p) => p.name === m[1])
     if (!preset) return raw
     const ids = []
-    const free = m[2].replace(/(^|\s)@([A-Za-z0-9_-]+)/g, (_, sp, id) => { ids.push(id); return sp }).trim()
+    const free = m[2].replace(/(^|\s)@(\.?[A-Za-z0-9_-]+)/g, (_, sp, id) => { ids.push(id); return sp }).trim()
     const targets = ids.length
       ? ids.map((id) => {
           const s = specs.find((x) => x.id === id)

@@ -24,6 +24,10 @@ an **absolute path** to that node's `spec.md` **inside the new session's own wor
 to its worktree-relative spec path against the spec index; since the worktree is freshly branched off main,
 that relative path is identical there, so the absolute pointer is just the worktree dir joined with it.
 
+The `@mention` grammar must name **every** node, so it admits an **optional leading dot**: a node id is its
+directory basename, so a dot-prefixed config root keeps the dot (`.config`), and without the leading dot
+`@.config` would capture nothing and silently lose both the pointer and the session's node attribution.
+
 Only the **pointer** is appended — never the spec **body**. The agent opens the live file, so it always sees
 the current contract, and the launch prompt stays small (well under the shell-arg truncation limit [[launch]]
 guards against). This is the plain-node companion to [[dispatch]]'s directive prompts: those rewrite the

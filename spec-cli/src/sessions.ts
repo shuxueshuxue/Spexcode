@@ -459,7 +459,9 @@ const slugify = (s: string | null) => (s || 'session').replace(/[^a-zA-Z0-9_-]/g
 // actually left in the prompt (changed it, or deleted it for a node-agnostic prompt) is the truth. We read
 // the FIRST `@<id>` that begins a word (same positional rule the dashboard's mention menu uses). When there
 // is none, the session is node-agnostic and we label it by the first few words of the prompt instead.
-const MENTION = /(?:^|\s)@([A-Za-z0-9_-]+)/
+// The OPTIONAL leading dot is load-bearing: a node id is its dir basename, so a dot-prefixed config root
+// (`.config`) keeps the dot — without `\.?` here `@.config` captures nothing and never resolves to a node.
+const MENTION = /(?:^|\s)@(\.?[A-Za-z0-9_-]+)/
 const mentionedNode = (prompt: string): string | null => prompt.match(MENTION)?.[1] ?? null
 function titleFromPrompt(prompt: string): string | null {
   const first = (prompt || '').trim().split('\n')[0].trim()

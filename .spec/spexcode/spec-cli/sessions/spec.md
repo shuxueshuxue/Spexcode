@@ -80,11 +80,13 @@ hooks, and the repo all keep working; it is overridable (`SPEXCODE_HIDE_CLAUDE_M
 and best-effort (a failure isolating never blocks the launch).
 
 Because a dispatched agent receives **only the human's terse launch prompt** — no system prompt otherwise
-carries the dogfood ritual — every **launch and resume** appends a **concise system prompt**
-(`--append-system-prompt`): every change lands as a commit on the node branch **before** declaring
-done / proposing merge, the spec body stays a living current-state document (no `## vN`, no
-current-state/verdict), and `CLAUDE.spexhidden.md` holds the full ritual. It is kept short on purpose —
-the launch line is typed into tmux and truncates past ~2KB.
+carries SpexCode's standing contracts — every **launch and resume** appends a **system prompt**
+(`--append-system-prompt`) gathered **entirely** from the **active `surface: system` config nodes' bodies**.
+There is no hardcoded base text: the dogfood ritual (commit spec+code on the node branch **before**
+declaring done / proposing merge; keep the spec body a living current-state document, no `## vN`, no
+current-state/verdict) lives in the `.config/ritual` node, so editing a standing contract is a spec edit,
+not a code change here. Built fresh per launch, written to the launch script file (no ~2KB tmux limit), so
+the combined contract may be arbitrarily long.
 
 Five hooks are injected via a per-worktree
 settings file (no global settings touched): **`UserPromptSubmit` + `PreToolUse` → one branching

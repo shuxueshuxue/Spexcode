@@ -40,30 +40,26 @@ const TMUX_SOCK = process.env.SPEXCODE_TMUX || 'spexcode'
 const CLAUDE_CMD = process.env.SPEXCODE_CLAUDE_CMD || 'claude --dangerously-skip-permissions'
 const COLS = 120, ROWS = 32
 
-// @@@ appendSysPrompt - a dashboard/CLI-launched session gets ONLY the human's terse prompt; there is no
-// system prompt carrying the dogfood ritual, so agents kept proposing merge with UNCOMMITTED work. We inject
-// a CONCISE imperative via --append-system-prompt on EVERY launch/resume (both go through launch() below).
-// The Stop gate's commit check is the deterministic backstop; this makes the agent commit FIRST the normal
-// way. This base text is the always-on floor; the `surface: system` config nodes' bodies are folded in on
-// top of it (see appendSysArg) so SpexCode's always-on contracts are configured as spec nodes, not hardcoded.
-const SYSTEM_PROMPT =
-  'Every change lands as a git commit on your node branch BEFORE you declare done / propose merge. ' +
-  'The spec body is a living current-state document (no ## vN sections, no current-state/verdict). ' +
-  'See CLAUDE.spexhidden.md for the dogfood ritual.'
-// @@@ surface:system gather - the launched agent's system prompt is the base floor PLUS every ACTIVE
-// `surface: system` config node's body (pending plugins are filtered out by loadConfig, so a `status:
-// pending` ritual/voice stub is declared intent and never injected). This is the `system` gather-point of
-// the surface mechanism: a config node opts in by declaring `surface: system`, and its body becomes an
-// always-on contract on every launch/resume
-// (no slash, no agent choice). Built fresh per launch so editing a system node takes effect on the next
-// launch with no restart. Single-quoted onto the launch line and shell-escaped the same way the prompt is;
-// the launch line is written to a script file (see launch()), so the combined length is unbounded — it no
-// longer rides the ~2KB tmux send-keys limit that capped the inline prompt (the launch-prompt-limit lesson).
+// @@@ appendSysArg - a dashboard/CLI-launched session gets ONLY the human's terse prompt; nothing else
+// carries SpexCode's always-on contracts (the dogfood ritual, voice-before-ask, …), so agents kept e.g.
+// proposing merge with UNCOMMITTED work. We inject those contracts via --append-system-prompt on EVERY
+// launch/resume (both go through launch() below). There is NO hardcoded base text here: the system prompt
+// is gathered ENTIRELY from the ACTIVE `surface: system` config nodes' bodies. The dogfood ritual itself is
+// one such node (`.spec/spexcode/.config/ritual`) — so changing a standing contract is a spec edit, not a
+// code change to this launcher. This is the `system` gather-point of the surface mechanism: a config node
+// opts in by declaring `surface: system`, and its body becomes an always-on contract on every launch/resume
+// (no slash, no agent choice). Pending plugins are filtered out by loadConfig, so a `status: pending` stub
+// is declared intent and never injected. Built fresh per launch so editing a system node takes effect on the
+// next launch with no restart. The combined text is single-quoted onto the launch line and shell-escaped the
+// same way the prompt is; the launch line is written to a script file (see launch()), so the length is
+// unbounded — it no longer rides the ~2KB tmux send-keys limit that capped the inline prompt (the
+// launch-prompt-limit lesson). No active system node → no flag at all (empty string).
 function appendSysArg(): string {
-  const parts = [SYSTEM_PROMPT]
+  const parts: string[] = []
   for (const cfg of loadConfig()) {
     if (cfg.surface.includes('system') && cfg.body.trim()) parts.push(cfg.body.trim())
   }
+  if (!parts.length) return ''
   const full = parts.join('\n\n')
   return `--append-system-prompt '${full.replace(/'/g, `'\\''`)}'`
 }

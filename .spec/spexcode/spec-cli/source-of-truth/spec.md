@@ -13,71 +13,40 @@ code:
 ## raw source
 
 The canonical spec state is `.spec` on `main`. A worktree's `.spec` is never a rival truth — it is a
-pending proposal, attributed to a session; on merge it becomes the new version plus one history entry.
-The dashboard is a **read-time aggregator over git, not a separate store**. Because git *is* the
-database, reading it must scale with history, not with how many nodes ask.
+pending proposal, attributed to a session, that becomes the new version plus one history row on merge.
+The dashboard is a **read-time aggregator over git, not a separate store**: because git *is* the
+database, reading must scale with history, not with the number of nodes.
 
 ## expanded spec
 
-A node's *whole* observable state is **derived** here, not stored: `version` (content-commit count),
-`drift` (governed code ahead of the latest version), `session` (commit attribution), and `status`. The
-loader reads `.spec` from the filesystem and overlays git-derived facts.
+A node's whole observable state is **derived here, not stored** — version (its count of content
+commits), drift (governed code that moved ahead of the latest version), session (commit attribution),
+and status. The loader reads `.spec` from the filesystem and overlays these git-derived facts. Nothing
+is persisted beside it: no datastore, no hash files — every fact is recomputed from git on read.
 
-To scale with history rather than node count, the aggregator walks the whole `.spec` timeline in a
-**single `git log` pass** (`historyIndex` in `git.ts`), bucketing every commit's rows by each file's
-current path and following reparent renames backward in-memory — so a moved node still reads as one
-continuous history and a pure move never counts as a version. The result is cached on `HEAD`
-(committed history is immutable). The cache key — the current commit sha — is read **straight from the
-filesystem** (`headSha`: `.git/HEAD` plus the ref it names), never from a `git rev-parse` subprocess: the
-key is checked on every warm read, so spawning git just to confirm "`HEAD` hasn't moved" made a warm
-`loadSpecs` pay two subprocess spawns (~150ms) for data it already held. A filesystem read is sub-ms, so
-a warm read spawns **no git at all**; the heavy walk runs only on a miss, after a real commit. The key
-stays strictly `HEAD`-derived (no TTL): a new commit rewrites `HEAD`/the loose ref, the sha changes, the
-cache misses, the board reflects the new version/drift at once. If the sha can't be read the cache is
-bypassed (recompute), never served stale. This replaces the old per-node
-`git log --follow` (`O(nodes × commits)`); `loadSpecs` now does one walk regardless of node count.
-Every git read on the serving path goes through the **async** helper (`gitA`), never the sync `git()`:
-synchronous `execFileSync` spawns via `fork()`, whose cost scales with the API server's resident memory,
-so in the long-running server each sync spawn is slow and degrades as RSS grows. Async spawning keeps the
-event loop free and the reads flat regardless of process size; `loadSpecs`/`specHistory` are async and
-fetch their independent indexes in parallel.
-Arbitrary non-`.spec` files (the governed *code* paths `spex lint` checks) keep the per-file `--follow`
-path, since the bulk index only covers `.spec`.
+Two principles keep that derivation cheap on a long-running server:
 
-The same discipline — warm-cached/batched, keyed on real change, read from the filesystem not a
-subprocess, never stale — now governs the **runtime reads** the dashboard makes alongside the spec data,
-so `/api/board`, `/api/layout`, and `/api/sessions` scale like `/api/specs` instead of spawning a
-git/tmux process per worktree or per session. The board **overlay** (each managed worktree's pending
-spec-delta vs main, owned by [[portable-layout]]) is a pure function of main's HEAD, the worktree's HEAD,
-and that worktree's `.spec` working-tree state, so it is memoized per worktree on a key read **entirely
-from the filesystem** — `headSha` for the two HEADs plus `worktreeSpecSig` (a stat-only fingerprint of
-the worktree's `.spec`: every file's path + mtime + size, so an edit, add, delete, or reparent moves the
-key). The three-`git diff` delta re-runs only when that key moves (a commit, a spec edit, a new or closed
-session), so a warm `/api/layout` spawns just the one `git worktree list`, yet a new commit or a new
-untracked spec.md still reflects at once; an unreadable HEAD fails loud (bypass the cache and recompute,
-never serve a delta keyed on an empty sha). Session liveness ([[sessions]]) takes the same turn away from
-per-item spawning: one batched `tmux list-panes -a` snapshots every session's pane in a single call,
-replacing the two tmux spawns per session, with the snapshot rebuilt every read so liveness is never
-stale. `buildBoard` simply composes these already-cached/batched sources.
+- **Scale with history, not node count.** The whole `.spec` timeline is read in a single git walk and
+  cached, so resolving every node is pure lookups rather than one history query per node. The arbitrary
+  code paths that drift-checking touches are the lone exception — they fall outside the spec index and
+  keep a per-file history walk.
+- **Key the cache on real change, read from the filesystem.** A warm read spawns no git at all: the
+  cache key is the current commit, read straight from `.git`, so it costs a file read, not a subprocess.
+  A new commit moves the key and the board reflects the new version and drift at once; an unreadable
+  key bypasses the cache and recomputes rather than ever serving stale data.
 
-Status is a four-state derived value (`deriveStatus`), computed from version + drift, with frontmatter
-kept only as a fallback when git is unreadable. `loadSpecs` derives the git-only part
-(pending/drift/merged); the live `active` state, which needs the worktree overlay, is layered on by the
-board assembler. The four-state model is specified in [[spec-node-states]]. `loadSpecs` also attaches the
-`parts` projection — now a **two-part** body (raw source + expanded spec), the agent-narrated current-state
-part having been dropped because what's-done is derived, never narrated (see [[three-part-body]]). The
-parser lives with `parseParts`, but the projection rides out on the same node objects this aggregator builds.
+The same discipline governs the runtime reads the dashboard makes alongside the spec data. The board
+**overlay** — each managed worktree's pending spec-delta versus `main`, owned by [[portable-layout]] —
+is a pure function of the two HEADs and the worktree's working-tree `.spec`, memoized on a
+filesystem-only key, so a warm board re-runs no per-worktree diff yet still reflects a fresh commit or
+edit immediately. Session liveness is owned by [[sessions]].
 
-Concretely, `specs.ts` is the aggregator: `loadSpecs()` calls `historyIndex`/`driftIndex` once (both cached
-on `HEAD`), then for each node under `.spec` does pure lookups — `rowsFor` for the version timeline,
-`driftFor` per governed file for `driftFiles`/`drift`, `deriveStatus` for `status`, and `parseParts` for
-`parts`. Session attribution comes from the latest version's `Session:` trailer, with frontmatter `session:`
-only as a fallback. `specHistory(id)` returns the per-node timeline with each row's line-diff scoped to that
-node: its `spec.md` stats come from the cached bulk index (rename-followed), and the governed-code stats from
-one `git log --numstat` walk over the node's `code` paths (`pathsStats`), looked up per version — replacing
-the old `git show`-per-version loop, so a whole node's history is two git spawns rather than one per row.
-`git.ts` provides the git access (`historyIndex`, `driftIndex`/`driftFor`, `rowsFor`, `statsFor`, `pathsStats`,
-the async `gitA`, and the hook-safe `git()` helper that strips a hook's exported `GIT_DIR`/`GIT_INDEX_FILE`);
-the HTTP entrypoint that serves these results is `index.ts`, governed by [[spec-cli]] — this node owns only
-the derivation pair `specs.ts` (loader/aggregator) + `git.ts` (git access). Nothing is
-stored: no datastore, no hash files — every fact is recomputed from git on read, warm-cached on `HEAD`.
+Status is a four-state derived value computed from version and drift, with frontmatter kept only as a
+fallback when git is unreadable: the loader derives the git-only part (pending / drift / merged), and
+the live **active** state is layered on by the board assembler from the worktree overlay. The four
+states are specified in [[spec-node-states]]. The loader also attaches the body's two-part projection
+— raw source and expanded spec — there being no agent-narrated current-state part, because what's-done
+is derived, never narrated (see [[three-part-body]]).
+
+This node owns the derivation pair: the loader/aggregator (`specs.ts`) and its git-access layer
+(`git.ts`). The HTTP entrypoint that serves the results belongs to [[spec-cli]].

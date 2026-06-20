@@ -106,8 +106,9 @@ send-keys, not the prompt socket** — send-keys is exactly right for arrows/Ent
 socket is exactly right for whole prompts; each stays on its own job. Nav mode forwards keystrokes and
 **nothing else** — it adds no other behavior. The reliable trigger is **manual**: a header `⌨ nav` toggle
 button and a `⌃/⌘+I` chord enter/exit it; once in, Esc is forwarded (it cancels a menu) and a **second Esc**
-(or a click on the indicator) exits. Switching tabs or a session going offline also exits, so keystrokes can
-never leak to the wrong pane. **Additionally**, a best-effort, **non-authoritative** sniff of the pane
+(or a click on the indicator) exits. Exiting nav mode (by any route) hands the keyboard back to the `❯`
+box — it refocuses so you can type immediately without re-clicking. Switching tabs or a session going
+offline also exits, so keystrokes can never leak to the wrong pane. **Additionally**, a best-effort, **non-authoritative** sniff of the pane
 (a select-caret line plus an Esc/Enter hint line) merely **suggests** nav mode by pulsing the button — it
 never seizes keys on its own, because screen-scraping is fragile and the manual toggle is the dependable path.
 

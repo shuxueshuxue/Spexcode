@@ -2,7 +2,7 @@ import { serve } from '@hono/node-server'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { createNodeWebSocket } from '@hono/node-ws'
-import { loadSpecs, specHistory, specDiff } from './specs.js'
+import { loadSpecs, specHistory, specDiffAt } from './specs.js'
 import { resolveLayout } from './layout.js'
 import { buildBoard } from './board.js'
 import { newSession, listSessions, sendKeys, rawKey, closeSession, reopen, propose, mergeSession, sessionGraph, registerWatch, deregisterWatch } from './sessions.js'
@@ -23,9 +23,9 @@ app.get('/health', (c) => c.text('ok'))
 app.get('/api/board', async (c) => c.json(await buildBoard()))
 app.get('/api/specs', async (c) => c.json(await loadSpecs()))
 app.get('/api/specs/:id/history', async (c) => c.json(await specHistory(c.req.param('id'))))
-// the spec.md line diff of the node's latest version — the recent pane's proof-of-change when a node
-// has no A→B screenshot evidence yet.
-app.get('/api/specs/:id/diff', async (c) => c.json(await specDiff(c.req.param('id'))))
+// the spec.md line diff one version introduced — the history tab's per-version proof-of-change, fetched
+// lazily when an older version's item expands (the latest version's diff ships with the board as node.lastDiff).
+app.get('/api/specs/:id/diff/:hash', async (c) => c.json(await specDiffAt(c.req.param('id'), c.req.param('hash'))))
 app.get('/api/layout', async (c) => c.json(await resolveLayout()))
 // the dashboard input's `/` dropdown — the union of built-in + user/project/skill commands, computed
 // the same way Claude Code computes its own `/` menu. Insert-only on the client; nothing executes here.

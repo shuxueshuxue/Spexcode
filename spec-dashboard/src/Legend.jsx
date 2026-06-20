@@ -24,8 +24,8 @@ const BOARD_KEYS = [
   [['?'], 'legend.board.help'],
 ]
 const POPUP_KEYS = [
-  [['←', '→', 'h', 'l', '⇥', '1', '2', '3'], 'legend.popup.switch'],
-  [['j', 'k'], 'legend.popup.scroll'],
+  [['←', '→', 'h', 'l', '⇥', '1', '2'], 'legend.popup.switch'],
+  [['j', 'k', '↑', '↓'], 'legend.popup.scroll'],
   [['⏎'], 'legend.popup.enter'],
   [['esc'], 'legend.popup.esc'],
 ]

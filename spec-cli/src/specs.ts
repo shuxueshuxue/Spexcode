@@ -238,24 +238,21 @@ export async function specDiffAt(id: string, hash: string) {
   return latestDiff(node.relPath, hash)
 }
 
-// @@@ config presets - REFLEXIVE, SKILL-SHAPED preset nodes under .spec/spexcode/.config/* (the INSTANCE
-// tree — the DIY dev-flow plugins; the sibling config/ tree is the SPEC of the config system, not plugins,
-// so it is NOT scanned here). Each is an
-// ordinary spec node (it also shows on the board, parented to spexcode) BUT its folder is also a skill
-// bundle: `spec.md`'s body is the agent prompt/contract (with a {{targets}} placeholder the launcher fills
-// with the @-referenced nodes), and the SAME folder may co-locate auxiliary files — scripts, assets — that
-// the preset ships for the agent to run deterministically. So /api/config reports each node's folder `dir`
+// @@@ config presets - REFLEXIVE, SKILL-SHAPED preset nodes whose folder IS a skill bundle: `spec.md`'s
+// body is the agent prompt/contract (with a {{targets}} placeholder the launcher fills with the
+// @-referenced nodes), and the SAME folder may co-locate auxiliary files — scripts, assets — that the
+// preset ships for the agent to run deterministically. So each preset reports its folder `dir`
 // (repo-relative) and its `files` (co-located paths, spec.md excluded) alongside name/title/desc/kind/body.
-// The launcher lists these in the new-session `/` dropdown and composes body + targets + free text + the
-// folder path into the launched agent's prompt, so the agent can reach its own scripts. `kind` ∈
-// mutating|report tells the launcher whether the preset edits the graph or only reports on it.
-// @@@ surface - WHERE a config node plugs in, one OR a list of: slash | system | skill | setup (default
-// slash). It is the single axis the engine routes on: `slash` nodes are offered in the new-session `/`
-// dropdown; `system` nodes have their body folded into a launched agent's --append-system-prompt; `skill`
-// and `setup` are recognized values reserved for later gather-points (a skill bundle / an init script).
-// A node may declare several surfaces — the body and bundle mean the same thing, only the delivery differs.
-export type ConfigPreset = { name: string; title: string; desc: string; kind: string; surface: string[]; dir: string; files: string[]; body: string }
-const CONFIG_DIR = join(SPEC_DIR, 'spexcode', '.config')
+// `kind` ∈ mutating|report tells the launcher whether the preset edits the graph or only reports on it.
+export type ConfigPreset = { name: string; title: string; desc: string; kind: string; dir: string; files: string[]; body: string }
+// @@@ path-driven surface - a config node's surface is its LOCATION, not a frontmatter field:
+// <root>/slash/<name>/spec.md is a slash preset (offered in the new-session `/` dropdown);
+// <root>/system/<name>/spec.md is a system contract (its body folded into a launched agent's
+// --append-system-prompt). BOTH config roots participate: `.config` (the instance — DIY dev-flow plugins)
+// and `config` (the project system spec). loadConfig gathers the slash surface, loadSystemConfig the
+// system surface; each scans the same-named subdir under every root. The presets still show on the board as
+// ordinary spec nodes (via loadSpecs) — the slash/system dir is just routing, not itself a node.
+const CONFIG_ROOTS = ['.config', 'config'].map((r) => join(SPEC_DIR, 'spexcode', r))
 // co-located bundle files = everything under the node folder except its spec.md, repo-relative, recursive.
 function bundleFiles(dir: string): string[] {
   const out: string[] = []
@@ -269,28 +266,34 @@ function bundleFiles(dir: string): string[] {
   walk(dir)
   return out.sort()
 }
-export function loadConfig(): ConfigPreset[] {
-  if (!existsSync(CONFIG_DIR)) return []
+// gather the preset nodes living under `<root>/<surface>/*` across every config root.
+function loadSurface(surface: 'slash' | 'system'): ConfigPreset[] {
   const out: ConfigPreset[] = []
-  for (const e of readdirSync(CONFIG_DIR, { withFileTypes: true })) {
-    const nodeDir = join(CONFIG_DIR, e.name)
-    if (!e.isDirectory() || !existsSync(join(nodeDir, 'spec.md'))) continue
-    const { fm, body } = parseFrontmatter(readFileSync(join(nodeDir, 'spec.md'), 'utf8'))
-    // @@@ skip pending - a `status: pending` plugin is DECLARED INTENT, not yet an active plugin. It still
-    // renders on the board (via loadSpecs), but it must NOT gather: not offered as a slash preset, not folded
-    // into a system prompt. Only built/active plugins surface here, so pending voice/ritual stubs are inert.
-    if (str(fm.status) === 'pending') continue
-    const surface = list(fm.surface)
-    out.push({
-      name: e.name,
-      title: str(fm.title, e.name),
-      desc: str(fm.desc),
-      kind: str(fm.kind, 'mutating'),
-      surface: surface.length ? surface : ['slash'],   // no surface declared → today's behavior: a slash preset
-      dir: relative(ROOT, nodeDir),
-      files: bundleFiles(nodeDir),
-      body: body.trim(),
-    })
+  for (const root of CONFIG_ROOTS) {
+    const dir = join(root, surface)
+    if (!existsSync(dir)) continue
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      const nodeDir = join(dir, e.name)
+      if (!e.isDirectory() || !existsSync(join(nodeDir, 'spec.md'))) continue
+      const { fm, body } = parseFrontmatter(readFileSync(join(nodeDir, 'spec.md'), 'utf8'))
+      // @@@ skip pending - a `status: pending` plugin is DECLARED INTENT, not yet an active plugin. It still
+      // renders on the board (via loadSpecs), but it must NOT gather: neither offered as a slash preset nor
+      // folded into a system prompt. Only built/active plugins surface here, so pending stubs stay inert.
+      if (str(fm.status) === 'pending') continue
+      out.push({
+        name: e.name,
+        title: str(fm.title, e.name),
+        desc: str(fm.desc),
+        kind: str(fm.kind, 'mutating'),
+        dir: relative(ROOT, nodeDir),
+        files: bundleFiles(nodeDir),
+        body: body.trim(),
+      })
+    }
   }
   return out.sort((a, b) => a.name.localeCompare(b.name))
 }
+// the slash presets (new-session `/` dropdown).
+export function loadConfig(): ConfigPreset[] { return loadSurface('slash') }
+// the system contracts (folded into a launched agent's --append-system-prompt).
+export function loadSystemConfig(): ConfigPreset[] { return loadSurface('system') }

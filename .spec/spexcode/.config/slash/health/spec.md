@@ -4,7 +4,6 @@ status: active
 hue: 200
 desc: Report a node's health — lint, drift, and body altitude — without changing anything.
 kind: report
-surface: slash
 ---
 Report the health of each target spec node. **READ-ONLY**: make no edits and no commits.
 

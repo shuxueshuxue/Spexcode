@@ -5,11 +5,11 @@ hue: 110
 desc: The instance home — SpexCode's DIY dev-flow plugins live here as skill-shaped config nodes.
 ---
 `.config/` is the **instance** of the config system: the concrete dev-flow plugins SpexCode ships for
-working in this repo. Each child is a skill-shaped node — its folder *is* the unit (a `spec.md` plus any
-co-located scripts) — that declares how it plugs in via the `surface` field defined by [[config]]'s
-[[surface]] mechanism.
+working in this repo. Each plugin is a skill-shaped node — its folder *is* the unit (a `spec.md` plus any
+co-located scripts) — sorted into a `slash/` or `system/` dir whose name IS its surface, per [[config]]'s
+[[surface]] path-driven routing.
 
-`/api/config` and the launcher's surface gather read from here, not from [[config]] (which holds the
+`/api/config` and the launcher's system gather read from here, not from [[config]] (which holds the
 *spec of the config system* itself). Only **built/active** plugins gather — a `pending` node is declared
 intent, not yet an active plugin, so it renders on the board but is neither offered as a slash preset nor
 folded into a system prompt.

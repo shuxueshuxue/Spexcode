@@ -2,7 +2,6 @@
 title: ritual
 status: active
 hue: 30
-surface: system
 desc: SpexCode's opinionated git flow — node/<id> branches, one spec+code commit, a Session: trailer, a --no-ff merge.
 code:
 ---

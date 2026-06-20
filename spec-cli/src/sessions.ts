@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { createConnection } from 'node:net'
 import { fileURLToPath } from 'node:url'
 import { git, gitA, repoRoot } from './git.js'
-import { loadConfig, type ConfigPreset } from './specs.js'
+import { loadSystemConfig, type ConfigPreset } from './specs.js'
 
 // @@@ sessions - the WORKTREE is the durable unit; tmux is a disposable runtime handle. Each session
 // worktree carries an untracked `.session` file (the source of truth) that survives a kill / reboot /
@@ -49,8 +49,8 @@ const MAX_ACTIVE = Math.max(1, Number(process.env.SPEXCODE_MAX_ACTIVE) || 6)
 // @@@ CORE_CONTRACT - the BAKED product default: the minimal contract ANY SpexCode project needs, injected
 // FIRST into every launched/resumed agent regardless of config. This is the ground base — the product works
 // on it alone. It deliberately does NOT mention our specific git flow (branch names, merge style, trailers);
-// that opinionated scaffold lives in the `.config/ritual` config node and layers on TOP via the surface
-// gather below. The split matters: a user who deletes every config plugin STILL gets agents that honor the
+// that opinionated scaffold lives in the `.config/system/ritual` config node and layers on TOP via the
+// system gather below. The split matters: a user who deletes every config plugin STILL gets agents that honor the
 // core (commit before declaring done; specs stay living current-state docs) — the core is product, not
 // removable scaffold. Edit the opinion in the spec tree; edit this ground floor here.
 const CORE_CONTRACT = `Commit your spec node and the code it justifies BEFORE you declare done or propose merge — the commit comes first, never as an afterthought to a declaration.
@@ -60,24 +60,24 @@ A spec body is a living current-state document: it states the node's PRESENT int
 // @@@ appendSysArg - the system prompt folded into EVERY launched/resumed agent (both paths go through
 // launch() below), assembled in TWO layers:
 //   1. CORE_CONTRACT (above) — the BAKED product default, always first, present even with ZERO config.
-//   2. each ACTIVE `surface: system` config node's body — the OPINIONATED scaffold, layered on top.
+//   2. each ACTIVE system config node's body — the OPINIONATED scaffold, layered on top.
 // Without this a dashboard/CLI-launched session gets ONLY the human's terse prompt and carries none of
 // SpexCode's standing contracts (agents kept proposing merge with UNCOMMITTED work). Layer 2 is the
-// `system` gather-point of the surface mechanism: a config node opts in by declaring `surface: system` and
+// system surface, gathered by loadSystemConfig: a config node opts in by LIVING under a `system/` dir and
 // its body becomes an always-on contract (no slash, no agent choice) — our git flow lives there
-// (`.spec/spexcode/.config/ritual`), so changing the OPINIONATED specifics is a spec edit, not a code change
-// here; the baked core guarantees the ground rules hold even when that node is absent. Pending plugins are
-// filtered out by loadConfig, so a `status: pending` stub never injects. Built fresh per launch, so editing
-// a system node (or this core) takes effect on the next launch with no restart. The combined text is
+// (`.spec/spexcode/.config/system/ritual`), so changing the OPINIONATED specifics is a spec edit, not a code
+// change here; the baked core guarantees the ground rules hold even when that node is absent. Pending plugins
+// are filtered out by loadSystemConfig, so a `status: pending` stub never injects. Built fresh per launch, so
+// editing a system node (or this core) takes effect on the next launch with no restart. The combined text is
 // single-quoted onto the launch line and shell-escaped like the prompt; the launch line is written to a
 // script file (see launch()), so length is unbounded — it no longer rides the ~2KB tmux send-keys limit
 // that capped the inline prompt (the launch-prompt-limit lesson). There is ALWAYS a flag (the baked core is
-// non-empty), so a config-less instance still gets the core injected. `cfgs` defaults to the live config
+// non-empty), so a config-less instance still gets the core injected. `cfgs` defaults to the live system
 // load — it's a parameter only so the layering (baked core present even with NO system nodes) is testable.
-export function appendSysArg(cfgs: ConfigPreset[] = loadConfig()): string {
+export function appendSysArg(cfgs: ConfigPreset[] = loadSystemConfig()): string {
   const parts: string[] = [CORE_CONTRACT]
   for (const cfg of cfgs) {
-    if (cfg.surface.includes('system') && cfg.body.trim()) parts.push(cfg.body.trim())
+    if (cfg.body.trim()) parts.push(cfg.body.trim())
   }
   const full = parts.join('\n\n')
   return `--append-system-prompt '${full.replace(/'/g, `'\\''`)}'`
@@ -505,7 +505,7 @@ function writeSettings(path: string): string {
 // @@@ launchScript - the WHOLE launch invocation (rendezvous env prefix + claude + --append-system-prompt
 // + --settings + the human prompt) is written to an ephemeral `.spex-launch.sh` in the worktree and run via
 // `bash <file>`, NOT typed inline. Inline send-keys TRUNCATES past ~2KB (the launch-prompt-limit trap), and
-// the surface:system gather can make --append-system-prompt arbitrarily large; a file has no length limit
+// the system-surface gather can make --append-system-prompt arbitrarily large; a file has no length limit
 // and the only thing send-keys types is the short `bash <file>` line. It's the SAME command the inline path
 // ran (env prefix exports the rendezvous vars to the claude child), just relocated to a file. Liveness no
 // longer cares what the pane's foreground command is: claude runs as a child of bash (and, via the

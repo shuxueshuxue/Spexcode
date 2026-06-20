@@ -172,10 +172,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   useEffect(() => {
     loadConfig().then((d) => { if (Array.isArray(d)) setPresets(d) }).catch(() => {})
   }, [])
-  // @@@ slash surface - only `surface: slash` config nodes are launchable presets in the `/` dropdown; a
-  // `system` (or skill/setup) node plugs in elsewhere and must never appear here. We filter once and use the
-  // result for BOTH the palette and composeLaunch, so a `/<name>` that names a non-slash node isn't composed.
-  const slashPresets = useMemo(() => presets.filter((p) => (p.surface || ['slash']).includes('slash')), [presets])
+  // @@@ slash surface - /api/config returns ONLY slash-surface nodes (those living under a `slash/` dir;
+  // the backend routes on location now, see specs.ts loadSurface), so the presets ARE the launchable set —
+  // no client-side filter. system nodes plug in via the launcher's system prompt and never reach here.
+  const slashPresets = presets
 
   // nav mode binds to ONE live session's menu — leaving the tab (or it going offline) exits it, so raw
   // keystrokes can never leak into the wrong pane.

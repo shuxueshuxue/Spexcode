@@ -2,29 +2,28 @@
 title: surface
 status: active
 hue: 260
-desc: A config node declares how it plugs in via a `surface` field; the engine gathers presets by surface.
+desc: A config node's surface is its LOCATION — slash/ vs system/ — not a frontmatter field; the engine routes by path.
 code:
 ---
 # surface
 
-A config node declares **where it plugs in** with a `surface` field — one value, or a list, of
-`slash | system | skill | setup`. A node with no `surface` keeps today's behavior (a `slash` preset).
-`surface` is the single axis the engine routes on: a node's body and co-located bundle mean the same
-thing across surfaces — only the *delivery* differs.
+A config node's **surface** — where it plugs in — is its **location on disk**, not a declared field. The
+parent routing dir under a config root names the surface:
 
-`loadConfig` (in [[source-of-truth]]'s `specs.ts`) reads the plugin instances from the [[.config]] tree,
-parses `surface` onto every preset (defaulting to `['slash']`), and `/api/config` ([[spec-cli]]) ships
-them. Only **built/active** plugins gather — a `status: pending` node is declared intent, so it is filtered
-out and reaches no gather-point. Two gather-points consume the rest today:
+- `<root>/slash/<name>/spec.md` — a **slash** preset, offered in the new-session `/` dropdown.
+- `<root>/system/<name>/spec.md` — a **system** contract, its body folded into a launched agent's
+  `--append-system-prompt`.
 
-- **slash** — the new-session `/` dropdown lists **only** `surface: slash` config nodes as launchable
-  presets. The dashboard ([[session-console]]'s `SessionInterface.jsx`) filters to slash nodes for both
-  the palette and the `/<name>` compose grammar, so a non-slash node is never offered or composed.
-- **system** — at launch, [[sessions]]'s launcher appends each `surface: system` node's body to the
-  agent's `--append-system-prompt`, on top of the always-on base contract. These are SpexCode's
-  always-on contracts (e.g. the dogfood ritual), configured as spec nodes rather than hardcoded — no
-  slash, no agent choice. Built fresh per launch, so editing a system node takes effect on the next launch.
+Both config roots participate: [[.config]] (the instance — the DIY dev-flow plugins) and [[config]] (the
+project system spec). The `slash/` and `system/` dirs are pure routing — they hold no `spec.md` of their
+own, so they are not nodes; each preset's board parent stays the config root, and moving a node between
+surfaces is a version-neutral reparent.
 
-`skill` and `setup` are **defined-but-not-yet-gathered**: recognized, valid `surface` values reserved
-for later gather-points — `skill` exposing a node's folder as a Claude Code skill bundle, `setup`
-running a node's script at init. They are accepted and reported now; nothing routes on them yet.
+In [[source-of-truth]]'s `specs.ts`, `loadSurface(s)` scans `<root>/<s>/*` across every root: `loadConfig`
+gathers the slash surface ([[spec-cli]]'s `/api/config`, the [[session-console]] `/` palette), and
+`loadSystemConfig` gathers the system surface ([[sessions]]'s launcher, layered on top of the always-on base
+contract). Only **built/active** plugins gather — a `status: pending` node is declared intent, so it renders
+on the board but reaches no surface.
+
+Path-driven routing is the whole mechanism: there is no `surface` frontmatter to parse, validate, or keep in
+sync — a node's surface is wherever it lives, and re-homing it is the only way to change it.

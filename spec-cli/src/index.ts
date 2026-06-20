@@ -27,13 +27,13 @@ app.get('/api/specs/:id/history', async (c) => c.json(await specHistory(c.req.pa
 // lazily when an older version's item expands (the latest version's diff ships with the board as node.lastDiff).
 app.get('/api/specs/:id/diff/:hash', async (c) => c.json(await specDiffAt(c.req.param('id'), c.req.param('hash'))))
 app.get('/api/layout', async (c) => c.json(await resolveLayout()))
-// @@@ config presets - the reflexive, skill-shaped plugin INSTANCES (.spec/spexcode/.config/*, the
-// dev-flow plugins; the config/ tree is the spec of the config system, not plugins, so it is not listed).
-// Pending plugins are excluded — only built/active ones gather. Each entry carries its prompt `body` (with
-// a {{targets}} placeholder), its `kind` (mutating|report), its `surface` (where it plugs in: slash |
-// system | skill | setup), and its folder `dir` + co-located `files` so the launcher can both list slash
-// presets in the new-session `/` dropdown and fold system presets into a launched agent's system prompt.
-// Read live from disk (no git), like the specs.
+// @@@ config presets - the SLASH-surface config nodes: reflexive, skill-shaped plugins living under a
+// `slash/` dir in either config root (`.config/slash/*` instance plugins, `config/slash/*` project system).
+// A node's surface is its LOCATION, not a field (see specs.ts loadSurface); the sibling system surface
+// (`*/system/*`) is gathered separately into launched agents' system prompts and is NOT listed here.
+// Pending plugins are excluded — only built/active ones gather. Each entry carries its prompt `body` (with a
+// {{targets}} placeholder), its `kind` (mutating|report), and its folder `dir` + co-located `files` so the
+// launcher can list these presets in the new-session `/` dropdown. Read live from disk (no git), like specs.
 app.get('/api/config', (c) => c.json(loadConfig()))
 // the dashboard input's `/` dropdown — the union of built-in + user/project/skill commands, computed
 // the same way Claude Code computes its own `/` menu. Insert-only on the client; nothing executes here.

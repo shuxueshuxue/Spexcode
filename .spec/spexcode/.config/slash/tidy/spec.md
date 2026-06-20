@@ -4,7 +4,6 @@ status: active
 hue: 140
 desc: Rewrite a node's body to contract altitude — push mechanics into code comments, keep the contract.
 kind: mutating
-surface: slash
 ---
 Tidy each target spec node so its body reads as **contract**, not implementation.
 

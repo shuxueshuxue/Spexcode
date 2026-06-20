@@ -26,11 +26,11 @@ died), `needs-input` (pausing to ask the **human**), `queued` (held below the ca
 `idle` (stopped at the prompt without declaring). `merges` is a metadata count, not a state.
 
 **Authored states win over liveness.** `reconcile` maps `awaiting`/`blocked`/`error`/`needs-input`
-straight to their label; only `active`/`idle` defer to a liveness check, and that check is the
-**rendezvous socket, never the pane's foreground command** (the worker runs under `reclaude`; see
-[[launch]]). A session is **offline** if its tmux or socket is gone, else `idle` if the idle-prompt hook
-fired since the last tool use, else working. `idle` is the **one inferred state**, so `markIdleFromCwd`
-is **active-only guarded** and can never clobber a declaration.
+straight to their label; only `active`/`idle` defer to a liveness check, on the **rendezvous socket,
+never the pane's foreground command** (see [[launch]]). A session is **offline** only when genuinely dead
+(no tmux, or its socket never opened); a still-booting one reads the transient **`starting`** instead.
+Else `idle` if the idle-prompt hook fired since the last tool use, else working — the **one inferred
+state**, so `markIdleFromCwd` is **active-only guarded** and can never clobber a declaration.
 
 ### Hooks (injected per session via `--settings`, polluting nothing)
 

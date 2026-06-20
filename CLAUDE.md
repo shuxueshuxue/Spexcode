@@ -64,10 +64,13 @@ each. There is no discovery phase.
   of spec-driven dev, so reach for it; don't serialize out of caution. Contention on `main` is fine —
   git serializes the merges, and a conflict just means you re-merge. Never throttle parallel work to
   avoid conflicts.
-- **MONITOR** — `spex watch` streams session transitions. Two read-noise traps: a worker shows
-  `offline` for the **first ~15–20s** after launch (the boot window — transient, do **not** react to
-  it); and `spex watch` can emit a spurious `closed`/`removed` — **verify against git** (`git -C <root>
-  log --all`, branch still present) before treating any work as lost.
+- **MONITOR** — `spex watch` streams the session lifecycle: `launched` → actionable transitions
+  (`review` / `done` / `offline` / `error` / `needs-input`) → `closed`. A booting worker reads
+  `starting` (not `offline`) until its control socket is up, and `closed` fires only when a session is
+  genuinely gone — so each event is trustworthy and needs no cross-checking against git.
+- **POLL, DON'T BLOCK** — to wait on a dispatched worker, POLL one-shot — `spex review <id>` or `spex
+  ls` (both **return immediately**). **Never block on `spex watch`**: it STREAMS forever and will freeze
+  your turn waiting for an event that never ends the stream.
 - **REVIEW** — `spex review <id>` prints the one review payload: commits ahead of `main`, the
   merge-base diff (the worker's real changes), and the merge/typecheck/lint gates. Decide from that —
   you don't hand-run git or read the source.

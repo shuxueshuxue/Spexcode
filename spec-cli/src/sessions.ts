@@ -148,7 +148,7 @@ function replyViaSocket(sock: string, text: string): Promise<DispatchResult> {
 
 export type Lifecycle = 'active' | 'idle' | 'awaiting' | 'blocked' | 'error' | 'needs-input' | 'queued'
 export type Proposal = 'merge' | 'nothing' | 'close'
-export type DisplayStatus = 'working' | 'idle' | 'offline' | 'review' | 'done' | 'close-pending' | 'blocked' | 'error' | 'needs-input' | 'queued'
+export type DisplayStatus = 'working' | 'idle' | 'offline' | 'starting' | 'review' | 'done' | 'close-pending' | 'blocked' | 'error' | 'needs-input' | 'queued'
 const PROPOSAL_STATUS: Record<Proposal, DisplayStatus> = { merge: 'review', nothing: 'done', close: 'close-pending' }
 
 export type Session = {
@@ -283,6 +283,14 @@ async function liveTmux(): Promise<Set<string>> {
   return s
 }
 
+// @@@ launchedAt - when we last started a tmux window for an id (set in launch()). claude needs ~15-20s
+// after the window appears to recreate its rendezvous socket; in that window the socket is absent but the
+// session is booting, NOT dead. reconcile consults this to report 'starting' (a distinct transient state)
+// instead of 'offline' for BOOT_GRACE_MS after launch — so 'offline' only ever means genuinely dead. In-
+// memory in the single server process (lost on restart, which is fine: a restart has nothing in flight).
+const launchedAt = new Map<string, number>()
+const BOOT_GRACE_MS = 25000   // > waitForSocket's 15s timeout, covering the observed ~15-20s socket boot window
+
 // reconcile the SHOWN status from a session's declared state + a prebuilt liveness set (no per-call tmux
 // spawn — see liveTmux). Declarations win over liveness, in ONE path: awaiting maps to its proposal label;
 // blocked / error / needs-input map straight to themselves. We never INFER those externally.
@@ -296,7 +304,12 @@ function reconcile(rec: SessRec, live: Set<string>): DisplayStatus {
   // its child — is the truth that claude is up. else idle if the idle_prompt hook fired since the last tool,
   // else working. The mark-active hook flips idle → active on the next real work, self-correcting.
   if (!rec.session || !live.has(rec.session)) return 'offline'
-  if (!existsSync(rvSock(rec.session))) return 'offline'
+  if (!existsSync(rvSock(rec.session))) {
+    // tmux is up but the socket isn't: a just-launched agent still booting reads 'starting' for the boot
+    // window; only past it (socket still gone) is the agent genuinely dead → 'offline'.
+    const at = launchedAt.get(rec.session)
+    return at && Date.now() - at < BOOT_GRACE_MS ? 'starting' : 'offline'
+  }
   return rec.status === 'idle' ? 'idle' : 'working'
 }
 
@@ -512,6 +525,7 @@ async function launch(id: string, path: string, tail: string): Promise<void> {
   await tmux(['new-session', '-d', '-s', id, '-x', String(COLS), '-y', String(ROWS), '-c', path])
   await tmux(['send-keys', '-t', id, '-l', '--', `bash ${launchScript(id, path, tail)}`])
   await tmux(['send-keys', '-t', id, 'Enter'])
+  launchedAt.set(id, Date.now())   // stamp the boot window so reconcile reads 'starting', not 'offline', until the socket is up
 }
 
 // @@@ node directives - a dashboard board chord (nn / dd) prefixes the New Session prompt with a
@@ -979,6 +993,7 @@ export async function mergeSession(id: string, opts: { keep?: boolean } = {}): P
 export async function closeSession(id: string): Promise<boolean> {
   const wt = await findWorktree(id)
   await tmuxOk(['kill-session', '-t', id])
+  launchedAt.delete(id)   // drop the boot-window stamp so the map never accretes closed ids
   try { rmSync(rvSock(id), { force: true }) } catch { /* best-effort sweep; tmpdir socket, claude/OS may already be gone */ }
   if (wt) {
     await gitA(['-C', mainRoot(), 'worktree', 'remove', '--force', wt.path])
@@ -1005,11 +1020,11 @@ export async function captureSession(id: string): Promise<string> {
 //   Monitor({ command: 'spex watch', persistent: true, description: 'spex session state changes' })
 // @@@ presentation + selection - shared by `spex ls` (pretty), `spex watch` (events) and the API.
 export const STATUS_GLYPH: Record<DisplayStatus, string> = {
-  working: '\u25cf', idle: '\u25cb', offline: '\u23fb', review: '\u25c6', done: '\u2713',
+  working: '\u25cf', idle: '\u25cb', offline: '\u23fb', starting: '\u25d4', review: '\u25c6', done: '\u2713',
   'close-pending': '\u2715', blocked: '\u29d6', error: '\u2717', 'needs-input': '\u2370', queued: '\u25cc',
 }
 const ANSI: Record<DisplayStatus, string> = {
-  working: '33', idle: '90', offline: '90', review: '35', done: '34', 'close-pending': '31', blocked: '36', error: '31', 'needs-input': '93', queued: '90',
+  working: '33', idle: '90', offline: '90', starting: '36', review: '35', done: '34', 'close-pending': '31', blocked: '36', error: '31', 'needs-input': '93', queued: '90',
 }
 
 // a session matches a selector if the selector is its id (or an id-prefix), its node, or its branch.
@@ -1084,18 +1099,36 @@ export async function watchSessions(emit: (line: string) => void, opts: WatchOpt
   const { selectors = [], statuses, includeIdle = false, intervalMs = 5000, as } = opts
   const tag = as ? `[${as}] ` : ''
   const prev = new Map<string, DisplayStatus>()
+  const paths = new Map<string, string>()   // last-seen worktree path per id → detect a GENUINE worktree removal
+  const misses = new Map<string, number>()   // consecutive polls an id has been absent → flicker guard (see below)
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
   for (;;) {
     try {
       const cur = selectSessions(await listSessions(), selectors, statuses)
       const ids = new Set(cur.map((s) => s.id))
       for (const s of cur) {
+        paths.set(s.id, s.path)   // remember where it lives, so a later disappearance can be checked against disk
+        misses.delete(s.id)       // present again → any nascent miss streak was just a flicker, reset it
         if (!prev.has(s.id)) emit(tag + launchEvent(s)) // FIRST sighting → launched, any status (incl. 'working'), once
         if (s.status === prev.get(s.id)) continue // only on transition, not every tick
         prev.set(s.id, s.status)
         if (WATCH_ACTIONABLE.has(s.status) || (includeIdle && s.status === 'idle')) emit(tag + sessionEvent(s))
       }
-      for (const id of [...prev.keys()]) if (!ids.has(id)) { prev.delete(id); emit(`${tag}[spex] closed \u00b7 removed  [id ${id}]`) }
+      // @@@ closed only when GENUINELY gone — never on a one-poll board flicker. listSessions can transiently
+      // drop a live session (a worktree skipped mid-read, a git/tmux hiccup during the boot window); it then
+      // reappears next poll. So a vanished id is "closed" only if its worktree is actually removed from disk,
+      // OR it has been absent for 2 consecutive polls. A single-poll absence with the worktree still present
+      // just waits for the next poll to confirm.
+      for (const id of [...prev.keys()]) {
+        if (ids.has(id)) continue
+        const path = paths.get(id)
+        const gone = !path || !existsSync(path)
+        const n = (misses.get(id) || 0) + 1
+        misses.set(id, n)
+        if (!gone && n < 2) continue   // single-poll flicker, worktree still on disk → wait for the next poll
+        prev.delete(id); paths.delete(id); misses.delete(id)
+        emit(`${tag}[spex] closed \u00b7 removed  [id ${id}]`)
+      }
     } catch { /* transient git/tmux hiccup; keep watching */ }
     await sleep(intervalMs)
   }

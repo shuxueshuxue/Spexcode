@@ -10,6 +10,8 @@ dist/
 .session
 # originating-prompt sidecar (multi-line launch request) — runtime metadata, not spec data
 .session-prompt
+# deferred launch prompt for a still-QUEUED session (consumed at launch) — runtime, not spec data
+.session-launch
 # per-worktree generated hook settings (writeSettings() writes absolute paths) — runtime, not spec data
 .spex-hooks.json
 # per-worktree generated launch script (launchScript() writes the claude invocation) — runtime, not spec data

@@ -39,6 +39,11 @@ const pexec = promisify(execFile)
 const TMUX_SOCK = process.env.SPEXCODE_TMUX || 'spexcode'
 const CLAUDE_CMD = process.env.SPEXCODE_CLAUDE_CMD || 'claude --dangerously-skip-permissions'
 const COLS = 120, ROWS = 32
+// @@@ concurrency cap - the most working agents we let run AT ONCE. Heavy multi-agent load (many claude
+// processes computing simultaneously) was the source of resource-pressure crashes, so a launch beyond the
+// cap is QUEUED, not started: it becomes a durable `queued` worktree that the drainer launches the moment a
+// slot frees (an agent proposes/dies). Configurable; default 6. Floored at 1 so a bad env can't wedge it to 0.
+const MAX_ACTIVE = Math.max(1, Number(process.env.SPEXCODE_MAX_ACTIVE) || 6)
 
 // @@@ appendSysArg - a dashboard/CLI-launched session gets ONLY the human's terse prompt; nothing else
 // carries SpexCode's always-on contracts (the dogfood ritual, voice-before-ask, …), so agents kept e.g.
@@ -137,9 +142,9 @@ function replyViaSocket(sock: string, text: string): Promise<DispatchResult> {
   })
 }
 
-export type Lifecycle = 'active' | 'idle' | 'awaiting' | 'blocked' | 'error' | 'needs-input'
+export type Lifecycle = 'active' | 'idle' | 'awaiting' | 'blocked' | 'error' | 'needs-input' | 'queued'
 export type Proposal = 'merge' | 'nothing' | 'close'
-export type DisplayStatus = 'working' | 'idle' | 'offline' | 'review' | 'done' | 'close-pending' | 'blocked' | 'error' | 'needs-input'
+export type DisplayStatus = 'working' | 'idle' | 'offline' | 'review' | 'done' | 'close-pending' | 'blocked' | 'error' | 'needs-input' | 'queued'
 const PROPOSAL_STATUS: Record<Proposal, DisplayStatus> = { merge: 'review', nothing: 'done', close: 'close-pending' }
 
 export type Session = {
@@ -165,6 +170,23 @@ function readPromptFile(dir: string): string | null {
     return s.trim() ? s : null
   } catch { return null }
 }
+// @@@ deferred launch prompt - a QUEUED session is a fully-prepared worktree we have NOT launched claude
+// into yet. The exact prompt to launch it with — the directive-generated finish-the-op prompt, or the plain
+// human prompt — is parked in its own untracked sidecar (`.session-launch`) so the drainer can launch it
+// later (possibly after a backend restart) WITHOUT re-deriving anything. It is CONSUMED (removed) the moment
+// the session launches, so it exists only while a session is still waiting in the queue. Distinct from
+// `.session-prompt` (the human-facing originating ask, which differs from the launch prompt for directives).
+const LAUNCH_FILE = '.session-launch'
+function writeLaunchFile(dir: string, prompt: string): void {
+  try { writeFileSync(join(dir, LAUNCH_FILE), prompt) } catch { /* best-effort; the drainer treats a missing file as nothing-to-launch */ }
+}
+function readLaunchFile(dir: string): string | null {
+  try { const p = join(dir, LAUNCH_FILE); return existsSync(p) ? readFileSync(p, 'utf8') : null } catch { return null }
+}
+function removeLaunchFile(dir: string): void {
+  try { rmSync(join(dir, LAUNCH_FILE), { force: true }) } catch { /* best-effort */ }
+}
+
 // a one-line preview of the originating prompt for tables/events: first non-empty line, truncated.
 function promptPreview(prompt: string, n = 60): string {
   const first = prompt.split('\n').map((l) => l.trim()).find(Boolean) || ''
@@ -199,7 +221,7 @@ function readSessionFile(dir: string): SessRec {
     if (k === 'node') r.node = v || null
     else if (k === 'title') r.title = v || null
     else if (k === 'session') r.session = v || null
-    else if (k === 'status' && (v === 'active' || v === 'idle' || v === 'awaiting' || v === 'blocked' || v === 'error' || v === 'needs-input')) r.status = v
+    else if (k === 'status' && (v === 'active' || v === 'idle' || v === 'awaiting' || v === 'blocked' || v === 'error' || v === 'needs-input' || v === 'queued')) r.status = v
     else if (k === 'proposal' && v) r.proposal = v as Proposal
     else if (k === 'merges') r.merges = Number(v) || 0
     else if (k === 'note') r.note = v || null
@@ -254,7 +276,7 @@ async function liveTmux(): Promise<Set<string>> {
 // blocked / error / needs-input map straight to themselves. We never INFER those externally.
 function reconcile(rec: SessRec, live: Set<string>): DisplayStatus {
   if (rec.status === 'awaiting') return PROPOSAL_STATUS[rec.proposal || 'nothing']
-  if (rec.status !== 'active' && rec.status !== 'idle') return rec.status  // blocked | error | needs-input
+  if (rec.status !== 'active' && rec.status !== 'idle') return rec.status  // blocked | error | needs-input | queued (no tmux yet)
   // active/idle are the SAME live agent — claude runs whether it is churning OR waiting at its prompt — so
   // they share ONE deterministic liveness check: offline iff the tmux window is gone OR claude's rendezvous
   // socket is absent. claude (via the reclaude wrapper) holds CLAUDE_BG_RENDEZVOUS_SOCK open the whole time
@@ -568,9 +590,91 @@ function deleteNodePrompt(nodeId: string, relPath: string | null, rest: string):
     `Commit the removal + refactor on this node branch (\`spec: remove ${nodeId} — <reason>\`, with a Session: trailer), then declare at the Stop gate (session done --propose merge). Do NOT merge.`
 }
 
-// @@@ newSession - durable worktree (branch node/<slug> off main) + .session label, then launch claude
-// with the id we chose. Backs both the dashboard POST and `spex session new`. A board directive (nn/dd)
-// additionally mutates the worktree's spec tree up front and hands the agent a finish-the-op prompt.
+// @@@ concurrency cap + queue - keep at most MAX_ACTIVE agents WORKING at once. A session OCCUPIES a slot
+// while its agent is launched and still OWNS its task: its claude is genuinely live (tmux window present AND
+// rendezvous socket present) and it has not yet handed the work to a human (lifecycle `awaiting`). So
+// working/idle/blocked/needs-input/error agents that are actually alive each hold a slot; a session frees its
+// slot the moment it PROPOSES (review/done/close-pending), goes OFFLINE (crashed/exited — socket gone), or is
+// closed. Liveness is checked directly (the same socket truth reconcile uses) rather than off the display
+// status, so an authored state (blocked/error/needs-input) whose claude has since died does NOT pin a slot.
+// `queued` sessions never occupy. Resource pressure scales with concurrently-WORKING agents, which is exactly
+// this set — the cap throttles it; the rest wait as durable `queued` worktrees.
+function isOccupying(s: Session, live: Set<string>): boolean {
+  if (s.status === 'queued' || s.lifecycle === 'awaiting') return false   // not launched, or handed to a human
+  return live.has(s.id) && existsSync(rvSock(s.id))                       // a genuinely live claude (tmux + socket)
+}
+// sessions we've JUST launched whose rendezvous socket hasn't come up yet. During that boot window reconcile
+// reads them `offline` (socket absent) and isOccupying would miss them, so the drainer would over-launch and
+// blow past the cap. We hold the slot here from launch until the socket appears (waitForSocket) or times out.
+// In-memory in the single server process (the only drainer) — lost on restart, which is fine: a restart drains
+// the durable `queued` worktrees fresh with nothing in flight.
+const launching = new Set<string>()
+let draining = false   // re-entrancy guard: only one drain pass runs at a time (no double-launch)
+
+// launch a prepared `queued` worktree: feed it its parked launch prompt, flip it to active. Returns false
+// (leaving it queued, to be retried next drain) if the worktree/prompt is gone or the tmux launch threw.
+async function startQueued(id: string): Promise<boolean> {
+  const wt = await findWorktree(id)
+  if (!wt) return false
+  const launchPrompt = readLaunchFile(wt.path)
+  if (launchPrompt == null) return false   // a queued session always has one; if it's gone, don't spin on it
+  launching.add(id)   // hold the slot across the boot window BEFORE we launch, so a concurrent count can't race us
+  try {
+    const sq = `'${launchPrompt.replace(/'/g, `'\\''`)}'`
+    await launch(id, wt.path, `--session-id ${id} ${sq}`)
+  } catch {
+    launching.delete(id)
+    return false   // launch failed → stays `queued`, retried on the next drain tick
+  }
+  writeSessionFile(wt.path, { ...wt.rec, status: 'active', proposal: null })
+  removeLaunchFile(wt.path)   // consumed
+  // release the boot-window hold once the socket is up (then isOccupying takes over) or after the bounded
+  // wait — so a launch that never booted reads offline and the drainer reclaims the slot instead of pinning it.
+  void waitForSocket(id).finally(() => launching.delete(id))
+  return true
+}
+
+// @@@ drainQueue - start as many `queued` sessions as there are free slots, oldest first. Idempotent and
+// re-entrancy-guarded; safe to call on every slot-freeing event (newSession / close / propose) AND on a
+// periodic tick (superviseQueue) — the periodic tick is what catches the AGENT-authored transitions
+// (done/blocked written by a hook SUBPROCESS, which can't reach this server's queue). Re-lists each iteration
+// so a freshly launched session (held in `launching`) counts immediately and we never exceed the cap.
+export async function drainQueue(): Promise<void> {
+  if (draining) return
+  draining = true
+  try {
+    for (;;) {
+      const [sessions, live] = await Promise.all([listSessions(), liveTmux()])
+      const occupied = sessions.reduce((n, s) => n + (launching.has(s.id) || isOccupying(s, live) ? 1 : 0), 0)
+      if (occupied >= MAX_ACTIVE) break
+      const next = sessions.find((s) => s.status === 'queued' && !launching.has(s.id))
+      if (!next) break
+      if (!(await startQueued(next.id))) break   // launch failed → stop this pass; a later tick retries
+    }
+  } finally { draining = false }
+}
+
+// @@@ superviseQueue - the periodic drainer. Started once at serve(). The explicit drainQueue() calls on
+// newSession/close/propose cover the slot-freeing events the SERVER handles, but an agent proposing done or
+// going blocked writes its .session from a hook subprocess the server never sees, and a crash just makes a
+// socket vanish — so a timer is what turns those into freed slots. Cheap: one worktree+tmux snapshot per tick,
+// and a no-op when nothing is queued. Idempotent (guarded), so a second call is harmless.
+let supervisingQueue = false
+export function superviseQueue(intervalMs = 3000): void {
+  if (supervisingQueue) return
+  supervisingQueue = true
+  const tick = async () => {
+    try { await drainQueue() } catch { /* transient git/tmux hiccup; next tick retries */ }
+    setTimeout(tick, intervalMs)
+  }
+  void tick()
+}
+
+// @@@ newSession - durable worktree (branch node/<slug> off main) + .session label. The agent does NOT
+// launch inline any more: the worktree is prepared and parked as `queued`, then drainQueue() launches it
+// immediately if we're under the concurrency cap, else it waits its turn. Backs both the dashboard POST and
+// `spex session new`. A board directive (nn/dd) additionally mutates the worktree's spec tree up front and
+// hands the agent a finish-the-op prompt.
 export async function newSession(node: string | null, prompt: string): Promise<Session> {
   const id = randomUUID()
   const directive = parseDirective(prompt)
@@ -584,12 +688,15 @@ export async function newSession(node: string | null, prompt: string): Promise<S
   const branch = `node/${slug}`
   const path = join(mainRoot(), '.worktrees', slug)
   await gitA(['-C', mainRoot(), 'worktree', 'add', '-b', branch, path, 'main'])
-  const rec: SessRec = { node: ref || null, title, session: id, status: 'active', proposal: null, merges: 0, note: null }
+  // prepared but NOT launched: enters the queue as `queued`. drainQueue() below launches it at once when a
+  // slot is free, else it waits — durable as a worktree, so it survives a backend restart and is still findable.
+  const rec: SessRec = { node: ref || null, title, session: id, status: 'queued', proposal: null, merges: 0, note: null }
   writeSessionFile(path, rec)
   writePromptFile(path, prompt)   // capture the ORIGINATING prompt (the human/manager's ask) as sidecar metadata (best-effort)
   await hideClaudeMd(path)   // isolate the dispatched agent from the project CLAUDE.md (before launch)
-  // perform the directive's spec-tree mutation in the worktree, then dispatch the finish-the-op prompt.
-  // the mutation is uncommitted, so the board's overlay shows it instantly (added ghost / deleted mark).
+  // perform the directive's spec-tree mutation in the worktree, then PARK the finish-the-op prompt for launch.
+  // the mutation is uncommitted, so the board's overlay shows it instantly (added ghost / deleted mark) even
+  // while the session only sits queued.
   let launchPrompt = prompt
   if (directive?.kind === 'new') {
     const placeholderId = `untitled-${id.slice(0, 4)}`
@@ -598,9 +705,10 @@ export async function newSession(node: string | null, prompt: string): Promise<S
   } else if (directive?.kind === 'delete') {
     launchPrompt = deleteNodePrompt(directive.targetId, removeNode(path, directive.targetId), directive.rest)
   }
-  const sq = `'${launchPrompt.replace(/'/g, `'\\''`)}'`
-  await launch(id, path, `--session-id ${id} ${sq}`)
-  return toSession(rec, branch, path, 'working')
+  writeLaunchFile(path, launchPrompt)   // park the exact launch prompt for the drainer (consumed at launch)
+  await drainQueue()                    // launch now if under the cap, else leave it queued for a free slot
+  const after = readSessionFile(path)   // 'active' if the drain launched it, else still 'queued'
+  return toSession(after, branch, path, after.status === 'queued' ? 'queued' : 'working')
 }
 
 // @@@ waitForSocket - after a relaunch, the resumed claude needs SEVERAL SECONDS to boot and recreate its
@@ -650,6 +758,7 @@ export async function propose(id: string, proposal: Proposal): Promise<boolean> 
   const wt = await findWorktree(id)
   if (!wt) return false
   writeSessionFile(wt.path, { ...wt.rec, status: 'awaiting', proposal })
+  void drainQueue()   // a proposal frees this session's slot — start the next queued one if any
   return true
 }
 // @@@ agent-authored state - the agent (forced by gates at boundaries) writes its OWN state to
@@ -692,7 +801,7 @@ export function markIdleFromCwd(): boolean {
 // cwd = the session worktree; ALL git goes through git() so the hook's exported GIT_DIR/GIT_INDEX_FILE can't
 // misdirect repo discovery to the cwd (the same trap git.ts documents). `main` resolves via the shared refs,
 // so `main..HEAD` works from any linked worktree regardless of where main is checked out.
-const RUNTIME_FILES = new Set(['.session', '.session-prompt', '.spex-hooks.json', '.spex-launch.sh', 'CLAUDE.spexhidden.md'])
+const RUNTIME_FILES = new Set(['.session', '.session-prompt', '.session-launch', '.spex-hooks.json', '.spex-launch.sh', 'CLAUDE.spexhidden.md'])
 export function mergeReadiness(): { ready: boolean; reason?: string } {
   let dirty: string[] = []
   try {
@@ -741,14 +850,19 @@ export async function mergeSession(id: string): Promise<{ ok: boolean; dispatche
   return r.ok ? { ok: true, dispatched: true } : { ok: false, error: r.error ?? 'agent not reachable' }
 }
 
-// @@@ closeSession - the ONLY removal (human-confirmed): kills tmux, removes the worktree + branch.
+// @@@ closeSession - the ONLY removal (human-confirmed): kills tmux, sweeps the rendezvous socket, removes
+// the worktree + branch. The rendezvous socket lives in the OS tmpdir (NOT the worktree), so worktree removal
+// alone leaves it behind — closing many sessions over time would accumulate stale `spexcode-rv-*.sock` files.
+// We unlink it here so no dead control endpoint lingers (rmSync force = no error if claude already removed it).
 export async function closeSession(id: string): Promise<boolean> {
   const wt = await findWorktree(id)
   await tmuxOk(['kill-session', '-t', id])
+  try { rmSync(rvSock(id), { force: true }) } catch { /* best-effort sweep; tmpdir socket, claude/OS may already be gone */ }
   if (wt) {
     await gitA(['-C', mainRoot(), 'worktree', 'remove', '--force', wt.path])
     if (wt.branch) await gitA(['-C', mainRoot(), 'branch', '-D', wt.branch])
   }
+  void drainQueue()   // a close frees a slot — start the next queued session if any
   return !!wt
 }
 
@@ -770,10 +884,10 @@ export async function captureSession(id: string): Promise<string> {
 // @@@ presentation + selection - shared by `spex ls` (pretty), `spex watch` (events) and the API.
 export const STATUS_GLYPH: Record<DisplayStatus, string> = {
   working: '\u25cf', idle: '\u25cb', offline: '\u23fb', review: '\u25c6', done: '\u2713',
-  'close-pending': '\u2715', blocked: '\u29d6', error: '\u2717', 'needs-input': '\u2370',
+  'close-pending': '\u2715', blocked: '\u29d6', error: '\u2717', 'needs-input': '\u2370', queued: '\u25cc',
 }
 const ANSI: Record<DisplayStatus, string> = {
-  working: '33', idle: '90', offline: '90', review: '35', done: '34', 'close-pending': '31', blocked: '36', error: '31', 'needs-input': '93',
+  working: '33', idle: '90', offline: '90', review: '35', done: '34', 'close-pending': '31', blocked: '36', error: '31', 'needs-input': '93', queued: '90',
 }
 
 // a session matches a selector if the selector is its id (or an id-prefix), its node, or its branch.
@@ -828,6 +942,7 @@ const NEXT: Record<string, string> = {
   error: 'reopen (relaunch & retry) | capture | close',
   'needs-input': 'send "<msg>" | capture',
   idle: 'send "<msg>" | capture',
+  queued: 'waiting for a free slot — starts automatically | close',
 }
 export function sessionEvent(s: Session): string {
   const note = s.note ? ` — note: ${s.note}` : ''

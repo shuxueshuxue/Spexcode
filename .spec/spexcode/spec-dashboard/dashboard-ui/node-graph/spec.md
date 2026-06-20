@@ -15,69 +15,22 @@ code:
 ---
 # node-graph
 
-## raw source
+A stable tidy-tree map of the spec-node neighbourhood: navigate by **relationship**, not by hunting a full forest where siblings blur into cousins. The tree sits at **fixed absolute positions and never re-plots** — per keystroke the viewpoint moves; only highlight / dim / edge colour change. Layout is horizontal left→right: depth is the column (root at the left), siblings stack as rows, parents centre over their children, tiles never touch, and edges read bold when they touch the focus, faint otherwise. Keys follow the same relationships (see [[keyboard-nav]]).
 
-Show the local neighbourhood and navigate by relationship — the full-forest view confused siblings with
-cousins. The tree sits at fixed absolute positions and never re-plots: the viewpoint moves, only
-highlight / dim / edge colour change per keystroke.
+Each node is a tight **two-row tile** — not a card — so the whole tree fits one screen; a reader sees at a glance both *what this node is* and *who/when*.
 
-Each node is a small **two-row** tile, kept tight so the tree still fits on one screen. The top row is the
-node's **identity** — what it is and its state. The second row is its **people** — who is editing it right
-now, or, when nobody is, how long since it was last edited. A reader should see at a glance both "what is
-this node" and "who/when". Node width is sized to let longer titles read (overflow ellipsises).
+**Row 1 — identity:** `status dot · title · version` plus overlay marks. The dot shows the backend-**derived** four-state (see [[spec-node-states]]): green merged, orange active (pulsing), yellow drift (with a commits-ahead `⚠N` badge), grey pending. A worktree's pending ops stamp glyphs in the author session's colour — `+` added, `~` edited, `✕` deleted, `→` moved — with a dashed ring while uncommitted; an `added`-only node draws as a translucent ghost. A live author session also stamps a subtle `⏎` (click / Enter opens that session).
 
-## expanded spec
+**Row 2 — people & recency:** a node's *live editors* are the sessions whose pending ops currently touch it (the live overlay, never the historical `session` trailer). With editors, one **avatar** each ringed by liveness and capped with `+N`; with none, it falls back to **"last edited … ago"**, or "no versions yet" when there is no committed history.
 
-Layout is horizontal, left→right — depth sets the column (root at the left), siblings stack as rows, and
-parents centre vertically over their kids. Row and column spacing track the two-row node box so tiles never
-touch. Edges read bold when they touch the focus, faint otherwise. Keys follow the same relationships (see
-[[keyboard-nav]]).
+**Avatars** are deterministic, generated from the session id (the dashboard has no real accounts). Rendering is a **pluggable provider seam**: a higher-priority provider registered later (e.g. id → real image) swaps every face with no change to the node renderer.
 
-**Row 1 — identity.** `status dot · title · version`, plus overlay marks. The dot reads the backend-**derived**
-four-state value (see [[spec-node-states]]): green = merged, orange = active, yellow = drift, grey = pending;
-active pulses, and drift shows its commits-ahead `⚠N` badge. A worktree's pending ops are stamped as glyphs —
-`+` added, `~` edited, `✕` deleted, `→` moved — in the author session's colour, with a dashed ring while
-uncommitted and an `added`-only node drawn as a translucent ghost. A node whose author session is live also
-stamps a subtle `⏎` (click / Enter opens that session).
+**One colour system.** A session's avatar face and its *labelling colour* — node ring/overlay, the `⏎`, the reparent edge, the session-row stripe — derive from the SAME hash of the SAME seed (the session id), so a session's face and every mark that names it share one hue. The backend emits a stable `seed` per worktree (its live session id, else its path); the dashboard derives the colour.
 
-**Row 2 — people & recency.** A node's *live editors* are the sessions whose pending ops currently touch it
-(the live overlay — never the historical `session` trailer). When there are any, the row shows one **avatar**
-per editor, ringed by that session's liveness (working / idle / offline) and capped with a `+N` overflow.
-When there are none, it falls back to **"last edited … ago"** (from the node's latest-version date), or
-"no versions yet" for a node with no committed history.
+A **leaf** node carries a small `+` button on its right edge (revealed on hover/focus): a SECOND entry to the `nn` new-node chord (see [[keyboard-nav]]) that opens the New Session tab pre-seeded with `@new under @<id>` for that node. It is purely additive — it never moves focus/selection.
 
-Avatars are **deterministic and generated** from the session id: the dashboard has no real accounts, so a
-stable face (colour + glyph + shape, hashed from the id) stands in for each session with no storage. Avatar
-rendering is a **pluggable provider seam** — a higher-priority provider registered later (e.g. one mapping a
-session id to a real image asset) swaps every avatar on the board with no change to the node renderer.
+A `moved` overlay carrying `toParent` draws a **faint dashed arrow** to the node's proposed new parent, in the author session's colour, so a human SEES the reparent before it merges — overlaid on, never replacing, the solid tree edges.
 
-**One colour system.** Both a session's avatar face and its *labelling colour* — the node ring/overlay, the
-`⏎` link, the reparent edge, and the session-row stripe — derive from the SAME hash of the SAME seed (the
-session id), so a session's face and every mark that names it always share one hue (`color.js`:
-`hash → hueFor → {avatarColors, labelColor}`). The backend no longer picks colours: it emits a stable `seed`
-per worktree (its live session id, else its path) and the dashboard derives the colour. A worktree with no
-session falls back to its path as the seed, so its overlays still get a stable colour.
+Because this vocabulary is dense, a **floating legend** decodes it on demand (`?` toggles, Esc closes), reading its swatches from the SAME constants the nodes render from so it can never drift. The legend and the [[settings]] popup share one centered-modal chrome (`Modal.jsx`).
 
-A **leaf** node (one with no children) carries a small `+` button pinned to its right edge, revealed on
-hover/focus. It is a SECOND entry to the `nn` new-node chord (see [[keyboard-nav]]): clicking it opens the
-session board's New Session tab with the *same* `@new under @<id>` directive pre-seeded for that node — the
-identical create-child path the chord fires, just keyed to the clicked node rather than the focused one. The
-click is purely additive: it opens the create affordance without moving focus/selection off the current node.
-
-A `moved` overlay also carries `toParent` (the node's *proposed* new parent); when it does, the board draws a
-**faint dashed arrow** from the node to that parent, in the author session's colour, so a human can SEE the
-reparent before it merges. It is deliberately subtle and overlaid on top of, never replacing, the solid tree
-edges of the present structure.
-
-Because this visual vocabulary is dense, a **floating legend** decodes it on demand (`?` toggles it, Esc
-closes). It reads its swatches from the SAME `STATUS`/`GLYPH` constants the nodes render from, so it can never
-drift from the real symbols. `?`/Esc are handled in the graph-mode branch of the capture-phase keydown
-handler, below the modal guards, so the legend never disturbs (or is disturbed by) an open popup or session
-interface. The legend and the [[settings]] popup share **one** centered-modal chrome — `Modal.jsx` (backdrop
-+ titled header with × close + scrollable body) — so both look and behave identically from a single
-definition rather than two hand-rolled copies.
-
-The board and the session console are **bidirectionally linked**: a node's live editors map to live sessions
-by exact id, so the same overlay that draws Row 2's avatars also drives the `⏎` affordance and Enter →
-the session interface (see [[session-console]]). The reverse half: clicking a session row focuses its first
-changed node. Nodes with no live editor just focus on click.
+The board and the session console are **bidirectionally linked**: live editors map to live sessions by exact id, driving both Row 2's avatars and the `⏎` → session interface (see [[session-console]]); clicking a session row focuses its first changed node, and nodes with no live editor focus on click.

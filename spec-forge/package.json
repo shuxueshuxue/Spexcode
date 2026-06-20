@@ -3,12 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Host-agnostic forge projection — projects pending spec nodes out as forge issues. git/.spec stays canonical; the forge is a projection and never flows back as authority.",
+  "description": "Host-agnostic forge link tracer — reads a forge's open issues/PRs and resolves each to the spec node it serves (issue-body `Spec: <id>` marker + `node/<id>` PR branch). Read-only; a node's status stays git-derived.",
   "scripts": {
-    "proof": "tsx src/proof.ts",
-    "outbound-proof": "tsx src/outbound-proof.ts",
-    "inbound-proof": "tsx src/inbound-proof.ts",
-    "seam-proof": "tsx src/seam-proof.ts"
+    "proof": "tsx src/proof.ts"
   },
   "devDependencies": {
     "@types/node": "^20.16.0",

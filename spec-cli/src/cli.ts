@@ -34,7 +34,7 @@ Specs / graph
   ack <node>            stamp Spec-OK:<node> trailer on HEAD (this code change keeps <node>'s spec valid)
   serve                 run the API server (http://localhost:8787)
   board                 dump the dashboard board state as JSON
-  forge <sub>           project the graph to a forge (read-only): list [--host github|gitlab] | mirror <nodeId>  [--json]
+  forge <sub>           trace a forge's issues/PRs onto spec nodes (read-only): links [--host github] [--node <id>] [--json]
   review <id>           manager cockpit: review a session (ahead·merge-base diff·gates·proposal)  [--json]
   merge <id>            manager cockpit: gated atomic merge into main (re-checks gates, then closes)  [--keep]
 
@@ -118,9 +118,9 @@ if (cmd === 'serve') {
   else console.error(`merge blocked: ${r.reason}`)
   process.exit(r.merged ? 0 : 1)
 } else if (cmd === 'forge') {
-  // @@@ forge - the spec-forge projection on this CLI: list the graph's pending nodes as a chosen host's
-  // forge issues (read-only, zero network — git/`.spec` stays canonical). Logic lives in spec-forge; this
-  // is just routing. `spex forge list [--host github|gitlab] [--json]` | `spex forge mirror <nodeId>`.
+  // @@@ forge - the spec-forge link tracer on this CLI: read a forge's open issues/PRs and resolve each to
+  // the spec node it serves (read-only — a node's status stays git-derived). Logic lives in spec-forge;
+  // this is just routing. `spex forge links [--host github] [--node <id>] [--json]`.
   const { runForge } = await import('../../spec-forge/src/cli.js')
   process.exit(await runForge(process.argv.slice(3)))
 } else if (cmd === 'board') {

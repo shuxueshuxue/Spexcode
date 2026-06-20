@@ -2,33 +2,31 @@
 title: port
 status: active
 hue: 280
-desc: The host-agnostic forge port (ForgeDriver) + its first read-only github driver projecting pending nodes as issue rows.
+desc: The host-agnostic forge port (ForgeDriver) that READS a host's open issues/PRs, plus its first real driver — github via the gh CLI.
 code:
   - spec-forge/src/port.ts
   - spec-forge/src/drivers/github.ts
-  - spec-forge/src/proof.ts
 ---
 # port
 
 The seam of [[spec-forge]]: a single **host-agnostic port** naming the abstraction, with **per-host
-drivers** behind it. The name is the seam, never the vendor — a driver maps the port's vendor-neutral
-shape onto its host (`github` here; `gitlab`, Bitbucket later).
+drivers** behind it. The name is the seam, never the vendor.
 
-The non-negotiable contract holds at the port: **git/`.spec` is the single source of truth; a forge is
-only a projection and NEVER flows back as authority.** Every port method is therefore a one-way read
-OUT of the graph — nothing mutates a node's version or status.
+Unlike a projection, the port **reads the forge**. Its two verbs fetch a host's open work objects —
+`listIssues() → ForgeIssue[]` and `listPRs() → ForgePR[]`. `ForgeIssue` is the small stable subset an
+issue collapses to on every host (number, title, body, url, state, labels — the body is where the
+`Spec: <id>` marker lives); `ForgePR` adds `headRefName` (the `node/<id>` branch = a free structural link)
+and `closesIssues` (the issue numbers it closes, for transitive linking). These vendor-neutral shapes are
+exactly what lets one port cover GitHub/GitLab/Bitbucket.
 
-**Port surface (this slice):** `listPending() → IssueRow[]`. `IssueRow` is the small, stable common
-subset a forge issue collapses to on every host — `title`, `body`, `labels` — which is exactly what
-lets one port cover GitHub/GitLab/Bitbucket.
+A driver is the **only** thing that touches the network/CLI; it does no link resolution (that is
+host-agnostic, in [[links]]). The first real driver is **`github`**, which wraps the **`gh` CLI** — reusing
+the user's existing auth and `gh`'s repo auto-detection rather than handling tokens itself. It **fails
+loud**: an absent or unauthenticated `gh` throws with gh's own message, so a broken `gh` never looks like
+an empty forge.
 
-**First driver — `github` (read-only):** reuses spec-cli's `loadSpecs` (it does NOT reimplement the
-`.spec` reader), keeps the nodes whose derived status is `pending` — the graph's native "open issues" —
-and projects each as an issue-shaped row. Strictly read-only: it returns objects, performs zero network
-calls, and writes nothing.
+The contract holds at the port: it is **read-only**. A driver fetches and returns objects and writes
+nothing — not to the forge, and never to a node's version or status (which stays git-derived).
 
-**Proof:** `npm run proof` drives the driver and prints the projection. The listing is the first proof
-the abstraction holds end-to-end.
-
-Out of scope for this slice (later siblings): outbound mirror, inbound triage, gitlab, and any real
-network or CLI/API wiring.
+Out of scope here: the link resolution itself ([[links]]), the CLI surface ([[forge-cli]]), and any second
+driver (gitlab/bitbucket wrapping their own CLI later).

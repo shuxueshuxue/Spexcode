@@ -3,34 +3,38 @@ title: spec-forge
 status: active
 session: 3def572e
 hue: 280
-desc: A built host-agnostic forge projection — one ForgeDriver port, per-host drivers, mirror out + triage in; git/.spec stays canonical.
+desc: A forge link tracer — reads a forge's open issues/PRs and resolves each to the spec node it serves (issue-body marker + node/<id> PR branch). Read-only; a node's status stays git-derived.
 ---
 # spec-forge
 
-A sibling package (alongside spec-cli, spec-dashboard, spec-yatsu) that bridges the spec graph to
-external **forges** — git hosts with issues and code review (GitHub, GitLab, and the like). The
-bridge is a single host-agnostic **[[port]]** (`ForgeDriver`) that names the abstraction; **per-host
-drivers** sit behind it. Two drivers exist today — `github` and **[[gitlab]]** — and they are proven
-substitutable through the one shared type: the same port covers both hosts. The name is the seam,
-never the vendor.
+A sibling package (alongside spec-cli, spec-dashboard, spec-yatsu) that relates an external **forge**'s
+work objects to the spec graph. The two are different *kinds* of thing on different axes: a spec node
+**defines** (the condition/need), while a forge **issue/PR does** (the working process toward it). An
+issue is therefore not a node mirrored out — it is the work spawned by the gap between a node and reality.
+So spec-forge does not project the graph onto a forge; it **reads the forge and links its work back to the
+nodes that work serves.**
 
-The non-negotiable contract: **git/`.spec` is the single source of truth; the forge is only a
-projection and never flows back as authority.** SpexCode already *is* the issue/PR system — pending
-nodes are issues, `node/*` branches and `--no-ff` merges are PRs — so a forge state (webhook, label,
-PR merge) must never mutate a node's version or status. That would reinstate the second source of
-truth this project exists to retire.
+The bridge is a single host-agnostic **[[port]]** (`ForgeDriver`) that *reads* a host's open issues and
+PRs; per-host drivers sit behind it (`github` via `gh` today; gitlab/bitbucket later). The host-agnostic
+**[[links]]** resolver then inverts that raw work into `node → { issues, prs }`. The capstone **[[forge-cli]]**
+exposes it on the real CLI as `spex forge links`.
 
-Integration runs in two bounded, read-only directions, both leaving spec truth upstream:
+**How a forge object names its node — three sources, no datastore of our own:**
 
-- **Outbound mirror ([[outbound]]):** `mapStatus` turns a node's status into labels and `mirrorNode`
-  projects a node out as a PR-shaped `MirrorPR` (title, `node/<id>` head, `main` base, status
-  labels) — so collaborators who haven't adopted SpexCode still see motion.
-- **Inbound triage ([[inbound]]):** `importIssues` pure-maps a forge issue to a `PendingNode`
-  descriptor (slug, title, desc, provenance) — born outside, then it lives in the graph. Provenance
-  is recorded but is never authority, and no node is created here.
+- **PR branch (free):** a PR heading off `node/<id>` is structurally bound to that node — the convention
+  SpexCode worktrees already use, no marker needed.
+- **Issue-body marker (the one convention):** an issue body line `Spec: <node-id>` (comma-separated for
+  several) names the node(s) it serves. Chosen over labels because it needs no per-node label
+  pre-creation and scales to any number of nodes while staying human-visible.
+- **Transitive (free):** an unmarked issue still links through a PR that closes it on a node branch
+  (issue ← `closingIssuesReferences` ← PR → node).
 
-The projection is reachable on the real CLI through **[[forge-cli]]** (`spex forge list` / `mirror`),
-not just standalone proof scripts.
+The non-negotiable contract: **git/`.spec` is the single source of truth.** The forge owns *execution*
+(its issues/PRs), the graph owns *definition*, and the two authorities never cross. Definition flows
+DOWN (a node motivates work); the tracer never writes a node's version or status — a node's status stays
+**git-derived** (`deriveStatus`), so the only execution fact that reaches the graph (a merge) arrives
+through git, never through this package.
 
-Out of scope: real network/API wiring to a live host and any write-back *from* a forge. The drivers
-are deterministic and zero-network; nothing reaches outward and nothing flows back inward as truth.
+Out of scope: any write *to* a forge from the tracer, and surfacing links in the dashboard (a sibling
+node — this package is CLI-first because frontend can't be verified here). Reading is live; everything
+else is read-only.

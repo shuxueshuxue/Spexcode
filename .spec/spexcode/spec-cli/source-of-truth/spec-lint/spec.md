@@ -20,7 +20,7 @@ intent, not mechanics.
 
 ## expanded spec
 
-`spex lint` (the `spex` CLI, `cli.ts` → `lint.ts`, over `loadSpecs()` from `specs.ts`) checks four
+`spex lint` (the `spex` CLI, `cli.ts` → `lint.ts`, over `loadSpecs()` from `specs.ts`) checks five
 rules:
 
 - **integrity** (error): every file a spec lists in `code:` exists — broken links block.
@@ -30,6 +30,12 @@ rules:
 - **coverage** (warn): every governed source file (under the governed roots) is claimed by ≥1 spec —
   no orphan code.
 - **drift** (warn): a governed file has commits newer than its spec's latest version → maybe stale.
+- **altitude** (warn): a body still describes *intent and contract*, not a re-narration of the
+  implementation. It can't be judged deterministically, so the rule fires on cheap proxies of a
+  mechanics dump — a body grown long (non-blank lines / chars over a soft budget), or thick with code
+  identifiers per line, or written as step-by-step how-to. Budgets are tuned so today's concise specs
+  pass and only a genuine dump warns; identifiers/steps are counted from prose only (a fenced code
+  sample inflates length, not density). A WARN, like coverage/drift — lint stays 0 errors.
 
 No file hashes are stored — git is already the hash database, so drift is derived live from git
 ancestry (commits a governed file moved ahead of the spec's latest version). The pre-commit hook is a

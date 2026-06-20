@@ -442,17 +442,26 @@ function parseNameStatus(out: string): { code: string; from: string; to: string 
   return rows
 }
 
-// @@@ worktreeSpecDelta - what this worktree changes about the spec tree vs `mainRef`. The op set is
-// read from ONE diff of mainRef against the worktree's WORKING TREE (`git diff <ref>`), which already
-// folds committed + staged + unstaged into the final state (an add-then-uncommitted-delete cancels
-// out, etc.). Untracked new spec.md don't show in that diff, so a `status --porcelain` pass adds them
-// as `added` and marks which paths are dirty; a third diff vs HEAD marks what's actually committed.
+// @@@ worktreeSpecDelta - what this worktree changes about the spec tree vs main. The op set is read
+// from ONE diff of the FORK POINT against the worktree's WORKING TREE (`git diff <base>`), which folds
+// committed + staged + unstaged into the final state (an add-then-uncommitted-delete cancels out, etc.).
+// Untracked new spec.md don't show in that diff, so a `status --porcelain` pass adds them as `added` and
+// marks which paths are dirty; a third diff vs HEAD marks what's actually committed.
+// @@@ staleness gate - the base is `git merge-base main HEAD` (the worktree's FORK POINT), NOT main's
+// HEAD. Diffing against main HEAD made a worktree merely BEHIND main (stale — e.g. a long-lived session
+// that never advanced) show main's NEWER content as a phantom "edit" it never made. Anchoring the diff at
+// the fork point means main's post-fork commits live on main's side of the merge-base and never enter the
+// diff, so staleness registers as nothing — while EVERY genuine worktree change (committed on the branch
+// AND uncommitted/dirty, distinction preserved) still appears, since those live on the worktree's side.
 export async function worktreeSpecDelta(wtPath: string, mainRef: string): Promise<NodeOp[]> {
   const run = (args: string[]) => gitA(['-C', wtPath, '-c', 'core.quotePath=false', ...args])
+  // fork point = where this worktree branched from main; '' (no common ancestor / unreadable ref) falls
+  // back to mainRef so we still surface changes rather than going silent.
+  const base = (await run(['merge-base', mainRef, 'HEAD'])).trim() || mainRef
   // the three queries are independent — run them in parallel.
   const [workOut, commOut, statusOut] = await Promise.all([
-    run(['diff', '--name-status', '-M', mainRef, '--', '.spec']),
-    run(['diff', '--name-status', '-M', `${mainRef}...HEAD`, '--', '.spec']),
+    run(['diff', '--name-status', '-M', base, '--', '.spec']),
+    run(['diff', '--name-status', '-M', `${base}...HEAD`, '--', '.spec']),
     run(['status', '--porcelain', '--untracked-files=all', '--', '.spec']),
   ])
   const work = parseNameStatus(workOut)

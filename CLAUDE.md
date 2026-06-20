@@ -21,14 +21,25 @@ Doer (in the `node/<id>` worktree):
    "Git is the database" below).
 3. Commit on the node branch: `spec: <id> — <reason>`, with a `Session: <sess-id>` trailer in the
    commit **body** — that trailer is the version's attribution (see "Git is the database" below).
-4. **Propose** the merge — don't merge yourself: commit first, then `spex done --propose merge`. (A
-   manual `git merge` from the worktree trips the safety gate, which expects the branch to still be
-   ahead of `main`.) The doer's job ends here, with the proposal awaiting review.
+4. **Propose** the merge — don't merge yourself: commit first, then `spex session done --propose
+   merge`. (A manual `git merge` from the worktree trips the safety gate, which expects the branch to
+   still be ahead of `main`.) The doer's job ends here, with the proposal awaiting review.
 
 Manager (the human reviewer, after reviewing the proposal):
 
-5. Merge into `main` with `--no-ff`: `merge node/<id>: <reason>`.
+5. Merge into `main` with `--no-ff`: `merge node/<id>: <reason>`. The merge is itself a **dispatch** —
+   the manager reopens the session and the session's *own* agent runs the `git merge` (it knows the
+   work's intent and can resolve conflicts); the server never touches `main`'s tree.
 6. Delete the node branch; retire the worktree.
+
+**Why a dispatched worker is never told the ritual.** This file (`CLAUDE.md`) is auto-loaded only by
+the *managing* session; a dispatched worker runs with it **hidden** (`hideClaudeMd`) and gets a
+**task-only** prompt. The ritual still reaches the worker through product *mechanism*, not prose: the
+backend creates the `node/<id>` branch, the `prepare-commit-msg` hook stamps the `Session:` trailer,
+the commit-before-declare contract is the **`.config/core`** node folded into the worker's
+`--append-system-prompt` (there is no baked `CORE_CONTRACT` constant — the contract is *data*, a
+config node), and the `--no-ff` merge style is stated at merge time by the merge prompt. So don't
+restate the flow when dispatching — the system enforces it.
 
 `main-guard` (a pre-commit hook) **blocks direct commits on `main`**; merges pass because `MERGE_HEAD`
 is set, and node-branch commits pass because they aren't on `main`. Escape hatch for seeding/topology
@@ -42,12 +53,25 @@ file (`node:` / `session:` / `status:` lines) that the layout linker reads.
 
 - A node = a directory under `.spec/` containing a `spec.md`. `id` = directory basename; `parent` =
   the nearest ancestor directory that also has a `spec.md`. The tree root is **`.spec/spexcode`**
-  (the project), with package children `spec-dashboard` (UI), `spec-cli` (server + source-of-truth
-  guards), and `spec-yatsu` (pending). A node is a *directory*, not a file — that's what lets it both
-  nest (children = subdirs) and co-locate assets; the id lives in the dir name, so the file is always
-  `spec.md` (never `<id>.md` — that would duplicate the id).
+  (the project). Its children are the package nodes — `spec-cli` (Hono backend + source-of-truth
+  guards), `spec-dashboard` (UI), and `spec-forge` (a *pending* host-agnostic forge bridge) — plus
+  the **reflexive config system** (`.config` and `config`, next bullet). (`spec-dashboard` also owns a
+  pending `yatsu-evidence` child — the designed-not-built computer-use A→B evidence path.) A node is a
+  *directory*, not a file — that's what lets it both nest (children = subdirs) and co-locate assets;
+  the id lives in the dir name, so the file is always `spec.md` (never `<id>.md` — that would
+  duplicate the id).
+- **The config system is reflexive** — SpexCode's own dev-flow behavior is itself spec nodes, managed
+  by the same dogfood ritual. Two roots sit under `spexcode`: **`.config`** holds the concrete
+  *instance* plugins (`core`, `voice-before-ask`, `tidy`, `health`); **`config`** holds the *spec of
+  the config system* itself (`surface`). Each plugin is a **flat** child carrying a `surface`
+  frontmatter **field** — `surface: system` folds its body verbatim into every launched agent's
+  `--append-system-prompt`; `surface: slash` exposes it as a `/`-dropdown preset for new sessions.
+  There are no `system/`/`slash/` bucket dirs and no path-driven surface — the surface *is* the field,
+  so every plugin is a real graph child. `spec-cli`'s `loadSystemConfig`/`loadConfig` gather the two
+  surfaces; only built/active plugins gather (a `pending` plugin renders on the board but reaches no
+  surface).
 - `spec.md` = frontmatter (`title`, `status` ∈ merged|active|pending, `session`, `hue`, `desc`,
-  optional `code:` list) + a markdown body.
+  optional `code:` list; config nodes also carry a `surface` field) + a markdown body.
 - **The body is a living current-state document, never a changelog.** It always describes the node's
   *present* intent; you rewrite it in place, you do not accrete `## vN` sections. (Markdown headings
   `## …` / `###` are fine for *structure* — what's banned is a heading whose text is a version, i.e.
@@ -81,21 +105,30 @@ together — that is a project choice, not a git requirement.
 
 - `spec-cli/` — Hono backend, run with `tsx` (**no build step**; `npx tsc --noEmit` to type-check).
   Reads `.spec` + git live and serves `GET /api/specs`, `GET /api/specs/:id/history`,
-  `GET /api/layout`. Loader: `src/specs.ts`; git access: `src/git.ts`; portability seam:
-  `src/layout.ts` (`resolveLayout()`, optional `spexcode.json` override for non-default layouts).
+  `GET /api/layout`, `GET /api/config` (the gathered config surfaces), plus the `/api/sessions` state
+  machine. Loader: `src/specs.ts`; git access: `src/git.ts`; sessions/launch: `src/sessions.ts`;
+  portability seam: `src/layout.ts` (`resolveLayout()`, optional `spexcode.json` override for
+  non-default layouts).
 - `spec-dashboard/` — Vite + React. `src/data.js` fetches `/api/specs` and **decorates client-side**
   with only the x/y tidy-tree layout (a pure view concern — the backend has no pixels). Everything
   else, including the A→B `evidence` links, is served by the backend; the dashboard no longer
   fabricates screenshots (absent evidence reads as "none"). `data.js` still carries a mock session
   log as a stand-in for the real tmux/yatsu feed.
-- `spec-yatsu` — named as the third package (computer-use A→B evidence) but **not yet present**.
+- `spec-forge` — a third package node (a host-agnostic bridge that projects spec nodes out to
+  GitHub/GitLab issues & PRs, with git/`.spec` staying the single source of truth) but **pending —
+  not yet built**. The computer-use A→B *evidence* path is likewise designed-not-built, living as the
+  `yatsu-evidence` node under `spec-dashboard`.
 
 ## Running it
 
-- Backend: `npm run api` → http://localhost:8787
+- Backend: `npm run api` → http://localhost:8787 (a supervisor that hot-reloads `spec-cli/src` and
+  owns the public port for zero-downtime restarts).
 - Frontend: `npm run web` → Vite. **Port 5173 by default but not pinned** — it takes the next free
   port (e.g. 5174) and prints `Local: http://localhost:<port>/`; read that line for the real port.
   Vite proxies `/api` → :8787, so the backend must be running too.
+- `spex watch` — the **canonical session monitor**: streams actionable session transitions as they
+  happen (`spex ls` for a one-shot table). The dashboard's live Sessions console is the GUI
+  equivalent.
 - `spex lint` (CLI: `spec-cli/src/cli.ts` → `lint.ts`; or `npm run lint`) checks the spec↔code graph:
   **integrity** (error — a `code:` path doesn't exist), **living** (error — a body contains a `## vN`
   changelog heading instead of staying current-state; see "the body is a living document" above),
@@ -118,7 +151,7 @@ process is on a different credential path than your shell alias. Fix: start the 
 `SPEXCODE_CLAUDE_CMD` pointing at a **known-good launcher** (here, the `reclaude` wrapper):
 
 ```
-SPEXCODE_CLAUDE_CMD='/abs/path/to/reclaude --dangerously-skip-permissions' npm run serve
+SPEXCODE_CLAUDE_CMD='/abs/path/to/reclaude --dangerously-skip-permissions' npm run api
 ```
 
 run inside the dedicated `spex-backend` tmux. Gotchas worth knowing:
@@ -158,6 +191,6 @@ live):
 ## Naming
 
 The project is **SpexCode**. npm root package: `spexcode`; CLI package: `@spexcode/spec-cli`. The
-package *directory* names (`spec-cli`, `spec-dashboard`, `spec-yatsu`) are component names and stay
-lowercase-hyphen — they are not the brand. Env escape hatch: `SPEXCODE_ALLOW_MAIN`. Optional layout
-override file: `spexcode.json`.
+package *directory* names (`spec-cli`, `spec-dashboard`; `spec-forge` once it's built) are component
+names and stay lowercase-hyphen — they are not the brand. Env escape hatch: `SPEXCODE_ALLOW_MAIN`.
+Optional layout override file: `spexcode.json`.

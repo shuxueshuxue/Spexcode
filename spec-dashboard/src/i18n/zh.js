@@ -131,6 +131,7 @@ export default {
     driftAhead: ({ n }) => `领先 ${n}`,
     opTitle: ({ op, label, uncommitted }) => `${op} · ${label}${uncommitted ? '（未提交）' : ''}`,
     openIssues: ({ n }) => `${n} 个待办 issue——悬停或聚焦查看`,
+    openIssuesCount: ({ n }) => `${n} 个待办 issue`,
   },
 
   sessionGraph: {

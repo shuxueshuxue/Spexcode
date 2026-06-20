@@ -84,7 +84,7 @@ function IssuePopover({ issues, t }) {
   if (!issues || issues.length === 0) return null
   return (
     <div className="issue-popover nodrag nopan" role="tooltip">
-      <div className="issue-pop-head">◆ {t('specNode.openIssues', { n: issues.length })}</div>
+      <div className="issue-pop-head">◆ {t('specNode.openIssuesCount', { n: issues.length })}</div>
       {issues.map((i) => (
         <a key={i.number} className="issue-card" href={i.url} target="_blank" rel="noreferrer"
           onClick={(e) => e.stopPropagation()}>

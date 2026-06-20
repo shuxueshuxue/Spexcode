@@ -29,6 +29,7 @@ function printHelp(): void {
 Usage: spex <command> [args]
 
 Specs / graph
+  init [dir]            scaffold a repo to adopt SpexCode (seed .spec + install git hooks; default: cwd)
   lint                  check the spec↔code graph (integrity·living·coverage·drift)
   ack <node>            stamp Spec-OK:<node> trailer on HEAD (this code change keeps <node>'s spec valid)
   serve                 run the API server (http://localhost:8787)
@@ -71,6 +72,11 @@ if (cmd === 'serve') {
   } catch (e: any) {
     console.error(`ack failed: ${e?.message ?? e}`); process.exit(1)
   }
+} else if (cmd === 'init') {
+  // scaffold a repo to adopt SpexCode: copy the shipped DATA templates (seed spec tree + git hooks)
+  // into <targetDir> (default cwd). spex init [targetDir]
+  const { specInit } = await import('./init.js')
+  await specInit(positionals(3)[0])
 } else if (cmd === 'board') {
   const { buildBoard } = await import('./board.js')
   console.log(JSON.stringify(await buildBoard(), null, 2))

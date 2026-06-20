@@ -593,13 +593,20 @@ function removeNode(wtPath: string, nodeId: string): string | null {
 // @@@ directive prompts - the INTENT handed to the dispatched agent. The server did the mechanical
 // spec-tree mutation; the agent does the intelligent rest (name + spec + code, or history-driven
 // refactor). Like mergePrompt, the op is a DISPATCH: the server never authors specs or refactors code.
+// These state only the TASK — they deliberately do NOT restate the git ritual (commit format, the
+// Session: trailer, the node-branch flow, the merge style). That standing contract reaches the agent ONCE,
+// via the gathered system prompt (appendSysArg: the baked CORE_CONTRACT + the active `system/` config
+// nodes, our `.config/system/ritual` among them), so it is a spec edit, not duplicated string here — and a
+// standalone adopter with a different ritual is governed by THEIR config, not OUR hardcoded instructions.
+// The only handoff detail kept is "propose merge, don't merge yourself": that OVERRIDES the ritual's
+// merge-it-yourself step for the dispatch phase (the human triggers the merge later, see mergePrompt).
 function newNodePrompt(placeholderId: string, parentId: string, relPath: string, rest: string): string {
   return `A placeholder spec node \`${placeholderId}\` was created under parent \`${parentId}\` at ${relPath} in this worktree. ` +
     `Turn it into a real node and build it, per this request:\n\n${rest || '(no extra description — infer the intent from the parent and the codebase)'}\n\n` +
     `1. Choose a good kebab-case id reflecting the intent (node id = its directory basename) and \`git mv\` the directory \`${dirname(relPath)}\` to it, keeping it under \`${parentId}\`. ` +
-    `2. Rewrite spec.md at contract altitude: real title/desc, the two-part body (raw source = human intent · expanded spec = behavioral contract), and a \`code:\` list of the files it will govern — NO current-state/verdict sections. ` +
+    `2. Rewrite spec.md at contract altitude: real title/desc, the two-part body (raw source = human intent · expanded spec = behavioral contract), and a \`code:\` list of the files it will govern. ` +
     `3. Implement the code the spec describes. 4. Keep \`spex lint\` at 0 errors and the build green. ` +
-    `Commit on this node branch (\`spec: <id> — <reason>\`, with a Session: trailer), then declare at the Stop gate (session done --propose merge). Do NOT merge.`
+    `When it's ready, propose merge for the human to review — do NOT merge it yourself.`
 }
 function deleteNodePrompt(nodeId: string, relPath: string | null, rest: string): string {
   const recover = relPath
@@ -610,7 +617,7 @@ function deleteNodePrompt(nodeId: string, relPath: string | null, rest: string):
     `1. ${recover} ` +
     `2. Decide what happens to that governed code now the spec is gone — remove it, fold it into another node's responsibility, or re-point references — and fix any specs that linked \`[[${nodeId}]]\`. ` +
     `3. Apply the refactor; keep \`spex lint\` at 0 errors and the build green. ` +
-    `Commit the removal + refactor on this node branch (\`spec: remove ${nodeId} — <reason>\`, with a Session: trailer), then declare at the Stop gate (session done --propose merge). Do NOT merge.`
+    `When it's ready, propose merge for the human to review — do NOT merge it yourself.`
 }
 
 // @@@ concurrency cap + queue - keep at most MAX_ACTIVE agents WORKING at once. A session OCCUPIES a slot
@@ -846,14 +853,18 @@ export function mergeReadiness(): { ready: boolean; reason?: string } {
 
 // @@@ mergePrompt - the INTENT the human clicks "merge" with, written as an instruction to the session's
 // own agent. The agent (not the server) performs the merge, because only the agent knows the work's intent
-// and can resolve conflicts; the server has no fixed `git merge` logic. branch/main are substituted live.
+// and can resolve conflicts; the server has no fixed `git merge` logic. It states only the TASK + the safety
+// loop (verify HEAD advanced, abort if half-merged) — the merge STYLE (\`--no-ff\`, the \`merge node/<id>:
+// <reason>\` message) is NOT hardcoded here: it reaches the agent via the gathered ritual in its system
+// prompt (appendSysArg → \`.config/system/ritual\`), so an adopter with a different merge style is governed
+// by their config, not ours. branch/main are substituted live.
 function mergePrompt(branch: string, main: string): string {
-  return `Merge your branch ${branch} into main now. From the main checkout at ${main}, run: ` +
-    `git -C ${main} merge --no-ff ${branch}. If it conflicts, resolve the conflicts yourself ` +
-    `(you know the intent of this work), complete the merge, and verify \`git -C ${main} rev-parse HEAD\` ` +
-    `actually advanced and that no merge is left in progress (no ${main}/.git/MERGE_HEAD present). If ` +
-    `anything goes wrong and main is left half-merged, run git -C ${main} merge --abort to restore main ` +
-    `and explain. After a verified successful merge, propose close (you're done).`
+  return `Merge your branch ${branch} into main now, following the project's merge ritual. ` +
+    `Main is checked out at ${main} (operate on it with \`git -C ${main}\`). If it conflicts, resolve the ` +
+    `conflicts yourself (you know the intent of this work), complete the merge, and verify ` +
+    `\`git -C ${main} rev-parse HEAD\` actually advanced and that no merge is left in progress (no ` +
+    `${main}/.git/MERGE_HEAD present). If anything goes wrong and main is left half-merged, run ` +
+    `git -C ${main} merge --abort to restore main and explain. After a verified successful merge, propose close (you're done).`
 }
 
 // @@@ mergeSession - the merge ACTION is now a DISPATCH, not a fixed server-side `git merge`. The human

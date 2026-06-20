@@ -6,7 +6,8 @@
   "description": "Host-agnostic forge projection — projects pending spec nodes out as forge issues. git/.spec stays canonical; the forge is a projection and never flows back as authority.",
   "scripts": {
     "proof": "tsx src/proof.ts",
-    "outbound-proof": "tsx src/outbound-proof.ts"
+    "outbound-proof": "tsx src/outbound-proof.ts",
+    "inbound-proof": "tsx src/inbound-proof.ts"
   },
   "devDependencies": {
     "@types/node": "^20.16.0",

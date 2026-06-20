@@ -39,6 +39,18 @@ const TMUX_SOCK = process.env.SPEXCODE_TMUX || 'spexcode'
 const CLAUDE_CMD = process.env.SPEXCODE_CLAUDE_CMD || 'claude --dangerously-skip-permissions'
 const COLS = 120, ROWS = 32
 
+// @@@ appendSysPrompt - a dashboard/CLI-launched session gets ONLY the human's terse prompt; there is no
+// system prompt carrying the dogfood ritual, so agents kept proposing merge with UNCOMMITTED work. We inject
+// a CONCISE imperative via --append-system-prompt on EVERY launch/resume (both go through launch() below).
+// The Stop gate's commit check is the deterministic backstop; this makes the agent commit FIRST the normal
+// way. Kept SHORT and single-quote-free: the launch line is typed via tmux send-keys and truncates past ~2KB
+// (see the launch-prompt-limit lesson), and the value is single-quoted into that line.
+const SYSTEM_PROMPT =
+  'Every change lands as a git commit on your node branch BEFORE you declare done / propose merge. ' +
+  'The spec body is a living current-state document (no ## vN sections, no current-state/verdict). ' +
+  'See CLAUDE.spexhidden.md for the dogfood ritual.'
+const appendSysArg = `--append-system-prompt '${SYSTEM_PROMPT}'`
+
 // @@@ rendezvous control socket - the DETERMINISTIC, ONLY input path for PROMPTS to sessions WE launch. We
 // start `claude` with CLAUDE_BG_BACKEND=daemon + CLAUDE_BG_RENDEZVOUS_SOCK=<per-session sock> set ONLY on
 // that one spawned command (env prefix on the launch line — never global/exported, never a plugin or global
@@ -441,7 +453,7 @@ function writeSettings(path: string): string {
 }
 async function launch(id: string, path: string, tail: string): Promise<void> {
   await tmux(['new-session', '-d', '-s', id, '-x', String(COLS), '-y', String(ROWS), '-c', path])
-  await tmux(['send-keys', '-t', id, '-l', '--', `${rvEnv(id)} ${CLAUDE_CMD} ${writeSettings(path)} ${tail}`])
+  await tmux(['send-keys', '-t', id, '-l', '--', `${rvEnv(id)} ${CLAUDE_CMD} ${appendSysArg} ${writeSettings(path)} ${tail}`])
   await tmux(['send-keys', '-t', id, 'Enter'])
 }
 
@@ -624,6 +636,34 @@ export function markIdleFromCwd(): boolean {
 // the question as the note) — a HARD signal that the agent is asking the human; (2) the agent declares it
 // itself via markStateFromCwd('needs-input', { note }) — `spex session ask`, e.g. at the Stop gate. Either
 // way the mark-active path clears it back to active on the next tool / prompt, same as any non-active state.
+
+// @@@ mergeReadiness - the deterministic commit gate the Stop hook enforces before a session may declare
+// done / propose merge. The dogfood ritual lands every change as a COMMIT on the node branch first, so two
+// states block a declaration: (1) uncommitted working-tree changes, ignoring the runtime files SpexCode
+// itself writes into the worktree (.session / .session-prompt / .spex-hooks.json / CLAUDE.spexhidden.md —
+// never part of the spec/code work), or (2) 0 commits ahead of main (nothing committed to merge). Runs from
+// cwd = the session worktree; ALL git goes through git() so the hook's exported GIT_DIR/GIT_INDEX_FILE can't
+// misdirect repo discovery to the cwd (the same trap git.ts documents). `main` resolves via the shared refs,
+// so `main..HEAD` works from any linked worktree regardless of where main is checked out.
+const RUNTIME_FILES = new Set(['.session', '.session-prompt', '.spex-hooks.json', 'CLAUDE.spexhidden.md'])
+export function mergeReadiness(): { ready: boolean; reason?: string } {
+  let dirty: string[] = []
+  try {
+    dirty = git(['status', '--porcelain', '--untracked-files=all']).split('\n').filter(Boolean).map((line) => {
+      let p = line.slice(3)                                  // strip the `XY ` status, keep the path
+      const arrow = p.indexOf(' -> '); if (arrow >= 0) p = p.slice(arrow + 4)   // a rename: keep the new path
+      return p
+    }).filter((p) => !RUNTIME_FILES.has(p))
+  } catch { /* git status failed — fall through to the ahead check, still a real guard */ }
+  if (dirty.length) {
+    const shown = dirty.slice(0, 8).join(', ') + (dirty.length > 8 ? ', …' : '')
+    return { ready: false, reason: `uncommitted changes on your node branch (${shown}) — commit your spec+code first` }
+  }
+  let ahead = 0
+  try { ahead = Number(git(['rev-list', '--count', 'main..HEAD']).trim()) || 0 } catch { ahead = 0 }
+  if (ahead === 0) return { ready: false, reason: 'your node branch is 0 commits ahead of main — nothing is committed to merge' }
+  return { ready: true }
+}
 
 // @@@ mergePrompt - the INTENT the human clicks "merge" with, written as an instruction to the session's
 // own agent. The agent (not the server) performs the merge, because only the agent knows the work's intent

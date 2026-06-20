@@ -70,14 +70,32 @@ readable, only renamed so Claude Code's auto-discovery skips it — and the trac
 `git update-index --assume-unchanged CLAUDE.md` so that rename is invisible to git and can never be
 staged/committed/merged back to main. This is a rename, never a delete and never `--bare`, so auth, the
 hooks, and the repo all keep working; it is overridable (`SPEXCODE_HIDE_CLAUDE_MD=0`) and on by default,
-and best-effort (a failure isolating never blocks the launch). Five hooks are injected via a per-worktree
+and best-effort (a failure isolating never blocks the launch).
+
+Because a dispatched agent receives **only the human's terse launch prompt** — no system prompt otherwise
+carries the dogfood ritual — every **launch and resume** appends a **concise system prompt**
+(`--append-system-prompt`): every change lands as a commit on the node branch **before** declaring
+done / proposing merge, the spec body stays a living current-state document (no `## vN`, no
+current-state/verdict), and `CLAUDE.spexhidden.md` holds the full ritual. It is kept short on purpose —
+the launch line is typed into tmux and truncates past ~2KB.
+
+Five hooks are injected via a per-worktree
 settings file (no global settings touched): **`UserPromptSubmit` + `PreToolUse` → one branching
 `mark-active` hook** that reads the payload's `tool_name` and writes **`needs-input`** (the question → the
 note) when the tool is **AskUserQuestion**, else **`active`** — the reliable freshness signal (any other
 tool use means working; it fires before the tool, so a `spex session done` declaration lands after and
-wins, and the next tool flips back to active); **`Stop` → the gate** blocks a stop while still
-`active` to force a declaration, with a hard loop-break (on the `stop_hook_active` continuation it
-auto-defaults and allows — at most one nudge, never a dead loop, never an undeclared leak);
+wins, and the next tool flips back to active); **`Stop` → the gate** does two jobs, each with a hard loop-break. (i) A **commit gate**: a
+done/merge declaration (`awaiting` + proposal `merge`|`nothing`) is **rejected** while the node branch
+has **uncommitted changes** or is **0 commits ahead of main** — the ritual commits spec+code *before*
+proposing — blocking once with the specific reason and commit instructions, and on the forced
+continuation escaping to honest `blocked` so a false "ready to merge" never stands. The dirty check
+**ignores the runtime files SpexCode writes into the worktree** (`.session`, `.session-prompt`,
+`.spex-hooks.json`, `CLAUDE.spexhidden.md`); a propose-**close** declaration is exempt (it discards the
+worktree). The check is deterministic and runs all git through `git.ts`'s `git()` so the hook's exported
+`GIT_DIR`/`GIT_INDEX_FILE` can't misdirect repo discovery. (ii) A **declare gate**: it blocks a stop
+while still `active` to force a declaration, with a hard loop-break (on the `stop_hook_active`
+continuation it auto-defaults — `awaiting`/`nothing` when committed, else `blocked` — and allows; at most
+one nudge, never a dead loop, never an undeclared or uncommitted leak);
 **`StopFailure` → error**; and **`Notification(idle_prompt)` → idle** (a catch-all hook that keys on the
 structured `notification_type` field, so it runs `spex session idle` only on the idle-prompt notification,
 not other notifications) marks the session `idle` when claude sits waiting at its prompt. `spex session idle` is **guarded

@@ -144,6 +144,14 @@ if (cmd === 'serve') {
     // authored state — NOT guarded active-only). The --note carries the question. Distinct from `block`
     // (waiting on a background task, self-resumes): a needs-input agent resumes only when the human replies.
     console.log(s.markStateFromCwd('needs-input', { note: flag('note') }) ? 'needs-input' : 'no .session in cwd')
+  } else if (sub === 'commit-gate') {
+    // the Stop gate's deterministic commit check (from cwd = the worktree): exit 0 if the node branch is
+    // ready to declare done/merge (work committed + ahead of main), else print the reason and exit 1. Uses
+    // git() so the hook's exported GIT_DIR/GIT_INDEX_FILE don't misdirect repo discovery (see git.ts).
+    const r = s.mergeReadiness()
+    if (r.ready) { console.log('ready'); process.exit(0) }
+    console.log(r.reason)
+    process.exit(1)
   } else if (sub === 'idle') {
     // the Notification(idle_prompt) hook marks ITS OWN worktree (from cwd) idle when claude waits at its
     // prompt. INFERRED, so guarded active-only: it no-ops unless the current status is exactly `active`,

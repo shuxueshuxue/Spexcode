@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ReactFlow, Background, Controls, MarkerType, useReactFlow } from '@xyflow/react'
+import { ReactFlow, Background, MarkerType, useReactFlow } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import SpecNode from './SpecNode.jsx'
 import NodeView, { PANES } from './NodeView.jsx'
@@ -359,7 +359,6 @@ function Dashboard({ specs, sessions, reload }) {
           proOptions={{ hideAttribution: true }}
         >
           <Background variant="dots" color="#cdc6ad" gap={20} size={1} />
-          <Controls showInteractive={false} />
         </ReactFlow>
         {/* HUD is deliberately minimal: brand + a discreet `?` that opens the full keymap/legend modal.
             The wall of inline hints used to live here; it now lives inside that modal (see Legend.jsx). */}

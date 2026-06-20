@@ -11,10 +11,12 @@ code:
 
 ## raw source
 
-Dispatching a **prompt** to a session — a message, a continue, the merge instruction — is **control**,
-separate from the tmux pane, which is **display only**. Control must be **scoped** (only sessions this
-product launched) and **fail-loud** (a dead dispatch is seen, never silently degraded to typing into the
-pane). And **merge is an intent the human expresses, not a server-run git script.**
+Dispatching a **prompt** to a session — a message, a continue, the merge instruction, a node directive —
+is **control**, separate from the tmux pane, which is **display only**. Control must be **scoped** (only
+sessions this product launched) and **fail-loud** (a dead dispatch is seen, never silently degraded to
+typing into the pane). And **merge is an intent the human expresses, not a server-run git script.** A
+dispatched prompt states only the **task**; the standing git **ritual** is not restated in it — that is
+the gathered system prompt's job, so the prompt and the ritual never duplicate.
 
 ## expanded spec
 
@@ -42,6 +44,19 @@ conflicts (it knows the work's intent), verify main's HEAD advanced and no merge
 lives in the agent's verification, never a server check, and main is never left half-merged. The action
 is async: `POST /api/sessions/:id/merge` returns 200 `{dispatched:true}` once the prompt is **confirmed
 accepted** (409 if unreachable). The server no longer bumps `merges` on a click.
+
+**Prompts state the task; the ritual is gathered, not duplicated.** Every prompt the server builds for an
+agent — the merge prompt above and the directive **new-node** / **delete-node** prompts (each a placeholder
+the server set up, handed to the agent to name+spec+code or to refactor-away by git history) — states only
+the **task** and the safety steps specific to it. It deliberately does **not** re-state SpexCode's git
+ritual: the `spec: <id> — <reason>` commit shape, the `Session:` trailer, the node-branch flow, or the
+`--no-ff` merge style. That standing contract reaches the agent exactly once, through the **gathered system
+prompt** ([[launch]]'s `--append-system-prompt`: the baked core plus the active `system/` config nodes,
+`.config/system/ritual` among them). Keeping it in one place is what makes a standalone adopter — whose
+ritual config differs — obey **their** contract rather than ours hardcoded into a dispatch string; the old
+duplication was the `test ≠ usage` leak. The one task-level detail the directive prompts keep is "propose
+merge, don't merge yourself" — it overrides the ritual's merge-it-yourself step for the dispatch phase,
+since the human triggers the merge later.
 
 The **separate raw nav-key channel** (`rawKey`) keeps its own `tmux send-keys` path — the interactive
 single-keystroke channel for driving the agent's TUI menus, **not** a prompt fallback — left untouched.

@@ -1,6 +1,7 @@
 import { loadSpecs, deriveStatus } from './specs.js'
 import { resolveLayout } from './layout.js'
 import { listSessions } from './sessions.js'
+import { residentForgeView } from '../../spec-forge/src/resident.js'
 
 // @@@ buildBoard - the dashboard's RUNTIME state, assembled in ONE shared module so the human (HTTP
 // /api/board) and an agent (`spex board`) see the IDENTICAL board. The only thing left to the frontend
@@ -78,6 +79,21 @@ export async function buildBoard() {
     }),
     ...Object.values(ghostById),
   ]
+  // @@@ open-issue fold - lay each node's bound OPEN issues (spec-forge) onto it, for the dashboard's
+  // glance badge + popover. NON-BLOCKING and SILENT by construction: residentForgeView serves the last
+  // background reconcile (never waits on `gh`) and returns [] when there's no forge/gh/auth — so a
+  // forge-less board is byte-for-byte what it was, no badge and no error. Only issues here (a node DEFINES,
+  // an issue DOES); PRs already read on the board as session/overlay state. `openIssues` is attached only
+  // when non-empty, so SpecNode can treat its presence as "has work". Read-only — status stays git-derived.
+  const issuesByNode: Record<string, any[]> = {}
+  for (const link of residentForgeView(nodes.map((n) => n.id))) {
+    issuesByNode[link.node] = link.issues.map((i) => ({ number: i.number, state: i.state, title: i.title, url: i.url }))
+  }
+  for (const n of nodes) {
+    const issues = issuesByNode[n.id]
+    if (issues && issues.length) n.openIssues = issues
+  }
+
   const opsByPath: Record<string, any[]> = {}
   opWts.forEach((w) => { opsByPath[w.path] = w.ops })
   // session rows carry no colour — the dashboard seeds each row's stripe off the session id (labelColor),

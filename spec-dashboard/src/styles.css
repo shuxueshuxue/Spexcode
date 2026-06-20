@@ -310,6 +310,27 @@ body {
 /* drift badge: governed code is N commits ahead of this spec (rigorous, via git rev-list) */
 .drift-badge { flex: none; font-size: 10px; font-weight: 700; color: var(--yellow); border: 1px solid var(--yellow); border-radius: 3px; padding: 0 3px; line-height: 1.4; }
 
+/* @@@ issue badge - the bound-WORK glance: count of OPEN issues the forge linked to this node. Magenta,
+   deliberately distinct from the status dot AND the yellow drift-badge so the three signals never blur.
+   The wrap is focusable (tabIndex) so the popover reveals on hover OR keyboard focus; the popover is the
+   ONE detail surface (absolutely positioned above the row, never pushing layout). nodrag/nopan keep
+   react-flow from stealing the pointer so the issue links stay clickable. */
+.issue-badge-wrap { position: relative; flex: none; display: inline-flex; outline: none; }
+.issue-badge { font-size: 10px; font-weight: 700; color: var(--magenta); border: 1px solid var(--magenta); border-radius: 3px; padding: 0 3px; line-height: 1.4; cursor: default; }
+.issue-badge-wrap:focus-visible .issue-badge { box-shadow: 0 0 0 2px color-mix(in srgb, var(--magenta) 35%, transparent); }
+.issue-popover {
+  display: none; position: absolute; bottom: calc(100% + 6px); left: 0; z-index: 8;
+  min-width: 220px; max-width: 360px; padding: 5px;
+  background: var(--paper); border: 1px solid var(--magenta); border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.16);
+}
+.issue-badge-wrap:hover .issue-popover, .issue-badge-wrap:focus-within .issue-popover { display: block; }
+.issue-row { display: flex; align-items: baseline; gap: 6px; padding: 3px 5px; border-radius: 4px; text-decoration: none; color: var(--ink); }
+.issue-row:hover { background: var(--panel2); }
+.issue-num { font-size: 10px; font-weight: 700; color: var(--magenta); flex: none; font-family: var(--mono); }
+.issue-state { font-size: 9px; color: var(--muted); flex: none; text-transform: uppercase; letter-spacing: .03em; }
+.issue-title { font-size: 11px; color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 .ov-marks { display: flex; gap: 3px; flex: none; margin-left: 2px; }
 .ov-mark { font-size: 11px; font-weight: 700; line-height: 1; color: var(--ov, var(--blue)); }
 .ov-mark.ov-deleted { color: var(--orange); }

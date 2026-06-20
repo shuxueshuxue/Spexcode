@@ -134,6 +134,7 @@ export default {
     editorTitle: ({ node, status, id }) => `${node} · ${status} — ${id}`,
     driftAhead: ({ n }) => `${n} ahead`,
     opTitle: ({ op, label, uncommitted }) => `${op} · ${label}${uncommitted ? ' (uncommitted)' : ''}`,
+    openIssues: ({ n }) => `${n} open issue${n === 1 ? '' : 's'} — hover or focus to list`,
   },
 
   sessionGraph: {

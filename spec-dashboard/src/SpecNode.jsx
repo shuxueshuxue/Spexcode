@@ -63,6 +63,33 @@ function EditorRow({ data }) {
   )
 }
 
+// @@@ IssueBadge - the bound-WORK glance on a node: the count of OPEN issues the forge has linked to this
+// node (spec-forge, folded into /api/board as data.openIssues). Rendered ONLY when there are any. Its hue
+// is distinct from the status dot AND the drift-badge so the three signals never blur: status dot =
+// derived state, drift-badge = code ahead of spec, this = work pointing AT the node. The single detail
+// surface is one popover — revealed on hover OR keyboard focus (the badge is focusable) via CSS, listing
+// each issue (num · state · title) as a link to its url. Clicking a link must NOT bubble to the node's
+// click (which would open the session), so each link stops propagation. No second detail pane anywhere.
+function IssueBadge({ issues, t }) {
+  if (!issues || issues.length === 0) return null
+  return (
+    <span className="issue-badge-wrap nodrag nopan" tabIndex={0}
+      title={t('specNode.openIssues', { n: issues.length })}>
+      <span className="issue-badge">◆{issues.length}</span>
+      <span className="issue-popover" role="tooltip">
+        {issues.map((i) => (
+          <a key={i.number} className="issue-row" href={i.url} target="_blank" rel="noreferrer"
+            onClick={(e) => e.stopPropagation()}>
+            <span className="issue-num">#{i.number}</span>
+            <span className="issue-state">{i.state}</span>
+            <span className="issue-title">{i.title}</span>
+          </a>
+        ))}
+      </span>
+    </span>
+  )
+}
+
 // @@@ SpecNode - two stacked rows, not a card. ROW 1 (the original thin file-tree line): status dot +
 // title + version + overlay marks. ROW 2: the live editors' avatars, or "last edited … ago" (EditorRow).
 // The tree flows left->right, so handles are on the sides. When a worktree has a PENDING change to this
@@ -103,6 +130,7 @@ export default function SpecNode({ data, selected }) {
             ⚠{data.drift}
           </span>
         )}
+        <IssueBadge issues={data.openIssues} t={t} />
         <span className="node-ver">{data.version ? `v${data.version}` : ''}</span>
         {ops.length > 0 && (
           <span className="ov-marks" title={overlays.map((o) => t('specNode.opTitle', { op: t(`legend.opRows.${o.op}`), label: o.label, uncommitted: !o.committed })).join('\n')}>

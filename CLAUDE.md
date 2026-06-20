@@ -97,6 +97,29 @@ together — that is a project choice, not a git requirement.
   `spex lint` and (later) the LLM judge anchor to.
 - Toolchain: **npm, not pnpm**; Node is pinned via `.nvmrc` (22).
 
+### Worker auth — dispatched sessions use `SPEXCODE_CLAUDE_CMD`
+
+The backend launches every dispatched worker via `process.env.SPEXCODE_CLAUDE_CMD` (default
+`claude --dangerously-skip-permissions`). In a **non-interactive** shell `claude` can resolve to an
+expired binary instead of your interactive login, so **workers 401 (`Please run /login · API Error:
+401 Invalid bearer token`) even when your own Claude Code is perfectly healthy** — the dispatched
+process is on a different credential path than your shell alias. Fix: start the backend with
+`SPEXCODE_CLAUDE_CMD` pointing at a **known-good launcher** (here, the `reclaude` wrapper):
+
+```
+SPEXCODE_CLAUDE_CMD='/abs/path/to/reclaude --dangerously-skip-permissions' npm run serve
+```
+
+run inside the dedicated `spex-backend` tmux. Gotchas worth knowing:
+- The var is **not persisted**. Restart the backend (or let a watchdog restart it) *without* it and
+  every **new** worker 401s, while already-running workers keep their good launch. Bake it into the
+  launch command / watchdog, not an ad-hoc export — losing it is the usual cause of a sudden 401 wave.
+- An already-401'd worker does **not** recover via `resume` (that re-attaches to the still-broken
+  process). **Close it, kill its tmux session (`tmux -L spexcode kill-session -t <id>`), then
+  re-dispatch.**
+- This is distinct from a *genuine* token expiry (which needs **you** to re-login). The tell: your
+  interactive Claude Code works and only dispatched workers fail → wrong launcher, not a dead token.
+
 ## Setup / onboarding
 
 The pre-commit hook is **per-clone, not committed** (`.git/hooks/` is never in the repo), so a fresh

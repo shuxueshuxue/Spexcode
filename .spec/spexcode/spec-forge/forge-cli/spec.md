@@ -2,32 +2,30 @@
 title: forge-cli
 status: active
 hue: 280
-desc: Exposes the forge projection on the real `spex` CLI (`spex forge list`/`mirror`) — until now spec-forge was reachable only through standalone proof scripts. Read-only, zero network.
+desc: Exposes the link tracer on the real `spex` CLI — `spex forge links` prints node → linked issues/PRs. Read-only; reading is live.
 code:
   - spec-forge/src/cli.ts
   - spec-cli/src/cli.ts
 ---
 # forge-cli
 
-The **capstone** of [[spec-forge]]: it makes the projection *usable*. Until now the [[port]] and its
-drivers were exercised only by standalone proof scripts; this exposes them on the real product surface as
-`spex forge`, so a human or agent reaches the same projection through the CLI they already use.
-
-It introduces **no new direction** — it is the existing read-out wearing a CLI surface. The
-non-negotiable contract is therefore unchanged and unweakened: **git/`.spec` is the single source of
-truth; a forge is only a projection and NEVER flows back as authority.** Every verb is read-only, performs
-zero network, and mutates nothing.
+The capstone of [[spec-forge]]: it makes the tracer *usable*. Until now the [[port]] and [[links]] were
+exercised only by a standalone proof script; this exposes them on the real product surface as `spex
+forge`, so a human or agent reaches the same resolution through the CLI they already use.
 
 **Surface:**
 
-- `spex forge list [--host github|gitlab] [--json]` — print a host's `listPending()` projection: the
-  graph's pending nodes as that host's forge-issue rows. Default host github. The host is selected
-  **through the `ForgeDriver` port** (a registry keyed by each driver's own `host`), never a hardcoded
-  vendor branch — so a third host is one registry entry, not a new conditional.
-- `spex forge mirror <nodeId> [--json]` — project one node OUT as its `MirrorPR` (the outbound twin of
-  list). Default output is a clean human table/summary; `--json` emits the raw shape.
+- `spex forge links [--host github] [--node <id>] [--json]` — read the host's open issues/PRs through the
+  chosen driver, resolve them against the real node ids ([[links]]), and print `node → linked work`. A
+  header line reports both the link counts and how many issues/PRs were scanned (so an empty result is
+  legible: nothing linked vs nothing to scan). `--node` narrows to one node; `--json` emits the raw
+  resolved structure. The host is selected **through the `ForgeDriver` port** (a registry keyed by each
+  driver's own `host`), never a hardcoded vendor branch — a second host is one registry entry.
 
-The logic lives **in this package**; `spec-cli/src/cli.ts` carries only a thin `forge` route that
-delegates to `runForge` and a help-text line — the CLI stays a routing seam, the projection stays here.
+Reading the forge is **live** (the driver calls `gh`), but the package is otherwise read-only: it never
+writes to the forge and never mutates a node — a node's status stays git-derived. The logic lives **in
+this package**; `spec-cli/src/cli.ts` carries only a thin `forge` route that delegates to `runForge` and a
+help-text line.
 
-Out of scope (later siblings): real forge API/network wiring, and any write back from a host into the graph.
+Out of scope (sibling node): surfacing the same links in the dashboard — done CLI-first because frontend
+can't be verified here.

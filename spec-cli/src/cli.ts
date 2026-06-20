@@ -106,17 +106,17 @@ if (cmd === 'serve') {
     for (const f of r.diff) console.log(`    ${f.status.padEnd(12)} +${f.additions} -${f.deletions}  ${f.path}`)
   }
 } else if (cmd === 'merge') {
-  // @@@ merge - the cockpit's ACT verb (review's sequel): the SERVER lands the session atomically. It
-  // re-checks review's gates (conflicts/typecheck/lint) and, only if all pass, runs the --no-ff merge into
-  // main, confirms HEAD advanced, and closes the session (--keep leaves it). Any failing gate merges
-  // NOTHING and prints the reason (fail-loud, non-zero exit). The agent never touches main here.
+  // @@@ merge - the cockpit's ACT verb (review's sequel), a DISPATCH not a server merge: it reopens the
+  // session and hands the session's OWN agent the merge prompt — the agent runs the --no-ff merge, resolves
+  // conflicts, verifies main advanced, and proposes close. The server never touches main. Fail-loud: an
+  // unreachable agent prints the reason and exits non-zero.
   const { mergeSession } = await import('./sessions.js')
   const id = positionals(3)[0]
-  if (!id) { console.error('usage: spex merge <id> [--keep]'); process.exit(2) }
-  const r = await mergeSession(id, { keep: has('keep') })
-  if (r.merged) console.log(`merged ${id} → ${r.head?.slice(0, 9)}${r.closed ? ' (session closed)' : ''}`)
-  else console.error(`merge blocked: ${r.reason}`)
-  process.exit(r.merged ? 0 : 1)
+  if (!id) { console.error('usage: spex merge <id>'); process.exit(2) }
+  const r = await mergeSession(id)
+  if (r.dispatched) console.log(`merge dispatched to ${id} — its agent is landing the merge`)
+  else console.error(`merge dispatch failed: ${r.reason}`)
+  process.exit(r.dispatched ? 0 : 1)
 } else if (cmd === 'forge') {
   // @@@ forge - the spec-forge link tracer on this CLI: read a forge's open issues/PRs and resolve each to
   // the spec node it serves (read-only — a node's status stays git-derived). Logic lives in spec-forge;
@@ -233,13 +233,13 @@ if (cmd === 'serve') {
     // (the agent deliberately asking the human) — idle is the undeclared stop the Stop gate missed.
     console.log(s.markIdleFromCwd() ? 'idle' : 'noop (no .session in cwd, or not active)')
   } else if (sub === 'merge') {
-    // server-side atomic gated merge (same as top-level `spex merge`): re-checks the review gates, merges
-    // --no-ff into main, confirms HEAD advanced, then closes the session unless --keep. Any failing gate
-    // merges nothing (fail-loud). The SERVER performs the merge — the session's agent never touches main.
-    const r = await s.mergeSession(id, { keep: has('keep') })
-    if (r.merged) console.log(`merged ${id} → ${r.head?.slice(0, 9)}${r.closed ? ' (session closed)' : ''}`)
-    else console.error(`merge blocked: ${r.reason}`)
-    process.exit(r.merged ? 0 : 1)
+    // merge dispatch (same as top-level `spex merge`): reopen the session and hand its OWN agent the merge
+    // prompt — the agent runs the --no-ff merge, resolves conflicts, verifies main advanced, and proposes
+    // close. The SERVER never touches main. Fail-loud: an unreachable agent prints the reason, exits non-zero.
+    const r = await s.mergeSession(id)
+    if (r.dispatched) console.log(`merge dispatched to ${id} — its agent is landing the merge`)
+    else console.error(`merge dispatch failed: ${r.reason}`)
+    process.exit(r.dispatched ? 0 : 1)
   } else if (sub === 'close') {
     console.log(await s.closeSession(id) ? `closed ${id}` : `no such session ${id}`)
   } else if (sub === 'send') {

@@ -1,8 +1,6 @@
 // @@@ mock backend - what's left here is the client-side view decoration + a stand-in session log.
 // - spec tree   -> reading .spec on `main` (the source of truth, via /api/specs)
 // - session     -> the worktree linker (`git worktree list` + .session file + `tmux capture-pane`)
-// - evidence    -> A->B links served from the backend (`evidence:` frontmatter); none until yatsu.
-//   (No placeholder screenshots are fabricated here anymore — absent evidence reads as "none".)
 
 // @@@ session log - fake tmux scrollback. for the active nodes it mirrors the REAL work from
 // our conversation; root is the meta session (this very chat) building the whole board.
@@ -15,7 +13,7 @@ const LOGS = {
     `\x1b[35m✻\x1b[0m every node below is a real thread from our chat.`,
     `\x1b[33m⧗ recursion:\x1b[0m the dashboard renders its own making.`,
     ``,
-    `\x1b[90m  children: source-of-truth · dashboard-ui · yatsu-evidence\x1b[0m`,
+    `\x1b[90m  children: source-of-truth · dashboard-ui\x1b[0m`,
     `\x1b[90m  next: wire the real backend behind src/data.js\x1b[0m`,
     ``,
   ],
@@ -27,7 +25,6 @@ const LOGS = {
     `\x1b[35m✻\x1b[0m the Van Wijk zoom arc + forced zoom:1.15 cause the hop`,
     `\x1b[32m● Edit\x1b[0m src/App.jsx  flyTo: setCenter → flat rAF pan \x1b[90m(+18 -3)\x1b[0m`,
     `\x1b[32m● Bash\x1b[0m npm run build  \x1b[90m… ✓ built in 995ms\x1b[0m`,
-    `\x1b[33m⧗ yatsu\x1b[0m recording B: a flat glide between nodes`,
     ``,
   ],
   'sess-7f3a': [
@@ -39,15 +36,6 @@ const LOGS = {
     `\x1b[32m● Edit\x1b[0m src/PeekPanel.jsx  attachCustomKeyEventHandler \x1b[90m(+6)\x1b[0m`,
     `\x1b[32m● Bash\x1b[0m npm run build  \x1b[90m… ✓\x1b[0m`,
     `\x1b[90m  (you just used it to get here — press esc to leave)\x1b[0m`,
-    ``,
-  ],
-  'sess-b412': [
-    `\x1b[90m$ claude --resume   worktree node/ab-screenshots\x1b[0m`,
-    `\x1b[36m● spec:\x1b[0m ab-screenshots  \x1b[90mv1\x1b[0m`,
-    ``,
-    `\x1b[35m✻\x1b[0m rendering before/after as inline SVG (no binary assets)`,
-    `\x1b[32m● Edit\x1b[0m src/data.js  svgShot()  \x1b[90m(+22)\x1b[0m`,
-    `\x1b[33m⧗ yatsu\x1b[0m would drive a desktop container to capture the real GUI A→B`,
     ``,
   ],
 }

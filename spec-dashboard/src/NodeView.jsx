@@ -160,10 +160,9 @@ function parseDiff(patch) {
   return out
 }
 
-// @@@ DiffEvidence - a version's proof-of-change: the actual line diff it introduced to spec.md. When a
-// version also has A→B screenshots they render ABOVE this (see HistoryItem); when it has none, nothing is
-// said about it — the diff alone stands as the proof. `diff == null` = still loading (older items fetch
-// lazily on expand); an empty patch = a version with no recorded spec.md change.
+// @@@ DiffEvidence - a version's proof-of-change: the actual line diff it introduced to spec.md. `diff ==
+// null` = still loading (older items fetch lazily on expand); an empty patch = a version with no recorded
+// spec.md change.
 function DiffEvidence({ diff }) {
   const t = useT()
   if (diff == null) return <figcaption className="ev-note">{t('nodeView.loadingChange')}</figcaption>
@@ -179,14 +178,12 @@ function DiffEvidence({ diff }) {
 
 // @@@ HistoryItem - one version in the merged history. Always its row header (number · hash · date · the
 // +adds/−dels it changed in THIS node · reason · session), and — when expanded — its proof below: the
-// A→B screenshots (the latest version only, until yatsu records per-version frames) then the spec.md line
-// diff that version introduced. The latest item renders its diff instantly from node.lastDiff; older
-// items fetch theirs lazily the first time they open. Clicking the header toggles the item by hand.
+// spec.md line diff that version introduced. The latest item renders its diff instantly from node.lastDiff;
+// older items fetch theirs lazily the first time they open. Clicking the header toggles the item by hand.
 function HistoryItem({ node, r, v, latest, open, onToggle }) {
   const t = useT()
   const fetched = useVersionDiff(node.id, r.hash, open && !latest)
   const diff = latest ? (node.lastDiff ?? fetched) : fetched
-  const shots = latest ? (node.evidence || []) : []
   return (
     <div className={`ver-row${latest ? ' latest' : ''}${open ? ' open' : ''}`}>
       <button className="rec-toggle" onClick={onToggle} aria-expanded={open}>
@@ -205,13 +202,6 @@ function HistoryItem({ node, r, v, latest, open, onToggle }) {
       </button>
       {open && (
         <figure className="rec-evidence">
-          {shots.length > 0 && (
-            <div className="ev-pair">
-              {shots.map((src, i) => (
-                <div className="ev-shot" key={i}><img src={src} alt={t('nodeView.evidenceAlt', { n: i + 1 })} /></div>
-              ))}
-            </div>
-          )}
           <DiffEvidence diff={diff} />
         </figure>
       )}

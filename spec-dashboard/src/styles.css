@@ -273,15 +273,10 @@ body {
 .rec-sub { color: var(--muted); font-size: 11px; margin-top: 3px; }
 .rec-msg.muted { color: var(--muted); }
 
-/* an expanded item's proof: A→B screenshots (latest only) above its spec line diff */
+/* an expanded item's proof: the version's spec.md line diff */
 .rec-evidence { margin: 12px 0 2px; padding: 14px 0 0; border-top: 1px solid var(--line); }
-.ev-pair { display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 14px; }
-.ev-shot { flex: 1; max-width: 320px; }
-.ev-shot img { width: 100%; border: 1px solid var(--line); border-radius: 5px; display: block; }
-.ev-shot figcaption { font-size: 11px; color: var(--muted); margin-top: 6px; text-align: center; }
-.ev-arrow { color: var(--blue); font-size: 20px; flex: none; }
 .ev-note { font-size: 11px; color: var(--muted); text-align: center; margin-top: 12px; }
-/* the version's spec.md line diff — its proof-of-change (sits under the screenshots when there are any). */
+/* the version's spec.md line diff — its proof-of-change. */
 .ev-difflabel { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
 .ev-diff { margin: 0; font-family: var(--mono); font-size: 11px; line-height: 1.55; background: var(--panel2); border: 1px solid var(--line); border-radius: 5px; padding: 8px 0; overflow-x: auto; }
 .ev-diff .dl { padding: 0 12px; white-space: pre; }

@@ -152,7 +152,7 @@ export type DisplayStatus = 'working' | 'idle' | 'offline' | 'starting' | 'revie
 const PROPOSAL_STATUS: Record<Proposal, DisplayStatus> = { merge: 'review', nothing: 'done', close: 'close-pending' }
 
 export type Session = {
-  id: string; node: string | null; title: string | null; branch: string | null; path: string
+  id: string; node: string | null; title: string | null; name: string | null; branch: string | null; path: string
   lifecycle: Lifecycle; proposal: Proposal | null; merges: number; status: DisplayStatus; note: string | null
   prompt: string | null; promptPreview: string | null
 }
@@ -197,9 +197,10 @@ function promptPreview(prompt: string, n = 60): string {
   return first.length > n ? first.slice(0, n - 1) + '…' : first
 }
 
-// the human label for a session row: the spec node it references, else a prompt-derived title (node-
-// agnostic sessions), else the branch, else the id. Used everywhere a session is named for a human.
-export const sessionLabel = (s: Session): string => s.node || s.title || s.branch || s.id
+// the human label for a session row: a user-chosen NAME (the rename override) wins over everything; else
+// the spec node it references, else a prompt-derived title (node-agnostic sessions), else the branch, else
+// the id. Used everywhere a session is named for a human. The frontend mirrors this precedence (session.js).
+export const sessionLabel = (s: Session): string => s.name || s.node || s.title || s.branch || s.id
 
 async function tmux(args: string[]): Promise<string> {
   const { stdout } = await pexec('tmux', ['-L', TMUX_SOCK, ...args], { encoding: 'utf8' })
@@ -222,9 +223,11 @@ function pkgRoot(): string {
   return fileURLToPath(new URL('..', import.meta.url))
 }
 
-type SessRec = { node: string | null; title: string | null; session: string | null; status: Lifecycle; proposal: Proposal | null; merges: number; note: string | null }
+// `name` is the user-chosen display override set by the rename gesture — distinct from the auto-derived
+// `title` (from the prompt), so a rename never has to fight or overwrite the launch-time derivation.
+type SessRec = { node: string | null; title: string | null; name: string | null; session: string | null; status: Lifecycle; proposal: Proposal | null; merges: number; note: string | null }
 function readSessionFile(dir: string): SessRec {
-  const r: SessRec = { node: null, title: null, session: null, status: 'active', proposal: null, merges: 0, note: null }
+  const r: SessRec = { node: null, title: null, name: null, session: null, status: 'active', proposal: null, merges: 0, note: null }
   const p = join(dir, '.session')
   if (!existsSync(p)) return r
   for (const line of readFileSync(p, 'utf8').split('\n')) {
@@ -232,6 +235,7 @@ function readSessionFile(dir: string): SessRec {
     const k = line.slice(0, i).trim(), v = line.slice(i + 1).trim()
     if (k === 'node') r.node = v || null
     else if (k === 'title') r.title = v || null
+    else if (k === 'name') r.name = v || null
     else if (k === 'session') r.session = v || null
     else if (k === 'status' && (v === 'active' || v === 'idle' || v === 'awaiting' || v === 'blocked' || v === 'error' || v === 'needs-input' || v === 'queued')) r.status = v
     else if (k === 'proposal' && v) r.proposal = v as Proposal
@@ -243,6 +247,7 @@ function readSessionFile(dir: string): SessRec {
 function writeSessionFile(dir: string, rec: SessRec): void {
   const lines = [`node: ${rec.node || ''}`]
   if (rec.title) lines.push(`title: ${rec.title}`)
+  if (rec.name) lines.push(`name: ${rec.name}`)
   lines.push(`session: ${rec.session || ''}`, `status: ${rec.status}`)
   if (rec.status === 'awaiting' && rec.proposal) lines.push(`proposal: ${rec.proposal}`)
   if (rec.merges) lines.push(`merges: ${rec.merges}`)
@@ -331,7 +336,20 @@ async function findWorktree(id: string): Promise<{ path: string; branch: string 
 
 function toSession(rec: SessRec, branch: string | null, path: string, status: DisplayStatus): Session {
   const prompt = readPromptFile(path)   // the originating ask, captured at launch (sidecar; null for old sessions)
-  return { id: rec.session!, node: rec.node, title: rec.title, branch, path, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, prompt, promptPreview: prompt ? promptPreview(prompt) : null }
+  return { id: rec.session!, node: rec.node, title: rec.title, name: rec.name, branch, path, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, prompt, promptPreview: prompt ? promptPreview(prompt) : null }
+}
+
+// @@@ renameSession - set (or clear) a session's human display NAME: the user-chosen override that wins
+// over the derived label (node/title/branch/id) on every surface. Persisted to the worktree's `.session`
+// — the only writer of that file — so the name survives backend restarts and is read back like any other
+// field. A blank name CLEARS the override, reverting the row to its derived label. Works for a session in
+// any state (queued/live/offline) since it edits the on-disk record, not the live tmux. Unknown id → false
+// (the route answers 404). The frontend's right-click rename is the sole caller today.
+export async function renameSession(id: string, name: string): Promise<boolean> {
+  const wt = await findWorktree(id)
+  if (!wt) return false
+  writeSessionFile(wt.path, { ...wt.rec, name: name.trim() || null })
+  return true
 }
 
 // the session's full ORIGINATING prompt (what it was asked to do), or null if none was recorded.
@@ -783,7 +801,7 @@ export async function newSession(node: string | null, prompt: string): Promise<S
   await gitA(['-C', mainRoot(), 'worktree', 'add', '-b', branch, path, 'main'])
   // prepared but NOT launched: enters the queue as `queued`. drainQueue() below launches it at once when a
   // slot is free, else it waits — durable as a worktree, so it survives a backend restart and is still findable.
-  const rec: SessRec = { node: ref || null, title, session: id, status: 'queued', proposal: null, merges: 0, note: null }
+  const rec: SessRec = { node: ref || null, title, name: null, session: id, status: 'queued', proposal: null, merges: 0, note: null }
   writeSessionFile(path, rec)
   writePromptFile(path, prompt)   // capture the ORIGINATING prompt (the human/manager's ask) as sidecar metadata (best-effort)
   await hideClaudeMd(path)   // isolate the dispatched agent from the project CLAUDE.md (before launch)

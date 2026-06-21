@@ -460,6 +460,37 @@ body {
 .sess-lock { font-size: 10px; flex: none; line-height: 1; filter: saturate(0); }
 .sess-ops { color: var(--ov, var(--blue)); font-size: 11px; font-weight: 700; flex: none; }
 
+/* ---- session right-click menu + rename prompt (SessionContextMenu.jsx) ---- */
+/* a small pop-over anchored at the cursor (fixed to viewport coords), above the window's z-index. */
+.sess-menu {
+  position: fixed; z-index: 30; min-width: 116px;
+  background: var(--paper); border: 1px solid var(--line); border-radius: 5px;
+  box-shadow: 0 6px 22px rgba(101,123,131,.22); overflow: hidden; padding: 3px;
+}
+.sess-menu-item {
+  display: block; width: 100%; text-align: left; background: none; border: none;
+  border-radius: 3px; padding: 5px 9px; cursor: pointer;
+  font-family: var(--mono); font-size: 12px; color: var(--ink2);
+}
+.sess-menu-item:hover { background: var(--blue); color: var(--paper); }
+/* the rename prompt rides the shared Modal chrome, just narrower than the wide help/legend popup. */
+.sess-rename-modal { width: min(360px, 92vw); }
+.sess-rename { display: flex; flex-direction: column; gap: 10px; padding: 4px 2px 2px; }
+.sess-rename-input {
+  font-family: var(--mono); font-size: 13px; color: var(--ink2);
+  background: var(--paper); border: 1px solid var(--line); border-radius: 4px; padding: 7px 9px;
+}
+.sess-rename-input:focus { outline: none; border-color: var(--blue); }
+.sess-rename-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.sess-rename-btn {
+  background: var(--paper); border: 1px solid var(--line); color: var(--ink);
+  border-radius: 4px; padding: 4px 12px; cursor: pointer; font-family: var(--mono); font-size: 12px;
+}
+.sess-rename-btn:hover { background: var(--panel); }
+.sess-rename-save { border-color: var(--blue); color: var(--blue); }
+.sess-rename-save:hover { background: var(--blue); color: var(--paper); }
+.sess-rename-save:disabled { opacity: .5; cursor: default; }
+
 /* ---- help modal: keymap + legend (opened by `?`) ---- */
 /* the SINGLE home for the keymap and node vocabulary. A centered, large, scrollable modal over a
    dimmed backdrop (click-outside closes — see Legend.jsx). The HUD only carries a discreet `?`. */

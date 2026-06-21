@@ -6,10 +6,12 @@
 // surfaces read as one selection. Double-click opens that session's board (the mouse parallel to ⏎).
 // The full interactive surface is the session interface; this stays the read-only summary.
 
+import { useState } from 'react'
 import { Avatar } from './avatar.jsx'
 import { labelColor } from './color.js'
 import { GLYPH } from './SpecNode.jsx'
 import { STATUS_DOT, sessionName } from './session.js'
+import SessionContextMenu from './SessionContextMenu.jsx'
 import { useT } from './i18n/index.jsx'
 
 // @@@ opSummary - a session's overlay tally: how many nodes it is changing, by op ("+2 ~1 ✕1"). Exported
@@ -42,8 +44,10 @@ export function SessionRow({ s, locked }) {
   )
 }
 
-export default function SessionWindow({ sessions, activeId, onPick, onOpen, onOpenSession }) {
+export default function SessionWindow({ sessions, activeId, onPick, onOpen, onOpenSession, reload }) {
   const t = useT()
+  // the right-click target: { x, y, session } anchoring the context menu at the cursor, or null when closed.
+  const [menu, setMenu] = useState(null)
   return (
     <div className="sesswin">
       <div className="sesswin-head">
@@ -67,6 +71,7 @@ export default function SessionWindow({ sessions, activeId, onPick, onOpen, onOp
               style={{ '--ov': labelColor(s.id) }}
               onClick={() => onPick(s)}
               onDoubleClick={() => onOpenSession(s.id)}
+              onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, session: s }) }}
               title={t('sessionWindow.rowTitle')}
             >
               <SessionRow s={s} locked={locked} />
@@ -74,6 +79,7 @@ export default function SessionWindow({ sessions, activeId, onPick, onOpen, onOp
           )
         })
       )}
+      <SessionContextMenu menu={menu} onClose={() => setMenu(null)} onRenamed={reload} />
     </div>
   )
 }

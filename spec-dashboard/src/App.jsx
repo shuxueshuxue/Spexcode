@@ -497,7 +497,7 @@ function Dashboard({ specs, sessions, reload }) {
           <button className="hud-help" onClick={() => setLegend((v) => !v)} title={t('hud.helpTitle')}>?</button>
         </div>
 
-        <SessionWindow sessions={sessions} activeId={highlightId} onPick={onPickSession} onOpen={openBoard} onOpenSession={openSession} />
+        <SessionWindow sessions={sessions} activeId={highlightId} onPick={onPickSession} onOpen={openBoard} onOpenSession={openSession} reload={reload} />
 
         {/* @@@ lock banner - a top-center hint while a session owns the graph. It names the grip (in the
             session's colour) and tells the user the key to walk its changed nodes — or, when it has none,

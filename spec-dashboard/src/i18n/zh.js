@@ -10,6 +10,9 @@ export default {
     session: '会话',
     loading: '加载中…',
     noVersions: '尚无版本——此规格即最新的事实依据。',
+    cancel: '取消',
+    save: '保存',
+    close: '关闭',
   },
 
   status: {
@@ -96,10 +99,13 @@ export default {
   sessionWindow: {
     title: '会话',
     newTitle: '打开会话界面（⏎）',
-    rowTitle: '单击将图锁定到此会话 · 双击打开它',
+    rowTitle: '单击将图锁定到此会话 · 双击打开它 · 右键重命名',
     lockedTitle: '图已锁定到此会话——再次单击解除',
     emptyBefore: '没有活动的工作树——按 ',
     emptyAfter: ' 开始一个',
+    rename: '重命名',
+    renameTitle: '重命名“{name}”',
+    renamePlaceholder: '显示名称（留空以重置）',
   },
 
   lockHint: {

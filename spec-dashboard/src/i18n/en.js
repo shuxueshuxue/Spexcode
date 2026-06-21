@@ -12,6 +12,9 @@ export default {
     session: 'session',
     loading: 'loading…',
     noVersions: 'no versions yet — this spec is the latest ground truth.',
+    cancel: 'cancel',
+    save: 'save',
+    close: 'close',
   },
 
   // session / node lifecycle states (backend-derived); shown as labels + inside tooltips.
@@ -99,10 +102,13 @@ export default {
   sessionWindow: {
     title: 'sessions',
     newTitle: 'open the session interface (⏎)',
-    rowTitle: 'click to lock the graph onto this session · double-click to open it',
+    rowTitle: 'click to lock the graph onto this session · double-click to open it · right-click to rename',
     lockedTitle: 'graph locked to this session — click again to release',
     emptyBefore: 'no live worktrees — press ',
     emptyAfter: ' to start one',
+    rename: 'rename',
+    renameTitle: 'rename “{name}”',
+    renamePlaceholder: 'display name (blank to reset)',
   },
 
   // top-of-screen banner shown while a session owns the graph (locked). It names the grip and tells

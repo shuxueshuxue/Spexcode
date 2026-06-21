@@ -9,5 +9,6 @@ export const STATUS_DOT = {
   'close-pending': '#cb4b16', blocked: '#2aa198', error: '#dc322f', 'needs-input': '#b58900',
 }
 
-// the human-facing name of a session: its node, else title/branch, else the raw id.
-export const sessionName = (s) => s?.node || s?.title || s?.branch || s?.id
+// the human-facing name of a session: a user-chosen rename (`name`) wins over everything; else its node,
+// else title/branch, else the raw id. Mirrors the backend's sessionLabel precedence (spec-cli sessions.ts).
+export const sessionName = (s) => s?.name || s?.node || s?.title || s?.branch || s?.id

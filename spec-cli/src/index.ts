@@ -6,7 +6,7 @@ import { loadSpecs, specHistory, specDiffAt, loadConfig } from './specs.js'
 import { resolveLayout } from './layout.js'
 import { buildBoard } from './board.js'
 import { gitA } from './git.js'
-import { newSession, listSessions, sendKeys, rawKey, closeSession, reopen, propose, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, superviseQueue } from './sessions.js'
+import { newSession, listSessions, sendKeys, rawKey, closeSession, reopen, propose, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, superviseQueue } from './sessions.js'
 import { slashCommands } from './slash-commands.js'
 import { attachViewer, detachViewer, writeViewer, resizeBridge, superviseBridges, type Viewer } from './pty-bridge.js'
 import { installProcessGuards } from './resilience.js'
@@ -164,6 +164,14 @@ app.post('/api/sessions/:id/rawkey', async (c) => {
   return c.json({ ok }, ok ? 200 : 404)
 })
 app.post('/api/sessions/:id/close', async (c) => c.json({ ok: await closeSession(c.req.param('id')) }))
+// @@@ rename - set a session's human display NAME (the override that wins over the derived label), or clear
+// it with a blank name. Persists to the worktree's `.session` so it shows on every surface and survives a
+// restart. Unknown id → 404. The dashboard's right-click session menu is the caller.
+app.post('/api/sessions/:id/rename', async (c) => {
+  const body = await c.req.json().catch(() => ({}))
+  const ok = await renameSession(c.req.param('id'), typeof body?.name === 'string' ? body.name : '')
+  return c.json({ ok }, ok ? 200 : 404)
+})
 
 const port = Number(process.env.PORT || 8787)
 const server = serve({ fetch: app.fetch, port })

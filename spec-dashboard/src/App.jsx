@@ -8,6 +8,7 @@ import SessionInterface from './SessionInterface.jsx'
 import SessionGraph from './SessionGraph.jsx'
 import Legend from './Legend.jsx'
 import Settings from './Settings.jsx'
+import SpecSearch from './SpecSearch.jsx'
 import { loadBoard, layout, X_GAP, Y_GAP } from './data.js'
 import { labelColor } from './color.js'
 import { useT } from './i18n/index.jsx'
@@ -36,6 +37,7 @@ function Dashboard({ specs, sessions, reload }) {
   const [legend, setLegend] = useState(false)     // centered help modal: keymap + visual vocabulary (`?`)
   const [settings, setSettings] = useState(false) // centered settings modal: language picker etc. (`,`)
   const [graphView, setGraphView] = useState(false) // experimental session-subscription graph (`t`)
+  const [search, setSearch] = useState(false)     // jump-to-node search palette (Alt+F)
   const [sessionSel, setSessionSel] = useState('new') // persisted across open/close: last tab/session
   const [highlightId, setHighlightId] = useState(null) // session whose overlays are emphasised
   const [seed, setSeed] = useState(null)          // one-shot text a board chord pre-fills the New Session input with
@@ -291,11 +293,18 @@ function Dashboard({ specs, sessions, reload }) {
       // console leaves `graphView` untouched (you return to the graph you were in). It sits ABOVE the
       // guards below so it still fires while the session graph owns the board — but it is suppressed
       // while a modal/console captures keys, where a `t` is just a keystroke (e.g. typed into an input).
-      if (!sessionUI && !overlay && !legend && !settings && (e.key === 't' || e.key === 'T')) {
+      if (!sessionUI && !overlay && !legend && !settings && !search && (e.key === 't' || e.key === 'T')) {
         e.preventDefault(); e.stopPropagation(); setGraphView((v) => !v); return
       }
       if (graphView) return // the session-graph view owns its remaining keys (drag/click, handled there)
       if (sessionUI) return // the session interface owns ALL its keys (arrows / Enter / typing / Esc)
+      // search palette — same modal contract as the help/settings: while open its input OWNS every key
+      // (typing the query, ↑/↓/Enter to pick, Esc to close — all in SpecSearch), so we return before any
+      // board handler fires. App still catches Esc here too, so it closes even if the input lost focus.
+      if (search) {
+        if (e.key === 'Escape') { e.preventDefault(); setSearch(false) }
+        return
+      }
       if (overlay) {
         if (e.key === 'Escape') { e.preventDefault(); setOverlay(false); return }
         if (e.key === 'Tab') { e.preventDefault(); e.stopPropagation(); cyclePane(e.shiftKey ? -1 : 1); return }
@@ -333,6 +342,10 @@ function Dashboard({ specs, sessions, reload }) {
         return
       }
       if (e.key === ',') { e.preventDefault(); setSettings(true); return }
+      // @@@ Alt+F - open the jump-to-node search palette. Matched on e.code (Alt+F emits a dead-key glyph
+      // — `ƒ` on macOS — so e.key is unreliable). Alt is otherwise unbound on the board, and the chord
+      // buffer below ignores Alt-modified keys, so this shadows nothing.
+      if (e.altKey && e.code === 'KeyF') { e.preventDefault(); e.stopPropagation(); setSearch(true); return }
       // @@@ chord buffer - a small vim-style key buffer for multi-key board commands. A leader letter
       // (n/d) opens a pending buffer; the matching next letter fires the chord (open the session board
       // with its @-directive pre-seeded — see CHORDS/startNew). A non-matching key (or a 700ms lull)
@@ -374,7 +387,7 @@ function Dashboard({ specs, sessions, reload }) {
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [overlay, sessionUI, legend, settings, graphView, focus, upTarget, downTarget, rightTarget, parent, centerOn, getViewport, openBoard, startNew])
+  }, [overlay, sessionUI, legend, settings, graphView, search, focus, upTarget, downTarget, rightTarget, parent, centerOn, getViewport, openBoard, startNew])
 
   // clicking a node focuses it; the follow-focus effect then re-plots the tree around it and pans the
   // camera to keep it in place (a click drills the same way the arrows do). It does NOT open a session —
@@ -433,6 +446,9 @@ function Dashboard({ specs, sessions, reload }) {
 
         {legend && <Legend onClose={() => setLegend(false)} />}
         {settings && <Settings onClose={() => setSettings(false)} />}
+        {/* search over the WHOLE raw tree (not just visible nodes); picking one focuses it and the
+            expand-on-focus follow effect drills its spine open + pans the camera. */}
+        {search && <SpecSearch specs={specs} onPick={setFocusId} onClose={() => setSearch(false)} />}
       </div>
 
       {graphView && <SessionGraph onOpen={openSession} active={!sessionUI} />}

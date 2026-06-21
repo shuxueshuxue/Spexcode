@@ -58,6 +58,7 @@ export default {
       child: '前往最近的子节点',
       zoom: '放大 / 缩小 · 重置为概览',
       info: '打开节点信息弹窗（或双击节点）',
+      search: '搜索并跳转到任意节点（标题 / id / 路径）',
       graph: '切换会话图（实时监视网络）',
       enter: '进入聚焦节点的实时会话',
       newChild: '在聚焦节点下新建子节点（连击）',
@@ -193,5 +194,12 @@ export default {
     close: '关闭（esc 或 ,）',
     secLanguage: '语言',
     languageHint: '选择仪表盘语言。默认根据浏览器检测；你的选择会被记住。',
+  },
+
+  search: {
+    title: '搜索规格节点',
+    placeholder: '跳转到节点 — 标题、id 或路径…',
+    empty: '没有匹配的节点',
+    hint: '↑↓ 选择 · ⏎ 跳转 · esc 关闭',
   },
 }

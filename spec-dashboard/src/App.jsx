@@ -342,10 +342,10 @@ function Dashboard({ specs, sessions, reload }) {
         return
       }
       if (e.key === ',') { e.preventDefault(); setSettings(true); return }
-      // @@@ Alt+F - open the jump-to-node search palette. Matched on e.code (Alt+F emits a dead-key glyph
-      // — `ƒ` on macOS — so e.key is unreliable). Alt is otherwise unbound on the board, and the chord
-      // buffer below ignores Alt-modified keys, so this shadows nothing.
-      if (e.altKey && e.code === 'KeyF') { e.preventDefault(); e.stopPropagation(); setSearch(true); return }
+      // @@@ search key - `/` opens the jump-to-node search palette (the classic "slash to search"). It's
+      // unbound elsewhere on the board and is the unshifted key (Shift+/ is `?`, the help modal — handled
+      // above), so the two never collide. preventDefault stops the browser's own find-as-you-type / quick-find.
+      if (e.key === '/') { e.preventDefault(); e.stopPropagation(); setSearch(true); return }
       // @@@ chord buffer - a small vim-style key buffer for multi-key board commands. A leader letter
       // (n/d) opens a pending buffer; the matching next letter fires the chord (open the session board
       // with its @-directive pre-seeded — see CHORDS/startNew). A non-matching key (or a 700ms lull)

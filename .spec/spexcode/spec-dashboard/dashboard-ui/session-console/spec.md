@@ -43,9 +43,11 @@ tab-switching never half-paints.
 Human input has **two channels for two jobs**. The docked **`❯` box** is the *prompt* channel: submitting
 dispatches the line through the **control socket** — never by typing into the pane — so it lands even while
 tmux is in copy-mode. It **holds focus persistently**: interacting with panel chrome — clicking a tab
-(even the already-active one), the list's empty space, or the header, and right-clicking for the browser
-menu — never blurs it, so the human always keeps a place to type. Only the two text fields and the
-terminal's own selection take focus away. It wears the same `/` **slash-command completion** as the New
+(even the already-active one), the list's empty space, or the header — never blurs it, so the human always
+keeps a place to type. Only the two text fields and the terminal's own selection take focus away. The panel
+**suppresses the browser's native context menu** (a right-click menu would seize focus the moment it opens),
+giving it a terminal-app feel; the menu survives only over the text fields, where it stays on the
+already-focused box and offers paste. It wears the same `/` **slash-command completion** as the New
 tab ([[term-input]]), here for CC's commands. The second channel is **nav mode**:
 while on, the `❯` box is disabled and every keystroke is forwarded **raw** to the pane, so the human can drive
 the agent's interactive TUI menus (`/model`'s list, …). Its trigger is **manual and authoritative** — a header

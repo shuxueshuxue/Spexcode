@@ -35,8 +35,11 @@ folded onto the node (`node.issues`, open-first), grouped open/closed — no fet
 silent when the node has none. `SpecPane` renders the spec doc (`# title`, desc blockquote,
 status/version/session meta, `// governs` code list) and dispatches the body to `TwoPart` when `node.parts`
 is present, else the flat `SpecBody`. `HistoryPane` reads `/api/specs/:id/history` and is the single merged
-version log: the latest version sits expanded with its proof, older ones start collapsed and reveal as the
-reader scrolls down past the one they are reading (a header click toggles any by hand). A version's proof is
+version log: the latest version sits expanded with its proof, older ones start collapsed and reveal one at
+a time on the **down gesture** once you've finished the open one — scrolling down past it, *or* a `j`/`↓`
+keypress when there is nothing left to scroll (a short history with no scrollbar, or the bottom of a long
+one). Tying reveal to the gesture rather than to scroll movement alone is what keeps a sub-page history from
+dead-ending with its older versions forever hidden (a header click also toggles any by hand). A version's proof is
 the **spec.md line diff** it introduced — the latest version's diff ships precomputed with the board, older
 ones fetch lazily on expand; a version with no recorded change says so plainly. The "change
 it in place" surface relocated to the session interface (`Enter`; see [[session-console]] and [[term-input]])

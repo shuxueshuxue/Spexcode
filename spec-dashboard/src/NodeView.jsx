@@ -223,12 +223,26 @@ function HistoryPane({ node, rows }) {
     if (next.has(i)) next.delete(i); else next.add(i)
     return next
   }), [])
-  // @@@ progressive reveal - reveal the next collapsed version as the reader scrolls DOWN past the one
-  // they're reading. On each scroll-down, if the END of the deepest contiguously-open item (0..frontier)
-  // has come into view (they've finished reading it), open the next — ONE per event, so a slow scroll
-  // reveals one at a time while an eased/momentum scroll (many events) cascades smoothly. Never fires on
-  // mount or on scroll-up, so the rest genuinely start collapsed. getBoundingClientRect (not offsetTop)
-  // is correct regardless of the scroller's own positioning.
+  // @@@ revealNext - open the next still-collapsed version, but only once the reader has finished the
+  // deepest open item (0..frontier) — its END must be within the viewport. ONE per call, so each down
+  // gesture advances exactly one. getBoundingClientRect (not offsetTop) is correct regardless of the
+  // scroller's own positioning. Shared by both triggers below.
+  const revealNext = useCallback(() => setOpen((prev) => {
+    const sc = scRef.current
+    if (!sc) return prev
+    let f = -1
+    while (prev.has(f + 1)) f++
+    if (f < 0 || f >= rows.length - 1) return prev
+    const el = sc.querySelector(`[data-i="${f}"]`)
+    if (!el || el.getBoundingClientRect().bottom - sc.getBoundingClientRect().top > sc.clientHeight + 40) return prev
+    return new Set(prev).add(f + 1)
+  }), [rows])
+  // @@@ progressive reveal - the next version reveals on the DOWN gesture once you've read the open one.
+  // TWO triggers, because a "scroll down" can't always happen: (1) the wheel/drag SCROLL event, while
+  // there's overflow to move through; (2) a j/↓ KEYPRESS when the scroller can't move further — content
+  // shorter than a page (no scrollbar at all) or already at the bottom. Without (2) those cases dead-ended:
+  // no scroll event ever fired, so later versions never expanded. They never double-fire — (2) acts only
+  // at the bottom, exactly where (1), which needs movement, cannot. (Mount and scroll-up never reveal.)
   useEffect(() => {
     const sc = scRef.current
     if (!sc || !rows?.length) return
@@ -236,19 +250,17 @@ function HistoryPane({ node, rows }) {
     const onScroll = () => {
       const top = sc.scrollTop, down = top > prevTop
       prevTop = top
-      if (!down) return
-      setOpen((prev) => {
-        let f = -1
-        while (prev.has(f + 1)) f++
-        if (f < 0 || f >= rows.length - 1) return prev
-        const el = sc.querySelector(`[data-i="${f}"]`)
-        if (!el || el.getBoundingClientRect().bottom - sc.getBoundingClientRect().top > sc.clientHeight + 40) return prev
-        return new Set(prev).add(f + 1)
-      })
+      if (down) revealNext()
+    }
+    const onKey = (e) => {
+      if (e.key !== 'j' && e.key !== 'ArrowDown') return
+      if (sc.scrollHeight - sc.clientHeight - sc.scrollTop > 1) return  // room to scroll → (1) handles it
+      revealNext()
     }
     sc.addEventListener('scroll', onScroll, { passive: true })
-    return () => sc.removeEventListener('scroll', onScroll)
-  }, [rows])
+    window.addEventListener('keydown', onKey, true)   // capture: App stopPropagation()s j/k but same-target listeners still run
+    return () => { sc.removeEventListener('scroll', onScroll); window.removeEventListener('keydown', onKey, true) }
+  }, [rows, revealNext])
   if (!rows) return <div className="pane-hist empty">{t('nodeView.loadingHistory')}</div>
   if (!rows.length) return <div className="pane-hist empty">{t('common.noVersions')}</div>
   return (

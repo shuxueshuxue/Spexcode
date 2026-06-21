@@ -62,6 +62,7 @@ export default {
       zoom: 'zoom in / out · reset to overview',
       info: 'open the node-info popup (or double-click a node)',
       search: 'search & jump to any node (title / id / path)',
+      overlayCycle: 'cycle through nodes a worktree is changing (⇧ reverse)',
       graph: 'toggle the session graph (live monitor network)',
       enter: 'cross into the focus node’s live session',
       newChild: 'new child node under the focus (chord)',

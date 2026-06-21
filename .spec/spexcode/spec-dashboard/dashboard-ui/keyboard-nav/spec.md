@@ -7,6 +7,7 @@ desc: Move by relationship, not geometry.
 code:
   - spec-dashboard/src/App.jsx
   - spec-dashboard/src/SpecSearch.jsx
+  - spec-dashboard/src/scroll.js
 ---
 # keyboard-nav
 
@@ -24,6 +25,7 @@ Move through the spec tree by **relationship, not geometry** — the tree sits a
 | `+`/`-`, `0` | zoom in / out, back to overview zoom |
 | `i`, double-click | open the node-info popup |
 | `/` | open the search palette — jump to any node by name |
+| `o` / `O` | cycle focus through nodes a worktree is changing (`O` = reverse) |
 | `Enter` | cross into the node's live session(s) |
 | `@` | start a fresh New Session targeting the focus (opens on the New tab, focus mention prefilled) |
 | `t` | toggle spec graph ↔ session graph |
@@ -49,6 +51,8 @@ Move through the spec tree by **relationship, not geometry** — the tree sits a
 
 Relationship-walking reaches a deep node only by stepping its whole ancestor spine, and the board is a drill-down (see [[node-graph]]) — a node in a collapsed subtree is invisible until you arrive. `/` (slash-to-search) is the escape hatch: a palette that searches the **whole raw tree** (not just visible nodes), ranking by title, then id, then path. Picking a result just **sets focus** — no new navigation concept; expand-on-focus opens its spine and pans the camera exactly as the arrows would. Jump-by-name over the same focus state, for nodes relationship-walking can't yet see.
 
+`o` / `O` is the same idea aimed at *change* rather than *name*: it cycles focus through the nodes a worktree is currently editing (those carrying an overlay — see [[node-graph]]), wrapping at the ends, so you can walk every in-flight edit without hunting for the marked tiles. Like `/`, each step just sets focus and lets expand-on-focus reveal a node buried in a collapsed subtree.
+
 ## focus & sessions
 
 A node does **not** belong to a session. `node.session` is only the *last editor* (a "last edited by" attribution), never a live link. The live link is the overlay — the session(s) whose pending ops currently touch the node, marked on the board by a `⏎` affordance.
@@ -63,7 +67,7 @@ The `@` key is the unconditional, spec-oriented counterpart to Enter: where Ente
 
 ## HUD & help
 
-The HUD carries only the brand and a discreet `?`. The full keymap and the node's visual vocabulary (status dots, op glyphs, badges, rings) live together in **one** centered, scrollable modal — `?` opens it; `Esc`, a backdrop click, or its `×` closes it. There is no second copy of the legend.
+The HUD carries only the brand and a discreet `?`. The full keymap and the node's visual vocabulary (status dots, op glyphs, badges, rings) live together in **one** centered, scrollable modal — `?` opens it; `j`/`k` (or `↑`/`↓`) glide its body when it overflows the viewport; `Esc`, a backdrop click, or its `×` closes it. There is no second copy of the legend. That same `j`/`k` momentum glide drives the node-info popup's open pane — one shared scroller, not two copies.
 
 ## governed file
 

@@ -1,6 +1,6 @@
 import { readFileSync, existsSync } from 'node:fs'
-import { join } from 'node:path'
-import { repoRoot, gitA, gitTry, headSha, worktreeSpecSig, worktreeSpecDelta, type NodeOp } from './git.js'
+import { join, dirname } from 'node:path'
+import { git, repoRoot, gitA, gitTry, headSha, worktreeSpecSig, worktreeSpecDelta, type NodeOp } from './git.js'
 import { guardWorktree } from './resilience.js'
 
 // @@@ portable layout - the ONE seam where "where things live" is policy, not hardcode.
@@ -10,6 +10,7 @@ import { guardWorktree } from './resilience.js'
 
 type Config = {
   main?: string                    // path to the source-of-truth checkout (default: the `main` worktree)
+  mainBranch?: string              // source-of-truth BRANCH worktrees fork from (default: auto-detected — see mainBranch())
   branchPrefix?: string            // how a branch names its node (default: "node/")
   nodeFrom?: 'branch' | 'session'  // resolve a worktree's node id from its branch or its .session file
   dashboard?: {
@@ -33,6 +34,25 @@ export function readConfig(root: string): Config {
   const p = join(root, 'spexcode.json')
   if (!existsSync(p)) return {}
   try { return JSON.parse(readFileSync(p, 'utf8')) } catch { return {} }
+}
+
+// @@@ mainBranch - the source-of-truth BRANCH: what worktrees fork from, what merges land on, what review
+// diffs against. NOT hardcoded 'main' — that assumption broke every adopted repo whose default branch is
+// named otherwise (e.g. a project on `staging` or `feat/x`). Resolved from the MAIN checkout (the parent of
+// the shared git *common* dir, so the answer is the same whether called from the main checkout, a linked
+// worktree, or a commit hook), in order: (1) a `spexcode.json` `mainBranch` override; (2) auto-detect — the
+// branch that main checkout is currently on, so an adopted repo on its own default branch just works with no
+// config; (3) 'main' as the last resort. Sync (via git(), which strips a hook's GIT_DIR) so the Stop-gate's
+// commit-gate can call it too.
+export function mainBranch(): string {
+  try {
+    const mainCheckout = dirname(git(['rev-parse', '--path-format=absolute', '--git-common-dir']).trim())
+    const override = readConfig(mainCheckout).mainBranch?.trim()
+    if (override) return override
+    const cur = git(['-C', mainCheckout, 'symbolic-ref', '--short', 'HEAD']).trim()
+    if (cur) return cur
+  } catch { /* fall through to the conventional default */ }
+  return 'main'
 }
 
 // the worktree set is the board's EXISTENCE truth — a FAILED enumeration must never read as an empty repo.
@@ -105,20 +125,22 @@ async function cachedDelta(wtPath: string, mainRef: string): Promise<NodeOp[]> {
 export async function resolveLayout(): Promise<Layout> {
   const root = repoRoot()
   const cfg = readConfig(root)
+  const base = mainBranch()
   const convention: Convention = {
     main: cfg.main || '',
+    mainBranch: base,
     branchPrefix: cfg.branchPrefix ?? 'node/',
     nodeFrom: cfg.nodeFrom ?? 'branch',
   }
   const raw = await gitWorktrees(root)
-  const mainWt = raw.find((w) => w.branch === 'main')
-  const mainRef = mainWt?.branch ?? 'main'
+  const mainWt = raw.find((w) => w.branch === base)
+  const mainRef = mainWt?.branch ?? base
   // each worktree's spec delta is independent — compute (or cache-hit) them all in parallel. Each read is
   // wrapped: a worktree whose directory was genuinely removed mid-read (a worker self-merged and retired it)
   // is OMITTED, but one whose directory still exists and merely hit a transient DETAIL failure (a git index/
   // ref lock under a concurrent merge) is kept as a DEGRADED row — never dropped. See resilience.guardWorktree.
   const rows = await Promise.all(raw.map((w) => {
-    const isMain = w.branch === 'main'
+    const isMain = w.branch === base
     const fromBranch = w.branch && w.branch.startsWith(convention.branchPrefix)
       ? w.branch.slice(convention.branchPrefix.length) : null
     return guardWorktree<Worktree>(w.path, async (): Promise<Worktree> => {

@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url'
 import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, type ReviewDiffFile } from './git.js'
 import { guardWorktree } from './resilience.js'
 import { loadSystemConfig, loadSpecs, type ConfigPreset } from './specs.js'
+import { mainBranch } from './layout.js'
 
 // @@@ sessions - the WORKTREE is the durable unit; tmux is a disposable runtime handle. Each session
 // worktree carries an untracked `.session` file (the source of truth) that survives a kill / reboot /
@@ -798,7 +799,7 @@ export async function newSession(node: string | null, prompt: string): Promise<S
   const slug = `${slugify(ref || title || (directive ? `${directive.kind}-node` : null))}-${id.slice(0, 4)}`
   const branch = `node/${slug}`
   const path = join(mainRoot(), '.worktrees', slug)
-  await gitA(['-C', mainRoot(), 'worktree', 'add', '-b', branch, path, 'main'])
+  await gitA(['-C', mainRoot(), 'worktree', 'add', '-b', branch, path, mainBranch()])
   // prepared but NOT launched: enters the queue as `queued`. drainQueue() below launches it at once when a
   // slot is free, else it waits — durable as a worktree, so it survives a backend restart and is still findable.
   const rec: SessRec = { node: ref || null, title, name: null, session: id, status: 'queued', proposal: null, merges: 0, note: null }
@@ -932,8 +933,9 @@ export function mergeReadiness(): { ready: boolean; reason?: string } {
     return { ready: false, reason: `uncommitted changes on your node branch (${shown}) — commit your spec+code first` }
   }
   let ahead = 0
-  try { ahead = Number(git(['rev-list', '--count', 'main..HEAD']).trim()) || 0 } catch { ahead = 0 }
-  if (ahead === 0) return { ready: false, reason: 'your node branch is 0 commits ahead of main — nothing is committed to merge' }
+  const base = mainBranch()
+  try { ahead = Number(git(['rev-list', '--count', `${base}..HEAD`]).trim()) || 0 } catch { ahead = 0 }
+  if (ahead === 0) return { ready: false, reason: `your node branch is 0 commits ahead of ${base} — nothing is committed to merge` }
   return { ready: true }
 }
 
@@ -989,11 +991,12 @@ export async function reviewPayload(id: string): Promise<ReviewPayload | null> {
   const wt = await findWorktree(id)
   if (!wt) return null
   const { specLint } = await import('./lint.js')
+  const base = mainBranch()
   const [aheadOut, statusOut, diff, conflictsWithMain, typecheck, findings] = await Promise.all([
-    gitA(['-C', wt.path, 'rev-list', '--count', 'main..HEAD']),
+    gitA(['-C', wt.path, 'rev-list', '--count', `${base}..HEAD`]),
     gitA(['-C', wt.path, 'status', '--porcelain', '--untracked-files=all']),
-    mergeBaseDiff(wt.path, 'main'),
-    mergeConflicts(wt.path, 'main'),
+    mergeBaseDiff(wt.path, base),
+    mergeConflicts(wt.path, base),
     typecheckPkg(),
     specLint(),
   ])
@@ -1022,11 +1025,12 @@ export async function reviewPayload(id: string): Promise<ReviewPayload | null> {
 // After a clean merge the branch is 0 ahead of main, so the agent proposes CLOSE — not merge (the commit gate
 // would block a merge proposal; propose-close is exempt) — and the human confirms the close.
 function mergePrompt(mainPath: string, branch: string, reason: string): string {
-  return `Merge your branch \`${branch}\` into main, then propose close. You know this work, so resolve any conflicts yourself.\n\n` +
+  const base = mainBranch()
+  return `Merge your branch \`${branch}\` into \`${base}\`, then propose close. You know this work, so resolve any conflicts yourself.\n\n` +
     `1. Merge from the main checkout with a no-ff merge commit:\n   git -C ${mainPath} merge --no-ff -m "merge ${branch}: ${reason}" ${branch}\n` +
     `2. If it conflicts, resolve the conflicts (you know the intent) and complete the merge commit. ` +
-    `3. Verify it landed: main's HEAD must now be the new merge commit and no merge may be left in progress — if anything went half-merged, run \`git -C ${mainPath} merge --abort\` and report it rather than leaving main mid-state. ` +
-    `4. Once you've verified main advanced cleanly, propose close for the human — do NOT close it yourself.`
+    `3. Verify it landed: \`${base}\`'s HEAD must now be the new merge commit and no merge may be left in progress — if anything went half-merged, run \`git -C ${mainPath} merge --abort\` and report it rather than leaving \`${base}\` mid-state. ` +
+    `4. Once you've verified \`${base}\` advanced cleanly, propose close for the human — do NOT close it yourself.`
 }
 
 // @@@ mergeSession - the cockpit's ACT verb, the sequel to review — but a DISPATCH, not a server script: the

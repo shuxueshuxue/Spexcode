@@ -233,7 +233,7 @@ function Dashboard({ specs, sessions, reload }) {
     // per frame = exponential glide). Repeated/held j/k stack onto the SAME target, so the motion stays
     // one continuous flow. Switching panes swaps the scroller element, which resets the stale target.
     const bumpScroll = (delta) => {
-      const sc = document.querySelector('.ov-body .pane-doc, .ov-body .pane-hist')
+      const sc = document.querySelector('.ov-body .pane-doc, .ov-body .pane-hist, .ov-body .pane-issues')
       if (!sc) return
       if (sc !== scrollElRef.current) { scrollElRef.current = sc; scrollTargetRef.current = null }
       const max = sc.scrollHeight - sc.clientHeight

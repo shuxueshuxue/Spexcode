@@ -106,6 +106,10 @@ export default {
   nodeView: {
     paneSpec: 'spec',
     paneHistory: 'history',
+    paneIssues: 'issues',
+    openIssues: ({ n }) => `${n} open`,
+    closedIssues: ({ n }) => `${n} closed`,
+    noIssues: 'no issues linked to this node yet.',
     hint: '←→/hl/tab switch · j/k/↑↓ scroll · ⏎ session · esc back',
     statusLabel: 'status:',
     versionLabel: 'version:',

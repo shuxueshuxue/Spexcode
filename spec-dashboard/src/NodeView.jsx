@@ -7,6 +7,7 @@ import { useT } from './i18n/index.jsx'
 export const PANES = [
   { key: 'spec',    label: 'spec' },
   { key: 'history', label: 'history' },
+  { key: 'issues',  label: 'issues' },
 ]
 
 // @@@ inline - the only inline markdown the spec bodies actually use: `code` (78×), **bold**,
@@ -261,8 +262,48 @@ function HistoryPane({ node, rows }) {
   )
 }
 
+// @@@ IssuesPane - the node's bound forge work, OPEN and CLOSED both (the popover/badge on the board show
+// only the open subset; this tab is the full ledger). The node arrives from the board already carrying
+// `node.issues` (the [[dashboard-issues]] fold, open-first then newest); we just group it open/closed and
+// render each as a card linking to the forge. Empty (or forge-less) → a plain "none yet" line, never a
+// blank pane. No fetch here — one board poll already has the data, so the tab is instant like the rest.
+function IssueRow({ i }) {
+  return (
+    <a className="issue-card" href={i.url} target="_blank" rel="noreferrer">
+      <span className="issue-card-top">
+        <span className="issue-num">#{i.number}</span>
+        <span className={`issue-state st-${(i.state || '').toLowerCase()}`}>{i.state}</span>
+      </span>
+      <span className="issue-card-title">{i.title}</span>
+    </a>
+  )
+}
+function IssuesPane({ node }) {
+  const t = useT()
+  const issues = node.issues || []
+  if (!issues.length) return <div className="pane-issues empty">{t('nodeView.noIssues')}</div>
+  const open = issues.filter((i) => (i.state || '').toLowerCase() === 'open')
+  const closed = issues.filter((i) => (i.state || '').toLowerCase() !== 'open')
+  return (
+    <div className="pane-issues">
+      {open.length > 0 && (
+        <>
+          <div className="issue-group-head">{t('nodeView.openIssues', { n: open.length })}</div>
+          {open.map((i) => <IssueRow key={i.number} i={i} />)}
+        </>
+      )}
+      {closed.length > 0 && (
+        <>
+          <div className="issue-group-head closed">{t('nodeView.closedIssues', { n: closed.length })}</div>
+          {closed.map((i) => <IssueRow key={i.number} i={i} />)}
+        </>
+      )}
+    </div>
+  )
+}
+
 // PANES keys map to localized tab labels (the key drives logic; only the label is shown).
-const PANE_LABEL = { spec: 'nodeView.paneSpec', history: 'nodeView.paneHistory' }
+const PANE_LABEL = { spec: 'nodeView.paneSpec', history: 'nodeView.paneHistory', issues: 'nodeView.paneIssues' }
 
 export default function NodeView({ node, pane, setPane, onClose }) {
   const t = useT()
@@ -285,6 +326,7 @@ export default function NodeView({ node, pane, setPane, onClose }) {
         <div className="ov-body">
           {pane === 'spec' && <div className="pane-solo"><SpecPane node={node} /></div>}
           {pane === 'history' && <HistoryPane node={node} rows={rows} />}
+          {pane === 'issues' && <IssuesPane node={node} />}
         </div>
       </div>
     </div>

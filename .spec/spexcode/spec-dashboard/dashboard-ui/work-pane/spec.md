@@ -22,13 +22,16 @@ The node popup is the `i` surface: a fixed pop-out (`min(900px,90vw) × min(600p
 over the board and dismissed with `Esc`. The intent half is the **spec doc** — title, desc, governed-code
 list, and the body rendered as a living current-state document (two labelled parts — raw source / expanded
 spec — when the body is authored that way; see [[three-part-body]]). The proof and evolution of that intent
-live in the **history** tab. The "change it in place" half — a live
-terminal — belongs with the *session* that does the changing, not pinned to one node. The panel must size to
+live in the **history** tab. A third **issues** tab lists the forge work bound to this node — open and
+closed alike (the board's badge/card show only the open ones; see [[dashboard-issues]]). The "change it in
+place" half — a live terminal — belongs with the *session* that does the changing, not pinned to one node. The panel must size to
 itself, never to xterm: `min-width:0` runs down the flex chain and the body is `overflow:hidden`, each pane
 scrolling its own content, so there is no stray horizontal scrollbar.
 
-`NodeView.jsx` realises this as a **reference-only** popup: tabs are `spec` / `history` (`PANES`),
-with no `work` pane and no embedded terminal. `SpecPane` renders the spec doc (`# title`, desc blockquote,
+`NodeView.jsx` realises this as a **reference-only** popup: tabs are `spec` / `history` / `issues`
+(`PANES`), with no `work` pane and no embedded terminal. `IssuesPane` lists the issues the board already
+folded onto the node (`node.issues`, open-first), grouped open/closed — no fetch of its own, empty and
+silent when the node has none. `SpecPane` renders the spec doc (`# title`, desc blockquote,
 status/version/session meta, `// governs` code list) and dispatches the body to `TwoPart` when `node.parts`
 is present, else the flat `SpecBody`. `HistoryPane` reads `/api/specs/:id/history` and is the single merged
 version log: the latest version sits expanded with its proof, older ones start collapsed and reveal as the

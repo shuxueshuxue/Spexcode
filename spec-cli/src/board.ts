@@ -79,19 +79,27 @@ export async function buildBoard() {
     }),
     ...Object.values(ghostById),
   ]
-  // @@@ open-issue fold - lay each node's bound OPEN issues (spec-forge) onto it, for the dashboard's
-  // glance badge + popover. NON-BLOCKING and SILENT by construction: residentForgeView serves the last
+  // @@@ issue fold - lay each node's bound issues (spec-forge) onto it. `issues` is the FULL linked set
+  // (open + closed) the node-info Issues tab lists; `openIssues` is the open subset the glance badge +
+  // hover popover read. NON-BLOCKING and SILENT by construction: residentForgeView serves the last
   // background reconcile (never waits on `gh`) and returns [] when there's no forge/gh/auth — so a
   // forge-less board is byte-for-byte what it was, no badge and no error. Only issues here (a node DEFINES,
-  // an issue DOES); PRs already read on the board as session/overlay state. `openIssues` is attached only
-  // when non-empty, so SpecNode can treat its presence as "has work". Read-only — status stays git-derived.
+  // an issue DOES); PRs already read on the board as session/overlay state. Both fields are attached only
+  // when non-empty. Open sorts before closed, newest number first, so the tab reads live-work-first. Read-
+  // only — status stays git-derived.
+  const isOpen = (i: any) => (i.state || '').toLowerCase() === 'open'
   const issuesByNode: Record<string, any[]> = {}
   for (const link of residentForgeView(nodes.map((n) => n.id))) {
-    issuesByNode[link.node] = link.issues.map((i) => ({ number: i.number, state: i.state, title: i.title, url: i.url }))
+    issuesByNode[link.node] = link.issues
+      .map((i) => ({ number: i.number, state: i.state, title: i.title, url: i.url }))
+      .sort((a, b) => Number(isOpen(b)) - Number(isOpen(a)) || b.number - a.number)
   }
   for (const n of nodes) {
     const issues = issuesByNode[n.id]
-    if (issues && issues.length) n.openIssues = issues
+    if (!issues || !issues.length) continue
+    n.issues = issues
+    const open = issues.filter(isOpen)
+    if (open.length) n.openIssues = open
   }
 
   const opsByPath: Record<string, any[]> = {}

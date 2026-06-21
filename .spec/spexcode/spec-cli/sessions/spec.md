@@ -5,7 +5,6 @@ hue: 280
 desc: Durable worktree sessions — the subsystem overview; launch/state/dispatch/graph own the detail.
 code:
   - spec-cli/src/board.ts
-  - spec-cli/src/pty-bridge.ts
 ---
 
 # sessions
@@ -38,14 +37,12 @@ The subsystem divides into four governed concerns, each its own child node:
   fail-loud), and the merge intent that rides that path.
 - **[[graph]]** — the live monitor network (edge A→B iff A runs `spex watch B`) and the `spex watch`
   lifecycle event stream.
+- **[[live-view]]** — the dashboard's live terminal: one real tmux client per session, viewer
+  subscriptions that outlive the client so a pane never freezes, and the warm-bridge prewarm.
 
 ### Surfaces
 
-Two surfaces stay with the overview. `buildBoard` (`board.ts`) assembles the dashboard's runtime state —
+One surface stays with the overview. `buildBoard` (`board.ts`) assembles the dashboard's runtime state —
 merged tree + per-worktree overlay + the session list — in one module, served identically at HTTP
-`/api/board` and `spex board` (the frontend only adds x/y pixels). The dashboard's **live terminal**
-(`pty-bridge.ts`) is a genuine tmux client, not an output tap: one ref-counted `node-pty` per session,
-so there is exactly one client and one authoritative pane size, exposed over a single bidirectional
-WebSocket (`GET /api/sessions/:id/socket`). A supervisor keeps a warm bridge for every **detached** live
-session so opening a tab is instant, and deliberately **skips** any session a human is already attached
-to. `captureSession` remains for `spex capture`.
+`/api/board` and `spex board` (the frontend only adds x/y pixels). `captureSession` remains for
+`spex capture`.

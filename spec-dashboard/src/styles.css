@@ -452,28 +452,6 @@ body {
 .sess-lock { font-size: 10px; flex: none; line-height: 1; filter: saturate(0); }
 .sess-ops { color: var(--ov, var(--blue)); font-size: 11px; font-weight: 700; flex: none; }
 
-/* @@@ session peek - the on-graph REVIEW card for a node carrying pending changes (SpecNode/SessionPeek).
-   Mirrors .issue-popover's reveal (a .spec-node child shown on the WHOLE node's hover/focus) but drops
-   BELOW the node so it never collides with the issue card above. Inside it reuses the .sess-row vocabulary,
-   so a session reads identically here and in the top-right window. The ::before bridge spans the 6px gap
-   UP to the node so moving the pointer node->card keeps :hover alive. nodrag/nopan keep the rows clickable. */
-.session-peek {
-  display: none; position: absolute; top: calc(100% + 6px); left: 0; z-index: 20;
-  width: 236px;
-  background: var(--paper); border: 1px solid var(--line); border-radius: 7px;
-  box-shadow: 0 8px 24px rgba(0,0,0,.18); overflow: hidden;
-}
-.session-peek::before { content: ''; position: absolute; bottom: 100%; left: 0; right: 0; height: 8px; }
-.spec-node:hover .session-peek, .spec-node.focused .session-peek { display: block; }
-.session-peek-head {
-  font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em;
-  padding: 6px 9px; background: var(--panel2); border-bottom: 1px solid var(--line); font-family: var(--mono);
-}
-/* a ghost is translucent at rest (an added node not yet on main), but opacity caps its descendants too —
-   so its peek would read faint. Hovering/focusing the ghost to REVIEW it (its peek opens) makes the node
-   solid, so the review card is fully legible exactly when you're reading it. */
-.spec-node.ghost:hover, .spec-node.ghost.focused { opacity: 1; }
-
 /* ---- help modal: keymap + legend (opened by `?`) ---- */
 /* the SINGLE home for the keymap and node vocabulary. A centered, large, scrollable modal over a
    dimmed backdrop (click-outside closes — see Legend.jsx). The HUD only carries a discreet `?`. */

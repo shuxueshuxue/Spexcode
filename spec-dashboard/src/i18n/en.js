@@ -61,6 +61,7 @@ export default {
       child: 'to the nearest child',
       zoom: 'zoom in / out · reset to overview',
       info: 'open the node-info popup (or double-click a node)',
+      search: 'search & jump to any node (title / id / path)',
       graph: 'toggle the session graph (live monitor network)',
       enter: 'cross into the focus node’s live session',
       newChild: 'new child node under the focus (chord)',
@@ -196,5 +197,12 @@ export default {
     close: 'close (esc or ,)',
     secLanguage: 'language',
     languageHint: 'choose the dashboard language. detected from your browser by default; your choice is remembered.',
+  },
+
+  search: {
+    title: 'search spec nodes',
+    placeholder: 'jump to a node — title, id, or path…',
+    empty: 'no matching node',
+    hint: '↑↓ pick · ⏎ jump · esc close',
   },
 }

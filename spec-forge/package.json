@@ -4,9 +4,6 @@
   "private": true,
   "type": "module",
   "description": "Host-agnostic forge link tracer — reads a forge's open issues/PRs and resolves each to the spec node it serves (issue-body `Spec: <id>` marker + `node/<id>` PR branch). Read-only; a node's status stays git-derived.",
-  "scripts": {
-    "proof": "tsx src/proof.ts"
-  },
   "devDependencies": {
     "@types/node": "^20.16.0",
     "tsx": "^4.19.2",

@@ -69,8 +69,10 @@ each. There is no discovery phase.
   `starting` (not `offline`) until its control socket is up, and `closed` fires only when a session is
   genuinely gone — so each event is trustworthy and needs no cross-checking against git.
 - **POLL, DON'T BLOCK** — to wait on a dispatched worker, POLL one-shot — `spex review <id>` or `spex
-  ls` (both **return immediately**). **Never block on `spex watch`**: it STREAMS forever and will freeze
-  your turn waiting for an event that never ends the stream.
+  ls` (both **return immediately**), or use **`spex wait <id> [status]`**, the purpose-built one-shot
+  blocking primitive that returns on the first actionable transition (`--timeout`, default 1200s).
+  **Never block on `spex watch`**: it STREAMS forever and will freeze your turn waiting for an event
+  that never ends the stream. (`spex board` dumps the same board JSON the dashboard reads, for a glance.)
 - **REVIEW** — `spex review <id>` prints the one review payload: commits ahead of `main`, the
   merge-base diff (the worker's real changes), and the merge/typecheck/lint gates. Decide from that —
   you don't hand-run git or read the source.
@@ -88,15 +90,15 @@ each. There is no discovery phase.
 - A node = a directory under `.spec/` containing a `spec.md`. `id` = directory basename; `parent` =
   the nearest ancestor directory that also has a `spec.md`. The tree root is **`.spec/spexcode`**
   (the project). Its children are the package nodes — `spec-cli` (Hono backend + source-of-truth
-  guards), `spec-dashboard` (UI), and `spec-forge` (a *pending* host-agnostic forge bridge) — plus
-  the **reflexive config system** (`.config` and `config`, next bullet). (`spec-dashboard` also owns a
-  pending `yatsu-evidence` child — the designed-not-built computer-use A→B evidence path.) A node is a
+  guards), `spec-dashboard` (UI), and `spec-forge` (a built, read-only forge **link tracer**) — plus
+  the **reflexive config system** (`.config` and `config`, next bullet). A node is a
   *directory*, not a file — that's what lets it both nest (children = subdirs) and co-locate assets;
   the id lives in the dir name, so the file is always `spec.md` (never `<id>.md` — that would
   duplicate the id).
 - **The config system is reflexive** — SpexCode's own dev-flow behavior is itself spec nodes, managed
   by the same dogfood ritual. Two roots sit under `spexcode`: **`.config`** holds the concrete
-  *instance* plugins (`core`, `voice-before-ask`, `tidy`, `health`); **`config`** holds the *spec of
+  *instance* plugins (`core` + `forge-link` + `voice-before-ask` are `surface: system`; `health` +
+  `supervisor` + `tidy` are `surface: slash`); **`config`** holds the *spec of
   the config system* itself (`surface`). Each plugin is a **flat** child carrying a `surface`
   frontmatter **field** — `surface: system` folds its body verbatim into every launched agent's
   `--append-system-prompt`; `surface: slash` exposes it as a `/`-dropdown preset for new sessions.
@@ -138,20 +140,24 @@ together — that is a project choice, not a git requirement.
 ## Architecture / data flow
 
 - `spec-cli/` — Hono backend, run with `tsx` (**no build step**; `npx tsc --noEmit` to type-check).
-  Reads `.spec` + git live and serves `GET /api/specs`, `GET /api/specs/:id/history`,
-  `GET /api/layout`, `GET /api/config` (the gathered config surfaces), plus the `/api/sessions` state
-  machine. Loader: `src/specs.ts`; git access: `src/git.ts`; sessions/launch: `src/sessions.ts`;
+  Reads `.spec` + git live. The dashboard's single source is **`GET /api/board`** (assembled
+  tree + overlay + sessions); other surfaces include `GET /api/specs`, `GET /api/specs/:id/history`
+  (+ `/diff/:hash`), `GET /api/layout`, `GET /api/config` (the gathered config surfaces),
+  `GET /api/slash-commands`, and the whole **`/api/sessions` state-machine** (list/create/review/
+  merge/resume/capture/prompt/close + the **`:id/socket` terminal WebSocket** and `graph` edges).
+  Loader: `src/specs.ts`; git access: `src/git.ts`; sessions/launch: `src/sessions.ts`;
   portability seam: `src/layout.ts` (`resolveLayout()`, optional `spexcode.json` override for
   non-default layouts).
-- `spec-dashboard/` — Vite + React. `src/data.js` fetches `/api/specs` and **decorates client-side**
-  with only the x/y tidy-tree layout (a pure view concern — the backend has no pixels). Everything
-  else, including the A→B `evidence` links, is served by the backend; the dashboard no longer
-  fabricates screenshots (absent evidence reads as "none"). `data.js` still carries a mock session
-  log as a stand-in for the real tmux/yatsu feed.
-- `spec-forge` — a third package node (a host-agnostic bridge that projects spec nodes out to
-  GitHub/GitLab issues & PRs, with git/`.spec` staying the single source of truth) but **pending —
-  not yet built**. The computer-use A→B *evidence* path is likewise designed-not-built, living as the
-  `yatsu-evidence` node under `spec-dashboard`.
+- `spec-dashboard/` — Vite + React. `src/data.js`'s `loadBoard()` fetches **`/api/board`**; the x/y
+  tidy-tree `layout()` is exported from `data.js` but **applied in `App.jsx`** (focus-driven
+  drill-down — a pure view concern, the backend has no pixels). The live Sessions console is a **real
+  terminal** (`SessionTerm.jsx`) over the `/api/sessions/:id/socket` WebSocket. `data.js` still carries
+  a legacy mock `SESSION_LOG`, but it now feeds **only the dormant `TermPane.jsx`**, not the live UI.
+- `spec-forge` — a third package node, now **built and `active`**: a host-agnostic, **read-only forge
+  link tracer** that reads a forge's open issues/PRs and resolves each to the spec node it serves
+  (git/`.spec` stays the single source of truth — a node's status stays git-derived). Real `spec-forge/`
+  package (`src/{cli,links,port,cache,resident,proof}.ts`, `src/drivers/github.ts`) with active child
+  nodes `forge-cli`, `dashboard-issues`, `freshness`, `links`, `port`.
 
 ## Running it
 
@@ -166,8 +172,10 @@ together — that is a project choice, not a git requirement.
 - `spex lint` (CLI: `spec-cli/src/cli.ts` → `lint.ts`; or `npm run lint`) checks the spec↔code graph:
   **integrity** (error — a `code:` path doesn't exist), **living** (error — a body contains a `## vN`
   changelog heading instead of staying current-state; see "the body is a living document" above),
-  **coverage** (warn — a governed source file isn't claimed by any spec), **drift** (warn — a
-  governed file changed after its spec's last version, derived live from git, no stored hashes). The
+  **altitude** (warn — a body slid below contract altitude into a mechanics dump: over its line/char
+  budget, code-identifier density > 1.3/line, or ≥3 step-by-step lines; budgets overridable via
+  `spexcode.json`), **coverage** (warn — a governed source file isn't claimed by any spec), **drift**
+  (warn — a governed file changed after its spec's last version, derived live from git, no stored hashes). The
   pre-commit hook is a thin shim over it that blocks on errors only; bypass with `SPEXCODE_SKIP_LINT=1`. NOTE: anything calling git from inside a hook must
   go through `git.ts`'s `git()` helper, which strips the hook's exported `GIT_DIR`/`GIT_INDEX_FILE`
   (otherwise repo discovery resolves to the cwd and the lint silently sees zero specs).
@@ -225,6 +233,6 @@ live):
 ## Naming
 
 The project is **SpexCode**. npm root package: `spexcode`; CLI package: `@spexcode/spec-cli`. The
-package *directory* names (`spec-cli`, `spec-dashboard`; `spec-forge` once it's built) are component
+package *directory* names (`spec-cli`, `spec-dashboard`, `spec-forge`) are component
 names and stay lowercase-hyphen — they are not the brand. Env escape hatch: `SPEXCODE_ALLOW_MAIN`.
 Optional layout override file: `spexcode.json`.

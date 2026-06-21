@@ -64,10 +64,10 @@ if (cmd === 'serve') {
   // not a `.spec` template). Each step names the real seam: cwd picks the repo, PORT/API_URL pick endpoints.
   console.log(`spex guide — run SpexCode on your own repo
 
-The product model: install the \`spex\` CLI once. After that an agent drives the rest —
-you don't hand-author the spec tree or wire the dashboard yourself.
+The product model: install SpexCode ONCE, then use it across all your projects — an agent drives
+the rest, you don't hand-author the spec tree or wire the dashboard yourself.
 
-1. Install the CLI (one-time, global)
+1. Install the CLI (one-time, global — this ONE checkout serves every project)
      cd spec-cli && npm install && npm link      # \`spex\` now runs from ANY directory
    It always operates on the repo of your current directory — that cwd is the only "which repo" knob.
 
@@ -80,11 +80,12 @@ you don't hand-author the spec tree or wire the dashboard yourself.
      spex serve                                  # http://localhost:8787  (PORT=<n> for another endpoint)
    Serve a different repo by running it from there; two repos at once = two \`spex serve\` on two PORTs.
 
-4. Open the dashboard, pointed at that backend
-     cd spec-dashboard && npm install && npm run dev          # default backend :8787
-     API_URL=http://localhost:<port> npm run dev              # ANY other backend endpoint (one-off)
-   Point it without a launch flag by setting "dashboard": { "apiUrl": "..." } in spexcode.json —
-   the per-project default; the API_URL env still overrides it for a one-off or a remote backend.
+4. Open the dashboard — the SAME board for every project, pointed per project
+     cd spec-dashboard && npm install                        # once
+     API_URL=http://localhost:<port> npm run dev             # point this board at step 3's backend
+   The board is a viewer: API_URL is how the shared install points at each project (one dev-server
+   per project). "dashboard": { "apiUrl": "..." } in spexcode.json is the default ONLY when the board
+   lives inside the project (the dogfood layout) — for a shared install, use API_URL.
 
 5. Govern your layout (optional)
      spexcode.json sets lint's governedRoots/sourceExtensions and any non-default worktree layout.

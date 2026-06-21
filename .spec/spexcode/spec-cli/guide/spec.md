@@ -9,10 +9,11 @@ code:
 # guide
 
 `spex guide` is the product's onboarding surface as a **command**, not buried docs: it prints the
-end-to-end workflow for running SpexCode on *your own* repo. The model it teaches is **install the
-CLI once, then let an agent drive** — the human's only manual steps are the global install and
-pointing at a repo; authoring spec nodes, wiring the dashboard, and the dogfood ritual are an
-agent's job.
+end-to-end workflow for running SpexCode on *your own* repos. The model it teaches is **install once,
+then let an agent drive** — one SpexCode checkout serves *every* project (the global `spex` CLI acts
+on whatever repo is cwd, and the dashboard is a viewer pointed per project), so the human's only
+manual steps are the global install and pointing at a backend; authoring spec nodes, wiring the
+dashboard, and the dogfood ritual are an agent's job.
 
 Each step names the real seam rather than restating internals:
 

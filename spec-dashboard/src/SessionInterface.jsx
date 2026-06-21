@@ -152,6 +152,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const lastEscRef = useRef(0)
   const taRef = useRef(null)
   const msgRef = useRef(null)
+  const panelRef = useRef(null)
 
   const order = useMemo(() => ['new', ...sessions.map((s) => s.id)], [sessions])
   const active = order.includes(sel) ? sel : 'new'
@@ -491,29 +492,46 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
 
   const isTextField = (t) => t && (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT' || t.isContentEditable)
 
+  // focus the docked input — whichever box is currently mounted (the New-tab prompt when it's up, else the
+  // session ❯ box; both null in nav mode / offline, where there's no input to land in).
+  const refocusInput = () => {
+    const el = taRef.current || msgRef.current
+    if (el) requestAnimationFrame(() => el.focus())
+  }
+
   // @@@ keep input focus - mousedown is what MOVES focus, so clicking panel chrome (a tab button, the
   // list's empty padding, the header) would blur the docked input and leave you with nowhere to type. We
-  // cancel the focus shift for any target that isn't itself a text field or the live terminal (which owns
-  // its own selection): preventDefault on mousedown blocks the blur, not the click, so buttons still fire
-  // their onClick. (Switching to a different tab refocuses via the tab-switch effect; this is what saves
-  // clicking the ALREADY-active tab, which never re-runs that effect.)
+  // cancel the focus shift for any target that isn't itself a text field: preventDefault on mousedown blocks
+  // the blur, not the click, so buttons still fire their onClick. A LEFT click inside the terminal is the one
+  // exception — it owns its own text selection. A RIGHT click never moves focus anywhere (it can only mean
+  // "context menu", which we block below), so we cancel it even over the terminal.
   const keepFocus = (e) => {
     e.stopPropagation()   // also guards the backdrop from closing on an inside click
     const t = e.target
     if (isTextField(t)) return
-    if (t.closest && t.closest('.si-term-body')) return
+    if (e.button === 0 && t.closest && t.closest('.si-term-body')) return
     e.preventDefault()
   }
 
-  // @@@ no browser context menu - keepFocus can't save a right-click: the NATIVE context menu seizes
-  // focus when it opens (a blur a mousedown handler can't prevent), so the only fix is to stop the menu
-  // itself. We suppress it across the panel — terminal-app feel — EXCEPT over a text field, where the menu
-  // stays on the already-focused box (no focus lost) and its paste entry is genuinely useful.
-  const blockMenu = (e) => { if (!isTextField(e.target)) e.preventDefault() }
+  // @@@ no browser context menu - blocking the menu must NOT rely on a React onContextMenu (unreliable for
+  // repeated right-clicks). A native WINDOW listener in the CAPTURE phase intercepts every contextmenu over
+  // the panel — first, double, triple click alike — and cancels it: a terminal-app feel, and crucially the
+  // menu can no longer seize focus. We also refocus the docked input afterwards, since the right-button press
+  // itself may already have blurred it (preventDefault on the menu can't undo a blur the mousedown caused).
+  useEffect(() => {
+    if (!open) return
+    const onMenu = (e) => {
+      if (!panelRef.current?.contains(e.target)) return
+      e.preventDefault()
+      refocusInput()
+    }
+    window.addEventListener('contextmenu', onMenu, true)
+    return () => window.removeEventListener('contextmenu', onMenu, true)
+  }, [open])
 
   return (
     <div className="si-backdrop" onMouseDown={onClose} style={open ? undefined : { display: 'none' }}>
-      <div className="si-panel" onMouseDown={keepFocus} onContextMenu={blockMenu}>
+      <div className="si-panel" ref={panelRef} onMouseDown={keepFocus}>
         <aside className="si-list">
           <div className="si-list-head">// {t('session.title')}</div>
           <button className={active === 'new' ? 'si-item new on' : 'si-item new'} title={t('session.newSessionTitle')} onClick={() => setSel('new')}>

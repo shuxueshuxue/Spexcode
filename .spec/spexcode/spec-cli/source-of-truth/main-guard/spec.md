@@ -5,7 +5,7 @@ session: sess-merge
 hue: 145
 desc: Enforce the invariant — main only RECEIVES merges; all authoring happens in worktrees.
 code:
-  - scripts/hooks/pre-commit
+  - spec-cli/templates/hooks/pre-commit
   - scripts/install-hooks.sh
 ---
 # main-guard
@@ -23,7 +23,10 @@ A `pre-commit` hook rejects a direct commit while `HEAD` is `main`. Merges must 
 gate onto main sets `MERGE_HEAD`), so the worktree → merge flow is unaffected, and node-branch commits
 pass because they aren't on `main`. Escape hatch for seeding / eager topology: `SPEXCODE_ALLOW_MAIN=1`.
 
-Hooks live in the **common** git dir, so one install covers every worktree at once. The installer
-(`scripts/install-hooks.sh`, run via `npm run hooks`) copies the repo's tracked hook sources into that
-shared dir. Because `.git/hooks/` is never committed, this is a per-clone onboarding step, re-run
-whenever a hook source changes (the installed copy is a snapshot, not a symlink).
+Hooks live in the **common** git dir, so one install covers every worktree at once. There is **one
+canonical hook source** — the `spec-cli/templates/hooks/` shipped with the package — and **both** install
+paths copy from it: `scripts/install-hooks.sh` (run via `npm run hooks`) for this monorepo dogfooding
+itself, and [[spex-init]] for a project adopting SpexCode. A single source is the point: a second copy
+would let the two paths drift, installing different gates. Because `.git/hooks/` is never committed,
+installing is a per-clone onboarding step, re-run whenever the source changes (the installed copy is a
+snapshot, not a symlink). The hook is advisory and bypassable; the non-bypassable backstop is [[ci-gate]].

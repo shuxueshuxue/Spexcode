@@ -44,7 +44,8 @@ restate the flow when dispatching — the system enforces it.
 `main-guard` (a pre-commit hook) **blocks direct commits on `main`**; merges pass because `MERGE_HEAD`
 is set, and node-branch commits pass because they aren't on `main`. Escape hatch for seeding/topology
 only: `SPEXCODE_ALLOW_MAIN=1 git commit …`. Install/repair the hook with `npm run hooks` — **re-run it
-after the hook source (`scripts/hooks/pre-commit`) changes**, since `.git/hooks/pre-commit` is a copy.
+after the hook source (`spec-cli/templates/hooks/pre-commit`) changes**, since `.git/hooks/pre-commit`
+is a copy. That `templates/hooks/` dir is the single canonical source `spex init` plants too.
 
 Convention for live work: worktrees in `.worktrees/`, branch `node/<id>`, plus an untracked `.session`
 file (`node:` / `session:` / `status:` lines) that the layout linker reads.
@@ -213,7 +214,7 @@ clone must install it once — that's the answer to "when do we set up the hook"
 after install, before the first commit.**
 
 1. `npm install` in each package you use (`spec-cli`, `spec-dashboard`).
-2. `npm run hooks` — copies `scripts/hooks/pre-commit` into the shared git hooks dir (covers every
+2. `npm run hooks` — copies `spec-cli/templates/hooks/*` into the shared git hooks dir (covers every
    worktree). Re-run it whenever the hook source changes.
 
 The hook is **advisory** — bypassable, and absent on any machine that skipped step 2. The real gate is

@@ -22,9 +22,10 @@ when the package is installed outside the dogfood repo — never a hardcoded rep
   each a verbatim copy of the dogfood `.config` node. The dogfood-specific `voice-before-ask` is
   deliberately NOT seeded.
 - **The git hooks** — `templates/hooks/*` (the main-guard pre-commit and session-stamp
-  prepare-commit-msg, mirroring `scripts/hooks/`) copied into the target's resolved common hooks dir,
-  the same dir `scripts/install-hooks.sh` targets. They ship inside the package so a relocated install
-  still carries them.
+  prepare-commit-msg) copied into the target's resolved common hooks dir. This is the **one canonical
+  hook source**: `scripts/install-hooks.sh` (the monorepo's `npm run hooks`) installs the very same
+  files, so the two paths can't drift (see [[main-guard]]). They ship inside the package so a relocated
+  install still carries them.
 
 **Adoption is additive, never destructive.** No existing file is overwritten: an existing `<dir>/.spec`
 aborts the spec phase with a warning, and an existing hook is left untouched. A non-git target skips the

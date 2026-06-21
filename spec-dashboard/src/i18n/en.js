@@ -61,7 +61,7 @@ export default {
       child: 'to the nearest child',
       zoom: 'zoom in / out · reset to overview',
       info: 'open the node-info popup (or double-click a node)',
-      search: 'search & jump to any node (title / id / path)',
+      search: 'search & jump across nodes, sessions & issues',
       overlayCycle: 'cycle through nodes a worktree is changing (⇧ reverse)',
       graph: 'toggle the session graph (live monitor network)',
       enter: 'cross into the focus node’s live session',
@@ -212,9 +212,10 @@ export default {
   },
 
   search: {
-    title: 'search spec nodes',
-    placeholder: 'jump to a node — title, id, or path…',
-    empty: 'no matching node',
+    title: 'search nodes, sessions & issues',
+    placeholder: 'search nodes, sessions, issues…',
+    empty: 'no match',
     hint: '↑↓ pick · ⏎ jump · esc close',
+    kind: { spec: 'node', session: 'session', issue: 'issue' },
   },
 }

@@ -58,7 +58,7 @@ export default {
       child: '前往最近的子节点',
       zoom: '放大 / 缩小 · 重置为概览',
       info: '打开节点信息弹窗（或双击节点）',
-      search: '搜索并跳转到任意节点（标题 / id / 路径）',
+      search: '跨节点、会话与议题搜索并跳转',
       overlayCycle: '在工作树正在修改的节点间循环（⇧ 反向）',
       graph: '切换会话图（实时监视网络）',
       enter: '进入聚焦节点的实时会话',
@@ -207,9 +207,10 @@ export default {
   },
 
   search: {
-    title: '搜索规格节点',
-    placeholder: '跳转到节点 — 标题、id 或路径…',
-    empty: '没有匹配的节点',
+    title: '搜索节点、会话与议题',
+    placeholder: '搜索节点、会话、议题…',
+    empty: '没有匹配项',
     hint: '↑↓ 选择 · ⏎ 跳转 · esc 关闭',
+    kind: { spec: '节点', session: '会话', issue: '议题' },
   },
 }

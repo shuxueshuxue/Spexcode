@@ -124,6 +124,14 @@ function Dashboard({ specs, sessions, reload }) {
   // (the @-directive). One-shot: SessionInterface applies it then clears `seed`, so a later reopen keeps
   // the user's own draft instead of re-seeding.
   const startNew = useCallback((text) => { setSessionSel('new'); setSeed(text); setSessionUI(true) }, [])
+  // @@@ search routing - the `/` palette searches all three planes and hands back the picked entry; we
+  // dispatch by its kind. A spec or issue FOCUSES its node (issues land on the node they're bound to) — the
+  // expand-on-focus follow effect then drills its spine open + pans the camera. A session JUMPS to its tab
+  // on the session board (openSession). One switch, no per-type logic leaking into the palette.
+  const onSearchPick = useCallback((e) => {
+    if (e.kind === 'session') openSession(e.target)
+    else setFocusId(e.target)
+  }, [openSession])
 
   const children = useMemo(() => specs2.filter((s) => s.parent === focus.id), [specs2, focus])
   const parent = focus.parent ? byId[focus.parent] : null
@@ -502,9 +510,10 @@ function Dashboard({ specs, sessions, reload }) {
 
         {legend && <Legend onClose={() => setLegend(false)} />}
         {settings && <Settings onClose={() => setSettings(false)} />}
-        {/* search over the WHOLE raw tree (not just visible nodes); picking one focuses it and the
-            expand-on-focus follow effect drills its spine open + pans the camera. */}
-        {search && <SpecSearch specs={specs} onPick={setFocusId} onClose={() => setSearch(false)} />}
+        {/* search the THREE planes at once — spec nodes (whole raw tree, not just visible), live sessions,
+            and node-bound issues. onSearchPick routes the picked entry: spec/issue focus their node (the
+            follow effect drills the spine open + pans), a session jumps to its tab on the session board. */}
+        {search && <SpecSearch specs={specs} sessions={sessions} onPick={onSearchPick} onClose={() => setSearch(false)} />}
       </div>
 
       {graphView && <SessionGraph onOpen={openSession} onBack={() => setGraphView(false)} active={!sessionUI} />}

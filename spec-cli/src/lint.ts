@@ -135,6 +135,12 @@ export async function specLint(): Promise<Finding[]> {
   // coverage: every governed source file must be claimed by at least one spec.
   const governed: string[] = []
   for (const r of cfg.governedRoots) sourceFiles(root, r, governed, srcRe)
+  // @@@ governs-nothing - a fresh adopter who hasn't written a spexcode.json inherits the defaults, which
+  // name THIS repo's own dirs (spec-cli/src, spec-dashboard/src); in any other repo those don't exist, so
+  // coverage finds ZERO files and lint reports a misleading "all clear" while guarding nothing. Make that
+  // loud: if no governed source was found at all, the graph isn't governing any code — point at the knob.
+  if (governed.length === 0)
+    out.push({ level: 'warn', rule: 'coverage', msg: `governing NOTHING — no source files under governedRoots [${cfg.governedRoots.join(', ')}]. Set lint.governedRoots in spexcode.json to your project's source dirs.` })
   for (const f of governed)
     if (!owners.has(f)) out.push({ level: 'warn', rule: 'coverage', file: f, msg: `no spec governs: ${f}` })
 

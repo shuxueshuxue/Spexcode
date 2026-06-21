@@ -26,6 +26,10 @@ when the package is installed outside the dogfood repo — never a hardcoded rep
   hook source**: `scripts/install-hooks.sh` (the monorepo's `npm run hooks`) installs the very same
   files, so the two paths can't drift (see [[main-guard]]). They ship inside the package so a relocated
   install still carries them.
+- **A starter `spexcode.json`** — `templates/spexcode.json` copied to `<dir>/spexcode.json`. Without it
+  an adopter inherits SpexCode's own [[spec-lint]] defaults, whose `governedRoots` name *this* repo's
+  dirs; absent in the adopter's tree, lint would silently govern nothing and read falsely-clean. The
+  starter points `governedRoots` at `src/`; the adopter retargets it, and lint stays loud until it does.
 
 **Adoption is additive, never destructive.** No existing file is overwritten: an existing `<dir>/.spec`
 aborts the spec phase with a warning, and an existing hook is left untouched. A non-git target skips the

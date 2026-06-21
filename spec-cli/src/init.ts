@@ -64,6 +64,18 @@ export async function specInit(targetArg: string | undefined): Promise<void> {
     console.log(`✓ seeded ${planted.length} spec file(s) under .spec/ (root 'project' node + default .config)`)
   }
 
+  // 1b. plant a starter spexcode.json (the lint/layout knob). WITHOUT it, lint inherits SpexCode's own
+  // defaults whose governedRoots name THIS repo's dirs — absent in the adopter's tree, so lint silently
+  // governs nothing and reports a misleading "all clear". The starter points governedRoots at `src/`; the
+  // adopter edits it to their real source dirs (lint warns loudly until something is actually governed).
+  const cfgDest = join(targetDir, 'spexcode.json')
+  if (existsSync(cfgDest)) {
+    console.warn(`• spexcode.json already exists at ${cfgDest} — left untouched.`)
+  } else {
+    copyFileSync(join(TEMPLATES, 'spexcode.json'), cfgDest)
+    console.log(`✓ planted spexcode.json — set lint.governedRoots to YOUR source dirs (starter: ["src"])`)
+  }
+
   // 2. install the git hooks: templates/hooks/* -> <repo>/<common-git-dir>/hooks/* (skip any that exist).
   const hooksDir = resolveHooksDir(targetDir)
   if (!hooksDir) {
@@ -92,7 +104,10 @@ Next steps:
   1. Install the SpexCode packages (so \`spex\` and the dashboard run):
        cd <spec-cli> && npm install     # the package providing the \`spex\` CLI + server
   2. Edit .spec/project/spec.md to describe YOUR project, then grow child nodes beneath it.
-  3. Start the backend and open the board:
+  3. Set lint.governedRoots in spexcode.json to your source dir(s) — until you do, \`spex lint\`
+     warns it is governing nothing (it ships pointing at "src").
+  4. Start the backend and open the board:
        spex serve                       # http://localhost:8787
-  4. \`spex lint\` should report 0 errors. You're adopting SpexCode — the spec tree is now ground truth.`)
+  5. \`spex lint\` should report 0 errors. Coverage warnings are your adoption TODO (source files no
+     spec node claims yet). You're adopting SpexCode — the spec tree is now ground truth.`)
 }

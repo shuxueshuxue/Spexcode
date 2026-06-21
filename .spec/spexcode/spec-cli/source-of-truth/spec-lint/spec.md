@@ -28,15 +28,15 @@ rules:
 - **living** (error): a body stays current-state, with no `## vN` changelog headings — version history
   is read from git (recent/history tabs), not duplicated in prose. The check is fence-aware so a
   `## v2` inside a ``` block is sample text, not a violation.
-- **coverage** (warn): every governed source file (under the governed roots) is claimed by ≥1 spec —
-  no orphan code.
+- **coverage** (warn): every governed source file is claimed by ≥1 spec (no orphan code); and roots
+  matching no files at all are flagged as "governing nothing", so an adopter who never set
+  `lint.governedRoots` isn't shown a falsely-clean board.
 - **drift** (warn): a governed file has commits newer than its spec's latest version → maybe stale.
 - **altitude** (warn): a body still describes *intent and contract*, not a re-narration of the
   implementation. It can't be judged deterministically, so the rule fires on cheap proxies of a
   mechanics dump — a body grown long (non-blank lines / chars over a soft budget), or thick with code
   identifiers per line, or written as step-by-step how-to. Budgets default to values tuned so today's
-  concise specs pass and only a genuine dump warns; identifiers/steps are counted from prose only (a
-  fenced code sample inflates length, not density). A WARN, like coverage/drift — lint stays 0 errors.
+  concise specs pass and only a genuine dump warns. A WARN, like coverage/drift — lint stays 0 errors.
 
 What makes this a reusable **product**, not a SpexCode-only script: every project-shaped value — the
 governed roots, the source and code-identifier extensions, the altitude budgets — is read from an optional
@@ -64,7 +64,6 @@ deliberate no-spec-change. The trailer sits in the same trailer block as `Sessio
 is the explicit, auditable counterpart to drift: drift flags *maybe stale*, `Spec-OK` answers *checked,
 still valid*.
 
-A sharp edge: anything calling git from inside the hook must route through `git.ts`'s `git()` helper,
-which strips the inherited `GIT_DIR`/`GIT_WORK_TREE`/`GIT_INDEX_FILE`; otherwise git's repo discovery
-resolves to the cwd and the lint silently sees zero specs — it did once, caught only by testing through
-the real hook, not by running `spex lint` by hand.
+A sharp edge: git calls from inside the hook must route through `git.ts`'s `git()` helper, which strips
+the inherited `GIT_DIR`/`GIT_INDEX_FILE`; otherwise repo discovery resolves to the cwd and lint silently
+sees zero specs (caught only by testing through the real hook, not by running `spex lint` by hand).

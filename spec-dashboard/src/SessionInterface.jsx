@@ -595,7 +595,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   {/* every opened session's terminal stays mounted; only the active one is shown */}
                   {[...opened].map((id) => (
                     <div key={id} className="si-term-layer" style={{ position: 'absolute', inset: 0, display: id === active ? 'block' : 'none' }}>
-                      <SessionTerm sessionId={id} onMenu={reportMenu} />
+                      {/* active → this pane is the only one that holds a WebGL context (see SessionTerm). */}
+                      <SessionTerm sessionId={id} active={id === active} onMenu={reportMenu} />
                     </div>
                   ))}
                   {selSession?.status === 'offline' && (

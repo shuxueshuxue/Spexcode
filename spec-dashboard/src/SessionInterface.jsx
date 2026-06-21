@@ -489,9 +489,23 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     return () => window.removeEventListener('keydown', onKey, true)
   }, [setSel])
 
+  // @@@ keep input focus - mousedown is what MOVES focus, so clicking panel chrome (a tab button, the
+  // list's empty padding, the header) or right-clicking for the browser menu would blur the docked input
+  // and leave you with nowhere to type. We cancel the focus shift for any target that isn't itself a text
+  // field or the live terminal (which owns its own selection): preventDefault on mousedown blocks the blur,
+  // not the click, so buttons still fire their onClick. (Switching to a different tab refocuses via the
+  // tab-switch effect; this is what saves clicking the ALREADY-active tab, which never re-runs that effect.)
+  const keepFocus = (e) => {
+    e.stopPropagation()   // also guards the backdrop from closing on an inside click
+    const t = e.target
+    if (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT' || t.isContentEditable) return
+    if (t.closest && t.closest('.si-term-body')) return
+    e.preventDefault()
+  }
+
   return (
     <div className="si-backdrop" onMouseDown={onClose} style={open ? undefined : { display: 'none' }}>
-      <div className="si-panel" onMouseDown={(e) => e.stopPropagation()}>
+      <div className="si-panel" onMouseDown={keepFocus}>
         <aside className="si-list">
           <div className="si-list-head">// {t('session.title')}</div>
           <button className={active === 'new' ? 'si-item new on' : 'si-item new'} title={t('session.newSessionTitle')} onClick={() => setSel('new')}>

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ReactFlow, ReactFlowProvider, Background, Handle, Position,
-  MarkerType, useReactFlow,
+  MarkerType, ConnectionMode, useReactFlow,
 } from '@xyflow/react'
 import { Avatar } from './avatar.jsx'
 import { labelColor } from './color.js'
@@ -26,9 +26,11 @@ import { useT } from './i18n/index.jsx'
 
 const sessionLabel = (s, t) => s.node || s.title || s.branch || (s.id ? s.id.slice(0, 8) : t('common.session'))
 
-// @@@ GraphNode - a session as a network node: its avatar + label, ringed in its own hue. The handles are
-// the anchor points ReactFlow routes arrows to/from AND the drag targets for asking a monitor: drag from a
-// node's bottom (source) handle onto another's top (target) handle to ask the first to watch the second.
+// @@@ GraphNode - a session as a network node: its avatar + label, ringed in its own hue. The two handles
+// are the anchor points ReactFlow routes arrows to/from AND the drag targets for asking a monitor. With
+// connectionMode=loose (see ReactFlow below) EITHER handle of one node connects to EITHER of another, so a
+// drag never fails just because two ring-arranged nodes face away from each other; direction (who watches
+// whom) is the DRAG direction, not which handle was grabbed — drag from the watcher onto the watched.
 function GraphNode({ data }) {
   const t = useT()
   const color = labelColor(data.id)
@@ -144,11 +146,22 @@ function GraphCanvas({ onOpen, active, legend, setLegend }) {
   }, [])
   useEffect(() => () => clearTimeout(toastTimer.current), [])
 
+  // the node a connection drag STARTED on — the watcher. We pin direction to this, not to the source/target
+  // ReactFlow hands onConnect: in loose mode it labels those by handle TYPE (top=target, bottom=source), so
+  // a drag that happens to end on a source handle would otherwise come back reversed. The gesture is truth.
+  const dragFrom = useRef(null)
+  const onConnectStart = useCallback((_e, params) => { dragFrom.current = params?.nodeId || null }, [])
+
   // @@@ ask-to-monitor - dragging A→B is NOT drawing a stored edge: it dispatches a PROMPT to agent A (the
   // watcher) over the existing /keys channel, asking it to run `spex watch B` (its monitor tool). We add an
   // optimistic pending edge + a toast right away so the gesture feels acknowledged; the real arrow firms up
-  // when A's live watch registration arrives on the next poll. No subscription is ever written here.
-  const onConnect = useCallback(({ source, target }) => {
+  // when A's live watch registration arrives on the next poll. No subscription is ever written here. The
+  // watcher is the node the drag STARTED on (dragFrom); the watched is the other end — see onConnectStart.
+  const onConnect = useCallback((conn) => {
+    const ends = [conn.source, conn.target]
+    const source = dragFrom.current && ends.includes(dragFrom.current) ? dragFrom.current : conn.source
+    const target = ends.find((id) => id !== source)
+    dragFrom.current = null
     if (!source || !target || source === target) return
     const a = byId[source], b = byId[target]
     const labelA = a ? sessionLabel(a, t) : source.slice(0, 8)
@@ -240,7 +253,8 @@ function GraphCanvas({ onOpen, active, legend, setLegend }) {
     <>
       <ReactFlow
         nodes={rfNodes} edges={rfEdges} nodeTypes={nodeTypes}
-        onConnect={onConnect} onNodeClick={onNodeClick}
+        onConnect={onConnect} onConnectStart={onConnectStart} onNodeClick={onNodeClick}
+        connectionMode={ConnectionMode.Loose}
         nodesDraggable nodesConnectable connectOnClick={false} elementsSelectable={false}
         defaultViewport={frameViewport(pos, graph.nodes)} minZoom={0.3} maxZoom={1.6}
         proOptions={{ hideAttribution: true }}

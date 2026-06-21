@@ -52,7 +52,11 @@ graph never shows a dangling arrow.
 
 Asking is the exception, and it stays faithful to the no-store rule. Dragging A→B **dispatches a prompt to
 agent A** (over the same `/keys` channel the session console uses) telling it to monitor B with its monitor
-tool (`spex watch B`); **no subscription is written**. The dispatch alone isn't enough — the gesture must
+tool (`spex watch B`); **no subscription is written**. The gesture must never fail for a reason the user
+can't see: on a radial ring two nodes face arbitrary directions, so a drag may start or land on **any**
+anchor of either node — every anchor is connectable to every other, and the only thing that carries meaning
+is the drag's **direction**: the node the drag **started on is the watcher**, the other end the watched,
+regardless of which anchors the line happened to touch. The dispatch alone isn't enough — the gesture must
 *feel* acknowledged immediately: the moment the drag completes, an **optimistic pending edge** (dashed, in
 A's hue) appears and a brief **toast** confirms "asked A to monitor B", so the user never repeats the
 gesture or wonders whether it took. That edge is provisional; it **firms up to a solid live arrow** only

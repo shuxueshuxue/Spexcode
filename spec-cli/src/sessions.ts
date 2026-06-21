@@ -435,7 +435,7 @@ export async function sessionGraph(): Promise<{ nodes: Session[]; edges: Edge[] 
 // REPORTS itself to the backend's registration store over HTTP: register+heartbeat while it runs,
 // deregister on exit (see cli.ts `watch`). All best-effort — if the backend is down the watch still
 // streams its events; the graph edge just won't appear until a heartbeat lands. Never throws.
-const apiBase = () => process.env.SPEXCODE_API_URL || `http://127.0.0.1:${process.env.PORT || 8787}`
+export const apiBase = () => process.env.SPEXCODE_API_URL || `http://127.0.0.1:${process.env.PORT || 8787}`
 // the agent's OWN session id: Claude Code's env var if set, else the worktree `.session` in the cwd (the
 // `spex watch` runs from the worker's worktree, whose .session id equals the worker claude's session id).
 export function ownSessionId(): string | null {
@@ -451,6 +451,13 @@ async function postJSON(path: string, body: unknown): Promise<void> {
 export const reportWatch = (token: string, watcher: string, selectors: string[], ttlMs: number): Promise<void> =>
   postJSON('/api/sessions/graph/watch', { token, watcher, selectors, ttlMs })
 export const reportUnwatch = (token: string): Promise<void> => postJSON('/api/sessions/graph/unwatch', { token })
+
+// @@@ isBackendDown - a `client.ts` BackendError surfacing in the watch/wait poll loops (whose session
+// `source` is the HTTP backend client). Matched by NAME, not `instanceof`, so sessions.ts never imports
+// client.ts at runtime (client.ts imports apiBase from here — a runtime import back would be a cycle). A
+// backend-down poll must NOT be swallowed as a transient git/tmux hiccup: watch warns and keeps streaming,
+// wait fails loud rather than reporting a false timeout.
+export const isBackendDown = (e: unknown): boolean => e instanceof Error && e.name === 'BackendError'
 
 const slugify = (s: string | null) => (s || 'session').replace(/[^a-zA-Z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'session'
 
@@ -1041,11 +1048,22 @@ export async function closeSession(id: string): Promise<boolean> {
   return !!wt
 }
 
-// the session's live pane as a one-shot snapshot (output), for agents driving sessions via `spex capture`.
-// The dashboard no longer uses this — its live terminal is a real tmux client (see pty-bridge.ts).
-export async function captureSession(id: string): Promise<string> {
-  if (!(await alive(id))) return ''
-  try { return await tmux(['capture-pane', '-e', '-p', '-t', id]) } catch { return '' }
+// @@@ captureSessionResult - the session's live pane as a one-shot snapshot (output), the server side of
+// `GET /api/sessions/:id/capture` that `spex capture` (a backend client) reads. A monitoring read MUST
+// distinguish "I failed to read" from "the pane is genuinely empty" — the old captureSession collapsed
+// unknown-id, offline, and capture-error all to `''`, indistinguishable from an empty pane (a blank screen
+// that exits 0 is worse than useless to a manager). So the result is DISCRIMINATED: an empty pane is a
+// legitimate `{ok:true, pane:''}`; the three failure modes carry distinct reasons the route maps to distinct
+// HTTP codes (unknown→404, offline→409, capture-failed→502). The known-vs-offline check only runs on the
+// cold/not-alive branch, so a live capture (the polled hot path) costs just the one capture-pane.
+export type CaptureResult = { ok: true; pane: string } | { ok: false; reason: 'unknown' | 'offline' | 'capture-failed' }
+export async function captureSessionResult(id: string): Promise<CaptureResult> {
+  if (!(await alive(id))) {
+    const known = (await listSessions()).some((s) => s.id === id)
+    return { ok: false, reason: known ? 'offline' : 'unknown' }
+  }
+  try { return { ok: true, pane: await tmux(['capture-pane', '-e', '-p', '-t', id]) } }
+  catch { return { ok: false, reason: 'capture-failed' } }
 }
 
 // @@@ watch - the event source for Claude Code's Monitor tool (first-class managing-agent support).
@@ -1132,12 +1150,17 @@ export function launchEvent(s: Session): string {
   const asked = s.promptPreview ? ` · asked: ${s.promptPreview}` : ''
   return `[spex] launched · ${sessionLabel(s)} — act: capture | send "<msg>"${note}${asked}  [id ${s.id}]`
 }
-export type WatchOpts = { selectors?: string[]; statuses?: string[]; includeIdle?: boolean; intervalMs?: number; as?: string }
-export async function watchSessions(emit: (line: string) => void, opts: WatchOpts = {}): Promise<void> {
-  const { selectors = [], statuses, includeIdle = false, intervalMs = 5000, as } = opts
+// @@@ source - the session board the poll reads. The CLI passes the BACKEND CLIENT (client.ts
+// clientListSessions), so `spex watch` streams whatever backend SPEXCODE_API_URL points at — including a
+// REMOTE machine's. It is REQUIRED (no local default): a forgotten source must be a compile error, never a
+// silent in-process read of the wrong (local) board — the exact false-green the 2-machine test guards.
+export type WatchOpts = { source: () => Promise<Session[]>; selectors?: string[]; statuses?: string[]; includeIdle?: boolean; intervalMs?: number; as?: string }
+export async function watchSessions(emit: (line: string) => void, opts: WatchOpts): Promise<void> {
+  const { source, selectors = [], statuses, includeIdle = false, intervalMs = 5000, as } = opts
   const tag = as ? `[${as}] ` : ''
   const prev = new Map<string, DisplayStatus>()
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+  let warnedDown = false
   for (;;) {
     try {
       // EXISTENCE is the selector-matched board across ALL statuses — listSessions now lists every worktree
@@ -1145,7 +1168,8 @@ export async function watchSessions(emit: (line: string) => void, opts: WatchOpt
       // membership here IS the worktree's existence. The `statuses` filter governs only which TRANSITIONS we
       // emit, never whether a session is present — using it for presence would read a status change out of the
       // filtered set as a (false) removal.
-      const all = selectSessions(await listSessions(), selectors)
+      const all = selectSessions(await source(), selectors)
+      warnedDown = false   // a successful poll re-arms the down-warning, so a recovered-then-redowned backend warns again
       const ids = new Set(all.map((s) => s.id))
       const passesStatus = (st: DisplayStatus) => !statuses?.length || statuses.includes(st)
       for (const s of all) {
@@ -1163,7 +1187,12 @@ export async function watchSessions(emit: (line: string) => void, opts: WatchOpt
         prev.delete(id)
         emit(`${tag}[spex] closed \u00b7 removed  [id ${id}]`)
       }
-    } catch { /* transient git/tmux hiccup; keep watching */ }
+    } catch (e) {
+      // a backend-down poll must NOT be swallowed as a transient hiccup AND must NOT emit a false `closed`
+      // for every session: we skip the tick (prev is untouched → no phantom removals) and warn ONCE, loudly,
+      // so a manager sees the stream is blind rather than reading silence as "all sessions fine".
+      if (isBackendDown(e) && !warnedDown) { warnedDown = true; console.error(`${tag}[spex] watch: ${(e as Error).message}; retrying every ${intervalMs / 1000}s…`) }
+    }
     await sleep(intervalMs)
   }
 }
@@ -1175,21 +1204,29 @@ export async function watchSessions(emit: (line: string) => void, opts: WatchOpt
 // (it can never reach the target now), and a timeout guarantees the wait can't hang forever.
 const WAIT_ACTIONABLE = new Set<DisplayStatus>(['review', 'needs-input', 'error', 'done', 'close-pending', 'blocked'])
 const DEFAULT_WAIT_TIMEOUT_MS = 20 * 60 * 1000   // 20 min — long enough for real work, short enough to never wedge a turn
-export type WaitResult = { status: DisplayStatus } | { timedOut: true } | { gone: true }
+// the board source is REQUIRED, same rationale as watch's: the CLI passes the backend client, so `spex wait`
+// blocks on whatever (possibly remote) backend SPEXCODE_API_URL names — never a silent local read.
+export type WaitResult = { status: DisplayStatus } | { timedOut: true } | { gone: true } | { backendDown: string }
 export async function waitForSession(
   id: string,
-  opts: { status?: string; timeoutMs?: number; intervalMs?: number } = {},
+  opts: { source: () => Promise<Session[]>; status?: string; timeoutMs?: number; intervalMs?: number },
 ): Promise<WaitResult> {
-  const { status, timeoutMs = DEFAULT_WAIT_TIMEOUT_MS, intervalMs = 2000 } = opts
+  const { source, status, timeoutMs = DEFAULT_WAIT_TIMEOUT_MS, intervalMs = 2000 } = opts
   const targets = status ? new Set<DisplayStatus>([status as DisplayStatus]) : WAIT_ACTIONABLE
   const deadline = Date.now() + Math.max(1000, timeoutMs)
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
   for (;;) {
     try {
-      const s = selectSessions(await listSessions(), [id])[0]
+      const s = selectSessions(await source(), [id])[0]
       if (!s) return { gone: true }                       // unknown id / closed before the target — never will now
       if (targets.has(s.status)) return { status: s.status }
-    } catch { /* transient git/tmux hiccup; keep polling */ }
+    } catch (e) {
+      // the source is the HTTP backend client, so a throw means the backend is unreachable/erroring. A wait
+      // must FAIL LOUD here, not poll a dead backend for 20 min and then report a false `timedOut` (which a
+      // manager would read as "the work didn't finish" rather than "I couldn't see the work").
+      if (isBackendDown(e)) return { backendDown: (e as Error).message }
+      /* else a non-backend transient: keep polling */
+    }
     if (Date.now() >= deadline) return { timedOut: true }
     await sleep(Math.max(250, intervalMs))
   }

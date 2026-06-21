@@ -5,7 +5,7 @@ import { createNodeWebSocket } from '@hono/node-ws'
 import { loadSpecs, specHistory, specDiffAt, loadConfig } from './specs.js'
 import { resolveLayout } from './layout.js'
 import { buildBoard } from './board.js'
-import { newSession, listSessions, sendKeys, rawKey, closeSession, reopen, propose, mergeSession, reviewPayload, sessionGraph, registerWatch, deregisterWatch, superviseQueue } from './sessions.js'
+import { newSession, listSessions, sendKeys, rawKey, closeSession, reopen, propose, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, superviseQueue } from './sessions.js'
 import { slashCommands } from './slash-commands.js'
 import { attachViewer, detachViewer, writeViewer, resizeBridge, superviseBridges, type Viewer } from './pty-bridge.js'
 import { installProcessGuards } from './resilience.js'
@@ -75,6 +75,23 @@ app.post('/api/sessions', async (c) => {
 app.get('/api/sessions/:id/review', async (c) => {
   const r = await reviewPayload(c.req.param('id'))
   return r ? c.json(r) : c.json({ error: 'no such session' }, 404)
+})
+// @@@ capture - the session's live pane as TEXT (one-shot snapshot), the read surface a backend client
+// (`spex capture`, incl. a REMOTE one over SPEXCODE_API_URL) polls to monitor an agent's actual screen
+// without the binary terminal WebSocket. Fail and empty stay DISTINCT: a genuinely empty pane is 200 with an
+// empty body; the failure modes map to distinct codes so a client never mistakes "couldn't read" for "blank
+// screen" — unknown id → 404, session offline (no live pane) → 409, capture-pane errored → 502.
+app.get('/api/sessions/:id/capture', async (c) => {
+  const r = await captureSessionResult(c.req.param('id'))
+  if (r.ok) return c.text(r.pane)
+  if (r.reason === 'unknown') return c.text('no such session', 404)
+  if (r.reason === 'offline') return c.text('session offline (no live pane)', 409)
+  return c.text('capture failed', 502)
+})
+// the session's originating prompt (what it was asked to do), for a manager client; 404 if none recorded.
+app.get('/api/sessions/:id/prompt', async (c) => {
+  const p = await sessionPrompt(c.req.param('id'))
+  return p == null ? c.text('no prompt recorded', 404) : c.text(p)
 })
 // lifecycle transitions (thin callers of the session state machine)
 app.post('/api/sessions/:id/resume', async (c) => c.json({ ok: await reopen(c.req.param('id')) }))   // back-to-working / relaunch

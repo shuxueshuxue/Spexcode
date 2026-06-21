@@ -14,7 +14,11 @@ const US = '\x1f', RS = '\x1e'
 export function git(args: string[]): string {
   const env = { ...process.env }
   delete env.GIT_DIR; delete env.GIT_WORK_TREE; delete env.GIT_INDEX_FILE; delete env.GIT_OBJECT_DIRECTORY
-  return execFileSync('git', args, { encoding: 'utf8', env })
+  // @@@ capture stderr, don't inherit it - the default stdio leaks git's stderr to OUR stderr, so a probe
+  // that fails-soft (repoRoot() falls back to cwd) still spams `fatal: not a git repository` — visible the
+  // moment the CLI runs as a remote backend CLIENT from a non-repo dir (e.g. `spex capture` from ~). Piping
+  // stderr keeps it OFF the console; a real failure still throws with e.stderr populated for callers that care.
+  return execFileSync('git', args, { encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'pipe'] })
 }
 
 // @@@ async git - same env-cleaning as git(), but non-blocking. The worktree-overlay diff runs many

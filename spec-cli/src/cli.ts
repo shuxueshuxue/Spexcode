@@ -3,6 +3,16 @@
 export {} // make this a module so top-level await is allowed
 const cmd = process.argv[2]
 
+// @@@ fail-loud client errors - the read/control commands are backend clients (client.ts); when no backend
+// is reachable they throw BackendError. Convert that (matched by name, no import) into ONE clean line + a
+// non-zero exit, never a stack dump — so a down/wrong SPEXCODE_API_URL is obvious, never a silent miss.
+// Registered before any await so a top-level-await rejection lands here, not in Node's default reporter.
+process.on('unhandledRejection', (e: unknown) => {
+  if (e instanceof Error && e.name === 'BackendError') console.error(`spex: ${e.message}`)
+  else console.error(e)
+  process.exit(1)
+})
+
 // tiny flag reader: --key value  (and bare positionals)
 function flag(name: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`)
@@ -123,10 +133,10 @@ From here, dispatch an agent — it authors the spec nodes and rides the dogfood
   // merge-base diff = its REAL changes, the merge/typecheck/lint gates, and its standing proposal) so a
   // manager can decide whether to merge without hand-running git. `--json` for the raw payload. This is
   // the human-facing INSPECT verb; `spex session review` is the distinct agent action "propose merge".
-  const { reviewPayload } = await import('./sessions.js')
+  const { clientReview } = await import('./client.js')
   const id = positionals(3)[0]
   if (!id) { console.error('usage: spex review <session-id>'); process.exit(2) }
-  const r = await reviewPayload(id)
+  const r = await clientReview(id)
   if (!r) { console.error(`no such session ${id}`); process.exit(1) }
   if (has('json')) { console.log(JSON.stringify(r, null, 2)) }
   else {
@@ -147,10 +157,10 @@ From here, dispatch an agent — it authors the spec nodes and rides the dogfood
   // session and hands the session's OWN agent the merge prompt — the agent runs the --no-ff merge, resolves
   // conflicts, verifies main advanced, and proposes close. The server never touches main. Fail-loud: an
   // unreachable agent prints the reason and exits non-zero.
-  const { mergeSession } = await import('./sessions.js')
+  const { clientMerge } = await import('./client.js')
   const id = positionals(3)[0]
   if (!id) { console.error('usage: spex merge <id>'); process.exit(2) }
-  const r = await mergeSession(id)
+  const r = await clientMerge(id)
   if (r.dispatched) console.log(`merge dispatched to ${id} — its agent is landing the merge`)
   else console.error(`merge dispatch failed: ${r.reason}`)
   process.exit(r.dispatched ? 0 : 1)
@@ -165,8 +175,11 @@ From here, dispatch an agent — it authors the spec nodes and rides the dogfood
   console.log(JSON.stringify(await buildBoard(), null, 2))
 } else if (cmd === 'ls' || cmd === 'sessions') {
   // pretty list of living sessions + states. `spex ls [SEL...] [--status a,b] [--json]`
-  const { listSessions, selectSessions, formatTable } = await import('./sessions.js')
-  const picked = selectSessions(await listSessions(), positionals(3), flag('status')?.split(','))
+  // the board comes from the backend (so `spex ls` shows the sessions of whatever SPEXCODE_API_URL points at,
+  // incl. a remote machine); selectSessions/formatTable are pure presentation, applied client-side.
+  const { selectSessions, formatTable } = await import('./sessions.js')
+  const { clientListSessions } = await import('./client.js')
+  const picked = selectSessions(await clientListSessions(), positionals(3), flag('status')?.split(','))
   console.log(has('json') ? JSON.stringify(picked, null, 2) : formatTable(picked))
 } else if (cmd === 'watch') {
   // subscribe to session events (one line per actionable transition) — the Monitor event source.
@@ -176,6 +189,7 @@ From here, dispatch an agent — it authors the spec nodes and rides the dogfood
   // edge exists ONLY while the watch runs. watcher = our OWN session id; selectors = the targets (empty/@all
   // = a global watcher → every session). All best-effort: a down backend never breaks the event stream.
   const { watchSessions, ownSessionId, reportWatch, reportUnwatch } = await import('./sessions.js')
+  const { clientListSessions } = await import('./client.js')
   const { randomUUID } = await import('node:crypto')
   const selectors = positionals(3)
   const intervalMs = (Number(flag('interval')) || 5) * 1000
@@ -189,6 +203,7 @@ From here, dispatch an agent — it authors the spec nodes and rides the dogfood
     process.once('SIGINT', off); process.once('SIGTERM', off)
   }
   await watchSessions((line) => console.log(line), {
+    source: clientListSessions,   // poll the backend, so watch streams the (possibly remote) backend's board
     selectors,
     statuses: flag('status')?.split(','),
     includeIdle: has('idle'),
@@ -202,6 +217,7 @@ From here, dispatch an agent — it authors the spec nodes and rides the dogfood
   // specific STATUS positional if given), printing that status. --timeout (seconds, default 1200 = 20min)
   // caps the wait and exits non-zero so it can never hang forever; an unknown/closed id exits 2.
   const { waitForSession, STATUS_GLYPH } = await import('./sessions.js')
+  const { clientListSessions } = await import('./client.js')
   const [id, status] = positionals(3)
   if (!id) { console.error('usage: spex wait <id> [<status>] [--timeout SECONDS] [--interval SECONDS]'); process.exit(2) }
   if (status && !(status in STATUS_GLYPH)) {
@@ -209,9 +225,10 @@ From here, dispatch an agent — it authors the spec nodes and rides the dogfood
   }
   const timeoutMs = (Number(flag('timeout')) || 1200) * 1000
   const intervalMs = (Number(flag('interval')) || 2) * 1000
-  const r = await waitForSession(id, { status, timeoutMs, intervalMs })
+  const r = await waitForSession(id, { source: clientListSessions, status, timeoutMs, intervalMs })
   if ('status' in r) { console.log(r.status); process.exit(0) }
   if ('gone' in r) { console.error(`spex wait: no such (living) session ${id}`); process.exit(2) }
+  if ('backendDown' in r) { console.error(`spex wait: ${r.backendDown}`); process.exit(1) }   // fail loud, not a false timeout
   console.error(`spex wait: timeout — ${id} did not reach ${status || 'an actionable status'} within ${timeoutMs / 1000}s`)
   process.exit(1)
 } else if (cmd === 'new') {
@@ -223,16 +240,20 @@ From here, dispatch an agent — it authors the spec nodes and rides the dogfood
   console.log(JSON.stringify(await createSession(flag('node') ?? null, prompt), null, 2))
 } else if (cmd === 'session') {
   const sub = process.argv[3]
+  // `s` (sessions.ts) backs the state PRODUCERS that stay local (state/done/block/fail/ask/idle/commit-gate
+  // write the cwd .session) and `new` (its own launch path). `c` (client.ts) backs the read/control subs that
+  // route through the backend — exactly the split the refactor draws. Both lazily imported here.
   const s = await import('./sessions.js')
+  const c = await import('./client.js')
   const id = process.argv[4]
   if (sub === 'new') {
     // route through the backend (auth env + concurrency cap); in-process only if no backend is reachable.
     console.log(JSON.stringify(await s.createSession(flag('node') ?? null, flag('prompt') ?? ''), null, 2))
   } else if (sub === 'list') {
-    console.log(JSON.stringify(await s.listSessions(), null, 2))
+    console.log(JSON.stringify(await c.clientListSessions(), null, 2))
   } else if (sub === 'reopen' || sub === 'resume') {
-    // "back to working": clear proposal -> active, relaunch if offline
-    console.log(await s.reopen(id) ? `${id} -> working` : `no such session ${id}`)
+    // "back to working": clear proposal -> active, relaunch if offline (the backend owns the relaunch)
+    console.log(await c.clientReopen(id) ? `${id} -> working` : `no such session ${id}`)
   } else if (sub === 'review') {
     console.log(await s.propose(id, 'merge') ? `${id} -> review` : `no such session ${id}`)
   } else if (sub === 'state') {
@@ -273,25 +294,29 @@ From here, dispatch an agent — it authors the spec nodes and rides the dogfood
     // merge dispatch (same as top-level `spex merge`): reopen the session and hand its OWN agent the merge
     // prompt — the agent runs the --no-ff merge, resolves conflicts, verifies main advanced, and proposes
     // close. The SERVER never touches main. Fail-loud: an unreachable agent prints the reason, exits non-zero.
-    const r = await s.mergeSession(id)
+    const r = await c.clientMerge(id)
     if (r.dispatched) console.log(`merge dispatched to ${id} — its agent is landing the merge`)
     else console.error(`merge dispatch failed: ${r.reason}`)
     process.exit(r.dispatched ? 0 : 1)
   } else if (sub === 'close') {
-    console.log(await s.closeSession(id) ? `closed ${id}` : `no such session ${id}`)
+    console.log(await c.clientClose(id) ? `closed ${id}` : `no such session ${id}`)
   } else if (sub === 'send') {
-    // prompt dispatch is socket-only + fail-loud: a non-accepted prompt prints the reason AND exits
-    // non-zero, so a manager/script never mistakes a dead dispatch for success.
-    const r = await s.sendKeys(id, process.argv[5] ?? '')
+    // prompt dispatch is socket-only + fail-loud (the backend enforces it): a non-accepted prompt prints the
+    // reason AND exits non-zero, so a manager/script never mistakes a dead dispatch for success.
+    const r = await c.clientSend(id, process.argv[5] ?? '')
     console.log(r.ok ? 'sent' : `dispatch failed: ${r.error}`)
     process.exit(r.ok ? 0 : 1)
   } else if (sub === 'capture') {
-    process.stdout.write(await s.captureSession(id))   // the session's live pane (output), for agents
+    // the session's live pane (output) over HTTP — fail and empty stay DISTINCT: a real empty pane prints
+    // nothing and exits 0; unknown id / offline / capture-error each exit non-zero with a named reason.
+    const r = await c.clientCapture(id)
+    if (r.ok) { process.stdout.write(r.pane) }
+    else { console.error(`spex capture: ${r.reason}`); process.exit(r.status === 404 ? 2 : 1) }
   } else if (sub === 'prompt') {
     // print the session's full ORIGINATING prompt (what it was asked to do), captured at launch.
-    const p = await s.sessionPrompt(id)
-    if (p == null) { console.error(`no prompt recorded for ${id}`); process.exit(1) }
-    process.stdout.write(p.endsWith('\n') ? p : p + '\n')
+    const r = await c.clientPrompt(id)
+    if (!r.ok) { console.error(`no prompt recorded for ${id}`); process.exit(1) }
+    process.stdout.write(r.prompt.endsWith('\n') ? r.prompt : r.prompt + '\n')
   } else {
     console.error('spex session: new|list|reopen|review|done|block|ask|idle|merge|close|send|capture|prompt'); process.exit(2)
   }

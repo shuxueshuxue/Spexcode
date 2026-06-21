@@ -25,7 +25,7 @@ The durable unit is the worktree: each carries an untracked `.session` file (`no
 launch prompt. There is no in-memory map — the list is read from the worktrees every time, so state
 survives a backend restart. `sessions.ts` holds the machine and is the only writer of `.session`.
 
-The subsystem divides into four governed concerns, each its own child node:
+The subsystem divides into governed concerns, each its own child node:
 
 - **[[launch]]** — bringing a worker up: the `reclaude` wrapper, the per-session rendezvous socket, the
   non-truncating system-prompt + launch-prompt delivery, `CLAUDE.md` isolation, and the concurrency
@@ -39,10 +39,14 @@ The subsystem divides into four governed concerns, each its own child node:
   lifecycle event stream.
 - **[[live-view]]** — the dashboard's live terminal: one real tmux client per session, viewer
   subscriptions that outlive the client so a pane never freezes, and the warm-bridge prewarm.
+- **[[remote-client]]** — the `spex` CLI as a thin backend client: its read/control verbs route through the
+  backend (so the backend is the single tmux actor, and `SPEXCODE_API_URL` points at any machine's sessions),
+  while state producers stay local.
 
 ### Surfaces
 
 One surface stays with the overview. `buildBoard` (`board.ts`) assembles the dashboard's runtime state —
 merged tree + per-worktree overlay + the session list — in one module, served identically at HTTP
-`/api/board` and `spex board` (the frontend only adds x/y pixels). `captureSession` remains for
-`spex capture`.
+`/api/board` and `spex board` (the frontend only adds x/y pixels). The session's live pane is read as text by
+`captureSessionResult` behind `GET …/capture` — failure (unknown / offline / capture-error) kept distinct
+from an empty pane — which `spex capture` reads as a backend client (see [[remote-client]]).

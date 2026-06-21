@@ -1,6 +1,8 @@
+import { basename } from 'path'
 import { loadSpecs, deriveStatus } from './specs.js'
 import { resolveLayout } from './layout.js'
 import { listSessions } from './sessions.js'
+import { repoRoot } from './git.js'
 import { residentForgeView } from '../../spec-forge/src/resident.js'
 
 // @@@ buildBoard - the dashboard's RUNTIME state, assembled in ONE shared module so the human (HTTP
@@ -108,5 +110,9 @@ export async function buildBoard() {
   // the same seed its avatar face uses, so the two always match.
   const sess = sessions.map((s) => ({ ...s, source: s.path, ops: opsByPath[s.path] || [] }))
 
-  return { nodes, sessions: sess }
+  // @@@ project - the launch folder name (basename of this backend's repo root). The dashboard is a
+  // project-agnostic viewer pointed at ONE backend per dev-server (see the api-endpoint node), so the
+  // payload carries its own identity: the frontend names the browser tab after it, making each tab
+  // self-identifying when several projects each run their own backend.
+  return { nodes, sessions: sess, project: basename(repoRoot()) }
 }

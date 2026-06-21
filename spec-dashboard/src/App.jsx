@@ -537,6 +537,11 @@ export default function App() {
     const id = setInterval(reload, 4000)
     return () => clearInterval(id)
   }, [reload])
+  // @@@ self-identifying tab - name the browser tab after the backend's launch folder (board.project), so
+  // when several projects each run their own backend, every tab says which one this viewer is pointed at.
+  useEffect(() => {
+    if (board?.project) document.title = `${board.project} · SpexCode`
+  }, [board?.project])
   if (!board) return <div className="loading">{t('hud.loading')}</div>
   return <Dashboard specs={board.nodes} sessions={board.sessions} reload={reload} />
 }

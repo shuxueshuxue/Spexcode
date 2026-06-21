@@ -3,7 +3,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { createNodeWebSocket } from '@hono/node-ws'
 import { loadSpecs, specHistory, specDiffAt, loadConfig } from './specs.js'
-import { resolveLayout } from './layout.js'
+import { resolveLayout, mainBranch } from './layout.js'
 import { buildBoard } from './board.js'
 import { gitA } from './git.js'
 import { newSession, listSessions, sendKeys, rawKey, closeSession, reopen, propose, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, superviseQueue } from './sessions.js'
@@ -40,7 +40,8 @@ app.get('/api/specs/:id/diff/:hash', async (c) => c.json(await specDiffAt(c.req.
 app.get('/api/edit', async (c) => {
   const source = c.req.query('source') || '', path = c.req.query('path') || ''
   if (!source || !path) return c.json({ patch: '' })
-  const base = (await gitA(['-C', source, 'merge-base', 'main', 'HEAD'])).trim() || 'main'
+  const mb = mainBranch()
+  const base = (await gitA(['-C', source, 'merge-base', mb, 'HEAD'])).trim() || mb
   return c.json({ patch: await gitA(['-C', source, 'diff', base, '--', path]) })
 })
 app.get('/api/layout', async (c) => c.json(await resolveLayout()))

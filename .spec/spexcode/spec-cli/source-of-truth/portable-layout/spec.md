@@ -22,16 +22,23 @@ are tracked, and nothing machine-specific leaks into the tree — so a clean che
 
 ## expanded spec
 
-`spec-cli/src/layout.ts` is the one seam. `resolveLayout()` answers three questions — where is main,
-how to enumerate the other checkouts, how each declares its node — and exposes the result at
-`GET /api/layout`. Everything downstream consumes the resolved layout, never a hardcoded path.
+`spec-cli/src/layout.ts` is the one seam. `resolveLayout()` answers — where is main, **which branch is
+its source of truth**, how to enumerate the other checkouts, how each declares its node — and exposes the
+result at `GET /api/layout`. Everything downstream consumes the resolved layout, never a hardcoded path or
+branch name.
 
 Policy is read from an optional `spexcode.json` at the repo root; absent, the defaults are our
 convention:
 
 ```json
-{ "main": "/elsewhere", "branchPrefix": "node/", "nodeFrom": "branch" }
+{ "main": "/elsewhere", "mainBranch": "staging", "branchPrefix": "node/", "nodeFrom": "branch" }
 ```
+
+The **source-of-truth branch** — what worktrees fork from, merges land on, and reviews diff against — is
+detected by `mainBranch()`, never the baked-in name `main`: the `mainBranch` override above wins, else the
+branch the main checkout is currently on (so an adopted repo whose default is `staging`/`feat-x` just works
+with no config), else `main`. It is resolved via the shared git **common** dir, so it answers identically
+whether called from the main checkout, a linked worktree, or a commit hook.
 
 A worktree's node id resolves from its branch (strip `branchPrefix`) or its `.session` file, per
 `nodeFrom`. Beyond resolution, the seam also produces the board's raw material: each worktree carries

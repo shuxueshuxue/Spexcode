@@ -463,7 +463,7 @@ function Dashboard({ specs, sessions, reload }) {
         {search && <SpecSearch specs={specs} onPick={setFocusId} onClose={() => setSearch(false)} />}
       </div>
 
-      {graphView && <SessionGraph onOpen={openSession} active={!sessionUI} />}
+      {graphView && <SessionGraph onOpen={openSession} onBack={() => setGraphView(false)} active={!sessionUI} />}
       {overlay && <NodeView node={focus} pane={pane} setPane={setPane} onClose={() => setOverlay(false)} />}
       {/* stays MOUNTED across open/close (hidden via `open`) so the selected tab + per-tab drafts persist. */}
       <SessionInterface

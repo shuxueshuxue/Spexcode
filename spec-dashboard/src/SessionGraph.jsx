@@ -303,13 +303,23 @@ function SessionGraphLegend({ onClose }) {
 // @@@ SessionGraph - full-screen overlay. Wrapped in its OWN ReactFlowProvider so it shares NOTHING with
 // the board's ReactFlow instance (separate camera, selection, store) — the isolation that lets it drop in
 // without touching the existing views. onOpen crosses a clicked node into its session console (board path).
-export default function SessionGraph({ onOpen, active = true }) {
+export default function SessionGraph({ onOpen, onBack, active = true }) {
   const t = useT()
   const [legend, setLegend] = useState(false)
   return (
     <div className="session-graph">
       <div className="sg-hud">
         <span className="brand">$ session-graph</span>
+        {/* mirror of the board's hud-graph button — toggles back to the spec graph, the same crossing
+            the `t` key makes. The tree icon (root → two children) distinguishes it from the network glyph. */}
+        {onBack && (
+          <button className="hud-graph" onClick={onBack} title={t('sessionGraph.backTitle')}>
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
+              <circle cx="8" cy="3.5" r="1.8" /><circle cx="3.5" cy="12.5" r="1.8" /><circle cx="12.5" cy="12.5" r="1.8" />
+              <path d="M8 5.3 V8 M8 8 H3.5 V10.7 M8 8 H12.5 V10.7" />
+            </svg>
+          </button>
+        )}
         <button className="hud-help" onClick={() => setLegend((v) => !v)} title={t('sessionGraph.helpTitle')}>?</button>
       </div>
       <ReactFlowProvider>

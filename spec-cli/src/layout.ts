@@ -12,6 +12,10 @@ type Config = {
   main?: string                    // path to the source-of-truth checkout (default: the `main` worktree)
   branchPrefix?: string            // how a branch names its node (default: "node/")
   nodeFrom?: 'branch' | 'session'  // resolve a worktree's node id from its branch or its .session file
+  dashboard?: {
+    apiUrl?: string                // the per-project backend the board proxies to (read frontend-side; see api-endpoint)
+    title?: string                 // override for the browser-tab name (default: the repo-root basename; see tab-title)
+  }
 }
 
 export type Worktree = {
@@ -21,7 +25,7 @@ export type Worktree = {
 }
 export type Layout = { main: string; convention: Required<Config>; worktrees: Worktree[] }
 
-function readConfig(root: string): Config {
+export function readConfig(root: string): Config {
   const p = join(root, 'spexcode.json')
   if (!existsSync(p)) return {}
   try { return JSON.parse(readFileSync(p, 'utf8')) } catch { return {} }

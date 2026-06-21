@@ -213,6 +213,12 @@ body {
   font-family: var(--mono); font-size: 10px; color: var(--blue);
   border: 1px solid var(--line); border-radius: 2px; padding: 0 3px; margin-right: 3px; background: var(--paper);
 }
+/* @@@ tab counts - open/closed issue tallies shown on the issues tab face. Compact mono numbers in the
+   card vocabulary (green open · magenta closed) so the count reads without opening the tab. */
+.ov-tab-counts { display: inline-flex; gap: 3px; margin-left: 5px; vertical-align: baseline; }
+.ovc { font-family: var(--mono); font-size: 9px; font-weight: 700; line-height: 1.5; padding: 0 4px; border-radius: 3px; border: 1px solid var(--line); }
+.ovc.st-open { color: var(--green); border-color: color-mix(in srgb, var(--green) 45%, transparent); }
+.ovc.st-closed { color: var(--magenta); border-color: color-mix(in srgb, var(--magenta) 45%, transparent); }
 .ov-hint { margin-left: auto; font-size: 11px; color: var(--muted); }
 /* the panel is a fixed-size pop-out; each pane scrolls its OWN content (doc/hist below).
    the body itself never scrolls, so the work pane can't push a horizontal bar onto the window. */

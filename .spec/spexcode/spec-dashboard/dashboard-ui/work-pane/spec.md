@@ -23,7 +23,8 @@ over the board and dismissed with `Esc`. The intent half is the **spec doc** —
 list, and the body rendered as a living current-state document (two labelled parts — raw source / expanded
 spec — when the body is authored that way; see [[three-part-body]]). The proof and evolution of that intent
 live in the **history** tab. A third **issues** tab lists the forge work bound to this node — open and
-closed alike (the board's badge/card show only the open ones; see [[dashboard-issues]]). The "change it in
+closed alike, with the open/closed counts shown on the tab face itself (the board's badge/card show only
+the open ones; see [[dashboard-issues]]). The "change it in
 place" half — a live terminal — belongs with the *session* that does the changing, not pinned to one node. The panel must size to
 itself, never to xterm: `min-width:0` runs down the flex chain and the body is `overflow:hidden`, each pane
 scrolling its own content, so there is no stray horizontal scrollbar.

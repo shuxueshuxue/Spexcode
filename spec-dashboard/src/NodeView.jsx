@@ -309,6 +309,12 @@ export default function NodeView({ node, pane, setPane, onClose }) {
   const t = useT()
   // one fetch per node, feeding the single history pane (the popup's only data dependency).
   const rows = useHistory(node.id)
+  // @@@ tab counts - the issues tab carries its open/closed counts right on the tab face (green open ·
+  // magenta closed, same vocabulary as the cards inside), so the bound-work tally reads at a glance
+  // without opening the tab. Each badge shows only when non-zero; no issues → a bare `issues` label.
+  const issuesAll = node.issues || []
+  const issueOpen = issuesAll.filter((i) => (i.state || '').toLowerCase() === 'open').length
+  const issueClosed = issuesAll.length - issueOpen
   return (
     <div className="ov-backdrop" onMouseDown={onClose}>
       <div className="ov-panel" onMouseDown={(e) => e.stopPropagation()}>
@@ -318,6 +324,12 @@ export default function NodeView({ node, pane, setPane, onClose }) {
             {PANES.map((p, i) => (
               <button key={p.key} className={p.key === pane ? 'ov-tab on' : 'ov-tab'} onClick={() => setPane(p.key)}>
                 <kbd>{i + 1}</kbd> {t(PANE_LABEL[p.key])}
+                {p.key === 'issues' && (issueOpen > 0 || issueClosed > 0) && (
+                  <span className="ov-tab-counts">
+                    {issueOpen > 0 && <span className="ovc st-open" title={t('nodeView.openIssues', { n: issueOpen })}>{issueOpen}</span>}
+                    {issueClosed > 0 && <span className="ovc st-closed" title={t('nodeView.closedIssues', { n: issueClosed })}>{issueClosed}</span>}
+                  </span>
+                )}
               </button>
             ))}
           </div>

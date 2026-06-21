@@ -18,7 +18,6 @@ const BOARD_KEYS = [
   [['i'], 'legend.board.info'],
   [['/'], 'legend.board.search'],
   [['o', 'O'], 'legend.board.overlayCycle'],
-  [['esc'], 'legend.board.releaseLock'],
   [['t'], 'legend.board.graph'],
   [['⏎'], 'legend.board.enter'],
   [['n', 'n'], 'legend.board.newChild'],

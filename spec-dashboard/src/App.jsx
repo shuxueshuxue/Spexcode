@@ -125,22 +125,6 @@ function Dashboard({ specs, sessions, reload }) {
   // the user's own draft instead of re-seeding.
   const startNew = useCallback((text) => { setSessionSel('new'); setSeed(text); setSessionUI(true) }, [])
 
-  // @@@ pick a session - clicking a session row (top-right window OR an on-graph node peek) toggles the lock
-  // on its worktree's overlays (matched by source = worktree path). Locking ON jumps to the first node it's
-  // changing, in TREE order so the camera lands where the `o` cycle enters; focusing a collapsed id is fine
-  // (expand-on-focus drills its spine open). A session with no pending ops still locks — the top banner
-  // explains the empty grip; releasing (clicking again, or Esc — see onKey) leaves focus where it is. Defined
-  // ABOVE the nodes memo because each node's data carries it (the peek's click handler), and a useMemo factory
-  // runs during render — referencing a callback declared after it would hit the temporal dead zone.
-  const onPickSession = useCallback((s) => {
-    const releasing = highlightId === s.source
-    setHighlightId(releasing ? null : s.source)
-    if (releasing) return
-    const ids = new Set((s.ops || []).map((op) => op.nodeId))
-    const first = specs.find((n) => ids.has(n.id))
-    if (first) setFocusId(first.id)
-  }, [highlightId, specs])
-
   const children = useMemo(() => specs2.filter((s) => s.parent === focus.id), [specs2, focus])
   const parent = focus.parent ? byId[focus.parent] : null
 
@@ -201,19 +185,14 @@ function Dashboard({ specs, sessions, reload }) {
       className = kin ? undefined : 'is-far'
     }
     // a node with live editor(s) carries a `link` (SpecNode stamps the subtle ⏎ affordance — Enter
-    // crosses into that session) AND an `editors` list — the live sessions editing this node, driven by
-    // the live overlay (pending ops), NOT node.session. ONE list serves both readers: Row 2 draws an avatar
-    // per editor (it reads id/status/node), and the on-graph review peek renders each as a SessionRow
-    // (it also reads ops for the op-tally and source to mark the lock). So we pass the WHOLE session objects
-    // once, not a stripped copy alongside them. `onPickSession` is the peek's click handler (lock the graph);
-    // `lockedSource` is the currently-gripped worktree so a peek row can show its lock.
+    // crosses into that session) AND an `editors` list (SpecNode's second row draws their avatars).
+    // Both driven by the live overlay (pending ops), NOT node.session. `editors` is the minimal slice
+    // each avatar needs: id (the avatar seed + tooltip), status (liveness ring), node (tooltip label).
     const editors = liveEditorsOf(s)
+    const editorData = editors.map((e) => ({ id: e.id, status: e.status, node: e.node }))
     // collapsed = has children but its subtree is hidden (not on the expanded spine) -> show the ▸N hint.
     const kids = childCount[s.id] || 0
-    const extra = {
-      editors, collapsed: kids > 0 && !expanded.has(s.id), childCount: kids,
-      onPickSession, lockedSource: highlightId,
-    }
+    const extra = { editors: editorData, collapsed: kids > 0 && !expanded.has(s.id), childCount: kids }
     return {
       id: s.id, type: 'spec', position: { x: s.x, y: s.y },
       data: editors.length
@@ -222,7 +201,7 @@ function Dashboard({ specs, sessions, reload }) {
       draggable: false, selected: s.id === focusId, className,
     }
     })
-  }, [focusId, focus.parent, highlightId, lockedNodes, specs2, liveEditorsOf, childCount, expanded, onPickSession])
+  }, [focusId, focus.parent, highlightId, lockedNodes, specs2, liveEditorsOf, childCount, expanded])
 
   const edges = useMemo(() => {
     const tree = specs2.filter((s) => s.parent).map((s) => {
@@ -383,10 +362,6 @@ function Dashboard({ specs, sessions, reload }) {
       // unbound elsewhere on the board and is the unshifted key (Shift+/ is `?`, the help modal — handled
       // above), so the two never collide. preventDefault stops the browser's own find-as-you-type / quick-find.
       if (e.key === '/') { e.preventDefault(); e.stopPropagation(); setSearch(true); return }
-      // @@@ esc releases the lock - with a session locked and no modal open (every modal above guards Esc
-      // and returns first), Esc clears the grip — mirroring how each modal closes on Esc. The board
-      // un-greys and the lock banner drops; focus stays put. A no-op when nothing is locked (falls through).
-      if (e.key === 'Escape' && highlightId) { e.preventDefault(); e.stopPropagation(); setHighlightId(null); return }
       // @@@ chord buffer - a small vim-style key buffer for multi-key board commands. A leader letter
       // (n/d) opens a pending buffer; the matching next letter fires the chord (open the session board
       // with its @-directive pre-seeded — see CHORDS/startNew). A non-matching key (or a 700ms lull)
@@ -444,7 +419,7 @@ function Dashboard({ specs, sessions, reload }) {
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [overlay, sessionUI, legend, settings, graphView, search, highlightId, focus, cycleNodes, upTarget, downTarget, rightTarget, parent, centerOn, getViewport, openBoard, startNew, popupScroll, legendScroll])
+  }, [overlay, sessionUI, legend, settings, graphView, search, focus, cycleNodes, upTarget, downTarget, rightTarget, parent, centerOn, getViewport, openBoard, startNew, popupScroll, legendScroll])
 
   // clicking a node focuses it; the follow-focus effect then re-plots the tree around it and pans the
   // camera to keep it in place (a click drills the same way the arrows do). It does NOT open a session —
@@ -454,6 +429,20 @@ function Dashboard({ specs, sessions, reload }) {
   // double-click is the mouse parallel to the `i` key: focus the node AND open its info popup.
   // (single click still only focuses without panning; the camera follows the keyboard alone.)
   const onNodeDoubleClick = useCallback((_e, n) => { setFocusId(n.id); setOverlay(true) }, [])
+
+  // clicking a session in the top-right window toggles the lock on its worktree's overlays (matched by
+  // source = worktree path). Locking ON jumps to the first node it's changing, in TREE order so the
+  // camera lands where the `o` cycle enters; focusing a collapsed id is fine (expand-on-focus drills its
+  // spine open). A session with no pending ops still locks — the top banner explains the empty grip;
+  // releasing (clicking again) leaves focus where it is.
+  const onPickSession = useCallback((s) => {
+    const releasing = highlightId === s.source
+    setHighlightId(releasing ? null : s.source)
+    if (releasing) return
+    const ids = new Set((s.ops || []).map((op) => op.nodeId))
+    const first = specs.find((n) => ids.has(n.id))
+    if (first) setFocusId(first.id)
+  }, [highlightId, specs])
 
   return (
     <div className="app">

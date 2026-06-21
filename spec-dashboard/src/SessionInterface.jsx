@@ -5,6 +5,7 @@ import { Avatar } from './avatar.jsx'
 import { labelColor } from './color.js'
 import { STATUS_DOT, sessionName } from './session.js'
 import { SessionRow } from './SessionWindow.jsx'
+import SessionContextMenu from './SessionContextMenu.jsx'
 import { useT } from './i18n/index.jsx'
 
 // @@@ SessionInterface - the Enter surface. TWO panes: a left session list and a right content area
@@ -133,10 +134,11 @@ function highlight(text, q) {
   return <>{text.slice(0, i)}<b className="mention-hit">{text.slice(i, i + q.length)}</b>{text.slice(i + q.length)}</>
 }
 
-export default function SessionInterface({ sessions, specs = [], focusNode, open, sel, setSel, seed, onSeedConsumed, onClose, onCreated, onPickSession }) {
+export default function SessionInterface({ sessions, specs = [], focusNode, open, sel, setSel, seed, onSeedConsumed, onClose, onCreated, onPickSession, reload }) {
   const t = useT()
   const [prompt, setPrompt] = useState('')    // the New Session tab's own draft (its boarding-switch cache)
   const [menu, setMenu] = useState(null)      // completion dropdown: { kind:'mention'|'config'|'slash', items, index, start, end, query }
+  const [ctxMenu, setCtxMenu] = useState(null) // session-row right-click menu { x, y, session } — the RENAME gesture lives here, on the board's session list
   const [slashCmds, setSlashCmds] = useState([])   // the `/` command list (built-in + user/project/skill), fetched once
   const [presets, setPresets] = useState([])       // the config presets (GET /api/config) — the New Session box's `/` palette
   // bottom-input drafts, keyed by session id — each session tab keeps its OWN typed-but-unsent line, never
@@ -537,6 +539,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     if (!open) return
     const onMenu = (e) => {
       if (!panelRef.current?.contains(e.target)) return
+      // the left session list owns the right-click RENAME menu — let its own onContextMenu through (it
+      // opens the rename pop-over). The blocker still kills the browser menu everywhere else in the panel
+      // (notably the terminal), keeping the terminal-app feel.
+      if (e.target.closest?.('.si-list')) return
       e.preventDefault()
       refocusInput()
     }
@@ -545,6 +551,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   }, [open])
 
   return (
+    <>
     <div className="si-backdrop" onMouseDown={onClose} style={open ? undefined : { display: 'none' }}>
       <div className="si-panel" ref={panelRef} onMouseDown={keepFocus}>
         <aside className="si-list">
@@ -564,6 +571,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               style={{ '--ov': labelColor(s.id) }}
               onClick={() => setSel(s.id)}
               onDoubleClick={() => { if (s.ops?.length && onPickSession) { onPickSession(s, false); onClose() } }}
+              onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, session: s }) }}
               title={s.ops?.length ? t('session.opsTitle') : undefined}
             >
               <SessionRow s={s} locked={false} />
@@ -700,5 +708,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         </section>
       </div>
     </div>
+    <SessionContextMenu menu={ctxMenu} onClose={() => setCtxMenu(null)} onRenamed={reload} />
+    </>
   )
 }

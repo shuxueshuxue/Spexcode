@@ -305,7 +305,7 @@ function Dashboard({ specs, sessions, reload }) {
     // pane is mounted at a time, so the first matching `.ov-body` descendant is the scroller; when panes
     // switch the element changes and the scroller drops its stale target (see scroll.js).
     const bumpScroll = (delta) => popupScroll(
-      document.querySelector('.ov-body .pane-doc, .ov-body .pane-hist, .ov-body .pane-issues'), delta)
+      document.querySelector('.ov-body .pane-doc, .ov-body .pane-hist, .ov-body .pane-issues, .ov-body .pane-edit'), delta)
     const onKey = (e) => {
       // @@@ graph toggle - `t` is the ONE switch between the spec graph and the session graph, and it
       // toggles BOTH ways. It is the only crossing: Esc never switches graphs, and opening a session

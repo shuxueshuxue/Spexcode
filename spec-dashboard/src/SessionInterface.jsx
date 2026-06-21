@@ -628,8 +628,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   </div>
                 </div>
                 {selSession?.promptPreview && (
-                  /* the originating prompt — "what was this session asked to do?" — full text on hover */
-                  <div className="si-th-prompt" title={selSession.prompt || ''}>{t('session.asked', { text: selSession.promptPreview })}</div>
+                  /* the originating prompt — "what was this session asked to do?". Render the FULL prompt and
+                     let CSS ellipsis truncate it at the bar's real width (not the short server preview, which
+                     cut off long before the now-wide bar's edge); the complete text is still on hover. */
+                  <div className="si-th-prompt" title={selSession.prompt || ''}>{t('session.asked', { text: selSession.prompt || selSession.promptPreview })}</div>
                 )}
                 <div className="si-term-body" style={{ position: 'relative' }}>
                   {/* every opened session's terminal stays mounted; only the active one is shown */}

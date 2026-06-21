@@ -22,8 +22,10 @@ as watches start and stop. The one human gesture is **asking**: dragging A→B d
 ## expanded spec
 
 `t` (an otherwise-unbound board key, so it shadows no nav) opens a full-screen session-graph over the
-board; Esc returns. Because a hidden hotkey is undiscoverable, the board also carries a **small floating
-button** that opens the same view, and `t` is **listed in the help/legend** alongside the other board keys.
+board; Esc returns. Because a hidden hotkey is undiscoverable, the board carries a **small floating
+button** that opens the same view — and the session-graph carries the **mirror** of it (same affordance,
+a tree glyph for the spec graph) that toggles **back**, so the one `t` crossing is discoverable from
+**both** sides, not just on the way in. `t` is **listed in the help/legend** alongside the other board keys.
 The same discipline governs the view's **own** keys: rather than an always-on inline hint, the graph carries
 the **same discreet `?` help affordance the board uses** (key or button), opening a small legend of its
 keymap (move · open · drag-to-monitor · `t` back) and its edge vocabulary — one consistent help surface

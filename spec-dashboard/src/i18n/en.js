@@ -146,6 +146,7 @@ export default {
 
   sessionGraph: {
     brand: '$ session-graph',
+    backTitle: 'spec graph — the governed node tree (t)',
     helpTitle: 'keymap & legend (?)',
     asked: ({ a, b }) => `asked ${a} to monitor ${b}`,
     monitorPrompt: ({ label, id }) => `Please monitor session ${label} (${id}): run \`spex watch ${id}\` in the background and keep it running so its transitions surface to me.`,

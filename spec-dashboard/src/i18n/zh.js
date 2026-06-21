@@ -143,6 +143,7 @@ export default {
 
   sessionGraph: {
     brand: '$ session-graph',
+    backTitle: '规格图 — 受治理的节点树（t）',
     helpTitle: '快捷键与图例（?）',
     asked: ({ a, b }) => `已请求 ${a} 监视 ${b}`,
     monitorPrompt: ({ label, id }) => `请监视会话 ${label}（${id}）：在后台运行 \`spex watch ${id}\` 并保持运行，让其状态变化反馈给我。`,

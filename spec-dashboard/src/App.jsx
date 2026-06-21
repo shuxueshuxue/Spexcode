@@ -78,6 +78,11 @@ function Dashboard({ specs, sessions, reload }) {
     specs.forEach((s) => { if (s.parent) m[s.parent] = (m[s.parent] || 0) + 1 })
     return m
   }, [specs])
+  // @@@ overlay nodes - every node a worktree is currently changing (its `overlays` carry the pending
+  // add/edit/delete/move ops, each tagged with the author worktree's source). Drawn from the RAW tree so
+  // the cycle (the `o` key) can jump to a changed node even while it sits in a collapsed subtree. Kept in
+  // backend order so the cycle is stable across the 4s poll.
+  const overlayNodes = useMemo(() => specs.filter((s) => s.overlays?.length), [specs])
 
   // @@@ node<->session link - a node does NOT belong to a session. `node.session` is only the LAST
   // editor (the git Session: trailer — usually a closed session), kept purely as attribution. The LIVE
@@ -375,6 +380,21 @@ function Dashboard({ specs, sessions, reload }) {
       else if (e.key === '-' || e.key === '_') { e.preventDefault(); centerOn(focus, clamp(getViewport().zoom / 1.2), 160) }
       else if (e.key === '0') { e.preventDefault(); centerOn(focus, 0.85, 200) }
       else if (e.key === 'i' || e.key === 'I') { e.preventDefault(); setOverlay(true) }
+      // @@@ overlay cycle - `o` walks focus through the nodes a worktree is currently changing (`O` =
+      // ⇧, reverse), wrapping at the ends. It's a jump like `/` search: focus lands on the node and the
+      // expand-on-focus follow effect drills its spine open + pans the camera, so a change buried in a
+      // collapsed subtree is one keystroke away. When focus isn't on a marked node, it enters the ring at
+      // the first (or last, reversed) one. No-op when nothing is changing.
+      else if (e.key === 'o' || e.key === 'O') {
+        e.preventDefault()
+        if (!overlayNodes.length) return
+        const dir = e.key === 'O' ? -1 : 1
+        const idx = overlayNodes.findIndex((s) => s.id === focus.id)
+        const next = idx === -1
+          ? (dir > 0 ? overlayNodes[0] : overlayNodes[overlayNodes.length - 1])
+          : overlayNodes[(idx + dir + overlayNodes.length) % overlayNodes.length]
+        setFocusId(next.id)
+      }
       // (`t` toggles the session graph — handled at the top of onKey so it works from either graph.)
       // Enter opens the session board at the remembered tab (boarding switch — see openBoard).
       else if (e.key === 'Enter') { e.preventDefault(); openBoard() }
@@ -387,7 +407,7 @@ function Dashboard({ specs, sessions, reload }) {
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [overlay, sessionUI, legend, settings, graphView, search, focus, upTarget, downTarget, rightTarget, parent, centerOn, getViewport, openBoard, startNew])
+  }, [overlay, sessionUI, legend, settings, graphView, search, focus, overlayNodes, upTarget, downTarget, rightTarget, parent, centerOn, getViewport, openBoard, startNew])
 
   // clicking a node focuses it; the follow-focus effect then re-plots the tree around it and pans the
   // camera to keep it in place (a click drills the same way the arrows do). It does NOT open a session —

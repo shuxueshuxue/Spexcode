@@ -24,6 +24,7 @@ Move through the spec tree by **relationship, not geometry** — the tree sits a
 | `+`/`-`, `0` | zoom in / out, back to overview zoom |
 | `i`, double-click | open the node-info popup |
 | `/` | open the search palette — jump to any node by name |
+| `o` / `O` | cycle focus through nodes a worktree is changing (`O` = reverse) |
 | `Enter` | cross into the node's live session(s) |
 | `@` | start a fresh New Session targeting the focus (opens on the New tab, focus mention prefilled) |
 | `t` | toggle spec graph ↔ session graph |
@@ -48,6 +49,8 @@ Move through the spec tree by **relationship, not geometry** — the tree sits a
 ## search & jump
 
 Relationship-walking reaches a deep node only by stepping its whole ancestor spine, and the board is a drill-down (see [[node-graph]]) — a node in a collapsed subtree is invisible until you arrive. `/` (slash-to-search) is the escape hatch: a palette that searches the **whole raw tree** (not just visible nodes), ranking by title, then id, then path. Picking a result just **sets focus** — no new navigation concept; expand-on-focus opens its spine and pans the camera exactly as the arrows would. Jump-by-name over the same focus state, for nodes relationship-walking can't yet see.
+
+`o` / `O` is the same idea aimed at *change* rather than *name*: it cycles focus through the nodes a worktree is currently editing (those carrying an overlay — see [[node-graph]]), wrapping at the ends, so you can walk every in-flight edit without hunting for the marked tiles. Like `/`, each step just sets focus and lets expand-on-focus reveal a node buried in a collapsed subtree.
 
 ## focus & sessions
 

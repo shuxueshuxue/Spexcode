@@ -31,8 +31,14 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 // a viewer: anything we can push pane bytes to (a WebSocket, wrapped).
 export type Viewer = { send: (data: Buffer) => void }
 
-type Bridge = { id: string; pty: IPty; viewers: Set<Viewer>; cols: number; rows: number; prewarmed: boolean; clientTty?: string; repaintToken: number }
+type Bridge = { id: string; pty: IPty; cols: number; rows: number; prewarmed: boolean; clientTty?: string; repaintToken: number }
 const bridges = new Map<string, Bridge>()
+// @@@ stable subscription registry - the fix for the frozen-pane bug. Viewers are keyed by SESSION ID and
+// live HERE, never on the Bridge. The old Bridge.viewers Set died with the pty (p.onExit → bridges.delete),
+// orphaning the still-open WebSocket onto a deleted object — inactive, unscrollable, no repaint, until a
+// manual page refresh. Now only detachViewer (a real socket close) removes a viewer; a bridge dying and
+// respawning underneath is invisible to the browser, so client reconnection is unnecessary for bridge churn.
+const subscribers = new Map<string, Set<Viewer>>()
 
 // @@@ last-known viewer size - the cure for the pre-warm mismatch. Every viewer fit records its
 // cols/rows here (per session, plus a global fallback for a session this viewer hasn't opened before),
@@ -80,15 +86,22 @@ function ensureBridge(id: string, prewarm = false): Bridge | null {
       env: process.env as Record<string, string>,
     })
   } catch { return null }
-  b = { id, pty: p, viewers: new Set(), cols, rows, prewarmed: prewarm, repaintToken: 0 }
+  b = { id, pty: p, cols, rows, prewarmed: prewarm, repaintToken: 0 }
   bridges.set(id, b)
-  // tmux output (string, utf8-boundary-safe from node-pty) → broadcast as raw bytes to every viewer.
+  // tmux output (string, utf8-boundary-safe from node-pty) → broadcast as raw bytes to every viewer. The
+  // viewer set lives in `subscribers` (keyed by session id), so it survives this bridge being replaced.
   p.onData((data) => {
     const buf = Buffer.from(data, 'utf8')
-    for (const v of b!.viewers) { try { v.send(buf) } catch { /* drop a wedged viewer */ } }
+    for (const v of subscribers.get(id) ?? []) { try { v.send(buf) } catch { /* drop a wedged viewer */ } }
   })
   // attach-session exits when the session dies or we detach — drop the bridge so it's re-made if needed.
-  p.onExit(() => { if (bridges.get(id) === b) bridges.delete(id) })
+  // The subscribers are untouched; if any remain, kick a reconcile to RE-BIND fast (respawn + repaint)
+  // instead of waiting up to a full supervisor tick. The kick is alive-gated + serialized, so a session
+  // that died for real just reaps (no respawn) and a burst of exits collapses to one pass — never a storm.
+  p.onExit(() => {
+    if (bridges.get(id) === b) bridges.delete(id)
+    if ((subscribers.get(id)?.size ?? 0) > 0) kickSupervisor()
+  })
   return b
 }
 
@@ -112,9 +125,11 @@ function killBridge(id: string): void {
 // the status bar lands exactly once. There is no per-viewer partial seed, so rapid attach/detach can
 // never leave a half-seed behind.
 export function attachViewer(id: string, v: Viewer): boolean {
+  let s = subscribers.get(id)
+  if (!s) subscribers.set(id, s = new Set())
+  s.add(v)
   const b = ensureBridge(id)
-  if (!b) return false
-  b.viewers.add(v)
+  if (!b) return false   // spawn failed → caller closes the socket → detachViewer prunes this subscriber
   void settleAndRepaint(b)
   return true
 }
@@ -134,9 +149,18 @@ async function clientTty(b: Bridge): Promise<string | null> {
 }
 // force tmux to emit a full, coherent repaint of our client down the shared pty (in-band with the live
 // stream → no splice). All viewers of this bridge see it — an acceptable brief redraw, never a scramble.
-async function repaint(b: Bridge): Promise<void> {
-  const tty = await clientTty(b)
-  if (tty) await tmuxRaw(['refresh-client', '-t', tty])
+// @@@ fail-loud on re-bind - the repaint MUST land. On a fresh respawn (the re-bind path) the new tmux
+// client may not be registered with the server yet, so clientTty is briefly null; the old code's silent
+// `if (tty)` skip then left a re-bound idle pane frozen forever (no browser resize re-arms it, because the
+// socket never reopened). So retry until the client resolves, bounded (~0.5s), and bail if a newer attach/
+// resize supersedes us (token) so we never clobber a fresher size.
+async function repaint(b: Bridge, token: number): Promise<void> {
+  for (let i = 0; i < 24; i++) {
+    if (token !== b.repaintToken) return
+    const tty = await clientTty(b)
+    if (tty) { await tmuxRaw(['refresh-client', '-t', tty]); return }
+    await sleep(20)
+  }
 }
 // tmux's actual pane geometry for our session — the ground truth we wait on before repainting.
 async function paneSize(b: Bridge): Promise<{ cols: number; rows: number } | null> {
@@ -164,14 +188,19 @@ async function settleAndRepaint(b: Bridge): Promise<void> {
     await sleep(20)
   }
   if (token !== b.repaintToken) return
-  await repaint(b)
+  await repaint(b, token)
 }
 export function detachViewer(id: string, v: Viewer): void {
+  const s = subscribers.get(id)
+  if (!s) return
+  s.delete(v)
+  if (s.size > 0) return
+  // last viewer gone → drop the registry entry, then release the tmux client unless it's kept warm (the
+  // session itself stays alive, detached). Subscriber-set emptiness is now the single authority for "no one
+  // watching" — used here AND in the supervisor reap, so the two never disagree.
+  subscribers.delete(id)
   const b = bridges.get(id)
-  if (!b) return
-  b.viewers.delete(v)
-  // no one watching and not kept warm → release the tmux client (the session itself stays alive, detached).
-  if (b.viewers.size === 0 && !b.prewarmed) killBridge(id)
+  if (b && !b.prewarmed) killBridge(id)
 }
 // raw terminal input (keystrokes + mouse) straight into the shared tmux client.
 export function writeViewer(id: string, data: Buffer): void {
@@ -193,33 +222,60 @@ export function resizeBridge(id: string, cols: number, rows: number): void {
   void settleAndRepaint(b)
 }
 
-// @@@ supervisor - the cache. Every tick, ensure a warm bridge for each live session and reap bridges
-// whose session has died (and that no viewer is still holding). Idempotent; started once at serve().
+// @@@ supervisor - the cache AND the re-bind owner. One reconciliation pass: ensure a warm bridge per live
+// session, RE-BIND (respawn + repaint) any watched session whose pty just died, and reap bridges whose
+// session is gone and that no one is watching. Re-bind lives HERE, not in pty.onExit, because this pass is
+// alive-gated (a genuinely dead session reaps, never respawns) and rate-limited (the tick + the serialize
+// guard below), so a flaky session can't trigger a respawn storm. Started once at serve().
+async function reconcileOnce(): Promise<void> {
+  const live = new Set<string>()
+  for (const s of await listSessions()) {
+    if (!(await alive(s.id))) continue
+    live.add(s.id)
+    if (bridges.has(s.id)) { bridges.get(s.id)!.prewarmed = true; continue }  // already ours → keep warm
+    // no bridge for a live session: either viewers are already waiting (their bridge died → RE-BIND, which
+    // must fire settleAndRepaint so an idle pane doesn't sit frozen on the dead frame — nothing else re-arms
+    // it, since the socket never reopened), or it's an idle detached session to pre-warm. Pre-warm spawns at
+    // the last-known viewer size (prewarmSize), so a reattach finds the bridge already at the dashboard's
+    // pane size — no shrink, no shrink-vs-repaint race. A watched session attaches regardless of any human
+    // client (matching attachViewer), since refresh-client targets only our own client's tty.
+    if ((subscribers.get(s.id)?.size ?? 0) > 0) {
+      const b = ensureBridge(s.id, true)
+      if (b) void settleAndRepaint(b)
+    } else if ((await attachedCount(s.id)) === 0) {
+      ensureBridge(s.id, true)
+    }
+  }
+  for (const [id, b] of bridges) {
+    if (live.has(id)) continue
+    if ((subscribers.get(id)?.size ?? 0) === 0) killBridge(id)   // dead + unwatched → release
+    else b.prewarmed = false                                     // dead but still watched → serve until they leave
+  }
+}
+
+// serialize reconcile passes: at most one runs at a time, at most one queued. A burst of onExit kicks
+// therefore collapses to a single rerun — the natural rate-limit that stops a flaky session from storming.
+let reconciling = false
+let reconcilePending = false
+async function runReconcile(): Promise<void> {
+  if (reconciling) { reconcilePending = true; return }
+  reconciling = true
+  try { await reconcileOnce() } catch { /* transient git/tmux hiccup; the periodic tick retries */ }
+  reconciling = false
+  if (reconcilePending) { reconcilePending = false; void runReconcile() }
+}
+
 let supervising = false
 export function superviseBridges(intervalMs = 4000): void {
   if (supervising) return
   supervising = true
   void ensureTmuxOpts()
-  const tick = async () => {
-    try {
-      const live = new Set<string>()
-      for (const s of await listSessions()) {
-        if (!(await alive(s.id))) continue
-        live.add(s.id)
-        if (bridges.has(s.id)) { bridges.get(s.id)!.prewarmed = true; continue }  // already ours → keep warm
-        // only pre-warm DETACHED sessions; if a human is attached in their own terminal, leave it alone
-        // (the dashboard can still open it on demand — that's a user-initiated choice). Pre-warm spawns
-        // at the last-known viewer size (prewarmSize), so a reattach finds the bridge already at the
-        // dashboard's pane size — no shrink, no shrink-vs-repaint race.
-        if ((await attachedCount(s.id)) === 0) ensureBridge(s.id, true)
-      }
-      for (const [id, b] of bridges) {
-        if (live.has(id)) continue
-        if (b.viewers.size === 0) killBridge(id)   // dead + unwatched → release
-        else b.prewarmed = false                   // dead but still watched → serve until they leave
-      }
-    } catch { /* transient git/tmux hiccup; next tick retries */ }
-    setTimeout(tick, intervalMs)
-  }
-  void tick()
+  const tick = () => { void runReconcile(); setTimeout(tick, intervalMs) }
+  tick()
+}
+
+// a watched bridge's pty just died — recover NOW instead of waiting up to a full tick. Safe by construction:
+// runReconcile is alive-gated (a dead session reaps, never respawns) and serialized (kicks collapse), so no storm.
+function kickSupervisor(): void {
+  if (supervising) void runReconcile()
 }

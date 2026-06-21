@@ -620,6 +620,13 @@ body {
 .st-copyhint.copied {
   opacity: 1; color: #fdf6e3; background: rgba(133, 153, 0, .95); border-color: rgba(133, 153, 0, .95);
 }
+/* reconnecting is a FAIL-LOUD signal: visible without hover, amber, gently pulsing, so a dropped socket
+   (a backend restart) reads as "recovering" rather than a silently frozen pane. */
+.st-copyhint.reconnecting {
+  opacity: 1; color: #fdf6e3; background: rgba(203, 75, 22, .95); border-color: rgba(203, 75, 22, .95);
+  animation: st-recon-pulse 1.1s ease-in-out infinite;
+}
+@keyframes st-recon-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
 /* DARK terminal background (matches SessionTerm's xterm theme) so the dark-designed Claude TUI renders as
    intended — no light gutter/flash around the pane while xterm paints. */
 .st-host .xterm, .st-host .xterm-screen {

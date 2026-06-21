@@ -10,6 +10,16 @@ export const PANES = [
   { key: 'issues',  label: 'issues' },
 ]
 
+// @@@ panesFor - the edit tab exists ONLY when the node has a pending change (an overlay), and when it does
+// it LEADS, so a node mid-change opens with its in-flight change front-and-center. Shared by NodeView's tab
+// bar and App's keyboard pane-cycling so the two never disagree on order or on which tabs exist.
+export function panesFor(node) {
+  return node?.overlays?.length ? [{ key: 'edit', label: 'edit' }, ...PANES] : PANES
+}
+
+// op → glyph, kept local (a 4-entry map) so this popup never imports the graph node just for it.
+const OP_GLYPH = { added: '+', edited: '~', deleted: '✕', moved: '→' }
+
 // @@@ inline - the only inline markdown the spec bodies actually use: `code` (78×), **bold**,
 // and [[links]]. Anything else passes through as text. Keeps us off a full markdown dependency.
 function inline(text) {
@@ -314,8 +324,50 @@ function IssuesPane({ node }) {
   )
 }
 
+// @@@ useEditDiff - the node's PENDING change content, fetched LAZILY when the edit tab opens (like the
+// history tab's older diffs). The board's overlay markers say THAT a node changed, not WHAT — so this asks
+// the backend (/api/edit) for the unified diff of the node's spec.md in the editing worktree (`source`) vs
+// the fork point. `enabled` keeps a closed tab from ever fetching.
+function useEditDiff(source, path, enabled) {
+  const [diff, setDiff] = useState(null)
+  useEffect(() => {
+    if (!enabled || !source || !path) return
+    let on = true
+    fetch(`/api/edit?source=${encodeURIComponent(source)}&path=${encodeURIComponent(path)}`)
+      .then((r) => r.json()).then((d) => { if (on) setDiff(d) }).catch(() => on && setDiff({ patch: '' }))
+    return () => { on = false }
+  }, [source, path, enabled])
+  return diff
+}
+
+// @@@ EditPane - the node's in-flight change, made REVIEWABLE from the board. spec/history are near-empty for
+// a node mid-change — a freshly-added ghost most of all (no committed version yet) — so this tab shows WHAT
+// each live session is changing: the overlay's op + commit-state + author, and the unified diff of its
+// spec.md vs the fork point, rendered with the SAME DiffEvidence the history tab uses. No overlay → a plain
+// "no pending change" line. The overlay set (op markers) rides the board; only the diff content is fetched.
+function EditOverlay({ node, ov }) {
+  const t = useT()
+  const diff = useEditDiff(ov.source, node.path, true)
+  return (
+    <figure className="edit-rev">
+      <figcaption className="edit-by">
+        <span className={`ov-mark ov-${ov.op}`}>{OP_GLYPH[ov.op] || '•'}</span>
+        <span className="edit-by-label">{ov.label}</span>
+        <span className="edit-state">{ov.committed ? t('nodeView.editCommitted') : t('nodeView.editDirty')}</span>
+      </figcaption>
+      <DiffEvidence diff={diff} />
+    </figure>
+  )
+}
+function EditPane({ node }) {
+  const t = useT()
+  const overlays = node.overlays || []
+  if (!overlays.length) return <div className="pane-edit empty">{t('nodeView.noEdit')}</div>
+  return <div className="pane-edit">{overlays.map((ov, i) => <EditOverlay key={i} node={node} ov={ov} />)}</div>
+}
+
 // PANES keys map to localized tab labels (the key drives logic; only the label is shown).
-const PANE_LABEL = { spec: 'nodeView.paneSpec', history: 'nodeView.paneHistory', issues: 'nodeView.paneIssues' }
+const PANE_LABEL = { spec: 'nodeView.paneSpec', history: 'nodeView.paneHistory', issues: 'nodeView.paneIssues', edit: 'nodeView.paneEdit' }
 
 export default function NodeView({ node, pane, setPane, onClose }) {
   const t = useT()
@@ -327,14 +379,21 @@ export default function NodeView({ node, pane, setPane, onClose }) {
   const issuesAll = node.issues || []
   const issueOpen = issuesAll.filter((i) => (i.state || '').toLowerCase() === 'open').length
   const issueClosed = issuesAll.length - issueOpen
+  // the edit tab carries the same kind of count: how many live sessions have a pending change to this node
+  // (its overlays), so an in-flight change is visible on the tab face without opening it.
+  const editCount = (node.overlays || []).length
+  const panes = panesFor(node)
+  // render the pane the user picked, but fall back to the first available if it isn't valid for THIS node
+  // (e.g. 'edit' is selected, then a node with no overlay opens) — so a tab is always shown, never blank.
+  const active = panes.some((p) => p.key === pane) ? pane : panes[0].key
   return (
     <div className="ov-backdrop" onMouseDown={onClose}>
       <div className="ov-panel" onMouseDown={(e) => e.stopPropagation()}>
         <div className="ov-head">
           <span className="ov-title">{node.title}</span>
           <div className="ov-tabs">
-            {PANES.map((p, i) => (
-              <button key={p.key} className={p.key === pane ? 'ov-tab on' : 'ov-tab'} onClick={() => setPane(p.key)}>
+            {panes.map((p, i) => (
+              <button key={p.key} className={p.key === active ? 'ov-tab on' : 'ov-tab'} onClick={() => setPane(p.key)}>
                 <kbd>{i + 1}</kbd> {t(PANE_LABEL[p.key])}
                 {p.key === 'issues' && (issueOpen > 0 || issueClosed > 0) && (
                   <span className="ov-tab-counts">
@@ -342,15 +401,19 @@ export default function NodeView({ node, pane, setPane, onClose }) {
                     {issueClosed > 0 && <span className="ovc st-closed" title={t('nodeView.closedIssues', { n: issueClosed })}>{issueClosed}</span>}
                   </span>
                 )}
+                {p.key === 'edit' && editCount > 0 && (
+                  <span className="ov-tab-counts"><span className="ovc st-edit" title={t('nodeView.pendingEdits', { n: editCount })}>{editCount}</span></span>
+                )}
               </button>
             ))}
           </div>
           <span className="ov-hint">{t('nodeView.hint')}</span>
         </div>
         <div className="ov-body">
-          {pane === 'spec' && <div className="pane-solo"><SpecPane node={node} /></div>}
-          {pane === 'history' && <HistoryPane node={node} rows={rows} />}
-          {pane === 'issues' && <IssuesPane node={node} />}
+          {active === 'spec' && <div className="pane-solo"><SpecPane node={node} /></div>}
+          {active === 'history' && <HistoryPane node={node} rows={rows} />}
+          {active === 'issues' && <IssuesPane node={node} />}
+          {active === 'edit' && <EditPane node={node} />}
         </div>
       </div>
     </div>

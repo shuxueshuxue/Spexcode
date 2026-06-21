@@ -26,6 +26,7 @@ Move through the spec tree by **relationship, not geometry** — the tree sits a
 | `i`, double-click | open the node-info popup |
 | `/` | open the search palette — jump across nodes, sessions & issues by name |
 | `o` / `O` | cycle focus through changed nodes — the locked session's if one is locked, else all in-flight (`O` = reverse) |
+| `Esc` | release the locked session, when one is locked (else a no-op on the bare board) |
 | `Enter` | cross into the node's live session(s) |
 | `@` | start a fresh New Session targeting the focus (opens on the New tab, focus mention prefilled) |
 | `t` | toggle spec graph ↔ session graph |
@@ -69,7 +70,7 @@ The `@` key is the unconditional, spec-oriented counterpart to Enter: where Ente
 
 ## HUD & help
 
-The HUD carries only the brand and a discreet `?`; while a session is locked, a top-center **lock banner** names the grip (in its colour) and points at `o`/`O` to walk its changed nodes — or, when it has none, says so, so the un-greyed board doesn't read as a broken lock. The full keymap and the node's visual vocabulary (status dots, op glyphs, badges, rings) live together in **one** centered, scrollable modal — `?` opens it; `j`/`k` (or `↑`/`↓`) glide its body when it overflows the viewport; `Esc`, a backdrop click, or its `×` closes it. There is no second copy of the legend. That same `j`/`k` momentum glide drives the node-info popup's open pane — one shared scroller, not two copies.
+The HUD carries only the brand and a discreet `?`; while a session is locked, a top-center **lock banner** names the grip (in its colour) and points at `o`/`O` to walk its changed nodes — or, when it has none, says so, so the un-greyed board doesn't read as a broken lock. **`Esc` releases the lock** — the keyboard mirror of clicking the banner's release; it is the lone *board-level* `Esc`, firing only when no modal owns the keys and a session is actually locked, so a bare-board `Esc` is otherwise a no-op. The full keymap and the node's visual vocabulary (status dots, op glyphs, badges, rings) live together in **one** centered, scrollable modal — `?` opens it; `j`/`k` (or `↑`/`↓`) glide its body when it overflows the viewport; `Esc`, a backdrop click, or its `×` closes it. There is no second copy of the legend. That same `j`/`k` momentum glide drives the node-info popup's open pane — one shared scroller, not two copies.
 
 ## governed file
 

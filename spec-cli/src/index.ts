@@ -5,6 +5,7 @@ import { createNodeWebSocket } from '@hono/node-ws'
 import { loadSpecs, specHistory, specDiffAt, loadConfig } from './specs.js'
 import { resolveLayout } from './layout.js'
 import { buildBoard } from './board.js'
+import { gitA } from './git.js'
 import { newSession, listSessions, sendKeys, rawKey, closeSession, reopen, propose, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, superviseQueue } from './sessions.js'
 import { slashCommands } from './slash-commands.js'
 import { attachViewer, detachViewer, writeViewer, resizeBridge, superviseBridges, type Viewer } from './pty-bridge.js'
@@ -31,6 +32,17 @@ app.get('/api/specs/:id/history', async (c) => c.json(await specHistory(c.req.pa
 // the spec.md line diff one version introduced — the history tab's per-version proof-of-change, fetched
 // lazily when an older version's item expands (the latest version's diff ships with the board as node.lastDiff).
 app.get('/api/specs/:id/diff/:hash', async (c) => c.json(await specDiffAt(c.req.param('id'), c.req.param('hash'))))
+// @@@ pending edit - the CONTENT of a node's in-flight change, which the board's overlay markers don't carry.
+// A unified diff of the node's spec.md between the fork point (the editing worktree's merge-base with main)
+// and that worktree's WORKING tree, so it includes uncommitted edits and shows a freshly-added ghost as an
+// all-additions diff. The node-info `edit` tab fetches this lazily to make an in-flight change reviewable
+// from the board. `source` = the overlay's worktree path; `path` = the node's spec.md path (repo-relative).
+app.get('/api/edit', async (c) => {
+  const source = c.req.query('source') || '', path = c.req.query('path') || ''
+  if (!source || !path) return c.json({ patch: '' })
+  const base = (await gitA(['-C', source, 'merge-base', 'main', 'HEAD'])).trim() || 'main'
+  return c.json({ patch: await gitA(['-C', source, 'diff', base, '--', path]) })
+})
 app.get('/api/layout', async (c) => c.json(await resolveLayout()))
 // @@@ config presets - the SLASH-surface config nodes: reflexive, skill-shaped plugins that are FLAT direct
 // children of a config root (`.config/<name>` instance plugins, `config/<name>` project system). A node's

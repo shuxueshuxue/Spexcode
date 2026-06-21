@@ -24,13 +24,20 @@ list, and the body rendered as a living current-state document (two labelled par
 spec — when the body is authored that way; see [[three-part-body]]). The proof and evolution of that intent
 live in the **history** tab. A third **issues** tab lists the forge work bound to this node — open and
 closed alike, with the open/closed counts shown on the tab face itself (the board's badge/card show only
-the open ones; see [[dashboard-issues]]). The "change it in
+the open ones; see [[dashboard-issues]]). An **edit** tab makes a node's in-flight change reviewable from
+the board itself: it exists ONLY while the node has a pending overlay, and when it does it **leads** (the
+first tab, the editing-session count on its face), so a node mid-change — a freshly-added ghost most of all,
+otherwise near-empty on spec/history — opens with its change front-and-centre. It fetches the unified diff of
+the node's spec.md in the editing worktree against the fork point (`/api/edit`, lazy) and renders it with the
+same diff view the history tab uses. The "change it in
 place" half — a live terminal — belongs with the *session* that does the changing, not pinned to one node. The panel must size to
 itself, never to xterm: `min-width:0` runs down the flex chain and the body is `overflow:hidden`, each pane
 scrolling its own content, so there is no stray horizontal scrollbar.
 
-`NodeView.jsx` realises this as a **reference-only** popup: tabs are `spec` / `history` / `issues`
-(`PANES`), with no `work` pane and no embedded terminal. `IssuesPane` lists the issues the board already
+`NodeView.jsx` realises this as a **reference-only** popup: tabs are `spec` / `history` / `issues` plus a
+conditional `edit` — `panesFor(node)` prepends it (and App's keyboard pane-nav reads the same per-node list,
+so Tab/number keys never cycle to a tab that isn't there) — with no `work` pane and no embedded terminal.
+`EditPane` renders one `/api/edit` diff per overlay (lazy, reusing `DiffEvidence`). `IssuesPane` lists the issues the board already
 folded onto the node (`node.issues`, open-first), grouped open/closed — no fetch of its own, empty and
 silent when the node has none. `SpecPane` renders the spec doc (`# title`, desc blockquote,
 status/version/session meta, `// governs` code list) and dispatches the body to `TwoPart` when `node.parts`

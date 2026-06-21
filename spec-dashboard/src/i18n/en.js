@@ -119,6 +119,11 @@ export default {
     paneSpec: 'spec',
     paneHistory: 'history',
     paneIssues: 'issues',
+    paneEdit: 'edit',
+    noEdit: 'no pending change — this node has no live edit in flight.',
+    editCommitted: 'committed',
+    editDirty: 'uncommitted',
+    pendingEdits: ({ n }) => `${n} session${n === 1 ? '' : 's'} editing this node`,
     openIssues: ({ n }) => `${n} open`,
     closedIssues: ({ n }) => `${n} closed`,
     noIssues: 'no issues linked to this node yet.',
@@ -175,6 +180,7 @@ export default {
 
   session: {
     title: 'sessions',
+    opsTitle: 'nodes this session is changing — double-click the tab to lock + focus them',
     newSession: 'New Session',
     newSessionTitle: 'jump to New Session (⌃/⌘+N · also ⌃/⌘+↑)',
     ask: 'What would you like to do?',

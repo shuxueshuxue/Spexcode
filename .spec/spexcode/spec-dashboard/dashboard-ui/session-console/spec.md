@@ -84,3 +84,11 @@ changes still locks, but the board stays un-greyed and the banner says there's n
 click releases — the locked row wears the same grip so row and dimmed graph read as one selection.
 **Double-click opens that session's board**, the mouse parallel to `⏎`. The window and the interface share their dot-colour and
 display-name from `session.js`, so a session reads the same on every surface.
+
+The **interface's own tabs** (the Enter surface's left session list) render the **same shared `SessionRow`**
+the window does — avatar · status dot · name · status · op tally (`+2 ~1 ✕1`) — so a tab reads IDENTICALLY to
+the window (same status AND the same count, e.g. `review ~2`), not a divergent subset; each surface only
+wraps that one face in its own button + handlers. They carry the window's two gestures **inverted for their context**: a **single click** switches
+to the tab; a **double-click locks** that session and returns to the graph focused on its overlay — the same
+`onPickSession` flow, called with toggle off so a double-click always *grips* (never releases). The
+precondition is a node to focus: a session with no overlay just switches, the double-click a no-op beyond it.

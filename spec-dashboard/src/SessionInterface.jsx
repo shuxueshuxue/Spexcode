@@ -4,6 +4,7 @@ import { loadConfig } from './data.js'
 import { Avatar } from './avatar.jsx'
 import { labelColor } from './color.js'
 import { STATUS_DOT, sessionName } from './session.js'
+import { SessionRow } from './SessionWindow.jsx'
 import { useT } from './i18n/index.jsx'
 
 // @@@ SessionInterface - the Enter surface. TWO panes: a left session list and a right content area
@@ -132,7 +133,7 @@ function highlight(text, q) {
   return <>{text.slice(0, i)}<b className="mention-hit">{text.slice(i, i + q.length)}</b>{text.slice(i + q.length)}</>
 }
 
-export default function SessionInterface({ sessions, specs = [], focusNode, open, sel, setSel, seed, onSeedConsumed, onClose, onCreated }) {
+export default function SessionInterface({ sessions, specs = [], focusNode, open, sel, setSel, seed, onSeedConsumed, onClose, onCreated, onPickSession }) {
   const t = useT()
   const [prompt, setPrompt] = useState('')    // the New Session tab's own draft (its boarding-switch cache)
   const [menu, setMenu] = useState(null)      // completion dropdown: { kind:'mention'|'config'|'slash', items, index, start, end, query }
@@ -552,16 +553,20 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             ＋ {t('session.newSession')}
           </button>
           {sessions.map((s) => (
+            // @@@ single = switch, double = lock - a single click just switches to the tab; a DOUBLE click
+            // locks that session and returns to the graph focused on its overlay (onPickSession toggle=false
+            // always grips). Precondition: a node to focus — with no overlay the double click is a no-op
+            // beyond the switch. The face is the SHARED SessionRow, so a tab reads IDENTICALLY to the
+            // top-right window (same status + same overlay tally, e.g. "review ~2"), not a divergent subset.
             <button
               key={s.id}
               className={active === s.id ? 'si-item on' : 'si-item'}
               style={{ '--ov': labelColor(s.id) }}
               onClick={() => setSel(s.id)}
+              onDoubleClick={() => { if (s.ops?.length && onPickSession) { onPickSession(s, false); onClose() } }}
+              title={s.ops?.length ? t('session.opsTitle') : undefined}
             >
-              <Avatar seed={s.id} status={s.status} title={`${sessionName(s)} · ${t(`status.${s.status}`)}`} />
-              <span className="si-dot" style={{ background: STATUS_DOT[s.status] || '#93a1a1' }} />
-              <span className="si-name">{sessionName(s)}</span>
-              <span className="si-st">{t(`status.${s.status}`)}</span>
+              <SessionRow s={s} locked={false} />
             </button>
           ))}
         </aside>

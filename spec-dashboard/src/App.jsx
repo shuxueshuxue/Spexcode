@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ReactFlow, Background, MarkerType, useReactFlow } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import SpecNode from './SpecNode.jsx'
-import NodeView, { PANES } from './NodeView.jsx'
+import NodeView, { panesFor } from './NodeView.jsx'
 import SessionWindow from './SessionWindow.jsx'
 import SessionInterface from './SessionInterface.jsx'
 import SessionGraph from './SessionGraph.jsx'
@@ -19,7 +19,6 @@ const nodeTypes = { spec: SpecNode }
 // node box (used only to centre the camera on a node). NW/NH must track the .spec-node size in
 // styles.css: it's now two rows (title line + editor/last-edited line) and a bit wider for longer titles.
 const NW = 220, NH = 46
-const PANE_KEYS = PANES.map((p) => p.key)
 const clamp = (z) => Math.max(0.4, Math.min(1.6, z))
 
 // @@@ board chords - vim-style multi-key sequences typed on the board (a small key buffer; see onKey).
@@ -295,7 +294,10 @@ function Dashboard({ specs, sessions, reload }) {
   // OWNS the keys while open — arrows no longer leak through to move the board behind it (the old
   // blind-navigation bug); the session interface handles its own list nav / input.
   useEffect(() => {
-    const cyclePane = (dir) => setPane((p) => PANE_KEYS[(PANE_KEYS.indexOf(p) + dir + PANE_KEYS.length) % PANE_KEYS.length])
+    // the focused node's actual tabs (edit-first when it has a pending change), so Tab/number-key pane nav
+    // matches what NodeView renders for THIS node — never cycling to an edit tab that isn't there.
+    const paneKeys = panesFor(focus).map((p) => p.key)
+    const cyclePane = (dir) => setPane((p) => { const i = paneKeys.indexOf(p); return paneKeys[((i < 0 ? 0 : i) + dir + paneKeys.length) % paneKeys.length] })
     // nav just moves focus; the follow-focus effect recenters once the tree has re-plotted around the new
     // focus (passing the stale pre-re-plot node straight to centerOn would aim at its OLD coordinates).
     const go = (t, e) => { if (t) { e.preventDefault(); e.stopPropagation(); setFocusId(t.id) } }
@@ -329,7 +331,7 @@ function Dashboard({ specs, sessions, reload }) {
         // never moves the board behind. (j/k and ↑/↓ below are the vertical hand: they scroll the open pane.)
         if (e.key === 'ArrowLeft'  || e.key === 'h') { e.preventDefault(); e.stopPropagation(); cyclePane(-1); return }
         if (e.key === 'ArrowRight' || e.key === 'l') { e.preventDefault(); e.stopPropagation(); cyclePane(1); return }
-        if (/^[1-9]$/.test(e.key) && +e.key <= PANE_KEYS.length) { e.preventDefault(); e.stopPropagation(); setPane(PANE_KEYS[+e.key - 1]); return }
+        if (/^[1-9]$/.test(e.key) && +e.key <= paneKeys.length) { e.preventDefault(); e.stopPropagation(); setPane(paneKeys[+e.key - 1]); return }
         // Inside the popup, j/k AND ↑/↓ scroll the open pane's content (vim's and the arrow hand both go
         // vertical here) rather than moving the board — only one pane is mounted at a time, so the first
         // overflow:auto descendant of .ov-body is the scroller. In the history pane this scroll also drives
@@ -365,6 +367,11 @@ function Dashboard({ specs, sessions, reload }) {
         if (e.key === 'Escape' || e.key === ',') { e.preventDefault(); setSettings(false); return }
         return
       }
+      // @@@ Esc releases the session lock - the lone board-level Esc. Every modal above consumed its own
+      // Esc and returned, so reaching here means the bare board owns the key: when a session is locked, Esc
+      // un-greys the board and drops the lock banner (the keyboard mirror of clicking the banner's release).
+      // With nothing locked it falls through to the board's other keys, so a bare-board Esc is a no-op.
+      if (e.key === 'Escape' && highlightId) { e.preventDefault(); e.stopPropagation(); setHighlightId(null); return }
       if (e.key === ',') { e.preventDefault(); setSettings(true); return }
       // @@@ search key - `/` opens the jump-to-node search palette (the classic "slash to search"). It's
       // unbound elsewhere on the board and is the unshifted key (Shift+/ is `?`, the help modal — handled
@@ -427,7 +434,7 @@ function Dashboard({ specs, sessions, reload }) {
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [overlay, sessionUI, legend, settings, graphView, search, focus, cycleNodes, upTarget, downTarget, rightTarget, parent, centerOn, getViewport, openBoard, startNew, popupScroll, legendScroll])
+  }, [overlay, sessionUI, legend, settings, graphView, search, highlightId, focus, cycleNodes, upTarget, downTarget, rightTarget, parent, centerOn, getViewport, openBoard, startNew, popupScroll, legendScroll])
 
   // clicking a node focuses it; the follow-focus effect then re-plots the tree around it and pans the
   // camera to keep it in place (a click drills the same way the arrows do). It does NOT open a session —
@@ -443,8 +450,11 @@ function Dashboard({ specs, sessions, reload }) {
   // camera lands where the `o` cycle enters; focusing a collapsed id is fine (expand-on-focus drills its
   // spine open). A session with no pending ops still locks — the top banner explains the empty grip;
   // releasing (clicking again) leaves focus where it is.
-  const onPickSession = useCallback((s) => {
-    const releasing = highlightId === s.source
+  // toggle=true (the graph's session rows): a click on the locked session releases it. toggle=false (the
+  // session-board tab's DOUBLE click): always GRIP — switch back to the graph already locked + focused,
+  // never accidentally release. Either way, locking auto-focuses the session's first changed node.
+  const onPickSession = useCallback((s, toggle = true) => {
+    const releasing = toggle && highlightId === s.source
     setHighlightId(releasing ? null : s.source)
     if (releasing) return
     const ids = new Set((s.ops || []).map((op) => op.nodeId))
@@ -530,6 +540,7 @@ function Dashboard({ specs, sessions, reload }) {
         onSeedConsumed={() => setSeed(null)}
         onClose={() => setSessionUI(false)}
         onCreated={async (id) => { await reload(); if (id) setSessionSel(id) }}
+        onPickSession={onPickSession}
       />
     </div>
   )

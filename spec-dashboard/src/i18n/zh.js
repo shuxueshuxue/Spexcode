@@ -114,6 +114,11 @@ export default {
     paneSpec: '规格',
     paneHistory: '历史',
     paneIssues: 'issue',
+    paneEdit: '改动',
+    noEdit: '暂无进行中的改动 —— 此节点没有正在编辑的会话。',
+    editCommitted: '已提交',
+    editDirty: '未提交',
+    pendingEdits: ({ n }) => `${n} 个会话正在编辑此节点`,
     openIssues: ({ n }) => `${n} 个待办`,
     closedIssues: ({ n }) => `${n} 个已关闭`,
     noIssues: '尚无关联到此节点的 issue。',
@@ -170,6 +175,7 @@ export default {
 
   session: {
     title: '会话',
+    opsTitle: '此会话正在改动的节点 —— 双击标签锁定并聚焦它们',
     newSession: '新建会话',
     newSessionTitle: '跳转到新建会话（⌃/⌘+N · 或 ⌃/⌘+↑）',
     ask: '你想做点什么？',

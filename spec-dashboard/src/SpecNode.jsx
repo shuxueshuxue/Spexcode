@@ -151,6 +151,11 @@ export default function SpecNode({ data, selected }) {
         <EditorRow data={data} />
       </div>
       <IssuePopover issues={data.openIssues} t={t} />
+      {/* expandable hint — a collapsed node (children hidden to the right) gets a ▸N tab on its right
+          edge so a leaf and a closed branch never look alike. App sets data.collapsed/childCount. */}
+      {data.collapsed && (
+        <span className="node-expand" title={t('specNode.expandable', { n: data.childCount })}>▸{data.childCount}</span>
+      )}
       <Handle type="source" position={Position.Right} />
     </div>
   )

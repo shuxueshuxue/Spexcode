@@ -139,6 +139,7 @@ export default {
     opTitle: ({ op, label, uncommitted }) => `${op} · ${label}${uncommitted ? ' (uncommitted)' : ''}`,
     openIssues: ({ n }) => `${n} open issue${n === 1 ? '' : 's'} — hover or focus to list`,
     openIssuesCount: ({ n }) => `${n} open issue${n === 1 ? '' : 's'}`,
+    expandable: ({ n }) => `${n} child${n === 1 ? '' : 'ren'} — focus to drill in`,
   },
 
   sessionGraph: {

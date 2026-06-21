@@ -61,7 +61,10 @@ body {
 .hud-graph:hover { border-color: var(--blue); color: var(--orange); }
 
 /* gentle focus grouping — only opacity changes, positions never move */
-.react-flow__node { transition: opacity .18s ease; }
+/* opacity for focus-kin dimming; transform so a node GLIDES to its new slot when the tree re-plots on
+   focus change (expand-on-focus) instead of teleporting. Nodes that mount/unmount (a subtree opening or
+   collapsing) just appear/vanish — only nodes that persist across the re-plot animate. */
+.react-flow__node { transition: opacity .18s ease, transform .2s ease; }
 .react-flow__node.is-far { opacity: .35; }
 
 /* light-themed controls */
@@ -95,6 +98,18 @@ body {
 /* a node whose author session is live: a subtle ⏎ in the session colour — click/Enter opens it. */
 .node-session { font-size: 10px; font-weight: 700; line-height: 1; flex: none; opacity: .85; }
 
+/* expandable hint: a small ▸N tab riding the node's RIGHT edge (the direction children open), shown only
+   on a collapsed node so a leaf and a closed branch are never confused. Muted by default; on the focused
+   node it picks up the blue so "drill in with → " reads clearly. */
+.node-expand {
+  position: absolute; right: -7px; top: 50%; transform: translateY(-50%);
+  display: flex; align-items: center; gap: 1px;
+  font-size: 9px; font-weight: 700; line-height: 1; color: var(--muted);
+  background: var(--paper); border: 1px solid var(--line); border-radius: 7px;
+  padding: 2px 4px; pointer-events: none;
+}
+.spec-node.focused .node-expand { color: var(--blue); border-color: var(--blue); }
+
 /* ---- row 2: editor avatars · or "last edited … ago" ---- */
 .node-editors { display: flex; align-items: center; gap: 3px; }
 .node-lastedit { font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -117,6 +132,11 @@ body {
 .av-st-offline  { box-shadow: 0 0 0 1.5px var(--panel), 0 0 0 3px var(--line); opacity: .55; }
 
 .react-flow__handle { background: var(--muted); border: none; width: 5px; height: 5px; border-radius: 1px; }
+/* spec-tree handles route edges but need no visible square (no manual edge-drawing, nodes aren't
+   draggable) — hiding them de-clutters and frees the right edge for the ▸N expandable tab. The handles
+   stay in place (transparent) so edges still attach at the node's mid-sides. (SessionGraph keeps its
+   visible .sg-handle.) */
+.spec-node .react-flow__handle { background: transparent; }
 
 /* ---- sidebar ---- */
 .side { padding: 18px 18px 24px; overflow-y: auto; background: var(--panel); border-left: 1px solid var(--line); }

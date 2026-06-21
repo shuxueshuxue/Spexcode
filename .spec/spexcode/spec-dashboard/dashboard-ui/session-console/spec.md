@@ -68,7 +68,9 @@ per live session. List navigation lives at the
 **window level**, so arrows walk the list regardless of what holds focus (xterm included). Header lifecycle
 actions (relaunch / merge / close) follow the session's state; an offline session shows a
 relaunch panel instead of a dead terminal. There is **no manual "request review"** — review is
-**agent-proposed** at the stop-gate, so the header only surfaces actions a human still drives.
+**agent-proposed** at the stop-gate, so the header only surfaces actions a human still drives. The header also
+shows the session's **originating prompt** — "what was this asked to do?" — as a single line that fills the
+bar's width and reveals the **full text on hover**.
 
 **SessionWindow** is the read-only glance: every session as a status dot with a pending-op count. It carries
 **two gestures that mirror the graph**: a single click **locks** the board onto that session (its overlays

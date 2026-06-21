@@ -2,7 +2,7 @@
 title: session-rename
 status: active
 hue: 300
-desc: Right-click a session row to give it a human name — a persisted override that wins over the derived label.
+desc: Right-click a session row on the session board to give it a human name — a persisted override that wins over the derived label.
 code:
   - spec-dashboard/src/SessionContextMenu.jsx
   - spec-cli/src/sessions.ts
@@ -33,8 +33,10 @@ the one backend that owns that file. So a rename **persists** — it survives a 
 back like any other field, never held only in the browser. A session in **any** state is renamable
 (queued, live, or offline), because the gesture edits the on-disk record, not the live terminal.
 
-The gesture is a **right-click** on a session row, which opens a cursor-anchored pop-over — its own
-surface, so the read-only session glance stays thin and never grows menu logic of its own. Picking
+The gesture is a **right-click** on a session row **in the session board's left-hand session list**
+([[session-console]]) — the interactive surface where a human manages sessions, not the read-only
+top-right glance ([[session-graph]]), which deliberately carries NO menu: a mutation belongs on the
+board, never on the at-a-glance summary. It opens a cursor-anchored pop-over (its own surface). Picking
 **rename** swaps the menu for a centred prompt (the shared modal chrome) prefilled with the current
 override and ready to type over. Submitting hands the new name to the backend and asks the board to
 reload, so the new label appears on every surface at once rather than only where it was triggered. A

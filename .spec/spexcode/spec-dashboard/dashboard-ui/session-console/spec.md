@@ -51,7 +51,11 @@ tmux is in copy-mode. It **holds focus persistently**: interacting with panel ch
 keeps a place to type. A left-click selection in the terminal is the one thing that takes focus away. The
 panel also **suppresses the browser's native context menu entirely** (it would otherwise seize focus the
 moment it opens), for a terminal-app feel; should a right-click still blur the box, focus is **restored** to
-it. Together these keep the human's cursor in the input no matter where or how often they click. It wears the same `/` **slash-command completion** as the New
+it. Together these keep the human's cursor in the input no matter where or how often they click. The box
+**auto-grows upward** as its text wraps: it is anchored to the bottom and **overlays** the terminal's lower
+edge as it gets taller, so it never pushes the terminal or shifts any sibling — the terminal keeps its exact
+size and place. Growth is **capped at half the terminal's height**, where it finally scrolls; below the cap
+there is no scrollbar. It wears the same `/` **slash-command completion** as the New
 tab ([[term-input]]), here for CC's commands. The second channel is **nav mode**:
 while on, the `❯` box is disabled and every keystroke is forwarded **raw** to the pane, so the human can drive
 the agent's interactive TUI menus (`/model`'s list, …). Its trigger is **manual and authoritative** — a header

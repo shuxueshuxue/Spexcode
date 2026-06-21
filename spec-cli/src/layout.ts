@@ -17,13 +17,17 @@ type Config = {
     title?: string                 // override for the browser-tab name (default: the repo-root basename; see tab-title)
   }
 }
+// the resolved LAYOUT convention — main/branchPrefix/nodeFrom filled to defaults. `dashboard` is a
+// frontend/board concern (read separately via readConfig; see api-endpoint), NOT a layout field, so it
+// stays out of the convention rather than forcing a meaningless default here.
+type Convention = Required<Omit<Config, 'dashboard'>>
 
 export type Worktree = {
   path: string; branch: string | null; node: string | null
   session: string | null; status: string | null; isMain: boolean
   ops: NodeOp[]   // pending spec-node changes this worktree makes vs main (the board's overlay)
 }
-export type Layout = { main: string; convention: Required<Config>; worktrees: Worktree[] }
+export type Layout = { main: string; convention: Convention; worktrees: Worktree[] }
 
 export function readConfig(root: string): Config {
   const p = join(root, 'spexcode.json')
@@ -101,7 +105,7 @@ async function cachedDelta(wtPath: string, mainRef: string): Promise<NodeOp[]> {
 export async function resolveLayout(): Promise<Layout> {
   const root = repoRoot()
   const cfg = readConfig(root)
-  const convention: Required<Config> = {
+  const convention: Convention = {
     main: cfg.main || '',
     branchPrefix: cfg.branchPrefix ?? 'node/',
     nodeFrom: cfg.nodeFrom ?? 'branch',

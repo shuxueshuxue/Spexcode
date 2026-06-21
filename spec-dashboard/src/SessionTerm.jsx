@@ -33,7 +33,8 @@ import '@xterm/xterm/css/xterm.css'
 // bright opaque selectionBackground + a near-white selectionForeground (and the SAME colour when the term
 // is unfocused, via selectionInactiveBackground — focus never sits on the pane, so the highlight must read
 // fully bright while focus stays in the bottom box). ⌘/Ctrl+C then writes term.getSelection() to the system
-// clipboard and flashes a "copied ✓" confirmation.
+// clipboard (see copyToClipboard above — robust whether the dashboard is served over HTTPS/localhost or plain
+// HTTP, the latter lacking navigator.clipboard) and flashes a "copied ✓" confirmation only once the copy lands.
 //
 // NEVER STEAL FOCUS (terminal-like select+copy): a real terminal lets you click-drag to select without
 // yanking your keyboard focus elsewhere. xterm breaks that — on every mousedown its core does
@@ -68,6 +69,39 @@ function looksLikeMenu(term) {
     if (/esc/i.test(line) && /(enter|↵|↑|↓|select|confirm)/i.test(line)) hint = true
   }
   return caret && hint
+}
+
+// @@@ copy that survives plain HTTP - the async Clipboard API (navigator.clipboard) exists ONLY in a SECURE
+// context (https or localhost). This dashboard is routinely watched over plain http://<host>:<port> from
+// another machine (a remote box), where navigator.clipboard is UNDEFINED — so ⌘/Ctrl+C silently copied
+// NOTHING (the reported "copy doesn't work"). Prefer the modern API when present, but fall back to the
+// legacy execCommand('copy'), which works in insecure contexts under a user gesture (the copy keydown is
+// one). Resolves true only when the copy actually landed, so the caller never flashes a false "copied ✓".
+function copyToClipboard(text) {
+  if (navigator.clipboard?.writeText) {
+    return navigator.clipboard.writeText(text).then(() => true).catch(() => execCopyFallback(text))
+  }
+  return Promise.resolve(execCopyFallback(text))
+}
+
+// @@@ execCommand fallback - copies via a throwaway off-screen textarea. It must briefly focus+select that
+// textarea to run the copy, which would BLUR the ❯ box (breaking the never-steal-focus invariant), so we
+// save activeElement first and restore it right after. Off-screen + opacity:0 so it never flashes or scrolls.
+// Runs SYNCHRONOUSLY inside the keydown handler (the path taken when navigator.clipboard is absent), so the
+// user gesture is still active when execCommand fires.
+function execCopyFallback(text) {
+  const active = document.activeElement
+  const ta = document.createElement('textarea')
+  ta.value = text
+  ta.setAttribute('readonly', '')
+  ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none'
+  document.body.appendChild(ta)
+  let ok = false
+  try { ta.select(); ta.setSelectionRange(0, text.length); ok = document.execCommand('copy') } catch { ok = false }
+  ta.remove()
+  try { active?.focus?.() } catch { /* nothing to restore focus to */ }
+  if (!ok) console.warn('[SessionTerm] clipboard copy failed — selection left intact for manual copy')
+  return ok
 }
 
 export default function SessionTerm({ sessionId, active = true, onMenu }) {
@@ -253,10 +287,11 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
       const el = document.activeElement
       if (el && (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') && el.selectionStart !== el.selectionEnd) return
       ev.preventDefault(); ev.stopPropagation()
-      navigator.clipboard?.writeText(sel).then(() => {
+      copyToClipboard(sel).then((ok) => {
+        if (!ok) return   // copy genuinely failed — don't flash a false "copied ✓"; selection stays for manual copy
         setCopied(true)
         clearTimeout(copiedTimer); copiedTimer = setTimeout(() => setCopied(false), 1200)
-      }).catch(() => { /* clipboard denied (e.g. insecure context) — selection still stands for manual copy */ })
+      })
     }
     document.addEventListener('keydown', onCopyKey)
 

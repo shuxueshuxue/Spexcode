@@ -1,4 +1,4 @@
-import { readdirSync, existsSync } from 'node:fs'
+import { readdirSync, readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { repoRoot } from './git.js'
 import { loadSpecs } from './specs.js'
@@ -15,17 +15,41 @@ import { loadSpecs } from './specs.js'
 
 export type Finding = { level: 'error' | 'warn'; rule: string; spec?: string; file?: string; msg: string }
 
-// the roots whose source files must each be governed by a spec. Could move to spexcode.json later.
-const GOVERNED_ROOTS = ['spec-dashboard/src', 'spec-cli/src']
-const SRC = /\.(ts|tsx|js|jsx)$/
+// @@@ lint config - what makes `spex lint` a PRODUCT and not a SpexCode-only script: every value that is
+// project-shaped — which roots coverage governs, which extensions count as source / as code identifiers,
+// the altitude budgets — is read from an optional `spexcode.json` at the repo root, defaulting to the
+// values tuned against this tree. A consuming project (a Python/Go/Rust repo, a different layout) overrides
+// what fits it; absent the file, behaviour is exactly as before. Defaults live here so the file is optional.
+type LintConfig = {
+  governedRoots: string[]       // dirs whose source files must each be governed by a spec (coverage)
+  sourceExtensions: string[]    // extensions coverage treats as source files
+  identifierExtensions: string[]// extensions the altitude bare-filename signal recognises (see IDENT below)
+  altitude: { lineBudget: number; charBudget: number; sizeable: number; dense: number; steps: number }
+}
+const DEFAULT_CONFIG: LintConfig = {
+  governedRoots: ['spec-dashboard/src', 'spec-cli/src'],
+  sourceExtensions: ['ts', 'tsx', 'js', 'jsx'],
+  identifierExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'md'],
+  altitude: { lineBudget: 50, charBudget: 4200, sizeable: 35, dense: 1.3, steps: 3 },
+}
+function loadConfig(root: string): LintConfig {
+  try {
+    const raw = JSON.parse(readFileSync(join(root, 'spexcode.json'), 'utf8'))
+    const c = raw?.lint ?? {}
+    return { ...DEFAULT_CONFIG, ...c, altitude: { ...DEFAULT_CONFIG.altitude, ...(c.altitude ?? {}) } }
+  } catch {
+    return DEFAULT_CONFIG   // no file (or unreadable) → tuned defaults; lint is the same as before.
+  }
+}
+
 const SKIP_DIRS = new Set(['node_modules', 'dist', '.vite'])
 
-function sourceFiles(root: string, rel: string, acc: string[]) {
+function sourceFiles(root: string, rel: string, acc: string[], src: RegExp) {
   const abs = join(root, rel)
   if (!existsSync(abs)) return
   for (const e of readdirSync(abs, { withFileTypes: true })) {
-    if (e.isDirectory()) { if (!SKIP_DIRS.has(e.name)) sourceFiles(root, join(rel, e.name), acc) }
-    else if (SRC.test(e.name)) acc.push(join(rel, e.name))
+    if (e.isDirectory()) { if (!SKIP_DIRS.has(e.name)) sourceFiles(root, join(rel, e.name), acc, src) }
+    else if (src.test(e.name)) acc.push(join(rel, e.name))
   }
 }
 
@@ -33,19 +57,23 @@ function sourceFiles(root: string, rel: string, acc: string[]) {
 // that has slid below that altitude reads like a how-to dump: it grows long, it thickens with code
 // identifiers (camelCase, snake_case, `backticked` symbols, foo( calls, file/paths), and it slips into
 // step-by-step phrasing. We can't judge meaning deterministically, but these are cheap, honest PROXIES.
-// Thresholds are tuned against today's tree: the concise specs top out at ~41 non-blank lines / ~3.6k
-// chars; genuine mechanics dumps start well above. Soft budgets, so it's a WARN — lint stays 0 errors.
-// Returns a one-line reason naming whichever proxy(ies) tripped, or null when the body is at altitude.
-const LINE_BUDGET = 50      // non-blank body lines before the body is "too long"
-const CHAR_BUDGET = 4200    // body chars before "too long"
-const SIZEABLE = 35         // density / step phrasing only count once the body is also this long…
-const DENSE = 1.3           // …and identifier signals per non-blank line exceed this
-const STEPS = 3             // …or it has this many step-by-step how-to lines
-// code-identifier signals: camelCase | snake_case | foo( call | `backticked` | /a/path.ext | bare file.ext
-const IDENT = /[a-z][A-Za-z0-9]*[A-Z][A-Za-z0-9]*|\b[a-z]+_[a-z0-9_]+\b|\b\w+\(|`[^`]+`|\/[\w./-]+\.\w+|\b[\w-]+\.(ts|tsx|js|jsx|json|md)\b/g
+// Thresholds DEFAULT to values tuned against today's tree (concise specs top out at ~41 non-blank lines /
+// ~3.6k chars; genuine mechanics dumps start well above) but are overridable per project via spexcode.json
+// — see LintConfig. Soft budgets, so it's a WARN — lint stays 0 errors. Returns a one-line reason naming
+// whichever proxy(ies) tripped, or null when the body is at altitude.
+//
+// @@@ identRe - the code-identifier signals: camelCase | snake_case | foo( call | `backticked` | /a/path.ext
+// | bare file.ext. Only the bare-filename branch needs an extension allowlist (the /path branch accepts any
+// extension); without one a bare `word.word` would match ordinary prose like "e.g". The allowlist is config
+// (cfg.identifierExtensions) so a non-TS/JS project recognises ITS source files, not just this tree's.
+function identRe(extensions: string[]): RegExp {
+  const ext = extensions.join('|')
+  return new RegExp(`[a-z][A-Za-z0-9]*[A-Z][A-Za-z0-9]*|\\b[a-z]+_[a-z0-9_]+\\b|\\b\\w+\\(|\`[^\`]+\`|\\/[\\w./-]+\\.\\w+|\\b[\\w-]+\\.(${ext})\\b`, 'g')
+}
 // step-by-step how-to phrasing: numbered steps, or sequencing connectives that walk through mechanics.
 const STEP_LINE = /^\s*(\d+[.)]\s|[-*]\s*(first|then|next|finally)\b)|(^|[,;]\s*)(first|then|next|finally),/i
-function altitude(body: string): string | null {
+function altitude(body: string, cfg: LintConfig, ident: RegExp): string | null {
+  const a = cfg.altitude
   const lines = body.split('\n')
   const nb = lines.filter((l) => l.trim()).length
   const chars = body.length
@@ -55,19 +83,22 @@ function altitude(body: string): string | null {
   for (const l of lines) {
     if (/^\s*```/.test(l)) { inFence = !inFence; continue }
     if (inFence || !l.trim()) continue
-    signals += l.match(IDENT)?.length ?? 0
+    signals += l.match(ident)?.length ?? 0
     if (STEP_LINE.test(l)) steps++
   }
   const density = signals / Math.max(1, nb)
   const why: string[] = []
-  if (nb > LINE_BUDGET || chars > CHAR_BUDGET) why.push(`${nb} non-blank lines / ${chars} chars over budget (${LINE_BUDGET}/${CHAR_BUDGET})`)
-  if (nb > SIZEABLE && density > DENSE) why.push(`code-identifier density ${density.toFixed(2)}/line over ${DENSE}`)
-  if (nb > SIZEABLE && steps >= STEPS) why.push(`${steps} step-by-step how-to lines`)
+  if (nb > a.lineBudget || chars > a.charBudget) why.push(`${nb} non-blank lines / ${chars} chars over budget (${a.lineBudget}/${a.charBudget})`)
+  if (nb > a.sizeable && density > a.dense) why.push(`code-identifier density ${density.toFixed(2)}/line over ${a.dense}`)
+  if (nb > a.sizeable && steps >= a.steps) why.push(`${steps} step-by-step how-to lines`)
   return why.length ? why.join('; ') : null
 }
 
 export async function specLint(): Promise<Finding[]> {
   const root = repoRoot()
+  const cfg = loadConfig(root)
+  const ident = identRe(cfg.identifierExtensions)
+  const srcRe = new RegExp(`\\.(${cfg.sourceExtensions.join('|')})$`)
   const specs = await loadSpecs()
   const out: Finding[] = []
 
@@ -97,13 +128,13 @@ export async function specLint(): Promise<Finding[]> {
 
   // altitude: a body that re-narrates mechanics instead of stating contract/intent (WARN — soft budget).
   for (const s of specs) {
-    const why = altitude(s.body)
+    const why = altitude(s.body, cfg, ident)
     if (why) out.push({ level: 'warn', rule: 'altitude', spec: s.id, msg: `'${s.id}' body reads low-altitude (mechanics, not contract): ${why}` })
   }
 
   // coverage: every governed source file must be claimed by at least one spec.
   const governed: string[] = []
-  for (const r of GOVERNED_ROOTS) sourceFiles(root, r, governed)
+  for (const r of cfg.governedRoots) sourceFiles(root, r, governed, srcRe)
   for (const f of governed)
     if (!owners.has(f)) out.push({ level: 'warn', rule: 'coverage', file: f, msg: `no spec governs: ${f}` })
 

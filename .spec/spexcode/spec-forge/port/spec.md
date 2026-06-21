@@ -2,7 +2,7 @@
 title: port
 status: active
 hue: 280
-desc: The host-agnostic forge port (ForgeDriver) that READS a host's open issues/PRs, plus its first real driver — github via the gh CLI.
+desc: The host-agnostic forge port (ForgeDriver) that READS a host's issues (open + closed) and open PRs, plus its first real driver — github via the gh CLI.
 code:
   - spec-forge/src/port.ts
   - spec-forge/src/drivers/github.ts
@@ -12,8 +12,9 @@ code:
 The seam of [[spec-forge]]: a single **host-agnostic port** naming the abstraction, with **per-host
 drivers** behind it. The name is the seam, never the vendor.
 
-Unlike a projection, the port **reads the forge**. Its two verbs fetch a host's open work objects —
-`listIssues() → ForgeIssue[]` and `listPRs() → ForgePR[]`. `ForgeIssue` is the small stable subset an
+Unlike a projection, the port **reads the forge**. Its two verbs fetch a host's work objects —
+`listIssues() → ForgeIssue[]` (issues of **all** states, so closed work stays linkable, not just live
+issues) and `listPRs() → ForgePR[]` (open PRs). `ForgeIssue` is the small stable subset an
 issue collapses to on every host (number, title, body, url, state, labels — the body is where the
 `Spec: <id>` marker lives); `ForgePR` adds `headRefName` (the `node/<id>` branch = a free structural link)
 and `closesIssues` (the issue numbers it closes, for transitive linking). These vendor-neutral shapes are

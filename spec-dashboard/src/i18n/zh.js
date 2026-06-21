@@ -103,6 +103,10 @@ export default {
   nodeView: {
     paneSpec: '规格',
     paneHistory: '历史',
+    paneIssues: 'issue',
+    openIssues: ({ n }) => `${n} 个待办`,
+    closedIssues: ({ n }) => `${n} 个已关闭`,
+    noIssues: '尚无关联到此节点的 issue。',
     hint: '←→/hl/tab 切换 · j/k/↑↓ 滚动 · ⏎ 会话 · esc 返回',
     statusLabel: '状态：',
     versionLabel: '版本：',

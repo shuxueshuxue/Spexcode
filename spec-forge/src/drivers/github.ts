@@ -14,19 +14,24 @@ async function gh<T>(args: string[]): Promise<T> {
   return JSON.parse(stdout) as T
 }
 
-// @@@ github driver - the real, read-only driver behind the forge port. It READS the host (open issues +
+// @@@ github driver - the real, read-only driver behind the forge port. It READS the host (issues + open
 // PRs) via `gh`; it does not project the graph out and does not write anything. The link resolution
 // (which node an issue/PR serves) is NOT here — that's host-agnostic, in links.ts. This driver's only job
 // is to fill the vendor-neutral ForgeIssue/ForgePR shapes from GitHub's JSON. `--limit 200` is generous
-// for the open set; if a repo ever exceeds it the CLI surfaces the truncation, we don't silently cap.
+// for either set; if a repo ever exceeds it the CLI surfaces the truncation, we don't silently cap.
 export const githubDriver: ForgeDriver = {
   host: 'github',
 
+  // @@@ open + closed - fetch the two states SEPARATELY (each its own 200 window) and merge, so a flood of
+  // closed issues can never crowd the open set out of a single `--state all` limit. Both feed the node-info
+  // Issues tab (open and closed alike); the board derives the glance badge/popover from the open subset.
   async listIssues(): Promise<ForgeIssue[]> {
-    const rows = await gh<
-      { number: number; title: string; body: string; url: string; state: string; labels: { name: string }[] }[]
-    >(['issue', 'list', '--state', 'open', '--limit', '200', '--json', 'number,title,body,url,state,labels'])
-    return rows.map((r) => ({
+    const list = (state: string) =>
+      gh<{ number: number; title: string; body: string; url: string; state: string; labels: { name: string }[] }[]>(
+        ['issue', 'list', '--state', state, '--limit', '200', '--json', 'number,title,body,url,state,labels'],
+      )
+    const [open, closed] = await Promise.all([list('open'), list('closed')])
+    return [...open, ...closed].map((r) => ({
       number: r.number,
       title: r.title,
       body: r.body ?? '',

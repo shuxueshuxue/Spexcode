@@ -331,8 +331,21 @@ body {
 .issue-num { font-size: 10px; font-weight: 700; color: var(--magenta); flex: none; font-family: var(--mono); }
 .issue-state { font-size: 8px; color: var(--muted); flex: none; text-transform: uppercase; letter-spacing: .04em; border: 1px solid var(--line); border-radius: 3px; padding: 0 3px; line-height: 1.5; }
 .issue-state.st-open { color: var(--green); border-color: color-mix(in srgb, var(--green) 45%, transparent); }
+.issue-state.st-closed { color: var(--magenta); border-color: color-mix(in srgb, var(--magenta) 45%, transparent); }
 .issue-card-title { display: block; font-size: 11px; line-height: 1.35; color: var(--ink2);
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* @@@ issues pane - the node-info popup's third tab: the FULL bound-work ledger (open + closed), grouped
+   under two count headings. Reuses the .issue-card vocabulary the board popover already defines; here the
+   title is un-clamped (a tab has room for the whole title, unlike the tight hover card). Scrolls its own
+   content like the spec/history panes (j/k drives it — see App.jsx bumpScroll). */
+.pane-issues { flex: 1; min-width: 0; padding: 16px 20px; overflow: auto; }
+.pane-issues.empty { color: var(--muted); font-size: 13px; }
+.pane-issues .issue-group-head { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 2px 6px; }
+.pane-issues .issue-group-head.closed { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 14px; }
+.pane-issues .issue-card { padding: 7px 8px; }
+.pane-issues .issue-card + .issue-card { margin-top: 1px; }
+.pane-issues .issue-card-title { -webkit-line-clamp: unset; display: block; font-size: 12px; }
 
 .ov-marks { display: flex; gap: 3px; flex: none; margin-left: 2px; }
 .ov-mark { font-size: 11px; font-weight: 700; line-height: 1; color: var(--ov, var(--blue)); }

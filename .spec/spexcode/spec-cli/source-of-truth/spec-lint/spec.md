@@ -6,6 +6,7 @@ hue: 175
 desc: Keep the spec↔code graph honest — every code file is claimed by a spec; `spex lint` enforces it.
 code:
   - spec-cli/src/lint.ts
+  - spexcode.json
 ---
 # spec-lint
 
@@ -33,9 +34,14 @@ rules:
 - **altitude** (warn): a body still describes *intent and contract*, not a re-narration of the
   implementation. It can't be judged deterministically, so the rule fires on cheap proxies of a
   mechanics dump — a body grown long (non-blank lines / chars over a soft budget), or thick with code
-  identifiers per line, or written as step-by-step how-to. Budgets are tuned so today's concise specs
-  pass and only a genuine dump warns; identifiers/steps are counted from prose only (a fenced code
-  sample inflates length, not density). A WARN, like coverage/drift — lint stays 0 errors.
+  identifiers per line, or written as step-by-step how-to. Budgets default to values tuned so today's
+  concise specs pass and only a genuine dump warns; identifiers/steps are counted from prose only (a
+  fenced code sample inflates length, not density). A WARN, like coverage/drift — lint stays 0 errors.
+
+What makes this a reusable **product**, not a SpexCode-only script: every project-shaped value — the
+governed roots, the source and code-identifier extensions, the altitude budgets — is read from an optional
+**`spexcode.json`** (`lint` key), defaulting to values tuned to this tree. A repo with a different layout
+or language overrides what fits; absent the file, lint is unchanged.
 
 No file hashes are stored — git is already the hash database, so drift is derived live from git
 ancestry (commits a governed file moved ahead of the spec's latest version). The pre-commit hook is a

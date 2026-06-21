@@ -2,7 +2,7 @@
 title: dashboard-issues
 status: active
 hue: 280
-desc: Surfaces each node's bound OPEN issues on the dashboard — a glance count badge, and a detail card revealed by hovering/focusing the WHOLE node. Fed by a resident ForgeCache folded into /api/board; non-blocking and silent without a forge.
+desc: Surfaces each node's bound issues on the dashboard — an OPEN-count badge and hover card, plus the full open+closed set folded onto the node for the node-info Issues tab. Fed by a resident ForgeCache folded into /api/board; non-blocking and silent without a forge.
 code:
   - spec-forge/src/resident.ts
   - spec-cli/src/board.ts
@@ -33,9 +33,11 @@ url). No second detail pane — one surface. The badge is WORK, distinct from th
 wiring around [[freshness]]'s pure cache) serves the dashboard without a blocking forge call on the
 request path. Its contract: a view is **always instant** (the last successful reconcile), and asking for a
 view opportunistically triggers a **background** reconcile when the cache is stale (a TTL backs off both
-success and failure, so a forge-less repo is not re-probed every poll). The board folds each node's open
-issues — number, state, title, url — onto that node, but **only when there are any**. It is **silent by
-construction**: with no `gh`, no repo, or no auth the reconcile throws, is swallowed, and the cache stays
+success and failure, so a forge-less repo is not re-probed every poll). The board folds each node's linked
+issues — number, state, title, url — onto that node, **only when there are any**: the full set (open +
+closed) as `issues` for the node-info **Issues tab** ([[work-pane]]), and the open subset as `openIssues`
+for the glance badge and hover card. Closed issues link by the explicit `Spec:` marker (the transitive PR
+path sees only open PRs). It is **silent by construction**: with no `gh`, no repo, or no auth the reconcile throws, is swallowed, and the cache stays
 empty — so the board reads exactly as before, no badge and no error. Read-only throughout: the fold never
 touches a node's git-derived status.
 

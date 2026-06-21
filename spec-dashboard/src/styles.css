@@ -522,13 +522,18 @@ body {
    behind it — the graph stays mounted underneath (graphView untouched) and reappears when this closes. */
 .si-backdrop {
   position: fixed; inset: 0; z-index: 50;
-  background: rgba(101,123,131,.28); backdrop-filter: blur(2px);
+  background: rgba(101,123,131,.4); backdrop-filter: blur(5px);
   display: flex; align-items: center; justify-content: center;
 }
+/* @@@ near-fullscreen, still a popup - the board fills the viewport but keeps a thin inset so the dimmed,
+   blurred app frames it (you can see it's floating over something), plus rounded corners, a deep float
+   shadow, and a scale-in "pop" — all of which keep the modal mental model rather than reading as a route. */
 .si-panel {
-  width: min(960px, 92vw); height: min(620px, 86vh);
-  background: var(--paper); border: 1px solid var(--blue); border-radius: 6px;
-  overflow: hidden; display: flex; box-shadow: 0 14px 44px rgba(101,123,131,.28);
+  width: 96vw; height: 94vh;
+  background: var(--paper); border: 1px solid var(--blue); border-radius: 12px;
+  overflow: hidden; display: flex;
+  box-shadow: 0 30px 90px rgba(7, 54, 66, .45);
+  animation: si-pop .2s cubic-bezier(.2, .8, .2, 1);
 }
 .si-list {
   flex: 0 0 230px; border-right: 1px solid var(--line); background: var(--panel);
@@ -623,6 +628,7 @@ body {
 .si-send-err { flex: none; color: var(--orange); font-size: 11px; white-space: nowrap; }
 
 @keyframes si-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes si-pop { from { opacity: 0; transform: scale(.96) translateY(10px); } to { opacity: 1; transform: none; } }
 /* entrance for the session terminal — fade + a small rise, NOT scale(): a scaling transform distorts
    xterm's getBoundingClientRect-based cell measurement mid-animation, which (with the FitAddon) is one
    source of the "narrow strip" shrink. translateY leaves the measured box undistorted at every frame, so

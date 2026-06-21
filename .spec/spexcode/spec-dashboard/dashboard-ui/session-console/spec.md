@@ -21,6 +21,10 @@ driving the same sessions through the CLI see identical state.
 
 ## expanded spec
 
+The interface opens as a **near-fullscreen modal** over the dimmed, blurred board: it fills the viewport, but
+a thin inset (the board still framing it), rounded corners, a float shadow, and a scale-in entrance keep the
+**popup** mental model — it reads as floating over the app, never as a separate page.
+
 The interface is two panes: a left session list and a right content area that **morphs** by what's focused.
 
 **New Session** is a centred avatar + auto-growing input. Nothing is prefilled; the focused node is instead

@@ -102,6 +102,14 @@ export default {
     emptyAfter: ' 开始一个',
   },
 
+  lockHint: {
+    cycleBefore: '按 ',
+    cycleAfter: ({ n }) => ` 循环浏览它更改的 ${n} 个节点`,
+    empty: '此会话没有待处理的规格更改',
+    release: '解除',
+    releaseTitle: '解除锁定（或再次单击该会话）',
+  },
+
   nodeView: {
     paneSpec: '规格',
     paneHistory: '历史',

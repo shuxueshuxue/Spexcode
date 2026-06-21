@@ -12,6 +12,7 @@ import SpecSearch from './SpecSearch.jsx'
 import { loadBoard, layout, X_GAP, Y_GAP } from './data.js'
 import { createMomentumScroll } from './scroll.js'
 import { labelColor } from './color.js'
+import { sessionName } from './session.js'
 import { useT } from './i18n/index.jsx'
 
 const nodeTypes = { spec: SpecNode }
@@ -83,6 +84,21 @@ function Dashboard({ specs, sessions, reload }) {
   // the cycle (the `o` key) can jump to a changed node even while it sits in a collapsed subtree. Kept in
   // backend order so the cycle is stable across the 4s poll.
   const overlayNodes = useMemo(() => specs.filter((s) => s.overlays?.length), [specs])
+
+  // @@@ locked session - clicking a session row locks the graph onto it (highlightId = its worktree
+  // source). `lockedSession` is that row's object (for the banner's name/colour); `lockedNodes` are the
+  // nodes IT is currently changing — drawn from the RAW tree (like overlayNodes) so the cycle can jump
+  // into a collapsed subtree. When a session is locked the `o` cycle scopes to JUST its nodes
+  // (`cycleNodes`); with nothing locked it falls back to every changed node on the board.
+  const lockedSession = useMemo(
+    () => (highlightId ? sessions.find((s) => s.source === highlightId) : null),
+    [sessions, highlightId],
+  )
+  const lockedNodes = useMemo(
+    () => (highlightId ? specs.filter((s) => (s.overlays || []).some((o) => o.source === highlightId)) : []),
+    [specs, highlightId],
+  )
+  const cycleNodes = useMemo(() => (highlightId ? lockedNodes : overlayNodes), [highlightId, lockedNodes, overlayNodes])
 
   // @@@ node<->session link - a node does NOT belong to a session. `node.session` is only the LAST
   // editor (the git Session: trailer — usually a closed session), kept purely as attribution. The LIVE
@@ -160,7 +176,10 @@ function Dashboard({ specs, sessions, reload }) {
     return specs2.map((s) => {
     const kin = s.id === focusId || s.id === focus.parent || s.parent === focusId || s.parent === focus.parent
     let className
-    if (highlightId) {
+    // a session with pending node changes dims the board to spotlight them; a session with NONE
+    // locks without greying everything (there's nothing to spotlight — the top banner says so), so
+    // the board keeps its normal focus-kin dimming.
+    if (highlightId && lockedNodes.length) {
       className = (s.overlays || []).some((o) => o.source === highlightId) ? 'ov-hot' : 'ov-dim'
     } else {
       className = kin ? undefined : 'is-far'
@@ -182,7 +201,7 @@ function Dashboard({ specs, sessions, reload }) {
       draggable: false, selected: s.id === focusId, className,
     }
     })
-  }, [focusId, focus.parent, highlightId, specs2, liveEditorsOf, childCount, expanded])
+  }, [focusId, focus.parent, highlightId, lockedNodes, specs2, liveEditorsOf, childCount, expanded])
 
   const edges = useMemo(() => {
     const tree = specs2.filter((s) => s.parent).map((s) => {
@@ -372,19 +391,20 @@ function Dashboard({ specs, sessions, reload }) {
       else if (e.key === '-' || e.key === '_') { e.preventDefault(); centerOn(focus, clamp(getViewport().zoom / 1.2), 160) }
       else if (e.key === '0') { e.preventDefault(); centerOn(focus, 0.85, 200) }
       else if (e.key === 'i' || e.key === 'I') { e.preventDefault(); setOverlay(true) }
-      // @@@ overlay cycle - `o` walks focus through the nodes a worktree is currently changing (`O` =
-      // ⇧, reverse), wrapping at the ends. It's a jump like `/` search: focus lands on the node and the
-      // expand-on-focus follow effect drills its spine open + pans the camera, so a change buried in a
-      // collapsed subtree is one keystroke away. When focus isn't on a marked node, it enters the ring at
-      // the first (or last, reversed) one. No-op when nothing is changing.
+      // @@@ overlay cycle - `o` walks focus through the changed nodes (`O` = ⇧, reverse), wrapping at the
+      // ends. SCOPE follows the lock: with a session locked it walks just THAT session's changed nodes
+      // (the top banner names the count); with nothing locked it walks every changed node on the board.
+      // It's a jump like `/` search: focus lands on the node and the expand-on-focus follow effect drills
+      // its spine open + pans the camera, so a change buried in a collapsed subtree is one keystroke away.
+      // When focus isn't on a marked node, it enters the ring at the first (or last, reversed) one.
       else if (e.key === 'o' || e.key === 'O') {
         e.preventDefault()
-        if (!overlayNodes.length) return
+        if (!cycleNodes.length) return
         const dir = e.key === 'O' ? -1 : 1
-        const idx = overlayNodes.findIndex((s) => s.id === focus.id)
+        const idx = cycleNodes.findIndex((s) => s.id === focus.id)
         const next = idx === -1
-          ? (dir > 0 ? overlayNodes[0] : overlayNodes[overlayNodes.length - 1])
-          : overlayNodes[(idx + dir + overlayNodes.length) % overlayNodes.length]
+          ? (dir > 0 ? cycleNodes[0] : cycleNodes[cycleNodes.length - 1])
+          : cycleNodes[(idx + dir + cycleNodes.length) % cycleNodes.length]
         setFocusId(next.id)
       }
       // (`t` toggles the session graph — handled at the top of onKey so it works from either graph.)
@@ -399,7 +419,7 @@ function Dashboard({ specs, sessions, reload }) {
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [overlay, sessionUI, legend, settings, graphView, search, focus, overlayNodes, upTarget, downTarget, rightTarget, parent, centerOn, getViewport, openBoard, startNew, popupScroll, legendScroll])
+  }, [overlay, sessionUI, legend, settings, graphView, search, focus, cycleNodes, upTarget, downTarget, rightTarget, parent, centerOn, getViewport, openBoard, startNew, popupScroll, legendScroll])
 
   // clicking a node focuses it; the follow-focus effect then re-plots the tree around it and pans the
   // camera to keep it in place (a click drills the same way the arrows do). It does NOT open a session —
@@ -410,14 +430,19 @@ function Dashboard({ specs, sessions, reload }) {
   // (single click still only focuses without panning; the camera follows the keyboard alone.)
   const onNodeDoubleClick = useCallback((_e, n) => { setFocusId(n.id); setOverlay(true) }, [])
 
-  // clicking a session in the top-right window: toggle highlight of its worktree's overlays (matched
-  // by source = worktree path) + jump to its first changed node (only .session-linked sessions carry
-  // ops; a bare tmux session has none, so it just toggles selection).
+  // clicking a session in the top-right window toggles the lock on its worktree's overlays (matched by
+  // source = worktree path). Locking ON jumps to the first node it's changing, in TREE order so the
+  // camera lands where the `o` cycle enters; focusing a collapsed id is fine (expand-on-focus drills its
+  // spine open). A session with no pending ops still locks — the top banner explains the empty grip;
+  // releasing (clicking again) leaves focus where it is.
   const onPickSession = useCallback((s) => {
-    setHighlightId((cur) => (cur === s.source ? null : s.source))
-    const first = s.ops?.[0]
-    if (first && byId[first.nodeId]) setFocusId(first.nodeId)
-  }, [byId])
+    const releasing = highlightId === s.source
+    setHighlightId(releasing ? null : s.source)
+    if (releasing) return
+    const ids = new Set((s.ops || []).map((op) => op.nodeId))
+    const first = specs.find((n) => ids.has(n.id))
+    if (first) setFocusId(first.id)
+  }, [highlightId, specs])
 
   return (
     <div className="app">
@@ -455,6 +480,25 @@ function Dashboard({ specs, sessions, reload }) {
         </div>
 
         <SessionWindow sessions={sessions} activeId={highlightId} onPick={onPickSession} onOpen={openBoard} onOpenSession={openSession} />
+
+        {/* @@@ lock banner - a top-center hint while a session owns the graph. It names the grip (in the
+            session's colour) and tells the user the key to walk its changed nodes — or, when it has none,
+            that there's nothing to show (so the un-greyed board doesn't read as a broken lock). */}
+        {lockedSession && (
+          <div className="lock-hint" style={{ '--ov': labelColor(lockedSession.id) }}>
+            <span className="lock-hint-lead">🔒 {sessionName(lockedSession)}</span>
+            {lockedNodes.length ? (
+              <span className="lock-hint-body">
+                {t('lockHint.cycleBefore')}<kbd>o</kbd><kbd>O</kbd>{t('lockHint.cycleAfter', { n: lockedNodes.length })}
+              </span>
+            ) : (
+              <span className="lock-hint-body">{t('lockHint.empty')}</span>
+            )}
+            <button className="lock-hint-release" onClick={() => setHighlightId(null)} title={t('lockHint.releaseTitle')}>
+              {t('lockHint.release')}
+            </button>
+          </div>
+        )}
 
         {legend && <Legend onClose={() => setLegend(false)} />}
         {settings && <Settings onClose={() => setSettings(false)} />}

@@ -71,8 +71,10 @@ relaunch panel instead of a dead terminal. There is **no manual "request review"
 **agent-proposed** at the stop-gate, so the header only surfaces actions a human still drives.
 
 **SessionWindow** is the read-only glance: every session as a status dot with a pending-op count. It carries
-**two gestures that mirror the graph**: a single click **locks** the board onto that session (its overlays
-light, the rest grey, focus jumps to its first changed node) and a second click releases — the locked row
-wears the same grip so row and dimmed graph read as one selection. **Double-click opens
-that session's board**, the mouse parallel to `⏎`. The window and the interface share their dot-colour and
+**two gestures that mirror the graph**: a single click **locks** the board onto that session — its overlays
+light, the rest grey, focus jumps to its first changed node, and a top-center banner names the grip and
+points at `o`/`O` (see [[keyboard-nav]]) to walk just its changed nodes. A session with **no** pending
+changes still locks, but the board stays un-greyed and the banner says there's nothing to show. A second
+click releases — the locked row wears the same grip so row and dimmed graph read as one selection.
+**Double-click opens that session's board**, the mouse parallel to `⏎`. The window and the interface share their dot-colour and
 display-name from `session.js`, so a session reads the same on every surface.

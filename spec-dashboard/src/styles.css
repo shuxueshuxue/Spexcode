@@ -60,6 +60,32 @@ body {
 }
 .hud-graph:hover { border-color: var(--blue); color: var(--orange); }
 
+/* lock banner — top-center hint shown while a session owns the graph. Sits between the HUD (top-left)
+   and the session window (top-right); carries the locked session's colour on its spine via --ov. */
+.lock-hint {
+  position: absolute; top: 16px; left: 50%; transform: translateX(-50%); z-index: 6;
+  display: flex; align-items: center; gap: 10px; max-width: min(48vw, 520px);
+  padding: 5px 8px 5px 11px;
+  background: var(--paper); border: 1px solid var(--line); border-left: 4px solid var(--ov, var(--blue));
+  border-radius: 6px; box-shadow: 0 6px 22px rgba(101,123,131,.16);
+  font-family: var(--mono); font-size: 12px; color: var(--ink);
+}
+.lock-hint-lead {
+  font-weight: 700; flex: none; max-width: 200px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.lock-hint-body { color: var(--ink2); flex: 1; min-width: 0; }
+.lock-hint kbd {
+  border: 1px solid var(--line); border-radius: 3px; padding: 0 5px; margin: 0 1px;
+  color: var(--blue); font-family: var(--mono); font-size: 11px;
+}
+.lock-hint-release {
+  flex: none; cursor: pointer; padding: 1px 8px;
+  background: var(--paper); border: 1px solid var(--line); border-radius: 4px;
+  color: var(--muted); font-family: var(--mono); font-size: 11px;
+}
+.lock-hint-release:hover { border-color: var(--blue); color: var(--orange); }
+
 /* gentle focus grouping — only opacity changes, positions never move */
 /* opacity for focus-kin dimming; transform so a node GLIDES to its new slot when the tree re-plots on
    focus change (expand-on-focus) instead of teleporting. Nodes that mount/unmount (a subtree opening or

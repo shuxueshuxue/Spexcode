@@ -105,6 +105,16 @@ export default {
     emptyAfter: ' to start one',
   },
 
+  // top-of-screen banner shown while a session owns the graph (locked). It names the grip and tells
+  // the user the key to walk that session's changed nodes — or that the session has none to show.
+  lockHint: {
+    cycleBefore: 'press ',
+    cycleAfter: ({ n }) => ` to cycle its ${n} changed node${n === 1 ? '' : 's'}`,
+    empty: 'this session has no pending spec changes',
+    release: 'release',
+    releaseTitle: 'release the lock (or click the session again)',
+  },
+
   nodeView: {
     paneSpec: 'spec',
     paneHistory: 'history',

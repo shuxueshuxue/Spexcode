@@ -8,7 +8,7 @@ import SessionInterface from './SessionInterface.jsx'
 import SessionGraph from './SessionGraph.jsx'
 import Legend from './Legend.jsx'
 import Settings from './Settings.jsx'
-import { loadBoard, X_GAP, Y_GAP } from './data.js'
+import { loadBoard, layout, X_GAP, Y_GAP } from './data.js'
 import { labelColor } from './color.js'
 import { useT } from './i18n/index.jsx'
 
@@ -51,9 +51,31 @@ function Dashboard({ specs, sessions, reload }) {
   const scrollTargetRef = useRef(null)
   const scrollElRef = useRef(null)
 
-  const byId = useMemo(() => Object.fromEntries(specs.map((s) => [s.id, s])), [specs])
-  // focus is resilient to the board reflowing under polling (a merged/closed node may vanish).
-  const focus = byId[focusId] || specs.find((s) => !s.parent) || specs[0]
+  // resolve focus on the RAW tree first (resilient to a polled-away merged/closed node), then expand.
+  const rawById = useMemo(() => Object.fromEntries(specs.map((s) => [s.id, s])), [specs])
+  const focusRaw = rawById[focusId] || specs.find((s) => !s.parent) || specs[0]
+  // @@@ expand-on-focus - the tree is a DRILL-DOWN, not a fixed full-forest map: only the focused node's
+  // ancestor SPINE is expanded; every other subtree collapses to a single tile. So the root layer is
+  // always a short, readable column and the whole tree re-plots as focus moves (see layout() in data.js
+  // + the follow camera below). This deliberately replaces the older "fixed positions, never re-plots".
+  const expanded = useMemo(() => {
+    const set = new Set()
+    for (let cur = focusRaw; cur; cur = cur.parent ? rawById[cur.parent] : null) set.add(cur.id)
+    return set
+  }, [focusRaw, rawById])
+  // VISIBLE nodes are exactly those the layout placed (root, or a child of an expanded node); they carry
+  // the x/y all geometry/render below works on. Hidden subtrees simply aren't in `specs2`.
+  const placed = useMemo(() => layout(specs, expanded), [specs, expanded])
+  const specs2 = useMemo(() => specs.filter((s) => placed[s.id]).map((s) => ({ ...s, ...placed[s.id] })), [specs, placed])
+  const byId = useMemo(() => Object.fromEntries(specs2.map((s) => [s.id, s])), [specs2])
+  const focus = byId[focusRaw.id]
+  // direct-child count per node — drives the "expandable" hint: a VISIBLE node that has children but is
+  // collapsed (not on the expanded spine) shows a ▸N affordance, since its subtree is hidden to the right.
+  const childCount = useMemo(() => {
+    const m = {}
+    specs.forEach((s) => { if (s.parent) m[s.parent] = (m[s.parent] || 0) + 1 })
+    return m
+  }, [specs])
 
   // @@@ node<->session link - a node does NOT belong to a session. `node.session` is only the LAST
   // editor (the git Session: trailer — usually a closed session), kept purely as attribution. The LIVE
@@ -80,7 +102,7 @@ function Dashboard({ specs, sessions, reload }) {
   // the user's own draft instead of re-seeding.
   const startNew = useCallback((text) => { setSessionSel('new'); setSeed(text); setSessionUI(true) }, [])
 
-  const children = useMemo(() => specs.filter((s) => s.parent === focus.id), [specs, focus])
+  const children = useMemo(() => specs2.filter((s) => s.parent === focus.id), [specs2, focus])
   const parent = focus.parent ? byId[focus.parent] : null
 
   // child is to the RIGHT; pick the one nearest in y.
@@ -97,7 +119,7 @@ function Dashboard({ specs, sessions, reload }) {
   const rightTarget = useMemo(() => {
     if (childTarget) return childTarget
     let best = null, bestD = Infinity
-    for (const s of specs) {
+    for (const s of specs2) {
       const dx = s.x - focus.x
       if (dx <= 0) continue
       const dy = s.y - focus.y
@@ -105,7 +127,7 @@ function Dashboard({ specs, sessions, reload }) {
       if (d < bestD) { bestD = d; best = s }
     }
     return best
-  }, [childTarget, specs, focus])
+  }, [childTarget, specs2, focus])
 
   // @@@ vertical nav - columns are aligned by depth (x = depth * X_GAP), so ↑/↓ move strictly
   // within the focused node's column to the nearest node in that y-direction. They never change
@@ -113,14 +135,14 @@ function Dashboard({ specs, sessions, reload }) {
   // cousin above in the SAME column, not to a nearer node one column over. Trivially reversible.
   const nearestY = useCallback((dir) => {
     let best = null
-    for (const s of specs) {
+    for (const s of specs2) {
       if (s.id === focus.id || s.x !== focus.x) continue
       const dy = s.y - focus.y
       if (dir === 'down' ? dy <= 0 : dy >= 0) continue
       if (!best || Math.abs(dy) < Math.abs(best.y - focus.y)) best = s
     }
     return best
-  }, [specs, focus])
+  }, [specs2, focus])
   const downTarget = useMemo(() => nearestY('down'), [nearestY])
   const upTarget    = useMemo(() => nearestY('up'), [nearestY])
 
@@ -128,7 +150,7 @@ function Dashboard({ specs, sessions, reload }) {
   // highlighted, the overlay-dim: nodes touched by that session glow, the rest fade. Recomputes on
   // poll (specs identity changes) so a freshly-added ghost shows up without a manual refresh.
   const nodes = useMemo(() => {
-    return specs.map((s) => {
+    return specs2.map((s) => {
     const kin = s.id === focusId || s.id === focus.parent || s.parent === focusId || s.parent === focus.parent
     let className
     if (highlightId) {
@@ -142,7 +164,9 @@ function Dashboard({ specs, sessions, reload }) {
     // each avatar needs: id (the avatar seed + tooltip), status (liveness ring), node (tooltip label).
     const editors = liveEditorsOf(s)
     const editorData = editors.map((e) => ({ id: e.id, status: e.status, node: e.node }))
-    const extra = { editors: editorData }
+    // collapsed = has children but its subtree is hidden (not on the expanded spine) -> show the ▸N hint.
+    const kids = childCount[s.id] || 0
+    const extra = { editors: editorData, collapsed: kids > 0 && !expanded.has(s.id), childCount: kids }
     return {
       id: s.id, type: 'spec', position: { x: s.x, y: s.y },
       data: editors.length
@@ -151,10 +175,10 @@ function Dashboard({ specs, sessions, reload }) {
       draggable: false, selected: s.id === focusId, className,
     }
     })
-  }, [focusId, focus.parent, highlightId, specs, liveEditorsOf])
+  }, [focusId, focus.parent, highlightId, specs2, liveEditorsOf, childCount, expanded])
 
   const edges = useMemo(() => {
-    const tree = specs.filter((s) => s.parent).map((s) => {
+    const tree = specs2.filter((s) => s.parent).map((s) => {
       const hot = s.id === focusId || s.parent === focusId
       return {
         id: `${s.parent}-${s.id}`, source: s.parent, target: s.id, type: 'smoothstep',
@@ -165,7 +189,7 @@ function Dashboard({ specs, sessions, reload }) {
     // gets a faint dashed arrow node→toParent in the author session's colour, so a human SEES the
     // reparent before it merges. Subtle (low opacity, animated dashes) and never touches a tree edge.
     const moves = []
-    for (const s of specs) {
+    for (const s of specs2) {
       const mv = (s.overlays || []).find((o) => o.op === 'moved' && o.toParent && byId[o.toParent])
       if (!mv) continue
       const stroke = labelColor(mv.seed)
@@ -177,7 +201,7 @@ function Dashboard({ specs, sessions, reload }) {
       })
     }
     return [...tree, ...moves]
-  }, [focusId, specs, byId])
+  }, [focusId, specs2, byId])
 
   // camera — tree is fixed; viewpoint flat-pans to centre the focused node.
   const animateView = useCallback((target, dur) => {
@@ -208,9 +232,9 @@ function Dashboard({ specs, sessions, reload }) {
     animateView({ x: el.clientWidth / 2 - (node.x + NW / 2) * z, y: el.clientHeight / 2 - (node.y + NH / 2) * z, zoom: z }, dur)
   }, [animateView, getViewport])
 
-  // @@@ initial framing only - center the root once after first paint. Thereafter ONLY keyboard nav
-  // pans (see `go` below); a mouse click sets focus WITHOUT moving the camera. Click-focus and
-  // arrow-focus are different interaction logics, so the camera follows only the keyboard one.
+  // @@@ initial framing - center the root once after first paint. Thereafter the camera FOLLOWS focus
+  // (see the follow effect below): because the tree re-plots on every focus change, the camera must move
+  // even on a mouse click, else the clicked node would teleport out from under the cursor.
   const framedRef = useRef(false)
   useEffect(() => {
     if (framedRef.current) return
@@ -219,15 +243,28 @@ function Dashboard({ specs, sessions, reload }) {
     return () => cancelAnimationFrame(id)
   }, [centerOn, focus])
 
+  // @@@ follow focus - the tree RE-PLOTS on every focus change (expand-on-focus), so the focused node
+  // moves; the camera pans to keep it centred while its neighbourhood expands/collapses around it. Both
+  // keyboard nav and clicks land here. Fires on focusId ALONE — not on the 4s poll (focus is a fresh
+  // object each poll) — reading the latest focus/centerOn through refs. Skips the very first paint, which
+  // the initial-framing effect owns.
+  const focusRef = useRef(focus); focusRef.current = focus
+  const centerRef = useRef(centerOn); centerRef.current = centerOn
+  const followedRef = useRef(false)
+  useEffect(() => {
+    if (!followedRef.current) { followedRef.current = true; return }
+    centerRef.current(focusRef.current)
+  }, [focusId])
+
   // @@@ keys - capture phase so we win over react-flow. Graph mode: ←↑↓→ walk the tree, +/-/0 zoom,
   // `i` opens the node-info popup, Enter opens the session interface. A modal (popup or session UI)
   // OWNS the keys while open — arrows no longer leak through to move the board behind it (the old
   // blind-navigation bug); the session interface handles its own list nav / input.
   useEffect(() => {
     const cyclePane = (dir) => setPane((p) => PANE_KEYS[(PANE_KEYS.indexOf(p) + dir + PANE_KEYS.length) % PANE_KEYS.length])
-    // keyboard nav both focuses AND pans (the camera follows the keyboard). Mouse focus does not — see
-    // onNodeClick. This is the split: arrow-key focus recenters; click focus stays put.
-    const go = (t, e) => { if (t) { e.preventDefault(); e.stopPropagation(); setFocusId(t.id); centerOn(t) } }
+    // nav just moves focus; the follow-focus effect recenters once the tree has re-plotted around the new
+    // focus (passing the stale pre-re-plot node straight to centerOn would aim at its OLD coordinates).
+    const go = (t, e) => { if (t) { e.preventDefault(); e.stopPropagation(); setFocusId(t.id) } }
     // @@@ bumpScroll - ease the open popup pane toward an accumulating target. A press bumps the target
     // by `delta` (clamped to the scroll range); one rAF loop eases scrollTop toward it (fixed fraction
     // per frame = exponential glide). Repeated/held j/k stack onto the SAME target, so the motion stays
@@ -339,9 +376,9 @@ function Dashboard({ specs, sessions, reload }) {
     return () => window.removeEventListener('keydown', onKey, true)
   }, [overlay, sessionUI, legend, settings, graphView, focus, upTarget, downTarget, rightTarget, parent, centerOn, getViewport, openBoard, startNew])
 
-  // clicking a node ONLY focuses it — it does NOT pan the camera (recentering is keyboard-only, see
-  // `go`) and does NOT open a session (Enter is the deliberate cross into one). Mouse focus and
-  // keyboard focus are separate interaction logics; click moves the highlight, not the viewpoint.
+  // clicking a node focuses it; the follow-focus effect then re-plots the tree around it and pans the
+  // camera to keep it in place (a click drills the same way the arrows do). It does NOT open a session —
+  // Enter is the deliberate cross into one.
   const onNodeClick = useCallback((_e, n) => setFocusId(n.id), [])
 
   // double-click is the mouse parallel to the `i` key: focus the node AND open its info popup.

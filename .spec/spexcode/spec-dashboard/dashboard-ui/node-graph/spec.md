@@ -3,7 +3,7 @@ title: node-graph
 status: merged
 session: sess-graph
 hue: 280
-desc: A stable tree map; the viewpoint moves, the tree never re-plots. Each node shows its identity and its people.
+desc: A drill-down tidy-tree — only the focused node's spine expands, so the root layer stays a short readable column. Each node shows its identity and its people.
 code:
   - spec-dashboard/src/SpecNode.jsx
   - spec-dashboard/src/avatar.jsx
@@ -15,7 +15,7 @@ code:
 ---
 # node-graph
 
-A stable tidy-tree map of the spec-node neighbourhood: navigate by **relationship**, not by hunting a full forest where siblings blur into cousins. The tree sits at **fixed absolute positions and never re-plots** — per keystroke the viewpoint moves; only highlight / dim / edge colour change. Layout is horizontal left→right: depth is the column (root at the left), siblings stack as rows, parents centre over their children, tiles never touch, and edges read bold when they touch the focus, faint otherwise. Keys follow the same relationships (see [[keyboard-nav]]).
+A **drill-down** tidy-tree of the spec-node neighbourhood: navigate by **relationship**, not by hunting a full forest where siblings blur into cousins. Only the focused node's **ancestor spine is expanded** — every other subtree collapses to a single tile — so the **root layer is always a short, readable column** no matter how deep or bushy the real tree is. (A point-per-node tidy tree otherwise spends vertical space equal to its *leaf count*, which sprawls the high-level nodes — the very ones you most want to grasp together — the worst.) The tree **re-plots as focus moves** and the **camera follows focus**, keeping it centred while its neighbourhood expands and collapses around it. Layout is horizontal left→right: depth is the column (root at the left), siblings stack as rows, parents centre over their children, tiles never touch, and edges read bold when they touch the focus, faint otherwise. A **collapsed node** (children hidden) carries a small **`▸N` tab on its right edge** naming its hidden direct-child count, so a leaf and a closed branch never look alike; it picks up the focus colour on the focused node. Keys follow the same relationships (see [[keyboard-nav]]): ←/→ drill out/in, ↑/↓ walk siblings in the focused column.
 
 Each node is a tight **two-row tile** — not a card — so the whole tree fits one screen; a reader sees at a glance both *what this node is* and *who/when*.
 

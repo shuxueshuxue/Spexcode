@@ -55,18 +55,23 @@ function log(node) {
   return [...lines, `\x1b[36mtype here — keystrokes forward via\x1b[0m \x1b[1msend-keys\x1b[0m`, ``]
 }
 
-// @@@ tidy-tree layout - left->right: depth sets the column (x), post-order stacks leaves into
-// rows (y), parents centre vertically over their kids. Root at the left, subtrees extend right.
-// Gaps track the node box: a node is now TWO rows (title + editor/last-edited line) and a touch
-// wider for longer titles, so X_GAP/Y_GAP grew from the single-line era to keep rows from touching.
+// @@@ tidy-tree layout, drill-down - left->right: depth sets the column (x), post-order stacks the
+// VISIBLE leaves into rows (y), parents centre vertically over their kids. Root at the left, subtrees
+// extend right. This is NOT a fixed full-forest map: `expanded` is the set of nodes whose children are
+// shown — everything else collapses to a single tile, so a node's children appear only when it (and its
+// whole ancestor spine) is expanded. A collapsed node is itself a leaf in the plot. The caller expands
+// only the focused node's ancestor spine, which keeps the root layer a short, readable column however
+// deep/bushy the real tree is (the y-extent of a point-per-leaf tree is otherwise = total leaf count).
+// Gaps track the node box: a node is TWO rows (title + editor/last-edited line) and a touch wider for
+// longer titles, so X_GAP/Y_GAP keep rows from touching.
 export const X_GAP = 280, Y_GAP = 54
-function layout(nodes) {
+export function layout(nodes, expanded) {
   const kids = {}
   nodes.forEach((n) => { if (n.parent) (kids[n.parent] ??= []).push(n.id) })
   const pos = {}
   let row = 0
   const place = (id, depth) => {
-    const cs = kids[id] || []
+    const cs = expanded.has(id) ? (kids[id] || []) : []
     let y
     if (cs.length === 0) { y = row * Y_GAP; row++ }
     else { const ys = cs.map((c) => place(c, depth + 1)); y = (ys[0] + ys[ys.length - 1]) / 2 }
@@ -96,13 +101,12 @@ export async function apiFetch(input, init) {
 
 // @@@ loadBoard - THIN wrapper. The board (merged tree + overlay + ghosts + sessions) is assembled by
 // the backend `buildBoard()` and served at /api/board — the SAME data `spex board` prints, so human and
-// agent share one source of truth. The only thing decorated client-side is the x/y tidy-tree layout, a
-// pure view concern (the backend has no pixels). All overlay/ghost/session logic moved server-side.
+// agent share one source of truth. Returns the RAW nodes: the x/y tidy-tree layout is a pure view
+// concern that now depends on which node is focused (drill-down expand-on-focus), so it lives in the
+// view component (see App.jsx), not here. All overlay/ghost/session logic is server-side.
 export async function loadBoard() {
   const res = await apiFetch('/api/board')
-  const { nodes, sessions } = await res.json()
-  const pos = layout(nodes)
-  return { nodes: nodes.map((n) => ({ ...n, ...pos[n.id] })), sessions }
+  return res.json()
 }
 
 // @@@ loadConfig - the reflexive, skill-shaped slash presets (config nodes under a `*/slash/` dir) the

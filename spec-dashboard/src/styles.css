@@ -639,14 +639,20 @@ body {
 
 /* Active session: terminal fills the area (expands from centre out), input docked at the bottom. */
 .si-content.is-session .si-term { animation: si-expand .22s ease; }
-.si-term { flex: 1; min-height: 0; display: flex; flex-direction: column; margin: 12px; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+/* margin-bottom reserves the RESTING (one-line) ❯ box footprint — ~38px box + 12px bottom offset + 12px
+   gap — so the terminal keeps its exact size/position and isn't covered at rest. The input grows UPWARD as
+   an overlay (below) into the terminal only while it's actually multi-line. */
+.si-term { flex: 1; min-height: 0; display: flex; flex-direction: column; margin: 12px 12px 62px; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
 .si-term-head { padding: 7px 10px; background: var(--panel2); border-bottom: 1px solid var(--line); color: var(--ink2); display: flex; align-items: center; gap: 7px; font-size: 12px; }
 .si-th-prompt { padding: 4px 10px; background: var(--panel2); border-bottom: 1px solid var(--line); color: var(--ink2); font-size: 11px; opacity: 0.75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: default; }
 .si-term-body { flex: 1; min-height: 0; overflow: auto; padding: 10px 12px; background: var(--term-bg); }
 .si-line { font-size: 12px; line-height: 1.6; color: var(--ink2); white-space: pre-wrap; word-break: break-word; }
 .si-line.muted { color: var(--muted); }
 .si-op { color: var(--blue); font-weight: 700; }
-.si-bottom { position: relative; display: flex; align-items: center; gap: 8px; margin: 0 12px 12px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+/* the ❯ box is a bottom-anchored OVERLAY (not in flow): anchored at the bottom, it grows UPWARD when its
+   textarea wraps, floating over the terminal's lower edge — its opaque panel background occludes what it
+   covers — without pushing the terminal or moving any sibling. flex-end keeps the ❯ on the bottom line. */
+.si-bottom { position: absolute; left: 12px; right: 12px; bottom: 12px; z-index: 2; display: flex; align-items: flex-end; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
 .si-prompt { color: var(--blue); flex: none; }
 .si-bottom .si-input:disabled { color: var(--muted); }
 /* fail-loud: /keys dispatch failed — outline red and show the message wasn't delivered (draft restored). */

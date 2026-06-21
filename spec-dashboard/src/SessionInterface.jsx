@@ -153,6 +153,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const taRef = useRef(null)
   const msgRef = useRef(null)
   const panelRef = useRef(null)
+  const termRef = useRef(null)
 
   const order = useMemo(() => ['new', ...sessions.map((s) => s.id)], [sessions])
   const active = order.includes(sel) ? sel : 'new'
@@ -255,6 +256,19 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     ta.style.height = 'auto'
     ta.style.height = `${ta.scrollHeight}px`
   }, [prompt, active, open])
+
+  // @@@ docked input auto-grow - the session ❯ box grows with its content too, but UPWARD: the bar is
+  // absolutely anchored to the wrap's bottom (see CSS), so added lines extend over the terminal's lower
+  // edge and never push the terminal or any sibling. It caps at HALF the terminal's height — only there
+  // does overflow-y kick a scrollbar in; below the cap the textarea is exactly tall enough, so no scrollbar.
+  useEffect(() => {
+    const ta = msgRef.current
+    if (!ta || active === 'new' || !open) return
+    const maxH = Math.round((termRef.current?.clientHeight || 360) * 0.5)
+    ta.style.maxHeight = `${maxH}px`
+    ta.style.height = 'auto'
+    ta.style.height = `${Math.min(ta.scrollHeight, maxH)}px`
+  }, [msg, active, open])
 
   // @@@ composeLaunch - the grammar `/<preset> @<node>… <free text>` assembles ONE launch prompt:
   //   · /<preset>  → a config preset (GET /api/config) whose `body` is the contract the agent runs.
@@ -603,9 +617,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               down every SessionTerm and coming back forced a reconnect/repaint — the "reload" feel. */}
           <div
             className="si-session-wrap"
-            style={{ display: active === 'new' ? 'none' : 'flex', flexDirection: 'column', flex: 1, minWidth: 0, minHeight: 0 }}
+            style={{ display: active === 'new' ? 'none' : 'flex', flexDirection: 'column', flex: 1, minWidth: 0, minHeight: 0, position: 'relative' }}
           >
-              <div className="si-term">
+              <div className="si-term" ref={termRef}>
                 <div className="si-term-head">
                   <span className="si-dot" style={{ background: STATUS_DOT[selSession?.status] || '#93a1a1' }} />
                   <span className="si-th-name">{sessionName(selSession) || active}</span>

@@ -1,6 +1,7 @@
 import { Handle, Position } from '@xyflow/react'
 import { Avatar } from './avatar.jsx'
 import { labelColor } from './color.js'
+import { SessionRow } from './SessionWindow.jsx'
 import { useT } from './i18n/index.jsx'
 
 // @@@ timeAgo - compact "edited Nm/Nh/Nd ago" from an ISO date. Coarse on purpose (the row is tiny):
@@ -99,6 +100,28 @@ function IssuePopover({ issues, t }) {
   )
 }
 
+// @@@ SessionPeek - the on-graph REVIEW window for a node carrying pending changes. A node mid-change is
+// near-empty on the board — most of all a freshly-ADDED ghost (no title/version committed yet) — so the
+// overlay alone is useless to review. This surfaces it through the SESSION lens: a small card that mirrors
+// IssuePopover (a direct child of .spec-node, CSS-revealed on the WHOLE node's hover OR focus) but drops
+// BELOW the node so it never collides with the issue card above. It lists the live session(s) changing this
+// node, each as the SAME SessionRow the top-right window uses — including its op tally ("+2 ~1 ✕1" = how
+// many nodes that session is changing). Clicking a row hands straight to the existing review flow
+// (onPick → App.onPickSession: lock the graph onto the session, grey the rest, auto-focus its first changed
+// node). Rendered only when sessions edit the node, so it never reveals an empty card. nodrag/nopan stop
+// react-flow stealing the pointer so the rows stay clickable.
+function SessionPeek({ sessions, onPick, lockedSource, t }) {
+  if (!sessions || sessions.length === 0 || !onPick) return null
+  return (
+    <div className="session-peek nodrag nopan" role="tooltip">
+      <div className="session-peek-head">// {t('sessionWindow.peekHead')}</div>
+      {sessions.map((s) => (
+        <SessionRow key={s.id} s={s} locked={s.source === lockedSource} onPick={onPick} />
+      ))}
+    </div>
+  )
+}
+
 // @@@ SpecNode - two stacked rows, not a card. ROW 1 (the original thin file-tree line): status dot +
 // title + version + overlay marks. ROW 2: the live editors' avatars, or "last edited … ago" (EditorRow).
 // The tree flows left->right, so handles are on the sides. When a worktree has a PENDING change to this
@@ -151,6 +174,9 @@ export default function SpecNode({ data, selected }) {
         <EditorRow data={data} />
       </div>
       <IssuePopover issues={data.openIssues} t={t} />
+      {/* the on-graph review window: the live session(s) changing this node, each a click away from
+          locking the graph onto it. Makes a pending change (esp. an empty ghost) reviewable in place. */}
+      <SessionPeek sessions={data.editors} onPick={data.onPickSession} lockedSource={data.lockedSource} t={t} />
       {/* expandable hint — a collapsed node (children hidden to the right) gets a ▸N tab on its right
           edge so a leaf and a closed branch never look alike. App sets data.collapsed/childCount. */}
       {data.collapsed && (

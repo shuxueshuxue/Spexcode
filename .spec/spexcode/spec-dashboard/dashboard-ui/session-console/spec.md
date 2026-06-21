@@ -76,11 +76,16 @@ relaunch panel instead of a dead terminal. There is **no manual "request review"
 shows the session's **originating prompt** — "what was this asked to do?" — as a single line that fills the
 bar's width and reveals the **full text on hover**.
 
-**SessionWindow** is the read-only glance: every session as a status dot with a pending-op count. It carries
-**two gestures that mirror the graph**: a single click **locks** the board onto that session — its overlays
-light, the rest grey, focus jumps to its first changed node, and a top-center banner names the grip and
-points at `o`/`O` (see [[keyboard-nav]]) to walk just its changed nodes. A session with **no** pending
-changes still locks, but the board stays un-greyed and the banner says there's nothing to show. A second
-click releases — the locked row wears the same grip so row and dimmed graph read as one selection.
-**Double-click opens that session's board**, the mouse parallel to `⏎`. The window and the interface share their dot-colour and
-display-name from `session.js`, so a session reads the same on every surface.
+**SessionWindow** is the read-only glance: every session as a status dot with a pending-op count. Its unit is
+a single **SessionRow** — avatar · status dot · name · op tally — and that row is the **one shared locking
+control**: the window stacks it, and the [[node-graph]] reuses the *same* component as its on-graph **session
+peek** (hover/focus a changed node to review the session(s) changing it), so a session reads and locks
+identically from either surface. The row carries **two gestures that mirror the graph**: a single click
+**locks** the board onto that session — its overlays light, the rest grey, focus jumps to its first changed
+node, and a top-center banner names the grip and points at `o`/`O` (see [[keyboard-nav]]) to walk just its
+changed nodes. A session with **no** pending changes still locks, but the board stays un-greyed and the
+banner says there's nothing to show. The lock releases three equivalent ways — a **second click** on the row,
+the banner's **release** button, or **`Esc`** (see [[keyboard-nav]]) — and the locked row wears the same grip
+so row and dimmed graph read as one selection. **Double-click opens that session's board**, the mouse
+parallel to `⏎`. The window and the interface share their dot-colour and display-name from `session.js`, so a
+session reads the same on every surface.

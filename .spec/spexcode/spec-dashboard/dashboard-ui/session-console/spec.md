@@ -53,7 +53,8 @@ Terminals are **warm and always connected**: every live session's pane is mounte
 moment the board loads — never lazily on focus — and since the surface stays mounted whether or not the
 console is open, the sockets stay live **even while it's closed**, so reopening reveals panes that were warm
 all along. Switching tabs therefore **never loses your place** (socket and scroll survive), for **every** tab
-including **New Session**, which only hides its pane, never unmounts it. The backend keeps a warm tmux client
+including **New Session**, which only hides its pane, never unmounts it. Warmth is **state, not GPU**: only the
+**visible** pane is GPU-accelerated, so opening many panes can't exhaust the browser's capped GPU contexts. The backend keeps a warm tmux client
 per live session. List navigation lives at the
 **window level**, so arrows walk the list regardless of what holds focus (xterm included). Header lifecycle
 actions (relaunch / merge / close) follow the session's state; an offline session shows a

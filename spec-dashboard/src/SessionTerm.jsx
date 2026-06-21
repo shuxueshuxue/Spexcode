@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebglAddon } from '@xterm/addon-webgl'
-import { CanvasAddon } from '@xterm/addon-canvas'
 import { createResilientSocket } from './resilientSocket.js'
 import '@xterm/xterm/css/xterm.css'
 
@@ -47,8 +46,10 @@ import '@xterm/xterm/css/xterm.css'
 // answers, and it stands down when the focused field has its OWN non-empty selection (so ⌘C in the ❯ box
 // copies the box, not the pane). stdin stays disabled throughout — we never forward keystrokes to the pty.
 //
-// SPEED: render with the WebGL addon (GPU-composited glyphs — far faster than the default DOM renderer for
-// a busy TUI), falling back to the canvas addon, then to DOM, if a GL context can't be had. Incoming pane
+// SPEED: the VISIBLE pane renders with the WebGL addon (GPU-composited glyphs — far faster than the default
+// DOM renderer for a busy TUI); if no GL context can be had it stays on the DOM renderer. WebGL contexts are
+// a capped per-page resource, so ONLY the visible pane holds one — see the active-driven renderer effect for
+// why (the "frozen-top / live-bottom after hours" bug). Incoming pane
 // bytes are BATCHED: frames that arrive in the same tick are concatenated into ONE term.write per
 // animation frame instead of one write per WebSocket message, so a burst (e.g. the full repaint) parses in
 // a single pass. The single ordered repaint is preserved — batching only COALESCES in arrival order, never
@@ -69,9 +70,17 @@ function looksLikeMenu(term) {
   return caret && hint
 }
 
-export default function SessionTerm({ sessionId, onMenu }) {
+export default function SessionTerm({ sessionId, active = true, onMenu }) {
   const hostRef = useRef(null)
   const termRef = useRef(null)
+  // the GPU renderer for the VISIBLE pane only — see the active-driven effect below. Held in a ref so it
+  // can be disposed when this terminal goes off-screen and reattached when it comes back.
+  const webglRef = useRef(null)
+  // last cols/rows we synced to tmux; a ref (not effect locals) so BOTH the fit path and the renderer
+  // swap can reset it to force the next fit through the "size changed" gate.
+  const lastSizeRef = useRef({ cols: 0, rows: 0 })
+  // the latest fitAndSync, exposed so the active-driven renderer effect can re-measure after a swap.
+  const fitRef = useRef(null)
   // brief "copied ✓" confirmation flashed by the copy chord; drives only the corner caption, not the term.
   const [copied, setCopied] = useState(false)
   // socket health for the corner caption: 'connecting' | 'open' | 'reconnecting' (drives the loud "reconnecting…").
@@ -128,18 +137,12 @@ export default function SessionTerm({ sessionId, onMenu }) {
     // Guarded: a renamed private path just falls back to the old focus-stealing behaviour, never a crash.
     try { term._core.focus = () => {} } catch { /* pane may still grab focus on a future xterm */ }
 
-    // @@@ GPU renderer - load AFTER open() (the renderer needs the live DOM/canvas). WebGL composites
-    // glyphs on the GPU — much faster repaints for a busy TUI than xterm's default DOM renderer. If a GL
-    // context can't be created (or it's lost at runtime), dispose and drop to the canvas addon; if that
-    // also throws we silently keep the DOM renderer. FitAddon measures the core, not the renderer, so the
-    // fit guards are unaffected.
-    try {
-      const webgl = new WebglAddon()
-      webgl.onContextLoss(() => { try { webgl.dispose() } catch { /* */ } ; try { term.loadAddon(new CanvasAddon()) } catch { /* DOM fallback */ } })
-      term.loadAddon(webgl)
-    } catch {
-      try { term.loadAddon(new CanvasAddon()) } catch { /* DOM renderer stays */ }
-    }
+    // @@@ GPU renderer - the WebGL addon is loaded/disposed by the active-driven effect below, NOT here.
+    // WebGL contexts are a CAPPED per-page resource (browsers force-lose the oldest past ~16), and we keep
+    // every opened session's terminal mounted at once — so one context per terminal exhausts the cap after
+    // a few hours of opening sessions, and the browser then evicts contexts out from under live panes. So
+    // only the VISIBLE pane holds a context; hidden panes ride xterm's DOM renderer (no GL, and they're
+    // display:none so GPU speed is moot). The DOM renderer is what's live until the [active] effect attaches.
 
     const proto = location.protocol === 'https:' ? 'wss' : 'ws'
     const url = `${proto}://${location.host}/api/sessions/${sessionId}/socket`
@@ -147,7 +150,6 @@ export default function SessionTerm({ sessionId, onMenu }) {
 
     // fit xterm to the panel, then tell tmux to match — only when the size actually changed and the
     // socket is open (a stream of resize events would otherwise spam the backend).
-    let lastCols = 0, lastRows = 0
     const fitAndSync = () => {
       const host = hostRef.current
       if (!host) return
@@ -163,10 +165,12 @@ export default function SessionTerm({ sessionId, onMenu }) {
       // a tiny col count while the host is plainly wide is a degenerate mid-animation measurement — skip it;
       // a re-fit at full size will follow with the right number.
       if (cols < 20 && host.clientWidth > 200) return
-      if (cols === lastCols && rows === lastRows) return
-      lastCols = cols; lastRows = rows
+      const lastSize = lastSizeRef.current
+      if (cols === lastSize.cols && rows === lastSize.rows) return
+      lastSizeRef.current = { cols, rows }
       if (sock?.isOpen()) sock.send(JSON.stringify({ t: 'resize', cols, rows }))
     }
+    fitRef.current = fitAndSync
 
     const enc = new TextEncoder()
     // @@@ clean (re)connect - reset xterm to a blank slate so the bridge's coherent full repaint (tmux
@@ -199,7 +203,7 @@ export default function SessionTerm({ sessionId, onMenu }) {
     sock = createResilientSocket({
       url,
       onState: setConn,
-      onOpen: () => { pending = []; if (flushRaf) { cancelAnimationFrame(flushRaf); flushRaf = 0 } ; term.reset(); lastCols = 0; lastRows = 0; fitAndSync() },
+      onOpen: () => { pending = []; if (flushRaf) { cancelAnimationFrame(flushRaf); flushRaf = 0 } ; term.reset(); lastSizeRef.current = { cols: 0, rows: 0 }; fitAndSync() },
       onMessage: (e) => {
         if (!(e.data instanceof ArrayBuffer)) return
         pending.push(new Uint8Array(e.data))
@@ -284,10 +288,51 @@ export default function SessionTerm({ sessionId, onMenu }) {
       ro.disconnect()
       window.removeEventListener('resize', fitAndSync)
       sock.close()   // intentional close → the resilient socket stops reopening for good
-      term.dispose()
+      term.dispose() // disposes loaded addons too, incl. any live WebGL renderer
       termRef.current = null
+      webglRef.current = null  // term.dispose() killed the addon; drop our handle so a remount starts clean
+      fitRef.current = null
     }
   }, [sessionId])
+
+  // @@@ one GL context, for the VISIBLE pane only - this is the fix for the "frozen-top / live-bottom split
+  // after hours" bug. WebGL contexts are a CAPPED per-page resource: past ~16 live contexts the browser
+  // FORCE-LOSES the oldest (webglcontextlost) to make room, with no error — and we mount one terminal per
+  // opened session, all kept warm. Giving each its own context means a busy day crosses the cap, the browser
+  // evicts a context from a live pane, and the half-recovered renderer strands a stale frame up top with a
+  // thin live band below — only a reload (which tears down every context) clears it. So we bound live
+  // contexts to ~1: attach WebGL when this pane becomes visible, dispose it (releasing the context) when it
+  // hides. Hidden panes render via xterm's DOM renderer — they're display:none, so GPU speed buys nothing.
+  useEffect(() => {
+    const term = termRef.current
+    if (!term) return
+    if (active) {
+      if (webglRef.current) return  // already GPU-accelerated
+      try {
+        const webgl = new WebglAddon()
+        // a GENUINE runtime loss (GPU reset, or the browser still evicting us): drop to the DOM renderer and
+        // force a clean re-measure + FULL repaint, so we never strand a half-painted grid. Resetting the size
+        // guard is essential — otherwise fitAndSync sees "same cols/rows" and suppresses the corrective fit.
+        webgl.onContextLoss(() => {
+          try { webgl.dispose() } catch { /* */ }
+          webglRef.current = null
+          lastSizeRef.current = { cols: 0, rows: 0 }
+          requestAnimationFrame(() => { fitRef.current?.(); try { term.refresh(0, term.rows - 1) } catch { /* */ } })
+        })
+        term.loadAddon(webgl)
+        webglRef.current = webgl
+        // newly visible: re-measure against the now-laid-out host and force a full repaint so the fresh GL
+        // canvas paints the WHOLE grid rather than inheriting a partial frame from the DOM renderer.
+        requestAnimationFrame(() => { fitRef.current?.(); try { term.refresh(0, term.rows - 1) } catch { /* */ } })
+      } catch {
+        webglRef.current = null  // no GL context available — DOM renderer stays, which renders fine
+      }
+    } else if (webglRef.current) {
+      // leaving view: RELEASE the context so it can never accumulate across opened sessions.
+      try { webglRef.current.dispose() } catch { /* */ }
+      webglRef.current = null
+    }
+  }, [sessionId, active])
 
   return (
     <div className="st-wrap">

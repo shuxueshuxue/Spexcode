@@ -3,6 +3,7 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebglAddon } from '@xterm/addon-webgl'
 import { CanvasAddon } from '@xterm/addon-canvas'
+import { createResilientSocket } from './resilientSocket.js'
 import '@xterm/xterm/css/xterm.css'
 
 // @@@ SessionTerm - a READ-ONLY live view of a session's tmux pane, wired to a REAL tmux client over one
@@ -73,6 +74,8 @@ export default function SessionTerm({ sessionId, onMenu }) {
   const termRef = useRef(null)
   // brief "copied ✓" confirmation flashed by the copy chord; drives only the corner caption, not the term.
   const [copied, setCopied] = useState(false)
+  // socket health for the corner caption: 'connecting' | 'open' | 'reconnecting' (drives the loud "reconnecting…").
+  const [conn, setConn] = useState('connecting')
   // keep the latest onMenu without re-running the terminal effect (it'd tear down the WebSocket every render).
   const onMenuRef = useRef(onMenu)
   onMenuRef.current = onMenu
@@ -139,8 +142,8 @@ export default function SessionTerm({ sessionId, onMenu }) {
     }
 
     const proto = location.protocol === 'https:' ? 'wss' : 'ws'
-    const ws = new WebSocket(`${proto}://${location.host}/api/sessions/${sessionId}/socket`)
-    ws.binaryType = 'arraybuffer'
+    const url = `${proto}://${location.host}/api/sessions/${sessionId}/socket`
+    let sock = null   // the resilient socket; assigned below, once the frame machinery its callbacks use exists.
 
     // fit xterm to the panel, then tell tmux to match — only when the size actually changed and the
     // socket is open (a stream of resize events would otherwise spam the backend).
@@ -162,7 +165,7 @@ export default function SessionTerm({ sessionId, onMenu }) {
       if (cols < 20 && host.clientWidth > 200) return
       if (cols === lastCols && rows === lastRows) return
       lastCols = cols; lastRows = rows
-      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ t: 'resize', cols, rows }))
+      if (sock?.isOpen()) sock.send(JSON.stringify({ t: 'resize', cols, rows }))
     }
 
     const enc = new TextEncoder()
@@ -187,20 +190,28 @@ export default function SessionTerm({ sessionId, onMenu }) {
       pending = []
       term.write(merged)
     }
-    // on (re)connect, reset xterm to a blank slate (so the in-band repaint lands clean) and DROP any frames
-    // still queued from a prior socket — they belong to the old screen and would splice onto the reset one.
-    ws.onopen = () => { pending = []; if (flushRaf) { cancelAnimationFrame(flushRaf); flushRaf = 0 } ; term.reset(); lastCols = 0; lastRows = 0; fitAndSync() }
-    ws.onmessage = (e) => {
-      if (!(e.data instanceof ArrayBuffer)) return
-      pending.push(new Uint8Array(e.data))
-      if (!flushRaf) flushRaf = requestAnimationFrame(flush)
-    }
+    // @@@ resilient socket - reopen on a genuine socket drop. After the [[live-view]] fix, bridge churn no
+    // longer closes the socket, so the ONLY thing that does is a backend PROCESS restart (the zero-downtime
+    // reload); resilientSocket.js reopens with backoff and surfaces a visible "reconnecting…" so that case
+    // self-heals loudly instead of leaving a frozen pane. On every (re)open we reset xterm to a blank slate
+    // (so the backend's coherent in-band repaint lands clean), DROP any frames still queued from a prior
+    // socket (they belong to the old screen and would splice onto the reset one), then re-send the fitted size.
+    sock = createResilientSocket({
+      url,
+      onState: setConn,
+      onOpen: () => { pending = []; if (flushRaf) { cancelAnimationFrame(flushRaf); flushRaf = 0 } ; term.reset(); lastCols = 0; lastRows = 0; fitAndSync() },
+      onMessage: (e) => {
+        if (!(e.data instanceof ArrayBuffer)) return
+        pending.push(new Uint8Array(e.data))
+        if (!flushRaf) flushRaf = requestAnimationFrame(flush)
+      },
+    })
 
     // @@@ scroll-only writer - the ONLY thing written back over this socket is synthetic wheel→copy-mode
     // mouse reports (below). Human prompts do NOT go through here: they dispatch out-of-band via the control
     // socket (POST /keys in SessionInterface) so they survive tmux copy-mode, which scrolling enters and
     // which would otherwise eat pane bytes as navigation. This socket stays read-only display + scroll.
-    const send = (data) => { if (ws.readyState !== WebSocket.OPEN) return false; ws.send(enc.encode(data)); return true }
+    const send = (data) => sock.send(enc.encode(data))   // false (a no-op) while mid-reconnect; the wheel just skips
 
     // @@@ wheel → tmux copy-mode - forward the wheel as SGR mouse reports so tmux scrolls its real pane
     // history (xterm's own scrollback is just repaint noise here). 64/65 = wheel up/down; col,row is the
@@ -272,7 +283,7 @@ export default function SessionTerm({ sessionId, onMenu }) {
       if (termEl) termEl.removeEventListener('animationend', fitAndSync)
       ro.disconnect()
       window.removeEventListener('resize', fitAndSync)
-      try { ws.close() } catch { /* already closed */ }
+      sock.close()   // intentional close → the resilient socket stops reopening for good
       term.dispose()
       termRef.current = null
     }
@@ -281,8 +292,9 @@ export default function SessionTerm({ sessionId, onMenu }) {
   return (
     <div className="st-wrap">
       <div className="st-host" ref={hostRef} />
-      {/* subtle corner caption: only the copy confirmation flashes by the copy chord — no idle hint. */}
+      {/* subtle corner caption: the copy confirmation, or a loud "reconnecting…" while the socket re-opens. */}
       {copied && <div className="st-copyhint copied">copied ✓</div>}
+      {!copied && conn === 'reconnecting' && <div className="st-copyhint reconnecting">reconnecting…</div>}
     </div>
   )
 }

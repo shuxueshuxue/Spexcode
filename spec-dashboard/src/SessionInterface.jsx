@@ -152,11 +152,20 @@ export default function SessionInterface({ sessions, specs = [], project, focusN
   // looks like a select menu — used only to SUGGEST nav mode (pulse the button), never to seize keys.
   const [navMode, setNavMode] = useState(false)
   const [menuById, setMenuById] = useState({})
+  // @@@ file attach - a pasted/dropped/picked file is uploaded to the backend (= worker) machine's /tmp and
+  // its returned path is spliced into the prompt. `uploading` guards/announces the in-flight POST; `uploadErr`
+  // is the fail-loud flag; `dragTarget` lights the surface ('new' | 'msg') a file is currently dragged over.
+  const [uploading, setUploading] = useState(false)
+  const [uploadErr, setUploadErr] = useState(false)
+  const [dragTarget, setDragTarget] = useState(null)
+  const [attachAt, setAttachAt] = useState(null)  // surface the in-flight/last upload targets — drives the spinner + error placement
   const lastEscRef = useRef(0)
   const taRef = useRef(null)
   const msgRef = useRef(null)
   const panelRef = useRef(null)
   const termRef = useRef(null)
+  const fileRef = useRef(null)         // the one hidden <input type=file>; the attach buttons trigger it
+  const fileTargetRef = useRef('new')  // which surface the pending pick inserts into ('new' | 'msg')
 
   const order = useMemo(() => ['new', ...sessions.map((s) => s.id)], [sessions])
   const active = order.includes(sel) ? sel : 'new'
@@ -437,6 +446,71 @@ export default function SessionInterface({ sessions, specs = [], project, focusN
     }
   }
 
+  // @@@ file attach - paste, drop, or pick a file → POST it to /api/uploads (the backend writes it to the
+  // worker machine's /tmp) → splice the returned path into the active input. The path is the whole handoff:
+  // the agent runs on that same machine, so `/tmp/spexcode-uploads/<file>` is a path it can just read. Works
+  // on both surfaces; `target` ('new' | 'msg') picks which draft receives the path. Fail-loud: an upload that
+  // doesn't return a path flags `uploadErr` instead of silently dropping the file.
+  const uploadFile = async (file) => {
+    const fd = new FormData()
+    fd.append('file', file, file.name || 'pasted')
+    const res = await fetch('/api/uploads', { method: 'POST', body: fd })
+    if (!res.ok) throw new Error(`upload ${res.status}`)
+    const data = await res.json().catch(() => null)
+    if (!data?.path) throw new Error('upload: no path')
+    return data.path
+  }
+  // splice `text` at the caret of a textarea (ref+value+setter), padding with spaces so it never glues to
+  // neighbouring words, then drop the caret after it. The auto-grow effects re-run on the new value.
+  const insertAtCaret = (ref, value, setValue, text) => {
+    const el = ref.current
+    const start = el ? el.selectionStart : value.length
+    const end = el ? el.selectionEnd : value.length
+    const pre = value.slice(0, start)
+    const insert = (pre && !/\s$/.test(pre) ? ' ' : '') + text + ' '
+    setValue(pre + insert + value.slice(end))
+    requestAnimationFrame(() => {
+      if (!el) return
+      el.focus()
+      const c = pre.length + insert.length
+      el.setSelectionRange(c, c)
+    })
+  }
+  // upload every file in a list (paste/drop/pick), then insert the joined /tmp paths into the target surface.
+  const attachFiles = async (fileList, target) => {
+    const files = [...(fileList || [])]
+    if (!files.length || uploading) return
+    setUploadErr(false)
+    setAttachAt(target)
+    setUploading(true)
+    try {
+      const paths = []
+      for (const f of files) paths.push(await uploadFile(f))
+      if (target === 'new') insertAtCaret(taRef, prompt, setPrompt, paths.join(' '))
+      else insertAtCaret(msgRef, msg, setMsg, paths.join(' '))
+    } catch {
+      setUploadErr(true)
+    } finally {
+      setUploading(false)
+    }
+  }
+  // a paste carrying file(s) (a screenshot, a copied file) attaches them instead of pasting text; a plain
+  // text paste has no files and falls through to the textarea's normal behaviour untouched.
+  const onPasteFiles = (e, target) => {
+    const files = e.clipboardData?.files
+    if (files && files.length) { e.preventDefault(); attachFiles(files, target) }
+  }
+  // drag-drop onto an input surface: highlight while a file hovers, attach on drop.
+  const onDropFiles = (e, target) => {
+    e.preventDefault(); setDragTarget(null)
+    attachFiles(e.dataTransfer?.files, target)
+  }
+  const onDragOverFiles = (e, target) => {
+    if ([...(e.dataTransfer?.types || [])].includes('Files')) { e.preventDefault(); setDragTarget(target) }
+  }
+  // open the file picker, remembering which surface its result should land in.
+  const pickFiles = (target) => { fileTargetRef.current = target; fileRef.current?.click() }
+
   // lifecycle actions — thin POSTs to the session state machine, then reload the board.
   const act = async (verb, after) => {
     await fetch(`/api/sessions/${active}/${verb}`, { method: 'POST' }).catch(() => {})
@@ -555,6 +629,15 @@ export default function SessionInterface({ sessions, specs = [], project, focusN
     <>
     <div className="si-backdrop" onMouseDown={onClose} style={open ? undefined : { display: 'none' }}>
       <div className="si-panel" ref={panelRef} onMouseDown={keepFocus}>
+        {/* one hidden picker for both surfaces; pickFiles sets fileTargetRef so the result lands in the
+            surface whose attach button was clicked. Reset value so re-picking the same file still fires. */}
+        <input
+          ref={fileRef}
+          type="file"
+          multiple
+          style={{ display: 'none' }}
+          onChange={(e) => { attachFiles(e.target.files, fileTargetRef.current); e.target.value = '' }}
+        />
         <aside className="si-list">
           <div className="si-list-head">// {project ? `${project} ` : ''}{t('session.title')}</div>
           <button className={active === 'new' ? 'si-item new on' : 'si-item new'} title={t('session.newSessionTitle')} onClick={() => setSel('new')}>
@@ -585,7 +668,12 @@ export default function SessionInterface({ sessions, specs = [], project, focusN
             <div className="si-new-center">
               <div className="si-avatar">◠‿◠</div>
               <div className="si-ask">{t('session.ask')}</div>
-              <div className="si-inputwrap">
+              <div
+                className={dragTarget === 'new' ? 'si-inputwrap dragover' : 'si-inputwrap'}
+                onDragOver={(e) => onDragOverFiles(e, 'new')}
+                onDragLeave={() => setDragTarget(null)}
+                onDrop={(e) => onDropFiles(e, 'new')}
+              >
                 <textarea
                   ref={taRef}
                   className="si-input"
@@ -593,11 +681,20 @@ export default function SessionInterface({ sessions, specs = [], project, focusN
                   value={prompt}
                   onChange={(e) => { setPrompt(e.target.value); syncMenu(e.target) }}
                   onSelect={(e) => syncMenu(e.target)}
+                  onPaste={(e) => onPasteFiles(e, 'new')}
                   onBlur={() => setMenu(null)}
                   placeholder={t('session.inputPlaceholder')}
                   spellCheck={false}
                   disabled={sending}
                 />
+                <button
+                  type="button"
+                  className="si-attach"
+                  title={t('session.attachTitle')}
+                  onClick={() => pickFiles('new')}
+                  disabled={uploading || sending}
+                >{uploading && attachAt === 'new' ? '⏳' : '📎'}</button>
+                {uploadErr && attachAt === 'new' && <span className="si-attach-err" role="alert">{t('session.attachError')}</span>}
                 {menu && menu.kind === 'mention' && (
                   <ul className="mention-menu" role="listbox">
                     <li className="mention-head">// {menu.query ? `@${menu.query}` : t('session.menuSpecNodes')} — {t('session.menuHint')}</li>
@@ -685,7 +782,12 @@ export default function SessionInterface({ sessions, specs = [], project, focusN
                   <span className="si-nav-help">{t('session.navHelp')}</span>
                 </div>
               ) : (
-                <div className={sendErr ? 'si-bottom err' : 'si-bottom'}>
+                <div
+                  className={`${sendErr ? 'si-bottom err' : 'si-bottom'}${dragTarget === 'msg' ? ' dragover' : ''}`}
+                  onDragOver={(e) => { if (selSession?.status !== 'offline') onDragOverFiles(e, 'msg') }}
+                  onDragLeave={() => setDragTarget(null)}
+                  onDrop={(e) => { if (selSession?.status !== 'offline') onDropFiles(e, 'msg') }}
+                >
                   <span className="si-prompt">❯</span>
                   <textarea
                     ref={msgRef}
@@ -694,12 +796,21 @@ export default function SessionInterface({ sessions, specs = [], project, focusN
                     value={msg}
                     onChange={(e) => { setMsg(e.target.value); if (sendErr) setSendErr(false); syncMenu(e.target) }}
                     onSelect={(e) => syncMenu(e.target)}
+                    onPaste={(e) => { if (selSession?.status !== 'offline') onPasteFiles(e, 'msg') }}
                     onBlur={() => setMenu(null)}
                     onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); sendMsg() } }}
                     placeholder={selSession?.status === 'offline' ? t('session.msgOffline') : t('session.msgPlaceholder')}
                     spellCheck={false}
                     disabled={selSession?.status === 'offline'}
                   />
+                  <button
+                    type="button"
+                    className="si-attach"
+                    title={t('session.attachTitle')}
+                    onClick={() => pickFiles('msg')}
+                    disabled={uploading || selSession?.status === 'offline'}
+                  >{uploading && attachAt === 'msg' ? '⏳' : '📎'}</button>
+                  {uploadErr && attachAt === 'msg' && <span className="si-attach-err" role="alert">{t('session.attachError')}</span>}
                   {sendErr && <span className="si-send-err" role="alert">{t('session.msgError')}</span>}
                   {/* slash-command menu — docked at the bottom, so it opens UPWARD (`up`) above the ❯ box. */}
                   {menu && menu.kind === 'slash' && slashMenu(true, menu.query ? `/${menu.query}` : t('session.menuCommands'))}

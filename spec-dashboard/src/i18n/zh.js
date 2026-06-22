@@ -209,6 +209,8 @@ export default {
     msgOffline: '重新启动以向此会话发送消息',
     msgPlaceholder: '向此会话发送消息 · ⏎ 发送',
     msgError: '⚠ 未送达 — 重试',
+    attachTitle: '附加文件（或粘贴 / 拖入）—— 上传到会话所在机器，并插入其 /tmp 路径',
+    attachError: '⚠ 上传失败',
   },
 
   settings: {

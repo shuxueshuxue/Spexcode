@@ -30,3 +30,7 @@ the terminal, living in the CLI source — *not* a planted `.spec` template the 
 contracts are, and *not* routed through the dashboard's i18n catalogs ([[settings]]), which translate the
 browser UI, not operator-facing CLI output. `guide` tells you the loop; [[spex-init]] performs the first
 step of it.
+
+That block is this node's only stake in `cli.ts` — the file is the shared command hub every verb routes
+through, so a sibling verb's churn there (registering `forge`'s `eval-pending` or the `yatsu` route) is
+those features, not `guide`'s drift.

@@ -18,45 +18,44 @@ no subscription store, no datastore, no file; an edge exists **only while that w
 ## expanded spec
 
 When a `spex watch` starts it **registers with the backend** — reporting its own session id
-(`CLAUDE_CODE_SESSION_ID`, falling back to the worktree `.session`) as the watcher plus its target
-selectors — **heartbeats** while it runs, and **deregisters on exit**; a missed heartbeat drops the
-registration as a backstop. Registrations are **in-memory in the server** (its single owner); the watch
-process reports over HTTP at `POST /api/sessions/graph/watch` (register + heartbeat) and `…/unwatch`. A
-restart starts empty and live watches re-register on their next beat. This is **best-effort on the watch
-side** — a down backend delays only the edge, never the event stream.
+(`CLAUDE_CODE_SESSION_ID`, else the worktree `.session`) as the watcher plus its target selectors —
+**heartbeats** while it runs, and **deregisters on exit**; a missed heartbeat drops the registration as a
+backstop. Registrations are **in-memory in the server** (its single owner); the watch reports over HTTP
+(`POST …/graph/watch` register+heartbeat, `…/unwatch`). A restart starts empty and live watches re-register
+on their next beat. **Best-effort on the watch side** — a down backend delays only the edge, never the
+event stream.
 
-`GET /api/sessions/graph` returns `{ nodes, edges }`: live sessions as nodes and edges **computed at
-read time** from the registrations. Each watcher's **selectors are resolved live** with the same matcher
-`spex ls`/`watch` use, so a **global** watcher links to **every** session (including ones launched after
-the watch started) and a node/branch selector picks up future matches too. Self-edges, edges touching a
-non-live session, and duplicate A→B all drop out. This stays **isolated from the board assembler** —
-nothing here touches `buildBoard` or the spec tree; the dashboard's [[session-graph]] view is its (now
-observational) surface.
+`GET /api/sessions/graph` returns `{ nodes, edges }`: live sessions as nodes and edges **computed at read
+time** from the registrations. Each watcher's **selectors are resolved live** with the same matcher `spex
+ls`/`watch` use, so a **global** watcher links to **every** session (incl. ones launched after the watch
+started) and a node/branch selector picks up future matches too. Self-edges, edges touching a non-live
+session, and duplicate A→B all drop out. This stays **isolated from the board assembler** — nothing here
+touches `buildBoard` or the spec tree; the dashboard's [[session-graph]] is its observational surface.
 
 ### `spex watch` — the lifecycle event stream
 
 `spex watch [SEL…]` is also the event source for Claude Code's Monitor tool (`watchSessions`), emitting
-the **complete session lifecycle**, not only actionable transitions. A session's **first sighting** emits
-a `launched` event (once per id, never re-fired, so working/idle toggles don't flap); on top of that it
-emits each actionable transition (review / done / close-pending / offline / error / needs-input) and the
-removal (`closed`). `closed` fires the moment a session's id is **absent from the board**, which is now a
-**definitive** removal rather than a guess: the board lists every worktree that exists (a flaky detail read
-degrades a row, never drops it, and a failed enumeration skips the poll — see [[worktree-resilience]]), so
-absence means the worktree directory is actually gone. No flicker debounce is needed or kept — existence no
-longer flaps, so removal is read straight off the board. Presence is tracked across **all** statuses (the
-`--status` filter governs only which transitions are *emitted*, never whether a session counts as present),
-so a status falling out of the filter is never misread as a removal. The net feed is `launched →
-[actionable transitions] → closed` — a true "subscribe to all session changes" stream for a super-manager,
-where each watch process is one subscriber and the selector is the subscription.
+the **complete session lifecycle**, not only actionable transitions. A session's **first sighting** emits a
+`launched` event (once per id, never re-fired, so working/idle toggles don't flap); then each actionable
+transition (review / done / close-pending / offline / error / needs-input) and the removal (`closed`). `closed` fires the moment a session's id is **absent from the board**, a **definitive**
+removal: the board lists every worktree that exists (a flaky detail read degrades a row, never drops it; a
+failed enumeration skips the poll — see [[worktree-resilience]]), so absence means the directory is actually
+gone — no flicker debounce needed. Presence is tracked across **all** statuses (the
+`--status` filter governs only which transitions are *emitted*, never presence), so a status leaving the
+filter is never misread as a removal. The board it polls is an injected **`source`** (the backend client),
+so a watch streams whatever backend `SPEXCODE_API_URL` names — even a **remote** one — and a backend-down
+poll warns **once** and keeps the stream alive (never a phantom mass-`closed`). The net feed `launched →
+[actionable transitions] → closed` is a true "subscribe to all session changes" stream — each watch process
+one subscriber, the selector its subscription.
 
 ### `spex wait` — the one-shot blocking wait
 
 `spex wait <id> [STATUS]` (`waitForSession`) is the **blocking counterpart** to the streaming watch: an
-agent or supervisor that wants to "wait for a worker" needs a call that **returns**, because `spex watch`
-streams forever and never exits — blocking on it hangs the caller's whole turn. `wait` reuses the same
-board poll and selector matcher, and **exits the moment** `<id>` reaches an **actionable** status — the
-default set (`review`, `needs-input`, `error`, `done`, `close-pending`, `blocked`), or the single STATUS
-if the caller named one — printing that status. It is **bounded**: a `--timeout` (default 20 min) caps
-the wait and exits non-zero, so it can never wedge a turn; an unknown or already-closed id is terminal
-(it can never reach the target) and exits non-zero too. Only the actionable set differs from watch's —
-`wait` answers "tell me when this one worker needs me", where watch answers "stream everything".
+agent wanting to "wait for a worker" needs a call that **returns**, since `spex watch` never exits —
+blocking on it hangs the caller's whole turn. `wait` reuses the same injected `source` and selector matcher,
+and **exits the moment** `<id>` reaches an **actionable** status — the default set (`review`,
+`needs-input`, `error`, `done`, `close-pending`, `blocked`), or the single STATUS if named — printing it.
+**Bounded**: a `--timeout` (default 20 min) caps it and exits non-zero, so it can never wedge a turn;
+an unknown or already-closed id is terminal and exits non-zero; a **backend-down** poll **fails loud**
+rather than waiting out the timeout and reporting a false `timedOut`. Only the actionable set differs from
+watch's — `wait` answers "tell me when this worker needs me", watch "stream everything".

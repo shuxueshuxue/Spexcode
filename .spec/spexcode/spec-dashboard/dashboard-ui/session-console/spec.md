@@ -21,76 +21,46 @@ driving the same sessions through the CLI see identical state.
 
 ## expanded spec
 
-The interface opens as a **near-fullscreen modal** over the dimmed, blurred board: it fills the viewport, but
-a thin inset (the board still framing it), rounded corners, a float shadow, and a scale-in entrance keep the
-**popup** mental model — it reads as floating over the app, never as a separate page.
+The interface is a **near-fullscreen popup modal** over the dimmed board. Two panes: a left session list (its
+header self-identifies the project, `// <project> sessions`) and a right area that **morphs** by what's
+focused.
 
-The interface is two panes: a left session list and a right content area that **morphs** by what's focused.
+**New Session** is a centred avatar + auto-growing input. Nothing is prefilled; the focused node is the first
+**@-mention** suggestion, so the human opts in by typing `@`. A leading **`/`** opens the config-preset
+palette; the two compose the launch grammar `/<preset> @<node>… <free text>`, from which the server derives
+the node (first `@<id>`). Both menus only insert text; the New prompt has **no** `/` slash-command menu
+(reserved for our presets).
 
-**New Session** is a centred avatar + auto-growing input. Nothing is prefilled; the focused node is instead
-the first **@-mention** suggestion, so the human opts into a target by typing `@` — a narrow, keyboard-first
-dropdown of spec nodes. A leading **`/`** opens the config-preset palette; the
-two compose the launch grammar
-`/<preset> @<node>… <free text>` into one prompt, from which the server derives the session's node (the first
-`@<id>`). Both menus are pure assistance — picking a row only inserts text; the human still launches. The New
-tab's prompt deliberately has **no** `/` slash-command menu (that surface is reserved for our own presets).
+An existing session shows its **live tmux terminal** (SessionTerm) with the docked **`❯` input** below — a
+**real tmux client but a read-only scrollable view**. Read-only governs input, not extraction: text selects,
+the wheel scrolls real history, a drag selects even under the program's mouse-reporting, and `⌘/Ctrl+C` copies
+to the clipboard **over HTTPS, localhost, or plain HTTP** (past the secure-context-only Clipboard API), never
+stealing focus from the input.
 
-An existing session shows its **live tmux terminal** (SessionTerm) with the **single human input** docked at
-the bottom. The terminal is a **real tmux client but a pure read-only scrollable view** — the human never
-types into it. Read-only governs **input, not extraction**: text still selects and copies, and the wheel
-scrolls tmux's real pane history. A plain mouse drag selects even while the program inside has **mouse
-reporting on**, and `⌘/Ctrl+C` copies the selection to the **system clipboard whether the dashboard is served
-over HTTPS, localhost, or plain HTTP**. Extraction is **terminal-like**: selecting and copying in the pane **never
-steal keyboard focus** from the docked `❯` box, so a human grabs scrollback text mid-sentence and keeps
-typing. The pane is **dark** (for the Claude Code TUI inside) and **scales to its panel**. A (re)joining
-viewer gets a **single coherent full repaint**, never a snapshot spliced into the live stream — so
-tab-switching never half-paints.
+Input has **two channels**. The **`❯` box** is the prompt channel: submitting dispatches through the **control
+socket** (never typed into the pane), so it lands even in copy-mode. It **holds focus persistently** —
+left-clicking panel chrome never blurs it, the panel **suppresses the native context menu** and **restores**
+focus if a right-click blurs it. It **auto-grows upward** over the terminal's lower edge, **capped at half its
+height**, and wears the same `/` **slash-command completion** as New ([[term-input]]). The second channel is
+**nav mode**: the `❯` box disables and keystrokes forward **raw** to the pane (to drive the agent's TUI menus);
+trigger is **manual** (header toggle / `⌃/⌘+I`), and leaving the tab or going offline exits.
 
-Human input has **two channels for two jobs**. The docked **`❯` box** is the *prompt* channel: submitting
-dispatches the line through the **control socket** — never by typing into the pane — so it lands even while
-tmux is in copy-mode. It **holds focus persistently**: interacting with panel chrome — clicking a tab
-(even the already-active one), the list's empty space, or the header — never blurs it, so the human always
-keeps a place to type. A left-click selection in the terminal is the one thing that takes focus away. The
-panel also **suppresses the browser's native context menu entirely** (it would otherwise seize focus the
-moment it opens), for a terminal-app feel; should a right-click still blur the box, focus is **restored** to
-it. Together these keep the human's cursor in the input no matter where or how often they click. The box
-**auto-grows upward** as its text wraps: it is anchored to the bottom and **overlays** the terminal's lower
-edge as it gets taller, so it never pushes the terminal or shifts any sibling — the terminal keeps its exact
-size and place. Growth is **capped at half the terminal's height**, where it finally scrolls; below the cap
-there is no scrollbar. It wears the same `/` **slash-command completion** as the New
-tab ([[term-input]]), here for CC's commands. The second channel is **nav mode**:
-while on, the `❯` box is disabled and every keystroke is forwarded **raw** to the pane, so the human can drive
-the agent's interactive TUI menus (`/model`'s list, …). Its trigger is **manual and authoritative** — a header
-toggle (and `⌃/⌘+I`) enters/exits; a best-effort sniff only *suggests* it, never seizes keys. Exiting refocuses
-the `❯` box; leaving the tab or going offline also exits, so keystrokes can never reach the wrong pane.
+A **right-click on a session row** opens the rename pop-over ([[session-rename]]), coexisting with the
+context-menu suppression; the shared `sessionName` puts that rename first in the label precedence. Either
+input also accepts an **attached file**: paste, drop, or the 📎 picker uploads it to the backend (= worker)
+machine's `/tmp` and splices the path in, so the agent gets a readable local path, not bytes (fail-loud on
+bad upload).
 
-Terminals are **warm and always connected**: every live session's pane is mounted and its socket opened the
-moment the board loads — never lazily on focus — and since the surface stays mounted whether or not the
-console is open, the sockets stay live **even while it's closed**, so reopening reveals panes that were warm
-all along. Switching tabs therefore **never loses your place** (socket and scroll survive), for **every** tab
-including **New Session**, which only hides its pane, never unmounts it. Warmth is **state, not GPU**: only the
-**visible** pane is GPU-accelerated, so opening many panes can't exhaust the browser's capped GPU contexts. The backend keeps a warm tmux client
-per live session. List navigation lives at the
-**window level**, so arrows walk the list regardless of what holds focus (xterm included). Header lifecycle
-actions (relaunch / merge / close) follow the session's state; an offline session shows a
-relaunch panel instead of a dead terminal. There is **no manual "request review"** — review is
-**agent-proposed** at the stop-gate, so the header only surfaces actions a human still drives. The header also
-shows the session's **originating prompt** — "what was this asked to do?" — as a single line that fills the
-bar's width and reveals the **full text on hover**.
+Terminals are **warm and always connected**: every live pane mounts and opens its socket when the board loads
+and stays mounted even while the console is closed, so switching tabs **never loses your place** (socket +
+scroll survive). Warmth is **state, not GPU**: only the **visible** pane holds a WebGL context, so many panes
+can't exhaust the browser's capped GPU contexts. Header lifecycle (relaunch / merge / close) follows state; an
+offline session shows a relaunch panel; review is **agent-proposed** at the stop-gate, not a manual request.
+The header shows the **originating prompt** in one line.
 
-**SessionWindow** is the read-only glance: every session as a status dot with a pending-op count. It carries
-**two gestures that mirror the graph**: a single click **locks** the board onto that session — its overlays
-light, the rest grey, focus jumps to its first changed node, and a top-center banner names the grip and
-points at `o`/`O` (see [[keyboard-nav]]) to walk just its changed nodes. A session with **no** pending
-changes still locks, but the board stays un-greyed and the banner says there's nothing to show. A second
-click releases — the locked row wears the same grip so row and dimmed graph read as one selection.
-**Double-click opens that session's board**, the mouse parallel to `⏎`. The window and the interface share their dot-colour and
-display-name from `session.js`, so a session reads the same on every surface.
-
-The **interface's own tabs** (the Enter surface's left session list) render the **same shared `SessionRow`**
-the window does — avatar · status dot · name · status · op tally (`+2 ~1 ✕1`) — so a tab reads IDENTICALLY to
-the window (same status AND the same count, e.g. `review ~2`), not a divergent subset; each surface only
-wraps that one face in its own button + handlers. They carry the window's two gestures **inverted for their context**: a **single click** switches
-to the tab; a **double-click locks** that session and returns to the graph focused on its overlay — the same
-`onPickSession` flow, called with toggle off so a double-click always *grips* (never releases). The
-precondition is a node to focus: a session with no overlay just switches, the double-click a no-op beyond it.
+**SessionWindow** is the read-only glance: each session a status dot + pending-op count. A single click
+**locks** the board onto that session (overlays light, the rest grey, focus jumps to its first changed node,
+see [[keyboard-nav]]); a no-overlay session still locks un-greyed; a second click releases; **double-click
+opens** its board (the mouse parallel to `⏎`). The **interface's own tabs** render
+the same shared `SessionRow`, reading IDENTICALLY to the window, with those gestures **inverted**: single
+click switches tab, double-click locks. All surfaces share dot-colour and name from `session.js`.

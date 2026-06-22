@@ -53,4 +53,10 @@ states are specified in [[spec-node-states]]. The loader also attaches the body'
 is derived, never narrated (see [[three-part-body]]).
 
 This node owns the derivation pair: the loader/aggregator (`specs.ts`) and its git-access layer
-(`git.ts`). The HTTP entrypoint that serves the results belongs to [[spec-cli]].
+(`git.ts`). The git layer exposes three call shapes by how failure should behave: a sync read that throws
+(`git`, with stderr piped, not inherited, so a fail-soft probe never spams the console when the CLI runs
+as a remote backend client from a non-repo dir); an async read that hides failure as `''` (`gitA`); and a
+fail-loud runner for mutating ops where the exit code IS the verdict (`gitTry`, returning ok + stderr so
+the caller surfaces the real reason). It also scopes the pre-commit drift gate to the commit's own staged
+paths. All three strip an inherited `GIT_DIR`/work-tree env so a hook can't misdirect the op. The HTTP
+entrypoint that serves the results belongs to [[spec-cli]].

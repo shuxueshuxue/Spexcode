@@ -46,7 +46,8 @@ The subsystem divides into governed concerns, each its own child node:
 ### Surfaces
 
 One surface stays with the overview. `buildBoard` (`board.ts`) assembles the dashboard's runtime state —
-merged tree + per-worktree overlay + the session list — in one module, served identically at HTTP
-`/api/board` and `spex board` (the frontend only adds x/y pixels). The session's live pane is read as text by
+merged tree + per-worktree overlay + the session list, plus the backend's own project identity (the
+browser-tab name) — in one module, served identically at HTTP `/api/board` and `spex board` (the frontend
+only adds x/y pixels). The session's live pane is read as text by
 `captureSessionResult` behind `GET …/capture` — failure (unknown / offline / capture-error) kept distinct
 from an empty pane — which `spex capture` reads as a backend client (see [[remote-client]]).

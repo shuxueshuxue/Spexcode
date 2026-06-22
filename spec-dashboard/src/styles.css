@@ -461,9 +461,11 @@ body {
 .sess-ops { color: var(--ov, var(--blue)); font-size: 11px; font-weight: 700; flex: none; }
 
 /* ---- session right-click menu + rename prompt (SessionContextMenu.jsx) ---- */
-/* a small pop-over anchored at the cursor (fixed to viewport coords), above the window's z-index. */
+/* a small pop-over anchored at the cursor (fixed to viewport coords). z-index 60 floats it ABOVE every
+   surface — including the session board (.si-backdrop, 50), which is where the rename gesture now lives;
+   a lower value (it began at 30, sized for the .sesswin glance) renders it BEHIND the board, invisible. */
 .sess-menu {
-  position: fixed; z-index: 30; min-width: 116px;
+  position: fixed; z-index: 60; min-width: 116px;
   background: var(--paper); border: 1px solid var(--line); border-radius: 5px;
   box-shadow: 0 6px 22px rgba(101,123,131,.22); overflow: hidden; padding: 3px;
 }
@@ -494,8 +496,10 @@ body {
 /* ---- help modal: keymap + legend (opened by `?`) ---- */
 /* the SINGLE home for the keymap and node vocabulary. A centered, large, scrollable modal over a
    dimmed backdrop (click-outside closes — see Legend.jsx). The HUD only carries a discreet `?`. */
+/* z-index 60 keeps every Modal (help legend, the session rename prompt) ABOVE all surfaces, including the
+   session board (.si-backdrop, 50) it can be opened from — a modal must never render behind its surface. */
 .legend-backdrop {
-  position: fixed; inset: 0; z-index: 20;
+  position: fixed; inset: 0; z-index: 60;
   background: rgba(101,123,131,.25); backdrop-filter: blur(2px);
   display: flex; align-items: center; justify-content: center;
 }

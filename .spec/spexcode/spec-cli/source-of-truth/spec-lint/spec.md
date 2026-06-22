@@ -43,10 +43,11 @@ governed roots, the source and code-identifier extensions, the altitude budgets 
 **`spexcode.json`** (`lint` key), defaulting to values tuned to this tree. A repo with a different layout
 or language overrides what fits; absent the file, lint is unchanged.
 
-No file hashes are stored — git is already the hash database, so drift is derived live from git
-ancestry (commits a governed file moved ahead of the spec's latest version). The pre-commit hook is a
-thin shim over `spex lint`, blocking on **errors only** (bypass with `SPEXCODE_SKIP_LINT=1`); the same
-command runs in CI for real enforcement — local hooks are advisory.
+No file hashes are stored — git is the hash database, so drift is derived live from git ancestry. Plain
+`spex lint` blocks on **errors only**; coverage and drift stay advisory, so CI (plain `spex lint`, see
+[[ci-gate]]) never reddens on the backlog. The pre-commit hook runs `spex lint --gate`, adding the
+**commit-local drift gate** ([[drift-gate]]): a commit touching a file whose node is `≥
+lint.driftErrorThreshold` (default 3) behind is blocked with guidance. Bypass with `SPEXCODE_SKIP_LINT=1`.
 
 ### Spec-OK — acknowledging an implementation-only change
 
@@ -58,11 +59,9 @@ reads that trailer: a commit newer than `<node>`'s latest version that acknowled
 and does **not** count toward its drift. The acknowledged node is matched against the node whose latest
 version is the `sinceHash` drift is measured from, so `Spec-OK: A` only quiets A's drift, never B's.
 
-`spex ack <node-id>` (in `cli.ts`) stamps the trailer onto **HEAD** via `git commit --amend --trailer`
-— the workflow is: land the implementation-only commit, then `spex ack <node>` to record that it was a
-deliberate no-spec-change. The trailer sits in the same trailer block as `Session:`; both coexist. This
-is the explicit, auditable counterpart to drift: drift flags *maybe stale*, `Spec-OK` answers *checked,
-still valid*.
+`spex ack <node-id>` (in `cli.ts`) stamps the trailer onto **HEAD** via `git commit --amend --trailer`:
+land the implementation-only commit, then `spex ack <node>`. It coexists with the `Session:` trailer.
+The auditable counterpart to drift: drift flags *maybe stale*, `Spec-OK` answers *checked, still valid*.
 
 A sharp edge: git calls from inside the hook must route through `git.ts`'s `git()` helper, which strips
 the inherited `GIT_DIR`/`GIT_INDEX_FILE`; otherwise repo discovery resolves to the cwd and lint silently

@@ -20,19 +20,25 @@ export type Finding = { level: 'error' | 'warn'; rule: string; spec?: string; fi
 // the altitude budgets — is read from an optional `spexcode.json` at the repo root, defaulting to the
 // values tuned against this tree. A consuming project (a Python/Go/Rust repo, a different layout) overrides
 // what fits it; absent the file, behaviour is exactly as before. Defaults live here so the file is optional.
-type LintConfig = {
+export type LintConfig = {
   governedRoots: string[]       // dirs whose source files must each be governed by a spec (coverage)
   sourceExtensions: string[]    // extensions coverage treats as source files
   identifierExtensions: string[]// extensions the altitude bare-filename signal recognises (see IDENT below)
   altitude: { lineBudget: number; charBudget: number; sizeable: number; dense: number; steps: number }
+  // @@@ driftErrorThreshold - drift stays an advisory WARN in `spex lint` (CI keeps it advisory — see the
+  // ci-gate node), but the commit-local pre-commit gate (`spex lint --gate`) HARD-BLOCKS a commit that
+  // touches a file whose node has accumulated >= this many commits of drift. Small drift nudges; a node
+  // that's fallen this far behind must be reconciled before you pile more change onto its files.
+  driftErrorThreshold: number
 }
 const DEFAULT_CONFIG: LintConfig = {
   governedRoots: ['spec-dashboard/src', 'spec-cli/src'],
   sourceExtensions: ['ts', 'tsx', 'js', 'jsx'],
   identifierExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'md'],
   altitude: { lineBudget: 50, charBudget: 4200, sizeable: 35, dense: 1.3, steps: 3 },
+  driftErrorThreshold: 3,
 }
-function loadConfig(root: string): LintConfig {
+export function loadConfig(root: string): LintConfig {
   try {
     const raw = JSON.parse(readFileSync(join(root, 'spexcode.json'), 'utf8'))
     const c = raw?.lint ?? {}

@@ -41,7 +41,8 @@ Usage: spex <command> [args]
 Specs / graph
   guide                 print the product setup workflow (install the CLI, adopt a repo, run it)
   init [dir]            scaffold a repo to adopt SpexCode (seed .spec + install git hooks; default: cwd)
-  lint                  check the spec↔code graph (integrity·living·coverage·drift)
+  lint                  check the spec↔code graph (integrity·living·coverage·drift)  [--gate: commit-local drift gate]
+  drift [node]          diagnose drift: list drifting nodes, or one node's layers  [--explain: raw∥expanded∥code-diff]
   ack <node>            stamp Spec-OK:<node> trailer on HEAD (this code change keeps <node>'s spec valid)
   serve                 run the API server (http://localhost:8787)
   board                 dump the dashboard board state as JSON
@@ -108,7 +109,20 @@ From here, dispatch an agent — it authors the spec nodes and rides the dogfood
   const errors = findings.filter((f) => f.level === 'error')
   for (const f of findings) console.error(`  ${f.level === 'error' ? '✗' : '•'} ${f.rule}: ${f.msg}`)
   console.error(`spex lint: ${errors.length} error(s), ${findings.length - errors.length} warning(s)`)
-  process.exit(errors.length ? 1 : 0)
+  // @@@ --gate - the pre-commit form. Plain lint blocks on errors only (drift stays advisory, per the
+  // ci-gate contract); --gate ALSO runs the commit-local drift gate (blocks when a staged file's node is
+  // heavily drifted) and prints the remediation guidance. CI keeps calling plain `spex lint`.
+  let block = errors.length > 0
+  if (has('gate')) {
+    const { driftGate } = await import('./drift.js')
+    if (await driftGate()) block = true
+  }
+  process.exit(block ? 1 : 0)
+} else if (cmd === 'drift') {
+  // diagnose drift (a report, never a gate): `spex drift` lists drifting nodes; `spex drift <node>
+  // --explain` shows that node's raw source ∥ expanded spec ∥ the code diff since its spec's last version.
+  const { explainDrift } = await import('./drift.js')
+  process.exit(await explainDrift(positionals(3)[0], { explain: has('explain') }))
 } else if (cmd === 'ack') {
   // stamp a `Spec-OK: <node>` trailer onto HEAD: "this code change keeps <node>'s spec valid — no spec
   // edit needed", so git.ts's drift won't count this implementation-only commit against <node>. Workflow:

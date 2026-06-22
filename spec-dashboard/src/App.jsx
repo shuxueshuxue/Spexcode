@@ -9,6 +9,8 @@ import SessionGraph from './SessionGraph.jsx'
 import Legend from './Legend.jsx'
 import Settings from './Settings.jsx'
 import SpecSearch from './SpecSearch.jsx'
+import MobileApp from './MobileApp.jsx'
+import { useIsMobile } from './useIsMobile.js'
 import { loadBoard, layout, X_GAP, Y_GAP, projectTitle } from './data.js'
 import { createMomentumScroll } from './scroll.js'
 import { labelColor } from './color.js'
@@ -578,6 +580,7 @@ function Dashboard({ specs, sessions, project, reload }) {
 // changes from other worktrees appear without a refresh. Keeps the last good board across reloads.
 export default function App() {
   const t = useT()
+  const isMobile = useIsMobile()
   const [board, setBoard] = useState(null)
   const reload = useCallback(() => loadBoard().then(setBoard).catch(() => {}), [])
   useEffect(() => {
@@ -593,5 +596,8 @@ export default function App() {
     if (name) document.title = `${name} · SpexCode`
   }, [board?.project])
   if (!board) return <div className="loading">{t('hud.loading')}</div>
+  // @@@ one board, two faces - same polled data, but a phone gets the touch-first drill-down (MobileApp);
+  // a wider viewport keeps the desktop graph board. The switch is viewport width alone (see useIsMobile).
+  if (isMobile) return <MobileApp specs={board.nodes} sessions={board.sessions} project={projectTitle(board)} />
   return <Dashboard specs={board.nodes} sessions={board.sessions} project={projectTitle(board)} reload={reload} />
 }

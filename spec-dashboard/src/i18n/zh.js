@@ -229,4 +229,16 @@ export default {
     hint: '↑↓ 选择 · ⏎ 跳转 · esc 关闭',
     kind: { spec: '节点', session: '会话', issue: '议题' },
   },
+
+  // 触控优先的手机界面（MobileApp）—— 桌面图谱是鼠标/键盘的操作方式，手机改用下钻列表 + 会话页。
+  mobile: {
+    specsTab: '规格',
+    sessionsTab: '会话',
+    childrenTab: ({ n }) => `子节点 ${n}`,
+    liveEditors: ({ n }) => `${n} 个在线编辑者`,
+    changing: ({ n }) => `正在修改 ${n} 个节点`,
+    noChanges: '没有待提交的规格更改',
+    noSessions: '没有运行中的会话 —— 请在桌面看板上启动',
+    back: '返回',
+  },
 }

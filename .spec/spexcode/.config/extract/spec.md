@@ -22,7 +22,7 @@ Then grow nodes under that spine:
   several jobs becomes several nodes that each claim it; one job spanning several files becomes one node
   claiming them all. Every governed file is claimed by at least one node; nest into subtrees where warranted.
 - **Stay at contract altitude.** State each node's intent, invariants, and outward behavior — what it
-  guarantees and why — not how the code does it. Push mechanics into `@@@` code comments.
+  guarantees and why — not how the code does it.
 - **Never fabricate intent.** Code shows *what it does*, rarely *why*. Read any README/design docs for real
   intent; where you can still only see behavior, state the behavior and mark the intent as inferred rather
   than inventing a rationale.

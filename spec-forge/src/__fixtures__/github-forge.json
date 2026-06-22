@@ -1,0 +1,63 @@
+{
+  "_note": "Fixture mirroring githubDriver output (the vendor-neutral ForgeIssue[]/ForgePR[] a `gh issue/pr list` collapses to) for a sample repo. Drives the needs-yatsu-eval resolver test with no network.",
+  "issues": [
+    {
+      "number": 1,
+      "title": "login redirect is broken on /logout",
+      "body": "Steps to repro: click logout, land on a 404.\n\nSpec: sessions\nneeds-yatsu-eval\n",
+      "url": "https://github.com/acme/repo/issues/1",
+      "state": "open",
+      "labels": []
+    },
+    {
+      "number": 2,
+      "title": "board badge count is off by one",
+      "body": "The open-issue badge over-counts.\n\nSpec: dashboard-issues",
+      "url": "https://github.com/acme/repo/issues/2",
+      "state": "open",
+      "labels": ["bug", "needs-yatsu-eval"]
+    },
+    {
+      "number": 3,
+      "title": "tracer mislinks a node/<id> branch with a dash",
+      "body": "branchToNode picks the short id.\n\nSpec: links",
+      "url": "https://github.com/acme/repo/issues/3",
+      "state": "open",
+      "labels": ["bug"]
+    },
+    {
+      "number": 4,
+      "title": "old freshness drift already verified",
+      "body": "Spec: freshness\nNeeds-Yatsu-Eval\n",
+      "url": "https://github.com/acme/repo/issues/4",
+      "state": "closed",
+      "labels": []
+    },
+    {
+      "number": 5,
+      "title": "flagged but names no node",
+      "body": "This one is flagged but carries no Spec: marker and no closing PR.\n\nneeds-yatsu-eval\n",
+      "url": "https://github.com/acme/repo/issues/5",
+      "state": "open",
+      "labels": ["needs-yatsu-eval"]
+    },
+    {
+      "number": 6,
+      "title": "fixed via an open PR, no marker on the issue",
+      "body": "A worked bug; the node comes transitively from the closing PR.\n\nneeds-yatsu-eval: ignore-the-trailing-text",
+      "url": "https://github.com/acme/repo/issues/6",
+      "state": "open",
+      "labels": ["needs-yatsu-eval"]
+    }
+  ],
+  "prs": [
+    {
+      "number": 20,
+      "title": "fix logout redirect",
+      "url": "https://github.com/acme/repo/pull/20",
+      "state": "open",
+      "headRefName": "node/port-7f3a1c2",
+      "closesIssues": [6]
+    }
+  ]
+}

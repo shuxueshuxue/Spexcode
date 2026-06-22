@@ -465,7 +465,6 @@ body {
   background: color-mix(in srgb, var(--ov) 12%, var(--panel2));
   border-left-width: 4px; color: var(--ink); font-weight: 600;
 }
-.sess-dot { width: 7px; height: 7px; border-radius: 2px; flex: none; }
 .sess-id { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sess-status { color: var(--muted); font-size: 10px; flex: none; }
 .sess-lock { font-size: 10px; flex: none; line-height: 1; filter: saturate(0); }

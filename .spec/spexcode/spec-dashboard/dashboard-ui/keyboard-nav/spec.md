@@ -8,6 +8,7 @@ code:
   - spec-dashboard/src/App.jsx
   - spec-dashboard/src/SpecSearch.jsx
   - spec-dashboard/src/scroll.js
+  - spec-dashboard/src/styles.css
 ---
 # keyboard-nav
 
@@ -46,6 +47,7 @@ Move through the spec tree by **relationship, not geometry** — the tree sits a
 
 - **Move by relationship, not geometry.** Navigation walks the parent/child/column structure (see [[node-graph]]), never raw pixel distance. `↑`/`↓` stay strictly within the focus node's column — depth pins x, so a column is a clean reversible vertical line. `hjkl` mirror the arrows for the vim hand. The one exception is a **leaf's right arrow**: with no child to dive into, rather than dead-end it steps to the nearest node in the columns to its right — and even there the distance is normalised into grid cells (so the wide column gap and the narrow row gap weigh equally), never raw pixels. It only ever moves rightward, so the parent key still walks you back.
 - **The camera follows the keyboard, not the mouse.** Arrow nav recentres the viewport on the new node — a flat-pan at constant zoom, never zoom-to-fit. A mouse click only moves the highlight; the board stays put. Same focus state, two interaction logics.
+- **While the keyboard drives, the mouse steps aside.** The pointer-side mirror of the rule above: a navigation keystroke puts the board in *keyboard mode* — the cursor hides and the board stops taking pointer events, so a stationary cursor can no longer fire a hover affordance (the issue popover, any future hover reveal) while you walk the tree. Only a real mouse move brings it back — one that genuinely moves the pointer, never a camera pan sliding the board *under* a still cursor; clicks, modals, and zoom leave the mode untouched. So the two input modes never fight over the board.
 - **A modal owns the keys.** While the popup, help overlay, settings, search palette, or session interface is open it captures every key — nav never leaks to the board behind it.
 
 ## search & jump

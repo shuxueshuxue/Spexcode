@@ -29,6 +29,13 @@ body {
 }
 
 .app { display: grid; grid-template-columns: 1fr; height: 100vh; }
+/* @@@ keyboard mode - while the KEYBOARD is driving the board (App.jsx kbdMode, set by nav keys, cleared by
+   a real mouse move) the mouse gets out of the way: the cursor hides everywhere and the board takes no
+   pointer events. With no pointer over it, no :hover reaction fires under the stationary cursor — the issue
+   popover and any future hover affordance simply don't appear until you actually move the mouse. Scoped to
+   .react-flow so the modals/HUD layered ABOVE the board (legend, settings, search) stay clickable. */
+.app.kbd-mode, .app.kbd-mode * { cursor: none !important; }
+.app.kbd-mode .react-flow { pointer-events: none; }
 
 /* ---- graph pane ---- */
 .graph { position: relative; background: var(--paper); border-right: 1px solid var(--line); }

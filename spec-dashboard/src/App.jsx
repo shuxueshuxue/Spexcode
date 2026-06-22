@@ -47,6 +47,13 @@ function Dashboard({ specs, sessions, project, reload }) {
   const graphRef = useRef(null)
   const animRef = useRef(0)
   const chordRef = useRef({ buf: '', timer: 0 })  // pending board-chord buffer (see onKey)
+  // @@@ kbdMode - the pointer-side mirror of "the camera follows the keyboard, not the mouse": while the
+  // KEYBOARD is driving the board, the mouse gets out of the way. Nav keys engage it (see onKey); the CSS
+  // (.kbd-mode) then hides the cursor and lifts the board's pointer events, so a stationary cursor can't
+  // trigger a hover reaction (the issue popover etc.). A genuine mouse MOVE clears it (see below).
+  const [kbdMode, setKbdMode] = useState(false)
+  const kbdRef = useRef(false); kbdRef.current = kbdMode
+  const lastMouseRef = useRef({ x: -1, y: -1 })
   // @@@ momentum scrollers - j/k glide for the two scrollable modals, one instance each so their
   // accumulating targets stay independent. The popup pane and the help body share ONE implementation
   // (createMomentumScroll); see scroll.js for the easing/target mechanics.
@@ -300,7 +307,7 @@ function Dashboard({ specs, sessions, project, reload }) {
     const cyclePane = (dir) => setPane((p) => { const i = paneKeys.indexOf(p); return paneKeys[((i < 0 ? 0 : i) + dir + paneKeys.length) % paneKeys.length] })
     // nav just moves focus; the follow-focus effect recenters once the tree has re-plotted around the new
     // focus (passing the stale pre-re-plot node straight to centerOn would aim at its OLD coordinates).
-    const go = (t, e) => { if (t) { e.preventDefault(); e.stopPropagation(); setFocusId(t.id) } }
+    const go = (t, e) => { if (t) { e.preventDefault(); e.stopPropagation(); setKbdMode(true); setFocusId(t.id) } }
     // @@@ bumpScroll - glide the open popup pane by `delta` via the shared momentum scroller. Only one
     // pane is mounted at a time, so the first matching `.ov-body` descendant is the scroller; when panes
     // switch the element changes and the scroller drops its stale target (see scroll.js).
@@ -402,9 +409,10 @@ function Dashboard({ specs, sessions, project, reload }) {
       if (e.key === 'ArrowDown'  || e.key === 'j') return go(downTarget, e)
       if (e.key === 'ArrowLeft'  || e.key === 'h') return go(parent, e)
       if (e.key === 'ArrowRight' || e.key === 'l') return go(rightTarget, e)
-      if (e.key === '=' || e.key === '+') { e.preventDefault(); centerOn(focus, clamp(getViewport().zoom * 1.2), 160) }
-      else if (e.key === '-' || e.key === '_') { e.preventDefault(); centerOn(focus, clamp(getViewport().zoom / 1.2), 160) }
-      else if (e.key === '0') { e.preventDefault(); centerOn(focus, 0.85, 200) }
+      // zoom & cycle are keyboard board ops too — they engage kbdMode so the mouse steps aside the same way.
+      if (e.key === '=' || e.key === '+') { e.preventDefault(); setKbdMode(true); centerOn(focus, clamp(getViewport().zoom * 1.2), 160) }
+      else if (e.key === '-' || e.key === '_') { e.preventDefault(); setKbdMode(true); centerOn(focus, clamp(getViewport().zoom / 1.2), 160) }
+      else if (e.key === '0') { e.preventDefault(); setKbdMode(true); centerOn(focus, 0.85, 200) }
       else if (e.key === 'i' || e.key === 'I') { e.preventDefault(); setOverlay(true) }
       // @@@ overlay cycle - `o` walks focus through the changed nodes (`O` = ⇧, reverse), wrapping at the
       // ends. SCOPE follows the lock: with a session locked it walks just THAT session's changed nodes
@@ -415,6 +423,7 @@ function Dashboard({ specs, sessions, project, reload }) {
       else if (e.key === 'o' || e.key === 'O') {
         e.preventDefault()
         if (!cycleNodes.length) return
+        setKbdMode(true)
         const dir = e.key === 'O' ? -1 : 1
         const idx = cycleNodes.findIndex((s) => s.id === focus.id)
         const next = idx === -1
@@ -435,6 +444,23 @@ function Dashboard({ specs, sessions, project, reload }) {
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
   }, [overlay, sessionUI, legend, settings, graphView, search, highlightId, focus, cycleNodes, upTarget, downTarget, rightTarget, parent, centerOn, getViewport, openBoard, startNew, popupScroll, legendScroll])
+
+  // @@@ a REAL mouse move wakes the mouse - the only exit from kbdMode. The guard is the whole trick: every
+  // arrow press PANS the camera under a stationary cursor, and a content shift can emit a synthetic mousemove
+  // whose clientX/clientY are UNCHANGED — treating that as "the user moved the mouse" would snap the cursor
+  // back the instant you navigate, defeating the feature. So we wake only when the pointer's viewport
+  // coordinates actually differ from the last seen ones. One always-on listener (stable via kbdRef) both
+  // tracks the position and performs the exit; it no-ops while kbdMode is already off.
+  useEffect(() => {
+    const onMove = (e) => {
+      const p = lastMouseRef.current
+      const moved = e.clientX !== p.x || e.clientY !== p.y
+      p.x = e.clientX; p.y = e.clientY
+      if (moved && kbdRef.current) setKbdMode(false)
+    }
+    window.addEventListener('mousemove', onMove, true)
+    return () => window.removeEventListener('mousemove', onMove, true)
+  }, [])
 
   // clicking a node focuses it; the follow-focus effect then re-plots the tree around it and pans the
   // camera to keep it in place (a click drills the same way the arrows do). It does NOT open a session —
@@ -463,7 +489,7 @@ function Dashboard({ specs, sessions, project, reload }) {
   }, [highlightId, specs])
 
   return (
-    <div className="app">
+    <div className={kbdMode ? 'app kbd-mode' : 'app'}>
       <div className="graph" ref={graphRef}>
         <ReactFlow
           nodes={nodes}

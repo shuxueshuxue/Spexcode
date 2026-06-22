@@ -1,7 +1,8 @@
 import { loadSpecs } from '../../spec-cli/src/specs.js'
-import type { ForgeDriver } from './port.js'
+import type { ForgeDriver, ForgeIssue, ForgePR } from './port.js'
 import { githubDriver } from './drivers/github.js'
 import { resolveLinks, type NodeLinks } from './links.js'
+import { resolveEvalPending, type NodeEvalPending } from './needs-yatsu-eval.js'
 
 // @@@ forge cli - the spec-forge link tracer on the real `spex` surface. It READS a forge (open issues +
 // PRs) through a driver and resolves each to the spec node it serves, then surfaces node → work. Every
@@ -24,6 +25,23 @@ function flag(args: string[], name: string): string | undefined {
   return i >= 0 ? args[i + 1] : undefined
 }
 const has = (args: string[], name: string) => args.includes(`--${name}`)
+
+// @@@ readForge - the read every verb shares: select the host's driver THROUGH the port (registry lookup,
+// never a vendor branch), load the canonical node ids (git/`.spec`), and fetch the host's open issues/PRs.
+// Returns null after printing the unknown-host error so the caller just exits 2. Read-only — it only reads.
+async function readForge(
+  args: string[],
+): Promise<{ driver: ForgeDriver; nodeIds: string[]; issues: ForgeIssue[]; prs: ForgePR[] } | null> {
+  const host = flag(args, 'host') ?? DEFAULT_HOST
+  const driver = driverFor(host)
+  if (!driver) {
+    console.error(`forge: unknown host '${host}' (known: ${DRIVERS.map((d) => d.host).join(', ')})`)
+    return null
+  }
+  const nodeIds = (await loadSpecs()).map((s) => s.id)
+  const [issues, prs] = await Promise.all([driver.listIssues(), driver.listPRs()])
+  return { driver, nodeIds, issues, prs }
+}
 
 // @@@ render - print the node → work inversion for a human. One block per node that has links: its issues
 // (with the source that linked them — marker vs the inferred pr/branch) then its PRs. The url trails each
@@ -48,14 +66,9 @@ function render(links: NodeLinks[]): string {
 // against the real node ids (loadSpecs — git/`.spec` canonical), and print node → linked work. --node <id>
 // narrows to one node; --json emits the raw resolved structure. Read-only end to end.
 async function links(args: string[]): Promise<number> {
-  const host = flag(args, 'host') ?? DEFAULT_HOST
-  const driver = driverFor(host)
-  if (!driver) {
-    console.error(`forge: unknown host '${host}' (known: ${DRIVERS.map((d) => d.host).join(', ')})`)
-    return 2
-  }
-  const nodeIds = (await loadSpecs()).map((s) => s.id)
-  const [issues, prs] = await Promise.all([driver.listIssues(), driver.listPRs()])
+  const forge = await readForge(args)
+  if (!forge) return 2
+  const { driver, nodeIds, issues, prs } = forge
   let resolved = resolveLinks(issues, prs, nodeIds)
 
   const only = flag(args, 'node')
@@ -75,11 +88,50 @@ async function links(args: string[]): Promise<number> {
   return 0
 }
 
+// @@@ renderPending - print the eval-pending list for a human. One block per node owed an evaluation, each
+// row a flagged open issue (with the source that linked it to the node — marker vs the inferred PR). Same
+// row shape as render() so the two reports read alike; the url trails so it stays clickable.
+function renderPending(pending: NodeEvalPending[]): string {
+  const out: string[] = []
+  for (const n of pending) {
+    out.push(`\n${n.node}`)
+    for (const i of n.pending) out.push(`    #${i.number} ${i.state}  ${i.title}  (via ${i.via})  ${i.url}`)
+  }
+  return out.join('\n')
+}
+
+// @@@ forge eval-pending - the forge half of `spex yatsu scan`, on the CLI. Read the host's open issues/PRs,
+// resolve the ones flagged `needs-yatsu-eval` (label or body line) to the node each serves, and print
+// node → evaluation owed. --node <id> narrows; --json emits the raw NodeEvalPending[] — the SAME shape
+// `spex yatsu scan` consumes to fold these in beside its own stale-reading findings. Read-only end to end.
+async function evalPending(args: string[]): Promise<number> {
+  const forge = await readForge(args)
+  if (!forge) return 2
+  const { driver, nodeIds, issues, prs } = forge
+  let resolved = resolveEvalPending(issues, prs, nodeIds)
+
+  const only = flag(args, 'node')
+  if (only) {
+    if (!nodeIds.includes(only)) { console.error(`forge: no such node '${only}'`); return 1 }
+    resolved = resolved.filter((n) => n.node === only)
+  }
+
+  if (has(args, 'json')) { console.log(JSON.stringify(resolved, null, 2)); return 0 }
+  const nPending = resolved.reduce((a, n) => a + n.pending.length, 0)
+  console.log(
+    `spec-forge · ${driver.host} · ${resolved.length} node(s) with eval pending · ${nPending} issue(s)` +
+      ` · scanned ${issues.length} issue(s), ${prs.length} pr(s)`,
+  )
+  if (resolved.length) console.log(renderPending(resolved))
+  return 0
+}
+
 // @@@ runForge - the package's single entrypoint, called by cli.ts's thin `forge` route with the arg slice
 // after `forge`. Routes to a read-only verb and returns the process exit code (the route just exits on it).
 export async function runForge(args: string[]): Promise<number> {
   const sub = args[0]
   if (sub === 'links') return links(args.slice(1))
-  console.error('spex forge: links [--host github] [--node <id>] [--json]')
+  if (sub === 'eval-pending') return evalPending(args.slice(1))
+  console.error('spex forge: links [--host github] [--node <id>] [--json] | eval-pending [--host github] [--node <id>] [--json]')
   return 2
 }

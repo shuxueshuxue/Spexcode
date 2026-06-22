@@ -24,7 +24,9 @@ import { useT } from './i18n/index.jsx'
 // Nodes REUSE the shared seed-to-hue colour + avatar (color.js / avatar.jsx) keyed off the session id, so
 // a face here matches the same session's stripe/avatar everywhere else on the dashboard.
 
-const sessionLabel = (s, t) => s.node || s.title || s.branch || (s.id ? s.id.slice(0, 8) : t('common.session'))
+// name (the manual rename override) wins over the derived label on EVERY surface — mirror session.js's
+// sessionName precedence here too, just with the graph's short id fallback.
+const sessionLabel = (s, t) => s.name || s.node || s.title || s.branch || (s.id ? s.id.slice(0, 8) : t('common.session'))
 
 // @@@ GraphNode - a session as a network node: its avatar + label, ringed in its own hue. The two handles
 // are the anchor points ReactFlow routes arrows to/from AND the drag targets for asking a monitor. With

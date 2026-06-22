@@ -18,8 +18,8 @@ code:
 Sessions are labelled automatically — by the spec node they touch, or a few words of their launch
 prompt, or their branch. That default is fine until a human needs to fix it: two sessions on the same
 node read alike, and a node-agnostic session wears an awkward prompt fragment forever. Right-clicking a
-session row should open a small menu whose one verb, **rename**, lets a human give that session a name
-that sticks.
+session row should open a small menu: **rename** lets a human give that session a name that sticks, and
+**close** offers the same worktree removal the header does, one right-click away.
 
 ## expanded spec
 
@@ -45,6 +45,11 @@ reload, so the new label appears on every surface at once rather than only where
 **blank** name is a **reset**, not an error: it clears the override and the session falls back to its
 derived label. Renaming an unknown session fails loudly — the endpoint answers 404 — never a silent
 success.
+
+The menu's second item, **close**, is a right-click shortcut for the header's close button — not a new
+capability. It POSTs the same human-only worktree removal (no confirm, identical behaviour) and asks the
+board to reload, so the closed row drops off every surface at once; it's styled as the destructive verb to
+set it apart from rename.
 
 Because both the pop-over and its prompt are opened **from** the board, each must render **above** it:
 a menu or modal that paints behind its own surface is present in the DOM yet invisible and unclickable,

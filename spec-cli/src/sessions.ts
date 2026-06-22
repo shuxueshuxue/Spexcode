@@ -361,13 +361,14 @@ async function findWorktree(id: string): Promise<{ path: string; branch: string 
   return null
 }
 
-// @@@ createdAt - a session's birth instant = the `.session` sidecar's BIRTHTIME. The file is written once
-// at newSession and only ever rewritten in place (status flips, rename, merge tally), so birthtime is stable
-// across a session's whole life where mtime/ctime drift on every rewrite — making it the only on-disk signal
-// that yields a chronological order that never reshuffles. Falls back to mtime where a filesystem reports no
-// birthtime, then 0. Drives listSessions' ordering (oldest first, new sessions append).
+// @@@ createdAt - a session's birth instant = the WORKTREE DIRECTORY's birthtime. The dir is created once by
+// `git worktree add` and lives for the session's whole life, so its birthtime is the one stable anchor. The
+// `.session` file's birthtime is NOT usable: writers recreate that file (it's rewritten via replace, not an
+// in-place truncate), so its birthtime resets to "last major write" and the order would reshuffle — exactly
+// the instability we're avoiding. Falls back to dir mtime where a filesystem reports no birthtime, then 0.
+// Drives listSessions' ordering (oldest first, new sessions append).
 function createdAt(dir: string): number {
-  try { const s = statSync(join(dir, '.session')); return s.birthtimeMs || s.mtimeMs || 0 } catch { return 0 }
+  try { const s = statSync(dir); return s.birthtimeMs || s.mtimeMs || 0 } catch { return 0 }
 }
 
 function toSession(rec: SessRec, branch: string | null, path: string, status: DisplayStatus, activity: string | null = null): Session {

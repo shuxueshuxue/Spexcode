@@ -514,6 +514,12 @@ body {
 .sess-rename-save { border-color: var(--blue); color: var(--blue); }
 .sess-rename-save:hover { background: var(--blue); color: var(--paper); }
 .sess-rename-save:disabled { opacity: .5; cursor: default; }
+/* close-confirm prompt: shares the rename modal chrome; the confirm button is the destructive (orange) verb. */
+.sess-confirm { display: flex; flex-direction: column; gap: 12px; padding: 4px 2px 2px; }
+.sess-confirm-msg { margin: 0; color: var(--ink); font-size: 12px; line-height: 1.4; }
+.sess-rename-btn.danger { border-color: var(--orange); color: var(--orange); }
+.sess-rename-btn.danger:hover { background: var(--orange); color: var(--paper); }
+.sess-rename-btn.danger:disabled { opacity: .5; cursor: default; }
 
 /* ---- help modal: keymap + legend (opened by `?`) ---- */
 /* the SINGLE home for the keymap and node vocabulary. A centered, large, scrollable modal over a

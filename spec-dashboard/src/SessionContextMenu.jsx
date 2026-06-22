@@ -1,11 +1,11 @@
 // @@@ SessionContextMenu - the right-click menu on a session row, with two gestures. "Rename" swaps the
 // menu for a centred prompt (the shared Modal) prefilled with the session's CURRENT name override;
 // submitting POSTs to /api/sessions/:id/rename — the backend persists it to the worktree's `.session` as the
-// `name` override that wins over the derived label — and a blank name CLEARS the override. "Close" is a
-// right-click shortcut for the header's close button: it POSTs to /api/sessions/:id/close (the human-only
-// worktree removal), no confirm, identical behaviour. Either gesture calls onChanged so the board reloads
-// and every surface reflects it at once. The menu is its own pop-over (not a board node), so the window
-// stays a thin glance and this owns the gesture.
+// `name` override that wins over the derived label — and a blank name CLEARS the override. "Close" runs the
+// same /api/sessions/:id/close as the header's close button (the human-only worktree removal), but — unlike
+// that button — behind a **confirm prompt**, because a right-click is easy to mis-aim and the removal is
+// destructive. Either gesture calls onChanged so the board reloads and every surface reflects it at once.
+// The menu is its own pop-over (not a board node), so the window stays a thin glance and this owns the gesture.
 
 import { useEffect, useRef, useState } from 'react'
 import Modal from './Modal.jsx'
@@ -16,6 +16,7 @@ import { useT } from './i18n/index.jsx'
 export default function SessionContextMenu({ menu, onClose, onChanged }) {
   const t = useT()
   const [renaming, setRenaming] = useState(null)   // the session whose rename prompt is open | null
+  const [closing, setClosing] = useState(null)     // the session whose close-confirm prompt is open | null
   const [value, setValue] = useState('')
   const [busy, setBusy] = useState(false)
   const inputRef = useRef(null)
@@ -40,14 +41,20 @@ export default function SessionContextMenu({ menu, onClose, onChanged }) {
     onClose()
   }
 
-  // close = the same gesture as the header's close button, just reachable from the right-click menu: POST
-  // the human-only worktree removal, then reload so the row drops off every surface. No confirm — it mirrors
-  // that button exactly. Fire-and-forget: a failed close is reconciled by the next board poll.
+  // close opens a confirm prompt first (the removal is destructive and a right-click is easy to mis-aim).
   const startClose = (e) => {
     e.stopPropagation()
-    const id = menu.session.id
+    setClosing(menu.session)
     onClose()
-    apiFetch(`/api/sessions/${id}/close`, { method: 'POST' }).catch(() => {}).finally(() => onChanged?.())
+  }
+
+  // confirmed close: POST the human-only worktree removal, then reload so the row drops off every surface.
+  const confirmClose = async () => {
+    if (busy) return
+    setBusy(true)
+    try { await apiFetch(`/api/sessions/${closing.id}/close`, { method: 'POST' }) }
+    catch { /* the next board poll reconciles */ }
+    finally { setBusy(false); setClosing(null); onChanged?.() }
   }
 
   const submit = async (e) => {
@@ -90,6 +97,22 @@ export default function SessionContextMenu({ menu, onClose, onChanged }) {
               <button type="submit" className="sess-rename-btn sess-rename-save" disabled={busy}>{t('common.save')}</button>
             </div>
           </form>
+        </Modal>
+      )}
+      {closing && (
+        <Modal
+          title={t('sessionWindow.closeTitle', { name: sessionName(closing) })}
+          closeLabel={t('common.close')}
+          className="sess-rename-modal"
+          onClose={() => setClosing(null)}
+        >
+          <div className="sess-confirm">
+            <p className="sess-confirm-msg">{t('sessionWindow.closeConfirm')}</p>
+            <div className="sess-rename-actions">
+              <button type="button" className="sess-rename-btn" onClick={() => setClosing(null)}>{t('common.cancel')}</button>
+              <button type="button" className="sess-rename-btn danger" onClick={confirmClose} disabled={busy}>{t('sessionWindow.close')}</button>
+            </div>
+          </div>
         </Modal>
       )}
     </>

@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { randomUUID } from 'node:crypto'
-import { readFileSync, writeFileSync, existsSync, renameSync, mkdirSync, rmSync, readdirSync } from 'node:fs'
+import { readFileSync, writeFileSync, existsSync, renameSync, mkdirSync, rmSync, readdirSync, statSync } from 'node:fs'
 import { join, dirname, relative } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createConnection } from 'node:net'
@@ -155,7 +155,7 @@ const PROPOSAL_STATUS: Record<Proposal, DisplayStatus> = { merge: 'review', noth
 export type Session = {
   id: string; node: string | null; title: string | null; name: string | null; branch: string | null; path: string
   lifecycle: Lifecycle; proposal: Proposal | null; merges: number; status: DisplayStatus; note: string | null
-  prompt: string | null; promptPreview: string | null
+  prompt: string | null; promptPreview: string | null; created: number; activity: string | null
 }
 
 // @@@ originating prompt - what the session was ASKED to do, captured at launch so a manager (human or
@@ -297,6 +297,32 @@ async function liveTmux(): Promise<Set<string>> {
   return s
 }
 
+// @@@ paneTitles - each worker's LIVE self-summary, free from tmux. Claude Code continuously sets its
+// terminal title (an OSC escape) to a short description of what it is doing right now — and tmux captures
+// that as the pane title (NOT the window name; OSC titles never touch window_name). Our worker launches one
+// pane per session, named with the session id, so ONE `list-panes -a` maps id → "what it's doing". Same
+// shape and cost as liveTmux (one tmux call for the whole list); failure → empty map, so a tmux hiccup just
+// drops the subtitle for a tick, never the session. The leading status glyph is stripped at read time.
+async function paneTitles(): Promise<Map<string, string>> {
+  const m = new Map<string, string>()
+  let out = ''
+  try { out = await tmux(['list-panes', '-a', '-F', '#{session_name}\t#{pane_title}']) } catch { return m }
+  for (const line of out.split('\n')) {
+    const tab = line.indexOf('\t'); if (tab < 0) continue
+    const id = line.slice(0, tab), title = cleanActivity(line.slice(tab + 1))
+    if (id && title) m.set(id, title)
+  }
+  return m
+}
+
+// strip Claude Code's leading status glyph (✳ when idle, a braille spinner frame while working) plus the
+// space after it: the dashboard draws its own status dot, and a frozen spinner frame is just noise — keep
+// only the summary text. Empty after stripping → null (no subtitle).
+function cleanActivity(raw: string): string | null {
+  const t = raw.replace(/^[\s✳✶✻✽✢·⠀-⣿]+/u, '').trim()
+  return t || null
+}
+
 // @@@ launchedAt - when we last started a tmux window for an id (set in launch()). claude needs ~15-20s
 // after the window appears to recreate its rendezvous socket; in that window the socket is absent but the
 // session is booting, NOT dead. reconcile consults this to report 'starting' (a distinct transient state)
@@ -335,9 +361,21 @@ async function findWorktree(id: string): Promise<{ path: string; branch: string 
   return null
 }
 
-function toSession(rec: SessRec, branch: string | null, path: string, status: DisplayStatus): Session {
+// @@@ createdAt - a session's birth instant = the `.session` sidecar's BIRTHTIME. The file is written once
+// at newSession and only ever rewritten in place (status flips, rename, merge tally), so birthtime is stable
+// across a session's whole life where mtime/ctime drift on every rewrite — making it the only on-disk signal
+// that yields a chronological order that never reshuffles. Falls back to mtime where a filesystem reports no
+// birthtime, then 0. Drives listSessions' ordering (oldest first, new sessions append).
+function createdAt(dir: string): number {
+  try { const s = statSync(join(dir, '.session')); return s.birthtimeMs || s.mtimeMs || 0 } catch { return 0 }
+}
+
+function toSession(rec: SessRec, branch: string | null, path: string, status: DisplayStatus, activity: string | null = null): Session {
   const prompt = readPromptFile(path)   // the originating ask, captured at launch (sidecar; null for old sessions)
-  return { id: rec.session!, node: rec.node, title: rec.title, name: rec.name, branch, path, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, prompt, promptPreview: prompt ? promptPreview(prompt) : null }
+  // activity is the LIVE pane title; it only means anything while the worker is up — a dead/booting/queued
+  // session would show a stale or absent title, so it's suppressed there (the row falls back to its label).
+  const live = status !== 'offline' && status !== 'starting' && status !== 'queued'
+  return { id: rec.session!, node: rec.node, title: rec.title, name: rec.name, branch, path, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, prompt, promptPreview: prompt ? promptPreview(prompt) : null, created: createdAt(path), activity: live ? activity : null }
 }
 
 // @@@ renameSession - set (or clear) a session's human display NAME: the user-chosen override that wins
@@ -369,16 +407,17 @@ const lastKnownSession = new Map<string, Session>()
 // @@@ listSessions - every worktree that IS a session (has a .session id), status reconciled. Offline
 // and awaiting ones still appear (their .session persists), so a session is never lost from view.
 export async function listSessions(): Promise<Session[]> {
-  // ONE worktree enumeration + ONE tmux liveness snapshot for the whole list (both independent), then
-  // every session reconciles by a pure set lookup + one existsSync — no per-session tmux spawn.
-  const [wts, live] = await Promise.all([listWorktrees(), liveTmux()])
+  // ONE worktree enumeration + ONE tmux liveness snapshot + ONE pane-title snapshot for the whole list (all
+  // independent), then every session reconciles by a pure set lookup + one existsSync — no per-session tmux
+  // spawn.
+  const [wts, live, titles] = await Promise.all([listWorktrees(), liveTmux(), paneTitles()])
   // each row reads that worktree's .session + prompt sidecar. A worktree whose directory is GENUINELY gone
   // (a worker self-merged and retired it) is omitted; one whose directory still exists but hit a transient
   // read failure is served from its last-known row — never dropped. See resilience.guardWorktree.
   const rows = await Promise.all(wts.map((w) => guardWorktree<Session | null>(w.path, () => {
     const rec = readSessionFile(w.path)
     if (!rec.session) { lastKnownSession.delete(w.path); return null }   // exists but isn't a session
-    const s = toSession(rec, w.branch, w.path, reconcile(rec, live))
+    const s = toSession(rec, w.branch, w.path, reconcile(rec, live), titles.get(rec.session) ?? null)
     lastKnownSession.set(w.path, s)
     return s
   }, () => {
@@ -390,7 +429,12 @@ export async function listSessions(): Promise<Session[]> {
   // prune last-known entries for worktrees that no longer appear at all (genuinely removed), keeping it bounded.
   const livePaths = new Set(wts.map((w) => w.path))
   for (const p of [...lastKnownSession.keys()]) if (!livePaths.has(p)) lastKnownSession.delete(p)
-  return rows.filter((s): s is Session => s != null)
+  // @@@ creation order - git lists worktrees alphabetically by path, and a path is a slug of the launch
+  // prompt, so the raw enumeration order is effectively random AND reshuffles every time a session joins or
+  // leaves. Order by birth instead (oldest first): each session keeps its slot for life and a new one simply
+  // appends — a stable spatial map across every surface (dashboard window, session tabs, `spex ls`). id
+  // breaks ties so same-instant births stay deterministic.
+  return rows.filter((s): s is Session => s != null).sort((a, b) => a.created - b.created || a.id.localeCompare(b.id))
 }
 
 // @@@ session graph = LIVE monitors, not a stored relationship. An edge A→B means "agent A is RIGHT NOW

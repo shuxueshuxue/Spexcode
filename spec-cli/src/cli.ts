@@ -20,7 +20,7 @@ function flag(name: string): string | undefined {
 }
 const has = (name: string) => process.argv.includes(`--${name}`)
 // bare positionals after argv index `from`, skipping flags and their values (selectors for ls/watch).
-const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--timeout'])
+const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--timeout', '--reason'])
 function positionals(from: number): string[] {
   const out: string[] = []
   for (let i = from; i < process.argv.length; i++) {
@@ -42,7 +42,7 @@ Specs / graph
   guide                 print the product setup workflow (install the CLI, adopt a repo, run it)
   init [dir]            scaffold a repo to adopt SpexCode (seed .spec + install git hooks; default: cwd)
   lint                  check the spec↔code graph (integrity·living·coverage·drift); when committing, gates on heavy commit-local drift
-  ack <node>            stamp Spec-OK:<node> trailer on HEAD (this code change keeps <node>'s spec valid)
+  ack <node>… --reason  stamp Spec-OK on HEAD for one or more nodes (this change keeps their specs valid); --reason required, not stored
   serve                 run the API server (http://localhost:8787)
   board                 dump the dashboard board state as JSON
   forge <sub>           trace a forge's issues/PRs onto spec nodes (read-only): links [--host github] [--node <id>] [--json]
@@ -118,16 +118,28 @@ From here, dispatch an agent — it authors the spec nodes and rides the dogfood
   if (blocked.length) console.error(`\n✗ SpexCode: ${blocked.join(', ')} ${blocked.length === 1 ? 'is' : 'are'} ≥ ${threshold} commit(s) behind. Reconcile (above) or bypass with SPEXCODE_SKIP_LINT=1.`)
   process.exit(errors.length || blocked.length ? 1 : 0)
 } else if (cmd === 'ack') {
-  // stamp a `Spec-OK: <node>` trailer onto HEAD: "this code change keeps <node>'s spec valid — no spec
-  // edit needed", so git.ts's drift won't count this implementation-only commit against <node>. Workflow:
-  // land the code commit, then `spex ack <node>`. --amend rewrites HEAD adding the trailer (it sits in
-  // the same block as Session:); git de-dupes an identical adjacent trailer, so re-acking is harmless.
+  // stamp a `Spec-OK: <node>` trailer onto HEAD per node: "this code change keeps <node>'s spec valid —
+  // no spec edit needed", so git.ts's drift won't count this implementation-only commit against <node>.
+  // Workflow: land the code commit, then `spex ack <node>… --reason "<why>"`. --amend rewrites HEAD adding
+  // the trailers (in the same block as Session:); git de-dupes identical adjacent trailers, so re-acking
+  // is harmless. One amend carries all nodes — when a commit touches a SHARED file (styles.css, an i18n
+  // catalog) it acks every co-owner at once.
+  //
+  // @@@ forced reason - --reason is REQUIRED but deliberately NOT stored: git records only `Spec-OK:
+  // <node>`, never the prose. Its whole job is to make the agent ARTICULATE why each spec still holds
+  // before quieting its drift — a blind ack must cost a sentence of thought. The thinking is the gate; the
+  // text is discarded (a stored reason would just invite stale boilerplate). Empty/whitespace → rejected.
   const { git } = await import('./git.js')
-  const node = positionals(3)[0]
-  if (!node) { console.error('usage: spex ack <node-id>'); process.exit(2) }
+  const nodes = positionals(3)
+  const reason = (flag('reason') ?? '').trim()
+  if (!nodes.length || !reason) {
+    console.error('usage: spex ack <node-id>… --reason "<why this change keeps each spec valid>"')
+    console.error('  --reason is required (it forces you to check before acking) and is NOT stored — git keeps only the Spec-OK trailer.')
+    process.exit(2)
+  }
   try {
-    git(['commit', '--amend', '--no-edit', '--trailer', `Spec-OK: ${node}`])
-    console.log(`Spec-OK: ${node} → ${git(['rev-parse', '--short', 'HEAD']).trim()}`)
+    git(['commit', '--amend', '--no-edit', ...nodes.flatMap((n) => ['--trailer', `Spec-OK: ${n}`])])
+    console.log(`Spec-OK: ${nodes.join(', ')} → ${git(['rev-parse', '--short', 'HEAD']).trim()}  (reason required, not stored)`)
   } catch (e: any) {
     console.error(`ack failed: ${e?.message ?? e}`); process.exit(1)
   }

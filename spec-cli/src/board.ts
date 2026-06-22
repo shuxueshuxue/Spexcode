@@ -44,6 +44,14 @@ export async function buildBoard() {
   const byId: Record<string, any> = Object.fromEntries(specs.map((n) => [n.id, n]))
   const byDir: Record<string, string> = {}
   specs.forEach((n: any) => { if (n.path) byDir[n.path.replace(/\/spec\.md$/, '')] = n.id })
+  // @@@ ghost ancestry - a worktree can ADD a whole new subtree at once (e.g. `extract` scaffolding a
+  // fresh root with many nested nodes). Each new node's parent is ITSELF a ghost — absent from main's
+  // byDir — so resolving against byDir alone returns null and the board renders every new node as a root
+  // (no tree at all). Register every added node's own dir up front, so resolveParent can chain a new node
+  // to its new ancestor and only the genuine subtree root stays parentless.
+  for (const w of opWts) for (const op of w.ops) {
+    if (op.op === 'added') byDir[op.path.replace(/\/spec\.md$/, '')] = op.nodeId
+  }
 
   const overlaysByNode: Record<string, any[]> = {}
   const ghostById: Record<string, any> = {}

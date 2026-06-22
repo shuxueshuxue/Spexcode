@@ -234,4 +234,17 @@ export default {
     hint: '↑↓ pick · ⏎ jump · esc close',
     kind: { spec: 'node', session: 'session', issue: 'issue' },
   },
+
+  // the touch-first phone interface (MobileApp) — the desktop graph is a mouse/keyboard instrument, so a
+  // phone gets a drill-down list + a sessions tab instead.
+  mobile: {
+    specsTab: 'specs',
+    sessionsTab: 'sessions',
+    childrenTab: ({ n }) => `children ${n}`,
+    liveEditors: ({ n }) => `${n} live editor${n === 1 ? '' : 's'}`,
+    changing: ({ n }) => `changing ${n} node${n === 1 ? '' : 's'}`,
+    noChanges: 'no pending spec changes',
+    noSessions: 'no live sessions — start one from a desktop board',
+    back: 'back',
+  },
 }

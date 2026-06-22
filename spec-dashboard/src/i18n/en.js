@@ -214,6 +214,8 @@ export default {
     msgOffline: 'relaunch to message this session',
     msgPlaceholder: 'message this session · ⏎ to send',
     msgError: '⚠ not delivered — retry',
+    attachTitle: 'attach a file (or paste / drop) — uploaded to the session machine, its /tmp path inserted',
+    attachError: '⚠ upload failed',
   },
 
   settings: {

@@ -56,6 +56,9 @@ The subsystem divides into governed concerns, each its own child node:
 One surface stays with the overview. `buildBoard` (`board.ts`) assembles the dashboard's runtime state —
 merged tree + per-worktree overlay + the session list, plus the backend's own project identity (the
 browser-tab name) — in one module, served identically at HTTP `/api/board` and `spex board` (the frontend
-only adds x/y pixels). The session's live pane is read as text by
+only adds x/y pixels). An added (ghost) node nests into the tree by directory ancestry — including
+ancestry among the *other* nodes the same worktree adds — so a worktree introducing a whole new subtree
+at once (e.g. an `extract` scaffold of a fresh root) renders as one tree under its single new root, not a
+flat scatter of one root per node. The session's live pane is read as text by
 `captureSessionResult` behind `GET …/capture` — failure (unknown / offline / capture-error) kept distinct
 from an empty pane — which `spex capture` reads as a backend client (see [[remote-client]]).

@@ -31,27 +31,33 @@ importing. **The reload must be zero-downtime: port 8787 never has a gap.** A `t
 ~1-2s window where every API call was refused (a node merge touching backend code took the dashboard
 down); that window must not exist.
 
-The mechanism is a tiny **supervisor** (`serve` runs `supervise.ts`) that owns the public
-port as a raw-TCP proxy and runs the real Hono server as a child on a private port. On a source change it
-boots a fresh child, waits for `GET /health` (a cheap, git-free readiness probe `index.ts` exposes), then
-atomically flips the proxy to it and **gracefully drains** the old child — which stops accepting new
-connections but finishes in-flight requests before exiting, so a request mid-flight is never reset. The
-public socket never closes, so the flip is invisible. (SO_REUSEPORT — two processes sharing the port — is
-the obvious alternative but is unsupported on this platform, hence the proxy.) An unhealthy new child is
-discarded and the current one kept, so a broken edit degrades to "still serving old code", never to a
-gap. The live ws/pty bridges still drop on reload and reconnect; detached tmux sessions survive untouched.
+The mechanism is a tiny **supervisor** (`serve` runs `supervise.ts`) that owns the public port as a
+raw-TCP proxy and runs the real Hono server as a child on a private port. On a source change it boots a
+fresh child, waits for `GET /health` (a cheap, git-free readiness probe), atomically flips the proxy to
+it, then **gracefully drains** the old child — which stops accepting new connections but finishes
+in-flight requests before exiting. The public socket never closes, so the flip is invisible. (SO_REUSEPORT
+is the obvious alternative but is unsupported on this platform, hence the proxy.) An unhealthy new child
+is discarded and the current one kept, so a broken edit degrades to "still serving old code", never a gap.
+Live ws/pty bridges drop and reconnect; detached tmux sessions survive untouched. The dashboard also
+retries a transient failure with bounded backoff, so a poll landing on the flip is masked.
 
-The dashboard rides through any residual blip itself: its `data.js` fetches retry a transient connection
-failure with bounded backoff (~5 tries over ~2s) before surfacing an error, so a reload is invisible to
-the UI even if a poll lands exactly on the sub-second flip.
+**Last-resort resilience:** both supervisor and child install process guards at startup — an unforeseen
+async throw (a worktree vanishing mid-read during a worker self-merge, say) is logged and the process
+KEEPS SERVING rather than exiting and dropping the public port (and the tmux session) with it.
 
-Routes it must expose:
+Read routes: `/api/board` (the assembled board — merged tree + per-worktree overlay + session list, the
+dashboard's single source, identical to `spex board`), `/api/specs` (live via `loadSpecs`),
+`/api/specs/:id/history` + `/api/specs/:id/diff/:hash` (a node's timeline and any version's spec.md
+line-diff), `/api/edit` (a node's in-flight working-tree delta vs its fork point, reviewable from the
+board), `/api/layout` (the resolved [[portable-layout]]), and `/api/config` + `/api/slash-commands` (the
+`/` dropdown — config-root plugins declaring `surface: slash`, plus the Claude-Code command union).
 
-- `GET /api/board` — the assembled board (merged tree + per-worktree overlay + session list), the
-  dashboard's single source; identical data to `spex board`, the frontend only adds x/y pixels.
-- `GET /api/specs` — every node, derived live (`loadSpecs`).
-- `GET /api/specs/:id/history` — a node's version timeline.
-- `GET /api/layout` — the resolved [[portable-layout]].
-- `/api/sessions` — list + spawn, plus per-session lifecycle (`resume`/`review`/`merge`/`close`),
-  an SSE pane `stream`, and `keys` for keystroke forwarding. These are thin callers of the
-  [[sessions]] state machine; no session logic lives in `index.ts`.
+Write/runtime routes are thin callers of the [[sessions]] state machine — no session logic lives here:
+`/api/sessions` list + spawn; per-session `resume`/`review`/`close`, plus reads `review` (the merge
+bundle), `capture` (the live pane as text), and `prompt`. `merge` is a **dispatch to the session's own
+agent**, not a server merge — it returns `{dispatched}` and never touches main's tree. The ❯ box
+(`keys`) dispatches a whole prompt over the rendezvous control socket, fail-loud (an unconfirmed prompt is
+502, never a silent 200); `rawkey` keeps tmux send-keys for nav; `socket` streams pane bytes.
+`/api/sessions/graph` edges are DERIVED from live `spex watch` monitors (`watch`/`unwatch` register +
+heartbeat), not a stored subscription. `/api/uploads` writes a pasted file to this (worker) machine's
+/tmp and returns its path. At boot the server also runs `superviseQueue()` to launch queued sessions.

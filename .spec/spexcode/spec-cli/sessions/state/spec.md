@@ -38,10 +38,10 @@ state**, so `markIdleFromCwd` is **active-only guarded** and can never clobber a
   **`needs-input`** (the question → the note) on **AskUserQuestion**, else **`active`** — the freshness
   signal that also flips `idle`/`needs-input` back the moment work resumes.
 - **`Stop` → the gate**, two jobs each with a hard loop-break. A **commit gate** rejects a done/merge
-  proposal while the branch has uncommitted changes or is 0 ahead of main (ignoring SpexCode's runtime
-  files — `.session`, `.session-prompt`, `.spex-hooks.json`, `CLAUDE.spexhidden.md`); propose-**close**
-  is exempt. A **declare gate** blocks a stop while still `active`, auto-defaulting on the forced
-  continuation (honest `blocked`, or `awaiting`/`nothing` when committed) — one nudge, never a leak.
+  proposal while the branch has uncommitted changes or is 0 ahead of the base branch — ignoring the runtime
+  files SpexCode writes into the worktree (its `.session*` sidecars, the injected hooks/launch scripts, the
+  hidden `CLAUDE.md`); propose-**close** is exempt. A **declare gate** blocks a stop while still `active`,
+  auto-defaulting on the forced continuation (honest `blocked`, or `awaiting`/`nothing` when committed).
 - **`StopFailure` → `error`**; **`Notification(idle_prompt)` → `idle`** (keys on `notification_type`).
   All Stop-gate git runs through `git.ts`'s `git()` so an exported `GIT_DIR` can't misdirect discovery.
 

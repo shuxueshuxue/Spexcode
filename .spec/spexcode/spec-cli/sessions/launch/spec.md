@@ -19,54 +19,43 @@ launching has a **single owner**: the running backend process, never whichever s
 
 ## expanded spec
 
-`newSession` adds the `node/<slug>` worktree, writes `.session` (and best-effort the `.session-prompt`
-sidecar with the originating prompt), isolates `CLAUDE.md`, and **queues the worktree for launch** on a
-private `tmux -L` socket; the drainer starts it at once when under the cap (`spex new "<prompt>"
-[--node X]` is the shorthand). `claude` launches with `--session-id <uuid>` — the id equals the `.session`
-id and the commit attribution, so the same conversation `--resume`s after death and a spec node links to
-its live session. Workers run through the **`reclaude` wrapper** (`SPEXCODE_CLAUDE_CMD`), which runs
-claude as a **child** rather than exec'ing it, so the pane's foreground command is the wrapper/shell —
-deliberately **not** a liveness signal ([[state]] reads the socket instead). The spawned command alone
-carries `CLAUDE_BG_BACKEND=daemon` and a `CLAUDE_BG_RENDEZVOUS_SOCK` path **derived from the session id**
-as an env prefix — never global, never a plugin — so [[dispatch]] later addresses only our own sockets.
+`newSession` adds the `node/<slug>` worktree (off the base branch), writes `.session` (+ best-effort the
+`.session-prompt` sidecar), isolates `CLAUDE.md`, and **queues the worktree for launch** on a private `tmux
+-L` socket (`spex new "<prompt>" [--node X]`). `claude` launches with `--session-id
+<uuid>` — the id equals the `.session` id and the commit attribution, so the conversation `--resume`s after
+death and a spec node links to it. Workers run through the **`reclaude` wrapper**
+(`SPEXCODE_CLAUDE_CMD`), which runs claude as a **child** rather than exec'ing it, so the pane's foreground
+command is the wrapper/shell — **not** a liveness signal ([[state]] reads the socket instead). The spawned
+command alone carries `CLAUDE_BG_BACKEND=daemon` and a `CLAUDE_BG_RENDEZVOUS_SOCK` path **derived from the
+session id** as an env prefix (never global, never a plugin), so [[dispatch]] addresses only our sockets.
 
 **`CLAUDE.md` isolation:** before claude starts, the worktree's `CLAUDE.md` is *renamed* to
-`CLAUDE.spexhidden.md` (still on disk, only hidden from Claude Code auto-discovery) and pinned with `git
-update-index --assume-unchanged`, so it can never be staged or merged to main. A rename, never a delete
-or `--bare`; overridable (`SPEXCODE_HIDE_CLAUDE_MD=0`), best-effort, never blocking the launch.
+`CLAUDE.spexhidden.md` (still on disk, only hidden from auto-discovery) and pinned `--assume-unchanged`, so
+it can never be staged or merged. A rename, never a delete; overridable (`SPEXCODE_HIDE_CLAUDE_MD=0`).
 
-**Non-truncating delivery:** because a dispatched agent gets only the human's terse launch prompt, every
-launch and resume appends a **system prompt** (`--append-system-prompt`) gathered **entirely** from the
-`surface: system` config nodes — there is **no baked-in core**. Each active system node's body (in name
-order) is concatenated into the appended prompt: the ground spec-discipline contract lives in the
-`core/spec` system node, opinionated rules like `voice-before-ask` sit alongside it, so adding or editing
-any always-on contract is a spec edit, not a code change. It is built fresh per launch and written to the
-**launch script file** (not a tmux arg), so neither the contract nor the launch prompt hits the ~2KB tmux
-limit. With **zero** system nodes the flag is omitted entirely.
+**Non-truncating delivery:** a dispatched agent gets only the human's terse prompt, so every launch and
+resume appends a **system prompt** (`--append-system-prompt`) gathered **entirely** from `surface: system`
+config nodes — **no baked-in core**. Each active node's body (name order) is concatenated (the
+spec-discipline contract lives in the `core` node, rules like `voice-before-ask` alongside it), so editing
+any always-on contract is a spec edit, not a code change. The whole invocation is written to the **launch
+script file**, so neither contract nor prompt hits the ~2KB tmux send-keys limit. Every path that file and
+its hooks reference resolves from the CLI package's **own** on-disk location, never a hardcoded
+`<repoRoot>/spec-cli`, so relocating it can't break launch.
 
-**Self-locating paths:** every path the launch script and its injected hooks reference — the hook
-scripts (`stop-gate.sh`, `mark-active.sh`), the `tsx` runner, and `cli.ts` — resolves from the CLI
-package's **own** on-disk location (derived from the running module's URL), never from a hardcoded
-`<repoRoot>/spec-cli`. Renaming or relocating the package therefore can't break a launch, and no config
-knob is introduced for it.
-
-**The backend is the single launch owner.** `spex new` / `spex session new` **POST to the running
-backend** rather than launching in their own process, so the launch always runs where the launch env and
-the cap live. This matters because the caller can be **another agent** — a supervisor running `spex new` —
-whose env has been stripped of `SPEXCODE_CLAUDE_CMD`, so an in-process launch from there spawns bare-`claude`
-workers that **401 at boot**. The CLI falls back to in-process **only when no backend answers**, warning
-that the launch then carries the caller's env and skips the cap.
+**The backend is the single launch owner.** `spex new` / `spex session new` **POST to the running backend**,
+so the launch always runs where the launch env and cap live. The caller can be **another agent** whose env
+was stripped of `SPEXCODE_CLAUDE_CMD`, so an in-process launch there spawns bare-`claude` workers that
+**401 at boot**. The CLI falls back to in-process **only when no backend answers** (warning that it then
+carries the caller's env, no cap).
 
 ### Concurrency cap (bounded working set)
 
-At most **`SPEXCODE_MAX_ACTIVE`** sessions (default **6**) run as working agents at once. A session holds
-a slot while its claude is genuinely live and the work is not yet handed to a human, and frees it the
-moment it proposes, goes offline, or is closed. A launch beyond the cap never runs: it lands as a durable
-**`queued`** worktree — fully prepared, claude not started, its exact prompt parked in a `.session-launch`
-sidecar. A **drainer** starts queued sessions oldest-first the instant a slot frees — on every
-slot-freeing server action and on a periodic tick (which catches the frees the server never sees — a hook
-subprocess, a crash). `newSession` queues-then-drains; a restart re-drains the survivors. `reopen`
-relaunches a session whose claude is gone and **waits for its rendezvous socket** (bounded poll) before
-returning, so a follow-on [[dispatch]] addresses a live socket rather than racing the boot. `closeSession`
-is the only removal — a human-only action that deletes the worktree and **sweeps the session's rendezvous
-socket** (which lives in the tmpdir, outside the worktree), so no stale control endpoint ever lingers.
+At most **`SPEXCODE_MAX_ACTIVE`** sessions (default **6**) run as working agents at once. A session holds a
+slot while its claude is genuinely live and not yet handed to a human; it frees the slot the moment it
+proposes, goes offline, or is closed. A launch beyond the cap lands as a durable **`queued`** worktree
+(fully prepared, claude not started, its prompt parked in a `.session-launch` sidecar). A **drainer** starts
+queued sessions oldest-first the instant a slot frees — on every slot-freeing server action and on a
+periodic tick (catching frees the server never sees: a hook subprocess, a crash). A restart re-drains
+survivors. `reopen` relaunches a dead session and **waits for its rendezvous socket** before returning, so
+a follow-on [[dispatch]] hits a live socket. `closeSession` is the only removal — human-only, deleting the
+worktree and **sweeping the rendezvous socket**, which lives in the tmpdir outside the worktree.

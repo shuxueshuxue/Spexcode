@@ -22,41 +22,39 @@ not restated in every prompt, so the prompt and the flow never duplicate.
 
 Prompt control goes through a **per-session rendezvous socket only**, never PTY keystrokes. The socket
 path is **derived from the session id** (set up at [[launch]]), so only our own sockets are addressed —
-control never reaches a Claude Code session outside the product. Writing one line
-`{"type":"reply","text":…}` injects the text as a prompt and submits it deterministically, so multi-line
-prompts and Enters can't be corrupted the way `tmux send-keys` could.
+control never reaches a Claude Code session outside the product. Writing one `{"type":"reply","text":…}`
+line injects the text and submits it deterministically, so multi-line prompts and Enters can't be
+corrupted the way `tmux send-keys` could.
 
 `sendKeys` is **socket-only with no send-keys fallback** and confirms the agent actually **accepted** the
 prompt, not mere write-success. The daemon acks no accepted reply, so acceptance is an **in-order
-round-trip**: `sendKeys` writes the `reply` line immediately followed by a `repaint` line; the daemon
-dispatches lines strictly in order, so a `repaint-done` with no preceding `reply-rejected` proves the
-reply was taken (`repaint` is auth-exempt, a reliable probe even if a future daemon gates `reply`). A
-missing/socketless session, a connect error, a `reply-rejected`/`shutting-down`, or a timeout all return
-a **loud `DispatchResult {ok,error}`** that propagates: `POST …/keys` answers **502** (not 200), `spex
-session send` prints the reason, and `mergeSession` returns it.
+round-trip**: it writes the `reply` line then a `repaint` line; the daemon handles lines strictly in order,
+so a `repaint-done` with no preceding `reply-rejected` proves the reply was taken (`repaint` is auth-exempt,
+a reliable probe even if a future daemon gates `reply`). A missing/socketless session, a connect error, a
+`reply-rejected`/`shutting-down`, or a timeout all return a **loud `DispatchResult {ok,error}`** that
+propagates: `POST …/keys` answers **502**, `spex session send` prints it, `mergeSession` returns it.
 
 **Merge is a dispatch, not a script.** `mergeSession` carries no `git merge` logic: it reopens the
 session (clears the proposal → active, `--resume`s via `reopen` if tmux died — which waits for the
 rendezvous socket, closing the just-relaunched-no-socket race), then dispatches a **merge prompt**
-through this same `sendKeys`. The prompt tells the **agent** to merge its branch into main from the **main
-checkout** (`-C <main>`, not its node worktree), resolve any conflicts (it knows the work's
-intent), verify main's HEAD advanced and no merge is left in progress, `git merge --abort` if anything went
-half-merged, and propose close once verified — so the guarantee lives in the agent's verification, never a
-server check, and main is never left half-merged. The action
-is async: `POST /api/sessions/:id/merge` returns 200 `{dispatched:true}` once the prompt is **confirmed
-accepted** (409 if unreachable). The server no longer bumps `merges` on a click.
+through this same `sendKeys`. The prompt tells the **agent** to merge its branch into the base branch
+from the **main checkout** (`-C <main>`, not its node worktree), resolve any conflicts (it knows the
+work's intent), verify the base HEAD advanced with no merge left in progress, `git merge --abort` if
+anything went half-merged, and propose close once verified — so the guarantee lives in the agent's
+verification, never a server check, and the base is never left half-merged. Async: `POST
+/api/sessions/:id/merge` returns `{dispatched:true}` once the prompt is **confirmed accepted** (409 if
+unreachable). The server no longer bumps `merges` on a click.
 
 **Prompts state the task; the git flow is mechanism, not duplicated prose.** Every prompt the server builds
-for an agent — the merge prompt above and the directive **new-node** / **delete-node** prompts (each a
-placeholder the server set up, handed to the agent to name+spec+code or to refactor-away by git history) —
-states only the **task** and the safety steps specific to it. It deliberately does **not** re-state the git
-flow's mechanics, because each is enforced by a product mechanism instead of injected prose: the `node/<id>`
-branch is made by [[launch]]'s `newSession`, the `Session:` trailer is auto-stamped by the prepare-commit-msg
-hook, commit-before-declare is the baked `CORE_CONTRACT` in the gathered system prompt, and the `--no-ff` /
-`merge node/<id>: <reason>` style is stated by the **merge prompt itself** at merge time (the one place no
-other mechanism carries it). No standing `ritual` config node is needed — the flow is the product default,
-not removable per-project opinion. The one task-level detail the directive prompts keep is "propose merge,
-don't merge yourself", since the human triggers the merge later.
+— the merge prompt above and the directive **new-node** / **delete-node** prompts (each a placeholder the
+server set up, handed to the agent to name+spec+code or refactor-away by git history) — states only the
+**task** plus its own safety steps. It deliberately does **not** re-state the git flow's mechanics, because
+each is enforced by a product mechanism, not injected prose: the `node/<id>` branch by [[launch]]'s
+`newSession`, the `Session:` trailer by the prepare-commit-msg hook, commit-before-declare by the `core`
+system config node folded into the gathered system prompt (see [[launch]]), and the `--no-ff` / `merge
+node/<id>: <reason>` style by the **merge prompt** at merge time (the one place no other mechanism carries
+it). No standing `ritual` config node is needed — the flow is the product default, not a per-project
+opinion. The one task-level detail the directive prompts keep is "propose merge, don't merge".
 
-The **separate raw nav-key channel** (`rawKey`) keeps its own `tmux send-keys` path — the interactive
-single-keystroke channel for driving the agent's TUI menus, **not** a prompt fallback — left untouched.
+The **separate raw nav-key channel** (`rawKey`) keeps its own `tmux send-keys` path — the single-keystroke
+channel for driving the agent's TUI menus, **not** a prompt fallback.

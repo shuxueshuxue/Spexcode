@@ -41,7 +41,7 @@ Usage: spex <command> [args]
 Specs / graph
   guide                 print the product setup workflow (install the CLI, adopt a repo, run it)
   init [dir]            scaffold a repo to adopt SpexCode (seed .spec + install git hooks; default: cwd)
-  lint                  check the spec↔code graph (integrity·living·coverage·drift)
+  lint                  check the spec↔code graph (integrity·living·coverage·drift); when committing, gates on heavy commit-local drift
   ack <node>            stamp Spec-OK:<node> trailer on HEAD (this code change keeps <node>'s spec valid)
   serve                 run the API server (http://localhost:8787)
   board                 dump the dashboard board state as JSON
@@ -103,12 +103,20 @@ the rest, you don't hand-author the spec tree or wire the dashboard yourself.
 
 From here, dispatch an agent — it authors the spec nodes and rides the dogfood ritual for you.`)
 } else if (cmd === 'lint') {
-  const { specLint } = await import('./lint.js')
+  const { specLint, driftGate, DRIFT_GUIDANCE } = await import('./lint.js')
   const findings = await specLint()
   const errors = findings.filter((f) => f.level === 'error')
   for (const f of findings) console.error(`  ${f.level === 'error' ? '✗' : '•'} ${f.rule}: ${f.msg}`)
   console.error(`spex lint: ${errors.length} error(s), ${findings.length - errors.length} warning(s)`)
-  process.exit(errors.length ? 1 : 0)
+  // drift teaches + gates from the ONE `spex lint` (no flag): print the remediation guidance wherever
+  // drift exists, then apply the commit-local gate — which reads the staged index itself, so it only
+  // blocks an in-flight commit that touches an already heavily-drifted node. CI/manual (nothing staged)
+  // stays advisory, per the ci-gate contract.
+  const { blocked, touched, threshold } = await driftGate()
+  if (findings.some((f) => f.rule === 'drift') || touched.length) console.error(`\n${DRIFT_GUIDANCE}`)
+  for (const t of touched) console.error(`  ${t.drift >= threshold ? '✗' : '•'} drift-gate: '${t.id}' is ${t.drift} behind${t.drift >= threshold ? ' — BLOCKS this commit' : ' (advisory)'}`)
+  if (blocked.length) console.error(`\n✗ SpexCode: ${blocked.join(', ')} ${blocked.length === 1 ? 'is' : 'are'} ≥ ${threshold} commit(s) behind. Reconcile (above) or bypass with SPEXCODE_SKIP_LINT=1.`)
+  process.exit(errors.length || blocked.length ? 1 : 0)
 } else if (cmd === 'ack') {
   // stamp a `Spec-OK: <node>` trailer onto HEAD: "this code change keeps <node>'s spec valid — no spec
   // edit needed", so git.ts's drift won't count this implementation-only commit against <node>. Workflow:

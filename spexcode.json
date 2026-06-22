@@ -3,6 +3,7 @@
     "governedRoots": ["spec-dashboard/src", "spec-cli/src"],
     "sourceExtensions": ["ts", "tsx", "js", "jsx"],
     "identifierExtensions": ["ts", "tsx", "js", "jsx", "json", "md"],
-    "altitude": { "lineBudget": 50, "charBudget": 4200, "sizeable": 35, "dense": 1.3, "steps": 3 }
+    "altitude": { "lineBudget": 50, "charBudget": 4200, "sizeable": 35, "dense": 1.3, "steps": 3 },
+    "driftErrorThreshold": 3
   }
 }

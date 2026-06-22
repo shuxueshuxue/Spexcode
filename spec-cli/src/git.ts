@@ -428,6 +428,16 @@ export function driftFor(idx: DriftIndex, sinceHash: string, path: string): numb
   return n
 }
 
+// @@@ stagedFiles - the paths git is about to commit (the index vs HEAD), so the pre-commit drift gate
+// can scope itself to the files THIS commit touches instead of the whole backlog. git() (sync, env-
+// stripped) because the hook runs it once, synchronously, with an inherited GIT_DIR that must be ignored.
+export function stagedFiles(root: string): string[] {
+  try {
+    return git(['-C', root, '-c', 'core.quotePath=false', 'diff', '--cached', '--name-only'])
+      .split('\n').map((s) => s.trim()).filter(Boolean)
+  } catch { return [] }
+}
+
 // ---- pending worktree changes (the board's runtime overlay) ----
 
 // @@@ NodeOp - one pending change a worktree makes to a spec node, RELATIVE TO MAIN. `op` is the net

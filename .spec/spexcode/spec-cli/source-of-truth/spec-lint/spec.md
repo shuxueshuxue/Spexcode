@@ -58,9 +58,10 @@ governed file while the spec stays true. Such a commit may carry a **`Spec-OK: <
 (*"this change keeps `<node>`'s spec valid"*); `git.ts`'s drift count skips a commit that acknowledges
 the node whose version drift is measured from, so `Spec-OK: A` only quiets A's drift, never B's.
 
-`spex ack <node-id>` (`cli.ts`) stamps it onto **HEAD** via `git commit --amend --trailer`, coexisting
-with `Session:`. The auditable counterpart to drift: drift flags *maybe stale*, `Spec-OK` answers
-*checked, still valid*.
+`spex ack <node-id>… --reason "<why>"` (`cli.ts`) stamps the trailer onto **HEAD** (`git commit --amend
+--trailer`, beside `Session:`), taking **several nodes** in one amend so a commit to a shared file acks
+every co-owner at once. `--reason` is **required but not stored** — git keeps only `Spec-OK: <node>`; it
+forces the agent to *articulate* why each spec still holds before quieting it.
 
 A sharp edge: git calls from inside the hook must route through `git.ts`'s `git()` helper, which strips
 the inherited `GIT_DIR`/`GIT_INDEX_FILE`; otherwise repo discovery resolves to the cwd and lint silently

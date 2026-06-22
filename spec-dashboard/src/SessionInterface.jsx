@@ -516,20 +516,20 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     if (el) requestAnimationFrame(() => el.focus())
   }
 
-  // @@@ keep input focus - mousedown is what MOVES focus, so clicking panel chrome (a tab button, the
+  // @@@ keep input focus - mousedown is what MOVES focus, so a LEFT click on panel chrome (a tab button, the
   // list's empty padding, the header) would blur the docked input and leave you with nowhere to type. We
-  // cancel the focus shift for any target that isn't itself a text field: preventDefault on mousedown blocks
-  // the blur, not the click, so buttons still fire their onClick. A LEFT click inside the terminal is the one
-  // exception — it owns its own text selection. A RIGHT click never moves focus anywhere (it can only mean
-  // "context menu", which we block below), so we cancel it even over the terminal.
+  // cancel that focus shift for any left-click target that isn't itself a text field: preventDefault on
+  // mousedown blocks the blur, not the click, so buttons still fire their onClick. The terminal is the one
+  // exception — it owns its own text selection. RIGHT clicks are NOT our concern here: focus retention on a
+  // right-press belongs to the contextmenu blocker below (refocusInput), and preventDefault on a right-button
+  // mousedown SUPPRESSES the subsequent contextmenu in some browsers (Safari/Firefox), which would silently
+  // kill the rename pop-over. So we touch left clicks only — right clicks fall straight through to onContextmenu.
   const keepFocus = (e) => {
-    e.stopPropagation()   // also guards the backdrop from closing on an inside click
+    e.stopPropagation()   // also guards the backdrop from closing on an inside click (any button)
+    if (e.button !== 0) return
     const t = e.target
     if (isTextField(t)) return
-    if (e.button === 0 && t.closest && t.closest('.si-term-body')) return
-    // a right-click on the session list must reach its onContextMenu (the rename pop-over): preventDefault
-    // on a right-button mousedown SUPPRESSES the subsequent contextmenu event, so exempt it here.
-    if (e.button === 2 && t.closest && t.closest('.si-list')) return
+    if (t.closest && t.closest('.si-term-body')) return
     e.preventDefault()
   }
 
@@ -538,14 +538,12 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // the panel — first, double, triple click alike — and cancels it: a terminal-app feel, and crucially the
   // menu can no longer seize focus. We also refocus the docked input afterwards, since the right-button press
   // itself may already have blurred it (preventDefault on the menu can't undo a blur the mousedown caused).
+  // This blocks EVERYWHERE in the panel, list rows included — preventDefault here does not stop propagation,
+  // so a row's own onContextMenu still fires and opens the rename pop-over; we just also kill the OS menu.
   useEffect(() => {
     if (!open) return
     const onMenu = (e) => {
       if (!panelRef.current?.contains(e.target)) return
-      // the left session list owns the right-click RENAME menu — let its own onContextMenu through (it
-      // opens the rename pop-over). The blocker still kills the browser menu everywhere else in the panel
-      // (notably the terminal), keeping the terminal-app feel.
-      if (e.target.closest?.('.si-list')) return
       e.preventDefault()
       refocusInput()
     }

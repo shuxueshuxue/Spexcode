@@ -46,6 +46,7 @@ Specs / graph
   serve                 run the API server (http://localhost:8787)
   board                 dump the dashboard board state as JSON
   forge <sub>           trace a forge's issues/PRs onto spec nodes (read-only): links [--host github] [--node <id>] [--json]
+  yatsu <sub>           the eval/loss engine over the readings sidecar: scan | eval [.|<node>] [--force] [--image P] | clean [--keep-latest|--all]
   review <id>           manager cockpit: review a session (ahead·merge-base diff·gates·proposal)  [--json]
   merge <id>            manager cockpit: gated atomic merge into main (re-checks gates, then closes)  [--keep]
 
@@ -190,6 +191,12 @@ From here, dispatch an agent — it authors the spec nodes and rides the dogfood
   // this is just routing. `spex forge links [--host github] [--node <id>] [--json]`.
   const { runForge } = await import('../../spec-forge/src/cli.js')
   process.exit(await runForge(process.argv.slice(3)))
+} else if (cmd === 'yatsu') {
+  // @@@ yatsu - the eval/loss engine on this CLI (the same thin-route shape as `forge`): a lazy import of
+  // runYatsu, handed the arg slice after `yatsu`. All logic — yatsu.md scenarios, the readings sidecar,
+  // git-derived freshness, the blob cache — lives in spec-yatsu; this is just routing.
+  const { runYatsu } = await import('../../spec-yatsu/src/cli.js')
+  process.exit(await runYatsu(process.argv.slice(3)))
 } else if (cmd === 'board') {
   const { buildBoard } = await import('./board.js')
   console.log(JSON.stringify(await buildBoard(), null, 2))

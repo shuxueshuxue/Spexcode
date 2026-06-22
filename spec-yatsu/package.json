@@ -1,0 +1,15 @@
+{
+  "name": "@spexcode/spec-yatsu",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The eval/loss engine — yatsu.md declares scenarios, a flat yatsu.evals.ndjson sidecar records readings (a second git-as-database axis), freshness is derived live from git (no stored hashes), and pixels live content-addressed under the shared git common dir. `spex yatsu scan|eval|clean`.",
+  "scripts": {
+    "test": "tsx --test src/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.16.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}

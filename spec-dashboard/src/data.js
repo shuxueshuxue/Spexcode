@@ -109,6 +109,12 @@ export async function loadBoard() {
   return res.json()
 }
 
+// @@@ projectTitle - the self-identifying NAME of the project a backend serves: its spexcode.json
+// dashboard.title override, else its launch-folder basename (resolved backend-side, arriving as
+// board.project). The ONE source for that name, so the browser tab and the session-board list header
+// read the same identity rather than each re-deriving it.
+export const projectTitle = (board) => board?.project || ''
+
 // @@@ loadConfig - the reflexive, skill-shaped slash presets (config nodes carrying `surface: slash`) the
 // backend serves at /api/config: [{ name, title, desc, kind, dir, files, body }]. The new-session box lists these under its
 // `/` palette and composes the picked preset's `body` (its {{targets}} filled by @-resolved nodes) into the

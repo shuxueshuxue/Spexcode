@@ -134,7 +134,7 @@ function highlight(text, q) {
   return <>{text.slice(0, i)}<b className="mention-hit">{text.slice(i, i + q.length)}</b>{text.slice(i + q.length)}</>
 }
 
-export default function SessionInterface({ sessions, specs = [], focusNode, open, sel, setSel, seed, onSeedConsumed, onClose, onCreated, onPickSession, reload }) {
+export default function SessionInterface({ sessions, specs = [], project, focusNode, open, sel, setSel, seed, onSeedConsumed, onClose, onCreated, onPickSession, reload }) {
   const t = useT()
   const [prompt, setPrompt] = useState('')    // the New Session tab's own draft (its boarding-switch cache)
   const [menu, setMenu] = useState(null)      // completion dropdown: { kind:'mention'|'config'|'slash', items, index, start, end, query }
@@ -556,7 +556,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     <div className="si-backdrop" onMouseDown={onClose} style={open ? undefined : { display: 'none' }}>
       <div className="si-panel" ref={panelRef} onMouseDown={keepFocus}>
         <aside className="si-list">
-          <div className="si-list-head">// {t('session.title')}</div>
+          <div className="si-list-head">// {project ? `${project} ` : ''}{t('session.title')}</div>
           <button className={active === 'new' ? 'si-item new on' : 'si-item new'} title={t('session.newSessionTitle')} onClick={() => setSel('new')}>
             ＋ {t('session.newSession')}
           </button>

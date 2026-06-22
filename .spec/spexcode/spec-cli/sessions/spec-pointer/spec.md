@@ -21,8 +21,9 @@ A **path is enough**: hand the agent one line pointing at the spec, and it reads
 When [[launch]]'s `newSession` resolves a node ref — explicit `--node`, else the prompt's first `@mention` —
 to a node that **already exists** in the committed spec tree, it appends **one line** to the launch prompt:
 an **absolute path** to that node's `spec.md` **inside the new session's own worktree**. The ref is resolved
-to its worktree-relative spec path against the spec index; since the worktree is freshly branched off main,
-that relative path is identical there, so the absolute pointer is just the worktree dir joined with it.
+against the loaded spec index to that node's worktree-relative spec path (the index entry's own `path`, which
+already carries the `.spec/` prefix); since the worktree is freshly branched off main, that relative path is
+identical there, so the absolute pointer is just the worktree dir joined with it.
 
 The `@mention` grammar must name **every** node, so it admits an **optional leading dot**: a node id is its
 directory basename, so a dot-prefixed config root keeps the dot (`.config`), and without the leading dot

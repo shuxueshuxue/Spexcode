@@ -17,7 +17,8 @@ a backend **process** restart (the zero-downtime supervisor reload), which genui
 
 So the client owns recovery from a real drop, **and only** from a real drop. The socket **reopens itself**:
 on an unexpected close it retries with **capped, escalating backoff**, indefinitely, while surfacing a
-visible **"reconnecting…"** state — recovery is **loud**, never a silently dead pane. A connection that
+visible **"reconnecting…"** state — the pane tracks a small `connecting | open | reconnecting` health and
+shows it in a corner caption, so recovery is **loud**, never a silently dead pane. A connection that
 stays healthy a few seconds **resets** the backoff; a flapping server **escalates** to the cap instead of
 hammering it. The single **intentional** close — the pane unmounting, when a session goes offline and the
 header swaps in the relaunch panel — stops reopening for good.

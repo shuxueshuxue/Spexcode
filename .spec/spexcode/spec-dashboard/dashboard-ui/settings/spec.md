@@ -33,7 +33,11 @@ one must not mean inventing a new surface.
 
 - **No hardcoded copy.** Components import a translator `t(key)` and never inline visible text. The copy
   lives in `i18n/<lang>.js` dictionaries; the only literals left in components are language-neutral
-  glyphs and punctuation (`//`, `❯`, `＋`, arrow/Enter key caps, op marks).
+  glyphs and punctuation (`//`, `❯`, `＋`, arrow/Enter key caps, op marks). The catalogs therefore
+  **accrete a key per visible string from every feature** — a new surface adds its strings here (each in
+  both `en.js` and `zh.js`), so the dictionaries growing alongside the product is the invariant working,
+  not drift; the picker and resolution mechanism below stay fixed as they grow. Keys may be plain strings
+  or `({ n }) => …` interpolators for counted/named copy.
 - **English + Chinese**, with English as both the source locale and the per-key fallback: a key missing
   in another language degrades to English, never to a blank or a raw key.
 - **Language resolution.** An explicit saved choice always wins; absent one, auto-detect from

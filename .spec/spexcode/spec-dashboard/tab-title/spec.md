@@ -29,10 +29,10 @@ so the override names the project, not the whole title.
 
 That name is read through a single frontend helper, `projectTitle(board)`, so any surface
 that needs to say *which* project shares one source rather than re-deriving it. The **session
-board**'s left-hand list header reuses it: `// sessions` becomes `// <project> sessions`,
-self-identifying the board the way the tab self-identifies the window — the same payoff when
-several project boards sit open at once. With no name resolved it falls back to plain
-`// sessions`.
+board**'s left-hand list header reuses it: the translated `// {sessions}` header ([[settings]])
+gains the project name as `// <project> {sessions}`, self-identifying the board the way the tab
+self-identifies the window — the same payoff when several project boards sit open at once. With no
+name resolved it falls back to the plain translated header.
 
 `index.html` ships a plain `SpexCode` `<title>` as the pre-load fallback — what the tab
 reads before the first board arrives, and if the backend is unreachable.

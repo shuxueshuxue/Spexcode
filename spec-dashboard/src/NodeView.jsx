@@ -8,6 +8,7 @@ export const PANES = [
   { key: 'spec',    label: 'spec' },
   { key: 'history', label: 'history' },
   { key: 'issues',  label: 'issues' },
+  { key: 'eval',    label: 'eval' },
 ]
 
 // @@@ panesFor - the edit tab exists ONLY when the node has a pending change (an overlay), and when it does
@@ -366,8 +367,80 @@ export function EditPane({ node }) {
   return <div className="pane-edit">{overlays.map((ov, i) => <EditOverlay key={i} node={node} ov={ov} />)}</div>
 }
 
+// @@@ useEvals - the node's evaluation timeline from yatsu (/api/specs/:id/evals): every reading joined with
+// a LIVE freshness flag, newest-first. The single `eval` tab below reads it. Null while loading; a stable
+// shape ({hasYatsu, readings}) on arrival so the pane distinguishes "no scenarios" from "no readings yet".
+function useEvals(id) {
+  const [data, setData] = useState(null)
+  useEffect(() => {
+    let on = true
+    fetch(`/api/specs/${id}/evals`).then((r) => r.json()).then((d) => { if (on) setData(d) })
+      .catch(() => on && setData({ node: id, hasYatsu: false, readings: [] }))
+    return () => { on = false }
+  }, [id])
+  return data
+}
+
+// @@@ EvalReading - one evaluation event. Its header always shows the scenario, a freshness badge (✓ current
+// / ⚠ stale — the SAME signal `spex yatsu scan` reports, mirroring code-drift; stale names which axes moved),
+// the evaluator tag, the read's codeSha, and when it was taken. The captured pixels expand below on click:
+// a present blob fetches by hash from the shared cache, a record whose bytes are gone reads "miss original
+// file", and a pixel-less observation (a human eyeballed it) says so. (Forge issue-events — the second
+// evidence source — arrive with a future sibling node; this shows LOCAL readings only.)
+function EvalReading({ r }) {
+  const t = useT()
+  const [open, setOpen] = useState(false)
+  const hasImage = r.blobState === 'present'
+  const staleTitle = r.fresh ? '' : t('nodeView.eval.staleAxes', { axes: r.staleAxes.join(', ') })
+  return (
+    <div className={`eval-row${open ? ' open' : ''}`}>
+      <button className="eval-head" onClick={() => hasImage && setOpen((o) => !o)} aria-expanded={hasImage ? open : undefined} disabled={!hasImage}>
+        <span className="eval-top">
+          {hasImage && <span className="eval-caret">{open ? '▾' : '▸'}</span>}
+          <span className="eval-scenario">{r.scenario}</span>
+          <span className={`eval-fresh ${r.fresh ? 'ok' : 'stale'}`} title={staleTitle}>
+            {r.fresh ? t('nodeView.eval.current') : t('nodeView.eval.stale')}
+          </span>
+        </span>
+        <span className="eval-meta">
+          <span className="eval-evaluator">{r.evaluator}</span>
+          <code className="eval-sha">{r.codeSha.slice(0, 7)}</code>
+          <span className="eval-ts">{r.ts.replace('T', ' ').slice(0, 16)}</span>
+        </span>
+      </button>
+      {!hasImage && (
+        <div className="eval-noimg">
+          {r.blobState === 'miss' ? t('nodeView.eval.miss') : t('nodeView.eval.noImage')}
+        </div>
+      )}
+      {hasImage && open && (
+        <figure className="eval-shot">
+          <img src={`/api/yatsu/blob/${r.blob}`} alt={t('nodeView.eval.shotAlt', { scenario: r.scenario })} loading="lazy" />
+        </figure>
+      )}
+    </div>
+  )
+}
+
+// @@@ EvalPane - the node's evidence timeline (the [[spec-yatsu]] eval tab). Three empty states stay
+// distinct: a node that declares no scenarios (no yatsu.md), one that declares some but hasn't been read,
+// and the loading flicker. Otherwise the readings render newest-first (the server already reversed the
+// append-only sidecar), each its own expandable card.
+export function EvalPane({ node }) {
+  const t = useT()
+  const data = useEvals(node.id)
+  if (!data) return <div className="pane-eval empty">{t('nodeView.eval.loading')}</div>
+  if (!data.hasYatsu) return <div className="pane-eval empty">{t('nodeView.eval.noScenarios')}</div>
+  if (!data.readings.length) return <div className="pane-eval empty">{t('nodeView.eval.noReadings')}</div>
+  return (
+    <div className="pane-eval">
+      {data.readings.map((r, i) => <EvalReading key={`${r.scenario}-${r.ts}-${i}`} r={r} />)}
+    </div>
+  )
+}
+
 // PANES keys map to localized tab labels (the key drives logic; only the label is shown).
-const PANE_LABEL = { spec: 'nodeView.paneSpec', history: 'nodeView.paneHistory', issues: 'nodeView.paneIssues', edit: 'nodeView.paneEdit' }
+const PANE_LABEL = { spec: 'nodeView.paneSpec', history: 'nodeView.paneHistory', issues: 'nodeView.paneIssues', eval: 'nodeView.paneEval', edit: 'nodeView.paneEdit' }
 
 export default function NodeView({ node, pane, setPane, onClose }) {
   const t = useT()
@@ -413,6 +486,7 @@ export default function NodeView({ node, pane, setPane, onClose }) {
           {active === 'spec' && <div className="pane-solo"><SpecPane node={node} /></div>}
           {active === 'history' && <HistoryPane node={node} rows={rows} />}
           {active === 'issues' && <IssuesPane node={node} />}
+          {active === 'eval' && <EvalPane node={node} />}
           {active === 'edit' && <EditPane node={node} />}
         </div>
       </div>

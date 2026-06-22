@@ -1006,3 +1006,26 @@ body {
 
 .m-empty { padding: 18px 14px; color: var(--muted); font-size: 13px; }
 .m-empty.big { flex: 1; display: flex; align-items: center; justify-content: center; text-align: center; }
+
+/* @@@ eval tab - the node's evaluation timeline (see [[yatsu-eval-tab]]). Each reading is an expandable
+   card: a header (scenario + freshness badge mirroring code-drift + evaluator/sha/time), then the captured
+   pixels on expand. Same scroller shape as the other popup panes (.ov-body is overflow:hidden; the pane
+   scrolls itself, and App's bumpScroll targets .pane-eval). */
+.pane-eval { flex: 1; min-width: 0; padding: 16px 20px; overflow: auto; }
+.pane-eval.empty { color: var(--muted); font-size: 13px; }
+.eval-row { border-bottom: 1px solid var(--line); padding: 10px 0; }
+.eval-row:last-child { border-bottom: 0; }
+.eval-head { display: flex; flex-direction: column; gap: 4px; width: 100%; text-align: left; background: none; border: 0; padding: 0; margin: 0; font: inherit; color: inherit; cursor: pointer; }
+.eval-head:disabled { cursor: default; }
+.eval-top { display: flex; align-items: center; gap: 8px; }
+.eval-caret { flex: none; color: var(--muted); font-size: 11px; }
+.eval-scenario { font-size: 13px; font-weight: 600; color: var(--ink2); }
+/* freshness badge: green ✓ current / yellow ⚠ stale — the same vocabulary as the drift badge on the board */
+.eval-fresh { flex: none; font-size: 10px; font-weight: 700; border-radius: 3px; padding: 0 4px; line-height: 1.5; }
+.eval-fresh.ok { color: var(--green); border: 1px solid var(--green); }
+.eval-fresh.stale { color: var(--yellow); border: 1px solid var(--yellow); cursor: help; }
+.eval-meta { display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--muted); }
+.eval-sha { color: var(--blue); background: var(--panel2); padding: 0 4px; border-radius: 3px; }
+.eval-noimg { margin-top: 4px; padding-left: 19px; font-size: 11px; color: var(--muted); }
+.eval-shot { margin: 8px 0 2px; padding-left: 19px; }
+.eval-shot img { display: block; max-width: 100%; background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; }

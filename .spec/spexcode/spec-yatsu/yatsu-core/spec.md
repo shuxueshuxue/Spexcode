@@ -44,7 +44,9 @@ The surface mirrors the code-drift report:
 Pixels are content-addressed under the **shared git common dir** (resolved via [[portable-layout]]), so
 every worktree shares one copy and the bytes sit outside the tree — uncommittable by construction, hence
 no .gitignore. A record whose blob is gone renders as `miss original file`; a pre-commit backstop rejects
-a blob copied into the tree. `spec-cli/src/cli.ts` carries only a thin `yatsu` route (the [[forge-cli]] shape).
+a blob copied into the tree. `spec-cli/src/cli.ts` carries only a thin `yatsu` route (the [[forge-cli]]
+shape) — yatsu-core's sole stake in that shared command hub, untouched when a sibling verb churns the same
+file (e.g. registering [[forge-cli]]'s `eval-pending`).
 
 Out of scope (sibling nodes): the Playwright/WebDriver drivers, the dashboard eval-tab, and the forge
 `needs-yatsu-eval` half of scan.

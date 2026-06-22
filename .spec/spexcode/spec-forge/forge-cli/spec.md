@@ -2,7 +2,7 @@
 title: forge-cli
 status: active
 hue: 280
-desc: Exposes the link tracer on the real `spex` CLI — `spex forge links` prints node → linked issues/PRs. Read-only; reading is live.
+desc: Exposes spec-forge's reads on the real `spex` CLI — `spex forge links` (node → linked issues/PRs) and `spex forge eval-pending` (node → evaluation owed). Read-only; reading is live.
 code:
   - spec-forge/src/cli.ts
   - spec-cli/src/cli.ts
@@ -10,8 +10,8 @@ code:
 # forge-cli
 
 The capstone of [[spec-forge]]: it makes the tracer *usable*. Until now the [[port]] and [[links]] were
-exercised only by a standalone proof script; this exposes them on the real product surface as `spex
-forge`, so a human or agent reaches the same resolution through the CLI they already use.
+exercised only by a standalone proof script; this exposes spec-forge's reads on the real product surface as
+`spex forge <sub>`, so a human or agent reaches the same resolution through the CLI they already use.
 
 **Surface:**
 
@@ -19,8 +19,17 @@ forge`, so a human or agent reaches the same resolution through the CLI they alr
   chosen driver, resolve them against the real node ids ([[links]]), and print `node → linked work`. A
   header line reports both the link counts and how many issues/PRs were scanned (so an empty result is
   legible: nothing linked vs nothing to scan). `--node` narrows to one node; `--json` emits the raw
-  resolved structure. The host is selected **through the `ForgeDriver` port** (a registry keyed by each
-  driver's own `host`), never a hardcoded vendor branch — a second host is one registry entry.
+  resolved structure.
+- `spex forge eval-pending [--host github] [--node <id>] [--json]` — the same read, resolved instead to the
+  open issues flagged `needs-yatsu-eval`, printed as `node → evaluation owed` with the same header and
+  `--node`/`--json` flags so the two reports read alike. The flag-recognition and node-resolution semantics
+  are [[needs-yatsu-eval]]'s; this is only its CLI exposure. `--json` emits the raw `NodeEvalPending[]` —
+  the shape `spex yatsu scan` consumes.
+
+Both verbs share one read — select the host's driver **through the `ForgeDriver` port** (a registry keyed by
+each driver's own `host`, never a hardcoded vendor branch — a second host is one registry entry), load the
+canonical node ids, fetch the host's open issues/PRs — factored into `readForge`, so a third verb is just a
+resolver plus a printer.
 
 Reading the forge is **live** (the driver calls `gh`), but the package is otherwise read-only: it never
 writes to the forge and never mutates a node — a node's status stays git-derived. The logic lives **in

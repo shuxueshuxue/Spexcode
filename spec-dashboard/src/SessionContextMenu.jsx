@@ -1,10 +1,11 @@
-// @@@ SessionContextMenu - the right-click menu on a session row, plus its rename flow. Right-clicking a
-// row opens this small menu anchored at the cursor; "Rename" swaps it for a centred prompt (the shared
-// Modal) prefilled with the session's CURRENT name override. Submitting POSTs the new name to
-// /api/sessions/:id/rename — the backend persists it to the worktree's `.session` as the `name` override
-// that wins over the derived label — then asks the board to reload so the new name shows on every surface
-// at once. A blank name CLEARS the override, reverting the row to its derived label (node/title/branch/id).
-// The menu is its own pop-over (not a board node), so the window stays a thin glance and this owns the gesture.
+// @@@ SessionContextMenu - the right-click menu on a session row, with two gestures. "Rename" swaps the
+// menu for a centred prompt (the shared Modal) prefilled with the session's CURRENT name override;
+// submitting POSTs to /api/sessions/:id/rename — the backend persists it to the worktree's `.session` as the
+// `name` override that wins over the derived label — and a blank name CLEARS the override. "Close" is a
+// right-click shortcut for the header's close button: it POSTs to /api/sessions/:id/close (the human-only
+// worktree removal), no confirm, identical behaviour. Either gesture calls onChanged so the board reloads
+// and every surface reflects it at once. The menu is its own pop-over (not a board node), so the window
+// stays a thin glance and this owns the gesture.
 
 import { useEffect, useRef, useState } from 'react'
 import Modal from './Modal.jsx'
@@ -12,7 +13,7 @@ import { apiFetch } from './data.js'
 import { sessionName } from './session.js'
 import { useT } from './i18n/index.jsx'
 
-export default function SessionContextMenu({ menu, onClose, onRenamed }) {
+export default function SessionContextMenu({ menu, onClose, onChanged }) {
   const t = useT()
   const [renaming, setRenaming] = useState(null)   // the session whose rename prompt is open | null
   const [value, setValue] = useState('')
@@ -39,6 +40,16 @@ export default function SessionContextMenu({ menu, onClose, onRenamed }) {
     onClose()
   }
 
+  // close = the same gesture as the header's close button, just reachable from the right-click menu: POST
+  // the human-only worktree removal, then reload so the row drops off every surface. No confirm — it mirrors
+  // that button exactly. Fire-and-forget: a failed close is reconciled by the next board poll.
+  const startClose = (e) => {
+    e.stopPropagation()
+    const id = menu.session.id
+    onClose()
+    apiFetch(`/api/sessions/${id}/close`, { method: 'POST' }).catch(() => {}).finally(() => onChanged?.())
+  }
+
   const submit = async (e) => {
     e.preventDefault()
     if (busy) return
@@ -48,7 +59,7 @@ export default function SessionContextMenu({ menu, onClose, onRenamed }) {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: value }),
       })
-      onRenamed?.()
+      onChanged?.()
     } catch { /* the next board poll reconciles; nothing destructive to recover */ }
     finally { setBusy(false); setRenaming(null) }
   }
@@ -58,6 +69,7 @@ export default function SessionContextMenu({ menu, onClose, onRenamed }) {
       {menu && (
         <div className="sess-menu" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()}>
           <button className="sess-menu-item" onClick={startRename}>{t('sessionWindow.rename')}</button>
+          <button className="sess-menu-item danger" onClick={startClose}>{t('sessionWindow.close')}</button>
         </div>
       )}
       {renaming && (

@@ -105,6 +105,8 @@ export default {
     emptyAfter: ' 开始一个',
     rename: '重命名',
     close: '关闭',
+    closeTitle: '关闭“{name}”？',
+    closeConfirm: '这将关闭会话并删除其工作树。任何未提交的更改都会丢失。',
     renameTitle: '重命名“{name}”',
     renamePlaceholder: '显示名称（留空以重置）',
   },

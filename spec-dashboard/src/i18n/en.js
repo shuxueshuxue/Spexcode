@@ -108,6 +108,8 @@ export default {
     emptyAfter: ' to start one',
     rename: 'rename',
     close: 'close',
+    closeTitle: 'close “{name}”?',
+    closeConfirm: 'This closes the session and removes its worktree. Any uncommitted changes are lost.',
     renameTitle: 'rename “{name}”',
     renamePlaceholder: 'display name (blank to reset)',
   },

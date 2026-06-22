@@ -46,10 +46,11 @@ reload, so the new label appears on every surface at once rather than only where
 derived label. Renaming an unknown session fails loudly — the endpoint answers 404 — never a silent
 success.
 
-The menu's second item, **close**, is a right-click shortcut for the header's close button — not a new
-capability. It POSTs the same human-only worktree removal (no confirm, identical behaviour) and asks the
-board to reload, so the closed row drops off every surface at once; it's styled as the destructive verb to
-set it apart from rename.
+The menu's second item, **close**, runs the same human-only worktree removal as the header's close button,
+but behind a **confirm prompt** — a right-click is easy to mis-aim and the removal is destructive, so unlike
+that button it asks first (the confirm is the shared modal, its commit button styled as the destructive
+verb). Confirming POSTs the close and asks the board to reload, so the closed row drops off every surface at
+once; cancelling does nothing.
 
 Because both the pop-over and its prompt are opened **from** the board, each must render **above** it:
 a menu or modal that paints behind its own surface is present in the DOM yet invisible and unclickable,

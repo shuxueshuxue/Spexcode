@@ -24,8 +24,8 @@ forge`, so a human or agent reaches the same resolution through the CLI they alr
 
 Reading the forge is **live** (the driver calls `gh`), but the package is otherwise read-only: it never
 writes to the forge and never mutates a node — a node's status stays git-derived. The logic lives **in
-this package**; `spec-cli/src/cli.ts` carries only a thin `forge` route that delegates to `runForge` and a
-help-text line.
+this package**; `spec-cli/src/cli.ts` carries only a thin `forge` route — a lazy `import()` of `runForge`
+to which it hands `argv` — plus a help-text line, so the main CLI never bundles forge logic it isn't using.
 
 Out of scope (sibling node): surfacing the same links in the dashboard — done CLI-first because frontend
 can't be verified here.

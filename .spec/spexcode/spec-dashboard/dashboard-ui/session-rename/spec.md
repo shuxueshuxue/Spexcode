@@ -49,8 +49,9 @@ success.
 Because both the pop-over and its prompt are opened **from** the board, each must render **above** it:
 a menu or modal that paints behind its own surface is present in the DOM yet invisible and unclickable,
 so they live on the top layer — over the board's backdrop, never beneath it. The board also suppresses
-the OS context menu everywhere inside it (the terminal-app feel of [[session-console]]), and that
-suppression and this gesture **coexist**: the same right-click that kills the browser's menu on a row
-ALSO opens the rename pop-over, so blocking the OS menu never costs the human theirs. Right-clicking the
+the OS context menu everywhere inside it (the terminal-app feel of [[session-console]]) via a native
+capture-phase `contextmenu` listener, and that suppression and this gesture **coexist**: the same
+right-click that kills the browser's menu on a row ALSO opens the rename pop-over (the row's own handler
+still fires), so blocking the OS menu never costs the human theirs. Right-clicking the
 list's empty space below the rows is simply that block with no pop-over — the OS menu is still suppressed
 and the docked input keeps focus, never a stolen-focus gap.

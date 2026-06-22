@@ -30,3 +30,7 @@ itself, and [[spex-init]] for a project adopting SpexCode. A single source is th
 would let the two paths drift, installing different gates. Because `.git/hooks/` is never committed,
 installing is a per-clone onboarding step, re-run whenever the source changes (the installed copy is a
 snapshot, not a symlink). The hook is advisory and bypassable; the non-bypassable backstop is [[ci-gate]].
+
+This node owns **only** the main-authoring guard. The same `pre-commit` file also carries the
+[[spec-lint]] shim (it runs `spex lint` after this gate), but that block is that node's contract, not
+this one's — they share a file, not a concern.

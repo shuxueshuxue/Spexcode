@@ -49,7 +49,9 @@ node **or** focusing it (clicking or keyboard-navigating to it) reveals a **card
 node, a header plus one mini-card per issue (number and state on top, the **full title wrapping** beneath,
 not a single clipped line), each a link to its url. The card is the **only** detail surface this feature
 adds: no second detail pane, no extra route. Clicking an issue link opens the forge, never the node's
-session.
+session. The badge and the card's count line render inside the node tile ([[node-graph]]) and draw their
+copy through the shared translator `t` ([[settings]]), so even the work signal speaks the reader's
+language; each issue's own number/state/title stay raw forge data.
 
 Out of scope (future siblings, per node granularity): surfacing open **PRs** the same way (PRs already
 read on the board as session/overlay state); any live push of forge deltas (that is [[freshness]]'s

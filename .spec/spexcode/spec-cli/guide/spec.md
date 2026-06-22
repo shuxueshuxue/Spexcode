@@ -25,6 +25,8 @@ Each step names the real seam rather than restating internals:
 - **`spexcode.json` governs layout** — lint's `governedRoots`/`sourceExtensions` and any non-default
   worktree convention; `spex lint` at 0 errors is the adoption bar, its coverage warnings the TODO.
 
-The text is help narration (like `printHelp` and `spex init`'s next-steps), so it lives in the CLI
-source — it is *not* a planted `.spec` template the way [[spex-init]]'s contracts are. `guide` tells
-you the loop; [[spex-init]] performs the first step of it.
+The text is help narration (like `printHelp` and `spex init`'s next-steps): one static block printed to
+the terminal, living in the CLI source — *not* a planted `.spec` template the way [[spex-init]]'s
+contracts are, and *not* routed through the dashboard's i18n catalogs ([[settings]]), which translate the
+browser UI, not operator-facing CLI output. `guide` tells you the loop; [[spex-init]] performs the first
+step of it.

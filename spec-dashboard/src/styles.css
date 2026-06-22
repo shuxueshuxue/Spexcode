@@ -867,3 +867,142 @@ body {
   border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,.12);
   font-family: var(--mono); font-size: 12px;
 }
+
+/* ============================================================================
+   MOBILE INTERFACE (MobileApp) — the touch-first face. Only mounted on a phone
+   (App switches on useIsMobile), so every rule here is reached only there; the
+   .m-pane-host overrides are scoped so the reused panes never change on desktop.
+   The desktop graph + its keyboard model don't translate to a thumb, so this is
+   a native drill-down (breadcrumb + tap rows) over the SAME board data.
+   ============================================================================ */
+.m-app {
+  position: fixed; inset: 0; z-index: 10;       /* a full-screen shell, above any stray desktop chrome */
+  display: flex; flex-direction: column;
+  background: var(--paper); color: var(--ink);
+  font-family: var(--mono); -webkit-tap-highlight-color: transparent;
+}
+
+/* top bar — a thin context strip: optional back chevron + the project brand (which tab am I serving). */
+.m-topbar {
+  flex: none; display: flex; align-items: center; gap: 8px;
+  height: 48px; padding: 0 10px; padding-top: env(safe-area-inset-top, 0);
+  box-sizing: content-box; border-bottom: 1px solid var(--line); background: var(--panel);
+}
+.m-back {
+  flex: none; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
+  font-size: 26px; line-height: 1; color: var(--blue);
+  background: none; border: none; cursor: pointer;
+}
+.m-back.ghost { visibility: hidden; }          /* keep the brand fixed when there's nothing to go back to */
+.m-brand { font-weight: 700; letter-spacing: .4px; color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.m-main { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; overscroll-behavior: contain; }
+.m-specs { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+
+/* breadcrumb — the spine root→here, horizontally scrollable when it's deep; tap any crumb to climb. */
+.m-crumbs {
+  flex: none; display: flex; align-items: center; gap: 2px;
+  padding: 7px 10px; overflow-x: auto; white-space: nowrap;
+  border-bottom: 1px solid var(--line); background: var(--paper);
+}
+.m-crumbs::-webkit-scrollbar { display: none; }
+.m-crumb { display: inline-flex; align-items: center; gap: 2px; }
+.m-crumb-sep { color: var(--muted); }
+.m-crumb-btn { background: none; border: none; padding: 2px 3px; font-family: var(--mono); font-size: 12px; color: var(--muted); cursor: pointer; }
+.m-crumb-btn.cur { color: var(--ink2); font-weight: 700; }
+
+.m-node { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+/* compact, persistent node header — the row that stays put while you flip tabs below it. */
+.m-node-head {
+  flex: none; display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px;
+  padding: 12px 14px 8px;
+}
+.m-dot { flex: none; width: 9px; height: 9px; border-radius: 50%; }
+.m-node-title { font-size: 16px; font-weight: 700; color: var(--ink2); }
+.m-node-ver { font-size: 12px; color: var(--muted); }
+.m-node-status { font-size: 11px; color: var(--ink); padding: 1px 6px; border: 1px solid var(--line); border-radius: 999px; }
+.m-node-faces { display: inline-flex; gap: 2px; }
+.m-node-desc { flex: none; padding: 0 14px 10px; color: var(--ink); font-size: 13px; line-height: 1.5; }
+
+/* segmented control — children · spec · history · issues (· edit), scrollable if it overflows. */
+.m-tabs {
+  flex: none; display: flex; gap: 6px; padding: 0 10px 8px; overflow-x: auto; white-space: nowrap;
+  border-bottom: 1px solid var(--line);
+}
+.m-tabs::-webkit-scrollbar { display: none; }
+.m-tab {
+  flex: none; padding: 6px 12px; min-height: 32px; cursor: pointer;
+  font-family: var(--mono); font-size: 12px; color: var(--ink);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
+}
+.m-tab.on { color: var(--paper); background: var(--blue); border-color: var(--blue); }
+
+/* the pane area is the single scroller — EXCEPT history, whose own .pane-hist scrolls (progressive version
+   reveal keys off its scroll), so .fixed hands the scroll back to it. The reused desktop panes are reset to
+   flow naturally inside this host (no nested scrollbars), and SpecPane's title/desc are dropped since the
+   header already shows them. */
+.m-pane-host { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.m-pane-host > * { flex: 1; min-height: 0; }
+.m-pane-host.fixed .pane-hist { height: 100%; }
+.m-pane-host .pane-doc { overflow: auto; -webkit-overflow-scrolling: touch; padding: 14px; }
+.m-pane-host .pane-doc > h1, .m-pane-host .pane-doc > blockquote { display: none; }
+.m-pane-host .pane-issues, .m-pane-host .pane-edit { -webkit-overflow-scrolling: touch; }
+
+.m-children { overflow: auto; -webkit-overflow-scrolling: touch; }
+
+/* a tappable tree row (a child in the drill-down, or a session's changed node) — generous touch height. */
+.m-row {
+  display: flex; align-items: center; gap: 9px; width: 100%; min-height: 52px;
+  padding: 10px 14px; text-align: left; cursor: pointer;
+  background: var(--paper); border: none; border-bottom: 1px solid var(--line);
+  font-family: var(--mono); color: var(--ink);
+}
+.m-row:active { background: var(--panel); }
+.m-row[disabled] { opacity: .5; }
+.m-row-title { flex: 1; min-width: 0; font-size: 14px; color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-row-faces { flex: none; display: inline-flex; gap: 2px; }
+.m-row-ver { flex: none; font-size: 11px; color: var(--muted); }
+.m-row-kids { flex: none; font-size: 11px; color: var(--blue); }
+.m-row-chev { flex: none; color: var(--muted); font-size: 18px; }
+
+/* bottom tab bar — the two planes (specs / sessions), thumb-reachable, with the device's home-bar inset. */
+.m-tabbar {
+  flex: none; display: flex; border-top: 1px solid var(--line); background: var(--panel);
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+.m-tabbar-btn {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
+  height: 52px; cursor: pointer; background: none; border: none;
+  font-family: var(--mono); font-size: 13px; color: var(--muted);
+}
+.m-tabbar-btn.on { color: var(--blue); font-weight: 700; box-shadow: inset 0 2px 0 var(--blue); }
+.m-tabbar-ico { font-size: 13px; }
+.m-tabbar-badge {
+  min-width: 16px; padding: 0 4px; border-radius: 999px; background: var(--orange); color: var(--paper);
+  font-size: 10px; line-height: 16px; text-align: center;
+}
+
+/* sessions list — reuses the SAME SessionRow face the desktop draws (avatar · name · status · ops · activity). */
+.m-sesslist { flex: 1; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; }
+.m-sess-row {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; width: 100%;
+  padding: 12px 14px; text-align: left; cursor: pointer;
+  background: var(--paper); border: none; border-bottom: 1px solid var(--line); font-family: var(--mono);
+}
+.m-sess-row:active { background: var(--panel); }
+.m-sess-row .sess-id { flex: 1; min-width: 0; font-weight: 700; color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-sess-row .sess-status, .m-sess-row .sess-ops { flex: none; font-size: 11px; color: var(--muted); }
+.m-sess-row .sess-activity { flex-basis: 100%; color: var(--muted); font-size: 11px; line-height: 1.4; }
+
+/* session detail — identity, the worker's rolling activity, and the nodes it's changing (tap to cross over). */
+.m-sessdetail { flex: 1; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; }
+.m-sess-card { display: flex; align-items: center; gap: 10px; padding: 14px; border-bottom: 1px solid var(--line); }
+.m-sess-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.m-sess-name { font-size: 16px; font-weight: 700; color: var(--ink2); }
+.m-sess-status { font-size: 12px; color: var(--muted); }
+.m-sess-activity { padding: 10px 14px; color: var(--ink); font-size: 13px; line-height: 1.5; background: var(--panel); border-bottom: 1px solid var(--line); }
+.m-sess-section { padding: 12px 14px 6px; font-size: 11px; font-weight: 700; letter-spacing: .4px; color: var(--muted); text-transform: uppercase; }
+.m-sessdetail .ov-mark { flex: none; }
+
+.m-empty { padding: 18px 14px; color: var(--muted); font-size: 13px; }
+.m-empty.big { flex: 1; display: flex; align-items: center; justify-content: center; text-align: center; }

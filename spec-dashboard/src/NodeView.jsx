@@ -106,7 +106,7 @@ function TwoPart({ parts }) {
   )
 }
 
-function SpecPane({ node }) {
+export function SpecPane({ node }) {
   const t = useT()
   return (
     <div className="pane-doc">
@@ -128,7 +128,7 @@ function SpecPane({ node }) {
 
 // @@@ useHistory - the node's version log from git (/api/specs/:id/history), newest first. The single
 // `history` tab below reads it: the latest version is expanded, older ones reveal as the reader scrolls.
-function useHistory(id) {
+export function useHistory(id) {
   const [rows, setRows] = useState(null)
   useEffect(() => {
     let on = true
@@ -224,7 +224,7 @@ function HistoryItem({ node, r, v, latest, open, onToggle }) {
 // version opens expanded with its proof; older ones start collapsed and REVEAL progressively as the
 // reader scrolls — once the end of the deepest open item is in view (they've finished reading it), the
 // next item expands. A header click toggles any item by hand. `rows` is NodeView's one fetch, newest-first.
-function HistoryPane({ node, rows }) {
+export function HistoryPane({ node, rows }) {
   const t = useT()
   const scRef = useRef(null)
   const [open, setOpen] = useState(() => new Set([0]))   // latest expanded; the rest reveal on scroll
@@ -300,7 +300,7 @@ function IssueRow({ i }) {
     </a>
   )
 }
-function IssuesPane({ node }) {
+export function IssuesPane({ node }) {
   const t = useT()
   const issues = node.issues || []
   if (!issues.length) return <div className="pane-issues empty">{t('nodeView.noIssues')}</div>
@@ -359,7 +359,7 @@ function EditOverlay({ node, ov }) {
     </figure>
   )
 }
-function EditPane({ node }) {
+export function EditPane({ node }) {
   const t = useT()
   const overlays = node.overlays || []
   if (!overlays.length) return <div className="pane-edit empty">{t('nodeView.noEdit')}</div>

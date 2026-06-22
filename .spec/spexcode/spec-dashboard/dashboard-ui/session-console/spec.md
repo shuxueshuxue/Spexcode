@@ -33,7 +33,9 @@ dropdown of spec nodes. A leading **`/`** opens the config-preset palette; the
 two compose the launch grammar
 `/<preset> @<node>… <free text>` into one prompt, from which the server derives the session's node (the first
 `@<id>`). Both menus are pure assistance — picking a row only inserts text; the human still launches. The New
-tab's prompt deliberately has **no** `/` slash-command menu (that surface is reserved for our own presets).
+tab's prompt deliberately has **no** `/` slash-command menu (that surface is reserved for our own presets). A
+preset launched with **no `@`-target** never assumes a node: the composed prompt tells the agent to take its
+scope from the prompt, else ask the human before acting (a scopeless preset just proceeds).
 
 An existing session shows its **live tmux terminal** (SessionTerm) with the **single human input** docked at
 the bottom. The terminal is a **real tmux client but a pure read-only scrollable view** — the human never

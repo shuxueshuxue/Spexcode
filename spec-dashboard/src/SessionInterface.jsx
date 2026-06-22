@@ -285,7 +285,7 @@ export default function SessionInterface({ sessions, specs = [], project, focusN
   // @@@ composeLaunch - the grammar `/<preset> @<node>… <free text>` assembles ONE launch prompt:
   //   · /<preset>  → a config preset (GET /api/config) whose `body` is the contract the agent runs.
   //   · @<node>…   → the targets; resolved (via the @-mention specs) to `@id — path` lines that REPLACE the
-  //                  body's {{targets}} placeholder. No @ = a "current/focused" note (the body handles it).
+  //                  body's {{targets}} placeholder. No @ = a no-target note: use the prompt's scope, else ask the human (never assume a node).
   //   · free text  → appended after the body as the human's extra steer.
   // Keeping each target as `@id` in the targets block is load-bearing: the server derives the session's node
   // from the FIRST `@<id>` it sees, so the composed prompt stays node-associated for free. A leading `/` that
@@ -303,7 +303,7 @@ export default function SessionInterface({ sessions, specs = [], project, focusN
           const s = specs.find((x) => x.id === id)
           return s ? `- @${s.id} — ${specPath(s.path)}` : `- @${id}`
         }).join('\n')
-      : '(no target specified — operate on the current/focused node.)'
+      : '(No target was @-mentioned. If the prompt names the scope, use it; otherwise ask the human to define the scope before proceeding — unless this task needs no scope, in which case proceed.)'
     const body = preset.body.includes('{{targets}}')
       ? preset.body.replace('{{targets}}', targets)
       : `${preset.body}\n\n${targets}`

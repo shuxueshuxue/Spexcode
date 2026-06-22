@@ -8,6 +8,7 @@ import { buildBoard } from './board.js'
 import { gitA } from './git.js'
 import { newSession, listSessions, sendKeys, rawKey, closeSession, reopen, propose, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, superviseQueue } from './sessions.js'
 import { slashCommands } from './slash-commands.js'
+import { saveUpload, MAX_UPLOAD_BYTES } from './uploads.js'
 import { attachViewer, detachViewer, writeViewer, resizeBridge, superviseBridges, type Viewer } from './pty-bridge.js'
 import { installProcessGuards } from './resilience.js'
 
@@ -57,6 +58,23 @@ app.get('/api/config', (c) => c.json(loadConfig()))
 // the dashboard input's `/` dropdown — the union of built-in + user/project/skill commands, computed
 // the same way Claude Code computes its own `/` menu. Insert-only on the client; nothing executes here.
 app.get('/api/slash-commands', (c) => c.json(slashCommands()))
+
+// @@@ file attach - the New Session prompt and a session's ❯ box accept pasted/dropped/picked files. Each
+// is POSTed here as multipart, written to THIS (the backend = worker) machine's /tmp, and its absolute path
+// is returned for the client to splice into the prompt — so an attachment reaches the agent as a readable
+// local path, not bytes in the prompt. Fail-loud: missing/empty file → 400, over the size cap → 413, a write
+// error → 500; only a real write returns 201 {path}.
+app.post('/api/uploads', async (c) => {
+  const body = await c.req.parseBody().catch(() => ({} as Record<string, string | File>))
+  const file = body['file']
+  if (!(file instanceof File) || file.size === 0) return c.json({ error: 'no file' }, 400)
+  if (file.size > MAX_UPLOAD_BYTES) return c.json({ error: 'file too large' }, 413)
+  try {
+    return c.json({ path: await saveUpload(file) }, 201)
+  } catch (e) {
+    return c.json({ error: String((e as Error)?.message || e) }, 500)
+  }
+})
 
 // sessions: real tmux-backed Claude Code sessions. List + spawn, stream the live pane (WebSocket),
 // forward keystrokes, and close.

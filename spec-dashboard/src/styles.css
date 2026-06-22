@@ -32,10 +32,14 @@ body {
 /* @@@ keyboard mode - while the KEYBOARD is driving the board (App.jsx kbdMode, set by nav keys, cleared by
    a real mouse move) the mouse gets out of the way: the cursor hides everywhere and the board takes no
    pointer events. With no pointer over it, no :hover reaction fires under the stationary cursor — the issue
-   popover and any future hover affordance simply don't appear until you actually move the mouse. Scoped to
-   .react-flow so the modals/HUD layered ABOVE the board (legend, settings, search) stay clickable. */
+   popover and any future hover affordance simply don't appear until you actually move the mouse. (The
+   FOCUSED node's popover still shows: that's a .focused class match, not hover, and is the keyboard reveal.)
+   Scoped to .react-flow so the modals/HUD layered ABOVE the board (legend, settings, search) stay clickable.
+   The subtree (* ) is load-bearing: React Flow re-enables pointer-events:all on its node/edge/handle layers,
+   so a rule on the .react-flow container ALONE is overridden and a stationary cursor still hits the node.
+   The window mousemove that exits kbdMode still fires — it passes through to the .graph behind. */
 .app.kbd-mode, .app.kbd-mode * { cursor: none !important; }
-.app.kbd-mode .react-flow { pointer-events: none; }
+.app.kbd-mode .react-flow, .app.kbd-mode .react-flow * { pointer-events: none !important; }
 
 /* ---- graph pane ---- */
 .graph { position: relative; background: var(--paper); border-right: 1px solid var(--line); }

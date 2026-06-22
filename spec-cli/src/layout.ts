@@ -36,6 +36,15 @@ export function readConfig(root: string): Config {
   try { return JSON.parse(readFileSync(p, 'utf8')) } catch { return {} }
 }
 
+// @@@ gitCommonDir - the SHARED git common dir (absolute), the one git directory every worktree of a
+// repo points at. A "where things live" primitive: linked-worktree state (HEAD, index) is per-worktree,
+// but the common dir is shared, so anything that must be ONE copy across all worktrees (and never end up
+// committed) belongs under it — e.g. yatsu's content-addressed pixel cache. Same `git rev-parse` mainBranch
+// uses, via the env-stripped git() so a hook's exported GIT_DIR can't misdirect it.
+export function gitCommonDir(): string {
+  return git(['rev-parse', '--path-format=absolute', '--git-common-dir']).trim()
+}
+
 // @@@ mainBranch - the source-of-truth BRANCH: what worktrees fork from, what merges land on, what review
 // diffs against. NOT hardcoded 'main' — that assumption broke every adopted repo whose default branch is
 // named otherwise (e.g. a project on `staging` or `feat/x`). Resolved from the MAIN checkout (the parent of

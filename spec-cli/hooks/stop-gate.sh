@@ -59,5 +59,5 @@ if [ "$cont" = true ]; then
 fi
 
 # first stop in an undeclared state -> nudge exactly once with PATH-independent commands.
-printf '{"decision":"block","reason":"You are stopping with an undeclared state, so the manager cannot act. Run exactly one of these, then stop: %s session done --propose merge (ready to review/merge) ; %s session done --propose nothing (paused, awaiting the human) ; %s session block --note <what-you-await> (waiting on a background task, you will self-resume) ; %s session done --propose close (propose discarding this worktree) ; %s session ask --note <your-question> (you are asking the human a question; you will resume when they answer)."}\n' "$S" "$S" "$S" "$S" "$S"
+printf '{"decision":"block","reason":"You are stopping without declaring this session'"'"'s state, so its outcome would be guessed instead of recorded. Declare what should happen next by running exactly one of these, then stop: %s session done --propose merge (ready to review/merge) ; %s session done --propose nothing (paused, awaiting the human) ; %s session block --note <what-you-await> (waiting on a background task, you will self-resume) ; %s session done --propose close (propose discarding this worktree) ; %s session ask --note <your-question> (you are asking the human a question; you will resume when they answer)."}\n' "$S" "$S" "$S" "$S" "$S"
 exit 0

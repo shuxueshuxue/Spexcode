@@ -9,7 +9,7 @@
 import { Avatar } from './avatar.jsx'
 import { labelColor } from './color.js'
 import { GLYPH } from './SpecNode.jsx'
-import { STATUS_DOT, sessionName } from './session.js'
+import { sessionName } from './session.js'
 import { useT } from './i18n/index.jsx'
 
 // @@@ opSummary - a session's overlay tally: how many nodes it is changing, by op ("+2 ~1 ✕1"). Exported
@@ -21,8 +21,8 @@ export function opSummary(ops) {
   return Object.entries(by).map(([op, n]) => `${GLYPH[op]}${n}`).join(' ')
 }
 
-// @@@ SessionRow - the shared session FACE: a TWO-row block. Row 1 is the identity line — avatar · status
-// dot · name · status (or 🔒 when locked) · op tally. Row 2 is the live ACTIVITY line: the worker's own
+// @@@ SessionRow - the shared session FACE: a TWO-row block. Row 1 is the identity line — avatar · name ·
+// status word (or 🔒 when locked) · op tally. Row 2 is the live ACTIVITY line: the worker's own
 // rolling self-summary (its tmux pane title, see sessions.ts paneTitles), in a smaller font spanning the
 // FULL width (it wraps below the avatar too). Identity stays put while activity changes every turn, so the
 // two never fight. Row 2 is omitted when there's no activity (offline / booting / queued). The top-right
@@ -35,7 +35,6 @@ export function SessionRow({ s, locked }) {
   return (
     <>
       <Avatar seed={s.id} status={s.status} title={`${sessionName(s)} · ${t(`status.${s.status}`)} — ${s.id.slice(0, 8)}`} />
-      <span className="sess-dot" style={{ background: STATUS_DOT[s.status] || '#93a1a1' }} />
       <span className="sess-id">{sessionName(s)}</span>
       {locked
         ? <span className="sess-lock" title={t('sessionWindow.lockedTitle')}>🔒</span>

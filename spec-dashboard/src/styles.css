@@ -648,12 +648,13 @@ body {
   font-family: var(--mono); font-size: 12px; color: var(--ink2);
 }
 .si-item:hover { background: var(--panel2); }
-/* @@@ selected tab — terminal style: a DARK bar (the same base03 as the pane it opens) with bold light text
-   and a green ❯ prompt caret. Deliberately NOT a blue spine: the left stripe stays the session's own avatar
-   colour (--ov) so selection is never confused with identity. The dark fill outranks :hover (added explicitly
-   so a hovered selection doesn't flip back to the light hover tint). */
-.si-item.on { background: var(--term-bg); color: var(--paper); font-weight: 600; border-left-width: 3px; }
-.si-item.on:hover { background: var(--term-bg); }
+/* @@@ selected tab — obvious but in-theme: a soft blue WASH (clearly past the plain hover tint), crisp bold
+   ink, a thicker spine, and a green ❯ prompt caret for terminal flavour. The wash is a background, a
+   different axis from the thin left stripe, so it never reads as the avatar colour the way the old blue
+   border-line did; the stripe itself stays the session's own --ov hue. Mirrors the locked-row mix recipe.
+   The :hover override deepens the wash slightly so a hovered selection still gives feedback. */
+.si-item.on { background: color-mix(in srgb, var(--blue) 15%, var(--panel2)); color: var(--ink2); font-weight: 600; border-left-width: 3px; }
+.si-item.on:hover { background: color-mix(in srgb, var(--blue) 24%, var(--panel2)); }
 .si-item.on::before { content: '❯'; flex: none; color: var(--green); font-weight: 700; }
 .si-item.new { color: var(--blue); font-weight: 600; }
 .si-dot { width: 7px; height: 7px; border-radius: 2px; flex: none; }

@@ -527,6 +527,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     const t = e.target
     if (isTextField(t)) return
     if (e.button === 0 && t.closest && t.closest('.si-term-body')) return
+    // a right-click on the session list must reach its onContextMenu (the rename pop-over): preventDefault
+    // on a right-button mousedown SUPPRESSES the subsequent contextmenu event, so exempt it here.
+    if (e.button === 2 && t.closest && t.closest('.si-list')) return
     e.preventDefault()
   }
 

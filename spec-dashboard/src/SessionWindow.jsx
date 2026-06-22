@@ -21,11 +21,14 @@ export function opSummary(ops) {
   return Object.entries(by).map(([op, n]) => `${GLYPH[op]}${n}`).join(' ')
 }
 
-// @@@ SessionRow - the shared session FACE: avatar · status dot · name · status (or 🔒 when locked) · op
-// tally. The top-right window AND the session-board tab both render THIS, so a session reads identically on
-// either surface — same status AND same overlay count ("review ~2"), not one minus the other. Each surface
-// wraps it in its own button with its own handlers (window: lock / open · tab: switch / lock) and its own
-// active/locked styling; the classes are global, so the face styles the same inside either container.
+// @@@ SessionRow - the shared session FACE: a TWO-row block. Row 1 is the identity line — avatar · status
+// dot · name · status (or 🔒 when locked) · op tally. Row 2 is the live ACTIVITY line: the worker's own
+// rolling self-summary (its tmux pane title, see sessions.ts paneTitles), in a smaller font spanning the
+// FULL width (it wraps below the avatar too). Identity stays put while activity changes every turn, so the
+// two never fight. Row 2 is omitted when there's no activity (offline / booting / queued). The top-right
+// window AND the session-board tab both render THIS, so a session reads identically on either surface — same
+// status, same overlay count ("review ~2"), same activity. Each surface wraps it in its own button with its
+// own handlers and active/locked styling; the classes are global, so the face styles the same in either.
 export function SessionRow({ s, locked }) {
   const t = useT()
   const ops = opSummary(s.ops)
@@ -38,6 +41,7 @@ export function SessionRow({ s, locked }) {
         ? <span className="sess-lock" title={t('sessionWindow.lockedTitle')}>🔒</span>
         : <span className="sess-status">{t(`status.${s.status}`)}</span>}
       {ops && <span className="sess-ops">{ops}</span>}
+      {s.activity && <span className="sess-activity" title={s.activity}>{s.activity}</span>}
     </>
   )
 }

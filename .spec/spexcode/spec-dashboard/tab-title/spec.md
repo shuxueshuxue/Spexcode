@@ -2,11 +2,13 @@
 title: tab-title
 status: active
 hue: 190
-desc: The browser tab names itself after the backend (its launch folder, or a configured name), so every per-project viewer is self-identifying.
+desc: The project's self-identifying name (a configured dashboard.title, else the backend's launch folder) names the browser tab and the session-board list header, so every per-project viewer shows which backend it serves.
 code:
   - spec-cli/src/board.ts
   - spec-cli/src/layout.ts
+  - spec-dashboard/src/data.js
   - spec-dashboard/src/App.jsx
+  - spec-dashboard/src/SessionInterface.jsx
   - spec-dashboard/index.html
 ---
 # tab-title
@@ -24,6 +26,13 @@ needs no configuration. A project that wants a hand-picked name sets `dashboard.
 its `spexcode.json` (the same per-project config block that holds `dashboard.apiUrl`); when
 present it replaces the folder name. Either way the frontend keeps the `· SpexCode` suffix,
 so the override names the project, not the whole title.
+
+That name is read through a single frontend helper, `projectTitle(board)`, so any surface
+that needs to say *which* project shares one source rather than re-deriving it. The **session
+board**'s left-hand list header reuses it: `// sessions` becomes `// <project> sessions`,
+self-identifying the board the way the tab self-identifies the window — the same payoff when
+several project boards sit open at once. With no name resolved it falls back to plain
+`// sessions`.
 
 `index.html` ships a plain `SpexCode` `<title>` as the pre-load fallback — what the tab
 reads before the first board arrives, and if the backend is unreachable.

@@ -5,6 +5,8 @@ hue: 300
 desc: Right-click a session row on the session board to give it a human name — a persisted override that wins over the derived label.
 code:
   - spec-dashboard/src/SessionContextMenu.jsx
+  - spec-dashboard/src/SessionInterface.jsx
+  - spec-dashboard/src/styles.css
   - spec-cli/src/sessions.ts
   - spec-cli/src/index.ts
 ---
@@ -43,3 +45,12 @@ reload, so the new label appears on every surface at once rather than only where
 **blank** name is a **reset**, not an error: it clears the override and the session falls back to its
 derived label. Renaming an unknown session fails loudly — the endpoint answers 404 — never a silent
 success.
+
+Because both the pop-over and its prompt are opened **from** the board, each must render **above** it:
+a menu or modal that paints behind its own surface is present in the DOM yet invisible and unclickable,
+so they live on the top layer — over the board's backdrop, never beneath it. The board also suppresses
+the OS context menu everywhere inside it (the terminal-app feel of [[session-console]]), and that
+suppression and this gesture **coexist**: the same right-click that kills the browser's menu on a row
+ALSO opens the rename pop-over, so blocking the OS menu never costs the human theirs. Right-clicking the
+list's empty space below the rows is simply that block with no pop-over — the OS menu is still suppressed
+and the docked input keeps focus, never a stolen-focus gap.

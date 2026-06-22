@@ -148,8 +148,9 @@ test('drivers: tag round-trips, registry resolves manual + defaults', () => {
   assert.equal(evaluatorTag(manualDriver), 'manual@1')
   assert.deepEqual(parseEvaluator('manual@2'), { name: 'manual', version: 2 })
   assert.equal(driverFor('manual'), manualDriver)
-  assert.equal(driverFor(undefined), manualDriver)   // default
-  assert.equal(driverFor('playwright'), undefined)   // future sibling, not registered
+  assert.equal(driverFor(undefined), manualDriver)        // default
+  assert.equal(driverFor('playwright')?.name, 'playwright') // the registered web driver (sibling node)
+  assert.equal(driverFor('webdriver'), undefined)         // still-unbuilt sibling, not registered
 })
 
 // ---- cache (content-addressed blob store + GC) ----

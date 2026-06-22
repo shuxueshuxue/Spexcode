@@ -180,10 +180,6 @@ export async function loadSpecs() {
       code,
       version: h.length,
       reason: h[0]?.reason || '',
-      // @@@ versionHash - the sha of the node's latest version commit (S, h newest-first), or '' when
-      // unversioned. It's the baseline drift is measured FROM, so `spex drift --explain` diffs the code
-      // since this sha (rangeDiff) to show exactly the change the spec hasn't caught up with.
-      versionHash: S,
       // @@@ lastEdited - ISO date of the node's latest version commit (h is newest-first), or null
       // when it has no committed version. The board's node row shows "last edited … ago" from this
       // when no live session is currently editing the node (see SpecNode's second row).

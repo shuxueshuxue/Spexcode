@@ -26,15 +26,12 @@ if [ -z "${SPEXCODE_SKIP_LINT:-}" ]; then
   main_root=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)")
   repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
   lint_found=1
-  # `lint --gate`: integrity/living errors block as always, PLUS the commit-local drift gate (a staged
-  # file whose node is >= driftErrorThreshold behind blocks, with remediation guidance). Plain `spex lint`
-  # in CI stays drift-advisory — the gate's hard drift block is local-only, see the spec-lint node.
   if command -v spex >/dev/null 2>&1; then
-    do_lint() { spex lint --gate >&2; }
+    do_lint() { spex lint >&2; }
   elif [ -x "$repo_root/node_modules/.bin/spex" ]; then
-    do_lint() { "$repo_root/node_modules/.bin/spex" lint --gate >&2; }
+    do_lint() { "$repo_root/node_modules/.bin/spex" lint >&2; }
   elif [ -x "$main_root/spec-cli/node_modules/.bin/tsx" ] && [ -f "$main_root/spec-cli/src/cli.ts" ]; then
-    do_lint() { "$main_root/spec-cli/node_modules/.bin/tsx" "$main_root/spec-cli/src/cli.ts" lint --gate >&2; }
+    do_lint() { "$main_root/spec-cli/node_modules/.bin/tsx" "$main_root/spec-cli/src/cli.ts" lint >&2; }
   else
     lint_found=0
   fi

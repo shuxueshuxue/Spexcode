@@ -33,8 +33,9 @@ The offline `❯` box takes none of these — there is no live machine to carry 
 
 Each attached file is uploaded to **the backend**, which is by construction **the machine every session and
 worker runs on** — its temp dir is the same `/tmp` home the rendezvous sockets already use, so an upload
-shares the worker's filesystem for free. The file is written there under a collision-proof, path-safe name,
-and its **absolute path** is what gets spliced into the prompt at the caret, padded so it never glues to a
+shares the worker's filesystem for free. The file lands in one `spexcode-uploads/` sink there under a
+collision-proof, path-safe name, and its **absolute path** is what gets spliced into the prompt at the
+caret, padded so it never glues to a
 neighbouring word. The human types around it; the agent reads it. That is the entire contract — "send the
 file over, hand me the path" — with no transport leaking into the prompt text.
 

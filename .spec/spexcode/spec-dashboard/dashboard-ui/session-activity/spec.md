@@ -32,7 +32,7 @@ never shows a stale line. A tmux hiccup drops the line for one tick, never the s
 **Render (two-row face).** The shared session face ([[session-console]]'s `SessionRow`) is two rows. Row 1
 is **identity** — avatar · name · status word (or 🔒) · op tally — the stable spatial anchor that keeps a
 session's slot. Row 2 is the **activity line**: the worker's own summary in a smaller, dimmer font
-that spans the **whole row width** (wrapping below the avatar too), single-line with an ellipsis, omitted
-when there's no activity. Identity stays put while activity changes each turn, so the two never fight —
+that spans the **whole row width** — the face's flex row wraps and the line takes a full-width basis, so it
+drops below the avatar too — single-line with an ellipsis, omitted when there's no activity. Identity stays put while activity changes each turn, so the two never fight —
 the same separation the rename override keeps over the derived label ([[session-rename]]). The face is
 shared, so the top-right window and the Enter session tabs show the identical activity.

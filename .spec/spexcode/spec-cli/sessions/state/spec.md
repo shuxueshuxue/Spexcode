@@ -50,4 +50,4 @@ capture and the agent's own `spex session ask --note` — and resumes only on a 
 self-resuming `blocked`; `idle` is the inferred opposite, a stop with no declaration at all. Surfacing a
 `needs-input` is the manager's job via [[graph]]'s `spex watch`. The lifecycle writers
 (`markStateFromCwd` and the `markDone`/`markError`/`markIdle` variants) live in `sessions.ts`; the `spex
-session done|ask|block|idle` commands and the `spex ls` table are their `cli.ts` surface.
+session done|ask|block|idle` commands and the `spex ls` table are state's only stake in the shared `cli.ts` hub.

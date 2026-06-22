@@ -25,12 +25,13 @@ The durable unit is the worktree: each carries an untracked `.session` file (`no
 launch prompt. There is no in-memory map — the list is read from the worktrees every time, so state
 survives a backend restart. `sessions.ts` holds the machine and is the only writer of `.session`.
 
-The list is ordered by **session birth, oldest first** — derived from the `.session` file's birthtime,
-which is fixed for the worktree's life (the file is rewritten in place on every state change, so mtime
-drifts but birthtime does not). Git enumerates worktrees alphabetically by path, and a path is a slug of
-the launch prompt, so the raw order is effectively arbitrary *and* reshuffles whenever a session joins or
-leaves; birth order instead gives every session a permanent slot with new ones appending at the end — one
-stable spatial map shared by the dashboard window, the session tabs, and `spex ls`.
+The list is ordered by **session birth, oldest first** — derived from the **worktree directory's**
+birthtime. The directory is created once by `git worktree add` and lives for the session's whole life, so
+its birthtime is the one stable creation anchor; the `.session` file's own birthtime is unusable because
+writers recreate that file, resetting it to the last major write. Git enumerates worktrees alphabetically
+by path, and a path is a slug of the launch prompt, so the raw order is arbitrary *and* reshuffles whenever
+a session joins or leaves; birth order instead gives every session a permanent slot with new ones appending
+at the end — one stable spatial map shared by the dashboard window, the session tabs, and `spex ls`.
 
 The subsystem divides into governed concerns, each its own child node:
 

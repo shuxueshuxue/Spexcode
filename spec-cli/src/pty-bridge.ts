@@ -81,9 +81,12 @@ function ensureBridge(id: string, prewarm = false): Bridge | null {
   const { cols, rows } = prewarmSize(id)
   let p: IPty
   try {
-    p = pty.spawn('tmux', ['-L', TMUX_SOCK, 'attach-session', '-t', id], {
+    // -u + a UTF-8 LANG force this tmux CLIENT to emit UTF-8 even when the host's locale is empty/non-UTF-8
+    // (a macOS LaunchAgent gives LANG="" → tmux would substitute `_` for every wide char: CJK, ▸, ★, …).
+    // Locale-independent so the live terminal renders non-ASCII intact regardless of how the backend started.
+    p = pty.spawn('tmux', ['-u', '-L', TMUX_SOCK, 'attach-session', '-t', id], {
       name: 'xterm-256color', cols, rows,
-      env: process.env as Record<string, string>,
+      env: { ...process.env, LANG: process.env.LANG || 'en_US.UTF-8' } as Record<string, string>,
     })
   } catch { return null }
   b = { id, pty: p, cols, rows, prewarmed: prewarm, repaintToken: 0 }

@@ -20,6 +20,12 @@ every browser viewer of that session — so there is one authoritative pane size
 supervisor keeps a **warm** client for every *detached* live session, so opening a tab paints instantly,
 and deliberately **skips** any session a human is already attached to in their own terminal.
 
+The client is forced to **UTF-8** (`tmux -u` plus a UTF-8 `LANG`), independent of the host's locale. Without
+that, a backend launched with an empty/non-UTF-8 environment (e.g. a macOS LaunchAgent, where `LANG=""`)
+makes tmux substitute `_` for every wide character — CJK, `▸`, `★`, … — in the bytes it streams to the
+browser, even though the pane itself stores them correctly. Forcing it here keeps the live terminal
+glyph-faithful wherever the backend runs.
+
 ## the durable-subscription invariant
 
 A viewer subscribes to a **stable session id**, never to the bridge instance. The subscription **outlives

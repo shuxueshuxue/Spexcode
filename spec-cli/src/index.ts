@@ -8,6 +8,7 @@ import { buildBoard } from './board.js'
 import { gitA } from './git.js'
 import { newSession, listSessions, sendKeys, rawKey, closeSession, reopen, propose, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, superviseQueue } from './sessions.js'
 import { slashCommands } from './slash-commands.js'
+import { evalTimeline, readBlobByHash } from '../../spec-yatsu/src/evaltab.js'
 import { saveUpload, MAX_UPLOAD_BYTES } from './uploads.js'
 import { attachViewer, detachViewer, writeViewer, resizeBridge, superviseBridges, type Viewer } from './pty-bridge.js'
 import { installProcessGuards } from './resilience.js'
@@ -44,6 +45,21 @@ app.get('/api/edit', async (c) => {
   const mb = mainBranch()
   const base = (await gitA(['-C', source, 'merge-base', mb, 'HEAD'])).trim() || mb
   return c.json({ patch: await gitA(['-C', source, 'diff', base, '--', path]) })
+})
+// @@@ eval timeline - a node's chronological evaluation history for the dashboard eval tab (the READ half of
+// `spex yatsu`). Each reading from the yatsu.evals.ndjson sidecar (scenario/codeSha/blob/evaluator/ts) joined
+// with a LIVE freshness flag — the same git-derived staleness `spex yatsu scan` reports, so the tab mirrors
+// code-drift. Newest-first; `hasYatsu:false` for a node that declares no scenarios. LOCAL readings only —
+// the forge issue-events source is a future sibling (see the yatsu-eval-tab spec).
+app.get('/api/specs/:id/evals', async (c) => c.json(await evalTimeline(c.req.param('id'))))
+// @@@ eval blob - serve a reading's captured pixels by content hash from the shared common-dir cache (the
+// bytes never enter git). A malformed hash → 400; a record whose bytes are gone → 404 with the `miss original
+// file` sentinel (the tab shows that instead of an image); present → the bytes with a sniffed image MIME, and
+// an immutable cache header since the name IS the content hash.
+app.get('/api/yatsu/blob/:hash', (c) => {
+  const r = readBlobByHash(c.req.param('hash'))
+  if (!r.ok) return c.text(r.message, r.reason === 'invalid' ? 400 : 404)
+  return c.body(new Uint8Array(r.bytes), 200, { 'Content-Type': r.mime, 'Cache-Control': 'public, max-age=31536000, immutable' })
 })
 app.get('/api/layout', async (c) => c.json(await resolveLayout()))
 // @@@ config presets - the SLASH-surface config nodes: reflexive, skill-shaped plugins that are FLAT direct

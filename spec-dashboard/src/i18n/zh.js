@@ -123,6 +123,7 @@ export default {
     paneSpec: '规格',
     paneHistory: '历史',
     paneIssues: 'issue',
+    paneEval: '评测',
     paneEdit: '改动',
     noEdit: '暂无进行中的改动 —— 此节点没有正在编辑的会话。',
     editCommitted: '已提交',
@@ -147,6 +148,17 @@ export default {
     noChange: '尚无记录的改动——此规格即最新的事实依据。',
     diffLabel: '规格行差异',
     loadingHistory: '正在加载历史…',
+    eval: {
+      loading: '正在加载评测…',
+      noScenarios: '尚未声明场景 —— 此节点没有可评测的 yatsu.md。',
+      noReadings: '尚无评测 —— 运行 `spex yatsu eval` 进行一次读取。',
+      current: '✓ 最新',
+      stale: '⚠ 过期',
+      staleAxes: ({ axes }) => `已过期：自本次读取以来 ${axes} 已变动`,
+      miss: '原始文件缺失 —— 截图已从缓存中清除。',
+      noImage: '无图像 —— 一次无像素的观测。',
+      shotAlt: ({ scenario }) => `${scenario} 的捕获证据`,
+    },
   },
 
   specNode: {

@@ -128,6 +128,7 @@ export default {
     paneSpec: 'spec',
     paneHistory: 'history',
     paneIssues: 'issues',
+    paneEval: 'eval',
     paneEdit: 'edit',
     noEdit: 'no pending change — this node has no live edit in flight.',
     editCommitted: 'committed',
@@ -152,6 +153,17 @@ export default {
     noChange: 'no recorded change yet — this spec is the latest ground truth.',
     diffLabel: 'spec line diff',
     loadingHistory: 'loading history…',
+    eval: {
+      loading: 'loading evaluations…',
+      noScenarios: 'no scenarios declared — this node has no yatsu.md to evaluate.',
+      noReadings: 'no evaluations yet — run `spex yatsu eval` to take a reading.',
+      current: '✓ current',
+      stale: '⚠ stale',
+      staleAxes: ({ axes }) => `stale: ${axes} moved since this reading`,
+      miss: 'miss original file — the capture was pruned from the cache.',
+      noImage: 'no image — a pixel-less observation.',
+      shotAlt: ({ scenario }) => `captured evidence for ${scenario}`,
+    },
   },
 
   specNode: {

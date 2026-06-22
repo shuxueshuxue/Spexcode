@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { repoRoot } from './git.js'
+import { repoRoot, stagedFiles } from './git.js'
 import { loadSpecs } from './specs.js'
 
 // @@@ spec-lint - keeps the spec<->code GRAPH honest (the judge keeps the CONTENT honest, elsewhere):
@@ -159,4 +159,49 @@ export async function specLint(): Promise<Finding[]> {
   }
 
   return out
+}
+
+// @@@ drift is a forcing function - drift can't be auto-resolved (the machine can't tell which link of
+// raw intent → expanded spec → code: link → code structure → implementation broke), so `spex lint`
+// prints this when any drift exists: it names every honest remedy and the inspection commands, so the
+// agent diagnoses instead of blind-acking. The fix is composed from existing tools (lint + the spec.md +
+// git diff) — no bespoke `drift` command. The principle that governs it: never patch the symptom.
+export const DRIFT_GUIDANCE = `DRIFT — a governed file has moved ahead of its spec. A CHECKPOINT, not a chore: find WHERE the truth
+broke along  raw intent → expanded spec → code: link → code structure → implementation, fix THAT layer.
+
+  Inspect:  spex lint                                                       which files, against which spec
+            the node's spec.md                                             its raw source + expanded spec
+            git diff $(git log -1 --format=%H -- <spec.md>)..HEAD -- <file>   the code delta since the spec
+
+Diagnose, then apply the one honest remedy:
+  • contract changed        → rewrite the spec body to the new intent, commit it (re-versions the node)
+  • only mechanics changed  → spex ack <node>   "checked — spec still valid"   (give a real reason)
+  • implementation is WRONG → the spec is right; fix the CODE back toward it, then ack
+  • wrong code: link        → the node shouldn't own this file (or owns it too broadly); fix frontmatter
+  • expanded spec ≠ raw     → the spec drifted from human intent; fix the expanded spec to serve the raw
+  • structural mismatch     → one file owned by many specs / a feature with no home: refactor so a file
+                              maps to a node, or file an issue and link it (defer honestly)
+
+Never patch. A reasoned ack or a real fix are recorded and re-judged at review; a blind ack is a lie.`
+
+// @@@ commit-local drift gate - the hard gate, with NO flag: `spex lint` reads the staged index itself.
+// Empty (CI, manual audit) → no commit in flight → returns no blockers, drift stays advisory (the
+// ci-gate contract). Non-empty (pre-commit) → block the commit IF one of its OWN staged files belongs to
+// a node already >= driftErrorThreshold behind ("reconcile this node before piling more onto its files").
+// Sub-threshold drift on a touched node is returned for an advisory nudge but doesn't block. The backlog
+// on untouched nodes never blocks — the gate is commit-local, not retroactive.
+export async function driftGate(): Promise<{ blocked: string[]; touched: { id: string; drift: number }[]; threshold: number }> {
+  const root = repoRoot()
+  const cfg = loadConfig(root)
+  const staged = stagedFiles(root)
+  if (!staged.length) return { blocked: [], touched: [], threshold: cfg.driftErrorThreshold }
+  const specs = await loadSpecs()
+  const owners = new Map<string, string[]>()
+  for (const s of specs) for (const f of s.code) owners.set(f, [...(owners.get(f) ?? []), s.id])
+  const byId = new Map(specs.map((s) => [s.id, s]))
+  const ids = new Set<string>()
+  for (const f of staged) for (const o of owners.get(f) ?? []) ids.add(o)
+  const touched = [...ids].map((id) => byId.get(id)!).filter((s) => s && s.drift > 0)
+    .map((s) => ({ id: s.id, drift: s.drift })).sort((a, b) => b.drift - a.drift)
+  return { blocked: touched.filter((t) => t.drift >= cfg.driftErrorThreshold).map((t) => t.id), touched, threshold: cfg.driftErrorThreshold }
 }

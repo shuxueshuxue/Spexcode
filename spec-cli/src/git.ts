@@ -428,14 +428,6 @@ export function driftFor(idx: DriftIndex, sinceHash: string, path: string): numb
   return n
 }
 
-// @@@ rangeDiff - the unified patch a file accumulated from <fromHash> (exclusive) up to HEAD: exactly
-// the code changes the spec hasn't caught up with. '' for an unversioned node (no baseline to diff from).
-// Same env-stripping as every read (via gitA) so it's safe to call from inside a hook.
-export async function rangeDiff(root: string, fromHash: string, path: string): Promise<string> {
-  if (!fromHash) return ''
-  return gitA(['-C', root, '-c', 'core.quotePath=false', 'diff', `${fromHash}..HEAD`, '--', path])
-}
-
 // @@@ stagedFiles - the paths git is about to commit (the index vs HEAD), so the pre-commit drift gate
 // can scope itself to the files THIS commit touches instead of the whole backlog. git() (sync, env-
 // stripped) because the hook runs it once, synchronously, with an inherited GIT_DIR that must be ignored.

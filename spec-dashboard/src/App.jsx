@@ -9,7 +9,7 @@ import SessionGraph from './SessionGraph.jsx'
 import Legend from './Legend.jsx'
 import Settings from './Settings.jsx'
 import SpecSearch from './SpecSearch.jsx'
-import { loadBoard, layout, X_GAP, Y_GAP } from './data.js'
+import { loadBoard, layout, X_GAP, Y_GAP, projectTitle } from './data.js'
 import { createMomentumScroll } from './scroll.js'
 import { labelColor } from './color.js'
 import { sessionName } from './session.js'
@@ -30,7 +30,7 @@ const CHORDS = { nn: (id) => `@new under @${id}: `, dd: (id) => `@delete @${id}:
 const CHORD_KEYS = Object.keys(CHORDS)
 const CHORD_LEADERS = new Set(CHORD_KEYS.map((c) => c[0]))
 
-function Dashboard({ specs, sessions, reload }) {
+function Dashboard({ specs, sessions, project, reload }) {
   const [focusId, setFocusId] = useState(() => specs.find((s) => !s.parent)?.id)
   const [overlay, setOverlay] = useState(false)   // node-info popup (opened by `i`)
   const [pane, setPane] = useState('spec')
@@ -532,6 +532,7 @@ function Dashboard({ specs, sessions, reload }) {
       <SessionInterface
         sessions={sessions}
         specs={specs}
+        project={project}
         focusNode={focus}
         open={sessionUI}
         sel={sessionSel}
@@ -558,11 +559,13 @@ export default function App() {
     const id = setInterval(reload, 4000)
     return () => clearInterval(id)
   }, [reload])
-  // @@@ self-identifying tab - name the browser tab after the backend's launch folder (board.project), so
-  // when several projects each run their own backend, every tab says which one this viewer is pointed at.
+  // @@@ self-identifying tab - name the browser tab after the project (projectTitle: the configured
+  // dashboard.title, else the backend's launch folder), so when several projects each run their own backend,
+  // every tab says which one this viewer is pointed at. The same name labels the session-board list header.
   useEffect(() => {
-    if (board?.project) document.title = `${board.project} · SpexCode`
+    const name = projectTitle(board)
+    if (name) document.title = `${name} · SpexCode`
   }, [board?.project])
   if (!board) return <div className="loading">{t('hud.loading')}</div>
-  return <Dashboard specs={board.nodes} sessions={board.sessions} reload={reload} />
+  return <Dashboard specs={board.nodes} sessions={board.sessions} project={projectTitle(board)} reload={reload} />
 }

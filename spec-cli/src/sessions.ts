@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { randomUUID } from 'node:crypto'
-import { readFileSync, writeFileSync, existsSync, renameSync, mkdirSync, rmSync, readdirSync } from 'node:fs'
+import { readFileSync, writeFileSync, existsSync, renameSync, mkdirSync, rmSync, readdirSync, statSync } from 'node:fs'
 import { join, dirname, relative } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createConnection } from 'node:net'
@@ -155,7 +155,7 @@ const PROPOSAL_STATUS: Record<Proposal, DisplayStatus> = { merge: 'review', noth
 export type Session = {
   id: string; node: string | null; title: string | null; name: string | null; branch: string | null; path: string
   lifecycle: Lifecycle; proposal: Proposal | null; merges: number; status: DisplayStatus; note: string | null
-  prompt: string | null; promptPreview: string | null
+  prompt: string | null; promptPreview: string | null; created: number
 }
 
 // @@@ originating prompt - what the session was ASKED to do, captured at launch so a manager (human or
@@ -335,9 +335,18 @@ async function findWorktree(id: string): Promise<{ path: string; branch: string 
   return null
 }
 
+// @@@ createdAt - a session's birth instant = the `.session` sidecar's BIRTHTIME. The file is written once
+// at newSession and only ever rewritten in place (status flips, rename, merge tally), so birthtime is stable
+// across a session's whole life where mtime/ctime drift on every rewrite — making it the only on-disk signal
+// that yields a chronological order that never reshuffles. Falls back to mtime where a filesystem reports no
+// birthtime, then 0. Drives listSessions' ordering (oldest first, new sessions append).
+function createdAt(dir: string): number {
+  try { const s = statSync(join(dir, '.session')); return s.birthtimeMs || s.mtimeMs || 0 } catch { return 0 }
+}
+
 function toSession(rec: SessRec, branch: string | null, path: string, status: DisplayStatus): Session {
   const prompt = readPromptFile(path)   // the originating ask, captured at launch (sidecar; null for old sessions)
-  return { id: rec.session!, node: rec.node, title: rec.title, name: rec.name, branch, path, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, prompt, promptPreview: prompt ? promptPreview(prompt) : null }
+  return { id: rec.session!, node: rec.node, title: rec.title, name: rec.name, branch, path, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, prompt, promptPreview: prompt ? promptPreview(prompt) : null, created: createdAt(path) }
 }
 
 // @@@ renameSession - set (or clear) a session's human display NAME: the user-chosen override that wins
@@ -390,7 +399,12 @@ export async function listSessions(): Promise<Session[]> {
   // prune last-known entries for worktrees that no longer appear at all (genuinely removed), keeping it bounded.
   const livePaths = new Set(wts.map((w) => w.path))
   for (const p of [...lastKnownSession.keys()]) if (!livePaths.has(p)) lastKnownSession.delete(p)
-  return rows.filter((s): s is Session => s != null)
+  // @@@ creation order - git lists worktrees alphabetically by path, and a path is a slug of the launch
+  // prompt, so the raw enumeration order is effectively random AND reshuffles every time a session joins or
+  // leaves. Order by birth instead (oldest first): each session keeps its slot for life and a new one simply
+  // appends — a stable spatial map across every surface (dashboard window, session tabs, `spex ls`). id
+  // breaks ties so same-instant births stay deterministic.
+  return rows.filter((s): s is Session => s != null).sort((a, b) => a.created - b.created || a.id.localeCompare(b.id))
 }
 
 // @@@ session graph = LIVE monitors, not a stored relationship. An edge A→B means "agent A is RIGHT NOW

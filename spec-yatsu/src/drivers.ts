@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import type { Scenario } from './yatsu.js'
+import { playwrightDriver } from './driver-playwright.js'
 
 // @@@ Driver - a PRODUCER of readings: the interchangeable thing that reads a scenario's live state.
 // Playwright, WebDriver, a backend call, or a human eyeballing are all the same shape — the engine
@@ -45,10 +46,11 @@ export const manualDriver: Driver = {
 }
 
 // @@@ driver registry - selecting a producer goes THROUGH this list keyed by `name`, never a hardcoded
-// branch (the [[forge-cli]] driver-registry shape). A scenario's `driver` field is a lookup here; an
-// unregistered driver (e.g. `playwright` before its node is built) resolves to undefined so eval can skip
-// it loudly rather than crash.
-const DRIVERS: Driver[] = [manualDriver]
+// branch (the [[forge-cli]] driver-registry shape). A scenario's `driver` field is a lookup here; a sibling
+// driver node slots in by adding itself here (the playwright web driver does — its module touches no browser
+// at import, so a manual-only run never loads it), with NO change to eval. An unregistered name still
+// resolves to undefined so eval skips it loudly rather than crash.
+const DRIVERS: Driver[] = [manualDriver, playwrightDriver]
 export const DEFAULT_DRIVER = manualDriver.name
 
 export function driverFor(name: string | undefined): Driver | undefined {

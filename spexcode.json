@@ -4,6 +4,7 @@
     "sourceExtensions": ["ts", "tsx", "js", "jsx"],
     "identifierExtensions": ["ts", "tsx", "js", "jsx", "json", "md"],
     "altitude": { "lineBudget": 50, "charBudget": 4200, "sizeable": 35, "dense": 1.3, "steps": 3 },
+    "maxChildren": 8,
     "driftErrorThreshold": 3
   }
 }

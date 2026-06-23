@@ -6,7 +6,7 @@ hue: 200
 desc: A config plugin — the minimal spec-discipline contract folded into every launched agent.
 code:
 ---
-Before you implement, read your node's spec — it is the current contract. Then act deliberately: if your task changes the intent, edit the spec first so spec and code land together; if it implements existing intent, make the code honor the spec. The one forbidden move is code that silently diverges from its spec.
+Before you implement, read your node's spec — it is the current contract. A node rarely stands alone: read its neighbors and children too, since one node's intent is only fully legible against the tree around it — the parent that scopes it, the siblings it shares a boundary with, the children that refine it. Then act deliberately: if your task changes the intent, edit the spec first so spec and code land together; if it implements existing intent, make the code honor the spec. The one forbidden move is code that silently diverges from its spec.
 
 Commit your spec node and the code it justifies BEFORE you declare done or propose merge — the commit comes first, never as an afterthought to a declaration.
 

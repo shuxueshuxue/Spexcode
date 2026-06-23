@@ -640,8 +640,8 @@ body {
 .search-foot { padding: 6px 12px; border-top: 1px solid var(--line); background: var(--panel); color: var(--muted); font-size: 11px; }
 
 /* ---- session interface (Enter): two panes, right content morphs ---- */
-/* z-index 50 is ABOVE the session graph (40): a session opened FROM the graph must overlay it, not hide
-   behind it — the graph stays mounted underneath (graphView untouched) and reappears when this closes. */
+/* z-index 50 lifts the whole console above the spec board behind it. The relationship graph is no longer a
+   separate overlay — it's a tab INSIDE this console (the right pane, see .si-content.is-graph). */
 .si-backdrop {
   position: fixed; inset: 0; z-index: 50;
   background: rgba(101,123,131,.4); backdrop-filter: blur(5px);
@@ -677,7 +677,21 @@ body {
 .si-item.on { background: color-mix(in srgb, var(--blue) 15%, var(--panel2)); color: var(--ink2); font-weight: 600; border-left-width: 3px; }
 .si-item.on:hover { background: color-mix(in srgb, var(--blue) 24%, var(--panel2)); }
 .si-item.on::before { content: '❯'; flex: none; color: var(--green); font-weight: 700; }
-.si-item.new { color: var(--blue); font-weight: 600; }
+/* @@@ top button row - New Session (＋, blue) and the relationship graph (network glyph, magenta) as two
+   COMPACT side-by-side buttons, not full-width rows — so neither sits in the ↑/↓ path to a session. Selected
+   one gets a hue wash + ring (its own colour), mirroring the session rows' selected wash. */
+.si-toprow { display: flex; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.si-pill {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  padding: 7px 0; background: none; border: 1px solid var(--line); border-radius: 5px;
+  cursor: pointer; font-family: var(--mono); line-height: 1;
+}
+.si-pill-glyph { font-size: 15px; display: flex; }
+.si-pill.new { color: var(--blue); }
+.si-pill.graph { color: var(--magenta); }
+.si-pill:hover { background: var(--panel2); border-color: currentColor; }
+.si-pill.new.on { background: color-mix(in srgb, var(--blue) 16%, var(--panel2)); border-color: var(--blue); }
+.si-pill.graph.on { background: color-mix(in srgb, var(--magenta) 16%, var(--panel2)); border-color: var(--magenta); }
 .si-dot { width: 7px; height: 7px; border-radius: 2px; flex: none; }
 .si-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .si-st { color: var(--muted); font-size: 10px; flex: none; }
@@ -687,6 +701,8 @@ body {
 
 /* New Session: input + avatar centred, terminal vibe. */
 .si-content.is-new { align-items: center; justify-content: center; }
+/* the relationship graph fills the pane via an absolute child (.session-graph inset:0), so anchor it. */
+.si-content.is-graph { position: relative; }
 .si-new-center { width: min(560px, 86%); display: flex; flex-direction: column; align-items: center; gap: 12px; margin-bottom: 12vh; animation: si-rise .18s ease; }
 .si-avatar { font-size: 30px; color: var(--blue); letter-spacing: 2px; }
 .si-ask { font-size: 15px; color: var(--ink2); }
@@ -847,14 +863,16 @@ body {
 .si-offline-sub { font-size: 12px; color: var(--muted); max-width: 460px; line-height: 1.6; }
 .si-offline-sub code { color: var(--blue); background: var(--panel2); padding: 0 4px; border-radius: 3px; }
 
-/* ---- session-graph (experimental) — the directed subscription network, a full-screen overlay over
-   the spec board. Isolated visual surface; reuses the seed-to-hue colour (color.js) per node. ---- */
+/* ---- session-graph (experimental) — the directed subscription network. It FILLS the session console's
+   right content pane (the "View Session Relationship" tab), not a fullscreen overlay. Isolated visual
+   surface; reuses the seed-to-hue colour (color.js) per node. ---- */
 .session-graph {
-  position: fixed; inset: 0; z-index: 40; background: var(--paper);
+  position: absolute; inset: 0; background: var(--paper);
 }
+/* the lone `?` help, top-right of the pane (the brand/back chrome is gone — the tab is the frame). */
 .sg-hud {
-  position: absolute; top: 16px; left: 18px; z-index: 5;
-  display: flex; flex-direction: column; gap: 6px; pointer-events: none;
+  position: absolute; top: 12px; right: 14px; z-index: 5;
+  display: flex; gap: 6px; pointer-events: none;
 }
 /* a session node: avatar + label + status, ringed in its own hue (--sg from labelColor(id)). */
 .sg-node {

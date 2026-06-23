@@ -21,6 +21,16 @@ Then grow nodes under that spine:
 - **Decompose by responsibility, not by file.** A node is one job the code does. A fat file split across
   several jobs becomes several nodes that each claim it; one job spanning several files becomes one node
   claiming them all. Every governed file is claimed by at least one node; nest into subtrees where warranted.
+- **Group wide layers; don't mirror the file tree — at every level, the root included.** One-node-per-
+  folder is a smell; the directory layout is a hint, not the decomposition. If a node would have more than
+  ~7 direct children you're under-grouping: add intermediate **sub-domain** nodes that cluster siblings
+  serving one concern (e.g. model-config + model-selection + auth + provider-compat → a single *model*
+  domain), and recurse, until every level reads as a handful of related siblings, not a flat wall. Fold
+  cross-cutting substrate (design system, dialogs, i18n, utilities, platform glue) under one *foundation*
+  node instead of scattering it across the top level, and don't promote a tiny standalone feature to a
+  peer of the major domains when it belongs inside one. A sub-domain node is legitimate — it claims the
+  cluster's barrel/wiring/shared files, so it isn't pure-prose. Equally, split a fat folder that holds
+  several distinct jobs. Group by responsibility, never to hit a number — never invent contrived buckets.
 - **Stay at contract altitude.** State each node's intent, invariants, and outward behavior — what it
   guarantees and why — not how the code does it.
 - **Never fabricate intent.** Code shows *what it does*, rarely *why*. Read any README/design docs for real

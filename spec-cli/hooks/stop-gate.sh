@@ -22,20 +22,23 @@ proposal=$(sed -n 's/^proposal:[[:space:]]*//p' .session 2>/dev/null | head -1)
 # BSD sed has no \| alternation.)
 cont=$(printf '%s' "$input" | sed -n 's/.*"stop_hook_active"[[:space:]]*:[[:space:]]*\([a-z]*\).*/\1/p')
 
-# @@@ yatsu advisory - a NON-BLOCKING nudge (never a gate), emitted only when the session stops CLEAN-DONE
-# (committed work + a done/awaiting declaration): the agent IS yatsu's evaluator, so a stale or missing loss
-# score is a blind spot to flag the moment work lands. Reuse `spex yatsu scan` (already scoped to the nodes
-# that declare a yatsu.md); it lists each stale/missing score as a `• yatsu-…` line and exits 0 as ever. On
-# any finding, surface a concise pointer to `spex yatsu eval <node>` via the Stop hook's additionalContext
-# (the agent sees it next turn) — NEVER a block decision: a stale score is a heads-up, not a wall. Called
-# only on ALLOW paths and never alongside a block, so it can't change the gate's stop/continue verdict.
+# @@@ yatsu advisory - a nudge (never a gate) emitted when a session stops CLEAN-DONE (committed work + a
+# done/awaiting declaration): the agent IS yatsu's evaluator, so a yatsu gap in what it just changed is a
+# blind spot to flag the moment work lands. SCOPED via `spex yatsu scan --changed` to the nodes THIS branch
+# touched — so an agent is never nagged about a score that went stale in a node it never opened (the bug
+# that made three workers ask "is this mine?"). Three gap classes it surfaces: yatsu-drift / yatsu-missing
+# (a node with a yatsu.md whose score is stale / unmeasured) and yatsu-uncovered (a FRONTEND node with no
+# yatsu.md — an obvious UI change carrying no loss signal). Delivered via the Stop hook's additionalContext
+# (NEVER a block decision: a gap is a heads-up, not a wall). FIRES ONCE: the additionalContext itself forces
+# one continuation, so the CALLER guards it on stop_hook_active — re-emitting on the forced re-stop is what
+# looped 31 turns and tripped the Stop-hook block cap. Called only on ALLOW paths, never alongside a block.
 yatsu_advisory() {
   local out ids n msg esc
-  out=$($S yatsu scan 2>&1)
-  n=$(printf '%s\n' "$out" | grep -cE 'yatsu-(drift|missing):')
-  [ "${n:-0}" -gt 0 ] || return 0   # every score fresh (or scan unavailable) -> nothing to nudge
+  out=$($S yatsu scan --changed 2>&1)
+  n=$(printf '%s\n' "$out" | grep -cE 'yatsu-(drift|missing|uncovered):')
+  [ "${n:-0}" -gt 0 ] || return 0   # no gap in what you changed (or scan unavailable) -> nothing to nudge
   ids=$(printf '%s\n' "$out" | sed -n "s/.*yatsu-[a-z]*: '\([^']*\)'.*/\1/p" | awk '!seen[$0]++' | head -6 | paste -sd' ' -)
-  msg="yatsu (the loss signal the optimizer reads) has ${n} stale or missing score(s) — nodes: ${ids}. Re-measure any you changed: run its scenario, compare to the expected, file with \`spex yatsu eval <node>\`. \`spex yatsu scan\` lists them all. (Advisory — not a gate.)"
+  msg="yatsu — the loss signal the optimizer reads — flags ${n} gap(s) in nodes you changed: ${ids}. A node whose score went stale/unmeasured: re-measure it (run the scenario, compare to expected, \`spex yatsu eval <node>\`). A FRONTEND node with no yatsu.md: give it one (a scenario — description + expected), since an obvious UI change should carry a loss signal. \`spex yatsu scan --changed\` lists them. (Advisory — fires once, not a gate.)"
   esc=$(printf '%s' "$msg" | sed 's/\\/\\\\/g; s/"/\\"/g')
   printf '{"hookSpecificOutput":{"hookEventName":"Stop","additionalContext":"%s"}}\n' "$esc"
 }

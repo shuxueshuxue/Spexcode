@@ -13,14 +13,17 @@ export const SIDECAR_FILE = 'yatsu.evals.ndjson'
 // @@@ Scenario - one declared way to measure the node's loss: a `description` (what to check), the
 // `expected` result (what zero loss looks like), and OPTIONALLY a `test` (a repo path to a co-located
 // runnable file — a playwright.spec.ts, a script — that the AGENT may run by hand; yatsu itself runs
-// nothing). `name` is its key in the sidecar; the bug-fix keystone (a repro becoming a regression
-// scenario) appends one. There is no `driver`/`steps`-as-execution-mechanism: a scenario is a target the
-// agent measures however it likes, not a script yatsu executes.
+// nothing) and `code` (concrete repo files THIS scenario depends on — its own slice of the node's code
+// freshness axis, so two scenarios on one node go stale independently; absent → it inherits the whole
+// node's `code:` list). `name` is its key in the sidecar; the bug-fix keystone (a repro becoming a
+// regression scenario) appends one. There is no `driver`/`steps`-as-execution-mechanism: a scenario is a
+// target the agent measures however it likes, not a script yatsu executes.
 export type Scenario = {
   name: string
   description: string
   expected: string
   test?: string
+  code?: string[]
 }
 
 export type YatsuNode = {
@@ -31,10 +34,10 @@ export type YatsuNode = {
   scenarios: Scenario[]
 }
 
-// @@@ scenario schema - the four fields a scenario may declare; `name`/`description`/`expected` are
-// required, `test` optional. Anything else inside an item is a typo or mistake — validateScenarios rejects
-// it loudly (the lenient parser below merely ignores it). One source of truth for both faces.
-const SCENARIO_KEYS = ['name', 'description', 'expected', 'test'] as const
+// @@@ scenario schema - the five fields a scenario may declare; `name`/`description`/`expected` are
+// required, `test`/`code` optional. Anything else inside an item is a typo or mistake — validateScenarios
+// rejects it loudly (the lenient parser below merely ignores it). One source of truth for both faces.
+const SCENARIO_KEYS = ['name', 'description', 'expected', 'test', 'code'] as const
 type ScenarioKey = (typeof SCENARIO_KEYS)[number]
 
 // a raw scenario item straight off the frontmatter walk: the known fields it set, plus any UNKNOWN keys it
@@ -119,18 +122,28 @@ function assignField(cur: RawItem, kv: string, lines: string[], idx: number, key
 
 const unquote = (s: string) => s.replace(/^["'](.*)["']$/, '$1').trim()
 
+// a scenario's optional `code:` is a comma-separated path list (a YAML flow list `[a, b]` or bare `a, b`,
+// or a single path) — the tiny parser stays scalar-only, so the list is split here from the stored string.
+function parseCodeList(raw: string): string[] {
+  return raw.replace(/^\[|\]$/g, '').split(',').map((s) => unquote(s.trim())).filter(Boolean)
+}
+
 // @@@ parseScenarios - the LENIENT reader every consumer (scan/eval/show) uses: clean Scenario[] off the
 // walk, missing prose fields defaulting to '' and a nameless item dropped. Tolerant by design — the loud
 // gate is validateScenarios (run at scan + pre-commit), so a malformed file is rejected THERE, not silently
 // reshaped here.
 export function parseScenarios(src: string): Scenario[] {
   return walkScenarios(src).items
-    .map((it): Scenario => ({
-      name: it.fields.name ?? '',
-      description: it.fields.description ?? '',
-      expected: it.fields.expected ?? '',
-      ...(it.fields.test ? { test: it.fields.test } : {}),
-    }))
+    .map((it): Scenario => {
+      const code = it.fields.code ? parseCodeList(it.fields.code) : []
+      return {
+        name: it.fields.name ?? '',
+        description: it.fields.description ?? '',
+        expected: it.fields.expected ?? '',
+        ...(it.fields.test ? { test: it.fields.test } : {}),
+        ...(code.length ? { code } : {}),
+      }
+    })
     .filter((s) => s.name)   // a scenario with no name is malformed — drop it (validateScenarios reports it)
 }
 

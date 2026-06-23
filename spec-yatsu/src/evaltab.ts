@@ -39,12 +39,20 @@ export type EvalEntry = {
   blobState: 'present' | 'miss' | 'none'
 }
 
+// @@@ ScenarioInfo - the DECLARED scenario (name + what zero loss is + its optional code subset), shipped
+// ALONGSIDE the readings so a consumer can see the WHOLE scenario set, not just the ones a reading exists for
+// — a never-measured scenario has no reading but is still a declared, countable unit of loss. The board folds
+// this so the tile/focus-panel can say "X of Y satisfied" and flag the unmeasured ones (see [[yatsu-score-badge]]).
+export type ScenarioInfo = { name: string; expected: string; code?: string[] }
+
 // `hasYatsu` distinguishes a node that declares no scenarios (no yatsu.md) from one that declares some but
-// has no readings yet — the tab says different things for each. `readings` is NEWEST-FIRST (the sidecar is
-// append-only oldest→newest; the tab leads with the latest measurement, like the history tab).
+// has no readings yet — the tab says different things for each. `scenarios` is the declared set; `readings`
+// is NEWEST-FIRST (the sidecar is append-only oldest→newest; the tab leads with the latest measurement,
+// like the history tab).
 export type EvalTimeline = {
   node: string
   hasYatsu: boolean
+  scenarios: ScenarioInfo[]
   readings: EvalEntry[]
 }
 
@@ -69,15 +77,20 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
   // short-circuit a non-yatsu node on the (short) yatsu walk — the board attaches `evals` to every node, so
   // this is the common case and must stay cheap (a list the size of the few yatsu nodes, not the whole tree).
   const ynode = (ctx?.ynodes ?? yatsuNodes(root)).find((n) => n.id === id)
-  if (!ynode) return { node: id, hasYatsu: false, readings: [] }
+  if (!ynode) return { node: id, hasYatsu: false, scenarios: [], readings: [] }
   // the governed `code:` files are the freshness CODE axis; read them from the canonical spec loader so a
   // reparent/rename is seen the same way `spex lint` and `spex yatsu eval` see it (joined by directory).
   const specs = ctx?.specs ?? await loadSpecs()
   const codeFiles = specs.find((s) => dirname(s.path) === relative(root, ynode.dir))?.code ?? []
   const idx = ctx?.idx ?? await driftIndex(root)
-  const byName = new Map(ynode.scenarios.map((s) => [s.name, s]))   // join each reading to its scenario's expected
+  const byName = new Map(ynode.scenarios.map((s) => [s.name, s]))   // join each reading to its scenario's expected + code
+  const scenarios: ScenarioInfo[] = ynode.scenarios.map((s) => ({
+    name: s.name, expected: s.expected, ...(s.code?.length ? { code: s.code } : {}),
+  }))
   const readings: EvalEntry[] = readReadings(ynode.sidecarPath).map((r) => {
-    const axes = staleAxes(r, codeFiles, ynode.yatsuPath, idx)
+    // a scenario's own `code` is its freshness code axis when it declares one; else the whole node's list.
+    const sc = byName.get(r.scenario)
+    const axes = staleAxes(r, sc?.code?.length ? sc.code : codeFiles, ynode.yatsuPath, idx)
     return {
       scenario: r.scenario,
       expected: byName.get(r.scenario)?.expected ?? '',
@@ -93,7 +106,7 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
     }
   })
   readings.reverse()
-  return { node: id, hasYatsu: true, readings }
+  return { node: id, hasYatsu: true, scenarios, readings }
 }
 
 // @@@ blob serving - resolve a reading's evidence by content hash from the shared common-dir cache (the only

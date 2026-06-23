@@ -125,10 +125,12 @@ export async function buildBoard() {
   // every non-yatsu node on that walk, so only the few yatsu nodes touch their sidecar and the poll stays fast.
   // `evals` is the readings array (newest-first), attached ONLY when the node declares scenarios (a yatsu.md):
   // its presence IS the eval tab's hasYatsu signal — absent = no scenarios, an empty array = no reading yet.
+  // `scenarios` is the DECLARED set folded alongside, so the tile/focus-panel can count "X of Y satisfied"
+  // (and name the unmeasured ones), not just score the readings that happen to exist (see [[yatsu-score-badge]]).
   const ectx = evalContext(root, specs, idx)
   await Promise.all(nodes.map(async (n) => {
     const tl = await evalTimeline(n.id, ectx)
-    if (tl.hasYatsu) n.evals = tl.readings
+    if (tl.hasYatsu) { n.evals = tl.readings; n.scenarios = tl.scenarios }
   }))
 
   const opsByPath: Record<string, any[]> = {}

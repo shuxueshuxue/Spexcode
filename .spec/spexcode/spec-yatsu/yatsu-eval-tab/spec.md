@@ -32,8 +32,11 @@ come back newest-first.
 
 This timeline **rides the board**: `buildBoard` folds each node's `evalTimeline` onto it as the `evals`
 field — the SAME single source as a node's issues / overlays / lastDiff — so the dashboard reads it from the
-one `/api/board` poll, never a per-node fetch. To keep that attach cheap the engine reuses the specs +
-`driftIndex` the board already computed plus one shared yatsu walk, short-circuiting every non-yatsu node. The
+one `/api/board` poll, never a per-node fetch. Alongside the readings it folds the node's **declared
+scenarios** (name + `expected` + optional `code`), so a consumer sees the WHOLE set — a never-measured
+scenario has no reading but is still a countable unit of loss ([[yatsu-score-badge]]'s tile count, the
+[[focus-panel]]). To keep that attach cheap the engine reuses the specs + `driftIndex` the board already
+computed plus one shared yatsu walk, short-circuiting every non-yatsu node. The
 bytes are the one thing NOT folded: `/api/yatsu/blob` serves a reading's evidence by content hash from the
 shared cache, fetched **lazily on expand**, with a **miss original file** signal when the bytes are gone and a
 MIME sniffed from the content — an image type for a screenshot, `text/plain` for a transcript. (A standalone
@@ -44,12 +47,11 @@ same `panesFor` registry. Because the readings arrive on the board prop, the tab
 — never the previous node's readings on a switch. It is a **thin consumer of the chronological-timeline
 scaffold the history tab uses** (the scroll/reveal/toggle and per-row header-over-evidence shape live once —
 see [[work-pane]]): newest expanded, older reveal on the down gesture, a header click toggles any. Each row's
-header names its scenario, the **verdict badge** (✓ pass / ✗ fail / ≈ note — the loss the agent measured, the
-how-far-off text on hover; *legacy* for a pre-verdict reading), and the **score circle** ([[yatsu-score-badge]])
-— the SAME at-a-glance badge the node tile carries, read here per reading: green ✓ a fresh pass · red ✗ a fresh
-fail · grey ✓/✗ stale (the last verdict greyed, the moved axis on hover) · empty ring no current score. (It
-replaces the old ✓ current / ⚠ stale freshness badge, so card and tab speak ONE vocabulary and no ⚠ remains.)
-Then its evaluator, codeSha, and time.
+header names its scenario, the **verdict badge** (✓ pass / ✗ fail / ≈ note — the loss the agent measured,
+how-far-off on hover; *legacy* for a pre-verdict reading), and the **score circle** ([[yatsu-score-badge]])
+read per reading: green ✓ fresh pass · red ✗ fresh fail · grey ✓/✗ stale (last verdict greyed, moved axis on
+hover) · empty ring no current score — the same colour vocabulary the node tile's count uses. Then its
+evaluator, codeSha, and time.
 Its evidence is the scenario's **expected** over the captured proof — a screenshot inline or a transcript as
 text (fetched by hash **lazily on expand**), or — no capture — *miss original file* when the blob was pruned,
 else an evidence-less observation. Two empty states stay distinct by presence: no scenarios (no `evals` at

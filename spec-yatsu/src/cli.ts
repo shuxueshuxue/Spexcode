@@ -121,13 +121,22 @@ async function scan(args: string[] = []): Promise<number> {
       }
       const latest = latestPerScenario(readReadings(y.sidecarPath))
       for (const sc of y.scenarios) {
+        // a scenario's own `code` narrows its freshness CODE axis to a subset; a path that does not exist
+        // would make that axis silently immortal (changedSince finds no commits for it), so flag it LOUD as a
+        // malformed declaration — the same loud-fail spirit as a bad node `code:`.
+        const ghosts = (sc.code ?? []).filter((p) => !existsSync(join(root, p)))
+        if (ghosts.length) {
+          malformed++
+          findings.push(`  • yatsu-schema: '${s.id}' scenario '${sc.name}' \`code\` path(s) not found: ${ghosts.join(', ')} — fix ${y.yatsuPath}`)
+        }
+        const codeFiles = sc.code?.length ? sc.code : s.code   // scenario's own subset, else the node's list
         const r = latest.get(sc.name)
         if (!r) {
           missingScores++
           findings.push(`  • yatsu-missing: '${s.id}' scenario '${sc.name}' has no reading yet — measure with \`spex yatsu eval ${s.id}\``)
           continue
         }
-        const axes = staleAxes(r, s.code, y.yatsuPath, idx)
+        const axes = staleAxes(r, codeFiles, y.yatsuPath, idx)
         if (axes.length) {
           staleScores++
           findings.push(`  • yatsu-drift: '${s.id}' scenario '${sc.name}' is stale (${axes.join(', ')} moved since ${r.codeSha.slice(0, 7)}) — re-measure with \`spex yatsu eval ${s.id}\``)

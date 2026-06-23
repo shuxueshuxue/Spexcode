@@ -196,7 +196,9 @@ app.get('/api/sessions/:id/socket', upgradeWebSocket((c) => {
 // reason (never a silent 200), so the dashboard/manager sees a dead dispatch instead of a false success.
 app.post('/api/sessions/:id/keys', async (c) => {
   const body = await c.req.json().catch(() => ({}))
-  const r = await sendKeys(c.req.param('id'), typeof body?.text === 'string' ? body.text : '')
+  // `from` (the sender's session id) rides only an agent-to-agent send → the backend records the comms
+  // edge ([[comms-edge]]); a raw human dispatch omits it and is not logged.
+  const r = await sendKeys(c.req.param('id'), typeof body?.text === 'string' ? body.text : '', typeof body?.from === 'string' ? body.from : undefined)
   return c.json(r, r.ok ? 200 : 502)
 })
 // @@@ raw single-keystroke nav - the PRESERVED tmux send-keys path, distinct from the prompt socket the

@@ -45,8 +45,11 @@ same `panesFor` registry. Because the readings arrive on the board prop, the tab
 scaffold the history tab uses** (the scroll/reveal/toggle and per-row header-over-evidence shape live once —
 see [[work-pane]]): newest expanded, older reveal on the down gesture, a header click toggles any. Each row's
 header names its scenario, the **verdict badge** (✓ pass / ✗ fail / ≈ note — the loss the agent measured, the
-how-far-off text on hover; *legacy* for a pre-verdict reading), and the freshness **badge** (✓ current /
-⚠ stale — the board's code-drift vocabulary, the moved axis on hover), then its evaluator, codeSha, and time.
+how-far-off text on hover; *legacy* for a pre-verdict reading), and the **score circle** ([[yatsu-score-badge]])
+— the SAME at-a-glance badge the node tile carries, read here per reading: green ✓ a fresh pass · red ✗ a fresh
+fail · grey ✓/✗ stale (the last verdict greyed, the moved axis on hover) · empty ring no current score. (It
+replaces the old ✓ current / ⚠ stale freshness badge, so card and tab speak ONE vocabulary and no ⚠ remains.)
+Then its evaluator, codeSha, and time.
 Its evidence is the scenario's **expected** over the captured proof — a screenshot inline or a transcript as
 text (fetched by hash **lazily on expand**), or — no capture — *miss original file* when the blob was pruned,
 else an evidence-less observation. Two empty states stay distinct by presence: no scenarios (no `evals` at

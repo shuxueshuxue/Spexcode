@@ -11,6 +11,7 @@
   --blue:  #268bd2;
   --green: #859900;
   --orange:#cb4b16;
+  --red:   #dc322f;   /* a true red, distinct from the orange ACTIVE-status hue — the loud "fresh fail" score */
   --yellow:#b58900;
   --magenta:#d33682;
   --cyan:  #2aa198;
@@ -373,6 +374,21 @@ body {
    deliberately distinct from the status dot AND the yellow drift-badge so the three signals never blur.
    Just the glance — the detail card (.issue-popover) is now anchored to the WHOLE node, not this marker. */
 .issue-badge { flex: none; font-size: 10px; font-weight: 700; color: var(--magenta); border: 1px solid var(--magenta); border-radius: 3px; padding: 0 3px; line-height: 1.4; cursor: default; }
+
+/* @@@ score badge - the yatsu SCORE at a glance (score.jsx). A RINGED circle with a centred ✓/✗ glyph, made
+   round-and-outlined on purpose so it never reads as the filled square status dot. Colour carries freshness
+   (green/red = fresh, grey = stale), the glyph carries the verdict, an empty ring = no current score. Shared
+   by the node tile here and the eval-tab rows (one vocabulary). Drawn, not unicode-"circled", to stay crisp. */
+.score-badge {
+  flex: none; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center;
+  width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid currentColor;
+  font-size: 9px; font-weight: 900; line-height: 1; cursor: default;
+}
+.score-badge.pass      { color: var(--green); }
+.score-badge.fail      { color: var(--red); }
+.score-badge.stalePass,
+.score-badge.staleFail { color: var(--muted); }                 /* the last verdict, greyed */
+.score-badge.empty     { color: var(--muted); opacity: .45; }   /* never measured — an empty ring */
 
 /* @@@ issue popover - the bound-WORK detail CARD, a child of .spec-node so it reveals on the ENTIRE node's
    hover OR focus (selected = clicked / keyboard-navigated), not just the badge. Slightly wider than a node
@@ -1019,10 +1035,8 @@ body {
 .eval-top { display: flex; align-items: center; gap: 8px; }
 .eval-caret { flex: none; color: var(--muted); font-size: 11px; }
 .eval-scenario { font-size: 13px; font-weight: 600; color: var(--ink2); }
-/* freshness badge: green ✓ current / yellow ⚠ stale — the same vocabulary as the drift badge on the board */
-.eval-fresh { flex: none; font-size: 10px; font-weight: 700; border-radius: 3px; padding: 0 4px; line-height: 1.5; }
-.eval-fresh.ok { color: var(--green); border: 1px solid var(--green); }
-.eval-fresh.stale { color: var(--yellow); border: 1px solid var(--yellow); cursor: help; }
+/* the freshness signal is now the shared .score-badge circle (see score.jsx) — green/red fresh, grey stale,
+   empty = no current score — so a reading's row and its node's card badge speak ONE vocabulary (no more ⚠). */
 .eval-meta { display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--muted); }
 .eval-sha { color: var(--blue); background: var(--panel2); padding: 0 4px; border-radius: 3px; }
 /* verdict badge: the loss the agent measured — green ✓ pass / orange ✗ fail / blue ≈ note (hover for the

@@ -167,6 +167,14 @@ together — that is a project choice, not a git requirement.
 
 - Backend: `npm run api` → http://localhost:8787 (a supervisor that hot-reloads `spec-cli/src` and
   owns the public port for zero-downtime restarts).
+  - **The supervisor hot-reloads the CHILD server, never ITSELF.** On a `spec-cli/src` change it boots a
+    fresh child (`index.ts` + the modules it imports — server logic, `sessions.ts`, …) behind the stable
+    public port, so those edits go live on their own. But a change to **`supervise.ts`**, or to **how the
+    child is spawned** (its env — e.g. what a launched session inherits), only takes effect on a **FULL
+    backend restart** (kill the whole `serve` process / its tmux session, relaunch `npm run api`) — the
+    in-place child reload is NOT enough. Tell-tale: the change is merged and on disk, but live behaviour is
+    unchanged and the running child still shows the old env (`tr '\0' '\n' < /proc/<child-pid>/environ`).
+    (Machine-specific relaunch steps — which tmux socket, the watchdog — live in local notes, not here.)
 - Frontend: `npm run web` → Vite. **Port 5173 by default but not pinned** — it takes the next free
   port (e.g. 5174) and prints `Local: http://localhost:<port>/`; read that line for the real port.
   Vite proxies `/api` → :8787, so the backend must be running too.

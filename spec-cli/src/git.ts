@@ -405,24 +405,42 @@ export async function driftIndex(root: string): Promise<DriftIndex> {
   if (head) driftIdxCache = { head, idx }
   return idx
 }
-// pure lookup: how many commits to `path` are newer than `sinceHash` (the spec's last version). No git
-// calls. @@@ Spec-OK ack - a code commit ahead of the spec can carry a `Spec-OK: <node>` trailer
-// meaning "this change keeps <node>'s spec valid — no spec edit needed"; such a commit is skipped so an
-// acknowledged implementation-only change isn't false drift. `sinceHash` is the node's OWN latest
-// version commit, so the node(s) it's a version of (specNodes[sinceHash]) name the node being measured;
-// a commit counts as acknowledged only if its `Spec-OK:` set names one of those — `Spec-OK: A` quiets
-// A's drift, never B's.
+// pure lookup: how many commits to `path` are newer than `sinceHash` (the spec's last version) and not
+// yet acknowledged. No git calls.
+//
+// @@@ Spec-OK ack is a CHECKPOINT, not a per-commit stamp - a `Spec-OK: <node>` trailer means "the change
+// up to HERE keeps <node>'s spec valid — no spec edit needed". The NEWEST such trailer (itself newer than
+// the version) acknowledges EVERY drift commit at or below it, back to the version — so ONE `spex ack
+// <node>` at the tip clears the node's whole pending drift WHEREVER its files moved, with NO need to land
+// the trailer on the exact commit that moved a file. (The old rule — honour the trailer only on the same
+// commit that touched the file — made `spex ack` silently no-op the moment you stacked any commit on top
+// of the file-moving one, forcing a reset+amend dance to re-home the trailer. The checkpoint reading
+// removes that trap.) A change made AFTER the ack (newer than it) is fresh, un-acknowledged drift again.
+//
+// `sinceHash` is the node's OWN latest version commit, so the node(s) it's a version of
+// (specNodes[sinceHash]) name the node being measured; an ack counts only if its `Spec-OK:` set names one
+// of those — `Spec-OK: A` quiets A's drift, never B's.
 export function driftFor(idx: DriftIndex, sinceHash: string, path: string): number {
   if (!sinceHash) return 0
   const sp = idx.pos.get(sinceHash)
   if (sp === undefined) return 0
   const targets = idx.specNodes.get(sinceHash)
+  // the newest commit that acks a target (smallest pos = closest to HEAD) is the floor at/below which all
+  // drift is acknowledged. No target / no matching ack → Infinity, so nothing is quieted. An ack at or
+  // before the version (p >= sp) can't speak for it — a re-version invalidates older acks.
+  let ackPos = Infinity
+  if (targets) {
+    for (const [h, ackSet] of idx.acks) {
+      const p = idx.pos.get(h)
+      if (p === undefined || p >= sp) continue
+      if ([...targets].some((t) => ackSet.has(t))) ackPos = Math.min(ackPos, p)
+    }
+  }
   let n = 0
   for (const h of idx.fileCommits.get(path) ?? []) {
     const p = idx.pos.get(h)
-    if (p === undefined || p >= sp) continue
-    const ack = idx.acks.get(h)
-    if (ack && targets && [...targets].some((t) => ack.has(t))) continue
+    if (p === undefined || p >= sp) continue   // older than / at the version → not drift
+    if (p >= ackPos) continue                  // at or below the newest covering ack → acknowledged
     n++
   }
   return n

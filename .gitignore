@@ -14,6 +14,7 @@ dist/
 # remove these five lines once no flat-layout worktree remains.
 .session-prompt
 .session-launch
+.session-comms.ndjson
 .spex-hooks.json
 .spex-launch.sh
 CLAUDE.spexhidden.md

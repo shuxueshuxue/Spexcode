@@ -53,4 +53,8 @@ sanitised basename first.
 The gestures, the path-splicing, and the attach affordance are the prompt boxes in `SessionInterface.jsx`
 ([[session-console]], [[term-input]]); their styling rides `styles.css`. The upload endpoint and the
 `/tmp` sink are the backend's ([[api-endpoint]], [[sessions]]) — a thin route over a small upload module,
-the same shape [[session-rename]] uses to span the UI and the server for one feature.
+the same shape [[session-rename]] uses to span the UI and the server for one feature. This node's slices of
+those shared files are just the attach-control styling in `styles.css` and the `/api/uploads` route in
+`index.ts`; the yatsu eval tab's `.eval-*` classes and its eval-blob endpoint, reworked when yatsu was
+reframed to serve a verdict over transcript-or-image evidence, are [[spec-yatsu]]'s churn, not file-attach's
+drift.

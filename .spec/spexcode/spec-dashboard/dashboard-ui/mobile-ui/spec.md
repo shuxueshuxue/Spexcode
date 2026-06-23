@@ -32,3 +32,7 @@ It is **read-first**: it answers "what does the tree say" and "what are my agent
 phone. Authoring work and streaming a session's live console (terminal sizing and text input on
 a phone are their own problem) stay with the desktop board — a deliberate scope line, not an
 oversight.
+
+This node's slice of the shared `styles.css` is the narrow-viewport mobile face; classes other surfaces
+add there — most recently the yatsu eval tab's `.eval-*` verdict/transcript rules from the measure-and-score
+reframe — are those features' churn, not mobile-ui's drift.

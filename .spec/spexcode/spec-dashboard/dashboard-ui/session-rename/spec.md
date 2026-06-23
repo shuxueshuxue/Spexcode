@@ -61,3 +61,7 @@ right-click that kills the browser's menu on a row ALSO opens the rename pop-ove
 still fires), so blocking the OS menu never costs the human theirs. Right-clicking the
 list's empty space below the rows is simply that block with no pop-over — the OS menu is still suppressed
 and the docked input keeps focus, never a stolen-focus gap.
+
+This node's slices of the shared files are the context-menu/rename-modal styling in `styles.css` and the
+rename route in `index.ts`; the yatsu eval tab's `.eval-*` styles and its eval-blob endpoint, reworked in
+the measure-and-score reframe, are [[spec-yatsu]]'s churn, not session-rename's drift.

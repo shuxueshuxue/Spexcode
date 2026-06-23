@@ -54,6 +54,7 @@ state**, **active-only guarded** so it can never clobber a declaration.
 `asking` resumes only on a human prompt (unlike self-resuming `parked`); `idle` is its inferred opposite,
 a stop with no declaration. Surfacing an `asking` is the manager's job (see [[graph]]). The lifecycle
 writers live in `sessions.ts`; state's only stake in the shared `cli.ts` hub is the `spex session`
-declaration commands and the `spex ls` table. A declaration echoes a one-line confirmation — recorded for
+declaration commands and the `spex ls` table — a sibling verb's churn there, like the `yatsu` usage line
+rewritten in the measure-and-score reframe, moves the file but is not state's drift. A declaration echoes a one-line confirmation — recorded for
 the dashboard, after which the next tool call flips the worktree back to `active`, so an agent never reads
 that re-flip as a lost proposal.

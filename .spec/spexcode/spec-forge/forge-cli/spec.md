@@ -34,7 +34,9 @@ resolver plus a printer.
 Reading the forge is **live** (the driver calls `gh`), but the package is otherwise read-only: it never
 writes to the forge and never mutates a node — a node's status stays git-derived. The logic lives **in
 this package**; `spec-cli/src/cli.ts` carries only a thin `forge` route — a lazy `import()` of `runForge`
-to which it hands `argv` — plus a help-text line, so the main CLI never bundles forge logic it isn't using.
+to which it hands `argv` — plus the `forge` help-text line, so the main CLI never bundles forge logic it
+isn't using. A neighbouring verb's churn in that shared hub — the `yatsu` usage line rewritten when yatsu
+was reframed to measure-and-score — moves the file but is that feature's, not forge-cli's drift.
 
 Out of scope (sibling node): surfacing the same links in the dashboard — done CLI-first because frontend
 can't be verified here.

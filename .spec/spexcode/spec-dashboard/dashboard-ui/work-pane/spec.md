@@ -36,8 +36,8 @@ centre. It lazily fetches the unified diff of the node's spec.md in the editing 
 keyboard pane-nav read it, so number/Tab keys never cycle to a tab that isn't there. `panesFor` also
 registers an **eval** pane (a fourth reference face), but that pane's component and data contract — it
 rides `node.evals`, the board fold — belong to [[yatsu-eval-tab]], just as the issues tab's content is
-[[dashboard-issues]]'; this node owns the popup shell and the spec/history/issues/edit panes, so a change
-to the eval pane's source is that node's evolution, never work-pane drift. The **history** tab is
+[[dashboard-issues]]'; this node owns the popup shell and the spec/history/issues/edit panes, so the eval pane's
+reframe into a verdict-over-evidence timeline is that node's evolution, never work-pane drift. The **history** tab is
 the one merged version log: the latest version sits expanded with its proof, older ones start collapsed and
 reveal one at a time on the **down gesture** once you've finished the open one — scrolling past its end, *or*
 a `j`/`↓` keypress when there is nothing left to scroll (a short history with no scrollbar, or the bottom of

@@ -59,6 +59,6 @@ Two read verbs round out the manager surface, both backend-computed so a client 
 from "blank pane" — empty pane → 200, unknown id → 404, offline → 409, capture error → 502; **prompt**
 (`GET …/prompt`) returns a session's originating ask (404 if none). Paths resolve from the CLI package's OWN
 location, never a hardcoded layout, so the cockpit works wherever the package lives. Every cockpit verb only
-READS or DISPATCHES — none mutates main directly. The cockpit's stake in `cli.ts` is just the thin
-`review`/`merge`/`capture`/`prompt` routes; it shares that command hub with unrelated verbs, so their churn
-there (registering `forge eval-pending` or the `yatsu` route) is not the cockpit's drift.
+READS or DISPATCHES — none mutates main directly. The cockpit's stake in the shared `cli.ts`/`index.ts` hubs is just the thin
+`review`/`merge`/`capture`/`prompt` routes; the yatsu reframe's churn there — its rewritten verb line and
+its eval-blob comment — is that feature's, not the cockpit's drift.

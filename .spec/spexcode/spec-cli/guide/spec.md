@@ -32,5 +32,6 @@ browser UI, not operator-facing CLI output. `guide` tells you the loop; [[spex-i
 step of it.
 
 That block is this node's only stake in `cli.ts` — the file is the shared command hub every verb routes
-through, so a sibling verb's churn there (registering `forge`'s `eval-pending` or the `yatsu` route) is
-those features, not `guide`'s drift.
+through, so a sibling verb's churn there — `forge`'s `eval-pending`, or the `yatsu` usage line rewritten
+when yatsu was reframed to *measure a node's scenarios and keep score* — is those features, not `guide`'s
+drift.

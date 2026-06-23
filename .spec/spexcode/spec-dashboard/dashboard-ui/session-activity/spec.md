@@ -36,3 +36,7 @@ that spans the **whole row width** — the face's flex row wraps and the line ta
 drops below the avatar too — single-line with an ellipsis, omitted when there's no activity. Identity stays put while activity changes each turn, so the two never fight —
 the same separation the rename override keeps over the derived label ([[session-rename]]). The face is
 shared, so the top-right window and the Enter session tabs show the identical activity.
+
+This node's slice of the shared `styles.css` is the Row-2 activity line (the full-width, dimmer wrap);
+classes other surfaces add there — like the yatsu eval tab's `.eval-*` verdict/transcript rules from the
+measure-and-score reframe — are those features' churn, not session-activity's drift.

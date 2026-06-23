@@ -23,7 +23,9 @@ the CLI where they belong, not under the dashboard. Hono + tsx, **no build step*
 `spec-cli` is the backend. It owns the read path (turn `.spec` + git into JSON) and the write path
 (the `spex` CLI driving worktrees/sessions); the dashboard is a thin HTTP caller. `index.ts` is the
 HTTP entrypoint — a Hono app that wires the loaders and the session state machine to routes — and is
-the file this node governs (the deeper mechanism lives in its [[source-of-truth]] subtree).
+the file this node governs (the deeper mechanism lives in its [[source-of-truth]] subtree; the yatsu
+eval endpoints' contract belongs to [[spec-yatsu]], so their churn — the eval-blob comment reframed to
+serve a transcript or image, not just pixels — is that subtree's evolution, not spec-cli's drift).
 
 The `serve` script (the `npm run api` entry) hot-reloads the backend on its own source changes
 (`spec-cli/src/**`) — never on `.spec/**/spec.md` or dashboard edits, which it reads via fs rather than

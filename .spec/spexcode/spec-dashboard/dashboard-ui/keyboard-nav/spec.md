@@ -8,6 +8,7 @@ code:
   - spec-dashboard/src/App.jsx
   - spec-dashboard/src/SpecSearch.jsx
   - spec-dashboard/src/scroll.js
+  - spec-dashboard/src/cycle.js
   - spec-dashboard/src/styles.css
 ---
 # keyboard-nav
@@ -35,4 +36,4 @@ A node does **not** belong to a session; `node.session` is only a last-editor at
 
 ## HUD & governed file
 
-While a session is locked a top-center **lock banner** names the grip and points at the overlay-cycle keys (or says it has none, so the un-greyed board doesn't read as broken). **Esc releases the lock**, firing only with no modal open and a session locked. The full keymap and the node's visual vocabulary live in **one** centered scrollable modal that help opens; vim/arrow keys glide its body and the node-info popup's pane alike. The single governed file is `App.jsx` — the shell and capture-phase keydown handler routing every key to navigation or the active modal; it renders [[node-graph]] but exists for the keyboard contract. Its only slice of the shared `styles.css` is the keyboard-mode pointer-suppression rules; the yatsu eval tab's `.eval-*` classes there are a sibling's churn, not keyboard-nav's drift.
+While a session is locked a top-center **lock banner** names the grip and points at the overlay-cycle keys (or says it has none). **Esc releases the lock**, firing only with no modal open and a session locked. The full keymap and the node's visual vocabulary live in **one** centered scrollable modal that help opens; vim/arrow keys glide its body and the node-info popup's pane alike. The governed files are `App.jsx` — the capture-phase keydown handler routing every key to navigation or the active modal, rendering [[node-graph]] but existing for the keyboard contract — and `cycle.js`, the `cycleNext` ring primitive [[board-stats]] also walks. Its only slice of the shared `styles.css` is the keyboard-mode pointer-suppression rules; the yatsu eval tab's `.eval-*` classes there are a sibling's churn, not keyboard-nav's drift.

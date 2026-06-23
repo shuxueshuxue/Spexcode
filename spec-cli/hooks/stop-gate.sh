@@ -56,7 +56,10 @@ yatsu_advisory() {
 # merge" never stands. (A propose-close declaration is exempt — it discards the worktree, so commits are moot.)
 if [ "${status:-active}" = awaiting ] && { [ "$proposal" = merge ] || [ "$proposal" = nothing ]; }; then
   if gatemsg=$($S session commit-gate 2>&1); then
-    yatsu_advisory   # clean done: nudge (non-blocking) if any loss score went stale/missing
+    # nudge ONCE: emit on the natural stop, but STAY SILENT on the forced re-stop the additionalContext
+    # itself causes (stop_hook_active=true). Without this guard the advisory re-fired every clean-done stop
+    # and looped — the bug a prior change DESCRIBED in a comment but never actually implemented at the call.
+    [ "$cont" != true ] && yatsu_advisory
     exit 0   # work is committed and ahead of main -> the proposal is honest, let it stop.
   fi
   if [ "$cont" = true ]; then
@@ -77,7 +80,9 @@ if [ "$cont" = true ]; then
   # undeclared stop with uncommitted work becomes `asking` (needs the human), never a false awaiting/done.
   if $S session commit-gate >/dev/null 2>&1; then
     $S session state awaiting --propose nothing --note "auto: stopped without declaring" >/dev/null 2>&1 || true
-    yatsu_advisory   # auto-declared done with committed work: same non-blocking nudge
+    # NOTE: no yatsu nudge on the auto-declare path. It only runs on the forced continuation (cont=true),
+    # where a guarded advisory could never fire anyway, and an unguarded one was a second loop vector (a
+    # mark-active tool call could re-enter this branch). The clean-done path above is the single nudge site.
   else
     $S session ask --note "auto: stopped without declaring and with uncommitted work — commit your spec+code on the node branch, then declare" >/dev/null 2>&1 || true
   fi

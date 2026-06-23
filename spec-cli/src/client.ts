@@ -63,8 +63,10 @@ export async function clientCapture(id: string): Promise<CaptureResult> {
 
 // POST /api/sessions/:id/keys — prompt dispatch (the backend routes it through the rendezvous socket,
 // socket-only + fail-loud; a non-accepted prompt comes back ok:false / HTTP 502).
-export async function clientSend(id: string, text: string): Promise<DispatchResult> {
-  const r = await apiFetch(`/api/sessions/${seg(id)}/keys`, post({ text }))
+export async function clientSend(id: string, text: string, from?: string): Promise<DispatchResult> {
+  // `from` = the sending agent's own session id; the backend logs the comms edge ([[comms-edge]]) only when
+  // it's present (an agent send), so a human-shell send stays unrecorded.
+  const r = await apiFetch(`/api/sessions/${seg(id)}/keys`, post({ text, ...(from ? { from } : {}) }))
   return await r.json().catch(() => ({ ok: false, error: `bad backend response (${r.status})` })) as DispatchResult
 }
 

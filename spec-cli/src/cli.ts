@@ -20,7 +20,7 @@ function flag(name: string): string | undefined {
 }
 const has = (name: string) => process.argv.includes(`--${name}`)
 // bare positionals after argv index `from`, skipping flags and their values (selectors for ls/watch).
-const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--timeout', '--reason'])
+const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--timeout', '--reason', '--out'])
 function positionals(from: number): string[] {
   const out: string[] = []
   for (let i = from; i < process.argv.length; i++) {
@@ -115,6 +115,7 @@ Specs / graph
   forge <sub>           trace a forge's issues/PRs onto spec nodes (read-only): links | eval-pending [--host github] [--node <id>] [--json]
   yatsu <sub>           measure a node's scenarios and keep score: scan | eval [.|<node>] [--scenario N] (--pass|--fail|--note T) [--image P|--result P|-] | show [.|<node>] [--json] | clean [--keep-latest|--all]
   review <SEL>          manager cockpit: review a session (ahead·merge-base diff·gates·proposal)  [--json]
+  review proof <SEL>    render the session's proof of work — self-contained HTML (diff·measured yatsu loss·gates)  [--open|--out P|--json]  ·  --scaffold (in a worktree) seeds a fillable .session/proof.md
   merge <SEL>           manager cockpit: gated atomic merge into main (re-checks gates, then closes)  [--keep]
 
 Sessions
@@ -189,6 +190,42 @@ if (cmd === 'serve') {
   // into <targetDir> (default cwd). spex init [targetDir]
   const { specInit } = await import('./init.js')
   await specInit(positionals(3)[0])
+} else if (cmd === 'review' && positionals(3)[0] === 'proof') {
+  // @@@ review proof - render a session's PROOF OF WORK ([[review-proof]]): a self-contained HTML document
+  // the backend builds (the merge-base diff + the measured yatsu loss with its evidence + the gates, under
+  // the agent's authored claim). This is a thin backend CLIENT — it fetches the rendered bytes and writes or
+  // opens them, so it works against a REMOTE backend unchanged. `--scaffold` is the one LOCAL act: drop a
+  // fillable `.session/proof.md` into the cwd worktree (the lenient schema the agent enriches the proof with).
+  if (has('scaffold')) {
+    const { writeFileSync, existsSync, mkdirSync } = await import('node:fs')
+    const { dirname } = await import('node:path')
+    const { PROOF_TEMPLATE, manifestPath } = await import('../../spec-yatsu/src/proof.js')
+    const p = manifestPath(process.cwd())
+    if (existsSync(p) && !has('force')) { console.error(`proof manifest already exists: ${p} (use --force to overwrite)`); process.exit(1) }
+    mkdirSync(dirname(p), { recursive: true })
+    writeFileSync(p, PROOF_TEMPLATE)
+    console.log(`wrote proof scaffold → ${p}\nfill it in, then it rides your next \`spex review proof\` (delete it to fall back to your proposal note)`)
+    process.exit(0)
+  }
+  const sel = positionals(3)[1]
+  if (!sel) { console.error('usage: spex review proof <selector> [--open | --out <path> | --json]   (or `--scaffold` inside a worktree)'); process.exit(2) }
+  const id = await resolveSelectorOrExit(sel)
+  const { clientProof } = await import('./client.js')
+  const r = await clientProof(id, has('json'))
+  if (!r.ok) { console.error(`no proof for ${id} (status ${r.status})`); process.exit(1) }
+  if (has('json')) { console.log(r.body); process.exit(0) }
+  const { writeFileSync } = await import('node:fs')
+  const { join } = await import('node:path')
+  const { tmpdir } = await import('node:os')
+  const out = flag('out') ?? join(tmpdir(), `spexcode-proof-${id.slice(0, 8)}.html`)
+  writeFileSync(out, r.body)
+  if (has('open')) {
+    const { spawn } = await import('node:child_process')
+    const opener = process.platform === 'darwin' ? 'open' : 'xdg-open'
+    try { spawn(opener, [out], { detached: true, stdio: 'ignore' }).unref(); console.log(`opened ${out}`) }
+    catch { console.log(`wrote ${out} — couldn't auto-open, open it in a browser`) }
+  } else console.log(out)
+  process.exit(0)
 } else if (cmd === 'review') {
   // @@@ review - the manager cockpit's first verb: print ONE review payload for a session (ahead, the
   // merge-base diff = its REAL changes, the merge/typecheck/lint gates, and its standing proposal) so a
@@ -335,7 +372,12 @@ if (cmd === 'serve') {
   } else if (sub === 'done') {
     // sugar for awaiting; --propose merge|nothing|close, optional --note
     const p = (flag('propose') as any) || 'nothing'
-    console.log(s.markStateFromCwd('awaiting', { proposal: p, note: flag('note') }) ? `done (${p})${DECLARED}` : 'no .session in cwd')
+    const ok = s.markStateFromCwd('awaiting', { proposal: p, note: flag('note') })
+    // @@@ review-proof nudge - entering the review state (propose merge) is the moment to present the work as
+    // a PROOF ([[review-proof]]): point the agent at the schema it can fill so the human opens a real proof of
+    // work, not just a one-line note. Optional + agentic — the proof renders regardless; this only invites it.
+    const proofHint = ok && p === 'merge' ? `\n→ present it: \`spex review proof --scaffold\` then fill \`.session/proof.md\` — a proof of work (your yatsu evidence + the diff + the gates) the human opens on the dashboard.` : ''
+    console.log(ok ? `done (${p})${DECLARED}${proofHint}` : 'no .session in cwd')
   } else if (sub === 'park') {
     // sugar: the agent is waiting on a background task; it will self-resume (NOT idle/awaiting)
     console.log(s.markStateFromCwd('parked', { note: flag('note') }) ? `parked${DECLARED}` : 'no .session in cwd')

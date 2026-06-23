@@ -2,7 +2,7 @@
 title: graph
 status: active
 hue: 280
-desc: The live session-monitor network — edge A→B iff A runs `spex watch B` — and the `spex watch` stream / `spex wait` one-shot.
+desc: The live session-monitor network — edge A→B iff A runs `spex watch B` — and the `spex watch` actionable-transition stream.
 code:
   - spec-cli/src/sessions.ts
 ---
@@ -37,7 +37,7 @@ touches `buildBoard` or the spec tree; the dashboard's [[session-graph]] is its 
 `spex watch [SEL…]` is also the event source for Claude Code's Monitor tool (`watchSessions`), emitting
 the **complete session lifecycle**, not only actionable transitions. A session's **first sighting** emits a
 `launched` event (once per id, never re-fired, so working/idle toggles don't flap); then each actionable
-transition (review / done / close-pending / offline / error / needs-input) and the removal (`closed`). `closed` fires the moment a session's id is **absent from the board**, a **definitive**
+transition (review / done / close-pending / offline / error / asking) and the removal (`closed`). `closed` fires the moment a session's id is **absent from the board**, a **definitive**
 removal: the board lists every worktree that exists (a flaky detail read degrades a row, never drops it; a
 failed enumeration skips the poll — see [[worktree-resilience]]), so absence means the directory is actually
 gone — no flicker debounce needed. Presence is tracked across **all** statuses (the
@@ -48,14 +48,8 @@ poll warns **once** and keeps the stream alive (never a phantom mass-`closed`). 
 [actionable transitions] → closed` is a true "subscribe to all session changes" stream — each watch process
 one subscriber, the selector its subscription.
 
-### `spex wait` — the one-shot blocking wait
-
-`spex wait <id> [STATUS]` (`waitForSession`) is the **blocking counterpart** to the streaming watch: an
-agent wanting to "wait for a worker" needs a call that **returns**, since `spex watch` never exits —
-blocking on it hangs the caller's whole turn. `wait` reuses the same injected `source` and selector matcher,
-and **exits the moment** `<id>` reaches an **actionable** status — the default set (`review`,
-`needs-input`, `error`, `done`, `close-pending`, `blocked`), or the single STATUS if named — printing it.
-**Bounded**: a `--timeout` (default 20 min) caps it and exits non-zero, so it can never wedge a turn;
-an unknown or already-closed id is terminal and exits non-zero; a **backend-down** poll **fails loud**
-rather than waiting out the timeout and reporting a false `timedOut`. Only the actionable set differs from
-watch's — `wait` answers "tell me when this worker needs me", watch "stream everything".
+To **wait** on a specific worker rather than stream the whole board, poll one-shot — `spex review <id>`
+or `spex ls` both return immediately — and loop. There is no blocking `wait` primitive: a self-resuming
+`parked` agent has nothing to act on, so "block until actionable" has no single honest answer; the manager
+decides what counts by what they poll for. Never block on `spex watch` — it streams forever and never
+returns, so waiting on it freezes the caller's whole turn.

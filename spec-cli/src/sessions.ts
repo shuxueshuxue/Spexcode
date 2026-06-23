@@ -26,11 +26,11 @@ import { mainBranch } from './layout.js'
 //                proposal=merge   → shown "review"        ("ready, merge me")
 //                proposal=nothing → shown "done"          ("finished, your call")
 //                proposal=close   → shown "close-pending" ("I suggest discarding this worktree")
-//   needs-input → the agent is pausing to ask the HUMAN a question. Written DETERMINISTICALLY two ways: the
+//   asking → the agent is pausing to ask the HUMAN a question. Written DETERMINISTICALLY two ways: the
 //                mark-active PreToolUse hook captures it the moment the agent invokes the AskUserQuestion
 //                tool (question → note), and the agent may also declare it via `spex session ask --note
-//                <question>`. Not inferred. Distinct from `blocked` (which waits on a background task/
-//                schedule and self-resumes); a needs-input agent resumes only when a human sends it a prompt.
+//                <question>`. Not inferred. Distinct from `parked` (which waits on a background task/
+//                schedule and self-resumes); an asking agent resumes only when a human sends it a prompt.
 //   (closed = the worktree is removed; not a stored status)
 // The agent only ever PROPOSES (awaiting); merge/close are human-only. Every proposal is reversible
 // via reopen() → active. `merges` is METADATA (how many times merged), shown as a badge, not a state.
@@ -147,9 +147,9 @@ function replyViaSocket(sock: string, text: string): Promise<DispatchResult> {
   })
 }
 
-export type Lifecycle = 'active' | 'idle' | 'awaiting' | 'blocked' | 'error' | 'needs-input' | 'queued'
+export type Lifecycle = 'active' | 'idle' | 'awaiting' | 'parked' | 'error' | 'asking' | 'queued'
 export type Proposal = 'merge' | 'nothing' | 'close'
-export type DisplayStatus = 'working' | 'idle' | 'offline' | 'starting' | 'review' | 'done' | 'close-pending' | 'blocked' | 'error' | 'needs-input' | 'queued'
+export type DisplayStatus = 'working' | 'idle' | 'offline' | 'starting' | 'review' | 'done' | 'close-pending' | 'parked' | 'error' | 'asking' | 'queued'
 const PROPOSAL_STATUS: Record<Proposal, DisplayStatus> = { merge: 'review', nothing: 'done', close: 'close-pending' }
 
 export type Session = {
@@ -238,7 +238,7 @@ function readSessionFile(dir: string): SessRec {
     else if (k === 'title') r.title = v || null
     else if (k === 'name') r.name = v || null
     else if (k === 'session') r.session = v || null
-    else if (k === 'status' && (v === 'active' || v === 'idle' || v === 'awaiting' || v === 'blocked' || v === 'error' || v === 'needs-input' || v === 'queued')) r.status = v
+    else if (k === 'status' && (v === 'active' || v === 'idle' || v === 'awaiting' || v === 'parked' || v === 'error' || v === 'asking' || v === 'queued')) r.status = v
     else if (k === 'proposal' && v) r.proposal = v as Proposal
     else if (k === 'merges') r.merges = Number(v) || 0
     else if (k === 'note') r.note = v || null
@@ -333,10 +333,10 @@ const BOOT_GRACE_MS = 25000   // > waitForSocket's 15s timeout, covering the obs
 
 // reconcile the SHOWN status from a session's declared state + a prebuilt liveness set (no per-call tmux
 // spawn — see liveTmux). Declarations win over liveness, in ONE path: awaiting maps to its proposal label;
-// blocked / error / needs-input map straight to themselves. We never INFER those externally.
+// parked / error / asking map straight to themselves. We never INFER those externally.
 function reconcile(rec: SessRec, live: Set<string>): DisplayStatus {
   if (rec.status === 'awaiting') return PROPOSAL_STATUS[rec.proposal || 'nothing']
-  if (rec.status !== 'active' && rec.status !== 'idle') return rec.status  // blocked | error | needs-input | queued (no tmux yet)
+  if (rec.status !== 'active' && rec.status !== 'idle') return rec.status  // parked | error | asking | queued (no tmux yet)
   // active/idle are the SAME live agent — claude runs whether it is churning OR waiting at its prompt — so
   // they share ONE deterministic liveness check: offline iff the tmux window is gone OR claude's rendezvous
   // socket is absent. claude (via the reclaude wrapper) holds CLAUDE_BG_RENDEZVOUS_SOCK open the whole time
@@ -516,11 +516,11 @@ export const reportWatch = (token: string, watcher: string, selectors: string[],
   postJSON('/api/sessions/graph/watch', { token, watcher, selectors, ttlMs })
 export const reportUnwatch = (token: string): Promise<void> => postJSON('/api/sessions/graph/unwatch', { token })
 
-// @@@ isBackendDown - a `client.ts` BackendError surfacing in the watch/wait poll loops (whose session
+// @@@ isBackendDown - a `client.ts` BackendError surfacing in the watch poll loop (whose session
 // `source` is the HTTP backend client). Matched by NAME, not `instanceof`, so sessions.ts never imports
 // client.ts at runtime (client.ts imports apiBase from here — a runtime import back would be a cycle). A
-// backend-down poll must NOT be swallowed as a transient git/tmux hiccup: watch warns and keeps streaming,
-// wait fails loud rather than reporting a false timeout.
+// backend-down poll must NOT be swallowed as a transient git/tmux hiccup: watch warns ONCE and keeps
+// streaming rather than emitting false `closed` events for every session.
 export const isBackendDown = (e: unknown): boolean => e instanceof Error && e.name === 'BackendError'
 
 const slugify = (s: string | null) => (s || 'session').replace(/[^a-zA-Z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'session'
@@ -570,7 +570,7 @@ async function hideClaudeMd(path: string): Promise<void> {
 // file (NOT inline on the command line — inline JSON containing single quotes broke the shell quoting
 // and claude read it as a missing file path). The file is ephemeral (removed with the worktree), so
 // still no global pollution. UserPromptSubmit + PreToolUse → the ONE branching `mark-active` hook (active
-// on any work; needs-input, with the question as the note, when the tool is AskUserQuestion — see
+// on any work; asking, with the question as the note, when the tool is AskUserQuestion — see
 // mark-active.sh); Stop → the blocking gate (with a loop-break); StopFailure → `error`;
 // Notification(idle_prompt) → `idle`. Hook commands use MAIN's tsx+cli by absolute path ($SPEX) since a
 // fresh worktree has no node_modules and `spex` may be off the session's PATH.
@@ -578,10 +578,10 @@ async function hideClaudeMd(path: string): Promise<void> {
 // WAITING at its prompt without having declared a state — the case the Stop gate misses: an API error
 // killed the turn before the gate ran, or the brief window between stopping and declaring. (claude is
 // the pane's foreground process whether churning or idle-waiting, so reconcile alone can't tell them
-// apart — only idle_prompt can.) This is DISTINCT from `needs-input` (the agent asking the human, captured
+// apart — only idle_prompt can.) This is DISTINCT from `asking` (the agent asking the human, captured
 // from the AskUserQuestion tool or declared via `spex session ask`); idle is the inferred, undeclared
 // stop. The active-only guard in `session idle` is what keeps the two from clobbering each other (a
-// deliberate awaiting/needs-input/blocked/error declaration always survives). The Notification fires for
+// deliberate awaiting/asking/parked/error declaration always survives). The Notification fires for
 // many reasons, so the command keys on the structured `notification_type` field — acting only on the
 // idle_prompt one — rather than sniffing the payload blob for the bare word.
 function settingsJson(): string {
@@ -727,10 +727,10 @@ function deleteNodePrompt(nodeId: string, relPath: string | null, rest: string):
 // @@@ concurrency cap + queue - keep at most MAX_ACTIVE agents WORKING at once. A session OCCUPIES a slot
 // while its agent is launched and still OWNS its task: its claude is genuinely live (tmux window present AND
 // rendezvous socket present) and it has not yet handed the work to a human (lifecycle `awaiting`). So
-// working/idle/blocked/needs-input/error agents that are actually alive each hold a slot; a session frees its
+// working/idle/parked/asking/error agents that are actually alive each hold a slot; a session frees its
 // slot the moment it PROPOSES (review/done/close-pending), goes OFFLINE (crashed/exited — socket gone), or is
 // closed. Liveness is checked directly (the same socket truth reconcile uses) rather than off the display
-// status, so an authored state (blocked/error/needs-input) whose claude has since died does NOT pin a slot.
+// status, so an authored state (parked/error/asking) whose claude has since died does NOT pin a slot.
 // `queued` sessions never occupy. Resource pressure scales with concurrently-WORKING agents, which is exactly
 // this set — the cap throttles it; the rest wait as durable `queued` worktrees.
 function isOccupying(s: Session, live: Set<string>): boolean {
@@ -771,7 +771,7 @@ async function startQueued(id: string): Promise<boolean> {
 // @@@ drainQueue - start as many `queued` sessions as there are free slots, oldest first. Idempotent and
 // re-entrancy-guarded; safe to call on every slot-freeing event (newSession / close / propose) AND on a
 // periodic tick (superviseQueue) — the periodic tick is what catches the AGENT-authored transitions
-// (done/blocked written by a hook SUBPROCESS, which can't reach this server's queue). Re-lists each iteration
+// (done/parked written by a hook SUBPROCESS, which can't reach this server's queue). Re-lists each iteration
 // so a freshly launched session (held in `launching`) counts immediately and we never exceed the cap.
 export async function drainQueue(): Promise<void> {
   if (draining) return
@@ -790,7 +790,7 @@ export async function drainQueue(): Promise<void> {
 
 // @@@ superviseQueue - the periodic drainer. Started once at serve(). The explicit drainQueue() calls on
 // newSession/close/propose cover the slot-freeing events the SERVER handles, but an agent proposing done or
-// going blocked writes its .session from a hook subprocess the server never sees, and a crash just makes a
+// going parked writes its .session from a hook subprocess the server never sees, and a crash just makes a
 // socket vanish — so a timer is what turns those into freed slots. Cheap: one worktree+tmux snapshot per tick,
 // and a no-op when nothing is queued. Idempotent (guarded), so a second call is harmless.
 let supervisingQueue = false
@@ -927,7 +927,7 @@ export async function propose(id: string, proposal: Proposal): Promise<boolean> 
   return true
 }
 // @@@ agent-authored state - the agent (forced by gates at boundaries) writes its OWN state to
-// .session; it is the authority on what a stop MEANS (awaiting human vs blocked on a background task).
+// .session; it is the authority on what a stop MEANS (awaiting human vs parked on a background task).
 // External hooks only know SOMETHING changed, not the transition, so they force a write, never infer.
 export function markStateFromCwd(status: Lifecycle, opts: { proposal?: Proposal; note?: string } = {}): boolean {
   const rec = readSessionFile(process.cwd())
@@ -943,8 +943,8 @@ export const markDoneFromCwd = (proposal: Proposal = 'nothing') => markStateFrom
 export const markErrorFromCwd = () => markStateFromCwd('error')
 // @@@ markIdleFromCwd - the ONE INFERRED state, so (unlike the agent-authored writers above) it carries a
 // strict active-only guard: the Notification(idle_prompt) hook fires it when claude is waiting at its
-// prompt, and it may ONLY overwrite `active` → `idle`. A deliberate declaration (awaiting / needs-input /
-// blocked / error) must survive — idle only fills the gap where the agent stopped WITHOUT declaring (e.g.
+// prompt, and it may ONLY overwrite `active` → `idle`. A deliberate declaration (awaiting / asking /
+// parked / error) must survive — idle only fills the gap where the agent stopped WITHOUT declaring (e.g.
 // an API error killed the turn before the Stop gate). The mark-active hook flips idle → active on resume.
 export function markIdleFromCwd(): boolean {
   const rec = readSessionFile(process.cwd())
@@ -952,10 +952,10 @@ export function markIdleFromCwd(): boolean {
   writeSessionFile(process.cwd(), { ...rec, status: 'idle' })
   return true
 }
-// @@@ needs-input has TWO writers, both deterministic (neither guarded active-only): (1) the mark-active
-// PreToolUse hook captures it the instant the agent invokes the AskUserQuestion tool (status=needs-input,
+// @@@ asking has TWO writers, both deterministic (neither guarded active-only): (1) the mark-active
+// PreToolUse hook captures it the instant the agent invokes the AskUserQuestion tool (status=asking,
 // the question as the note) — a HARD signal that the agent is asking the human; (2) the agent declares it
-// itself via markStateFromCwd('needs-input', { note }) — `spex session ask`, e.g. at the Stop gate. Either
+// itself via markStateFromCwd('asking', { note }) — `spex session ask`, e.g. at the Stop gate. Either
 // way the mark-active path clears it back to active on the next tool / prompt, same as any non-active state.
 
 // @@@ mergeReadiness - the deterministic commit gate the Stop hook enforces before a session may declare
@@ -1144,10 +1144,10 @@ export async function captureSessionResult(id: string): Promise<CaptureResult> {
 // @@@ presentation + selection - shared by `spex ls` (pretty), `spex watch` (events) and the API.
 export const STATUS_GLYPH: Record<DisplayStatus, string> = {
   working: '\u25cf', idle: '\u25cb', offline: '\u23fb', starting: '\u25d4', review: '\u25c6', done: '\u2713',
-  'close-pending': '\u2715', blocked: '\u29d6', error: '\u2717', 'needs-input': '\u2370', queued: '\u25cc',
+  'close-pending': '\u2715', parked: '\u29d6', error: '\u2717', asking: '\u2370', queued: '\u25cc',
 }
 const ANSI: Record<DisplayStatus, string> = {
-  working: '33', idle: '90', offline: '90', starting: '36', review: '35', done: '34', 'close-pending': '31', blocked: '36', error: '31', 'needs-input': '93', queued: '90',
+  working: '33', idle: '90', offline: '90', starting: '36', review: '35', done: '34', 'close-pending': '31', parked: '36', error: '31', asking: '93', queued: '90',
 }
 
 // a session matches a selector if the selector is its id (or an id-prefix), its node, or its branch.
@@ -1193,14 +1193,14 @@ export function formatTable(sessions: Session[], color = true): string {
   return [c('1', `SpexCode sessions (${sessions.length})`), header, ...rows, statusLegend(color)].join('\n')
 }
 
-const WATCH_ACTIONABLE = new Set<DisplayStatus>(['review', 'done', 'close-pending', 'offline', 'error', 'needs-input'])
+const WATCH_ACTIONABLE = new Set<DisplayStatus>(['review', 'done', 'close-pending', 'offline', 'error', 'asking'])
 const NEXT: Record<string, string> = {
   review: 'merge | reopen(back-to-working) | close',
   done: 'merge | reopen | close',
   'close-pending': 'close | reopen',
   offline: 'reopen (relaunch & resume)',
   error: 'reopen (relaunch & retry) | capture | close',
-  'needs-input': 'send "<msg>" | capture',
+  asking: 'send "<msg>" | capture',
   idle: 'send "<msg>" | capture',
   queued: 'waiting for a free slot — starts automatically | close',
 }
@@ -1264,40 +1264,6 @@ export async function watchSessions(emit: (line: string) => void, opts: WatchOpt
   }
 }
 
-// @@@ wait - the ONE-SHOT blocking wait, the counterpart to `watch` (which streams forever and never
-// returns, so an agent that blocks on it to "wait for a worker" hangs its whole turn). Reuses the same
-// board poll (listSessions + selectSessions) but RETURNS the moment <id> reaches an actionable status —
-// the default set below, or the single `status` if the caller named one. A vanished session is terminal
-// (it can never reach the target now), and a timeout guarantees the wait can't hang forever.
-const WAIT_ACTIONABLE = new Set<DisplayStatus>(['review', 'needs-input', 'error', 'done', 'close-pending', 'blocked'])
-const DEFAULT_WAIT_TIMEOUT_MS = 20 * 60 * 1000   // 20 min — long enough for real work, short enough to never wedge a turn
-// the board source is REQUIRED, same rationale as watch's: the CLI passes the backend client, so `spex wait`
-// blocks on whatever (possibly remote) backend SPEXCODE_API_URL names — never a silent local read.
-export type WaitResult = { status: DisplayStatus } | { timedOut: true } | { gone: true } | { backendDown: string }
-export async function waitForSession(
-  id: string,
-  opts: { source: () => Promise<Session[]>; status?: string; timeoutMs?: number; intervalMs?: number },
-): Promise<WaitResult> {
-  const { source, status, timeoutMs = DEFAULT_WAIT_TIMEOUT_MS, intervalMs = 2000 } = opts
-  const targets = status ? new Set<DisplayStatus>([status as DisplayStatus]) : WAIT_ACTIONABLE
-  const deadline = Date.now() + Math.max(1000, timeoutMs)
-  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
-  for (;;) {
-    try {
-      const s = selectSessions(await source(), [id])[0]
-      if (!s) return { gone: true }                       // unknown id / closed before the target — never will now
-      if (targets.has(s.status)) return { status: s.status }
-    } catch (e) {
-      // the source is the HTTP backend client, so a throw means the backend is unreachable/erroring. A wait
-      // must FAIL LOUD here, not poll a dead backend for 20 min and then report a false `timedOut` (which a
-      // manager would read as "the work didn't finish" rather than "I couldn't see the work").
-      if (isBackendDown(e)) return { backendDown: (e as Error).message }
-      /* else a non-backend transient: keep polling */
-    }
-    if (Date.now() >= deadline) return { timedOut: true }
-    await sleep(Math.max(250, intervalMs))
-  }
-}
 // @@@ sendKeys - PROMPT control for a session, through the per-session rendezvous socket ONLY. The socket
 // injects AND submits the prompt and confirms the agent ACCEPTED it (see replyViaSocket); there is NO
 // send-keys fallback. A prompt that can't go through the socket — no socket (socketless/old session, or the

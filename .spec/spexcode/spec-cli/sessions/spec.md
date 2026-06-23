@@ -39,7 +39,7 @@ The subsystem divides into governed concerns, each its own child node:
   non-truncating system-prompt + launch-prompt delivery, `CLAUDE.md` isolation, and the concurrency
   cap with its durable launch queue.
 - **[[state]]** — the lifecycle state machine: the declared statuses, the per-session `Stop` /
-  `PreToolUse` / `Notification` hooks that gate them, AskUserQuestion → `needs-input`, and socket-based
+  `PreToolUse` / `Notification` hooks that gate them, AskUserQuestion → `asking`, and socket-based
   liveness via `reconcile`.
 - **[[dispatch]]** — delivering a prompt to a live agent over its rendezvous socket (socket-only,
   fail-loud), and the merge intent that rides that path.

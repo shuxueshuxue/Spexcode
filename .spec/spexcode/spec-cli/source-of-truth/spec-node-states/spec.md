@@ -41,9 +41,9 @@ The same end-to-end tracing covers the two other state vocabularies the board sh
 - **session states** — the worktree state machine, traced **HARD** (explicit writes, then one liveness
   check + one guarded inference — no text-sniffing the TUI). The agent's own writes are authoritative and
   `reconcile` returns each directly: `awaiting`'s proposals `review` · `done` · `close-pending`, plus
-  `blocked` · `error` · `needs-input`. `needs-input` is captured **deterministically** the instant the
+  `parked` · `error` · `asking`. `asking` is captured **deterministically** the instant the
   agent invokes the **AskUserQuestion** tool — the single `PreToolUse` mark-active hook reads `tool_name`
-  from the payload and writes `needs-input` (the question → note), else `active` — and is also
+  from the payload and writes `asking` (the question → note), else `active` — and is also
   self-declarable via `spex session ask`. The only LIVE-derived values are `working` · `idle` · `offline`,
   from **one** liveness check (a dead tmux or a bare-shell pane = offline) plus **one** guarded inference
   (`idle`, written active-only by the `idle_prompt` Notification hook so it never clobbers a declaration).

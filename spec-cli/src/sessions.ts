@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { randomUUID } from 'node:crypto'
-import { readFileSync, writeFileSync, existsSync, renameSync, mkdirSync, rmSync, readdirSync, statSync } from 'node:fs'
+import { readFileSync, writeFileSync, appendFileSync, existsSync, renameSync, mkdirSync, rmSync, readdirSync, statSync } from 'node:fs'
 import { join, dirname, relative } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createConnection } from 'node:net'
@@ -451,7 +451,34 @@ export async function listSessions(): Promise<Session[]> {
 // this in-memory map in the SERVER process — the watch process (a separate `spex watch`) talks to it over
 // HTTP (POST /api/sessions/graph/watch + …/unwatch). No datastore, no file: a backend restart starts
 // empty and live watches re-register on their next heartbeat. Kept isolated from the board assembler.
-export type Edge = { from: string; to: string }
+// an edge is either a LIVE monitor arrow (A→B = A watches B, directed) or a recorded comms link (A↔B =
+// they have exchanged `count` direct messages, undirected). The dashboard renders the two kinds apart.
+export type Edge = { from: string; to: string; kind: 'monitor' | 'comms'; count?: number }
+
+// @@@ comms log - direct agent talk ([[comms-edge]]), recorded per-worktree. `spex session send` goes
+// THROUGH the backend (sendKeys); on a delivered message that carries a sender, the backend appends one
+// {peer, ts} line to the RECIPIENT's `.session/comms.ndjson` — each message counted exactly once, on the
+// side the backend already resolved. Persisted (survives a backend restart, unlike the in-memory monitor
+// registrations) and untracked (dies with the worktree, matching a graph of LIVE sessions). No sender →
+// not an agent send → not logged. Best-effort: recording must NEVER fail the delivered message.
+const COMMS_FILE = 'comms.ndjson'
+async function recordComms(toId: string, fromId: string): Promise<void> {
+  if (!fromId || fromId === toId) return
+  try {
+    const wt = await findWorktree(toId)
+    if (!wt) return
+    appendFileSync(join(runtimeDir(wt.path), COMMS_FILE), JSON.stringify({ peer: fromId, ts: new Date().toISOString() }) + '\n')
+  } catch { /* a recording failure must not fail the delivered send */ }
+}
+// the peers this session has exchanged messages with — one entry per message, newest appended last.
+function readComms(path: string): string[] {
+  try {
+    const p = join(path, RUNTIME_DIR, COMMS_FILE)
+    if (!existsSync(p)) return []
+    return readFileSync(p, 'utf8').split('\n').filter(Boolean)
+      .map((l) => { try { return String(JSON.parse(l).peer || '') } catch { return '' } }).filter(Boolean)
+  } catch { return [] }
+}
 // keyed by an opaque per-watch token (one per `spex watch` process), so a single agent may run several
 // monitors without them clobbering each other. `selectors` is what the watch targets (resolved LIVE at
 // read time, not frozen here); empty / @all = a GLOBAL watcher. `expires` is the heartbeat backstop.
@@ -495,8 +522,23 @@ export async function sessionGraph(): Promise<{ nodes: Session[]; edges: Edge[] 
       const key = `${reg.watcher} ${t.id}`
       if (seen.has(key)) continue
       seen.add(key)
-      edges.push({ from: reg.watcher, to: t.id })
+      edges.push({ from: reg.watcher, to: t.id, kind: 'monitor' })
     }
+  }
+  // comms edges: undirected direct-talk, one per pair, carrying the message count — read from each live
+  // session's per-worktree log and aggregated by sorted pair so A→B and B→A fold into one A↔B count. An
+  // edge to a non-live session is dropped, like the monitor edges.
+  const commsCount = new Map<string, number>()
+  for (const n of nodes) {
+    for (const peer of readComms(n.path)) {
+      if (peer === n.id || !live.has(peer)) continue
+      const key = n.id < peer ? `${n.id}\t${peer}` : `${peer}\t${n.id}`
+      commsCount.set(key, (commsCount.get(key) ?? 0) + 1)
+    }
+  }
+  for (const [key, count] of commsCount) {
+    const [from, to] = key.split('\t')
+    edges.push({ from, to, kind: 'comms', count })
   }
   return { nodes, edges }
 }
@@ -1349,11 +1391,15 @@ export async function watchSessions(emit: (line: string) => void, opts: WatchOpt
 // silently degrading to typing into the pane and reporting a false success. The socket exists only for
 // sessions WE launched the new way and its path is derived from the id, so we never address another
 // session's socket. (The separate RAW nav-key channel keeps its own `tmux send-keys` path — see rawKey.)
-export async function sendKeys(id: string, text: string): Promise<DispatchResult> {
+export async function sendKeys(id: string, text: string, from?: string): Promise<DispatchResult> {
   if (!text) return { ok: false, error: 'empty prompt — nothing to dispatch' }
   const sock = rvSock(id)
   if (!existsSync(sock)) return { ok: false, error: `no rendezvous control socket for session ${id} (socketless/old session, or the agent is offline) — prompt NOT delivered` }
-  return replyViaSocket(sock, text)
+  const r = await replyViaSocket(sock, text)
+  // record the delivered agent-to-agent message ([[comms-edge]]): only when it carries a sender (an agent
+  // send, not a raw human dispatch) and actually landed. Fire-and-forget — never gates the send result.
+  if (r.ok && from) void recordComms(id, from)
+  return r
 }
 
 // @@@ rawKey - the RAW-KEYSTROKE nav path, kept DELIBERATELY on `tmux send-keys` and NEVER the rendezvous

@@ -101,7 +101,7 @@ function GraphCanvas({ onOpen, active, legend, setLegend }) {
   // a live monitor A→B already registered drops its optimistic twin — the pending edge has become real.
   useEffect(() => {
     if (!pending.length) return
-    const live = new Set(graph.edges.map((e) => `${e.from}->${e.to}`))
+    const live = new Set(graph.edges.filter((e) => e.kind !== 'comms').map((e) => `${e.from}->${e.to}`))
     setPending((p) => p.filter((e) => !live.has(`${e.from}->${e.to}`)))
   }, [graph.edges]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -110,6 +110,18 @@ function GraphCanvas({ onOpen, active, legend, setLegend }) {
   // it firm up when the real watch appears. Both keyed the same so a live edge supersedes its pending twin.
   const rfEdges = useMemo(() => {
     const live = graph.edges.map((e) => {
+      // a COMMS edge (direct talk) reads APART from a monitor arrow: a thin, muted, UNDIRECTED dashed line
+      // (no arrowhead) labelled with the message count — "these two have talked", distinct from "A watches B".
+      if (e.kind === 'comms') {
+        return {
+          id: `comms:${e.from}-${e.to}`, source: e.from, target: e.to, type: 'straight',
+          label: `💬 ${e.count ?? 1}`,
+          labelStyle: { fontSize: 10, fill: 'var(--sg-comms, #8a8f98)', fontWeight: 600 },
+          labelBgStyle: { fill: 'var(--sg-comms-bg, rgba(20,22,28,0.85))' }, labelBgPadding: [4, 2], labelBgBorderRadius: 4,
+          style: { stroke: 'var(--sg-comms, #8a8f98)', strokeWidth: 1.5, strokeDasharray: '2 4', opacity: 0.8 },
+          className: 'sg-edge sg-comms',
+        }
+      }
       const stroke = labelColor(e.from)
       return {
         id: `${e.from}->${e.to}`, source: e.from, target: e.to, type: 'smoothstep', animated: true,

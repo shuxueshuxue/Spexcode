@@ -39,7 +39,33 @@ function positionals(from: number): string[] {
 // edge is cosmetic and must NEVER fail the underlying watch/wait when the backend is unreachable — the poll
 // already needs the backend, and the TTL expires a stale edge if a killed process never deregisters. This
 // is the single place edge lifecycle lives, so `watch` and `wait` are just consumption policies over it.
-async function withWatchEdge<T>(selectors: string[], intervalMs: number, body: () => Promise<T>): Promise<T> {
+// @@@ watch handshake ([[comms-edge]]) - on a `spex watch` over a SPECIFIC target, tell that target who now
+// supervises it, ONCE, so the connection is live in the target's context the moment the watch starts (the
+// monitor edge alone tells the target nothing). Skips a global/@all watcher (never greet a whole fleet) and
+// any selector that doesn't resolve to exactly one live session. Greeted-once per watch process; the
+// greeting rides a plain send (NO sender id → it is the connection notice itself, not logged as agent talk).
+const greeted = new Set<string>()
+async function greetWatchTargets(watcher: string, selectors: string[]): Promise<void> {
+  try {
+    const real = selectors.filter((sel) => sel && sel !== '@all')
+    if (!real.length) return
+    const { resolveClientSession, clientSend } = await import('./client.js')
+    const { sessionLabel } = await import('./sessions.js')
+    const meR = await resolveClientSession(watcher)
+    const me = 'ok' in meR ? (sessionLabel(meR.ok) || watcher.slice(0, 8)) : watcher.slice(0, 8)
+    for (const sel of real) {
+      const r = await resolveClientSession(sel)
+      if (!('ok' in r)) continue   // none/ambiguous → don't guess a target to interrupt
+      const target = r.ok.id
+      if (target === watcher || greeted.has(target)) continue
+      greeted.add(target)
+      const text = `🔭 ${me} (${watcher}) is now supervising you — they started \`spex watch\` over this session. To reach them directly, run: spex session send ${watcher} "<your message>". (One-time heads-up; reply only if you need to.)`
+      void clientSend(target, text)   // no sender id → the connection notice is not double-counted as comms
+    }
+  } catch { /* greeting is best-effort — it must never disturb the watch */ }
+}
+
+async function withWatchEdge<T>(selectors: string[], intervalMs: number, body: () => Promise<T>, greet = false): Promise<T> {
   const { ownSessionId, reportWatch, reportUnwatch } = await import('./sessions.js')
   const { randomUUID } = await import('node:crypto')
   const watcher = ownSessionId()
@@ -47,6 +73,7 @@ async function withWatchEdge<T>(selectors: string[], intervalMs: number, body: (
   const token = randomUUID()
   const ttlMs = intervalMs * 3   // tolerate two missed heartbeats before the edge is dropped
   void reportWatch(token, watcher, selectors, ttlMs)
+  if (greet) void greetWatchTargets(watcher, selectors)   // one-shot connection handshake to specific targets
   const hb = setInterval(() => void reportWatch(token, watcher, selectors, ttlMs), intervalMs)
   const cleanup = () => { clearInterval(hb); void reportUnwatch(token) }
   process.once('SIGINT', () => { cleanup(); process.exit(0) })
@@ -269,7 +296,7 @@ From here, dispatch an agent — it authors the spec nodes and rides the dogfood
     includeIdle: has('idle'),
     as: flag('as'),
     intervalMs,
-  }))   // never resolves (no `until`); withWatchEdge clears the edge on SIGINT/SIGTERM
+  }), true)   // greet=true: a stream watch greets its specific targets once; `wait` (one-shot) does not
 } else if (cmd === 'wait') {
   // @@@ wait = the ONE-SHOT subscription (an agent's event loop). `spex wait <id> [--timeout S] [--interval
   // S] [--idle]` polls the SAME board until <id> reaches an actionable status, prints that status, and
@@ -390,7 +417,7 @@ From here, dispatch an agent — it authors the spec nodes and rides the dogfood
       const sr = await c.resolveClientSession(senderId)
       sender = 'ok' in sr ? { id: sr.ok.id, label: s.sessionLabel(sr.ok) } : { id: senderId, label: null }
     }
-    const r = await c.clientSend(full, s.withSenderHint(process.argv[5] ?? '', sender))
+    const r = await c.clientSend(full, s.withSenderHint(process.argv[5] ?? '', sender), senderId ?? undefined)
     console.log(r.ok ? 'sent' : `dispatch failed: ${r.error}`)
     process.exit(r.ok ? 0 : 1)
   } else if (sub === 'capture') {

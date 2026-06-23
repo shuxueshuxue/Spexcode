@@ -43,9 +43,11 @@ version moved. The code and scenario axes reuse the very drift index `spex lint`
 An ack vindicates a *spec*, not a reading, so that ack logic is deliberately not borrowed here.
 
 The surface mirrors the code-drift report:
-- **scan** — report which scores are stale or missing: per scenario, its latest reading gone stale or no
-  reading taken yet — exactly the pairs `eval` would (re)measure. The proactive Stop gate reuses it
-  ([[yatsu-proactive]]).
+- **scan [--changed]** — the loss signal's blind spots in three classes: a stale reading (`yatsu-drift`), a
+  scenario never measured (`yatsu-missing`), or a node governing a **frontend surface** (a UI file in its
+  `code:`) with **no yatsu.md at all** (`yatsu-uncovered`) — a loss function never written. `--changed`
+  scopes all three to the nodes the current branch touched (the proactive Stop gate's view —
+  [[yatsu-proactive]]); plain scan is the whole-repo coverage report.
 - **eval [.|<node>] [--scenario N] (--pass|--fail|--note T) [--image P|--result P|-]** — FILE the
   measurement the agent already took. yatsu runs nothing: it stores the evidence the agent hands it
   (`--image` a screenshot, `--result` a transcript or `-` for stdin) under one verdict, for one scenario.

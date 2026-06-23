@@ -94,6 +94,24 @@ function assignField(cur: RawItem, kv: string, lines: string[], idx: number, key
   const f = kv.match(/^([A-Za-z_][\w-]*):\s*(.*)$/)
   if (!f) return idx
   const key = f[1]
+  // @@@ block-sequence code - `code:` (the one list field) may be written inline (`code: a, b`) OR as a YAML
+  // block sequence — `- item` lines indented deeper, exactly like spec.md's `code:`. The scalar-only reader
+  // can't see those lines, so collect them HERE into the comma form parseCodeList expects; without this they
+  // would be silently dropped and the scenario would read as having no `code:` at all (a fail-silent footgun).
+  if (key === 'code' && f[2].trim() === '') {
+    const items: string[] = []
+    let j = idx + 1
+    for (; j < lines.length; j++) {
+      const l = lines[j]
+      if (!l.trim()) continue
+      const ind = l.length - l.replace(/^\s+/, '').length
+      if (ind <= keyIndent) break
+      const it = l.trim().match(/^-\s*(.+)$/)
+      if (!it) break
+      items.push(unquote(it[1]))
+    }
+    if (items.length) { cur.fields.code = items.join(','); return j - 1 }
+  }
   let value: string
   let end = idx
   const block = f[2].match(/^([|>])[+-]?\s*$/)

@@ -14,6 +14,7 @@ import MobileApp from './MobileApp.jsx'
 import { useIsMobile } from './useIsMobile.js'
 import { loadBoard, layout, X_GAP, Y_GAP, projectTitle } from './data.js'
 import { createMomentumScroll } from './scroll.js'
+import { cycleNext } from './cycle.js'
 import { labelColor } from './color.js'
 import { sessionName } from './session.js'
 import { useT } from './i18n/index.jsx'
@@ -427,12 +428,8 @@ function Dashboard({ specs, sessions, project, reload }) {
         e.preventDefault()
         if (!cycleNodes.length) return
         setKbdMode(true)
-        const dir = e.key === 'O' ? -1 : 1
-        const idx = cycleNodes.findIndex((s) => s.id === focus.id)
-        const next = idx === -1
-          ? (dir > 0 ? cycleNodes[0] : cycleNodes[cycleNodes.length - 1])
-          : cycleNodes[(idx + dir + cycleNodes.length) % cycleNodes.length]
-        setFocusId(next.id)
+        const next = cycleNext(cycleNodes, focus.id, e.key === 'O' ? -1 : 1, (n) => n.id)
+        if (next) setFocusId(next.id)
       }
       // (`t` toggles the session graph — handled at the top of onKey so it works from either graph.)
       // Enter opens the session board at the remembered tab (boarding switch — see openBoard).
@@ -529,9 +526,10 @@ function Dashboard({ specs, sessions, project, reload }) {
         <SessionWindow sessions={sessions} activeId={highlightId} onPick={onPickSession} onOpen={openBoard} onOpenSession={openSession} />
 
         {/* @@@ board stats - the per-node badges, totalled (bottom-left, always on). It reads the SAME
-            `specs` the graph plots, so it stays in lock-step with the tiles; clicking a stat focuses the
-            first node it counts (setFocusId drills + pans there, the same jump a search pick performs). */}
-        <BoardStats specs={specs} onJump={setFocusId} />
+            `specs` the graph plots, so it stays in lock-step with the tiles; clicking a stat WALKS focus
+            through the nodes it counts (cycleNext from the current focus — the same ring primitive the o/O
+            overlay cycle uses), so a repeated click steps to the next one, drilling + panning to each. */}
+        <BoardStats specs={specs} focusId={focusId} onJump={setFocusId} />
 
         {/* @@@ lock banner - a top-center hint while a session owns the graph. It names the grip (in the
             session's colour) and tells the user the key to walk its changed nodes — or, when it has none,

@@ -1,6 +1,7 @@
 import { dirname } from 'node:path'
-import { git, repoRoot, driftIndex, type ReviewDiffFile } from '../../spec-cli/src/git.js'
+import { git, gitA, repoRoot, driftIndex, type ReviewDiffFile } from '../../spec-cli/src/git.js'
 import { loadSpecs } from '../../spec-cli/src/specs.js'
+import { mainBranch } from '../../spec-cli/src/layout.js'
 import { reviewPayload } from '../../spec-cli/src/sessions.js'
 import { evalTimeline, evalContext, readBlobByHash, type EvalEntry } from './evaltab.js'
 import { isUiPath } from './cli.js'
@@ -36,6 +37,19 @@ export type ProofReading = {
     | { kind: 'none' }
 }
 
+// @@@ ProofFile - a changed file the proof lets you DRILL INTO: the cockpit's status + line counts, plus the
+// unified diff and the full before/after content (the merge-base side ↔ the HEAD side) — all derived from
+// git, so the proof page lets a reviewer jump summary → diff → whole-file comparison with no extra fetch.
+// patch '' / old·new null when there is nothing to show (added → no old, deleted → no new) or when the file
+// was past the enrichment cap (`omitted`) or too large (`truncated`) — kept honest, never silently blank.
+export type ProofFile = ReviewDiffFile & {
+  patch: string
+  oldText: string | null
+  newText: string | null
+  truncated: boolean
+  omitted: boolean
+}
+
 // one changed spec node: its diff slice (the files this node owns that the session touched) joined with its
 // measured loss (latest reading per scenario). A frontend node with no yatsu.md is an honest blind spot.
 export type ProofNode = {
@@ -43,7 +57,7 @@ export type ProofNode = {
   title: string
   hue: number
   desc: string
-  files: ReviewDiffFile[]
+  files: ProofFile[]
   additions: number
   deletions: number
   hasYatsu: boolean
@@ -65,7 +79,7 @@ export type ProofModel = {
   gates: ProofGate[]
   score: { passed: number; total: number; fresh: number }   // the yatsu summary across all nodes
   nodes: ProofNode[]
-  otherFiles: ReviewDiffFile[]   // changed files no spec node claims
+  otherFiles: ProofFile[]        // changed files no spec node claims
 }
 
 // @@@ buildProofModel - assemble the proof for one session, FULLY DERIVED. reviewPayload does the cockpit
@@ -86,13 +100,26 @@ export async function buildProofModel(id: string): Promise<ProofModel | null> {
   const ctxRoot = wtPath ?? repoRoot()
   const ctx = evalContext(ctxRoot, specs, await driftIndex(ctxRoot))
 
+  // enrich each changed file with its unified diff + full before/after content (derived from the session
+  // worktree at the merge-base ↔ HEAD), so the proof can drill summary → diff → whole-file comparison with no
+  // extra fetch. Capped at MAX_ENRICHED_FILES so a huge changeset can't bloat the page; the rest keep their
+  // row but say so (omitted), never silently blank.
+  const base = wtPath ? (await gitA(['-C', wtPath, 'merge-base', mainBranch(), 'HEAD'])).trim() : ''
+  const enriched = new Map<string, ProofFile>()
+  let budget = MAX_ENRICHED_FILES
+  for (const f of payload.diff) {
+    if (wtPath && base && budget > 0) { enriched.set(f.path, await enrichFile(wtPath, base, f)); budget-- }
+    else enriched.set(f.path, { ...f, patch: '', oldText: null, newText: null, truncated: false, omitted: !!(wtPath && base) })
+  }
+
   // group the session's real changes (merge-base diff) by the spec node that owns each file.
-  const byNode = new Map<string, ReviewDiffFile[]>()
-  const otherFiles: ReviewDiffFile[] = []
+  const byNode = new Map<string, ProofFile[]>()
+  const otherFiles: ProofFile[] = []
   for (const f of payload.diff) {
     const nid = nodeForFile(f.path, specs, payload.node)
-    if (nid) { const arr = byNode.get(nid) ?? []; arr.push(f); byNode.set(nid, arr) }
-    else otherFiles.push(f)
+    const pf = enriched.get(f.path)!
+    if (nid) { const arr = byNode.get(nid) ?? []; arr.push(pf); byNode.set(nid, arr) }
+    else otherFiles.push(pf)
   }
   // the session's primary node always appears, even if it has no file in the diff yet.
   if (payload.node && specById.has(payload.node) && !byNode.has(payload.node)) byNode.set(payload.node, [])
@@ -155,6 +182,31 @@ function gateRows(p: NonNullable<Awaited<ReturnType<typeof reviewPayload>>>): Pr
     { label: 'ahead', ok: p.ahead > 0, detail: `${p.ahead} commit(s) ahead of main` },
     { label: 'committed', ok: p.dirtyNonRuntime === 0, detail: p.dirtyNonRuntime === 0 ? 'nothing uncommitted' : `${p.dirtyNonRuntime} uncommitted file(s)` },
   ]
+}
+
+// @@@ enrichFile - the per-file drill-down, derived from the session worktree: the unified diff (base..HEAD),
+// the full OLD content (the merge-base side — null for an added file) and the full NEW content (the HEAD side
+// — null for a deleted file). Each capped to MAX_FILE_BYTES so one giant file can't bloat the page. gitA
+// returns '' on a missing path, which is exactly the add/delete (and best-effort rename) case.
+const MAX_ENRICHED_FILES = 60
+const MAX_FILE_BYTES = 200_000
+async function enrichFile(wtPath: string, base: string, f: ReviewDiffFile): Promise<ProofFile> {
+  const run = (args: string[]) => gitA(['-C', wtPath, '-c', 'core.quotePath=false', ...args])
+  const [patchRaw, oldRaw, newRaw] = await Promise.all([
+    run(['diff', '-M', `${base}..HEAD`, '--', f.path]),
+    f.status === 'added' ? Promise.resolve('') : run(['show', `${base}:${f.path}`]),
+    f.status === 'deleted' ? Promise.resolve('') : run(['show', `HEAD:${f.path}`]),
+  ])
+  const cap = (s: string) => (s.length > MAX_FILE_BYTES ? { text: s.slice(0, MAX_FILE_BYTES), cut: true } : { text: s, cut: false })
+  const p = cap(patchRaw), o = cap(oldRaw), nw = cap(newRaw)
+  return {
+    ...f,
+    patch: p.text,
+    oldText: f.status === 'added' ? null : o.text,
+    newText: f.status === 'deleted' ? null : nw.text,
+    truncated: p.cut || o.cut || nw.cut,
+    omitted: false,
+  }
 }
 
 // resolve a reading's evidence to inline bytes so the proof is a self-contained file: an image → a base64
@@ -295,11 +347,37 @@ function renderReading(r: ProofReading): string {
   </div>`
 }
 
+// @@@ renderPatch - colour a unified diff by line: additions green, deletions red, hunk headers blue, the
+// git metadata lines muted. Each line is its own block so a long diff scrolls inside its box. Escaped first.
+function renderPatch(patch: string): string {
+  return patch.split('\n').map((ln) => {
+    const cls = /^@@/.test(ln) ? 'h'
+      : /^(diff |index |--- |\+\+\+ |rename |similarity |new file|deleted file|old mode|new mode|Binary )/.test(ln) ? 'm'
+      : ln[0] === '+' ? 'a' : ln[0] === '-' ? 'd' : ''
+    return `<span class="dl ${cls}">${esc(ln) || ' '}</span>`
+  }).join('')
+}
+
+// @@@ renderFile - one changed file as a DRILL-DOWN: the summary row (status · path · ±) expands to the
+// unified diff, which itself nests a further toggle for the full original ↔ new content side by side. All
+// inlined (no fetch), native <details>, so the page stays a self-contained plain file. A file past the
+// enrichment cap keeps its row but says `omitted`; an added/deleted side shows an explicit absence marker.
+function renderFile(f: ProofFile): string {
+  const row = `<span class="fstatus ${esc(f.status)}">${esc(f.status)}</span> <span class="fpath">${esc(f.path)}</span> <span class="fnum"><span class="add">+${f.additions}</span> <span class="del">−${f.deletions}</span></span>`
+  if (f.omitted) return `<div class="file flat"><div class="frow">${row}<span class="note">diff omitted — large changeset</span></div></div>`
+  if (!f.patch && f.oldText == null && f.newText == null) return `<div class="file flat"><div class="frow">${row}</div></div>`
+  const side = (label: string, text: string | null, absent: string) =>
+    `<div class="side"><div class="side-h">${label}</div><pre>${text == null ? `<span class="abs">${absent}</span>` : (esc(text) || '<span class="abs">(empty)</span>')}</pre></div>`
+  const cmp = (f.oldText != null || f.newText != null)
+    ? `<details class="fullfile"><summary>full file · original ↔ new</summary><div class="cmp">${side('original (merge-base)', f.oldText, '— added —')}${side('new (HEAD)', f.newText, '— deleted —')}</div></details>`
+    : ''
+  return `<details class="file"><summary>${row}${f.truncated ? '<span class="note">truncated</span>' : ''}</summary>
+    <div class="file-body">${f.patch ? `<div class="patch">${renderPatch(f.patch)}</div>` : '<div class="note">no textual diff</div>'}${cmp}</div></details>`
+}
+
 function renderNode(n: ProofNode): string {
   const stat = `<span class="diffstat"><span class="add">+${n.additions}</span> <span class="del">−${n.deletions}</span> · ${n.files.length} file(s)</span>`
-  const fileList = n.files.length
-    ? `<ul class="files">${n.files.map((f) => `<li><span class="fstatus ${esc(f.status)}">${esc(f.status)}</span> <span class="fpath">${esc(f.path)}</span> <span class="fnum"><span class="add">+${f.additions}</span> <span class="del">−${f.deletions}</span></span></li>`).join('')}</ul>`
-    : ''
+  const fileList = n.files.length ? `<div class="files">${n.files.map(renderFile).join('')}</div>` : ''
   let proof: string
   if (n.readings.length) proof = n.readings.map(renderReading).join('')
   else if (n.uncoveredFrontend) proof = `<div class="blindspot">⚠ a frontend node with no yatsu.md — no loss signal measured. Give it a scenario so this change can be proven.</div>`
@@ -332,7 +410,7 @@ export function renderProofHtml(m: ProofModel): string {
   const gates = m.gates.map((g) => `<li class="${g.ok ? 'ok' : 'bad'}"><span class="gmark">${g.ok ? '✓' : '✗'}</span><span class="glabel">${esc(g.label)}</span><span class="gdetail">${esc(g.detail)}</span></li>`).join('')
   const otherBlock = m.otherFiles.length
     ? `<article class="node other"><div class="nhead"><span class="ntitle">other files</span><span class="nid">unclaimed by any node</span></div>
-       <ul class="files">${m.otherFiles.map((f) => `<li><span class="fstatus ${esc(f.status)}">${esc(f.status)}</span> <span class="fpath">${esc(f.path)}</span> <span class="fnum"><span class="add">+${f.additions}</span> <span class="del">−${f.deletions}</span></span></li>`).join('')}</ul></article>`
+       <div class="files">${m.otherFiles.map(renderFile).join('')}</div></article>`
     : ''
   return `<!doctype html>
 <html lang="en"><head>
@@ -391,11 +469,29 @@ h2{margin:42px 0 16px;font-size:14px;letter-spacing:.14em;text-transform:upperca
 .ndesc{margin:8px 0 4px;color:var(--dim);font-size:13px}
 .diffstat{margin-left:auto;font:12px/1 ui-monospace,monospace;color:var(--dim)}
 .add{color:var(--green)}.del{color:var(--red)}
-.files{list-style:none;margin:12px 0 0;padding:0;border-top:1px solid var(--line)}
-.files li{display:flex;align-items:center;gap:10px;padding:5px 0;font:12px/1.4 ui-monospace,monospace;border-bottom:1px solid #0c1117}
+.files{margin:12px 0 0;border-top:1px solid var(--line)}
+.file{border-bottom:1px solid #0c1117}
+.file>summary,.frow{display:flex;align-items:center;gap:10px;padding:6px 2px;font:12px/1.4 ui-monospace,monospace}
+.file>summary{cursor:pointer;list-style:none}
+.file>summary::-webkit-details-marker{display:none}
+.file>summary::before{content:'▸ ';color:var(--dim)}
+.file[open]>summary::before{content:'▾ '}
+.file.flat .frow{padding-left:14px}
 .fstatus{flex:none;width:84px;color:var(--dim);text-transform:uppercase;font-size:10px;letter-spacing:.06em}
 .fstatus.added{color:var(--green)}.fstatus.deleted{color:var(--red)}.fstatus.modified{color:var(--amber)}
-.fpath{color:#aebccd;overflow:hidden;text-overflow:ellipsis}.fnum{margin-left:auto}
+.fpath{color:#aebccd;overflow:hidden;text-overflow:ellipsis}.fnum{margin-left:auto;flex:none}
+.note{color:var(--dim);font-style:italic;font-size:11px;margin-left:8px}
+.file-body{padding:2px 0 12px 14px}
+.patch{font:12px/1.5 ui-monospace,monospace;background:#05080d;border:1px solid var(--line);border-radius:8px;overflow:auto;max-height:480px;white-space:pre}
+.dl{display:block;padding:0 10px;min-height:1.5em}
+.dl.a{background:#11331f;color:#86e2ad}.dl.d{background:#3a1616;color:#f3a3a0}.dl.h{color:#74a6f7;background:#0c1830}.dl.m{color:var(--dim)}
+.fullfile{margin-top:10px}
+.fullfile>summary{cursor:pointer;color:var(--accent);font:600 11px/1 ui-monospace,monospace;padding:6px 0}
+.cmp{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px}
+.side{flex:1;min-width:300px}
+.side-h{font:600 10px/1 ui-monospace,monospace;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);padding:0 0 6px}
+.side pre{margin:0;padding:10px 12px;background:#05080d;border:1px solid var(--line);border-radius:8px;max-height:440px;overflow:auto;font:11px/1.5 ui-monospace,monospace;color:#aebccd;white-space:pre}
+.abs{color:var(--dim);font-style:italic}
 .readings{margin-top:8px}
 .reading{margin-top:14px;padding:14px 16px;border:1px solid var(--line);border-radius:10px;background:var(--panel2)}
 .rhead{display:flex;align-items:center;gap:10px;flex-wrap:wrap}

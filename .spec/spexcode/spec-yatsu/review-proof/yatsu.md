@@ -7,13 +7,16 @@ scenarios:
       `spex review proof --out` writes. Check the self-contained, fully-derived HTML renders:
       a masthead headline derived from the node/branch, the gates checklist, and per changed
       node its yatsu evidence (verdict badge + the inlined screenshot/transcript), with a
-      frontend node lacking a yatsu.md shown as an honest blind spot rather than omitted.
+      frontend node lacking a yatsu.md shown as an honest blind spot. Then DRILL a changed
+      file (spec.md included): its row expands to the coloured unified diff, and a further
+      toggle shows the full original ↔ new content side by side.
     expected: >
       One coherent dark proof document with no agent-authored content: a masthead with the
       derived node/branch headline + session/commits, a gate row (typecheck · lint · conflict
       · ahead), and an evidence section grouping the diff by node, each measured scenario
-      showing its verdict and inlined evidence. Assets are data-URIs so no image is broken;
-      layout is whole, not empty or garbled.
+      showing its verdict and inlined evidence. Each changed file expands to its unified diff
+      (additions green, deletions red) and further to the full before/after comparison. Assets
+      are data-URIs so no image is broken; layout is whole, not empty or garbled.
 ---
 # review-proof yatsu
 

@@ -44,7 +44,7 @@ function summarize(specs) {
     if (n.drift > 0) driftIds.push(n.id)                          // node whose code is ahead of spec
     const open = n.openIssues || []
     if (open.length) { issueIds.push(n.id); for (const i of open) issueNumbers.add(i.number) }
-    const st = nodeScore(n.evals)                                 // null when the node declares no scenarios
+    const st = nodeScore(n.scenarios, n.evals)                    // scenario-aware; null when no yatsu.md
     if (st && score[st]) score[st].push(n.id)
   }
   return { total: specs.length, status, driftIds, issueIds, issueCount: issueNumbers.size, score }

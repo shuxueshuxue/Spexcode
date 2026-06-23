@@ -1,7 +1,7 @@
 import { Handle, Position } from '@xyflow/react'
 import { Avatar } from './avatar.jsx'
 import { labelColor } from './color.js'
-import { ScoreBadge, nodeScore } from './score.jsx'
+import { ScenarioCount } from './score.jsx'
 import { useT } from './i18n/index.jsx'
 
 // @@@ timeAgo - compact "edited Nm/Nh/Nd ago" from an ISO date. Coarse on purpose (the row is tiny):
@@ -67,37 +67,12 @@ function EditorRow({ data }) {
 // @@@ IssueBadge - the at-a-glance count of OPEN issues the forge linked to this node (spec-forge, folded
 // into /api/board as data.openIssues). Rendered ONLY when there are any. Magenta, a hue distinct from the
 // status dot AND the drift-badge so the three signals never blur: status dot = derived state, drift-badge
-// = code ahead of spec, this = work pointing AT the node. This is purely the glance; the DETAIL lives in
-// IssuePopover, which is now revealed by the WHOLE node (hover/focus), not by this marker alone.
+// = code ahead of spec, this = work pointing AT the node. This is purely the GLANCE; the DETAIL (the issue
+// list, alongside the node's scenarios) lives in the left [[focus-panel]] for the focused node — no longer a
+// card popped on the node itself, so Issues and Scenarios share one place and one status.
 function IssueBadge({ issues, t }) {
   if (!issues || issues.length === 0) return null
   return <span className="issue-badge" title={t('specNode.openIssues', { n: issues.length })}>◆{issues.length}</span>
-}
-
-// @@@ IssuePopover - the bound-WORK detail CARD. It is a direct child of `.spec-node` (not nested in the
-// badge), so CSS reveals it on the ENTIRE node's hover OR focus (selected = clicked or keyboard-navigated
-// to), never just the tiny badge. It reads as a card — slightly wider than a node, a header plus one
-// two-line mini-card per issue: number + state on top, the FULL title wrapping below (not one ellipsized
-// line). Each card links to the forge; stopPropagation keeps a click off the node's session-open. nodrag/
-// nopan stop react-flow stealing the pointer so the links stay clickable. The single detail surface — no
-// second pane, no extra route. Rendered only when there are issues, so it never reveals an empty card.
-function IssuePopover({ issues, t }) {
-  if (!issues || issues.length === 0) return null
-  return (
-    <div className="issue-popover nodrag nopan" role="tooltip">
-      <div className="issue-pop-head">◆ {t('specNode.openIssuesCount', { n: issues.length })}</div>
-      {issues.map((i) => (
-        <a key={i.number} className="issue-card" href={i.url} target="_blank" rel="noreferrer"
-          onClick={(e) => e.stopPropagation()}>
-          <span className="issue-card-top">
-            <span className="issue-num">#{i.number}</span>
-            <span className={`issue-state st-${(i.state || '').toLowerCase()}`}>{i.state}</span>
-          </span>
-          <span className="issue-card-title">{i.title}</span>
-        </a>
-      ))}
-    </div>
-  )
 }
 
 // @@@ SpecNode - two stacked rows, not a card. ROW 1 (the original thin file-tree line): status dot +
@@ -136,7 +111,7 @@ export default function SpecNode({ data, selected }) {
           </span>
         )}
         <IssueBadge issues={data.openIssues} t={t} />
-        <ScoreBadge state={nodeScore(data.evals)} />
+        <ScenarioCount scenarios={data.scenarios} evals={data.evals} />
         <span className="node-ver">{data.version ? `v${data.version}` : ''}</span>
         {ops.length > 0 && (
           <span className="ov-marks" title={overlays.map((o) => t('specNode.opTitle', { op: t(`legend.opRows.${o.op}`), label: o.label, uncommitted: !o.committed })).join('\n')}>
@@ -147,7 +122,6 @@ export default function SpecNode({ data, selected }) {
       <div className="node-row2">
         <EditorRow data={data} />
       </div>
-      <IssuePopover issues={data.openIssues} t={t} />
       {/* expandable hint — a collapsed node (children hidden to the right) gets a ▸N tab on its right
           edge so a leaf and a closed branch never look alike. App sets data.collapsed/childCount. */}
       {data.collapsed && (

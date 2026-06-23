@@ -29,7 +29,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-.app { display: grid; grid-template-columns: 1fr; height: 100vh; }
+.app { display: grid; grid-template-columns: var(--fp-w, 250px) 1fr; height: 100vh; }
 /* @@@ keyboard mode - while the KEYBOARD is driving the board (App.jsx kbdMode, set by nav keys, cleared by
    a real mouse move) the mouse gets out of the way: the cursor hides everywhere and the board takes no
    pointer events. With no pointer over it, no :hover reaction fires under the stationary cursor — the issue
@@ -437,20 +437,46 @@ body {
 .score-badge.staleFail { color: var(--muted); }                 /* the last verdict, greyed */
 .score-badge.empty     { color: var(--muted); opacity: .45; }   /* never measured — an empty ring */
 
-/* @@@ issue popover - the bound-WORK detail CARD, a child of .spec-node so it reveals on the ENTIRE node's
-   hover OR focus (selected = clicked / keyboard-navigated), not just the badge. Slightly wider than a node
-   (260 vs 220) to read as a card. Absolutely positioned above the node — never pushes layout. The ::after
-   bridge spans the 6px gap to the node so moving the pointer popover->node keeps :hover alive (the popover
-   is a DOM descendant, so hovering it sustains .spec-node:hover). nodrag/nopan keep the links clickable. */
-.issue-popover {
-  display: none; position: absolute; bottom: calc(100% + 6px); left: 0; z-index: 20;
-  width: 260px; padding: 6px;
-  background: var(--paper); border: 1px solid var(--magenta); border-radius: 7px;
-  box-shadow: 0 8px 24px rgba(0,0,0,.18);
-}
-.issue-popover::after { content: ''; position: absolute; top: 100%; left: 0; right: 0; height: 8px; }
-.spec-node:hover .issue-popover, .spec-node.focused .issue-popover { display: block; }
-.issue-pop-head { font-size: 10px; font-weight: 700; color: var(--magenta); text-transform: uppercase; letter-spacing: .04em; padding: 2px 4px 5px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+/* @@@ scenario count - the per-scenario tally on a node tile (score.jsx ScenarioCount): ✓ satisfied/total,
+   replacing the single fuzzy score circle. A tiny outlined pill in the worst-first colour (green all-pass,
+   red any fresh fail, grey stale/blind-spot), so a board sweep reads HOW MANY scenarios a node satisfies. */
+.scenario-count { flex: none; font-family: var(--mono); font-size: 10px; font-weight: 700; line-height: 1.4;
+  border: 1px solid currentColor; border-radius: 3px; padding: 0 3px; cursor: default; }
+.scenario-count.pass { color: var(--green); }
+.scenario-count.fail { color: var(--red); }
+.scenario-count.stalePass, .scenario-count.staleFail { color: var(--muted); }
+.scenario-count.empty { color: var(--muted); opacity: .7; }
+
+/* @@@ focus panel - the left column ([[focus-panel]]): the FOCUSED node's Issues + Scenarios, the two
+   stateful kinds of bound work, in ONE place with their satisfaction status — replacing the on-node issue
+   popover so neither kind is privileged. Scrolls its own content; reuses the .issue-card vocabulary below. */
+.focus-panel { overflow: auto; background: var(--panel); border-right: 1px solid var(--line);
+  display: flex; flex-direction: column; gap: 16px; padding: 14px 12px; }
+.fp-head { display: flex; flex-direction: column; gap: 2px; }
+.fp-eyebrow { font-size: 9px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.fp-title { font-size: 14px; font-weight: 700; color: var(--ink2); word-break: break-word; line-height: 1.25; }
+.fp-sec { display: flex; flex-direction: column; gap: 6px; }
+.fp-sec-head { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted);
+  border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+.fp-count { font-family: var(--mono); }
+.fp-count.pass { color: var(--green); } .fp-count.fail { color: var(--red); }
+.fp-count.stalePass, .fp-count.staleFail, .fp-count.empty { color: var(--muted); }
+.fp-empty { color: var(--muted); font-size: 11px; padding: 2px; }
+.fp-scenario { display: flex; gap: 7px; align-items: flex-start; padding: 4px 2px; }
+.fp-sc-mark { flex: none; font-weight: 900; line-height: 1.5; }
+.fp-scenario.pass .fp-sc-mark { color: var(--green); }
+.fp-scenario.fail .fp-sc-mark { color: var(--red); }
+.fp-scenario.stalePass .fp-sc-mark, .fp-scenario.staleFail .fp-sc-mark { color: var(--muted); }
+.fp-scenario.empty .fp-sc-mark, .fp-scenario.missing .fp-sc-mark { color: var(--muted); opacity: .55; }
+.fp-sc-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.fp-sc-name { font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--ink2); }
+.fp-sc-expected { color: var(--ink); font-size: 11px; line-height: 1.35; }
+.fp-sc-code { color: var(--muted); font-family: var(--mono); font-size: 9px; opacity: .85; }
+.fp-issue-counts { display: flex; gap: 6px; font-size: 9px; }
+.focus-panel .issue-group-head { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 6px 2px 2px; }
+.focus-panel .issue-card { padding: 5px 4px; }
+
 .issue-card { display: block; padding: 5px 6px; border-radius: 5px; text-decoration: none; }
 .issue-card + .issue-card { margin-top: 2px; }
 .issue-card:hover { background: var(--panel2); }

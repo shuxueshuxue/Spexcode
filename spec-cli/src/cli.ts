@@ -53,7 +53,6 @@ Specs / graph
 Sessions
   ls [SEL…]             living-sessions table          [--status a,b] [--json]
   watch [SEL…]          stream actionable transitions  [--as NAME] [--status a,b] [--idle] [--interval N]
-  wait <id> [STATUS]    block until <id> hits an actionable status, print it, exit  [--timeout S] [--interval S]
   new "<prompt>"        start a session (= session new)  [--node X]
   session <sub>         new | list | reopen | review | done | merge | close | send | capture | prompt
   session prompt <id>   print the session's originating prompt (what it was asked to do)
@@ -237,27 +236,6 @@ From here, dispatch an agent — it authors the spec nodes and rides the dogfood
     as: flag('as'),
     intervalMs,
   })
-} else if (cmd === 'wait') {
-  // @@@ wait - the ONE-SHOT blocking wait an agent/supervisor needs (contrast `watch`, which STREAMS
-  // forever and never exits — blocking on it to "wait for a worker" hangs the whole turn). Reuses the
-  // board poll and EXITS on the first time <id> reaches an actionable status (the default set, or the
-  // specific STATUS positional if given), printing that status. --timeout (seconds, default 1200 = 20min)
-  // caps the wait and exits non-zero so it can never hang forever; an unknown/closed id exits 2.
-  const { waitForSession, STATUS_GLYPH } = await import('./sessions.js')
-  const { clientListSessions } = await import('./client.js')
-  const [id, status] = positionals(3)
-  if (!id) { console.error('usage: spex wait <id> [<status>] [--timeout SECONDS] [--interval SECONDS]'); process.exit(2) }
-  if (status && !(status in STATUS_GLYPH)) {
-    console.error(`spex wait: unknown status '${status}' (one of: ${Object.keys(STATUS_GLYPH).join(', ')})`); process.exit(2)
-  }
-  const timeoutMs = (Number(flag('timeout')) || 1200) * 1000
-  const intervalMs = (Number(flag('interval')) || 2) * 1000
-  const r = await waitForSession(id, { source: clientListSessions, status, timeoutMs, intervalMs })
-  if ('status' in r) { console.log(r.status); process.exit(0) }
-  if ('gone' in r) { console.error(`spex wait: no such (living) session ${id}`); process.exit(2) }
-  if ('backendDown' in r) { console.error(`spex wait: ${r.backendDown}`); process.exit(1) }   // fail loud, not a false timeout
-  console.error(`spex wait: timeout — ${id} did not reach ${status || 'an actionable status'} within ${timeoutMs / 1000}s`)
-  process.exit(1)
 } else if (cmd === 'new') {
   // shorthand for `spex session new`: spex new "<prompt>" [--node X]  (prompt = first positional or --prompt)
   // createSession POSTs to the running backend so the launch runs in the backend's process (auth env + cap);
@@ -267,7 +245,7 @@ From here, dispatch an agent — it authors the spec nodes and rides the dogfood
   console.log(JSON.stringify(await createSession(flag('node') ?? null, prompt), null, 2))
 } else if (cmd === 'session') {
   const sub = process.argv[3]
-  // `s` (sessions.ts) backs the state PRODUCERS that stay local (state/done/block/fail/ask/idle/commit-gate
+  // `s` (sessions.ts) backs the state PRODUCERS that stay local (state/done/park/fail/ask/idle/commit-gate
   // write the cwd .session) and `new` (its own launch path). `c` (client.ts) backs the read/control subs that
   // route through the backend — exactly the split the refactor draws. Both lazily imported here.
   const s = await import('./sessions.js')
@@ -284,7 +262,7 @@ From here, dispatch an agent — it authors the spec nodes and rides the dogfood
   } else if (sub === 'review') {
     console.log(await s.propose(id, 'merge') ? `${id} -> review` : `no such session ${id}`)
   } else if (sub === 'state') {
-    // the agent authors ITS OWN state (from cwd): active|awaiting|blocked|error  [--propose] [--note]
+    // the agent authors ITS OWN state (from cwd): active|awaiting|parked|error  [--propose] [--note]
     const st = process.argv[4] as any
     const ok = s.markStateFromCwd(st, { proposal: flag('propose') as any, note: flag('note') })
     console.log(ok ? `state -> ${st}` : 'no .session in cwd (or bad status)')
@@ -292,17 +270,17 @@ From here, dispatch an agent — it authors the spec nodes and rides the dogfood
     // sugar for awaiting; --propose merge|nothing|close, optional --note
     const p = (flag('propose') as any) || 'nothing'
     console.log(s.markStateFromCwd('awaiting', { proposal: p, note: flag('note') }) ? `done (${p})` : 'no .session in cwd')
-  } else if (sub === 'block') {
+  } else if (sub === 'park') {
     // sugar: the agent is waiting on a background task; it will self-resume (NOT idle/awaiting)
-    console.log(s.markStateFromCwd('blocked', { note: flag('note') }) ? 'blocked' : 'no .session in cwd')
+    console.log(s.markStateFromCwd('parked', { note: flag('note') }) ? 'parked' : 'no .session in cwd')
   } else if (sub === 'fail') {
     // the StopFailure hook marks ITS OWN worktree (from cwd) as error (turn died on an API error)
     console.log(s.markStateFromCwd('error') ? 'marked error' : 'no .session in cwd')
   } else if (sub === 'ask') {
-    // the agent DELIBERATELY declares it is pausing to ask the human a question (like `done`/`block`, an
-    // authored state — NOT guarded active-only). The --note carries the question. Distinct from `block`
-    // (waiting on a background task, self-resumes): a needs-input agent resumes only when the human replies.
-    console.log(s.markStateFromCwd('needs-input', { note: flag('note') }) ? 'needs-input' : 'no .session in cwd')
+    // the agent DELIBERATELY declares it is pausing to ask the human a question (like `done`/`park`, an
+    // authored state — NOT guarded active-only). The --note carries the question. Distinct from `park`
+    // (waiting on a background task, self-resumes): an asking agent resumes only when the human replies.
+    console.log(s.markStateFromCwd('asking', { note: flag('note') }) ? 'asking' : 'no .session in cwd')
   } else if (sub === 'commit-gate') {
     // the Stop gate's deterministic commit check (from cwd = the worktree): exit 0 if the node branch is
     // ready to declare done/merge (work committed + ahead of main), else print the reason and exit 1. Uses
@@ -314,7 +292,7 @@ From here, dispatch an agent — it authors the spec nodes and rides the dogfood
   } else if (sub === 'idle') {
     // the Notification(idle_prompt) hook marks ITS OWN worktree (from cwd) idle when claude waits at its
     // prompt. INFERRED, so guarded active-only: it no-ops unless the current status is exactly `active`,
-    // never clobbering a deliberate awaiting/needs-input/blocked/error declaration. Distinct from `ask`
+    // never clobbering a deliberate awaiting/asking/parked/error declaration. Distinct from `ask`
     // (the agent deliberately asking the human) — idle is the undeclared stop the Stop gate missed.
     console.log(s.markIdleFromCwd() ? 'idle' : 'noop (no .session in cwd, or not active)')
   } else if (sub === 'merge') {
@@ -345,7 +323,7 @@ From here, dispatch an agent — it authors the spec nodes and rides the dogfood
     if (!r.ok) { console.error(`no prompt recorded for ${id}`); process.exit(1) }
     process.stdout.write(r.prompt.endsWith('\n') ? r.prompt : r.prompt + '\n')
   } else {
-    console.error('spex session: new|list|reopen|review|done|block|ask|idle|merge|close|send|capture|prompt'); process.exit(2)
+    console.error('spex session: new|list|reopen|review|done|park|ask|idle|merge|close|send|capture|prompt'); process.exit(2)
   }
 } else {
   console.error(`spex: unknown command '${cmd}' (try: spex help)`)

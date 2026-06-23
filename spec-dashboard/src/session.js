@@ -6,7 +6,7 @@
 // session list, and the @-mention rows — a session's status reads the same colour wherever it appears.
 export const STATUS_DOT = {
   working: '#cb4b16', idle: '#93a1a1', offline: '#657b83', review: '#6c71c4', done: '#268bd2',
-  'close-pending': '#cb4b16', blocked: '#2aa198', error: '#dc322f', 'needs-input': '#b58900',
+  'close-pending': '#cb4b16', parked: '#2aa198', error: '#dc322f', asking: '#b58900',
 }
 
 // the human-facing name of a session: a user-chosen rename (`name`) wins over everything; else its node,

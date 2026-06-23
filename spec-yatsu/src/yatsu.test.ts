@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
-import { parseScenarios } from './yatsu.js'
+import { parseScenarios, validateScenarios } from './yatsu.js'
 import { readReadings, appendReading, latestPerScenario, type Reading } from './sidecar.js'
 import { changedSince, staleAxes } from './freshness.js'
 import { putBlob, listBlobs, gc, resolveBlob, MISS_BLOB, isStrayBlob } from './cache.js'
@@ -68,6 +68,75 @@ scenarios:
   assert.equal(sc[0].name, 'quoted name')
   assert.equal(sc[0].expected, '')
   assert.equal(sc[0].test, undefined)
+})
+
+// ---- yatsu.md schema validation (the loud twin of parseScenarios: scan reports it, the gate rejects it) ----
+
+test('validateScenarios: a well-formed yatsu.md is valid (no errors)', () => {
+  assert.deepEqual(validateScenarios(`---
+scenarios:
+  - name: login-works
+    description: log in with valid creds
+    expected: lands on the dashboard
+    test: tests/login.spec.ts
+  - name: logout-redirects
+    description: log out
+    expected: back on /login
+---
+body`), [])
+})
+
+test('validateScenarios: no frontmatter / no scenarios key / empty list each fail loud', () => {
+  assert.match(validateScenarios('# just a body\n')[0], /no frontmatter/)
+  assert.match(validateScenarios('---\ntitle: x\n---\nbody')[0], /no `scenarios:` key/)
+  assert.match(validateScenarios('---\nscenarios:\n---\nbody')[0], /declares no scenarios/)
+})
+
+test('validateScenarios: a missing required field is named (by scenario name when present, else index)', () => {
+  const errs = validateScenarios(`---
+scenarios:
+  - name: has-no-expected
+    description: a surface
+  - description: nameless and incomplete
+---`)
+  assert.ok(errs.some((e) => /scenario 'has-no-expected': missing required field `expected`/.test(e)), errs.join(' | '))
+  // the second item has no name → referenced by index, and flagged for the missing name too
+  assert.ok(errs.some((e) => /scenario #2: missing required field `name`/.test(e)), errs.join(' | '))
+})
+
+test('validateScenarios: a typo\'d field key is rejected (not silently swallowed)', () => {
+  const errs = validateScenarios(`---
+scenarios:
+  - name: typo
+    descripton: misspelled key
+    expected: something
+---`)
+  // the unknown key is named, AND `description` reads as missing (the typo never landed it)
+  assert.ok(errs.some((e) => /unknown field `descripton`/.test(e)), errs.join(' | '))
+  assert.ok(errs.some((e) => /missing required field `description`/.test(e)), errs.join(' | '))
+})
+
+test('validateScenarios: duplicate scenario names collide (they key the sidecar)', () => {
+  const errs = validateScenarios(`---
+scenarios:
+  - name: dup
+    description: first
+    expected: a
+  - name: dup
+    description: second
+    expected: b
+---`)
+  assert.ok(errs.some((e) => /duplicate scenario name 'dup'/.test(e)), errs.join(' | '))
+})
+
+test('validateScenarios vs parseScenarios: the lenient reader drops a nameless item the validator flags', () => {
+  const md = `---
+scenarios:
+  - description: nameless
+    expected: x
+---`
+  assert.equal(parseScenarios(md).length, 0)                 // lenient: silently dropped
+  assert.ok(validateScenarios(md).some((e) => /missing required field `name`/.test(e)))  // strict: loud
 })
 
 // ---- sidecar round-trip ----

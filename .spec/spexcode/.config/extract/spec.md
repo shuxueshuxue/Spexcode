@@ -43,6 +43,13 @@ Then grow nodes under that spine:
   cross-cutting features stay visible. If nothing reaches a file, say it's likely dead rather than
   dignifying it with a confident spec.
 
+**Give every frontend node a loss signal.** A node that governs UI or visual code (`.tsx`/`.jsx`/`.vue`/
+`.svelte`/`.css`, or the dashboard) is a blind spot until it carries a `yatsu.md` — so write one as you
+extract it: a scenario with a **description** (what to look at through the running app) and the **expected**
+result that is zero loss. Frontend scenarios are measured by looking (YATU) — a screenshot filed with
+`spex yatsu eval <node> --image <png> --pass`. Backend nodes don't need one yet; run `spex yatsu scan` to
+list the frontend nodes still uncovered.
+
 Confirm `spexcode.json`'s `governedRoots` points at the real source dirs first — lint reads silently empty
 otherwise. Commit one node per commit (`spec: <id> — extract from <area>`) with a `Session:` trailer, and
 run `spex lint` after each: it must reach 0 errors, 0 coverage warnings, 0 altitude warnings.

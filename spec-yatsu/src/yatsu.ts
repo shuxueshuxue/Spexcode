@@ -31,20 +31,33 @@ export type YatsuNode = {
   scenarios: Scenario[]
 }
 
-// @@@ scenarios parser - yatsu.md declares scenarios in a frontmatter `scenarios:` block: a YAML block
-// sequence of mappings (name/description/expected/test). The spec-cli frontmatter reader is scalar /
-// flat-string-list only, so this is a small indentation-driven parser for exactly that shape — no YAML
-// dependency, the same "deliberately tiny" spirit. Sequence items are the dashes at the shallowest indent
-// after `scenarios:`; `key: value` lines deeper set the current item's fields; a value of `|` or `>`
-// opens a block scalar (the prose fields, description/expected, want to span lines).
-export function parseScenarios(src: string): Scenario[] {
+// @@@ scenario schema - the four fields a scenario may declare; `name`/`description`/`expected` are
+// required, `test` optional. Anything else inside an item is a typo or mistake — validateScenarios rejects
+// it loudly (the lenient parser below merely ignores it). One source of truth for both faces.
+const SCENARIO_KEYS = ['name', 'description', 'expected', 'test'] as const
+type ScenarioKey = (typeof SCENARIO_KEYS)[number]
+
+// a raw scenario item straight off the frontmatter walk: the known fields it set, plus any UNKNOWN keys it
+// carried — kept (not dropped) so the validator can name a typo'd field instead of silently swallowing it.
+type RawItem = { fields: Partial<Record<ScenarioKey, string>>; unknownKeys: string[] }
+
+// @@@ scenarios walk - the ONE indentation-driven pass over yatsu.md's frontmatter `scenarios:` block,
+// shared by the lenient reader (parseScenarios) and the strict gate (validateScenarios) so the two can
+// never disagree about what the file says. yatsu.md declares scenarios as a YAML block sequence of mappings
+// (name/description/expected/test); the spec-cli frontmatter reader is scalar / flat-string-list only, so
+// this is a small parser for exactly that shape — no YAML dependency, the same "deliberately tiny" spirit.
+// Sequence items are the dashes at the shallowest indent after `scenarios:`; `key: value` lines deeper set
+// the current item's fields; a value of `|`/`>` opens a block scalar (description/expected span lines). It
+// reports whether the frontmatter and the `scenarios:` key were present at all, so the validator can tell
+// "no scenarios declared" from "scenarios declared but malformed".
+function walkScenarios(src: string): { hasFrontmatter: boolean; hasKey: boolean; items: RawItem[] } {
   const m = src.match(/^---\n([\s\S]*?)\n---/)
-  if (!m) return []
+  if (!m) return { hasFrontmatter: false, hasKey: false, items: [] }
   const lines = m[1].split('\n')
   let i = lines.findIndex((l) => /^scenarios:\s*$/.test(l))
-  if (i < 0) return []
-  const out: Partial<Scenario>[] = []
-  let cur: Partial<Scenario> | null = null
+  if (i < 0) return { hasFrontmatter: true, hasKey: false, items: [] }
+  const items: RawItem[] = []
+  let cur: RawItem | null = null
   let itemIndent = -1            // the indent of the `- ` that starts each scenario (set by the first one)
   const indentOf = (l: string) => l.length - l.replace(/^\s+/, '').length
   for (i++; i < lines.length; i++) {
@@ -56,8 +69,8 @@ export function parseScenarios(src: string): Scenario[] {
     const dash = trimmed.startsWith('- ') || trimmed === '-'
     if (dash && (itemIndent < 0 || indent <= itemIndent)) {
       // a new scenario item. start fresh; the `- ` may carry the first field inline.
-      cur = {}
-      out.push(cur)
+      cur = { fields: {}, unknownKeys: [] }
+      items.push(cur)
       itemIndent = indent
       const inline = trimmed.slice(1).trim()   // text after the dash
       if (inline) i = assignField(cur, inline, lines, i, indent)
@@ -66,16 +79,20 @@ export function parseScenarios(src: string): Scenario[] {
     if (!cur) continue            // content before the first dash — ignore
     i = assignField(cur, trimmed, lines, i, indent)
   }
-  return out.map(finishScenario).filter((s) => s.name)   // a scenario with no name is malformed — drop it
+  return { hasFrontmatter: true, hasKey: true, items }
 }
 
 // assign a `key: value` field to the current item. When the value is a block-scalar indicator (`|`
 // literal / `>` folded), consume the following more-indented lines as the value and return the index of
-// the LAST consumed line (the for-loop's ++ then moves past it); otherwise return `idx` unchanged.
-function assignField(cur: Partial<Scenario>, kv: string, lines: string[], idx: number, keyIndent: number): number {
+// the LAST consumed line (the for-loop's ++ then moves past it); otherwise return `idx` unchanged. A key
+// outside the schema is recorded under unknownKeys (still consuming its block, so the body isn't misread as
+// new items) rather than dropped — validateScenarios needs to see it to reject the typo.
+function assignField(cur: RawItem, kv: string, lines: string[], idx: number, keyIndent: number): number {
   const f = kv.match(/^([A-Za-z_][\w-]*):\s*(.*)$/)
   if (!f) return idx
   const key = f[1]
+  let value: string
+  let end = idx
   const block = f[2].match(/^([|>])[+-]?\s*$/)
   if (block) {
     const fold = block[1] === '>'
@@ -90,28 +107,56 @@ function assignField(cur: Partial<Scenario>, kv: string, lines: string[], idx: n
       body.push(l.slice(base))
     }
     while (body.length && body[body.length - 1] === '') body.pop()   // strip trailing blanks
-    setField(cur, key, fold ? body.join(' ').replace(/\s+/g, ' ').trim() : body.join('\n'))
-    return j - 1
+    value = fold ? body.join(' ').replace(/\s+/g, ' ').trim() : body.join('\n')
+    end = j - 1
+  } else {
+    value = unquote(f[2])
   }
-  setField(cur, key, unquote(f[2]))
-  return idx
+  if ((SCENARIO_KEYS as readonly string[]).includes(key)) cur.fields[key as ScenarioKey] = value
+  else cur.unknownKeys.push(key)
+  return end
 }
 
-function setField(cur: Partial<Scenario>, key: string, val: string): void {
-  if (key === 'name') cur.name = val
-  else if (key === 'description') cur.description = val
-  else if (key === 'expected') cur.expected = val
-  else if (key === 'test') cur.test = val
-}
 const unquote = (s: string) => s.replace(/^["'](.*)["']$/, '$1').trim()
 
-function finishScenario(c: Partial<Scenario>): Scenario {
-  return {
-    name: c.name ?? '',
-    description: c.description ?? '',
-    expected: c.expected ?? '',
-    ...(c.test ? { test: c.test } : {}),
-  }
+// @@@ parseScenarios - the LENIENT reader every consumer (scan/eval/show) uses: clean Scenario[] off the
+// walk, missing prose fields defaulting to '' and a nameless item dropped. Tolerant by design — the loud
+// gate is validateScenarios (run at scan + pre-commit), so a malformed file is rejected THERE, not silently
+// reshaped here.
+export function parseScenarios(src: string): Scenario[] {
+  return walkScenarios(src).items
+    .map((it): Scenario => ({
+      name: it.fields.name ?? '',
+      description: it.fields.description ?? '',
+      expected: it.fields.expected ?? '',
+      ...(it.fields.test ? { test: it.fields.test } : {}),
+    }))
+    .filter((s) => s.name)   // a scenario with no name is malformed — drop it (validateScenarios reports it)
+}
+
+// @@@ validateScenarios - the STRICT schema gate, the loud twin of parseScenarios. Returns one message per
+// problem (empty array = valid). A yatsu.md must carry a frontmatter `scenarios:` list of at least one item,
+// and every item must set a non-empty name + description + expected, declare no field outside the schema,
+// and use a name unique within the file. PURE (src → errors) so both faces share it: `spex yatsu scan`
+// emits each as a `yatsu-schema` finding, and the pre-commit backstop rejects a staged yatsu.md that fails
+// — a malformed loss function never lands silently the way the lenient parser would have let it.
+export function validateScenarios(src: string): string[] {
+  const { hasFrontmatter, hasKey, items } = walkScenarios(src)
+  if (!hasFrontmatter) return ['no frontmatter block — a yatsu.md must declare a `scenarios:` list']
+  if (!hasKey) return ['frontmatter has no `scenarios:` key — declare at least one scenario']
+  if (!items.length) return ['`scenarios:` declares no scenarios — add one (name + description + expected)']
+  const errs: string[] = []
+  const counts = new Map<string, number>()
+  items.forEach((it, idx) => {
+    const label = it.fields.name ? `scenario '${it.fields.name}'` : `scenario #${idx + 1}`
+    for (const k of ['name', 'description', 'expected'] as const) {
+      if (!it.fields[k]?.trim()) errs.push(`${label}: missing required field \`${k}\``)
+    }
+    for (const u of it.unknownKeys) errs.push(`${label}: unknown field \`${u}\` (allowed: ${SCENARIO_KEYS.join(', ')})`)
+    if (it.fields.name) counts.set(it.fields.name, (counts.get(it.fields.name) ?? 0) + 1)
+  })
+  for (const [n, c] of counts) if (c > 1) errs.push(`duplicate scenario name '${n}' (${c}×) — names must be unique within a yatsu.md`)
+  return errs
 }
 
 // @@@ yatsuNodes - walk `.spec` for every directory holding a yatsu.md and read its scenarios. The spec

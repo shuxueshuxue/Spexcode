@@ -5,7 +5,7 @@ import { createNodeWebSocket } from '@hono/node-ws'
 import { loadSpecs, specHistory, specDiffAt, loadConfig } from './specs.js'
 import { resolveLayout, mainBranch } from './layout.js'
 import { buildBoard } from './board.js'
-import { gitA } from './git.js'
+import { gitA, gitTry } from './git.js'
 import { newSession, listSessions, sendKeys, rawKey, closeSession, reopen, propose, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, superviseQueue } from './sessions.js'
 import { slashCommands } from './slash-commands.js'
 import { evalTimeline, readBlobByHash } from '../../spec-yatsu/src/evaltab.js'
@@ -36,15 +36,25 @@ app.get('/api/specs/:id/history', async (c) => c.json(await specHistory(c.req.pa
 app.get('/api/specs/:id/diff/:hash', async (c) => c.json(await specDiffAt(c.req.param('id'), c.req.param('hash'))))
 // @@@ pending edit - the CONTENT of a node's in-flight change, which the board's overlay markers don't carry.
 // A unified diff of the node's spec.md between the fork point (the editing worktree's merge-base with main)
-// and that worktree's WORKING tree, so it includes uncommitted edits and shows a freshly-added ghost as an
-// all-additions diff. The node-info `edit` tab fetches this lazily to make an in-flight change reviewable
-// from the board. `source` = the overlay's worktree path; `path` = the node's spec.md path (repo-relative).
+// and that worktree's WORKING tree, so it includes uncommitted edits. The node-info `edit` tab fetches this
+// lazily to make an in-flight change reviewable from the board. `source` = the overlay's worktree path;
+// `path` = the node's spec.md path (repo-relative).
+// @@@ untracked ghost - a freshly-added node's spec.md is UNTRACKED until its first commit, and `git diff <base>`
+// is blind to untracked files (returns '') — so the edit tab showed NOTHING for a brand-new uncommitted node.
+// When the base diff is empty AND the path is untracked (`status` reports `??`), synthesize the all-additions
+// view with `diff --no-index /dev/null <path>` (gitTry, since --no-index exits 1 when files differ and gitA
+// would swallow that). Gated on `??` so a tracked file with no pending change correctly stays empty.
 app.get('/api/edit', async (c) => {
   const source = c.req.query('source') || '', path = c.req.query('path') || ''
   if (!source || !path) return c.json({ patch: '' })
   const mb = mainBranch()
   const base = (await gitA(['-C', source, 'merge-base', mb, 'HEAD'])).trim() || mb
-  return c.json({ patch: await gitA(['-C', source, 'diff', base, '--', path]) })
+  let patch = await gitA(['-C', source, 'diff', base, '--', path])
+  if (!patch) {
+    const status = await gitA(['-C', source, 'status', '--porcelain', '--untracked-files=all', '--', path])
+    if (status.startsWith('??')) patch = (await gitTry(['-C', source, 'diff', '--no-index', '--', '/dev/null', path])).stdout
+  }
+  return c.json({ patch })
 })
 // @@@ eval timeline - a node's chronological evaluation history for the dashboard eval tab (the READ half of
 // `spex yatsu`). Each reading from the yatsu.evals.ndjson sidecar (scenario/codeSha/blob/evaluator/ts) joined

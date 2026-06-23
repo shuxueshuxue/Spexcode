@@ -1221,12 +1221,22 @@ export function launchEvent(s: Session): string {
 // clientListSessions), so `spex watch` streams whatever backend SPEXCODE_API_URL points at — including a
 // REMOTE machine's. It is REQUIRED (no local default): a forgotten source must be a compile error, never a
 // silent in-process read of the wrong (local) board — the exact false-green the 2-machine test guards.
-export type WatchOpts = { source: () => Promise<Session[]>; selectors?: string[]; statuses?: string[]; includeIdle?: boolean; intervalMs?: number; as?: string }
-export async function watchSessions(emit: (line: string) => void, opts: WatchOpts): Promise<void> {
-  const { source, selectors = [], statuses, includeIdle = false, intervalMs = 5000, as } = opts
+export type WatchOpts = { source: () => Promise<Session[]>; selectors?: string[]; statuses?: string[]; includeIdle?: boolean; intervalMs?: number; as?: string; until?: { timeoutMs: number } }
+// @@@ watch outcome - only the BOUNDED `until` mode resolves (that mode is what `spex wait` runs on); a
+// plain watch (no `until`) streams forever and never resolves. The bound is what makes `wait` a one-shot
+// "block for a worker, then exit" that is GUARANTEED to return. The deadline is checked EVERY poll, before
+// EVERY sleep (and even when a poll throws), so a target stuck in ANY non-actionable state
+// (`working`/`parked`/`idle`/`queued`/`starting`) can never hang the caller — it exits at the deadline.
+// `reached` = the target hit an actionable status; the rest are the loud exits.
+export type WatchOutcome = { reached: DisplayStatus } | { timedOut: true } | { gone: true } | { backendDown: string }
+export async function watchSessions(emit: (line: string) => void, opts: WatchOpts): Promise<WatchOutcome> {
+  const { source, selectors = [], statuses, includeIdle = false, intervalMs = 5000, as, until } = opts
   const tag = as ? `[${as}] ` : ''
   const prev = new Map<string, DisplayStatus>()
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+  // the no-hang wall: a fixed deadline computed ONCE, checked unconditionally every iteration below.
+  const deadline = until ? Date.now() + Math.max(1000, until.timeoutMs) : 0
+  const isActionable = (st: DisplayStatus) => WATCH_ACTIONABLE.has(st) || (includeIdle && st === 'idle')
   let warnedDown = false
   for (;;) {
     try {
@@ -1254,12 +1264,24 @@ export async function watchSessions(emit: (line: string) => void, opts: WatchOpt
         prev.delete(id)
         emit(`${tag}[spex] closed \u00b7 removed  [id ${id}]`)
       }
+      // BOUNDED mode (`until`, what `spex wait` runs): return the moment a watched target is actionable; an empty selected set
+      // means the target is gone (absent from the board), which it can never come back from. Both sit inside
+      // the try, after the emit pass, so the caller still saw every transition before we hand control back.
+      if (until) {
+        const hit = all.find((s) => isActionable(s.status))
+        if (hit) return { reached: hit.status }
+        if (!all.length) return { gone: true }
+      }
     } catch (e) {
       // a backend-down poll must NOT be swallowed as a transient hiccup AND must NOT emit a false `closed`
       // for every session: we skip the tick (prev is untouched → no phantom removals) and warn ONCE, loudly,
       // so a manager sees the stream is blind rather than reading silence as "all sessions fine".
+      if (until && isBackendDown(e)) return { backendDown: (e as Error).message }   // a bounded wait fails loud, never a false timeout
       if (isBackendDown(e) && !warnedDown) { warnedDown = true; console.error(`${tag}[spex] watch: ${(e as Error).message}; retrying every ${intervalMs / 1000}s…`) }
     }
+    // the HARD wall — checked every iteration, in EVERY state, even after a thrown poll, BEFORE the sleep:
+    // this is what guarantees `spex wait` can never hang on a worker stuck outside WATCH_ACTIONABLE.
+    if (until && Date.now() >= deadline) return { timedOut: true }
     await sleep(intervalMs)
   }
 }

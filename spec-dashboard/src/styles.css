@@ -1098,3 +1098,37 @@ body {
 .eval-expected-label { color: var(--muted); font-weight: 600; }
 .eval-transcript { font-family: var(--mono); font-size: 11px; color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px; margin: 0; max-height: 360px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
 .eval-transcript.loading { color: var(--muted); }
+
+/* ---- review proof overlay ([[review-proof]]'s slice of the shared stylesheet) ----
+   A thin frame around the backend-rendered proof of work (an iframe over /api/sessions/:id/proof). Floats
+   ABOVE the session board (.si-backdrop, 50) it opens from, so the modal never renders behind its surface.
+   The proof document is self-contained + dark; only this chrome wears the dashboard's light theme. */
+.proof-overlay {
+  position: fixed; inset: 0; z-index: 70;
+  background: rgba(7, 54, 66, .5); backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center;
+}
+.proof-frame {
+  width: 92vw; height: 92vh; max-width: 1080px;
+  background: var(--paper); border: 1px solid var(--blue); border-radius: 12px;
+  overflow: hidden; display: flex; flex-direction: column;
+  box-shadow: 0 30px 90px rgba(7, 54, 66, .5);
+  animation: si-pop .2s cubic-bezier(.2, .8, .2, 1);
+}
+.proof-bar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 12px; border-bottom: 1px solid var(--line);
+  font-family: var(--mono); font-size: 12px; color: var(--ink2);
+}
+.proof-title { font-weight: 700; letter-spacing: .04em; }
+.proof-newtab { margin-left: auto; color: var(--blue); text-decoration: none; font-size: 11px; }
+.proof-newtab:hover { text-decoration: underline; }
+.proof-x {
+  background: var(--paper); border: 1px solid var(--line); color: var(--ink);
+  border-radius: 4px; padding: 1px 9px; cursor: pointer; font-family: var(--mono); font-size: 12px;
+}
+.proof-x:hover { border-color: var(--orange); color: var(--orange); }
+.proof-iframe { flex: 1; width: 100%; border: 0; background: #0b0e14; }
+/* the `proof` action button shares .si-act; tint it the spec-graph accent so it reads as evidence, not an edit. */
+.si-act.proof { color: var(--cyan); border-color: var(--cyan); }
+.si-act.proof:hover { background: var(--cyan); color: var(--paper); border-color: var(--cyan); }

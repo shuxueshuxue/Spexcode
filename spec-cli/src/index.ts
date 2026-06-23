@@ -9,6 +9,7 @@ import { gitA, gitTry } from './git.js'
 import { newSession, listSessions, sendKeys, rawKey, closeSession, reopen, propose, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, superviseQueue } from './sessions.js'
 import { slashCommands } from './slash-commands.js'
 import { evalTimeline, readBlobByHash } from '../../spec-yatsu/src/evaltab.js'
+import { buildProofModel, renderProofHtml } from '../../spec-yatsu/src/proof.js'
 import { saveUpload, MAX_UPLOAD_BYTES } from './uploads.js'
 import { attachViewer, detachViewer, writeViewer, resizeBridge, superviseBridges, type Viewer } from './pty-bridge.js'
 import { installProcessGuards } from './resilience.js'
@@ -133,6 +134,17 @@ app.post('/api/sessions', async (c) => {
 app.get('/api/sessions/:id/review', async (c) => {
   const r = await reviewPayload(c.req.param('id'))
   return r ? c.json(r) : c.json({ error: 'no such session' }, 404)
+})
+// @@@ review proof - the agent's review state, marshaled into one self-contained HTML proof of work (the
+// [[review-proof]] engine): the diff grouped by node, each node's measured yatsu loss with its evidence
+// inlined as data-URIs, and the merge gates, under the agent's authored claim. The dashboard overlay and
+// `spex review proof` are thin fetchers of this one route. `?format=json` returns the model; default = the
+// rendered HTML. 404 for an unknown id.
+app.get('/api/sessions/:id/proof', async (c) => {
+  const m = await buildProofModel(c.req.param('id'))
+  if (!m) return c.text('no such session', 404)
+  if (c.req.query('format') === 'json') return c.json(m)
+  return c.html(renderProofHtml(m))
 })
 // @@@ capture - the session's live pane as TEXT (one-shot snapshot), the read surface a backend client
 // (`spex capture`, incl. a REMOTE one over SPEXCODE_API_URL) polls to monitor an agent's actual screen

@@ -19,11 +19,12 @@ launching has a **single owner**: the running backend process, never whichever s
 
 ## expanded spec
 
-`newSession` adds the `node/<slug>` worktree (off the base branch), writes `.session` (+ best-effort the
-`.session-prompt` sidecar), isolates `CLAUDE.md`, and **queues the worktree for launch** on a private `tmux
+`newSession` adds the `node/<slug>` worktree (off the base branch), writes `.session/state` (+ best-effort
+the `.session/prompt` sidecar, and at launch the hooks/launch scripts — all under the worktree's `.session/`
+runtime dir, [[runtime]]), isolates `CLAUDE.md`, and **queues the worktree for launch** on a private `tmux
 -L` socket (`spex new "<prompt>" [--node X]`). `claude` launches with `--session-id
-<uuid>` — the id equals the `.session` id and the commit attribution, so the conversation `--resume`s after
-death and a spec node links to it. Workers run through the **`reclaude` wrapper**
+<uuid>` — the id equals the `.session/state` id and the commit attribution, so the conversation `--resume`s
+after death and a spec node links to it. Workers run through the **`reclaude` wrapper**
 (`SPEXCODE_CLAUDE_CMD`), which runs claude as a **child** rather than exec'ing it, so the pane's foreground
 command is the wrapper/shell — **not** a liveness signal ([[state]] reads the socket instead). The spawned
 command alone carries `CLAUDE_BG_BACKEND=daemon` and a `CLAUDE_BG_RENDEZVOUS_SOCK` path **derived from the

@@ -6,17 +6,16 @@ dist/
 # SpexCode worktrees live here — they are separate checkouts, never committed
 .worktrees/
 
-# per-worktree session linker — ephemeral runtime state, not spec data
+# per-worktree session runtime — EVERY harness-written artifact under ONE ignored dir (state, prompt,
+# launch, hooks.json, launch.sh, claude.md), so the worktree's spec/code tree stays clean. (`.session` with
+# no trailing slash also covers a legacy flat `.session` state file.) Removed with the worktree.
 .session
-# originating-prompt sidecar (multi-line launch request) — runtime metadata, not spec data
+# legacy flat runtime sidecars (pre runtime-dir refactor) — still ignored while in-flight sessions drain;
+# remove these five lines once no flat-layout worktree remains.
 .session-prompt
-# deferred launch prompt for a still-QUEUED session (consumed at launch) — runtime, not spec data
 .session-launch
-# per-worktree generated hook settings (writeSettings() writes absolute paths) — runtime, not spec data
 .spex-hooks.json
-# per-worktree generated launch script (launchScript() writes the claude invocation) — runtime, not spec data
 .spex-launch.sh
-# per-worktree hidden CLAUDE.md copy (hideClaudeMd renames CLAUDE.md so Claude Code won't auto-load it) — runtime, not spec data
 CLAUDE.spexhidden.md
 
 # harness state

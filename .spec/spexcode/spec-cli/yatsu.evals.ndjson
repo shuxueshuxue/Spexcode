@@ -1,0 +1,1 @@
+{"scenario":"edit-shows-uncommitted-node","codeSha":"05b37bb6b49e849717b7b86f09a282fcd202f9a1","blob":"ef4a1cf61dae2752c0abfd96798ce10008441285336d3243ec9f15bb93c85b84","blobKind":"transcript","evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-23T06:36:14.100Z"}

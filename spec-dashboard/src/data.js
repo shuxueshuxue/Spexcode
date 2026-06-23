@@ -55,30 +55,30 @@ function log(node) {
   return [...lines, `\x1b[36mtype here — keystrokes forward via\x1b[0m \x1b[1msend-keys\x1b[0m`, ``]
 }
 
-// @@@ tidy-tree layout, drill-down - left->right: depth sets the column (x), post-order stacks the
-// VISIBLE leaves into rows (y), parents centre vertically over their kids. Root at the left, subtrees
-// extend right. This is NOT a fixed full-forest map: `expanded` is the set of nodes whose children are
-// shown — everything else collapses to a single tile, so a node's children appear only when it (and its
-// whole ancestor spine) is expanded. A collapsed node is itself a leaf in the plot. The caller expands
-// only the focused node's ancestor spine, which keeps the root layer a short, readable column however
-// deep/bushy the real tree is (the y-extent of a point-per-leaf tree is otherwise = total leaf count).
-// Gaps track the node box: a node is TWO rows (title + editor/last-edited line) and a touch wider for
-// longer titles, so X_GAP/Y_GAP keep rows from touching.
+// @@@ tidy-tree layout, drill-down - left->right: depth sets the column (x). TOP-DOWN: each node takes
+// exactly ONE row in its own column, and an expanded node's children are an evenly-spaced block CENTRED on
+// the parent's row, sized only by that node's OWN child count. So switching focus within a column never
+// moves that column — only the deeper column (the newly-focused node's children) appears, centred on it.
+// This deliberately replaces the bottom-up centroid model (leaves stacked into ONE global row counter,
+// parents at their kids' midpoint), under which a deep expansion's leaf count spread the SHALLOW siblings
+// apart. `expanded` is the focused node's ancestor SPINE (the caller passes exactly that), so there is one
+// expanded node per column and sibling children-blocks never collide; every other subtree is a collapsed
+// leaf tile, which keeps the root layer a short column however deep/bushy the real tree is. Gaps track the
+// node box: a node is TWO rows (title + editor/last-edited line) and a touch wider for longer titles, so
+// X_GAP/Y_GAP keep rows from touching.
 export const X_GAP = 280, Y_GAP = 54
 export function layout(nodes, expanded) {
   const kids = {}
   nodes.forEach((n) => { if (n.parent) (kids[n.parent] ??= []).push(n.id) })
   const pos = {}
-  let row = 0
-  const place = (id, depth) => {
-    const cs = expanded.has(id) ? (kids[id] || []) : []
-    let y
-    if (cs.length === 0) { y = row * Y_GAP; row++ }
-    else { const ys = cs.map((c) => place(c, depth + 1)); y = (ys[0] + ys[ys.length - 1]) / 2 }
+  const place = (id, depth, y) => {
     pos[id] = { x: depth * X_GAP, y }
-    return y
+    const cs = expanded.has(id) ? (kids[id] || []) : []
+    if (!cs.length) return
+    const top = y - ((cs.length - 1) / 2) * Y_GAP   // children block centred on the parent's row
+    cs.forEach((c, i) => place(c, depth + 1, top + i * Y_GAP))
   }
-  nodes.filter((n) => !n.parent).forEach((r) => place(r.id, 0))
+  nodes.filter((n) => !n.parent).forEach((r, i) => place(r.id, 0, i * Y_GAP))
   return pos
 }
 

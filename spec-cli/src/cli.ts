@@ -115,7 +115,7 @@ Specs / graph
   forge <sub>           trace a forge's issues/PRs onto spec nodes (read-only): links | eval-pending [--host github] [--node <id>] [--json]
   yatsu <sub>           measure a node's scenarios and keep score: scan | eval [.|<node>] [--scenario N] (--pass|--fail|--note T) [--image P|--result P|-] | show [.|<node>] [--json] | clean [--keep-latest|--all]
   review <SEL>          manager cockpit: review a session (ahead·merge-base diff·gates·proposal)  [--json]
-  review proof <SEL>    render the session's proof of work — self-contained HTML (diff·measured yatsu loss·gates)  [--open|--out P|--json]  ·  --scaffold (in a worktree) seeds a fillable .session/proof.md
+  review proof <SEL>    render the session's proof of work — self-contained HTML, fully derived (diff·measured yatsu loss·gates)  [--open|--out P|--json]
   merge <SEL>           manager cockpit: gated atomic merge into main (re-checks gates, then closes)  [--keep]
 
 Sessions
@@ -192,23 +192,11 @@ if (cmd === 'serve') {
   await specInit(positionals(3)[0])
 } else if (cmd === 'review' && positionals(3)[0] === 'proof') {
   // @@@ review proof - render a session's PROOF OF WORK ([[review-proof]]): a self-contained HTML document
-  // the backend builds (the merge-base diff + the measured yatsu loss with its evidence + the gates, under
-  // the agent's authored claim). This is a thin backend CLIENT — it fetches the rendered bytes and writes or
-  // opens them, so it works against a REMOTE backend unchanged. `--scaffold` is the one LOCAL act: drop a
-  // fillable `.session/proof.md` into the cwd worktree (the lenient schema the agent enriches the proof with).
-  if (has('scaffold')) {
-    const { writeFileSync, existsSync, mkdirSync } = await import('node:fs')
-    const { dirname } = await import('node:path')
-    const { PROOF_TEMPLATE, manifestPath } = await import('../../spec-yatsu/src/proof.js')
-    const p = manifestPath(process.cwd())
-    if (existsSync(p) && !has('force')) { console.error(`proof manifest already exists: ${p} (use --force to overwrite)`); process.exit(1) }
-    mkdirSync(dirname(p), { recursive: true })
-    writeFileSync(p, PROOF_TEMPLATE)
-    console.log(`wrote proof scaffold → ${p}\nfill it in, then it rides your next \`spex review proof\` (delete it to fall back to your proposal note)`)
-    process.exit(0)
-  }
+  // the backend builds FULLY DERIVED (the merge-base diff + the measured yatsu loss with its evidence + the
+  // gates) — no agent input, generated on the fly. This is a thin backend CLIENT — it fetches the rendered
+  // bytes and writes or opens them, so it works against a REMOTE backend unchanged.
   const sel = positionals(3)[1]
-  if (!sel) { console.error('usage: spex review proof <selector> [--open | --out <path> | --json]   (or `--scaffold` inside a worktree)'); process.exit(2) }
+  if (!sel) { console.error('usage: spex review proof <selector> [--open | --out <path> | --json]'); process.exit(2) }
   const id = await resolveSelectorOrExit(sel)
   const { clientProof } = await import('./client.js')
   const r = await clientProof(id, has('json'))
@@ -372,12 +360,7 @@ if (cmd === 'serve') {
   } else if (sub === 'done') {
     // sugar for awaiting; --propose merge|nothing|close, optional --note
     const p = (flag('propose') as any) || 'nothing'
-    const ok = s.markStateFromCwd('awaiting', { proposal: p, note: flag('note') })
-    // @@@ review-proof nudge - entering the review state (propose merge) is the moment to present the work as
-    // a PROOF ([[review-proof]]): point the agent at the schema it can fill so the human opens a real proof of
-    // work, not just a one-line note. Optional + agentic — the proof renders regardless; this only invites it.
-    const proofHint = ok && p === 'merge' ? `\n→ present it: \`spex review proof --scaffold\` then fill \`.session/proof.md\` — a proof of work (your yatsu evidence + the diff + the gates) the human opens on the dashboard.` : ''
-    console.log(ok ? `done (${p})${DECLARED}${proofHint}` : 'no .session in cwd')
+    console.log(s.markStateFromCwd('awaiting', { proposal: p, note: flag('note') }) ? `done (${p})${DECLARED}` : 'no .session in cwd')
   } else if (sub === 'park') {
     // sugar: the agent is waiting on a background task; it will self-resume (NOT idle/awaiting)
     console.log(s.markStateFromCwd('parked', { note: flag('note') }) ? `parked${DECLARED}` : 'no .session in cwd')

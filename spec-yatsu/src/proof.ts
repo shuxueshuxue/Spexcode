@@ -1,21 +1,18 @@
-import { existsSync, readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname } from 'node:path'
 import { git, repoRoot, driftIndex, type ReviewDiffFile } from '../../spec-cli/src/git.js'
 import { loadSpecs } from '../../spec-cli/src/specs.js'
-import { RUNTIME_DIR } from '../../spec-cli/src/layout.js'
 import { reviewPayload } from '../../spec-cli/src/sessions.js'
 import { evalTimeline, evalContext, readBlobByHash, type EvalEntry } from './evaltab.js'
 import { isUiPath } from './cli.js'
 
-// @@@ review proof - the agent's REVIEW STATE, marshaled. When a session proposes merge, this is the engine
-// that turns its standing claim into a self-contained, beautiful PROOF OF WORK: the optimizer presenting its
-// measured loss at the moment a human decides. It JOINS three things the system already knows —
-// [[manager-cockpit]]'s reviewPayload (the diff + the merge gates), each changed node's [[yatsu-eval-tab]]
-// timeline (the measured loss + its evidence), and the agent's thin `.session/proof.md` manifest (an
-// authored headline + narrative) — and renders ONE HTML document with the yatsu evidence inlined as
-// data-URIs ([[yatsu-core]]'s cache), so the page stands alone as a plain file. It lives in spec-yatsu
-// because a proof IS the marshaled evaluation; it runs ONLY on the backend (the CLI and dashboard fetch the
-// bytes it renders — one engine, thin faces).
+// @@@ review proof - the review state, marshaled. When a session is in review, this is the engine that turns
+// what the system ALREADY KNOWS into a self-contained PROOF OF WORK — no agent authoring, nothing to fill in.
+// It JOINS two derived sources: [[manager-cockpit]]'s reviewPayload (the merge-base diff + the merge gates)
+// and each changed node's [[yatsu-eval-tab]] timeline (the measured loss + its evidence), and renders ONE HTML
+// document with the yatsu evidence inlined as data-URIs ([[yatsu-core]]'s cache) so the page stands alone as a
+// plain file. Because it is FULLY DERIVED it can never go stale and costs the agent nothing — it is generated
+// on the fly each time it is opened. It lives in spec-yatsu because a proof IS the marshaled evaluation; it
+// runs ONLY on the backend (the CLI and dashboard fetch the bytes it renders — one engine, thin faces).
 
 // ---- the model ----
 
@@ -61,9 +58,7 @@ export type ProofModel = {
   id: string
   node: string | null
   branch: string | null
-  claim: string
-  narrativeHtml: string          // rendered from the manifest's markdown body ('' when none authored)
-  hasManifest: boolean
+  title: string                  // DERIVED headline (the node, else the branch) — no agent-authored claim
   generatedAt: string
   ahead: number
   dirtyNonRuntime: number
@@ -73,10 +68,10 @@ export type ProofModel = {
   otherFiles: ReviewDiffFile[]   // changed files no spec node claims
 }
 
-// @@@ buildProofModel - assemble the proof for one session. reviewPayload does the cockpit reads (diff +
-// gates + the standing proposal/note); we map its diff onto spec nodes, fold each node's eval timeline (the
-// SAME engine the eval tab rides), resolve the evidence bytes for inlining, and read the agent's manifest.
-// null when no session has that id (the route answers 404).
+// @@@ buildProofModel - assemble the proof for one session, FULLY DERIVED. reviewPayload does the cockpit
+// reads (the merge-base diff + the merge gates); we map its diff onto spec nodes, fold each node's eval
+// timeline (the SAME engine the eval tab rides), and resolve the evidence bytes for inlining. No manifest, no
+// agent input — the headline is derived from the node/branch. null when no session has that id (route → 404).
 export async function buildProofModel(id: string): Promise<ProofModel | null> {
   const payload = await reviewPayload(id)
   if (!payload) return null
@@ -99,7 +94,7 @@ export async function buildProofModel(id: string): Promise<ProofModel | null> {
     if (nid) { const arr = byNode.get(nid) ?? []; arr.push(f); byNode.set(nid, arr) }
     else otherFiles.push(f)
   }
-  // the session's primary node always appears, even if it has no file in the diff yet (a pure narrative).
+  // the session's primary node always appears, even if it has no file in the diff yet.
   if (payload.node && specById.has(payload.node) && !byNode.has(payload.node)) byNode.set(payload.node, [])
 
   const nodes: ProofNode[] = []
@@ -131,16 +126,15 @@ export async function buildProofModel(id: string): Promise<ProofModel | null> {
   // measured nodes first, then by amount changed — the strongest evidence and the biggest change lead.
   nodes.sort((a, b) => (b.readings.length - a.readings.length) || ((b.additions + b.deletions) - (a.additions + a.deletions)))
 
-  const manifest = wtPath ? parseManifest(readManifest(wtPath)) : { claim: null, narrative: '', present: false }
-  const claim = manifest.claim || payload.proposal.note || `Review proof — ${payload.node || payload.branch || id}`
+  // the headline is DERIVED — the node the session is on, else its branch, else the id. No agent claim.
+  const primary = payload.node && specById.has(payload.node) ? specById.get(payload.node)!.title : null
+  const title = primary || payload.node || payload.branch || id.slice(0, 8)
 
   return {
     id,
     node: payload.node,
     branch: payload.branch,
-    claim,
-    narrativeHtml: manifest.narrative ? mdToHtml(manifest.narrative) : '',
-    hasManifest: manifest.present,
+    title,
     generatedAt: new Date().toISOString(),
     ahead: payload.ahead,
     dirtyNonRuntime: payload.dirtyNonRuntime,
@@ -241,55 +235,11 @@ function codeClaims(code: string[], file: string): boolean {
   })
 }
 
-// ---- the agent's manifest (.session/proof.md) ----
-
-// the proof's scaffold — what `spex review proof --scaffold` drops into a worktree for the agent to fill.
-export const PROOF_TEMPLATE = `---
-claim: <one line — what this session delivers, the headline of your proof>
----
-
-<!-- The body is free markdown. Make the case that the work is correct, pointing at the
-     yatsu evidence the proof shows below it. Measure your nodes (spex yatsu eval) — the
-     evidence gallery is built from those readings. This file is optional; delete it to
-     fall back to your proposal note. -->
-
-## what & why
-
-## the proof
-`
-
-const MANIFEST_NAME = 'proof.md'
-// always the new runtime-dir layout (`.session/proof.md`) — the manifest is a NEW concept with no legacy
-// flat sidecar, so it adopts the folder unconditionally (unlike runtimePath's prompt/launch fallbacks).
-export const manifestPath = (wtDir: string) => join(wtDir, RUNTIME_DIR, MANIFEST_NAME)
-function readManifest(wtDir: string): string {
-  const p = manifestPath(wtDir)
-  return existsSync(p) ? readFileSync(p, 'utf8') : ''
-}
-
-// LENIENT by design (not the strict yatsu.md validator): pull an optional `claim` from the frontmatter and
-// take the rest as the free-markdown narrative. An empty string → no manifest (present:false).
-function parseManifest(src: string): { claim: string | null; narrative: string; present: boolean } {
-  if (!src.trim()) return { claim: null, narrative: '', present: false }
-  let claim: string | null = null
-  let body = src
-  const m = src.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/)
-  if (m) {
-    for (const line of m[1].split('\n')) {
-      const cm = line.match(/^\s*claim:\s*(.*)$/)
-      if (cm) { claim = cm[1].trim().replace(/^["']|["']$/g, '') || null }
-    }
-    body = m[2]
-  }
-  // drop HTML comments (the template's guidance) and trim.
-  const narrative = body.replace(/<!--[\s\S]*?-->/g, '').trim()
-  return { claim, narrative, present: true }
-}
-
 // ---- worktree resolution (no sessions.ts edit: read git's own worktree list) ----
 
-// the worktree path whose checked-out branch matches — so the backend can read that session's manifest
-// without findWorktree. `git worktree list --porcelain` emits `worktree <path>` then `branch refs/heads/<b>`.
+// the worktree path whose checked-out branch matches — so the eval context is rooted at the SESSION's
+// worktree (its readings + git freshness), not the backend's checkout. `git worktree list --porcelain` emits
+// `worktree <path>` then `branch refs/heads/<b>`.
 function worktreePathForBranch(branch: string | null): string | null {
   if (!branch) return null
   let out = ''
@@ -302,40 +252,13 @@ function worktreePathForBranch(branch: string | null): string | null {
   return null
 }
 
-// ---- a tiny, safe markdown → HTML for the narrative ----
+// ---- the renderer ----
 
+// escape interpolated text for HTML (the proof inlines derived data — file paths, scenarios, expected — so
+// every value is escaped; there is no agent-authored markdown to render).
 function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
-// inline rules applied AFTER escaping: `code`, **bold**, *italic*, [text](url) with a safe-scheme guard.
-function inline(s: string): string {
-  return esc(s)
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, t, u) => /^(https?:|\/|#)/.test(u) ? `<a href="${esc(u)}" target="_blank" rel="noopener">${t}</a>` : t)
-}
-// block-level: headings, unordered lists, and paragraphs separated by blank lines. Deliberately small.
-function mdToHtml(md: string): string {
-  const lines = md.split('\n')
-  const out: string[] = []
-  let para: string[] = [], list: string[] = []
-  const flushPara = () => { if (para.length) { out.push(`<p>${inline(para.join(' '))}</p>`); para = [] } }
-  const flushList = () => { if (list.length) { out.push(`<ul>${list.map((i) => `<li>${inline(i)}</li>`).join('')}</ul>`); list = [] } }
-  for (const raw of lines) {
-    const line = raw.replace(/\s+$/, '')
-    const h = line.match(/^(#{1,4})\s+(.*)$/)
-    const li = line.match(/^\s*[-*]\s+(.*)$/)
-    if (h) { flushPara(); flushList(); const lvl = Math.min(h[1].length + 1, 5); out.push(`<h${lvl}>${inline(h[2])}</h${lvl}>`) }
-    else if (li) { flushPara(); list.push(li[1]) }
-    else if (!line.trim()) { flushPara(); flushList() }
-    else { flushList(); para.push(line.trim()) }
-  }
-  flushPara(); flushList()
-  return out.join('\n')
-}
-
-// ---- the renderer ----
 
 const SCORE_GLYPH: Record<string, string> = { pass: '✓', fail: '✗', stalePass: '✓', staleFail: '✗', empty: '' }
 function scoreBadge(state: ScoreState, title?: string): string {
@@ -415,17 +338,16 @@ export function renderProofHtml(m: ProofModel): string {
 <html lang="en"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>proof · ${esc(m.claim)}</title>
+<title>proof · ${esc(m.title)}</title>
 <style>${STYLE}</style>
 </head><body>
 <main class="proof">
   <header class="masthead">
     <div class="eyebrow">SpexCode · review proof</div>
-    <h1 class="claim">${esc(m.claim)}</h1>
-    <div class="meta">session <code>${esc(idShort)}</code>${m.branch ? ` · <code>${esc(m.branch)}</code>` : ''}${m.node ? ` · node <code>${esc(m.node)}</code>` : ''} · ${m.nodes.length} node(s) · <span class="ts">${esc(m.generatedAt)}</span></div>
+    <h1 class="claim">${esc(m.title)}</h1>
+    <div class="meta">session <code>${esc(idShort)}</code>${m.branch ? ` · <code>${esc(m.branch)}</code>` : ''}${m.node ? ` · node <code>${esc(m.node)}</code>` : ''} · ${m.ahead} commit(s) · ${m.nodes.length} node(s) · <span class="ts">${esc(m.generatedAt)}</span></div>
     <div class="ribbon">${ribbon}</div>
   </header>
-  ${m.narrativeHtml ? `<section class="narrative">${m.narrativeHtml}</section>` : (m.hasManifest ? '' : `<section class="narrative muted">No proof narrative authored — this proof is derived from the diff, the measured loss, and the gates. The agent can enrich it: <code>spex review proof --scaffold</code> then fill <code>.session/proof.md</code>.</section>`)}
   <section class="evidence-section">
     <h2>Evidence — measured loss</h2>
     ${m.nodes.map(renderNode).join('')}
@@ -460,12 +382,6 @@ code{background:#0006;padding:.05em .35em;border-radius:4px;font-size:.88em;colo
 .chip.bad{color:var(--red);border-color:#3a1f1f}
 .chip.warn{color:var(--amber);border-color:#3a3320}
 h2{margin:42px 0 16px;font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);font-weight:700}
-.narrative{margin-top:26px;padding:22px 26px;border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:12px;background:var(--panel)}
-.narrative.muted{color:var(--dim);border-left-color:var(--grey);font-size:14px}
-.narrative h2{margin:18px 0 8px;font-size:13px;color:var(--accent);text-transform:none;letter-spacing:0}
-.narrative h3,.narrative h4{margin:14px 0 6px;color:#dbe6f2;font-size:15px}
-.narrative p{margin:10px 0}.narrative ul{margin:8px 0 8px 4px;padding-left:18px}.narrative li{margin:3px 0}
-.narrative a{color:var(--accent)}
 .node{margin:14px 0;padding:18px 20px;border:1px solid var(--line);border-radius:12px;background:var(--panel);border-left:3px solid hsl(var(--hue,210),55%,55%)}
 .node.other{border-left-color:var(--grey)}
 .nhead{display:flex;align-items:center;gap:10px;flex-wrap:wrap}

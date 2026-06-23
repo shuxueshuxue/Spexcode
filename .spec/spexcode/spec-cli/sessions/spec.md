@@ -2,7 +2,7 @@
 title: sessions
 status: active
 hue: 280
-desc: Durable worktree sessions — the subsystem overview; launch/state/dispatch/graph own the detail.
+desc: Durable worktree sessions — the subsystem overview; lifecycle/comms/injected-context own the detail.
 code:
   - spec-cli/src/board.ts
 ---
@@ -12,57 +12,44 @@ code:
 ## raw source
 
 A SpexCode **session** is a unit of work the dashboard and the CLI launch, drive, and retire through
-**one shared module** (the dashboard is a thin caller; `spex` is the CLI). The **worktree** is the
-durable thing, not the tmux process — a session survives a kill, a reboot, or a moved folder. The
-**agent writes its own state** and may only *propose* merge or close; a **human** makes those calls.
-Nothing auto-disappears, so a self-finished session stays findable, and the dashboard and the terminal
-are two faces of the **same** state.
+**one shared module** (the dashboard is a thin caller; `spex` is the CLI). The **worktree** is the durable
+thing, not the tmux process — a session survives a kill, a reboot, or a moved folder. The **agent writes
+its own state** and may only *propose* merge or close; a **human** makes those calls. Nothing
+auto-disappears, so a self-finished session stays findable, and the dashboard and the terminal are two
+faces of the **same** state.
 
 ## expanded spec
 
-The durable unit is the worktree: each carries an untracked `.session` file (`node` / `session`-id /
-`status` / `proposal` / `note` / `merges`) plus a `.session-prompt` sidecar holding the originating
-launch prompt. There is no in-memory map — the list is read from the worktrees every time, so state
-survives a backend restart. `sessions.ts` holds the machine and is the only writer of `.session`.
+State lives on disk, not in memory: each worktree carries its own runtime record, so the session list is
+read from the worktrees every time and survives a backend restart ([[lifecycle]] owns the worktree, its
+state machine, and the `.session/` layout). The list is ordered by **session birth, oldest first** — by the
+worktree directory's birthtime, the one creation anchor that outlives every state rewrite — so each session
+keeps a permanent slot, new ones appending at the end: one spatial map shared by the dashboard window, the
+session tabs, and `spex ls`, instead of git's arbitrary alphabetical order.
 
-The list is ordered by **session birth, oldest first** — by the **worktree directory's** birthtime, the
-one stable creation anchor (`git worktree add` makes it once and it outlives every `.session` rewrite,
-which resets that file's own birthtime). Git's raw enumeration is alphabetical by path — arbitrary, and
-reshuffled as sessions come and go — so birth order instead pins every session to a permanent slot, new ones
-appending at the end: one spatial map shared by the dashboard window, the session tabs, and `spex ls`.
+The subsystem divides into governed concerns:
 
-The subsystem divides into governed concerns, each its own child node:
+- **[[lifecycle]]** — a session's existence: [[launch]] (bring a worker up), [[state]] (the agent-authored
+  status machine + liveness), [[runtime]] (the ignored `.session/` scratch dir).
+- **[[comms]]** — the inter-agent mesh over one rendezvous socket: [[dispatch]] (deliver a prompt; merge as
+  a dispatched prompt), [[agent-reply-channel]] (reply hint), [[comms-edge]] (recorded talk + graph edge),
+  [[graph]] (the live watch network).
+- **[[injected-context]]** — what a launched session is fed to start spec-aware: [[spec-pointer]] (the live
+  spec path, never the body) and [[spec-first]] (the read-before-write nudge).
+- **[[session-selectors]]** — one selector grammar (id · prefix · node · branch) so every command names the
+  same sessions.
+- **[[live-view]]** — the dashboard's live terminal: one tmux client per session, viewer subscriptions that
+  outlive it, and the warm-bridge prewarm.
+- **[[remote-client]]** — the `spex` CLI as a thin backend client, so one install monitors any machine's
+  sessions and the backend stays the single tmux actor.
 
-- **[[launch]]** — bringing a worker up: the `reclaude` wrapper, the per-session rendezvous socket, the
-  non-truncating system-prompt + launch-prompt delivery, `CLAUDE.md` isolation, and the concurrency
-  cap with its durable launch queue.
-- **[[state]]** — the lifecycle state machine: the declared statuses, the per-session `Stop` /
-  `PreToolUse` / `Notification` hooks that gate them, AskUserQuestion → `asking`, and socket-based
-  liveness via `reconcile`.
-- **[[dispatch]]** — delivering a prompt to a live agent over its rendezvous socket (socket-only,
-  fail-loud), and the merge intent that rides that path.
-- **[[agent-reply-channel]]** — making a dispatched message bidirectional: stamp the sender + a reply hint
-  into the delivered text so the recipient agent can reply back over the same send.
-- **[[graph]]** — the live monitor network (edge A→B iff A runs `spex watch B`) and the `spex watch`
-  lifecycle event stream.
-- **[[live-view]]** — the dashboard's live terminal: one real tmux client per session, viewer
-  subscriptions that outlive the client so a pane never freezes, and the warm-bridge prewarm.
-- **[[remote-client]]** — the `spex` CLI as a thin backend client: its read/control verbs route through the
-  backend (so the backend is the single tmux actor, and `SPEXCODE_API_URL` points at any machine's sessions),
-  while state producers stay local.
+### Surface
 
-### Surfaces
-
-One surface stays with the overview. `buildBoard` (`board.ts`) assembles the dashboard's runtime state —
-merged tree + per-worktree overlay + the session list, plus the backend's own project identity (the
-browser-tab name) — in one module, served identically at HTTP `/api/board` and `spex board` (the frontend
-only adds x/y pixels). An added (ghost) node nests into the tree by directory ancestry — including
-ancestry among the *other* nodes the same worktree adds — so a worktree introducing a whole new subtree
-at once (e.g. an `extract` scaffold of a fresh root) renders as one tree under its single new root, not a
-flat scatter of one root per node. The session's live pane is read as text by
-`captureSessionResult` behind `GET …/capture` — failure (unknown / offline / capture-error) kept distinct
-from an empty pane — which `spex capture` reads as a backend client (see [[remote-client]]).
-
-`buildBoard` is also the shared hub where sibling features fold their own per-node sidecars onto these
-nodes ([[dashboard-issues]] issues, [[yatsu-eval-tab]] evals); this overview owns the tree / overlay /
-session-list / identity assembly, so such a fold is that feature's stake, not `sessions`' drift.
+One surface stays with the overview. `buildBoard` (`board.ts`) assembles the dashboard's runtime state — the
+merged spec tree, the per-worktree overlay (a ghost/added node nests by directory ancestry, so a worktree
+introducing a whole new subtree renders as one tree, not a flat scatter), the session list, and the
+backend's own project identity (the browser-tab name) — in one module, served identically at HTTP
+`/api/board` and `spex board` (the frontend only adds x/y pixels). It is also the shared hub where sibling
+features fold their per-node sidecars onto these nodes ([[dashboard-issues]] issues, [[yatsu-eval-tab]]
+evals) and behind which the live pane is read as text at `…/capture` (which [[remote-client]]'s `spex
+capture` reads) — so such a fold is that feature's stake, not `sessions`' drift.

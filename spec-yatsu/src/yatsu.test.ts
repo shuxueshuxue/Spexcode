@@ -95,6 +95,24 @@ scenarios:
   assert.equal(sc[3].code, undefined)   // absent → inherits the node's whole code: list, not []
 })
 
+test('parseScenarios: code as a YAML block sequence (like spec.md), not just inline', () => {
+  const sc = parseScenarios(`---
+scenarios:
+  - name: block
+    description: a
+    expected: b
+    code:
+      - src/x.ts
+      - src/y.ts
+  - name: after
+    description: a
+    expected: b
+---`)
+  assert.deepEqual(sc[0].code, ['src/x.ts', 'src/y.ts'])   // block-sequence items collected, not dropped
+  assert.equal(sc[1].name, 'after')                        // the next scenario item still parses
+  assert.equal(sc[1].code, undefined)
+})
+
 test('validateScenarios: `code` is an allowed optional field, not an unknown-key error', () => {
   assert.deepEqual(validateScenarios(`---
 scenarios:

@@ -50,6 +50,12 @@ result that is zero loss. Frontend scenarios are measured by looking (YATU) — 
 `spex yatsu eval <node> --image <png> --pass`. Backend nodes don't need one yet; run `spex yatsu scan` to
 list the frontend nodes still uncovered.
 
+**Extract incrementally — don't plan the whole tree before writing.** For a large area (hundreds of files),
+don't enumerate the whole partition up front or script a generator to emit it at once — that burns context
+before a node lands and loses everything to one interruption. Fix the top-level cut and commit it, then take
+ONE subtree at a time (write the leaf, list its files, lint, COMMIT) before the next — never holding more than
+one subtree uncommitted, so progress survives context limits.
+
 Confirm `spexcode.json`'s `governedRoots` points at the real source dirs first — lint reads silently empty
 otherwise. Commit one node per commit (`spec: <id> — extract from <area>`) with a `Session:` trailer, and
 run `spex lint` after each: it must reach 0 errors, 0 coverage warnings, 0 altitude warnings.

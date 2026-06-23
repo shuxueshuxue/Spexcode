@@ -105,8 +105,7 @@ function IssuePopover({ issues, t }) {
 // The tree flows left->right, so handles are on the sides. When a worktree has a PENDING change to this
 // node (from /api/board overlays), it carries `overlays`: the node takes the author session's colour
 // (dashed ring = uncommitted, solid = committed) and shows op glyphs. An `added` node not yet on main
-// renders as a translucent ghost. When the node's author session is LIVE (App decorates `data.link`), it
-// stamps a subtle ⏎ in that session's colour — clicking the node (or Enter) opens that session.
+// renders as a translucent ghost.
 export default function SpecNode({ data, selected }) {
   const t = useT()
   const s = STATUS[data.status] || STATUS.pending
@@ -131,10 +130,6 @@ export default function SpecNode({ data, selected }) {
           {data.status === 'active' && <span className="pulse" style={{ background: s.color }} />}
         </span>
         <span className="node-title">{data.title}</span>
-        {data.link && (
-          <span className="node-session" style={{ color: data.link.color }}
-            title={t('specNode.liveSession', { status: t(`status.${data.link.status}`) })}>⏎</span>
-        )}
         {data.drift > 0 && (
           <span className="drift-badge" title={(data.driftFiles || []).map((d) => `${d.file}: ${t('specNode.driftAhead', { n: d.behind })}`).join('\n')}>
             ⚠{data.drift}

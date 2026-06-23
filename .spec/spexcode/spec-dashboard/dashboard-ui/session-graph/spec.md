@@ -25,11 +25,12 @@ since the graph and the consoles are sibling tabs of one board, simply switches 
 ## expanded spec
 
 Isolation is the governing principle: the view runs in its **own** ReactFlow context (separate camera,
-selection, store) and reads its **own** data (`GET /api/sessions/graph`, see [[sessions]]), so even sitting
-in the console's content pane it cannot disturb the spec board or any other ReactFlow. It **fills the pane**
-(absolute over a positioned `.si-content`) and opens **already framed** — it holds an empty pane until the
-first graph arrives, then `fitView` centres the web within the pane, so the first paint is never an empty
-screen that pans in a beat later.
+selection, store), so even sitting in the console's content pane it cannot disturb the spec board or any
+other ReactFlow. Its **nodes are the shared preloaded session list** the console already holds (the same
+`sessions` every surface reads); only the **edges** are its own poll (`GET /api/sessions/graph`, see
+[[sessions]]). So it **fills the pane** and opens **instant and already framed** — the nodes are there on the
+first render, never a cold fetch to block behind, so `fitView` centres the web in that same paint, not an
+empty screen panning in a beat later.
 
 The **console owns the arrows and Esc** ([[keyboard-nav]], [[session-console]]); what is **left** to this
 view is the in-graph walk. You reach the tab from an **empty** New Session with **→** and leave it with **←**
@@ -37,17 +38,18 @@ view is the in-graph walk. You reach the tab from an **empty** New Session with 
 Esc closes the view's `?` legend first, else the console. So the graph's cursor is **vim-only**: **hjkl** move
 it to the nearest node inside a 45° cone in that direction (the camera following), and **⏎** opens the focused
 session — the twin of a click, which **switches to that session's console tab**. The view's own keys keep the
-board's discipline: the **same discreet `?` help affordance the board uses** opens a small legend of its keymap
-(move · open · ← leave · drag-to-monitor) and edge vocabulary, instead of a standing wall of text.
+board's discipline: the **same discreet `?` help affordance the board uses** opens a small legend of its
+keymap and edge vocabulary, instead of a standing wall of text.
 
 Each node is a session, drawn with the **same** seed-to-hue colour and avatar the rest of the dashboard keys
 off its session id ([[node-graph]]), so a face here matches that session everywhere. Layout is a **network**,
 not a tree: sessions sit on a radial ring so the directed edges read as a web of relationships.
 
-The edges are **derived from live watches, never user-drawn** (see [[sessions]]): the view only **polls**, so
-a watch starting or stopping makes its arrow appear or vanish on its own, each drawn in the **watcher's** hue;
-a global (`--all`) watcher shows arrows to every node. The backend derives edges only between live sessions,
-so closing a session removes its node and arrows together — the graph never shows a dangling arrow.
+The edges are **derived from live watches, never user-drawn** (see [[sessions]]): the view only **polls**,
+so a watch starting or stopping makes its arrow appear or vanish on its own, each drawn in the
+**watcher's** hue; a global (`--all`) watcher shows arrows to every node. The backend derives edges only
+between live sessions, so closing a session removes its node and arrows together — the graph never shows a
+dangling arrow.
 
 Asking is the exception, faithful to the no-store rule. Dragging A→B **dispatches a prompt to agent A** (over
 the same `/keys` channel the console uses) telling it to monitor B (`spex watch B`); **no subscription is

@@ -716,11 +716,13 @@ export default function SessionInterface({ sessions, specs = [], project, focusN
 
         <section className={active === 'new' ? 'si-content is-new' : active === 'graph' ? 'si-content is-graph' : 'si-content is-session'}>
           {/* @@@ relationship graph - mounted only while its tab is active AND the console is open, so it
-              doesn't poll in the background; it remounts (one fetch, instantly re-framed) on reselect. onOpen
-              switches the console to the clicked session's tab — the graph's "open" is a tab switch, not a
-              cross-surface jump. Its legend is lifted here (graphLegend) for Esc precedence (see key router). */}
+              doesn't poll edges in the background; it remounts (instantly framed) on reselect. Its NODES are
+              the preloaded `sessions` the console already holds — handed straight in, so reselect frames the
+              web with no cold fetch (only edges poll). onOpen switches the console to the clicked session's
+              tab — the graph's "open" is a tab switch, not a cross-surface jump. Its legend is lifted here
+              (graphLegend) for Esc precedence (see key router). */}
           {open && active === 'graph' && (
-            <SessionGraph onOpen={(id) => setSel(id)} active legend={graphLegend} setLegend={setGraphLegend} />
+            <SessionGraph sessions={sessions} onOpen={(id) => setSel(id)} active legend={graphLegend} setLegend={setGraphLegend} />
           )}
           {active === 'new' && (
             <div className="si-new-center">

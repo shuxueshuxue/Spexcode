@@ -21,11 +21,17 @@ reversible, and nothing auto-disappears.
 
 The `.session` file is the source of truth (`readSessionFile` / `writeSessionFile`; never an in-memory
 map). Statuses: `active` (working / undeclared this turn), `awaiting` (a proposal — `merge`→review,
-`nothing`→done, `close`→close-pending), `blocked` (on a background task; self-resumes), `error` (a turn
-died), `needs-input` (pausing to ask the **human**), `queued` (held below the cap — [[launch]]), and
-`idle` (stopped at the prompt without declaring). `merges` is a metadata count, not a state.
+`nothing`→done, `close`→close-pending), `parked` (waiting on a background task; **self-resumes** — nothing
+for a human to do), `error` (a turn died), `asking` (stopped and **needs the human** — a question, or the
+stop-gate's auto-default for an undeclared/uncommitted stop), `queued` (held below the cap — [[launch]]),
+and `idle` (stopped at the prompt without declaring). `merges` is a metadata count, not a state.
 
-**Authored states win over liveness.** `reconcile` maps `awaiting`/`blocked`/`error`/`needs-input`
+`parked` and `asking` split what a single over-loaded `blocked` used to conflate: a self-resuming
+background wait (leave it alone) versus a dead stop that won't move until a human nudges it (act on it).
+They carry distinct faces, so the board never reads "stuck, needs me" as "fine, self-resuming," or the
+reverse — and a still-going `parked` agent is never mistaken for one with something to act on.
+
+**Authored states win over liveness.** `reconcile` maps `awaiting`/`parked`/`error`/`asking`
 straight to their label; only `active`/`idle` defer to a liveness check, on the **rendezvous socket,
 never the pane's foreground command** (see [[launch]]). A session is **offline** only when genuinely dead
 (no tmux, or its socket never opened); a still-booting one reads the transient **`starting`** instead.
@@ -35,19 +41,20 @@ state**, so `markIdleFromCwd` is **active-only guarded** and can never clobber a
 ### Hooks (injected per session via `--settings`, polluting nothing)
 
 - **`UserPromptSubmit` + `PreToolUse` → one `mark-active` hook** reads `tool_name`: it writes
-  **`needs-input`** (the question → the note) on **AskUserQuestion**, else **`active`** — the freshness
-  signal that also flips `idle`/`needs-input` back the moment work resumes.
+  **`asking`** (the question → the note) on **AskUserQuestion**, else **`active`** — the freshness
+  signal that also flips `idle`/`asking` back the moment work resumes.
 - **`Stop` → the gate**, two jobs each with a hard loop-break. A **commit gate** rejects a done/merge
   proposal while the branch has uncommitted changes or is 0 ahead of the base branch — ignoring the runtime
   files SpexCode writes into the worktree (its `.session*` sidecars, the injected hooks/launch scripts, the
   hidden `CLAUDE.md`); propose-**close** is exempt. A **declare gate** blocks a stop while still `active`,
-  auto-defaulting on the forced continuation (honest `blocked`, or `awaiting`/`nothing` when committed).
+  auto-defaulting on the forced continuation to **`asking`** (the stop needs a human — it never fakes a
+  self-resuming `parked`), or to `awaiting`/`nothing` only when the work is actually committed and ahead.
 - **`StopFailure` → `error`**; **`Notification(idle_prompt)` → `idle`** (keys on `notification_type`).
   All Stop-gate git runs through `git.ts`'s `git()` so an exported `GIT_DIR` can't misdirect discovery.
 
-`needs-input` has **two** deterministic writers (neither inferred nor guarded) — the `PreToolUse`
-capture and the agent's own `spex session ask --note` — and resumes only on a human prompt, unlike
-self-resuming `blocked`; `idle` is the inferred opposite, a stop with no declaration at all. Surfacing a
-`needs-input` is the manager's job via [[graph]]'s `spex watch`. The lifecycle writers
-(`markStateFromCwd` and the `markDone`/`markError`/`markIdle` variants) live in `sessions.ts`; the `spex
-session done|ask|block|idle` commands and the `spex ls` table are state's only stake in the shared `cli.ts` hub. A successful `done`/`ask`/`block` echoes a one-line note that the declaration is recorded and seen in the dashboard, and that the next tool call flips this worktree back to `active` (the `mark-active` hook) — stated as a fact, not an order, so an agent inclined to re-read `.session` understands why that read shows `active` and that the dashboard, not a follow-up tool call, is where the proposal lands.
+`asking` has **two** deterministic writers (neither inferred nor guarded) — the `PreToolUse` capture and
+the agent's own `spex session ask --note` — and resumes only on a human prompt, unlike self-resuming
+`parked`; `idle` is the inferred opposite, a stop with no declaration at all. Surfacing an `asking` is the
+manager's job via [[graph]]'s `spex watch`. The lifecycle writers (`markStateFromCwd` and the
+`markDone`/`markError`/`markIdle` variants) live in `sessions.ts`; the `spex session done|ask|park|idle`
+commands and the `spex ls` table are state's only stake in the shared `cli.ts` hub. A successful `done`/`ask`/`park` echoes a one-line note that the declaration is recorded and seen in the dashboard, and that the next tool call flips this worktree back to `active` (the `mark-active` hook) — stated as a fact, not an order, so an agent inclined to re-read `.session` understands why that read shows `active` and that the dashboard, not a follow-up tool call, is where the proposal lands.

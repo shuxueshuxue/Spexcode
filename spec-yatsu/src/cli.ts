@@ -2,6 +2,7 @@ import { readFileSync, existsSync } from 'node:fs'
 import { join, relative, dirname } from 'node:path'
 import { repoRoot, headSha, driftIndex, stagedFiles, git } from '../../spec-cli/src/git.js'
 import { loadSpecs } from '../../spec-cli/src/specs.js'
+import { mainBranch } from '../../spec-cli/src/layout.js'
 import { yatsuNodes, type YatsuNode } from './yatsu.js'
 import { readReadings, appendReading, latestPerScenario, type Reading, type Verdict } from './sidecar.js'
 import { staleAxes } from './freshness.js'
@@ -50,39 +51,87 @@ function currentNodeId(root: string): string | null {
   return null
 }
 
-// @@@ scan - status: which SCORES are stale or missing — the loss signal's blind spots — mirroring `spex
-// lint`'s code-drift output (the `•` glyph + one line per finding). A "score" is a scenario's LATEST
-// reading, so scan reports exactly the (node, scenario) pairs `spex yatsu eval` would (re)measure: a
-// scenario whose latest reading went stale (a governed code file, its scenario, or the evaluator moved
-// since its codeSha), OR one with no reading at all (missing). Read-only; exits 0 (a status report, like
-// drift's advisory warn) — the proactive Stop gate ([[yatsu-proactive]]) reads these finding lines, never
-// the exit code. The forge `needs-yatsu-eval` half of the spec's scan is a separate node — not the core's.
-async function scan(): Promise<number> {
+// @@@ ui surface - a node has a MEASURABLE frontend surface when its governed code includes a UI file: a
+// component/style (.jsx/.tsx/.vue/.svelte/.css) or anything in the dashboard package. Such a node CAN be
+// measured (browser YATU) so having NO yatsu.md is a real blind spot — an obvious frontend change with no
+// loss signal. A pure-backend node legitimately has none (backend yatsu is still future — see [[spec-yatsu]]).
+const UI_FILE = /\.(jsx|tsx|vue|svelte|css)$/
+export const isUiPath = (p: string) => UI_FILE.test(p) || p.includes('spec-dashboard/')
+
+// @@@ changedSinceBase - every repo path THIS branch changed since it forked from the main branch
+// (committed OR still in the working tree, plus new untracked files), so `scan --changed` can scope the
+// loss-signal nudge to the nodes this agent actually touched — never nagging it about a score that went
+// stale in a node it never opened. merge-base anchored, so the main branch advancing isn't read as this
+// branch's change. Best-effort: a git error (detached, no base) yields ∅ → `--changed` scan stays silent.
+function changedSinceBase(root: string): Set<string> {
+  const out = new Set<string>()
+  const add = (s: string) => { for (const l of s.split('\n')) { const t = l.trim(); if (t) out.add(t) } }
+  try {
+    const base = git(['-C', root, 'merge-base', mainBranch(), 'HEAD']).trim()
+    if (base) add(git(['-C', root, '-c', 'core.quotePath=false', 'diff', '--name-only', base]))
+    add(git(['-C', root, '-c', 'core.quotePath=false', 'ls-files', '--others', '--exclude-standard']))
+  } catch { /* no base → empty set */ }
+  return out
+}
+
+// a node is "changed" if the branch touched its node dir (spec.md / yatsu.md / sidecar all live there) or
+// any governed code path — matched as an exact file, a directory prefix, or a `*` glob.
+export function nodeChanged(dirRel: string, codeFiles: string[], changed: Set<string>): boolean {
+  for (const c of changed) if (c === dirRel || c.startsWith(dirRel + '/')) return true
+  return codeFiles.some((cf) => {
+    if (changed.has(cf)) return true
+    const dir = cf.replace(/\/+$/, '') + '/'
+    const re = cf.includes('*') ? new RegExp('^' + cf.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$') : null
+    for (const c of changed) { if (c.startsWith(dir)) return true; if (re && re.test(c)) return true }
+    return false
+  })
+}
+
+// @@@ scan - the loss signal's BLIND SPOTS, mirroring `spex lint`'s code-drift output (the `•` glyph + one
+// line per finding). Three classes: a node WITH a yatsu.md whose scenario's latest reading went stale (a
+// governed code file, the scenario, or the evaluator moved since its codeSha) → `yatsu-drift`; a scenario
+// with no reading at all → `yatsu-missing`; a frontend node (UI in its `code:`) with NO yatsu.md → an
+// `yatsu-uncovered` loss function that was never written. `--changed` scopes all three to the nodes THIS
+// branch touched (the proactive Stop gate's view — see [[yatsu-proactive]]); plain scan is the whole-repo
+// coverage report. Read-only; exits 0 (a status report) — the gate reads the finding lines, never the code.
+async function scan(args: string[] = []): Promise<number> {
   const root = repoRoot()
+  const changedOnly = has(args, 'changed')
+  const changed = changedOnly ? changedSinceBase(root) : null
   const idx = await driftIndex(root)
-  const nodes = await gatherNodes(root)
-  let flaggedNodes = 0, staleScores = 0, missingScores = 0
-  for (const n of nodes) {
-    const latest = latestPerScenario(readReadings(n.sidecarPath))
+  const specs = await loadSpecs()
+  const yByDir = new Map(yatsuNodes(root).map((n) => [relative(root, n.dir), n]))
+  let flaggedNodes = 0, staleScores = 0, missingScores = 0, uncovered = 0
+  for (const s of specs) {
+    const dirRel = dirname(s.path)
+    if (changed && !nodeChanged(dirRel, s.code, changed)) continue
+    const y = yByDir.get(dirRel)
     const findings: string[] = []
-    for (const sc of n.scenarios) {
-      const r = latest.get(sc.name)
-      if (!r) {
-        missingScores++
-        findings.push(`  • yatsu-missing: '${n.id}' scenario '${sc.name}' has no reading yet — measure with \`spex yatsu eval ${n.id}\``)
-        continue
+    if (y) {
+      const latest = latestPerScenario(readReadings(y.sidecarPath))
+      for (const sc of y.scenarios) {
+        const r = latest.get(sc.name)
+        if (!r) {
+          missingScores++
+          findings.push(`  • yatsu-missing: '${s.id}' scenario '${sc.name}' has no reading yet — measure with \`spex yatsu eval ${s.id}\``)
+          continue
+        }
+        const axes = staleAxes(r, s.code, y.yatsuPath, idx)
+        if (axes.length) {
+          staleScores++
+          findings.push(`  • yatsu-drift: '${s.id}' scenario '${sc.name}' is stale (${axes.join(', ')} moved since ${r.codeSha.slice(0, 7)}) — re-measure with \`spex yatsu eval ${s.id}\``)
+        }
       }
-      const axes = staleAxes(r, n.codeFiles, n.yatsuPath, idx)
-      if (axes.length) {
-        staleScores++
-        findings.push(`  • yatsu-drift: '${n.id}' scenario '${sc.name}' is stale (${axes.join(', ')} moved since ${r.codeSha.slice(0, 7)}) — re-measure with \`spex yatsu eval ${n.id}\``)
-      }
+    } else if (s.code.some(isUiPath)) {
+      uncovered++
+      findings.push(`  • yatsu-uncovered: '${s.id}' governs frontend code but has no yatsu.md — give it a scenario (description + expected) so its loss can be measured`)
     }
     if (!findings.length) continue
     flaggedNodes++
     for (const f of findings) console.error(f)
   }
-  console.error(`spex yatsu scan: ${flaggedNodes} node(s) with a stale or missing score (${staleScores} stale, ${missingScores} missing)`)
+  const scope = changedOnly ? ' --changed' : ''
+  console.error(`spex yatsu scan${scope}: ${flaggedNodes} node(s) flagged (${staleScores} stale, ${missingScores} missing, ${uncovered} uncovered)`)
   return 0
 }
 
@@ -232,11 +281,11 @@ export function formatTimeline(tl: EvalTimeline): string {
 // after `yatsu`. Routes to a verb and returns the process exit code (the route just exits on it).
 export async function runYatsu(args: string[]): Promise<number> {
   const sub = args[0]
-  if (sub === 'scan') return scan()
+  if (sub === 'scan') return scan(args.slice(1))
   if (sub === 'eval') return evalCmd(args.slice(1))
   if (sub === 'clean') return clean(args.slice(1))
   if (sub === 'show') return show(args.slice(1))
   if (sub === 'check-staged') return checkStaged()
-  console.error('spex yatsu: scan | eval [.|<node>] [--scenario <name>] (--pass|--fail|--note <text>) [--image <path>|--result <path|->] | show [.|<node>] [--json] | clean [--keep-latest|--all]')
+  console.error('spex yatsu: scan [--changed] | eval [.|<node>] [--scenario <name>] (--pass|--fail|--note <text>) [--image <path>|--result <path|->] | show [.|<node>] [--json] | clean [--keep-latest|--all]')
   return 2
 }

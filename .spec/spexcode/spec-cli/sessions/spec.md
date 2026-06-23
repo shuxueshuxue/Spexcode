@@ -25,13 +25,11 @@ The durable unit is the worktree: each carries an untracked `.session` file (`no
 launch prompt. There is no in-memory map — the list is read from the worktrees every time, so state
 survives a backend restart. `sessions.ts` holds the machine and is the only writer of `.session`.
 
-The list is ordered by **session birth, oldest first** — derived from the **worktree directory's**
-birthtime. The directory is created once by `git worktree add` and lives for the session's whole life, so
-its birthtime is the one stable creation anchor; the `.session` file's own birthtime is unusable because
-writers recreate that file, resetting it to the last major write. Git enumerates worktrees alphabetically
-by path, and a path is a slug of the launch prompt, so the raw order is arbitrary *and* reshuffles whenever
-a session joins or leaves; birth order instead gives every session a permanent slot with new ones appending
-at the end — one stable spatial map shared by the dashboard window, the session tabs, and `spex ls`.
+The list is ordered by **session birth, oldest first** — by the **worktree directory's** birthtime, the
+one stable creation anchor (`git worktree add` makes it once and it outlives every `.session` rewrite,
+which resets that file's own birthtime). Git's raw enumeration is alphabetical by path — arbitrary, and
+reshuffled as sessions come and go — so birth order instead pins every session to a permanent slot, new ones
+appending at the end: one spatial map shared by the dashboard window, the session tabs, and `spex ls`.
 
 The subsystem divides into governed concerns, each its own child node:
 
@@ -43,6 +41,8 @@ The subsystem divides into governed concerns, each its own child node:
   liveness via `reconcile`.
 - **[[dispatch]]** — delivering a prompt to a live agent over its rendezvous socket (socket-only,
   fail-loud), and the merge intent that rides that path.
+- **[[agent-reply-channel]]** — making a dispatched message bidirectional: stamp the sender + a reply hint
+  into the delivered text so the recipient agent can reply back over the same send.
 - **[[graph]]** — the live monitor network (edge A→B iff A runs `spex watch B`) and the `spex watch`
   lifecycle event stream.
 - **[[live-view]]** — the dashboard's live terminal: one real tmux client per session, viewer

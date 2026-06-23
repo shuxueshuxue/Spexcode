@@ -182,6 +182,14 @@ export default function SessionInterface({ sessions, specs = [], project, focusN
   // graph's ← returns) so it never blocks the path down to a session. 'graph' is a valid `sel` all the same.
   const order = useMemo(() => ['new', ...sessions.map((s) => s.id)], [sessions])
   const active = sel === 'graph' || order.includes(sel) ? sel : 'new'
+  // @@@ stale-tab fallback - a selected session can leave the board out from under you: closed via the
+  // header here, ended on its own, or closed from another window. This removal — not the close button — is
+  // what drives tab fallback. If `sel` no longer resolves (you're still on the now-gone tab) we land on New
+  // Session; if you'd already switched to another valid tab the close stands and `sel` still resolves, so
+  // this never fires. Mirrors `active`'s validity test so the lifted `sel` is never left stale behind it.
+  useEffect(() => {
+    if (sel !== 'graph' && !order.includes(sel)) setSel('new')
+  }, [order, sel, setSel])
   const focusId = focusNode?.id || null
   const selSession = sessions.find((s) => s.id === active)
   // the active session tab's bottom-input draft (per-session, see `drafts`).
@@ -525,10 +533,11 @@ export default function SessionInterface({ sessions, specs = [], project, focusN
   // open the file picker, remembering which surface its result should land in.
   const pickFiles = (target) => { fileTargetRef.current = target; fileRef.current?.click() }
 
-  // lifecycle actions — thin POSTs to the session state machine, then reload the board.
-  const act = async (verb, after) => {
+  // lifecycle actions — thin POSTs to the session state machine, then reload the board. No tab jump on
+  // close: the reload drops the closed session from the board and the stale-tab fallback above lands the
+  // viewer on New Session only if they're still on that tab.
+  const act = async (verb) => {
     await fetch(`/api/sessions/${active}/${verb}`, { method: 'POST' }).catch(() => {})
-    if (after) after()
     await onCreated?.(null)
   }
   // @@@ window-level list nav - ↑/↓ move the selection regardless of focus; Enter on New launches.
@@ -807,7 +816,7 @@ export default function SessionInterface({ sessions, specs = [], project, focusN
                         (`session done --propose merge`). proposals (review/done/close-pending) resolve to
                         merge / close */}
                     {(selSession?.status === 'review' || selSession?.status === 'done') && <button className="si-act go" onClick={() => act('merge')}>{t('session.merge')}</button>}
-                    <button className="si-act kill" onClick={() => act('close', () => setSel('new'))}>{t('session.close')}</button>
+                    <button className="si-act kill" onClick={() => act('close')}>{t('session.close')}</button>
                   </div>
                 </div>
                 <div className="si-term-body" style={{ position: 'relative' }}>

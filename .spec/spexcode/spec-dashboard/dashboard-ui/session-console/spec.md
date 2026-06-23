@@ -58,7 +58,10 @@ place** (socket + scroll survive), New Session included (it hides its pane). War
 the **visible** pane holds a WebGL context, so many panes can't exhaust the browser's capped GPU contexts. List
 navigation lives at the **window level** (arrows walk the list whatever holds focus). Header lifecycle
 (relaunch / merge / close) follows state; offline shows a relaunch panel; review is **agent-proposed** at the
-stop-gate.
+stop-gate. **Closing is event-driven**: the tab's *removal* — not the close button — drives where you land.
+Still on the closed tab → New Session; already moved to another valid tab → your switch stands. The same
+fallback covers a session that ends or is closed elsewhere, so the selection never points at a session the
+board no longer has.
 
 **SessionWindow** is the read-only glance, built from the shared **`SessionRow`** face — avatar (no status
 dot) · name · status (or 🔒 when locked) · pending-op count · activity. A single click **locks** the board onto

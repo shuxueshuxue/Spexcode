@@ -2,7 +2,7 @@
 title: session-graph
 status: active
 hue: 280
-desc: Experimental — sessions as a directed monitor network; t opens it, arrows = live `spex watch` edges.
+desc: Experimental — sessions as a directed monitor network; the session console's "View Session Relationship" tab, edges = live `spex watch`.
 code:
   - spec-dashboard/src/SessionGraph.jsx
 ---
@@ -14,32 +14,35 @@ code:
 Sessions are not only spec-editors — they **watch each other**. Show them as a **directed monitor
 network**: each session a node, each *live monitor* (agent A running `spex watch B`) a directed arrow
 A→B. The view is **experimental and isolated** — it must drop in without disturbing the spec board or any
-existing view. `t` (or a small floating button on the board, with `t` documented in the help) opens it, and
-the same `t` returns. The arrows are **observational** — they reflect who is watching whom right now and
+existing view. It lives as a tab **inside the session console** ([[session-console]]): the **"View Session
+Relationship"** view, reached by its icon button (paired with `＋ New Session` in the console's top button
+row) or — from the spec board — the small floating network button / the `t` key, both of which open the
+console **on this tab**. The arrows are **observational** — they reflect who is watching whom right now and
 appear/disappear as watches start and stop. The one human gesture is **asking**: dragging A→B does not draw
-a stored edge, it **asks agent A to monitor B**. Clicking a node **opens that session's console**.
+a stored edge, it **asks agent A to monitor B**. Clicking a node **opens that session's console** — which,
+since the graph and the consoles are sibling tabs of one board, simply switches to that session's tab.
 
 ## expanded spec
 
-`t` (an otherwise-unbound board key, owned by App) is the **only** switch in or out, and it toggles **both**
-ways from one place. Because a hidden hotkey is undiscoverable, the board carries a small floating button
-that opens the view, the graph carries its mirror (a tree glyph) that toggles back, and `t` is **listed in
-the help/legend** — so the one crossing is discoverable from both sides. The view's own keys follow the same
-discipline: the **same discreet `?` help affordance the board uses** opens a small legend of its keymap
-(move · open · drag-to-monitor · `t` back) and edge vocabulary, instead of a standing wall of text.
-
 Isolation is the governing principle: the view runs in its **own** ReactFlow context (separate camera,
-selection, store) and reads its **own** data (`GET /api/sessions/graph`, see [[sessions]]), so it cannot
-break the board. While open it **owns the keyboard**, and on close the board is exactly as it was. It opens
-**already framed** — the overlay waits for the first graph, then mounts with a viewport pre-computed from the
-node bounds, so the first paint is centred on the web, never an empty screen that pans in a beat later.
+selection, store) and reads its **own** data (`GET /api/sessions/graph`, see [[sessions]]), so even sitting
+in the console's content pane it cannot disturb the spec board or any other ReactFlow. It **fills the pane**
+(absolute over a positioned `.si-content`) and opens **already framed** — it holds an empty pane until the
+first graph arrives, then `fitView` centres the web within the pane, so the first paint is never an empty
+screen that pans in a beat later.
+
+The **console owns the arrows and Esc** ([[keyboard-nav]], [[session-console]]); what is **left** to this
+view is the in-graph walk. You reach the tab from an **empty** New Session with **→** and leave it with **←**
+(a horizontal axis off New, the twin of the vertical session list) — the other arrows are **inert** here.
+Esc closes the view's `?` legend first, else the console. So the graph's cursor is **vim-only**: **hjkl** move
+it to the nearest node inside a 45° cone in that direction (the camera following), and **⏎** opens the focused
+session — the twin of a click, which **switches to that session's console tab**. The view's own keys keep the
+board's discipline: the **same discreet `?` help affordance the board uses** opens a small legend of its keymap
+(move · open · ← leave · drag-to-monitor) and edge vocabulary, instead of a standing wall of text.
 
 Each node is a session, drawn with the **same** seed-to-hue colour and avatar the rest of the dashboard keys
 off its session id ([[node-graph]]), so a face here matches that session everywhere. Layout is a **network**,
-not a tree: sessions sit on a radial ring so the directed edges read as a web of relationships. A keyboard
-cursor walks that web (arrow/hjkl move to the nearest node in a direction, the camera following); ⏎ opens
-the focused session, the twin of a click — which **opens that session's console** by reusing the board's
-existing open-session path, no new mechanism.
+not a tree: sessions sit on a radial ring so the directed edges read as a web of relationships.
 
 The edges are **derived from live watches, never user-drawn** (see [[sessions]]): the view only **polls**, so
 a watch starting or stopping makes its arrow appear or vanish on its own, each drawn in the **watcher's** hue;

@@ -15,12 +15,15 @@ import { useT } from './i18n/index.jsx'
 // A→B dispatches a PROMPT to agent A telling it to monitor B (POST /keys; NO subscription store). That
 // gesture is optimistic — a pending dashed edge + a toast appear immediately so the user never wonders if
 // it worked — and the edge goes solid once A's real `spex watch` registration shows up on the next poll.
-// Deliberately ISOLATED from the spec board — its own ReactFlowProvider (so it never shares the board's
-// camera/selection state), its own data, its own keys: a keyboard cursor walks the web (arrows/hjkl move
-// to the nearest node in that direction, the camera following) and ⏎ opens the focused session, the twin
-// of a click. `t` is the ONLY switch in or out (it toggles both graphs, owned by App so it works from
-// either) — Esc does nothing here, and opening a session console over this view never closes it (you
-// return to this graph when the console closes; while it is open it owns the keys, so our nav goes quiet).
+// This view LIVES INSIDE the session console as the "View Session Relationship" tab (see SessionInterface):
+// it fills the right content pane when that tab is active, NOT a fullscreen overlay. It stays ISOLATED all
+// the same — its own ReactFlowProvider (so it never shares the board's or any other ReactFlow's
+// camera/selection state) and its own data. The CONSOLE owns the ARROWS and Esc: you reach this tab from an
+// empty New Session with → and leave it with ← (a horizontal axis off New), the other arrows are inert, and
+// Esc closes the console (or this view's legend first). What's LEFT to this view is the in-graph nav: hjkl
+// walk the web to the nearest node in that direction (the camera following) — arrows never move the cursor —
+// and ⏎ opens the focused session, the twin of a click, which here switches to that session's console tab
+// (onOpen → setSel).
 // Nodes REUSE the shared seed-to-hue colour + avatar (color.js / avatar.jsx) keyed off the session id, so
 // a face here matches the same session's stripe/avatar everywhere else on the dashboard.
 
@@ -63,21 +66,6 @@ function radial(sessions) {
   return pos
 }
 
-// @@@ frame on open - pre-compute a viewport that already frames the whole radial web from the node bounds
-// + the full-screen size, so the very FIRST paint lands centred (no empty-screen-then-pan). The radial is
-// origin-centred, so this is essentially window-centre at a fit-to-bounds zoom; pad covers a node's extent.
-function frameViewport(pos, sessions) {
-  if (!sessions.length) return { x: 0, y: 0, zoom: 0.8 }
-  const xs = sessions.map((s) => pos[s.id]?.x ?? 0)
-  const ys = sessions.map((s) => pos[s.id]?.y ?? 0)
-  const pad = 110
-  const minX = Math.min(...xs) - pad, maxX = Math.max(...xs) + pad
-  const minY = Math.min(...ys) - pad, maxY = Math.max(...ys) + pad
-  const w = window.innerWidth, h = window.innerHeight
-  const zoom = Math.max(0.3, Math.min(1.4, Math.min(w / (maxX - minX), h / (maxY - minY))))
-  return { x: w / 2 - ((minX + maxX) / 2) * zoom, y: h / 2 - ((minY + maxY) / 2) * zoom, zoom }
-}
-
 function GraphCanvas({ onOpen, active, legend, setLegend }) {
   const t = useT()
   const [graph, setGraph] = useState({ nodes: [], edges: [] })
@@ -98,10 +86,10 @@ function GraphCanvas({ onOpen, active, legend, setLegend }) {
   }, [])
   useEffect(() => { reload(); const id = setInterval(reload, 4000); return () => clearInterval(id) }, [reload])
 
-  // `t` (the only switch between the two graphs) stays owned by App so it toggles both ways from one place
-  // and is suppressed while the session console captures keys; Esc still does NOT leave this view. The
-  // REMAINING keys (arrow/hjkl nav + ⏎ to open) are this graph's own and handled below — App bails to us
-  // for them (`if (graphView) return`). See the nav effect after onNodeClick.
+  // The CONSOLE owns the universal keys (↑/↓ walk the tab list, Esc closes the console/this legend). What's
+  // LEFT to this view — handled in the nav effect below — is the in-graph nav: hjkl move the cursor, ⏎ opens
+  // the focused session, `?` toggles the legend. The console's window listener runs FIRST (it mounts first)
+  // and consumes ↑/↓/Esc; the keys it doesn't touch (hjkl/⏎/?) fall through to ours.
 
   const pos = useMemo(() => radial(graph.nodes), [graph.nodes])
   const byId = useMemo(() => Object.fromEntries(graph.nodes.map((s) => [s.id, s])), [graph.nodes])
@@ -176,10 +164,10 @@ function GraphCanvas({ onOpen, active, legend, setLegend }) {
     }).catch(() => { /* the optimistic edge stands until a poll proves it never registered */ })
   }, [byId, t, flash])
 
-  // clicking a node crosses into that session's console — reuse of the board's open-session path (no new
-  // mechanism). The session graph stays mounted BEHIND the console (graphView is untouched), so closing
-  // the console returns here, not to the spec graph. A single click is unambiguously "open": connectOnClick
-  // is OFF (below), so only a handle DRAG asks-to-monitor — a click never doubles as a connect.
+  // clicking a node switches the console to that session's tab (onOpen → setSel) — the graph and the session
+  // consoles are sibling tabs of one board, so "open" is just a tab switch, no new mechanism. A single click
+  // is unambiguously "open": connectOnClick is OFF (below), so only a handle DRAG asks-to-monitor — a click
+  // never doubles as a connect.
   const onNodeClick = useCallback((_e, n) => onOpen?.(n.id), [onOpen])
 
   // keep a keyboard cursor alive: once the graph loads, focus the first node so arrows/⏎ have a start
@@ -190,25 +178,26 @@ function GraphCanvas({ onOpen, active, legend, setLegend }) {
   }, [graph.nodes, focusId])
 
   // @@@ directional nav - the radial layout is a network, not a tree, so there is no parent/child to walk:
-  // an arrow (or its hjkl twin) moves the cursor to the NEAREST node inside a 45° cone in that screen
-  // direction, which reads naturally on a ring. We pan the camera to follow (keyboard-only — click never
-  // moves it). ⏎ opens the focused session (the keyboard twin of a click). pos/byId are flow coords, the
-  // same space setCenter wants, so no projection is needed.
+  // an hjkl key moves the cursor to the NEAREST node inside a 45° cone in that screen direction, which reads
+  // naturally on a ring. We pan the camera to follow (keyboard-only — click never moves it). ⏎ opens the
+  // focused session (the keyboard twin of a click). pos/byId are flow coords, the same space setCenter wants,
+  // so no projection is needed. The ARROWS are deliberately NOT bound here — the console owns them (← leaves
+  // to New Session, the rest inert), so the graph's web-walk is vim-only: hjkl move the cursor, nothing else.
   const CONES = useMemo(() => ({
-    ArrowRight: (dx, dy) => dx > 0 && dx >= Math.abs(dy), l: (dx, dy) => dx > 0 && dx >= Math.abs(dy),
-    ArrowLeft:  (dx, dy) => dx < 0 && -dx >= Math.abs(dy), h: (dx, dy) => dx < 0 && -dx >= Math.abs(dy),
-    ArrowDown:  (dx, dy) => dy > 0 && dy >= Math.abs(dx), j: (dx, dy) => dy > 0 && dy >= Math.abs(dx),
-    ArrowUp:    (dx, dy) => dy < 0 && -dy >= Math.abs(dx), k: (dx, dy) => dy < 0 && -dy >= Math.abs(dx),
+    l: (dx, dy) => dx > 0 && dx >= Math.abs(dy),
+    h: (dx, dy) => dx < 0 && -dx >= Math.abs(dy),
+    j: (dx, dy) => dy > 0 && dy >= Math.abs(dx),
+    k: (dx, dy) => dy < 0 && -dy >= Math.abs(dx),
   }), [])
   const focusRef = useRef(focusId); focusRef.current = focusId
   useEffect(() => {
-    if (!active) return // a session console is open over this graph — it owns the keys (incl. ⏎ and arrows)
+    if (!active) return // not the active tab (or the console is closed) — it owns the keys, ours stay quiet
     const onKey = (e) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return
-      // the help modal (keymap + legend) is itself a modal: while open it OWNS the keys — only `?`/Esc
-      // close it, nav never leaks to the graph behind. `?` opens it from the board.
+      // the help modal (keymap + legend) owns ITS keys while open: `?` closes it (Esc too, but the console's
+      // listener catches Esc first and closes the legend — see SessionInterface), nav never leaks behind it.
       if (legend) {
-        if (e.key === 'Escape' || e.key === '?') { e.preventDefault(); e.stopPropagation(); setLegend(false) }
+        if (e.key === '?') { e.preventDefault(); e.stopPropagation(); setLegend(false) }
         return
       }
       if (e.key === '?') { e.preventDefault(); e.stopPropagation(); setLegend(true); return }
@@ -240,15 +229,17 @@ function GraphCanvas({ onOpen, active, legend, setLegend }) {
     return () => window.removeEventListener('keydown', onKey, true)
   }, [active, byId, pos, graph.nodes, CONES, onOpen, setCenter, getViewport, legend, setLegend])
 
-  // re-frame gently when the session count changes AFTER the first paint (a watch/session appeared); the
-  // first paint is already framed by the computed defaultViewport, so we skip it to avoid a redundant pan.
+  // @@@ frame to the pane - the web is origin-centred in flow coords; fitView frames it within whatever size
+  // the content pane gives us (no window-based pre-frame — this is an in-pane tab, not a fullscreen overlay).
+  // First paint snaps (duration 0) so the graph opens already centred; a later session-count change pans.
   useEffect(() => {
-    if (!loaded) return
-    if (!framedRef.current) { framedRef.current = true; return }
-    if (rfNodes.length) requestAnimationFrame(() => fitView({ padding: 0.25, duration: 300 }))
+    if (!loaded || !rfNodes.length) return
+    const first = !framedRef.current
+    framedRef.current = true
+    requestAnimationFrame(() => fitView({ padding: 0.25, duration: first ? 0 : 300 }))
   }, [rfNodes.length, loaded, fitView])
 
-  // hold the empty overlay until the first graph arrives, THEN mount already-framed (see frameViewport).
+  // hold the empty pane until the first graph arrives; the frame effect then fits it (see above).
   if (!loaded) return <div className="sg-loading">{t('common.loading')}</div>
 
   return (
@@ -258,7 +249,7 @@ function GraphCanvas({ onOpen, active, legend, setLegend }) {
         onConnect={onConnect} onConnectStart={onConnectStart} onNodeClick={onNodeClick}
         connectionMode={ConnectionMode.Loose}
         nodesDraggable nodesConnectable connectOnClick={false} elementsSelectable={false}
-        defaultViewport={frameViewport(pos, graph.nodes)} minZoom={0.3} maxZoom={1.6}
+        defaultViewport={{ x: 0, y: 0, zoom: 0.8 }} minZoom={0.3} maxZoom={1.6}
         proOptions={{ hideAttribution: true }}
       >
         <Background variant="dots" color="#cdc6ad" gap={20} size={1} />
@@ -269,14 +260,15 @@ function GraphCanvas({ onOpen, active, legend, setLegend }) {
 }
 
 // @@@ SessionGraphLegend - the session graph's keymap + edge vocabulary, shown in the shared centered Modal
-// opened by the HUD's discreet `?` (key or click) — the SAME affordance the spec board uses (see Legend.jsx),
-// so the wall of inline hints that used to sit in the HUD now lives behind one button on BOTH graphs.
+// opened by the tab's discreet `?` (key or click) — the SAME affordance the spec board uses (see Legend.jsx),
+// so the wall of inline hints that used to stand in the HUD lives behind one button. The keymap mirrors the
+// embedded model: hjkl walk the web (arrows are the console tab-list's), ⏎ opens, and you leave via the tabs.
 function SessionGraphLegend({ onClose }) {
   const t = useT()
   const KEYS = [
-    [['↑', 'k', '↓', 'j', '←', 'h', '→', 'l'], 'move'],
+    [['h', 'j', 'k', 'l'], 'move'],
     [['⏎'], 'open'],
-    [['t'], 'back'],
+    [['←'], 'leave'],
   ]
   return (
     <Modal title={t('sessionGraph.legend.title')} closeLabel={t('sessionGraph.legend.close')} onClose={onClose}>
@@ -302,26 +294,19 @@ function SessionGraphLegend({ onClose }) {
   )
 }
 
-// @@@ SessionGraph - full-screen overlay. Wrapped in its OWN ReactFlowProvider so it shares NOTHING with
-// the board's ReactFlow instance (separate camera, selection, store) — the isolation that lets it drop in
-// without touching the existing views. onOpen crosses a clicked node into its session console (board path).
-export default function SessionGraph({ onOpen, onBack, active = true }) {
+// @@@ SessionGraph - the "View Session Relationship" tab body: it FILLS the console's right content pane
+// (absolute inset:0 over a positioned pane), NOT a fullscreen overlay. Wrapped in its OWN ReactFlowProvider
+// so it shares NOTHING with the spec board's ReactFlow instance (separate camera, selection, store) — the
+// isolation that lets it sit inside the console without touching the board behind it. `onOpen` switches the
+// console to a clicked node's session tab (setSel). `active` is true while this tab is the one selected;
+// `legend`/`setLegend` are LIFTED to the console so its Esc handler can close the legend before the console.
+export default function SessionGraph({ onOpen, active = true, legend, setLegend }) {
   const t = useT()
-  const [legend, setLegend] = useState(false)
   return (
     <div className="session-graph">
+      {/* a single discreet `?` — the same help affordance the spec board uses — opens the keymap/edge legend.
+          No brand/back chrome: the tab IS the frame, and leaving is just picking another tab. */}
       <div className="sg-hud">
-        <span className="brand">$ session-graph</span>
-        {/* mirror of the board's hud-graph button — toggles back to the spec graph, the same crossing
-            the `t` key makes. The tree icon (root → two children) distinguishes it from the network glyph. */}
-        {onBack && (
-          <button className="hud-graph" onClick={onBack} title={t('sessionGraph.backTitle')}>
-            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
-              <circle cx="8" cy="3.5" r="1.8" /><circle cx="3.5" cy="12.5" r="1.8" /><circle cx="12.5" cy="12.5" r="1.8" />
-              <path d="M8 5.3 V8 M8 8 H3.5 V10.7 M8 8 H12.5 V10.7" />
-            </svg>
-          </button>
-        )}
         <button className="hud-help" onClick={() => setLegend((v) => !v)} title={t('sessionGraph.helpTitle')}>?</button>
       </div>
       <ReactFlowProvider>

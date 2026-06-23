@@ -273,6 +273,12 @@ From here, dispatch an agent — it authors the spec nodes and rides the dogfood
   const s = await import('./sessions.js')
   const c = await import('./client.js')
   const id = process.argv[4]
+  // @@@ declaredNote - appended to a successful done/ask/block declaration. The agent often wants to
+  // self-verify the write, but the mark-active PreToolUse hook rewrites .session back to `active` BEFORE
+  // the next tool runs (by design — see [[state]] / mark-active.sh), so any re-read shows `active`, never
+  // the state just written. We STATE that fact rather than commanding "stop", so the agent can reason on
+  // its own that the dashboard — not a follow-up tool call — is where this declaration is seen.
+  const DECLARED = ' — recorded; the human sees it in the dashboard. Your next tool call resets this worktree to active (the mark-active hook, by design), so re-reading .session won\'t reflect it.'
   if (sub === 'new') {
     // route through the backend (auth env + concurrency cap); in-process only if no backend is reachable.
     console.log(JSON.stringify(await s.createSession(flag('node') ?? null, flag('prompt') ?? ''), null, 2))
@@ -291,10 +297,10 @@ From here, dispatch an agent — it authors the spec nodes and rides the dogfood
   } else if (sub === 'done') {
     // sugar for awaiting; --propose merge|nothing|close, optional --note
     const p = (flag('propose') as any) || 'nothing'
-    console.log(s.markStateFromCwd('awaiting', { proposal: p, note: flag('note') }) ? `done (${p})` : 'no .session in cwd')
+    console.log(s.markStateFromCwd('awaiting', { proposal: p, note: flag('note') }) ? `done (${p})${DECLARED}` : 'no .session in cwd')
   } else if (sub === 'block') {
     // sugar: the agent is waiting on a background task; it will self-resume (NOT idle/awaiting)
-    console.log(s.markStateFromCwd('blocked', { note: flag('note') }) ? 'blocked' : 'no .session in cwd')
+    console.log(s.markStateFromCwd('blocked', { note: flag('note') }) ? `blocked${DECLARED}` : 'no .session in cwd')
   } else if (sub === 'fail') {
     // the StopFailure hook marks ITS OWN worktree (from cwd) as error (turn died on an API error)
     console.log(s.markStateFromCwd('error') ? 'marked error' : 'no .session in cwd')
@@ -302,7 +308,7 @@ From here, dispatch an agent — it authors the spec nodes and rides the dogfood
     // the agent DELIBERATELY declares it is pausing to ask the human a question (like `done`/`block`, an
     // authored state — NOT guarded active-only). The --note carries the question. Distinct from `block`
     // (waiting on a background task, self-resumes): a needs-input agent resumes only when the human replies.
-    console.log(s.markStateFromCwd('needs-input', { note: flag('note') }) ? 'needs-input' : 'no .session in cwd')
+    console.log(s.markStateFromCwd('needs-input', { note: flag('note') }) ? `needs-input${DECLARED}` : 'no .session in cwd')
   } else if (sub === 'commit-gate') {
     // the Stop gate's deterministic commit check (from cwd = the worktree): exit 0 if the node branch is
     // ready to declare done/merge (work committed + ahead of main), else print the reason and exit 1. Uses

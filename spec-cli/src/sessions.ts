@@ -1150,14 +1150,37 @@ const ANSI: Record<DisplayStatus, string> = {
   working: '33', idle: '90', offline: '90', starting: '36', review: '35', done: '34', 'close-pending': '31', parked: '36', error: '31', asking: '93', queued: '90',
 }
 
-// a session matches a selector if the selector is its id (or an id-prefix), its node, or its branch.
-// no selectors (or '@all') = everything. Optional status filter on top. This IS the subscription.
+// @@@ session selectors - the ONE matcher every session command shares (see [[session-selectors]]). A
+// selector matches a session iff it is the session's full id, an id-PREFIX, its node, or its branch. This is
+// the single predicate; selectSessions (MANY) and resolveSession (ONE) both call it, so id-prefix/node/branch
+// resolution can never drift between "which sessions ls/watch/wait/graph show" and "which session
+// review/merge/send/close act on".
+export function matchesSelector(s: Session, q: string): boolean {
+  return s.id === q || s.id.startsWith(q) || s.node === q || s.branch === q
+}
+
+// no selectors (or '@all') = everything. Optional status filter on top. This IS the ls/watch subscription.
 export function selectSessions(all: Session[], selectors: string[], statuses?: string[]): Session[] {
   let out = all
   const sel = selectors.filter((x) => x && x !== '@all')
-  if (sel.length) out = out.filter((s) => sel.some((q) => s.id === q || s.id.startsWith(q) || s.node === q || s.branch === q))
+  if (sel.length) out = out.filter((s) => sel.some((q) => matchesSelector(s, q)))
   if (statuses && statuses.length) out = out.filter((s) => statuses.includes(s.status))
   return out
+}
+
+// @@@ resolveSession - resolve ONE selector to ONE session against a board: the single-target counterpart of
+// selectSessions, for the control verbs (review/send/merge/close/reopen/capture/prompt). The backend matches
+// ids EXACTLY, so a verb resolves the selector here first and then calls with the FULL id — a node/branch/
+// prefix selector drives a verb just as it filters `ls`. The result is DISCRIMINATED so a caller can fail
+// precisely: an exact full-id hit wins outright (never reported ambiguous just for prefixing a longer id);
+// otherwise a lone match is `ok`, several is `ambiguous` (a prefix/node hitting many), none is `none`.
+export type Resolved = { ok: Session } | { ambiguous: Session[] } | { none: true }
+export function resolveSession(selector: string, sessions: Session[]): Resolved {
+  const exact = sessions.find((s) => s.id === selector)
+  if (exact) return { ok: exact }
+  const hits = sessions.filter((s) => matchesSelector(s, selector))
+  if (hits.length === 1) return { ok: hits[0] }
+  return hits.length ? { ambiguous: hits } : { none: true }
 }
 
 const trunc = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + '\u2026' : s)

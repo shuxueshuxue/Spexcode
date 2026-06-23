@@ -54,6 +54,23 @@ async function withWatchEdge<T>(selectors: string[], intervalMs: number, body: (
   try { return await body() } finally { cleanup() }   // one-shot `wait` clears on return; stream `watch` clears on signal
 }
 
+// @@@ resolveSelectorOrExit - the ONE glue that turns a control verb's user SELECTOR (full id, id-prefix,
+// node, or branch — the same grammar `ls`/`watch` take) into the FULL id the backend matches exactly. It
+// resolves against the live board (client.ts's resolveClientSession → the shared resolveSession), and on
+// anything but a clean single hit prints a precise error and exits non-zero: `none` → no such session;
+// `ambiguous` → the candidate sessions. So review/merge/reopen/close/send/capture/prompt all accept selectors
+// with ZERO per-command matching — the matcher lives once in [[session-selectors]]; this is present-error glue.
+async function resolveSelectorOrExit(selector: string): Promise<string> {
+  if (!selector) { console.error('spex: missing session selector (id | id-prefix | node | branch)'); process.exit(2) }
+  const { resolveClientSession } = await import('./client.js')
+  const r = await resolveClientSession(selector)
+  if ('ok' in r) return r.ok.id
+  if ('none' in r) { console.error(`spex: no such session: ${selector}`); process.exit(2) }
+  console.error(`spex: ambiguous selector "${selector}" matches ${r.ambiguous.length} sessions — be more specific:`)
+  for (const s of r.ambiguous) console.error(`  ${s.id.slice(0, 8)}  ${s.node || s.branch || s.id}`)
+  process.exit(2)
+}
+
 // @@@ help - tidy one-screen command summary for humans AND agents (no args or `spex help`). Grouped
 // by purpose; flags shown inline so the surface is self-explanatory without reading the source.
 function printHelp(): void {
@@ -70,18 +87,19 @@ Specs / graph
   board                 dump the dashboard board state as JSON
   forge <sub>           trace a forge's issues/PRs onto spec nodes (read-only): links | eval-pending [--host github] [--node <id>] [--json]
   yatsu <sub>           measure a node's scenarios and keep score: scan | eval [.|<node>] [--scenario N] (--pass|--fail|--note T) [--image P|--result P|-] | show [.|<node>] [--json] | clean [--keep-latest|--all]
-  review <id>           manager cockpit: review a session (ahead·merge-base diff·gates·proposal)  [--json]
-  merge <id>            manager cockpit: gated atomic merge into main (re-checks gates, then closes)  [--keep]
+  review <SEL>          manager cockpit: review a session (ahead·merge-base diff·gates·proposal)  [--json]
+  merge <SEL>           manager cockpit: gated atomic merge into main (re-checks gates, then closes)  [--keep]
 
 Sessions
   ls [SEL…]             living-sessions table          [--status a,b] [--json]
   watch [SEL…]          stream actionable transitions (forever — a human's monitor)  [--as NAME] [--status a,b] [--idle] [--interval N]
-  wait <id>             block until <id> is actionable, print it, exit (one-shot; draws the graph edge)  [--timeout S=1200] [--interval S]
+  wait <SEL>            block until <SEL> is actionable, print it, exit (one-shot; draws the graph edge)  [--timeout S=1200] [--interval S]
   new "<prompt>"        start a session (= session new)  [--node X]
   session <sub>         new | list | reopen | review | done | merge | close | send | capture | prompt
-  session prompt <id>   print the session's originating prompt (what it was asked to do)
+  session prompt <SEL>  print the session's originating prompt (what it was asked to do)
 
-  SEL = session id (or id-prefix), node, or branch; none (or @all) = every session.`)
+  SEL = session id (or id-prefix), node, or branch — accepted by every read/control verb (ls·watch·wait·
+        review·merge·reopen·close·send·capture·prompt); none (or @all) = every session.`)
 }
 
 if (cmd === 'serve') {
@@ -178,8 +196,9 @@ From here, dispatch an agent — it authors the spec nodes and rides the dogfood
   // manager can decide whether to merge without hand-running git. `--json` for the raw payload. This is
   // the human-facing INSPECT verb; `spex session review` is the distinct agent action "propose merge".
   const { clientReview } = await import('./client.js')
-  const id = positionals(3)[0]
-  if (!id) { console.error('usage: spex review <session-id>'); process.exit(2) }
+  const sel = positionals(3)[0]
+  if (!sel) { console.error('usage: spex review <session-selector>  (id | id-prefix | node | branch)'); process.exit(2) }
+  const id = await resolveSelectorOrExit(sel)
   const r = await clientReview(id)
   if (!r) { console.error(`no such session ${id}`); process.exit(1) }
   if (has('json')) { console.log(JSON.stringify(r, null, 2)) }
@@ -202,8 +221,9 @@ From here, dispatch an agent — it authors the spec nodes and rides the dogfood
   // conflicts, verifies main advanced, and proposes close. The server never touches main. Fail-loud: an
   // unreachable agent prints the reason and exits non-zero.
   const { clientMerge } = await import('./client.js')
-  const id = positionals(3)[0]
-  if (!id) { console.error('usage: spex merge <id>'); process.exit(2) }
+  const sel = positionals(3)[0]
+  if (!sel) { console.error('usage: spex merge <selector>  (id | id-prefix | node | branch)'); process.exit(2) }
+  const id = await resolveSelectorOrExit(sel)
   const r = await clientMerge(id)
   if (r.dispatched) console.log(`merge dispatched to ${id} — its agent is landing the merge`)
   else console.error(`merge dispatch failed: ${r.reason}`)
@@ -304,7 +324,8 @@ From here, dispatch an agent — it authors the spec nodes and rides the dogfood
     console.log(JSON.stringify(await c.clientListSessions(), null, 2))
   } else if (sub === 'reopen' || sub === 'resume') {
     // "back to working": clear proposal -> active, relaunch if offline (the backend owns the relaunch)
-    console.log(await c.clientReopen(id) ? `${id} -> working` : `no such session ${id}`)
+    const full = await resolveSelectorOrExit(id)
+    console.log(await c.clientReopen(full) ? `${full} -> working` : `no such session ${full}`)
   } else if (sub === 'review') {
     console.log(await s.propose(id, 'merge') ? `${id} -> review` : `no such session ${id}`)
   } else if (sub === 'state') {
@@ -345,28 +366,33 @@ From here, dispatch an agent — it authors the spec nodes and rides the dogfood
     // merge dispatch (same as top-level `spex merge`): reopen the session and hand its OWN agent the merge
     // prompt — the agent runs the --no-ff merge, resolves conflicts, verifies main advanced, and proposes
     // close. The SERVER never touches main. Fail-loud: an unreachable agent prints the reason, exits non-zero.
-    const r = await c.clientMerge(id)
-    if (r.dispatched) console.log(`merge dispatched to ${id} — its agent is landing the merge`)
+    const full = await resolveSelectorOrExit(id)
+    const r = await c.clientMerge(full)
+    if (r.dispatched) console.log(`merge dispatched to ${full} — its agent is landing the merge`)
     else console.error(`merge dispatch failed: ${r.reason}`)
     process.exit(r.dispatched ? 0 : 1)
   } else if (sub === 'close') {
-    console.log(await c.clientClose(id) ? `closed ${id}` : `no such session ${id}`)
+    const full = await resolveSelectorOrExit(id)
+    console.log(await c.clientClose(full) ? `closed ${full}` : `no such session ${full}`)
   } else if (sub === 'send') {
     // prompt dispatch is socket-only + fail-loud (the backend enforces it): a non-accepted prompt prints the
     // reason AND exits non-zero, so a manager/script never mistakes a dead dispatch for success.
-    const r = await c.clientSend(id, process.argv[5] ?? '')
+    const full = await resolveSelectorOrExit(id)
+    const r = await c.clientSend(full, process.argv[5] ?? '')
     console.log(r.ok ? 'sent' : `dispatch failed: ${r.error}`)
     process.exit(r.ok ? 0 : 1)
   } else if (sub === 'capture') {
     // the session's live pane (output) over HTTP — fail and empty stay DISTINCT: a real empty pane prints
     // nothing and exits 0; unknown id / offline / capture-error each exit non-zero with a named reason.
-    const r = await c.clientCapture(id)
+    const full = await resolveSelectorOrExit(id)
+    const r = await c.clientCapture(full)
     if (r.ok) { process.stdout.write(r.pane) }
     else { console.error(`spex capture: ${r.reason}`); process.exit(r.status === 404 ? 2 : 1) }
   } else if (sub === 'prompt') {
     // print the session's full ORIGINATING prompt (what it was asked to do), captured at launch.
-    const r = await c.clientPrompt(id)
-    if (!r.ok) { console.error(`no prompt recorded for ${id}`); process.exit(1) }
+    const full = await resolveSelectorOrExit(id)
+    const r = await c.clientPrompt(full)
+    if (!r.ok) { console.error(`no prompt recorded for ${full}`); process.exit(1) }
     process.stdout.write(r.prompt.endsWith('\n') ? r.prompt : r.prompt + '\n')
   } else {
     console.error('spex session: new|list|reopen|review|done|park|ask|idle|merge|close|send|capture|prompt'); process.exit(2)

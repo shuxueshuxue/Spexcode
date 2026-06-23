@@ -27,6 +27,12 @@ machine's sessions with no code change — the dashboard's viewer-points-anywher
 `watch`/`wait` take the board **source** as a required argument (the backend client), so a poll can never
 silently read a local board by default.
 
+**Every command speaks the same selector grammar.** A caller names a session by full id, id-prefix, node, or
+branch — and not just the list verbs: the **control** verbs accept it too. The backend matches `/…/:id`
+EXACTLY, so `resolveClientSession` resolves a selector against the live board (the [[session-selectors]]
+matcher over `clientListSessions`) and the verb then calls with the resolved FULL id. A non-match is loud and
+precise — `none` → no such session, `ambiguous` → the candidate ids — never a silent miss against the backend.
+
 The split is load-bearing and is the whole point. State **producers** stay **local**: `done`/`ask`/`park`/
 `idle` and the lifecycle hooks write the cwd worktree's `.session` (see [[state]]) — that file is HOW the
 backend learns state, so an agent must be able to declare its own even with no backend up. **Launch**

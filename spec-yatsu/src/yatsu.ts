@@ -10,10 +10,10 @@ import { join, relative, basename } from 'node:path'
 export const YATSU_FILE = 'yatsu.md'
 export const SIDECAR_FILE = 'yatsu.evals.ndjson'
 
-// @@@ Scenario - one declared observation: a `driver` (which producer reads it — manual today,
-// Playwright/WebDriver later), a `target` (what it points at: a route, a surface, a description), and
-// EITHER a `run` (path to a native test that IS the scenario body) OR inline `steps`. name is its key
-// in the sidecar; the bug-fix keystone (a repro becoming a regression scenario) just appends one here.
+// @@@ Scenario - one declared observation: a `driver` (which producer reads it — the manual producer
+// today, a computer-use "stupid user" later), a `target` (what it points at: a route, a surface, a
+// description), and EITHER a `run` (path to a native test that IS the scenario body) OR inline `steps`.
+// name is its key in the sidecar; the bug-fix keystone (a repro becoming a regression scenario) appends one.
 export type Scenario = {
   name: string
   driver: string

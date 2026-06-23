@@ -22,6 +22,24 @@ proposal=$(sed -n 's/^proposal:[[:space:]]*//p' .session 2>/dev/null | head -1)
 # BSD sed has no \| alternation.)
 cont=$(printf '%s' "$input" | sed -n 's/.*"stop_hook_active"[[:space:]]*:[[:space:]]*\([a-z]*\).*/\1/p')
 
+# @@@ yatsu advisory - a NON-BLOCKING nudge (never a gate), emitted only when the session stops CLEAN-DONE
+# (committed work + a done/awaiting declaration): the agent IS yatsu's evaluator, so a stale or missing loss
+# score is a blind spot to flag the moment work lands. Reuse `spex yatsu scan` (already scoped to the nodes
+# that declare a yatsu.md); it lists each stale/missing score as a `• yatsu-…` line and exits 0 as ever. On
+# any finding, surface a concise pointer to `spex yatsu eval <node>` via the Stop hook's additionalContext
+# (the agent sees it next turn) — NEVER a block decision: a stale score is a heads-up, not a wall. Called
+# only on ALLOW paths and never alongside a block, so it can't change the gate's stop/continue verdict.
+yatsu_advisory() {
+  local out ids n msg esc
+  out=$($S yatsu scan 2>&1)
+  n=$(printf '%s\n' "$out" | grep -cE 'yatsu-(drift|missing):')
+  [ "${n:-0}" -gt 0 ] || return 0   # every score fresh (or scan unavailable) -> nothing to nudge
+  ids=$(printf '%s\n' "$out" | sed -n "s/.*yatsu-[a-z]*: '\([^']*\)'.*/\1/p" | awk '!seen[$0]++' | head -6 | paste -sd' ' -)
+  msg="yatsu (the loss signal the optimizer reads) has ${n} stale or missing score(s) — nodes: ${ids}. Re-measure any you changed: run its scenario, compare to the expected, file with \`spex yatsu eval <node>\`. \`spex yatsu scan\` lists them all. (Advisory — not a gate.)"
+  esc=$(printf '%s' "$msg" | sed 's/\\/\\\\/g; s/"/\\"/g')
+  printf '{"hookSpecificOutput":{"hookEventName":"Stop","additionalContext":"%s"}}\n' "$esc"
+}
+
 # @@@ commit gate - a declaration of done/merge (awaiting + proposal merge|nothing) is only honest once the
 # node branch carries the work as COMMITS: the dogfood ritual commits spec+code BEFORE any proposal, yet a
 # dashboard-launched agent kept proposing merge with 0 commits / a dirty tree. So before allowing such a
@@ -32,6 +50,7 @@ cont=$(printf '%s' "$input" | sed -n 's/.*"stop_hook_active"[[:space:]]*:[[:spac
 # merge" never stands. (A propose-close declaration is exempt — it discards the worktree, so commits are moot.)
 if [ "${status:-active}" = awaiting ] && { [ "$proposal" = merge ] || [ "$proposal" = nothing ]; }; then
   if gatemsg=$($S session commit-gate 2>&1); then
+    yatsu_advisory   # clean done: nudge (non-blocking) if any loss score went stale/missing
     exit 0   # work is committed and ahead of main -> the proposal is honest, let it stop.
   fi
   if [ "$cont" = true ]; then
@@ -52,6 +71,7 @@ if [ "$cont" = true ]; then
   # undeclared stop with uncommitted work becomes `asking` (needs the human), never a false awaiting/done.
   if $S session commit-gate >/dev/null 2>&1; then
     $S session state awaiting --propose nothing --note "auto: stopped without declaring" >/dev/null 2>&1 || true
+    yatsu_advisory   # auto-declared done with committed work: same non-blocking nudge
   else
     $S session ask --note "auto: stopped without declaring and with uncommitted work — commit your spec+code on the node branch, then declare" >/dev/null 2>&1 || true
   fi

@@ -19,11 +19,13 @@ reversible, and nothing auto-disappears.
 
 ## expanded spec
 
-The `.session` file is the source of truth (never an in-memory map). The statuses: `active` (working / undeclared this turn), `awaiting` (a proposal — review, done,
-or close-pending, by kind), `parked` (waiting on a background task; **self-resumes** — nothing
-for a human to do), `error` (a turn died), `asking` (stopped and **needs the human** — a question, or the
-stop-gate's auto-default for an undeclared/uncommitted stop), `queued` (held below the cap — [[launch]]),
-and `idle` (stopped at the prompt without declaring). `merges` is a metadata count, not a state.
+The `.session/state` file is the source of truth (never an in-memory map) — one file in the worktree's
+`.session/` runtime dir ([[runtime]]). The statuses: `active` (working / undeclared this turn), `awaiting`
+(a proposal — review, done, or close-pending, by kind), `parked` (waiting on a background task;
+**self-resumes** — nothing for a human to do), `error` (a turn died), `asking` (stopped and **needs the
+human** — a question, or the stop-gate's auto-default for an undeclared/uncommitted stop), `queued` (held
+below the cap — [[launch]]), and `idle` (stopped at the prompt without declaring). `merges` is a metadata
+count, not a state.
 
 `parked` and `asking` split what a single over-loaded `blocked` used to conflate: a self-resuming
 background wait (leave it alone) versus a dead stop that won't move until a human nudges it (act on it).
@@ -44,8 +46,8 @@ state**, **active-only guarded** so it can never clobber a declaration.
   a stale `idle`/`asking` back the moment work resumes.
 - **`Stop` → the gate**, two jobs each with a hard loop-break. A **commit gate** rejects a done/merge
   proposal while the branch has uncommitted changes or is 0 ahead of the base branch — ignoring the runtime
-  files SpexCode writes into the worktree (its `.session*` sidecars, the injected hooks/launch scripts, the
-  hidden `CLAUDE.md`); propose-**close** is exempt. A **declare gate** blocks a stop while still `active`,
+  files SpexCode writes into the worktree (the whole `.session/` runtime dir — [[runtime]]); propose-**close**
+  is exempt. A **declare gate** blocks a stop while still `active`,
   auto-defaulting on the forced continuation to **`asking`** (the stop needs a human — it never fakes a
   self-resuming `parked`), or to `awaiting`/`nothing` only when the work is actually committed and ahead.
 - **`StopFailure` → `error`**; **`Notification(idle_prompt)` → `idle`**. All Stop-gate git goes through

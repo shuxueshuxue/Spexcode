@@ -79,7 +79,7 @@ function printHelp(): void {
 Usage: spex <command> [args]
 
 Specs / graph
-  guide                 print the product setup workflow (install the CLI, adopt a repo, run it)
+  guide [spec|yatsu]    no topic: the setup workflow; spec/yatsu: the file-format manual for authoring nodes
   init [dir]            scaffold a repo to adopt SpexCode (seed .spec + install git hooks; default: cwd)
   lint                  check the spec↔code graph (integrity·living·coverage·drift); when committing, gates on heavy commit-local drift
   ack <node>… --reason  stamp Spec-OK on HEAD for one or more nodes (this change keeps their specs valid); --reason required, not stored
@@ -109,41 +109,12 @@ if (cmd === 'serve') {
 } else if (cmd === undefined || cmd === 'help' || cmd === '--help' || cmd === '-h') {
   printHelp()
 } else if (cmd === 'guide') {
-  // @@@ guide - the product onboarding surface as a COMMAND, not buried docs. The model is "install the
-  // CLI once, then the agent drives the rest": the human's only real manual step is the global install
-  // (and pointing at a repo); spec nodes, the dashboard wiring, and the dogfood ritual are an agent's job.
-  // Narrative text lives here like printHelp + init's next-steps (help, not a planted contract — so it is
-  // not a `.spec` template). Each step names the real seam: cwd picks the repo, PORT/API_URL pick endpoints.
-  console.log(`spex guide — run SpexCode on your own repo
-
-The product model: install SpexCode ONCE, then use it across all your projects — an agent drives
-the rest, you don't hand-author the spec tree or wire the dashboard yourself.
-
-1. Install the CLI (one-time, global — this ONE checkout serves every project)
-     cd spec-cli && npm install && npm link      # \`spex\` now runs from ANY directory
-   It always operates on the repo of your current directory — that cwd is the only "which repo" knob.
-
-2. Adopt a repo
-     cd <your-repo> && spex init                 # seeds .spec/ + git hooks (additive, never overwrites)
-   Works on any git repo. Edit .spec/project/spec.md to describe it, then grow child nodes
-   (each a dir with a spec.md + a \`code:\` list of the files it governs).
-
-3. Run the backend — it reads .spec + git from the cwd repo
-     spex serve                                  # http://localhost:8787  (PORT=<n> for another endpoint)
-   Serve a different repo by running it from there; two repos at once = two \`spex serve\` on two PORTs.
-
-4. Open the dashboard — the SAME board for every project, pointed per project
-     cd spec-dashboard && npm install                        # once
-     API_URL=http://localhost:<port> npm run dev             # point this board at step 3's backend
-   The board is a viewer: API_URL is how the shared install points at each project (one dev-server
-   per project). "dashboard": { "apiUrl": "..." } in spexcode.json is the default ONLY when the board
-   lives inside the project (the dogfood layout) — for a shared install, use API_URL.
-
-5. Govern your layout (optional)
-     spexcode.json sets lint's governedRoots/sourceExtensions and any non-default worktree layout.
-     \`spex lint\` must report 0 errors; coverage warnings are your adoption TODO (files no node claims yet).
-
-From here, dispatch an agent — it authors the spec nodes and rides the dogfood ritual for you.`)
+  // @@@ guide - SpexCode's reference surface as a COMMAND, not buried docs. No topic → the human SETUP
+  // workflow (install once, then an agent drives); `spec` / `yatsu` → the agent-facing file-format manual.
+  // The narration lives in guide.ts (kept out of this shared hub), the help-text spirit of printHelp — not
+  // a planted `.spec` template. process.argv[3] is the optional topic.
+  const { guideText } = await import('./guide.js')
+  console.log(guideText(process.argv[3]))
 } else if (cmd === 'lint') {
   const { specLint, driftGate, DRIFT_GUIDANCE } = await import('./lint.js')
   const findings = await specLint()

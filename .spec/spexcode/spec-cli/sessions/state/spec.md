@@ -6,6 +6,7 @@ desc: The lifecycle state machine — declared statuses, gating hooks, socket li
 code:
   - spec-cli/src/sessions.ts
   - spec-cli/src/cli.ts
+  - spec-cli/hooks/stop-gate.sh
 ---
 
 # state
@@ -50,6 +51,10 @@ state**, **active-only guarded** so it can never clobber a declaration.
   is exempt. A **declare gate** blocks a stop while still `active`,
   auto-defaulting on the forced continuation to **`asking`** (the stop needs a human — it never fakes a
   self-resuming `parked`), or to `awaiting`/`nothing` only when the work is actually committed and ahead.
+  The block reason gives each option its **application condition**, not a menu: a state is a claim others
+  act on, so the agent picks the TRUE one. **`parked` is policed hardest** — claim it only when a real
+  background task will wake you; with nothing running to resume you the stop is `asking`, never a false
+  `parked` the board misreads as self-resuming while you actually need the human.
 - **`StopFailure` → `error`**; **`Notification(idle_prompt)` → `idle`**. All Stop-gate git goes through
   the shared `git()` helper, so a stray exported git dir can't misdirect repo discovery.
 

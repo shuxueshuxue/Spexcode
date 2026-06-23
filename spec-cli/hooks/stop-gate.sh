@@ -89,6 +89,10 @@ if [ "$cont" = true ]; then
   exit 0
 fi
 
-# first stop in an undeclared state -> nudge exactly once with PATH-independent commands.
-printf '{"decision":"block","reason":"You are stopping without declaring this session'"'"'s state, so its outcome would be guessed instead of recorded. Declare what should happen next by running exactly one of these, then stop: %s session done --propose merge (ready to review/merge) ; %s session done --propose nothing (paused, awaiting the human) ; %s session park --note <what-you-await> (waiting on a background task, you will self-resume) ; %s session done --propose close (propose discarding this worktree) ; %s session ask --note <your-question> (you are asking the human a question; you will resume when they answer)."}\n' "$S" "$S" "$S" "$S" "$S"
+# first stop in an undeclared state -> nudge exactly once with PATH-independent commands. The reason
+# EMPHASIZES that each state is a CLAIM others act on (not a box to tick to end the turn) and gives the
+# precise APPLICATION CONDITION for each — so the agent picks the TRUE one. park is policed hardest because
+# a false park (no real background task) reads on the board as "fine, self-resuming" when the agent actually
+# needs the human, which is the most damaging mislabel.
+printf '{"decision":"block","reason":"Your session state is a CLAIM the board, your supervisor, and other agents act on — not a box to tick to end the turn. Stopping undeclared makes your outcome a guess. Pick the ONE that is TRUE right now, by its condition, then stop. %s session done --propose merge = your spec+code are COMMITTED on the branch and genuinely ready for a human to review/merge (not just probably-done). %s session done --propose nothing = committed, but you are NOT proposing a merge; paused for the human to look. %s session park --note <what-you-await> = use ONLY when a real BACKGROUND TASK will wake you (a spex wait you backgrounded, a running build/job). If nothing is actually running to resume you, you are NOT parked — you are waiting on the human, so use ask. park claims leave-me-alone-I-self-resume; do not use it as a default to clear this gate. %s session done --propose close = you propose discarding this worktree. %s session ask --note <your-question> = you need the human: a real question, OR you are simply stopped awaiting their direction; you resume only when they reply. Choose by what is true."}\n' "$S" "$S" "$S" "$S" "$S"
 exit 0

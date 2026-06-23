@@ -2,7 +2,7 @@ import { readFileSync, existsSync } from 'node:fs'
 import { join, relative, dirname } from 'node:path'
 import { repoRoot, headSha, driftIndex, stagedFiles, git } from '../../spec-cli/src/git.js'
 import { loadSpecs } from '../../spec-cli/src/specs.js'
-import { mainBranch } from '../../spec-cli/src/layout.js'
+import { mainBranch, statePath } from '../../spec-cli/src/layout.js'
 import { yatsuNodes, type YatsuNode } from './yatsu.js'
 import { readReadings, appendReading, latestPerScenario, type Reading, type Verdict } from './sidecar.js'
 import { staleAxes } from './freshness.js'
@@ -35,9 +35,11 @@ async function gatherNodes(root: string): Promise<EvalNode[]> {
   return yatsuNodes(root).map((n) => ({ ...n, codeFiles: codeByDir.get(relative(root, n.dir)) ?? [] }))
 }
 
-// resolve `.` → the node this worktree works on: the `.session` node line, else the `node/<id>` branch.
+// resolve `.` → the node this worktree works on: the session state's node line, else the `node/<id>`
+// branch. Reads through [[portable-layout]]'s statePath so it spans the runtime-dir migration — the new
+// `.session/state` file or a legacy flat `.session` — instead of EISDIR-ing on a new session's `.session/` dir.
 function currentNodeId(root: string): string | null {
-  const sf = join(root, '.session')
+  const sf = statePath(root)
   if (existsSync(sf)) {
     for (const line of readFileSync(sf, 'utf8').split('\n')) {
       const m = line.match(/^\s*node:\s*(\S+)/)

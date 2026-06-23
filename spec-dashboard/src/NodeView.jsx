@@ -357,16 +357,27 @@ export function IssuesPane({ node }) {
 // @@@ useEditDiff - the node's PENDING change content, fetched LAZILY when the edit tab opens (like the
 // history tab's older diffs). The board's overlay markers say THAT a node changed, not WHAT — so this asks
 // the backend (/api/edit) for the unified diff of the node's spec.md in the editing worktree (`source`) vs
-// the fork point. `enabled` keeps a closed tab from ever fetching.
+// the fork point. `enabled` keeps a closed tab from ever fetching. The edit tab unmounts on every tab toggle
+// (panes are conditionally rendered), so — exactly like the history tab's per-version diffs (versionDiffCache)
+// — the result is MEMOISED per (source,path): toggling back seeds the first paint from the cache instead of
+// flashing the loading state. The one difference from a committed version's immutable diff is that a pending
+// change is LIVE, so this REVALIDATES on each open (cache seeds the paint, a background fetch then refreshes
+// it) rather than trusting the cache forever; a failed revalidate keeps the last good diff, never blanks it.
+const editDiffCache = new Map()
 function useEditDiff(source, path, enabled) {
-  const [diff, setDiff] = useState(null)
+  const key = `${source}\t${path}`
+  const [diff, setDiff] = useState(() => editDiffCache.get(key) ?? null)
   useEffect(() => {
     if (!enabled || !source || !path) return
+    const cached = editDiffCache.get(key)
+    if (cached) setDiff(cached)   // show the last diff at once; the fetch below refreshes it (the change is live)
     let on = true
     fetch(`/api/edit?source=${encodeURIComponent(source)}&path=${encodeURIComponent(path)}`)
-      .then((r) => r.json()).then((d) => { if (on) setDiff(d) }).catch(() => on && setDiff({ patch: '' }))
+      .then((r) => r.json())
+      .then((d) => { editDiffCache.set(key, d); if (on) setDiff(d) })
+      .catch(() => on && setDiff((prev) => prev ?? { patch: '' }))
     return () => { on = false }
-  }, [source, path, enabled])
+  }, [source, path, enabled, key])
   return diff
 }
 

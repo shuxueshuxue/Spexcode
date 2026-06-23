@@ -30,7 +30,8 @@ node's in-flight change reviewable from the board: it exists **only** while the 
 and when it does it **leads** (first tab, editing-session count on its face), so a node mid-change — a
 freshly-added ghost most of all, otherwise near-empty on spec/history — opens with its change front-and-
 centre. It lazily fetches the unified diff of the node's spec.md in the editing worktree vs the fork point
-(`/api/edit`) and renders it with the same diff view the history tab uses.
+(`/api/edit`), rendered with the history tab's diff view and **memoised** the same way — re-opening shows the
+last diff at once, not a reload — but **revalidated** each open, since a pending change is live.
 
 `panesFor(node)` is the single source of which tabs exist and their order — both the tab bar and App's
 keyboard pane-nav read it, so number/Tab keys never cycle to a tab that isn't there. `panesFor` also
@@ -51,8 +52,8 @@ shared**: the eval pane ([[yatsu-eval-tab]]) rides the same component (version r
 
 The "change it in place" surface — the live terminal — relocated to the *session* that does the changing
 (`Enter`; see [[session-console]] and [[term-input]]), keyed to a session rather than pinned to a node. The
-panel sizes to **itself**, never to xterm's measured width — `min-width:0` down the flex chain, the body
-`overflow:hidden`, each pane scrolling its own content, so no stray horizontal scrollbar — but that sizing
-lives in `styles.css`, the dashboard's shared stylesheet governed by [[node-graph]]; this node owns only the
+panel sizes to **itself**, never to xterm's measured width (each pane scrolls its own content, no stray
+horizontal scrollbar) — but that sizing lives in `styles.css`, the dashboard's shared stylesheet governed by
+[[node-graph]]; this node owns only the
 popup component, so a style change elsewhere is never drift here. So the original "one act split in two"
 intent stands, but the union is dissolved: intent in the popup, the changing surface with the session.

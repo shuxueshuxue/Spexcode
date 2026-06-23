@@ -160,12 +160,13 @@ From here, dispatch an agent — it authors the spec nodes and rides the dogfood
   if (blocked.length) console.error(`\n✗ SpexCode: ${blocked.join(', ')} ${blocked.length === 1 ? 'is' : 'are'} ≥ ${threshold} commit(s) behind. Reconcile (above) or bypass with SPEXCODE_SKIP_LINT=1.`)
   process.exit(errors.length || blocked.length ? 1 : 0)
 } else if (cmd === 'ack') {
-  // stamp a `Spec-OK: <node>` trailer onto HEAD per node: "this code change keeps <node>'s spec valid —
-  // no spec edit needed", so git.ts's drift won't count this implementation-only commit against <node>.
-  // Workflow: land the code commit, then `spex ack <node>… --reason "<why>"`. --amend rewrites HEAD adding
-  // the trailers (in the same block as Session:); git de-dupes identical adjacent trailers, so re-acking
-  // is harmless. One amend carries all nodes — when a commit touches a SHARED file (styles.css, an i18n
-  // catalog) it acks every co-owner at once.
+  // stamp a `Spec-OK: <node>` trailer onto HEAD per node: "the change up to here keeps <node>'s spec valid
+  // — no spec edit needed", so git.ts's drift won't count the acknowledged commits against <node>. The ack
+  // is a CHECKPOINT covering ALL of a node's pending drift at or below HEAD (see driftFor), so it need NOT
+  // sit on the exact commit that moved a file — land your commit(s), stack freely, then `spex ack <node>…
+  // --reason "<why>"` ONCE at the tip. --amend adds the trailers to HEAD (in the same block as Session:);
+  // git de-dupes identical adjacent trailers, so re-acking is harmless. One amend carries all nodes — when a
+  // commit touches a SHARED file (styles.css, an i18n catalog) it acks every co-owner at once.
   //
   // @@@ forced reason - --reason is REQUIRED but deliberately NOT stored: git records only `Spec-OK:
   // <node>`, never the prose. Its whole job is to make the agent ARTICULATE why each spec still holds

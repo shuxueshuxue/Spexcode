@@ -7,6 +7,7 @@ desc: .spec on main is canonical; worktrees hold session-attributed proposals.
 code:
   - spec-cli/src/specs.ts
   - spec-cli/src/git.ts
+  - spec-cli/src/git.test.ts
 ---
 # source-of-truth
 
@@ -22,7 +23,10 @@ database, reading must scale with history, not with the number of nodes.
 A node's whole observable state is **derived here, not stored** — version (its count of content
 commits), drift (governed code that moved ahead of the latest version), session (commit attribution),
 and status. The loader reads `.spec` from the filesystem and overlays these git-derived facts. Nothing
-is persisted beside it: no datastore, no hash files — every fact is recomputed from git on read.
+is persisted beside it: no datastore, no hash files — every fact is recomputed from git on read. Drift is
+netted against **acknowledgement**: a `Spec-OK: <node>` trailer checkpoints that node's spec valid at its
+commit, quieting every drift commit at or below it back to the version — so one `spex ack` at the tip
+clears a node's pending drift, not just on the exact commit that moved a file.
 
 Two principles keep that derivation cheap on a long-running server:
 

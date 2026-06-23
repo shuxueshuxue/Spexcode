@@ -149,7 +149,6 @@ export default {
     diffLabel: '规格行差异',
     loadingHistory: '正在加载历史…',
     eval: {
-      loading: '正在加载评测…',
       noScenarios: '尚未声明场景 —— 此节点没有可评测的 yatsu.md。',
       noReadings: '尚无评测 —— 运行 `spex yatsu eval` 进行一次读取。',
       current: '✓ 最新',

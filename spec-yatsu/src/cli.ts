@@ -2,17 +2,18 @@ import { readFileSync, existsSync } from 'node:fs'
 import { join, relative, dirname } from 'node:path'
 import { repoRoot, headSha, driftIndex, stagedFiles, git } from '../../spec-cli/src/git.js'
 import { loadSpecs } from '../../spec-cli/src/specs.js'
-import { yatsuNodes, type YatsuNode, type Scenario } from './yatsu.js'
-import { readReadings, appendReading, latestPerScenario, type Reading } from './sidecar.js'
+import { yatsuNodes, type YatsuNode } from './yatsu.js'
+import { readReadings, appendReading, latestPerScenario, type Reading, type Verdict } from './sidecar.js'
 import { staleAxes } from './freshness.js'
-import { driverFor, evaluatorTag } from './drivers.js'
+import { evaluatorTag } from './evaluator.js'
 import { putBlob, listBlobs, gc, isStrayBlob } from './cache.js'
 import { evalTimeline, type EvalTimeline } from './evaltab.js'
 
-// @@@ yatsu cli - the eval/loss engine on the real `spex` surface (the [[forge-cli]] shape: spec-cli/cli.ts
-// carries only a thin `yatsu` route delegating here; all logic lives in this package). Three verbs over the
-// readings sidecar — scan (status), eval (re-read), clean (GC the pixel cache) — plus a check-staged
-// backstop the pre-commit hook shims to. Freshness is derived live from git, never from stored hashes.
+// @@@ yatsu cli - the eval/loss SCOREBOARD on the real `spex` surface (the [[forge-cli]] shape: spec-cli/
+// cli.ts carries only a thin `yatsu` route delegating here; all logic lives in this package). yatsu KEEPS
+// SCORE and EXECUTES NOTHING — four verbs over the readings sidecar: scan (which scores are stale), eval
+// (FILE the measurement the agent already took), show (read a node's scores), clean (GC the evidence
+// cache) — plus a check-staged backstop the pre-commit hook shims to. Freshness is derived live from git.
 
 function flag(args: string[], name: string): string | undefined {
   const i = args.indexOf(`--${name}`)
@@ -51,11 +52,11 @@ function currentNodeId(root: string): string | null {
 
 // @@@ scan - status: which SCORES are stale or missing — the loss signal's blind spots — mirroring `spex
 // lint`'s code-drift output (the `•` glyph + one line per finding). A "score" is a scenario's LATEST
-// reading, so scan reports exactly the (node, scenario) pairs `spex yatsu eval` would (re)read: a scenario
-// whose latest reading went stale (a governed code file, its scenario, or the evaluator moved since its
-// codeSha), OR one with no reading at all (missing). Read-only; exits 0 (a status report, like drift's
-// advisory warn) — the proactive Stop gate reads these finding lines, never the exit code. The forge
-// `needs-yatsu-eval` half of the spec's scan is a separate node — not part of the core.
+// reading, so scan reports exactly the (node, scenario) pairs `spex yatsu eval` would (re)measure: a
+// scenario whose latest reading went stale (a governed code file, its scenario, or the evaluator moved
+// since its codeSha), OR one with no reading at all (missing). Read-only; exits 0 (a status report, like
+// drift's advisory warn) — the proactive Stop gate ([[yatsu-proactive]]) reads these finding lines, never
+// the exit code. The forge `needs-yatsu-eval` half of the spec's scan is a separate node — not the core's.
 async function scan(): Promise<number> {
   const root = repoRoot()
   const idx = await driftIndex(root)
@@ -71,10 +72,10 @@ async function scan(): Promise<number> {
         findings.push(`  • yatsu-missing: '${n.id}' scenario '${sc.name}' has no reading yet — measure with \`spex yatsu eval ${n.id}\``)
         continue
       }
-      const axes = staleAxes(r, sc, n.codeFiles, n.yatsuPath, idx)
+      const axes = staleAxes(r, n.codeFiles, n.yatsuPath, idx)
       if (axes.length) {
         staleScores++
-        findings.push(`  • yatsu-drift: '${n.id}' scenario '${sc.name}' is stale (${axes.join(', ')} moved since ${r.codeSha.slice(0, 7)}) — re-read with \`spex yatsu eval ${n.id}\``)
+        findings.push(`  • yatsu-drift: '${n.id}' scenario '${sc.name}' is stale (${axes.join(', ')} moved since ${r.codeSha.slice(0, 7)}) — re-measure with \`spex yatsu eval ${n.id}\``)
       }
     }
     if (!findings.length) continue
@@ -85,52 +86,72 @@ async function scan(): Promise<number> {
   return 0
 }
 
-// @@@ eval - re-read scenarios into the sidecar, INCREMENTAL + IDEMPOTENT: a scenario is re-read only when
-// its latest reading is stale (or absent), so a no-change re-run records nothing; `--force` re-reads all
-// (a result suspected flaky). `.` = the current node, a bare id = that node, no arg = sweep every yatsu node.
-// `--image <path>` hands the (manual) driver a captured image to store as the reading's blob.
+// @@@ eval - FILE the measurement the agent ALREADY took; yatsu RUNS NOTHING (no screenshot, no test, no
+// browser). It appends ONE reading for ONE scenario: the evidence the agent captured (`--image` a
+// screenshot OR `--result` a transcript, content-addressed the same way — `--result -` reads stdin) and
+// the verdict it reached (`--pass` | `--fail` | `--note <how far off>`). `.` / no arg = the current node,
+// a bare id = that node. `--scenario <name>` picks which scenario; optional when the node declares one.
 async function evalCmd(args: string[]): Promise<number> {
   const root = repoRoot()
-  const force = has(args, 'force')
-  const image = flag(args, 'image')
   const sel = positional(args)
-  const idx = await driftIndex(root)
-  let nodes = await gatherNodes(root)
-  if (sel === '.') {
-    const cur = currentNodeId(root)
-    if (!cur) { console.error('spex yatsu eval .: no current node (no .session/node-branch here) — name a node or sweep all'); return 2 }
-    nodes = nodes.filter((n) => n.id === cur)
-    if (!nodes.length) { console.error(`spex yatsu eval .: current node '${cur}' has no yatsu.md (declare scenarios first)`); return 1 }
-  } else if (sel) {
-    nodes = nodes.filter((n) => n.id === sel)
-    if (!nodes.length) { console.error(`spex yatsu eval: no yatsu node '${sel}' (a node needs a yatsu.md)`); return 1 }
+  const id = !sel || sel === '.' ? currentNodeId(root) : sel
+  if (!id) { console.error('spex yatsu eval .: no current node (no .session/node-branch here) — name a node'); return 2 }
+  const node = (await gatherNodes(root)).find((n) => n.id === id)
+  if (!node) { console.error(`spex yatsu eval: no yatsu node '${id}' (a node needs a yatsu.md)`); return 1 }
+  if (!node.scenarios.length) { console.error(`spex yatsu eval: '${id}' declares no scenarios in its yatsu.md`); return 1 }
+
+  // which scenario this measurement is OF: --scenario, or the sole scenario when there is exactly one.
+  const names = node.scenarios.map((s) => s.name)
+  const scName = flag(args, 'scenario')
+  let scenario = scName ? node.scenarios.find((s) => s.name === scName) : node.scenarios.length === 1 ? node.scenarios[0] : undefined
+  if (!scenario) {
+    const why = scName ? `has no scenario '${scName}'` : `declares ${node.scenarios.length} scenarios — name one with --scenario <name>`
+    console.error(`spex yatsu eval: '${id}' ${why} — declared: ${names.join(', ')}`)
+    return 1
   }
-  if (!nodes.length) { console.log('spex yatsu eval: no yatsu nodes to evaluate'); return 0 }
-  const codeSha = headSha(root)   // the freshness anchor stamped on every reading taken now
-  let produced = 0, fresh = 0, skipped = 0
-  for (const n of nodes) {
-    const latest = latestPerScenario(readReadings(n.sidecarPath))
-    for (const sc of n.scenarios) {
-      const drv = driverFor(sc.driver)
-      if (!drv) { console.error(`  ! '${n.id}' scenario '${sc.name}': unknown driver '${sc.driver}' — skipped (no producer registered)`); skipped++; continue }
-      const prev = latest.get(sc.name)
-      const stale = !prev || staleAxes(prev, sc, n.codeFiles, n.yatsuPath, idx).length > 0
-      if (!force && !stale) { fresh++; continue }
-      const bytes = await drv.capture(sc, { image })
-      const blob = bytes ? putBlob(bytes) : null
-      const reading: Reading = { scenario: sc.name, codeSha, blob, evaluator: evaluatorTag(drv), ts: new Date().toISOString() }
-      appendReading(n.sidecarPath, reading)
-      produced++
-      console.log(`  ✓ '${n.id}' scenario '${sc.name}' → reading @ ${codeSha.slice(0, 7)} [${reading.evaluator}]${blob ? ` blob ${blob.slice(0, 12)}…` : ' (no image)'}`)
-    }
+
+  // the verdict the agent reached (required — a measurement without one is the legacy shape, not a filing).
+  const verdict = parseVerdict(args)
+  if (!verdict) { console.error('spex yatsu eval: a verdict is required — one of --pass | --fail | --note <text>'); return 2 }
+
+  // the evidence the agent captured (optional; --image XOR --result). The bytes go to the content-addressed
+  // cache exactly the same whether image or transcript; only `blobKind` records which they are.
+  const image = flag(args, 'image')
+  const result = flag(args, 'result')
+  if (image !== undefined && result !== undefined) { console.error('spex yatsu eval: pass at most one of --image / --result'); return 2 }
+  let blob: string | null = null
+  let blobKind: 'image' | 'transcript' | undefined
+  if (image !== undefined) { blob = putBlob(readFileSync(image)); blobKind = 'image' }
+  else if (result !== undefined) { blob = putBlob(readFileSync(result === '-' ? 0 : result)); blobKind = 'transcript' }
+
+  const reading: Reading = {
+    scenario: scenario.name,
+    codeSha: headSha(root),
+    blob,
+    ...(blobKind ? { blobKind } : {}),
+    evaluator: evaluatorTag(),
+    verdict,
+    ts: new Date().toISOString(),
   }
-  console.log(`spex yatsu eval: ${produced} reading(s) recorded, ${fresh} fresh (skipped)${skipped ? `, ${skipped} no-driver` : ''}`)
+  appendReading(node.sidecarPath, reading)
+  const ev = blobKind === 'transcript' ? `transcript ${blob!.slice(0, 12)}…` : blobKind === 'image' ? `image ${blob!.slice(0, 12)}…` : 'no evidence'
+  console.log(`  ✓ '${id}' scenario '${scenario.name}' → ${verdictText(verdict)} @ ${reading.codeSha.slice(0, 7)} [${reading.evaluator}] (${ev})`)
+  console.log(`spex yatsu eval: 1 measurement filed`)
   return 0
 }
 
-// @@@ clean - GC the pixel cache. Default: drop blobs referenced by NO reading record. `--keep-latest`:
+// the verdict from the flags: exactly one of --pass / --fail / --note <text> (precedence pass > fail > note).
+function parseVerdict(args: string[]): Verdict | null {
+  if (has(args, 'pass')) return { status: 'pass' }
+  if (has(args, 'fail')) return { status: 'fail' }
+  const note = flag(args, 'note')
+  if (note !== undefined) return { status: 'note', note }
+  return null
+}
+
+// @@@ clean - GC the evidence cache. Default: drop blobs referenced by NO reading record. `--keep-latest`:
 // keep only the latest reading's blob per scenario (drop superseded captures too). `--all`: drop every
-// blob. Records are untouched — a dropped blob just renders as the MISS sentinel until re-evaluated.
+// blob. Records are untouched — a dropped blob just renders as the MISS sentinel until re-measured.
 async function clean(args: string[]): Promise<number> {
   const root = repoRoot()
   const all = has(args, 'all')
@@ -150,13 +171,13 @@ async function clean(args: string[]): Promise<number> {
   return 0
 }
 
-// @@@ check-staged - the pre-commit backstop. A pixel blob lives in the shared git common dir (outside the
-// tree), so the only way one reaches the index is a stray copy into the worktree; reject it rather than let
-// binary pixels into git history. The hook shims to this (`spex yatsu check-staged`), like the lint shim.
+// @@@ check-staged - the pre-commit backstop. An evidence blob lives in the shared git common dir (outside
+// the tree), so the only way one reaches the index is a stray copy into the worktree; reject it rather than
+// let binary pixels into git history. The hook shims to this (`spex yatsu check-staged`), like the lint shim.
 function checkStaged(): number {
   const offenders = stagedFiles(repoRoot()).filter(isStrayBlob)
   if (!offenders.length) return 0
-  console.error('✗ SpexCode yatsu: stray pixel blob(s) staged — blobs live in the shared git common dir, never in the tree:')
+  console.error('✗ SpexCode yatsu: stray evidence blob(s) staged — blobs live in the shared git common dir, never in the tree:')
   for (const o of offenders) console.error(`    ${o}`)
   console.error('  Unstage them (git rm --cached <path>); a reading references its blob by hash, it never commits the bytes.')
   return 1
@@ -178,19 +199,31 @@ async function show(args: string[]): Promise<number> {
   return 0
 }
 
+// the verdict as a short tag for the terminal: ✓ pass / ✗ fail / ≈ note: <text>, or `legacy` for a reading
+// taken before verdicts existed.
+function verdictText(v: Verdict | undefined): string {
+  if (!v) return 'legacy'
+  if (v.status === 'pass') return '✓ pass'
+  if (v.status === 'fail') return '✗ fail'
+  return `≈ note: ${v.note ?? ''}`
+}
+
 // @@@ formatTimeline - the human rendering of an EvalTimeline (the SAME shape `--json` emits verbatim and the
-// dashboard rides on the board). NEWEST-FIRST, one line per reading: the freshness badge in the board's
-// code-drift vocabulary (✓ current / ⚠ stale, naming the moved axes), the scenario, evaluator, short codeSha,
-// blob state, and ts. The two empty states stay distinct by hasYatsu, the way the eval tab keeps them apart.
+// dashboard rides on the board). NEWEST-FIRST, one row per reading: the VERDICT (the loss the agent
+// measured), the freshness badge in the board's code-drift vocabulary (✓ current / ⚠ stale, naming the moved
+// axes), the scenario, evaluator, short codeSha, the evidence state (image / transcript / miss / none), and
+// ts; the scenario's `expected` (what zero loss is) on a second indented line. The two empty states stay
+// distinct by hasYatsu, the way the eval tab keeps them apart.
 export function formatTimeline(tl: EvalTimeline): string {
   if (!tl.hasYatsu) return `spex yatsu show: '${tl.node}' declares no scenarios (no yatsu.md)`
   if (!tl.readings.length) return `spex yatsu show: '${tl.node}' has scenarios but no reading yet — run \`spex yatsu eval ${tl.node}\``
   const w = Math.max(...tl.readings.map((r) => r.scenario.length))
-  const lines = tl.readings.map((r) => {
+  const lines = tl.readings.flatMap((r) => {
     const badge = r.fresh ? '✓ current' : `⚠ stale (${r.staleAxes.join(', ')})`
-    const blob = r.blobState === 'present' ? `image ${(r.blob ?? '').slice(0, 12)}…`
-      : r.blobState === 'miss' ? 'miss original file' : 'no image'
-    return `  ${r.scenario.padEnd(w)}  ${badge}  ${r.evaluator}  ${r.codeSha.slice(0, 7)}  ${blob}  ${r.ts}`
+    const ev = r.blobState === 'present' ? `${r.blobKind === 'transcript' ? 'transcript' : 'image'} ${(r.blob ?? '').slice(0, 12)}…`
+      : r.blobState === 'miss' ? 'miss original file' : 'no evidence'
+    const head = `  ${r.scenario.padEnd(w)}  ${verdictText(r.verdict)}  ${badge}  ${r.evaluator}  ${r.codeSha.slice(0, 7)}  ${ev}  ${r.ts}`
+    return r.expected ? [head, `  ${' '.repeat(w)}  expected: ${r.expected}`] : [head]
   })
   return [`spex yatsu show: '${tl.node}' — ${tl.readings.length} reading(s), newest first`, '', ...lines].join('\n')
 }
@@ -204,6 +237,6 @@ export async function runYatsu(args: string[]): Promise<number> {
   if (sub === 'clean') return clean(args.slice(1))
   if (sub === 'show') return show(args.slice(1))
   if (sub === 'check-staged') return checkStaged()
-  console.error('spex yatsu: scan | eval [.|<node>] [--force] [--image <path>] | show [.|<node>] [--json] | clean [--keep-latest|--all]')
+  console.error('spex yatsu: scan | eval [.|<node>] [--scenario <name>] (--pass|--fail|--note <text>) [--image <path>|--result <path|->] | show [.|<node>] [--json] | clean [--keep-latest|--all]')
   return 2
 }

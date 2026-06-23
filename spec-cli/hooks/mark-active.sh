@@ -2,14 +2,14 @@
 # @@@ mark-active - the SINGLE freshness hook, wired to BOTH UserPromptSubmit and PreToolUse. It branches
 # on ONE structured field read straight from the hook payload (stdin JSON), so the state is HARD — never
 # text-sniffed from the TUI:
-#   tool_name == AskUserQuestion → the agent is pausing to ask the HUMAN → status: needs-input, with the
+#   tool_name == AskUserQuestion → the agent is pausing to ask the HUMAN → status: asking, with the
 #                                  first question's text as the note. This is the deterministic capture of
 #                                  a question (the agent need not also call `spex session ask`).
 #   any other tool, or a prompt submit (which carries no tool_name) → the agent is working → status: active
 #                                  (and drop the now-stale proposal/note).
 # Fires BEFORE the tool runs, so a `spex session done` declaration (itself a tool) lands AFTER this and
 # wins; the next real tool after a declaration flips back to active, forcing a fresh Stop-gate declaration.
-# That same next-tool rule clears needs-input back to active once the agent resumes work. Pure shell (no
+# That same next-tool rule clears asking back to active once the agent resumes work. Pure shell (no
 # node/tsx) so it stays cheap firing on every tool call. cwd = the session worktree.
 f=.session
 [ -f "$f" ] || exit 0
@@ -19,7 +19,7 @@ payload=$(cat 2>/dev/null)
 tool=$(printf '%s' "$payload" | sed -n 's/.*"tool_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
 
 if [ "$tool" = AskUserQuestion ]; then
-  status=needs-input
+  status=asking
   # first question's text → the note (best-effort; a question with embedded quotes may truncate).
   note=$(printf '%s' "$payload" | grep -o '"question"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 \
     | sed 's/^"question"[[:space:]]*:[[:space:]]*"//; s/"$//')

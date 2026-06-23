@@ -27,7 +27,7 @@ machine's sessions with no code change — the dashboard's viewer-points-anywher
 `watch`/`wait` take the board **source** as a required argument (the backend client), so a poll can never
 silently read a local board by default.
 
-The split is load-bearing and is the whole point. State **producers** stay **local**: `done`/`ask`/`block`/
+The split is load-bearing and is the whole point. State **producers** stay **local**: `done`/`ask`/`park`/
 `idle` and the lifecycle hooks write the cwd worktree's `.session` (see [[state]]) — that file is HOW the
 backend learns state, so an agent must be able to declare its own even with no backend up. **Launch**
 (`spex new`) keeps its own already-justified path (it needs the backend's auth env — see [[launch]]). Only

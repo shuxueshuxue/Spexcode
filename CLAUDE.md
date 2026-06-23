@@ -70,10 +70,10 @@ each. There is no discovery phase.
   `starting` (not `offline`) until its control socket is up, and `closed` fires only when a session is
   genuinely gone — so each event is trustworthy and needs no cross-checking against git.
 - **POLL, DON'T BLOCK** — to wait on a dispatched worker, POLL one-shot — `spex review <id>` or `spex
-  ls` (both **return immediately**), or use **`spex wait <id> [status]`**, the purpose-built one-shot
-  blocking primitive that returns on the first actionable transition (`--timeout`, default 1200s).
-  **Never block on `spex watch`**: it STREAMS forever and will freeze your turn waiting for an event
-  that never ends the stream. (`spex board` dumps the same board JSON the dashboard reads, for a glance.)
+  ls` (both **return immediately**) — and loop until it reaches a status you care about. There is no
+  blocking `wait`: a self-resuming `parked` worker has nothing to act on, so *you* decide what counts by
+  what you poll for. **Never block on `spex watch`**: it STREAMS forever and will freeze your turn waiting
+  for an event that never ends the stream. (`spex board` dumps the same board JSON the dashboard reads, for a glance.)
 - **REVIEW** — `spex review <id>` prints the one review payload: commits ahead of `main`, the
   merge-base diff (the worker's real changes), and the merge/typecheck/lint gates. Decide from that —
   you don't hand-run git or read the source.

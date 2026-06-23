@@ -178,16 +178,35 @@ export default {
     scoreFail: ({ n }) => `${n} 个节点测量为最新且未通过 —— 点击逐个走查`,
     scoreStalePass: ({ n }) => `${n} 个节点为过期通过（最近一次通过测量后代码有变动）—— 点击逐个走查`,
     scoreStaleFail: ({ n }) => `${n} 个节点为过期未通过（最近一次未通过测量后代码有变动）—— 点击逐个走查`,
-    scoreEmpty: ({ n }) => `${n} 个节点声明了场景但暂无当前判定 —— 点击逐个走查`,
+    scoreEmpty: ({ n }) => `${n} 个节点存在未测量或未评分的场景（盲点）—— 点击逐个走查`,
   },
 
-  // yatsu 评分圆圈的悬停说明 —— 节点卡片徽章与 eval 标签页共用同一套词汇。
+  // yatsu 评分词汇 —— 节点卡片计数、聚焦面板与 eval 标签页共用一套词汇。count 是卡片/状态栏的计数；
+  // missing 是已声明但从未测量的场景。
   score: {
     pass: '当前通过 —— 已测量、最新且通过',
     fail: '当前未通过 —— 已测量、最新且未通过',
     stalePass: '已过期 —— 上次测量为通过，现已过时',
     staleFail: '已过期 —— 上次测量为未通过，现已过时',
     empty: '暂无当前评分 —— 从未测量，或无通过/未通过判定',
+    missing: '尚未测量 —— 该场景还没有任何读数',
+    count: ({ satisfied, total, outstanding }) =>
+      `${total} 个场景中有 ${satisfied} 个已满足（最新且通过）` +
+      (outstanding ? ` · ${outstanding} 个待处理 —— 未通过、已过期或未测量` : ''),
+  },
+
+  // 左侧聚焦面板 —— 把当前聚焦节点的 Issue 与 Scenario（及其满足状态）放在一处，让这两种有状态的工作
+  // 共用同一界面，而非在节点上弹窗。
+  focusPanel: {
+    focus: '聚焦',
+    scenarios: '场景',
+    issues: 'issue',
+    noScenarios: '无场景 —— 该节点没有用于测量的 yatsu.md。',
+    noIssues: '该节点暂无关联 issue。',
+    noFocus: '未聚焦任何节点。',
+    open: ({ n }) => `${n} 个待办`,
+    closed: ({ n }) => `${n} 个已关闭`,
+    tracks: ({ files }) => `跟踪 ${files}`,
   },
 
   specNode: {
@@ -198,8 +217,7 @@ export default {
     editorTitle: ({ node, status, id }) => `${node} · ${status} — ${id}`,
     driftAhead: ({ n }) => `领先 ${n}`,
     opTitle: ({ op, label, uncommitted }) => `${op} · ${label}${uncommitted ? '（未提交）' : ''}`,
-    openIssues: ({ n }) => `${n} 个待办 issue——悬停或聚焦查看`,
-    openIssuesCount: ({ n }) => `${n} 个待办 issue`,
+    openIssues: ({ n }) => `${n} 个待办 issue——聚焦该节点后在面板中查看`,
     expandable: ({ n }) => `${n} 个子节点——聚焦展开`,
   },
 

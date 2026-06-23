@@ -185,16 +185,35 @@ export default {
     scoreFail: ({ n }) => `${n} node${n === 1 ? '' : 's'} measured fresh & failing — click to walk them`,
     scoreStalePass: ({ n }) => `${n} node${n === 1 ? '' : 's'} with a stale pass (code moved since the last passing measurement) — click to walk them`,
     scoreStaleFail: ({ n }) => `${n} node${n === 1 ? '' : 's'} with a stale fail (code moved since the last failing measurement) — click to walk them`,
-    scoreEmpty: ({ n }) => `${n} node${n === 1 ? '' : 's'} that declare scenarios but have no current verdict — click to walk them`,
+    scoreEmpty: ({ n }) => `${n} node${n === 1 ? '' : 's'} with an unmeasured or unscored scenario (a blind spot) — click to walk them`,
   },
 
-  // the yatsu SCORE circle's hover copy — one vocabulary across the node-tile card badge and the eval tab.
+  // the yatsu SCORE vocabulary — one set of words across the node-tile count, the focus panel, and the eval
+  // tab. `count` is the tile/stat-bar tally; `missing` is a declared-but-never-measured scenario.
   score: {
     pass: 'current pass — measured, fresh, and passing',
     fail: 'current fail — measured, fresh, and failing',
     stalePass: 'stale — last measured a pass, now out of date',
     staleFail: 'stale — last measured a fail, now out of date',
     empty: 'no current score — never measured, or no pass/fail verdict',
+    missing: 'not measured yet — no reading filed for this scenario',
+    count: ({ satisfied, total, outstanding }) =>
+      `${satisfied} of ${total} scenario${total === 1 ? '' : 's'} satisfied (fresh & passing)` +
+      (outstanding ? ` · ${outstanding} outstanding — failing, stale, or unmeasured` : ''),
+  },
+
+  // the left FOCUS PANEL — the focused node's Issues and Scenarios in one place (their satisfaction status),
+  // so the two stateful kinds of bound work share one surface instead of an on-node popup.
+  focusPanel: {
+    focus: 'focus',
+    scenarios: 'scenarios',
+    issues: 'issues',
+    noScenarios: 'no scenarios — this node declares no yatsu.md to measure.',
+    noIssues: 'no issues linked to this node.',
+    noFocus: 'no node focused.',
+    open: ({ n }) => `${n} open`,
+    closed: ({ n }) => `${n} closed`,
+    tracks: ({ files }) => `tracks ${files}`,
   },
 
   specNode: {
@@ -205,8 +224,7 @@ export default {
     editorTitle: ({ node, status, id }) => `${node} · ${status} — ${id}`,
     driftAhead: ({ n }) => `${n} ahead`,
     opTitle: ({ op, label, uncommitted }) => `${op} · ${label}${uncommitted ? ' (uncommitted)' : ''}`,
-    openIssues: ({ n }) => `${n} open issue${n === 1 ? '' : 's'} — hover or focus to list`,
-    openIssuesCount: ({ n }) => `${n} open issue${n === 1 ? '' : 's'}`,
+    openIssues: ({ n }) => `${n} open issue${n === 1 ? '' : 's'} — focus the node to list them in the panel`,
     expandable: ({ n }) => `${n} child${n === 1 ? '' : 'ren'} — focus to drill in`,
   },
 

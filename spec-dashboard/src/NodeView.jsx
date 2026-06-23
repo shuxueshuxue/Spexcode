@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ScoreBadge, readingScore, nodeScore } from './score.jsx'
+import { ScoreBadge, readingScore, ScenarioCount } from './score.jsx'
 import { useT } from './i18n/index.jsx'
 
 // @@@ pane registry - add a face for a spec node by adding one entry + one render case below.
@@ -110,12 +110,12 @@ function TwoPart({ parts }) {
 
 // @@@ SpecPane - the node's INFORMATION BOARD: title, desc, a compact stat bar, the governed files, then the
 // body. The stat bar is the at-a-glance signal line — derived status (the SAME dot+colour vocabulary as the
-// tile, [[node-graph]]), version, the aggregate yatsu score (nodeScore over node.evals, [[yatsu-score-badge]])
-// and the drift count when a governed file outran the spec ([[source-of-truth]]) — with the last-editing
-// session pushed to the end. Score and drift are surfaced HERE from the tile so the popup stops hiding them.
+// tile, [[node-graph]]), version, the per-scenario yatsu COUNT (ScenarioCount over node.scenarios/evals,
+// [[yatsu-score-badge]] — the SAME ✓X/Y the tile shows) and the drift count when a governed file outran the
+// spec ([[source-of-truth]]) — with the last-editing session pushed to the end. Count and drift are surfaced
+// HERE from the tile so the popup stops hiding them.
 export function SpecPane({ node }) {
   const t = useT()
-  const score = nodeScore(node.evals)
   const driftTitle = (node.driftFiles || []).map((d) => `${d.file}: ${t('specNode.driftAhead', { n: d.behind })}`).join('\n')
   return (
     <div className="pane-doc">
@@ -126,7 +126,7 @@ export function SpecPane({ node }) {
           <i className="stat-dot" />{t(`status.${node.status}`)}
         </span>
         <span className="stat-chip" title={t('nodeView.versionLabel')}>v{node.version || 0}</span>
-        {score && <ScoreBadge state={score} />}
+        <ScenarioCount scenarios={node.scenarios} evals={node.evals} />
         {node.drift > 0 && <span className="stat-chip stat-drift" title={driftTitle}>⚠{node.drift}</span>}
         <span className="stat-sess" title={t('nodeView.lastEditedBy')}>✎ <b>{node.session || t('common.none')}</b></span>
       </div>

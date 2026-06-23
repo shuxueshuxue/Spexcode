@@ -3,6 +3,7 @@ import { ReactFlow, Background, MarkerType, useReactFlow } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import SpecNode from './SpecNode.jsx'
 import NodeView, { panesFor } from './NodeView.jsx'
+import FocusPanel from './FocusPanel.jsx'
 import SessionWindow from './SessionWindow.jsx'
 import SessionInterface from './SessionInterface.jsx'
 import Legend from './Legend.jsx'
@@ -52,7 +53,7 @@ function Dashboard({ specs, sessions, reload }) {
   // @@@ kbdMode - the pointer-side mirror of "the camera follows the keyboard, not the mouse": while the
   // KEYBOARD is driving the board, the mouse gets out of the way. Nav keys engage it (see onKey); the CSS
   // (.kbd-mode) then hides the cursor and lifts the board's pointer events, so a stationary cursor can't
-  // trigger a hover reaction (the issue popover etc.). A genuine mouse MOVE clears it (see below).
+  // trigger a hover reaction. A genuine mouse MOVE clears it (see below).
   const [kbdMode, setKbdMode] = useState(false)
   const kbdRef = useRef(false); kbdRef.current = kbdMode
   const lastMouseRef = useRef({ x: -1, y: -1 })
@@ -482,6 +483,9 @@ function Dashboard({ specs, sessions, reload }) {
 
   return (
     <div className={kbdMode ? 'app kbd-mode' : 'app'}>
+      {/* @@@ focus panel - the left column: the focused node's Issues + Scenarios in one place (their
+          satisfaction status). It reads the focused board node verbatim, so it tracks focus on every poll. */}
+      <FocusPanel node={focus} />
       <div className="graph" ref={graphRef}>
         <ReactFlow
           nodes={nodes}

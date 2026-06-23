@@ -69,11 +69,14 @@ each. There is no discovery phase.
   (`review` / `done` / `offline` / `error` / `needs-input`) → `closed`. A booting worker reads
   `starting` (not `offline`) until its control socket is up, and `closed` fires only when a session is
   genuinely gone — so each event is trustworthy and needs no cross-checking against git.
-- **POLL, DON'T BLOCK** — to wait on a dispatched worker, POLL one-shot — `spex review <id>` or `spex
-  ls` (both **return immediately**) — and loop until it reaches a status you care about. There is no
-  blocking `wait`: a self-resuming `parked` worker has nothing to act on, so *you* decide what counts by
-  what you poll for. **Never block on `spex watch`**: it STREAMS forever and will freeze your turn waiting
-  for an event that never ends the stream. (`spex board` dumps the same board JSON the dashboard reads, for a glance.)
+- **WAIT WITH `spex wait <id>`** — to wait on a dispatched worker, background `spex wait <id>`: it blocks
+  until the worker hits an actionable status, prints it, and **exits** (the exit is your wake-up — the
+  harness re-invokes you when the backgrounded command finishes). It **draws the watcher→worker edge on the
+  session graph** for the whole wait (so your supervision is visible, not an invisible spin) and is
+  **guaranteed to terminate** (a `--timeout`, default 1200s, is the hard wall — a worker stuck in any
+  non-actionable state can't hang you). Background one wait per worker; N waits draw N edges. One trap:
+  **never block on `spex watch`** — that's the human's *forever* stream, no `<id>`, and it freezes your turn.
+  (`spex review <id>` / `spex ls` still return a one-shot snapshot; `spex board` dumps the board JSON for a glance.)
 - **REVIEW** — `spex review <id>` prints the one review payload: commits ahead of `main`, the
   merge-base diff (the worker's real changes), and the merge/typecheck/lint gates. Decide from that —
   you don't hand-run git or read the source.

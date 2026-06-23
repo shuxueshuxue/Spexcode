@@ -2,7 +2,7 @@
 title: graph
 status: active
 hue: 280
-desc: The live session-monitor network — edge A→B iff A runs `spex watch B` — and the `spex watch` actionable-transition stream.
+desc: The live session-monitor network — edge A→B iff A subscribes to B (`spex watch` stream or `spex wait` one-shot) — over one shared poll + edge lifecycle.
 code:
   - spec-cli/src/sessions.ts
 ---
@@ -48,8 +48,28 @@ poll warns **once** and keeps the stream alive (never a phantom mass-`closed`). 
 [actionable transitions] → closed` is a true "subscribe to all session changes" stream — each watch process
 one subscriber, the selector its subscription.
 
-To **wait** on a specific worker rather than stream the whole board, poll one-shot — `spex review <id>`
-or `spex ls` both return immediately — and loop. There is no blocking `wait` primitive: a self-resuming
-`parked` agent has nothing to act on, so "block until actionable" has no single honest answer; the manager
-decides what counts by what they poll for. Never block on `spex watch` — it streams forever and never
-returns, so waiting on it freezes the caller's whole turn.
+### Two consumption policies, one subscription: `watch` (stream) and `wait` (one-shot)
+
+`watch` and `wait` are the SAME subscription — poll the board `source`, draw the `watcher→targets` edge —
+under two **consumption policies**; only how they consume transitions differs:
+
+- **`spex watch [SEL…]`** — *stream forever*, for a human monitoring the board. Emits every actionable
+  transition; never exits (so a turn must never block on it).
+- **`spex wait <id>`** — *take-one-and-exit*, an agent's event-loop primitive. Polls until `<id>` is
+  actionable, prints that status, and **exits** — an agent backgrounds it and the harness re-invokes when
+  the command exits, so the exit IS the wake-up. (Emit is silent: a backgrounded wait wants one clean status
+  line, not the stream.)
+
+**Edge-drawing belongs to the subscription, not to `watch`** (`withWatchEdge` in `cli.ts`): BOTH commands
+report the `watcher→targets` edge (register + TTL heartbeat) for as long as they run and clear it on exit.
+So a supervisor backgrounding `spex wait <worker>` is **visible on the graph** for the whole wait — N waits
+draw N independent edges — and each clears the instant its wait resolves (supervision ended). Edge writes
+are **best-effort**: the edge is cosmetic, so an unreachable backend never fails the wait (and a killed
+process's edge expires by TTL), even though the poll itself does need the backend.
+
+`wait` is **guaranteed to terminate** — the one invariant that matters for an event loop. A `--timeout`
+(default 1200s) sets a deadline checked **every poll, before every sleep, even after a thrown poll**, so a
+worker stuck in *any* non-actionable state (`working`, `parked`, `idle`, `queued`, `starting`) can never
+hang the caller — it exits non-zero at the deadline. Actionable = `WATCH_ACTIONABLE` (which excludes
+self-resuming `parked`, so a parked worker correctly does *not* end the wait), plus `idle` when `--idle` is
+given. A vanished/closed target exits at once; a backend-down poll **fails loud**, never a false timeout.

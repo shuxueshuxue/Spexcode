@@ -158,8 +158,6 @@ export default {
     eval: {
       noScenarios: 'no scenarios declared — this node has no yatsu.md to measure.',
       noReadings: 'no measurements yet — run `spex yatsu eval` to file one.',
-      current: '✓ current',
-      stale: '⚠ stale',
       staleAxes: ({ axes }) => `stale: ${axes} moved since this reading`,
       pass: '✓ pass',
       fail: '✗ fail',
@@ -172,6 +170,15 @@ export default {
       noImage: 'no evidence — the agent attested without a capture.',
       shotAlt: ({ scenario }) => `captured evidence for ${scenario}`,
     },
+  },
+
+  // the yatsu SCORE circle's hover copy — one vocabulary across the node-tile card badge and the eval tab.
+  score: {
+    pass: 'current pass — measured, fresh, and passing',
+    fail: 'current fail — measured, fresh, and failing',
+    stalePass: 'stale — last measured a pass, now out of date',
+    staleFail: 'stale — last measured a fail, now out of date',
+    empty: 'no current score — never measured, or no pass/fail verdict',
   },
 
   specNode: {

@@ -23,7 +23,7 @@ scenarios:
     target: /login
     run: tests/login.spec.ts
   - name: logout-redirects
-    driver: playwright
+    driver: computer-use
     target: /logout
     steps:
       - click the logout button
@@ -34,7 +34,7 @@ body text is ignored by the parser
   const sc = parseScenarios(md)
   assert.equal(sc.length, 2)
   assert.deepEqual(sc[0], { name: 'login-works', driver: 'manual', target: '/login', run: 'tests/login.spec.ts' })
-  assert.deepEqual(sc[1], { name: 'logout-redirects', driver: 'playwright', target: '/logout', steps: ['click the logout button', 'assert the page is /login'] })
+  assert.deepEqual(sc[1], { name: 'logout-redirects', driver: 'computer-use', target: '/logout', steps: ['click the logout button', 'assert the page is /login'] })
 })
 
 test('parseScenarios: no frontmatter / no scenarios key → empty', () => {
@@ -149,8 +149,7 @@ test('drivers: tag round-trips, registry resolves manual + defaults', () => {
   assert.deepEqual(parseEvaluator('manual@2'), { name: 'manual', version: 2 })
   assert.equal(driverFor('manual'), manualDriver)
   assert.equal(driverFor(undefined), manualDriver)        // default
-  assert.equal(driverFor('playwright')?.name, 'playwright') // the registered web driver (sibling node)
-  assert.equal(driverFor('webdriver'), undefined)         // still-unbuilt sibling, not registered
+  assert.equal(driverFor('playwright'), undefined)        // scripted browser drivers retired — manual is the only producer
 })
 
 // ---- cache (content-addressed blob store + GC) ----

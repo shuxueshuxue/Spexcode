@@ -172,6 +172,20 @@ export default {
     },
   },
 
+  // the bottom-left board-stats strip — every per-node badge, totalled across the whole tree. Each chip's
+  // title says what it counts and that clicking it jumps to the first such node.
+  stats: {
+    aria: 'board statistics',
+    totalTitle: ({ n }) => `${n} spec node${n === 1 ? '' : 's'} in the tree`,
+    statusTitle: ({ n, status }) => `${n} ${status} — click to jump to the first`,
+    driftTitle: ({ n }) => `${n} commit${n === 1 ? '' : 's'} of code ahead of spec, tree-wide — click to jump to the first drifting node`,
+    issueTitle: ({ n }) => `${n} open issue${n === 1 ? '' : 's'} across the tree — click to jump to the first`,
+    passTitle: ({ n }) => `${n} node${n === 1 ? '' : 's'} measured fresh & passing — click to jump to the first`,
+    failTitle: ({ n }) => `${n} node${n === 1 ? '' : 's'} measured fresh & failing — click to jump to the first`,
+    staleTitle: ({ n }) => `${n} node${n === 1 ? '' : 's'} with a stale measurement (code moved since) — click to jump to the first`,
+    blindTitle: ({ n }) => `${n} node${n === 1 ? '' : 's'} that declare scenarios but have no current verdict — click to jump to the first`,
+  },
+
   // the yatsu SCORE circle's hover copy — one vocabulary across the node-tile card badge and the eval tab.
   score: {
     pass: 'current pass — measured, fresh, and passing',

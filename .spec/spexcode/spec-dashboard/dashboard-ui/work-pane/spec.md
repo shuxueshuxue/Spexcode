@@ -44,7 +44,10 @@ a `j`/`↓` keypress when there is nothing left to scroll (a short history with 
 a long one). Tying reveal to the gesture, not to scroll movement alone, is what keeps a sub-page history from
 dead-ending with older versions forever hidden (a header click also toggles by hand). A version's proof is
 the **spec.md line diff** it introduced — the latest ships precomputed with the board, older ones fetch
-lazily on expand; a version with no recorded change says so plainly.
+lazily on expand; a version with no recorded change says so plainly. That scaffold — scroll container,
+latest-expanded reveal, click-toggle, and the per-row header-over-evidence shape — is **data-agnostic and
+shared**: the eval pane ([[yatsu-eval-tab]]) rides the same component (version rows + diff here, reading rows
++ screenshot there).
 
 The "change it in place" surface — the live terminal — relocated to the *session* that does the changing
 (`Enter`; see [[session-console]] and [[term-input]]), keyed to a session rather than pinned to a node. The

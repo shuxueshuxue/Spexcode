@@ -1016,7 +1016,6 @@ body {
 .eval-row { border-bottom: 1px solid var(--line); padding: 10px 0; }
 .eval-row:last-child { border-bottom: 0; }
 .eval-head { display: flex; flex-direction: column; gap: 4px; width: 100%; text-align: left; background: none; border: 0; padding: 0; margin: 0; font: inherit; color: inherit; cursor: pointer; }
-.eval-head:disabled { cursor: default; }
 .eval-top { display: flex; align-items: center; gap: 8px; }
 .eval-caret { flex: none; color: var(--muted); font-size: 11px; }
 .eval-scenario { font-size: 13px; font-weight: 600; color: var(--ink2); }
@@ -1026,6 +1025,8 @@ body {
 .eval-fresh.stale { color: var(--yellow); border: 1px solid var(--yellow); cursor: help; }
 .eval-meta { display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--muted); }
 .eval-sha { color: var(--blue); background: var(--panel2); padding: 0 4px; border-radius: 3px; }
-.eval-noimg { margin-top: 4px; padding-left: 19px; font-size: 11px; color: var(--muted); }
+/* the eval evidence figure: a screenshot, or — when there are no pixels — a muted note. The figure's own
+   left-indent/margin position both, so the note carries no padding of its own. */
 .eval-shot { margin: 8px 0 2px; padding-left: 19px; }
 .eval-shot img { display: block; max-width: 100%; background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; }
+.eval-noimg { font-size: 11px; color: var(--muted); }

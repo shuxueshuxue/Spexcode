@@ -43,12 +43,15 @@ The **eval tab** ([[spec-dashboard]]) is a fourth face on the node popup beside 
 by the same `panesFor` registry so the tab bar and keyboard nav agree. Because the readings arrive on the
 board prop, the tab is **instant and consistent** — it can never show the previous node's readings on a
 switch (the old per-node fetch never reset, so stale readings lingered and the pane loaded out of step with
-the rest). It renders the timeline as expandable cards: each names its scenario, a freshness **badge** (✓
-current / ⚠ stale — the board's code-drift vocabulary, naming the moved axis on hover), its evaluator,
-codeSha, and time. A reading with pixels expands to fetch and show its image by hash; one whose blob was
-pruned reads *miss original file*; a pixel-less observation (a human eyeballed it) says so. Two empty states
-stay distinct by the field's presence: no scenarios (no yatsu.md → no `evals` at all) and scenarios but no
-reading yet (an empty array). There is no loading state — the board already carries the readings.
+the rest). It is a **thin consumer of the chronological-timeline scaffold the history tab uses** (extracted
+so the scroll/reveal/toggle and the per-row header-over-evidence shape live once — see [[work-pane]]): the
+newest reading sits expanded, older ones reveal one at a time on the down gesture, a header click toggles any
+by hand. Each row's header names its scenario, a freshness **badge** (✓ current / ⚠ stale — the board's
+code-drift vocabulary, naming the moved axis on hover), its evaluator, codeSha, and time; its evidence is the
+captured screenshot fetched by hash **lazily on expand**, or — no pixels — a note: *miss original file* when
+the blob was pruned, else a pixel-less observation (a human eyeballed it). Two empty states stay distinct by
+the field's presence: no scenarios (no yatsu.md → no `evals` at all) and scenarios but no reading yet (an
+empty array). There is no loading state — the board already carries the readings.
 
 **The seam / out of scope:** the **forge issue-events** half of the timeline — each tracked issue appearing
 twice (open, close) and linking out to its forge-hosted image rather than a local blob — arrives with the

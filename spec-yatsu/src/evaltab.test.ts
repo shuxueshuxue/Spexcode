@@ -12,7 +12,8 @@ const tmp = () => mkdtempSync(join(tmpdir(), 'evaltab-test-'))
 // magic-number prefixes the MIME sniffer keys off of.
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3])
 const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 16, 0x4a, 0x46])
-const TXT = Buffer.from('not an image at all', 'utf8')
+const TRANSCRIPT = Buffer.from('not an image at all — a transcript', 'utf8')
+const BINARY = Buffer.from([0x00, 0x01, 0x02, 0xfe, 0xff])   // has a NUL → not text
 
 // ---- readBlobByHash: serve / miss / invalid ----
 
@@ -27,10 +28,11 @@ test('readBlobByHash: a present PNG blob serves its bytes with an image/png MIME
   }
 })
 
-test('readBlobByHash: JPEG and unknown bytes sniff to their right MIME', () => {
+test('readBlobByHash: JPEG, transcript text, and binary bytes sniff to their right MIME', () => {
   const dir = tmp()
   assert.equal((readBlobByHash(putBlob(JPEG, dir), dir) as { mime: string }).mime, 'image/jpeg')
-  assert.equal((readBlobByHash(putBlob(TXT, dir), dir) as { mime: string }).mime, 'application/octet-stream')
+  assert.equal((readBlobByHash(putBlob(TRANSCRIPT, dir), dir) as { mime: string }).mime, 'text/plain; charset=utf-8')
+  assert.equal((readBlobByHash(putBlob(BINARY, dir), dir) as { mime: string }).mime, 'application/octet-stream')
 })
 
 test('readBlobByHash: a well-formed hash with no cached bytes is a MISS', () => {

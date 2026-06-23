@@ -1,1 +1,2 @@
 {"scenario":"drill-down-tree-renders","codeSha":"7670a91812ef5cce8026f442b357577848e22a64","blob":"98582575fd7c155403b52a383bb5b1a4183ec40ba48d459f3347ad74c255e7be","blobKind":"image","evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-23T08:23:48.079Z"}
+{"scenario":"drill-down-tree-renders","codeSha":"cb9168b0fcdb38c7e0a17c01be12e950cb4cbe72","blob":"e77191c60df84a4a87e0e6fa573f7c3f88fd78bae4b8137d82895b42f9cf9547","blobKind":"image","evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-23T13:00:18.502Z"}

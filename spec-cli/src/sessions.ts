@@ -457,25 +457,36 @@ export type Edge = { from: string; to: string; kind: 'monitor' | 'comms'; count?
 
 // @@@ comms log - direct agent talk ([[comms-edge]]), recorded per-worktree. `spex session send` goes
 // THROUGH the backend (sendKeys); on a delivered message that carries a sender, the backend appends one
-// {peer, ts} line to the RECIPIENT's `.session/comms.ndjson` — each message counted exactly once, on the
-// side the backend already resolved. Persisted (survives a backend restart, unlike the in-memory monitor
-// registrations) and untracked (dies with the worktree, matching a graph of LIVE sessions). No sender →
-// not an agent send → not logged. Best-effort: recording must NEVER fail the delivered message.
+// {peer, ts} line to the RECIPIENT's comms log — each message counted exactly once, on the side the backend
+// already resolved. Persisted (survives a backend restart, unlike the in-memory monitor registrations) and
+// untracked (dies with the worktree, matching a graph of LIVE sessions). No sender → not logged.
+// LAYOUT-AWARE, like [[portable-layout]]'s statePath: a new session writes `.session/comms.ndjson`; a
+// still-draining LEGACY session (`.session` is a flat FILE, so the dir can't be made) writes the flat
+// sibling `.session-comms.ndjson` — both gitignored. Without this a legacy session silently recorded
+// nothing. Best-effort: a recording failure must NEVER fail the delivered message.
 const COMMS_FILE = 'comms.ndjson'
+const LEGACY_COMMS = '.session-comms.ndjson'
+function commsLog(dir: string): { path: string; mkdir: boolean } {
+  const base = join(dir, RUNTIME_DIR)
+  try { if (statSync(base).isFile()) return { path: join(dir, LEGACY_COMMS), mkdir: false } } catch { /* missing or dir */ }
+  return { path: join(base, COMMS_FILE), mkdir: true }
+}
 async function recordComms(toId: string, fromId: string): Promise<void> {
   if (!fromId || fromId === toId) return
   try {
     const wt = await findWorktree(toId)
     if (!wt) return
-    appendFileSync(join(runtimeDir(wt.path), COMMS_FILE), JSON.stringify({ peer: fromId, ts: new Date().toISOString() }) + '\n')
+    const { path, mkdir } = commsLog(wt.path)
+    if (mkdir) mkdirSync(join(wt.path, RUNTIME_DIR), { recursive: true })
+    appendFileSync(path, JSON.stringify({ peer: fromId, ts: new Date().toISOString() }) + '\n')
   } catch { /* a recording failure must not fail the delivered send */ }
 }
 // the peers this session has exchanged messages with — one entry per message, newest appended last.
-function readComms(path: string): string[] {
+function readComms(dir: string): string[] {
   try {
-    const p = join(path, RUNTIME_DIR, COMMS_FILE)
-    if (!existsSync(p)) return []
-    return readFileSync(p, 'utf8').split('\n').filter(Boolean)
+    const { path } = commsLog(dir)
+    if (!existsSync(path)) return []
+    return readFileSync(path, 'utf8').split('\n').filter(Boolean)
       .map((l) => { try { return String(JSON.parse(l).peer || '') } catch { return '' } }).filter(Boolean)
   } catch { return [] }
 }

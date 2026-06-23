@@ -9,8 +9,10 @@ import Modal from './Modal.jsx'
 import { useT } from './i18n/index.jsx'
 
 // @@@ session-graph - the EXPERIMENTAL directed monitor network: each session is a node, each LIVE
-// monitor a directed arrow A→B meaning "agent A is right now running `spex watch B`". Live edges are
-// DERIVED from live watches (GET /api/sessions/graph), never stored. The view is OBSERVATIONAL — it
+// monitor a directed arrow A→B meaning "agent A is right now running `spex watch B`". The NODES are the
+// preloaded board sessions the dashboard already polls (passed in as `sessions`) — the same source every
+// other surface reads — so the view opens INSTANTLY, never blocking on its own cold session fetch. Live
+// edges are DERIVED from live watches (the `edges` of GET /api/sessions/graph), never stored. The view is OBSERVATIONAL — it
 // reflects who is watching whom and updates as watches start/stop — but it ALSO lets a human ASK: dragging
 // A→B dispatches a PROMPT to agent A telling it to monitor B (POST /keys; NO subscription store). That
 // gesture is optimistic — a pending dashed edge + a toast appear immediately so the user never wonders if
@@ -66,10 +68,16 @@ function radial(sessions) {
   return pos
 }
 
-function GraphCanvas({ onOpen, active, legend, setLegend }) {
+function GraphCanvas({ sessions = [], onOpen, active, legend, setLegend }) {
   const t = useT()
-  const [graph, setGraph] = useState({ nodes: [], edges: [] })
-  const [loaded, setLoaded] = useState(false)        // first fetch done → safe to mount already-framed
+  // @@@ nodes from the preloaded board, edges from the poll - the graph's NODES are the SHARED session list
+  // the dashboard already polls (`board.sessions`, refreshed every 4s by App and handed down here), the same
+  // source every other surface reads. So this view opens INSTANTLY with the nodes already in hand and frames
+  // them on the first paint — it never blocks behind a cold `listSessions()` round-trip the way it did when it
+  // re-fetched the whole `{nodes,edges}` itself (that recompute spawns git/tmux and ran 0.5–3s under multi-
+  // agent load, while every other surface was instant off the cached board). Only the EDGES — the live
+  // monitor arrows + comms links, the genuinely observational part — are polled from /api/sessions/graph.
+  const [edges, setEdges] = useState([])             // live monitor + comms edges, from the poll
   const [pending, setPending] = useState([])         // optimistic monitor edges, awaiting the live watch
   const [toast, setToast] = useState(null)           // brief "asked A to monitor B" reassurance
   const [focusId, setFocusId] = useState(null)       // keyboard cursor: the node arrows move and ⏎ opens
@@ -80,9 +88,9 @@ function GraphCanvas({ onOpen, active, legend, setLegend }) {
   const reload = useCallback(async () => {
     try {
       const res = await fetch('/api/sessions/graph')
-      setGraph(await res.json())
-    } catch { /* transient; keep the last good graph */ }
-    finally { setLoaded(true) }
+      const g = await res.json()
+      setEdges(Array.isArray(g.edges) ? g.edges : [])   // nodes are preloaded; take only the edges
+    } catch { /* transient; keep the last good edges */ }
   }, [])
   useEffect(() => { reload(); const id = setInterval(reload, 4000); return () => clearInterval(id) }, [reload])
 
@@ -91,25 +99,28 @@ function GraphCanvas({ onOpen, active, legend, setLegend }) {
   // the focused session, `?` toggles the legend. The console's window listener runs FIRST (it mounts first)
   // and consumes ↑/↓/Esc; the keys it doesn't touch (hjkl/⏎/?) fall through to ours.
 
-  const pos = useMemo(() => radial(graph.nodes), [graph.nodes])
-  const byId = useMemo(() => Object.fromEntries(graph.nodes.map((s) => [s.id, s])), [graph.nodes])
-  const rfNodes = useMemo(() => graph.nodes.map((s) => ({
+  const pos = useMemo(() => radial(sessions), [sessions])
+  const byId = useMemo(() => Object.fromEntries(sessions.map((s) => [s.id, s])), [sessions])
+  const rfNodes = useMemo(() => sessions.map((s) => ({
     id: s.id, type: 'session', position: pos[s.id] || { x: 0, y: 0 },
     data: { ...s, focus: s.id === focusId }, draggable: true,
-  })), [graph.nodes, pos, focusId])
+  })), [sessions, pos, focusId])
 
   // a live monitor A→B already registered drops its optimistic twin — the pending edge has become real.
   useEffect(() => {
     if (!pending.length) return
-    const live = new Set(graph.edges.filter((e) => e.kind !== 'comms').map((e) => `${e.from}->${e.to}`))
+    const live = new Set(edges.filter((e) => e.kind !== 'comms').map((e) => `${e.from}->${e.to}`))
     setPending((p) => p.filter((e) => !live.has(`${e.from}->${e.to}`)))
-  }, [graph.edges]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [edges]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // each live monitor A→B is a solid directed arrow in the WATCHER's hue; each PENDING (asked-but-not-yet-
   // registered) monitor is the same arrow dashed, so the user sees their request land instantly and watches
   // it firm up when the real watch appears. Both keyed the same so a live edge supersedes its pending twin.
   const rfEdges = useMemo(() => {
-    const live = graph.edges.map((e) => {
+    // an edge whose endpoint isn't in the preloaded node set (a brief board↔graph poll skew) is dropped —
+    // the SAME "no edge touching a non-live session" rule the backend applies, kept honest client-side so
+    // ReactFlow never routes a dangling arrow; it self-heals on the next board poll.
+    const live = edges.filter((e) => byId[e.from] && byId[e.to]).map((e) => {
       // a COMMS edge (direct talk) reads APART from a monitor arrow: a thin, muted, UNDIRECTED dashed line
       // (no arrowhead) labelled with the message count — "these two have talked", distinct from "A watches B".
       if (e.kind === 'comms') {
@@ -139,7 +150,7 @@ function GraphCanvas({ onOpen, active, legend, setLegend }) {
       }
     })
     return [...live, ...optimistic]
-  }, [graph.edges, pending])
+  }, [edges, byId, pending])
 
   const flash = useCallback((text) => {
     setToast(text)
@@ -185,9 +196,9 @@ function GraphCanvas({ onOpen, active, legend, setLegend }) {
   // keep a keyboard cursor alive: once the graph loads, focus the first node so arrows/⏎ have a start
   // point; if the focused session disappears between polls (closed/merged), fall back to the first node.
   useEffect(() => {
-    if (!graph.nodes.length) { if (focusId !== null) setFocusId(null); return }
-    if (!focusId || !graph.nodes.some((s) => s.id === focusId)) setFocusId(graph.nodes[0].id)
-  }, [graph.nodes, focusId])
+    if (!sessions.length) { if (focusId !== null) setFocusId(null); return }
+    if (!focusId || !sessions.some((s) => s.id === focusId)) setFocusId(sessions[0].id)
+  }, [sessions, focusId])
 
   // @@@ directional nav - the radial layout is a network, not a tree, so there is no parent/child to walk:
   // an hjkl key moves the cursor to the NEAREST node inside a 45° cone in that screen direction, which reads
@@ -223,7 +234,7 @@ function GraphCanvas({ onOpen, active, legend, setLegend }) {
       e.preventDefault(); e.stopPropagation()
       const c = pos[cur.id] || { x: 0, y: 0 }
       let best = null, bestD = Infinity
-      for (const s of graph.nodes) {
+      for (const s of sessions) {
         if (s.id === cur.id) continue
         const p = pos[s.id] || { x: 0, y: 0 }
         const dx = p.x - c.x, dy = p.y - c.y
@@ -239,20 +250,18 @@ function GraphCanvas({ onOpen, active, legend, setLegend }) {
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [active, byId, pos, graph.nodes, CONES, onOpen, setCenter, getViewport, legend, setLegend])
+  }, [active, byId, pos, sessions, CONES, onOpen, setCenter, getViewport, legend, setLegend])
 
   // @@@ frame to the pane - the web is origin-centred in flow coords; fitView frames it within whatever size
   // the content pane gives us (no window-based pre-frame — this is an in-pane tab, not a fullscreen overlay).
-  // First paint snaps (duration 0) so the graph opens already centred; a later session-count change pans.
+  // Nodes are preloaded, so they're present on the FIRST render: this fires in that same commit's rAF and the
+  // graph opens already centred (duration 0) — no loading gate to wait behind. A later session-count change pans.
   useEffect(() => {
-    if (!loaded || !rfNodes.length) return
+    if (!rfNodes.length) return
     const first = !framedRef.current
     framedRef.current = true
     requestAnimationFrame(() => fitView({ padding: 0.25, duration: first ? 0 : 300 }))
-  }, [rfNodes.length, loaded, fitView])
-
-  // hold the empty pane until the first graph arrives; the frame effect then fits it (see above).
-  if (!loaded) return <div className="sg-loading">{t('common.loading')}</div>
+  }, [rfNodes.length, fitView])
 
   return (
     <>
@@ -312,7 +321,9 @@ function SessionGraphLegend({ onClose }) {
 // isolation that lets it sit inside the console without touching the board behind it. `onOpen` switches the
 // console to a clicked node's session tab (setSel). `active` is true while this tab is the one selected;
 // `legend`/`setLegend` are LIFTED to the console so its Esc handler can close the legend before the console.
-export default function SessionGraph({ onOpen, active = true, legend, setLegend }) {
+// `sessions` is the preloaded board session list (the console already holds it) — the graph's NODES, so the
+// view opens instantly without a cold listSessions() fetch; only edges are polled (see GraphCanvas).
+export default function SessionGraph({ sessions = [], onOpen, active = true, legend, setLegend }) {
   const t = useT()
   return (
     <div className="session-graph">
@@ -322,7 +333,7 @@ export default function SessionGraph({ onOpen, active = true, legend, setLegend 
         <button className="hud-help" onClick={() => setLegend((v) => !v)} title={t('sessionGraph.helpTitle')}>?</button>
       </div>
       <ReactFlowProvider>
-        <GraphCanvas onOpen={onOpen} active={active} legend={legend} setLegend={setLegend} />
+        <GraphCanvas sessions={sessions} onOpen={onOpen} active={active} legend={legend} setLegend={setLegend} />
       </ReactFlowProvider>
       {legend && <SessionGraphLegend onClose={() => setLegend(false)} />}
     </div>

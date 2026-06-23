@@ -3,7 +3,7 @@ import { join, relative, dirname } from 'node:path'
 import { repoRoot, headSha, driftIndex, stagedFiles, git } from '../../spec-cli/src/git.js'
 import { loadSpecs } from '../../spec-cli/src/specs.js'
 import { mainBranch, statePath } from '../../spec-cli/src/layout.js'
-import { yatsuNodes, type YatsuNode } from './yatsu.js'
+import { yatsuNodes, validateScenarios, YATSU_FILE, type YatsuNode } from './yatsu.js'
 import { readReadings, appendReading, latestPerScenario, type Reading, type Verdict } from './sidecar.js'
 import { staleAxes } from './freshness.js'
 import { evaluatorTag } from './evaluator.js'
@@ -90,12 +90,15 @@ export function nodeChanged(dirRel: string, codeFiles: string[], changed: Set<st
 }
 
 // @@@ scan - the loss signal's BLIND SPOTS, mirroring `spex lint`'s code-drift output (the `•` glyph + one
-// line per finding). Three classes: a node WITH a yatsu.md whose scenario's latest reading went stale (a
-// governed code file, the scenario, or the evaluator moved since its codeSha) → `yatsu-drift`; a scenario
-// with no reading at all → `yatsu-missing`; a frontend node (UI in its `code:`) with NO yatsu.md → an
-// `yatsu-uncovered` loss function that was never written. `--changed` scopes all three to the nodes THIS
-// branch touched (the proactive Stop gate's view — see [[yatsu-proactive]]); plain scan is the whole-repo
-// coverage report. Read-only; exits 0 (a status report) — the gate reads the finding lines, never the code.
+// line per finding). Four classes: a yatsu.md that violates the scenario schema (a missing required field, a
+// typo'd key, a duplicate name) → `yatsu-schema` — a malformed loss function the lenient parser would have
+// silently swallowed; a node WITH a valid yatsu.md whose scenario's latest reading went stale (a governed
+// code file, the scenario, or the evaluator moved since its codeSha) → `yatsu-drift`; a scenario with no
+// reading at all → `yatsu-missing`; a frontend node (UI in its `code:`) with NO yatsu.md → an
+// `yatsu-uncovered` loss function that was never written. `--changed` scopes all to the nodes THIS branch
+// touched (the proactive Stop gate's view — see [[yatsu-proactive]]); plain scan is the whole-repo coverage
+// report. Read-only; exits 0 (a status report) — the gate reads the finding lines, never the code. The
+// pre-commit backstop is the HARD twin: it shares validateScenarios and rejects a malformed staged yatsu.md.
 async function scan(args: string[] = []): Promise<number> {
   const root = repoRoot()
   const changedOnly = has(args, 'changed')
@@ -103,13 +106,19 @@ async function scan(args: string[] = []): Promise<number> {
   const idx = await driftIndex(root)
   const specs = await loadSpecs()
   const yByDir = new Map(yatsuNodes(root).map((n) => [relative(root, n.dir), n]))
-  let flaggedNodes = 0, staleScores = 0, missingScores = 0, uncovered = 0
+  let flaggedNodes = 0, malformed = 0, staleScores = 0, missingScores = 0, uncovered = 0
   for (const s of specs) {
     const dirRel = dirname(s.path)
     if (changed && !nodeChanged(dirRel, s.code, changed)) continue
     const y = yByDir.get(dirRel)
     const findings: string[] = []
     if (y) {
+      // schema first: a malformed yatsu.md is the loudest gap — report each violation, then still scan its
+      // (leniently-parsed) scenarios for stale/missing so a typo doesn't mask a real freshness gap.
+      for (const e of validateScenarios(readFileSync(join(y.dir, YATSU_FILE), 'utf8'))) {
+        malformed++
+        findings.push(`  • yatsu-schema: '${s.id}' ${e} — fix ${y.yatsuPath}`)
+      }
       const latest = latestPerScenario(readReadings(y.sidecarPath))
       for (const sc of y.scenarios) {
         const r = latest.get(sc.name)
@@ -133,7 +142,7 @@ async function scan(args: string[] = []): Promise<number> {
     for (const f of findings) console.error(f)
   }
   const scope = changedOnly ? ' --changed' : ''
-  console.error(`spex yatsu scan${scope}: ${flaggedNodes} node(s) flagged (${staleScores} stale, ${missingScores} missing, ${uncovered} uncovered)`)
+  console.error(`spex yatsu scan${scope}: ${flaggedNodes} node(s) flagged (${malformed} malformed, ${staleScores} stale, ${missingScores} missing, ${uncovered} uncovered)`)
   return 0
 }
 
@@ -222,16 +231,37 @@ async function clean(args: string[]): Promise<number> {
   return 0
 }
 
-// @@@ check-staged - the pre-commit backstop. An evidence blob lives in the shared git common dir (outside
-// the tree), so the only way one reaches the index is a stray copy into the worktree; reject it rather than
-// let binary pixels into git history. The hook shims to this (`spex yatsu check-staged`), like the lint shim.
+// @@@ check-staged - the pre-commit backstop, two rejections over the staged set (the hook shims to it,
+// `spex yatsu check-staged`, like the lint shim). (1) A stray evidence blob: a blob lives in the shared git
+// common dir (outside the tree), so the only way one reaches the index is a stray copy into the worktree —
+// reject it rather than let binary pixels into git history. (2) A malformed yatsu.md: a staged scenario file
+// must satisfy the schema (validateScenarios, the same gate `scan` reports), so a broken loss function — a
+// typo'd field, a scenario missing its `expected` — is rejected AT the commit, never landing silently for
+// the lenient parser to swallow. Prints every offender, then exits non-zero if either check failed.
 function checkStaged(): number {
-  const offenders = stagedFiles(repoRoot()).filter(isStrayBlob)
-  if (!offenders.length) return 0
-  console.error('✗ SpexCode yatsu: stray evidence blob(s) staged — blobs live in the shared git common dir, never in the tree:')
-  for (const o of offenders) console.error(`    ${o}`)
-  console.error('  Unstage them (git rm --cached <path>); a reading references its blob by hash, it never commits the bytes.')
-  return 1
+  const root = repoRoot()
+  const staged = stagedFiles(root)
+  let bad = false
+
+  const blobs = staged.filter(isStrayBlob)
+  if (blobs.length) {
+    bad = true
+    console.error('✗ SpexCode yatsu: stray evidence blob(s) staged — blobs live in the shared git common dir, never in the tree:')
+    for (const o of blobs) console.error(`    ${o}`)
+    console.error('  Unstage them (git rm --cached <path>); a reading references its blob by hash, it never commits the bytes.')
+  }
+
+  for (const rel of staged.filter((p) => p === YATSU_FILE || p.endsWith('/' + YATSU_FILE))) {
+    const abs = join(root, rel)
+    if (!existsSync(abs)) continue   // staged deletion — nothing to validate
+    const errs = validateScenarios(readFileSync(abs, 'utf8'))
+    if (!errs.length) continue
+    bad = true
+    console.error(`✗ SpexCode yatsu: ${rel} — invalid scenario schema:`)
+    for (const e of errs) console.error(`    ${e}`)
+  }
+
+  return bad ? 1 : 0
 }
 
 // @@@ show - the CLI FACE of the eval timeline, the terminal twin of the dashboard's eval tab. Both read

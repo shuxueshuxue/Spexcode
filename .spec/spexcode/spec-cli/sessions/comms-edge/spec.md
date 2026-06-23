@@ -27,9 +27,11 @@ know it has a supervisor. The connection should be established in B's context th
 
 **A send is recorded through the backend.** `spex session send` already goes through the backend (POST
 `/api/sessions/:id/keys`); it now also carries the SENDER's id. On a successful delivery the backend
-appends one line — `{peer, ts}` — to the RECIPIENT's per-worktree runtime log, `.session/comms.ndjson`
-(the recipient's dir is the one the backend already resolved to deliver). Recording on the recipient side
-counts each message exactly once. The log is per-worktree and untracked: it lives and dies with the
+appends one line — `{peer, ts}` — to the RECIPIENT's per-worktree runtime log (the recipient's dir is the
+one the backend already resolved to deliver). The log path is layout-aware like [[portable-layout]]: a new
+session writes `.session/comms.ndjson`; a still-draining legacy session (`.session` is a flat file, so the
+dir can't be made) writes the gitignored flat sibling `.session-comms.ndjson`. Recording on the recipient
+side counts each message exactly once. The log is per-worktree and untracked: it lives and dies with the
 session, which is exactly right for a graph of LIVE sessions — and, unlike the in-memory monitor
 registrations, it SURVIVES a backend restart. A human sending from a plain shell has no sender id, so
 nothing is recorded (no self-talk, no phantom edge) — the same rule [[agent-reply-channel]] uses for its

@@ -12,6 +12,8 @@ dist/
 .session-prompt
 # deferred launch prompt for a still-QUEUED session (consumed at launch) — runtime, not spec data
 .session-launch
+# inter-agent comms log (`spex session send` records) — runtime, not spec data; removed with the worktree
+.session-comms.ndjson
 # per-worktree generated hook settings (writeSettings() writes absolute paths) — runtime, not spec data
 .spex-hooks.json
 # per-worktree generated launch script (launchScript() writes the claude invocation) — runtime, not spec data

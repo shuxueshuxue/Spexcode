@@ -11,6 +11,8 @@ import { loadSpecs } from './specs.js'
 //   drift     (warn) : a governed file has commits newer than its spec's latest version -> maybe stale.
 //   altitude  (warn) : a body has slid BELOW contract altitude into a mechanics dump (too long, and/or
 //                      too dense with code identifiers, and/or step-by-step how-to) — see altitude().
+//   breadth   (warn) : a node has too many direct children (>= maxChildren) — altitude's structural twin:
+//                      the same comprehensibility limit on the tree's breadth, not a body's depth.
 // No file hashes are stored anywhere: git already is the hash database, so drift is derived live.
 
 export type Finding = { level: 'error' | 'warn'; rule: string; spec?: string; file?: string; msg: string }
@@ -25,6 +27,11 @@ export type LintConfig = {
   sourceExtensions: string[]    // extensions coverage treats as source files
   identifierExtensions: string[]// extensions the altitude bare-filename signal recognises (see IDENT below)
   altitude: { lineBudget: number; charBudget: number; sizeable: number; dense: number; steps: number }
+  // @@@ maxChildren - the breadth budget: warn when a node has >= this many DIRECT child nodes. Altitude
+  // bounds a single body's depth; this bounds the tree's breadth, so the escape valve altitude pushes you
+  // toward — "split into children" — can't be satisfied by a wide flat fan-out that's just as hard to hold
+  // in your head. A soft taste dial (a flat list of genuine peers is sometimes right) → it's a WARN.
+  maxChildren: number
   // @@@ driftErrorThreshold - drift stays an advisory WARN in `spex lint` (CI keeps it advisory — see the
   // ci-gate node), but the commit-local pre-commit gate (`spex lint --gate`) HARD-BLOCKS a commit that
   // touches a file whose node has accumulated >= this many commits of drift. Small drift nudges; a node
@@ -36,6 +43,7 @@ const DEFAULT_CONFIG: LintConfig = {
   sourceExtensions: ['ts', 'tsx', 'js', 'jsx'],
   identifierExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'md'],
   altitude: { lineBudget: 50, charBudget: 4200, sizeable: 35, dense: 1.3, steps: 3 },
+  maxChildren: 8,
   driftErrorThreshold: 3,
 }
 export function loadConfig(root: string): LintConfig {
@@ -136,6 +144,17 @@ export async function specLint(): Promise<Finding[]> {
   for (const s of specs) {
     const why = altitude(s.body, cfg, ident)
     if (why) out.push({ level: 'warn', rule: 'altitude', spec: s.id, msg: `'${s.id}' body reads low-altitude (mechanics, not contract): ${why}` })
+  }
+
+  // breadth: a node with too many DIRECT children is altitude's structural twin — splitting a node to pass
+  // altitude shouldn't just relocate the sprawl into a wide flat fan-out (WARN — soft, advisory). Children
+  // are derived from the parent links loadSpecs already computes; no explicit child array to keep in sync.
+  const childCount = new Map<string, number>()
+  for (const s of specs) if (s.parent) childCount.set(s.parent, (childCount.get(s.parent) ?? 0) + 1)
+  for (const s of specs) {
+    const n = childCount.get(s.id) ?? 0
+    if (n >= cfg.maxChildren)
+      out.push({ level: 'warn', rule: 'breadth', spec: s.id, msg: `'${s.id}' has ${n} direct child nodes (>= ${cfg.maxChildren}) — is an intermediate grouping layer missing? (a flat list of genuine peers is sometimes right — ignore if so)` })
   }
 
   // coverage: every governed source file must be claimed by at least one spec.

@@ -141,15 +141,23 @@ export function useHistory(id) {
 
 // @@@ useVersionDiff - one version's spec.md line-diff (/api/specs/:id/diff/:hash), fetched LAZILY the
 // first time its history item expands. `enabled` keeps collapsed items from ever fetching; the latest
-// item never uses this (the board already ships its diff as node.lastDiff, so it renders instantly).
+// item never uses this (the board already ships its diff as node.lastDiff, so it renders instantly). A
+// commit hash's diff is immutable, so results are memoised per (id,hash): collapsing then re-expanding an
+// older version — its evidence figure unmounts on collapse — reads the cache instead of refetching/flashing.
+const versionDiffCache = new Map()
 function useVersionDiff(id, hash, enabled) {
-  const [diff, setDiff] = useState(null)
+  const key = `${id}/${hash}`
+  const [diff, setDiff] = useState(() => versionDiffCache.get(key) ?? null)
   useEffect(() => {
     if (!enabled) return
+    const cached = versionDiffCache.get(key)
+    if (cached) { setDiff(cached); return }
     let on = true
-    fetch(`/api/specs/${id}/diff/${hash}`).then((r) => r.json()).then((d) => { if (on) setDiff(d) }).catch(() => on && setDiff({ patch: '' }))
+    fetch(`/api/specs/${id}/diff/${hash}`).then((r) => r.json())
+      .then((d) => { versionDiffCache.set(key, d); if (on) setDiff(d) })
+      .catch(() => on && setDiff({ patch: '' }))
     return () => { on = false }
-  }, [id, hash, enabled])
+  }, [id, hash, enabled, key])
   return diff
 }
 
@@ -188,45 +196,16 @@ function DiffEvidence({ diff }) {
   )
 }
 
-// @@@ HistoryItem - one version in the merged history. Always its row header (number · hash · date · the
-// +adds/−dels it changed in THIS node · reason · session), and — when expanded — its proof below: the
-// spec.md line diff that version introduced. The latest item renders its diff instantly from node.lastDiff;
-// older items fetch theirs lazily the first time they open. Clicking the header toggles the item by hand.
-function HistoryItem({ node, r, v, latest, open, onToggle }) {
-  const t = useT()
-  const fetched = useVersionDiff(node.id, r.hash, open && !latest)
-  const diff = latest ? (node.lastDiff ?? fetched) : fetched
-  return (
-    <div className={`ver-row${latest ? ' latest' : ''}${open ? ' open' : ''}`}>
-      <button className="rec-toggle" onClick={onToggle} aria-expanded={open}>
-        <div className="rec-head">
-          <span className="rec-caret">{open ? '▾' : '▸'}</span>
-          <span className="rec-v">v{v}</span>
-          <code className="rec-hash">{r.hash.slice(0, 7)}</code>
-          <span className="rec-date">{(r.date || '').slice(0, 10)}</span>
-          <span className="rec-diff">
-            <b className="rec-add">+{r.additions ?? 0}</b>
-            <b className="rec-del">−{r.deletions ?? 0}</b>
-          </span>
-        </div>
-        <div className="rec-msg">{r.reason}</div>
-        <div className="rec-sub">{t('nodeView.filesChanged', { n: r.files ?? 0 })} · {r.session || t('common.idle')}</div>
-      </button>
-      {open && (
-        <figure className="rec-evidence">
-          <DiffEvidence diff={diff} />
-        </figure>
-      )}
-    </div>
-  )
-}
-
-// @@@ HistoryPane - the merged version log (the old `recent` + `history` tabs, now one). The latest
-// version opens expanded with its proof; older ones start collapsed and REVEAL progressively as the
-// reader scrolls — once the end of the deepest open item is in view (they've finished reading it), the
-// next item expands. A header click toggles any item by hand. `rows` is NodeView's one fetch, newest-first.
-export function HistoryPane({ node, rows }) {
-  const t = useT()
+// @@@ ChronoPane - the shared chronological-timeline scaffold behind BOTH the history and eval tabs. It owns
+// the one scroll container, the open-set (item 0 — the latest — starts expanded, the rest REVEAL one at a time
+// on the down gesture, see revealNext), the manual click-toggle, and the per-item shape: a toggle-header button
+// over an evidence <figure> that unfolds when open. It is DATA-AGNOSTIC — it knows nothing of versions or
+// readings: each consumer supplies the items, their React key, the scaffold class names (so history and eval
+// keep their own CSS), an optional per-row modifier class, and two render props for the header and the
+// evidence. Empty/loading states live in the consumers (each has its own vocabulary), so `items` is always a
+// non-empty array here. revealNext + its two triggers are the progressive reveal, lifted from the old
+// HistoryPane verbatim, so the history tab is unchanged and the eval tab inherits the same gesture.
+function ChronoPane({ items, itemKey, classes, rowClass, renderHeader, renderEvidence }) {
   const scRef = useRef(null)
   const [open, setOpen] = useState(() => new Set([0]))   // latest expanded; the rest reveal on scroll
   const toggle = useCallback((i) => setOpen((prev) => {
@@ -234,29 +213,28 @@ export function HistoryPane({ node, rows }) {
     if (next.has(i)) next.delete(i); else next.add(i)
     return next
   }), [])
-  // @@@ revealNext - open the next still-collapsed version, but only once the reader has finished the
-  // deepest open item (0..frontier) — its END must be within the viewport. ONE per call, so each down
-  // gesture advances exactly one. getBoundingClientRect (not offsetTop) is correct regardless of the
-  // scroller's own positioning. Shared by both triggers below.
+  // @@@ revealNext - open the next still-collapsed item, but only once the reader has finished the deepest
+  // open item (0..frontier) — its END must be within the viewport. ONE per call, so each down gesture advances
+  // exactly one. getBoundingClientRect (not offsetTop) is correct regardless of the scroller's own positioning.
   const revealNext = useCallback(() => setOpen((prev) => {
     const sc = scRef.current
     if (!sc) return prev
     let f = -1
     while (prev.has(f + 1)) f++
-    if (f < 0 || f >= rows.length - 1) return prev
+    if (f < 0 || f >= items.length - 1) return prev
     const el = sc.querySelector(`[data-i="${f}"]`)
     if (!el || el.getBoundingClientRect().bottom - sc.getBoundingClientRect().top > sc.clientHeight + 40) return prev
     return new Set(prev).add(f + 1)
-  }), [rows])
-  // @@@ progressive reveal - the next version reveals on the DOWN gesture once you've read the open one.
-  // TWO triggers, because a "scroll down" can't always happen: (1) the wheel/drag SCROLL event, while
-  // there's overflow to move through; (2) a j/↓ KEYPRESS when the scroller can't move further — content
-  // shorter than a page (no scrollbar at all) or already at the bottom. Without (2) those cases dead-ended:
-  // no scroll event ever fired, so later versions never expanded. They never double-fire — (2) acts only
-  // at the bottom, exactly where (1), which needs movement, cannot. (Mount and scroll-up never reveal.)
+  }), [items])
+  // @@@ progressive reveal - the next item reveals on the DOWN gesture once you've read the open one. TWO
+  // triggers, because a "scroll down" can't always happen: (1) the wheel/drag SCROLL event, while there's
+  // overflow to move through; (2) a j/↓ KEYPRESS when the scroller can't move further — content shorter than a
+  // page (no scrollbar at all) or already at the bottom. Without (2) those cases dead-ended: no scroll event
+  // ever fired, so later items never expanded. They never double-fire — (2) acts only at the bottom, exactly
+  // where (1), which needs movement, cannot. (Mount and scroll-up never reveal.)
   useEffect(() => {
     const sc = scRef.current
-    if (!sc || !rows?.length) return
+    if (!sc) return
     let prevTop = sc.scrollTop
     const onScroll = () => {
       const top = sc.scrollTop, down = top > prevTop
@@ -271,17 +249,67 @@ export function HistoryPane({ node, rows }) {
     sc.addEventListener('scroll', onScroll, { passive: true })
     window.addEventListener('keydown', onKey, true)   // capture: App stopPropagation()s j/k but same-target listeners still run
     return () => { sc.removeEventListener('scroll', onScroll); window.removeEventListener('keydown', onKey, true) }
-  }, [rows, revealNext])
+  }, [revealNext])
+  return (
+    <div className={classes.pane} ref={scRef}>
+      {items.map((it, i) => {
+        const isOpen = open.has(i)
+        const mod = rowClass ? rowClass(it, i) : ''
+        return (
+          <div data-i={i} key={itemKey(it, i)} className={`${classes.row}${mod ? ` ${mod}` : ''}${isOpen ? ' open' : ''}`}>
+            <button className={classes.head} onClick={() => toggle(i)} aria-expanded={isOpen}>
+              {renderHeader(it, i, isOpen)}
+            </button>
+            {isOpen && <figure className={classes.evidence}>{renderEvidence(it, i)}</figure>}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// @@@ HistoryEvidence - one version's proof, mounted only while its row is open (so older diffs fetch lazily).
+// The latest renders its diff instantly from node.lastDiff (shipped on the board); older versions fetch theirs
+// the first time they expand, memoised by hash so a re-open is instant (see useVersionDiff).
+function HistoryEvidence({ node, r, latest }) {
+  const fetched = useVersionDiff(node.id, r.hash, !latest)
+  return <DiffEvidence diff={latest ? (node.lastDiff ?? fetched) : fetched} />
+}
+
+// @@@ HistoryPane - the merged version log (the old `recent` + `history` tabs, now one), a thin consumer of the
+// shared ChronoPane scaffold. Each row's header is the version line (number · hash · date · the +adds/−dels it
+// changed in THIS node · reason · files · session); its evidence is the spec.md line diff that version
+// introduced. The latest sits open with its proof; older ones reveal on the down gesture and fetch their diff
+// lazily on expand. `rows` is NodeView's one fetch, newest-first; the empty/loading states stay here so the
+// scaffold only ever sees a non-empty list.
+export function HistoryPane({ node, rows }) {
+  const t = useT()
   if (!rows) return <div className="pane-hist empty">{t('nodeView.loadingHistory')}</div>
   if (!rows.length) return <div className="pane-hist empty">{t('common.noVersions')}</div>
   return (
-    <div className="pane-hist" ref={scRef}>
-      {rows.map((r, i) => (
-        <div data-i={i} key={r.hash}>
-          <HistoryItem node={node} r={r} v={rows.length - i} latest={i === 0} open={open.has(i)} onToggle={() => toggle(i)} />
-        </div>
-      ))}
-    </div>
+    <ChronoPane
+      items={rows}
+      itemKey={(r) => r.hash}
+      classes={{ pane: 'pane-hist', row: 'ver-row', head: 'rec-toggle', evidence: 'rec-evidence' }}
+      rowClass={(r, i) => (i === 0 ? 'latest' : '')}
+      renderHeader={(r, i, open) => (
+        <>
+          <div className="rec-head">
+            <span className="rec-caret">{open ? '▾' : '▸'}</span>
+            <span className="rec-v">v{rows.length - i}</span>
+            <code className="rec-hash">{r.hash.slice(0, 7)}</code>
+            <span className="rec-date">{(r.date || '').slice(0, 10)}</span>
+            <span className="rec-diff">
+              <b className="rec-add">+{r.additions ?? 0}</b>
+              <b className="rec-del">−{r.deletions ?? 0}</b>
+            </span>
+          </div>
+          <div className="rec-msg">{r.reason}</div>
+          <div className="rec-sub">{t('nodeView.filesChanged', { n: r.files ?? 0 })} · {r.session || t('common.idle')}</div>
+        </>
+      )}
+      renderEvidence={(r, i) => <HistoryEvidence node={node} r={r} latest={i === 0} />}
+    />
   )
 }
 
@@ -367,64 +395,49 @@ export function EditPane({ node }) {
   return <div className="pane-edit">{overlays.map((ov, i) => <EditOverlay key={i} node={node} ov={ov} />)}</div>
 }
 
-// @@@ EvalReading - one evaluation event. Its header always shows the scenario, a freshness badge (✓ current
-// / ⚠ stale — the SAME signal `spex yatsu scan` reports, mirroring code-drift; stale names which axes moved),
-// the evaluator tag, the read's codeSha, and when it was taken. The captured pixels expand below on click:
-// a present blob fetches by hash from the shared cache, a record whose bytes are gone reads "miss original
-// file", and a pixel-less observation (a human eyeballed it) says so. (Forge issue-events — the second
-// evidence source — arrive with a future sibling node; this shows LOCAL readings only.)
-function EvalReading({ r }) {
-  const t = useT()
-  const [open, setOpen] = useState(false)
-  const hasImage = r.blobState === 'present'
-  const staleTitle = r.fresh ? '' : t('nodeView.eval.staleAxes', { axes: r.staleAxes.join(', ') })
-  return (
-    <div className={`eval-row${open ? ' open' : ''}`}>
-      <button className="eval-head" onClick={() => hasImage && setOpen((o) => !o)} aria-expanded={hasImage ? open : undefined} disabled={!hasImage}>
-        <span className="eval-top">
-          {hasImage && <span className="eval-caret">{open ? '▾' : '▸'}</span>}
-          <span className="eval-scenario">{r.scenario}</span>
-          <span className={`eval-fresh ${r.fresh ? 'ok' : 'stale'}`} title={staleTitle}>
-            {r.fresh ? t('nodeView.eval.current') : t('nodeView.eval.stale')}
-          </span>
-        </span>
-        <span className="eval-meta">
-          <span className="eval-evaluator">{r.evaluator}</span>
-          <code className="eval-sha">{r.codeSha.slice(0, 7)}</code>
-          <span className="eval-ts">{r.ts.replace('T', ' ').slice(0, 16)}</span>
-        </span>
-      </button>
-      {!hasImage && (
-        <div className="eval-noimg">
-          {r.blobState === 'miss' ? t('nodeView.eval.miss') : t('nodeView.eval.noImage')}
-        </div>
-      )}
-      {hasImage && open && (
-        <figure className="eval-shot">
-          <img src={`/api/yatsu/blob/${r.blob}`} alt={t('nodeView.eval.shotAlt', { scenario: r.scenario })} loading="lazy" />
-        </figure>
-      )}
-    </div>
-  )
-}
-
-// @@@ EvalPane - the node's evidence timeline (the [[spec-yatsu]] eval tab). The readings RIDE THE BOARD
-// (`node.evals`, the [[yatsu-eval-tab]] fold) — the SAME single source as node.issues/overlays/lastDiff —
-// so the tab is INSTANT and never shows the prior node's readings on a switch (the old per-node fetch never
-// reset, so stale readings lingered and the pane loaded out of step with the rest). Two empty states stay
-// distinct by presence: a node that declares no scenarios (no yatsu.md → no `evals` field at all) and one
-// that declares some but hasn't been read (an empty array). Otherwise the readings render newest-first (the
-// server already reversed the append-only sidecar), each its own expandable card whose IMAGE still fetches
-// lazily on expand (/api/yatsu/blob/:hash). No loading state — the board already carries the data.
+// @@@ EvalPane - the node's evidence timeline (the [[spec-yatsu]] eval tab), a thin consumer of the SAME
+// ChronoPane scaffold the history tab uses, so the scroll/reveal/toggle and the per-item header+evidence
+// shape live in ONE place. The readings RIDE THE BOARD (`node.evals`, the [[yatsu-eval-tab]] fold) — the SAME
+// single source as node.issues/overlays/lastDiff — so the tab is INSTANT and never shows the prior node's
+// readings on a switch (the old per-node fetch never reset, so stale readings lingered and the pane loaded out
+// of step with the rest). Each row's header is the reading line (scenario · freshness badge ✓ current / ⚠ stale
+// — the board's code-drift vocabulary, naming the moved axis on hover · evaluator · codeSha · time); its
+// evidence is the captured screenshot, fetched LAZILY by hash on expand (/api/yatsu/blob/:hash), or — when
+// there are no pixels — a note: *miss original file* when the record outlived its bytes, else a pixel-less
+// observation (a human eyeballed it). Two empty states stay distinct by presence: a node that declares no
+// scenarios (no yatsu.md → no `evals` field at all) and one that declares some but hasn't been read (an empty
+// array). Readings arrive newest-first (the server already reversed the append-only sidecar). (Forge
+// issue-events — the second evidence source — arrive with a future sibling node; this shows LOCAL readings only.)
 export function EvalPane({ node }) {
   const t = useT()
   const readings = node.evals
   if (!readings) return <div className="pane-eval empty">{t('nodeView.eval.noScenarios')}</div>
   if (!readings.length) return <div className="pane-eval empty">{t('nodeView.eval.noReadings')}</div>
   return (
-    <div className="pane-eval">
-      {readings.map((r, i) => <EvalReading key={`${r.scenario}-${r.ts}-${i}`} r={r} />)}
-    </div>
+    <ChronoPane
+      items={readings}
+      itemKey={(r, i) => `${r.scenario}-${r.ts}-${i}`}
+      classes={{ pane: 'pane-eval', row: 'eval-row', head: 'eval-head', evidence: 'eval-shot' }}
+      renderHeader={(r, i, open) => (
+        <>
+          <span className="eval-top">
+            <span className="eval-caret">{open ? '▾' : '▸'}</span>
+            <span className="eval-scenario">{r.scenario}</span>
+            <span className={`eval-fresh ${r.fresh ? 'ok' : 'stale'}`} title={r.fresh ? '' : t('nodeView.eval.staleAxes', { axes: r.staleAxes.join(', ') })}>
+              {r.fresh ? t('nodeView.eval.current') : t('nodeView.eval.stale')}
+            </span>
+          </span>
+          <span className="eval-meta">
+            <span className="eval-evaluator">{r.evaluator}</span>
+            <code className="eval-sha">{r.codeSha.slice(0, 7)}</code>
+            <span className="eval-ts">{r.ts.replace('T', ' ').slice(0, 16)}</span>
+          </span>
+        </>
+      )}
+      renderEvidence={(r) => (r.blobState === 'present'
+        ? <img src={`/api/yatsu/blob/${r.blob}`} alt={t('nodeView.eval.shotAlt', { scenario: r.scenario })} loading="lazy" />
+        : <figcaption className="eval-noimg">{r.blobState === 'miss' ? t('nodeView.eval.miss') : t('nodeView.eval.noImage')}</figcaption>)}
+    />
   )
 }
 

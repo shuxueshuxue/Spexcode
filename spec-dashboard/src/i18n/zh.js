@@ -153,8 +153,6 @@ export default {
     eval: {
       noScenarios: '尚未声明场景 —— 此节点没有可测量的 yatsu.md。',
       noReadings: '尚无测量 —— 运行 `spex yatsu eval` 归档一次。',
-      current: '✓ 最新',
-      stale: '⚠ 过期',
       staleAxes: ({ axes }) => `已过期：自本次读取以来 ${axes} 已变动`,
       pass: '✓ 通过',
       fail: '✗ 未通过',
@@ -167,6 +165,15 @@ export default {
       noImage: '无证据 —— 代理未捕获即作出判定。',
       shotAlt: ({ scenario }) => `${scenario} 的捕获证据`,
     },
+  },
+
+  // yatsu 评分圆圈的悬停说明 —— 节点卡片徽章与 eval 标签页共用同一套词汇。
+  score: {
+    pass: '当前通过 —— 已测量、最新且通过',
+    fail: '当前未通过 —— 已测量、最新且未通过',
+    stalePass: '已过期 —— 上次测量为通过，现已过时',
+    staleFail: '已过期 —— 上次测量为未通过，现已过时',
+    empty: '暂无当前评分 —— 从未测量，或无通过/未通过判定',
   },
 
   specNode: {

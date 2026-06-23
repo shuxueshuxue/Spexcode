@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { ScoreBadge, readingScore } from './score.jsx'
 import { useT } from './i18n/index.jsx'
 
 // @@@ pane registry - add a face for a spec node by adding one entry + one render case below.
@@ -449,8 +450,9 @@ function EvalEvidence({ r }) {
 // single source as node.issues/overlays/lastDiff — so the tab is INSTANT and never shows the prior node's
 // readings on a switch (the old per-node fetch never reset, so stale readings lingered and the pane loaded out
 // of step with the rest). Each row's header is the score line (scenario · VERDICT ✓ pass / ✗ fail / ≈ note —
-// the loss the agent measured · freshness badge ✓ current / ⚠ stale, the board's code-drift vocabulary naming
-// the moved axis on hover · evaluator · codeSha · time); its evidence is the scenario's `expected` over the
+// the loss the agent measured · the SCORE circle ([[yatsu-score-badge]]): green ✓ fresh pass / red ✗ fresh fail
+// / grey ✓/✗ stale (the last verdict greyed, the moved axis on hover) / empty ring no current score — the SAME
+// vocabulary the node tile's card badge speaks · evaluator · codeSha · time); its evidence is the scenario's `expected` over the
 // captured proof — an image inline or a transcript as text, fetched LAZILY by hash on expand, or — no capture
 // — *miss original file* when the record outlived its bytes, else an evidence-less note. Two empty states stay
 // distinct by presence: a node that declares no scenarios (no yatsu.md → no `evals` field at all) and one that
@@ -473,9 +475,7 @@ export function EvalPane({ node }) {
             <span className="eval-caret">{open ? '▾' : '▸'}</span>
             <span className="eval-scenario">{r.scenario}</span>
             <VerdictBadge verdict={r.verdict} />
-            <span className={`eval-fresh ${r.fresh ? 'ok' : 'stale'}`} title={r.fresh ? '' : t('nodeView.eval.staleAxes', { axes: r.staleAxes.join(', ') })}>
-              {r.fresh ? t('nodeView.eval.current') : t('nodeView.eval.stale')}
-            </span>
+            <ScoreBadge state={readingScore(r)} title={r.fresh ? undefined : t('nodeView.eval.staleAxes', { axes: r.staleAxes.join(', ') })} />
           </span>
           <span className="eval-meta">
             <span className="eval-evaluator">{r.evaluator}</span>

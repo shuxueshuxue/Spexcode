@@ -507,6 +507,20 @@ export function ownSessionId(): string | null {
   if (env && env.trim()) return env.trim()
   return readSessionFile(process.cwd()).session
 }
+
+// @@@ withSenderHint - bidirectional agent messaging. `spex session send` delivers a prompt to the
+// recipient; this stamps WHO sent it and HOW to reply as a one-line insert appended to the delivered
+// message, so the recipient agent CAN reply (or ignore) and the reply rides the SAME send back into the
+// sender's prompt — a reply channel, no workflow enforcement, just a prompt insert. The sender is the
+// SENDING agent's OWN session (id from [[dispatch]]'s send-command process via ownSessionId, label its
+// board row); its FULL id is stamped so the reply addresses exactly one session, never a prefix. A human
+// running `send` from a plain shell has no session id (sender=null) → the bare message, no hint, no loop.
+export type MsgSender = { id: string; label: string | null }
+export function withSenderHint(text: string, sender: MsgSender | null): string {
+  if (!sender) return text
+  const who = sender.label ? `${sender.label} (${sender.id})` : sender.id
+  return `${text}\n\n— from ${who}. To reply: spex session send ${sender.id} "<your reply>"`
+}
 async function postJSON(path: string, body: unknown): Promise<void> {
   try {
     await fetch(`${apiBase()}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })

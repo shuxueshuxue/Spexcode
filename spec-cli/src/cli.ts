@@ -378,7 +378,18 @@ From here, dispatch an agent — it authors the spec nodes and rides the dogfood
     // prompt dispatch is socket-only + fail-loud (the backend enforces it): a non-accepted prompt prints the
     // reason AND exits non-zero, so a manager/script never mistakes a dead dispatch for success.
     const full = await resolveSelectorOrExit(id)
-    const r = await c.clientSend(full, process.argv[5] ?? '')
+    // BIDIRECTIONAL: stamp the SENDER (this send process's OWN session — the only process that knows it, via
+    // ownSessionId from CLAUDE_CODE_SESSION_ID / cwd .session) + a one-line reply hint into the delivered
+    // message, so the recipient can reply over the SAME send. The sender's row (hence its display label) is
+    // resolved through the shared resolver; a human in a plain shell has no session id → bare message, no
+    // hint (see [[agent-reply-channel]]).
+    const senderId = s.ownSessionId()
+    let sender = null
+    if (senderId) {
+      const sr = await c.resolveClientSession(senderId)
+      sender = 'ok' in sr ? { id: sr.ok.id, label: s.sessionLabel(sr.ok) } : { id: senderId, label: null }
+    }
+    const r = await c.clientSend(full, s.withSenderHint(process.argv[5] ?? '', sender))
     console.log(r.ok ? 'sent' : `dispatch failed: ${r.error}`)
     process.exit(r.ok ? 0 : 1)
   } else if (sub === 'capture') {

@@ -1,1 +1,2 @@
 {"scenario":"board-renders","codeSha":"19f1b0bea5f990e1a7bbd3e4a1c8e6cf51cdfb84","blob":"53f966411cec82f6d2fc11a4fc128d3934613050bc6f294ab17f0cf41d7da719","evaluator":"manual@1","ts":"2026-06-23T02:58:36.320Z"}
+{"scenario":"board-renders","codeSha":"0621efe02c0f0bf5e1885bbe686a5a754268daec","blob":"487c8e93a8d078f60a70f8804cca0c8a4012fb29e361d4d4ab73ffa0e4e0c9bb","blobKind":"image","evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-23T16:48:30.148Z"}

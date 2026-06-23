@@ -1,0 +1,2 @@
+{"scenario":"stats-strip-renders","codeSha":"3c44eec2903647b9655e9f29c09b552695685827","blob":"fbd0b00d61f685c00a5f63021658e224e708c6c4a00b3f8e9188f9634331aba7","blobKind":"image","evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-23T07:50:17.580Z"}
+{"scenario":"stat-click-jumps","codeSha":"3c44eec2903647b9655e9f29c09b552695685827","blob":"c99b09bacabdc59fadeaee92293b05bd730c45ea608ff407da7a764f467a2793","blobKind":"image","evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-23T07:50:18.609Z"}

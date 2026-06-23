@@ -7,6 +7,7 @@ import { readReadings, appendReading, latestPerScenario, type Reading } from './
 import { staleAxes } from './freshness.js'
 import { driverFor, evaluatorTag } from './drivers.js'
 import { putBlob, listBlobs, gc, isStrayBlob } from './cache.js'
+import { evalTimeline, type EvalTimeline } from './evaltab.js'
 
 // @@@ yatsu cli - the eval/loss engine on the real `spex` surface (the [[forge-cli]] shape: spec-cli/cli.ts
 // carries only a thin `yatsu` route delegating here; all logic lives in this package). Three verbs over the
@@ -149,6 +150,39 @@ function checkStaged(): number {
   return 1
 }
 
+// @@@ show - the CLI FACE of the eval timeline, the terminal twin of the dashboard's eval tab. Both read
+// ONE engine: the dashboard folds evalTimeline onto the board, this verb calls the same evalTimeline for one
+// node — exactly the `spex board` / `/api/board` byte-identical pattern (both call buildBoard). It's a thin
+// wrapper: resolve a single node, hand it to evalTimeline with NO ctx (the standalone path that derives its
+// own specs + driftIndex for one id, like the /api/specs/:id/evals route), then render. No timeline logic here.
+async function show(args: string[]): Promise<number> {
+  const root = repoRoot()
+  const sel = positional(args)
+  const id = !sel || sel === '.' ? currentNodeId(root) : sel
+  if (!id) { console.error('spex yatsu show .: no current node (no .session/node-branch here) — name a node'); return 2 }
+  const tl = await evalTimeline(id)   // no ctx → evalTimeline derives specs + driftIndex itself for this one id
+  if (has(args, 'json')) { console.log(JSON.stringify(tl, null, 2)); return 0 }
+  console.log(formatTimeline(tl))
+  return 0
+}
+
+// @@@ formatTimeline - the human rendering of an EvalTimeline (the SAME shape `--json` emits verbatim and the
+// dashboard rides on the board). NEWEST-FIRST, one line per reading: the freshness badge in the board's
+// code-drift vocabulary (✓ current / ⚠ stale, naming the moved axes), the scenario, evaluator, short codeSha,
+// blob state, and ts. The two empty states stay distinct by hasYatsu, the way the eval tab keeps them apart.
+export function formatTimeline(tl: EvalTimeline): string {
+  if (!tl.hasYatsu) return `spex yatsu show: '${tl.node}' declares no scenarios (no yatsu.md)`
+  if (!tl.readings.length) return `spex yatsu show: '${tl.node}' has scenarios but no reading yet — run \`spex yatsu eval ${tl.node}\``
+  const w = Math.max(...tl.readings.map((r) => r.scenario.length))
+  const lines = tl.readings.map((r) => {
+    const badge = r.fresh ? '✓ current' : `⚠ stale (${r.staleAxes.join(', ')})`
+    const blob = r.blobState === 'present' ? `image ${(r.blob ?? '').slice(0, 12)}…`
+      : r.blobState === 'miss' ? 'miss original file' : 'no image'
+    return `  ${r.scenario.padEnd(w)}  ${badge}  ${r.evaluator}  ${r.codeSha.slice(0, 7)}  ${blob}  ${r.ts}`
+  })
+  return [`spex yatsu show: '${tl.node}' — ${tl.readings.length} reading(s), newest first`, '', ...lines].join('\n')
+}
+
 // @@@ runYatsu - the package's single entrypoint, called by cli.ts's thin `yatsu` route with the arg slice
 // after `yatsu`. Routes to a verb and returns the process exit code (the route just exits on it).
 export async function runYatsu(args: string[]): Promise<number> {
@@ -156,7 +190,8 @@ export async function runYatsu(args: string[]): Promise<number> {
   if (sub === 'scan') return scan()
   if (sub === 'eval') return evalCmd(args.slice(1))
   if (sub === 'clean') return clean(args.slice(1))
+  if (sub === 'show') return show(args.slice(1))
   if (sub === 'check-staged') return checkStaged()
-  console.error('spex yatsu: scan | eval [.|<node>] [--force] [--image <path>] | clean [--keep-latest|--all]')
+  console.error('spex yatsu: scan | eval [.|<node>] [--force] [--image <path>] | show [.|<node>] [--json] | clean [--keep-latest|--all]')
   return 2
 }

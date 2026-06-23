@@ -31,6 +31,29 @@ function positionals(from: number): string[] {
   return out
 }
 
+// @@@ watch edge - the watcher→targets session-graph edge, shared by BOTH `watch` (stream) and `wait`
+// (one-shot). Running EITHER reports the edge to the backend (register + TTL heartbeat) and clears it on
+// exit, so the edge exists for exactly as long as the subscription does — a supervisor blocking on
+// `spex wait <worker>` is VISIBLE on the graph for the whole wait, just like a stream watch, and it clears
+// the instant the wait resolves (supervision ended). Edge writes are BEST-EFFORT (fire-and-forget): the
+// edge is cosmetic and must NEVER fail the underlying watch/wait when the backend is unreachable — the poll
+// already needs the backend, and the TTL expires a stale edge if a killed process never deregisters. This
+// is the single place edge lifecycle lives, so `watch` and `wait` are just consumption policies over it.
+async function withWatchEdge<T>(selectors: string[], intervalMs: number, body: () => Promise<T>): Promise<T> {
+  const { ownSessionId, reportWatch, reportUnwatch } = await import('./sessions.js')
+  const { randomUUID } = await import('node:crypto')
+  const watcher = ownSessionId()
+  if (!watcher) return body()   // not a launched session (no own id) → nothing to attribute an edge to
+  const token = randomUUID()
+  const ttlMs = intervalMs * 3   // tolerate two missed heartbeats before the edge is dropped
+  void reportWatch(token, watcher, selectors, ttlMs)
+  const hb = setInterval(() => void reportWatch(token, watcher, selectors, ttlMs), intervalMs)
+  const cleanup = () => { clearInterval(hb); void reportUnwatch(token) }
+  process.once('SIGINT', () => { cleanup(); process.exit(0) })
+  process.once('SIGTERM', () => { cleanup(); process.exit(0) })
+  try { return await body() } finally { cleanup() }   // one-shot `wait` clears on return; stream `watch` clears on signal
+}
+
 // @@@ help - tidy one-screen command summary for humans AND agents (no args or `spex help`). Grouped
 // by purpose; flags shown inline so the surface is self-explanatory without reading the source.
 function printHelp(): void {
@@ -52,7 +75,8 @@ Specs / graph
 
 Sessions
   ls [SEL…]             living-sessions table          [--status a,b] [--json]
-  watch [SEL…]          stream actionable transitions  [--as NAME] [--status a,b] [--idle] [--interval N]
+  watch [SEL…]          stream actionable transitions (forever — a human's monitor)  [--as NAME] [--status a,b] [--idle] [--interval N]
+  wait <id>             block until <id> is actionable, print it, exit (one-shot; draws the graph edge)  [--timeout S=1200] [--interval S]
   new "<prompt>"        start a session (= session new)  [--node X]
   session <sub>         new | list | reopen | review | done | merge | close | send | capture | prompt
   session prompt <id>   print the session's originating prompt (what it was asked to do)
@@ -208,34 +232,50 @@ From here, dispatch an agent — it authors the spec nodes and rides the dogfood
   const picked = selectSessions(await clientListSessions(), positionals(3), flag('status')?.split(','))
   console.log(has('json') ? JSON.stringify(picked, null, 2) : formatTable(picked))
 } else if (cmd === 'watch') {
-  // subscribe to session events (one line per actionable transition) — the Monitor event source.
-  // `spex watch [SEL...] [--status a,b] [--as NAME] [--idle] [--interval N]`. Each watch = one subscriber.
-  // @@@ monitor → graph edge - running this IS what creates a session-graph edge: we report watcher→targets
-  // to the backend (register + heartbeat) for as long as this process lives, and deregister on exit, so the
-  // edge exists ONLY while the watch runs. watcher = our OWN session id; selectors = the targets (empty/@all
-  // = a global watcher → every session). All best-effort: a down backend never breaks the event stream.
-  const { watchSessions, ownSessionId, reportWatch, reportUnwatch } = await import('./sessions.js')
+  // @@@ watch = the STREAMING subscription (a human's monitor). `spex watch [SEL...] [--status a,b]
+  // [--as NAME] [--idle] [--interval N]` streams one line per actionable transition, FOREVER — it never
+  // exits, so don't block a turn on it (that's what `spex wait` is for). withWatchEdge draws the
+  // watcher→targets graph edge for as long as it runs (empty/@all selectors = a global watcher → every
+  // session). watch and wait are two consumption policies over the SAME poll loop + edge lifecycle.
+  const { watchSessions } = await import('./sessions.js')
   const { clientListSessions } = await import('./client.js')
-  const { randomUUID } = await import('node:crypto')
   const selectors = positionals(3)
   const intervalMs = (Number(flag('interval')) || 5) * 1000
-  const watcher = ownSessionId()
-  if (watcher) {
-    const token = randomUUID()
-    const ttlMs = intervalMs * 3   // tolerate two missed heartbeats before the edge is dropped
-    void reportWatch(token, watcher, selectors, ttlMs)
-    const hb = setInterval(() => void reportWatch(token, watcher, selectors, ttlMs), intervalMs)
-    const off = async () => { clearInterval(hb); await reportUnwatch(token); process.exit(0) }
-    process.once('SIGINT', off); process.once('SIGTERM', off)
-  }
-  await watchSessions((line) => console.log(line), {
+  await withWatchEdge(selectors, intervalMs, () => watchSessions((line) => console.log(line), {
     source: clientListSessions,   // poll the backend, so watch streams the (possibly remote) backend's board
     selectors,
     statuses: flag('status')?.split(','),
     includeIdle: has('idle'),
     as: flag('as'),
     intervalMs,
-  })
+  }))   // never resolves (no `until`); withWatchEdge clears the edge on SIGINT/SIGTERM
+} else if (cmd === 'wait') {
+  // @@@ wait = the ONE-SHOT subscription (an agent's event loop). `spex wait <id> [--timeout S] [--interval
+  // S] [--idle]` polls the SAME board until <id> reaches an actionable status, prints that status, and
+  // EXITS — an agent backgrounds it and the harness re-invokes when the command exits, so the exit IS the
+  // wake-up. Like `watch`, it draws the watcher→<id> graph edge via withWatchEdge for as long as it blocks
+  // (so supervision is VISIBLE, not an invisible spin) and clears it the instant the wait resolves. The emit
+  // is a no-op — a backgrounded wait wants a single clean status line on exit, not the streamed transitions.
+  // GUARANTEED to terminate: the `--timeout` (default 1200s) deadline is checked every poll (see
+  // watchSessions), so a target stuck in any non-actionable state can never hang the caller.
+  const { watchSessions } = await import('./sessions.js')
+  const { clientListSessions } = await import('./client.js')
+  const [id] = positionals(3)
+  if (!id) { console.error('usage: spex wait <id> [--timeout SECONDS] [--interval SECONDS] [--idle]'); process.exit(2) }
+  const intervalMs = (Number(flag('interval')) || 2) * 1000
+  const timeoutSec = Number(flag('timeout')) || 1200
+  const r = await withWatchEdge([id], intervalMs, () => watchSessions(() => {}, {
+    source: clientListSessions,
+    selectors: [id],
+    includeIdle: has('idle'),
+    intervalMs,
+    until: { timeoutMs: timeoutSec * 1000 },
+  }))
+  if ('reached' in r) { console.log(r.reached); process.exit(0) }
+  if ('gone' in r) { console.error(`spex wait: no such (living) session ${id}`); process.exit(2) }
+  if ('backendDown' in r) { console.error(`spex wait: ${r.backendDown}`); process.exit(1) }   // fail loud, not a false timeout
+  console.error(`spex wait: timeout — ${id} did not reach an actionable status within ${timeoutSec}s`)
+  process.exit(1)
 } else if (cmd === 'new') {
   // shorthand for `spex session new`: spex new "<prompt>" [--node X]  (prompt = first positional or --prompt)
   // createSession POSTs to the running backend so the launch runs in the backend's process (auth env + cap);

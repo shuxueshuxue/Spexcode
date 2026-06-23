@@ -138,6 +138,7 @@ export default {
     versionLabel: '版本：',
     lastEditedBy: '最后编辑者：',
     governs: '// 管辖',
+    proseNode: '// 无管辖文件 · 纯文档节点',
     rawTitle: '原始来源',
     rawOwner: '人工',
     rawNote: '极少改动 · 需要审批',

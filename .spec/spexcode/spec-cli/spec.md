@@ -39,7 +39,10 @@ in-flight requests before exiting. The public socket never closes, so the flip i
 is the obvious alternative but is unsupported on this platform, hence the proxy.) An unhealthy new child
 is discarded and the current one kept, so a broken edit degrades to "still serving old code", never a gap.
 Live ws/pty bridges drop and reconnect; detached tmux sessions survive untouched. The dashboard also
-retries a transient failure with bounded backoff, so a poll landing on the flip is masked.
+retries a transient failure with bounded backoff, so a poll landing on the flip is masked. Because the
+child binds a **private** port that changes on every reload, the supervisor hands it a fixed
+`SPEXCODE_API_URL` at the **public** port; every session the child launches inherits it, so a launched
+agent's own `spex` calls reach the stable public endpoint instead of chasing a retired child's port.
 
 **Last-resort resilience:** both supervisor and child install process guards at startup — an unforeseen
 async throw (a worktree vanishing mid-read during a worker self-merge, say) is logged and the process

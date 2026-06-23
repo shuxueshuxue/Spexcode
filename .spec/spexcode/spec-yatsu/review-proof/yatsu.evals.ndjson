@@ -1,1 +1,2 @@
 {"scenario":"proof-renders","codeSha":"90eaf0b5d44ed215863bc86770a827ea9c80a3e2","blob":"dfed74359e1de5a1f86c34f9a2fbe87b71a3cab6fa2a76e1b7783809140dd97c","blobKind":"image","evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-23T10:47:34.941Z"}
+{"scenario":"proof-renders","codeSha":"2d4c71bc9ed128168f4aaac0911323ab9d45817c","blob":"a3319ee2d7dd18ad3648c2548e85ccb6f9e9698fc9a0e0f40a0efdae1a2de493","blobKind":"image","evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-23T13:08:17.028Z"}

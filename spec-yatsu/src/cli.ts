@@ -49,27 +49,39 @@ function currentNodeId(root: string): string | null {
   return null
 }
 
-// @@@ scan - status: nodes holding a stale reading, mirroring `spex lint`'s code-drift output (the same
-// `•`/`✗` glyph + one line per finding). Read-only; exits 0 (a status report, like drift's advisory warn).
-// The forge `needs-yatsu-eval` half of the spec's scan is a separate node — not part of the core.
+// @@@ scan - status: which SCORES are stale or missing — the loss signal's blind spots — mirroring `spex
+// lint`'s code-drift output (the `•` glyph + one line per finding). A "score" is a scenario's LATEST
+// reading, so scan reports exactly the (node, scenario) pairs `spex yatsu eval` would (re)read: a scenario
+// whose latest reading went stale (a governed code file, its scenario, or the evaluator moved since its
+// codeSha), OR one with no reading at all (missing). Read-only; exits 0 (a status report, like drift's
+// advisory warn) — the proactive Stop gate reads these finding lines, never the exit code. The forge
+// `needs-yatsu-eval` half of the spec's scan is a separate node — not part of the core.
 async function scan(): Promise<number> {
   const root = repoRoot()
   const idx = await driftIndex(root)
   const nodes = await gatherNodes(root)
-  let staleNodes = 0, staleReadings = 0
+  let flaggedNodes = 0, staleScores = 0, missingScores = 0
   for (const n of nodes) {
-    const byName = new Map(n.scenarios.map((s) => [s.name, s]))
-    const stale: { r: Reading; axes: string[] }[] = []
-    for (const r of readReadings(n.sidecarPath)) {
-      const axes = staleAxes(r, byName.get(r.scenario), n.codeFiles, n.yatsuPath, idx)
-      if (axes.length) stale.push({ r, axes })
+    const latest = latestPerScenario(readReadings(n.sidecarPath))
+    const findings: string[] = []
+    for (const sc of n.scenarios) {
+      const r = latest.get(sc.name)
+      if (!r) {
+        missingScores++
+        findings.push(`  • yatsu-missing: '${n.id}' scenario '${sc.name}' has no reading yet — measure with \`spex yatsu eval ${n.id}\``)
+        continue
+      }
+      const axes = staleAxes(r, sc, n.codeFiles, n.yatsuPath, idx)
+      if (axes.length) {
+        staleScores++
+        findings.push(`  • yatsu-drift: '${n.id}' scenario '${sc.name}' is stale (${axes.join(', ')} moved since ${r.codeSha.slice(0, 7)}) — re-read with \`spex yatsu eval ${n.id}\``)
+      }
     }
-    if (!stale.length) continue
-    staleNodes++; staleReadings += stale.length
-    for (const { r, axes } of stale)
-      console.error(`  • yatsu-drift: '${n.id}' scenario '${r.scenario}' is stale (${axes.join(', ')} moved since ${r.codeSha.slice(0, 7)}) — re-read with \`spex yatsu eval ${n.id}\``)
+    if (!findings.length) continue
+    flaggedNodes++
+    for (const f of findings) console.error(f)
   }
-  console.error(`spex yatsu scan: ${staleNodes} node(s) holding a stale reading, ${staleReadings} stale reading(s)`)
+  console.error(`spex yatsu scan: ${flaggedNodes} node(s) with a stale or missing score (${staleScores} stale, ${missingScores} missing)`)
   return 0
 }
 

@@ -69,7 +69,7 @@ Specs / graph
   serve                 run the API server (http://localhost:8787)
   board                 dump the dashboard board state as JSON
   forge <sub>           trace a forge's issues/PRs onto spec nodes (read-only): links | eval-pending [--host github] [--node <id>] [--json]
-  yatsu <sub>           the eval/loss engine over the readings sidecar: scan | eval [.|<node>] [--force] [--image P] | clean [--keep-latest|--all]
+  yatsu <sub>           the eval/loss engine over the readings sidecar: scan | eval [.|<node>] [--force] [--image P] | show [.|<node>] [--json] | clean [--keep-latest|--all]
   review <id>           manager cockpit: review a session (ahead·merge-base diff·gates·proposal)  [--json]
   merge <id>            manager cockpit: gated atomic merge into main (re-checks gates, then closes)  [--keep]
 

@@ -35,7 +35,8 @@ version moved. The code and scenario axes reuse the very drift index `spex lint`
 An ack vindicates a *spec*, not a reading, so that ack logic is deliberately not borrowed here.
 
 The surface mirrors the code-drift report:
-- **scan** — report nodes holding a stale reading.
+- **scan** — report which scores are stale or missing: per scenario, its latest reading gone stale or no
+  reading taken yet — exactly the pairs `eval` would (re)read. The proactive Stop gate reuses it ([[yatsu-proactive]]).
 - **eval [.|<node>] [--force] [--image P]** — incremental + idempotent: re-read only stale scenarios,
   `--force` redoes all. The default **manual** driver records a reading and optionally stores a provided
   image; a **Driver** interface lets a browser producer replace it with no change to eval.

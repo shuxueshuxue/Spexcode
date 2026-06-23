@@ -54,7 +54,9 @@ Read routes: `/api/board` (the assembled board — merged tree + per-worktree ov
 dashboard's single source, identical to `spex board`), `/api/specs` (live via `loadSpecs`),
 `/api/specs/:id/history` + `/api/specs/:id/diff/:hash` (a node's timeline and any version's spec.md
 line-diff), `/api/edit` (a node's in-flight working-tree delta vs its fork point, reviewable from the
-board), `/api/layout` (the resolved [[portable-layout]]), and `/api/config` + `/api/slash-commands` (the
+board — incl. a **brand-new, still-untracked node** as an all-additions diff, so a just-created uncommitted
+node shows its body not nothing), `/api/layout` (the resolved
+[[portable-layout]]), and `/api/config` + `/api/slash-commands` (the
 `/` dropdown — config-root plugins declaring `surface: slash`, plus the Claude-Code command union).
 
 Write/runtime routes are thin callers of the [[sessions]] state machine — no session logic lives here:

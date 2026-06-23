@@ -260,6 +260,14 @@ export default {
     attachError: '⚠ upload failed',
   },
 
+  proof: {
+    btn: 'proof',
+    btnTitle: "open this session's proof of work — the measured yatsu evidence, the diff, and the merge gates",
+    title: 'review proof',
+    newTab: 'open in new tab',
+    close: 'close (esc)',
+  },
+
   settings: {
     title: 'settings',
     close: 'close (esc or ,)',

@@ -253,6 +253,14 @@ export default {
     attachError: '⚠ 上传失败',
   },
 
+  proof: {
+    btn: '证明',
+    btnTitle: '打开此会话的工作证明 —— 测得的 yatsu 证据、改动与合并门禁',
+    title: '评审证明',
+    newTab: '在新标签页打开',
+    close: '关闭（esc）',
+  },
+
   settings: {
     title: '设置',
     close: '关闭（esc 或 ,）',

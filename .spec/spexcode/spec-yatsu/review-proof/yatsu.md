@@ -4,15 +4,16 @@ scenarios:
     description: >
       With a session in the review state, open its proof — via the dashboard proof action
       (the overlay) or by loading GET /api/sessions/:id/proof in a browser, or the file
-      `spex review proof --out` writes. Check the self-contained HTML renders: the authored
-      claim as the masthead, the gates checklist, and per changed node its yatsu evidence
-      (verdict badge + the inlined screenshot/transcript), with a frontend node lacking a
-      yatsu.md shown as an honest blind spot rather than omitted.
+      `spex review proof --out` writes. Check the self-contained, fully-derived HTML renders:
+      a masthead headline derived from the node/branch, the gates checklist, and per changed
+      node its yatsu evidence (verdict badge + the inlined screenshot/transcript), with a
+      frontend node lacking a yatsu.md shown as an honest blind spot rather than omitted.
     expected: >
-      One coherent dark proof document: a masthead with the claim + session/branch, a gate
-      row (typecheck · lint · conflict · ahead), and an evidence section grouping the diff by
-      node, each measured scenario showing its verdict and inlined evidence. Assets are
-      data-URIs so no image is broken; layout is whole, not empty or garbled.
+      One coherent dark proof document with no agent-authored content: a masthead with the
+      derived node/branch headline + session/commits, a gate row (typecheck · lint · conflict
+      · ahead), and an evidence section grouping the diff by node, each measured scenario
+      showing its verdict and inlined evidence. Assets are data-URIs so no image is broken;
+      layout is whole, not empty or garbled.
 ---
 # review-proof yatsu
 

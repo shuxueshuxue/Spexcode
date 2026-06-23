@@ -62,7 +62,10 @@ function waitHealthy(port: number, tries = 150): Promise<boolean> {
 // boot a fresh backend child on a free internal port and wait until it's serving.
 async function boot(): Promise<Backend | null> {
   const port = await freePort()
-  const child = spawn(tsx, [entry], { stdio: 'inherit', env: { ...process.env, PORT: String(port) } })
+  // PORT pins the child's PRIVATE bind port; SPEXCODE_API_URL pins everything the child SPAWNS (launched
+  // sessions + their hooks) at the PUBLIC port, so a launched agent's own `spex` reaches the stable proxy
+  // and never inherits this ephemeral, soon-retired port (apiBase() prefers SPEXCODE_API_URL over PORT).
+  const child = spawn(tsx, [entry], { stdio: 'inherit', env: { ...process.env, PORT: String(port), SPEXCODE_API_URL: process.env.SPEXCODE_API_URL || `http://127.0.0.1:${publicPort}` } })
   // if the ACTIVE backend dies unexpectedly (crash, OOM), restart it so the public port keeps serving.
   // Planned retirement sets current to the NEW child first, so the old child's exit fails this identity
   // check and is ignored. boot()'s ~5s health budget rate-limits any crash loop.

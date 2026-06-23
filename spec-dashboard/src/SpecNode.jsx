@@ -1,6 +1,7 @@
 import { Handle, Position } from '@xyflow/react'
 import { Avatar } from './avatar.jsx'
 import { labelColor } from './color.js'
+import { ScoreBadge, nodeScore } from './score.jsx'
 import { useT } from './i18n/index.jsx'
 
 // @@@ timeAgo - compact "edited Nm/Nh/Nd ago" from an ISO date. Coarse on purpose (the row is tiny):
@@ -140,6 +141,7 @@ export default function SpecNode({ data, selected }) {
           </span>
         )}
         <IssueBadge issues={data.openIssues} t={t} />
+        <ScoreBadge state={nodeScore(data.evals)} />
         <span className="node-ver">{data.version ? `v${data.version}` : ''}</span>
         {ops.length > 0 && (
           <span className="ov-marks" title={overlays.map((o) => t('specNode.opTitle', { op: t(`legend.opRows.${o.op}`), label: o.label, uncommitted: !o.committed })).join('\n')}>

@@ -367,20 +367,6 @@ export function EditPane({ node }) {
   return <div className="pane-edit">{overlays.map((ov, i) => <EditOverlay key={i} node={node} ov={ov} />)}</div>
 }
 
-// @@@ useEvals - the node's evaluation timeline from yatsu (/api/specs/:id/evals): every reading joined with
-// a LIVE freshness flag, newest-first. The single `eval` tab below reads it. Null while loading; a stable
-// shape ({hasYatsu, readings}) on arrival so the pane distinguishes "no scenarios" from "no readings yet".
-function useEvals(id) {
-  const [data, setData] = useState(null)
-  useEffect(() => {
-    let on = true
-    fetch(`/api/specs/${id}/evals`).then((r) => r.json()).then((d) => { if (on) setData(d) })
-      .catch(() => on && setData({ node: id, hasYatsu: false, readings: [] }))
-    return () => { on = false }
-  }, [id])
-  return data
-}
-
 // @@@ EvalReading - one evaluation event. Its header always shows the scenario, a freshness badge (✓ current
 // / ⚠ stale — the SAME signal `spex yatsu scan` reports, mirroring code-drift; stale names which axes moved),
 // the evaluator tag, the read's codeSha, and when it was taken. The captured pixels expand below on click:
@@ -422,19 +408,22 @@ function EvalReading({ r }) {
   )
 }
 
-// @@@ EvalPane - the node's evidence timeline (the [[spec-yatsu]] eval tab). Three empty states stay
-// distinct: a node that declares no scenarios (no yatsu.md), one that declares some but hasn't been read,
-// and the loading flicker. Otherwise the readings render newest-first (the server already reversed the
-// append-only sidecar), each its own expandable card.
+// @@@ EvalPane - the node's evidence timeline (the [[spec-yatsu]] eval tab). The readings RIDE THE BOARD
+// (`node.evals`, the [[yatsu-eval-tab]] fold) — the SAME single source as node.issues/overlays/lastDiff —
+// so the tab is INSTANT and never shows the prior node's readings on a switch (the old per-node fetch never
+// reset, so stale readings lingered and the pane loaded out of step with the rest). Two empty states stay
+// distinct by presence: a node that declares no scenarios (no yatsu.md → no `evals` field at all) and one
+// that declares some but hasn't been read (an empty array). Otherwise the readings render newest-first (the
+// server already reversed the append-only sidecar), each its own expandable card whose IMAGE still fetches
+// lazily on expand (/api/yatsu/blob/:hash). No loading state — the board already carries the data.
 export function EvalPane({ node }) {
   const t = useT()
-  const data = useEvals(node.id)
-  if (!data) return <div className="pane-eval empty">{t('nodeView.eval.loading')}</div>
-  if (!data.hasYatsu) return <div className="pane-eval empty">{t('nodeView.eval.noScenarios')}</div>
-  if (!data.readings.length) return <div className="pane-eval empty">{t('nodeView.eval.noReadings')}</div>
+  const readings = node.evals
+  if (!readings) return <div className="pane-eval empty">{t('nodeView.eval.noScenarios')}</div>
+  if (!readings.length) return <div className="pane-eval empty">{t('nodeView.eval.noReadings')}</div>
   return (
     <div className="pane-eval">
-      {data.readings.map((r, i) => <EvalReading key={`${r.scenario}-${r.ts}-${i}`} r={r} />)}
+      {readings.map((r, i) => <EvalReading key={`${r.scenario}-${r.ts}-${i}`} r={r} />)}
     </div>
   )
 }

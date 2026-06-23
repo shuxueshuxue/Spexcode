@@ -154,7 +154,6 @@ export default {
     diffLabel: 'spec line diff',
     loadingHistory: 'loading history…',
     eval: {
-      loading: 'loading evaluations…',
       noScenarios: 'no scenarios declared — this node has no yatsu.md to evaluate.',
       noReadings: 'no evaluations yet — run `spex yatsu eval` to take a reading.',
       current: '✓ current',

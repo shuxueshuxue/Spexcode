@@ -9,6 +9,7 @@ import SessionGraph from './SessionGraph.jsx'
 import Legend from './Legend.jsx'
 import Settings from './Settings.jsx'
 import SpecSearch from './SpecSearch.jsx'
+import BoardStats from './BoardStats.jsx'
 import MobileApp from './MobileApp.jsx'
 import { useIsMobile } from './useIsMobile.js'
 import { loadBoard, layout, X_GAP, Y_GAP, projectTitle } from './data.js'
@@ -526,6 +527,11 @@ function Dashboard({ specs, sessions, project, reload }) {
         </div>
 
         <SessionWindow sessions={sessions} activeId={highlightId} onPick={onPickSession} onOpen={openBoard} onOpenSession={openSession} />
+
+        {/* @@@ board stats - the per-node badges, totalled (bottom-left, always on). It reads the SAME
+            `specs` the graph plots, so it stays in lock-step with the tiles; clicking a stat focuses the
+            first node it counts (setFocusId drills + pans there, the same jump a search pick performs). */}
+        <BoardStats specs={specs} onJump={setFocusId} />
 
         {/* @@@ lock banner - a top-center hint while a session owns the graph. It names the grip (in the
             session's colour) and tells the user the key to walk its changed nodes — or, when it has none,

@@ -78,6 +78,17 @@ export async function clientReview(id: string): Promise<ReviewPayload | null> {
   return await r.json() as ReviewPayload
 }
 
+// GET /api/sessions/:id/proof — the rendered review PROOF ([[review-proof]]): the self-contained HTML the
+// backend builds (default), or the model JSON (`json:true` → ?format=json). The engine runs on the backend,
+// so the CLI is a thin fetcher that writes/opens these bytes — works against a remote backend unchanged.
+// 404 → no such session.
+export type ProofResult = { ok: true; body: string } | { ok: false; status: number }
+export async function clientProof(id: string, json = false): Promise<ProofResult> {
+  const r = await apiFetch(`/api/sessions/${seg(id)}/proof${json ? '?format=json' : ''}`)
+  if (r.ok) return { ok: true, body: await r.text() }
+  return { ok: false, status: r.status }
+}
+
 // POST /api/sessions/:id/merge — the cockpit's merge DISPATCH (200 {dispatched:true} / 409 {reason}).
 export async function clientMerge(id: string): Promise<{ dispatched: boolean; reason?: string }> {
   const r = await apiFetch(`/api/sessions/${seg(id)}/merge`, post({}))

@@ -7,6 +7,7 @@ import { labelColor } from './color.js'
 import { STATUS_DOT, sessionName } from './session.js'
 import { SessionRow } from './SessionWindow.jsx'
 import SessionContextMenu from './SessionContextMenu.jsx'
+import { ProofButton } from './ReviewProof.jsx'
 import { useT } from './i18n/index.jsx'
 
 // @@@ SessionInterface - the Enter surface. TWO panes: a left session list and a right content area
@@ -817,6 +818,9 @@ export default function SessionInterface({ sessions, specs = [], project, focusN
                     {/* no manual "request review": agents propose review themselves at the stop-gate
                         (`session done --propose merge`). proposals (review/done/close-pending) resolve to
                         merge / close */}
+                    {/* the review-proof face: a thin opener for the backend-rendered proof of work
+                        ([[review-proof]]); shown alongside merge whenever the session has work to review. */}
+                    <ProofButton sessionId={active} status={selSession?.status} />
                     {(selSession?.status === 'review' || selSession?.status === 'done') && <button className="si-act go" onClick={() => act('merge')}>{t('session.merge')}</button>}
                     <button className="si-act kill" onClick={() => act('close')}>{t('session.close')}</button>
                   </div>

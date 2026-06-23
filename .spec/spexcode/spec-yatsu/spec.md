@@ -3,49 +3,51 @@ title: spec-yatsu
 status: active
 session: 861e8ed1-064b-489e-b623-ff79dac86dc1
 hue: 140
-desc: The eval/loss engine — yatsu.md declares scenarios; a readings sidecar is a second git-as-database axis; scan/eval/show/clean on the CLI, the eval tab on the dashboard.
+desc: yatsu is the evaluation in spec=loss / commits=optimizer — a spec carries how to measure its loss, the agent measures it, yatsu keeps score and flags stale.
 ---
 # spec-yatsu
 
-The third SpexCode package, with [[spec-cli]], [[spec-dashboard]], and [[spec-forge]] — and now built.
-Read the system as one optimization: **a spec is a loss-function design** (the target — *chosen*, not
-proven), **issues/commits are the optimizer**, and **yatsu is the evaluator** that reads the loss (live
-behavior vs. spec) and hands the signal back. Nothing proves a spec; what is measured is the code's
-conformance — a relation between a spec and a code-state, keyed at the **evaluation**.
+The third SpexCode package, with [[spec-cli]], [[spec-dashboard]], and [[spec-forge]]. Read the system as
+one optimization: **a spec is a loss-function design** (what we want), **issues/commits are the
+optimizer** (driving the code toward it), and **yatsu is the evaluation** — the measured loss, how far
+live behavior sits from the spec.
 
-## The spine — scenarios and readings, a second git-as-database axis
+## A spec carries how to measure its loss
 
-Each node carries a **`yatsu.md`** beside its `spec.md` declaring its scenarios as a structured
-`scenarios:` list (**one or many**, scenario-only — each a driver + target + inline steps or a pointer to
-a native test). The **readings** they produce are recorded apart, in a flat git-tracked sidecar
-`yatsu.evals.ndjson` keyed by scenario — and *that* record is the second axis: as a `spec.md` commit is a
-*spec version*, a reading commit is an *evaluation event*, so the whole engine (history, attribution,
-drift) applies unchanged, never inflating spec versions. The eval timeline is the sidecar's history. The
-core launches no browser; the producer behind the Driver seam is **a human eyeballing** — the manual
-producer (`spex yatsu eval --image`) — with a computer-use "stupid user" the interchangeable future one.
-A reading is **stale** when its governed `code:`, its scenario, or the evaluator version moved since.
+Beyond the target, a node's **`yatsu.md`** says how to measure the loss against it — one or more
+scenarios, each: a **description** (what to check), the **expected** result (what zero loss looks like),
+and optionally a **test file** beside it (a real `playwright.spec.ts`, a script — whatever runs). This is
+the *measurement*, written next to the loss function. yatsu defines no DSL and runs nothing.
 
-- **`spex yatsu scan`** — status: nodes holding a stale reading. *(Folding in open forge issues marked
-  needs-yatsu-eval, resolved by [[spec-forge]]'s `eval-pending`, is the next wire.)*
-- **`spex yatsu eval [.|<node>] [--force] [--image <path>]`** — incremental, idempotent: re-reads only
-  the stale (`.` = current node, bare = sweep the tree; `--force` redoes a flaky result).
-- **`spex yatsu show [.|<node>] [--json]`** — the CLI face of the eval timeline: a thin read over the
-  *same* engine the dashboard folds onto the board, so a terminal agent and the eval tab read alike.
-- **`spex yatsu clean [--keep-latest|--all]`** — prune the pixel cache (unreferenced blobs by default).
+## The agent measures; yatsu keeps score
 
-## Evidence — the eval tab
+The **agent is the evaluator.** When a score is stale, the agent reads the scenario, runs it *however* —
+the test file, by hand, a computer-use pass — compares the actual result to the expected, and files the
+measurement: `spex yatsu eval <node>` with the **evidence** it captured (a screenshot, a transcript) and
+a **verdict** (met expected, or how far off). yatsu executes nothing; it only records the result.
 
-A node's **eval tab** (sharing the history tab's chronological scaffold) lists its readings newest-first
-from `node.evals` on the board: each a freshness badge ("✓ current / ⚠ stale", surfacing `scan` like
-code-drift) over an expandable screenshot. Pixels are content-addressed under the **shared git common
-dir** — one blob per content, shared by every worktree (no duplication), never committed; a record whose
-blob is gone reads **"miss original file."** *(A second timeline source — forge issue open/close events
-that link out to the issue — is designed, not yet wired.)*
+yatsu **keeps score.** Measurements live in a flat git-tracked `yatsu.evals.ndjson` beside the spec — a
+*second git-as-database axis*: a measurement commit is an evaluation event, so history / attribution /
+drift apply unchanged. A score is **stale** when its governed `code:`, its scenario, or the evaluator
+moved since — derived live from git, no stored hashes. Evidence bytes are content-addressed under the
+shared git common dir (one blob per content, shared by every worktree, never committed; gone → "miss
+original file").
 
-## The keystone & what's next
+- **`spex yatsu scan`** — which scores are stale or missing.
+- **`spex yatsu eval [.|<node>]`** — the agent files a measurement (evidence + verdict).
+- **`spex yatsu show [.|<node>] [--json]`** — read a node's scores; the same data the dashboard's eval
+  tab renders (one engine, two faces).
+- **`spex yatsu clean [--keep-latest|--all]`** — prune the evidence cache.
 
-A bug *is* a detected loss: **A = repro on the broken state, B = the same scenario after the fix**, so a
-fix authors its own regression scenario; [[spec-forge]]'s issue→node link is the rail. Still ahead: the
-**computer-use "stupid user"** producer (scripted Playwright/WebDriver is deliberately *not* the path —
-the ledger plus the manual producer is the heart), the forge second source above, and **backend yatsu**
-(loss through real APIs — [[freshness]] reconcile waiting).
+## Proactive — the optimizer keeps its scores fresh
+
+yatsu is the loss signal the optimizer reads, so a stale score is a blind spot. The **`core` contract**
+tells every agent: changed a node that has a `yatsu.md`? re-measure it. The **stop-gate** surfaces a
+stale or missing score the way it surfaces code-drift, so the nudge lands in the flow, not on demand.
+Only nodes that declare a scenario are in scope — a node with no surface to measure simply has none.
+
+## What's next
+The **computer-use "stupid user"** is the agent's most thorough measuring hand — it just looks. **Backend
+yatsu** measures loss through real APIs ([[freshness]] reconcile waiting). Nothing in yatsu ever learns
+*how* to test: the spec defines the loss, the agent measures it, the optimizer drives it down, yatsu
+keeps score.

@@ -13,6 +13,19 @@ scenarios:
       The edit tab renders the node's pending spec.md diff, and re-selecting the tab after switching
       away shows that diff immediately with no loading-flash — the same instant feel as the history,
       issues and eval tabs. The filed reading carries the screenshot and a pass verdict.
+  - name: info-board-signals
+    description: >-
+      Open the dashboard, jump (the `/` search) to a node with rich state — e.g. node-graph, a drift
+      node that has a yatsu score and governs several files — and press `i`, then the `spec` tab. Read
+      the info board: a compact stat bar must carry the node's at-a-glance signals, and the governed
+      files must read as a counted row of chips, not a vertical list. Screenshot the spec tab and file
+      it with `spex yatsu eval work-pane --scenario info-board-signals --image <png> --pass`.
+    expected: >-
+      The stat bar shows, left to right, the derived status as a coloured dot + label, the version, the
+      aggregate yatsu score badge, a drift count when the node has drifted, and the last-editing session
+      pushed to the right — the same signal vocabulary the node tile speaks. Below it the governed files
+      render as a `// governs N` count over a wrapping row of file chips. The filed reading carries the
+      screenshot and a pass verdict.
 ---
 # yatsu.md — work-pane
 

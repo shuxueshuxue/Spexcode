@@ -143,6 +143,7 @@ export default {
     versionLabel: 'version:',
     lastEditedBy: 'last edited by:',
     governs: '// governs',
+    proseNode: '// no file owned · prose node',
     rawTitle: 'raw source',
     rawOwner: 'human',
     rawNote: 'rarely changed · needs approval',

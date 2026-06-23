@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ScoreBadge, readingScore } from './score.jsx'
+import { ScoreBadge, readingScore, nodeScore } from './score.jsx'
 import { useT } from './i18n/index.jsx'
 
 // @@@ pane registry - add a face for a spec node by adding one entry + one render case below.
@@ -108,20 +108,35 @@ function TwoPart({ parts }) {
   )
 }
 
+// @@@ SpecPane - the node's INFORMATION BOARD: title, desc, a compact stat bar, the governed files, then the
+// body. The stat bar is the at-a-glance signal line — derived status (the SAME dot+colour vocabulary as the
+// tile, [[node-graph]]), version, the aggregate yatsu score (nodeScore over node.evals, [[yatsu-score-badge]])
+// and the drift count when a governed file outran the spec ([[source-of-truth]]) — with the last-editing
+// session pushed to the end. Score and drift are surfaced HERE from the tile so the popup stops hiding them.
 export function SpecPane({ node }) {
   const t = useT()
+  const score = nodeScore(node.evals)
+  const driftTitle = (node.driftFiles || []).map((d) => `${d.file}: ${t('specNode.driftAhead', { n: d.behind })}`).join('\n')
   return (
     <div className="pane-doc">
       <h1># {node.title}</h1>
       <blockquote>{node.desc}</blockquote>
-      <div className="doc-meta">
-        {t('nodeView.statusLabel')} <b>{t(`status.${node.status}`)}</b> · {t('nodeView.versionLabel')} <b>v{node.version || 0}</b> · {t('nodeView.lastEditedBy')} <b>{node.session || t('common.none')}</b>
+      <div className="doc-stat">
+        <span className={`stat-status st-${node.status}`} title={t('nodeView.statusLabel')}>
+          <i className="stat-dot" />{t(`status.${node.status}`)}
+        </span>
+        <span className="stat-chip" title={t('nodeView.versionLabel')}>v{node.version || 0}</span>
+        {score && <ScoreBadge state={score} />}
+        {node.drift > 0 && <span className="stat-chip stat-drift" title={driftTitle}>⚠{node.drift}</span>}
+        <span className="stat-sess" title={t('nodeView.lastEditedBy')}>✎ <b>{node.session || t('common.none')}</b></span>
       </div>
-      {node.code?.length > 0 && (
-        <div className="doc-code">
-          <span className="doc-code-h">{t('nodeView.governs')}</span>
-          {node.code.map((f) => <code key={f} className="doc-code-f">{f}</code>)}
+      {node.code?.length > 0 ? (
+        <div className="doc-gov">
+          <span className="doc-gov-h">{t('nodeView.governs')} <b>{node.code.length}</b></span>
+          <div className="doc-gov-files">{node.code.map((f) => <code key={f} className="gov-f">{f}</code>)}</div>
         </div>
+      ) : (
+        <div className="doc-gov prose"><span className="doc-gov-h">{t('nodeView.proseNode')}</span></div>
       )}
       {node.parts ? <TwoPart parts={node.parts} /> : <SpecBody body={node.body} />}
     </div>

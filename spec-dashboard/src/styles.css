@@ -310,11 +310,33 @@ body {
   margin: 0 0 16px; padding: 8px 14px; border-left: 3px solid var(--blue);
   background: var(--panel2); color: var(--ink); line-height: 1.6; font-size: 13px;
 }
-.pane-doc .doc-meta { font-size: 12px; color: var(--muted); margin-bottom: 18px; }
-.pane-doc .doc-meta b { color: var(--ink2); }
-.pane-doc .doc-code { display: flex; flex-direction: column; gap: 3px; margin: 0 0 16px; }
-.pane-doc .doc-code-h { font-size: 11px; color: var(--muted); margin-bottom: 2px; }
-.pane-doc .doc-code-f { font-size: 12px; color: var(--blue); background: var(--panel2); padding: 1px 6px; border-radius: 3px; align-self: flex-start; }
+/* @@@ stat bar - the node's at-a-glance signal line: status (the tile's dot+colour vocabulary) · version
+   · yatsu score · drift, with the last-editing session pushed to the end. A compact panel strip that wraps
+   on narrow. Surfaces the score + drift signals that previously lived ONLY on the tile, never in the popup. */
+.pane-doc .doc-stat {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+  margin: 0 0 16px; padding: 6px 10px;
+  background: var(--panel2); border: 1px solid var(--line); border-radius: 5px;
+}
+.stat-status { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+.stat-dot { width: 7px; height: 7px; border-radius: 2px; flex: none; background: var(--muted); } /* square tick, like the node */
+.stat-status.st-merged  { color: var(--green);  } .stat-status.st-merged  .stat-dot { background: var(--green); }
+.stat-status.st-active  { color: var(--orange); } .stat-status.st-active  .stat-dot { background: var(--orange); }
+.stat-status.st-drift   { color: var(--yellow); } .stat-status.st-drift   .stat-dot { background: var(--yellow); }
+.stat-status.st-pending { color: var(--muted);  } .stat-status.st-pending .stat-dot { background: var(--muted); }
+.stat-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; color: var(--ink2); background: var(--paper); border: 1px solid var(--line); border-radius: 3px; padding: 1px 6px; }
+.stat-chip.stat-drift { color: var(--yellow); font-weight: 700; border-color: color-mix(in srgb, var(--yellow) 45%, transparent); }
+.stat-sess { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--muted); min-width: 0; }
+.stat-sess b { color: var(--ink2); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* @@@ governs - the node's owned files as a counted row of wrapping chips (compact, vs the old one-per-line
+   vertical stack); a pure-prose node (no code:) shows a muted 'no file owned' marker instead of nothing. */
+.pane-doc .doc-gov { margin: 0 0 16px; }
+.doc-gov-h { display: block; font-size: 10.5px; color: var(--muted); margin-bottom: 6px; }
+.doc-gov-h b { color: var(--ink2); font-weight: 700; }
+.doc-gov-files { display: flex; flex-wrap: wrap; gap: 5px; }
+.gov-f { font-size: 11px; color: var(--blue); background: var(--panel2); border: 1px solid color-mix(in srgb, var(--blue) 22%, var(--line)); padding: 1px 7px; border-radius: 3px; }
+.doc-gov.prose .doc-gov-h { font-style: italic; }
 
 /* the rendered spec.md: lead intent, then each `## vN` revision as a separated, labeled section */
 .doc-body { border-top: 1px solid var(--line); padding-top: 14px; font-size: 13px; line-height: 1.65; color: var(--ink); }

@@ -20,9 +20,13 @@ panel that never grows to xterm's measured width.
 
 The node popup is the `i` surface: a fixed pop-out (`min(900px,90vw) × min(600px,84vh)`) with tabs, opened
 over the board and dismissed with `Esc`. It is **reference-only** (`NodeView.jsx`) — no `work` pane, no
-embedded terminal. The intent half is the **spec doc**: title, desc, governed-code list, and the body
-rendered as a living current-state document (the two labelled parts — raw source / expanded spec — when
-authored that way, else the flat body). The proof and evolution of that intent live in the **history** tab.
+embedded terminal. The intent half is the **spec doc** — an information board. A **stat bar** carries the
+node's at-a-glance signals, the same the tile speaks: derived **status**, **version**, the aggregate **yatsu
+score** ([[yatsu-score-badge]]), and the **drift** count when a governed file outran the spec
+([[source-of-truth]]) — so score and drift live in the popup now, not only on the tile. Below it the governed
+files, then the body as a living current-state document (the two
+labelled parts — raw source / expanded spec — when authored that way, else the flat body). The proof and
+evolution of that intent live in the **history** tab.
 An **issues** tab lists the forge work bound to this node — open and closed alike, with both counts on the
 tab face (the board's badge/card show only the open ones; see [[dashboard-issues]]); the data already rides
 the board fold (`node.issues`), so the tab is a no-fetch group, silent when empty. An **edit** tab makes a

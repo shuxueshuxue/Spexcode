@@ -11,11 +11,14 @@
 #                                          committed, else `asking` — needs the human) and allow. Guaranteed to end.
 # $SPEX is the PATH-independent CLI invocation (abs tsx + cli) injected by settingsArg, so the gate's
 # own auto-default AND the command it shows the agent both work even when `spex` is absent from PATH.
-# Runs with cwd = the session worktree; state is the deterministic, file-based .session.
+# Runs with cwd = the session worktree; state is the deterministic, file-based session record.
+# @@@ runtime dir - state lives at `.session/state` (the runtime-dir layout); a legacy in-flight worktree
+# still has the flat `.session` FILE. Resolve to whichever exists so the gate spans the migration.
 S="${SPEX:-spex}"
+if [ -d .session ]; then SF=.session/state; else SF=.session; fi
 input=$(cat 2>/dev/null || true)
-status=$(sed -n 's/^status:[[:space:]]*//p' .session 2>/dev/null | head -1)
-proposal=$(sed -n 's/^proposal:[[:space:]]*//p' .session 2>/dev/null | head -1)
+status=$(sed -n 's/^status:[[:space:]]*//p' "$SF" 2>/dev/null | head -1)
+proposal=$(sed -n 's/^proposal:[[:space:]]*//p' "$SF" 2>/dev/null | head -1)
 
 # the value of the payload's structured `stop_hook_active` field (true on the hook-forced continuation),
 # read by field name rather than substring-sniffing the JSON blob. ([a-z]* captures true/false portably —

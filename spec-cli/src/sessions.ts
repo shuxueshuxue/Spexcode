@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url'
 import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, type ReviewDiffFile } from './git.js'
 import { guardWorktree } from './resilience.js'
 import { loadSystemConfig, loadSpecs, type ConfigPreset } from './specs.js'
-import { mainBranch } from './layout.js'
+import { mainBranch, statePath, runtimePath, RUNTIME_DIR } from './layout.js'
 
 // @@@ sessions - the WORKTREE is the durable unit; tmux is a disposable runtime handle. Each session
 // worktree carries an untracked `.session` file (the source of truth) that survives a kill / reboot /
@@ -163,13 +163,13 @@ export type Session = {
 // multi-line, so they live in their own untracked SIDECAR file (`.session-prompt`) beside `.session`,
 // not as a line in the line-based `.session`. Everything here is BEST-EFFORT: a missing/old sidecar (a
 // session launched before this existed) just means no prompt is shown — never an error, never blocks a launch.
-const PROMPT_FILE = '.session-prompt'
+const PROMPT_FILE = '.session-prompt'   // legacy flat name; the live path is `.session/prompt` (runtime dir)
 function writePromptFile(dir: string, prompt: string): void {
-  try { writeFileSync(join(dir, PROMPT_FILE), prompt) } catch { /* best-effort; must never block the launch */ }
+  try { writeFileSync(join(runtimeDir(dir), 'prompt'), prompt) } catch { /* best-effort; must never block the launch */ }
 }
 function readPromptFile(dir: string): string | null {
   try {
-    const p = join(dir, PROMPT_FILE)
+    const p = runtimePath(dir, 'prompt', PROMPT_FILE)
     if (!existsSync(p)) return null
     const s = readFileSync(p, 'utf8')
     return s.trim() ? s : null
@@ -181,15 +181,15 @@ function readPromptFile(dir: string): string | null {
 // later (possibly after a backend restart) WITHOUT re-deriving anything. It is CONSUMED (removed) the moment
 // the session launches, so it exists only while a session is still waiting in the queue. Distinct from
 // `.session-prompt` (the human-facing originating ask, which differs from the launch prompt for directives).
-const LAUNCH_FILE = '.session-launch'
+const LAUNCH_FILE = '.session-launch'   // legacy flat name; the live path is `.session/launch` (runtime dir)
 function writeLaunchFile(dir: string, prompt: string): void {
-  try { writeFileSync(join(dir, LAUNCH_FILE), prompt) } catch { /* best-effort; the drainer treats a missing file as nothing-to-launch */ }
+  try { writeFileSync(join(runtimeDir(dir), 'launch'), prompt) } catch { /* best-effort; the drainer treats a missing file as nothing-to-launch */ }
 }
 function readLaunchFile(dir: string): string | null {
-  try { const p = join(dir, LAUNCH_FILE); return existsSync(p) ? readFileSync(p, 'utf8') : null } catch { return null }
+  try { const p = runtimePath(dir, 'launch', LAUNCH_FILE); return existsSync(p) ? readFileSync(p, 'utf8') : null } catch { return null }
 }
 function removeLaunchFile(dir: string): void {
-  try { rmSync(join(dir, LAUNCH_FILE), { force: true }) } catch { /* best-effort */ }
+  try { rmSync(runtimePath(dir, 'launch', LAUNCH_FILE), { force: true }) } catch { /* best-effort */ }
 }
 
 // a one-line preview of the originating prompt for tables/events: first non-empty line, truncated.
@@ -227,9 +227,13 @@ function pkgRoot(): string {
 // `name` is the user-chosen display override set by the rename gesture — distinct from the auto-derived
 // `title` (from the prompt), so a rename never has to fight or overwrite the launch-time derivation.
 type SessRec = { node: string | null; title: string | null; name: string | null; session: string | null; status: Lifecycle; proposal: Proposal | null; merges: number; note: string | null }
+// ensure a worktree's `.session/` runtime dir exists, returning its path. Idempotent (recursive mkdir) —
+// every writer that drops a file under the runtime dir calls this first so launch order never matters.
+function runtimeDir(path: string): string { const d = join(path, RUNTIME_DIR); mkdirSync(d, { recursive: true }); return d }
+
 function readSessionFile(dir: string): SessRec {
   const r: SessRec = { node: null, title: null, name: null, session: null, status: 'active', proposal: null, merges: 0, note: null }
-  const p = join(dir, '.session')
+  const p = statePath(dir)
   if (!existsSync(p)) return r
   for (const line of readFileSync(p, 'utf8').split('\n')) {
     const i = line.indexOf(':'); if (i < 0) continue
@@ -253,7 +257,9 @@ function writeSessionFile(dir: string, rec: SessRec): void {
   if (rec.status === 'awaiting' && rec.proposal) lines.push(`proposal: ${rec.proposal}`)
   if (rec.merges) lines.push(`merges: ${rec.merges}`)
   if (rec.note) lines.push(`note: ${rec.note}`)
-  writeFileSync(join(dir, '.session'), lines.join('\n') + '\n')
+  const p = statePath(dir)   // `.session/state` for a new session; the flat `.session` file for a legacy one
+  mkdirSync(dirname(p), { recursive: true })   // creates `.session/`; no-op when p is the legacy flat file
+  writeFileSync(p, lines.join('\n') + '\n')
 }
 
 // @@@ fail-loud enumeration - the worktree set is the board's EXISTENCE truth, so a failed enumeration must
@@ -557,11 +563,11 @@ function titleFromPrompt(prompt: string): string | null {
 
 // @@@ hideClaudeMd - CLAUDE.md isolation. A DISPATCHED agent should run with full SpexCode control over
 // its own behavior, not be shaped by the project CLAUDE.md the way the managing session is (auto-discovery
-// would inject it as system context). At launch we rename the worktree's CLAUDE.md → CLAUDE.spexhidden.md
-// (still on disk, fully readable — NOT deleted, NOT --bare, so auth/hooks/repo stay intact) so Claude
-// Code's auto-discovery no longer finds it, and `update-index --assume-unchanged CLAUDE.md` so the rename
-// is invisible to git and can NEVER be staged/committed/merged back to main. Default ON; disable with
-// SPEXCODE_HIDE_CLAUDE_MD=0. Best-effort: any failure here must never block the launch.
+// would inject it as system context). At launch we move the worktree's CLAUDE.md → `.session/claude.md`
+// (still on disk, fully readable — NOT deleted, NOT --bare, so auth/hooks/repo stay intact; the lowercase
+// name in a dot-dir is invisible to Claude Code's CLAUDE.md auto-discovery), and `update-index
+// --assume-unchanged CLAUDE.md` so the move is invisible to git and can NEVER be staged/committed/merged
+// back to main. Default ON; disable with SPEXCODE_HIDE_CLAUDE_MD=0. Best-effort: any failure must not block launch.
 const HIDE_CLAUDE_MD = process.env.SPEXCODE_HIDE_CLAUDE_MD !== '0' && process.env.SPEXCODE_HIDE_CLAUDE_MD !== 'false'
 async function hideClaudeMd(path: string): Promise<void> {
   if (!HIDE_CLAUDE_MD) return
@@ -570,7 +576,7 @@ async function hideClaudeMd(path: string): Promise<void> {
   try {
     // pin the tracked path assume-unchanged FIRST, so the rename's deletion is never seen by git.
     await gitA(['-C', path, 'update-index', '--assume-unchanged', 'CLAUDE.md'])
-    renameSync(src, join(path, 'CLAUDE.spexhidden.md'))
+    renameSync(src, join(runtimeDir(path), 'claude.md'))
   } catch { /* isolation is best-effort; a failure must not block the launch */ }
 }
 
@@ -583,9 +589,11 @@ async function hideClaudeMd(path: string): Promise<void> {
 // @@@ settingsJson - the hooks Claude Code loads via `--settings <FILE>`. Written to a per-worktree
 // file (NOT inline on the command line — inline JSON containing single quotes broke the shell quoting
 // and claude read it as a missing file path). The file is ephemeral (removed with the worktree), so
-// still no global pollution. UserPromptSubmit + PreToolUse → the ONE branching `mark-active` hook (active
-// on any work; asking, with the question as the note, when the tool is AskUserQuestion — see
-// mark-active.sh); Stop → the blocking gate (with a loop-break); StopFailure → `error`;
+// still no global pollution. UserPromptSubmit + PreToolUse → the branching `mark-active` hook (active on
+// any work; asking, with the question as the note, when the tool is AskUserQuestion — see
+// mark-active.sh); PreToolUse ALSO runs `spec-first` (a one-shot read-the-spec-before-code nudge —
+// sessions/spec-first; its own sentinel file, so it never races mark-active's `.session/state` write); Stop
+// → the blocking gate (with a loop-break); StopFailure → `error`;
 // Notification(idle_prompt) → `idle`. Hook commands use MAIN's tsx+cli by absolute path ($SPEX) since a
 // fresh worktree has no node_modules and `spex` may be off the session's PATH.
 // @@@ idle hook - the Notification hook fires `session idle` (guarded active-only) when claude sits
@@ -602,11 +610,12 @@ function settingsJson(): string {
   const root = pkgRoot()
   const gate = join(root, 'hooks', 'stop-gate.sh')
   const markCmd = `bash ${join(root, 'hooks', 'mark-active.sh')}`
+  const specFirstCmd = `bash ${join(root, 'hooks', 'spec-first.sh')}`   // one-shot read-the-spec nudge (sessions/spec-first)
   const spex = `${join(root, 'node_modules', '.bin', 'tsx')} ${join(root, 'src', 'cli.ts')}`
   const idleCmd = `p=$(cat); case "$p" in *'"notification_type":"idle_prompt"'*) ${spex} session idle ;; esac`
   const hooks: Record<string, unknown> = {
     UserPromptSubmit: [{ hooks: [{ type: 'command', command: markCmd }] }],
-    PreToolUse: [{ hooks: [{ type: 'command', command: markCmd }] }],
+    PreToolUse: [{ hooks: [{ type: 'command', command: markCmd }, { type: 'command', command: specFirstCmd }] }],
     Stop: [{ hooks: [{ type: 'command', command: `SPEX='${spex}' bash ${gate}` }] }],
     StopFailure: [{ hooks: [{ type: 'command', command: `${spex} session fail` }] }],
     Notification: [{ hooks: [{ type: 'command', command: idleCmd }] }],
@@ -615,7 +624,7 @@ function settingsJson(): string {
 }
 // write the hooks file into the worktree and return the `--settings <file>` arg (no shell-quoting hazard).
 function writeSettings(path: string): string {
-  const file = join(path, '.spex-hooks.json')
+  const file = join(runtimeDir(path), 'hooks.json')
   writeFileSync(file, settingsJson())
   return `--settings ${file}`
 }
@@ -630,7 +639,7 @@ function writeSettings(path: string): string {
 // rendezvous socket instead (present while claude is alive, gone once it exits). The file is a RUNTIME_FILE
 // (gitignored, ignored by the merge gate, removed with the worktree) so it never pollutes the spec/code work.
 function launchScript(id: string, path: string, tail: string): string {
-  const file = join(path, '.spex-launch.sh')
+  const file = join(runtimeDir(path), 'launch.sh')
   writeFileSync(file, `${rvEnv(id)} ${CLAUDE_CMD} ${appendSysArg()} ${writeSettings(path)} ${tail}\n`)
   return file
 }
@@ -975,17 +984,26 @@ export function markIdleFromCwd(): boolean {
 // @@@ mergeReadiness - the deterministic commit gate the Stop hook enforces before a session may declare
 // done / propose merge. The dogfood ritual lands every change as a COMMIT on the node branch first, so two
 // states block a declaration: (1) uncommitted working-tree changes, ignoring the runtime files SpexCode
-// itself writes into the worktree (.session / .session-prompt / .spex-hooks.json / CLAUDE.spexhidden.md —
-// never part of the spec/code work), or (2) 0 commits ahead of main (nothing committed to merge). Runs from
+// itself writes into the worktree (the whole `.session/` dir — state/prompt/launch/hooks.json/launch.sh/
+// claude.md — never part of the spec/code work), or (2) 0 commits ahead of main (nothing committed to
+// merge; see isRuntimePath). Runs from
 // cwd = the session worktree; ALL git goes through git() so the hook's exported GIT_DIR/GIT_INDEX_FILE can't
 // misdirect repo discovery to the cwd (the same trap git.ts documents). `main` resolves via the shared refs,
 // so `main..HEAD` works from any linked worktree regardless of where main is checked out.
-const RUNTIME_FILES = new Set(['.session', '.session-prompt', '.session-launch', '.spex-hooks.json', '.spex-launch.sh', 'CLAUDE.spexhidden.md'])
+// legacy flat runtime files (pre runtime-dir refactor) — still recognised so an in-flight worktree's
+// sidecars never count as real work; drop this set once no flat-layout session remains.
+const LEGACY_RUNTIME = new Set(['.session', '.session-prompt', '.session-launch', '.spex-hooks.json', '.spex-launch.sh', 'CLAUDE.spexhidden.md'])
+// is this `git status` path one of SpexCode's own runtime artifacts (the whole `.session/` dir, or a
+// legacy flat sidecar) rather than the agent's spec/code work? Belt-and-suspenders to .gitignore — an
+// adopted project's ignore list may differ, so the gate filters by path, not just by tracking state.
+function isRuntimePath(p: string): boolean {
+  return p === RUNTIME_DIR || p.startsWith(RUNTIME_DIR + '/') || LEGACY_RUNTIME.has(p)
+}
 export function mergeReadiness(): { ready: boolean; reason?: string } {
   let dirty: string[] = []
   try {
     dirty = git(['status', '--porcelain', '--untracked-files=all']).split('\n').filter(Boolean)
-      .map(porcelainPath).filter((p) => !RUNTIME_FILES.has(p))
+      .map(porcelainPath).filter((p) => !isRuntimePath(p))
   } catch { /* git status failed — fall through to the ahead check, still a real guard */ }
   if (dirty.length) {
     const shown = dirty.slice(0, 8).join(', ') + (dirty.length > 8 ? ', …' : '')
@@ -1060,7 +1078,7 @@ export async function reviewPayload(id: string): Promise<ReviewPayload | null> {
     specLint(),
   ])
   const dirtyNonRuntime = statusOut.split('\n').filter(Boolean)
-    .map(porcelainPath).filter((p) => !RUNTIME_FILES.has(p)).length
+    .map(porcelainPath).filter((p) => !isRuntimePath(p)).length
   return {
     id, node: wt.rec.node, branch: wt.branch,
     ahead: Number(aheadOut.trim()) || 0,

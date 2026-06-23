@@ -11,7 +11,9 @@
 # wins; the next real tool after a declaration flips back to active, forcing a fresh Stop-gate declaration.
 # That same next-tool rule clears asking back to active once the agent resumes work. Pure shell (no
 # node/tsx) so it stays cheap firing on every tool call. cwd = the session worktree.
-f=.session
+# @@@ runtime dir - state lives at `.session/state` (the runtime-dir layout); a legacy in-flight worktree
+# still has the flat `.session` FILE. Resolve to whichever exists so the hook spans the migration.
+if [ -d .session ]; then f=.session/state; else f=.session; fi
 [ -f "$f" ] || exit 0
 payload=$(cat 2>/dev/null)
 # the value of the "tool_name" field (empty on UserPromptSubmit, which carries no tool). Keyed on the

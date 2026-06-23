@@ -1,4 +1,4 @@
-import { readFileSync, existsSync } from 'node:fs'
+import { readFileSync, existsSync, statSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { git, repoRoot, gitA, gitTry, headSha, worktreeSpecSig, worktreeSpecDelta, type NodeOp } from './git.js'
 import { guardWorktree } from './resilience.js'
@@ -81,10 +81,37 @@ async function gitWorktrees(root: string): Promise<{ path: string; branch: strin
   return list
 }
 
+// @@@ runtime dir - EVERY per-worktree artifact SpexCode writes lives under ONE ignored directory,
+// `.session/` (state, prompt, launch, hooks.json, launch.sh, claude.md), so the worktree's spec/code tree
+// stays clean and the whole runtime is one `rm -rf`. This is the single seam that knows where those files
+// sit; sessions.ts writes/reads them through here. COMPAT: pre-refactor worktrees wrote them as flat
+// dotfiles in the worktree root (`.session` the FILE, `.session-prompt`, …). Readers resolve the folder
+// path but fall back to the legacy flat file while `.session` is still a file, so in-flight sessions keep
+// running until they drain — drop the legacy fallbacks (here, in sessions.ts, the hooks, .gitignore) once
+// no flat-layout worktree remains.
+export const RUNTIME_DIR = '.session'
+// the per-session state file. New layout: `.session/state`. Legacy: the flat `.session` FILE, detected
+// because `.session` stat's as a file, not a directory (missing → new layout, the brand-new-session case).
+export function statePath(dir: string): string {
+  const base = join(dir, RUNTIME_DIR)
+  try { if (statSync(base).isFile()) return base } catch { /* missing or a dir → folder layout */ }
+  return join(base, 'state')
+}
+// a runtime sidecar (prompt / launch / …): prefer the new `.session/<name>`, fall back to the legacy flat
+// name for an in-flight pre-refactor worktree. Returns the NEW path when neither exists, so writes adopt
+// the folder. The dir is created by the writer (runtimeDir in sessions.ts), not here.
+export function runtimePath(dir: string, name: string, legacy: string): string {
+  const neu = join(dir, RUNTIME_DIR, name)
+  if (existsSync(neu)) return neu
+  const old = join(dir, legacy)
+  if (existsSync(old)) return old
+  return neu
+}
+
 // the untracked per-worktree linker: node / session / status (ephemeral runtime state).
 function readSession(dir: string) {
   const r = { node: null as string | null, session: null as string | null, status: null as string | null }
-  const p = join(dir, '.session')
+  const p = statePath(dir)
   if (!existsSync(p)) return r
   for (const line of readFileSync(p, 'utf8').split('\n')) {
     const i = line.indexOf(':'); if (i < 0) continue

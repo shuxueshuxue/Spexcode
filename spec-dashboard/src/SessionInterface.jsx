@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import SessionTerm from './SessionTerm.jsx'
+import SessionGraph from './SessionGraph.jsx'
 import { loadConfig } from './data.js'
 import { Avatar } from './avatar.jsx'
 import { labelColor } from './color.js'
@@ -13,6 +14,11 @@ import { useT } from './i18n/index.jsx'
 //   · "New Session" focused -> input box + avatar CENTERED (terminal vibe). Nothing is prefilled — the
 //     focused spec node is instead the FIRST @-mention suggestion, so you opt into targeting it by typing
 //     `@`. Enter launches a real session, then we SWITCH to it.
+//   · "View Session Relationship" focused -> the content becomes the live monitor GRAPH (SessionGraph): the
+//     who-watches-whom network of all sessions, filling the pane. Its trigger (was a fullscreen `t` overlay)
+//     is a compact icon button paired with the ＋ New Session button in a top ROW — neither sits in the ↑/↓
+//     path to a session. New ⇄ graph is a HORIZONTAL axis: → from an EMPTY New Session enters the graph, ←
+//     leaves it. Inside, hjkl walk the web and clicking a node (or ⏎) switches to that session's tab.
 //   · an existing session focused -> the content becomes a READ-ONLY live tmux terminal (SessionTerm),
 //     with the SINGLE human input docked at the BOTTOM. The terminal never accepts typing; the bottom box
 //     is the only input — submitting dispatches the line through the CONTROL SOCKET (POST /keys, which
@@ -152,6 +158,10 @@ export default function SessionInterface({ sessions, specs = [], project, focusN
   // looks like a select menu — used only to SUGGEST nav mode (pulse the button), never to seize keys.
   const [navMode, setNavMode] = useState(false)
   const [menuById, setMenuById] = useState({})
+  // @@@ graph legend - the relationship tab's `?` keymap modal. LIFTED here (not inside SessionGraph) so the
+  // console's own Esc handler can close it before closing the console — the console's window listener runs
+  // first, so it must own this Esc precedence (see the key router below).
+  const [graphLegend, setGraphLegend] = useState(false)
   // @@@ file attach - a pasted/dropped/picked file is uploaded to the backend (= worker) machine's /tmp and
   // its returned path is spliced into the prompt. `uploading` guards/announces the in-flight POST; `uploadErr`
   // is the fail-loud flag; `dragTarget` lights the surface ('new' | 'msg') a file is currently dragged over.
@@ -167,8 +177,11 @@ export default function SessionInterface({ sessions, specs = [], project, focusN
   const fileRef = useRef(null)         // the one hidden <input type=file>; the attach buttons trigger it
   const fileTargetRef = useRef('new')  // which surface the pending pick inserts into ('new' | 'msg')
 
+  // @@@ the vertical ↑/↓ ring - New Session, then each live session. The relationship graph is DELIBERATELY
+  // NOT in this ring: it sits on a HORIZONTAL axis off New (New's → enters it when the prompt is empty, the
+  // graph's ← returns) so it never blocks the path down to a session. 'graph' is a valid `sel` all the same.
   const order = useMemo(() => ['new', ...sessions.map((s) => s.id)], [sessions])
-  const active = order.includes(sel) ? sel : 'new'
+  const active = sel === 'graph' || order.includes(sel) ? sel : 'new'
   const focusId = focusNode?.id || null
   const selSession = sessions.find((s) => s.id === active)
   // the active session tab's bottom-input draft (per-session, see `drafts`).
@@ -254,7 +267,8 @@ export default function SessionInterface({ sessions, specs = [], project, focusN
     if (!open) return
     const id = setTimeout(() => {
       if (active === 'new') taRef.current?.focus()
-      else if (selSession?.status !== 'offline') msgRef.current?.focus()
+      // the graph tab has no docked input — it owns the keyboard itself (hjkl/⏎/?), so focus nothing.
+      else if (selSession && selSession.status !== 'offline') msgRef.current?.focus()
     }, 0)
     return () => clearTimeout(id)
   }, [open, active, selSession?.status])
@@ -519,23 +533,39 @@ export default function SessionInterface({ sessions, specs = [], project, focusN
   }
   // @@@ window-level list nav - ↑/↓ move the selection regardless of focus; Enter on New launches.
   const stateRef = useRef({})
-  stateRef.current = { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, navMode, setNavMode, sendRawKey }
+  stateRef.current = { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, navMode, setNavMode, sendRawKey, graphLegend, setGraphLegend }
   useEffect(() => {
     const onKey = (e) => {
-      const { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, navMode, setNavMode, sendRawKey } = stateRef.current
-      if (!open) return   // panel hidden (board not the active surface): the graph owns the keys
+      const { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, navMode, setNavMode, sendRawKey, graphLegend, setGraphLegend } = stateRef.current
+      if (!open) return   // panel hidden (board not the active surface): nothing here listens
       // @@@ nav-mode toggle chord (⌃/⌘+I) - the dependable keyboard entry/exit, alongside the header button.
       // Handled before everything else so it works whether nav mode is currently on or off.
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'i' || e.key === 'I') && active !== 'new') {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'i' || e.key === 'I') && active !== 'new' && active !== 'graph') {
         e.preventDefault(); e.stopPropagation(); setNavMode((v) => !v); return
       }
       // @@@ jump to New Session - ⌃/⌘+N (also ⌃/⌘+↑/Home) snaps the selection to the New Session tab from
-      // anywhere in the panel, no arrowing up the whole list. Handled before the nav-mode passthrough so it
-      // works even while raw-key mode is forwarding keystrokes to a session pane. The tab-switch focus effect
-      // then drops the caret into the prompt box. (⌘+N is OS-reserved on macOS; ⌃+N is the dependable one.)
+      // anywhere in the panel, no arrowing up the whole list. Kept ABOVE both the relationship-tab branch and
+      // the nav-mode passthrough so it works from the graph and even while raw-key mode forwards to a pane.
+      // The tab-switch focus effect then drops the caret into the prompt box. (⌘+N is OS-reserved on macOS.)
       if (((e.ctrlKey || e.metaKey) && (e.key === 'n' || e.key === 'N')) ||
           ((e.ctrlKey || e.metaKey) && (e.key === 'ArrowUp' || e.key === 'Home'))) {
         e.preventDefault(); e.stopPropagation(); setSel('new'); return
+      }
+      // @@@ relationship-tab keys - the graph fills the pane and walks by hjkl ALONE (handled in its own
+      // listener, which runs after ours). Arrows are NOT the graph's: ← returns to New Session (the spatial
+      // twin of New's → into the graph), and the other arrows are inert here — we swallow them so they never
+      // scroll or fall through to tab nav. Esc closes the graph's `?` legend first (if open), else the console;
+      // ⌃/⌘+N above still escapes to New. We let hjkl / ⏎ / ? pass UNTOUCHED to the graph's own listener.
+      if (active === 'graph') {
+        if (e.key === 'Escape') {
+          e.preventDefault(); e.stopPropagation()
+          if (graphLegend) setGraphLegend(false); else onClose()
+          return
+        }
+        if (graphLegend) { if (e.key.startsWith('Arrow')) { e.preventDefault(); e.stopPropagation() } return }
+        if (e.key === 'ArrowLeft') { e.preventDefault(); e.stopPropagation(); setSel('new'); return }
+        if (e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); return }
+        return
       }
       // @@@ nav mode passthrough - while ON, EVERY key is forwarded raw to the session pane and nothing else
       // fires (no list nav, no page scroll). Esc is forwarded too (it cancels the agent's menu); a SECOND Esc
@@ -563,8 +593,15 @@ export default function SessionInterface({ sessions, specs = [], project, focusN
         if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); e.stopPropagation(); accept(menu.items[menu.index]); return }
         if (e.key === 'Escape')    { e.preventDefault(); e.stopPropagation(); setMenu(null); return }
       }
-      // Esc closes the whole interface (App delegates it here so the menu can claim it first, above).
+      // Esc closes the whole interface (App delegates it here so the menu can claim it first, above). The
+      // relationship tab's Esc is owned by its branch up top (legend-then-console); this is the other tabs'.
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onClose(); return }
+      // @@@ New → graph - from New Session, → crosses into the relationship graph, but ONLY when the prompt is
+      // EMPTY, so a non-empty draft still moves the caret normally. The graph's ← crosses back (see its branch
+      // above). This is the horizontal twin of the vertical ↑/↓ ring, mirroring the New/graph button pair.
+      if (active === 'new' && e.key === 'ArrowRight' && (taRef.current?.value ?? '') === '') {
+        e.preventDefault(); e.stopPropagation(); setSel('graph'); return
+      }
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         // inside a multi-line input, ↑/↓ first walk the caret between (possibly wrapped) lines; only at
         // the visual edge — no line to move to in that direction — do they fall through to tab nav.
@@ -603,7 +640,9 @@ export default function SessionInterface({ sessions, specs = [], project, focusN
     if (e.button !== 0) return
     const t = e.target
     if (isTextField(t)) return
-    if (t.closest && t.closest('.si-term-body')) return
+    // the terminal owns its own text selection; the relationship graph owns its own mousedown (ReactFlow's
+    // pan / drag-to-monitor / node click) — preventing default on either would break those gestures.
+    if (t.closest && (t.closest('.si-term-body') || t.closest('.session-graph'))) return
     e.preventDefault()
   }
 
@@ -640,9 +679,21 @@ export default function SessionInterface({ sessions, specs = [], project, focusN
         />
         <aside className="si-list">
           <div className="si-list-head">// {project ? `${project} ` : ''}{t('session.title')}</div>
-          <button className={active === 'new' ? 'si-item new on' : 'si-item new'} title={t('session.newSessionTitle')} onClick={() => setSel('new')}>
-            ＋ {t('session.newSession')}
-          </button>
+          {/* @@@ top button row - two compact icon buttons, NOT full-width list rows, so neither blocks the
+              ↑/↓ path down to a session. `＋` starts a New Session; the network glyph opens the relationship
+              graph (same glyph the spec board's HUD carries). New ⇄ graph is the ←/→ horizontal axis (see the
+              key router); the live session rows below are the ↑/↓ vertical ring. */}
+          <div className="si-toprow">
+            <button className={active === 'new' ? 'si-pill new on' : 'si-pill new'} title={t('session.newSessionTitle')} onClick={() => setSel('new')}>
+              <span className="si-pill-glyph">＋</span>
+            </button>
+            <button className={active === 'graph' ? 'si-pill graph on' : 'si-pill graph'} title={t('session.relationshipTitle')} onClick={() => setSel('graph')}>
+              <svg className="si-pill-glyph" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
+                <circle cx="3.5" cy="4" r="1.8" /><circle cx="12.5" cy="4" r="1.8" /><circle cx="8" cy="12.5" r="1.8" />
+                <path d="M4.9 5.1 L7 11 M11.1 5.1 L9 11 M5 4 H11" />
+              </svg>
+            </button>
+          </div>
           {sessions.map((s) => (
             // @@@ single = switch, double = lock - a single click just switches to the tab; a DOUBLE click
             // locks that session and returns to the graph focused on its overlay (onPickSession toggle=false
@@ -663,7 +714,14 @@ export default function SessionInterface({ sessions, specs = [], project, focusN
           ))}
         </aside>
 
-        <section className={active === 'new' ? 'si-content is-new' : 'si-content is-session'}>
+        <section className={active === 'new' ? 'si-content is-new' : active === 'graph' ? 'si-content is-graph' : 'si-content is-session'}>
+          {/* @@@ relationship graph - mounted only while its tab is active AND the console is open, so it
+              doesn't poll in the background; it remounts (one fetch, instantly re-framed) on reselect. onOpen
+              switches the console to the clicked session's tab — the graph's "open" is a tab switch, not a
+              cross-surface jump. Its legend is lifted here (graphLegend) for Esc precedence (see key router). */}
+          {open && active === 'graph' && (
+            <SessionGraph onOpen={(id) => setSel(id)} active legend={graphLegend} setLegend={setGraphLegend} />
+          )}
           {active === 'new' && (
             <div className="si-new-center">
               <div className="si-avatar">◠‿◠</div>
@@ -728,7 +786,7 @@ export default function SessionInterface({ sessions, specs = [], project, focusN
               down every SessionTerm and coming back forced a reconnect/repaint — the "reload" feel. */}
           <div
             className="si-session-wrap"
-            style={{ display: active === 'new' ? 'none' : 'flex', flexDirection: 'column', flex: 1, minWidth: 0, minHeight: 0, position: 'relative' }}
+            style={{ display: (active === 'new' || active === 'graph') ? 'none' : 'flex', flexDirection: 'column', flex: 1, minWidth: 0, minHeight: 0, position: 'relative' }}
           >
               <div className="si-term" ref={termRef}>
                 <div className="si-term-head">

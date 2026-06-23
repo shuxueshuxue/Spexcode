@@ -5,7 +5,6 @@ import SpecNode from './SpecNode.jsx'
 import NodeView, { panesFor } from './NodeView.jsx'
 import SessionWindow from './SessionWindow.jsx'
 import SessionInterface from './SessionInterface.jsx'
-import SessionGraph from './SessionGraph.jsx'
 import Legend from './Legend.jsx'
 import Settings from './Settings.jsx'
 import SpecSearch from './SpecSearch.jsx'
@@ -39,7 +38,6 @@ function Dashboard({ specs, sessions, project, reload }) {
   const [sessionUI, setSessionUI] = useState(false) // session interface (opened by Enter)
   const [legend, setLegend] = useState(false)     // centered help modal: keymap + visual vocabulary (`?`)
   const [settings, setSettings] = useState(false) // centered settings modal: language picker etc. (`,`)
-  const [graphView, setGraphView] = useState(false) // experimental session-subscription graph (`t`)
   const [search, setSearch] = useState(false)     // jump-to-node search palette (Alt+F)
   const [sessionSel, setSessionSel] = useState('new') // persisted across open/close: last tab/session
   const [highlightId, setHighlightId] = useState(null) // session whose overlays are emphasised
@@ -122,11 +120,10 @@ function Dashboard({ specs, sessions, project, reload }) {
   // close/reopen. Enter (board or node-info popup) always reopens it at the remembered tab (`sessionSel`),
   // a "boarding switch" — never a context jump based on the focused node.
   const openBoard = useCallback(() => setSessionUI(true), [])
-  // @@@ open a session's console - the session-graph's embed: clicking a graph node crosses into THAT
-  // session's console by reusing the board's open path (select its tab + show the interface). It does NOT
-  // touch `graphView`: the console opens ON TOP of whichever graph you're in, and closing it returns you
-  // to that same graph. Switching between the two graphs is `t`'s job alone (see onKey) — never a side
-  // effect of opening a session. No new mechanism — SessionInterface already keys its console off `sessionSel`.
+  // @@@ open a session's console - jump straight to a given session: select its tab + show the interface.
+  // Used by the top-right SessionWindow and the `/` search when the picked entry is a session. No new
+  // mechanism — SessionInterface already keys its console off `sessionSel`. (The relationship graph's own
+  // node-click reuses the same tab-select, but it does so INSIDE the console via setSel — see SessionGraph.)
   const openSession = useCallback((id) => { setSessionSel(id); setSessionUI(true) }, [])
   // @@@ startNew - a board chord opens the session board on its New Session tab with `text` pre-seeded
   // (the @-directive). One-shot: SessionInterface applies it then clears `seed`, so a later reopen keeps
@@ -316,16 +313,14 @@ function Dashboard({ specs, sessions, project, reload }) {
     const bumpScroll = (delta) => popupScroll(
       document.querySelector('.ov-body .pane-doc, .ov-body .pane-hist, .ov-body .pane-issues, .ov-body .pane-eval, .ov-body .pane-edit'), delta)
     const onKey = (e) => {
-      // @@@ graph toggle - `t` is the ONE switch between the spec graph and the session graph, and it
-      // toggles BOTH ways. It is the only crossing: Esc never switches graphs, and opening a session
-      // console leaves `graphView` untouched (you return to the graph you were in). It sits ABOVE the
-      // guards below so it still fires while the session graph owns the board — but it is suppressed
-      // while a modal/console captures keys, where a `t` is just a keystroke (e.g. typed into an input).
+      // @@@ relationship key - `t` opens the session console on its "View Session Relationship" tab — the
+      // live monitor graph now LIVES in the console (see SessionInterface), not as a fullscreen overlay. It is
+      // suppressed while a modal/console already captures keys (there a `t` is just a keystroke, e.g. typed
+      // into an input). The console's own list nav then carries you off the tab; this key only opens onto it.
       if (!sessionUI && !overlay && !legend && !settings && !search && (e.key === 't' || e.key === 'T')) {
-        e.preventDefault(); e.stopPropagation(); setGraphView((v) => !v); return
+        e.preventDefault(); e.stopPropagation(); setSessionSel('graph'); setSessionUI(true); return
       }
-      if (graphView) return // the session-graph view owns its remaining keys (drag/click, handled there)
-      if (sessionUI) return // the session interface owns ALL its keys (arrows / Enter / typing / Esc)
+      if (sessionUI) return // the session interface owns ALL its keys (arrows / Enter / typing / Esc / the graph)
       // search palette — same modal contract as the help/settings: while open its input OWNS every key
       // (typing the query, ↑/↓/Enter to pick, Esc to close — all in SpecSearch), so we return before any
       // board handler fires. App still catches Esc here too, so it closes even if the input lost focus.
@@ -445,7 +440,7 @@ function Dashboard({ specs, sessions, project, reload }) {
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [overlay, sessionUI, legend, settings, graphView, search, highlightId, focus, cycleNodes, upTarget, downTarget, rightTarget, parent, centerOn, getViewport, openBoard, startNew, popupScroll, legendScroll])
+  }, [overlay, sessionUI, legend, settings, search, highlightId, focus, cycleNodes, upTarget, downTarget, rightTarget, parent, centerOn, getViewport, openBoard, startNew, popupScroll, legendScroll])
 
   // @@@ a REAL mouse move wakes the mouse - the only exit from kbdMode. The guard is the whole trick: every
   // arrow press PANS the camera under a stationary cursor, and a content shift can emit a synthetic mousemove
@@ -514,9 +509,9 @@ function Dashboard({ specs, sessions, project, reload }) {
             The wall of inline hints used to live here; it now lives inside that modal (see Legend.jsx). */}
         <div className="hud">
           <span className="brand">$ spec-dashboard</span>
-          {/* a discreet floating affordance for the session graph — same view the `t` key opens (now also
-              documented in the help modal). The button makes the otherwise hidden hotkey discoverable. */}
-          <button className="hud-graph" onClick={() => setGraphView(true)} title={t('hud.graphTitle')}>
+          {/* a discreet floating affordance for the relationship view — opens the session console on its
+              "View Session Relationship" tab (same as the `t` key). The button makes the hotkey discoverable. */}
+          <button className="hud-graph" onClick={() => { setSessionSel('graph'); setSessionUI(true) }} title={t('hud.graphTitle')}>
             <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
               <circle cx="3.5" cy="4" r="1.8" /><circle cx="12.5" cy="4" r="1.8" /><circle cx="8" cy="12.5" r="1.8" />
               <path d="M4.9 5.1 L7 11 M11.1 5.1 L9 11 M5 4 H11" />
@@ -554,7 +549,6 @@ function Dashboard({ specs, sessions, project, reload }) {
         {search && <SpecSearch specs={specs} sessions={sessions} onPick={onSearchPick} onClose={() => setSearch(false)} />}
       </div>
 
-      {graphView && <SessionGraph onOpen={openSession} onBack={() => setGraphView(false)} active={!sessionUI} />}
       {overlay && <NodeView node={focus} pane={pane} setPane={setPane} onClose={() => setOverlay(false)} />}
       {/* stays MOUNTED across open/close (hidden via `open`) so the selected tab + per-tab drafts persist. */}
       <SessionInterface

@@ -1,7 +1,7 @@
 import { relative, dirname } from 'node:path'
-import { repoRoot, driftIndex } from '../../spec-cli/src/git.js'
+import { repoRoot, driftIndex, type DriftIndex } from '../../spec-cli/src/git.js'
 import { loadSpecs } from '../../spec-cli/src/specs.js'
-import { yatsuNodes } from './yatsu.js'
+import { yatsuNodes, type YatsuNode } from './yatsu.js'
 import { readReadings } from './sidecar.js'
 import { staleAxes, type StaleAxis } from './freshness.js'
 import { getBlob, hasBlob, MISS_BLOB } from './cache.js'
@@ -12,6 +12,12 @@ import { getBlob, hasBlob, MISS_BLOB } from './cache.js'
 // LIVE freshness flag, the same git-derived staleness `scan` reports) and the captured pixels behind each
 // reading (the content-addressed blob, or a clear MISS signal when the record outlived its bytes). LOCAL
 // readings only; the forge issue-events source is a future sibling ([[freshness]] reconcile) — see the spec.
+//
+// The timeline now RIDES THE BOARD: buildBoard folds each node's evalTimeline onto its board node (the
+// `evals` field) so the dashboard eval tab reads the single /api/board poll like every other pane, never a
+// separate per-node fetch. To keep that whole-board attach fast, evalTimeline takes an optional EvalContext
+// of the specs + driftIndex the board ALREADY computed (so they're not re-derived per node) plus one shared
+// yatsu walk; the standalone /api/specs/:id/evals route omits it and derives all three itself for one id.
 
 // @@@ EvalEntry - one reading rendered for the tab. The sidecar fields verbatim (scenario/codeSha/blob/
 // evaluator/ts) PLUS what only a live read can know: `fresh` + which `staleAxes` moved (the freshness
@@ -36,15 +42,33 @@ export type EvalTimeline = {
   readings: EvalEntry[]
 }
 
-export async function evalTimeline(id: string): Promise<EvalTimeline> {
-  const root = repoRoot()
-  const ynode = yatsuNodes(root).find((n) => n.id === id)
+// @@@ EvalContext - the read-context a WHOLE-BOARD attach computes ONCE (buildBoard) so the eval timeline
+// rides the single board poll instead of a per-node fetch: the yatsu-node walk plus the specs + driftIndex
+// the board already derived. evalTimeline reuses these for every node — only the few yatsu nodes then touch
+// their sidecar; the rest short-circuit on the (short) ynodes list — so the board poll stays fast.
+export type EvalContext = {
+  root: string
+  specs: Awaited<ReturnType<typeof loadSpecs>>
+  idx: DriftIndex
+  ynodes: YatsuNode[]
+}
+
+// build the shared context with ONE yatsu walk, reusing the caller's already-computed specs + driftIndex.
+export function evalContext(root: string, specs: Awaited<ReturnType<typeof loadSpecs>>, idx: DriftIndex): EvalContext {
+  return { root, specs, idx, ynodes: yatsuNodes(root) }
+}
+
+export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalTimeline> {
+  const root = ctx?.root ?? repoRoot()
+  // short-circuit a non-yatsu node on the (short) yatsu walk — the board attaches `evals` to every node, so
+  // this is the common case and must stay cheap (a list the size of the few yatsu nodes, not the whole tree).
+  const ynode = (ctx?.ynodes ?? yatsuNodes(root)).find((n) => n.id === id)
   if (!ynode) return { node: id, hasYatsu: false, readings: [] }
   // the governed `code:` files are the freshness CODE axis; read them from the canonical spec loader so a
   // reparent/rename is seen the same way `spex lint` and `spex yatsu eval` see it (joined by directory).
-  const specs = await loadSpecs()
+  const specs = ctx?.specs ?? await loadSpecs()
   const codeFiles = specs.find((s) => dirname(s.path) === relative(root, ynode.dir))?.code ?? []
-  const idx = await driftIndex(root)
+  const idx = ctx?.idx ?? await driftIndex(root)
   const byName = new Map(ynode.scenarios.map((s) => [s.name, s]))
   const readings: EvalEntry[] = readReadings(ynode.sidecarPath).map((r) => {
     const axes = staleAxes(r, byName.get(r.scenario), codeFiles, ynode.yatsuPath, idx)

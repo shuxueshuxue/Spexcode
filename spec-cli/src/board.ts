@@ -2,8 +2,9 @@ import { basename } from 'path'
 import { loadSpecs, deriveStatus } from './specs.js'
 import { resolveLayout, readConfig } from './layout.js'
 import { listSessions } from './sessions.js'
-import { repoRoot } from './git.js'
+import { repoRoot, driftIndex } from './git.js'
 import { residentForgeView } from '../../spec-forge/src/resident.js'
+import { evalContext, evalTimeline } from '../../spec-yatsu/src/evaltab.js'
 
 // @@@ buildBoard - the dashboard's RUNTIME state, assembled in ONE shared module so the human (HTTP
 // /api/board) and an agent (`spex board`) see the IDENTICAL board. The only thing left to the frontend
@@ -27,7 +28,11 @@ export async function buildBoard() {
   // REUSES the HEAD-keyed spec-history cache (the git-derived node data — see specs.ts/git.ts), resolveLayout
   // reuses the per-worktree overlay cache and recomputes only the deltas that actually changed (the live
   // OVERLAY), and listSessions takes its liveness from ONE batched tmux snapshot. Nothing here re-walks git.
+  const root = repoRoot()
   const [layout, sessions, specs] = await Promise.all([resolveLayout(), listSessions(), loadSpecs()])
+  // the eval fold's freshness axis: a WARM hit here — loadSpecs already computed this HEAD's driftIndex, so
+  // this is the same cached walk, fetched once and reused for every yatsu node (never re-run per node).
+  const idx = await driftIndex(root)
   const worktrees = layout.worktrees.filter((w) => !w.isMain)
   // resolveLayout already zeroed ops for unmanaged worktrees, so this is just "has pending changes".
   const opWts = worktrees.filter((w) => w.ops && w.ops.length)
@@ -112,6 +117,20 @@ export async function buildBoard() {
     if (open.length) n.openIssues = open
   }
 
+  // @@@ eval fold - lay each node's evaluation timeline (spec-yatsu) onto it, the SAME single-source pattern
+  // as issues/overlays/lastDiff. The eval tab now rides THIS one board poll instead of a separate per-node
+  // fetch — that fetch never reset on a node switch, so the tab briefly showed the PRIOR node's readings and
+  // loaded at a different time than the panes that ride the board. evalContext reuses the specs + driftIndex
+  // computed above (one git-derived read, not re-run per node) plus one yatsu walk; evalTimeline short-circuits
+  // every non-yatsu node on that walk, so only the few yatsu nodes touch their sidecar and the poll stays fast.
+  // `evals` is the readings array (newest-first), attached ONLY when the node declares scenarios (a yatsu.md):
+  // its presence IS the eval tab's hasYatsu signal — absent = no scenarios, an empty array = no reading yet.
+  const ectx = evalContext(root, specs, idx)
+  await Promise.all(nodes.map(async (n) => {
+    const tl = await evalTimeline(n.id, ectx)
+    if (tl.hasYatsu) n.evals = tl.readings
+  }))
+
   const opsByPath: Record<string, any[]> = {}
   opWts.forEach((w) => { opsByPath[w.path] = w.ops })
   // session rows carry no colour — the dashboard seeds each row's stripe off the session id (labelColor),
@@ -123,6 +142,5 @@ export async function buildBoard() {
   // hand-picked name. The dashboard is a project-agnostic viewer pointed at ONE backend per dev-server
   // (see the api-endpoint node), so the payload carries its own identity: the frontend names the tab
   // after it, making each tab self-identifying when several projects each run their own backend.
-  const root = repoRoot()
   return { nodes, sessions: sess, project: readConfig(root).dashboard?.title || basename(root) }
 }

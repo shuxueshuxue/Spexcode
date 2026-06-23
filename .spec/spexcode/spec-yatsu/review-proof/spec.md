@@ -33,6 +33,11 @@ the **session's worktree**, so freshness and readings reflect that branch, not t
 headline is DERIVED (the node, else the branch) — there is no agent-authored claim, manifest, or narrative.
 A frontend node with no yatsu.md shows as an honest blind spot, never hidden.
 
+Every changed file — `spec.md` included — is a **drill-down**: its row expands to the unified diff
+(base..HEAD), and further to the full original ↔ new content side by side, all derived from git and inlined
+behind native toggles (capped so a huge changeset can't bloat the page). Nothing is hidden — the whole
+diff and both file versions are there to jump into, no extra fetch.
+
 The faces are thin and all show the identical bytes. The backend serves `GET /api/sessions/:id/proof` (HTML;
 `?format=json` = the model). `spex review proof <SEL>` is a backend CLIENT ([[remote-client]]) that fetches
 that HTML and writes (`--out`) or opens (`--open`) it, so it works against a remote backend unchanged. The

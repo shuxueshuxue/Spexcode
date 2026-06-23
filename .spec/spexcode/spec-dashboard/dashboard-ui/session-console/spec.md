@@ -22,12 +22,17 @@ driving the same sessions through the CLI see identical state.
 ## expanded spec
 
 The interface is a **near-fullscreen popup modal** over the dimmed board. Two panes: a left session list (its
-header names the project, `// <project> sessions`) and a right area that **morphs** by what's focused.
+header names the project, `// <project> sessions`) and a right area that **morphs** by what's focused. The
+list's **top button row** pairs `＋` New Session and the relationship-graph icon above the session rows (so
+neither blocks the `↑/↓` path); New ⇄ graph is horizontal — `→` from an *empty* New enters, `←` returns.
 
 **New Session** is a centred avatar + auto-growing input. Nothing is prefilled; the focused node is the first
 **@-mention** suggestion, so the human opts in with `@`. A leading **`/`** opens the config-preset palette;
 the two compose the launch grammar `/<preset> @<node>… <free text>`, from which the server derives the node (the
 first `@<id>`). Both menus only insert text; the New prompt has **no** `/` slash-command menu (presets only). A preset launched with **no `@`-target** never assumes a node — the agent takes scope from the prompt, else asks first.
+
+**View Session Relationship** fills the pane with the live monitor graph ([[session-graph]]) — its home now,
+not a `t` overlay; the board's `t`/network button open onto it, and clicking a node switches to that session's tab.
 
 An existing session shows its **live tmux terminal** (SessionTerm) with the docked **`❯` input** below — a
 **real tmux client but a read-only scrollable view**. Read-only governs input, not extraction: text selects, the

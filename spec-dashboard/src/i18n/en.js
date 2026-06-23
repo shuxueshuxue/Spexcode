@@ -38,7 +38,7 @@ export default {
 
   hud: {
     helpTitle: 'help — keymap & legend (?)',
-    graphTitle: 'session graph — the live monitor network (t)',
+    graphTitle: 'session relationships — open the live monitor graph in the session board (t)',
     loading: 'loading specs from git…',
   },
 
@@ -196,19 +196,17 @@ export default {
   },
 
   sessionGraph: {
-    brand: '$ session-graph',
-    backTitle: 'spec graph — the governed node tree (t)',
     helpTitle: 'keymap & legend (?)',
     asked: ({ a, b }) => `asked ${a} to monitor ${b}`,
     monitorPrompt: ({ label, id }) => `Please monitor session ${label} (${id}): run \`spex watch ${id}\` in the background and keep it running so its transitions surface to me.`,
     legend: {
-      title: 'session graph',
+      title: 'session relationships',
       close: 'close (esc or ?)',
       secKeys: 'keys',
       move: 'move the cursor to the nearest session',
       open: 'open the focused session',
+      leave: 'back to New Session',
       monitor: 'drag A→B to ask A to monitor B',
-      back: 'switch back to the spec graph',
       secEdges: 'edges',
       edgesDesc: 'each arrow A→B is a live monitor — agent A is running `spex watch B` right now.',
     },
@@ -218,7 +216,8 @@ export default {
     title: 'sessions',
     opsTitle: 'nodes this session is changing — double-click the tab to lock + focus them',
     newSession: 'New Session',
-    newSessionTitle: 'jump to New Session (⌃/⌘+N · also ⌃/⌘+↑)',
+    newSessionTitle: 'New Session (⌃/⌘+N · also ⌃/⌘+↑)',
+    relationshipTitle: 'View Session Relationship — the live monitor graph (→ from an empty New Session, ← back)',
     ask: 'What would you like to do?',
     inputPlaceholder: 'describe the work · @ spec · / command · ⏎ to launch · ⇧⏎ newline',
     menuCommands: 'commands',

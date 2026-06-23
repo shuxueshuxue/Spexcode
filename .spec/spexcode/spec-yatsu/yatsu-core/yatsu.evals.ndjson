@@ -1,1 +1,2 @@
 {"scenario":"scan-eval-clean-loop","codeSha":"ea7dc2abcc380a0e5e846aaff5423f959463dd5f","blob":null,"evaluator":"manual@1","ts":"2026-06-22T22:08:45.454Z"}
+{"scenario":"scan-eval-clean-loop","codeSha":"3ef26a8589838f79865db8ba2eeecb44246468d6","blob":"b4294c93f1f91fc531315020ef306484362de1cc5967e97e4ebb3d267569bc07","blobKind":"transcript","evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-23T07:28:26.275Z"}

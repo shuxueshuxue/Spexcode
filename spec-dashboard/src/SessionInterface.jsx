@@ -140,7 +140,7 @@ function highlight(text, q) {
   return <>{text.slice(0, i)}<b className="mention-hit">{text.slice(i, i + q.length)}</b>{text.slice(i + q.length)}</>
 }
 
-export default function SessionInterface({ sessions, specs = [], project, focusNode, open, sel, setSel, seed, onSeedConsumed, onClose, onCreated, onPickSession, reload }) {
+export default function SessionInterface({ sessions, specs = [], focusNode, open, sel, setSel, seed, onSeedConsumed, onClose, onCreated, onPickSession, reload }) {
   const t = useT()
   const [prompt, setPrompt] = useState('')    // the New Session tab's own draft (its boarding-switch cache)
   const [menu, setMenu] = useState(null)      // completion dropdown: { kind:'mention'|'config'|'slash', items, index, start, end, query }
@@ -687,7 +687,6 @@ export default function SessionInterface({ sessions, specs = [], project, focusN
           onChange={(e) => { attachFiles(e.target.files, fileTargetRef.current); e.target.value = '' }}
         />
         <aside className="si-list">
-          <div className="si-list-head">// {project ? `${project} ` : ''}{t('session.title')}</div>
           {/* @@@ top button row - two compact icon buttons, NOT full-width list rows, so neither blocks the
               ↑/↓ path down to a session. `＋` starts a New Session; the network glyph opens the relationship
               graph (same glyph the spec board's HUD carries). New ⇄ graph is the ←/→ horizontal axis (see the

@@ -227,7 +227,6 @@ export default {
   },
 
   session: {
-    title: 'sessions',
     opsTitle: 'nodes this session is changing — double-click the tab to lock + focus them',
     newSession: 'New Session',
     newSessionTitle: 'New Session (⌃/⌘+N · also ⌃/⌘+↑)',

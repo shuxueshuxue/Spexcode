@@ -220,7 +220,6 @@ export default {
   },
 
   session: {
-    title: '会话',
     opsTitle: '此会话正在改动的节点 —— 双击标签锁定并聚焦它们',
     newSession: '新建会话',
     newSessionTitle: '新建会话（⌃/⌘+N · 或 ⌃/⌘+↑）',

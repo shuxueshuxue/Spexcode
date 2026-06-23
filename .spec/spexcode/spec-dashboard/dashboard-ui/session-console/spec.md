@@ -21,8 +21,8 @@ driving the same sessions through the CLI see identical state.
 
 ## expanded spec
 
-The interface is a **near-fullscreen popup modal** over the dimmed board. Two panes: a left session list (its
-header names the project, `// <project> sessions`) and a right area that **morphs** by what's focused. The
+The interface is a **near-fullscreen popup modal** over the dimmed board. Two panes: a left session list and a
+right area that **morphs** by what's focused. The
 list's **top button row** pairs `＋` New Session and the relationship-graph icon above the session rows (so
 neither blocks the `↑/↓` path); New ⇄ graph is horizontal — `→` from an *empty* New enters, `←` returns.
 

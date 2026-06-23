@@ -33,7 +33,7 @@ const CHORDS = { nn: (id) => `@new under @${id}: `, dd: (id) => `@delete @${id}:
 const CHORD_KEYS = Object.keys(CHORDS)
 const CHORD_LEADERS = new Set(CHORD_KEYS.map((c) => c[0]))
 
-function Dashboard({ specs, sessions, project, reload }) {
+function Dashboard({ specs, sessions, reload }) {
   const [focusId, setFocusId] = useState(() => specs.find((s) => !s.parent)?.id)
   const [overlay, setOverlay] = useState(false)   // node-info popup (opened by `i`)
   const [pane, setPane] = useState('spec')
@@ -555,7 +555,6 @@ function Dashboard({ specs, sessions, project, reload }) {
       <SessionInterface
         sessions={sessions}
         specs={specs}
-        project={project}
         focusNode={focus}
         open={sessionUI}
         sel={sessionSel}
@@ -594,5 +593,5 @@ export default function App() {
   // @@@ one board, two faces - same polled data, but a phone gets the touch-first drill-down (MobileApp);
   // a wider viewport keeps the desktop graph board. The switch is viewport width alone (see useIsMobile).
   if (isMobile) return <MobileApp specs={board.nodes} sessions={board.sessions} project={projectTitle(board)} />
-  return <Dashboard specs={board.nodes} sessions={board.sessions} project={projectTitle(board)} reload={reload} />
+  return <Dashboard specs={board.nodes} sessions={board.sessions} reload={reload} />
 }

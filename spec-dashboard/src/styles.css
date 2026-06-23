@@ -686,7 +686,6 @@ body {
   flex: 0 0 230px; border-right: 1px solid var(--line); background: var(--panel);
   display: flex; flex-direction: column; overflow-y: auto;
 }
-.si-list-head { padding: 9px 12px; color: var(--muted); font-size: 11px; border-bottom: 1px solid var(--line); }
 .si-item {
   display: flex; flex-wrap: wrap; align-items: center; column-gap: 7px; row-gap: 2px; width: 100%;
   padding: 9px 12px; background: none; border: none; border-bottom: 1px solid var(--line);

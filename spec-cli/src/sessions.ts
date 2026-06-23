@@ -575,9 +575,11 @@ async function hideClaudeMd(path: string): Promise<void> {
 // @@@ settingsJson - the hooks Claude Code loads via `--settings <FILE>`. Written to a per-worktree
 // file (NOT inline on the command line — inline JSON containing single quotes broke the shell quoting
 // and claude read it as a missing file path). The file is ephemeral (removed with the worktree), so
-// still no global pollution. UserPromptSubmit + PreToolUse → the ONE branching `mark-active` hook (active
-// on any work; asking, with the question as the note, when the tool is AskUserQuestion — see
-// mark-active.sh); Stop → the blocking gate (with a loop-break); StopFailure → `error`;
+// still no global pollution. UserPromptSubmit + PreToolUse → the branching `mark-active` hook (active on
+// any work; asking, with the question as the note, when the tool is AskUserQuestion — see
+// mark-active.sh); PreToolUse ALSO runs `spec-first` (a one-shot read-the-spec-before-code nudge —
+// sessions/spec-first; its own sentinel file, so it never races mark-active's `.session/state` write); Stop
+// → the blocking gate (with a loop-break); StopFailure → `error`;
 // Notification(idle_prompt) → `idle`. Hook commands use MAIN's tsx+cli by absolute path ($SPEX) since a
 // fresh worktree has no node_modules and `spex` may be off the session's PATH.
 // @@@ idle hook - the Notification hook fires `session idle` (guarded active-only) when claude sits
@@ -594,11 +596,12 @@ function settingsJson(): string {
   const root = pkgRoot()
   const gate = join(root, 'hooks', 'stop-gate.sh')
   const markCmd = `bash ${join(root, 'hooks', 'mark-active.sh')}`
+  const specFirstCmd = `bash ${join(root, 'hooks', 'spec-first.sh')}`   // one-shot read-the-spec nudge (sessions/spec-first)
   const spex = `${join(root, 'node_modules', '.bin', 'tsx')} ${join(root, 'src', 'cli.ts')}`
   const idleCmd = `p=$(cat); case "$p" in *'"notification_type":"idle_prompt"'*) ${spex} session idle ;; esac`
   const hooks: Record<string, unknown> = {
     UserPromptSubmit: [{ hooks: [{ type: 'command', command: markCmd }] }],
-    PreToolUse: [{ hooks: [{ type: 'command', command: markCmd }] }],
+    PreToolUse: [{ hooks: [{ type: 'command', command: markCmd }, { type: 'command', command: specFirstCmd }] }],
     Stop: [{ hooks: [{ type: 'command', command: `SPEX='${spex}' bash ${gate}` }] }],
     StopFailure: [{ hooks: [{ type: 'command', command: `${spex} session fail` }] }],
     Notification: [{ hooks: [{ type: 'command', command: idleCmd }] }],

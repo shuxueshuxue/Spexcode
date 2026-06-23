@@ -395,19 +395,68 @@ export function EditPane({ node }) {
   return <div className="pane-edit">{overlays.map((ov, i) => <EditOverlay key={i} node={node} ov={ov} />)}</div>
 }
 
-// @@@ EvalPane - the node's evidence timeline (the [[spec-yatsu]] eval tab), a thin consumer of the SAME
+// @@@ VerdictBadge - the loss the AGENT measured (the [[spec-yatsu]] verdict): ✓ pass (met expected, zero
+// loss) / ✗ fail / ≈ note (a how-far-off text, shown on hover). A reading taken before verdicts existed has
+// none → a muted `legacy` badge. This is the eval tab's headline — what the score actually SAYS.
+function VerdictBadge({ verdict }) {
+  const t = useT()
+  if (!verdict) return <span className="eval-verdict legacy">{t('nodeView.eval.legacy')}</span>
+  if (verdict.status === 'pass') return <span className="eval-verdict pass">{t('nodeView.eval.pass')}</span>
+  if (verdict.status === 'fail') return <span className="eval-verdict fail">{t('nodeView.eval.fail')}</span>
+  return <span className="eval-verdict note" title={verdict.note}>{t('nodeView.eval.note')}</span>
+}
+
+// @@@ TranscriptEvidence - a text transcript blob, fetched LAZILY by hash on expand (the component mounts
+// only when its row is open, like the image's lazy load). Same /api/yatsu/blob/:hash endpoint the image
+// uses; we read it as text and show it in a <pre>. A miss/empty fetch falls back to an empty transcript.
+function TranscriptEvidence({ hash }) {
+  const t = useT()
+  const [text, setText] = useState(null)
+  useEffect(() => {
+    let live = true
+    fetch(`/api/yatsu/blob/${hash}`)
+      .then((r) => (r.ok ? r.text() : Promise.reject(new Error('miss'))))
+      .then((tx) => { if (live) setText(tx) })
+      .catch(() => { if (live) setText('') })
+    return () => { live = false }
+  }, [hash])
+  if (text === null) return <pre className="eval-transcript loading">{t('nodeView.eval.loadingTranscript')}</pre>
+  return <pre className="eval-transcript">{text}</pre>
+}
+
+// @@@ EvalEvidence - one reading's evidence body: the scenario's `expected` (what zero loss looks like) over
+// the captured proof — an image inline, a transcript as text, the *miss original file* note when the record
+// outlived its bytes, else an evidence-less note (the agent attested without a capture). A `note` verdict's
+// how-far-off text shows here too, so the loss is spelled out beside the proof.
+function EvalEvidence({ r }) {
+  const t = useT()
+  return (
+    <>
+      {r.expected && <div className="eval-expected"><span className="eval-expected-label">{t('nodeView.eval.expected')}</span> {r.expected}</div>}
+      {r.verdict?.status === 'note' && r.verdict.note && <div className="eval-note"><span className="eval-expected-label">{t('nodeView.eval.noteLabel')}</span> {r.verdict.note}</div>}
+      {r.blobState === 'present'
+        ? (r.blobKind === 'transcript'
+            ? <TranscriptEvidence hash={r.blob} />
+            : <img src={`/api/yatsu/blob/${r.blob}`} alt={t('nodeView.eval.shotAlt', { scenario: r.scenario })} loading="lazy" />)
+        : <figcaption className="eval-noimg">{r.blobState === 'miss' ? t('nodeView.eval.miss') : t('nodeView.eval.noImage')}</figcaption>}
+    </>
+  )
+}
+
+// @@@ EvalPane - the node's measurement timeline (the [[spec-yatsu]] eval tab), a thin consumer of the SAME
 // ChronoPane scaffold the history tab uses, so the scroll/reveal/toggle and the per-item header+evidence
 // shape live in ONE place. The readings RIDE THE BOARD (`node.evals`, the [[yatsu-eval-tab]] fold) — the SAME
 // single source as node.issues/overlays/lastDiff — so the tab is INSTANT and never shows the prior node's
 // readings on a switch (the old per-node fetch never reset, so stale readings lingered and the pane loaded out
-// of step with the rest). Each row's header is the reading line (scenario · freshness badge ✓ current / ⚠ stale
-// — the board's code-drift vocabulary, naming the moved axis on hover · evaluator · codeSha · time); its
-// evidence is the captured screenshot, fetched LAZILY by hash on expand (/api/yatsu/blob/:hash), or — when
-// there are no pixels — a note: *miss original file* when the record outlived its bytes, else a pixel-less
-// observation (a human eyeballed it). Two empty states stay distinct by presence: a node that declares no
-// scenarios (no yatsu.md → no `evals` field at all) and one that declares some but hasn't been read (an empty
-// array). Readings arrive newest-first (the server already reversed the append-only sidecar). (Forge
-// issue-events — the second evidence source — arrive with a future sibling node; this shows LOCAL readings only.)
+// of step with the rest). Each row's header is the score line (scenario · VERDICT ✓ pass / ✗ fail / ≈ note —
+// the loss the agent measured · freshness badge ✓ current / ⚠ stale, the board's code-drift vocabulary naming
+// the moved axis on hover · evaluator · codeSha · time); its evidence is the scenario's `expected` over the
+// captured proof — an image inline or a transcript as text, fetched LAZILY by hash on expand, or — no capture
+// — *miss original file* when the record outlived its bytes, else an evidence-less note. Two empty states stay
+// distinct by presence: a node that declares no scenarios (no yatsu.md → no `evals` field at all) and one that
+// declares some but hasn't been measured (an empty array). Readings arrive newest-first (the server already
+// reversed the append-only sidecar). (Forge issue-events — the second evidence source — arrive with a future
+// sibling node; this shows LOCAL readings only.)
 export function EvalPane({ node }) {
   const t = useT()
   const readings = node.evals
@@ -423,6 +472,7 @@ export function EvalPane({ node }) {
           <span className="eval-top">
             <span className="eval-caret">{open ? '▾' : '▸'}</span>
             <span className="eval-scenario">{r.scenario}</span>
+            <VerdictBadge verdict={r.verdict} />
             <span className={`eval-fresh ${r.fresh ? 'ok' : 'stale'}`} title={r.fresh ? '' : t('nodeView.eval.staleAxes', { axes: r.staleAxes.join(', ') })}>
               {r.fresh ? t('nodeView.eval.current') : t('nodeView.eval.stale')}
             </span>
@@ -434,9 +484,7 @@ export function EvalPane({ node }) {
           </span>
         </>
       )}
-      renderEvidence={(r) => (r.blobState === 'present'
-        ? <img src={`/api/yatsu/blob/${r.blob}`} alt={t('nodeView.eval.shotAlt', { scenario: r.scenario })} loading="lazy" />
-        : <figcaption className="eval-noimg">{r.blobState === 'miss' ? t('nodeView.eval.miss') : t('nodeView.eval.noImage')}</figcaption>)}
+      renderEvidence={(r) => <EvalEvidence r={r} />}
     />
   )
 }

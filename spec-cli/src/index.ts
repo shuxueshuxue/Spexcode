@@ -52,10 +52,10 @@ app.get('/api/edit', async (c) => {
 // code-drift. Newest-first; `hasYatsu:false` for a node that declares no scenarios. LOCAL readings only —
 // the forge issue-events source is a future sibling (see the yatsu-eval-tab spec).
 app.get('/api/specs/:id/evals', async (c) => c.json(await evalTimeline(c.req.param('id'))))
-// @@@ eval blob - serve a reading's captured pixels by content hash from the shared common-dir cache (the
+// @@@ eval blob - serve a reading's captured evidence by content hash from the shared common-dir cache (the
 // bytes never enter git). A malformed hash → 400; a record whose bytes are gone → 404 with the `miss original
-// file` sentinel (the tab shows that instead of an image); present → the bytes with a sniffed image MIME, and
-// an immutable cache header since the name IS the content hash.
+// file` sentinel (the tab shows that instead); present → the bytes with a MIME sniffed from the content (an
+// image type, or text/plain for a transcript), and an immutable cache header since the name IS the content hash.
 app.get('/api/yatsu/blob/:hash', (c) => {
   const r = readBlobByHash(c.req.param('hash'))
   if (!r.ok) return c.text(r.message, r.reason === 'invalid' ? 400 : 404)

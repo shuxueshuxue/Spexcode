@@ -1,11 +1,11 @@
 import { readFileSync } from 'node:fs'
 import type { Scenario } from './yatsu.js'
-import { playwrightDriver } from './driver-playwright.js'
 
 // @@@ Driver - a PRODUCER of readings: the interchangeable thing that reads a scenario's live state.
-// Playwright, WebDriver, a backend call, or a human eyeballing are all the same shape — the engine
-// (eval/scan/clean) never names a concrete one. The core ships ONLY the manual driver; a Playwright
-// driver is a future sibling node that slots in by registering here, with NO change to eval.
+// A human eyeballing, a backend call, or a future computer-use "stupid user" are all the same shape — the
+// engine (eval/scan/clean) never names a concrete one. The core ships ONLY the manual producer; another
+// producer slots in by registering here, with NO change to eval. (Scripted browser drivers are deliberately
+// off the roadmap: the ledger + manual/computer-use producer is the capture story, not Playwright/WebDriver.)
 //
 // `version` is the EVALUATOR freshness axis: it is recorded on every reading as `<name>@<version>`, and
 // bumping it marks every reading the driver produced stale (the measuring instrument changed, so re-read).
@@ -46,11 +46,11 @@ export const manualDriver: Driver = {
 }
 
 // @@@ driver registry - selecting a producer goes THROUGH this list keyed by `name`, never a hardcoded
-// branch (the [[forge-cli]] driver-registry shape). A scenario's `driver` field is a lookup here; a sibling
-// driver node slots in by adding itself here (the playwright web driver does — its module touches no browser
-// at import, so a manual-only run never loads it), with NO change to eval. An unregistered name still
-// resolves to undefined so eval skips it loudly rather than crash.
-const DRIVERS: Driver[] = [manualDriver, playwrightDriver]
+// branch (the [[forge-cli]] driver-registry shape). A scenario's `driver` field is a lookup here; a future
+// producer (a computer-use "stupid user") slots in by adding itself here, with NO change to eval. The core
+// ships only the manual producer. An unregistered name still resolves to undefined so eval skips it loudly
+// rather than crash.
+const DRIVERS: Driver[] = [manualDriver]
 export const DEFAULT_DRIVER = manualDriver.name
 
 export function driverFor(name: string | undefined): Driver | undefined {

@@ -21,8 +21,9 @@ to a native test; no loose headings). The **readings** they produce are recorded
 git-tracked sidecar `yatsu.evals.ndjson` keyed by scenario — and *that* record is the second axis: as a
 `spec.md` commit is a *spec version*, a reading commit is an *evaluation event*, so the whole engine
 (history, attribution, drift) applies unchanged, never inflating spec versions. The eval timeline is the
-sidecar's history. The core launches no browser; Playwright, WebDriver, a backend call, or **a human
-eyeballing** are interchangeable *producers* — the [[spec-forge]] shape. A reading is **stale** when its
+sidecar's history. The core launches no browser; the producer behind the Driver seam is **a human
+eyeballing** — the manual producer that ships today (`spex yatsu eval --image`) — with a computer-use
+"stupid user" as the interchangeable future one, the [[spec-forge]] shape. A reading is **stale** when its
 governed `code:`, its scenario, or the evaluator version moved since.
 
 - **`spex yatsu scan`** — status: nodes holding a stale reading, *plus* open forge issues marked
@@ -50,6 +51,8 @@ no authoring pass: **each fix contributes its repro** as a new scenario in the n
 lives on as a regression eval.
 
 ## Future siblings
-The drivers (Playwright/WebDriver, web + Electron), the eval-tab UI, the needs-yatsu-eval forge marker,
-and the cache/cleanup mechanism are each their own node. **Backend yatsu** (loss through real APIs —
-[[freshness]] reconcile waiting) and the **computer-use "stupid user"** lane stay later, opt-in.
+The next producer is the **computer-use "stupid user"** — a real agent driving the very surface a user
+touches, the interchangeable successor to the manual producer behind the Driver seam. (Scripted
+Playwright/WebDriver automation is deliberately *not* on this roadmap; the ledger plus the manual producer
+is the heart.) **Backend yatsu** — loss measured through real APIs ([[freshness]] reconcile waiting) —
+stays later, opt-in.

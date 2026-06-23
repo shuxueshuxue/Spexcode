@@ -70,6 +70,41 @@ scenarios:
   assert.equal(sc[0].test, undefined)
 })
 
+test('parseScenarios: optional code list — flow list, comma-separated, and a single path', () => {
+  const sc = parseScenarios(`---
+scenarios:
+  - name: flow
+    description: a
+    expected: b
+    code: [src/x.ts, src/y.ts]
+  - name: csv
+    description: a
+    expected: b
+    code: src/x.ts, src/z.ts
+  - name: one
+    description: a
+    expected: b
+    code: src/only.ts
+  - name: none
+    description: a
+    expected: b
+---`)
+  assert.deepEqual(sc[0].code, ['src/x.ts', 'src/y.ts'])
+  assert.deepEqual(sc[1].code, ['src/x.ts', 'src/z.ts'])
+  assert.deepEqual(sc[2].code, ['src/only.ts'])
+  assert.equal(sc[3].code, undefined)   // absent → inherits the node's whole code: list, not []
+})
+
+test('validateScenarios: `code` is an allowed optional field, not an unknown-key error', () => {
+  assert.deepEqual(validateScenarios(`---
+scenarios:
+  - name: s
+    description: a
+    expected: b
+    code: src/x.ts
+---`), [])
+})
+
 // ---- yatsu.md schema validation (the loud twin of parseScenarios: scan reports it, the gate rejects it) ----
 
 test('validateScenarios: a well-formed yatsu.md is valid (no errors)', () => {

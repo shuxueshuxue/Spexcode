@@ -160,8 +160,6 @@ body {
 @keyframes pulse { 0% { transform: scale(1); opacity: .6; } 100% { transform: scale(2.6); opacity: 0; } }
 .node-title { font-size: 12px; font-weight: 600; color: var(--ink2); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .node-ver { font-size: 10px; color: var(--muted); flex: none; }
-/* a node whose author session is live: a subtle ⏎ in the session colour — click/Enter opens it. */
-.node-session { font-size: 10px; font-weight: 700; line-height: 1; flex: none; opacity: .85; }
 
 /* expandable hint: a small ▸N tab riding the node's RIGHT edge (the direction children open), shown only
    on a collapsed node so a leaf and a closed branch are never confused. Muted by default; on the focused

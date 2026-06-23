@@ -199,10 +199,9 @@ function Dashboard({ specs, sessions, project, reload }) {
     } else {
       className = kin ? undefined : 'is-far'
     }
-    // a node with live editor(s) carries a `link` (SpecNode stamps the subtle ⏎ affordance — Enter
-    // crosses into that session) AND an `editors` list (SpecNode's second row draws their avatars).
-    // Both driven by the live overlay (pending ops), NOT node.session. `editors` is the minimal slice
-    // each avatar needs: id (the avatar seed + tooltip), status (liveness ring), node (tooltip label).
+    // a node with live editor(s) carries an `editors` list (SpecNode's second row draws their avatars),
+    // driven by the live overlay (pending ops), NOT node.session. `editors` is the minimal slice each
+    // avatar needs: id (the avatar seed + tooltip), status (liveness ring), node (tooltip label).
     const editors = liveEditorsOf(s)
     const editorData = editors.map((e) => ({ id: e.id, status: e.status, node: e.node }))
     // collapsed = has children but its subtree is hidden (not on the expanded spine) -> show the ▸N hint.
@@ -210,9 +209,7 @@ function Dashboard({ specs, sessions, project, reload }) {
     const extra = { editors: editorData, collapsed: kids > 0 && !expanded.has(s.id), childCount: kids }
     return {
       id: s.id, type: 'spec', position: { x: s.x, y: s.y },
-      data: editors.length
-        ? { ...s, ...extra, link: { color: labelColor(editors[0].id), status: editors[0].status } }
-        : { ...s, ...extra },
+      data: { ...s, ...extra },
       draggable: false, selected: s.id === focusId, className,
     }
     })

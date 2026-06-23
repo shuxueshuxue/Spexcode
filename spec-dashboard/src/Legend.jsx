@@ -85,10 +85,6 @@ export default function Legend({ onClose }) {
           <section className="legend-sec">
             <div className="legend-h">{t('legend.secBadges')}</div>
             <div className="legend-row">
-              <span className="legend-glyph">⏎</span>
-              <span className="legend-desc">{t('legend.badgeSession')}</span>
-            </div>
-            <div className="legend-row">
               <span className="drift-badge">⚠N</span>
               <span className="legend-desc">{t('legend.badgeDrift')}</span>
             </div>

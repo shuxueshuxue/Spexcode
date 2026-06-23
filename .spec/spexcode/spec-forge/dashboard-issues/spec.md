@@ -39,7 +39,9 @@ closed) as `issues` for the node-info **Issues tab** ([[work-pane]]), and the op
 for the glance badge and hover card. Closed issues link by the explicit `Spec:` marker (the transitive PR
 path sees only open PRs). It is **silent by construction**: with no `gh`, no repo, or no auth the reconcile throws, is swallowed, and the cache stays
 empty — so the board reads exactly as before, no badge and no error. Read-only throughout: the fold never
-touches a node's git-derived status.
+touches a node's git-derived status. This fold is one of several the board carries — the eval timeline
+([[yatsu-eval-tab]]) rides the same pattern. dashboard-issues owns only its issues slice, so that
+sibling's churn there is that feature, not this node's drift.
 
 **Frontend — one glance badge, one detail card.** When a node carries open issues, its first row gains a
 single badge: the **count**, in a hue distinct from the status dot and from the drift-badge (so the three

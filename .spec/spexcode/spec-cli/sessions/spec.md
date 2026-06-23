@@ -62,3 +62,7 @@ at once (e.g. an `extract` scaffold of a fresh root) renders as one tree under i
 flat scatter of one root per node. The session's live pane is read as text by
 `captureSessionResult` behind `GET …/capture` — failure (unknown / offline / capture-error) kept distinct
 from an empty pane — which `spex capture` reads as a backend client (see [[remote-client]]).
+
+`buildBoard` is also the shared hub where sibling features fold their own per-node sidecars onto these
+nodes ([[dashboard-issues]] issues, [[yatsu-eval-tab]] evals); this overview owns the tree / overlay /
+session-list / identity assembly, so such a fold is that feature's stake, not `sessions`' drift.

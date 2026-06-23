@@ -34,8 +34,10 @@ one must not mean inventing a new surface.
 - **No hardcoded copy.** Components import a translator `t(key)` and never inline visible text. The copy
   lives in `i18n/<lang>.js` dictionaries; the only literals left in components are language-neutral
   glyphs and punctuation (`//`, `❯`, `＋`, arrow/Enter key caps, op marks). The catalogs therefore
-  **track the visible strings of every feature** — a new surface adds its keys here and a removed one drops
-  them (each change mirrored across `en.js` and `zh.js`), so the dictionaries churning alongside the product
+  **track the visible strings of every feature** — a key appears the moment its string is shown and drops
+  the moment it stops being shown: a whole surface removed, **or** a kept surface that sheds a state (a pane
+  whose data now arrives with the board no longer flickers a loading line, so its loading key goes). Every
+  such add/drop is mirrored across `en.js` and `zh.js`, so the dictionaries churning alongside the product
   is the invariant working, not drift; the picker and resolution mechanism below stay fixed as they grow. Keys may be plain strings
   or `({ n }) => …` interpolators for counted/named copy.
 - **English + Chinese**, with English as both the source locale and the per-key fallback: a key missing

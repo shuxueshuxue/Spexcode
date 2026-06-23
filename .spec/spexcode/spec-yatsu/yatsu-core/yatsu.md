@@ -11,6 +11,16 @@ scenarios:
       the reading is fresh and flags it stale only after the governed file moves; clean empties
       the cache while the records still resolve (their blobs render as the miss-original-file
       sentinel).
+  - name: schema-gate-rejects-malformed
+    description: >-
+      Through the real `spex` surface, write a yatsu.md with a typo'd field key and a missing
+      `expected` into a node dir, then (a) run `spex yatsu scan` and (b) stage it and run
+      `spex yatsu check-staged`. File the transcript with
+      `spex yatsu eval yatsu-core --scenario schema-gate-rejects-malformed --result <txt> --pass`.
+    expected: >-
+      scan reports a `yatsu-schema` finding naming each violation (unknown key, missing required
+      field) and counts it under "N malformed"; check-staged prints the same violations and exits
+      non-zero (blocking the commit), while a well-formed staged yatsu.md exits zero.
 ---
 # yatsu.md — yatsu-core
 

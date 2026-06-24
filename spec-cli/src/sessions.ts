@@ -156,6 +156,7 @@ export type Session = {
   id: string; node: string | null; title: string | null; name: string | null; branch: string | null; path: string
   lifecycle: Lifecycle; proposal: Proposal | null; merges: number; status: DisplayStatus; note: string | null
   prompt: string | null; promptPreview: string | null; created: number; activity: string | null
+  sortKey: number | null   // manual drag-reorder override ([[session-reorder]]); null = sort by `created`
 }
 
 // @@@ originating prompt - what the session was ASKED to do, captured at launch so a manager (human or
@@ -226,13 +227,13 @@ function pkgRoot(): string {
 
 // `name` is the user-chosen display override set by the rename gesture — distinct from the auto-derived
 // `title` (from the prompt), so a rename never has to fight or overwrite the launch-time derivation.
-type SessRec = { node: string | null; title: string | null; name: string | null; session: string | null; status: Lifecycle; proposal: Proposal | null; merges: number; note: string | null }
+type SessRec = { node: string | null; title: string | null; name: string | null; session: string | null; status: Lifecycle; proposal: Proposal | null; merges: number; note: string | null; sortKey: number | null }
 // ensure a worktree's `.session/` runtime dir exists, returning its path. Idempotent (recursive mkdir) —
 // every writer that drops a file under the runtime dir calls this first so launch order never matters.
 function runtimeDir(path: string): string { const d = join(path, RUNTIME_DIR); mkdirSync(d, { recursive: true }); return d }
 
 function readSessionFile(dir: string): SessRec {
-  const r: SessRec = { node: null, title: null, name: null, session: null, status: 'active', proposal: null, merges: 0, note: null }
+  const r: SessRec = { node: null, title: null, name: null, session: null, status: 'active', proposal: null, merges: 0, note: null, sortKey: null }
   const p = statePath(dir)
   if (!existsSync(p)) return r
   for (const line of readFileSync(p, 'utf8').split('\n')) {
@@ -246,6 +247,10 @@ function readSessionFile(dir: string): SessRec {
     else if (k === 'proposal' && v) r.proposal = v as Proposal
     else if (k === 'merges') r.merges = Number(v) || 0
     else if (k === 'note') r.note = v || null
+    // @@@ sortkey - the drag-reorder pseudo-time ([[session-reorder]]): a manual sort value that wins over
+    // birth time. A blank or non-numeric value falls back to null so the row reverts to `created` (note
+    // Number('') is 0, not NaN, so the empty case is rejected explicitly, not via isFinite).
+    else if (k === 'sortkey') { const n = v === '' ? NaN : Number(v); r.sortKey = Number.isFinite(n) ? n : null }
   }
   return r
 }
@@ -257,6 +262,7 @@ function writeSessionFile(dir: string, rec: SessRec): void {
   if (rec.status === 'awaiting' && rec.proposal) lines.push(`proposal: ${rec.proposal}`)
   if (rec.merges) lines.push(`merges: ${rec.merges}`)
   if (rec.note) lines.push(`note: ${rec.note}`)
+  if (rec.sortKey != null) lines.push(`sortkey: ${rec.sortKey}`)
   const p = statePath(dir)   // `.session/state` for a new session; the flat `.session` file for a legacy one
   mkdirSync(dirname(p), { recursive: true })   // creates `.session/`; no-op when p is the legacy flat file
   writeFileSync(p, lines.join('\n') + '\n')
@@ -382,7 +388,7 @@ function toSession(rec: SessRec, branch: string | null, path: string, status: Di
   // activity is the LIVE pane title; it only means anything while the worker is up — a dead/booting/queued
   // session would show a stale or absent title, so it's suppressed there (the row falls back to its label).
   const live = status !== 'offline' && status !== 'starting' && status !== 'queued'
-  return { id: rec.session!, node: rec.node, title: rec.title, name: rec.name, branch, path, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, prompt, promptPreview: prompt ? promptPreview(prompt) : null, created: createdAt(path), activity: live ? activity : null }
+  return { id: rec.session!, node: rec.node, title: rec.title, name: rec.name, branch, path, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, prompt, promptPreview: prompt ? promptPreview(prompt) : null, created: createdAt(path), activity: live ? activity : null, sortKey: rec.sortKey }
 }
 
 // @@@ renameSession - set (or clear) a session's human display NAME: the user-chosen override that wins
@@ -395,6 +401,18 @@ export async function renameSession(id: string, name: string): Promise<boolean> 
   const wt = await findWorktree(id)
   if (!wt) return false
   writeSessionFile(wt.path, { ...wt.rec, name: name.trim() || null })
+  return true
+}
+
+// @@@ setSessionSort - set (or clear) a session's drag-reorder pseudo-time ([[session-reorder]]). Exactly
+// parallel to renameSession: the override is persisted to the worktree's `.session` record so the manual
+// order survives restarts and shows on every surface (all of them sort by `sortKey ?? created`). A null key
+// CLEARS the override, dropping the row back to its `created` slot — the reset twin of a blank name. Works in
+// any state since it edits the on-disk record, not the live tmux. Unknown id → false (the route answers 404).
+export async function setSessionSort(id: string, key: number | null): Promise<boolean> {
+  const wt = await findWorktree(id)
+  if (!wt) return false
+  writeSessionFile(wt.path, { ...wt.rec, sortKey: key != null && Number.isFinite(key) ? key : null })
   return true
 }
 
@@ -439,9 +457,11 @@ export async function listSessions(): Promise<Session[]> {
   // @@@ creation order - git lists worktrees alphabetically by path, and a path is a slug of the launch
   // prompt, so the raw enumeration order is effectively random AND reshuffles every time a session joins or
   // leaves. Order by birth instead (oldest first): each session keeps its slot for life and a new one simply
-  // appends — a stable spatial map across every surface (dashboard window, session tabs, `spex ls`). id
-  // breaks ties so same-instant births stay deterministic.
-  return rows.filter((s): s is Session => s != null).sort((a, b) => a.created - b.created || a.id.localeCompare(b.id))
+  // appends — a stable spatial map across every surface (dashboard window, session tabs, `spex ls`). A manual
+  // drag ([[session-reorder]]) overrides one row's slot via a pseudo-time `sortKey`, so sort by `sortKey ??
+  // created`: an undragged row stays at its birth time, a dragged one lands among its new neighbours, and the
+  // two orders share one axis. id breaks ties so same-instant births (or sort-keys) stay deterministic.
+  return rows.filter((s): s is Session => s != null).sort((a, b) => (a.sortKey ?? a.created) - (b.sortKey ?? b.created) || a.id.localeCompare(b.id))
 }
 
 // @@@ session graph = LIVE monitors, not a stored relationship. An edge A→B means "agent A is RIGHT NOW
@@ -925,7 +945,7 @@ export async function newSession(node: string | null, prompt: string): Promise<S
   await gitA(['-C', mainRoot(), 'worktree', 'add', '-b', branch, path, mainBranch()])
   // prepared but NOT launched: enters the queue as `queued`. drainQueue() below launches it at once when a
   // slot is free, else it waits — durable as a worktree, so it survives a backend restart and is still findable.
-  const rec: SessRec = { node: ref || null, title, name: null, session: id, status: 'queued', proposal: null, merges: 0, note: null }
+  const rec: SessRec = { node: ref || null, title, name: null, session: id, status: 'queued', proposal: null, merges: 0, note: null, sortKey: null }
   writeSessionFile(path, rec)
   writePromptFile(path, prompt)   // capture the ORIGINATING prompt (the human/manager's ask) as sidecar metadata (best-effort)
   await hideClaudeMd(path)   // isolate the dispatched agent from the project CLAUDE.md (before launch)

@@ -9,7 +9,7 @@ function mk(id: string, node: string | null, branch: string | null): Session {
   return {
     id, node, title: null, name: null, branch, path: `/wt/${id}`,
     lifecycle: 'active', proposal: null, merges: 0, status: 'working', note: null,
-    prompt: null, promptPreview: null, created: 0, activity: null,
+    prompt: null, promptPreview: null, created: 0, activity: null, sortKey: null,
   }
 }
 

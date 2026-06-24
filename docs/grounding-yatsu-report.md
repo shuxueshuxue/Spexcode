@@ -39,6 +39,13 @@ A controlled task whose **spec carries non-obvious intent** so grounding is meas
 | mutate-only (old) | **0/3** | structurally blind: never fires on a read-only task |
 | read-time (new) | **3/3** | fires on the first code read — the gap this change closes |
 
+**Lint-rule message design (Haiku) — does the agent act on the warning?**
+
+| lint message | output | read spec? |
+|---|---|---|
+| vague ("may have an associated spec; keep consistent") | **VIOLATE 3/3** (`$9.99`) | never (0/3) |
+| path-delivering ("governed by node `widget` at `<path>` — honor it") | **HONOR 3/3** (`9,99 €`) | yes (3/3) |
+
 ## Findings (brutal)
 
 1. **Strong models self-ground; the mechanism is a reliability floor for them, not a quality boost.**
@@ -49,10 +56,12 @@ A controlled task whose **spec carries non-obvious intent** so grounding is meas
    broken result.** Haiku blind ships `$9.99` and never opens the spec (`CODE>CODE`), violating a contract
    it never read. Path delivery flips it to `9,99 €`.
 
-3. **Paths beat prose — decisively.** The prose contract *"read your node's spec first"* with **no concrete
-   path** did *nothing*: VIOLATE 3/3, identical to blind. What works is delivering the **spec path** —
-   either via the prompt pointer or via the hook's block message (which resolves and includes the path).
-   An exhortation a weak agent can't act on is theater; a path it can open is leverage.
+3. **Paths beat prose — decisively, on BOTH the prompting and the lint axis.** The prose contract *"read
+   your node's spec first"* with **no concrete path** did *nothing*: VIOLATE 3/3, identical to blind. The
+   same law held when the message was framed as a *lint warning*: a **vague** lint message was ignored
+   (VIOLATE 3/3, spec never read), a **path-delivering** lint message was acted on (HONOR 3/3, spec read
+   3/3). What works — in a prompt, a hook block, or a lint/drift line — is delivering the **concrete spec
+   path/owner**. An exhortation a weak agent can't act on is theater; a path it can open is leverage.
 
 4. **The read-time widening is validated where it matters.** On read-only/analysis work the old mutate-only
    hook is structurally blind (0/3 fire) — exactly the gap that let an analysis session reason straight

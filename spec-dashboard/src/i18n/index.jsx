@@ -36,8 +36,11 @@ function initialLang() {
   return detect()
 }
 
-// walk a dotted path ('legend.board.move') into a nested dict; undefined if any segment is missing.
+// walk a dotted path ('legend.board.move') into a nested dict; undefined if any segment is missing. A
+// non-string key (a caller passed t(undefined) — e.g. a label map missing an entry) resolves to undefined
+// too, so translate() degrades to the visible-key path instead of throwing and taking the whole tree down.
 function resolve(dict, key) {
+  if (typeof key !== 'string') return undefined
   return key.split('.').reduce((o, k) => (o == null ? undefined : o[k]), dict)
 }
 

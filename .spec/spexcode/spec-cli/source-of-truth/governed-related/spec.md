@@ -41,8 +41,8 @@ size, not its ownership, and offers three moves, split first:
 - **single foundation owner** + relate the rest, when the file is a genuine shared substrate.
 
 This inverts the earlier "one owner per file" rule: ownership is many-to-one BY DESIGN now, bounded only at
-the high end. The foundation nodes the old single-owner migration created to absorb monoliths
-([[sessions-core]], [[dashboard-shell]]) become split-the-file candidates, not permanent owners. The
-yatsu-scenario half — a scenario's own govern/related split and a too-many-owners count over the scenario
-axis — is the next step; today a scenario still carries only a freshness `code` subset, and yatsu no longer
-skips a shared file.
+the high end. The model holds on **both** axes — spec nodes and yatsu scenarios (a yatsu.md owns nothing;
+only its scenarios `code`-govern ≤1 file and `related`-reference the rest, and a file governed by too many
+scenarios is the `yatsu-owners` smell). Still ahead: the foundation nodes the old single-owner migration
+created to absorb monoliths ([[sessions-core]], [[dashboard-shell]]) become split-the-file candidates, not
+permanent owners — the tree migration that splits those files so each governor reclaims its own module.

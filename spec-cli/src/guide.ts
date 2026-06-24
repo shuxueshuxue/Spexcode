@@ -95,11 +95,14 @@ FRONTMATTER: a \`scenarios:\` list (a YAML block sequence of mappings). Each sce
   expected     REQUIRED. What ZERO loss looks like — the target the measurement is compared against.
   test         optional. A repo path to a co-located runnable file (a playwright.spec.ts, a script)
                the agent MAY run by hand. Not a driver — yatsu never executes it.
-  code         optional. A comma-separated list of concrete repo files THIS scenario depends on (\`a.ts, b.ts\`
-               or a flow list \`[a.ts, b.ts]\`) — its own slice of the code freshness axis, so scenarios on one
-               node go stale independently. Absent → the scenario inherits the whole node's \`code:\` list.
-               Each path must exist (\`spex yatsu scan\` flags a ghost as \`yatsu-schema\`).
+  code         optional. The file THIS scenario GOVERNS, ideally one (a comma list / flow list \`[a, b]\` is
+               allowed) — its own slice of the code freshness axis, so scenarios on one node go stale
+               independently. Absent → it inherits the node's \`code:\` list. A file governed by > maxOwners
+               scenarios warns \`yatsu-owners\` (split it). Each path must exist (a ghost → \`yatsu-schema\`).
+  related      optional. Files this scenario REFERENCES but does not govern — same path forms. They do NOT
+               stale it (the freshness mirror of a spec node's govern/related). Each path must exist.
 Multi-line prose uses YAML block scalars: \`|\` keeps newlines, \`>\` folds wrapped lines to spaces.
+A yatsu.md OWNS nothing — only its scenarios govern and relate (see governed-related).
 
 THE SCHEMA IS ENFORCED (closed field set, three required fields, unique names). A missing required field,
 an unknown key (a typo like \`descripton:\`), a duplicate name, or no scenarios at all is rejected LOUD:
@@ -117,7 +120,8 @@ THE SCOREBOARD: readings live in yatsu.evals.ndjson beside the yatsu.md — one 
 (a second git-as-database axis). Freshness is derived live from git: a reading goes STALE when a governed
 code file, the scenario (the yatsu.md), or the evaluator moves since it was filed.
   spex yatsu scan [--changed]   blind spots: yatsu-schema (malformed) · yatsu-drift (stale) ·
-                                yatsu-missing (never measured) · yatsu-uncovered (frontend, no yatsu.md)
+                                yatsu-missing (never measured) · yatsu-uncovered (frontend, no yatsu.md) ·
+                                yatsu-owners (a file governed by > maxOwners scenarios — split it)
   spex yatsu show <node>        the reading timeline (verdict · freshness · evidence), newest first
   spex yatsu clean              GC the content-addressed evidence cache`
 

@@ -316,13 +316,6 @@ function Dashboard({ specs, sessions, reload }) {
     const bumpScroll = (delta) => popupScroll(
       document.querySelector('.ov-body .pane-doc, .ov-body .pane-hist, .ov-body .pane-issues, .ov-body .pane-eval, .ov-body .pane-edit'), delta)
     const onKey = (e) => {
-      // @@@ relationship key - `t` opens the session console on its "View Session Relationship" tab — the
-      // live monitor graph now LIVES in the console (see SessionInterface), not as a fullscreen overlay. It is
-      // suppressed while a modal/console already captures keys (there a `t` is just a keystroke, e.g. typed
-      // into an input). The console's own list nav then carries you off the tab; this key only opens onto it.
-      if (!sessionUI && !overlay && !legend && !settings && !search && (e.key === 't' || e.key === 'T')) {
-        e.preventDefault(); e.stopPropagation(); setSessionSel('graph'); setSessionUI(true); return
-      }
       if (sessionUI) return // the session interface owns ALL its keys (arrows / Enter / typing / Esc / the graph)
       // search palette — same modal contract as the help/settings: while open its input OWNS every key
       // (typing the query, ↑/↓/Enter to pick, Esc to close — all in SpecSearch), so we return before any
@@ -427,7 +420,6 @@ function Dashboard({ specs, sessions, reload }) {
         const next = cycleNext(cycleNodes, focus.id, e.key === 'O' ? -1 : 1, (n) => n.id)
         if (next) setFocusId(next.id)
       }
-      // (`t` toggles the session graph — handled at the top of onKey so it works from either graph.)
       // Enter opens the session board at the remembered tab (boarding switch — see openBoard).
       else if (e.key === 'Enter') { e.preventDefault(); openBoard() }
       // @@@ @-key - the spec-oriented launch shortcut: jump straight to a FRESH New Session targeting the
@@ -509,7 +501,7 @@ function Dashboard({ specs, sessions, reload }) {
         <div className="hud">
           <span className="brand">$ spec-dashboard</span>
           {/* a discreet floating affordance for the relationship view — opens the session console on its
-              "View Session Relationship" tab (same as the `t` key). The button makes the hotkey discoverable. */}
+              "View Session Relationship" tab. This button is the (only) way in — there is no keyboard shortcut. */}
           <button className="hud-graph" onClick={() => { setSessionSel('graph'); setSessionUI(true) }} title={t('hud.graphTitle')}>
             <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
               <circle cx="3.5" cy="4" r="1.8" /><circle cx="12.5" cy="4" r="1.8" /><circle cx="8" cy="12.5" r="1.8" />

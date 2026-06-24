@@ -38,7 +38,7 @@ export default {
 
   hud: {
     helpTitle: 'help — keymap & legend (?)',
-    graphTitle: 'session relationships — open the live monitor graph in the session board (t)',
+    graphTitle: 'session relationships — open the live monitor graph in the session board',
     loading: 'loading specs from git…',
   },
 
@@ -68,7 +68,6 @@ export default {
       info: 'open the node-info popup (or double-click a node)',
       search: 'search & jump across nodes, sessions & issues',
       overlayCycle: 'cycle through nodes a worktree is changing (⇧ reverse)',
-      graph: 'toggle the session graph (live monitor network)',
       enter: 'cross into the focus node’s live session',
       newChild: 'new child node under the focus (chord)',
       del: 'delete the focused node (chord)',

@@ -35,7 +35,7 @@ export default {
 
   hud: {
     helpTitle: '帮助 — 按键与图例（?）',
-    graphTitle: '会话关系 — 在会话面板中打开实时监视图（t）',
+    graphTitle: '会话关系 — 在会话面板中打开实时监视图',
     loading: '正在从 git 加载规格…',
   },
 
@@ -65,7 +65,6 @@ export default {
       info: '打开节点信息弹窗（或双击节点）',
       search: '跨节点、会话与议题搜索并跳转',
       overlayCycle: '在工作树正在修改的节点间循环（⇧ 反向）',
-      graph: '切换会话图（实时监视网络）',
       enter: '进入聚焦节点的实时会话',
       newChild: '在聚焦节点下新建子节点（连击）',
       del: '删除聚焦节点（连击）',

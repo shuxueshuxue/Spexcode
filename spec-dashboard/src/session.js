@@ -4,21 +4,21 @@
 
 // @@@ STATUS_COLOR - the SINGLE status→colour map. One source for BOTH the liveness dot AND the status
 // word, on every surface, so a session's state reads the same hue wherever it appears (window row, console
-// tab + header, @-mention row, search row, session graph, mobile card). The hues are a 6-bucket SEMANTIC
-// code — the word still spells the exact state; the colour answers "does this need me?":
-//   green = working (active)        yellow = asking (blocked, needs a human answer)   red = error
-//   blue  = review / done (a checkpoint reached — your move)        cyan = parked (paused on purpose)
-//   grey  = idle / starting / queued / close-pending / offline (inactive, not its turn)
+// tab + header, @-mention row, search row, session graph, mobile card). Deliberately just FOUR hues — a
+// traffic light plus grey — the word still spells the exact state; the colour only answers "does this need
+// me?", so a glance sorts the board without a legend:
+//   green  = working (the agent is busy — leave it)
+//   yellow = waiting on YOU: asking / review / done (answer it, or review & merge)
+//   red    = error (something broke)
+//   grey   = everything inactive: idle / starting / queued / close-pending / parked / offline
 // Values are theme tokens (styles.css :root) so the palette stays Solarized and single-sourced; green for
 // `working` also agrees with the avatar liveness ring (av-st-working). var() resolves in inline styles.
 export const STATUS_COLOR = {
   working: 'var(--green)',
-  asking: 'var(--yellow)',
+  asking: 'var(--yellow)', review: 'var(--yellow)', done: 'var(--yellow)',
   error: 'var(--red)',
-  review: 'var(--blue)', done: 'var(--blue)',
-  parked: 'var(--cyan)',
   idle: 'var(--muted)', starting: 'var(--muted)', queued: 'var(--muted)',
-  'close-pending': 'var(--muted)', offline: 'var(--muted)',
+  'close-pending': 'var(--muted)', parked: 'var(--muted)', offline: 'var(--muted)',
 }
 
 // the human-facing name of a session: a user-chosen rename (`name`) wins over everything; else its node,

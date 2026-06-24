@@ -37,11 +37,11 @@ scenarios:
       against the pre-change baseline (the MAIN dashboard, where every status word is the same muted grey).
       Screenshot the SessionWindow on both so the contrast is visible.
     expected: |
-      On the changed dashboard each status word is painted by its semantic hue from the single STATUS_COLOR
-      map: `working` green (var --green = rgb(133,153,0)), `asking` yellow (var --yellow = rgb(181,137,0)),
-      `error` red, `review`/`done` blue, `parked` cyan, and the inactive rest
-      (`idle`/`starting`/`queued`/`close-pending`/`offline`) muted grey (rgb(147,161,161)). On the MAIN
-      baseline every word is that same muted grey regardless of state. The word's colour equals the
+      On the changed dashboard each status word is painted by its bucket hue from the single STATUS_COLOR
+      map — four hues only: `working` green (var --green = rgb(133,153,0)); the waiting-on-you states
+      `asking`/`review`/`done` yellow (var --yellow = rgb(181,137,0)); `error` red; and everything inactive
+      (`idle`/`starting`/`queued`/`close-pending`/`parked`/`offline`) muted grey (rgb(147,161,161)). On the
+      MAIN baseline every word is that same muted grey regardless of state. The word's colour equals the
       session's liveness-dot colour on the surfaces that draw a dot (same source), and `working` green
       matches the avatar's liveness ring — dot, word, and ring never disagree.
 ---

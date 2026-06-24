@@ -29,8 +29,10 @@ selection, store), so even sitting in the console's content pane it cannot distu
 other ReactFlow. Its **nodes are the shared preloaded session list** the console already holds (the same
 `sessions` every surface reads); only the **edges** are its own poll (`GET /api/sessions/graph`, see
 [[sessions]]). So it **fills the pane** and opens **instant and already framed** — the nodes are there on the
-first render, never a cold fetch to block behind, so `fitView` centres the web in that same paint, not an
-empty screen panning in a beat later.
+first render, never a cold fetch to block behind, and the **first visible frame is already centred**: opening
+is **motionless**, with no corner-to-centre pan or zoom-to-fit playing out after the pane appears. This holds
+on **every reselect** — the tab remounts each time it's picked, yet never replays an intro — matching the
+board graph's settled stillness. Only a later session-count change reframes, with a gentle pan.
 
 The **console owns the arrows and Esc** ([[keyboard-nav]], [[session-console]]); what is **left** to this
 view is the in-graph walk. You reach the tab from an **empty** New Session with **→** and leave it with **←**

@@ -665,10 +665,12 @@ function settingsJson(): string {
   const markCmd = `bash ${join(root, 'hooks', 'mark-active.sh')}`
   const specFirstCmd = `bash ${join(root, 'hooks', 'spec-first.sh')}`   // one-shot read-the-spec nudge (sessions/spec-first)
   const spex = `${join(root, 'node_modules', '.bin', 'tsx')} ${join(root, 'src', 'cli.ts')}`
+  const specOfFileCmd = `SPEX='${spex}' bash ${join(root, 'hooks', 'spec-of-file.sh')}`   // per-edit, once-per-file: name the governing spec (sessions/spec-first)
   const idleCmd = `p=$(cat); case "$p" in *'"notification_type":"idle_prompt"'*) ${spex} session idle ;; esac`
   const hooks: Record<string, unknown> = {
     UserPromptSubmit: [{ hooks: [{ type: 'command', command: markCmd }] }],
     PreToolUse: [{ hooks: [{ type: 'command', command: markCmd }, { type: 'command', command: specFirstCmd }] }],
+    PostToolUse: [{ hooks: [{ type: 'command', command: specOfFileCmd }] }],
     Stop: [{ hooks: [{ type: 'command', command: `SPEX='${spex}' bash ${gate}` }] }],
     StopFailure: [{ hooks: [{ type: 'command', command: `${spex} session fail` }] }],
     Notification: [{ hooks: [{ type: 'command', command: idleCmd }] }],

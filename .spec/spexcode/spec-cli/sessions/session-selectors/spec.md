@@ -4,8 +4,9 @@ status: active
 hue: 280
 desc: One selector grammar (id·id-prefix·node·branch) and one matcher, so every session command names the same sessions.
 code:
-  - spec-cli/src/sessions.ts
   - spec-cli/src/selectors.test.ts
+related:
+  - spec-cli/src/sessions.ts
 ---
 
 # session-selectors

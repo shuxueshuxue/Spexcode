@@ -5,9 +5,10 @@ session: 7e2b8db3-d7d4-484e-bfd8-75ae61ffad71
 hue: 170
 desc: Drop a file on the prompt — it rides to the worker's /tmp and the prompt keeps its path.
 code:
+  - spec-cli/src/uploads.ts
+related:
   - spec-dashboard/src/SessionInterface.jsx
   - spec-dashboard/src/styles.css
-  - spec-cli/src/uploads.ts
   - spec-cli/src/index.ts
 ---
 # file-attach

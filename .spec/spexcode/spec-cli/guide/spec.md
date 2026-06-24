@@ -4,8 +4,9 @@ status: active
 hue: 200
 desc: `spex guide` is the reference surface as a command — no topic prints the setup workflow; `spec`/`yatsu` print the file-format manual an agent authors against.
 code:
-  - spec-cli/src/cli.ts
   - spec-cli/src/guide.ts
+related:
+  - spec-cli/src/cli.ts
 ---
 # guide
 

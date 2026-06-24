@@ -4,9 +4,10 @@ status: active
 hue: 280
 desc: The lifecycle state machine — declared statuses, gating hooks, socket liveness; agent-authored, never inferred.
 code:
+  - spec-cli/hooks/stop-gate.sh
+related:
   - spec-cli/src/sessions.ts
   - spec-cli/src/cli.ts
-  - spec-cli/hooks/stop-gate.sh
 ---
 
 # state

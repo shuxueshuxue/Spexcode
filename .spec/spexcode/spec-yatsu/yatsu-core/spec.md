@@ -10,6 +10,7 @@ code:
   - spec-yatsu/src/freshness.ts
   - spec-yatsu/src/cache.ts
   - spec-yatsu/src/evaluator.ts
+related:
   - spec-cli/src/cli.ts
 ---
 # yatsu-core

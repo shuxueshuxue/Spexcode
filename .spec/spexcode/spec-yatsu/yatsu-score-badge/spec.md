@@ -5,6 +5,7 @@ hue: 160
 desc: The yatsu score at a glance — a per-scenario COUNT (✓ satisfied / total) on each node tile, and a ringed circle on every eval-tab row, so a board sweep reads how many of a node's scenarios are satisfied and which are blind spots.
 code:
   - spec-dashboard/src/score.jsx
+related:
   - spec-dashboard/src/SpecNode.jsx
 ---
 # yatsu-score-badge

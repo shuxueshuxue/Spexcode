@@ -5,6 +5,7 @@ hue: 280
 desc: Surfaces each node's bound issues on the dashboard — an OPEN-count badge on the tile, plus the full open+closed set folded onto the node for the focus panel and the node-info Issues tab. Fed by a resident ForgeCache folded into /api/board; non-blocking and silent without a forge.
 code:
   - spec-forge/src/resident.ts
+related:
   - spec-cli/src/board.ts
   - spec-dashboard/src/SpecNode.jsx
 ---

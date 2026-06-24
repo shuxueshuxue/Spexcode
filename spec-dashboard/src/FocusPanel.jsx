@@ -11,16 +11,19 @@ import { useT } from './i18n/index.jsx'
 // spot · · never measured). The colour comes from the row's state class (styles.css), so this is shape only.
 const MARK = { pass: '✓', fail: '✗', stalePass: '✓', staleFail: '✗', empty: '○', missing: '·' }
 
-function ScenarioRow({ s, t }) {
+// a scenario row — a BUTTON that drills into the focused node's eval tab (the deep reading timeline), so the
+// glance is an entry point, not a dead end. The `expected` is a clamped preview (the full prose lives in the
+// eval tab), so a long scenario never blows out the narrow column.
+function ScenarioRow({ s, t, onOpenEval }) {
   return (
-    <div className={`fp-scenario ${s.state}`}>
+    <button type="button" className={`fp-scenario ${s.state}`} onClick={onOpenEval} title={t('focusPanel.openEval')}>
       <span className="fp-sc-mark" title={t(`score.${s.state}`)}>{MARK[s.state]}</span>
       <span className="fp-sc-body">
         <span className="fp-sc-name">{s.name}</span>
         {s.expected && <span className="fp-sc-expected">{s.expected}</span>}
         {s.code?.length > 0 && <span className="fp-sc-code">{t('focusPanel.tracks', { files: s.code.join(', ') })}</span>}
       </span>
-    </div>
+    </button>
   )
 }
 
@@ -37,7 +40,7 @@ function IssueRow({ i }) {
   )
 }
 
-export default function FocusPanel({ node }) {
+export default function FocusPanel({ node, onOpenEval }) {
   const t = useT()
   const states = scenarioStates(node?.scenarios, node?.evals)
   const satisfied = states.filter((s) => s.state === 'pass').length
@@ -59,7 +62,7 @@ export default function FocusPanel({ node }) {
           )}
         </div>
         {states.length
-          ? states.map((s) => <ScenarioRow key={s.name} s={s} t={t} />)
+          ? states.map((s) => <ScenarioRow key={s.name} s={s} t={t} onOpenEval={onOpenEval} />)
           : <div className="fp-empty">{t('focusPanel.noScenarios')}</div>}
       </section>
 

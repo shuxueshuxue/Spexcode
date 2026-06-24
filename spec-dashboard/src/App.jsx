@@ -123,6 +123,9 @@ function Dashboard({ specs, sessions, reload }) {
   // close/reopen. Enter (board or node-info popup) always reopens it at the remembered tab (`sessionSel`),
   // a "boarding switch" — never a context jump based on the focused node.
   const openBoard = useCallback(() => setSessionUI(true), [])
+  // @@@ open the eval tab - the focus panel's scenario rows drill here: open the node-info popup on its eval
+  // pane (the deep reading timeline), so the always-on glance is the entry point to the full detail.
+  const openEval = useCallback(() => { setPane('eval'); setOverlay(true) }, [])
   // @@@ open a session's console - jump straight to a given session: select its tab + show the interface.
   // Used by the top-right SessionWindow and the `/` search when the picked entry is a session. No new
   // mechanism — SessionInterface already keys its console off `sessionSel`. (The relationship graph's own
@@ -485,7 +488,7 @@ function Dashboard({ specs, sessions, reload }) {
     <div className={kbdMode ? 'app kbd-mode' : 'app'}>
       {/* @@@ focus panel - the left column: the focused node's Issues + Scenarios in one place (their
           satisfaction status). It reads the focused board node verbatim, so it tracks focus on every poll. */}
-      <FocusPanel node={focus} />
+      <FocusPanel node={focus} onOpenEval={openEval} />
       <div className="graph" ref={graphRef}>
         <ReactFlow
           nodes={nodes}

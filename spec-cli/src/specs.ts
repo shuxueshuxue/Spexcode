@@ -240,11 +240,11 @@ export async function loadSpecs() {
       lastEdited: h[0]?.date || null,
       drift,
       driftFiles,
-      // @@@ lastDiff - the node's latest version's unified patch to its spec.md, PRECOMPUTED and shipped
-      // with the board (and /api/specs) so the history tab's expanded-by-default latest item renders its
-      // line-diff instantly, with no round-trip (older items fetch theirs via /api/specs/:id/diff/:hash).
-      // Cached by the version's commit sha (see latestDiff).
-      lastDiff: await latestDiff(r.relPath, S),
+      // @@@ no precomputed diff - the latest version's spec.md patch is NOT computed here. Doing so cost
+      // TWO `git show` forks PER NODE on every cold board load (~158 subprocesses for ~80 nodes) just to
+      // make ONE rarely-viewed surface — a node's history-tab latest diff — render without a round-trip.
+      // The history tab fetches it lazily on expand via /api/specs/:id/diff/:hash (`specDiffAt`), exactly
+      // like older versions already do. See [[work-pane]].
       body: r.body.trim(),
       // @@@ two parts - raw source (human) / expanded spec (agent), parsed from labelled `## …`
       // sections. No agent-authored current-state part — what's-done is DERIVED (status/version/drift),

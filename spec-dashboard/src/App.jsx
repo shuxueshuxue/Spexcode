@@ -486,9 +486,6 @@ function Dashboard({ specs, sessions, reload }) {
 
   return (
     <div className={kbdMode ? 'app kbd-mode' : 'app'}>
-      {/* @@@ focus panel - the left column: the focused node's Issues + Scenarios in one place (their
-          satisfaction status). It reads the focused board node verbatim, so it tracks focus on every poll. */}
-      <FocusPanel node={focus} onOpenEval={openEval} />
       <div className="graph" ref={graphRef}>
         <ReactFlow
           nodes={nodes}
@@ -522,7 +519,7 @@ function Dashboard({ specs, sessions, reload }) {
           <button className="hud-help" onClick={() => setLegend((v) => !v)} title={t('hud.helpTitle')}>?</button>
         </div>
 
-        <SessionWindow sessions={sessions} activeId={highlightId} onPick={onPickSession} onOpen={openBoard} onOpenSession={openSession} />
+        <SessionWindow sessions={sessions} activeId={highlightId} onPick={onPickSession} onOpenSession={openSession} />
 
         {/* @@@ board stats - the per-node badges, totalled (bottom-left, always on). It reads the SAME
             `specs` the graph plots, so it stays in lock-step with the tiles; clicking a stat WALKS focus
@@ -556,6 +553,10 @@ function Dashboard({ specs, sessions, reload }) {
             follow effect drills the spine open + pans), a session jumps to its tab on the session board. */}
         {search && <SpecSearch specs={specs} sessions={sessions} onPick={onSearchPick} onClose={() => setSearch(false)} />}
       </div>
+
+      {/* @@@ focus panel - the RIGHT column: the focused node's Issues + Scenarios in one place (their
+          satisfaction status). It reads the focused board node verbatim, so it tracks focus on every poll. */}
+      <FocusPanel node={focus} onOpenEval={openEval} />
 
       {overlay && <NodeView node={focus} pane={pane} setPane={setPane} onClose={() => setOverlay(false)} />}
       {/* stays MOUNTED across open/close (hidden via `open`) so the selected tab + per-tab drafts persist. */}

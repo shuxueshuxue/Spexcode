@@ -27,7 +27,7 @@ A rename sets a session's **name** — a user-chosen display override kept disti
 title, so naming a session never fights or erases the launch-time derivation. The name sits at the
 **top** of the label precedence on every surface (`name` ▸ node ▸ title ▸ branch ▸ id): once set it wins
 over the node a session references, so the human's label is authoritative wherever the session is
-named — the top-right window, the [[session-graph]], the [[session-console]] tabs, and the CLI's `spex`
+named — the top-left window, the [[session-graph]], the [[session-console]] tabs, and the CLI's `spex`
 listings — because they all read that one shared precedence.
 
 The name lives where the rest of a session's record lives: the worktree's `.session` file, written by

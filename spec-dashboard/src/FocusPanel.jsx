@@ -1,7 +1,7 @@
 import { scenarioStates, aggregateState } from './score.jsx'
 import { useT } from './i18n/index.jsx'
 
-// @@@ focus panel - the left column: the FOCUSED node's Issues AND Scenarios in one place, with their
+// @@@ focus panel - the right column: the FOCUSED node's Issues AND Scenarios in one place, with their
 // satisfaction status. The proposal's core move — Issues and Scenarios are BOTH stateful bound work, so they
 // share one surface and one status here instead of an issue popup that popped only on the node (privileging
 // issues). It reads the focused board node verbatim (node.scenarios + node.evals + node.issues, all folded by

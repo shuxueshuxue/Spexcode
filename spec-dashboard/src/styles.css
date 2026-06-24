@@ -549,19 +549,22 @@ body {
   background: color-mix(in srgb, var(--ov) 12%, var(--panel2));
   border-left-width: 4px; color: var(--ink); font-weight: 600;
 }
-.sess-id { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sess-status { color: var(--muted); font-size: 10px; flex: none; }
+/* row 1, the headline: the session's live self-summary (or prompt placeholder). flex:1 eats the line so the
+   ever-changing tmux task description has room; min-width:0 lets the ellipsis engage in a flex child. */
+.sess-id { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sess-lock { font-size: 10px; flex: none; line-height: 1; filter: saturate(0); }
-.sess-ops { color: var(--ov, var(--blue)); font-size: 11px; font-weight: 700; flex: none; }
-/* @@@ the activity line - the worker's live self-summary (pane title). flex-basis:100% forces it onto its
-   own wrapped line spanning the WHOLE row (under the avatar too); smaller + dimmer than the identity line so
-   it reads as a subtitle, single-line with an ellipsis. min-width:0 lets the ellipsis actually engage in a
-   flex child. The same rule serves the .si-item tab face. */
-.sess-activity {
+/* @@@ the status line - ROW 2: the small badges that used to crowd the headline (status word · op tally),
+   now on their own line. flex-basis:100% forces it onto a wrapped line spanning the WHOLE row (under the
+   avatar too); smaller + dimmer than the headline so it reads as a subtitle. The line has slack on the
+   right by design — more glance-info (ahead-count, age, …) can join it later. The same rule serves the
+   .si-item tab face. */
+.sess-meta {
   flex: 0 0 100%; width: 100%; min-width: 0; margin-top: 1px;
-  font-size: 10px; line-height: 1.3; color: var(--muted); opacity: .9;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  display: flex; align-items: center; column-gap: 7px;
+  font-size: 10px; line-height: 1.3; opacity: .9; overflow: hidden;
 }
+.sess-status { color: var(--muted); flex: none; }   /* colour overridden inline by STATUS_COLOR */
+.sess-ops { color: var(--ov, var(--blue)); font-weight: 700; flex: none; }
 
 /* ---- session right-click menu + rename prompt (SessionContextMenu.jsx) ---- */
 /* a small pop-over anchored at the cursor (fixed to viewport coords). z-index 60 floats it ABOVE every
@@ -1082,7 +1085,7 @@ body {
   font-size: 10px; line-height: 16px; text-align: center;
 }
 
-/* sessions list — reuses the SAME SessionRow face the desktop draws (avatar · name · status · ops · activity). */
+/* sessions list — reuses the SAME SessionRow face the desktop draws (row 1: avatar · headline; row 2: status · ops). */
 .m-sesslist { flex: 1; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; }
 .m-sess-row {
   display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; width: 100%;
@@ -1091,8 +1094,8 @@ body {
 }
 .m-sess-row:active { background: var(--panel); }
 .m-sess-row .sess-id { flex: 1; min-width: 0; font-weight: 700; color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.m-sess-row .sess-status, .m-sess-row .sess-ops { flex: none; font-size: 11px; color: var(--muted); }
-.m-sess-row .sess-activity { flex-basis: 100%; color: var(--muted); font-size: 11px; line-height: 1.4; }
+.m-sess-row .sess-meta { font-size: 11px; line-height: 1.4; }
+.m-sess-row .sess-ops { color: var(--muted); }   /* mobile keeps the tally muted, not the overlay hue */
 
 /* session detail — identity, the worker's rolling activity, and the nodes it's changing (tap to cross over). */
 .m-sessdetail { flex: 1; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; }

@@ -70,8 +70,10 @@ land. Still on the closed tab → New Session; already moved to another valid ta
 fallback covers a session that ends or is closed elsewhere, so the selection never points at a session the
 board no longer has.
 
-**SessionWindow** is the read-only glance, built from the shared **`SessionRow`** face — avatar (no status
-dot) · name · the **colour-coded status word** (or 🔒 when locked) · pending-op count · activity. A single click **locks** the board onto
+**SessionWindow** is the read-only glance, built from the shared **`SessionRow`** face — a two-row block
+([[session-activity]]): Row 1 is the avatar (no status dot) + the session **headline** (the worker's live
+tmux self-summary once it exists, else a launch-prompt placeholder; a rename always wins), with a 🔒 at its
+end when the row is locked; Row 2 is the **colour-coded status word** + pending-op count. A single click **locks** the board onto
 that session (overlays light, rest grey, focus jumps to its first changed node, see [[keyboard-nav]]); a
 no-overlay session still locks un-greyed; a second click releases; **double-click opens** its board (mouse-side `⏎`). The **interface's own tabs** render the same `SessionRow` with those gestures **inverted**:
 single click switches tab, double-click locks.

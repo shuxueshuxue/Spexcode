@@ -2,7 +2,7 @@
 title: focus-panel
 status: active
 hue: 300
-desc: A left column showing the FOCUSED node's Issues and Scenarios together — their satisfaction status in one place — so the two stateful kinds of bound work share one surface instead of an issue popup on the node.
+desc: A right column showing the FOCUSED node's Issues and Scenarios together — their satisfaction status in one place — so the two stateful kinds of bound work share one surface instead of an issue popup on the node.
 code:
   - spec-dashboard/src/FocusPanel.jsx
   - spec-dashboard/src/App.jsx
@@ -10,7 +10,7 @@ code:
 ---
 # focus-panel
 
-A persistent **left column** that reads the **focused** node and shows, in one place, the two kinds of
+A persistent **right column** that reads the **focused** node and shows, in one place, the two kinds of
 **stateful bound work** pointing at it: its **Issues** (open + closed, from the forge) and its **Scenarios**
 (the yatsu loss targets, with each one's satisfaction status). It makes Issues and Scenarios **equal
 citizens** of a node — both are things that *do*, with their own state, surfaced side by side — rather than
@@ -18,7 +18,7 @@ privileging issues with a popup that opened only on the node.
 
 ## raw source
 
-Put a small dedicated window on the LEFT of the board that follows the focused node and lists, for that node:
+Put a small dedicated window on the RIGHT of the board that follows the focused node and lists, for that node:
 its **Scenarios** — each with its satisfaction state (fresh pass / fail / stale / never-measured), its
 `expected`, and the files it tracks — headed by a **✓ satisfied / total** count; and its **Issues** — open
 and closed, each a card linking to the forge, headed by open/closed counts. This REPLACES the on-node issue
@@ -49,7 +49,7 @@ the worst-first aggregate.
 title) linking to the forge — the same `.issue-card` vocabulary the node-info Issues tab uses. The on-tile
 **count badge** (◆N) stays as the glance; the LIST now lives here, not in a popover.
 
-**Where it mounts.** It is the board shell's left grid column (`App.jsx`, the shared `.app` layout), beside
+**Where it mounts.** It is the board shell's right grid column (`App.jsx`, the shared `.app` layout), beside
 the graph pane — desktop only (the phone keeps its own drill-down, [[mobile-ui]]). It owns its `FocusPanel.jsx`
 plus its `.focus-panel` slice of the shared stylesheet and the one-column-to-two `.app` grid change, on
 [[node-graph]]'s shared-stylesheet/shared-shell contract — so a co-owner's churn in App.jsx or styles.css is

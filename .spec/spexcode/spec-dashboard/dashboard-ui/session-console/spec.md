@@ -14,7 +14,7 @@ code:
 
 ## raw source
 
-`Enter` on the board opens the session interface; the always-on top-right window (SessionWindow) is the
+`Enter` on the board opens the session interface; the always-on top-left window (SessionWindow) is the
 at-a-glance summary. Both are **thin views of `/api/board`** (i.e. `spex board`): the dashboard renders only
 what the backend reports and never invents session state, so a human watching the dashboard and an agent
 driving the same sessions through the CLI see identical state.

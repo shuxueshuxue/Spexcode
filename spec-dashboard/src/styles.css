@@ -29,7 +29,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-.app { display: grid; grid-template-columns: var(--fp-w, 250px) 1fr; height: 100vh; }
+.app { display: grid; grid-template-columns: 1fr var(--fp-w, 250px); height: 100vh; }
 /* @@@ keyboard mode - while the KEYBOARD is driving the board (App.jsx kbdMode, set by nav keys, cleared by
    a real mouse move) the mouse gets out of the way: the cursor hides everywhere and the board takes no
    pointer events. With no pointer over it, no :hover reaction fires under the stationary cursor — the issue
@@ -52,9 +52,12 @@ body {
 
 .hud {
   position: absolute; top: 16px; left: 18px; z-index: 5;
-  display: flex; flex-direction: column; gap: 8px; pointer-events: none;
+  display: flex; flex-direction: row; align-items: center; gap: 8px; pointer-events: none;
 }
 .brand { color: var(--ink2); font-weight: 700; letter-spacing: .5px; }
+/* the HUD buttons sit on ONE horizontal line beside the brand (align-items centres them against it),
+   overriding the flex-start the base button rules carry for their other (column) home in .sg-hud. */
+.hud .hud-graph, .hud .hud-help { align-self: center; }
 /* discreet `?` affordance — the only HUD hint; opens the full keymap/legend modal. The HUD itself is
    pointer-events:none so the board stays draggable; the button re-enables pointer events for itself. */
 .hud-help {
@@ -450,7 +453,8 @@ body {
 /* @@@ focus panel - the left column ([[focus-panel]]): the FOCUSED node's Issues + Scenarios, the two
    stateful kinds of bound work, in ONE place with their satisfaction status — replacing the on-node issue
    popover so neither kind is privileged. Scrolls its own content; reuses the .issue-card vocabulary below. */
-.focus-panel { overflow: auto; background: var(--panel); border-right: 1px solid var(--line);
+/* the RIGHT column now; the graph's own border-right draws the separator on its (left-of-panel) edge. */
+.focus-panel { overflow: auto; background: var(--panel);
   display: flex; flex-direction: column; gap: 16px; padding: 14px 12px; }
 .fp-head { display: flex; flex-direction: column; gap: 2px; }
 .fp-eyebrow { font-size: 9px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
@@ -522,25 +526,11 @@ body {
 
 /* ---- top-right session window (always-on glance) ---- */
 .sesswin {
-  position: absolute; top: 16px; right: 16px; z-index: 6; width: 232px;
+  position: absolute; top: 48px; left: 16px; z-index: 6; width: 232px;
   background: var(--paper); border: 1px solid var(--line); border-radius: 6px;
   box-shadow: 0 6px 22px rgba(101,123,131,.16); overflow: hidden;
   font-size: 12px;
 }
-.sesswin-head {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 6px 9px; background: var(--panel2); border-bottom: 1px solid var(--line);
-}
-.sesswin-title { color: var(--muted); font-size: 11px; display: flex; align-items: center; gap: 6px; }
-.sesswin-count {
-  background: var(--panel); color: var(--muted); border-radius: 8px;
-  padding: 0 6px; font-size: 10px; line-height: 15px; min-width: 15px; text-align: center;
-}
-.sesswin-new {
-  background: var(--paper); border: 1px solid var(--blue); color: var(--blue);
-  border-radius: 4px; padding: 1px 7px; cursor: pointer; font-family: var(--mono); font-size: 11px;
-}
-.sesswin-new:hover { background: var(--blue); color: var(--paper); }
 .sesswin-empty { padding: 12px 10px; color: var(--muted); font-size: 11px; line-height: 1.5; }
 .sesswin-empty kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; color: var(--blue); }
 .sess-row {

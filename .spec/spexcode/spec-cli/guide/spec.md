@@ -24,6 +24,16 @@ from one verb, picked by an optional topic:
   it. The always-on system prompt is the **clue** that the format exists; this manual carries the detail.
   An unknown topic fails loud (names the real topics), never a silent setup dump.
 
+A **`--help`/`-h` flag after any subcommand is also a request for this surface** — `spex <cmd> --help`
+prints the command summary and EXITS, without ever running `<cmd>`. This is a safety contract, not a
+convenience: the help flag used to be an ignored no-op that fell through to the verb's side effect, so
+probing a STREAMING verb (`spex watch --help` started a watch that never exits and blocked the caller) or a
+MUTATING one (`spex session new --help` created a stray session) detonated the very command the user was
+only asking about. A help probe must never fire a side effect — that footgun belongs at the mechanism, not
+buried in a worker's prompt. So the summary itself must read its own caveats honestly: a verb that blocks
+forever (`watch`) says so and points at the one-shot alternative, so the help an agent reaches for tells it
+how to use the verb safely.
+
 The narration is static help text (the spirit of `printHelp` and `spex init`'s next-steps), now living in
 its own `guide.ts` module rather than the shared `cli.ts` hub — *not* a planted `.spec` template the way
 [[spex-init]]'s contracts are, and *not* routed through the dashboard's i18n catalogs ([[settings]]),

@@ -120,14 +120,25 @@ Specs / graph
 
 Sessions
   ls [SEL…]             living-sessions table          [--status a,b] [--json]
-  watch [SEL…]          stream actionable transitions (forever — a human's monitor)  [--as NAME] [--status a,b] [--idle] [--interval N]
-  wait <SEL>            block until <SEL> is actionable, print it, exit (one-shot; draws the graph edge)  [--timeout S=1200] [--interval S]
+  watch [SEL…]          stream actionable transitions — NEVER EXITS; run it in the BACKGROUND, don't block a turn on it (poll one-shot with \`wait\`)  [--as NAME] [--status a,b] [--idle] [--interval N]
+  wait <SEL>            block until <SEL> is actionable, print it, exit (one-shot — the non-blocking counterpart to watch; draws the graph edge)  [--timeout S=1200] [--interval S]
   new "<prompt>"        start a session (= session new)  [--node X]
   session <sub>         new | list | reopen | review | done | merge | close | send | capture | prompt
   session prompt <SEL>  print the session's originating prompt (what it was asked to do)
 
   SEL = session id (or id-prefix), node, or branch — accepted by every read/control verb (ls·watch·wait·
         review·merge·reopen·close·send·capture·prompt); none (or @all) = every session.`)
+}
+
+// @@@ help guard - `--help`/`-h` after ANY subcommand prints the summary and EXITS, never running the
+// command. Without this the flag was an ignored no-op that fell THROUGH to the side effect: `spex watch
+// --help` started a watch that never exits and BLOCKED the caller forever; `spex session new --help`
+// CREATED a stray session. A help PROBE must never fire a streaming or mutating verb — the footguns the
+// supervisor prompt could only warn about, fixed at the mechanism instead. (`spex help`/`spex` with no
+// command keep their own paths below; this guards `cmd` + a trailing help flag.)
+if (cmd && cmd !== 'help' && (has('help') || process.argv.includes('-h'))) {
+  printHelp()
+  process.exit(0)
 }
 
 if (cmd === 'serve') {

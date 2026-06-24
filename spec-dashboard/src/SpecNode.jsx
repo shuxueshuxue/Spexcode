@@ -68,7 +68,7 @@ function EditorRow({ data }) {
 // into /api/board as data.openIssues). Rendered ONLY when there are any. Magenta, a hue distinct from the
 // status dot AND the drift-badge so the three signals never blur: status dot = derived state, drift-badge
 // = code ahead of spec, this = work pointing AT the node. This is purely the GLANCE; the DETAIL (the issue
-// list, alongside the node's scenarios) lives in the left [[focus-panel]] for the focused node — no longer a
+// list, alongside the node's scenarios) lives in the [[focus-panel]] for the focused node — no longer a
 // card popped on the node itself, so Issues and Scenarios share one place and one status.
 function IssueBadge({ issues, t }) {
   if (!issues || issues.length === 0) return null

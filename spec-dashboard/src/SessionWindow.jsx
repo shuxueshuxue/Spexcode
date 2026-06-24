@@ -1,4 +1,4 @@
-// @@@ SessionWindow - the always-on, top-right glance at live Claude Code sessions (one per
+// @@@ SessionWindow - the always-on, top-left glance at live Claude Code sessions (one per
 // worktree, plus queued prompts). Not a modal: it floats over the board so a human watching main
 // sees, at a glance, who is working and what pending node changes each carries.
 // @@@ two gestures, one mirrors the graph - single click LOCKS the graph onto this session (its
@@ -25,7 +25,7 @@ export function opSummary(ops) {
 // status word (or 🔒 when locked) · op tally. Row 2 is the live ACTIVITY line: the worker's own
 // rolling self-summary (its tmux pane title, see sessions.ts paneTitles), in a smaller font spanning the
 // FULL width (it wraps below the avatar too). Identity stays put while activity changes every turn, so the
-// two never fight. Row 2 is omitted when there's no activity (offline / booting / queued). The top-right
+// two never fight. Row 2 is omitted when there's no activity (offline / booting / queued). The top-left
 // window AND the session-board tab both render THIS, so a session reads identically on either surface — same
 // status, same overlay count ("review ~2"), same activity. Each surface wraps it in its own button with its
 // own handlers and active/locked styling; the classes are global, so the face styles the same in either.
@@ -45,17 +45,10 @@ export function SessionRow({ s, locked }) {
   )
 }
 
-export default function SessionWindow({ sessions, activeId, onPick, onOpen, onOpenSession }) {
+export default function SessionWindow({ sessions, activeId, onPick, onOpenSession }) {
   const t = useT()
   return (
     <div className="sesswin">
-      <div className="sesswin-head">
-        <span className="sesswin-title">
-          // {t('sessionWindow.title')}
-          {sessions.length > 0 && <span className="sesswin-count">{sessions.length}</span>}
-        </span>
-        <button className="sesswin-new" onClick={onOpen} title={t('sessionWindow.newTitle')}>⏎ {t('common.new')}</button>
-      </div>
       {sessions.length === 0 ? (
         <div className="sesswin-empty">{t('sessionWindow.emptyBefore')}<kbd>⏎</kbd>{t('sessionWindow.emptyAfter')}</div>
       ) : (

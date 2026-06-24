@@ -40,7 +40,10 @@ wheel scrolls real history, a drag selects even under mouse-reporting, and `⌘/
 **over HTTPS, localhost, or plain HTTP** (past the secure-context-only Clipboard API).
 
 Input has **two channels**. The **`❯` box** is the prompt channel: submitting dispatches through the **control
-socket** (never typed into the pane), so it lands even in copy-mode. It **holds focus persistently** — clicking
+socket** (never typed into the pane), so it lands even in copy-mode. The one exception is **`/exit` alone**:
+the box intercepts it client-side and **closes this session directly** — the same no-prompt removal as the
+header **Close** button (`act('close')`) — rather than dispatching the word to the agent, where it would only
+quit the agent's own process and orphan the worktree. It **holds focus persistently** — clicking
 chrome never blurs it, the panel **suppresses the native context menu** and **restores** focus after a
 right-click. It **auto-grows upward**, **capped at half** the terminal height, with New's `/` **completion**
 ([[term-input]]). The second channel is **nav mode**: the `❯` box disables and keystrokes forward

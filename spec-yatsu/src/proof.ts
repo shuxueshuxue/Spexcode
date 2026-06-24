@@ -261,9 +261,10 @@ function nodeScore(hasYatsu: boolean, latest: EvalEntry[]): ScoreState {
 
 // which spec node owns a changed file: a file inside a node's directory (its spec.md / yatsu.md / sidecar)
 // belongs to the NEAREST such node; otherwise the node whose governed `code:` claims it (exact path,
-// directory prefix, or `*` glob — the same matching `spex yatsu scan --changed` uses). A shared hub file is
-// claimed by MANY nodes; when the session has a primary node that also claims it, attribute it THERE so a
-// node/<id> session's stake in cli.ts/index.ts groups under its own node, not whichever sibling sorts first.
+// directory prefix, or `*` glob — the same matching `spex yatsu scan --changed` uses). A shared file is
+// governed by MANY nodes (ordinary composition); when the session has a primary node that also governs it,
+// attribute it THERE so a node/<id> session's stake in cli.ts/index.ts groups under its own node, not
+// whichever sibling sorts first.
 // null = unclaimed.
 function nodeForFile(file: string, specs: Awaited<ReturnType<typeof loadSpecs>>, primary: string | null): string | null {
   let best: string | null = null, bestLen = -1

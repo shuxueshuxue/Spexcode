@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # @@@ spec-of-file - a PostToolUse ANNOTATE hook: the FIRST time a session edits a given file, it tells the
-# agent which spec node GOVERNS it — and, when a file has many owners, flags it as a shared hub to split —
-# so the contract is in view AT THE MOMENT OF THE EDIT, not just at the first-access nudge (spec-first) or
+# agent which spec node(s) GOVERN it — and, when a file is OVER-owned (> maxOwners), flags it as doing too
+# much and points at the split — so the contract is in view AT THE MOMENT OF THE EDIT, not just at the
 # at commit (lint/drift). NON-BLOCKING (additionalContext only — never a verdict) and dedup'd PER FILE via a
 # .session ledger, so a 50-edit refactor annotates each file ONCE, never per write: the once-per-file
 # discipline that keeps a pervasive signal from decaying into the noise it is meant to cure. Uses MAIN's
@@ -20,7 +20,7 @@ case "$path" in */.spec/*|.spec/*|*/spec.md|spec.md|*/.session/*|.session/*) exi
 led=.session/spec-of-file-seen
 [ -f "$led" ] && grep -qxF -- "$path" "$led" && exit 0
 echo "$path" >> "$led"
-msg=$($S owner "$path" --actionable 2>/dev/null)   # --actionable: silent on a cleanly-owned file; speaks only for a hub / uncovered
+msg=$($S owner "$path" --actionable 2>/dev/null)   # --actionable: silent on a sanely-owned file; speaks only for an OVER-owned / uncovered file
 [ -n "$msg" ] || exit 0
 esc=$(printf '%s' "$msg" | sed 's/\\/\\\\/g; s/"/\\"/g')
 printf '{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"%s"}}\n' "$esc"

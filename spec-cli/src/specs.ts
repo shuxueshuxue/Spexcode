@@ -154,9 +154,9 @@ function raws(): Raw[] {
 // @@@ specOwners - which spec node(s) GOVERN a file, by the same claim rule lint/yatsu use (exact path,
 // directory prefix, or *-glob). LIGHT: reads only frontmatter `code:` via raws() — no git history, drift,
 // or diff walk — so a per-edit PostToolUse hook can call it cheaply on every first-touch of a file. Takes
-// an absolute OR repo-relative path; returns {id, desc} per claiming node. More than one = a shared hub
-// file (the caller surfaces that as the "give this file a single owner" signal — see the governed/related
-// split). Empty = uncovered.
+// an absolute OR repo-relative path; returns {id, desc} per governing node. Several owners is fine (ordinary
+// composition); only an OVER-owned file (> maxOwners) is the smell the caller flags — split it (see
+// [[governed-related]]). Empty = uncovered.
 export function specOwners(file: string): { id: string; desc: string }[] {
   const rel = file.startsWith('/') ? relative(ROOT, file) : file
   const claims = (cf: string): boolean => {
@@ -190,14 +190,11 @@ export async function loadSpecs() {
   // they don't block the server's event loop or pay sync fork() cost). Every node below is a pure lookup
   // EXCEPT its precomputed latest diff, which is one cached git show that only re-runs on a new version.
   const [idx, didx] = await Promise.all([historyIndex(ROOT), driftIndex(ROOT)])
-  // @@@ hub attribution - a file listed in `code:` by >=2 nodes is a HUB with no single owner; per-node
-  // drift on it fans the SAME change across every co-owner (noise the agent learns to ignore — see
-  // [[governed-related]]). Count governors once, then exclude hub files from a node's driftFiles: a hub
-  // gets ONE `hub` lint warning + the live edit-time flag instead of N false drifts. Drift resumes the
-  // moment a file has a single governor (the other claimants moved it to `related:`).
+  // @@@ shared governance - a file may be GOVERNED by several nodes; that is ordinary composition, not a
+  // defect (see [[governed-related]]). Drift fans to EVERY governor — each owns the file and has a stake in
+  // a change to it — and no owner's signal is suppressed. An OVER-owned file (governed by > maxOwners) is the
+  // only smell, surfaced once by lint's `owners` rule; the remedy is to split the FILE, not hide its drift.
   const allRaws = raws()
-  const governCount = new Map<string, number>()
-  for (const rr of allRaws) for (const f of list(rr.fm.code)) governCount.set(f, (governCount.get(f) ?? 0) + 1)
   return Promise.all(allRaws.map(async (r) => {
     const h = rowsFor(idx, r.relPath)
     // @@@ real session attribution - the node's session IS the Claude Code session that authored its
@@ -212,7 +209,6 @@ export async function loadSpecs() {
     const code = list(r.fm.code)
     const S = h[0]?.hash || ''
     const driftFiles = code
-      .filter((f) => (governCount.get(f) ?? 0) < 2)   // hub files (>=2 governors) drift nobody — see governCount
       .map((f) => ({ file: f, behind: driftFor(didx, S, f) }))
       .filter((d) => d.behind > 0)
     const drift = driftFiles.reduce((a, d) => a + d.behind, 0)

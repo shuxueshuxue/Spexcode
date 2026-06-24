@@ -51,9 +51,13 @@ FRONTMATTER (YAML between the opening and closing --- lines; every field optiona
   desc     one-line summary shown on the board.
   hue      board colour, 0–360. Default 210.
   status   pending | active | merged | drift. Usually DERIVED from git state — rarely hand-set.
-  code:    a YAML list of repo-relative paths this node GOVERNS — files, directories, or *-globs.
-           Every listed path must exist (lint integrity error otherwise). Omit / leave empty for a
-           pure-prose node: a cross-cutting contract no single file owns (use sparingly).
+  code:    files this node GOVERNS (is source of truth for) — ideally ONE, a YAML list of repo-relative
+           paths/dirs/*-globs. Drives drift + yatsu. Many nodes MAY govern the same file (ordinary
+           composition); a file governed by > maxOwners nodes warns (the \`owners\` rule — split it). Omit
+           for a pure-prose node: a cross-cutting contract no file owns.
+  related: files this node REFERENCES but does not own — a YAML list, same path forms. Carries coverage
+           (never drift, never yatsu, nothing to ack); it is the many-to-many net that claims the files
+           govern doesn't. Every listed path must exist (lint integrity error otherwise).
   surface  config/.config nodes only: system (folded into every agent's prompt) | slash (a /command).
 
 BODY (Markdown after the frontmatter): the contract — intent, invariants, outward behaviour; NOT how the
@@ -68,10 +72,12 @@ WHAT lint CHECKS (spex lint; the pre-commit hook gates on errors):
   living    (error)  no "## vN" changelog headings — the body is current-state.
   altitude  (warn)   the body stays high-altitude: line/char budgets (~50 lines / 4200 chars), low
                      code-identifier density, no step-by-step phrasing. Over budget = rewrite higher.
-  coverage  (warn)   every governed source file is claimed by at least one node.
+  coverage  (warn)   every source file is claimed by ≥1 node — via code: OR related: (related is the net).
   drift     (warn)   a governed file has commits newer than the node's spec version — it may be stale.
                      Remedy: edit the spec to the new intent (re-versions the node), OR \`spex ack <node>
                      --reason "…"\` when only mechanics changed and the contract still holds.
+  owners    (warn)   a file governed by > maxOwners nodes (default 3) does too much — SPLIT it so each
+                     governor owns its own module (or merge the nodes, or give it one foundation owner).
 
 LIFECYCLE: author each node on a node/<id> branch, one node per commit; \`spex lint\` must reach 0 errors
 before merge. \`spex init\` seeds the first tree; \`spex guide yatsu\` covers the sibling loss-signal file.`

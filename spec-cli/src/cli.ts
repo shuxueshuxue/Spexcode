@@ -166,6 +166,9 @@ if (cmd === 'serve') {
   if (owners.length === 0) {
     console.log(`${rel} — no spec governs this yet (uncovered). If your change is substantive, give it a home before it drifts.`)
   } else if (owners.length === 1) {
+    // a cleanly-owned file is NOT actionable: --actionable callers (the per-edit spec-of-file hook) stay
+    // silent here, so the annotation fires only on a hub or an uncovered file — rare and worth acting on.
+    if (has('actionable')) process.exit(0)
     console.log(`${rel} is governed by '${owners[0].id}' — ${owners[0].desc} Read/honor its spec; if your change shifts the intent, update the spec in the SAME commit.`)
   } else {
     const ids = owners.map((o) => o.id).join(', ')

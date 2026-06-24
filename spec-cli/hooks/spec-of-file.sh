@@ -20,7 +20,7 @@ case "$path" in */.spec/*|.spec/*|*/spec.md|spec.md|*/.session/*|.session/*) exi
 led=.session/spec-of-file-seen
 [ -f "$led" ] && grep -qxF -- "$path" "$led" && exit 0
 echo "$path" >> "$led"
-msg=$($S owner "$path" 2>/dev/null)
+msg=$($S owner "$path" --actionable 2>/dev/null)   # --actionable: silent on a cleanly-owned file; speaks only for a hub / uncovered
 [ -n "$msg" ] || exit 0
 esc=$(printf '%s' "$msg" | sed 's/\\/\\\\/g; s/"/\\"/g')
 printf '{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"%s"}}\n' "$esc"

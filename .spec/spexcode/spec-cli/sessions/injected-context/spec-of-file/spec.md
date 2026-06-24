@@ -2,7 +2,7 @@
 title: spec-of-file
 status: active
 hue: 280
-desc: A per-edit PostToolUse annotation — the first time a session edits a file, name the spec that governs it (and flag a shared-hub file with many owners), keeping the contract in view at the edit.
+desc: A per-edit PostToolUse annotation that fires only when ACTIONABLE — the first edit of a shared-hub or uncovered file flags it at the edit; a cleanly-owned file is left silent.
 code:
   - spec-cli/hooks/spec-of-file.sh
 ---
@@ -24,16 +24,16 @@ A PostToolUse hook (`spec-of-file.sh`), wired on PostToolUse via `settingsJson`.
 governing spec; a `.session` ledger dedupes so each file is annotated **once per session**. Spec files and
 runtime state are skipped — not governed code.
 
-The file→spec resolve is **`spex owner <path>`** (a thin verb in cli.ts, resolver `specOwners` in specs.ts),
-a light read of frontmatter `code:` only — no git walk — so the per-edit call stays cheap. Its three
-outcomes ARE the signal:
+The file→spec resolve is **`spex owner <path> --actionable`** (a thin verb in cli.ts, resolver `specOwners`
+in specs.ts), a light read of frontmatter `code:` only — no git walk. `--actionable` is the discipline: it
+speaks ONLY when there is something to act on, so the annotation stays rare instead of chatty.
 
-- **one owner** → "governed by `<id>` — <desc>. Honor its spec; if your change shifts intent, update the
-  spec in the same commit." The contract, delivered at the edit.
-- **many owners** → the file is a **shared hub**: "your change likely belongs to ONE; the others co-own it
-  — a file with many owners should get a single foundation owner and be RELATED elsewhere." The
-  central-file guardrail of [[governed-related]], surfaced live the moment a hub gets folded into a node.
-- **no owner** → uncovered; give it a home before it drifts.
+- **shared hub** (>=2 owners) → "your change likely belongs to ONE; the others co-own it — give it a single
+  owner and RELATE it elsewhere." The [[governed-related]] guardrail, surfaced live the moment a hub is touched.
+- **uncovered** (no owner) → give it a home before it drifts.
+- **cleanly owned** (one owner) → **silent**. [[spec-first]] and the [[spec-pointer]] already grounded the
+  agent; re-announcing a known owner on every edit is exactly the noise this annotation must not become —
+  the lesson that an earlier always-on version of this hook taught.
 
 Non-blocking and once-per-file by design: a pervasive signal earns its keep only by staying rare and
 precise, or it becomes the noise it was meant to cure. The enforcer is still the Stop gate; this annotates.

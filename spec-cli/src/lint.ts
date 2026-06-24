@@ -125,6 +125,14 @@ export async function specLint(): Promise<Finding[]> {
       owners.set(f, [...(owners.get(f) ?? []), s.id])
     }
   }
+  // a file is COVERED if any node GOVERNS (code:) or merely REFERENCES (related:) it; integrity covers both.
+  // `related:` lets a co-owner reference a hub without owning its drift/yatsu — the remedy a `hub` warning asks for.
+  const claimed = new Set<string>(owners.keys())
+  for (const s of specs) for (const f of s.related) {
+    if (!existsSync(join(root, f)))
+      out.push({ level: 'error', rule: 'integrity', spec: s.id, file: f, msg: `spec '${s.id}' lists a missing related file: ${f}` })
+    claimed.add(f)
+  }
 
   // living: a spec body describes the node's CURRENT intent — it is not a changelog. Version history
   // (every content commit, its reason/session/line-diff) is read from git and shown in the dashboard's
@@ -167,7 +175,18 @@ export async function specLint(): Promise<Finding[]> {
   if (governed.length === 0)
     out.push({ level: 'warn', rule: 'coverage', msg: `governing NOTHING — no source files under governedRoots [${cfg.governedRoots.join(', ')}]. Set lint.governedRoots in spexcode.json to your project's source dirs.` })
   for (const f of governed)
-    if (!owners.has(f)) out.push({ level: 'warn', rule: 'coverage', file: f, msg: `no spec governs: ${f}` })
+    if (!claimed.has(f)) out.push({ level: 'warn', rule: 'coverage', file: f, msg: `no spec governs: ${f}` })
+
+  // hub: a file GOVERNED by >=2 nodes has no single owner, so drift/yatsu cannot attribute it to one node
+  // without fanning the same change across every co-owner — which is why both now SKIP such files (see
+  // [[governed-related]]). ONE summary warning (not one per file — that would be its own wall of noise):
+  // the count, the worst offenders, and the remedy. The fix is to give each hub ONE owner in code: and let
+  // the rest reference it via related: (still counts for coverage); drift/yatsu then resume on the owner.
+  const hubs = [...owners].filter(([, ids]) => ids.length >= 2).sort((a, b) => b[1].length - a[1].length)
+  if (hubs.length) {
+    const top = hubs.slice(0, 5).map(([f, ids]) => `${f.split('/').pop()}(${ids.length})`).join(', ')
+    out.push({ level: 'warn', rule: 'hub', msg: `${hubs.length} file(s) are governed by >=2 nodes (shared hubs with no single owner) — drift & yatsu can't attribute them, so both SKIP them (no per-co-owner fan-out). Worst: ${top}. Give each ONE owner in code:, let the rest reference it via related:.` })
+  }
 
   // drift: a governed file has commits NOT yet reflected in its spec. Rigorous by git ancestry —
   // loadSpecs computes `driftFiles` via `git rev-list <spec's last version>..HEAD -- <file>` (see

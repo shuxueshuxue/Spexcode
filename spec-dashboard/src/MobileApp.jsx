@@ -16,7 +16,9 @@ import { useT } from './i18n/index.jsx'
 
 // the desktop pane keys → their localized tab labels (panesFor hands back English labels; we relabel so
 // the mobile tabs read in the active language like the rest of the UI).
-const PANE_T = { spec: 'nodeView.paneSpec', history: 'nodeView.paneHistory', issues: 'nodeView.paneIssues', edit: 'nodeView.paneEdit' }
+// one i18n-key per pane key panesFor() can return — MUST cover every key in NodeView's PANES (+ 'edit'),
+// or t(undefined) below would throw and blank the whole mobile screen. ('eval' was added to PANES later.)
+const PANE_T = { spec: 'nodeView.paneSpec', history: 'nodeView.paneHistory', issues: 'nodeView.paneIssues', eval: 'nodeView.paneEval', edit: 'nodeView.paneEdit' }
 
 // live sessions whose pending ops touch this node = its live editors (mirror of App.jsx's liveEditorsOf —
 // a node never "belongs" to a session; the live link is the overlay, the set currently changing it).

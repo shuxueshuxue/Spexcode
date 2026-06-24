@@ -5,9 +5,10 @@ session: e335f3af-0695-488c-b12e-5fd1299e8b6a
 hue: 210
 desc: The phone-sized face of the board — a touch drill-down of the spec tree plus a sessions tab, reusing the same polled data and the same node panes, because the desktop graph's pan/zoom/keyboard model can't be driven by a thumb.
 code:
-  - spec-dashboard/src/App.jsx
   - spec-dashboard/src/MobileApp.jsx
   - spec-dashboard/src/useIsMobile.js
+related:
+  - spec-dashboard/src/App.jsx
   - spec-dashboard/src/styles.css
 ---
 # mobile-ui

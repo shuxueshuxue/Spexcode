@@ -3,7 +3,7 @@ title: spec-pointer
 status: active
 hue: 280
 desc: When a dispatched session names an existing node, point the agent at that node's live spec.md by path — never inject the body.
-code:
+related:
   - spec-cli/src/sessions.ts
 ---
 

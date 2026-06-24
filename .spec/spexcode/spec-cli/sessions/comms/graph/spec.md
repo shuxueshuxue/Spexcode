@@ -3,7 +3,7 @@ title: graph
 status: active
 hue: 280
 desc: The live session-monitor network — edge A→B iff A subscribes to B (`spex watch` stream or `spex wait` one-shot) — over one shared poll + edge lifecycle.
-code:
+related:
   - spec-cli/src/sessions.ts
 ---
 

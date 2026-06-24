@@ -5,6 +5,7 @@ hue: 140
 desc: The dashboard eval tab — a node's measurement timeline (verdict + expected + live freshness) with evidence (image or transcript) on expand, plus the spec-cli read API behind it.
 code:
   - spec-yatsu/src/evaltab.ts
+related:
   - spec-cli/src/board.ts
   - spec-cli/src/index.ts
   - spec-dashboard/src/NodeView.jsx

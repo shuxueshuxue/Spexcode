@@ -5,10 +5,11 @@ session: sess-1c9d
 hue: 320
 desc: Move by relationship, not geometry.
 code:
-  - spec-dashboard/src/App.jsx
   - spec-dashboard/src/SpecSearch.jsx
   - spec-dashboard/src/scroll.js
   - spec-dashboard/src/cycle.js
+related:
+  - spec-dashboard/src/App.jsx
   - spec-dashboard/src/styles.css
 ---
 # keyboard-nav

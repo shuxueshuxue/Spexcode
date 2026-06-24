@@ -5,6 +5,7 @@ import {
 } from '@xyflow/react'
 import { Avatar } from './avatar.jsx'
 import { labelColor } from './color.js'
+import { STATUS_COLOR } from './session.js'
 import Modal from './Modal.jsx'
 import { useT } from './i18n/index.jsx'
 
@@ -47,7 +48,7 @@ function GraphNode({ data }) {
       <Handle type="target" position={Position.Top} className="sg-handle" />
       <Avatar seed={data.id} status={data.status} size={34} title={`${sessionLabel(data, t)} · ${t(`status.${data.status}`)}`} />
       <span className="sg-label">{sessionLabel(data, t)}</span>
-      <span className="sg-status">{t(`status.${data.status}`)}</span>
+      <span className="sg-status" style={{ color: STATUS_COLOR[data.status] }}>{t(`status.${data.status}`)}</span>
       <Handle type="source" position={Position.Bottom} className="sg-handle" />
     </div>
   )

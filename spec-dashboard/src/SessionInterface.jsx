@@ -4,7 +4,7 @@ import SessionGraph from './SessionGraph.jsx'
 import { loadConfig } from './data.js'
 import { Avatar } from './avatar.jsx'
 import { labelColor } from './color.js'
-import { STATUS_DOT, sessionName } from './session.js'
+import { STATUS_COLOR, sessionName } from './session.js'
 import { SessionRow } from './SessionWindow.jsx'
 import SessionContextMenu from './SessionContextMenu.jsx'
 import { ProofButton } from './ReviewProof.jsx'
@@ -781,7 +781,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                         onMouseDown={(e) => { e.preventDefault(); accept(it) }}
                         onMouseEnter={() => setMenu((m) => (m ? { ...m, index: i } : m))}
                       >
-                        <span className="mention-dot" style={{ background: STATUS_DOT[it.status] || '#93a1a1' }} />
+                        <span className="mention-dot" style={{ background: STATUS_COLOR[it.status] || STATUS_COLOR.offline }} />
                         <span className="mention-id">@{highlight(it.id, menu.query)}</span>
                         <span className="mention-path">{specPath(it.path)}</span>
                       </li>
@@ -806,9 +806,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           >
               <div className="si-term" ref={termRef}>
                 <div className="si-term-head">
-                  <span className="si-dot" style={{ background: STATUS_DOT[selSession?.status] || '#93a1a1' }} />
+                  <span className="si-dot" style={{ background: STATUS_COLOR[selSession?.status] || STATUS_COLOR.offline }} />
                   <span className="si-th-name">{sessionName(selSession) || active}</span>
-                  <span className="si-th-st">{selSession?.status ? t(`status.${selSession.status}`) : ''}</span>
+                  <span className="si-th-st" style={{ color: STATUS_COLOR[selSession?.status] }}>{selSession?.status ? t(`status.${selSession.status}`) : ''}</span>
                   {selSession?.merges > 0 && <span className="si-merges" title={t('session.mergesTitle')}>{t('session.merges', { n: selSession.merges })}</span>}
                   <div className="si-actions">
                     {selSession?.status !== 'offline' && (

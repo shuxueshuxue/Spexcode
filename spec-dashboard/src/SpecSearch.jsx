@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { STATUS } from './SpecNode.jsx'
 import { scenarioStates } from './score.jsx'
-import { STATUS_DOT, sessionName } from './session.js'
+import { STATUS_COLOR, sessionName } from './session.js'
 import { useT } from './i18n/index.jsx'
 
 // @@@ SpecSearch - the `/` palette. It searches the board's FOUR planes at once — spec nodes, live
@@ -64,7 +64,7 @@ function buildEntries(specs, sessions) {
     const sub = s.promptPreview || s.note || s.status || ''
     entries.push({
       kind: 'session', key: `session:${s.id}`, target: s.id,
-      color: STATUS_DOT[s.status] || STATUS_DOT.offline,
+      color: STATUS_COLOR[s.status] || STATUS_COLOR.offline,
       title: name, sub,
       primary: name || '', secondary: s.id, tertiary: sub,
     })

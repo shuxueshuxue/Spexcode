@@ -23,7 +23,9 @@ realised wherever a live terminal sits beside spec navigation.
   out-of-band (the rendezvous control socket, bypassing tmux), so it lands even when scrolling has put
   tmux in copy-mode — where bytes written into the pane are eaten as navigation and never reach the
   agent. Dispatch is **fail-loud**: a failed send restores the draft and flags the error rather than
-  pretend it sent.
+  pretend it sent. One token never reaches the agent: **`/exit` alone is intercepted** as a *dashboard*
+  command — it closes the session (the no-prompt removal) rather than being dispatched, since sending the
+  word to a live agent would only quit its own process and orphan the worktree. Realised in [[session-console]].
 
 ## completion menus answer different questions
 

@@ -38,9 +38,12 @@ focus on every poll and stays in lock-step with the tile.
 **Scenarios, per-scenario.** It joins the node's declared scenarios to their latest reading (the shared
 `scenarioStates` from [[yatsu-score-badge]]) so a **never-measured** scenario still appears — it is a unit of
 loss, not an absence. Each row leads with a state mark in the score colour vocabulary, then the scenario name,
-its `expected`, and — when the scenario scopes its own freshness — the **files it tracks** (the per-scenario
-`code` from [[yatsu-core]]). The section header carries the **✓ satisfied / total** count, the same tally the
-tile shows, coloured by the worst-first aggregate.
+a **clamped preview** of its `expected` (the glance stays compact — long prose never blows out the column),
+and — when the scenario scopes its own freshness — the **files it tracks** (the per-scenario `code` from
+[[yatsu-core]]). The whole row is a **button that drills into the focused node's eval tab** (opens the
+node-info popup on its eval pane), so the glance is the entry point to the full reading timeline, not a dead
+end. The section header carries the **✓ satisfied / total** count, the same tally the tile shows, coloured by
+the worst-first aggregate.
 
 **Issues, open and closed.** The full bound set, grouped open-first then closed, each a card (number · state ·
 title) linking to the forge — the same `.issue-card` vocabulary the node-info Issues tab uses. The on-tile
@@ -52,6 +55,6 @@ plus its `.focus-panel` slice of the shared stylesheet and the one-column-to-two
 [[node-graph]]'s shared-stylesheet/shared-shell contract — so a co-owner's churn in App.jsx or styles.css is
 that feature, not this node's drift.
 
-Out of scope: the node-info popup's own Issues/Eval tabs ([[yatsu-eval-tab]]) stay as the deep timeline view;
-this panel is the always-on glance, not a replacement for them. Editing or creating scenarios is a workflow,
-not a view — that is the `/scenario` config flow, a separate node.
+Out of scope: the node-info popup's own Issues/Eval tabs ([[yatsu-eval-tab]]) stay as the deep timeline view
+this panel **drills into** (the always-on glance, not a replacement for it). Editing or creating scenarios is
+a workflow, not a view — that is the `/scenario` config flow, a separate node.

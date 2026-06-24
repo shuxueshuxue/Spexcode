@@ -1,0 +1,2 @@
+{"scenario":"rename-overrides-and-clears","codeSha":"f76eaa8cf17aad430c21d26487d0405c9498f6c7","blob":"5310367c5c838bef9b9509fe776942b8bbf81aceaa41ca276b626280b13e0f5d","blobKind":"image","evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-24T17:53:56.032Z"}
+{"scenario":"close-confirm-removes-row","codeSha":"f76eaa8cf17aad430c21d26487d0405c9498f6c7","blob":"0f4b51469b0f8da538aed2460d6397ca435d5a73ca53f298368fde42e2f1dc5a","blobKind":"image","evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-24T17:53:56.667Z"}

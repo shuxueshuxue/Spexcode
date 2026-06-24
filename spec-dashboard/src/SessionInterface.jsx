@@ -821,7 +821,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                         ([[review-proof]]); shown alongside merge whenever the session has work to review. */}
                     <ProofButton sessionId={active} status={selSession?.status} />
                     {(selSession?.status === 'review' || selSession?.status === 'done') && <button className="si-act go" onClick={() => act('merge')}>{t('session.merge')}</button>}
-                    <button className="si-act kill" onClick={() => act('close')}>{t('session.close')}</button>
+                    {/* no header "close": the verb read as "close the panel" but killed the session + worktree.
+                        Closing now lives only on the session row's right-click menu, behind a confirm prompt. */}
                   </div>
                 </div>
                 <div className="si-term-body" style={{ position: 'relative' }}>

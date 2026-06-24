@@ -79,7 +79,8 @@ single click switches tab, double-click locks.
 All surfaces share name and status from `session.js`, whose single **`STATUS_COLOR`** map paints **both** the
 liveness dot **and** the status word the SAME hue everywhere they appear (window row, console tab + header,
 @-mention and search rows, the relationship graph, the mobile card). Deliberately just **four hues — a traffic
-light plus grey**: green = `working` (busy, leave it), yellow = waiting on YOU (`asking`/`review`/`done`), red =
-`error`, grey = everything inactive (`idle`/`starting`/`queued`/`close-pending`/`parked`/`offline`). The colour
+light plus grey**: green = on track, no action from you (`working`, or `parked` — paused to self-resume), yellow
+= waiting on YOU (`asking`/`review`/`done`), red = `error`, grey = stopped/dormant
+(`idle`/`starting`/`queued`/`close-pending`/`offline`). The colour
 only answers *does this session need me?* so a glance sorts the board without a legend; the word still spells the
 exact state. Green for `working` also matches the avatar's liveness ring, so dot, word, and ring never disagree.

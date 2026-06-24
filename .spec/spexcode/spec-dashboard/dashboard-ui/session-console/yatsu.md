@@ -44,6 +44,35 @@ scenarios:
       MAIN baseline every word is that same muted grey regardless of state. The word's colour equals the
       session's liveness-dot colour on the surfaces that draw a dot (same source), and `working` green
       matches the avatar's liveness ring — dot, word, and ring never disagree.
+  - name: nav-mode-modifier-combos-reach-the-terminal
+    description: >
+      Measure nav mode's raw-key channel end to end. Stand up a live tmux pane running a key-echo program
+      that renders control bytes visibly (`cat -v`), then exercise the REAL product path the dashboard
+      uses — `POST /api/sessions/:id/rawkey` with `{key}` (the same body sendRawKey posts) — for the tokens
+      navKeyToken produces: a control combo `C-r`, a meta combo `M-b`, the named modified key `S-Tab`, a
+      meta-uppercase `M-B`, a shift-arrow `S-Up`, an interrupt `C-c`, and a malformed `C-C-x`. After each,
+      capture the pane to read what the program actually received. (Browser variant: open the console on a
+      live session, enter nav mode, press ⌃R / ⌥B / Shift+Tab and watch the agent's TUI respond.)
+    expected: |
+      Each modifier combo arrives as the correct terminal bytes — `C-r` → `^R` (0x12), `M-b` → `ESC b`,
+      `S-Tab` → the back-tab `^[[Z` (what Claude Code's mode-cycle reads), `M-B` → `ESC B`, `S-Up` →
+      `^[[1;2A`, `C-c` → 0x03 (interrupts the program). tmux accepts every encoded token; a malformed
+      token is rejected (HTTP 404 / `ok:false`), never sent as junk. Nav mode can therefore drive Claude
+      Code's modifier bindings, not just arrows.
+    code: spec-cli/src/sessions.ts, spec-cli/src/index.ts
+  - name: nav-mode-alt-i-and-cmd-i-stay-reserved
+    description: >
+      Through the running dashboard in a real browser, open the session interface on a LIVE session and
+      confirm the reserved-toggle contract. Intercept `/rawkey` so no keystroke can reach a real agent,
+      recording only WHICH keys attempt a forward. With nav mode OFF, press ⌥+I (Option+I — note ⌥I emits a
+      dead-key glyph on a mac, so this also proves the e.code match) then ⌘+I; then enter nav mode and
+      press an ordinary key (`x`); then ⌥+I again. Watch the bottom-bar nav indicator and the recorded
+      forwards.
+    expected: |
+      ⌥+I and ⌘+I toggle nav mode on and off every time (the bottom-bar nav indicator appears/disappears)
+      and forward NOTHING — no `/rawkey` attempt is recorded for either. An ordinary key pressed while nav
+      mode is ON DOES forward (recorded), so the carve-out is exactly the two reserved chords, not a blanket
+      block. The browser/app takes no other action on ⌥/⌘+I.
 ---
 
 # session-console — yatsu

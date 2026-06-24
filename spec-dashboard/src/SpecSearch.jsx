@@ -1,23 +1,28 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { STATUS } from './SpecNode.jsx'
+import { scenarioStates } from './score.jsx'
 import { STATUS_DOT, sessionName } from './session.js'
 import { useT } from './i18n/index.jsx'
 
-// @@@ SpecSearch - the `/` palette. It searches the board's THREE planes at once — spec nodes, live
-// sessions, and the issues bound to nodes — through ONE uniform pipeline: every searchable thing is
-// flattened to a typed `entry` of the same shape (three ranking tiers + display fields + a target), so
-// one rank() and one row renderer serve all three. On pick the entry is handed back whole; App routes by
-// kind — a spec or issue FOCUSES its node (the board's drill-down then opens its spine + pans the camera,
-// the same focus state the arrows drive), a session JUMPS to its tab on the session board. No per-type
-// branching lives here beyond building the entries; the palette itself is type-agnostic.
+// @@@ SpecSearch - the `/` palette. It searches the board's FOUR planes at once — spec nodes, live
+// sessions, the issues bound to nodes, and those nodes' scenarios — through ONE uniform pipeline: every
+// searchable thing is flattened to a typed `entry` of the same shape (three ranking tiers + display fields +
+// a target), so one rank() and one row renderer serve all four. On pick the entry is handed back whole; App
+// routes by kind — a spec, issue, or scenario FOCUSES its node (the board's drill-down then opens its spine +
+// pans the camera, the same focus state the arrows drive), a session JUMPS to its tab on the session board.
+// No per-type branching lives here beyond building the entries; the palette itself is type-agnostic.
+
+// a scenario row's dot reads its satisfaction the way the tile/panel do (score.jsx): green fresh pass · red
+// fresh fail · grey stale / never-measured.
+const SCEN_COLOR = { pass: 'var(--green)', fail: 'var(--red)', stalePass: 'var(--muted)', staleFail: 'var(--muted)', empty: 'var(--muted)', missing: 'var(--muted)' }
 
 // the breadcrumb path the rows show + match against (`.spec/a/b/<id>/spec.md` minus the shell + leaf),
 // so a row reads like the tree path it is. Mirrors SessionInterface's @-mention path.
 const specPath = (p) => (p || '').replace(/^\.spec\//, '').replace(/\/spec\.md$/, '')
 
-// equal-score ties group by plane (nodes, then sessions, then issues) so an empty/loose query reads as an
-// ordered jump-list rather than an interleaved jumble.
-const KIND_ORDER = { spec: 0, session: 1, issue: 2 }
+// equal-score ties group by plane (nodes, then sessions, then issues, then scenarios) so an empty/loose
+// query reads as an ordered jump-list rather than an interleaved jumble.
+const KIND_ORDER = { spec: 0, session: 1, issue: 2, scenario: 3 }
 
 // @@@ buildEntries - fold the three planes into one flat list of uniform entries. Each carries the tiers
 // rank() scores (primary = the human name, secondary = the stable id/number, tertiary = the path/context)
@@ -41,6 +46,16 @@ function buildEntries(specs, sessions) {
         color: open ? 'var(--green)' : 'var(--muted)',
         title: i.title, sub: `#${i.number} · ${path}`,
         primary: i.title || '', secondary: `#${i.number}`, tertiary: path,
+      })
+    }
+    // scenarios DO against a node like issues; flattened OFF it (board folds `node.scenarios`/`node.evals`),
+    // each matching on its name (primary) and its `expected` prose (tertiary), and landing on its host node.
+    for (const sc of scenarioStates(s.scenarios, s.evals)) {
+      entries.push({
+        kind: 'scenario', key: `scenario:${s.id}:${sc.name}`, target: s.id,
+        color: SCEN_COLOR[sc.state] || 'var(--cyan)',
+        title: sc.name, sub: path,
+        primary: sc.name || '', secondary: '', tertiary: `${sc.expected || ''} ${path}`,
       })
     }
   }

@@ -135,10 +135,10 @@ function Dashboard({ specs, sessions, reload }) {
   // (the @-directive). One-shot: SessionInterface applies it then clears `seed`, so a later reopen keeps
   // the user's own draft instead of re-seeding.
   const startNew = useCallback((text) => { setSessionSel('new'); setSeed(text); setSessionUI(true) }, [])
-  // @@@ search routing - the `/` palette searches all three planes and hands back the picked entry; we
-  // dispatch by its kind. A spec or issue FOCUSES its node (issues land on the node they're bound to) — the
-  // expand-on-focus follow effect then drills its spine open + pans the camera. A session JUMPS to its tab
-  // on the session board (openSession). One switch, no per-type logic leaking into the palette.
+  // @@@ search routing - the `/` palette searches all four planes and hands back the picked entry; we
+  // dispatch by its kind. A spec, issue, or scenario FOCUSES its node (issues/scenarios land on the node
+  // they're bound to) — the expand-on-focus follow effect then drills its spine open + pans the camera. A
+  // session JUMPS to its tab on the session board (openSession). One switch, no per-type logic in the palette.
   const onSearchPick = useCallback((e) => {
     if (e.kind === 'session') openSession(e.target)
     else setFocusId(e.target)
@@ -540,9 +540,9 @@ function Dashboard({ specs, sessions, reload }) {
 
         {legend && <Legend onClose={() => setLegend(false)} />}
         {settings && <Settings onClose={() => setSettings(false)} />}
-        {/* search the THREE planes at once — spec nodes (whole raw tree, not just visible), live sessions,
-            and node-bound issues. onSearchPick routes the picked entry: spec/issue focus their node (the
-            follow effect drills the spine open + pans), a session jumps to its tab on the session board. */}
+        {/* search the FOUR planes at once — spec nodes (whole raw tree, not just visible), live sessions,
+            node-bound issues, and scenarios. onSearchPick routes the picked entry: spec/issue/scenario focus
+            their node (the follow effect drills the spine open + pans), a session jumps to its session tab. */}
         {search && <SpecSearch specs={specs} sessions={sessions} onPick={onSearchPick} onClose={() => setSearch(false)} />}
       </div>
 

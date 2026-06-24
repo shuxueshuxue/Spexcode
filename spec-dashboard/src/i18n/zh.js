@@ -63,7 +63,7 @@ export default {
       child: '前往最近的子节点',
       zoom: '放大 / 缩小 · 重置为概览',
       info: '打开节点信息弹窗（或双击节点）',
-      search: '跨节点、会话与议题搜索并跳转',
+      search: '跨节点、会话、议题与场景搜索并跳转',
       overlayCycle: '在工作树正在修改的节点间循环（⇧ 反向）',
       enter: '进入聚焦节点的实时会话',
       newChild: '在聚焦节点下新建子节点（连击）',
@@ -285,11 +285,11 @@ export default {
   },
 
   search: {
-    title: '搜索节点、会话与议题',
-    placeholder: '搜索节点、会话、议题…',
+    title: '搜索节点、会话、议题与场景',
+    placeholder: '搜索节点、会话、议题、场景…',
     empty: '没有匹配项',
     hint: '↑↓ 选择 · ⏎ 跳转 · esc 关闭',
-    kind: { spec: '节点', session: '会话', issue: '议题' },
+    kind: { spec: '节点', session: '会话', issue: '议题', scenario: '场景' },
   },
 
   // 触控优先的手机界面（MobileApp）—— 桌面图谱是鼠标/键盘的操作方式，手机改用下钻列表 + 会话页。

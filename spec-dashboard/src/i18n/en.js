@@ -66,7 +66,7 @@ export default {
       child: 'to the nearest child',
       zoom: 'zoom in / out · reset to overview',
       info: 'open the node-info popup (or double-click a node)',
-      search: 'search & jump across nodes, sessions & issues',
+      search: 'search & jump across nodes, sessions, issues & scenarios',
       overlayCycle: 'cycle through nodes a worktree is changing (⇧ reverse)',
       enter: 'cross into the focus node’s live session',
       newChild: 'new child node under the focus (chord)',
@@ -292,11 +292,11 @@ export default {
   },
 
   search: {
-    title: 'search nodes, sessions & issues',
-    placeholder: 'search nodes, sessions, issues…',
+    title: 'search nodes, sessions, issues & scenarios',
+    placeholder: 'search nodes, sessions, issues, scenarios…',
     empty: 'no match',
     hint: '↑↓ pick · ⏎ jump · esc close',
-    kind: { spec: 'node', session: 'session', issue: 'issue' },
+    kind: { spec: 'node', session: 'session', issue: 'issue', scenario: 'scenario' },
   },
 
   // the touch-first phone interface (MobileApp) — the desktop graph is a mouse/keyboard instrument, so a

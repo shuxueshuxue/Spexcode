@@ -17,6 +17,20 @@ scenarios:
       A's row is gone from the list. Pass 2: having switched to B before the close settles, the view STAYS
       on B — the close never yanks you back to New Session. In neither case is the selected tab left
       pointing at a session the board no longer lists.
+  - name: create-stays-on-new
+    description: >
+      Through the running dashboard in a real browser, open the session interface (Enter) and land on the
+      New Session tab. Type a short launch prompt (e.g. `@<some-node> quick smoke test`) and press Enter to
+      submit. Without clicking anything, watch the active tab and the session list for several seconds (long
+      enough for at least one 4s board poll, so the new session has surely been listed). Then type a second
+      prompt and submit again. Screenshot the tab list + active pane right after each submit settles.
+    expected: |
+      Submitting never switches tabs: after each Enter the New Session tab stays the active/selected tab and
+      its prompt is cleared, ready for the next launch — the view does NOT jump onto the freshly created
+      session, nor does it bounce between New and the new tab. Each new session simply appears as a new row
+      in the list below (surfaced by the board poll). Both sessions can be created back-to-back without ever
+      leaving New Session. The only thing that moves your selection is a tab's removal (the close/exit
+      scenarios), never a creation.
   - name: exit-command-closes
     description: >
       Through the running dashboard in a real browser, open the session interface (Enter) on a LIVE
@@ -51,7 +65,9 @@ scenarios:
 Measure through the **real dashboard surface**, YATU-style: drive the actual browser interface (open with
 `Enter`, click the tabs, and close via the **session row's right-click menu → Close → confirm** — there is no
 header close button), never a direct `/api/sessions/:id/close` call or an internal selection helper. The loss
-being scored is the tab-fallback contract in the spec: a closed session leaves the board, and that **removal**
-— not the closing gesture — is what decides where you land. You are still on the closed tab → New Session; you
-already moved to another valid tab → your switch stands. Evidence is a before/after screenshot pair of the tab
-list and active pane for each pass.
+being scored is the **selection contract** in the spec. Two halves. (1) **Creating never moves you**: submitting
+a New Session launch keeps you on the New tab (prompt cleared) so you can fire off several in a row — the new
+session only appears as a row below, never as a tab the view jumps onto. (2) The **tab-fallback** on removal: a
+closed session leaves the board, and that **removal** — not the closing gesture — is what decides where you
+land. You are still on the closed tab → New Session; you already moved to another valid tab → your switch
+stands. Evidence is a before/after screenshot pair of the tab list and active pane for each pass.

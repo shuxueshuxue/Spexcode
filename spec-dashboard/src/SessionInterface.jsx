@@ -141,7 +141,7 @@ function highlight(text, q) {
   return <>{text.slice(0, i)}<b className="mention-hit">{text.slice(i, i + q.length)}</b>{text.slice(i + q.length)}</>
 }
 
-export default function SessionInterface({ sessions, specs = [], focusNode, open, sel, setSel, seed, onSeedConsumed, onClose, onCreated, onPickSession, reload }) {
+export default function SessionInterface({ sessions, specs = [], focusNode, open, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, reload }) {
   const t = useT()
   const [prompt, setPrompt] = useState('')    // the New Session tab's own draft (its boarding-switch cache)
   const [menu, setMenu] = useState(null)      // completion dropdown: { kind:'mention'|'config'|'slash', items, index, start, end, query }
@@ -333,7 +333,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     return free ? `${body}\n\n${free}` : body
   }
 
-  // launch a real session, then SWITCH to it (onCreated reloads the board, then App sets sel to the id).
+  // launch a real session, then STAY on the New tab — no tab switch. The new session just appears in the
+  // list below once `reload` (and the 4s poll) picks it up, so you can fire off several in a row. Removing
+  // the old jump-to-the-new-session also kills its race with the stale-tab fallback, which used to bounce
+  // you back to New whenever the backend hadn't listed the session yet by the time the post-create reload
+  // landed — the unstable "sometimes the new tab, sometimes back to New" jump.
   const submit = async () => {
     const raw = prompt.trim()
     if (!raw || sending) return
@@ -349,7 +353,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       })
       const data = await res.json().catch(() => null)
       setPrompt('')
-      await onCreated?.(data?.id)
+      await reload?.()
     } finally {
       setSending(false)
     }
@@ -544,7 +548,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // viewer on New Session only if they're still on that tab.
   const act = async (verb) => {
     await fetch(`/api/sessions/${active}/${verb}`, { method: 'POST' }).catch(() => {})
-    await onCreated?.(null)
+    await reload?.()
   }
   // @@@ window-level list nav - ↑/↓ move the selection regardless of focus; Enter on New launches.
   const stateRef = useRef({})

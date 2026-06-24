@@ -83,6 +83,7 @@ function GraphCanvas({ sessions = [], onOpen, active, legend, setLegend }) {
   const [focusId, setFocusId] = useState(null)       // keyboard cursor: the node arrows move and ⏎ opens
   const { fitView, setCenter, getViewport } = useReactFlow()
   const framedRef = useRef(false)
+  const [framed, setFramed] = useState(false)         // mask the pre-fit frame; reveal the already-centred web (no intro motion)
   const toastTimer = useRef(0)
 
   const reload = useCallback(async () => {
@@ -252,15 +253,28 @@ function GraphCanvas({ sessions = [], onOpen, active, legend, setLegend }) {
     return () => window.removeEventListener('keydown', onKey, true)
   }, [active, byId, pos, sessions, CONES, onOpen, setCenter, getViewport, legend, setLegend])
 
-  // @@@ frame to the pane - the web is origin-centred in flow coords; fitView frames it within whatever size
-  // the content pane gives us (no window-based pre-frame — this is an in-pane tab, not a fullscreen overlay).
-  // Nodes are preloaded, so they're present on the FIRST render: this fires in that same commit's rAF and the
-  // graph opens already centred (duration 0) — no loading gate to wait behind. A later session-count change pans.
+  // @@@ frame BEFORE the first visible frame - the web is origin-centred in flow coords, so its very first
+  // paint lands in the top-left corner at the default zoom. The old code let that corner frame SHOW and then
+  // snapped the camera in on the next rAF, which read as a zoom+pan "intro" on EVERY reselect (this tab
+  // REMOUNTS each time it's picked, unlike the always-mounted board graph). Instead we keep the canvas hidden
+  // (opacity 0, see the ReactFlow style) through that first paint, then in the rAF fit the web AND reveal it in
+  // the same commit — so the first VISIBLE frame is already centred and the graph is STATIC the instant it
+  // shows, never an intro animation. Nodes are preloaded, so the rAF resolves a frame after mount (no loading
+  // gate). An empty web reveals the bare board at once (nothing to frame). A later session-count change
+  // reframes with a gentle pan (duration 300, already visible).
+  // framedRef flips inside the rAF, NOT in the effect body: under StrictMode the first effect run's rAF is
+  // cancelled by its cleanup before it fires, so a body-side flag would make the surviving remount read
+  // "not first" and skip the reveal (canvas stuck hidden). Setting it only when the rAF actually runs keeps
+  // the instant first-fit + reveal correct in dev and prod alike.
   useEffect(() => {
-    if (!rfNodes.length) return
+    if (!rfNodes.length) { setFramed(true); return }  // empty: show the bare board, nothing to frame
     const first = !framedRef.current
-    framedRef.current = true
-    requestAnimationFrame(() => fitView({ padding: 0.25, duration: first ? 0 : 300 }))
+    const id = requestAnimationFrame(() => {
+      fitView({ padding: 0.25, duration: first ? 0 : 300 })
+      framedRef.current = true
+      setFramed(true)
+    })
+    return () => cancelAnimationFrame(id)
   }, [rfNodes.length, fitView])
 
   return (
@@ -272,6 +286,7 @@ function GraphCanvas({ sessions = [], onOpen, active, legend, setLegend }) {
         nodesDraggable nodesConnectable connectOnClick={false} elementsSelectable={false}
         defaultViewport={{ x: 0, y: 0, zoom: 0.8 }} minZoom={0.3} maxZoom={1.6}
         proOptions={{ hideAttribution: true }}
+        style={{ opacity: framed ? 1 : 0 }}
       >
         <Background variant="dots" color="#cdc6ad" gap={20} size={1} />
       </ReactFlow>

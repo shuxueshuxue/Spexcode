@@ -48,8 +48,8 @@ reveal one at a time on the **down gesture** once you've finished the open one �
 a `j`/`↓` keypress when there is nothing left to scroll (a short history with no scrollbar, or the bottom of
 a long one). Tying reveal to the gesture, not to scroll movement alone, is what keeps a sub-page history from
 dead-ending with older versions forever hidden (a header click also toggles by hand). A version's proof is
-the **spec.md line diff** it introduced — the latest ships precomputed with the board, older ones fetch
-lazily on expand; a version with no recorded change says so plainly. That scaffold — scroll container,
+the **spec.md line diff** it introduced, fetched lazily on expand — every version, memoised by hash (the
+latest no longer shipped precomputed); a version with no recorded change says so plainly. That scaffold — scroll container,
 latest-expanded reveal, click-toggle, and the per-row header-over-evidence shape — is **data-agnostic and
 shared**: the eval pane ([[yatsu-eval-tab]]) rides the same component (version rows + diff here, reading rows
 + screenshot there).

@@ -284,12 +284,13 @@ function ChronoPane({ items, itemKey, classes, rowClass, renderHeader, renderEvi
   )
 }
 
-// @@@ HistoryEvidence - one version's proof, mounted only while its row is open (so older diffs fetch lazily).
-// The latest renders its diff instantly from node.lastDiff (shipped on the board); older versions fetch theirs
-// the first time they expand, memoised by hash so a re-open is instant (see useVersionDiff).
+// @@@ HistoryEvidence - one version's proof, mounted only while its row is open, so EVERY version's diff
+// (the latest included) fetches lazily on expand — memoised by hash so a re-open is instant (see
+// useVersionDiff). The latest is no longer shipped on the board: precomputing it cost a `git show` per node
+// on every cold load (see specs.ts / [[work-pane]]); one fetch when the row opens is the right trade.
 function HistoryEvidence({ node, r, latest }) {
-  const fetched = useVersionDiff(node.id, r.hash, !latest)
-  return <DiffEvidence diff={latest ? (node.lastDiff ?? fetched) : fetched} />
+  const fetched = useVersionDiff(node.id, r.hash, true)
+  return <DiffEvidence diff={fetched} />
 }
 
 // @@@ HistoryPane - the merged version log (the old `recent` + `history` tabs, now one), a thin consumer of the

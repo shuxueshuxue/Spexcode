@@ -67,5 +67,3 @@ menu ([[session-rename]]) carries a **reset order** item — shown only while th
 session in **any** state is reorderable or resettable (queued, live, offline), because the gesture edits
 the on-disk record, not the live terminal; reordering an unknown session fails loudly (the endpoint
 answers 404), never a silent success.
-</content>
-</invoke>

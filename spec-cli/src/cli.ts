@@ -155,24 +155,29 @@ if (cmd === 'serve') {
   const { guideText } = await import('./guide.js')
   console.log(guideText(process.argv[3]))
 } else if (cmd === 'owner') {
-  // @@@ owner - which spec node GOVERNS a path: the file→spec map the per-edit annotate hook (spec-of-file)
-  // surfaces at the moment of an edit. Light (frontmatter only, no git walk). 0 owners → uncovered; 1 →
-  // name it + its contract; many → flag the SHARED HUB and point at the single-owner refactor. Read-only.
+  // @@@ owner - which spec node(s) GOVERN a path: the file→spec map the per-edit annotate hook (spec-of-file)
+  // surfaces at the moment of an edit. Light (frontmatter only, no git walk). 0 owners → uncovered; a sanely
+  // owned file (1..maxOwners) → name the owners + the contract; OVER-owned (> maxOwners) → flag the file as
+  // doing too much and point at the split (see [[governed-related]]). Read-only.
   const { specOwners } = await import('./specs.js')
+  const { loadConfig } = await import('./lint.js')
   const p = positionals(3)[0]
   if (!p) { console.error('usage: spex owner <path>'); process.exit(2) }
   const rel = p.startsWith(process.cwd()) ? p.slice(process.cwd().length + 1) : p
   const owners = specOwners(p)
+  const maxOwners = loadConfig(process.cwd()).maxOwners
   if (owners.length === 0) {
     console.log(`${rel} — no spec governs this yet (uncovered). If your change is substantive, give it a home before it drifts.`)
-  } else if (owners.length === 1) {
-    // a cleanly-owned file is NOT actionable: --actionable callers (the per-edit spec-of-file hook) stay
-    // silent here, so the annotation fires only on a hub or an uncovered file — rare and worth acting on.
+  } else if (owners.length <= maxOwners) {
+    // a sanely-owned file is NOT actionable: --actionable callers (the per-edit spec-of-file hook) stay
+    // silent here, so the annotation fires only on an OVER-owned or uncovered file — rare and worth acting on.
     if (has('actionable')) process.exit(0)
-    console.log(`${rel} is governed by '${owners[0].id}' — ${owners[0].desc} Read/honor its spec; if your change shifts the intent, update the spec in the SAME commit.`)
+    const named = owners.map((o) => `'${o.id}'`).join(', ')
+    const lead = owners.length === 1 ? `${rel} is governed by ${named} — ${owners[0].desc}` : `${rel} is governed by ${named} (shared, fine).`
+    console.log(`${lead} Read/honor the spec; if your change shifts the intent, update the spec in the SAME commit.`)
   } else {
     const ids = owners.map((o) => o.id).join(', ')
-    console.log(`${rel} is claimed by ${owners.length} specs (${ids}) — a SHARED HUB. Your change likely belongs to ONE of them; the others merely co-own it. A file with many owners should get a single foundation owner and be RELATED elsewhere — don't fold a hub into a feature node's governed set.`)
+    console.log(`${rel} is governed by ${owners.length} specs (${ids}) — more than one file should hold. This file does TOO MUCH: SPLIT it so each governor owns its own module (or merge the nodes if they're one concern, or give it a single foundation owner + relate the rest).`)
   }
 } else if (cmd === 'lint') {
   const { specLint, driftGate, DRIFT_GUIDANCE } = await import('./lint.js')

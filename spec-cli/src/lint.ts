@@ -13,6 +13,8 @@ import { loadSpecs } from './specs.js'
 //                      too dense with code identifiers, and/or step-by-step how-to) — see altitude().
 //   breadth   (warn) : a node has too many direct children (>= maxChildren) — altitude's structural twin:
 //                      the same comprehensibility limit on the tree's breadth, not a body's depth.
+//   owners    (warn) : a file is GOVERNED by > maxOwners nodes — breadth rotated onto the file: it holds
+//                      more separately-specified functionality than one file should. Remedy: split it.
 // No file hashes are stored anywhere: git already is the hash database, so drift is derived live.
 
 export type Finding = { level: 'error' | 'warn'; rule: string; spec?: string; file?: string; msg: string }
@@ -37,6 +39,11 @@ export type LintConfig = {
   // touches a file whose node has accumulated >= this many commits of drift. Small drift nudges; a node
   // that's fallen this far behind must be reconciled before you pile more change onto its files.
   driftErrorThreshold: number
+  // @@@ maxOwners - the too-many-owners budget: warn when a single file is GOVERNED (code:) by MORE THAN
+  // this many nodes. Many owners per file is ordinary composition, not a defect (see [[governed-related]]);
+  // only an over-owned file is a smell — it has accreted more independently-specified functionality than
+  // one file should hold. The remedy blames the FILE (split it), not the ownership. A soft taste dial → WARN.
+  maxOwners: number
 }
 const DEFAULT_CONFIG: LintConfig = {
   governedRoots: ['spec-dashboard/src', 'spec-cli/src'],
@@ -45,6 +52,7 @@ const DEFAULT_CONFIG: LintConfig = {
   altitude: { lineBudget: 50, charBudget: 4200, sizeable: 35, dense: 1.3, steps: 3 },
   maxChildren: 8,
   driftErrorThreshold: 3,
+  maxOwners: 3,
 }
 export function loadConfig(root: string): LintConfig {
   try {
@@ -126,7 +134,8 @@ export async function specLint(): Promise<Finding[]> {
     }
   }
   // a file is COVERED if any node GOVERNS (code:) or merely REFERENCES (related:) it; integrity covers both.
-  // `related:` lets a co-owner reference a hub without owning its drift/yatsu — the remedy a `hub` warning asks for.
+  // `related:` is the coverage net: govern is a sharp ideally-one-file pointer, so most files are reached by
+  // related, not govern (see [[governed-related]]). It carries coverage but never drift/yatsu.
   const claimed = new Set<string>(owners.keys())
   for (const s of specs) for (const f of s.related) {
     if (!existsSync(join(root, f)))
@@ -177,15 +186,16 @@ export async function specLint(): Promise<Finding[]> {
   for (const f of governed)
     if (!claimed.has(f)) out.push({ level: 'warn', rule: 'coverage', file: f, msg: `no spec governs: ${f}` })
 
-  // hub: a file GOVERNED by >=2 nodes has no single owner, so drift/yatsu cannot attribute it to one node
-  // without fanning the same change across every co-owner — which is why both now SKIP such files (see
-  // [[governed-related]]). ONE summary warning (not one per file — that would be its own wall of noise):
-  // the count, the worst offenders, and the remedy. The fix is to give each hub ONE owner in code: and let
-  // the rest reference it via related: (still counts for coverage); drift/yatsu then resume on the owner.
-  const hubs = [...owners].filter(([, ids]) => ids.length >= 2).sort((a, b) => b[1].length - a[1].length)
-  if (hubs.length) {
-    const top = hubs.slice(0, 5).map(([f, ids]) => `${f.split('/').pop()}(${ids.length})`).join(', ')
-    out.push({ level: 'warn', rule: 'hub', msg: `${hubs.length} file(s) are governed by >=2 nodes (shared hubs with no single owner) — drift & yatsu can't attribute them, so both SKIP them (no per-co-owner fan-out). Worst: ${top}. Give each ONE owner in code:, let the rest reference it via related:.` })
+  // too-many-owners: many nodes governing one file is ordinary composition (drift fans to each — correct,
+  // every owner has a stake), so this is NOT flagged. Only an OVER-owned file is a smell — governed by more
+  // than maxOwners nodes, it has accreted more independently-specified functionality than one file should
+  // hold (see [[governed-related]]). ONE summary line (not one per file — its own wall of noise): the count,
+  // the worst offenders, and the remedy, which blames the FILE not the ownership — SPLIT it so each governor
+  // reclaims its own module; or merge the nodes if they're one concern; or give it a single foundation owner.
+  const over = [...owners].filter(([, ids]) => ids.length > cfg.maxOwners).sort((a, b) => b[1].length - a[1].length)
+  if (over.length) {
+    const top = over.slice(0, 5).map(([f, ids]) => `${f.split('/').pop()}(${ids.length})`).join(', ')
+    out.push({ level: 'warn', rule: 'owners', msg: `${over.length} file(s) are governed by > ${cfg.maxOwners} nodes — each holds more separately-specified functionality than one file should. Worst: ${top}. SPLIT the file so each governor owns its own module (or merge the nodes, or give it a single foundation owner + related:).` })
   }
 
   // drift: a governed file has commits NOT yet reflected in its spec. Rigorous by git ancestry —

@@ -16,7 +16,7 @@ network**: each session a node, each *live monitor* (agent A running `spex watch
 A→B. The view is **experimental and isolated** — it must drop in without disturbing the spec board or any
 existing view. It lives as a tab **inside the session console** ([[session-console]]): the **"View Session
 Relationship"** view, reached by its icon button (paired with `＋ New Session` in the console's top button
-row) or — from the spec board — the small floating network button / the `t` key, both of which open the
+row) or — from the spec board — the small floating network button, which opens the
 console **on this tab**. The arrows are **observational** — they reflect who is watching whom right now and
 appear/disappear as watches start and stop. The one human gesture is **asking**: dragging A→B does not draw
 a stored edge, it **asks agent A to monitor B**. Clicking a node **opens that session's console** — which,

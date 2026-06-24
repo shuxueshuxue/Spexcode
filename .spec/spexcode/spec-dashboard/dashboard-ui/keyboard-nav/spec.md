@@ -17,7 +17,7 @@ Move through the spec tree by **relationship, not geometry** — the tree sits a
 
 ## keymap
 
-On the board, arrows (or vim keys) walk the focus through the tree (below); the rest are direct verbs — zoom and reset-to-overview, the node-info popup, search, cycle in-flight edits, cross into / start a fresh session, open the session relationship graph (`t`), help, settings, new-child / delete chords. A board-level Esc only releases a locked session. Inside any popup the keys re-bind to it: left/right (or vim, or a numbered pane) switch panes, up/down scroll, Enter crosses, Esc closes.
+On the board, arrows (or vim keys) walk the focus through the tree (below); the rest are direct verbs — zoom and reset-to-overview, the node-info popup, search, cycle in-flight edits, cross into / start a fresh session, help, settings, new-child / delete chords. (The session relationship graph has no keybinding — it opens from its floating board button.) A board-level Esc only releases a locked session. Inside any popup the keys re-bind to it: left/right (or vim, or a numbered pane) switch panes, up/down scroll, Enter crosses, Esc closes.
 
 ## principles
 
@@ -28,7 +28,7 @@ On the board, arrows (or vim keys) walk the focus through the tree (below); the 
 
 ## search, jump & cycle
 
-The board is a drill-down (see [[node-graph]]), so a node in a collapsed subtree is invisible until you walk its spine. **Slash-to-search** is the escape hatch, spanning **three planes at once** — spec nodes, live sessions, and node-bound issues — each row tagged with its plane. Picking **routes by kind**: a node or issue sets focus (an issue lands on its bound node) and expand-on-focus reveals and pans to it; a session jumps to its tab (see [[session-console]]). The **overlay-cycle** keys aim the same at *change* not name — cycling focus through the nodes a worktree is editing, wrapping; **scope follows the lock**: a locked session's changed nodes, else every in-flight edit.
+The board is a drill-down (see [[node-graph]]), so a node in a collapsed subtree is invisible until you walk its spine. **Slash-to-search** is the escape hatch, spanning **four planes at once** — spec nodes, live sessions, node-bound issues, and scenarios — each row tagged with its plane. Picking **routes by kind**: a node, issue, or scenario sets focus (an issue or scenario lands on its bound node) and expand-on-focus reveals and pans to it; a session jumps to its tab (see [[session-console]]). The **overlay-cycle** keys aim the same at *change* not name — cycling focus through the nodes a worktree is editing, wrapping; **scope follows the lock**: a locked session's changed nodes, else every in-flight edit.
 
 ## focus, sessions & chords
 

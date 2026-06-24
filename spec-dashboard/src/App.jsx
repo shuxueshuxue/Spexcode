@@ -135,10 +135,10 @@ function Dashboard({ specs, sessions, reload }) {
   // (the @-directive). One-shot: SessionInterface applies it then clears `seed`, so a later reopen keeps
   // the user's own draft instead of re-seeding.
   const startNew = useCallback((text) => { setSessionSel('new'); setSeed(text); setSessionUI(true) }, [])
-  // @@@ search routing - the `/` palette searches all three planes and hands back the picked entry; we
-  // dispatch by its kind. A spec or issue FOCUSES its node (issues land on the node they're bound to) — the
-  // expand-on-focus follow effect then drills its spine open + pans the camera. A session JUMPS to its tab
-  // on the session board (openSession). One switch, no per-type logic leaking into the palette.
+  // @@@ search routing - the `/` palette searches all four planes and hands back the picked entry; we
+  // dispatch by its kind. A spec, issue, or scenario FOCUSES its node (issues/scenarios land on the node
+  // they're bound to) — the expand-on-focus follow effect then drills its spine open + pans the camera. A
+  // session JUMPS to its tab on the session board (openSession). One switch, no per-type logic in the palette.
   const onSearchPick = useCallback((e) => {
     if (e.kind === 'session') openSession(e.target)
     else setFocusId(e.target)
@@ -316,13 +316,6 @@ function Dashboard({ specs, sessions, reload }) {
     const bumpScroll = (delta) => popupScroll(
       document.querySelector('.ov-body .pane-doc, .ov-body .pane-hist, .ov-body .pane-issues, .ov-body .pane-eval, .ov-body .pane-edit'), delta)
     const onKey = (e) => {
-      // @@@ relationship key - `t` opens the session console on its "View Session Relationship" tab — the
-      // live monitor graph now LIVES in the console (see SessionInterface), not as a fullscreen overlay. It is
-      // suppressed while a modal/console already captures keys (there a `t` is just a keystroke, e.g. typed
-      // into an input). The console's own list nav then carries you off the tab; this key only opens onto it.
-      if (!sessionUI && !overlay && !legend && !settings && !search && (e.key === 't' || e.key === 'T')) {
-        e.preventDefault(); e.stopPropagation(); setSessionSel('graph'); setSessionUI(true); return
-      }
       if (sessionUI) return // the session interface owns ALL its keys (arrows / Enter / typing / Esc / the graph)
       // search palette — same modal contract as the help/settings: while open its input OWNS every key
       // (typing the query, ↑/↓/Enter to pick, Esc to close — all in SpecSearch), so we return before any
@@ -427,7 +420,6 @@ function Dashboard({ specs, sessions, reload }) {
         const next = cycleNext(cycleNodes, focus.id, e.key === 'O' ? -1 : 1, (n) => n.id)
         if (next) setFocusId(next.id)
       }
-      // (`t` toggles the session graph — handled at the top of onKey so it works from either graph.)
       // Enter opens the session board at the remembered tab (boarding switch — see openBoard).
       else if (e.key === 'Enter') { e.preventDefault(); openBoard() }
       // @@@ @-key - the spec-oriented launch shortcut: jump straight to a FRESH New Session targeting the
@@ -509,7 +501,7 @@ function Dashboard({ specs, sessions, reload }) {
         <div className="hud">
           <span className="brand">$ spec-dashboard</span>
           {/* a discreet floating affordance for the relationship view — opens the session console on its
-              "View Session Relationship" tab (same as the `t` key). The button makes the hotkey discoverable. */}
+              "View Session Relationship" tab. This button is the (only) way in — there is no keyboard shortcut. */}
           <button className="hud-graph" onClick={() => { setSessionSel('graph'); setSessionUI(true) }} title={t('hud.graphTitle')}>
             <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
               <circle cx="3.5" cy="4" r="1.8" /><circle cx="12.5" cy="4" r="1.8" /><circle cx="8" cy="12.5" r="1.8" />
@@ -548,9 +540,9 @@ function Dashboard({ specs, sessions, reload }) {
 
         {legend && <Legend onClose={() => setLegend(false)} />}
         {settings && <Settings onClose={() => setSettings(false)} />}
-        {/* search the THREE planes at once — spec nodes (whole raw tree, not just visible), live sessions,
-            and node-bound issues. onSearchPick routes the picked entry: spec/issue focus their node (the
-            follow effect drills the spine open + pans), a session jumps to its tab on the session board. */}
+        {/* search the FOUR planes at once — spec nodes (whole raw tree, not just visible), live sessions,
+            node-bound issues, and scenarios. onSearchPick routes the picked entry: spec/issue/scenario focus
+            their node (the follow effect drills the spine open + pans), a session jumps to its session tab. */}
         {search && <SpecSearch specs={specs} sessions={sessions} onPick={onSearchPick} onClose={() => setSearch(false)} />}
       </div>
 

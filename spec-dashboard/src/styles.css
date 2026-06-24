@@ -703,6 +703,7 @@ body {
 .search-kind.k-spec    { color: var(--blue);  border-color: color-mix(in srgb, var(--blue) 40%, var(--line)); }
 .search-kind.k-session { color: var(--orange); border-color: color-mix(in srgb, var(--orange) 40%, var(--line)); }
 .search-kind.k-issue   { color: var(--green); border-color: color-mix(in srgb, var(--green) 40%, var(--line)); }
+.search-kind.k-scenario{ color: var(--cyan); border-color: color-mix(in srgb, var(--cyan) 40%, var(--line)); }
 .search-title { color: var(--ink2); font-weight: 600; flex: none; }
 .search-path { color: var(--muted); font-size: 11px; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .search-foot { padding: 6px 12px; border-top: 1px solid var(--line); background: var(--panel); color: var(--muted); font-size: 11px; }

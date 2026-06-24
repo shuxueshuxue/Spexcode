@@ -455,6 +455,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const sendMsg = async () => {
     const text = msg
     if (!text.trim() || active === 'new') return
+    // @@@ /exit → close - the inbox's one client-intercepted token. `/exit` (CC's quit word) closes THIS
+    // spexcode session directly — the same no-prompt removal as the header Close button (act('close')) —
+    // instead of being dispatched to the agent, where it would only quit the agent's own process and
+    // orphan the worktree. trim() covers the trailing space the `/` completion leaves and a stray newline.
+    if (text.trim() === '/exit') { setMsg(''); setMenu(null); act('close'); return }
     setMsg('')
     setSendErr(false)
     try {

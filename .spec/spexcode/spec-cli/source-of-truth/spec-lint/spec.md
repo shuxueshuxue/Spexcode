@@ -28,6 +28,8 @@ rules:
 - **living** (error): a body stays current-state, with no `## vN` changelog headings — version history
   is read from git (recent/history tabs), not duplicated in prose. Fence-aware: a `## v2` inside a ```
   block is sample text, not a violation.
+- **duplicate-id** (error): every node id (leaf folder name) is globally unique — two sharing one clobber
+  each other in the board / wikilinks / `byId` (e.g. a `core` package node vs `.config/core`).
 - **coverage** (warn): every governed source file is claimed by ≥1 spec (no orphan code); and roots
   matching no files are flagged "governing nothing", so an adopter who never set `lint.governedRoots`
   isn't shown a falsely-clean board.
@@ -36,15 +38,13 @@ rules:
   The rule can't judge meaning, so it fires on cheap proxies of a mechanics dump — grown long (lines /
   chars over a soft budget), thick with code identifiers, or step-by-step how-to. Budgets default so
   concise specs pass and only a dump warns.
-- **breadth** (warn): a node has fewer than `lint.maxChildren` direct children (default 8). Altitude's
-  structural twin — the same "hold it in your head" limit on the tree's breadth, not a body's depth, so
-  passing altitude can't just relocate the sprawl into a flat fan-out. Advisory: a flat list of true
-  peers is sometimes right, so it asks whether a grouping is missing rather than mandates one.
+- **breadth** (warn): a node with **≥ `lint.maxChildren`** direct children (default 8) — altitude's
+  structural twin, the same "hold it in your head" limit on tree breadth, so passing altitude can't relocate
+  sprawl into a flat fan-out. Advisory: a flat list of true peers is sometimes right, so it asks, not mandates.
 
-Reusable as a **product**, not a SpexCode-only script: every project-shaped value — governed roots,
-source and code-identifier extensions, altitude budgets, the breadth limit — is read from an optional
-**`spexcode.json`** (`lint` key), defaulting to values tuned to this tree; a different layout or language
-overrides what fits, and absent the file lint is unchanged.
+Reusable as a **product**, not a SpexCode-only script: every project-shaped value — governed roots, source
+and code-identifier extensions, altitude budgets, the breadth limit — is read from an optional
+**`spexcode.json`** (`lint` key), defaulting to values tuned to this tree; absent the file lint is unchanged.
 
 No file hashes are stored — git is the hash database, so drift is derived live. When
 drift exists, `spex lint` prints **remediation guidance**: drift can't be auto-fixed, so the agent must

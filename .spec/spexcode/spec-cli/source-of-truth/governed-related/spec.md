@@ -2,7 +2,7 @@
 title: governed-related
 status: active
 hue: 200
-desc: Split a node's files into GOVERNED (owned — drives drift/yatsu, as before) and RELATED (referenced — coverage only, never drift/yatsu); a file with >=2 governors is a hub that both signals skip.
+desc: Two relations on a node — GOVERN (source of truth, ideally one file; drives drift/yatsu; many nodes MAY share a file) and RELATED (referenced, carries coverage). A file governed by more than maxOwners nodes warns "split it". No hub-exclusion.
 related:
   - spec-cli/src/specs.ts
   - spec-cli/src/lint.ts
@@ -13,32 +13,36 @@ related:
 
 ## raw source
 
-A node's `code:` list means two incompatible things at once. For **coverage** it is a governance link,
-naturally many-to-many — every hub file claimed from each feature that reaches it. For **attribution** —
-drift, yatsu, "is this mine?" — it must be ownership, one owner per file. Reading governance AS ownership is
-why a change to one hub file (`cli.ts`, `sessions.ts`, `styles.css`) fans a stale/uncovered signal across
-every co-owner. Separate the two relations — and give them two SIGNAL SHAPES.
+A node's link to code carries two relations the old single `code:` list conflated. **govern** is what the
+node is the SOURCE OF TRUTH for — sharp, ideally one file, so drift and yatsu have an unambiguous subject.
+**related** is everything it merely references — many, and it is what carries coverage. A file owned by
+several nodes is NOT a defect to stamp out; it is ordinary composition. The real defect is a file owned by
+TOO MANY nodes — it has accreted more independently-specified functionality than one file should hold. Read
+the count as a smell on the FILE, not on its ownership.
 
 ## expanded spec
 
-Two relations on a node:
+Two relations, one shape for spec nodes and yatsu scenarios alike (a yatsu.md owns nothing — only its
+scenarios govern and relate):
 
-- **governed** (`code:`) — the files the node is source of truth for. Drives coverage AND historical
-  drift/yatsu, unchanged.
-- **related** (`related:`) — files the node references but does not own. Counts for **coverage** only;
-  never drift, never yatsu. The escape valve that lets a co-owner reference a hub without owning its loss
-  signal. (This node dogfoods it: it owns no file, and lists its implementation as `related:`.)
+- **govern** (`code:`) — the file the node is source of truth for, ideally one. Drives drift and yatsu
+  attribution. **Many nodes may govern the same file** — a change fans drift to each, which is correct:
+  every owner has a stake. There is no hub-exclusion; no owner's signal is suppressed.
+- **related** (`related:`) — files referenced but not owned. Carries **coverage**: every code file must be
+  reached by some node's related (or govern). No drift, no yatsu, no ack — a pointer, not a verdict.
 
-Built and live: a file governed by **>=2 nodes is a hub** with no single owner, so [[spec-lint]]'s `drift`
-and [[yatsu-core]]'s `scan` now EXCLUDE hub files — attributing to nobody beats fanning across all
-co-owners. The `hub` lint rule reports them in one summary line with the remedy. [[spec-of-file]] surfaces
-the same at the edit (flags a hub, stays silent on a cleanly-owned file). The remedy for a hub: move it out
-of the co-owners' `code:` into `related:`, leaving ONE owner — drift/yatsu then resume on that owner.
+**too-many-owners** — the file-rotated twin of breadth ([[spec-lint]]): when a file is governed by more than
+`maxOwners` nodes (default 3), one summary warning fires, at lint and the commit gate. It blames the file's
+size, not its ownership, and offers three moves, split first:
 
-The migration is DONE: all 21 hubs now have a single owner (the `hub` warning reads 0), via two new
-foundation nodes ([[sessions-core]], [[dashboard-shell]]), the [[spec-cli]] package node owning the
-server/CLI entries, and a clear owner for the rest. Still ahead: the present-tense "this commit touched
-files related to specs X, Y — glance at them" nudge for related files (a pointer, not a verdict); deriving
-relatedness from the import graph so a node declares only what it owns; and the residual smell the migration
-exposed — `sessions.ts` is a monolith whose slice-features ([[dispatch]], [[graph]], [[session-selectors]],
-[[agent-reply-channel]], [[spec-pointer]]) now hold no code of their own until a code split gives each one back.
+- **split the file** so each governing node reclaims its own module — the honest fix the [[sessions-core]]
+  monolith still awaits;
+- **merge the nodes** when the separate specs are really one concern;
+- **single foundation owner** + relate the rest, when the file is a genuine shared substrate.
+
+This inverts the earlier "one owner per file" rule: ownership is many-to-one BY DESIGN now, bounded only at
+the high end. The foundation nodes the old single-owner migration created to absorb monoliths
+([[sessions-core]], [[dashboard-shell]]) become split-the-file candidates, not permanent owners. The
+yatsu-scenario half — a scenario's own govern/related split and a too-many-owners count over the scenario
+axis — is the next step; today a scenario still carries only a freshness `code` subset, and yatsu no longer
+skips a shared file.

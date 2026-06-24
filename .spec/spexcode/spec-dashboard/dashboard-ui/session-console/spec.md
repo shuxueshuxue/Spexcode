@@ -57,9 +57,11 @@ never lazily on focus — and stays mounted even while the console is closed, so
 place** (socket + scroll survive), New Session included (it hides its pane). Warmth is **state, not GPU**: only
 the **visible** pane holds a WebGL context, so many panes can't exhaust the browser's capped GPU contexts. List
 navigation lives at the **window level** (arrows walk the list whatever holds focus). Header lifecycle
-(relaunch / merge / close) follows state; offline shows a relaunch panel; review is **agent-proposed** at the
-stop-gate. **Closing is event-driven**: the tab's *removal* — not the close button — drives where you land.
-Still on the closed tab → New Session; already moved to another valid tab → your switch stands. The same
+(relaunch / merge) follows state; offline shows a relaunch panel; review is **agent-proposed** at the
+stop-gate. There is **no header close button** (its "close" misread as "close the panel" while it killed the
+session + worktree): closing lives only on the row's right-click menu, behind a confirm ([[session-rename]]).
+**Closing is event-driven**: the tab's *removal* — not any one gesture — drives where you
+land. Still on the closed tab → New Session; already moved to another valid tab → your switch stands. The same
 fallback covers a session that ends or is closed elsewhere, so the selection never points at a session the
 board no longer has.
 

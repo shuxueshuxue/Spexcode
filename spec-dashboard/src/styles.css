@@ -912,8 +912,6 @@ body {
 .si-act:hover { border-color: var(--blue); color: var(--blue); }
 .si-act.go { border-color: var(--blue); color: var(--blue); }
 .si-act.go:hover { background: var(--blue); color: var(--paper); }
-.si-act.kill { color: var(--orange); }
-.si-act.kill:hover { background: var(--orange); color: var(--paper); border-color: var(--orange); }
 .si-act.big { padding: 8px 18px; font-size: 13px; margin-top: 8px; }
 /* nav-mode toggle: forwards raw keystrokes to the pane. `.on` = active (yellow, like the keyboard cursor);
    `.suggest` = the best-effort menu sniff thinks a select menu is up, so it pulses to invite nav mode. */

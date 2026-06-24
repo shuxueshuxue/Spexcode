@@ -1,10 +1,11 @@
 // @@@ SessionContextMenu - the right-click menu on a session row, with two gestures. "Rename" swaps the
 // menu for a centred prompt (the shared Modal) prefilled with the session's CURRENT name override;
 // submitting POSTs to /api/sessions/:id/rename — the backend persists it to the worktree's `.session` as the
-// `name` override that wins over the derived label — and a blank name CLEARS the override. "Close" runs the
-// same /api/sessions/:id/close as the header's close button (the human-only worktree removal), but — unlike
-// that button — behind a **confirm prompt**, because a right-click is easy to mis-aim and the removal is
-// destructive. Either gesture calls onChanged so the board reloads and every surface reflects it at once.
+// `name` override that wins over the derived label — and a blank name CLEARS the override. "Close" POSTs
+// /api/sessions/:id/close (the human-only worktree removal) — this menu is now the ONLY close path (the header
+// once had a button, but its "close" label misread as "close the panel"). It sits behind a **confirm prompt**,
+// because a right-click is easy to mis-aim and the removal is destructive. Either gesture calls onChanged so
+// the board reloads and every surface reflects it at once.
 // The menu is its own pop-over (not a board node), so the window stays a thin glance and this owns the gesture.
 
 import { useEffect, useRef, useState } from 'react'

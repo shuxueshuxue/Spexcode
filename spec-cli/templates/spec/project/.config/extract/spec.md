@@ -7,7 +7,8 @@ desc: Reverse-engineer a faithful spec tree out of existing code — responsibil
 kind: mutating
 ---
 Reverse-engineer a spec tree for the target source area(s) below — code that has no specs yet. Aim for a
-tree where every governed file is claimed and `spex lint` is clean, with bodies at contract altitude.
+tree where every governed file is claimed and `spex lint` is clean, with bodies at contract altitude and in
+the codebase's own primary language (a predominantly-Chinese repo → Chinese specs).
 
 {{targets}}
 
@@ -21,16 +22,13 @@ Then grow nodes under that spine:
 - **Decompose by responsibility, not by file.** A node is one job the code does. A fat file split across
   several jobs becomes several nodes that each claim it; one job spanning several files becomes one node
   claiming them all. Every governed file is claimed by at least one node; nest into subtrees where warranted.
-- **Group wide layers; don't mirror the file tree — at every level, the root included.** One-node-per-
-  folder is a smell; the directory layout is a hint, not the decomposition. If a node would have more than
-  ~7 direct children you're under-grouping: add intermediate **sub-domain** nodes that cluster siblings
-  serving one concern (e.g. model-config + model-selection + auth + provider-compat → a single *model*
-  domain), and recurse, until every level reads as a handful of related siblings, not a flat wall. Fold
-  cross-cutting substrate (design system, dialogs, i18n, utilities, platform glue) under one *foundation*
-  node instead of scattering it across the top level, and don't promote a tiny standalone feature to a
-  peer of the major domains when it belongs inside one. A sub-domain node is legitimate — it claims the
-  cluster's barrel/wiring/shared files, so it isn't pure-prose. Equally, split a fat folder that holds
-  several distinct jobs. Group by responsibility, never to hit a number — never invent contrived buckets.
+- **Group wide layers; don't mirror the file tree — at every level, the root included.** One-node-per-folder
+  is a smell. If a node would have more than ~7 direct children you're under-grouping: add intermediate
+  **sub-domain** nodes that cluster siblings serving one concern (e.g. model-config + selection + auth +
+  provider-compat → a *model* domain), and recurse until every level reads as a handful of siblings, not a
+  flat wall. Fold cross-cutting substrate (design system, dialogs, i18n, utilities, platform glue) under one
+  *foundation* node. A sub-domain node claims the cluster's barrel/wiring files (so it isn't pure-prose);
+  equally, split a fat folder holding several distinct jobs. Group by responsibility, never to hit a number.
 - **Stay at contract altitude.** State each node's intent, invariants, and outward behavior — what it
   guarantees and why — not how the code does it.
 - **Never fabricate intent.** Code shows *what it does*, rarely *why*. Read any README/design docs for real
@@ -45,8 +43,9 @@ Then grow nodes under that spine:
 
 **Give every frontend node a loss signal.** A node that governs UI or visual code (`.tsx`/`.jsx`/`.vue`/
 `.svelte`/`.css`, or the dashboard) is a blind spot until it carries a `yatsu.md` — so write one as you
-extract it: a scenario with a **description** (what to look at through the running app) and the **expected**
-result that is zero loss. Frontend scenarios are measured by looking (YATU) — a screenshot filed with
+extract it: a **real user-path** scenario — a goal and the steps to reach it through the running app (never a
+bare render-check), covering a failure/empty/edge state — with a **description** of those steps and the
+**expected** zero-loss result. Frontend scenarios are measured by looking (YATU) — a screenshot filed with
 `spex yatsu eval <node> --image <png> --pass`. Backend nodes don't need one yet; run `spex yatsu scan` to
 list the frontend nodes still uncovered.
 

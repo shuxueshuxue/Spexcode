@@ -124,6 +124,23 @@ function raws(): Raw[] {
   return acc
 }
 
+// @@@ specOwners - which spec node(s) GOVERN a file, by the same claim rule lint/yatsu use (exact path,
+// directory prefix, or *-glob). LIGHT: reads only frontmatter `code:` via raws() — no git history, drift,
+// or diff walk — so a per-edit PostToolUse hook can call it cheaply on every first-touch of a file. Takes
+// an absolute OR repo-relative path; returns {id, desc} per claiming node. More than one = a shared hub
+// file (the caller surfaces that as the "give this file a single owner" signal — see the governed/related
+// split). Empty = uncovered.
+export function specOwners(file: string): { id: string; desc: string }[] {
+  const rel = file.startsWith('/') ? relative(ROOT, file) : file
+  const claims = (cf: string): boolean => {
+    if (cf === rel) return true
+    if (rel.startsWith(cf.replace(/\/+$/, '') + '/')) return true
+    if (cf.includes('*')) return new RegExp('^' + cf.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$').test(rel)
+    return false
+  }
+  return raws().filter((r) => list(r.fm.code).some(claims)).map((r) => ({ id: r.id, desc: str(r.fm.desc) }))
+}
+
 // @@@ diff cache - a commit's patch is immutable, so memo fileDiffAt by (version sha + spec.md path).
 // loadSpecs precomputes every node's latest line-diff for the board (so the latest history item is
 // instant — no per-open fetch + git call), and specDiffAt serves any version's diff on demand over the

@@ -2,7 +2,7 @@
 title: injected-context
 status: active
 hue: 280
-desc: What the harness feeds a launched session so it starts (and stays) spec-aware — a live spec path, never an inlined body, plus a one-shot nudge at the read→write boundary.
+desc: What the harness feeds a launched session so it starts (and stays) spec-aware — a live spec path, a one-shot nudge at the first code access, and a per-edit reminder of which spec governs the file.
 ---
 
 # injected-context
@@ -16,15 +16,19 @@ The harness injects only **pointers and reminders**, so the agent always reads t
 
 ## expanded spec
 
-Two thin injections, both deliberately *non-enforcing* (the Stop gate is the enforcer):
+Three thin injections, all deliberately *non-enforcing* (the Stop gate is the enforcer):
 
 - **[[spec-pointer]]** — when a dispatch names an existing node, append **one line**: the absolute path to
   that node's live `spec.md` inside the new worktree. Never the body. Fail-quiet by absence — an unknown id
   or a `@new` placeholder appends nothing.
-- **[[spec-first]]** — a one-shot `PreToolUse` nudge that fires once, exactly at the first code-mutating
-  edit, telling the agent to read its node's spec and reconcile against it (change the spec if intent
-  changed, else make code honor it). Editing a spec first blesses silently; a code edit first blocks once,
-  then passes.
+- **[[spec-first]]** — a one-shot `PreToolUse` nudge that fires once, at the first code ACCESS (read or
+  edit), telling the agent to read its node's spec and its neighbors and reconcile against it. Touching a
+  spec first blesses silently; a code access first blocks once, then passes. Reading — not just writing —
+  trips it, so an analysis session can't reason straight from code without ever opening the contract.
+- **[[spec-of-file]]** — a per-edit `PostToolUse` annotation that, once per file, names the spec governing
+  the file just edited (and flags a shared-hub file with many owners). Non-blocking — the contract kept in
+  view at the edit, not just at the start.
 
-Together they make spec-awareness the session's starting condition without ever duplicating spec text into
-a prompt: point at the live file, remind at the moment it matters, enforce elsewhere.
+Together they make spec-awareness the session's starting AND running condition without ever duplicating
+spec text into a prompt: point at the live file, ground before the first read, name the owner at each edit,
+enforce elsewhere.

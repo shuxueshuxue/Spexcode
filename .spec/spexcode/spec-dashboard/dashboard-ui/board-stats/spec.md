@@ -6,6 +6,7 @@ session: 89e4d64b-8dde-4bd1-b60c-a3825caaba67
 desc: A glanceable bottom-left strip that counts the per-node badges across the whole tree — composition (status dots), attention (drift nodes + distinct open issues), coverage (yatsu circles) — and walks focus through the nodes behind any chip, one per click.
 code:
   - spec-dashboard/src/BoardStats.jsx
+related:
   - spec-dashboard/src/styles.css
   - spec-dashboard/src/i18n/en.js
   - spec-dashboard/src/i18n/zh.js

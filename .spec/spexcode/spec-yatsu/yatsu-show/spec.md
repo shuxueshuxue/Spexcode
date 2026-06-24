@@ -4,7 +4,7 @@ status: active
 hue: 140
 session: 4f111dfe-6777-423d-a353-da1c68e1a54f
 desc: The CLI face of the measurement timeline — `spex yatsu show [.|<node>] [--json]`, a thin wrapper over the same evalTimeline() the dashboard rides (verdict + expected + freshness), so a terminal agent and the board read ONE engine.
-code:
+related:
   - spec-yatsu/src/cli.ts
 ---
 # yatsu-show

@@ -105,11 +105,17 @@ async function scan(args: string[] = []): Promise<number> {
   const changed = changedOnly ? changedSinceBase(root) : null
   const idx = await driftIndex(root)
   const specs = await loadSpecs()
+  // a file governed by >=2 nodes is a HUB (see governed-related): editing it must not flag every co-owner's
+  // yatsu (the same fan-out lint's drift now avoids). A node is triggered as changed, or called
+  // uncovered-frontend, only by files it SOLELY governs — its own node dir still triggers via the dir check.
+  const governCount = new Map<string, number>()
+  for (const s of specs) for (const f of s.code) governCount.set(f, (governCount.get(f) ?? 0) + 1)
+  const owned = (code: string[]) => code.filter((f) => (governCount.get(f) ?? 0) < 2)
   const yByDir = new Map(yatsuNodes(root).map((n) => [relative(root, n.dir), n]))
   let flaggedNodes = 0, malformed = 0, staleScores = 0, missingScores = 0, uncovered = 0
   for (const s of specs) {
     const dirRel = dirname(s.path)
-    if (changed && !nodeChanged(dirRel, s.code, changed)) continue
+    if (changed && !nodeChanged(dirRel, owned(s.code), changed)) continue
     const y = yByDir.get(dirRel)
     const findings: string[] = []
     if (y) {
@@ -142,7 +148,7 @@ async function scan(args: string[] = []): Promise<number> {
           findings.push(`  • yatsu-drift: '${s.id}' scenario '${sc.name}' is stale (${axes.join(', ')} moved since ${r.codeSha.slice(0, 7)}) — re-measure with \`spex yatsu eval ${s.id}\``)
         }
       }
-    } else if (s.code.some(isUiPath)) {
+    } else if (owned(s.code).some(isUiPath)) {
       uncovered++
       findings.push(`  • yatsu-uncovered: '${s.id}' governs frontend code but has no yatsu.md — give it a scenario (description + expected) so its loss can be measured`)
     }

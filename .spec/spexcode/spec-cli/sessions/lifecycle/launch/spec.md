@@ -3,7 +3,7 @@ title: launch
 status: active
 hue: 280
 desc: Bring a worker up — reclaude wrapper, per-session rendezvous socket, non-truncating prompt, concurrency cap.
-code:
+related:
   - spec-cli/src/sessions.ts
 ---
 

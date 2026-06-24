@@ -151,6 +151,23 @@ function raws(): Raw[] {
   return acc
 }
 
+// @@@ specOwners - which spec node(s) GOVERN a file, by the same claim rule lint/yatsu use (exact path,
+// directory prefix, or *-glob). LIGHT: reads only frontmatter `code:` via raws() — no git history, drift,
+// or diff walk — so a per-edit PostToolUse hook can call it cheaply on every first-touch of a file. Takes
+// an absolute OR repo-relative path; returns {id, desc} per claiming node. More than one = a shared hub
+// file (the caller surfaces that as the "give this file a single owner" signal — see the governed/related
+// split). Empty = uncovered.
+export function specOwners(file: string): { id: string; desc: string }[] {
+  const rel = file.startsWith('/') ? relative(ROOT, file) : file
+  const claims = (cf: string): boolean => {
+    if (cf === rel) return true
+    if (rel.startsWith(cf.replace(/\/+$/, '') + '/')) return true
+    if (cf.includes('*')) return new RegExp('^' + cf.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$').test(rel)
+    return false
+  }
+  return raws().filter((r) => list(r.fm.code).some(claims)).map((r) => ({ id: r.id, desc: str(r.fm.desc) }))
+}
+
 // @@@ diff cache - a commit's patch is immutable, so memo fileDiffAt by (version sha + spec.md path).
 // loadSpecs precomputes every node's latest line-diff for the board (so the latest history item is
 // instant — no per-open fetch + git call), and specDiffAt serves any version's diff on demand over the
@@ -173,7 +190,15 @@ export async function loadSpecs() {
   // they don't block the server's event loop or pay sync fork() cost). Every node below is a pure lookup
   // EXCEPT its precomputed latest diff, which is one cached git show that only re-runs on a new version.
   const [idx, didx] = await Promise.all([historyIndex(ROOT), driftIndex(ROOT)])
-  return Promise.all(raws().map(async (r) => {
+  // @@@ hub attribution - a file listed in `code:` by >=2 nodes is a HUB with no single owner; per-node
+  // drift on it fans the SAME change across every co-owner (noise the agent learns to ignore — see
+  // [[governed-related]]). Count governors once, then exclude hub files from a node's driftFiles: a hub
+  // gets ONE `hub` lint warning + the live edit-time flag instead of N false drifts. Drift resumes the
+  // moment a file has a single governor (the other claimants moved it to `related:`).
+  const allRaws = raws()
+  const governCount = new Map<string, number>()
+  for (const rr of allRaws) for (const f of list(rr.fm.code)) governCount.set(f, (governCount.get(f) ?? 0) + 1)
+  return Promise.all(allRaws.map(async (r) => {
     const h = rowsFor(idx, r.relPath)
     // @@@ real session attribution - the node's session IS the Claude Code session that authored its
     // latest version (the commit's `Session:` trailer, auto-stamped from CLAUDE_CODE_SESSION_ID). Since
@@ -187,6 +212,7 @@ export async function loadSpecs() {
     const code = list(r.fm.code)
     const S = h[0]?.hash || ''
     const driftFiles = code
+      .filter((f) => (governCount.get(f) ?? 0) < 2)   // hub files (>=2 governors) drift nobody — see governCount
       .map((f) => ({ file: f, behind: driftFor(didx, S, f) }))
       .filter((d) => d.behind > 0)
     const drift = driftFiles.reduce((a, d) => a + d.behind, 0)
@@ -205,6 +231,7 @@ export async function loadSpecs() {
       hue: Number(str(r.fm.hue, '210')),
       desc: str(r.fm.desc),
       code,
+      related: list(r.fm.related),   // files the node references but does NOT own — counted for coverage, never for drift/yatsu
       version: h.length,
       reason: h[0]?.reason || '',
       // @@@ lastEdited - ISO date of the node's latest version commit (h is newest-first), or null

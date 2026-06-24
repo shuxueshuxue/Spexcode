@@ -4,9 +4,10 @@ status: active
 hue: 280
 desc: A send stamps WHO sent it + a reply hint into the delivered message, so the recipient can reply over the same send.
 code:
+  - spec-cli/src/agent-reply-channel.test.ts
+related:
   - spec-cli/src/sessions.ts
   - spec-cli/src/cli.ts
-  - spec-cli/src/agent-reply-channel.test.ts
 ---
 
 # agent-reply-channel

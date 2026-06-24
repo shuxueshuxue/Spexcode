@@ -3,7 +3,7 @@ title: session-activity
 status: active
 hue: 260
 desc: Every session row shows the worker's own live one-line summary of what it's doing now — read free from its tmux pane title.
-code:
+related:
   - spec-cli/src/sessions.ts
   - spec-dashboard/src/SessionWindow.jsx
   - spec-dashboard/src/styles.css

@@ -4,12 +4,13 @@ status: active
 hue: 190
 desc: The project's self-identifying name (a configured dashboard.title, else the backend's launch folder) names the browser tab and the session-board list header, so every per-project viewer shows which backend it serves.
 code:
+  - spec-dashboard/index.html
+related:
   - spec-cli/src/board.ts
   - spec-cli/src/layout.ts
   - spec-dashboard/src/data.js
   - spec-dashboard/src/App.jsx
   - spec-dashboard/src/SessionInterface.jsx
-  - spec-dashboard/index.html
 ---
 # tab-title
 

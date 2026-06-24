@@ -4,10 +4,11 @@ hue: 150
 desc: A fully-derived proof of work for a session in review — its yatsu evidence (measured loss), the diff, and the merge gates, rendered as one self-contained HTML on the fly when viewed. One backend engine; CLI, dashboard, and a bare browser are thin faces. No agent authoring.
 code:
   - spec-yatsu/src/proof.ts
+  - spec-dashboard/src/ReviewProof.jsx
+related:
   - spec-cli/src/index.ts
   - spec-cli/src/cli.ts
   - spec-cli/src/client.ts
-  - spec-dashboard/src/ReviewProof.jsx
   - spec-dashboard/src/SessionInterface.jsx
 ---
 # review-proof

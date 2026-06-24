@@ -10,6 +10,7 @@ code:
   - spec-dashboard/src/color.js
   - spec-dashboard/src/Legend.jsx
   - spec-dashboard/src/Modal.jsx
+related:
   - spec-dashboard/src/data.js
   - spec-dashboard/src/styles.css
 ---

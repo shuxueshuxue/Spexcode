@@ -3,7 +3,7 @@ title: runtime
 status: active
 hue: 280
 desc: The per-worktree `.session/` directory — every harness-written runtime artifact under one ignored, mergeable-clean folder, with a bounded compat shim for legacy flat files.
-code:
+related:
   - spec-cli/src/layout.ts
   - spec-cli/src/sessions.ts
 ---

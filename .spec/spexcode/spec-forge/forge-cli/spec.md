@@ -5,6 +5,7 @@ hue: 280
 desc: Exposes spec-forge's reads on the real `spex` CLI — `spex forge links` (node → linked issues/PRs) and `spex forge eval-pending` (node → evaluation owed). Read-only; reading is live.
 code:
   - spec-forge/src/cli.ts
+related:
   - spec-cli/src/cli.ts
 ---
 # forge-cli

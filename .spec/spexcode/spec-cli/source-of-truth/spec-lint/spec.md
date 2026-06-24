@@ -21,7 +21,7 @@ children — one comprehensibility ceiling, on depth and breadth.
 
 ## expanded spec
 
-`spex lint` (the `spex` CLI, `cli.ts` → `lint.ts`, over `loadSpecs()` from `specs.ts`) checks six
+`spex lint` (the `spex` CLI, `cli.ts` → `lint.ts`, over `loadSpecs()` from `specs.ts`) checks seven
 rules:
 
 - **integrity** (error): every file a spec lists in `code:` exists — broken links block.
@@ -31,7 +31,8 @@ rules:
 - **coverage** (warn): every governed source file is claimed by ≥1 spec (no orphan code); and roots
   matching no files are flagged "governing nothing", so an adopter who never set `lint.governedRoots`
   isn't shown a falsely-clean board.
-- **drift** (warn): a governed file has commits newer than its spec's latest version → maybe stale.
+- **drift** (warn): a governed file has commits newer than its spec's latest version → maybe stale. A file
+  governed by ≥2 nodes (a **hub**) is excluded — no single owner, so the `hub` rule flags it instead.
 - **altitude** (warn): a body states *intent and contract*, not a re-narration of the implementation.
   The rule can't judge meaning, so it fires on cheap proxies of a mechanics dump — grown long (lines /
   chars over a soft budget), thick with code identifiers, or step-by-step how-to. Budgets default so
@@ -39,10 +40,13 @@ rules:
 - **breadth** (warn): a node with **≥ `lint.maxChildren`** direct children (default 8) — altitude's
   structural twin, the same "hold it in your head" limit on tree breadth, so passing altitude can't relocate
   sprawl into a flat fan-out. Advisory: a flat list of true peers is sometimes right, so it asks, not mandates.
+- **hub** (warn): one summary line counting files governed by ≥2 nodes — shared hubs with no single owner
+  that `drift`/yatsu skip. Remedy: give each ONE owner in `code:`, reference it elsewhere via **`related:`**
+  (counts for coverage, never drift/yatsu) — breadth's mirror (too many owners, not too many children). See [[governed-related]].
 
-Reusable as a **product**, not a SpexCode-only script: every project-shaped value — governed roots, source
-and code-identifier extensions, altitude budgets, the breadth limit — is read from an optional
-**`spexcode.json`** (`lint` key), defaulting to values tuned to this tree; absent the file lint is unchanged.
+Reusable as a **product**, not a SpexCode-only script: every project-shaped value (roots, extensions,
+budgets, the breadth limit) is read from an optional **`spexcode.json`** (`lint` key), defaulting to values
+tuned to this tree; a different layout or language overrides what fits.
 
 No file hashes are stored — git is the hash database, so drift is derived live. When
 drift exists, `spex lint` prints **remediation guidance**: drift can't be auto-fixed, so the agent must
@@ -54,16 +58,9 @@ block; bypass with `SPEXCODE_SKIP_LINT=1`.
 
 ### Spec-OK — acknowledging an implementation-only change
 
-Not every commit ahead of a spec means the spec is stale — a refactor can change a governed file while
-the spec stays true. Such a commit may carry a **`Spec-OK: <node-id>`** trailer (*"keeps `<node>`'s spec
-valid"*); drift skips a commit that acknowledges the node it's measured from, so `Spec-OK: A` only quiets
-A's drift, never B's.
-
-`spex ack <node-id>… --reason "<why>"` (`cli.ts`) stamps the trailer onto **HEAD** (`--amend`, beside
-`Session:`), taking several nodes in one amend so a commit to a shared file acks every co-owner.
-`--reason` is **required but not stored** — git keeps only `Spec-OK: <node>`; it forces the agent to
-*articulate* why each spec still holds before quieting it.
-
-A sharp edge: git calls inside the hook must route through `git.ts`'s `git()` helper, which strips the
-inherited `GIT_DIR`/`GIT_INDEX_FILE` — else repo discovery resolves to the cwd and lint silently sees
-zero specs (caught only by testing the real hook, not `spex lint` by hand).
+A commit ahead of a spec isn't always staleness — a refactor can change a governed file while the spec
+stays true. Such a commit carries a **`Spec-OK: <node-id>`** trailer; drift skips the node it acknowledges
+(`Spec-OK: A` quiets only A). `spex ack <node>… --reason "<why>"` stamps it onto HEAD (`--amend`); the
+reason is **required but not stored** — it forces the agent to articulate why the spec still holds before
+quieting it. (Hubs now drift nobody, so the old "ack every co-owner of a shared file" dance is largely
+gone — see the `hub` rule.)

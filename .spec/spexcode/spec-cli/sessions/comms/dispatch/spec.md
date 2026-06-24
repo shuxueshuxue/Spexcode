@@ -3,7 +3,7 @@ title: dispatch
 status: active
 hue: 280
 desc: Deliver a prompt to a live agent over its rendezvous socket — socket-only, fail-loud — plus the merge intent.
-code:
+related:
   - spec-cli/src/sessions.ts
 ---
 

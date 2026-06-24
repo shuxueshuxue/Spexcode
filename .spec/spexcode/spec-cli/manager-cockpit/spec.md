@@ -3,7 +3,7 @@ title: manager-cockpit
 status: active
 hue: 200
 desc: The cockpit API — server-computed verbs that let a manager review/act on sessions without hand-running git.
-code:
+related:
   - spec-cli/src/index.ts
   - spec-cli/src/sessions.ts
   - spec-cli/src/cli.ts

@@ -17,6 +17,18 @@ scenarios:
       A's row is gone from the list. Pass 2: having switched to B before the close settles, the view STAYS
       on B — the close never yanks you back to New Session. In neither case is the selected tab left
       pointing at a session the board no longer lists.
+  - name: exit-command-closes
+    description: >
+      Through the running dashboard in a real browser, open the session interface (Enter) on a LIVE
+      (non-offline) session whose `❯` box is enabled. Type exactly `/exit` into the box (dismiss the `/`
+      completion menu if it opened, so Enter dispatches rather than completes) and press Enter. Watch the
+      session list and active pane. Screenshot the tab list + pane before typing and after Enter settles.
+    expected: |
+      The session closes outright — its row drops off the list and the view lands on New Session, the same
+      removal the row-menu Close performs — but with NO confirmation prompt (typing the exact command IS the
+      deliberate confirmation). The literal text `/exit` is never dispatched into the terminal/agent (the
+      read-only pane shows no new `/exit` line). Any other text, including `/exit` with trailing words,
+      dispatches normally to the agent.
 ---
 
 # session-console — yatsu

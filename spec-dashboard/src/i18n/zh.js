@@ -98,8 +98,6 @@ export default {
   },
 
   sessionWindow: {
-    title: '会话',
-    newTitle: '打开会话界面（⏎）',
     rowTitle: '单击将图锁定到此会话 · 双击打开它 · 右键重命名或关闭',
     lockedTitle: '图已锁定到此会话——再次单击解除',
     emptyBefore: '没有活动的工作树——按 ',

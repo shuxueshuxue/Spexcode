@@ -23,7 +23,7 @@ Surface each spec node's bound open issues on the dashboard. Backend: fold each 
 count + list into the board via a resident `ForgeCache`, served on the existing `/api/board` nodes —
 non-blocking (serve the last reconcile, refresh in the background) and silent when there's no forge/`gh`
 (no badge, no error). Frontend: one glance badge on the tile (count, hue distinct from the status dot, like
-the drift-badge), only when > 0; the issue LIST is read in the left [[focus-panel]] for the focused node
+the drift-badge), only when > 0; the issue LIST is read in the [[focus-panel]] for the focused node
 (alongside that node's scenarios — Issues and Scenarios as equal citizens), not in a card popped on the node.
 The badge is WORK, distinct from the derived status dot.
 
@@ -47,7 +47,7 @@ sibling's churn there is that feature, not this node's drift.
 first row gains a single badge: the **count**, in a hue distinct from the status dot and from the drift-badge
 (so the three signals never blur). Status dot = derived state; drift-badge = code ahead of spec; this badge =
 **bound work**. The badge is absent at zero. The detail — the full open+closed list, each issue a card
-(number, state, full title, link to the forge) — is read in the left [[focus-panel]] for the focused node,
+(number, state, full title, link to the forge) — is read in the [[focus-panel]] for the focused node,
 **beside that node's scenarios**, so the two stateful kinds of bound work share one surface and neither is
 privileged. (The node-info Issues tab keeps the same list as the deep view.) There is no longer a card popped
 on the node's own hover/focus. The badge renders inside the node tile ([[node-graph]]) and draws its copy

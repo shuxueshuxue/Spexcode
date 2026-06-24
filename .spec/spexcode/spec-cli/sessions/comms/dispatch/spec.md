@@ -56,5 +56,6 @@ node/<id>: <reason>` style by the **merge prompt** at merge time (the one place 
 it). No standing `ritual` config node is needed — the flow is the product default, not a per-project
 opinion. The one task-level detail the directive prompts keep is "propose merge, don't merge".
 
-The **separate raw nav-key channel** (`rawKey`) keeps its own `tmux send-keys` path — the single-keystroke
-channel for driving the agent's TUI menus, **not** a prompt fallback.
+The **separate raw nav-key channel** (`rawKey`) keeps its own `tmux send-keys` path — the per-keystroke
+channel for driving the agent's TUI menus, carrying named keys, printable chars, and `⌃`/`⌥`/`⌘` modifier
+combos (as `C-`/`M-`/`S-` tokens) so nav mode drives the terminal, **not** a prompt fallback.

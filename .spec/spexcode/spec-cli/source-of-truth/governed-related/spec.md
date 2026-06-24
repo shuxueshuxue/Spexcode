@@ -35,6 +35,10 @@ co-owners. The `hub` lint rule reports them in one summary line with the remedy.
 the same at the edit (flags a hub, stays silent on a cleanly-owned file). The remedy for a hub: move it out
 of the co-owners' `code:` into `related:`, leaving ONE owner — drift/yatsu then resume on that owner.
 
-Still ahead: the present-tense "this commit touched files related to specs X, Y — glance at them" nudge for
-related files (a pointer, not a verdict); deriving relatedness from the import graph so a node declares only
-what it owns; and the migration itself — the ~21 hubs the `hub` warning now lists each await a single owner.
+The migration is DONE: all 21 hubs now have a single owner (the `hub` warning reads 0), via two new
+foundation nodes ([[sessions-core]], [[dashboard-shell]]), the [[spec-cli]] package node owning the
+server/CLI entries, and a clear owner for the rest. Still ahead: the present-tense "this commit touched
+files related to specs X, Y — glance at them" nudge for related files (a pointer, not a verdict); deriving
+relatedness from the import graph so a node declares only what it owns; and the residual smell the migration
+exposed — `sessions.ts` is a monolith whose slice-features ([[dispatch]], [[graph]], [[session-selectors]],
+[[agent-reply-channel]], [[spec-pointer]]) now hold no code of their own until a code split gives each one back.

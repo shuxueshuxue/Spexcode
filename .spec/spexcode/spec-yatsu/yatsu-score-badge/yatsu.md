@@ -1,15 +1,15 @@
 ---
 scenarios:
-  - name: badge-renders
+  - name: count-renders
     description: >-
-      Open the node-graph and look at the cards. A node whose latest yatsu score is a fresh pass
-      shows a green ringed ✓ score badge beside its version; a node with no scenario (no yatsu.md)
-      shows NO score badge at all. The badge is a ringed circle, visually distinct from the filled
-      status dot and the magenta issue badge.
+      Open the node-graph and look at the tiles. A node with scenarios shows a per-scenario COUNT
+      pill — ✓ satisfied/total (e.g. ✓1/1, ✓0/2) — beside its version, coloured by the worst-first
+      aggregate (green all fresh-pass, red any fresh fail, grey stale/blind-spot). A node with no
+      yatsu.md shows NO count at all. The count never reads as the filled status dot.
     expected: >-
-      spec-dashboard (a fresh pass reading) renders the green ringed ✓; the nodes without a
-      yatsu.md — .config, config, spec-cli, spec-forge, spec-yatsu — render no score badge. The
-      ringed badge never reads as the node's status dot.
+      Nodes with scenarios render the ✓X/Y count (a fully-satisfied node green, an outstanding one
+      grey/red); the nodes without a yatsu.md render no count; the count never reads as the status
+      dot. Issue badge (◆N) and scenario count sit side by side on a node that has both.
 ---
 # yatsu.md — yatsu-score-badge
 

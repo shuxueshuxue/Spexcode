@@ -88,6 +88,10 @@ FRONTMATTER: a \`scenarios:\` list (a YAML block sequence of mappings). Each sce
   expected     REQUIRED. What ZERO loss looks like — the target the measurement is compared against.
   test         optional. A repo path to a co-located runnable file (a playwright.spec.ts, a script)
                the agent MAY run by hand. Not a driver — yatsu never executes it.
+  code         optional. A comma-separated list of concrete repo files THIS scenario depends on (\`a.ts, b.ts\`
+               or a flow list \`[a.ts, b.ts]\`) — its own slice of the code freshness axis, so scenarios on one
+               node go stale independently. Absent → the scenario inherits the whole node's \`code:\` list.
+               Each path must exist (\`spex yatsu scan\` flags a ghost as \`yatsu-schema\`).
 Multi-line prose uses YAML block scalars: \`|\` keeps newlines, \`>\` folds wrapped lines to spaces.
 
 THE SCHEMA IS ENFORCED (closed field set, three required fields, unique names). A missing required field,

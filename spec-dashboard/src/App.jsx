@@ -576,7 +576,17 @@ export default function App() {
   const t = useT()
   const isMobile = useIsMobile()
   const [board, setBoard] = useState(null)
-  const reload = useCallback(() => loadBoard().then(setBoard).catch(() => {}), [])
+  // @@@ freshest-issued wins - the board is polled AND reloaded on demand (a close/rename calls reload()),
+  // so several loadBoard()s can be in flight at once. They resolve out of order — and an OLDER one carries an
+  // OLDER backend snapshot, so blindly setBoard()ing whichever lands last can resurrect just-removed state:
+  // close a session, its post-close reload paints it gone, then a poll that was already in flight (snapshotted
+  // BEFORE the worktree removal) lands late and the row flickers back until the next 4s poll. Stamp each call
+  // with a monotonic seq and apply only the latest-issued one; a superseded response is dropped, never painted.
+  const reqSeq = useRef(0)
+  const reload = useCallback(() => {
+    const mine = ++reqSeq.current
+    return loadBoard().then((b) => { if (mine === reqSeq.current) setBoard(b) }).catch(() => {})
+  }, [])
   useEffect(() => {
     reload()
     const id = setInterval(reload, 4000)

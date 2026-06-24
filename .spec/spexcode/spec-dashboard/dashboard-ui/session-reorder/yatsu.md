@@ -39,4 +39,3 @@ exactly the dragged row (its `sortKey` set to the midpoint of its new neighbours
 keeps its real birth time, and the order persists across surfaces and restarts because it is stored in
 `.session`, not the browser. Evidence is a before/after screenshot pair of the tab list (plus the
 top-left window glance for the cross-surface check).
-</content>

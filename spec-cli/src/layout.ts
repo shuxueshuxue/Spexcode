@@ -41,8 +41,15 @@ export function readConfig(root: string): Config {
 // but the common dir is shared, so anything that must be ONE copy across all worktrees (and never end up
 // committed) belongs under it — e.g. yatsu's content-addressed pixel cache. Same `git rev-parse` mainBranch
 // uses, via the env-stripped git() so a hook's exported GIT_DIR can't misdirect it.
+// memoized: the git common dir is a PROCESS CONSTANT (it never changes for a running backend), but
+// mainBranch()/mainRoot() resolve it on every call — without the cache that was a `git rev-parse` fork
+// per call, ~60 forks on a single board build (mainBranch is called per session/overlay). Cache it like
+// [[source-of-truth]]'s repoRoot does. (HEAD/branch CAN move, so mainBranch still reads those live below;
+// only the common-dir path itself is cached.)
+let commonDirCache: string | null = null
 export function gitCommonDir(): string {
-  return git(['rev-parse', '--path-format=absolute', '--git-common-dir']).trim()
+  if (commonDirCache === null) commonDirCache = git(['rev-parse', '--path-format=absolute', '--git-common-dir']).trim()
+  return commonDirCache
 }
 
 // @@@ mainBranch - the source-of-truth BRANCH: what worktrees fork from, what merges land on, what review
@@ -55,7 +62,7 @@ export function gitCommonDir(): string {
 // commit-gate can call it too.
 export function mainBranch(): string {
   try {
-    const mainCheckout = dirname(git(['rev-parse', '--path-format=absolute', '--git-common-dir']).trim())
+    const mainCheckout = dirname(gitCommonDir())
     const override = readConfig(mainCheckout).mainBranch?.trim()
     if (override) return override
     const cur = git(['-C', mainCheckout, 'symbolic-ref', '--short', 'HEAD']).trim()

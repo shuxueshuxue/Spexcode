@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url'
 import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, type ReviewDiffFile } from './git.js'
 import { guardWorktree } from './resilience.js'
 import { loadSystemConfig, loadSpecs, type ConfigPreset } from './specs.js'
-import { mainBranch, statePath, runtimePath, RUNTIME_DIR } from './layout.js'
+import { mainBranch, gitCommonDir, statePath, runtimePath, RUNTIME_DIR } from './layout.js'
 
 // @@@ sessions - the WORKTREE is the durable unit; tmux is a disposable runtime handle. Each session
 // worktree carries an untracked `.session` file (the source of truth) that survives a kill / reboot /
@@ -212,7 +212,7 @@ export async function alive(id: string): Promise<boolean> { return tmuxOk(['has-
 
 // worktrees + branches are created off MAIN even when the server runs inside a worktree.
 function mainRoot(): string {
-  try { return dirname(git(['rev-parse', '--path-format=absolute', '--git-common-dir']).trim()) }
+  try { return dirname(gitCommonDir()) }
   catch { return repoRoot() }
 }
 

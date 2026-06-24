@@ -527,8 +527,14 @@ body {
 /* ---- top-right session window (always-on glance) ---- */
 .sesswin {
   position: absolute; top: 48px; left: 16px; z-index: 6; width: 232px;
+  /* a bounded glance, never a curtain: cap the height at ~80% of the viewport AND keep it clear of
+     the bottom .board-stats strip — top:48px offset + ~64px reserved for that strip and a gap — so
+     a long session list reveals its overflow by wheel/scrollbar inside the window instead of
+     extending down over the stats bar below. overflow-x stays hidden to keep the rounded corners. */
+  max-height: min(80vh, calc(100vh - 112px));
   background: var(--paper); border: 1px solid var(--line); border-radius: 6px;
-  box-shadow: 0 6px 22px rgba(101,123,131,.16); overflow: hidden;
+  box-shadow: 0 6px 22px rgba(101,123,131,.16);
+  overflow-y: auto; overflow-x: hidden;
   font-size: 12px;
 }
 .sesswin-empty { padding: 12px 10px; color: var(--muted); font-size: 11px; line-height: 1.5; }

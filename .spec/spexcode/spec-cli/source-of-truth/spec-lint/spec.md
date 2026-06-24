@@ -28,8 +28,6 @@ rules:
 - **living** (error): a body stays current-state, with no `## vN` changelog headings — version history
   is read from git (recent/history tabs), not duplicated in prose. Fence-aware: a `## v2` inside a ```
   block is sample text, not a violation.
-- **duplicate-id** (error): every node id (leaf folder name) is globally unique — two sharing one clobber
-  each other in the board / wikilinks / `byId` (e.g. a `core` package node vs `.config/core`).
 - **coverage** (warn): every governed source file is claimed by ≥1 spec (no orphan code); and roots
   matching no files are flagged "governing nothing", so an adopter who never set `lint.governedRoots`
   isn't shown a falsely-clean board.

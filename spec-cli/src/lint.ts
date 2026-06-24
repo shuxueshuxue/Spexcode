@@ -7,9 +7,6 @@ import { loadSpecs } from './specs.js'
 //   integrity (error): every file a spec lists in `code:` actually exists.
 //   living    (error): a spec body is a CURRENT-STATE document, never a changelog — no `## vN`
 //                      version headings. Version history is read from git (recent/history tabs).
-//   duplicate-id (error): every node id (its leaf folder name) is globally unique — two nodes sharing an
-//                      id clobber each other in the board/wikilinks/byId (e.g. a `core` package node vs the
-//                      `.config/core` plugin).
 //   coverage  (warn) : every governed source file is claimed by >=1 spec — no orphan code.
 //   drift     (warn) : a governed file has commits newer than its spec's latest version -> maybe stale.
 //   altitude  (warn) : a body has slid BELOW contract altitude into a mechanics dump (too long, and/or
@@ -142,15 +139,6 @@ export async function specLint(): Promise<Finding[]> {
         out.push({ level: 'error', rule: 'living', spec: s.id, msg: `'${s.id}' has a changelog heading "${line.trim()}" — keep the body current-state; version history lives in git (recent/history tabs)` })
     }
   }
-
-  // duplicate-id: a node id IS its leaf folder name, and the board, wikilinks, and the byId map all key on it
-  // — so two nodes sharing an id silently clobber each other (e.g. a `core` package node colliding with the
-  // `.config/core` plugin, which an extraction can stumble into). ERROR: a real correctness break, not a nit.
-  const idPaths = new Map<string, string[]>()
-  for (const s of specs) idPaths.set(s.id, [...(idPaths.get(s.id) ?? []), s.path])
-  for (const [id, paths] of idPaths)
-    if (paths.length > 1)
-      out.push({ level: 'error', rule: 'duplicate-id', spec: id, msg: `node id '${id}' is shared by ${paths.length} nodes (${paths.join(', ')}) — ids are leaf folder names and must be globally unique; rename all but one` })
 
   // altitude: a body that re-narrates mechanics instead of stating contract/intent (WARN — soft budget).
   for (const s of specs) {

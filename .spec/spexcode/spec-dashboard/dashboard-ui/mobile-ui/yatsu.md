@@ -9,10 +9,11 @@ scenarios:
       colour (computed `color`) on the list rows and in the opened detail. Screenshot the sessions list and
       one detail.
     expected: |
-      Every status word — on the list rows and in the opened detail — is painted by its semantic hue from
-      the single STATUS_COLOR map (working green rgb(133,153,0), asking yellow rgb(181,137,0), error red,
-      review/done blue, parked cyan, and the inactive rest idle/starting/queued/close-pending/offline muted
-      grey rgb(147,161,161)) — the SAME colour the desktop surfaces show, never a flat uniform grey.
+      Every status word — on the list rows and in the opened detail — is painted by its bucket hue from the
+      single STATUS_COLOR map (four hues: working green rgb(133,153,0); the waiting-on-you states
+      asking/review/done yellow rgb(181,137,0); error red; everything inactive
+      idle/starting/queued/close-pending/parked/offline muted grey rgb(147,161,161)) — the SAME colour the
+      desktop surfaces show, never a flat uniform grey.
 ---
 
 # mobile-ui — yatsu

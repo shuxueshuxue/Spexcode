@@ -40,8 +40,9 @@ The file formats an agent authors — run these for the full schema:
 
 const SPEC = `spex guide spec — the spec.md file format
 
-A spec node is a DIRECTORY under .spec/<project>/…/<id>/ holding a spec.md. The leaf dir name is the
-node's id (the same id \`spex board\`, \`ack\`, and a node/<id> branch use). A spec states a node's PRESENT
+A spec node is a DIRECTORY under .spec/<project>/…/<id>/ holding a spec.md. The node's id is its leaf dir
+name when that is globally unique, else the shortest parent-qualified path-suffix that disambiguates (so ids
+are unique by construction) — the same id \`spex board\`, \`ack\`, and a node/<id> branch use. A spec states a node's PRESENT
 intent at CONTRACT altitude — what it guarantees and why — and is rewritten in place as intent changes;
 version history is git's job, never a changelog in the body.
 

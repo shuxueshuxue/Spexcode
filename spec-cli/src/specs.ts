@@ -118,9 +118,36 @@ function walk(dir: string, parent: string | null, acc: Raw[]) {
   }
 }
 
+// @@@ unique-by-construction ids - a node's id was basename(dir), so two folders sharing a leaf name anywhere
+// in the tree (a `core` package vs the `.config/core` plugin) silently clobbered each other in the id-keyed
+// board / wikilinks / CLI. Re-key every node to the SHORTEST trailing path-suffix that is globally unique: a
+// node keeps its bare leaf name when that's unique (the common case — nothing changes), and only a real
+// collision grows the id by minimal parent qualification (`gugu/core` vs `.config/core`). Parent links are
+// recomputed by path-ancestry, so a basename collision can't leak into them either. The full path is always
+// unique, so the suffix search always terminates. walk's basename id/parent are placeholders this overrides.
+function reId(acc: Raw[]): void {
+  const segs = acc.map((r) => r.relPath.split(/[/\\]/).slice(1, -1))   // path under .spec, minus 'spec.md'
+  const suffix = (s: string[], k: number) => s.slice(s.length - k).join('/')
+  for (let i = 0; i < acc.length; i++) {
+    const s = segs[i]
+    let k = 1
+    while (k < s.length && segs.some((o, j) => j !== i && o.length >= k && suffix(o, k) === suffix(s, k))) k++
+    acc[i].id = suffix(s, k)
+  }
+  for (let i = 0; i < acc.length; i++) {
+    let best = -1
+    for (let j = 0; j < acc.length; j++) {
+      const o = segs[j], s = segs[i]
+      if (j !== i && o.length < s.length && o.every((seg, x) => seg === s[x]) && (best < 0 || o.length > segs[best].length)) best = j
+    }
+    acc[i].parent = best >= 0 ? acc[best].id : null
+  }
+}
+
 function raws(): Raw[] {
   const acc: Raw[] = []
   if (existsSync(SPEC_DIR)) walk(SPEC_DIR, null, acc)
+  reId(acc)
   return acc
 }
 

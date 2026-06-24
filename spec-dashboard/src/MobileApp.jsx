@@ -3,7 +3,7 @@ import { Avatar } from './avatar.jsx'
 import { STATUS, GLYPH } from './SpecNode.jsx'
 import { SpecPane, HistoryPane, IssuesPane, EditPane, useHistory, panesFor } from './NodeView.jsx'
 import { SessionRow } from './SessionWindow.jsx'
-import { sessionName } from './session.js'
+import { sessionName, STATUS_COLOR } from './session.js'
 import { useT } from './i18n/index.jsx'
 
 // @@@ MobileApp - the touch-first face of the SAME board the desktop renders. The desktop's spec GRAPH
@@ -120,7 +120,7 @@ function MobileSessions({ sessions, openId, setOpenId, byId, goToNode }) {
           <Avatar seed={open.id} status={open.status} />
           <div className="m-sess-meta">
             <span className="m-sess-name">{sessionName(open)}</span>
-            <span className="m-sess-status">{t(`status.${open.status}`)}</span>
+            <span className="m-sess-status" style={{ color: STATUS_COLOR[open.status] }}>{t(`status.${open.status}`)}</span>
           </div>
         </div>
         {open.activity && <div className="m-sess-activity">{open.activity}</div>}

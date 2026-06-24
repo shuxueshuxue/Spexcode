@@ -9,7 +9,7 @@
 import { Avatar } from './avatar.jsx'
 import { labelColor } from './color.js'
 import { GLYPH } from './SpecNode.jsx'
-import { sessionName } from './session.js'
+import { sessionName, STATUS_COLOR } from './session.js'
 import { useT } from './i18n/index.jsx'
 
 // @@@ opSummary - a session's overlay tally: how many nodes it is changing, by op ("+2 ~1 ✕1"). Exported
@@ -38,7 +38,7 @@ export function SessionRow({ s, locked }) {
       <span className="sess-id">{sessionName(s)}</span>
       {locked
         ? <span className="sess-lock" title={t('sessionWindow.lockedTitle')}>🔒</span>
-        : <span className="sess-status">{t(`status.${s.status}`)}</span>}
+        : <span className="sess-status" style={{ color: STATUS_COLOR[s.status] }}>{t(`status.${s.status}`)}</span>}
       {ops && <span className="sess-ops">{ops}</span>}
       {s.activity && <span className="sess-activity" title={s.activity}>{s.activity}</span>}
     </>

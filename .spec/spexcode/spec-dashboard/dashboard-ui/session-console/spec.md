@@ -71,7 +71,15 @@ fallback covers a session that ends or is closed elsewhere, so the selection nev
 board no longer has.
 
 **SessionWindow** is the read-only glance, built from the shared **`SessionRow`** face — avatar (no status
-dot) · name · status (or 🔒 when locked) · pending-op count · activity. A single click **locks** the board onto
+dot) · name · the **colour-coded status word** (or 🔒 when locked) · pending-op count · activity. A single click **locks** the board onto
 that session (overlays light, rest grey, focus jumps to its first changed node, see [[keyboard-nav]]); a
 no-overlay session still locks un-greyed; a second click releases; **double-click opens** its board (mouse-side `⏎`). The **interface's own tabs** render the same `SessionRow` with those gestures **inverted**:
-single click switches tab, double-click locks. All surfaces share name and status from `session.js`.
+single click switches tab, double-click locks.
+
+All surfaces share name and status from `session.js`, whose single **`STATUS_COLOR`** map paints **both** the
+liveness dot **and** the status word the SAME hue everywhere they appear (window row, console tab + header,
+@-mention and search rows, the relationship graph, the mobile card). The hues are a **6-bucket semantic code** —
+green = `working`, yellow = `asking`, red = `error`, blue = `review`/`done`, cyan = `parked`, grey = the
+inactive rest (`idle`/`starting`/`queued`/`close-pending`/`offline`) — so a glance answers *does this session
+need me?* before the word is even read; the word still spells the exact state. Green for `working` also matches
+the avatar's liveness ring, so dot, word, and ring never disagree.

@@ -1,1 +1,2 @@
 {"scenario":"language-switch-retranslates","codeSha":"7e2818cabc283d88d4b37b0091660011af836dad","blob":"04206a3b3580df52a7f8bee39534d7f74f03a592b94e48c55b6b32c8c6f19073","blobKind":"image","evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-24T15:37:59.951Z"}
+{"scenario":"language-switch-retranslates","codeSha":"d43cfd2c54d95eb63bdcdad07634a31e3d51f5a4","blob":"e815f0af55308e6f118b50d032a9b6de8e04b91b051a3c1e9139bf5b6b03d7c1","blobKind":"image","evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-24T17:43:36.345Z"}

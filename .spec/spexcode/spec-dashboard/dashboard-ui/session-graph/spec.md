@@ -45,7 +45,12 @@ keymap and edge vocabulary, instead of a standing wall of text.
 
 Each node is a session, drawn with the **same** seed-to-hue colour and avatar the rest of the dashboard keys
 off its session id ([[node-graph]]), so a face here matches that session everywhere. Layout is a **network**,
-not a tree: sessions sit on a radial ring so the directed edges read as a web of relationships.
+not a tree, and **not a fixed ring** — it is **force-directed**: related sessions are pulled together into
+**clusters** while unlinked ones drift to the margins, so the edges stay **short** instead of slashing straight
+across a ring. It is **deterministic and still** — the same topology always yields the same frame, and the web
+**re-settles only when the topology changes** (a watch starting or stopping, a session opening or closing), so
+across the edge polls it never jitters. Edges anchor **border-to-border** rather than to fixed handles, so an
+arrow leaves and lands cleanly whichever way two nodes settle.
 
 The edges are **derived from live watches, never user-drawn** (see [[sessions]]): the view only **polls**,
 so a watch starting or stopping makes its arrow appear or vanish on its own, each drawn in the

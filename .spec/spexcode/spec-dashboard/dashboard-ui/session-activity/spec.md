@@ -6,6 +6,7 @@ desc: Each session row's headline IS the worker's own live one-line self-summary
 related:
   - spec-cli/src/sessions.ts
   - spec-dashboard/src/SessionWindow.jsx
+  - spec-dashboard/src/SessionInterface.jsx
   - spec-dashboard/src/styles.css
 ---
 
@@ -48,7 +49,17 @@ metadata we add later. When this row is the **locked** selection a 🔒 sits at 
 status word **stays** on Row 2 (locking no longer hides it). The face is shared, so the top-left window, the
 Enter session tabs, and the mobile list all show the identical headline + status line.
 
+**The console header reads the same headline.** The Enter interface's **big-title bar** above the live
+terminal ([[session-console]]'s `si-th-name`) renders the SAME `sessionHeadline`, not the stable node name —
+so the agent's live self-summary that renarrates the rows renarrates the header in lock-step, and the title
+over the terminal never disagrees with the row that opened it. The data source and the content are one
+shared line across both surfaces; the **only** difference is room: the header is a wide bar, so it gives the
+headline `flex:1` of that width and ellipsises far **later** than the compact rows — less truncation where
+there is space for more. The stable `sessionName` is not the displayed title here; it stays the fixed handle
+behind tooltips, the lock hint, and search, which must not move turn-to-turn.
+
 This node's slice of the shared `styles.css` is the Row-2 status line (`.sess-meta`, the full-width dimmer
-wrap) and the Row-1 headline ellipsis; classes other surfaces add there — like the yatsu eval tab's
-`.eval-*` verdict/transcript rules from the measure-and-score reframe — are those features' churn, not
+wrap), the Row-1 headline ellipsis, and the console header big-title's room-to-expand (`.si-th-name`'s
+`flex:1` + ellipsis — the same headline, more width); classes other surfaces add there — like the yatsu eval
+tab's `.eval-*` verdict/transcript rules from the measure-and-score reframe — are those features' churn, not
 session-activity's drift.

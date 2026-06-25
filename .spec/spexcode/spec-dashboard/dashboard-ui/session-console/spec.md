@@ -39,7 +39,10 @@ auto-jump-to-the-new-session is gone; only a tab's *removal* (below) ever moves 
 not a `t` overlay; the board's `t`/network button open onto it, and clicking a node switches to that session's tab.
 
 An existing session shows its **live tmux terminal** (SessionTerm) with the docked **`❯` input** below — a
-**real tmux client but a read-only scrollable view**. Read-only governs input, not extraction: text selects, the
+**real tmux client but a read-only scrollable view**. The header bar above it (`si-th-name`) titles the
+terminal with the **shared session headline** ([[session-activity]]), not the stable `sessionName` — same
+source and content as the session rows, only with more room before it truncates — so the title over the
+terminal never disagrees with the row that opened it. Read-only governs input, not extraction: text selects, the
 wheel scrolls real history, a drag selects even under mouse-reporting, and `⌘/Ctrl+C` copies to the clipboard
 **over HTTPS, localhost, or plain HTTP** (past the secure-context-only Clipboard API).
 

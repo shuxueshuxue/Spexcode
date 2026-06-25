@@ -27,12 +27,22 @@ since the graph and the consoles are sibling tabs of one board, simply switches 
 Isolation is the governing principle: the view runs in its **own** ReactFlow context (separate camera,
 selection, store), so even sitting in the console's content pane it cannot disturb the spec board or any
 other ReactFlow. Its **nodes are the shared preloaded session list** the console already holds (the same
-`sessions` every surface reads); only the **edges** are its own poll (`GET /api/sessions/graph`, see
-[[sessions]]). So it **fills the pane** and opens **instant and already framed** — the nodes are there on the
-first render, never a cold fetch to block behind, and the **first visible frame is already centred**: opening
-is **motionless**, with no corner-to-centre pan or zoom-to-fit playing out after the pane appears. This holds
-on **every reselect** — the tab remounts each time it's picked, yet never replays an intro — matching the
-board graph's settled stillness. Only a later session-count change reframes, with a gentle pan.
+`sessions` every surface reads), and its **edges** — the live monitor + comms network (`GET
+/api/sessions/graph`, see [[sessions]]) — are polled by the **console itself** ([[session-console]]), the
+**always-mounted** owner, **not** by this tab. That matters: the tab **remounts on every reselect**, so a poll
+living inside it would **cold-refetch each time** and flash an **edgeless placeholder** that then re-settles
+and **jumps** once the first edge poll lands. Owning the edges one level up means **both** the nodes **and**
+the live edges are in hand on the **first render**, so the **first visible frame is already the final
+force-clustered web** — the relationships are baked into the layout from the start, never drawn in a few
+seconds later over a re-arranging graph. The reveal is **held until the edges land** (the mask lifts on the
+first edge response, even an empty one), so what first appears is the settled final frame, **already centred**:
+opening is **motionless**, with no corner-to-centre pan, no zoom-to-fit, and no edges-then-relayout shuffle
+playing out after the pane appears. This holds on **every reselect** — the in-hand edges are **reused** (no
+cold refetch), so it frames the final web **instantly** and never replays an intro — matching the board
+graph's settled stillness. And because the console keeps polling in the **background**, the web stays
+**current on its own**: a new watch or a rising comms count appears **live**, without a tab round-trip to
+refresh it. Only a session-count change **reframes** (a gentle pan); a topology change (a watch or comms
+edge starting or stopping) **re-settles the web in place**, within the existing frame.
 
 The **console owns the arrows and Esc** ([[keyboard-nav]], [[session-console]]); what is **left** to this
 view is the in-graph walk. You reach the tab from an **empty** New Session with **→** and leave it with **←**
@@ -44,7 +54,11 @@ board's discipline: the **same discreet `?` help affordance the board uses** ope
 keymap and edge vocabulary, instead of a standing wall of text.
 
 Each node is a session, drawn with the **same** seed-to-hue colour and avatar the rest of the dashboard keys
-off its session id ([[node-graph]]), so a face here matches that session everywhere. Layout is a **network**,
+off its session id ([[node-graph]]), so a face here matches that session everywhere — and **labelled with the
+same headline its session row and console title show** (`sessionHeadline`: a human rename, else the worker's
+**live tmux self-summary** — the agent's own description of what it's doing — else the launch-prompt preview),
+**not** a divergent stable-id name. So a node here reads as the very same session you see in the list, and the
+two stay identifiable as the agent renarrates. Layout is a **network**,
 not a tree, and **not a fixed ring** — it is **force-directed**: related sessions are pulled together into
 **clusters** while unlinked ones drift to the margins, so the edges stay **short** instead of slashing straight
 across a ring. It is **deterministic and still** — the same topology always yields the same frame, and the web

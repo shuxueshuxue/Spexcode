@@ -41,13 +41,16 @@ evenly spaced grid — a rare automatic backstop, not the normal path.
 
 The gesture is an **explicit drag handle** — a small grip at the **far right of the row's second line**
 (the status/op line, `.sess-meta`), shown **only** in the console's interactive list ([[session-console]]),
-never the read-only window glance ([[session-graph]]). **Only the handle is draggable**: grabbing it starts
-a native HTML5 drag (the dragged row itself is the drag image), dropping on the upper or lower half of a row
-places the dragged row **above** or **below** it, and dropping past the last row appends. Because only the
-handle initiates a drag, the rest of the row is **completely untouched** — single click switches tab,
-double-click locks, the `↑/↓` ring walks the list, and a row click keeps the `❯` input focused. The handle
-**stops its own mousedown** so it never trips the console's focus-retention (which preventDefaults a row
-mousedown and would otherwise cancel the native drag); that is the whole trick, and it costs the row nothing.
+never the read-only window glance ([[session-graph]]). **Only the handle starts a drag**: pressing it begins
+a **pointer drag** (mousedown → window mousemove past a small threshold → mouseup), dropping on the upper or
+lower half of a row places the dragged row **above** or **below** it, and releasing past the last row appends.
+A pointer drag — not native HTML5 DnD — is the load-bearing choice: native DnD needs an un-preventDefaulted
+mousedown, but the console preventDefaults a row mousedown to keep the `❯` input focused, and the two cannot
+both win (besides, native DnD on a real mouse was unreliable here). A pointer drag rides `window`
+mousemove/mouseup, which `preventDefault` does **not** stop, so the handle's mousedown flows through the
+focus-retention **untouched** — the input keeps focus AND the drag works. Because only the handle starts a
+drag, the rest of the row is **completely untouched** — single click switches tab, double-click locks, the
+`↑/↓` ring walks the list, and a row click keeps the `❯` input focused.
 
 The `sortKey` lives where the rest of a session's record lives — the worktree's `.session` file, written by
 the one backend that owns it ([[sessions-core]]) — so a reorder **persists** across a backend restart and is

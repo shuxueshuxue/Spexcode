@@ -44,7 +44,9 @@ The faces are thin and all show the identical bytes. The backend serves `GET /ap
 that HTML and writes (`--out`) or opens (`--open`) it, so it works against a remote backend unchanged. The
 dashboard ([[session-console]]) shows a **proof** action whenever the session is in the review state (a
 standing merge/done proposal) that opens the same route in an overlay — natural support, still just the
-artifact. Because the proof is derived, opening it always reflects the live diff/loss/gates.
+artifact. That action is one of the console's **board commands**: a cyan header button *and* the typed
+`/proof`, both driving the one overlay (the open-state lives in the console, this node owns only the
+overlay). Because the proof is derived, opening it always reflects the live diff/loss/gates.
 
 Out of scope: the measurement engine and freshness ([[yatsu-core]]); the per-node eval tab
 ([[yatsu-eval-tab]]); the merge dispatch ([[manager-cockpit]]). This node only marshals what they already

@@ -2,6 +2,7 @@ import { readFileSync, existsSync } from 'node:fs'
 import { join, relative, dirname } from 'node:path'
 import { repoRoot, headSha, driftIndex, stagedFiles, git } from '../../spec-cli/src/git.js'
 import { loadSpecs } from '../../spec-cli/src/specs.js'
+import { loadConfig } from '../../spec-cli/src/lint.js'
 import { mainBranch, statePath } from '../../spec-cli/src/layout.js'
 import { yatsuNodes, validateScenarios, YATSU_FILE, type YatsuNode } from './yatsu.js'
 import { readReadings, appendReading, latestPerScenario, type Reading, type Verdict } from './sidecar.js'
@@ -90,32 +91,32 @@ export function nodeChanged(dirRel: string, codeFiles: string[], changed: Set<st
 }
 
 // @@@ scan - the loss signal's BLIND SPOTS, mirroring `spex lint`'s code-drift output (the `•` glyph + one
-// line per finding). Four classes: a yatsu.md that violates the scenario schema (a missing required field, a
-// typo'd key, a duplicate name) → `yatsu-schema` — a malformed loss function the lenient parser would have
-// silently swallowed; a node WITH a valid yatsu.md whose scenario's latest reading went stale (a governed
-// code file, the scenario, or the evaluator moved since its codeSha) → `yatsu-drift`; a scenario with no
-// reading at all → `yatsu-missing`; a frontend node (UI in its `code:`) with NO yatsu.md → an
-// `yatsu-uncovered` loss function that was never written. `--changed` scopes all to the nodes THIS branch
-// touched (the proactive Stop gate's view — see [[yatsu-proactive]]); plain scan is the whole-repo coverage
-// report. Read-only; exits 0 (a status report) — the gate reads the finding lines, never the code. The
-// pre-commit backstop is the HARD twin: it shares validateScenarios and rejects a malformed staged yatsu.md.
+// line per finding). Five classes: a yatsu.md that violates the scenario schema (a missing required field, a
+// typo'd key, a duplicate name, a ghost `code`/`related` path) → `yatsu-schema` — a malformed loss function
+// the lenient parser would have silently swallowed; a node WITH a valid yatsu.md whose scenario's latest
+// reading went stale (a governed code file, the scenario, or the evaluator moved since its codeSha) →
+// `yatsu-drift`; a scenario with no reading at all → `yatsu-missing`; a frontend node (UI in its `code:`)
+// with NO yatsu.md → an `yatsu-uncovered` loss function that was never written; and one whole-repo summary,
+// a file governed by > maxOwners scenarios → `yatsu-owners` (split it, the scenario-axis twin of lint's
+// `owners`). `--changed` scopes the per-node classes to the nodes THIS branch touched (the proactive Stop
+// gate's view — see [[yatsu-proactive]]); plain scan is the whole-repo coverage report. Read-only; exits 0
+// (a status report) — the gate reads the finding lines, never the code. The pre-commit backstop is the HARD
+// twin: it shares validateScenarios and rejects a malformed staged yatsu.md.
 async function scan(args: string[] = []): Promise<number> {
   const root = repoRoot()
   const changedOnly = has(args, 'changed')
   const changed = changedOnly ? changedSinceBase(root) : null
   const idx = await driftIndex(root)
   const specs = await loadSpecs()
-  // a file governed by >=2 nodes is a HUB (see governed-related): editing it must not flag every co-owner's
-  // yatsu (the same fan-out lint's drift now avoids). A node is triggered as changed, or called
-  // uncovered-frontend, only by files it SOLELY governs — its own node dir still triggers via the dir check.
-  const governCount = new Map<string, number>()
-  for (const s of specs) for (const f of s.code) governCount.set(f, (governCount.get(f) ?? 0) + 1)
-  const owned = (code: string[]) => code.filter((f) => (governCount.get(f) ?? 0) < 2)
+  // a file may be governed by several nodes — ordinary composition, not a hub to skip (see governed-related).
+  // A change to a shared governed file legitimately triggers EVERY governing node's yatsu, mirroring how
+  // lint's drift now fans to every owner; nobody's loss signal is suppressed. An over-owned file is lint's
+  // `owners` concern (split it), not a reason to go silent here.
   const yByDir = new Map(yatsuNodes(root).map((n) => [relative(root, n.dir), n]))
   let flaggedNodes = 0, malformed = 0, staleScores = 0, missingScores = 0, uncovered = 0
   for (const s of specs) {
     const dirRel = dirname(s.path)
-    if (changed && !nodeChanged(dirRel, owned(s.code), changed)) continue
+    if (changed && !nodeChanged(dirRel, s.code, changed)) continue
     const y = yByDir.get(dirRel)
     const findings: string[] = []
     if (y) {
@@ -130,10 +131,12 @@ async function scan(args: string[] = []): Promise<number> {
         // a scenario's own `code` narrows its freshness CODE axis to a subset; a path that does not exist
         // would make that axis silently immortal (changedSince finds no commits for it), so flag it LOUD as a
         // malformed declaration — the same loud-fail spirit as a bad node `code:`.
-        const ghosts = (sc.code ?? []).filter((p) => !existsSync(join(root, p)))
-        if (ghosts.length) {
-          malformed++
-          findings.push(`  • yatsu-schema: '${s.id}' scenario '${sc.name}' \`code\` path(s) not found: ${ghosts.join(', ')} — fix ${y.yatsuPath}`)
+        for (const [field, paths] of [['code', sc.code], ['related', sc.related]] as const) {
+          const ghosts = (paths ?? []).filter((p) => !existsSync(join(root, p)))
+          if (ghosts.length) {
+            malformed++
+            findings.push(`  • yatsu-schema: '${s.id}' scenario '${sc.name}' \`${field}\` path(s) not found: ${ghosts.join(', ')} — fix ${y.yatsuPath}`)
+          }
         }
         const codeFiles = sc.code?.length ? sc.code : s.code   // scenario's own subset, else the node's list
         const r = latest.get(sc.name)
@@ -148,7 +151,7 @@ async function scan(args: string[] = []): Promise<number> {
           findings.push(`  • yatsu-drift: '${s.id}' scenario '${sc.name}' is stale (${axes.join(', ')} moved since ${r.codeSha.slice(0, 7)}) — re-measure with \`spex yatsu eval ${s.id}\``)
         }
       }
-    } else if (owned(s.code).some(isUiPath)) {
+    } else if (s.code.some(isUiPath)) {
       uncovered++
       findings.push(`  • yatsu-uncovered: '${s.id}' governs frontend code but has no yatsu.md — give it a scenario (description + expected) so its loss can be measured`)
     }
@@ -156,8 +159,27 @@ async function scan(args: string[] = []): Promise<number> {
     flaggedNodes++
     for (const f of findings) console.error(f)
   }
+  // @@@ yatsu-owners - the scenario-axis twin of lint's `owners` rule (see [[governed-related]]): a scenario
+  // GOVERNS the file in its `code:` (ideally one), and many scenarios may explicitly govern the same file —
+  // fine, ordinary composition. Only an OVER-governed file (> maxOwners scenarios naming it) is a smell: that
+  // file carries more separately-measured behaviour than one file should. ONE summary line; whole-repo only
+  // (never gated by --changed — it is a structural fact, not a per-branch freshness gap). Counts EXPLICIT
+  // scenario `code:` (an inherited node list isn't the scenario governing the file). Remedy: split the file.
+  let overOwned = 0
+  if (!changedOnly) {
+    const maxOwners = loadConfig(root).maxOwners
+    const govCount = new Map<string, number>()
+    for (const n of yByDir.values()) for (const sc of n.scenarios) for (const f of sc.code ?? []) govCount.set(f, (govCount.get(f) ?? 0) + 1)
+    const over = [...govCount].filter(([, c]) => c > maxOwners).sort((a, b) => b[1] - a[1])
+    if (over.length) {
+      overOwned = over.length
+      const top = over.slice(0, 5).map(([f, c]) => `${f.split('/').pop()}(${c})`).join(', ')
+      console.error(`  • yatsu-owners: ${over.length} file(s) are governed by > ${maxOwners} scenarios — each carries more separately-measured behaviour than one file should. Worst: ${top}. SPLIT the file so each scenario measures its own surface.`)
+    }
+  }
   const scope = changedOnly ? ' --changed' : ''
-  console.error(`spex yatsu scan${scope}: ${flaggedNodes} node(s) flagged (${malformed} malformed, ${staleScores} stale, ${missingScores} missing, ${uncovered} uncovered)`)
+  const ownersNote = overOwned ? `, ${overOwned} over-owned` : ''
+  console.error(`spex yatsu scan${scope}: ${flaggedNodes} node(s) flagged (${malformed} malformed, ${staleScores} stale, ${missingScores} missing, ${uncovered} uncovered${ownersNote})`)
   return 0
 }
 

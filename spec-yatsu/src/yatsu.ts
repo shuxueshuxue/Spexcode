@@ -10,20 +10,22 @@ import { join, relative, basename } from 'node:path'
 export const YATSU_FILE = 'yatsu.md'
 export const SIDECAR_FILE = 'yatsu.evals.ndjson'
 
-// @@@ Scenario - one declared way to measure the node's loss: a `description` (what to check), the
+// @@@ Scenario - one declared way to measure the node's loss, and the unit that GOVERNS code (a yatsu.md
+// owns nothing — only its scenarios do; see [[governed-related]]). A `description` (what to check), the
 // `expected` result (what zero loss looks like), and OPTIONALLY a `test` (a repo path to a co-located
-// runnable file — a playwright.spec.ts, a script — that the AGENT may run by hand; yatsu itself runs
-// nothing) and `code` (concrete repo files THIS scenario depends on — its own slice of the node's code
-// freshness axis, so two scenarios on one node go stale independently; absent → it inherits the whole
-// node's `code:` list). `name` is its key in the sidecar; the bug-fix keystone (a repro becoming a
-// regression scenario) appends one. There is no `driver`/`steps`-as-execution-mechanism: a scenario is a
-// target the agent measures however it likes, not a script yatsu executes.
+// runnable file — a playwright.spec.ts, a script — the AGENT may run by hand; yatsu runs nothing), `code`
+// (the file this scenario GOVERNS, ideally one — its own slice of the code freshness axis, so two scenarios
+// on one node go stale independently; absent → it inherits the spec node's `code:` list) and `related`
+// (files it REFERENCES but does not own — they do NOT stale it, the freshness mirror of spec govern/related).
+// A file governed by too many scenarios is yatsu scan's `yatsu-owners` smell (split it). `name` keys the
+// sidecar. No `driver`/`steps`: a scenario is a target the agent measures however it likes, not a script.
 export type Scenario = {
   name: string
   description: string
   expected: string
   test?: string
   code?: string[]
+  related?: string[]
 }
 
 export type YatsuNode = {
@@ -34,11 +36,13 @@ export type YatsuNode = {
   scenarios: Scenario[]
 }
 
-// @@@ scenario schema - the five fields a scenario may declare; `name`/`description`/`expected` are
-// required, `test`/`code` optional. Anything else inside an item is a typo or mistake — validateScenarios
-// rejects it loudly (the lenient parser below merely ignores it). One source of truth for both faces.
-const SCENARIO_KEYS = ['name', 'description', 'expected', 'test', 'code'] as const
+// @@@ scenario schema - the six fields a scenario may declare; `name`/`description`/`expected` are
+// required, `test`/`code`/`related` optional. Anything else inside an item is a typo or mistake —
+// validateScenarios rejects it loudly (the lenient parser below merely ignores it). `code` and `related`
+// are the two LIST fields (path lists). One source of truth for both faces.
+const SCENARIO_KEYS = ['name', 'description', 'expected', 'test', 'code', 'related'] as const
 type ScenarioKey = (typeof SCENARIO_KEYS)[number]
+const LIST_KEYS: readonly ScenarioKey[] = ['code', 'related']
 
 // a raw scenario item straight off the frontmatter walk: the known fields it set, plus any UNKNOWN keys it
 // carried — kept (not dropped) so the validator can name a typo'd field instead of silently swallowing it.
@@ -94,11 +98,11 @@ function assignField(cur: RawItem, kv: string, lines: string[], idx: number, key
   const f = kv.match(/^([A-Za-z_][\w-]*):\s*(.*)$/)
   if (!f) return idx
   const key = f[1]
-  // @@@ block-sequence code - `code:` (the one list field) may be written inline (`code: a, b`) OR as a YAML
-  // block sequence — `- item` lines indented deeper, exactly like spec.md's `code:`. The scalar-only reader
-  // can't see those lines, so collect them HERE into the comma form parseCodeList expects; without this they
-  // would be silently dropped and the scenario would read as having no `code:` at all (a fail-silent footgun).
-  if (key === 'code' && f[2].trim() === '') {
+  // @@@ block-sequence lists - a LIST field (`code:`/`related:`) may be written inline (`code: a, b`) OR as a
+  // YAML block sequence — `- item` lines indented deeper, exactly like spec.md's `code:`. The scalar-only
+  // reader can't see those lines, so collect them HERE into the comma form parseCodeList expects; without
+  // this they'd be silently dropped and the scenario would read as having no list at all (a fail-silent footgun).
+  if ((LIST_KEYS as readonly string[]).includes(key) && f[2].trim() === '') {
     const items: string[] = []
     let j = idx + 1
     for (; j < lines.length; j++) {
@@ -110,7 +114,7 @@ function assignField(cur: RawItem, kv: string, lines: string[], idx: number, key
       if (!it) break
       items.push(unquote(it[1]))
     }
-    if (items.length) { cur.fields.code = items.join(','); return j - 1 }
+    if (items.length) { cur.fields[key as ScenarioKey] = items.join(','); return j - 1 }
   }
   let value: string
   let end = idx
@@ -140,8 +144,8 @@ function assignField(cur: RawItem, kv: string, lines: string[], idx: number, key
 
 const unquote = (s: string) => s.replace(/^["'](.*)["']$/, '$1').trim()
 
-// a scenario's optional `code:` is a comma-separated path list (a YAML flow list `[a, b]` or bare `a, b`,
-// or a single path) — the tiny parser stays scalar-only, so the list is split here from the stored string.
+// a scenario's optional list field (`code:`/`related:`) is a comma-separated path list (a YAML flow list
+// `[a, b]` or bare `a, b`, or a single path) — the tiny parser stays scalar-only, so it is split here.
 function parseCodeList(raw: string): string[] {
   return raw.replace(/^\[|\]$/g, '').split(',').map((s) => unquote(s.trim())).filter(Boolean)
 }
@@ -154,12 +158,14 @@ export function parseScenarios(src: string): Scenario[] {
   return walkScenarios(src).items
     .map((it): Scenario => {
       const code = it.fields.code ? parseCodeList(it.fields.code) : []
+      const related = it.fields.related ? parseCodeList(it.fields.related) : []
       return {
         name: it.fields.name ?? '',
         description: it.fields.description ?? '',
         expected: it.fields.expected ?? '',
         ...(it.fields.test ? { test: it.fields.test } : {}),
         ...(code.length ? { code } : {}),
+        ...(related.length ? { related } : {}),
       }
     })
     .filter((s) => s.name)   // a scenario with no name is malformed — drop it (validateScenarios reports it)

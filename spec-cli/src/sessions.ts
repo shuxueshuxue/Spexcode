@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url'
 import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, type ReviewDiffFile } from './git.js'
 import { guardWorktree } from './resilience.js'
 import { loadSystemConfig, loadSpecs, type ConfigPreset } from './specs.js'
-import { mainBranch, gitCommonDir, statePath, runtimePath, RUNTIME_DIR } from './layout.js'
+import { mainBranch, gitCommonDir, statePath, runtimePath, RUNTIME_DIR, readConfig } from './layout.js'
 
 // @@@ sessions - the WORKTREE is the durable unit; tmux is a disposable runtime handle. Each session
 // worktree carries an untracked `.session` file (the source of truth) that survives a kill / reboot /
@@ -45,8 +45,19 @@ const COLS = 120, ROWS = 32
 // @@@ concurrency cap - the most working agents we let run AT ONCE. Heavy multi-agent load (many claude
 // processes computing simultaneously) was the source of resource-pressure crashes, so a launch beyond the
 // cap is QUEUED, not started: it becomes a durable `queued` worktree that the drainer launches the moment a
-// slot frees (an agent proposes/dies). Configurable; default 6. Floored at 1 so a bad env can't wedge it to 0.
-const MAX_ACTIVE = Math.max(1, Number(process.env.SPEXCODE_MAX_ACTIVE) || 6)
+// slot frees (an agent stops working/dies). NOT hardcoded — configured PER PROJECT in `spexcode.json`
+// (`sessions.maxActive`), so a box can be tuned to its capacity without touching the toolchain. Precedence:
+// spexcode.json → `SPEXCODE_MAX_ACTIVE` env → default 6. Read LIVE (cheap file read) so an edit takes effect
+// on the next drain tick, no restart. Floored at 1 so a bad value can't wedge the queue to 0.
+function maxActive(): number {
+  let v: number | undefined
+  try {
+    const fromJson = readConfig(mainRoot()).sessions?.maxActive
+    if (typeof fromJson === 'number' && Number.isFinite(fromJson)) v = fromJson
+  } catch { /* config unreadable — fall through to env/default */ }
+  if (v === undefined) { const e = Number(process.env.SPEXCODE_MAX_ACTIVE); if (Number.isFinite(e) && e > 0) v = e }
+  return Math.max(1, Math.floor(v ?? 6))
+}
 
 // @@@ appendSysArg - the system prompt folded into EVERY launched/resumed agent (both paths go through
 // launch() below), assembled ENTIRELY from the system config surface — there is NO baked-in core. The
@@ -150,12 +161,17 @@ function replyViaSocket(sock: string, text: string): Promise<DispatchResult> {
 export type Lifecycle = 'active' | 'idle' | 'awaiting' | 'parked' | 'error' | 'asking' | 'queued'
 export type Proposal = 'merge' | 'nothing' | 'close'
 export type DisplayStatus = 'working' | 'idle' | 'offline' | 'starting' | 'review' | 'done' | 'close-pending' | 'parked' | 'error' | 'asking' | 'queued'
+// liveness — the orthogonal axis to Lifecycle: whether the agent process is actually up, derived (never
+// authored) for EVERY session regardless of its lifecycle. See [[state]]: lifecycle and liveness never
+// override each other; the UI keys the terminal-mount / relaunch panel on this, the badge on lifecycle.
+export type Liveness = 'online' | 'starting' | 'offline'
 const PROPOSAL_STATUS: Record<Proposal, DisplayStatus> = { merge: 'review', nothing: 'done', close: 'close-pending' }
 
 export type Session = {
   id: string; node: string | null; title: string | null; name: string | null; branch: string | null; path: string
-  lifecycle: Lifecycle; proposal: Proposal | null; merges: number; status: DisplayStatus; note: string | null
+  lifecycle: Lifecycle; proposal: Proposal | null; merges: number; status: DisplayStatus; liveness: Liveness; note: string | null
   prompt: string | null; promptPreview: string | null; created: number; activity: string | null
+  sortKey: number | null   // manual drag-reorder override ([[session-reorder]]); null = sort by `created`
 }
 
 // @@@ originating prompt - what the session was ASKED to do, captured at launch so a manager (human or
@@ -226,13 +242,13 @@ function pkgRoot(): string {
 
 // `name` is the user-chosen display override set by the rename gesture — distinct from the auto-derived
 // `title` (from the prompt), so a rename never has to fight or overwrite the launch-time derivation.
-type SessRec = { node: string | null; title: string | null; name: string | null; session: string | null; status: Lifecycle; proposal: Proposal | null; merges: number; note: string | null }
+type SessRec = { node: string | null; title: string | null; name: string | null; session: string | null; status: Lifecycle; proposal: Proposal | null; merges: number; note: string | null; sortKey: number | null }
 // ensure a worktree's `.session/` runtime dir exists, returning its path. Idempotent (recursive mkdir) —
 // every writer that drops a file under the runtime dir calls this first so launch order never matters.
 function runtimeDir(path: string): string { const d = join(path, RUNTIME_DIR); mkdirSync(d, { recursive: true }); return d }
 
 function readSessionFile(dir: string): SessRec {
-  const r: SessRec = { node: null, title: null, name: null, session: null, status: 'active', proposal: null, merges: 0, note: null }
+  const r: SessRec = { node: null, title: null, name: null, session: null, status: 'active', proposal: null, merges: 0, note: null, sortKey: null }
   const p = statePath(dir)
   if (!existsSync(p)) return r
   for (const line of readFileSync(p, 'utf8').split('\n')) {
@@ -246,6 +262,9 @@ function readSessionFile(dir: string): SessRec {
     else if (k === 'proposal' && v) r.proposal = v as Proposal
     else if (k === 'merges') r.merges = Number(v) || 0
     else if (k === 'note') r.note = v || null
+    // @@@ sortkey - the drag-reorder pseudo-time ([[session-reorder]]). A blank or non-numeric value falls
+    // back to null so the row reverts to `created` (Number('') is 0, not NaN, so reject the empty case first).
+    else if (k === 'sortkey') { const n = v === '' ? NaN : Number(v); r.sortKey = Number.isFinite(n) ? n : null }
   }
   return r
 }
@@ -257,6 +276,7 @@ function writeSessionFile(dir: string, rec: SessRec): void {
   if (rec.status === 'awaiting' && rec.proposal) lines.push(`proposal: ${rec.proposal}`)
   if (rec.merges) lines.push(`merges: ${rec.merges}`)
   if (rec.note) lines.push(`note: ${rec.note}`)
+  if (rec.sortKey != null) lines.push(`sortkey: ${rec.sortKey}`)
   const p = statePath(dir)   // `.session/state` for a new session; the flat `.session` file for a legacy one
   mkdirSync(dirname(p), { recursive: true })   // creates `.session/`; no-op when p is the legacy flat file
   writeFileSync(p, lines.join('\n') + '\n')
@@ -337,25 +357,33 @@ function cleanActivity(raw: string): string | null {
 const launchedAt = new Map<string, number>()
 const BOOT_GRACE_MS = 25000   // > waitForSocket's 15s timeout, covering the observed ~15-20s socket boot window
 
-// reconcile the SHOWN status from a session's declared state + a prebuilt liveness set (no per-call tmux
-// spawn — see liveTmux). Declarations win over liveness, in ONE path: awaiting maps to its proposal label;
-// parked / error / asking map straight to themselves. We never INFER those externally.
-function reconcile(rec: SessRec, live: Set<string>): DisplayStatus {
-  if (rec.status === 'awaiting') return PROPOSAL_STATUS[rec.proposal || 'nothing']
-  if (rec.status !== 'active' && rec.status !== 'idle') return rec.status  // parked | error | asking | queued (no tmux yet)
-  // active/idle are the SAME live agent — claude runs whether it is churning OR waiting at its prompt — so
-  // they share ONE deterministic liveness check: offline iff the tmux window is gone OR claude's rendezvous
-  // socket is absent. claude (via the reclaude wrapper) holds CLAUDE_BG_RENDEZVOUS_SOCK open the whole time
-  // it is alive, so the socket — NOT pane_current_command, which is the wrapper/shell while claude runs as
-  // its child — is the truth that claude is up. else idle if the idle_prompt hook fired since the last tool,
-  // else working. The mark-active hook flips idle → active on the next real work, self-correcting.
+// @@@ liveness - the orthogonal axis ([[state]]): is the agent process up, for ANY session regardless of
+// lifecycle, from a prebuilt tmux set (no per-call spawn — see liveTmux) + the rendezvous socket. offline
+// iff the tmux window is gone OR claude's rendezvous socket is absent past the boot window. claude (via the
+// reclaude wrapper) holds CLAUDE_BG_RENDEZVOUS_SOCK open the whole time it is alive, so the socket — NOT
+// pane_current_command, which is the wrapper/shell while claude runs as its child — is the truth it is up.
+// A just-launched agent whose socket hasn't appeared yet reads the transient 'starting' for the grace
+// window; only past it (socket still gone) is it genuinely 'offline'.
+function liveness(rec: SessRec, live: Set<string>): Liveness {
   if (!rec.session || !live.has(rec.session)) return 'offline'
   if (!existsSync(rvSock(rec.session))) {
-    // tmux is up but the socket isn't: a just-launched agent still booting reads 'starting' for the boot
-    // window; only past it (socket still gone) is the agent genuinely dead → 'offline'.
     const at = launchedAt.get(rec.session)
     return at && Date.now() - at < BOOT_GRACE_MS ? 'starting' : 'offline'
   }
+  return 'online'
+}
+
+// reconcile the compact DisplayStatus — a DERIVED label composing lifecycle + liveness for one-glyph
+// surfaces ([[state]]), never a third source of truth. Lifecycle wins the label except where liveness must
+// show through: awaiting → its proposal label; parked/error/asking/queued → themselves; active/idle → their
+// liveness (offline/starting), else the active-only idle/working inference (the mark-active hook flips idle
+// → active on the next real work, self-correcting). The orthogonal liveness field is what the UI keys
+// terminal-mount and the relaunch panel on; this label is for badges and `spex ls`.
+function reconcile(rec: SessRec, live: Set<string>): DisplayStatus {
+  if (rec.status === 'awaiting') return PROPOSAL_STATUS[rec.proposal || 'nothing']
+  if (rec.status !== 'active' && rec.status !== 'idle') return rec.status  // parked | error | asking | queued (no tmux yet)
+  const lv = liveness(rec, live)
+  if (lv !== 'online') return lv  // 'offline' | 'starting'
   return rec.status === 'idle' ? 'idle' : 'working'
 }
 
@@ -377,12 +405,12 @@ function createdAt(dir: string): number {
   try { const s = statSync(dir); return s.birthtimeMs || s.mtimeMs || 0 } catch { return 0 }
 }
 
-function toSession(rec: SessRec, branch: string | null, path: string, status: DisplayStatus, activity: string | null = null): Session {
+function toSession(rec: SessRec, branch: string | null, path: string, status: DisplayStatus, lv: Liveness, activity: string | null = null): Session {
   const prompt = readPromptFile(path)   // the originating ask, captured at launch (sidecar; null for old sessions)
-  // activity is the LIVE pane title; it only means anything while the worker is up — a dead/booting/queued
-  // session would show a stale or absent title, so it's suppressed there (the row falls back to its label).
-  const live = status !== 'offline' && status !== 'starting' && status !== 'queued'
-  return { id: rec.session!, node: rec.node, title: rec.title, name: rec.name, branch, path, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, prompt, promptPreview: prompt ? promptPreview(prompt) : null, created: createdAt(path), activity: live ? activity : null }
+  // activity is the LIVE pane title; it only means anything while the worker is genuinely up — a
+  // dead/booting session would show a stale or absent title, so it's suppressed unless liveness is online.
+  const showActivity = lv === 'online'
+  return { id: rec.session!, node: rec.node, title: rec.title, name: rec.name, branch, path, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, prompt, promptPreview: prompt ? promptPreview(prompt) : null, created: createdAt(path), activity: showActivity ? activity : null, sortKey: rec.sortKey }
 }
 
 // @@@ renameSession - set (or clear) a session's human display NAME: the user-chosen override that wins
@@ -395,6 +423,17 @@ export async function renameSession(id: string, name: string): Promise<boolean> 
   const wt = await findWorktree(id)
   if (!wt) return false
   writeSessionFile(wt.path, { ...wt.rec, name: name.trim() || null })
+  return true
+}
+
+// @@@ setSessionSort - set (or clear) a session's drag-reorder pseudo-time ([[session-reorder]]), parallel
+// to renameSession: persisted to the worktree's `.session` record so the manual order survives restarts and
+// shows on every surface (all sort by `sortKey ?? created`). A null key CLEARS it, dropping the row back to
+// its `created` slot. Works in any state since it edits the on-disk record. Unknown id → false (route 404s).
+export async function setSessionSort(id: string, key: number | null): Promise<boolean> {
+  const wt = await findWorktree(id)
+  if (!wt) return false
+  writeSessionFile(wt.path, { ...wt.rec, sortKey: key != null && Number.isFinite(key) ? key : null })
   return true
 }
 
@@ -424,7 +463,7 @@ export async function listSessions(): Promise<Session[]> {
   const rows = await Promise.all(wts.map((w) => guardWorktree<Session | null>(w.path, () => {
     const rec = readSessionFile(w.path)
     if (!rec.session) { lastKnownSession.delete(w.path); return null }   // exists but isn't a session
-    const s = toSession(rec, w.branch, w.path, reconcile(rec, live), titles.get(rec.session) ?? null)
+    const s = toSession(rec, w.branch, w.path, reconcile(rec, live), liveness(rec, live), titles.get(rec.session) ?? null)
     lastKnownSession.set(w.path, s)
     return s
   }, () => {
@@ -439,9 +478,11 @@ export async function listSessions(): Promise<Session[]> {
   // @@@ creation order - git lists worktrees alphabetically by path, and a path is a slug of the launch
   // prompt, so the raw enumeration order is effectively random AND reshuffles every time a session joins or
   // leaves. Order by birth instead (oldest first): each session keeps its slot for life and a new one simply
-  // appends — a stable spatial map across every surface (dashboard window, session tabs, `spex ls`). id
-  // breaks ties so same-instant births stay deterministic.
-  return rows.filter((s): s is Session => s != null).sort((a, b) => a.created - b.created || a.id.localeCompare(b.id))
+  // appends — a stable spatial map across every surface (dashboard window, session tabs, `spex ls`). A manual
+  // drag ([[session-reorder]]) overrides one row's slot via a pseudo-time `sortKey`, so sort by `sortKey ??
+  // created`: an undragged row stays at its birth time, a dragged one lands among its new neighbours. id
+  // breaks ties so same-instant births (or sort-keys) stay deterministic.
+  return rows.filter((s): s is Session => s != null).sort((a, b) => (a.sortKey ?? a.created) - (b.sortKey ?? b.created) || a.id.localeCompare(b.id))
 }
 
 // @@@ session graph = LIVE monitors, not a stored relationship. An edge A→B means "agent A is RIGHT NOW
@@ -802,18 +843,19 @@ function deleteNodePrompt(nodeId: string, relPath: string | null, rest: string):
     `When it's ready, propose merge for the human to review — do NOT merge it yourself.`
 }
 
-// @@@ concurrency cap + queue - keep at most MAX_ACTIVE agents WORKING at once. A session OCCUPIES a slot
-// while its agent is launched and still OWNS its task: its claude is genuinely live (tmux window present AND
-// rendezvous socket present) and it has not yet handed the work to a human (lifecycle `awaiting`). So
-// working/idle/parked/asking/error agents that are actually alive each hold a slot; a session frees its
-// slot the moment it PROPOSES (review/done/close-pending), goes OFFLINE (crashed/exited — socket gone), or is
-// closed. Liveness is checked directly (the same socket truth reconcile uses) rather than off the display
-// status, so an authored state (parked/error/asking) whose claude has since died does NOT pin a slot.
-// `queued` sessions never occupy. Resource pressure scales with concurrently-WORKING agents, which is exactly
-// this set — the cap throttles it; the rest wait as durable `queued` worktrees.
+// @@@ concurrency cap + queue - keep at most maxActive() agents AUTONOMOUSLY PROGRESSING at once. A slot is
+// COMPUTE pressure, so only an agent actually consuming it holds one: genuinely live (tmux window + rendezvous
+// socket present) AND either churning (`working`) or paused-to-self-resume (`parked`). Every state that is
+// WAITING ON THE HUMAN frees its slot — `idle` (stopped at its prompt), `asking` (asked a question), and the
+// proposal states (review/done/close-pending) — exactly as `offline`/`queued` do. Those agents burn no
+// compute, so they must NEVER block a fresh launch: the old rule counted them, so a pile of "waiting on you"
+// sessions wedged the queue while the box sat near-idle (the reported blockage). Liveness is still checked
+// directly (the socket truth reconcile uses), so an authored `parked` whose claude has since died does NOT
+// pin a slot. The cap throttles concurrent COMPUTE; everything waiting-on-you waits cheap as a live pane.
+const OCCUPIES_SLOT = new Set<DisplayStatus>(['working', 'parked', 'starting'])  // starting's boot window is also held via `launching`
 function isOccupying(s: Session, live: Set<string>): boolean {
-  if (s.status === 'queued' || s.lifecycle === 'awaiting') return false   // not launched, or handed to a human
-  return live.has(s.id) && existsSync(rvSock(s.id))                       // a genuinely live claude (tmux + socket)
+  if (!OCCUPIES_SLOT.has(s.status)) return false                          // waiting-on-human / proposed / queued / dead → free
+  return live.has(s.id) && existsSync(rvSock(s.id))                       // and only while its claude is genuinely live
 }
 // sessions we've JUST launched whose rendezvous socket hasn't come up yet. During that boot window reconcile
 // reads them `offline` (socket absent) and isOccupying would miss them, so the drainer would over-launch and
@@ -855,10 +897,11 @@ export async function drainQueue(): Promise<void> {
   if (draining) return
   draining = true
   try {
+    const cap = maxActive()   // read once per drain pass (spexcode.json → env → 6); won't shift mid-burst
     for (;;) {
       const [sessions, live] = await Promise.all([listSessions(), liveTmux()])
       const occupied = sessions.reduce((n, s) => n + (launching.has(s.id) || isOccupying(s, live) ? 1 : 0), 0)
-      if (occupied >= MAX_ACTIVE) break
+      if (occupied >= cap) break
       const next = sessions.find((s) => s.status === 'queued' && !launching.has(s.id))
       if (!next) break
       if (!(await startQueued(next.id))) break   // launch failed → stop this pass; a later tick retries
@@ -925,7 +968,7 @@ export async function newSession(node: string | null, prompt: string): Promise<S
   await gitA(['-C', mainRoot(), 'worktree', 'add', '-b', branch, path, mainBranch()])
   // prepared but NOT launched: enters the queue as `queued`. drainQueue() below launches it at once when a
   // slot is free, else it waits — durable as a worktree, so it survives a backend restart and is still findable.
-  const rec: SessRec = { node: ref || null, title, name: null, session: id, status: 'queued', proposal: null, merges: 0, note: null }
+  const rec: SessRec = { node: ref || null, title, name: null, session: id, status: 'queued', proposal: null, merges: 0, note: null, sortKey: null }
   writeSessionFile(path, rec)
   writePromptFile(path, prompt)   // capture the ORIGINATING prompt (the human/manager's ask) as sidecar metadata (best-effort)
   await hideClaudeMd(path)   // isolate the dispatched agent from the project CLAUDE.md (before launch)
@@ -951,7 +994,9 @@ export async function newSession(node: string | null, prompt: string): Promise<S
   writeLaunchFile(path, launchPrompt)   // park the exact launch prompt for the drainer (consumed at launch)
   await drainQueue()                    // launch now if under the cap, else leave it queued for a free slot
   const after = readSessionFile(path)   // 'active' if the drain launched it, else still 'queued'
-  return toSession(after, branch, path, after.status === 'queued' ? 'queued' : 'working')
+  // queued → no process yet (offline liveness); just-launched → its socket is still booting (starting).
+  const queued = after.status === 'queued'
+  return toSession(after, branch, path, queued ? 'queued' : 'working', queued ? 'offline' : 'starting')
 }
 
 // @@@ waitForSocket - after a relaunch, the resumed claude needs SEVERAL SECONDS to boot and recreate its
@@ -1185,15 +1230,36 @@ export async function mergeSession(id: string): Promise<{ dispatched: boolean; r
   return { dispatched: true }
 }
 
-// @@@ closeSession - the ONLY removal (human-confirmed): kills tmux, sweeps the rendezvous socket, removes
-// the worktree + branch. The rendezvous socket lives in the OS tmpdir (NOT the worktree), so worktree removal
-// alone leaves it behind — closing many sessions over time would accumulate stale `spexcode-rv-*.sock` files.
-// We unlink it here so no dead control endpoint lingers (rmSync force = no error if claude already removed it).
+// @@@ stopAgentProcess - the shared teardown both exit and close begin with, so there is ONE kill path, not
+// two: kill the agent's tmux client, drop its boot-window stamp (else a just-launched id lingers in the grace
+// window reading `starting` instead of `offline`), and sweep its rendezvous socket. The socket lives in the OS
+// tmpdir (NOT the worktree), so worktree removal alone would leave it behind — closing many sessions over time
+// would accumulate stale `spexcode-rv-*.sock` files; we unlink it here (force = no error if claude/OS already
+// removed it). Deliberately does NOT drainQueue — the caller drains once, after it has settled the worktree.
+async function stopAgentProcess(id: string): Promise<void> {
+  await tmuxOk(['kill-session', '-t', id])
+  launchedAt.delete(id)
+  try { rmSync(rvSock(id), { force: true }) } catch { /* best-effort sweep; tmpdir socket, claude/OS may already be gone */ }
+}
+
+// @@@ exitSession - the SOFT stop (vs closeSession's removal): stops the agent process but LEAVES the durable
+// worktree + branch + transcript intact. The session stays on the board, now reading `offline` (no tmux window)
+// whatever its lifecycle, so the relaunch panel offers to --resume the SAME conversation (see reopen). This is
+// "step away, come back later"; closeSession is "discard this work". An offline session occupies no slot, so
+// the freed capacity drains a queued session next (drainQueue).
+export async function exitSession(id: string): Promise<boolean> {
+  const wt = await findWorktree(id)
+  await stopAgentProcess(id)
+  void drainQueue()   // an exit frees a slot — start the next queued session if any
+  return !!wt
+}
+
+// @@@ closeSession - the REMOVAL (human-confirmed): exit's soft stop PLUS removing the worktree + branch — the
+// work is gone, not just stopped. Same stop primitive as exitSession (no duplicate kill path), then the git
+// worktree/branch teardown that exit deliberately skips.
 export async function closeSession(id: string): Promise<boolean> {
   const wt = await findWorktree(id)
-  await tmuxOk(['kill-session', '-t', id])
-  launchedAt.delete(id)   // drop the boot-window stamp so the map never accretes closed ids
-  try { rmSync(rvSock(id), { force: true }) } catch { /* best-effort sweep; tmpdir socket, claude/OS may already be gone */ }
+  await stopAgentProcess(id)
   if (wt) {
     await gitA(['-C', mainRoot(), 'worktree', 'remove', '--force', wt.path])
     if (wt.branch) await gitA(['-C', mainRoot(), 'branch', '-D', wt.branch])
@@ -1421,16 +1487,43 @@ export async function sendKeys(id: string, text: string, from?: string): Promise
 // move, ←/→ to adjust, Enter to set, `s` for this-session, Esc to cancel). When the agent is in that
 // keystroke-navigation state its input box is replaced by the menu, so the dashboard's nav mode forwards
 // each key here in real time. send-keys is exactly right for single raw keys: named keys map to tmux's own
-// key names; a single printable char is sent literally (`-l`) so tmux doesn't reinterpret it. One key per
-// call, no socket and no Enter-synthesis — this IS the send-keys channel. False if the tmux session is gone.
+// key names; a single printable char is sent literally (`-l`) so tmux doesn't reinterpret it. The dashboard
+// also drives the agent with MODIFIER COMBOS — a terminal's three modifiers carried as a `C-`/`M-`/`S-`
+// prefix on the token (e.g. `C-r`, `M-b`, `S-Tab`, `C-M-x`); those are passed to tmux UNescaped so it parses
+// the combo. One key per call, no socket and no Enter-synthesis — this IS the send-keys channel. False if
+// the tmux session is gone, or if the token isn't a known base after its prefixes (defends the send-keys arg).
 const TMUX_KEY: Record<string, string> = {
   Up: 'Up', Down: 'Down', Left: 'Left', Right: 'Right',
   Enter: 'Enter', Escape: 'Escape', Tab: 'Tab', Space: 'Space', Backspace: 'BSpace',
+  Home: 'Home', End: 'End', Delete: 'DC',
 }
+// tmux honours an `S-` (shift) modifier ONLY on these named keys; on Enter/Space/BSpace it would send the
+// literal text "S-Enter" etc. (and shift is a no-op there anyway), so a stray S- is dropped. Shift+Tab is
+// the named exception: tmux spells it `BTab` (back-tab → ESC[Z, what Claude Code's mode-cycle reads).
+const SHIFTABLE = new Set(['Up', 'Down', 'Left', 'Right', 'Home', 'End', 'DC'])
 export async function rawKey(id: string, key: string): Promise<boolean> {
   if (!key || !(await alive(id))) return false
-  const named = TMUX_KEY[key]
-  if (named) { await tmux(['send-keys', '-t', id, named]); return true }
-  if ([...key].length === 1) { await tmux(['send-keys', '-t', id, '-l', '--', key]); return true }  // single printable char
+  // peel the optional C-/M-/S- modifier prefixes (each at most once, in any order) off the front; the
+  // remainder is the BASE key. The frontend only ever sends {C-,M-,S-} prefixes + a named key or one char.
+  let rest = key, prefix = ''
+  const seen = new Set<string>()
+  while (rest.length >= 2 && (rest[0] === 'C' || rest[0] === 'M' || rest[0] === 'S') && rest[1] === '-' && !seen.has(rest[0])) {
+    seen.add(rest[0]); prefix += rest.slice(0, 2); rest = rest.slice(2)
+  }
+  const named = TMUX_KEY[rest]
+  if (named) {
+    const noShift = prefix.replace('S-', '')   // C-/M- without the shift bit
+    let token: string
+    if (prefix.includes('S-') && named === 'Tab') token = noShift + 'BTab'              // Shift+Tab → back-tab
+    else if (prefix.includes('S-') && !SHIFTABLE.has(named)) token = noShift + named     // tmux can't carry S- here
+    else token = prefix + named
+    await tmux(['send-keys', '-t', id, token]); return true
+  }
+  if ([...rest].length === 1) {
+    // a single printable char: bare → literal (`-l`, so tmux never reinterprets it as a key name);
+    // modified → hand tmux the `C-`/`M-`/`S-` combo to parse (e.g. `C-a`), which `-l` would defeat.
+    if (prefix) { await tmux(['send-keys', '-t', id, prefix + rest]); return true }
+    await tmux(['send-keys', '-t', id, '-l', '--', rest]); return true
+  }
   return false
 }

@@ -2,7 +2,7 @@
 title: state
 status: active
 hue: 280
-desc: The lifecycle state machine — declared statuses, gating hooks, socket liveness; agent-authored, never inferred.
+desc: Two orthogonal axes — agent-authored lifecycle and runtime-derived liveness — that never override each other; plus the gating hooks that force the lifecycle write.
 code:
   - spec-cli/hooks/stop-gate.sh
 related:
@@ -34,12 +34,33 @@ background wait (leave it alone) versus a dead stop that won't move until a huma
 They carry distinct faces, so the board never reads "stuck, needs me" as "fine, self-resuming," or the
 reverse — and a still-going `parked` agent is never mistaken for one with something to act on.
 
-**Authored states win over liveness.** `reconcile` maps those authored states straight to their label;
-only `active`/`idle` defer to a liveness check, on the **rendezvous socket, never the pane's foreground
-command** (see [[launch]]). A session is **offline** only when genuinely dead
-(no tmux, or its socket never opened); a still-booting one reads the transient **`starting`** instead.
-Else `idle` if the idle-prompt hook fired since the last tool use, else working — the **one inferred
-state**, **active-only guarded** so it can never clobber a declaration.
+**Lifecycle and liveness are two orthogonal axes; neither overrides the other.** A session carries two
+independent facts, computed independently:
+
+- **lifecycle** — *what the work needs*, **authored by the agent** (`active`/`idle`/`awaiting`/`parked`/
+  `error`/`asking`/`queued`), never inferred — the `.session/state` value above.
+- **liveness** — *whether the agent process is up*, **derived by the runtime for every session regardless
+  of lifecycle**: `offline` (no tmux window for the id, or its rendezvous socket never opened — genuinely
+  dead), transient `starting` (window up, socket still booting — see [[launch]]), else `online`. Read from
+  the **rendezvous socket, never the pane's foreground command**: claude holds the socket open while it
+  lives; the pane command is the wrapper/shell.
+
+The surfaces compose the two without precedence: the badge shows lifecycle, while **liveness `offline`
+shows the relaunch panel whatever the lifecycle** — a dead `asking` agent still needs you, now resumable —
+the sole exception being `queued`, which has not launched yet and self-starts as a slot frees.
+
+Offline is reachable on purpose, not only by a crash. **`exit`** is the human-only *soft stop* — the inverse
+of `reopen`: it kills the agent's tmux + rendezvous socket but **leaves the worktree, branch, and transcript**,
+so the session simply reads `offline` and the relaunch panel offers to `--resume` the same conversation.
+Because it touches no `.session/state`, the lifecycle the agent last authored survives the stop untouched.
+Contrast **`close`**, the other human-only terminal verb: it *removes* the worktree, discarding the work. Both
+are human-only and direct (not agent proposals); exit is fully reversible (relaunch), close is not. An exited
+session occupies no working-set slot ([[launch]]) — offline never does — so the freed capacity drains a queued
+one. The one
+*inferred* refinement stays orthogonal and narrow: an `online` `active` session reads `idle` if the
+idle-prompt hook fired since the last tool use, else working, **active-only guarded** so it never clobbers
+a declaration. The compact `DisplayStatus` (the `spex ls` glyph, the row dot) is a **derived label
+composing both axes** for one-glyph surfaces — a convenience, never a third source of truth.
 
 ### Hooks (injected per session via `--settings`, polluting nothing)
 

@@ -2,7 +2,7 @@
 title: spec-of-file
 status: active
 hue: 280
-desc: A per-edit PostToolUse annotation that fires only when ACTIONABLE — the first edit of a shared-hub or uncovered file flags it at the edit; a cleanly-owned file is left silent.
+desc: A per-edit PostToolUse annotation that fires only when ACTIONABLE — the first edit of an over-owned (> maxOwners) or uncovered file flags it at the edit; a sanely-owned file is left silent.
 code:
   - spec-cli/hooks/spec-of-file.sh
 ---
@@ -28,10 +28,11 @@ The file→spec resolve is **`spex owner <path> --actionable`** (a thin verb in 
 in specs.ts), a light read of frontmatter `code:` only — no git walk. `--actionable` is the discipline: it
 speaks ONLY when there is something to act on, so the annotation stays rare instead of chatty.
 
-- **shared hub** (>=2 owners) → "your change likely belongs to ONE; the others co-own it — give it a single
-  owner and RELATE it elsewhere." The [[governed-related]] guardrail, surfaced live the moment a hub is touched.
+- **over-owned** (> maxOwners governors) → "this file does too much — SPLIT it so each governor owns its own
+  module (or merge the nodes, or give it a single foundation owner + relate)." The [[governed-related]]
+  guardrail, surfaced live the moment an over-owned file is touched.
 - **uncovered** (no owner) → give it a home before it drifts.
-- **cleanly owned** (one owner) → **silent**. [[spec-first]] and the [[spec-pointer]] already grounded the
+- **sanely owned** (1..maxOwners) → **silent**. [[spec-first]] and the [[spec-pointer]] already grounded the
   agent; re-announcing a known owner on every edit is exactly the noise this annotation must not become —
   the lesson that an earlier always-on version of this hook taught.
 

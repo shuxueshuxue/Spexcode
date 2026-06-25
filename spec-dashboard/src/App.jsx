@@ -562,7 +562,6 @@ function Dashboard({ specs, sessions, reload }) {
         seed={seed}
         onSeedConsumed={() => setSeed(null)}
         onClose={() => setSessionUI(false)}
-        onCreated={async (id) => { await reload(); if (id) setSessionSel(id) }}
         onPickSession={onPickSession}
         reload={reload}
       />

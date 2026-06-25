@@ -28,11 +28,11 @@ rules:
 - **living** (error): a body stays current-state, with no `## vN` changelog headings — version history
   is read from git (recent/history tabs), not duplicated in prose. Fence-aware: a `## v2` inside a ```
   block is sample text, not a violation.
-- **coverage** (warn): every governed source file is claimed by ≥1 spec (no orphan code); and roots
-  matching no files are flagged "governing nothing", so an adopter who never set `lint.governedRoots`
-  isn't shown a falsely-clean board.
+- **coverage** (warn): every source file is claimed by ≥1 spec via `code:` **or** `related:` (no orphan
+  code) — related is the coverage net; and roots matching no files are flagged "governing nothing", so an
+  adopter who never set `lint.governedRoots` isn't shown a falsely-clean board.
 - **drift** (warn): a governed file has commits newer than its spec's latest version → maybe stale. A file
-  governed by ≥2 nodes (a **hub**) is excluded — no single owner, so the `hub` rule flags it instead.
+  governed by several nodes drifts **every** owner — shared governance is ordinary, and each has a stake.
 - **altitude** (warn): a body states *intent and contract*, not a re-narration of the implementation.
   The rule can't judge meaning, so it fires on cheap proxies of a mechanics dump — grown long (lines /
   chars over a soft budget), thick with code identifiers, or step-by-step how-to. Budgets default so
@@ -40,9 +40,10 @@ rules:
 - **breadth** (warn): a node with **≥ `lint.maxChildren`** direct children (default 8) — altitude's
   structural twin, the same "hold it in your head" limit on tree breadth, so passing altitude can't relocate
   sprawl into a flat fan-out. Advisory: a flat list of true peers is sometimes right, so it asks, not mandates.
-- **hub** (warn): one summary line counting files governed by ≥2 nodes — shared hubs with no single owner
-  that `drift`/yatsu skip. Remedy: give each ONE owner in `code:`, reference it elsewhere via **`related:`**
-  (counts for coverage, never drift/yatsu) — breadth's mirror (too many owners, not too many children). See [[governed-related]].
+- **owners** (warn): one summary line counting files governed by **> `lint.maxOwners`** nodes (default 3) —
+  breadth's mirror on the file (too many owners, not too many children; below the cap is ordinary). Remedy
+  blames the FILE: **split** it so each governor owns a module, or merge the nodes, or give it a single
+  foundation owner + **`related:`**. See [[governed-related]].
 
 Reusable as a **product**, not a SpexCode-only script: every project-shaped value (roots, extensions,
 budgets, the breadth limit) is read from an optional **`spexcode.json`** (`lint` key), defaulting to values
@@ -62,5 +63,4 @@ A commit ahead of a spec isn't always staleness — a refactor can change a gove
 stays true. Such a commit carries a **`Spec-OK: <node-id>`** trailer; drift skips the node it acknowledges
 (`Spec-OK: A` quiets only A). `spex ack <node>… --reason "<why>"` stamps it onto HEAD (`--amend`); the
 reason is **required but not stored** — it forces the agent to articulate why the spec still holds before
-quieting it. (Hubs now drift nobody, so the old "ack every co-owner of a shared file" dance is largely
-gone — see the `hub` rule.)
+quieting it. A shared file drifts every governor, so `Spec-OK:` accepts several ids — one ack per co-owner.

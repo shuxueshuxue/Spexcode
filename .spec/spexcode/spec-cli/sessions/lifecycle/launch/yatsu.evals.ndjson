@@ -1,0 +1,2 @@
+{"scenario":"cap-counts-only-the-working-set","codeSha":"6399cbb84665b3016a42d6b88db985f52f725b93","blob":"269bde5bfc5b29de8d70998221f28d86f901e59a33cf8c6bd5f159ed1556ace8","blobKind":"transcript","evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-25T04:02:02.819Z"}
+{"scenario":"cap-value-comes-from-spexcode-json","codeSha":"6399cbb84665b3016a42d6b88db985f52f725b93","blob":"7fe785d6b46a26ae242d931d70b064519e8d85b6c6e9ccc36762f2d8f9ea7d3a","blobKind":"transcript","evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-25T04:02:03.575Z"}

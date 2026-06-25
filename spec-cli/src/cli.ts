@@ -123,11 +123,11 @@ Sessions
   watch [SEL…]          stream actionable transitions — NEVER EXITS; run it in the BACKGROUND, don't block a turn on it (poll one-shot with \`wait\`)  [--as NAME] [--status a,b] [--idle] [--interval N]
   wait <SEL>            block until <SEL> is actionable, print it, exit (one-shot — the non-blocking counterpart to watch; draws the graph edge)  [--timeout S=1200] [--interval S]
   new "<prompt>"        start a session (= session new)  [--node X]
-  session <sub>         new | list | reopen | review | done | merge | close | send | capture | prompt
+  session <sub>         new | list | reopen | review | done | merge | exit | close | send | capture | prompt
   session prompt <SEL>  print the session's originating prompt (what it was asked to do)
 
   SEL = session id (or id-prefix), node, or branch — accepted by every read/control verb (ls·watch·wait·
-        review·merge·reopen·close·send·capture·prompt); none (or @all) = every session.`)
+        review·merge·reopen·exit·close·send·capture·prompt); none (or @all) = every session.`)
 }
 
 // @@@ help guard - `--help`/`-h` after ANY subcommand prints the summary and EXITS, never running the
@@ -155,24 +155,29 @@ if (cmd === 'serve') {
   const { guideText } = await import('./guide.js')
   console.log(guideText(process.argv[3]))
 } else if (cmd === 'owner') {
-  // @@@ owner - which spec node GOVERNS a path: the file→spec map the per-edit annotate hook (spec-of-file)
-  // surfaces at the moment of an edit. Light (frontmatter only, no git walk). 0 owners → uncovered; 1 →
-  // name it + its contract; many → flag the SHARED HUB and point at the single-owner refactor. Read-only.
+  // @@@ owner - which spec node(s) GOVERN a path: the file→spec map the per-edit annotate hook (spec-of-file)
+  // surfaces at the moment of an edit. Light (frontmatter only, no git walk). 0 owners → uncovered; a sanely
+  // owned file (1..maxOwners) → name the owners + the contract; OVER-owned (> maxOwners) → flag the file as
+  // doing too much and point at the split (see [[governed-related]]). Read-only.
   const { specOwners } = await import('./specs.js')
+  const { loadConfig } = await import('./lint.js')
   const p = positionals(3)[0]
   if (!p) { console.error('usage: spex owner <path>'); process.exit(2) }
   const rel = p.startsWith(process.cwd()) ? p.slice(process.cwd().length + 1) : p
   const owners = specOwners(p)
+  const maxOwners = loadConfig(process.cwd()).maxOwners
   if (owners.length === 0) {
     console.log(`${rel} — no spec governs this yet (uncovered). If your change is substantive, give it a home before it drifts.`)
-  } else if (owners.length === 1) {
-    // a cleanly-owned file is NOT actionable: --actionable callers (the per-edit spec-of-file hook) stay
-    // silent here, so the annotation fires only on a hub or an uncovered file — rare and worth acting on.
+  } else if (owners.length <= maxOwners) {
+    // a sanely-owned file is NOT actionable: --actionable callers (the per-edit spec-of-file hook) stay
+    // silent here, so the annotation fires only on an OVER-owned or uncovered file — rare and worth acting on.
     if (has('actionable')) process.exit(0)
-    console.log(`${rel} is governed by '${owners[0].id}' — ${owners[0].desc} Read/honor its spec; if your change shifts the intent, update the spec in the SAME commit.`)
+    const named = owners.map((o) => `'${o.id}'`).join(', ')
+    const lead = owners.length === 1 ? `${rel} is governed by ${named} — ${owners[0].desc}` : `${rel} is governed by ${named} (shared, fine).`
+    console.log(`${lead} Read/honor the spec; if your change shifts the intent, update the spec in the SAME commit.`)
   } else {
     const ids = owners.map((o) => o.id).join(', ')
-    console.log(`${rel} is claimed by ${owners.length} specs (${ids}) — a SHARED HUB. Your change likely belongs to ONE of them; the others merely co-own it. A file with many owners should get a single foundation owner and be RELATED elsewhere — don't fold a hub into a feature node's governed set.`)
+    console.log(`${rel} is governed by ${owners.length} specs (${ids}) — more than one file should hold. This file does TOO MUCH: SPLIT it so each governor owns its own module (or merge the nodes if they're one concern, or give it a single foundation owner + relate the rest).`)
   }
 } else if (cmd === 'lint') {
   const { specLint, driftGate, DRIFT_GUIDANCE } = await import('./lint.js')
@@ -298,6 +303,24 @@ if (cmd === 'serve') {
 } else if (cmd === 'board') {
   const { buildBoard } = await import('./board.js')
   console.log(JSON.stringify(await buildBoard(), null, 2))
+} else if (cmd === 'search') {
+  // @@@ search - the lexical retrieval floor ([[spec-search]]): rank spec NODES by term overlap for a
+  // natural-language query and return { id, title, path, score, snippet }. `--json` prints that array
+  // verbatim (the surface spec-scout's `--deep` and the spec→code relay reuse); default is a pretty list.
+  // Thin router: all scoring lives in search.ts so every consumer shares one implementation.
+  const { searchSpecs } = await import('./search.js')
+  const query = positionals(3).join(' ')
+  if (!query.trim()) { console.error('usage: spex search <query> [--json] [--limit N]'); process.exit(2) }
+  const limit = Number(flag('limit')) || 10
+  const results = await searchSpecs(query, { limit })
+  if (has('json')) { console.log(JSON.stringify(results)); process.exit(0) }
+  if (!results.length) { console.log(`no spec node matches "${query}"`); process.exit(0) }
+  results.forEach((r, i) => {
+    console.log(`${String(i + 1).padStart(2)}. ${r.title}  [${r.id}]  ·  score ${r.score}`)
+    console.log(`    ${r.path}`)
+    if (r.snippet) console.log(`    ${r.snippet}`)
+  })
+  process.exit(0)
 } else if (cmd === 'ls' || cmd === 'sessions') {
   // pretty list of living sessions + states. `spex ls [SEL...] [--status a,b] [--json]`
   // the board comes from the backend (so `spex ls` shows the sessions of whatever SPEXCODE_API_URL points at,
@@ -426,6 +449,11 @@ if (cmd === 'serve') {
     if (r.dispatched) console.log(`merge dispatched to ${full} — its agent is landing the merge`)
     else console.error(`merge dispatch failed: ${r.reason}`)
     process.exit(r.dispatched ? 0 : 1)
+  } else if (sub === 'exit') {
+    // the SOFT stop: kill the agent's tmux + socket but KEEP the worktree, so the session goes offline and
+    // can be resumed (reopen/relaunch). Distinct from `close`, which removes the worktree.
+    const full = await resolveSelectorOrExit(id)
+    console.log(await c.clientExit(full) ? `exited ${full} (worktree kept — resumable)` : `no such session ${full}`)
   } else if (sub === 'close') {
     const full = await resolveSelectorOrExit(id)
     console.log(await c.clientClose(full) ? `closed ${full}` : `no such session ${full}`)
@@ -461,7 +489,7 @@ if (cmd === 'serve') {
     if (!r.ok) { console.error(`no prompt recorded for ${full}`); process.exit(1) }
     process.stdout.write(r.prompt.endsWith('\n') ? r.prompt : r.prompt + '\n')
   } else {
-    console.error('spex session: new|list|reopen|review|done|park|ask|idle|merge|close|send|capture|prompt'); process.exit(2)
+    console.error('spex session: new|list|reopen|review|done|park|ask|idle|merge|exit|close|send|capture|prompt'); process.exit(2)
   }
 } else {
   console.error(`spex: unknown command '${cmd}' (try: spex help)`)

@@ -102,6 +102,7 @@ export default {
     emptyBefore: '没有活动的工作树——按 ',
     emptyAfter: ' 开始一个',
     rename: '重命名',
+    resetOrder: '恢复默认顺序',
     close: '关闭',
     closeTitle: '关闭“{name}”？',
     closeConfirm: '这将关闭会话并删除其工作树。任何未提交的更改都会丢失。',
@@ -238,6 +239,7 @@ export default {
 
   session: {
     opsTitle: '此会话正在改动的节点 —— 双击标签锁定并聚焦它们',
+    dragHandle: '拖动以排序',
     newSession: '新建会话',
     newSessionTitle: '新建会话（⌃/⌘+N · 或 ⌃/⌘+↑）',
     relationshipTitle: '查看会话关系 — 实时监视图（在空的新建会话框按 → 进入，← 返回）',
@@ -249,7 +251,7 @@ export default {
     menuHint: '↑↓ 选择 · ⏎ 插入',
     hint: { before: '输入 ', mid: ' 以引用规格 · ', after: ' 以套用配置预设' },
     navBtn: '导航',
-    navTitle: '导航模式——转发原始按键以操作智能体的交互菜单（⌃/⌘+I）',
+    navTitle: '导航模式——转发原始按键（含 ⌃/⌥/⌘ 组合键）以驱动智能体的终端（⌥/⌘+I）',
     relaunch: '重新启动',
     merge: '合并',
     relaunchResume: '⏵ 重新启动并恢复',
@@ -259,13 +261,25 @@ export default {
     offlineSubBefore: '工作树及其会话 ',
     offlineSubAfter: ' 仍然完好。重新启动以恢复同一对话。',
     navInd: '⌨ 导航模式',
-    navHelp: '按键将发送给会话 · Esc-Esc 或点击退出',
+    navHelp: '按键（含 ⌃/⌥/⌘ 组合键）将发送给会话 · ⌥/⌘+I、Esc-Esc 或点击退出',
     navExit: '点击退出导航模式',
     msgOffline: '重新启动以向此会话发送消息',
     msgPlaceholder: '向此会话发送消息 · ⏎ 发送',
     msgError: '⚠ 未送达 — 重试',
     attachTitle: '附加文件（或粘贴 / 拖入）—— 上传到会话所在机器，并插入其 /tmp 路径',
     attachError: '⚠ 上传失败',
+    // 面板命令 —— ❯ 输入框在本地执行（不发送给智能体）的 `/` 命令，每条都是某个顶栏按钮的“打字版”。
+    // `*Desc` 是 `/` 菜单行的说明；`*Title` 是按钮的悬停提示。
+    cmd: {
+      navDesc: '导航模式 —— 转发原始按键给智能体',
+      proofDesc: '此会话的工作证明 —— yatsu、改动、合并门禁',
+      mergeTitle: '将此会话合并到 main',
+      mergeDesc: '将此会话合并到 main',
+      exitTitle: '退出此会话（停止智能体，保留工作树 —— 可恢复）',
+      exitDesc: '退出 —— 停止智能体与 tmux，但保留工作树，之后可恢复',
+      closeTitle: '关闭此会话（移除工作树）',
+      closeDesc: '关闭 —— 移除工作树与分支，丢弃此工作（等同右键菜单 → 关闭）',
+    },
   },
 
   proof: {

@@ -105,6 +105,7 @@ export default {
     emptyBefore: 'no live worktrees — press ',
     emptyAfter: ' to start one',
     rename: 'rename',
+    resetOrder: 'reset order',
     close: 'close',
     closeTitle: 'close “{name}”?',
     closeConfirm: 'This closes the session and removes its worktree. Any uncommitted changes are lost.',
@@ -245,6 +246,7 @@ export default {
 
   session: {
     opsTitle: 'nodes this session is changing — double-click the tab to lock + focus them',
+    dragHandle: 'drag to reorder',
     newSession: 'New Session',
     newSessionTitle: 'New Session (⌃/⌘+N · also ⌃/⌘+↑)',
     relationshipTitle: 'View Session Relationship — the live monitor graph (→ from an empty New Session, ← back)',
@@ -256,7 +258,7 @@ export default {
     menuHint: '↑↓ pick · ⏎ insert',
     hint: { before: 'type ', mid: ' to reference a spec · ', after: ' to apply a config preset' },
     navBtn: 'nav',
-    navTitle: "nav mode — forward raw keystrokes to drive the agent's interactive menus (⌃/⌘+I)",
+    navTitle: "nav mode — forward raw keystrokes incl. ⌃/⌥/⌘ combos to drive the agent's terminal (⌥/⌘+I)",
     relaunch: 'relaunch',
     merge: 'merge',
     relaunchResume: '⏵ relaunch & resume',
@@ -266,13 +268,25 @@ export default {
     offlineSubBefore: 'the worktree and its session ',
     offlineSubAfter: ' are intact. relaunch to resume the same conversation.',
     navInd: '⌨ nav mode',
-    navHelp: 'keys go to the session · Esc-Esc or click to exit',
+    navHelp: 'keys (incl. ⌃/⌥/⌘ combos) go to the session · ⌥/⌘+I, Esc-Esc, or click to exit',
     navExit: 'click to exit nav mode',
     msgOffline: 'relaunch to message this session',
     msgPlaceholder: 'message this session · ⏎ to send',
     msgError: '⚠ not delivered — retry',
     attachTitle: 'attach a file (or paste / drop) — uploaded to the session machine, its /tmp path inserted',
     attachError: '⚠ upload failed',
+    // board commands — the `/` commands the ❯ inbox runs HERE (not in the agent), each the typed twin of a
+    // header button. `*Desc` is the `/` menu row's description; `*Title` is a button's hover tooltip.
+    cmd: {
+      navDesc: 'nav mode — forward raw keystrokes to the agent',
+      proofDesc: "this session's proof of work — yatsu, diff, merge gates",
+      mergeTitle: 'merge this session to main',
+      mergeDesc: 'merge this session to main',
+      exitTitle: 'exit this session (stop the agent, keep the worktree — resumable)',
+      exitDesc: 'exit — stop the agent + tmux but KEEP the worktree, so it can be resumed',
+      closeTitle: 'close this session (removes the worktree)',
+      closeDesc: 'close — remove the worktree + branch, discarding the work (= row menu → Close)',
+    },
   },
 
   proof: {

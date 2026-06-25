@@ -321,6 +321,22 @@ if (cmd === 'serve') {
     if (r.snippet) console.log(`    ${r.snippet}`)
   })
   process.exit(0)
+} else if (cmd === 'relay') {
+  // @@@ relay - spec→code: the floor's top hits, each with its governed `code:` files, so an agent jumps
+  // topic→spec→code in one call ([[relay]]). Reuses search.ts's ranking; --json for machine use, else a list.
+  const { relaySearch } = await import('./relay.js')
+  const query = positionals(3).join(' ')
+  if (!query.trim()) { console.error('usage: spex relay <query> [--json] [--limit N]'); process.exit(2) }
+  const limit = Number(flag('limit')) || 3
+  const hits = await relaySearch(query, { limit })
+  if (has('json')) { console.log(JSON.stringify(hits)); process.exit(0) }
+  if (!hits.length) { console.log(`no spec node matches "${query}"`); process.exit(0) }
+  hits.forEach((h, i) => {
+    console.log(`${String(i + 1).padStart(2)}. ${h.title}  [${h.id}]  ·  score ${h.score}`)
+    if (h.code.length) h.code.forEach((c) => console.log(`    ${c}`))
+    else console.log(`    (no governed code: files — a pure-prose node)`)
+  })
+  process.exit(0)
 } else if (cmd === 'ls' || cmd === 'sessions') {
   // pretty list of living sessions + states. `spex ls [SEL...] [--status a,b] [--json]`
   // the board comes from the backend (so `spex ls` shows the sessions of whatever SPEXCODE_API_URL points at,

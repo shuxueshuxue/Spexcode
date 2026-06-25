@@ -19,8 +19,10 @@ dist/
 .spex-launch.sh
 CLAUDE.spexhidden.md
 
-# harness state
-.claude/
+# harness state (local settings, transcripts) — but TRACK project agent definitions:
+# .claude/agents/*.md are shareable, version-controlled artifacts (e.g. the spec-scout sub-agent).
+.claude/*
+!.claude/agents/
 
 # machine-local claude binary symlink (points into a per-machine install); the session
 # launcher resolves `claude` from PATH (SPEXCODE_CLAUDE_CMD), so this is never vendored

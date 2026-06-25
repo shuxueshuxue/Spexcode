@@ -108,14 +108,18 @@ function snippetFor(text: string, desc: string, qterms: string[], window = 140):
   return s
 }
 
-// @@@ searchSpecs - the one entrypoint every consumer shares. Sums each query term's best-tier weight × its
-// IDF across the corpus; a term saturating the tree (`spec`, `node`, `session`) has IDF≈0 and is near-neutral
-// however many titles it hits, while a rare content word (`loss`, `orphan`, `escape`) carries the rank. Keeps
-// only nodes that hit ≥1 term, sorts by score DESC (ties → shorter id, then id), caps to `limit` (default 10).
-export async function searchSpecs(query: string, opts: { limit?: number } = {}): Promise<SearchResult[]> {
+// @@@ search-compute timing - the floor has NO index or cache: every call re-reads the tree (loadSpecsLite),
+// re-tokenizes, and recomputes IDF + BM25 over the whole corpus — O(Q×D) in the corpus token count D. That's
+// fine at this scale (the real latency is Node startup, not this), but it grows linearly with the tree, so we
+// track the PURE COMPUTE time (this function only — excludes process boot and the lazy import) to catch the
+// day it creeps toward ~1s, the point an index would be overdue. `onStats` reports {nodes, tokens, ms}; the
+// CLI prints it to stderr on every `spex search`, and [[spec-search]]'s yatsu keeps a tracked baseline.
+export type SearchStats = { nodes: number; tokens: number; ms: number }
+export async function searchSpecs(query: string, opts: { limit?: number; onStats?: (s: SearchStats) => void } = {}): Promise<SearchResult[]> {
+  const t0 = performance.now()
   const limit = opts.limit ?? 10
   const qterms = terms(query)
-  if (!qterms.length) return []
+  if (!qterms.length) { opts.onStats?.({ nodes: 0, tokens: 0, ms: performance.now() - t0 }); return [] }
 
   // precompute each node's three searchable fields once (reused for df, scoring, and snippets).
   const nodes: NodeFields[] = loadSpecsLite().map((s) => {
@@ -152,5 +156,9 @@ export async function searchSpecs(query: string, opts: { limit?: number } = {}):
     scored.push({ id: n.id, title: n.title, path: n.path, score: Math.round(score * 100) / 100, snippet: snippetFor(n.snippetText, n.desc, qterms) })
   }
   scored.sort((a, b) => b.score - a.score || a.id.length - b.id.length || a.id.localeCompare(b.id))
+  if (opts.onStats) {
+    const tokens = nodes.reduce((a, n) => a + n.nameWords.length + n.descWords.length + n.bodyWords.length, 0)
+    opts.onStats({ nodes: nodes.length, tokens, ms: performance.now() - t0 })
+  }
   return scored.slice(0, limit)
 }

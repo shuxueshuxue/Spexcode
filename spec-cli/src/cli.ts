@@ -312,7 +312,10 @@ if (cmd === 'serve') {
   const query = positionals(3).join(' ')
   if (!query.trim()) { console.error('usage: spex search <query> [--json] [--limit N]'); process.exit(2) }
   const limit = Number(flag('limit')) || 10
-  const results = await searchSpecs(query, { limit })
+  // @@@ compute timing - emit the PURE search-compute time (search.ts only — excludes this process's startup
+  // and the lazy import above) to stderr on every call, so --json's stdout stays the clean contract array
+  // while we can still track the cost. Tracked baseline lives in [[spec-search]]'s yatsu; alarm near ~1s.
+  const results = await searchSpecs(query, { limit, onStats: (s) => console.error(`[spec-search] compute ${s.ms.toFixed(1)}ms · ${s.nodes} nodes · ${s.tokens} tokens (excludes process start)`) })
   if (has('json')) { console.log(JSON.stringify(results)); process.exit(0) }
   if (!results.length) { console.log(`no spec node matches "${query}"`); process.exit(0) }
   results.forEach((r, i) => {

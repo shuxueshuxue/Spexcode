@@ -45,8 +45,8 @@ caps the count (default 10).
 
 The retriever (`spec-cli/src/search.ts`, `searchSpecs`) keeps the keyboard-nav palette's tier SHAPE but over
 THREE fields by signal strength: **name** (`title`+`id`) > **desc** (the curated one-line summary) > **body**.
-A question is many words where the palette took one typed fragment, so the query is **tokenized** and each
-term scored against its single best field, then summed. Matching is at word boundaries (prefix-of-a-word,
+A question is many words, so the query is **tokenized** and each term scored against its single best field,
+then summed. Matching is at word boundaries (prefix-of-a-word,
 never raw substring, so `main` can't hide in `domain`); name matches forward only (else the plural `specs`
 floods every `spec-*` node), desc/body stem both ways (`merge`↔`merging`) for free singular/plural reach; a
 small stoplist drops the question's function words.
@@ -54,15 +54,16 @@ small stoplist drops the question's function words.
 Two textbook lexical weights — read FROM the corpus, never hand-fit to the benchmark — keep it robust against
 this tree's biases. **IDF** (`ln(N/df)`) means a word saturating the corpus (every node is a "spec", a "node")
 counts for ~nothing while rare content words carry the rank. **BM25 term-frequency** on the body means a node
-that genuinely concentrates a rare word beats a long node that mentions it once — saturated and lightly
-length-normalised so neither repetition nor sheer length runs away (a thorough long spec is not punished for
-its length). Together with the desc boost they reach the case the floor exists for: the keyword living in a
-node's body or summary, not its title — what justifies spec search over `grep` on names. The constants (field
-weights, BM25 `K1`/`B`) sit in flat plateaus, the tell that recall is earned by the general rule, not fitted.
+that genuinely concentrates a rare word beats a long node that mentions it once — saturated and
+length-normalised so neither repetition nor length runs away. Together with the desc boost they reach the
+floor's reason to exist: the keyword in a node's body or summary, not its title. The constants (field weights,
+BM25 `K1`/`B`) sit in flat plateaus, the tell that recall is earned by the general rule, not fitted.
 
-It reads the spec tree from the **filesystem only** (no git history/drift walk), so a cold `spex search` is
-fast enough for an agent to call as freely as `grep`. `cli.ts`'s `search` verb is a thin router over
-`searchSpecs`; all scoring lives in `search.ts` so every consumer shares one implementation.
+It reads the spec tree from the **filesystem only** (no git walk), so a cold `spex search` is cheap to call
+as freely as `grep`. `cli.ts`'s `search` verb is a thin router over `searchSpecs`; all scoring lives there so
+every consumer shares one implementation. There is NO index or cache — every call re-reads and re-ranks the
+whole tree (`O(Q×D)` in corpus tokens) — so it emits its pure-compute time (`nodes·tokens·ms`, excl. process
+start) to stderr per call and `yatsu.md` tracks a baseline; nearing ~1s means an index is overdue.
 
 Loss is the [[yatsu-core]]-measured recall of a held-out question→node benchmark (this node's `yatsu.md`), run
 through the REAL `spex search --json`. It guards robustness — the ranking is iterated to lift recall WITHOUT

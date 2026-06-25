@@ -1441,16 +1441,43 @@ export async function sendKeys(id: string, text: string, from?: string): Promise
 // move, ←/→ to adjust, Enter to set, `s` for this-session, Esc to cancel). When the agent is in that
 // keystroke-navigation state its input box is replaced by the menu, so the dashboard's nav mode forwards
 // each key here in real time. send-keys is exactly right for single raw keys: named keys map to tmux's own
-// key names; a single printable char is sent literally (`-l`) so tmux doesn't reinterpret it. One key per
-// call, no socket and no Enter-synthesis — this IS the send-keys channel. False if the tmux session is gone.
+// key names; a single printable char is sent literally (`-l`) so tmux doesn't reinterpret it. The dashboard
+// also drives the agent with MODIFIER COMBOS — a terminal's three modifiers carried as a `C-`/`M-`/`S-`
+// prefix on the token (e.g. `C-r`, `M-b`, `S-Tab`, `C-M-x`); those are passed to tmux UNescaped so it parses
+// the combo. One key per call, no socket and no Enter-synthesis — this IS the send-keys channel. False if
+// the tmux session is gone, or if the token isn't a known base after its prefixes (defends the send-keys arg).
 const TMUX_KEY: Record<string, string> = {
   Up: 'Up', Down: 'Down', Left: 'Left', Right: 'Right',
   Enter: 'Enter', Escape: 'Escape', Tab: 'Tab', Space: 'Space', Backspace: 'BSpace',
+  Home: 'Home', End: 'End', Delete: 'DC',
 }
+// tmux honours an `S-` (shift) modifier ONLY on these named keys; on Enter/Space/BSpace it would send the
+// literal text "S-Enter" etc. (and shift is a no-op there anyway), so a stray S- is dropped. Shift+Tab is
+// the named exception: tmux spells it `BTab` (back-tab → ESC[Z, what Claude Code's mode-cycle reads).
+const SHIFTABLE = new Set(['Up', 'Down', 'Left', 'Right', 'Home', 'End', 'DC'])
 export async function rawKey(id: string, key: string): Promise<boolean> {
   if (!key || !(await alive(id))) return false
-  const named = TMUX_KEY[key]
-  if (named) { await tmux(['send-keys', '-t', id, named]); return true }
-  if ([...key].length === 1) { await tmux(['send-keys', '-t', id, '-l', '--', key]); return true }  // single printable char
+  // peel the optional C-/M-/S- modifier prefixes (each at most once, in any order) off the front; the
+  // remainder is the BASE key. The frontend only ever sends {C-,M-,S-} prefixes + a named key or one char.
+  let rest = key, prefix = ''
+  const seen = new Set<string>()
+  while (rest.length >= 2 && (rest[0] === 'C' || rest[0] === 'M' || rest[0] === 'S') && rest[1] === '-' && !seen.has(rest[0])) {
+    seen.add(rest[0]); prefix += rest.slice(0, 2); rest = rest.slice(2)
+  }
+  const named = TMUX_KEY[rest]
+  if (named) {
+    const noShift = prefix.replace('S-', '')   // C-/M- without the shift bit
+    let token: string
+    if (prefix.includes('S-') && named === 'Tab') token = noShift + 'BTab'              // Shift+Tab → back-tab
+    else if (prefix.includes('S-') && !SHIFTABLE.has(named)) token = noShift + named     // tmux can't carry S- here
+    else token = prefix + named
+    await tmux(['send-keys', '-t', id, token]); return true
+  }
+  if ([...rest].length === 1) {
+    // a single printable char: bare → literal (`-l`, so tmux never reinterprets it as a key name);
+    // modified → hand tmux the `C-`/`M-`/`S-` combo to parse (e.g. `C-a`), which `-l` would defeat.
+    if (prefix) { await tmux(['send-keys', '-t', id, prefix + rest]); return true }
+    await tmux(['send-keys', '-t', id, '-l', '--', rest]); return true
+  }
   return false
 }

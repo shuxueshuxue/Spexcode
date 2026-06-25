@@ -30,7 +30,10 @@ export function opSummary(ops) {
 // with room to grow. The top-left window AND the session-board tab both render THIS, so a session reads
 // identically on either surface. Each surface wraps it in its own button with its own handlers and
 // active/locked styling; the classes are global, so the face styles the same in either.
-export function SessionRow({ s, locked }) {
+// @@@ handle - an optional trailing node rendered at the FAR RIGHT of row 2 (.sess-meta). The console list
+// passes the drag-reorder handle here ([[session-reorder]]); the read-only window glance passes nothing, so
+// the handle only appears where reordering is possible.
+export function SessionRow({ s, locked, handle }) {
   const t = useT()
   const ops = opSummary(s.ops)
   const headline = sessionHeadline(s)
@@ -42,6 +45,7 @@ export function SessionRow({ s, locked }) {
       <span className="sess-meta">
         <span className="sess-status" style={{ color: STATUS_COLOR[s.status] }}>{t(`status.${s.status}`)}</span>
         {ops && <span className="sess-ops">{ops}</span>}
+        {handle}
       </span>
     </>
   )

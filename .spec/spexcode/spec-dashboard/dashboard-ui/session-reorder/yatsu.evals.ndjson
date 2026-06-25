@@ -1,0 +1,2 @@
+{"scenario":"handle-drag-reorders","codeSha":"5c158ddee2aa44db24f0bf3ff1c0a2f6e4b09f1d","blob":"fd6a0418c62174c721d3840d4f791d4cc82e7a5d985de934b0c5e2c9e97859a8","blobKind":"image","evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-25T03:37:37.121Z"}
+{"scenario":"handle-leaves-row-gestures-intact","codeSha":"5c158ddee2aa44db24f0bf3ff1c0a2f6e4b09f1d","blob":"1bf29c852cf29bf58da0c081e03d99e5f762ae488c99431456078431da6b369e","blobKind":"image","evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-25T03:37:37.870Z"}

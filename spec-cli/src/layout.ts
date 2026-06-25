@@ -17,11 +17,14 @@ type Config = {
     apiUrl?: string                // the per-project backend the board proxies to (read frontend-side; see api-endpoint)
     title?: string                 // override for the browser-tab name (default: the repo-root basename; see tab-title)
   }
+  sessions?: {
+    maxActive?: number             // concurrency cap: max agents AUTONOMOUSLY PROGRESSING at once (default 6; see sessions.ts maxActive)
+  }
 }
-// the resolved LAYOUT convention — main/branchPrefix/nodeFrom filled to defaults. `dashboard` is a
-// frontend/board concern (read separately via readConfig; see api-endpoint), NOT a layout field, so it
-// stays out of the convention rather than forcing a meaningless default here.
-type Convention = Required<Omit<Config, 'dashboard'>>
+// the resolved LAYOUT convention — main/branchPrefix/nodeFrom filled to defaults. `dashboard` and `sessions`
+// are frontend/runtime concerns (read separately via readConfig; see api-endpoint / sessions.ts maxActive),
+// NOT layout fields, so they stay out of the convention rather than forcing a meaningless default here.
+type Convention = Required<Omit<Config, 'dashboard' | 'sessions'>>
 
 export type Worktree = {
   path: string; branch: string | null; node: string | null

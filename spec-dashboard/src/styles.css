@@ -352,6 +352,11 @@ body {
 .doc-pre { margin: 0 0 10px; padding: 10px 12px; background: var(--panel2); border-radius: 4px; overflow-x: auto; font-size: 12px; line-height: 1.5; }
 .doc-pre code { background: none; padding: 0; color: var(--ink); }
 .doc-link { color: var(--blue); }
+/* GFM tables in a spec body — compact, bordered, header-tinted; scrolls on its own if too wide. */
+.doc-table { width: 100%; margin: 0 0 12px; border-collapse: collapse; font-size: 12px; display: block; overflow-x: auto; }
+.doc-table th, .doc-table td { border: 1px solid var(--line); padding: 5px 9px; text-align: left; vertical-align: top; }
+.doc-table th { background: var(--panel2); color: var(--ink2); font-weight: 700; }
+.doc-table code { white-space: nowrap; }
 
 /* three-part spec body — raw source (human) / expanded spec (agent) / current state (agent).
    Each part is a card with an owner badge so the reader sees who owns it and how stable it is. */
@@ -459,6 +464,9 @@ body {
 .fp-head { display: flex; flex-direction: column; gap: 2px; }
 .fp-eyebrow { font-size: 9px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
 .fp-title { font-size: 14px; font-weight: 700; color: var(--ink2); word-break: break-word; line-height: 1.25; }
+/* the focused node's desc one-liner — clamped so a long description never blows out the head; full text on hover. */
+.fp-desc { color: var(--muted); font-size: 11px; line-height: 1.35; margin-top: 2px;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .fp-sec { display: flex; flex-direction: column; gap: 6px; }
 .fp-sec-head { display: flex; align-items: center; justify-content: space-between; gap: 8px;
   font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted);

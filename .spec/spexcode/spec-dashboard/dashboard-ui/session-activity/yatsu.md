@@ -8,13 +8,20 @@ scenarios:
       name, branch, or the few words the human typed at launch. Read Row 2: a smaller, dimmer line carrying
       the colour-coded status word and the op tally (e.g. `working  ~2`). A session that has not come up yet
       (queued / booting, no pane title) shows its launch-prompt placeholder on Row 1 instead, and Row 2 still
-      shows its status. Screenshot it and file with `spex yatsu eval session-activity --image <png> --pass`.
+      shows its status. Crucially, watch a session through its FIRST seconds of coming up: Row 1 must hold the
+      launch-prompt placeholder steadily and then switch ONCE to the agent's glyph-led self-summary — it must
+      NOT flicker through tmux's default pane title (the host name, e.g. `ser581555022561`) or a bare `Claude
+      Code` splash on the way, because a genuine self-summary always leads with a status glyph and a
+      glyph-less title is rejected as "not spoken yet". Screenshot it and file with `spex yatsu eval
+      session-activity --image <png> --pass`.
     expected: >-
       A live working session's Row 1 is its tmux self-summary used AS the headline — the agent's own
       description of what it is doing now, having overridden the launch-prompt placeholder it started with;
       Row 2 below carries the status word + op count in a quieter font. A not-yet-live row shows the prompt
-      placeholder as its headline and still shows its status on Row 2. The headline is the worker's own pane
-      title (or, when present, a human rename), never a bare derived label while the agent is up.
+      placeholder as its headline and still shows its status on Row 2. A just-booting row keeps that
+      placeholder until the agent's glyph-led summary lands — it never flashes the host name or a bare `Claude
+      Code` splash in between. The headline is the worker's own pane title (or, when present, a human rename),
+      never a bare derived label or tmux default while the agent is up.
     code:
       - spec-cli/src/sessions.ts
       - spec-dashboard/src/SessionWindow.jsx

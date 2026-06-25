@@ -45,6 +45,27 @@ scenarios:
       window never covers them. The overflow is not lost: a vertical scrollbar appears inside the window
       and scrolling reaches the final row. On the MAIN baseline the same long list extends straight down
       past 80% of the viewport and overlaps/covers the stats strip, with no scrollbar.
+  - name: board-command-parity
+    description: >
+      Through the running dashboard in a real browser, open the session interface (Enter) on a session in the
+      REVIEW state (so nav + proof + merge all apply). (1) Read the header action row: confirm three small
+      TEXT buttons — nav, proof, merge — with NO leading glyph/emoji (no ⌨ keyboard, no ◆ diamond), each
+      rendered in a distinct colour. (2) In the `❯` inbox type `/` and read the completion menu: the board's
+      own commands (`/nav`, `/proof`, `/merge`, `/exit`) lead the list, each `/name` and its `[board]` tag
+      painted the SAME colour as the matching button, visibly apart from Claude Code's blue command rows.
+      (3) Type `/proof` and Enter: the proof overlay opens — identical to clicking the proof button; close it,
+      then click the proof button and confirm the SAME overlay opens. (4) Type `/nav` and Enter: nav mode
+      engages (the `❯` box becomes the nav indicator AND the nav button shows its active `.on` state); click
+      the nav button to toggle it back off. Screenshot the action row and the `/` menu.
+    expected: |
+      The action-row buttons are text-only (no glyphs/emoji) and colour-coded — nav yellow (var --yellow =
+      rgb(181,137,0)), proof cyan (var --cyan = rgb(42,161,152)), merge green (var --green = rgb(133,153,0)).
+      In the `/` menu the four board commands lead, each name + `[board]` tag in its identity colour — the
+      SAME hue as its button (nav yellow, proof cyan, merge green, exit red = rgb(220,50,47)) — while CC's
+      commands stay blue (rgb(38,139,210)); one element, one colour in both places. Typing `/proof` opens the
+      very overlay the proof button opens (one shared open-state); typing `/nav` toggles nav mode exactly as
+      the nav button does, and the button reflects that same state. A board command is never dispatched to the
+      agent — its line is intercepted and the draft cleared — so no `/proof`/`/nav` text reaches the pane.
   - name: status-word-colour
     description: >
       Through the running dashboard in a real browser, with several live sessions in DIFFERENT states (at

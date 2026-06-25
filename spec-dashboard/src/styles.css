@@ -827,6 +827,12 @@ body {
 .slash-src.src-user { color: var(--green); opacity: .85; }
 .slash-src.src-project { color: var(--cyan); opacity: .85; }
 .slash-src.src-skill { color: var(--magenta); opacity: .85; }
+/* @@@ board-command row - one of OUR commands (close/merge/nav/proof): runs HERE, not in the agent. Its
+   `/name` and its `[board]` tag both wear the command's identity hue (--sc, set by sc-<color> on the row),
+   the SAME colour as the matching header button — so the menu and the button name one thing in one colour,
+   visibly apart from CC's blue `/name` rows. */
+.slash-name.board { color: var(--sc); font-weight: 700; }
+.slash-src.src-board { color: var(--sc); opacity: .9; }
 /* config-preset kinds (new-session `/` palette): a mutating preset edits the graph, a report only reads it. */
 .slash-src.src-mutating { color: var(--yellow); opacity: .85; }
 .slash-src.src-report { color: var(--cyan); opacity: .85; }
@@ -927,10 +933,23 @@ body {
 .si-act.go { border-color: var(--blue); color: var(--blue); }
 .si-act.go:hover { background: var(--blue); color: var(--paper); }
 .si-act.big { padding: 8px 18px; font-size: 13px; margin-top: 8px; }
-/* nav-mode toggle: forwards raw keystrokes to the pane. `.on` = active (yellow, like the keyboard cursor);
+
+/* @@@ board commands - the `/` commands the inbox runs ITSELF (close / merge / nav / proof) each own ONE
+   identity hue, carried in `--sc`. That same `--sc` paints BOTH places the command appears — this header
+   button AND its `/` menu row — so the typed command and the clicked button read as one thing in one colour.
+   The `sc-<color>` token is the single definition of each hue; everything downstream reads `var(--sc)`. */
+.sc-red    { --sc: var(--red); }
+.sc-green  { --sc: var(--green); }
+.sc-yellow { --sc: var(--yellow); }
+.sc-cyan   { --sc: var(--cyan); }
+/* coloured header button: a resting tint in the identity hue, filled on hover (the proof button's old look,
+   now shared by every board button so nav/proof/merge read alike). */
+.si-act.board { border-color: var(--sc); color: var(--sc); }
+.si-act.board:hover { background: var(--sc); color: var(--paper); border-color: var(--sc); }
+/* nav-mode toggle alone carries two extra states: `.on` = active (filled, like the keyboard cursor);
    `.suggest` = the best-effort menu sniff thinks a select menu is up, so it pulses to invite nav mode. */
-.si-act.nav.on { border-color: var(--yellow); color: var(--paper); background: var(--yellow); }
-.si-act.nav.suggest { border-color: var(--yellow); color: var(--yellow); animation: si-nav-pulse 1.1s ease-in-out infinite; }
+.si-act.board.nav.on { background: var(--sc); color: var(--paper); }
+.si-act.board.nav.suggest { animation: si-nav-pulse 1.1s ease-in-out infinite; }
 @keyframes si-nav-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(181, 137, 0, .5); } 50% { box-shadow: 0 0 0 3px rgba(181, 137, 0, 0); } }
 /* nav-mode indicator replacing the ❯ box: keys go to the pane, not this box. */
 .si-bottom.nav { border-color: var(--yellow); background: var(--panel2); cursor: pointer; gap: 10px; }
@@ -1185,6 +1204,4 @@ body {
 }
 .proof-x:hover { border-color: var(--orange); color: var(--orange); }
 .proof-iframe { flex: 1; width: 100%; border: 0; background: #0b0e14; }
-/* the `proof` action button shares .si-act; tint it the spec-graph accent so it reads as evidence, not an edit. */
-.si-act.proof { color: var(--cyan); border-color: var(--cyan); }
-.si-act.proof:hover { background: var(--cyan); color: var(--paper); border-color: var(--cyan); }
+/* the `proof` button's cyan now comes from the shared `.si-act.board.sc-cyan` rule (see board commands). */

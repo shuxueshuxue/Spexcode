@@ -274,6 +274,16 @@ export default {
     msgError: '⚠ not delivered — retry',
     attachTitle: 'attach a file (or paste / drop) — uploaded to the session machine, its /tmp path inserted',
     attachError: '⚠ upload failed',
+    // board commands — the `/` commands the ❯ inbox runs HERE (not in the agent), each the typed twin of a
+    // header button. `*Desc` is the `/` menu row's description; `*Title` is a button's hover tooltip.
+    cmd: {
+      navDesc: 'nav mode — forward raw keystrokes to the agent',
+      proofDesc: "this session's proof of work — yatsu, diff, merge gates",
+      mergeTitle: 'merge this session to main',
+      mergeDesc: 'merge this session to main',
+      exitTitle: 'close this session (removes the worktree)',
+      exitDesc: 'close this session — removes the worktree (= row menu → Close)',
+    },
   },
 
   proof: {

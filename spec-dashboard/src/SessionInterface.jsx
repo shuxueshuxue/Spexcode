@@ -8,7 +8,8 @@ import { labelColor } from './color.js'
 import { STATUS_COLOR, sessionName } from './session.js'
 import { SessionRow } from './SessionWindow.jsx'
 import SessionContextMenu from './SessionContextMenu.jsx'
-import { ProofButton } from './ReviewProof.jsx'
+import { ProofOverlay } from './ReviewProof.jsx'
+import { boardCommandsFor } from './sessionCommands.js'
 import { useT } from './i18n/index.jsx'
 
 // @@@ SessionInterface - the Enter surface. TWO panes: a left session list and a right content area
@@ -131,8 +132,9 @@ function matchConfig(presets, query) {
   return scored.slice(0, 10).map((x) => x.p)
 }
 
-// the row's trailing source tag, mirroring CC: `(user)` / `(project)` / `[skill]` / `built-in`.
-const SRC_TAG = { user: '(user)', project: '(project)', skill: '[skill]', 'built-in': 'built-in' }
+// the row's trailing source tag, mirroring CC: `(user)` / `(project)` / `[skill]` / `built-in`. `[board]`
+// flags one of OUR commands (close/merge/nav/proof) — it runs HERE, not in the agent (see boardCommandsFor).
+const SRC_TAG = { user: '(user)', project: '(project)', skill: '[skill]', 'built-in': 'built-in', board: '[board]' }
 
 // bold the first case-insensitive hit of the query inside a label (the part the user has typed so far).
 function highlight(text, q) {
@@ -160,6 +162,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // looks like a select menu — used only to SUGGEST nav mode (pulse the button), never to seize keys.
   const [navMode, setNavMode] = useState(false)
   const [menuById, setMenuById] = useState({})
+  // @@@ proof overlay - the review-proof iframe's open state lives HERE (not inside the button) so the typed
+  // `/proof` board command and the header button drive the ONE same overlay (see the command registry below).
+  const [proofOpen, setProofOpen] = useState(false)
   // @@@ graph legend - the relationship tab's `?` keymap modal. LIFTED here (not inside SessionGraph) so the
   // console's own Esc handler can close it before closing the console — the console's window listener runs
   // first, so it must own this Esc precedence (see the key router below).
@@ -252,7 +257,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
 
   // nav mode binds to ONE live session's menu — leaving the tab (or it going offline) exits it, so raw
   // keystrokes can never leak into the wrong pane.
-  useEffect(() => { setNavMode(false); setSendErr(false); setMenu(null) }, [active])
+  useEffect(() => { setNavMode(false); setSendErr(false); setMenu(null); setProofOpen(false) }, [active])
   useEffect(() => { if (selSession?.status === 'offline') setNavMode(false) }, [selSession?.status])
   // @@@ refocus on nav exit - leaving nav mode (chord, double-Esc, header button, or bottom-bar click)
   // hands the keyboard back to the bottom message box, so you can type without re-clicking it. Guarded to
@@ -423,7 +428,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     }
     const sm = value.match(/^\/(\S*)$/)
     if (sm) {
-      const items = matchSlash(slashCmds, sm[1])
+      // the board's own commands (coloured, run HERE) lead the menu; CC's commands follow. matchSlash is a
+      // stable prefix rank, so the board set keeps its lead within each score band.
+      const board = boardCmds.map((c) => ({ name: c.name, description: t(c.descKey), board: true, color: c.color }))
+      const items = matchSlash([...board, ...slashCmds], sm[1])
       if (!items.length) return null
       return { kind: 'slash', items, index: 0, start: 0, end: value.length, query: sm[1] }
     }
@@ -438,6 +446,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const accept = (item) => {
     if (!item || !menu) return
     if (menu.kind === 'slash') {
+      // a BOARD command is the one row that RUNS rather than inserts: it IS the board's control plane (the
+      // typed twin of its header button), so accepting it does the thing — close / merge / nav / open proof —
+      // exactly as clicking the button would. CC's own commands still only insert text (you Enter to dispatch).
+      if (item.board) { const c = boardCmds.find((x) => x.name === item.name); setMsg(''); setMenu(null); c?.run(); return }
       const insert = `/${item.name} `
       const before = msg.slice(0, menu.start)
       setMsg(before + insert + msg.slice(menu.end))
@@ -463,17 +475,20 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     <ul className={up ? 'mention-menu up' : 'mention-menu'} role="listbox">
       <li className="mention-head">// {head} — {t('session.menuHint')}</li>
       {menu.items.map((it, i) => {
-        const tag = it.source ?? it.kind   // command → source; preset → kind
+        // a BOARD command carries its own identity hue (sc-<color> sets --sc), tinting BOTH its `/name` and
+        // its `[board]` tag the same colour as its header button. CC commands → source tag; presets → kind.
+        const tag = it.board ? 'board' : (it.source ?? it.kind)
+        const hue = it.board ? ` sc-${it.color}` : ''
         return (
           <li
             key={`${tag}:${it.name}`}
             role="option"
             aria-selected={i === menu.index}
-            className={i === menu.index ? 'mention-item on' : 'mention-item'}
+            className={`${i === menu.index ? 'mention-item on' : 'mention-item'}${hue}`}
             onMouseDown={(e) => { e.preventDefault(); accept(it) }}
             onMouseEnter={() => setMenu((m) => (m ? { ...m, index: i } : m))}
           >
-            <span className="slash-name">/{highlight(it.name, menu.query)}</span>
+            <span className={it.board ? 'slash-name board' : 'slash-name'}>/{highlight(it.name, menu.query)}</span>
             <span className="slash-desc">{it.description ?? it.desc}</span>
             <span className={`slash-src src-${tag}`}>{SRC_TAG[tag] || tag}</span>
           </li>
@@ -492,11 +507,15 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const sendMsg = async () => {
     const text = msg
     if (!text.trim() || active === 'new') return
-    // @@@ /exit → close - the inbox's one client-intercepted token. `/exit` (CC's quit word) closes THIS
-    // spexcode session directly — the same no-prompt removal as the header Close button (act('close')) —
-    // instead of being dispatched to the agent, where it would only quit the agent's own process and
-    // orphan the worktree. trim() covers the trailing space the `/` completion leaves and a stray newline.
-    if (text.trim() === '/exit') { setMsg(''); setMenu(null); act('close'); return }
+    // @@@ board command → run, don't dispatch - a line that is EXACTLY `/<name>` of an available board
+    // command (close, merge, nav, proof) runs that command HERE instead of being sent to the agent — the
+    // same action its header button fires, from the same registry. This generalises the old `/exit`-only
+    // intercept: `/exit` still closes this session directly (the no-prompt removal the row-menu Close does),
+    // and sending any of these words to a live agent would only drive the agent's own process, not the board.
+    // The menu's accept() already runs a board command on pick; this covers the no-menu submit (line typed or
+    // pasted whole). trim() covers the trailing space the `/` completion leaves and a stray newline.
+    const cmd = boardCmds.find((c) => text.trim() === `/${c.name}`)
+    if (cmd) { setMsg(''); setMenu(null); cmd.run(); return }
     setMsg('')
     setSendErr(false)
     try {
@@ -583,6 +602,21 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     await fetch(`/api/sessions/${active}/${verb}`, { method: 'POST' }).catch(() => {})
     await onCreated?.(null)
   }
+
+  // @@@ board commands - ONE registry (sessionCommands.js) feeds BOTH the header buttons AND the `❯` inbox's
+  // `/`-command interception, so a typed `/<name>` and the clicked button are the same action with the same
+  // identity colour. `runners` binds each command name to the closure that DOES it — the SAME closure the
+  // button's onClick fires — so the two surfaces can never drift. `boardCmds` is that registry narrowed to
+  // the commands available in the current session state (nav whenever live; proof/merge at review/done; exit
+  // whenever live). Used by buildMenu (to list them, coloured, atop the inbox `/` menu), accept/sendMsg (to
+  // RUN one), and the action row (to render the buttons).
+  const runners = {
+    nav: () => setNavMode((v) => !v),
+    proof: () => setProofOpen(true),
+    merge: () => act('merge'),
+    exit: () => act('close'),
+  }
+  const boardCmds = boardCommandsFor(selSession?.status, runners)
   // @@@ window-level list nav - ↑/↓ move the selection regardless of focus; Enter on New launches.
   const stateRef = useRef({})
   stateRef.current = { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, navMode, setNavMode, sendRawKey, graphLegend, setGraphLegend }
@@ -856,24 +890,28 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   <span className="si-th-name">{sessionName(selSession) || active}</span>
                   <span className="si-th-st" style={{ color: STATUS_COLOR[selSession?.status] }}>{selSession?.status ? t(`status.${selSession.status}`) : ''}</span>
                   {selSession?.merges > 0 && <span className="si-merges" title={t('session.mergesTitle')}>{t('session.merges', { n: selSession.merges })}</span>}
+                  {/* @@@ action row - the buttons are the SAME board commands as the typed `/` commands, from
+                      the one registry: each carries its identity hue (sc-<color>) and fires the SAME run()
+                      the typed command does, so button and command never diverge. exit has no button here
+                      (button:false) — closing lives on the row's right-click menu, behind a confirm; relaunch
+                      is a plain lifecycle action, not a board command. No "request review": agents propose it
+                      at the stop-gate (`session done --propose merge`). */}
                   <div className="si-actions">
-                    {selSession?.status !== 'offline' && (
-                      <button
-                        className={navMode ? 'si-act nav on' : (menuById[active] ? 'si-act nav suggest' : 'si-act nav')}
-                        title={t('session.navTitle')}
-                        onClick={() => setNavMode((v) => !v)}
-                      >⌨ {t('session.navBtn')}</button>
-                    )}
-                    {selSession?.status === 'offline' && <button className="si-act go" onClick={() => act('resume')}>{t('session.relaunch')}</button>}
-                    {/* no manual "request review": agents propose review themselves at the stop-gate
-                        (`session done --propose merge`). proposals (review/done/close-pending) resolve to
-                        merge / close */}
-                    {/* the review-proof face: a thin opener for the backend-rendered proof of work
-                        ([[review-proof]]); shown alongside merge whenever the session has work to review. */}
-                    <ProofButton sessionId={active} status={selSession?.status} />
-                    {(selSession?.status === 'review' || selSession?.status === 'done') && <button className="si-act go" onClick={() => act('merge')}>{t('session.merge')}</button>}
-                    {/* no header "close": the verb read as "close the panel" but killed the session + worktree.
-                        Closing now lives only on the session row's right-click menu, behind a confirm prompt. */}
+                    {selSession?.status === 'offline'
+                      ? <button className="si-act go" onClick={() => act('resume')}>{t('session.relaunch')}</button>
+                      : boardCmds.filter((c) => c.button).map((c) => {
+                          // nav alone carries extra state: `.on` while active, `.suggest` while the pane sniff
+                          // thinks a select menu is up (the pulse that invites nav mode).
+                          const state = c.name === 'nav' ? (navMode ? ' on' : (menuById[active] ? ' suggest' : '')) : ''
+                          return (
+                            <button
+                              key={c.name}
+                              className={`si-act board sc-${c.color} ${c.name}${state}`}
+                              title={t(c.titleKey)}
+                              onClick={c.run}
+                            >{t(c.labelKey)}</button>
+                          )
+                        })}
                   </div>
                 </div>
                 <div className="si-term-body" style={{ position: 'relative' }}>
@@ -939,6 +977,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       </div>
     </div>
     <SessionContextMenu menu={ctxMenu} onClose={() => setCtxMenu(null)} onChanged={reload} />
+    {/* the review-proof overlay ([[review-proof]]) — one instance driven by the lifted `proofOpen`, opened
+        identically by the `proof` header button and the typed `/proof` board command. */}
+    {proofOpen && active !== 'new' && active !== 'graph' && <ProofOverlay sessionId={active} onClose={() => setProofOpen(false)} />}
     </>
   )
 }

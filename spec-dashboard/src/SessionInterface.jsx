@@ -219,53 +219,41 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // THAT row only (its midpoint among new neighbours). The rendered list IS the backend's (already sorted by
   // `sortKey ?? created`), so we POST the plan and reload — never shuffle locally, keeping this a thin view of
   // /api/board. dropHint lights the insertion line { id, place }.
+  const dragId = useRef(null)
   const [dropHint, setDropHint] = useState(null)
-  const suppressClickRef = useRef(false)   // a completed drag suppresses the row's tab-switch click that follows
   const applyReorder = async (plan) => {
     if (!plan) return
     try { await Promise.all(plan.updates.map((u) => setSessionSort(u.id, u.key))) }
     catch { /* the next board poll reconciles */ }
     reload?.()
   }
-  // @@@ POINTER drag, not native HTML5 DnD - the panel's keepFocus preventDefaults the row mousedown (to keep
-  // the ❯ input focused), and a preventDefaulted mousedown CANCELS a native dragstart outright — so HTML5
-  // `draggable` never fires for a real mouse here. A pointer drag (mousedown → window mousemove past a small
-  // threshold → mouseup) is immune to that preventDefault. Movement under the threshold stays a plain click
-  // (tab switch); a real drag flags suppressClickRef so the click that follows mouseup doesn't also switch tab.
-  const onRowMouseDown = (e, s) => {
-    if (e.button !== 0) return
-    const startY = e.clientY
-    const list = sessions            // snapshot for this gesture (a drag is far shorter than the 4s board poll)
-    let dragging = false, hint = null
-    const onMove = (ev) => {
-      if (!dragging) { if (Math.abs(ev.clientY - startY) < 4) return; dragging = true }
-      ev.preventDefault()            // suppress text selection once a drag is underway
-      const rows = [...(panelRef.current?.querySelectorAll('.si-item') || [])]
-      hint = null
-      for (const el of rows) {
-        const r = el.getBoundingClientRect()
-        if (ev.clientY >= r.top && ev.clientY <= r.bottom) { hint = { id: el.dataset.sid, place: ev.clientY < r.top + r.height / 2 ? 'before' : 'after' }; break }
-      }
-      if (!hint && rows.length && ev.clientY > rows[rows.length - 1].getBoundingClientRect().bottom) hint = { end: true }
-      setDropHint(hint && !hint.end ? hint : null)
-    }
-    const onUp = () => {
-      window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp)
-      setDropHint(null)
-      if (!dragging) return
-      // suppress only the click that fires synchronously right after THIS mouseup (a drag ending on the same
-      // row). Clear on the next tick so a stale flag can't swallow a later, unrelated click when the drag
-      // ended over a different row (then no row click follows to clear it).
-      suppressClickRef.current = true
-      setTimeout(() => { suppressClickRef.current = false }, 0)
-      let beforeId
-      if (hint?.end) beforeId = null
-      else if (hint) beforeId = hint.place === 'before' ? hint.id : (list[list.findIndex((x) => x.id === hint.id) + 1]?.id ?? null)
-      else return
-      applyReorder(reorderPlan(list, s.id, beforeId))
-    }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
+  // @@@ native HTML5 DnD - the rows are real `draggable` elements. keepFocus EXEMPTS .si-item from its
+  // mousedown preventDefault (see keepFocus below) — a preventDefaulted mousedown cancels a native dragstart,
+  // which is why this looked dead before. With the exemption the browser owns the gesture split: a quick
+  // press is a click (tab switch), a double press is a dblclick (lock), a press-and-drag is a drag — they
+  // never collide the way a hand-rolled pointer drag would. dropHint lights the insertion line { id, place }.
+  const onRowDragOver = (e, s) => {
+    if (!dragId.current || dragId.current === s.id) return
+    e.preventDefault()
+    const r = e.currentTarget.getBoundingClientRect()
+    const place = e.clientY < r.top + r.height / 2 ? 'before' : 'after'
+    setDropHint((h) => (h && h.id === s.id && h.place === place ? h : { id: s.id, place }))
+  }
+  const onRowDrop = (e, s) => {
+    e.preventDefault(); e.stopPropagation()
+    const draggedId = dragId.current; dragId.current = null
+    const hint = dropHint; setDropHint(null)
+    if (!draggedId) return
+    const place = hint && hint.id === s.id ? hint.place : 'before'
+    const i = sessions.findIndex((x) => x.id === s.id)
+    const beforeId = place === 'before' ? s.id : (sessions[i + 1]?.id ?? null)
+    applyReorder(reorderPlan(sessions, draggedId, beforeId))
+  }
+  // dropping in the empty space below the rows appends the dragged row to the very end.
+  const onListDrop = (e) => {
+    e.preventDefault()
+    const draggedId = dragId.current; dragId.current = null; setDropHint(null)
+    if (draggedId) applyReorder(reorderPlan(sessions, draggedId, null))
   }
 
   // @@@ the vertical ↑/↓ ring - New Session, then each live session. The relationship graph is DELIBERATELY
@@ -785,7 +773,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     if (isTextField(t)) return
     // the terminal owns its own text selection; the relationship graph owns its own mousedown (ReactFlow's
     // pan / drag-to-monitor / node click) — preventing default on either would break those gestures.
-    if (t.closest && (t.closest('.si-term-body') || t.closest('.session-graph'))) return
+    // .si-item rows are draggable (session-reorder): a preventDefaulted mousedown would cancel their native
+    // dragstart, so let their mousedown through. A row click/dblclick still fires; tab-switch refocuses the input.
+    if (t.closest && (t.closest('.si-term-body') || t.closest('.session-graph') || t.closest('.si-item'))) return
     e.preventDefault()
   }
 
@@ -820,7 +810,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           style={{ display: 'none' }}
           onChange={(e) => { attachFiles(e.target.files, fileTargetRef.current); e.target.value = '' }}
         />
-        <aside className="si-list">
+        <aside className="si-list" onDragOver={(e) => { if (dragId.current) e.preventDefault() }} onDrop={onListDrop}>
           {/* @@@ top button row - two compact icon buttons, NOT full-width list rows, so neither blocks the
               ↑/↓ path down to a session. `＋` starts a New Session; the network glyph opens the relationship
               graph (same glyph the spec board's HUD carries). New ⇄ graph is the ←/→ horizontal axis (see the
@@ -844,11 +834,14 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             // top-right window (same status + same overlay tally, e.g. "review ~2"), not a divergent subset.
             <button
               key={s.id}
-              data-sid={s.id}
               className={`si-item${active === s.id ? ' on' : ''}${dropHint?.id === s.id ? ` drop-${dropHint.place}` : ''}`}
               style={{ '--ov': labelColor(s.id) }}
-              onMouseDown={(e) => onRowMouseDown(e, s)}
-              onClick={() => { if (suppressClickRef.current) { suppressClickRef.current = false; return } setSel(s.id) }}
+              draggable
+              onDragStart={(e) => { dragId.current = s.id; e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', s.id) } catch { /* some browsers forbid setData here */ } }}
+              onDragOver={(e) => onRowDragOver(e, s)}
+              onDrop={(e) => onRowDrop(e, s)}
+              onDragEnd={() => { dragId.current = null; setDropHint(null) }}
+              onClick={() => setSel(s.id)}
               onDoubleClick={() => { if (s.ops?.length && onPickSession) { onPickSession(s, false); onClose() } }}
               onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, session: s }) }}
               title={s.ops?.length ? t('session.opsTitle') : undefined}

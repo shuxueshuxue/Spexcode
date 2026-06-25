@@ -39,7 +39,14 @@ auto-jump-to-the-new-session is gone; only a tab's *removal* (below) ever moves 
 not a `t` overlay; the board's `t`/network button open onto it, and clicking a node switches to that session's tab.
 
 An existing session shows its **live tmux terminal** (SessionTerm) with the docked **`❯` input** below — a
-**real tmux client but a read-only scrollable view**. The header bar above it (`si-th-name`) titles the
+**real tmux client but a read-only scrollable view** — but only when its **liveness** ([[state]]) is live
+(`online`/`starting`). The terminal mount and the relaunch panel key on **liveness, never the lifecycle
+label**: a session whose process is gone reads `offline` whatever its authored lifecycle (`asking`,
+`review`, `error`, …), so it never mounts a tmux client against a dead id (which would leak tmux's bare
+"no sessions" into the pane) — it shows the **relaunch panel** instead, offering to resume the same
+conversation (the transcript and `.session/` survive — see [[runtime]]). `queued` is the one exception: it
+has intentionally not launched, so it shows neither a terminal nor a relaunch, and self-starts as a slot
+frees. The header bar above it (`si-th-name`) titles the
 terminal with the **shared session headline** ([[session-activity]]), not the stable `sessionName` — same
 source and content as the session rows, only with more room before it truncates — so the title over the
 terminal never disagrees with the row that opened it. Read-only governs input, not extraction: text selects, the
@@ -78,8 +85,8 @@ place** (socket + scroll survive), New Session included (it hides its pane). War
 the **visible** pane holds a WebGL context, so many panes can't exhaust the browser's capped GPU contexts. List
 navigation lives at the **window level** (arrows walk the list whatever holds focus). The **header action row**
 is the same board-command registry, narrowed to the current state: **nav** whenever live, **proof** + **merge**
-at review/done — each a small **text** button (no glyphs) in its identity colour; offline swaps them for a
-relaunch panel, and review is **agent-proposed** at the stop-gate. There is **no header close button** (`/exit`
+at review/done — each a small **text** button (no glyphs) in its identity colour; an `offline` liveness
+(any lifecycle) swaps them for a relaunch panel, and review is **agent-proposed** at the stop-gate. There is **no header close button** (`/exit`
 has no button twin — its "close" misread as "close the panel" while it killed the session + worktree): closing
 lives only on the row's right-click menu, behind a confirm ([[session-rename]]).
 **Closing is event-driven**: the tab's *removal* — not any one gesture — drives where you

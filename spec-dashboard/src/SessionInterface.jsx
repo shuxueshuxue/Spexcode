@@ -289,6 +289,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   }, [order, sel, setSel])
   const focusId = focusNode?.id || null
   const selSession = sessions.find((s) => s.id === active)
+  // liveness (NOT the lifecycle label) gates the terminal vs the relaunch panel — see [[state]]/[[session-console]].
+  // noLivePane: no live tmux to attach or message (offline, incl a never-launched `queued`). showRelaunch:
+  // offer to resume — every dead session EXCEPT `queued`, which self-starts as a slot frees, so it gets no button.
+  const noLivePane = selSession?.liveness === 'offline'
+  const showRelaunch = noLivePane && selSession?.status !== 'queued'
   // the active session tab's bottom-input draft (per-session, see `drafts`).
   const msg = drafts[active] || ''
   const setMsg = (v) => setDrafts((d) => ({ ...d, [active]: v }))
@@ -312,14 +317,14 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // nav mode binds to ONE live session's menu — leaving the tab (or it going offline) exits it, so raw
   // keystrokes can never leak into the wrong pane.
   useEffect(() => { setNavMode(false); setSendErr(false); setMenu(null); setProofOpen(false) }, [active])
-  useEffect(() => { if (selSession?.status === 'offline') setNavMode(false) }, [selSession?.status])
+  useEffect(() => { if (selSession?.liveness === 'offline') setNavMode(false) }, [selSession?.liveness])
   // @@@ refocus on nav exit - leaving nav mode (chord, double-Esc, header button, or bottom-bar click)
   // hands the keyboard back to the bottom message box, so you can type without re-clicking it. Guarded to
   // the on→off edge for a live session tab; a tab switch or going offline exits nav too, but the tab-focus
   // effect owns focus there (and an offline tab has no input box to land in).
   const wasNavRef = useRef(false)
   useEffect(() => {
-    if (wasNavRef.current && !navMode && active !== 'new' && selSession?.status !== 'offline') msgRef.current?.focus()
+    if (wasNavRef.current && !navMode && active !== 'new' && selSession?.liveness !== 'offline') msgRef.current?.focus()
     wasNavRef.current = navMode
   }, [navMode])
   // forward one raw key to the active session's pane (fire-and-forget; the backend tmux send-keys it).
@@ -339,12 +344,16 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // that are already warm. Mounting while hidden is safe: SessionTerm's fit bails on a near-0 host (its
   // shrink guard) and re-fits via ResizeObserver/animationend the instant a layer is revealed. We track
   // exactly the set of live sessions, dropping any that vanish or go offline (an offline tab shows the
-  // relaunch panel, not a dead terminal). This is the key experience — no warmth is traded for laziness.
+  // relaunch panel, not a dead terminal). Liveness — NOT the lifecycle label — gates this: a session whose
+  // process is gone reads liveness 'offline' whatever its authored lifecycle (asking/review/error/…), so we
+  // never mount a tmux client against a dead id (which would leak tmux's bare "no sessions"). queued reads
+  // 'offline' too (never launched), so it also stays unmounted. This is the key experience — no warmth is
+  // traded for laziness.
   const [opened, setOpened] = useState(() => new Set())
   useEffect(() => {
     setOpened((prev) => {
       const next = new Set()
-      for (const s of sessions) if (s.status !== 'offline') next.add(s.id)
+      for (const s of sessions) if (s.liveness !== 'offline') next.add(s.id)
       if (next.size !== prev.size) return next
       for (const id of next) if (!prev.has(id)) return next
       return prev
@@ -373,10 +382,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     const id = setTimeout(() => {
       if (active === 'new') taRef.current?.focus()
       // the graph tab has no docked input — it owns the keyboard itself (hjkl/⏎/?), so focus nothing.
-      else if (selSession && selSession.status !== 'offline') msgRef.current?.focus()
+      else if (selSession && selSession.liveness !== 'offline') msgRef.current?.focus()
     }, 0)
     return () => clearTimeout(id)
-  }, [open, active, selSession?.status])
+  }, [open, active, selSession?.liveness])
 
   // @@@ auto-grow - the new-session box grows with its content (line wraps + newlines) up to the CSS
   // max-height, then scrolls. Reset to 0/auto first so it can also shrink when text is deleted. Re-runs
@@ -956,7 +965,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                       is a plain lifecycle action, not a board command. No "request review": agents propose it
                       at the stop-gate (`session done --propose merge`). */}
                   <div className="si-actions">
-                    {selSession?.status === 'offline'
+                    {showRelaunch
                       ? <button className="si-act go" onClick={() => act('resume')}>{t('session.relaunch')}</button>
                       : boardCmds.filter((c) => c.button).map((c) => {
                           // nav alone carries extra state: `.on` while active, `.suggest` while the pane sniff
@@ -981,7 +990,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                       <SessionTerm sessionId={id} active={id === active} onMenu={reportMenu} />
                     </div>
                   ))}
-                  {selSession?.status === 'offline' && (
+                  {showRelaunch && (
                     <div className="si-offline">
                       <div className="si-offline-msg">{t('session.offlineMsg')}</div>
                       <div className="si-offline-sub">{t('session.offlineSubBefore')}<code>{active.slice(0, 8)}…</code>{t('session.offlineSubAfter')}</div>
@@ -999,9 +1008,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               ) : (
                 <div
                   className={`${sendErr ? 'si-bottom err' : 'si-bottom'}${dragTarget === 'msg' ? ' dragover' : ''}`}
-                  onDragOver={(e) => { if (selSession?.status !== 'offline') onDragOverFiles(e, 'msg') }}
+                  onDragOver={(e) => { if (!noLivePane) onDragOverFiles(e, 'msg') }}
                   onDragLeave={() => setDragTarget(null)}
-                  onDrop={(e) => { if (selSession?.status !== 'offline') onDropFiles(e, 'msg') }}
+                  onDrop={(e) => { if (!noLivePane) onDropFiles(e, 'msg') }}
                 >
                   <span className="si-prompt">❯</span>
                   <textarea
@@ -1011,19 +1020,19 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                     value={msg}
                     onChange={(e) => { setMsg(e.target.value); if (sendErr) setSendErr(false); syncMenu(e.target) }}
                     onSelect={(e) => syncMenu(e.target)}
-                    onPaste={(e) => { if (selSession?.status !== 'offline') onPasteFiles(e, 'msg') }}
+                    onPaste={(e) => { if (!noLivePane) onPasteFiles(e, 'msg') }}
                     onBlur={() => setMenu(null)}
                     onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); sendMsg() } }}
-                    placeholder={selSession?.status === 'offline' ? t('session.msgOffline') : t('session.msgPlaceholder')}
+                    placeholder={noLivePane ? t('session.msgOffline') : t('session.msgPlaceholder')}
                     spellCheck={false}
-                    disabled={selSession?.status === 'offline'}
+                    disabled={noLivePane}
                   />
                   <button
                     type="button"
                     className="si-attach"
                     title={t('session.attachTitle')}
                     onClick={() => pickFiles('msg')}
-                    disabled={uploading || selSession?.status === 'offline'}
+                    disabled={uploading || noLivePane}
                   >{uploading && attachAt === 'msg' ? '⏳' : '📎'}</button>
                   {uploadErr && attachAt === 'msg' && <span className="si-attach-err" role="alert">{t('session.attachError')}</span>}
                   {sendErr && <span className="si-send-err" role="alert">{t('session.msgError')}</span>}

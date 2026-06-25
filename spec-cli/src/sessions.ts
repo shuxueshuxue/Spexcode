@@ -161,11 +161,15 @@ function replyViaSocket(sock: string, text: string): Promise<DispatchResult> {
 export type Lifecycle = 'active' | 'idle' | 'awaiting' | 'parked' | 'error' | 'asking' | 'queued'
 export type Proposal = 'merge' | 'nothing' | 'close'
 export type DisplayStatus = 'working' | 'idle' | 'offline' | 'starting' | 'review' | 'done' | 'close-pending' | 'parked' | 'error' | 'asking' | 'queued'
+// liveness — the orthogonal axis to Lifecycle: whether the agent process is actually up, derived (never
+// authored) for EVERY session regardless of its lifecycle. See [[state]]: lifecycle and liveness never
+// override each other; the UI keys the terminal-mount / relaunch panel on this, the badge on lifecycle.
+export type Liveness = 'online' | 'starting' | 'offline'
 const PROPOSAL_STATUS: Record<Proposal, DisplayStatus> = { merge: 'review', nothing: 'done', close: 'close-pending' }
 
 export type Session = {
   id: string; node: string | null; title: string | null; name: string | null; branch: string | null; path: string
-  lifecycle: Lifecycle; proposal: Proposal | null; merges: number; status: DisplayStatus; note: string | null
+  lifecycle: Lifecycle; proposal: Proposal | null; merges: number; status: DisplayStatus; liveness: Liveness; note: string | null
   prompt: string | null; promptPreview: string | null; created: number; activity: string | null
   sortKey: number | null   // manual drag-reorder override ([[session-reorder]]); null = sort by `created`
 }
@@ -353,25 +357,33 @@ function cleanActivity(raw: string): string | null {
 const launchedAt = new Map<string, number>()
 const BOOT_GRACE_MS = 25000   // > waitForSocket's 15s timeout, covering the observed ~15-20s socket boot window
 
-// reconcile the SHOWN status from a session's declared state + a prebuilt liveness set (no per-call tmux
-// spawn — see liveTmux). Declarations win over liveness, in ONE path: awaiting maps to its proposal label;
-// parked / error / asking map straight to themselves. We never INFER those externally.
-function reconcile(rec: SessRec, live: Set<string>): DisplayStatus {
-  if (rec.status === 'awaiting') return PROPOSAL_STATUS[rec.proposal || 'nothing']
-  if (rec.status !== 'active' && rec.status !== 'idle') return rec.status  // parked | error | asking | queued (no tmux yet)
-  // active/idle are the SAME live agent — claude runs whether it is churning OR waiting at its prompt — so
-  // they share ONE deterministic liveness check: offline iff the tmux window is gone OR claude's rendezvous
-  // socket is absent. claude (via the reclaude wrapper) holds CLAUDE_BG_RENDEZVOUS_SOCK open the whole time
-  // it is alive, so the socket — NOT pane_current_command, which is the wrapper/shell while claude runs as
-  // its child — is the truth that claude is up. else idle if the idle_prompt hook fired since the last tool,
-  // else working. The mark-active hook flips idle → active on the next real work, self-correcting.
+// @@@ liveness - the orthogonal axis ([[state]]): is the agent process up, for ANY session regardless of
+// lifecycle, from a prebuilt tmux set (no per-call spawn — see liveTmux) + the rendezvous socket. offline
+// iff the tmux window is gone OR claude's rendezvous socket is absent past the boot window. claude (via the
+// reclaude wrapper) holds CLAUDE_BG_RENDEZVOUS_SOCK open the whole time it is alive, so the socket — NOT
+// pane_current_command, which is the wrapper/shell while claude runs as its child — is the truth it is up.
+// A just-launched agent whose socket hasn't appeared yet reads the transient 'starting' for the grace
+// window; only past it (socket still gone) is it genuinely 'offline'.
+function liveness(rec: SessRec, live: Set<string>): Liveness {
   if (!rec.session || !live.has(rec.session)) return 'offline'
   if (!existsSync(rvSock(rec.session))) {
-    // tmux is up but the socket isn't: a just-launched agent still booting reads 'starting' for the boot
-    // window; only past it (socket still gone) is the agent genuinely dead → 'offline'.
     const at = launchedAt.get(rec.session)
     return at && Date.now() - at < BOOT_GRACE_MS ? 'starting' : 'offline'
   }
+  return 'online'
+}
+
+// reconcile the compact DisplayStatus — a DERIVED label composing lifecycle + liveness for one-glyph
+// surfaces ([[state]]), never a third source of truth. Lifecycle wins the label except where liveness must
+// show through: awaiting → its proposal label; parked/error/asking/queued → themselves; active/idle → their
+// liveness (offline/starting), else the active-only idle/working inference (the mark-active hook flips idle
+// → active on the next real work, self-correcting). The orthogonal liveness field is what the UI keys
+// terminal-mount and the relaunch panel on; this label is for badges and `spex ls`.
+function reconcile(rec: SessRec, live: Set<string>): DisplayStatus {
+  if (rec.status === 'awaiting') return PROPOSAL_STATUS[rec.proposal || 'nothing']
+  if (rec.status !== 'active' && rec.status !== 'idle') return rec.status  // parked | error | asking | queued (no tmux yet)
+  const lv = liveness(rec, live)
+  if (lv !== 'online') return lv  // 'offline' | 'starting'
   return rec.status === 'idle' ? 'idle' : 'working'
 }
 
@@ -393,12 +405,12 @@ function createdAt(dir: string): number {
   try { const s = statSync(dir); return s.birthtimeMs || s.mtimeMs || 0 } catch { return 0 }
 }
 
-function toSession(rec: SessRec, branch: string | null, path: string, status: DisplayStatus, activity: string | null = null): Session {
+function toSession(rec: SessRec, branch: string | null, path: string, status: DisplayStatus, lv: Liveness, activity: string | null = null): Session {
   const prompt = readPromptFile(path)   // the originating ask, captured at launch (sidecar; null for old sessions)
-  // activity is the LIVE pane title; it only means anything while the worker is up — a dead/booting/queued
-  // session would show a stale or absent title, so it's suppressed there (the row falls back to its label).
-  const live = status !== 'offline' && status !== 'starting' && status !== 'queued'
-  return { id: rec.session!, node: rec.node, title: rec.title, name: rec.name, branch, path, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, prompt, promptPreview: prompt ? promptPreview(prompt) : null, created: createdAt(path), activity: live ? activity : null, sortKey: rec.sortKey }
+  // activity is the LIVE pane title; it only means anything while the worker is genuinely up — a
+  // dead/booting session would show a stale or absent title, so it's suppressed unless liveness is online.
+  const showActivity = lv === 'online'
+  return { id: rec.session!, node: rec.node, title: rec.title, name: rec.name, branch, path, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, prompt, promptPreview: prompt ? promptPreview(prompt) : null, created: createdAt(path), activity: showActivity ? activity : null, sortKey: rec.sortKey }
 }
 
 // @@@ renameSession - set (or clear) a session's human display NAME: the user-chosen override that wins
@@ -451,7 +463,7 @@ export async function listSessions(): Promise<Session[]> {
   const rows = await Promise.all(wts.map((w) => guardWorktree<Session | null>(w.path, () => {
     const rec = readSessionFile(w.path)
     if (!rec.session) { lastKnownSession.delete(w.path); return null }   // exists but isn't a session
-    const s = toSession(rec, w.branch, w.path, reconcile(rec, live), titles.get(rec.session) ?? null)
+    const s = toSession(rec, w.branch, w.path, reconcile(rec, live), liveness(rec, live), titles.get(rec.session) ?? null)
     lastKnownSession.set(w.path, s)
     return s
   }, () => {
@@ -982,7 +994,9 @@ export async function newSession(node: string | null, prompt: string): Promise<S
   writeLaunchFile(path, launchPrompt)   // park the exact launch prompt for the drainer (consumed at launch)
   await drainQueue()                    // launch now if under the cap, else leave it queued for a free slot
   const after = readSessionFile(path)   // 'active' if the drain launched it, else still 'queued'
-  return toSession(after, branch, path, after.status === 'queued' ? 'queued' : 'working')
+  // queued → no process yet (offline liveness); just-launched → its socket is still booting (starting).
+  const queued = after.status === 'queued'
+  return toSession(after, branch, path, queued ? 'queued' : 'working', queued ? 'offline' : 'starting')
 }
 
 // @@@ waitForSocket - after a relaunch, the resumed claude needs SEVERAL SECONDS to boot and recreate its

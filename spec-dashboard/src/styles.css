@@ -459,6 +459,9 @@ body {
 .fp-head { display: flex; flex-direction: column; gap: 2px; }
 .fp-eyebrow { font-size: 9px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
 .fp-title { font-size: 14px; font-weight: 700; color: var(--ink2); word-break: break-word; line-height: 1.25; }
+/* the focused node's desc one-liner — clamped so a long description never blows out the head; full text on hover. */
+.fp-desc { color: var(--muted); font-size: 11px; line-height: 1.35; margin-top: 2px;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .fp-sec { display: flex; flex-direction: column; gap: 6px; }
 .fp-sec-head { display: flex; align-items: center; justify-content: space-between; gap: 8px;
   font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted);

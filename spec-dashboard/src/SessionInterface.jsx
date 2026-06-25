@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import SessionTerm from './SessionTerm.jsx'
 import SessionGraph from './SessionGraph.jsx'
-import { loadConfig, setSessionSort } from './data.js'
-import { reorderPlan } from './sessionReorder.js'
+import { loadConfig } from './data.js'
 import { Avatar } from './avatar.jsx'
 import { labelColor } from './color.js'
 import { STATUS_COLOR, sessionHeadline } from './session.js'
@@ -214,47 +213,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const termRef = useRef(null)
   const fileRef = useRef(null)         // the one hidden <input type=file>; the attach buttons trigger it
   const fileTargetRef = useRef('new')  // which surface the pending pick inserts into ('new' | 'msg')
-
-  // @@@ drag-reorder ([[session-reorder]]) - dragging a row to a new slot persists a pseudo-time sort-key for
-  // THAT row only (its midpoint among new neighbours). The rendered list IS the backend's (already sorted by
-  // `sortKey ?? created`), so we POST the plan and reload — never shuffle locally, keeping this a thin view of
-  // /api/board. dropHint lights the insertion line { id, place }.
-  const dragId = useRef(null)
-  const [dropHint, setDropHint] = useState(null)
-  const applyReorder = async (plan) => {
-    if (!plan) return
-    try { await Promise.all(plan.updates.map((u) => setSessionSort(u.id, u.key))) }
-    catch { /* the next board poll reconciles */ }
-    reload?.()
-  }
-  // @@@ native HTML5 DnD - the rows are real `draggable` elements. keepFocus EXEMPTS .si-item from its
-  // mousedown preventDefault (see keepFocus below) — a preventDefaulted mousedown cancels a native dragstart,
-  // which is why this looked dead before. With the exemption the browser owns the gesture split: a quick
-  // press is a click (tab switch), a double press is a dblclick (lock), a press-and-drag is a drag — they
-  // never collide the way a hand-rolled pointer drag would. dropHint lights the insertion line { id, place }.
-  const onRowDragOver = (e, s) => {
-    if (!dragId.current || dragId.current === s.id) return
-    e.preventDefault()
-    const r = e.currentTarget.getBoundingClientRect()
-    const place = e.clientY < r.top + r.height / 2 ? 'before' : 'after'
-    setDropHint((h) => (h && h.id === s.id && h.place === place ? h : { id: s.id, place }))
-  }
-  const onRowDrop = (e, s) => {
-    e.preventDefault(); e.stopPropagation()
-    const draggedId = dragId.current; dragId.current = null
-    const hint = dropHint; setDropHint(null)
-    if (!draggedId) return
-    const place = hint && hint.id === s.id ? hint.place : 'before'
-    const i = sessions.findIndex((x) => x.id === s.id)
-    const beforeId = place === 'before' ? s.id : (sessions[i + 1]?.id ?? null)
-    applyReorder(reorderPlan(sessions, draggedId, beforeId))
-  }
-  // dropping in the empty space below the rows appends the dragged row to the very end.
-  const onListDrop = (e) => {
-    e.preventDefault()
-    const draggedId = dragId.current; dragId.current = null; setDropHint(null)
-    if (draggedId) applyReorder(reorderPlan(sessions, draggedId, null))
-  }
 
   // @@@ the vertical ↑/↓ ring - New Session, then each live session. The relationship graph is DELIBERATELY
   // NOT in this ring: it sits on a HORIZONTAL axis off New (New's → enters it when the prompt is empty, the
@@ -773,9 +731,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     if (isTextField(t)) return
     // the terminal owns its own text selection; the relationship graph owns its own mousedown (ReactFlow's
     // pan / drag-to-monitor / node click) — preventing default on either would break those gestures.
-    // .si-item rows are draggable (session-reorder): a preventDefaulted mousedown would cancel their native
-    // dragstart, so let their mousedown through. A row click/dblclick still fires; tab-switch refocuses the input.
-    if (t.closest && (t.closest('.si-term-body') || t.closest('.session-graph') || t.closest('.si-item'))) return
+    if (t.closest && (t.closest('.si-term-body') || t.closest('.session-graph'))) return
     e.preventDefault()
   }
 
@@ -810,7 +766,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           style={{ display: 'none' }}
           onChange={(e) => { attachFiles(e.target.files, fileTargetRef.current); e.target.value = '' }}
         />
-        <aside className="si-list" onDragOver={(e) => { if (dragId.current) e.preventDefault() }} onDrop={onListDrop}>
+        <aside className="si-list">
           {/* @@@ top button row - two compact icon buttons, NOT full-width list rows, so neither blocks the
               ↑/↓ path down to a session. `＋` starts a New Session; the network glyph opens the relationship
               graph (same glyph the spec board's HUD carries). New ⇄ graph is the ←/→ horizontal axis (see the
@@ -834,13 +790,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             // top-right window (same status + same overlay tally, e.g. "review ~2"), not a divergent subset.
             <button
               key={s.id}
-              className={`si-item${active === s.id ? ' on' : ''}${dropHint?.id === s.id ? ` drop-${dropHint.place}` : ''}`}
+              className={active === s.id ? 'si-item on' : 'si-item'}
               style={{ '--ov': labelColor(s.id) }}
-              draggable
-              onDragStart={(e) => { dragId.current = s.id; e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', s.id) } catch { /* some browsers forbid setData here */ } }}
-              onDragOver={(e) => onRowDragOver(e, s)}
-              onDrop={(e) => onRowDrop(e, s)}
-              onDragEnd={() => { dragId.current = null; setDropHint(null) }}
               onClick={() => setSel(s.id)}
               onDoubleClick={() => { if (s.ops?.length && onPickSession) { onPickSession(s, false); onClose() } }}
               onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, session: s }) }}

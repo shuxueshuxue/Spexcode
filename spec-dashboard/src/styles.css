@@ -754,11 +754,6 @@ body {
 .si-item.on { background: color-mix(in srgb, var(--blue) 15%, var(--panel2)); color: var(--ink2); font-weight: 600; border-left-width: 3px; }
 .si-item.on:hover { background: color-mix(in srgb, var(--blue) 24%, var(--panel2)); }
 .si-item.on::before { content: '❯'; flex: none; color: var(--green); font-weight: 700; }
-/* @@@ drag-reorder ([[session-reorder]]) - the insertion line a dragged row will drop onto. An inset
-   box-shadow on the top (drop-before) or bottom (drop-after) edge, in the same blue as the selected wash,
-   so the human sees exactly where the row lands. No layout shift — it paints over the existing border. */
-.si-item.drop-before { box-shadow: inset 0 2px 0 0 var(--blue); }
-.si-item.drop-after { box-shadow: inset 0 -2px 0 0 var(--blue); }
 /* @@@ top button row - New Session (＋, blue) and the relationship graph (network glyph, magenta) as two
    COMPACT side-by-side buttons, not full-width rows — so neither sits in the ↑/↓ path to a session. Selected
    one gets a hue wash + ring (its own colour), mirroring the session rows' selected wash. */

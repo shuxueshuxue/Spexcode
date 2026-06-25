@@ -39,6 +39,21 @@ scenarios:
       reason to special-case. So ALL 13 SATISFIABLE cases should sit in the top 3 (recall@3 = 13/13), and most
       at rank 1 — the few that don't (e.g. `api-endpoint`, `yatsu-core`) are canonical-vs-sibling ties the
       spec-scout `--deep` LLM layer is meant to break, and being inside the top 3 is the floor doing its job.
+  - name: search-compute-budget
+    test: spec-cli/src/search.bench.mjs
+    description: >-
+      Track the floor's PURE search-compute time. The floor has NO index or cache — every call re-reads and
+      re-ranks the whole tree, O(Q×D) in the corpus token count — so this measures whether that recompute
+      stays cheap as the tree grows. Run `spex search "<any question>"` and read the stderr line
+      `[spec-search] compute <ms>ms · <nodes> nodes · <tokens> tokens`: that ms is `search.ts` only
+      (loadSpecsLite read+parse + tokenize + IDF + BM25), excluding process boot and the lazy import. File the
+      number against the current corpus scale.
+    expected: >-
+      Pure compute stays comfortably under ~1s — baseline ~70ms at ~81 nodes / ~40k tokens, where the
+      loadSpecsLite read+parse (and the O(N²) id de-collision) dominate, NOT the ranking. Because the cost is
+      O(corpus) with no index, the alarm is the day it nears ~1s: that is when a cached parse / inverted index
+      is overdue (the spec names this). A regression at fixed node count (say 2× the baseline) means the
+      recompute or the FS read grew — investigate before it reaches the wall.
 ---
 # yatsu.md — spec-search
 

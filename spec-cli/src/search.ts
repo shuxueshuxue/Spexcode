@@ -12,20 +12,33 @@ import { rankDocs, type RankInput } from './ranker.js'
 
 export type SearchResult = { id: string; title: string; path: string; score: number; snippet: string }
 
+// @@@ search-compute timing - the floor has NO index or cache: every call re-reads the tree (loadSpecsLite),
+// maps it, and re-ranks the whole corpus via rankDocs — O(Q×D) in the corpus token count D. Fine at this scale
+// (real latency is Node startup, not this) but it grows with the tree, so when the CLI asks (onStats) we report
+// the PURE COMPUTE time of THIS call (excludes process boot + the lazy import) plus the corpus size, to catch
+// the day it nears ~1s — the point an index would be overdue. See [[spec-search]]'s yatsu baseline.
+export type SearchStats = { nodes: number; tokens: number; ms: number }
+
 // @@@ searchSpecs - load the node corpus, map to the ranker's input shape, rank. The NODE field map: name =
 // `title id` (both carry the chosen identity), desc = the one-line summary, body = the spec prose. Nodes are
 // pre-sorted by the node tiebreak (shorter id, then id) BEFORE ranking: rankDocs sorts stably, so equal-scored
-// nodes keep this order — which reproduces the old explicit `id.length || id.localeCompare` tiebreak exactly.
-// The invariant search.bench.mjs guards: its recall/MRR numbers are UNCHANGED by this extraction (a
-// behaviour-preserving refactor — the scorer moved to ./ranker.ts, the maths did not).
-export async function searchSpecs(query: string, opts: { limit?: number } = {}): Promise<SearchResult[]> {
+// nodes keep this order — reproducing the old explicit `id.length || id.localeCompare` tiebreak exactly. The
+// scorer lives in ./ranker.ts (shared with the palette); search.bench.mjs guards that this extraction is
+// behaviour-preserving (recall/MRR unchanged).
+export async function searchSpecs(query: string, opts: { limit?: number; onStats?: (s: SearchStats) => void } = {}): Promise<SearchResult[]> {
+  const t0 = performance.now()
   const nodes = loadSpecsLite()
     .slice()
     .sort((a, b) => a.id.length - b.id.length || a.id.localeCompare(b.id))
   const inputs: RankInput<(typeof nodes)[number]>[] = nodes.map((s) => ({
     ref: s, name: `${s.title} ${s.id}`, desc: s.desc, body: s.body,
   }))
-  return rankDocs(query, inputs, opts).map((r) => ({
+  const out = rankDocs(query, inputs, { limit: opts.limit }).map((r) => ({
     id: r.ref.id, title: r.ref.title, path: r.ref.path, score: r.score, snippet: r.snippet,
   }))
+  if (opts.onStats) {
+    const tokens = inputs.reduce((a, i) => a + `${i.name} ${i.desc} ${i.body}`.split(/[^a-z0-9]+/i).filter(Boolean).length, 0)
+    opts.onStats({ nodes: inputs.length, tokens, ms: performance.now() - t0 })
+  }
+  return out
 }

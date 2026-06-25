@@ -51,9 +51,12 @@ carries the caller's env, no cap).
 
 ### Concurrency cap (bounded working set)
 
-At most **`SPEXCODE_MAX_ACTIVE`** sessions (default **6**) run as working agents at once. A session holds a
-slot while its claude is genuinely live and not yet handed to a human; it frees the slot the moment it
-proposes, goes offline, or is closed. A launch beyond the cap lands as a durable **`queued`** worktree
+At most **N** agents run **autonomously progressing** at once — **N configured per project in `spexcode.json`
+(`sessions.maxActive`, default 6)**, not hardcoded, read live so an edit applies on the next drain (the
+`SPEXCODE_MAX_ACTIVE` env is a fallback). A slot is **compute** pressure: a session holds one **only while
+live AND `working` or `parked`** (self-resuming). Everything **waiting on the human frees its slot** — `idle`,
+`asking`, and the proposals (review/done/close-pending) — like offline/closed, since they burn no compute and
+must never block a launch. A launch beyond the cap lands as a durable **`queued`** worktree
 (fully prepared, claude not started, its prompt parked in a `.session-launch` sidecar). A **drainer** starts
 queued sessions oldest-first the instant a slot frees — on every slot-freeing server action and on a
 periodic tick (catching frees the server never sees: a hook subprocess, a crash). A restart re-drains

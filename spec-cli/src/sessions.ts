@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url'
 import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, type ReviewDiffFile } from './git.js'
 import { guardWorktree } from './resilience.js'
 import { loadSystemConfig, loadSpecs, type ConfigPreset } from './specs.js'
-import { mainBranch, gitCommonDir, statePath, runtimePath, RUNTIME_DIR } from './layout.js'
+import { mainBranch, gitCommonDir, statePath, runtimePath, RUNTIME_DIR, readConfig } from './layout.js'
 
 // @@@ sessions - the WORKTREE is the durable unit; tmux is a disposable runtime handle. Each session
 // worktree carries an untracked `.session` file (the source of truth) that survives a kill / reboot /
@@ -45,8 +45,19 @@ const COLS = 120, ROWS = 32
 // @@@ concurrency cap - the most working agents we let run AT ONCE. Heavy multi-agent load (many claude
 // processes computing simultaneously) was the source of resource-pressure crashes, so a launch beyond the
 // cap is QUEUED, not started: it becomes a durable `queued` worktree that the drainer launches the moment a
-// slot frees (an agent proposes/dies). Configurable; default 6. Floored at 1 so a bad env can't wedge it to 0.
-const MAX_ACTIVE = Math.max(1, Number(process.env.SPEXCODE_MAX_ACTIVE) || 6)
+// slot frees (an agent stops working/dies). NOT hardcoded — configured PER PROJECT in `spexcode.json`
+// (`sessions.maxActive`), so a box can be tuned to its capacity without touching the toolchain. Precedence:
+// spexcode.json → `SPEXCODE_MAX_ACTIVE` env → default 6. Read LIVE (cheap file read) so an edit takes effect
+// on the next drain tick, no restart. Floored at 1 so a bad value can't wedge the queue to 0.
+function maxActive(): number {
+  let v: number | undefined
+  try {
+    const fromJson = readConfig(mainRoot()).sessions?.maxActive
+    if (typeof fromJson === 'number' && Number.isFinite(fromJson)) v = fromJson
+  } catch { /* config unreadable — fall through to env/default */ }
+  if (v === undefined) { const e = Number(process.env.SPEXCODE_MAX_ACTIVE); if (Number.isFinite(e) && e > 0) v = e }
+  return Math.max(1, Math.floor(v ?? 6))
+}
 
 // @@@ appendSysArg - the system prompt folded into EVERY launched/resumed agent (both paths go through
 // launch() below), assembled ENTIRELY from the system config surface — there is NO baked-in core. The
@@ -820,18 +831,19 @@ function deleteNodePrompt(nodeId: string, relPath: string | null, rest: string):
     `When it's ready, propose merge for the human to review — do NOT merge it yourself.`
 }
 
-// @@@ concurrency cap + queue - keep at most MAX_ACTIVE agents WORKING at once. A session OCCUPIES a slot
-// while its agent is launched and still OWNS its task: its claude is genuinely live (tmux window present AND
-// rendezvous socket present) and it has not yet handed the work to a human (lifecycle `awaiting`). So
-// working/idle/parked/asking/error agents that are actually alive each hold a slot; a session frees its
-// slot the moment it PROPOSES (review/done/close-pending), goes OFFLINE (crashed/exited — socket gone), or is
-// closed. Liveness is checked directly (the same socket truth reconcile uses) rather than off the display
-// status, so an authored state (parked/error/asking) whose claude has since died does NOT pin a slot.
-// `queued` sessions never occupy. Resource pressure scales with concurrently-WORKING agents, which is exactly
-// this set — the cap throttles it; the rest wait as durable `queued` worktrees.
+// @@@ concurrency cap + queue - keep at most maxActive() agents AUTONOMOUSLY PROGRESSING at once. A slot is
+// COMPUTE pressure, so only an agent actually consuming it holds one: genuinely live (tmux window + rendezvous
+// socket present) AND either churning (`working`) or paused-to-self-resume (`parked`). Every state that is
+// WAITING ON THE HUMAN frees its slot — `idle` (stopped at its prompt), `asking` (asked a question), and the
+// proposal states (review/done/close-pending) — exactly as `offline`/`queued` do. Those agents burn no
+// compute, so they must NEVER block a fresh launch: the old rule counted them, so a pile of "waiting on you"
+// sessions wedged the queue while the box sat near-idle (the reported blockage). Liveness is still checked
+// directly (the socket truth reconcile uses), so an authored `parked` whose claude has since died does NOT
+// pin a slot. The cap throttles concurrent COMPUTE; everything waiting-on-you waits cheap as a live pane.
+const OCCUPIES_SLOT = new Set<DisplayStatus>(['working', 'parked', 'starting'])  // starting's boot window is also held via `launching`
 function isOccupying(s: Session, live: Set<string>): boolean {
-  if (s.status === 'queued' || s.lifecycle === 'awaiting') return false   // not launched, or handed to a human
-  return live.has(s.id) && existsSync(rvSock(s.id))                       // a genuinely live claude (tmux + socket)
+  if (!OCCUPIES_SLOT.has(s.status)) return false                          // waiting-on-human / proposed / queued / dead → free
+  return live.has(s.id) && existsSync(rvSock(s.id))                       // and only while its claude is genuinely live
 }
 // sessions we've JUST launched whose rendezvous socket hasn't come up yet. During that boot window reconcile
 // reads them `offline` (socket absent) and isOccupying would miss them, so the drainer would over-launch and
@@ -873,10 +885,11 @@ export async function drainQueue(): Promise<void> {
   if (draining) return
   draining = true
   try {
+    const cap = maxActive()   // read once per drain pass (spexcode.json → env → 6); won't shift mid-burst
     for (;;) {
       const [sessions, live] = await Promise.all([listSessions(), liveTmux()])
       const occupied = sessions.reduce((n, s) => n + (launching.has(s.id) || isOccupying(s, live) ? 1 : 0), 0)
-      if (occupied >= MAX_ACTIVE) break
+      if (occupied >= cap) break
       const next = sessions.find((s) => s.status === 'queued' && !launching.has(s.id))
       if (!next) break
       if (!(await startQueued(next.id))) break   // launch failed → stop this pass; a later tick retries

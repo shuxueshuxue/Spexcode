@@ -8,6 +8,7 @@ code:
   - spec-dashboard/src/SessionWindow.jsx
   - spec-dashboard/src/SessionTerm.jsx
   - spec-dashboard/src/session.js
+  - spec-dashboard/src/sessionCommands.js
 ---
 
 # session-console
@@ -40,17 +41,21 @@ wheel scrolls real history, a drag selects even under mouse-reporting, and `⌘/
 **over HTTPS, localhost, or plain HTTP** (past the secure-context-only Clipboard API).
 
 Input has **two channels**. The **`❯` box** is the prompt channel: submitting dispatches through the **control
-socket** (never typed into the pane), so it lands even in copy-mode. The one exception is **`/exit` alone**:
-the box intercepts it client-side and **closes this session directly** (`act('close')` — the same worktree
-removal the row's right-click → Close performs) but with **no confirm**, since typing the exact command is
-itself the deliberate act, where the row-menu's confirm guards an easy-to-mis-aim right-click. It is never
-dispatched to the agent, which would only quit the agent's own process and orphan the worktree. It **holds
+socket** (never typed into the pane), so it lands even in copy-mode. The exception is the **board commands** —
+a `/` line the box intercepts client-side and runs HERE instead of sending to the agent (where the word would
+only drive the agent's own process, not the board). They come from **one registry** (`sessionCommands.js`) that
+ALSO renders the header buttons, so each command is the **typed twin of a button** — one action, one **identity
+colour**, never two codepaths: `/exit` closes this session (`act('close')`, red), `/merge` merges (green),
+`/nav` toggles nav mode (yellow), `/proof` opens the proof (cyan). In the inbox `/` menu they **lead** the
+list, coloured, tagged `[board]`, apart from CC's blue command rows; accepting one **runs** it (the one row
+that acts, not inserts — see [[term-input]]). `/exit` closing carries **no confirm** — typing the exact command
+is itself the deliberate act, where the row-menu's Close guards an easy-to-mis-aim right-click. The box **holds
 focus persistently** — clicking
 chrome never blurs it, the panel **suppresses the native context menu** and **restores** focus after a
 right-click. It **auto-grows upward**, **capped at half** the terminal height, with New's `/` **completion**
-([[term-input]]). The second channel is **nav mode**: the `❯` box disables and keystrokes forward
-**raw** to the pane (to drive the agent's TUI); the trigger is **manual** (header / `⌃/⌘+I`), and leaving the
-tab or going offline exits.
+([[term-input]]). The second channel is **nav mode** (the `/nav` board command, or the header button / `⌃/⌘+I`):
+the `❯` box disables and keystrokes forward **raw** to the pane to drive the agent's TUI; the trigger is
+**manual**, and leaving the tab or going offline exits.
 
 A **right-click on a session row** opens its context menu — rename or close ([[session-rename]]) — coexisting
 with the context-menu suppression; the shared `sessionName` puts that rename first in the label precedence.
@@ -63,10 +68,12 @@ Terminals are **warm and always connected**: every live pane mounts and opens it
 never lazily on focus — and stays mounted even while the console is closed, so switching tabs **never loses your
 place** (socket + scroll survive), New Session included (it hides its pane). Warmth is **state, not GPU**: only
 the **visible** pane holds a WebGL context, so many panes can't exhaust the browser's capped GPU contexts. List
-navigation lives at the **window level** (arrows walk the list whatever holds focus). Header lifecycle
-(relaunch / merge) follows state; offline shows a relaunch panel; review is **agent-proposed** at the
-stop-gate. There is **no header close button** (its "close" misread as "close the panel" while it killed the
-session + worktree): closing lives only on the row's right-click menu, behind a confirm ([[session-rename]]).
+navigation lives at the **window level** (arrows walk the list whatever holds focus). The **header action row**
+is the same board-command registry, narrowed to the current state: **nav** whenever live, **proof** + **merge**
+at review/done — each a small **text** button (no glyphs) in its identity colour; offline swaps them for a
+relaunch panel, and review is **agent-proposed** at the stop-gate. There is **no header close button** (`/exit`
+has no button twin — its "close" misread as "close the panel" while it killed the session + worktree): closing
+lives only on the row's right-click menu, behind a confirm ([[session-rename]]).
 **Closing is event-driven**: the tab's *removal* — not any one gesture — drives where you
 land. Still on the closed tab → New Session; already moved to another valid tab → your switch stands. The same
 fallback covers a session that ends or is closed elsewhere, so the selection never points at a session the

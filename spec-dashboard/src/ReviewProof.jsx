@@ -1,25 +1,15 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useT } from './i18n/index.jsx'
 
-// @@@ ReviewProof - the dashboard's thin face on the [[review-proof]] engine. A `proof` action, shown on a
-// session in the review/done state, opens that session's PROOF OF WORK — the backend-rendered, self-contained
-// HTML at /api/sessions/:id/proof — inside an overlay iframe. This is deliberately thin: the dashboard renders
-// NOTHING of the proof itself, it just opens the route (the SAME bytes `spex review proof` writes and a bare
-// browser shows). "Natural support" = a browser renders the artifact; the dashboard only frames it.
+// @@@ ReviewProof - the dashboard's thin face on the [[review-proof]] engine. The `proof` board command
+// (and its header button, see [[session-console]]'s command registry) opens a review/done session's PROOF
+// OF WORK — the backend-rendered, self-contained HTML at /api/sessions/:id/proof — inside an overlay iframe.
+// This is deliberately thin: the dashboard renders NOTHING of the proof itself, it just opens the route (the
+// SAME bytes `spex review proof` writes and a bare browser shows). The open/close STATE is owned by
+// SessionInterface so the typed `/proof` command and the header button drive the one same overlay; this
+// component is just the overlay. "Natural support" = a browser renders the artifact; the dashboard frames it.
 
-export function ProofButton({ sessionId, status }) {
-  const t = useT()
-  const [open, setOpen] = useState(false)
-  if (status !== 'review' && status !== 'done') return null
-  return (
-    <>
-      <button className="si-act proof" title={t('proof.btnTitle')} onClick={() => setOpen(true)}>◆ {t('proof.btn')}</button>
-      {open && <ProofOverlay sessionId={sessionId} onClose={() => setOpen(false)} />}
-    </>
-  )
-}
-
-function ProofOverlay({ sessionId, onClose }) {
+export function ProofOverlay({ sessionId, onClose }) {
   const t = useT()
   const url = `/api/sessions/${encodeURIComponent(sessionId)}/proof`
   // Esc closes ONLY the overlay: capture + stopImmediatePropagation so it wins over the interface's own Esc
@@ -41,7 +31,7 @@ function ProofOverlay({ sessionId, onClose }) {
     <div className="proof-overlay" onClick={onClose}>
       <div className="proof-frame" onClick={(e) => e.stopPropagation()}>
         <div className="proof-bar">
-          <span className="proof-title">◆ {t('proof.title')}</span>
+          <span className="proof-title">{t('proof.title')}</span>
           <a className="proof-newtab" href={url} target="_blank" rel="noopener noreferrer">{t('proof.newTab')} ↗</a>
           <button className="proof-x" onClick={onClose} title={t('proof.close')}>✕</button>
         </div>

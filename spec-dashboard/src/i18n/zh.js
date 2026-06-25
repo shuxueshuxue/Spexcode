@@ -267,6 +267,16 @@ export default {
     msgError: '⚠ 未送达 — 重试',
     attachTitle: '附加文件（或粘贴 / 拖入）—— 上传到会话所在机器，并插入其 /tmp 路径',
     attachError: '⚠ 上传失败',
+    // 面板命令 —— ❯ 输入框在本地执行（不发送给智能体）的 `/` 命令，每条都是某个顶栏按钮的“打字版”。
+    // `*Desc` 是 `/` 菜单行的说明；`*Title` 是按钮的悬停提示。
+    cmd: {
+      navDesc: '导航模式 —— 转发原始按键给智能体',
+      proofDesc: '此会话的工作证明 —— yatsu、改动、合并门禁',
+      mergeTitle: '将此会话合并到 main',
+      mergeDesc: '将此会话合并到 main',
+      exitTitle: '关闭此会话（移除工作树）',
+      exitDesc: '关闭此会话 —— 移除工作树（等同右键菜单 → 关闭）',
+    },
   },
 
   proof: {

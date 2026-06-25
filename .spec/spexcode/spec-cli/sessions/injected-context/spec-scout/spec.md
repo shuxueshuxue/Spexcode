@@ -1,8 +1,10 @@
 ---
 title: spec-scout
-status: pending
+status: active
 hue: 280
-desc: An active spec-consult sub-agent injected into a launched session — ask it a behaviour/topic question and it surfaces the governing spec node(s) and the user-story they encode, so reaching the spec is as cheap as grepping the code.
+desc: An on-demand spec-consult sub-agent (the spec analog of Explore) — ask it a behaviour/topic question and it surfaces the governing spec node(s), the user-story they encode, and the code to read, so reaching the spec is as cheap as grepping the code.
+code:
+  - .claude/agents/spec-scout.md
 ---
 
 # spec-scout
@@ -52,5 +54,9 @@ retriever plus an agent that wields it.
   node's files. It surfaces spec intent; it does not review code, nor replace [[spec-first]]'s grounding gate
   (the Stop gate stays the enforcer).
 
-Lives in [[injected-context]] as its fourth, **active** injection — the agent that turns the floor + relay
-into a first-class "find my contract" reflex. The sub-agent definition itself is the remaining build.
+Built as `.claude/agents/spec-scout.md` — a Claude Code Agent-tool agent type, so it is **on-demand** (spawned
+when a session needs it), NOT folded into every prompt: it turns the floor + relay into a first-class "find my
+contract" reflex *without* adding a sixth `surface:system` injection (it sidesteps the prompt-dilution it would
+otherwise cause). Its read-only tools (Bash/Read/Grep/Glob — no edit) enforce the "surfaces, never reviews or
+edits code" boundary. It is the fourth, **active** member of [[injected-context]]'s grounding set — the only
+on-demand one beside the three passive prompt injections.

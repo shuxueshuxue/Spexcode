@@ -102,6 +102,7 @@ export default {
     emptyBefore: '没有活动的工作树——按 ',
     emptyAfter: ' 开始一个',
     rename: '重命名',
+    resetOrder: '恢复默认顺序',
     close: '关闭',
     closeTitle: '关闭“{name}”？',
     closeConfirm: '这将关闭会话并删除其工作树。任何未提交的更改都会丢失。',
@@ -238,6 +239,7 @@ export default {
 
   session: {
     opsTitle: '此会话正在改动的节点 —— 双击标签锁定并聚焦它们',
+    dragHandle: '拖动以排序',
     newSession: '新建会话',
     newSessionTitle: '新建会话（⌃/⌘+N · 或 ⌃/⌘+↑）',
     relationshipTitle: '查看会话关系 — 实时监视图（在空的新建会话框按 → 进入，← 返回）',

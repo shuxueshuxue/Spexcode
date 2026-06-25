@@ -200,6 +200,31 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // console's own Esc handler can close it before closing the console — the console's window listener runs
   // first, so it must own this Esc precedence (see the key router below).
   const [graphLegend, setGraphLegend] = useState(false)
+  // @@@ relationship-graph edges - the live monitor + comms network for the "View Session Relationship" tab,
+  // polled HERE in the always-mounted console rather than inside SessionGraph. The graph tab REMOUNTS on every
+  // reselect, so a poll living inside it would cold-refetch each time and flash an edgeless placeholder that
+  // then re-lays-out and jumps once the first poll lands. Owning the edges one level up keeps them in hand
+  // across reselects (instant FINAL layout, no jump) and keeps the web current in the BACKGROUND while the
+  // console is open — a new watch / rising comms count appears live, no tab round-trip. `graphEdgesLoaded`
+  // lets the graph hold its first reveal until the real edges land, so the first visible frame is already the
+  // final clustered web. The NODES are the preloaded `sessions`; only these observational edges are polled.
+  const [graphEdges, setGraphEdges] = useState([])
+  const [graphEdgesLoaded, setGraphEdgesLoaded] = useState(false)
+  useEffect(() => {
+    if (!open) return                                  // only while the console is open (the graph's only home)
+    let live = true
+    const pull = async () => {
+      try {
+        const res = await fetch('/api/sessions/graph')
+        const g = await res.json()
+        if (live) setGraphEdges(Array.isArray(g.edges) ? g.edges : [])
+      } catch { /* transient; keep the last good edges */ }
+      finally { if (live) setGraphEdgesLoaded(true) }
+    }
+    pull()
+    const id = setInterval(pull, 4000)
+    return () => { live = false; clearInterval(id) }
+  }, [open])
   // @@@ file attach - a pasted/dropped/picked file is uploaded to the backend (= worker) machine's /tmp and
   // its returned path is spliced into the prompt. `uploading` guards/announces the in-flight POST; `uploadErr`
   // is the fail-loud flag; `dragTarget` lights the surface ('new' | 'msg') a file is currently dragged over.
@@ -873,14 +898,15 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         </aside>
 
         <section className={active === 'new' ? 'si-content is-new' : active === 'graph' ? 'si-content is-graph' : 'si-content is-session'}>
-          {/* @@@ relationship graph - mounted only while its tab is active AND the console is open, so it
-              doesn't poll edges in the background; it remounts (instantly framed) on reselect. Its NODES are
-              the preloaded `sessions` the console already holds — handed straight in, so reselect frames the
-              web with no cold fetch (only edges poll). onOpen switches the console to the clicked session's
-              tab — the graph's "open" is a tab switch, not a cross-surface jump. Its legend is lifted here
-              (graphLegend) for Esc precedence (see key router). */}
+          {/* @@@ relationship graph - mounted only while its tab is active AND the console is open. It
+              remounts (instantly framed) on reselect, but both its NODES (the preloaded `sessions`) AND its
+              EDGES (graphEdges, polled HERE in the always-mounted console) are handed straight in — so reselect
+              frames the FINAL clustered web with no cold fetch and no edgeless-then-jump shuffle, and the web
+              keeps updating live while the console is open. onOpen switches the console to the clicked
+              session's tab — the graph's "open" is a tab switch, not a cross-surface jump. Its legend is
+              lifted here (graphLegend) for Esc precedence (see key router). */}
           {open && active === 'graph' && (
-            <SessionGraph sessions={sessions} onOpen={(id) => setSel(id)} active legend={graphLegend} setLegend={setGraphLegend} />
+            <SessionGraph sessions={sessions} onOpen={(id) => setSel(id)} active legend={graphLegend} setLegend={setGraphLegend} edges={graphEdges} edgesLoaded={graphEdgesLoaded} />
           )}
           {active === 'new' && (
             <div className="si-new-center">

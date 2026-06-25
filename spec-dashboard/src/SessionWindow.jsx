@@ -9,7 +9,7 @@
 import { Avatar } from './avatar.jsx'
 import { labelColor } from './color.js'
 import { GLYPH } from './SpecNode.jsx'
-import { sessionName, STATUS_COLOR } from './session.js'
+import { sessionName, sessionHeadline, STATUS_COLOR } from './session.js'
 import { useT } from './i18n/index.jsx'
 
 // @@@ opSummary - a session's overlay tally: how many nodes it is changing, by op ("+2 ~1 ✕1"). Exported
@@ -21,26 +21,28 @@ export function opSummary(ops) {
   return Object.entries(by).map(([op, n]) => `${GLYPH[op]}${n}`).join(' ')
 }
 
-// @@@ SessionRow - the shared session FACE: a TWO-row block. Row 1 is the identity line — avatar · name ·
-// status word (or 🔒 when locked) · op tally. Row 2 is the live ACTIVITY line: the worker's own
-// rolling self-summary (its tmux pane title, see sessions.ts paneTitles), in a smaller font spanning the
-// FULL width (it wraps below the avatar too). Identity stays put while activity changes every turn, so the
-// two never fight. Row 2 is omitted when there's no activity (offline / booting / queued). The top-left
-// window AND the session-board tab both render THIS, so a session reads identically on either surface — same
-// status, same overlay count ("review ~2"), same activity. Each surface wraps it in its own button with its
-// own handlers and active/locked styling; the classes are global, so the face styles the same in either.
+// @@@ SessionRow - the shared session FACE: a TWO-row block. Row 1 is the HEADLINE — avatar · what the
+// session is about (sessionHeadline: the live tmux self-summary once it exists, else a placeholder of the
+// launch prompt's first words) · 🔒 when this row owns the graph. The headline gets the whole line so the
+// agent's smart, ever-changing task description has room to read — the avatar (seeded by id) is the fixed
+// anchor, not the text. Row 2 is the STATUS line: the colour-coded status word · op tally (how many spec
+// nodes this session is changing) — the small badges that used to crowd the title, now on their own line
+// with room to grow. The top-left window AND the session-board tab both render THIS, so a session reads
+// identically on either surface. Each surface wraps it in its own button with its own handlers and
+// active/locked styling; the classes are global, so the face styles the same in either.
 export function SessionRow({ s, locked }) {
   const t = useT()
   const ops = opSummary(s.ops)
+  const headline = sessionHeadline(s)
   return (
     <>
       <Avatar seed={s.id} status={s.status} title={`${sessionName(s)} · ${t(`status.${s.status}`)} — ${s.id.slice(0, 8)}`} />
-      <span className="sess-id">{sessionName(s)}</span>
-      {locked
-        ? <span className="sess-lock" title={t('sessionWindow.lockedTitle')}>🔒</span>
-        : <span className="sess-status" style={{ color: STATUS_COLOR[s.status] }}>{t(`status.${s.status}`)}</span>}
-      {ops && <span className="sess-ops">{ops}</span>}
-      {s.activity && <span className="sess-activity" title={s.activity}>{s.activity}</span>}
+      <span className="sess-id" title={headline}>{headline}</span>
+      {locked && <span className="sess-lock" title={t('sessionWindow.lockedTitle')}>🔒</span>}
+      <span className="sess-meta">
+        <span className="sess-status" style={{ color: STATUS_COLOR[s.status] }}>{t(`status.${s.status}`)}</span>
+        {ops && <span className="sess-ops">{ops}</span>}
+      </span>
     </>
   )
 }

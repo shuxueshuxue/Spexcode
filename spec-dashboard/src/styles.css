@@ -755,9 +755,10 @@ body {
 .si-item.on:hover { background: color-mix(in srgb, var(--blue) 24%, var(--panel2)); }
 .si-item.on::before { content: '❯'; flex: none; color: var(--green); font-weight: 700; }
 /* @@@ drag handle ([[session-reorder]]) - a small grip at the far right of row 2 (pushed right by margin
-   auto). The ONE draggable thing in the row; faint until you hover the row, cursor:grab to invite the drag. */
-.si-drag-handle { margin-left: auto; flex: none; cursor: grab; color: var(--muted); opacity: .35; padding: 0 1px; line-height: 1; font-size: 12px; user-select: none; }
-.si-item:hover .si-drag-handle { opacity: .7; }
+   auto). The ONE draggable thing in the row; the soft --ink slate (not the near-invisible --muted) keeps it
+   legible against the cream row, yet still understated at rest, deepening as you hover to invite the drag. */
+.si-drag-handle { margin-left: auto; flex: none; cursor: grab; color: var(--ink); opacity: .5; padding: 0 1px; line-height: 1; font-size: 12px; user-select: none; }
+.si-item:hover .si-drag-handle { opacity: .8; }
 .si-drag-handle:hover { opacity: 1; }
 .si-drag-handle:active { cursor: grabbing; }
 /* the insertion line a dragged row will drop onto — inset box-shadow on the top (before) / bottom (after)

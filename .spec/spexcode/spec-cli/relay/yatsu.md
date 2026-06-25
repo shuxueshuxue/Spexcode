@@ -11,7 +11,10 @@ scenarios:
       file that actually implements the behaviour (SessionInterface.jsx — where the /exit→close interception
       lives). The shape is `{id,title,path,score,code[]}` — the floor's shape with snippet replaced by the
       governed code: paths. So topic→spec→code closes in one call: the agent gets the files to read, not just
-      the node. A pure-prose top hit correctly returns an empty `code` (the documented v1 limitation).
+      the node. Second case — codeless-parent fall-through: a query whose top hit is a pure-prose PARENT
+      (e.g. "what grounds a launched session in its spec" → injected-context) returns its SUBTREE's code:
+      union (spec-first.sh + spec-of-file.sh), not an empty list — while a leaf-with-code still returns only
+      its own files (descendants are the fallback, never additive).
 ---
 # yatsu.md — relay
 

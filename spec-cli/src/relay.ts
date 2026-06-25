@@ -14,8 +14,26 @@ export async function relaySearch(query: string, opts: { limit?: number } = {}):
   const limit = opts.limit ?? 3
   const hits = await searchSpecs(query, { limit })
   if (!hits.length) return []
-  // one spec-index read; map each top hit's id → its frontmatter `code:` governed paths (files/dirs/globs).
+  // one spec-index read; per node: its frontmatter `code:` governed paths (files/dirs/globs) + the tree shape.
   const specs = await loadSpecs()
   const codeById = new Map(specs.map((s) => [s.id, (s.code as string[]) ?? []]))
-  return hits.map((h) => ({ id: h.id, title: h.title, path: h.path, score: h.score, code: codeById.get(h.id) ?? [] }))
+  const childrenOf = new Map<string, string[]>()
+  for (const s of specs) if (s.parent) childrenOf.set(s.parent, [...(childrenOf.get(s.parent) ?? []), s.id])
+  // @@@ codeless-parent fall-through - a node owns no code: when it's a pure-prose PARENT (e.g. injected-context,
+  // whose code lives in its child spec-first). Returning empty would send the agent nowhere, so borrow the union
+  // of the node's whole SUBTREE's code:. A general rule (any codeless node → its descendants' files), not a
+  // special-case. A node with its own code: keeps exactly that — descendants are only the FALLBACK.
+  const subtreeCode = (id: string): string[] => {
+    const own = codeById.get(id) ?? []
+    if (own.length) return own
+    const acc: string[] = []
+    const stack = [...(childrenOf.get(id) ?? [])]
+    while (stack.length) {
+      const c = stack.pop()!
+      acc.push(...(codeById.get(c) ?? []))
+      stack.push(...(childrenOf.get(c) ?? []))
+    }
+    return [...new Set(acc)]
+  }
+  return hits.map((h) => ({ id: h.id, title: h.title, path: h.path, score: h.score, code: subtreeCode(h.id) }))
 }

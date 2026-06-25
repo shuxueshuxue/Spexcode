@@ -37,7 +37,11 @@ function buildEntries(specs, sessions) {
       kind: 'spec', key: `spec:${s.id}`, target: s.id,
       color: (STATUS[s.status] || STATUS.pending).color,
       title: s.title || s.id, sub: path,
-      primary: s.title || s.id, secondary: s.id, tertiary: path,
+      // tertiary reaches into the node's PROSE — the one-line desc + the full spec body — alongside the path,
+      // the same way a scenario folds its `expected` prose into tertiary. So the spec we search is the spec
+      // itself (the ground truth), not just its name: a distinctive word buried in the body now surfaces its
+      // node, but only at the lowest weight, so a title/id hit always outranks it.
+      primary: s.title || s.id, secondary: s.id, tertiary: `${s.desc || ''} ${s.body || ''} ${path}`,
     })
     for (const i of s.issues || []) {
       const open = (i.state || '').toLowerCase() === 'open'

@@ -21,6 +21,18 @@ export const STATUS_COLOR = {
   'close-pending': 'var(--muted)', offline: 'var(--muted)',
 }
 
-// the human-facing name of a session: a user-chosen rename (`name`) wins over everything; else its node,
+// the STABLE identity of a session: a user-chosen rename (`name`) wins over everything; else its node,
 // else title/branch, else the raw id. Mirrors the backend's sessionLabel precedence (spec-cli sessions.ts).
+// Used where a session needs a fixed handle that doesn't move turn-to-turn — tooltips, the lock hint, search.
 export const sessionName = (s) => s?.name || s?.node || s?.title || s?.branch || s?.id
+
+// @@@ sessionHeadline - the row's HEADLINE (line 1): what this session is ABOUT, preferring the smartest
+// description available. A human rename (`name`) still wins — the [[session-rename]] override is
+// authoritative everywhere. Otherwise the worker's LIVE tmux self-summary (`activity`, see [[session-activity]])
+// takes the line: an agent-generated description of what it's doing right now, sharper than the few words a
+// human typed at launch. Before that label exists (booting / queued / offline) it falls back to the first
+// words of the launch prompt (`promptPreview`) as a placeholder, then node / title / branch / id. Distinct
+// from sessionName: the headline is ALLOWED to change each turn as the agent renarrates — the avatar (seeded
+// by id) is the fixed spatial anchor, not this line.
+export const sessionHeadline = (s) =>
+  s?.name || s?.activity || s?.promptPreview || s?.node || s?.title || s?.branch || s?.id

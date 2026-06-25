@@ -5,7 +5,7 @@ import { loadConfig, setSessionSort } from './data.js'
 import { reorderPlan } from './sessionReorder.js'
 import { Avatar } from './avatar.jsx'
 import { labelColor } from './color.js'
-import { STATUS_COLOR, sessionName } from './session.js'
+import { STATUS_COLOR, sessionHeadline } from './session.js'
 import { SessionRow } from './SessionWindow.jsx'
 import SessionContextMenu from './SessionContextMenu.jsx'
 import { ProofButton } from './ReviewProof.jsx'
@@ -853,7 +853,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               <div className="si-term" ref={termRef}>
                 <div className="si-term-head">
                   <span className="si-dot" style={{ background: STATUS_COLOR[selSession?.status] || STATUS_COLOR.offline }} />
-                  <span className="si-th-name">{sessionName(selSession) || active}</span>
+                  {/* the big-title reads the SHARED sessionHeadline (live tmux self-summary, else a launch-
+                      prompt placeholder; a rename always wins) — the SAME source/content as the session rows
+                      ([[session-activity]]), only with more room before it truncates, so the title over the
+                      terminal never disagrees with the row that opened it. */}
+                  <span className="si-th-name" title={selSession ? sessionHeadline(selSession) : active}>{(selSession && sessionHeadline(selSession)) || active}</span>
                   <span className="si-th-st" style={{ color: STATUS_COLOR[selSession?.status] }}>{selSession?.status ? t(`status.${selSession.status}`) : ''}</span>
                   {selSession?.merges > 0 && <span className="si-merges" title={t('session.mergesTitle')}>{t('session.merges', { n: selSession.merges })}</span>}
                   <div className="si-actions">

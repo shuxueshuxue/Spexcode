@@ -29,27 +29,28 @@ sessions, not only for *implement* sessions.
 
 ## expanded spec
 
-PENDING — problem captured; mechanism deferred to a design pass. Evidence from real worker transcripts
-sharpens the direction: agents ALREADY hand-roll spec search (`grep .spec` + `spex board`), so this is not
-new behaviour — it upgrades an existing reflex into a retriever that can rank and search prose body. The
-design questions, with their evidence-backed lean:
+The floor and the relay are BUILT; the remaining piece is `--deep`, and its mechanism is now decided.
+Evidence from real worker transcripts grounds the shape: agents ALREADY hand-roll spec search (`grep .spec`
++ `spex board`), so none of this is new behaviour — it upgrades that reflex into a ranked, body-aware
+retriever plus an agent that wields it.
 
-- **Surface — locked.** The contract is settled: a `spex search <query> [--json] [--limit N]` verb returning
-  a score-ranked list of nodes, each with a body-match snippet — **defined and owned by the lexical-floor
-  node** ([[spec-search]], its own branch off main), not redefined here. spec-scout is that floor's **`--deep`
-  consumer**: bare query = the lexical ranking; `--deep` routes here to rerank by *user-story* / LLM. It
-  depends only on the contract, never the floor's implementation, so the two branches stay independent. The
-  agent reflex is already `grep .spec`, so the verb takes over with zero retraining; ~80 nodes + an altitude
-  budget let the sub-agent read the whole tree — no embeddings yet.
-- **Retrieval** — share ONE ranker with the human `/` panel ([[keyboard-nav]]'s layered title/id/desc/body
-  weighting): what you give the human, give the agent. spec-scout layers *user-story* / LLM ranking on that
-  lexical floor; don't build a second retriever.
-- **Boundary — relay, not merge.** Do NOT fold spec and code into one unified index. Code search is already
-  first-class (agents grep code fluently) and ranks by architectural centrality; spec ranks by user-story —
-  the very divergence that makes spec search worth having. spec-scout *locates the governing node*, then
-  hands off to the existing code search (Explore / grep) scoped to that node's `code:` files, each ranked by
-  its own logic. It surfaces spec intent; it does not review code, nor replace [[spec-first]]'s grounding
-  gate (the Stop gate stays the enforcer). A "semantic search" umbrella name is fine — the build stays
-  spec-first.
+- **The floor is a TOOL; spec-scout is the AGENT.** `spex search` ([[spec-search]]) is a pure lexical
+  retrieval primitive — LLM-free, deterministic, fast, no auth, like `grep`. spec-scout is **the spec analog
+  of Explore**: an Agent-tool sub-agent that *uses* the floor. So **`--deep` IS that sub-agent, not a CLI
+  flag.** It calls `spex search --json`, reranks the candidates by *user-story* relevance in its own context,
+  then hands the winners to the relay. The CLI never calls an LLM; the agent does. (Shelling the CLI out to
+  an LLM was rejected: it crosses "the CLI is a deterministic primitive" for latency + an auth dependency,
+  and mismatches the Explore-analog identity. ~80 nodes + an altitude budget let the sub-agent read the whole
+  tree — no embeddings yet.)
+- **Retrieval** — the floor already shares ONE ranker with the human `/` panel ([[keyboard-nav]]'s layered
+  title/id/desc/body weighting): what you give the human, give the agent. spec-scout layers *user-story*
+  reranking on that lexical floor; it does not build a second retriever.
+- **Boundary — relay, not merge.** Built as [[relay]] (`spex relay <q>` → the top hits' governed `code:`,
+  with a codeless-parent fall-through to subtree code). Do NOT fold spec and code into one index: code search
+  already ranks by architectural centrality, spec by user-story — that divergence is the whole point.
+  spec-scout *locates the governing node*; the relay scopes the existing code search (Explore / grep) to that
+  node's files. It surfaces spec intent; it does not review code, nor replace [[spec-first]]'s grounding gate
+  (the Stop gate stays the enforcer).
 
-Lives in [[injected-context]] as its fourth, **active** injection, beside the three passive ones.
+Lives in [[injected-context]] as its fourth, **active** injection — the agent that turns the floor + relay
+into a first-class "find my contract" reflex. The sub-agent definition itself is the remaining build.

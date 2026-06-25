@@ -29,15 +29,24 @@ sessions, not only for *implement* sessions.
 
 ## expanded spec
 
-PENDING — problem captured here; mechanism deferred to a dedicated design pass. The open questions that pass
-must settle:
+PENDING — problem captured; mechanism deferred to a design pass. Evidence from real worker transcripts
+sharpens the direction: agents ALREADY hand-roll spec search (`grep .spec` + `spex board`), so this is not
+new behaviour — it upgrades an existing reflex into a retriever that can rank and search prose body. The
+design questions, with their evidence-backed lean:
 
-- **Surface** — a registered sub-agent type reached via the Agent tool (like Explore), versus a `spex` verb
-  (`spex spec <topic>`) the harness teaches the agent about. The "extra sub-agent injected by the spawning
-  system" framing favours the former.
-- **Retrieval** — how it ranks nodes by *user-story* relevance rather than keyword/path overlap, so it
-  returns what the spec deems important, not what the code happens to centre on.
-- **Boundary** — it *reads and surfaces* spec intent; it does not review code and does not replace
-  [[spec-first]]'s grounding gate. The Stop gate stays the enforcer.
+- **Surface** — lean **`spex search <topic>` CLI verb first**: the agent reflex is already `grep .spec`, so a
+  verb takes over with zero retraining. A whole-tree-reading **sub-agent** (Agent tool, like Explore) is the
+  `--deep` / Q&A variant for the *find-by-user-story* queries grep can't reach. The corpus is small (~80
+  nodes) with an altitude budget, so the sub-agent reads the whole tree — no embeddings needed yet.
+- **Retrieval** — share ONE ranker with the human `/` panel ([[keyboard-nav]]'s layered title/id/desc/body
+  weighting): what you give the human, give the agent. spec-scout layers *user-story* / LLM ranking on that
+  lexical floor; don't build a second retriever.
+- **Boundary — relay, not merge.** Do NOT fold spec and code into one unified index. Code search is already
+  first-class (agents grep code fluently) and ranks by architectural centrality; spec ranks by user-story —
+  the very divergence that makes spec search worth having. spec-scout *locates the governing node*, then
+  hands off to the existing code search (Explore / grep) scoped to that node's `code:` files, each ranked by
+  its own logic. It surfaces spec intent; it does not review code, nor replace [[spec-first]]'s grounding
+  gate (the Stop gate stays the enforcer). A "semantic search" umbrella name is fine — the build stays
+  spec-first.
 
 Lives in [[injected-context]] as its fourth, **active** injection, beside the three passive ones.

@@ -34,10 +34,13 @@ sharpens the direction: agents ALREADY hand-roll spec search (`grep .spec` + `sp
 new behaviour — it upgrades an existing reflex into a retriever that can rank and search prose body. The
 design questions, with their evidence-backed lean:
 
-- **Surface** — lean **`spex search <topic>` CLI verb first**: the agent reflex is already `grep .spec`, so a
-  verb takes over with zero retraining. A whole-tree-reading **sub-agent** (Agent tool, like Explore) is the
-  `--deep` / Q&A variant for the *find-by-user-story* queries grep can't reach. The corpus is small (~80
-  nodes) with an altitude budget, so the sub-agent reads the whole tree — no embeddings needed yet.
+- **Surface — locked.** The contract is settled: a `spex search <query> [--json] [--limit N]` verb returning
+  a score-ranked list of nodes, each with a body-match snippet — **defined and owned by the lexical-floor
+  node** ([[spec-search]], its own branch off main), not redefined here. spec-scout is that floor's **`--deep`
+  consumer**: bare query = the lexical ranking; `--deep` routes here to rerank by *user-story* / LLM. It
+  depends only on the contract, never the floor's implementation, so the two branches stay independent. The
+  agent reflex is already `grep .spec`, so the verb takes over with zero retraining; ~80 nodes + an altitude
+  budget let the sub-agent read the whole tree — no embeddings yet.
 - **Retrieval** — share ONE ranker with the human `/` panel ([[keyboard-nav]]'s layered title/id/desc/body
   weighting): what you give the human, give the agent. spec-scout layers *user-story* / LLM ranking on that
   lexical floor; don't build a second retriever.

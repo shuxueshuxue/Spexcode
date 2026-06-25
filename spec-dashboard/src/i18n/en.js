@@ -105,6 +105,7 @@ export default {
     emptyBefore: 'no live worktrees — press ',
     emptyAfter: ' to start one',
     rename: 'rename',
+    resetOrder: 'reset order',
     close: 'close',
     closeTitle: 'close “{name}”?',
     closeConfirm: 'This closes the session and removes its worktree. Any uncommitted changes are lost.',
@@ -245,6 +246,7 @@ export default {
 
   session: {
     opsTitle: 'nodes this session is changing — double-click the tab to lock + focus them',
+    dragHandle: 'drag to reorder',
     newSession: 'New Session',
     newSessionTitle: 'New Session (⌃/⌘+N · also ⌃/⌘+↑)',
     relationshipTitle: 'View Session Relationship — the live monitor graph (→ from an empty New Session, ← back)',

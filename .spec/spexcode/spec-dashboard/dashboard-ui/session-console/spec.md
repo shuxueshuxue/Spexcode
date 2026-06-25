@@ -67,6 +67,8 @@ otherwise **manual**, and leaving the tab or going offline exits.
 
 A **right-click on a session row** opens its context menu — rename or close ([[session-rename]]) — coexisting
 with the context-menu suppression; the shared `sessionName` puts that rename first in the label precedence.
+A small **drag handle** at the far right of each row's second line reorders the list ([[session-reorder]]) —
+only the handle drags, so click/double-click/`↑↓`/focus on the row are untouched.
 Either input also accepts an **attached file** (paste, drop, or the 📎 picker), uploaded to the backend
 (= worker) `/tmp` with its path spliced in — see [[file-attach]].
 

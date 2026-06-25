@@ -754,6 +754,16 @@ body {
 .si-item.on { background: color-mix(in srgb, var(--blue) 15%, var(--panel2)); color: var(--ink2); font-weight: 600; border-left-width: 3px; }
 .si-item.on:hover { background: color-mix(in srgb, var(--blue) 24%, var(--panel2)); }
 .si-item.on::before { content: '❯'; flex: none; color: var(--green); font-weight: 700; }
+/* @@@ drag handle ([[session-reorder]]) - a small grip at the far right of row 2 (pushed right by margin
+   auto). The ONE draggable thing in the row; faint until you hover the row, cursor:grab to invite the drag. */
+.si-drag-handle { margin-left: auto; flex: none; cursor: grab; color: var(--muted); opacity: .35; padding: 0 1px; line-height: 1; font-size: 12px; user-select: none; }
+.si-item:hover .si-drag-handle { opacity: .7; }
+.si-drag-handle:hover { opacity: 1; }
+.si-drag-handle:active { cursor: grabbing; }
+/* the insertion line a dragged row will drop onto — inset box-shadow on the top (before) / bottom (after)
+   edge, same blue as the selected wash, no layout shift. */
+.si-item.drop-before { box-shadow: inset 0 2px 0 0 var(--blue); }
+.si-item.drop-after { box-shadow: inset 0 -2px 0 0 var(--blue); }
 /* @@@ top button row - New Session (＋, blue) and the relationship graph (network glyph, magenta) as two
    COMPACT side-by-side buttons, not full-width rows — so neither sits in the ↑/↓ path to a session. Selected
    one gets a hue wash + ring (its own colour), mirroring the session rows' selected wash. */

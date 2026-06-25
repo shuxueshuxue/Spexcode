@@ -29,16 +29,16 @@ scenarios:
       whole reason spec search beats plain `grep` on titles). Lift recall by GENERALISING the ranking (fielded
       name>desc>body weighting, IDF, BM25 term-frequency, stemming), never by special-casing a question.
     expected: >-
-      recall@3 ≥ 0.85 over all 15 (recall@1 ≥ 0.70, MRR ≥ 0.75), achieved WITHOUT any benchmark-specific
-      branch in search.ts. recall@3 = 0.867 (13/15) is the structural CEILING: exactly TWO cases are
-      unsatisfiable on the current tree and are the only accepted misses — (13), where the node literally
-      named `supervisor` is the manager-agent prompt preset and carries NONE of "reload / zero-downtime /
-      connections" (that mechanism's prose lives in `spec-cli` and `runtime`), so no purely-lexical rule can
-      return `supervisor`; and (15), where the `spec-scout` node is absent here (pending-merge in another
-      session), so it cannot be retrieved until it lands. Both resolve as the tree fills in; neither is a
-      reason to special-case. So ALL 13 SATISFIABLE cases should sit in the top 3 (recall@3 = 13/13), and most
-      at rank 1 — the few that don't (e.g. `api-endpoint`, `yatsu-core`) are canonical-vs-sibling ties the
-      spec-scout `--deep` LLM layer is meant to break, and being inside the top 3 is the floor doing its job.
+      recall@3 ≥ 0.90 over all 15 (recall@1 ≥ 0.70, MRR ≥ 0.78), achieved WITHOUT any benchmark-specific
+      branch in search.ts. Measured 0.933 (14/15) on the assembled tree. EXACTLY ONE case is the accepted
+      miss — (13), where the node literally named `supervisor` is the manager-agent prompt preset and carries
+      NONE of "reload / zero-downtime / connections" (that mechanism's prose lives in `spec-cli` and
+      `runtime`): the benchmark LABEL is wrong, not the floor — the floor returns the true governor `spec-cli`
+      at rank 2, no purely-lexical rule can return `supervisor`, and it is left as a holdout, not special-
+      cased. (Case 15 `spec-scout` is now satisfiable — the node lives in the tree once spec-scout merges —
+      and the floor retrieves it.) So ALL 14 satisfiable cases sit in the top 3, most at rank 1 — the few that
+      don't (e.g. `api-endpoint`, `yatsu-core`) are canonical-vs-sibling ties the spec-scout `--deep` LLM
+      layer is meant to break, and being inside the top 3 is the floor doing its job.
 ---
 # yatsu.md — spec-search
 

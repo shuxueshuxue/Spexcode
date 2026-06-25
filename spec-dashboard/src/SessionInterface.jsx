@@ -215,10 +215,12 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const fileRef = useRef(null)         // the one hidden <input type=file>; the attach buttons trigger it
   const fileTargetRef = useRef('new')  // which surface the pending pick inserts into ('new' | 'msg')
 
-  // @@@ drag-reorder ([[session-reorder]]) - ONLY the per-row drag HANDLE is draggable (see dragHandle below);
-  // the rows themselves are just the drop TARGETS. The list IS the backend's order (sorted by sortKey ??
-  // created), so we POST the plan and reload — never shuffle locally. dropHint lights the insertion line.
-  const dragId = useRef(null)
+  // @@@ drag-reorder ([[session-reorder]]) - a POINTER drag started ONLY from the per-row handle (mousedown →
+  // window mousemove past a threshold → mouseup). NOT native HTML5 DnD: that needs an un-preventDefaulted
+  // mousedown, but keepFocus preventDefaults the row mousedown to keep the ❯ box focused — the two can't both
+  // win, and native dnd on a span-in-a-button was unreliable for a real mouse anyway. A pointer drag is immune
+  // to that preventDefault (it rides window mousemove/mouseup), so the handle's mousedown can flow through
+  // keepFocus untouched — the input KEEPS focus — while the drag still works. dropHint lights the insertion line.
   const [dropHint, setDropHint] = useState(null)
   const applyReorder = async (plan) => {
     if (!plan) return
@@ -226,48 +228,49 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     catch { /* the next board poll reconciles */ }
     reload?.()
   }
-  const onRowDragOver = (e, s) => {
-    if (!dragId.current || dragId.current === s.id) return
-    e.preventDefault()
-    const r = e.currentTarget.getBoundingClientRect()
-    const place = e.clientY < r.top + r.height / 2 ? 'before' : 'after'
-    setDropHint((h) => (h && h.id === s.id && h.place === place ? h : { id: s.id, place }))
+  // start a drag from a row's handle. Do NOT stopPropagation: keepFocus then still runs and preventDefaults the
+  // mousedown, so the docked ❯ input never loses focus — and preventDefault does not stop the window
+  // mousemove/mouseup this drag rides on. The whole gesture lives on `window`, so it survives the re-render
+  // applyReorder triggers and works even if the cursor leaves the list.
+  const onHandleDown = (e, s) => {
+    if (e.button !== 0) return
+    const startY = e.clientY
+    const list = sessions               // snapshot for this gesture (a drag is far shorter than the 4s poll)
+    let dragging = false, hint = null
+    const onMove = (ev) => {
+      if (!dragging) { if (Math.abs(ev.clientY - startY) < 4) return; dragging = true }
+      ev.preventDefault()
+      const rows = [...(panelRef.current?.querySelectorAll('.si-item') || [])]
+      hint = null
+      for (const el of rows) {
+        const r = el.getBoundingClientRect()
+        if (ev.clientY >= r.top && ev.clientY <= r.bottom) { hint = { id: el.dataset.sid, place: ev.clientY < r.top + r.height / 2 ? 'before' : 'after' }; break }
+      }
+      if (!hint && rows.length && ev.clientY > rows[rows.length - 1].getBoundingClientRect().bottom) hint = { end: true }
+      setDropHint(hint && !hint.end ? hint : null)
+    }
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp)
+      setDropHint(null)
+      if (!dragging) return
+      let beforeId
+      if (hint?.end) beforeId = null
+      else if (hint) beforeId = hint.place === 'before' ? hint.id : (list[list.findIndex((x) => x.id === hint.id) + 1]?.id ?? null)
+      else return
+      applyReorder(reorderPlan(list, s.id, beforeId))
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
   }
-  const onRowDrop = (e, s) => {
-    e.preventDefault(); e.stopPropagation()
-    const draggedId = dragId.current; dragId.current = null
-    const hint = dropHint; setDropHint(null)
-    if (!draggedId) return
-    const place = hint && hint.id === s.id ? hint.place : 'before'
-    const i = sessions.findIndex((x) => x.id === s.id)
-    const beforeId = place === 'before' ? s.id : (sessions[i + 1]?.id ?? null)
-    applyReorder(reorderPlan(sessions, draggedId, beforeId))
-  }
-  // dropping in the empty space below the rows appends the dragged row to the very end.
-  const onListDrop = (e) => {
-    e.preventDefault()
-    const draggedId = dragId.current; dragId.current = null; setDropHint(null)
-    if (draggedId) applyReorder(reorderPlan(sessions, draggedId, null))
-  }
-  // @@@ dragHandle - the grip at the far right of row 2, the ONE draggable thing. It stops its own mousedown
-  // so keepFocus never preventDefaults it (a preventDefaulted mousedown cancels the native dragstart), and
-  // stops its own click so grabbing it never switches the tab. The whole ROW becomes the drag image. Because
-  // only the handle drags, the row body keeps every other gesture — click, double-click, and `❯` focus.
+  // @@@ dragHandle - the grip at the far right of row 2, the ONLY drag affordance. Its mousedown starts a
+  // POINTER drag (onHandleDown) and flows through keepFocus so the ❯ input keeps focus; its click is stopped so
+  // grabbing the grip never switches tab. The row body keeps every other gesture — click, double-click, focus.
   const dragHandle = (s) => (
     <span
       className="si-drag-handle"
       title={t('session.dragHandle')}
-      draggable
-      onMouseDown={(e) => e.stopPropagation()}
+      onMouseDown={(e) => onHandleDown(e, s)}
       onClick={(e) => e.stopPropagation()}
-      onDragStart={(e) => {
-        dragId.current = s.id
-        e.dataTransfer.effectAllowed = 'move'
-        try { e.dataTransfer.setData('text/plain', s.id) } catch { /* some browsers forbid setData here */ }
-        const row = e.currentTarget.closest('.si-item')
-        if (row) e.dataTransfer.setDragImage(row, 16, 16)
-      }}
-      onDragEnd={() => { dragId.current = null; setDropHint(null) }}
     >⠿</span>
   )
 
@@ -823,7 +826,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           style={{ display: 'none' }}
           onChange={(e) => { attachFiles(e.target.files, fileTargetRef.current); e.target.value = '' }}
         />
-        <aside className="si-list" onDragOver={(e) => { if (dragId.current) e.preventDefault() }} onDrop={onListDrop}>
+        <aside className="si-list">
           {/* @@@ top button row - two compact icon buttons, NOT full-width list rows, so neither blocks the
               ↑/↓ path down to a session. `＋` starts a New Session; the network glyph opens the relationship
               graph (same glyph the spec board's HUD carries). New ⇄ graph is the ←/→ horizontal axis (see the
@@ -847,10 +850,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             // top-right window (same status + same overlay tally, e.g. "review ~2"), not a divergent subset.
             <button
               key={s.id}
+              data-sid={s.id}
               className={`si-item${active === s.id ? ' on' : ''}${dropHint?.id === s.id ? ` drop-${dropHint.place}` : ''}`}
               style={{ '--ov': labelColor(s.id) }}
-              onDragOver={(e) => onRowDragOver(e, s)}
-              onDrop={(e) => onRowDrop(e, s)}
               onClick={() => setSel(s.id)}
               onDoubleClick={() => { if (s.ops?.length && onPickSession) { onPickSession(s, false); onClose() } }}
               onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, session: s }) }}

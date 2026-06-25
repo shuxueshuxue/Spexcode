@@ -35,7 +35,7 @@ if [ -n "$node" ]; then
   sp=$(find .spec -path "*/$node/spec.md" 2>/dev/null | head -1)
   where="your node's spec (${sp:-.spec/.../$node/spec.md})"
 else
-  where="the spec node that governs this area (run: spex board)"
+  where="the spec node that governs this area (run: spex search <topic>)"
 fi
 printf '{"decision":"block","reason":"Before working in this code, read %s FIRST — it is the current contract — and read its NEIGHBORS too (the parent that scopes it, the siblings it borders, the children that refine it), since its intent is only fully legible against the surrounding tree. Then act deliberately: changing the intent? edit the spec first so spec and code land together. implementing existing intent? make the code honor the spec. The one forbidden move is code that silently diverges from its spec. (Fires once per session, at your first code read or edit.)"}\n' "$where"
 exit 0

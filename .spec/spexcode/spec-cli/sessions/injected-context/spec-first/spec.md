@@ -34,7 +34,7 @@ runtime dir — [[runtime]]) makes it fire at most once:
   reads its spec, re-issues the access, and it passes. Every later access passes too.
 
 The reminder carries the reconcile-against framing of [[core]], not "obey the spec": *read your node's spec
-— resolved from the `.session/state` node id, or `spex board` when the session has none — AND its neighbors
+— resolved from the `.session/state` node id, or `spex search <topic>` when the session has none — AND its neighbors
 (parent, siblings, children), since a node's intent is only fully legible against the surrounding tree; then
 change the spec if the task changes intent, or make code honor it if it implements existing intent; the one
 forbidden move is code that silently diverges.*

@@ -33,6 +33,8 @@ export const sessionName = (s) => s?.name || s?.node || s?.title || s?.branch ||
 // human typed at launch. Before that label exists (booting / queued / offline) it falls back to the first
 // words of the launch prompt (`promptPreview`) as a placeholder, then node / title / branch / id. Distinct
 // from sessionName: the headline is ALLOWED to change each turn as the agent renarrates — the avatar (seeded
-// by id) is the fixed spatial anchor, not this line.
+// by id) is the fixed spatial anchor, not this line. The console's big-title header (si-th-name) reads this
+// SAME line too — identical source/content to the rows, only with more room before it truncates — so the
+// title over the terminal renarrates in lock-step with the row that opened it.
 export const sessionHeadline = (s) =>
   s?.name || s?.activity || s?.promptPreview || s?.node || s?.title || s?.branch || s?.id

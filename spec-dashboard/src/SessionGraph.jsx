@@ -6,7 +6,7 @@ import {
 } from '@xyflow/react'
 import { Avatar } from './avatar.jsx'
 import { labelColor } from './color.js'
-import { STATUS_COLOR } from './session.js'
+import { STATUS_COLOR, sessionHeadline } from './session.js'
 import Modal from './Modal.jsx'
 import { useT } from './i18n/index.jsx'
 
@@ -31,9 +31,15 @@ import { useT } from './i18n/index.jsx'
 // Nodes REUSE the shared seed-to-hue colour + avatar (color.js / avatar.jsx) keyed off the session id, so
 // a face here matches the same session's stripe/avatar everywhere else on the dashboard.
 
-// name (the manual rename override) wins over the derived label on EVERY surface — mirror session.js's
-// sessionName precedence here too, just with the graph's short id fallback.
-const sessionLabel = (s, t) => s.name || s.node || s.title || s.branch || (s.id ? s.id.slice(0, 8) : t('common.session'))
+// a node's label is the SAME headline its session row/card/console title shows (sessionHeadline): a human
+// rename, else the worker's LIVE tmux self-summary (`activity` — the agent's own description of what it's
+// doing right now), else the launch-prompt preview, else node/title/branch. So a node here reads identically
+// to that session everywhere else — never a divergent stable-id name. Only the bare-id fallback is the
+// graph's own (short 8-char id), since a full id is too wide for a node chip.
+const sessionLabel = (s, t) => {
+  const h = sessionHeadline(s)
+  return h && h !== s.id ? h : (s.id ? s.id.slice(0, 8) : t('common.session'))
+}
 
 // @@@ GraphNode - a session as a network node: its avatar + label, ringed in its own hue. The two handles
 // are the drag targets for asking a monitor (the arrows themselves float border-to-border, see FloatingEdge,
@@ -168,16 +174,17 @@ function forceLayout(sessions, links) {
   return pos
 }
 
-function GraphCanvas({ sessions = [], onOpen, active, legend, setLegend }) {
+function GraphCanvas({ sessions = [], onOpen, active, legend, setLegend, edges = [], edgesLoaded = false }) {
   const t = useT()
-  // @@@ nodes from the preloaded board, edges from the poll - the graph's NODES are the SHARED session list
-  // the dashboard already polls (`board.sessions`, refreshed every 4s by App and handed down here), the same
-  // source every other surface reads. So this view opens INSTANTLY with the nodes already in hand and frames
-  // them on the first paint — it never blocks behind a cold `listSessions()` round-trip the way it did when it
-  // re-fetched the whole `{nodes,edges}` itself (that recompute spawns git/tmux and ran 0.5–3s under multi-
-  // agent load, while every other surface was instant off the cached board). Only the EDGES — the live
-  // monitor arrows + comms links, the genuinely observational part — are polled from /api/sessions/graph.
-  const [edges, setEdges] = useState([])             // live monitor + comms edges, from the poll
+  // @@@ nodes AND edges in hand on the first render - the graph's NODES are the SHARED session list the
+  // dashboard already polls (`board.sessions`, refreshed every 4s by App), and its EDGES (the live monitor +
+  // comms network) are polled by the always-mounted CONSOLE and handed down as a prop too — NOT cold-fetched
+  // here. So both halves are present on the first paint: the layout is the FINAL force-clustered web from the
+  // start, never an edgeless placeholder that re-settles a few seconds later (the old self-poll lived in this
+  // remount-on-reselect component, so every entry flashed nodes-only then jumped when the first poll landed).
+  // `edgesLoaded` (the console's first edge response landed, even an empty one) gates the reveal so the first
+  // VISIBLE frame already carries the relationships. Pending/optimistic edges are interaction state, so they
+  // stay local here.
   const [pending, setPending] = useState([])         // optimistic monitor edges, awaiting the live watch
   const [toast, setToast] = useState(null)           // brief "asked A to monitor B" reassurance
   const [focusId, setFocusId] = useState(null)       // keyboard cursor: the node arrows move and ⏎ opens
@@ -185,15 +192,6 @@ function GraphCanvas({ sessions = [], onOpen, active, legend, setLegend }) {
   const framedRef = useRef(false)
   const [framed, setFramed] = useState(false)         // mask the pre-fit frame; reveal the already-centred web (no intro motion)
   const toastTimer = useRef(0)
-
-  const reload = useCallback(async () => {
-    try {
-      const res = await fetch('/api/sessions/graph')
-      const g = await res.json()
-      setEdges(Array.isArray(g.edges) ? g.edges : [])   // nodes are preloaded; take only the edges
-    } catch { /* transient; keep the last good edges */ }
-  }, [])
-  useEffect(() => { reload(); const id = setInterval(reload, 4000); return () => clearInterval(id) }, [reload])
 
   // The CONSOLE owns the universal keys (↑/↓ walk the tab list, Esc closes the console/this legend). What's
   // LEFT to this view — handled in the nav effect below — is the in-graph nav: hjkl move the cursor, ⏎ opens
@@ -371,21 +369,23 @@ function GraphCanvas({ sessions = [], onOpen, active, legend, setLegend }) {
     return () => window.removeEventListener('keydown', onKey, true)
   }, [active, byId, pos, sessions, CONES, onOpen, setCenter, getViewport, legend, setLegend])
 
-  // @@@ frame BEFORE the first visible frame - the web is origin-centred in flow coords, so its very first
-  // paint lands in the top-left corner at the default zoom. The old code let that corner frame SHOW and then
-  // snapped the camera in on the next rAF, which read as a zoom+pan "intro" on EVERY reselect (this tab
-  // REMOUNTS each time it's picked, unlike the always-mounted board graph). Instead we keep the canvas hidden
+  // @@@ frame BEFORE the first visible frame, on the FINAL layout - the web is origin-centred in flow coords,
+  // so its very first paint lands in the top-left corner at the default zoom. We keep the canvas hidden
   // (opacity 0, see the ReactFlow style) through that first paint, then in the rAF fit the web AND reveal it in
-  // the same commit — so the first VISIBLE frame is already centred and the graph is STATIC the instant it
-  // shows, never an intro animation. Nodes are preloaded, so the rAF resolves a frame after mount (no loading
-  // gate). An empty web reveals the bare board at once (nothing to frame). A later session-count change
-  // reframes with a gentle pan (duration 300, already visible).
+  // the same commit — so the first VISIBLE frame is already centred and STATIC, never an intro animation. The
+  // reveal is also HELD until `edgesLoaded` (the console's first edge response has landed): nodes are preloaded
+  // but the force layout clusters around the live edges, so revealing before they arrive would show the
+  // edgeless placeholder and then JUMP when the topology lands. Gating on edgesLoaded means the masked frame
+  // we finally fit-and-reveal already carries the relationships — the final clustered web, no shuffle. An empty
+  // board reveals at once (nothing to frame). A later session-count change reframes with a gentle pan (300ms,
+  // already visible); a topology change re-settles the nodes in place without a reframe (length-keyed deps).
   // framedRef flips inside the rAF, NOT in the effect body: under StrictMode the first effect run's rAF is
   // cancelled by its cleanup before it fires, so a body-side flag would make the surviving remount read
   // "not first" and skip the reveal (canvas stuck hidden). Setting it only when the rAF actually runs keeps
   // the instant first-fit + reveal correct in dev and prod alike.
   useEffect(() => {
     if (!rfNodes.length) { setFramed(true); return }  // empty: show the bare board, nothing to frame
+    if (!edgesLoaded) return                          // hold the mask until the live edges land (final layout)
     const first = !framedRef.current
     const id = requestAnimationFrame(() => {
       fitView({ padding: 0.25, duration: first ? 0 : 300 })
@@ -393,7 +393,7 @@ function GraphCanvas({ sessions = [], onOpen, active, legend, setLegend }) {
       setFramed(true)
     })
     return () => cancelAnimationFrame(id)
-  }, [rfNodes.length, fitView])
+  }, [rfNodes.length, edgesLoaded, fitView])
 
   return (
     <>
@@ -455,8 +455,10 @@ function SessionGraphLegend({ onClose }) {
 // console to a clicked node's session tab (setSel). `active` is true while this tab is the one selected;
 // `legend`/`setLegend` are LIFTED to the console so its Esc handler can close the legend before the console.
 // `sessions` is the preloaded board session list (the console already holds it) — the graph's NODES, so the
-// view opens instantly without a cold listSessions() fetch; only edges are polled (see GraphCanvas).
-export default function SessionGraph({ sessions = [], onOpen, active = true, legend, setLegend }) {
+// view opens instantly without a cold listSessions() fetch. `edges`/`edgesLoaded` are the live monitor+comms
+// network the CONSOLE polls and hands down (so they persist across this tab's remount-on-reselect and stay
+// current in the background) — see GraphCanvas; the view never polls them itself.
+export default function SessionGraph({ sessions = [], onOpen, active = true, legend, setLegend, edges = [], edgesLoaded = false }) {
   const t = useT()
   return (
     <div className="session-graph">
@@ -466,7 +468,7 @@ export default function SessionGraph({ sessions = [], onOpen, active = true, leg
         <button className="hud-help" onClick={() => setLegend((v) => !v)} title={t('sessionGraph.helpTitle')}>?</button>
       </div>
       <ReactFlowProvider>
-        <GraphCanvas sessions={sessions} onOpen={onOpen} active={active} legend={legend} setLegend={setLegend} />
+        <GraphCanvas sessions={sessions} onOpen={onOpen} active={active} legend={legend} setLegend={setLegend} edges={edges} edgesLoaded={edgesLoaded} />
       </ReactFlowProvider>
       {legend && <SessionGraphLegend onClose={() => setLegend(false)} />}
     </div>

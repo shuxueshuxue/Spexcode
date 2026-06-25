@@ -52,6 +52,7 @@ export default function FocusPanel({ node, onOpenEval }) {
       <div className="fp-head">
         <span className="fp-eyebrow">{t('focusPanel.focus')}</span>
         <span className="fp-title">{node ? node.title : t('focusPanel.noFocus')}</span>
+        {node?.desc && <span className="fp-desc" title={node.desc}>{node.desc}</span>}
       </div>
 
       <section className="fp-sec">

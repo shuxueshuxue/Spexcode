@@ -303,6 +303,24 @@ if (cmd === 'serve') {
 } else if (cmd === 'board') {
   const { buildBoard } = await import('./board.js')
   console.log(JSON.stringify(await buildBoard(), null, 2))
+} else if (cmd === 'search') {
+  // @@@ search - the lexical retrieval floor ([[spec-search]]): rank spec NODES by term overlap for a
+  // natural-language query and return { id, title, path, score, snippet }. `--json` prints that array
+  // verbatim (the surface spec-scout's `--deep` and the spec→code relay reuse); default is a pretty list.
+  // Thin router: all scoring lives in search.ts so every consumer shares one implementation.
+  const { searchSpecs } = await import('./search.js')
+  const query = positionals(3).join(' ')
+  if (!query.trim()) { console.error('usage: spex search <query> [--json] [--limit N]'); process.exit(2) }
+  const limit = Number(flag('limit')) || 10
+  const results = await searchSpecs(query, { limit })
+  if (has('json')) { console.log(JSON.stringify(results)); process.exit(0) }
+  if (!results.length) { console.log(`no spec node matches "${query}"`); process.exit(0) }
+  results.forEach((r, i) => {
+    console.log(`${String(i + 1).padStart(2)}. ${r.title}  [${r.id}]  ·  score ${r.score}`)
+    console.log(`    ${r.path}`)
+    if (r.snippet) console.log(`    ${r.snippet}`)
+  })
+  process.exit(0)
 } else if (cmd === 'ls' || cmd === 'sessions') {
   // pretty list of living sessions + states. `spex ls [SEL...] [--status a,b] [--json]`
   // the board comes from the backend (so `spex ls` shows the sessions of whatever SPEXCODE_API_URL points at,

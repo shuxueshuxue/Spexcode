@@ -39,10 +39,31 @@ function inline(text) {
   return out
 }
 
+// a GFM table delimiter row — `|---|:--:|--:|` — what separates the header from the body and marks a
+// pipe-line as a real TABLE (not prose that happens to contain a `|`). Must carry a pipe so a bare `---`
+// horizontal rule after a pipe-paragraph isn't misread as one.
+function isTableDelim(line) {
+  const s = line.trim()
+  return s.includes('|') && /^\|?(\s*:?-+:?\s*\|)+(\s*:?-+:?\s*)?$/.test(s)
+}
+// split one table row into trimmed cells, dropping the outer pipes. Cell text keeps its inline markdown
+// (`code`, **bold**, [[links]]) — it runs back through inline() like any other prose.
+function tableCells(line) {
+  let s = line.trim()
+  if (s.startsWith('|')) s = s.slice(1)
+  if (s.endsWith('|')) s = s.slice(0, -1)
+  return s.split('|').map((c) => c.trim())
+}
+// per-column alignment from the delimiter cell: `:--:` center · `--:` right · else default (left).
+function colAlign(cell) {
+  const l = cell.startsWith(':'), r = cell.endsWith(':')
+  return l && r ? 'center' : r ? 'right' : null
+}
+
 // @@@ SpecBody - render the spec.md body as a current-state document (markdown). It is NOT a
 // changelog — version history is the recent/history tabs, sourced from git (spex lint's `living`
 // rule keeps `## vN` headings out of the body). Fence-aware tokenizer: ``` code, # headings,
-// `- ` lists, paragraphs. The leading `# title` line is dropped (it duplicates the panel header).
+// `- ` lists, | GFM tables |, paragraphs. The leading `# title` line is dropped (it duplicates the header).
 function SpecBody({ body }) {
   if (!body) return null
   const lines = body.replace(/^#\s+[^\n]*\n+/, '').split('\n')
@@ -57,6 +78,22 @@ function SpecBody({ body }) {
       out.push(<pre className="doc-pre" key={k++}><code>{buf.join('\n')}</code></pre>)
     } else if (/^#{1,6}\s+/.test(lines[i])) {
       out.push(<h4 className="doc-h" key={k++}>{inline(lines[i].replace(/^#+\s+/, ''))}</h4>); i++
+    } else if (t.includes('|') && i + 1 < lines.length && isTableDelim(lines[i + 1])) {
+      const head = tableCells(lines[i])
+      const aligns = tableCells(lines[i + 1]).map(colAlign)
+      i += 2
+      const rows = []
+      while (i < lines.length && lines[i].includes('|') && lines[i].trim() !== '' && !/^```/.test(lines[i].trim())) {
+        rows.push(tableCells(lines[i])); i++
+      }
+      out.push(
+        <table className="doc-table" key={k++}>
+          <thead><tr>{head.map((c, j) => <th key={j} style={aligns[j] ? { textAlign: aligns[j] } : undefined}>{inline(c)}</th>)}</tr></thead>
+          <tbody>{rows.map((r, ri) => (
+            <tr key={ri}>{head.map((_, ci) => <td key={ci} style={aligns[ci] ? { textAlign: aligns[ci] } : undefined}>{inline(r[ci] ?? '')}</td>)}</tr>
+          ))}</tbody>
+        </table>
+      )
     } else if (/^-\s+/.test(t)) {
       const items = []
       while (i < lines.length && /^-\s+/.test(lines[i].trim())) items.push(lines[i++].trim().replace(/^-\s+/, ''))
@@ -68,6 +105,8 @@ function SpecBody({ body }) {
       while (i < lines.length) {
         const l = lines[i]
         if (l.trim() === '' || /^```/.test(l.trim()) || /^#{1,6}\s+/.test(l) || /^-\s+/.test(l.trim())) break
+        // a table starting on the next line ends this paragraph even without a blank separator.
+        if (l.includes('|') && i + 1 < lines.length && isTableDelim(lines[i + 1])) break
         buf.push(l); i++
       }
       out.push(<p key={k++}>{inline(buf.join(' '))}</p>)

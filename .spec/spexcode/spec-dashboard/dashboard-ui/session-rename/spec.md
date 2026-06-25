@@ -47,10 +47,6 @@ reload, so the new label appears on every surface at once rather than only where
 derived label. Renaming an unknown session fails loudly — the endpoint answers 404 — never a silent
 success.
 
-The menu also carries a **reset order** item — shown only when the row has been dragged out of birth
-order — which belongs to [[session-reorder]] (it clears that row's manual sort-key), not to this node's
-rename/close contract; it rides in this pop-over because the same right-click is where a human reaches for it.
-
 The menu's second item, **close**, runs the same human-only worktree removal as the header's close button,
 but behind a **confirm prompt** — a right-click is easy to mis-aim and the removal is destructive, so unlike
 that button it asks first (the confirm is the shared modal, its commit button styled as the destructive

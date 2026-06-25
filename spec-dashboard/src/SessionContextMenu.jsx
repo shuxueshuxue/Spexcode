@@ -10,7 +10,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Modal from './Modal.jsx'
-import { apiFetch, setSessionSort } from './data.js'
+import { apiFetch } from './data.js'
 import { sessionName } from './session.js'
 import { useT } from './i18n/index.jsx'
 
@@ -40,17 +40,6 @@ export default function SessionContextMenu({ menu, onClose, onChanged }) {
     setValue(menu.session.name || '')   // prefill the current OVERRIDE (blank if none) — not the derived label
     setRenaming(menu.session)
     onClose()
-  }
-
-  // @@@ reset order ([[session-reorder]]) - clear this row's drag-reorder pseudo-time, dropping it back to its
-  // birth slot (the reset twin of a blank rename). No confirm — it's non-destructive — and no prompt: one POST
-  // then reload. Only offered when the row actually has a `sortKey` to clear (see the conditional below).
-  const resetOrder = async (e) => {
-    e.stopPropagation()
-    const id = menu.session.id
-    onClose()
-    try { await setSessionSort(id, null) } catch { /* the next board poll reconciles */ }
-    onChanged?.()
   }
 
   // close opens a confirm prompt first (the removal is destructive and a right-click is easy to mis-aim).
@@ -88,9 +77,6 @@ export default function SessionContextMenu({ menu, onClose, onChanged }) {
       {menu && (
         <div className="sess-menu" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()}>
           <button className="sess-menu-item" onClick={startRename}>{t('sessionWindow.rename')}</button>
-          {menu.session.sortKey != null && (
-            <button className="sess-menu-item" onClick={resetOrder}>{t('sessionWindow.resetOrder')}</button>
-          )}
           <button className="sess-menu-item danger" onClick={startClose}>{t('sessionWindow.close')}</button>
         </div>
       )}

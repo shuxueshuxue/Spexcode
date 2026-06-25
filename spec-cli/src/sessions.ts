@@ -214,10 +214,19 @@ function promptPreview(prompt: string, n = 60): string {
   return first.length > n ? first.slice(0, n - 1) + '…' : first
 }
 
-// the human label for a session row: a user-chosen NAME (the rename override) wins over everything; else
-// the spec node it references, else a prompt-derived title (node-agnostic sessions), else the branch, else
-// the id. Used everywhere a session is named for a human. The frontend mirrors this precedence (session.js).
+// the STABLE human label for a session row: a user-chosen NAME (the rename override) wins over everything;
+// else the spec node it references, else a prompt-derived title (node-agnostic sessions), else the branch,
+// else the id. Stable across turns — used for tables/selectors. The frontend mirrors this (session.js
+// sessionName).
 export const sessionLabel = (s: Session): string => s.name || s.node || s.title || s.branch || s.id
+
+// @@@ sessionHeadline - the cross-surface HEADLINE: the SAME chain the board card shows (frontend session.js
+// `sessionHeadline`). A user-chosen NAME wins, else the worker's LIVE self-summary (`activity`, the Claude
+// Code pane title — see [[session-activity]]), else a fuller prompt preview, else node/title/branch/id. Use
+// it wherever a session is NAMED FOR A HUMAN in CROSS-SESSION comms (the reply-channel footer, the watch
+// greeting), so an agent recognises a peer the way it reads the board — NOT the bare 7-word prompt
+// truncation `title` that `sessionLabel` stops at. `sessionLabel` stays the stable name for tables/selectors.
+export const sessionHeadline = (s: Session): string => s.name || s.activity || s.promptPreview || s.node || s.title || s.branch || s.id
 
 async function tmux(args: string[]): Promise<string> {
   const { stdout } = await pexec('tmux', ['-L', TMUX_SOCK, ...args], { encoding: 'utf8' })
@@ -619,13 +628,17 @@ export function ownSessionId(): string | null {
 // recipient; this stamps WHO sent it and HOW to reply as a one-line insert appended to the delivered
 // message, so the recipient agent CAN reply (or ignore) and the reply rides the SAME send back into the
 // sender's prompt — a reply channel, no workflow enforcement, just a prompt insert. The sender is the
-// SENDING agent's OWN session (id from [[dispatch]]'s send-command process via ownSessionId, label its
-// board row); its FULL id is stamped so the reply addresses exactly one session, never a prefix. A human
-// running `send` from a plain shell has no session id (sender=null) → the bare message, no hint, no loop.
+// SENDING agent's OWN session (id from [[dispatch]]'s send-command process via ownSessionId, `label` its
+// board HEADLINE — sessionHeadline, the same title the recipient reads on the board); its FULL id is stamped
+// so the reply addresses exactly one session, never a prefix. A human running `send` from a plain shell has
+// no session id (sender=null) → the bare message, no hint, no loop.
+// @@@ delimited as a SESSION TITLE - the headline is wrapped `session "<headline>" (<id>)` so the recipient
+// reads it AS a session title, not as prose bleeding into the message (an un-delimited prompt-derived title
+// was unrecognisable as a name). A bare-id label (no better name in the chain) needs no quotes.
 export type MsgSender = { id: string; label: string | null }
 export function withSenderHint(text: string, sender: MsgSender | null): string {
   if (!sender) return text
-  const who = sender.label ? `${sender.label} (${sender.id})` : sender.id
+  const who = sender.label && sender.label !== sender.id ? `session "${sender.label}" (${sender.id})` : `session ${sender.id}`
   return `${text}\n\n— from ${who}. To reply: spex session send ${sender.id} "<your reply>"`
 }
 async function postJSON(path: string, body: unknown): Promise<void> {

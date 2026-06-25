@@ -50,16 +50,18 @@ async function greetWatchTargets(watcher: string, selectors: string[]): Promise<
     const real = selectors.filter((sel) => sel && sel !== '@all')
     if (!real.length) return
     const { resolveClientSession, clientSend } = await import('./client.js')
-    const { sessionLabel } = await import('./sessions.js')
+    const { sessionHeadline } = await import('./sessions.js')
     const meR = await resolveClientSession(watcher)
-    const me = 'ok' in meR ? (sessionLabel(meR.ok) || watcher.slice(0, 8)) : watcher.slice(0, 8)
+    // name the watcher by its board HEADLINE (same as the reply-channel footer), delimited as a session title.
+    const me = 'ok' in meR ? sessionHeadline(meR.ok) : watcher
+    const meWho = me && me !== watcher ? `session "${me}" (${watcher})` : `session ${watcher}`
     for (const sel of real) {
       const r = await resolveClientSession(sel)
       if (!('ok' in r)) continue   // none/ambiguous → don't guess a target to interrupt
       const target = r.ok.id
       if (target === watcher || greeted.has(target)) continue
       greeted.add(target)
-      const text = `🔭 ${me} (${watcher}) is now supervising you — they started \`spex watch\` over this session. To reach them directly, run: spex session send ${watcher} "<your message>". (One-time heads-up; reply only if you need to.)`
+      const text = `🔭 ${meWho} is now supervising you — they started \`spex watch\` over this session. To reach them directly, run: spex session send ${watcher} "<your message>". (One-time heads-up; reply only if you need to.)`
       void clientSend(target, text)   // no sender id → the connection notice is not double-counted as comms
     }
   } catch { /* greeting is best-effort — it must never disturb the watch */ }
@@ -489,7 +491,9 @@ if (cmd === 'serve') {
     let sender = null
     if (senderId) {
       const sr = await c.resolveClientSession(senderId)
-      sender = 'ok' in sr ? { id: sr.ok.id, label: s.sessionLabel(sr.ok) } : { id: senderId, label: null }
+      // name the sender by the board HEADLINE (sessionHeadline — the live self-summary the recipient sees on
+      // the board), NOT the stable sessionLabel that stops at the bare prompt-truncation title.
+      sender = 'ok' in sr ? { id: sr.ok.id, label: s.sessionHeadline(sr.ok) } : { id: senderId, label: null }
     }
     const r = await c.clientSend(full, s.withSenderHint(process.argv[5] ?? '', sender), senderId ?? undefined)
     console.log(r.ok ? 'sent' : `dispatch failed: ${r.error}`)

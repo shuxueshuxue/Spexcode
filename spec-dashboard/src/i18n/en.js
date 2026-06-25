@@ -105,6 +105,7 @@ export default {
     emptyBefore: 'no live worktrees — press ',
     emptyAfter: ' to start one',
     rename: 'rename',
+    resetOrder: 'reset order',
     close: 'close',
     closeTitle: 'close “{name}”?',
     closeConfirm: 'This closes the session and removes its worktree. Any uncommitted changes are lost.',

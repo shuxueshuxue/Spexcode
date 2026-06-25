@@ -109,6 +109,16 @@ export async function loadBoard() {
   return res.json()
 }
 
+// @@@ setSessionSort - persist a session's drag-reorder pseudo-time ([[session-reorder]]). A finite number
+// pins the row's slot; null clears the override back to birth order (the reset twin of a blank rename). The
+// backend stores it on the `.session` record so the manual order shows on every surface after the next reload.
+export async function setSessionSort(id, key) {
+  return apiFetch(`/api/sessions/${id}/sort`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ key }),
+  })
+}
+
 // @@@ projectTitle - the self-identifying NAME of the project a backend serves: its spexcode.json
 // dashboard.title override, else its launch-folder basename (resolved backend-side, arriving as
 // board.project). The ONE source for that name, so the browser tab and the session-board list header

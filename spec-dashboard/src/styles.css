@@ -917,8 +917,10 @@ body {
 }
 .si-bottom .si-input { color: var(--ink2); }
 
-/* session header: name + status + lifecycle actions */
-.si-th-name { font-weight: 700; }
+/* session header: headline + status + lifecycle actions. The headline takes the row's free width
+   (flex:1) and only ellipsises when it overflows the wide header bar — so it expands FAR more than
+   the compact `.sess-id` rows before truncating, the one display difference between the two surfaces. */
+.si-th-name { font-weight: 700; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .si-th-st { color: var(--muted); font-size: 11px; }
 .si-merges { font-size: 10px; color: var(--green); border: 1px solid var(--line); border-radius: 3px; padding: 0 5px; }
 .si-actions { margin-left: auto; display: flex; gap: 6px; }

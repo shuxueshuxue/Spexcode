@@ -229,7 +229,10 @@ export default {
 
   sessionGraph: {
     helpTitle: 'keymap & legend (?)',
+    gestureHint: 'click a node, then right-click another to monitor',
     asked: ({ a, b }) => `asked ${a} to monitor ${b}`,
+    picked: ({ a }) => `picked ${a} — right-click another node to monitor it`,
+    needSource: 'left-click a node first, then right-click another to monitor it',
     monitorPrompt: ({ label, id }) => `Please monitor session ${label} (${id}): run \`spex watch ${id}\` in the background and keep it running so its transitions surface to me.`,
     legend: {
       title: 'session relationships',
@@ -238,7 +241,11 @@ export default {
       move: 'move the cursor to the nearest session',
       open: 'open the focused session',
       leave: 'back to New Session',
-      monitor: 'drag A→B to ask A to monitor B',
+      secMouse: 'mouse',
+      gDblClick: 'double-click',
+      gClickRight: 'click → right-click',
+      openMouse: 'double-click a session to open it',
+      monitor: 'left-click a node, then right-click another to ask the first to monitor it',
       secEdges: 'edges',
       edgesDesc: 'each arrow A→B is a live monitor — agent A is running `spex watch B` right now.',
     },

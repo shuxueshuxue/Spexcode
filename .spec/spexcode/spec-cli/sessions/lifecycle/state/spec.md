@@ -47,7 +47,16 @@ independent facts, computed independently:
 
 The surfaces compose the two without precedence: the badge shows lifecycle, while **liveness `offline`
 shows the relaunch panel whatever the lifecycle** — a dead `asking` agent still needs you, now resumable —
-the sole exception being `queued`, which has not launched yet and self-starts as a slot frees. The one
+the sole exception being `queued`, which has not launched yet and self-starts as a slot frees.
+
+Offline is reachable on purpose, not only by a crash. **`exit`** is the human-only *soft stop* — the inverse
+of `reopen`: it kills the agent's tmux + rendezvous socket but **leaves the worktree, branch, and transcript**,
+so the session simply reads `offline` and the relaunch panel offers to `--resume` the same conversation.
+Because it touches no `.session/state`, the lifecycle the agent last authored survives the stop untouched.
+Contrast **`close`**, the other human-only terminal verb: it *removes* the worktree, discarding the work. Both
+are human-only and direct (not agent proposals); exit is fully reversible (relaunch), close is not. An exited
+session occupies no working-set slot ([[launch]]) — offline never does — so the freed capacity drains a queued
+one. The one
 *inferred* refinement stays orthogonal and narrow: an `online` `active` session reads `idle` if the
 idle-prompt hook fired since the last tool use, else working, **active-only guarded** so it never clobbers
 a declaration. The compact `DisplayStatus` (the `spex ls` glyph, the row dot) is a **derived label

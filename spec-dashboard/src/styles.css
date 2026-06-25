@@ -949,6 +949,7 @@ body {
 .sc-green  { --sc: var(--green); }
 .sc-yellow { --sc: var(--yellow); }
 .sc-cyan   { --sc: var(--cyan); }
+.sc-muted  { --sc: var(--muted); }   /* the soft-stop `exit` hue — dormant grey, matching the offline state it sends the session to */
 /* coloured header button: a resting tint in the identity hue, filled on hover (the proof button's old look,
    now shared by every board button so nav/proof/merge read alike). */
 .si-act.board { border-color: var(--sc); color: var(--sc); }

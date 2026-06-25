@@ -20,7 +20,8 @@ Sessions are labelled automatically — by the spec node they touch, or a few wo
 prompt, or their branch. That default is fine until a human needs to fix it: two sessions on the same
 node read alike, and a node-agnostic session wears an awkward prompt fragment forever. Right-clicking a
 session row should open a small menu: **rename** lets a human give that session a name that sticks, and
-**close** offers the same worktree removal the header does, one right-click away.
+**close** offers the worktree removal one right-click away — the destructive twin of the typed `/close`
+command ([[session-console]]), distinct from `/exit`, which only stops the agent and keeps the worktree.
 
 ## expanded spec
 
@@ -51,11 +52,12 @@ The menu also carries a **reset order** item — shown only when the row has bee
 which belongs to [[session-reorder]] (it clears that row's manual sort-key), not to this node's rename/close
 contract; it rides in this pop-over because the same right-click is where a human reaches for it.
 
-The menu's second item, **close**, runs the same human-only worktree removal as the header's close button,
+The menu's second item, **close**, runs the same human-only worktree removal as the typed `/close` command,
 but behind a **confirm prompt** — a right-click is easy to mis-aim and the removal is destructive, so unlike
-that button it asks first (the confirm is the shared modal, its commit button styled as the destructive
-verb). Confirming POSTs the close and asks the board to reload, so the closed row drops off every surface at
-once; cancelling does nothing.
+the typed command (whose deliberate keystrokes ARE the confirmation) it asks first (the confirm is the shared
+modal, its commit button styled as the destructive verb). Confirming POSTs the close and asks the board to
+reload, so the closed row drops off every surface at once; cancelling does nothing. The menu carries only the
+decisive **close**, never the soft `/exit` stop — stopping-to-resume is a typed command on a live session.
 
 Because both the pop-over and its prompt are opened **from** the board, each must render **above** it:
 a menu or modal that paints behind its own surface is present in the DOM yet invisible and unclickable,

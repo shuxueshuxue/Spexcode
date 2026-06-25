@@ -7,10 +7,13 @@
 // `color` is the load-bearing field: it is the command's identity, painting BOTH where it appears — the
 // header button and the coloured `/` menu row — the SAME hue, so the command and its button read as the
 // same thing. The hue follows each button's own accent: proof = cyan, nav = yellow (the keyboard-cursor
-// hue), merge = green (the "merged ×N" badge), exit = red (the destructive close). `button:false` means the
-// command has no header twin (exit's close lives on the row's right-click menu) — it exists only as a typed
-// command. `when(status)` gates a command to the session states where it applies, exactly as the buttons
-// were gated before (nav whenever live; proof/merge only at review/done).
+// hue), merge = green (the "merged ×N" badge). The two terminal verbs split by destructiveness: `exit` is
+// the SOFT stop (muted grey — it just sends the session to the dormant/offline state, fully resumable),
+// `close` is the REMOVAL (red — it discards the worktree, the same act as the row's right-click Close).
+// `button:false` means the command has no header twin (both exit and close live as typed commands + the
+// right-click menu — there is deliberately no header close/kill button). `when(status)` gates a command to
+// the session states where it applies (nav whenever live; proof/merge only at review/done; exit/close
+// wherever the `❯` inbox exists, i.e. live).
 export const BOARD_COMMANDS = [
   { name: 'nav',   color: 'yellow', button: true,  when: (st) => !!st && st !== 'offline',
     labelKey: 'session.navBtn', titleKey: 'session.navTitle', descKey: 'session.cmd.navDesc' },
@@ -18,8 +21,10 @@ export const BOARD_COMMANDS = [
     labelKey: 'proof.btn', titleKey: 'proof.btnTitle', descKey: 'session.cmd.proofDesc' },
   { name: 'merge', color: 'green',  button: true,  when: (st) => st === 'review' || st === 'done',
     labelKey: 'session.merge', titleKey: 'session.cmd.mergeTitle', descKey: 'session.cmd.mergeDesc' },
-  { name: 'exit',  color: 'red',    button: false, when: (st) => !!st && st !== 'offline',
+  { name: 'exit',  color: 'muted',  button: false, when: (st) => !!st && st !== 'offline',
     titleKey: 'session.cmd.exitTitle', descKey: 'session.cmd.exitDesc' },
+  { name: 'close', color: 'red',    button: false, when: (st) => !!st && st !== 'offline',
+    titleKey: 'session.cmd.closeTitle', descKey: 'session.cmd.closeDesc' },
 ]
 
 // bind the static registry to the live per-render actions, then keep only the commands available in the

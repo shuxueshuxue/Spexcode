@@ -6,7 +6,7 @@ import { loadSpecs, specHistory, specDiffAt, loadConfig } from './specs.js'
 import { resolveLayout, mainBranch } from './layout.js'
 import { buildBoard } from './board.js'
 import { gitA, gitTry } from './git.js'
-import { newSession, listSessions, sendKeys, rawKey, closeSession, reopen, propose, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, superviseQueue } from './sessions.js'
+import { newSession, listSessions, sendKeys, rawKey, exitSession, closeSession, reopen, propose, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, superviseQueue } from './sessions.js'
 import { slashCommands } from './slash-commands.js'
 import { evalTimeline, readBlobByHash } from '../../spec-yatsu/src/evaltab.js'
 import { buildProofModel, renderProofHtml } from '../../spec-yatsu/src/proof.js'
@@ -222,6 +222,9 @@ app.post('/api/sessions/:id/rawkey', async (c) => {
   const ok = await rawKey(c.req.param('id'), typeof body?.key === 'string' ? body.key : '')
   return c.json({ ok }, ok ? 200 : 404)
 })
+// @@@ exit - the soft stop: kill the agent's tmux + socket, KEEP the worktree (the session goes offline and
+// can relaunch/--resume). Distinct from close, which removes the worktree. {ok:false} = no such session.
+app.post('/api/sessions/:id/exit', async (c) => c.json({ ok: await exitSession(c.req.param('id')) }))
 app.post('/api/sessions/:id/close', async (c) => c.json({ ok: await closeSession(c.req.param('id')) }))
 // @@@ rename - set a session's human display NAME (the override that wins over the derived label), or clear
 // it with a blank name. Persists to the worktree's `.session` so it shows on every surface and survives a

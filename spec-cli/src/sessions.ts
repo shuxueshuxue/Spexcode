@@ -1230,32 +1230,36 @@ export async function mergeSession(id: string): Promise<{ dispatched: boolean; r
   return { dispatched: true }
 }
 
-// @@@ exitSession - the SOFT stop (vs closeSession's removal): kills the live tmux client + sweeps the
-// rendezvous socket so the agent process is gone, but LEAVES the durable worktree + branch + transcript
-// intact. The session stays on the board, now reading `offline` (no tmux window) whatever its lifecycle, so
-// the relaunch panel offers to --resume the SAME conversation (see reopen). This is "step away, come back
-// later"; closeSession is "discard this work". launchedAt is dropped so a just-launched id doesn't linger in
-// the boot grace and read `starting` instead of `offline`. An offline session occupies no slot, so the freed
-// capacity drains a queued session next (drainQueue).
-export async function exitSession(id: string): Promise<boolean> {
-  const wt = await findWorktree(id)
+// @@@ stopAgentProcess - the shared teardown both exit and close begin with, so there is ONE kill path, not
+// two: kill the agent's tmux client, drop its boot-window stamp (else a just-launched id lingers in the grace
+// window reading `starting` instead of `offline`), and sweep its rendezvous socket. The socket lives in the OS
+// tmpdir (NOT the worktree), so worktree removal alone would leave it behind — closing many sessions over time
+// would accumulate stale `spexcode-rv-*.sock` files; we unlink it here (force = no error if claude/OS already
+// removed it). Deliberately does NOT drainQueue — the caller drains once, after it has settled the worktree.
+async function stopAgentProcess(id: string): Promise<void> {
   await tmuxOk(['kill-session', '-t', id])
   launchedAt.delete(id)
   try { rmSync(rvSock(id), { force: true }) } catch { /* best-effort sweep; tmpdir socket, claude/OS may already be gone */ }
+}
+
+// @@@ exitSession - the SOFT stop (vs closeSession's removal): stops the agent process but LEAVES the durable
+// worktree + branch + transcript intact. The session stays on the board, now reading `offline` (no tmux window)
+// whatever its lifecycle, so the relaunch panel offers to --resume the SAME conversation (see reopen). This is
+// "step away, come back later"; closeSession is "discard this work". An offline session occupies no slot, so
+// the freed capacity drains a queued session next (drainQueue).
+export async function exitSession(id: string): Promise<boolean> {
+  const wt = await findWorktree(id)
+  await stopAgentProcess(id)
   void drainQueue()   // an exit frees a slot — start the next queued session if any
   return !!wt
 }
 
-// @@@ closeSession - the REMOVAL (human-confirmed), distinct from exitSession's soft stop: kills tmux, sweeps
-// the rendezvous socket, AND removes the worktree + branch — the work is gone, not just stopped. The rendezvous
-// socket lives in the OS tmpdir (NOT the worktree), so worktree removal alone leaves it behind — closing many
-// sessions over time would accumulate stale `spexcode-rv-*.sock` files. We unlink it here so no dead control
-// endpoint lingers (rmSync force = no error if claude already removed it).
+// @@@ closeSession - the REMOVAL (human-confirmed): exit's soft stop PLUS removing the worktree + branch — the
+// work is gone, not just stopped. Same stop primitive as exitSession (no duplicate kill path), then the git
+// worktree/branch teardown that exit deliberately skips.
 export async function closeSession(id: string): Promise<boolean> {
   const wt = await findWorktree(id)
-  await tmuxOk(['kill-session', '-t', id])
-  launchedAt.delete(id)   // drop the boot-window stamp so the map never accretes closed ids
-  try { rmSync(rvSock(id), { force: true }) } catch { /* best-effort sweep; tmpdir socket, claude/OS may already be gone */ }
+  await stopAgentProcess(id)
   if (wt) {
     await gitA(['-C', mainRoot(), 'worktree', 'remove', '--force', wt.path])
     if (wt.branch) await gitA(['-C', mainRoot(), 'branch', '-D', wt.branch])

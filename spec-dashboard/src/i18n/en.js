@@ -282,8 +282,10 @@ export default {
       proofDesc: "this session's proof of work — yatsu, diff, merge gates",
       mergeTitle: 'merge this session to main',
       mergeDesc: 'merge this session to main',
-      exitTitle: 'close this session (removes the worktree)',
-      exitDesc: 'close this session — removes the worktree (= row menu → Close)',
+      exitTitle: 'exit this session (stop the agent, keep the worktree — resumable)',
+      exitDesc: 'exit — stop the agent + tmux but KEEP the worktree, so it can be resumed',
+      closeTitle: 'close this session (removes the worktree)',
+      closeDesc: 'close — remove the worktree + branch, discarding the work (= row menu → Close)',
     },
   },
 

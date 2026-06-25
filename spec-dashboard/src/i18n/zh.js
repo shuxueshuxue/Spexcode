@@ -275,8 +275,10 @@ export default {
       proofDesc: '此会话的工作证明 —— yatsu、改动、合并门禁',
       mergeTitle: '将此会话合并到 main',
       mergeDesc: '将此会话合并到 main',
-      exitTitle: '关闭此会话（移除工作树）',
-      exitDesc: '关闭此会话 —— 移除工作树（等同右键菜单 → 关闭）',
+      exitTitle: '退出此会话（停止智能体，保留工作树 —— 可恢复）',
+      exitDesc: '退出 —— 停止智能体与 tmux，但保留工作树，之后可恢复',
+      closeTitle: '关闭此会话（移除工作树）',
+      closeDesc: '关闭 —— 移除工作树与分支，丢弃此工作（等同右键菜单 → 关闭）',
     },
   },
 

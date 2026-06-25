@@ -341,10 +341,16 @@ async function paneTitles(): Promise<Map<string, string>> {
   return m
 }
 
-// strip Claude Code's leading status glyph (✳ when idle, a braille spinner frame while working) plus the
-// space after it: the dashboard draws its own status dot, and a frozen spinner frame is just noise — keep
-// only the summary text. Empty after stripping → null (no subtitle).
+// A genuine Claude Code self-summary always LEADS with a status glyph: ✳ (and its ✶✻✽✢ blink frames) when
+// idle, a braille spinner frame (U+2800–U+28FF) while working. That glyph is the only reliable signal that a
+// pane title is the agent's OWN OSC summary and not tmux's default — which, from pane birth until the agent
+// first speaks, is the HOST NAME (e.g. `ser581555022561`), and the app may flash a bare splash before its
+// first task. So we REQUIRE it: a title without a leading glyph is "not spoken yet" → null, and the row keeps
+// its launch-prompt placeholder instead of flickering through the host name and splash. Once matched the
+// glyph (and any space/`·` after it) is stripped — the dashboard draws its own status dot and a frozen
+// spinner frame is just noise — leaving only the summary text. Empty after stripping → null too.
 function cleanActivity(raw: string): string | null {
+  if (!/^[\s·]*[✳✶✻✽✢⠀-⣿]/u.test(raw)) return null
   const t = raw.replace(/^[\s✳✶✻✽✢·⠀-⣿]+/u, '').trim()
   return t || null
 }

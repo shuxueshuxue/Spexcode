@@ -25,10 +25,16 @@ terminal tab renames itself to fit the work.
 the **pane title** (never the window name — OSC titles don't touch it). Our worker runs one pane per
 session named with the session id, so `listSessions` reads every pane title in a single `list-panes`
 snapshot (`paneTitles`) — same shape and cost as the liveness snapshot — and hangs a cleaned summary on
-`Session.activity`. The leading status glyph (`✳` idle, braille spinner while working) is stripped: the
-dashboard draws its own status, and a frozen spinner frame is noise. Activity is **live and never
-persisted** — `null` for any session that isn't up (offline / starting / queued), so a dead or booting row
-never shows a stale line. A tmux hiccup drops the line for one tick, never the session.
+`Session.activity`. A genuine Claude Code self-summary always **leads with a status glyph** (`✳` idle, a
+braille spinner frame while working); that glyph is the **proof** the title is the agent's own OSC summary
+and not tmux's default — which, from pane birth until the agent first speaks, is the **host name** (e.g.
+`ser581555022561`), and the app may flash a bare splash before its first task. So the glyph is **required**:
+a pane title without one is "not spoken yet" → `activity` is `null`, and the row keeps its launch-prompt
+placeholder rather than flickering through the host name and splash. Once present the glyph is stripped (the
+dashboard draws its own status; a frozen spinner frame is noise) and only the summary text is kept. Activity
+is **live and never persisted** — also `null` for any session that isn't up (offline / starting / queued),
+so a dead or booting row never shows a stale line. A tmux hiccup drops the line for one tick, never the
+session.
 
 **Render (two-row face).** The shared session face ([[session-console]]'s `SessionRow`) is two rows. Row 1
 is the **headline** — the avatar followed by the one best description of what this session is *about*,

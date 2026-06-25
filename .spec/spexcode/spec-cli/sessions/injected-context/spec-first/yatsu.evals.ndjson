@@ -1,0 +1,1 @@
+{"scenario":"no-node-fallback-finds-the-governing-node","codeSha":"cd9c66e737e6825977c56dbcd8da10e3862ae81a","blob":"d84efa7a2da34ef1fbdc954bdb40172cc81e78adaeb54238243309cf082dd315","blobKind":"transcript","evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-25T16:36:55.403Z"}

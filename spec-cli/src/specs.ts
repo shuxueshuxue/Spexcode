@@ -185,6 +185,22 @@ async function latestDiff(relPath: string, hash: string): Promise<{ hash: string
   return val
 }
 
+// @@@ loadSpecsLite - the FILESYSTEM-ONLY slice of a node: id, title, path, desc, body — no git at all.
+// loadSpecs pays ~500ms of git history+drift walking to derive status/version/drift/session; a hot read like
+// the lexical [[spec-search]] floor (a cold CLI process on every call) needs none of that, only the text. So
+// it reads `raws()` (one fs walk + the id de-collision) and stops. Same id/title/desc/body loadSpecs would
+// report, so ranking is identical — just without the git tax. Synchronous: it touches no async git.
+export type SpecLite = { id: string; title: string; path: string; desc: string; body: string }
+export function loadSpecsLite(): SpecLite[] {
+  return raws().map((r) => ({
+    id: r.id,
+    title: str(r.fm.title, r.id),
+    path: r.relPath,
+    desc: str(r.fm.desc),
+    body: r.body.trim(),
+  }))
+}
+
 export async function loadSpecs() {
   // both indexes are one cached git walk each and independent — fetch them in parallel (async git, so
   // they don't block the server's event loop or pay sync fork() cost). Every node below is a pure lookup

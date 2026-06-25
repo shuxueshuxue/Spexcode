@@ -30,20 +30,19 @@ shape. No fs, no git, no DOM — so **tsx runs it server-side and vite bundles i
 a cross-package import from the dashboard builds clean).
 
 - **floor caller** — `search.ts`'s `searchSpecs` maps each spec node (`loadSpecsLite`) to one doc and ranks.
-- **palette caller** — `SpecSearch.jsx` maps all FOUR planes (nodes/sessions/issues/scenarios) to docs and
-  ranks them in ONE call: because it is one scorer it is one score scale, so the four planes sort into a
-  single list with no cross-scale reconciliation — the score-merge problem dissolves rather than being
-  solved.
+- **palette caller** — `SpecSearch.jsx` ranks **each plane separately** with `rankDocs`, then **interleaves**
+  the four ranked lists by plane (a node, a session, an issue, a scenario, repeat). One unified call over all
+  four was the obvious first move and it is WRONG — nodes carry far richer text than sparse sessions/issues,
+  so a single relevance list buries the non-node planes (a node-heavy query returned only nodes; caught
+  in-browser). Per-plane ranking keeps the shared scorer's quality within a plane; the interleave keeps every
+  matching plane visible — the palette's whole reason to exist. A bonus: ranking the node plane on its own
+  corpus means the palette ranks NODES over the same corpus the floor does, so node order matches `spex search`.
 
-**What is NOT shared** (the deliberate divergence): each caller chooses its own `query` (the floor tokenises
-a question; the palette can pass a typed fragment) and its own corpus, and pre-sorts its inputs in its own
-tiebreak — `rankDocs` sorts **stably** by score, so equal-scored docs keep the caller's order (the floor:
-shorter id then id; the palette: plane order then shorter name). The core stays free of any caller's identity.
-
-So what is shared is the **algorithm, not identical results**: the palette's IDF is over its four-plane
-corpus, the floor's over the node-only corpus, so the same query can order nodes a little differently in the
-two surfaces. That is correct, not a bug — the corpora genuinely differ. The win is narrower and real: neither
-side hand-rolls its own scoring, so the maths cannot silently drift apart.
+**What is NOT shared** (the deliberate divergence): each caller chooses its own `query` (the floor tokenises a
+question; the palette can pass a typed fragment), its own corpus, and its own assembly — the floor returns one
+node list, the palette interleaves four planes. `rankDocs` sorts **stably** by score, so equal-scored docs keep
+the caller's input order (the floor pre-sorts by shorter id then id; the palette by shorter name within each
+plane). The core stays free of any caller's identity: it scores `{name,desc,body}` and nothing else.
 
 **Invariant:** lifting the scorer is a behaviour-preserving refactor of the floor — `search.bench.mjs` reports
 the same recall/MRR before and after. That bench is the guard; a drift means the extraction broke the maths.

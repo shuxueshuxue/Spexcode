@@ -352,6 +352,11 @@ body {
 .doc-pre { margin: 0 0 10px; padding: 10px 12px; background: var(--panel2); border-radius: 4px; overflow-x: auto; font-size: 12px; line-height: 1.5; }
 .doc-pre code { background: none; padding: 0; color: var(--ink); }
 .doc-link { color: var(--blue); }
+/* GFM tables in a spec body — compact, bordered, header-tinted; scrolls on its own if too wide. */
+.doc-table { width: 100%; margin: 0 0 12px; border-collapse: collapse; font-size: 12px; display: block; overflow-x: auto; }
+.doc-table th, .doc-table td { border: 1px solid var(--line); padding: 5px 9px; text-align: left; vertical-align: top; }
+.doc-table th { background: var(--panel2); color: var(--ink2); font-weight: 700; }
+.doc-table code { white-space: nowrap; }
 
 /* three-part spec body — raw source (human) / expanded spec (agent) / current state (agent).
    Each part is a card with an owner badge so the reader sees who owns it and how stable it is. */

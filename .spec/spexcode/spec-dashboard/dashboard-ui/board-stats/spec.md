@@ -3,7 +3,7 @@ title: board-stats
 status: active
 hue: 210
 session: 89e4d64b-8dde-4bd1-b60c-a3825caaba67
-desc: A glanceable bottom-left strip that counts the per-node badges across the whole tree — composition (status dots), attention (drift nodes + distinct open issues), coverage (yatsu circles) — and walks focus through the nodes behind any chip, one per click.
+desc: A glanceable bottom-left strip that tallies the tree's badges — composition (status dots) and attention (drift nodes + distinct open issues) counted per node, coverage (yatsu circles) counted per scenario — and walks focus through the nodes behind any chip, one per click.
 code:
   - spec-dashboard/src/BoardStats.jsx
 related:
@@ -26,9 +26,11 @@ that says the whole-tree figures at a glance. Keep it honest and cheap: it **cou
 A strip pinned to the **bottom-left** of the [[node-graph]], always on, sharing the minimal-HUD chrome. It
 reads the **same `specs` the graph plots**, so it stays in lock-step with the tiles, and it is **pure
 frontend derivation** — every figure folds from the `/api/board` poll, no new endpoint and no new vocabulary.
-Each figure is a **count of distinct things**, never a sum of badges: summing per-node badges double-counts
-whatever spans nodes (an issue linked to several nodes; a shared file that drifts under all its owners), so
-the strip counts the underlying things once.
+The composition and attention figures are a **count of distinct things**, never a sum of badges: summing
+per-node badges double-counts whatever spans nodes (an issue linked to several nodes; a shared file that
+drifts under all its owners), so the strip counts the underlying things once. Coverage is the deliberate
+exception — it counts **scenarios**, the real unit of yatsu loss (see below), so its base is larger and more
+honest than a node roll-up.
 
 Three clusters, each answering one question:
 
@@ -37,17 +39,23 @@ Three clusters, each answering one question:
 - **Attention — what NEEDS a human.** `⚠N` counts **nodes whose code is ahead of their spec**; `◆N` counts
   **distinct open issues** linked to the tree (deduped by number). Both count distinct things — an issue on
   three nodes is one issue. The board only knows node-linked issues, so `◆` is the *linked* open set.
-- **Coverage — how well-MEASURED the tree is.** The yatsu **score circles**, counted through the very
+- **Coverage — how well-MEASURED the tree is.** The yatsu **score circles**, drawn through the very
   `ScoreBadge` the tiles render ([[yatsu-score-badge]]) — ONE vocabulary: green `✓` fresh pass, red `✗` fresh
   fail, a **stale** verdict as the **greyed mark inside the ring** (never an invented glyph), and a faint
-  empty ring for a *blind spot* (declares scenarios, no current verdict). It counts only what the frontend
+  empty ring for a *blind spot* (declares scenarios, no current verdict). Here the count is per **scenario**,
+  not per node: a node owns several scenarios, each in its own state, so each adds to its state's bucket (a
+  never-measured scenario folds into the blind-spot empty). This is the honest unit of loss and gives the row
+  a larger, truer base than collapsing every node to one worst-first verdict. It counts only what the frontend
   can see — not a "should have a scenario" census, which lives in `spex yatsu scan`.
 
-Every chip is a **walk**: clicking steps focus to the **next** node it counts, entering at the first when
-focus is outside the ring and **wrapping** — so repeated clicks cycle through them all, each drilling that
-node's spine open and panning to it. The step is the shared `cycleNext` primitive ([[keyboard-nav]]) the
-`o`/`O` overlay cycle also walks with, so click and keypress advance alike. A **zero-count** chip dims and
-goes inert. Desktop-only — it mounts in the graph shell the phone never renders ([[mobile-ui]]).
+Every chip is a **walk**, always at **node** granularity: clicking steps focus to the **next** node it counts,
+entering at the first when focus is outside the ring and **wrapping** — so repeated clicks cycle through them
+all, each drilling that node's spine open and panning to it. The step is the shared `cycleNext` primitive
+([[keyboard-nav]]) the `o`/`O` overlay cycle also walks with, so click and keypress advance alike. For a
+coverage chip the ring is the nodes that **own** a scenario in that state (a mixed node can therefore appear
+under several coverage chips, and the empty chip walks you to the node carrying the unmeasured scenario) —
+the scenario is the unit COUNTED, the node stays the unit WALKED. A **zero-count** chip dims and goes inert.
+Desktop-only — it mounts in the graph shell the phone never renders ([[mobile-ui]]).
 
 `BoardStats.jsx` is this node's only owned source: mounted by the shared App shell, **reusing** `cycleNext`
 ([[keyboard-nav]]) and `ScoreBadge` ([[yatsu-score-badge]]) rather than re-implementing them, and adding a

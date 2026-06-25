@@ -8,14 +8,18 @@ scenarios:
       and ◆ open-issue counts, then the yatsu score circles. Confirm the figures are COUNTS of
       distinct things: the leading total equals the four status-dot counts summed, and ◆ is the
       DEDUPED distinct open-issue count (not the per-node sum — an issue on several nodes counts
-      once). Confirm a stale score reads as the greyed verdict INSIDE the ring (grey ✓ / grey ✗),
-      never an invented glyph. Capture the strip and file with `spex yatsu eval board-stats
-      --scenario stats-strip-renders --image <png> --pass`.
+      once). Confirm the yatsu score circles count SCENARIOS, not nodes — cross-check a coverage
+      chip's number against the per-scenario tally (a node with several scenarios contributes each;
+      a never-measured scenario shows under the empty blind-spot ring), so the coverage figures are
+      larger than a one-verdict-per-node roll-up. Confirm a stale score reads as the greyed verdict
+      INSIDE the ring (grey ✓ / grey ✗), never an invented glyph. Capture the strip and file with
+      `spex yatsu eval board-stats --scenario stats-strip-renders --image <png> --pass`.
     expected: >-
       The strip renders all three clusters; the leading total equals the four status-dot counts
-      summed; ◆ is the deduped distinct open-issue count; a stale score shows the greyed verdict
-      mark inside the ring (no ⊘ or other invented glyph). The filed reading carries the screenshot
-      as image evidence and a pass verdict.
+      summed; ◆ is the deduped distinct open-issue count; the coverage circles count scenarios (not
+      nodes), so their figures match the per-scenario tally and exceed a per-node roll-up; a stale
+      score shows the greyed verdict mark inside the ring (no ⊘ or other invented glyph). The filed
+      reading carries the screenshot as image evidence and a pass verdict.
   - name: stat-click-jumps
     description: >-
       With the dashboard open, click a non-zero stat chip whose ring has more than one node (e.g.

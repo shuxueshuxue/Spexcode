@@ -16,6 +16,20 @@ scenarios:
       window glance shows the identical B, C, A order — every surface sorts by the same `sortKey ?? created`.
       The other row gestures still work (single-click switches tab, right-click opens the menu); the drag
       is additive, not a replacement.
+  - name: drag-coexists-with-click-and-dblclick
+    description: >
+      Through the running dashboard in a real browser, open the console (Enter) with several sessions, at
+      least one carrying pending ops (so double-click has a node to focus). With a REAL mouse, exercise the
+      three row gestures and confirm they stay distinct now that rows are draggable: (1) a single click
+      switches to that session's tab; (2) a double-click locks the board onto the session and jumps to its
+      focused node (the console closes onto the board — onPickSession); (3) a press-and-drag reorders the
+      row. This guards the regression where a hand-rolled pointer drag cannibalised the double-click.
+    expected: |
+      All three coexist and none cannibalises another: a single click selects the tab, a double-click locks
+      and focuses the node (closing the console onto the board), and a drag reorders the list. A double-click
+      never reorders, and a drag never switches or locks. The split is the browser's own — rows are native
+      HTML5 `draggable` and keepFocus exempts `.si-item` so a real dragstart fires, while click and dblclick
+      stay native and untouched.
   - name: reset-restores-birth-order
     description: >
       Continuing from a list where one row has been dragged out of birth order (e.g. A sits at the bottom

@@ -31,6 +31,9 @@ neither blocks the `↑/↓` path); New ⇄ graph is horizontal — `→` from a
 **@-mention** suggestion, so the human opts in with `@`. A leading **`/`** opens the config-preset palette;
 the two compose the launch grammar `/<preset> @<node>… <free text>`, from which the server derives the node (the
 first `@<id>`). Both menus only insert text; the New prompt has **no** `/` slash-command menu (presets only). A preset launched with **no `@`-target** never assumes a node — the agent takes scope from the prompt, else asks first.
+**Submitting launches but never switches tabs**: the prompt clears and you stay on New Session — the new session just
+appears in the list below (the next board poll surfaces it) — so you can fire off several in a row. The old
+auto-jump-to-the-new-session is gone; only a tab's *removal* (below) ever moves your selection for you.
 
 **View Session Relationship** fills the pane with the live monitor graph ([[session-graph]]) — its home now,
 not a `t` overlay; the board's `t`/network button open onto it, and clicking a node switches to that session's tab.

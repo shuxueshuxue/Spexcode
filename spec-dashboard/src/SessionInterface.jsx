@@ -36,10 +36,41 @@ import { useT } from './i18n/index.jsx'
 // New Session tab its textarea unmounts and focus would leave the panel, which used to kill further
 // nav. A window listener is focus-independent, so ↑/↓ keep walking the list no matter what's focused.
 
-// @@@ nav-mode keymap - DOM KeyboardEvent.key → the key NAME our /rawkey backend feeds to tmux send-keys.
-// Anything not listed and length-1 (a printable char) is forwarded verbatim. Escape is handled separately
-// (it cancels a menu, and a second Esc exits nav mode), so it's intentionally absent here.
-const RAWKEY = { ArrowUp: 'Up', ArrowDown: 'Down', ArrowLeft: 'Left', ArrowRight: 'Right', Enter: 'Enter', Tab: 'Tab', Backspace: 'Backspace', ' ': 'Space' }
+// @@@ nav-mode keymap - DOM KeyboardEvent.key → the BASE key NAME our /rawkey backend feeds to tmux
+// send-keys. Modifier combos (⌃/⌥/⌘) are encoded separately by navKeyToken below; this maps only the
+// non-printable bases. Escape is handled separately (it cancels a menu, and a second Esc exits nav mode),
+// so it's intentionally absent here.
+const RAWKEY = { ArrowUp: 'Up', ArrowDown: 'Down', ArrowLeft: 'Left', ArrowRight: 'Right', Enter: 'Enter', Tab: 'Tab', Backspace: 'Backspace', Delete: 'Delete', Home: 'Home', End: 'End', ' ': 'Space' }
+
+// @@@ navKeyToken - encode a keydown into the tmux-style token /rawkey forwards (`C-r`, `M-b`, `S-Tab`,
+// `C-M-x`, or a bare char / named key). Nav mode drives the agent's REAL terminal, so modifier combos must
+// REACH tmux, not be dropped. A terminal knows only three modifiers, so we map ⌃→`C-`, ⌥/⌘→`M-` (the
+// Command key has no terminal meaning, so it folds into Meta beside Option — the same modifier a mac user
+// already reaches for), and Shift→`S-` on a NAMED key (e.g. S-Tab); a modified letter carries Shift as its
+// case (`M-B`) and a bare shifted printable already carries its glyph. The BASE of a MODIFIED letter/digit
+// is read from e.code, NOT e.key: the moment a
+// real modifier is held, e.key is unreliable — ⌥B prints '∫' on a mac, ⌃-letters print control chars — but
+// the physical KeyB / Digit3 code is stable. Returns null when there is no sendable base (a lone modifier,
+// an unmapped non-printable), so those keys are simply swallowed rather than forwarded as junk.
+function navKeyToken(e) {
+  const named = RAWKEY[e.key]
+  const mod = e.ctrlKey || e.altKey || e.metaKey
+  let base = null
+  if (named) base = named
+  else if (mod) {
+    // a modified LETTER carries Shift as its CASE (`M-B`), never an `S-` prefix — tmux can't parse `S-`
+    // on a printable, and case is how Meta-shift is actually spelled.
+    if (/^Key[A-Z]$/.test(e.code)) base = e.shiftKey ? e.code.slice(3) : e.code.slice(3).toLowerCase()
+    else if (/^Digit[0-9]$/.test(e.code)) base = e.code.slice(5)
+    else if (e.key.length === 1) base = e.key
+  } else if (e.key.length === 1) base = e.key
+  if (base == null) return null
+  let pfx = ''
+  if (e.ctrlKey) pfx += 'C-'
+  if (e.altKey || e.metaKey) pfx += 'M-'
+  if (e.shiftKey && named) pfx += 'S-'   // `S-` only for NAMED keys (e.g. S-Tab, S-Up); the backend maps it
+  return pfx + base
+}
 
 // @@@ @-mention helpers - the spec path the menu matches against (`.spec/a/b/<id>/spec.md`), shown
 // minus the `.spec/` shell and the `/spec.md` leaf, so the row reads like the tree breadcrumb it is.
@@ -624,9 +655,12 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     const onKey = (e) => {
       const { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, navMode, setNavMode, sendRawKey, graphLegend, setGraphLegend } = stateRef.current
       if (!open) return   // panel hidden (board not the active surface): nothing here listens
-      // @@@ nav-mode toggle chord (⌃/⌘+I) - the dependable keyboard entry/exit, alongside the header button.
-      // Handled before everything else so it works whether nav mode is currently on or off.
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'i' || e.key === 'I') && active !== 'new' && active !== 'graph') {
+      // @@@ reserved nav-toggle (⌥/⌘+I) - the dependable keyboard entry/exit, alongside the header button.
+      // ⌥I and ⌘I are RESERVED: handled before everything else (so they work whether nav mode is on or off),
+      // never forwarded to tmux, never overridable by the app. Matched by e.code (the physical I key) because
+      // ⌥I on a mac prints a dead-key glyph rather than 'i', which a plain e.key check would miss.
+      const isI = e.code === 'KeyI' || e.key === 'i' || e.key === 'I'
+      if ((e.altKey || e.metaKey) && isI && active !== 'new' && active !== 'graph') {
         e.preventDefault(); e.stopPropagation(); setNavMode((v) => !v); return
       }
       // @@@ jump to New Session - ⌃/⌘+N (also ⌃/⌘+↑/Home) snaps the selection to the New Session tab from
@@ -654,8 +688,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         return
       }
       // @@@ nav mode passthrough - while ON, EVERY key is forwarded raw to the session pane and nothing else
-      // fires (no list nav, no page scroll). Esc is forwarded too (it cancels the agent's menu); a SECOND Esc
-      // within 600ms exits nav mode. preventDefault/stopPropagation keep keys from leaking anywhere else.
+      // fires (no list nav, no page scroll), so the human drives the agent's terminal directly — INCLUDING
+      // ⌃/⌥/⌘ + key combos (encoded by navKeyToken into a `C-r` / `M-b` / `S-Tab` token tmux understands).
+      // The only keys NOT forwarded are the ones claimed above: the reserved ⌥/⌘+I toggle and the
+      // jump-to-New chords. Esc is forwarded too (it cancels the agent's menu); a SECOND Esc within 600ms
+      // exits nav mode. preventDefault/stopPropagation keep keys from leaking anywhere else.
       if (navMode && active !== 'new') {
         e.preventDefault(); e.stopPropagation()
         if (e.key === 'Escape') {
@@ -665,9 +702,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           lastEscRef.current = now
           return
         }
-        const named = RAWKEY[e.key]
-        if (named) { sendRawKey(named); return }
-        if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) sendRawKey(e.key)
+        const token = navKeyToken(e)
+        if (token) sendRawKey(token)
         return
       }
       // a completion menu owns navigation/commit/dismiss while it's open — on the New Session prompt

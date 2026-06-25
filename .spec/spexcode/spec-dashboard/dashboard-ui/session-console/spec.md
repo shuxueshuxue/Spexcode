@@ -53,9 +53,11 @@ is itself the deliberate act, where the row-menu's Close guards an easy-to-mis-a
 focus persistently** — clicking
 chrome never blurs it, the panel **suppresses the native context menu** and **restores** focus after a
 right-click. It **auto-grows upward**, **capped at half** the terminal height, with New's `/` **completion**
-([[term-input]]). The second channel is **nav mode** (the `/nav` board command, or the header button / `⌃/⌘+I`):
-the `❯` box disables and keystrokes forward **raw** to the pane to drive the agent's TUI; the trigger is
-**manual**, and leaving the tab or going offline exits.
+([[term-input]]). The second channel is **nav mode** — entered by the `/nav` board command, the header
+button, or the reserved `⌥/⌘+I`: the `❯` box disables and **every keystroke — `⌃`/`⌥`/`⌘` combos included —
+forwards raw** to the pane, so a human drives the agent's terminal, not just its arrows. Those **reserved
+`⌥/⌘+I`** keys toggle nav mode and are **never forwarded to tmux nor overridable by the app**; entry is
+otherwise **manual**, and leaving the tab or going offline exits.
 
 A **right-click on a session row** opens its context menu — rename or close ([[session-rename]]) — coexisting
 with the context-menu suppression; the shared `sessionName` puts that rename first in the label precedence.

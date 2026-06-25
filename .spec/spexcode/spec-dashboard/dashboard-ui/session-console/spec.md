@@ -71,7 +71,10 @@ fallback covers a session that ends or is closed elsewhere, so the selection nev
 board no longer has.
 
 **SessionWindow** is the read-only glance, built from the shared **`SessionRow`** face — avatar (no status
-dot) · name · the **colour-coded status word** (or 🔒 when locked) · pending-op count · activity. A single click **locks** the board onto
+dot) · name · the **colour-coded status word** (or 🔒 when locked) · pending-op count · activity. It stays a
+**bounded** glance: the window never grows into a curtain — its height is capped (~80% of the viewport, and
+always stopping short of the bottom **stats strip**), and a long session list **scrolls** inside it rather
+than extending down over the board's stats bar. A single click **locks** the board onto
 that session (overlays light, rest grey, focus jumps to its first changed node, see [[keyboard-nav]]); a
 no-overlay session still locks un-greyed; a second click releases; **double-click opens** its board (mouse-side `⏎`). The **interface's own tabs** render the same `SessionRow` with those gestures **inverted**:
 single click switches tab, double-click locks.

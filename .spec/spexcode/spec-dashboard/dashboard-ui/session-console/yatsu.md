@@ -29,6 +29,22 @@ scenarios:
       deliberate confirmation). The literal text `/exit` is never dispatched into the terminal/agent (the
       read-only pane shows no new `/exit` line). Any other text, including `/exit` with trailing words,
       dispatches normally to the agent.
+  - name: window-bounded-scroll
+    description: >
+      Through the running dashboard in a real browser, with MORE live/queued sessions than fit the
+      viewport at once (a dozen or more), look at the top-left SessionWindow glance together with the
+      bottom-left `.board-stats` strip. Measure three things from a full-board screenshot: (a) the
+      window's rendered height against the viewport height, (b) whether the window's bottom edge stays
+      ABOVE the stats strip with a gap (they never overlap), and (c) that the rows past the cap are
+      reachable — wheel/drag the scrollbar inside the window down to its end and screenshot the last
+      row in view. Compare against the pre-change baseline (the MAIN dashboard) where the same long
+      list grows unbounded.
+    expected: |
+      The SessionWindow is a bounded glance: its height is capped at ~80% of the viewport and it always
+      stops short of the bottom stats strip, so the strip's chips stay fully visible and clickable — the
+      window never covers them. The overflow is not lost: a vertical scrollbar appears inside the window
+      and scrolling reaches the final row. On the MAIN baseline the same long list extends straight down
+      past 80% of the viewport and overlaps/covers the stats strip, with no scrollbar.
   - name: status-word-colour
     description: >
       Through the running dashboard in a real browser, with several live sessions in DIFFERENT states (at

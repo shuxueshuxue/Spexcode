@@ -335,24 +335,25 @@ async function paneTitles(): Promise<Map<string, string>> {
   try { out = await tmux(['list-panes', '-a', '-F', '#{session_name}\t#{pane_title}']) } catch { return m }
   for (const line of out.split('\n')) {
     const tab = line.indexOf('\t'); if (tab < 0) continue
-    const id = line.slice(0, tab), title = cleanActivity(line.slice(tab + 1))
+    const id = line.slice(0, tab), title = selfSummary(line.slice(tab + 1))
     if (id && title) m.set(id, title)
   }
   return m
 }
 
-// A genuine Claude Code self-summary always LEADS with a status glyph: ✳ (and its ✶✻✽✢ blink frames) when
-// idle, a braille spinner frame (U+2800–U+28FF) while working. That glyph is the only reliable signal that a
-// pane title is the agent's OWN OSC summary and not tmux's default — which, from pane birth until the agent
-// first speaks, is the HOST NAME (e.g. `ser581555022561`), and the app may flash a bare splash before its
-// first task. So we REQUIRE it: a title without a leading glyph is "not spoken yet" → null, and the row keeps
-// its launch-prompt placeholder instead of flickering through the host name and splash. Once matched the
-// glyph (and any space/`·` after it) is stripped — the dashboard draws its own status dot and a frozen
-// spinner frame is just noise — leaving only the summary text. Empty after stripping → null too.
-function cleanActivity(raw: string): string | null {
-  if (!/^[\s·]*[✳✶✻✽✢⠀-⣿]/u.test(raw)) return null
-  const t = raw.replace(/^[\s✳✶✻✽✢·⠀-⣿]+/u, '').trim()
-  return t || null
+// @@@ selfSummary - the agent's OWN live one-line description, parsed from its tmux pane title — the SINGLE
+// place the "is this the agent speaking?" rule lives, exported so it is unit-auditable. Claude Code sets that
+// title via an OSC escape and ALWAYS leads it with a status glyph: ✳ (and its ✶✻✽✢ blink frames) when idle, a
+// braille spinner frame (U+2800–U+28FF) while working. That leading glyph is the only reliable proof the
+// title is the agent and not tmux's default — which, from pane birth until the first turn, is the HOST NAME
+// (e.g. `ser581555022561`) or a bare `Claude Code` splash. So the glyph is REQUIRED: no leading glyph → null,
+// and the caller keeps showing the launch-prompt placeholder instead of flickering through the host name and
+// splash. The leading glyph run (with the spaces/`·` between and after) is stripped — the dashboard draws its
+// own status dot, a frozen spinner frame is just noise — leaving only the summary text (null if it is empty).
+// ONE regex is the single source of the glyph rule: it gates (requires ≥1 glyph) and strips in one match.
+export function selfSummary(paneTitle: string): string | null {
+  const m = /^[\s·]*(?:[✳✶✻✽✢⠀-⣿][\s·]*)+(.*)$/u.exec(paneTitle)
+  return m ? (m[1].trim() || null) : null
 }
 
 // @@@ launchedAt - when we last started a tmux window for an id (set in launch()). claude needs ~15-20s

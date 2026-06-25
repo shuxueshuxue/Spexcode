@@ -123,11 +123,11 @@ Sessions
   watch [SEL…]          stream actionable transitions — NEVER EXITS; run it in the BACKGROUND, don't block a turn on it (poll one-shot with \`wait\`)  [--as NAME] [--status a,b] [--idle] [--interval N]
   wait <SEL>            block until <SEL> is actionable, print it, exit (one-shot — the non-blocking counterpart to watch; draws the graph edge)  [--timeout S=1200] [--interval S]
   new "<prompt>"        start a session (= session new)  [--node X]
-  session <sub>         new | list | reopen | review | done | merge | close | send | capture | prompt
+  session <sub>         new | list | reopen | review | done | merge | exit | close | send | capture | prompt
   session prompt <SEL>  print the session's originating prompt (what it was asked to do)
 
   SEL = session id (or id-prefix), node, or branch — accepted by every read/control verb (ls·watch·wait·
-        review·merge·reopen·close·send·capture·prompt); none (or @all) = every session.`)
+        review·merge·reopen·exit·close·send·capture·prompt); none (or @all) = every session.`)
 }
 
 // @@@ help guard - `--help`/`-h` after ANY subcommand prints the summary and EXITS, never running the
@@ -431,6 +431,11 @@ if (cmd === 'serve') {
     if (r.dispatched) console.log(`merge dispatched to ${full} — its agent is landing the merge`)
     else console.error(`merge dispatch failed: ${r.reason}`)
     process.exit(r.dispatched ? 0 : 1)
+  } else if (sub === 'exit') {
+    // the SOFT stop: kill the agent's tmux + socket but KEEP the worktree, so the session goes offline and
+    // can be resumed (reopen/relaunch). Distinct from `close`, which removes the worktree.
+    const full = await resolveSelectorOrExit(id)
+    console.log(await c.clientExit(full) ? `exited ${full} (worktree kept — resumable)` : `no such session ${full}`)
   } else if (sub === 'close') {
     const full = await resolveSelectorOrExit(id)
     console.log(await c.clientClose(full) ? `closed ${full}` : `no such session ${full}`)
@@ -466,7 +471,7 @@ if (cmd === 'serve') {
     if (!r.ok) { console.error(`no prompt recorded for ${full}`); process.exit(1) }
     process.stdout.write(r.prompt.endsWith('\n') ? r.prompt : r.prompt + '\n')
   } else {
-    console.error('spex session: new|list|reopen|review|done|park|ask|idle|merge|close|send|capture|prompt'); process.exit(2)
+    console.error('spex session: new|list|reopen|review|done|park|ask|idle|merge|exit|close|send|capture|prompt'); process.exit(2)
   }
 } else {
   console.error(`spex: unknown command '${cmd}' (try: spex help)`)

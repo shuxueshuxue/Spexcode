@@ -58,11 +58,15 @@ socket** (never typed into the pane), so it lands even in copy-mode. The excepti
 a `/` line the box intercepts client-side and runs HERE instead of sending to the agent (where the word would
 only drive the agent's own process, not the board). They come from **one registry** (`sessionCommands.js`) that
 ALSO renders the header buttons, so each command is the **typed twin of a button** — one action, one **identity
-colour**, never two codepaths: `/exit` closes this session (`act('close')`, red), `/merge` merges (green),
-`/nav` toggles nav mode (yellow), `/proof` opens the proof (cyan). In the inbox `/` menu they **lead** the
-list, coloured, tagged `[board]`, apart from CC's blue command rows; accepting one **runs** it (the one row
-that acts, not inserts — see [[term-input]]). `/exit` closing carries **no confirm** — typing the exact command
-is itself the deliberate act, where the row-menu's Close guards an easy-to-mis-aim right-click. The box **holds
+colour**, never two codepaths. The two terminal verbs split by what they destroy: **`/exit`** stops this
+session (`act('exit')`, **muted grey**) — it kills the agent + tmux but **keeps the worktree**, so the session
+goes `offline` and offers **relaunch** (the same resumable stop a crash produces, see [[state]]); **`/close`**
+removes it (`act('close')`, **red**) — worktree + branch gone, the work discarded, the row's right-click Close's
+twin. `/merge` merges (green), `/nav` toggles nav mode (yellow), `/proof` opens the proof (cyan). In the inbox
+`/` menu they **lead** the list, coloured, tagged `[board]`, apart from CC's blue command rows; accepting one
+**runs** it (the one row that acts, not inserts — see [[term-input]]). Typed `/exit` and `/close` carry **no
+confirm** — typing the exact command is itself the deliberate act, where the row-menu's Close guards an
+easy-to-mis-aim right-click. The box **holds
 focus persistently** — clicking
 chrome never blurs it, the panel **suppresses the native context menu** and **restores** focus after a
 right-click. It **auto-grows upward**, **capped at half** the terminal height, with New's `/` **completion**
@@ -86,9 +90,11 @@ the **visible** pane holds a WebGL context, so many panes can't exhaust the brow
 navigation lives at the **window level** (arrows walk the list whatever holds focus). The **header action row**
 is the same board-command registry, narrowed to the current state: **nav** whenever live, **proof** + **merge**
 at review/done — each a small **text** button (no glyphs) in its identity colour; an `offline` liveness
-(any lifecycle) swaps them for a relaunch panel, and review is **agent-proposed** at the stop-gate. There is **no header close button** (`/exit`
-has no button twin — its "close" misread as "close the panel" while it killed the session + worktree): closing
-lives only on the row's right-click menu, behind a confirm ([[session-rename]]).
+(any lifecycle) swaps them for a relaunch panel, and review is **agent-proposed** at the stop-gate. There is
+**no header close/exit button** (neither has a button twin — a header "close" misreads as "close the panel"
+while it discards the worktree): the destructive **close** (worktree removal) lives only on the row's
+right-click menu, behind a confirm ([[session-rename]]); both verbs are otherwise reachable as the typed
+`/exit`·`/close` commands above.
 **Closing is event-driven**: the tab's *removal* — not any one gesture — drives where you
 land. Still on the closed tab → New Session; already moved to another valid tab → your switch stands. The same
 fallback covers a session that ends or is closed elsewhere, so the selection never points at a session the

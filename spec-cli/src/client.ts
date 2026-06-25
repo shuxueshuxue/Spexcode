@@ -101,6 +101,13 @@ export async function clientReopen(id: string): Promise<boolean> {
   return !!(await r.json().catch(() => ({ ok: false })))?.ok
 }
 
+// POST /api/sessions/:id/exit — the soft stop: kill tmux + socket, KEEP the worktree (session goes offline,
+// resumable). Distinct from close. {ok:false} = no such session.
+export async function clientExit(id: string): Promise<boolean> {
+  const r = await apiFetch(`/api/sessions/${seg(id)}/exit`, post({}))
+  return !!(await r.json().catch(() => ({ ok: false })))?.ok
+}
+
 // POST /api/sessions/:id/close — the human-only worktree removal. {ok:false} = no such session.
 export async function clientClose(id: string): Promise<boolean> {
   const r = await apiFetch(`/api/sessions/${seg(id)}/close`, post({}))

@@ -681,7 +681,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     nav: () => setNavMode((v) => !v),
     proof: () => setProofOpen(true),
     merge: () => act('merge'),
-    exit: () => act('close'),
+    exit: () => act('exit'),     // soft stop: kill tmux + socket, KEEP the worktree → session goes offline + relaunch panel
+    close: () => act('close'),   // removal: kill + remove the worktree + branch (the row right-click Close's twin)
   }
   const boardCmds = boardCommandsFor(selSession?.status, runners)
   // @@@ window-level list nav - ↑/↓ move the selection regardless of focus; Enter on New launches.

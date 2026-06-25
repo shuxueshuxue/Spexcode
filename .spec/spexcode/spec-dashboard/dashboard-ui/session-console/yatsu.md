@@ -29,20 +29,37 @@ scenarios:
       its prompt is cleared, ready for the next launch — the view does NOT jump onto the freshly created
       session, nor does it bounce between New and the new tab. Each new session simply appears as a new row
       in the list below (surfaced by the board poll). Both sessions can be created back-to-back without ever
-      leaving New Session. The only thing that moves your selection is a tab's removal (the close/exit
-      scenarios), never a creation.
-  - name: exit-command-closes
+      leaving New Session. The only thing that moves your selection is a tab's removal (the close-command /
+      close-tab-fallback scenarios — note `/exit` does NOT remove a tab, it only stops the session), never a
+      creation.
+  - name: exit-command-stops-keeps-worktree
     description: >
       Through the running dashboard in a real browser, open the session interface (Enter) on a LIVE
       (non-offline) session whose `❯` box is enabled. Type exactly `/exit` into the box (dismiss the `/`
       completion menu if it opened, so Enter dispatches rather than completes) and press Enter. Watch the
       session list and active pane. Screenshot the tab list + pane before typing and after Enter settles.
+      Then confirm resumability: the same tab now shows a relaunch panel — click it and watch the session
+      come back online on the SAME conversation.
     expected: |
-      The session closes outright — its row drops off the list and the view lands on New Session, the same
-      removal the row-menu Close performs — but with NO confirmation prompt (typing the exact command IS the
-      deliberate confirmation). The literal text `/exit` is never dispatched into the terminal/agent (the
+      The session is STOPPED but NOT removed: its row STAYS in the list (it does not drop off), now reading
+      `offline`, and the active tab swaps the live terminal for the relaunch panel — the same offline+relaunch
+      a crash would produce — with NO confirmation prompt (typing the exact command IS the deliberate act). The
+      view does NOT jump to New Session (no tab removal). Clicking relaunch `--resume`s the same conversation
+      (the transcript survives). The literal text `/exit` is never dispatched into the terminal/agent (the
       read-only pane shows no new `/exit` line). Any other text, including `/exit` with trailing words,
       dispatches normally to the agent.
+  - name: close-command-removes
+    description: >
+      Through the running dashboard in a real browser, open the session interface (Enter) on a LIVE
+      (non-offline) session whose `❯` box is enabled. Type exactly `/close` into the box (dismiss the `/`
+      completion menu if it opened, so Enter dispatches rather than completes) and press Enter. Watch the
+      session list and active pane. Screenshot the tab list + pane before typing and after Enter settles.
+    expected: |
+      The session is REMOVED outright — its row drops off the list and the view lands on New Session, the same
+      worktree removal the row-menu Close performs — but with NO confirmation prompt (typing the exact command
+      IS the deliberate confirmation; the right-click Close still confirms, the typed command does not). The
+      literal text `/close` is never dispatched into the terminal/agent (the read-only pane shows no new
+      `/close` line). Any other text, including `/close` with trailing words, dispatches normally to the agent.
   - name: window-bounded-scroll
     description: >
       Through the running dashboard in a real browser, with MORE live/queued sessions than fit the
@@ -65,8 +82,8 @@ scenarios:
       REVIEW state (so nav + proof + merge all apply). (1) Read the header action row: confirm three small
       TEXT buttons — nav, proof, merge — with NO leading glyph/emoji (no ⌨ keyboard, no ◆ diamond), each
       rendered in a distinct colour. (2) In the `❯` inbox type `/` and read the completion menu: the board's
-      own commands (`/nav`, `/proof`, `/merge`, `/exit`) lead the list, each `/name` and its `[board]` tag
-      painted the SAME colour as the matching button, visibly apart from Claude Code's blue command rows.
+      own commands (`/nav`, `/proof`, `/merge`, `/exit`, `/close`) lead the list, each `/name` and its
+      `[board]` tag painted its identity colour, visibly apart from Claude Code's blue command rows.
       (3) Type `/proof` and Enter: the proof overlay opens — identical to clicking the proof button; close it,
       then click the proof button and confirm the SAME overlay opens. (4) Type `/nav` and Enter: nav mode
       engages (the `❯` box becomes the nav indicator AND the nav button shows its active `.on` state); click
@@ -74,9 +91,11 @@ scenarios:
     expected: |
       The action-row buttons are text-only (no glyphs/emoji) and colour-coded — nav yellow (var --yellow =
       rgb(181,137,0)), proof cyan (var --cyan = rgb(42,161,152)), merge green (var --green = rgb(133,153,0)).
-      In the `/` menu the four board commands lead, each name + `[board]` tag in its identity colour — the
-      SAME hue as its button (nav yellow, proof cyan, merge green, exit red = rgb(220,50,47)) — while CC's
-      commands stay blue (rgb(38,139,210)); one element, one colour in both places. Typing `/proof` opens the
+      In the `/` menu the five board commands lead, each name + `[board]` tag in its identity colour — the
+      SAME hue as its button where it has one (nav yellow, proof cyan, merge green); the two button-less
+      terminal verbs split by destructiveness — exit muted grey (var --muted = rgb(147,161,161), the dormant/
+      offline hue it sends the session to) and close red (var --red = rgb(220,50,47), the worktree removal) —
+      while CC's commands stay blue (rgb(38,139,210)); one element, one colour in both places. Typing `/proof` opens the
       very overlay the proof button opens (one shared open-state); typing `/nav` toggles nav mode exactly as
       the nav button does, and the button reflects that same state. A board command is never dispatched to the
       agent — its line is intercepted and the draft cleared — so no `/proof`/`/nav` text reaches the pane.

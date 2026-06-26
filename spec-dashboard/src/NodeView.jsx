@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ScoreBadge, readingScore, ScenarioCount } from './score.jsx'
+import { ScoreBadge, readingScore, ScenarioCount, scenarioStates } from './score.jsx'
 import { useT } from './i18n/index.jsx'
 
 // @@@ pane registry - add a face for a spec node by adding one entry + one render case below.
@@ -510,6 +510,25 @@ function EvalEvidence({ r }) {
   )
 }
 
+// @@@ DeclaredScenario - a declared scenario shown in the eval tab WITHOUT a reading to expand: the empty
+// score ring (a blind spot) over its name, its `expected` (what zero loss looks like), and the files it
+// tracks. This is what makes the declared SET — not just the readings that exist — visible inside the popup;
+// an unmeasured scenario is still a unit of loss, and once the popup is open the [[focus-panel]]'s list is
+// behind its backdrop, so the eval tab is the only place that intent can show. A static row (no toggle).
+function DeclaredScenario({ s }) {
+  const t = useT()
+  return (
+    <div className="eval-row eval-declared-row">
+      <span className="eval-top">
+        <ScoreBadge state="empty" title={t('score.missing')} />
+        <span className="eval-scenario">{s.name}</span>
+        {s.code?.length > 0 && <code className="eval-tracks">{s.code.join(', ')}</code>}
+      </span>
+      {s.expected && <div className="eval-expected"><span className="eval-expected-label">{t('nodeView.eval.expected')}</span> {s.expected}</div>}
+    </div>
+  )
+}
+
 // @@@ EvalPane - the node's measurement timeline (the [[spec-yatsu]] eval tab), a thin consumer of the SAME
 // ChronoPane scaffold the history tab uses, so the scroll/reveal/toggle and the per-item header+evidence
 // shape live in ONE place. The readings RIDE THE BOARD (`node.evals`, the [[yatsu-eval-tab]] fold) — the SAME
@@ -520,18 +539,34 @@ function EvalEvidence({ r }) {
 // / grey ✓/✗ stale (the last verdict greyed, the moved axis on hover) / empty ring no current score — the SAME
 // vocabulary the node tile's card badge speaks · evaluator · codeSha · time); its evidence is the scenario's `expected` over the
 // captured proof — an image inline or a transcript as text, fetched LAZILY by hash on expand, or — no capture
-// — *miss original file* when the record outlived its bytes, else an evidence-less note. Two empty states stay
-// distinct by presence: a node that declares no scenarios (no yatsu.md → no `evals` field at all) and one that
-// declares some but hasn't been measured (an empty array). Readings arrive newest-first (the server already
-// reversed the append-only sidecar). (Forge issue-events — the second evidence source — arrive with a future
-// sibling node; this shows LOCAL readings only.)
+// — *miss original file* when the record outlived its bytes, else an evidence-less note. Readings arrive
+// newest-first (the server already reversed the append-only sidecar). (Forge issue-events — the second
+// evidence source — arrive with a future sibling node; this shows LOCAL readings only.)
+//
+// The tab shows the WHOLE declared set, not only the readings: a declared scenario with no reading shows as a
+// DeclaredScenario blind-spot row, so the node's measurable intent is legible in the popup before any reading
+// lands. No reading at ALL → just that list under a hint; some measured, some not → the unmeasured ones in a
+// band above the timeline. The one presence-distinct empty state survives: no yatsu.md → no `evals` field.
 export function EvalPane({ node }) {
   const t = useT()
   const readings = node.evals
   if (!readings) return <div className="pane-eval empty">{t('nodeView.eval.noScenarios')}</div>
-  if (!readings.length) return <div className="pane-eval empty">{t('nodeView.eval.noReadings')}</div>
+  const unmeasured = scenarioStates(node.scenarios, readings).filter((s) => !s.reading)
+  if (!readings.length) return (
+    <div className="pane-eval pane-eval-declared">
+      <div className="eval-todo-note">{t('nodeView.eval.noReadings')}</div>
+      {unmeasured.map((s) => <DeclaredScenario key={s.name} s={s} />)}
+    </div>
+  )
   return (
-    <ChronoPane
+    <div className="pane-eval-stack">
+      {unmeasured.length > 0 && (
+        <div className="eval-declared-band">
+          <div className="eval-declared-head">{t('nodeView.eval.unmeasuredHead', { n: unmeasured.length })}</div>
+          {unmeasured.map((s) => <DeclaredScenario key={s.name} s={s} />)}
+        </div>
+      )}
+      <ChronoPane
       items={readings}
       itemKey={(r, i) => `${r.scenario}-${r.ts}-${i}`}
       classes={{ pane: 'pane-eval', row: 'eval-row', head: 'eval-head', evidence: 'eval-shot' }}
@@ -551,7 +586,8 @@ export function EvalPane({ node }) {
         </>
       )}
       renderEvidence={(r) => <EvalEvidence r={r} />}
-    />
+      />
+    </div>
   )
 }
 

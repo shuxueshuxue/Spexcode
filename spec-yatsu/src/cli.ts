@@ -1,6 +1,6 @@
 import { readFileSync, existsSync } from 'node:fs'
 import { join, relative, dirname } from 'node:path'
-import { repoRoot, headSha, driftIndex, stagedFiles, git } from '../../spec-cli/src/git.js'
+import { repoRoot, headSha, driftIndex, historyIndex, stagedFiles, git } from '../../spec-cli/src/git.js'
 import { loadSpecs } from '../../spec-cli/src/specs.js'
 import { loadConfig } from '../../spec-cli/src/lint.js'
 import { mainBranch, statePath } from '../../spec-cli/src/layout.js'
@@ -107,6 +107,7 @@ async function scan(args: string[] = []): Promise<number> {
   const changedOnly = has(args, 'changed')
   const changed = changedOnly ? changedSinceBase(root) : null
   const idx = await driftIndex(root)
+  const hidx = await historyIndex(root)
   const specs = await loadSpecs()
   // a file may be governed by several nodes — ordinary composition, not a hub to skip (see governed-related).
   // A change to a shared governed file legitimately triggers EVERY governing node's yatsu, mirroring how
@@ -145,10 +146,10 @@ async function scan(args: string[] = []): Promise<number> {
           findings.push(`  • yatsu-missing: '${s.id}' scenario '${sc.name}' has no reading yet — measure with \`spex yatsu eval ${s.id}\``)
           continue
         }
-        const axes = staleAxes(r, codeFiles, y.yatsuPath, idx)
+        const axes = staleAxes(r, codeFiles, y.yatsuPath, idx, hidx)
         if (axes.length) {
           staleScores++
-          findings.push(`  • yatsu-drift: '${s.id}' scenario '${sc.name}' is stale (${axes.join(', ')} moved since ${r.codeSha.slice(0, 7)}) — re-measure with \`spex yatsu eval ${s.id}\``)
+          findings.push(`  • yatsu-drift: '${s.id}' scenario '${sc.name}' is stale (${axes.join(', ')} changed since ${r.codeSha.slice(0, 7)}) — re-measure with \`spex yatsu eval ${s.id}\``)
         }
       }
     } else if (s.code.some(isUiPath)) {

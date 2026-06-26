@@ -20,6 +20,14 @@ every browser viewer of that session — so there is one authoritative pane size
 supervisor keeps a **warm** client for every *detached* live session, so opening a tab paints instantly,
 and deliberately **skips** any session a human is already attached to in their own terminal.
 
+The warm client is held at the **last-known viewer size** — the most recent size any dashboard pane fitted
+to (per session, with a global fallback; only a session no viewer has *ever* sized falls back to a fixed
+default). The supervisor does not merely spawn a fresh bridge at that size — it **keeps existing warm
+bridges at it**, resizing a stale one off-screen while no one is watching. So when a viewer attaches, the
+pane is *already* its size: the open-time fit matches, tmux re-wraps nothing, and the human sees one clean
+repaint — never a visible cols/rows reflow settling in after the fact. The on-attach resize is the reflow;
+pre-sizing the warm client is what removes it. Only the first open of a never-sized session pays it once.
+
 The client is forced to **UTF-8** (`tmux -u` plus a UTF-8 `LANG`), independent of the host's locale. Without
 that, a backend launched with an empty/non-UTF-8 environment (e.g. a macOS LaunchAgent, where `LANG=""`)
 makes tmux substitute `_` for every wide character — CJK, `▸`, `★`, … — in the bytes it streams to the

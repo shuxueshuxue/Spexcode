@@ -987,20 +987,12 @@ body {
 .session-graph {
   position: absolute; inset: 0; background: var(--paper);
 }
-/* the standing gesture hint + lone `?` help, top-right of the pane (the brand/back chrome is gone — the
-   tab is the frame). */
+/* the lone `?` help, top-right of the pane (the brand/back chrome is gone — the tab is the frame). No
+   standing gesture caption lives here: the monitor gesture is hinted reactively (toasts), not by a
+   permanent label over the graph. */
 .sg-hud {
   position: absolute; top: 12px; right: 14px; z-index: 5;
   display: flex; gap: 6px; align-items: center; pointer-events: none;
-}
-/* the standing monitor-gesture hint: states the left-click-then-right-click rule the user can't see (there
-   are no handles); double-click-to-open is conventional and goes unhinted. Non-interactive, so the HUD's
-   pointer-events:none is fine. */
-.sg-hint {
-  padding: 4px 9px; background: var(--panel); color: var(--muted);
-  border: 1px solid var(--line); border-radius: 6px;
-  font-family: var(--mono); font-size: 11px; white-space: nowrap;
-  box-shadow: 0 1px 3px rgba(0,0,0,.08);
 }
 /* a session node: avatar + label + status, ringed in its own hue (--sg from labelColor(id)). */
 .sg-node {

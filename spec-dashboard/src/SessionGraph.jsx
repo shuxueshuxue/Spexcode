@@ -483,12 +483,13 @@ export default function SessionGraph({ sessions = [], onOpen, active = true, leg
   const t = useT()
   return (
     <div className="session-graph">
-      {/* a standing gesture hint + a single discreet `?` (the same help affordance the spec board uses) opens
-          the keymap/edge legend. The hint advertises the no-handle monitor gesture (left-click then
-          right-click) the user can't otherwise see; double-click-to-open is conventional and needs no hint.
-          No brand/back chrome: the tab IS the frame, and leaving is just picking another tab. */}
+      {/* a single discreet `?` (the same help affordance the spec board uses) opens the keymap/edge legend.
+          There is NO standing gesture caption: clicking a node is the intuitive first move and needs no
+          permanent prompt to advertise it — the monitor gesture is hinted REACTIVELY instead (picking a
+          source toasts the right-click step; a stray right-click reminds the user to pick first; the `?`
+          legend documents the full rule). No brand/back chrome: the tab IS the frame, and leaving is just
+          picking another tab. */}
       <div className="sg-hud">
-        <span className="sg-hint">{t('sessionGraph.gestureHint')}</span>
         <button className="hud-help" onClick={() => setLegend((v) => !v)} title={t('sessionGraph.helpTitle')}>?</button>
       </div>
       <ReactFlowProvider>

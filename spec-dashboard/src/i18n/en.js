@@ -229,7 +229,6 @@ export default {
 
   sessionGraph: {
     helpTitle: 'keymap & legend (?)',
-    gestureHint: 'click a node, then right-click another to monitor',
     asked: ({ a, b }) => `asked ${a} to monitor ${b}`,
     picked: ({ a }) => `picked ${a} — right-click another node to monitor it`,
     needSource: 'left-click a node first, then right-click another to monitor it',

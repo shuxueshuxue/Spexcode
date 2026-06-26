@@ -79,11 +79,13 @@ A** (over the same `/keys` channel the console uses) telling it to monitor B (`s
 subscription is written**. The gesture is **two clicks, not a drag**: you **left-click** a node to pick it as
 the **watcher** (it lights up as the selected source), then **right-click** another node — the watched.
 Direction lives in the order of the two clicks, so no handle and no drag is needed; left-clicking a different
-node re-picks the source, and a click on empty space clears it. Because the gesture has no visible handle to
-advertise it, the view **hints** it: a standing caption states the click-then-right-click rule, and picking a
-source raises a brief **toast** naming it and prompting the right-click (a right-click with nothing picked yet
-just reminds the user to pick first). Double-clicking to open needs no such hint — it is the conventional open
-gesture. To feel acknowledged at once, the moment the right-click lands an **optimistic pending edge** (dashed,
+node re-picks the source, and a click on empty space clears it. The gesture has no visible handle, but the
+view does **not** stand a permanent caption over the graph to advertise it: clicking a node is itself the
+intuitive first move and needs no prompt to remind the user to make it. Instead the hint is **reactive** —
+it surfaces only once the user engages. Picking a source raises a brief **toast** naming it and prompting the
+right-click, and a right-click with nothing picked yet just reminds the user to pick first; the full
+click-then-right-click rule also lives in the `?` legend for anyone who looks. Double-clicking to open needs
+no such hint — it is the conventional open gesture. To feel acknowledged at once, the moment the right-click lands an **optimistic pending edge** (dashed,
 in A's hue) appears with a brief **toast**; that edge is provisional and **firms up to a solid live arrow**
 only once A's real `spex watch` registration arrives on the next poll (a pending edge is superseded by its
 live twin, never doubled). Nodes stay draggable.

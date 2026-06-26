@@ -222,7 +222,6 @@ export default {
 
   sessionGraph: {
     helpTitle: '快捷键与图例（?）',
-    gestureHint: '左键选中一个节点，再右键另一个即可建立监视',
     asked: ({ a, b }) => `已请求 ${a} 监视 ${b}`,
     picked: ({ a }) => `已选中 ${a} —— 右键另一个节点即可让它监视`,
     needSource: '请先左键选中一个节点，再右键另一个建立监视',

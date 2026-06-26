@@ -19,13 +19,17 @@ scenarios:
       a node — it lights up as the picked watcher (dashed hue outline) and a toast prompts you to
       right-click the watched; then RIGHT-click a different node — an optimistic dashed monitor arrow
       appears from the first to the second with an "asked … to monitor …" toast, and no browser context
-      menu pops up. A standing hint near the `?` advertises the click-then-right-click rule. Screenshot
-      the picked-source + pending-edge state and file it with `spex yatsu eval session-graph --image <png> --pass`.
+      menu pops up. Confirm there is NO standing gesture caption over the graph before any click — only the
+      lone `?` help button — and that the click-then-right-click guidance appears reactively (the pick toast,
+      and the `?` legend). Screenshot the picked-source + pending-edge state and file it with
+      `spex yatsu eval session-graph --image <png> --pass`.
     expected: >-
-      Double-click opens a session (single-click never does); a left-click picks a node as the watcher
-      (visible highlight + toast) and a following right-click on another node draws the optimistic
-      pending monitor arrow and dispatches the ask — with the native context menu suppressed. There are
-      no connection handles on the nodes. The filed reading carries the screenshot and a pass verdict.
+      Before any interaction the pane shows no permanent gesture caption (only the `?` button); the
+      click-then-right-click rule is surfaced reactively. Double-click opens a session (single-click never
+      does); a left-click picks a node as the watcher (visible highlight + toast) and a following
+      right-click on another node draws the optimistic pending monitor arrow and dispatches the ask — with
+      the native context menu suppressed. There are no connection handles on the nodes. The filed reading
+      carries the screenshot and a pass verdict.
 ---
 # yatsu.md — session-graph
 

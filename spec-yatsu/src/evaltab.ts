@@ -1,5 +1,5 @@
 import { relative, dirname } from 'node:path'
-import { repoRoot, driftIndex, type DriftIndex } from '../../spec-cli/src/git.js'
+import { repoRoot, driftIndex, historyIndex, type DriftIndex, type HistoryIndex } from '../../spec-cli/src/git.js'
 import { loadSpecs } from '../../spec-cli/src/specs.js'
 import { yatsuNodes, type YatsuNode } from './yatsu.js'
 import { readReadings, type Verdict } from './sidecar.js'
@@ -64,12 +64,15 @@ export type EvalContext = {
   root: string
   specs: Awaited<ReturnType<typeof loadSpecs>>
   idx: DriftIndex
+  hidx: HistoryIndex
   ynodes: YatsuNode[]
 }
 
-// build the shared context with ONE yatsu walk, reusing the caller's already-computed specs + driftIndex.
-export function evalContext(root: string, specs: Awaited<ReturnType<typeof loadSpecs>>, idx: DriftIndex): EvalContext {
-  return { root, specs, idx, ynodes: yatsuNodes(root) }
+// build the shared context with ONE yatsu walk, reusing the caller's already-computed specs + the two
+// HEAD-keyed git indices (drift for the code axis, history for the rename-safe scenario axis — both warm
+// hits, loadSpecs already derived them).
+export function evalContext(root: string, specs: Awaited<ReturnType<typeof loadSpecs>>, idx: DriftIndex, hidx: HistoryIndex): EvalContext {
+  return { root, specs, idx, hidx, ynodes: yatsuNodes(root) }
 }
 
 export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalTimeline> {
@@ -83,6 +86,7 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
   const specs = ctx?.specs ?? await loadSpecs()
   const codeFiles = specs.find((s) => dirname(s.path) === relative(root, ynode.dir))?.code ?? []
   const idx = ctx?.idx ?? await driftIndex(root)
+  const hidx = ctx?.hidx ?? await historyIndex(root)
   const byName = new Map(ynode.scenarios.map((s) => [s.name, s]))   // join each reading to its scenario's expected + code
   const scenarios: ScenarioInfo[] = ynode.scenarios.map((s) => ({
     name: s.name, expected: s.expected, ...(s.code?.length ? { code: s.code } : {}),
@@ -90,7 +94,7 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
   const readings: EvalEntry[] = readReadings(ynode.sidecarPath).map((r) => {
     // a scenario's own `code` is its freshness code axis when it declares one; else the whole node's list.
     const sc = byName.get(r.scenario)
-    const axes = staleAxes(r, sc?.code?.length ? sc.code : codeFiles, ynode.yatsuPath, idx)
+    const axes = staleAxes(r, sc?.code?.length ? sc.code : codeFiles, ynode.yatsuPath, idx, hidx)
     return {
       scenario: r.scenario,
       expected: byName.get(r.scenario)?.expected ?? '',

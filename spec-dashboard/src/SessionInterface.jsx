@@ -415,11 +415,15 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // @@@ auto-grow - the new-session box grows with its content (line wraps + newlines) up to the CSS
   // max-height, then scrolls. Reset to 0/auto first so it can also shrink when text is deleted. Re-runs
   // on `open` too, so a reopen with a cached multi-line draft restores its height instead of collapsing.
+  // overflow-y is HIDDEN below the cap and only flipped to `auto` once content actually exceeds it — so a
+  // sub-pixel-rounded scrollHeight or the height transition can't flash a scrollbar before the cap is hit.
   useEffect(() => {
     const ta = taRef.current
     if (!ta || active !== 'new' || !open) return
     ta.style.height = 'auto'
-    ta.style.height = `${ta.scrollHeight}px`
+    const maxH = parseFloat(getComputedStyle(ta).maxHeight) || Infinity
+    ta.style.overflowY = ta.scrollHeight > maxH ? 'auto' : 'hidden'
+    ta.style.height = `${Math.min(ta.scrollHeight, maxH)}px`
   }, [prompt, active, open])
 
   // @@@ docked input auto-grow - the session ❯ box grows with its content too, but UPWARD: the bar is
@@ -432,6 +436,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     const maxH = Math.round((termRef.current?.clientHeight || 360) * 0.5)
     ta.style.maxHeight = `${maxH}px`
     ta.style.height = 'auto'
+    ta.style.overflowY = ta.scrollHeight > maxH ? 'auto' : 'hidden'
     ta.style.height = `${Math.min(ta.scrollHeight, maxH)}px`
   }, [msg, active, open])
 

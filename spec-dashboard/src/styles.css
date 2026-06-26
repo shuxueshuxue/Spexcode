@@ -853,7 +853,9 @@ body {
 .si-input {
   flex: 1; min-width: 0; resize: none; background: transparent; border: none; outline: none;
   color: var(--ink2); font-family: var(--mono); font-size: 13px; line-height: 1.5; max-height: 180px;
-  overflow-y: auto; transition: height .12s ease;
+  /* overflow stays HIDDEN below the cap — the auto-grow JS sizes the box to its content, so a scrollbar
+     here would only be transition-lag/sub-pixel-rounding noise. JS flips it to `auto` exactly at the cap. */
+  overflow-y: hidden; transition: height .12s ease;
 }
 .si-input::placeholder { color: var(--muted); }
 .si-hint { font-size: 11px; color: var(--muted); }

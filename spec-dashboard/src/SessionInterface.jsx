@@ -126,6 +126,20 @@ function caretAtEdge(el, dir) {
   return dir === 'up' ? top < lh : top >= textHeight - lh - 1
 }
 
+// @@@ fitTextarea - the ONE auto-grow routine every `.si-input` shares. Size the box to its content (reset
+// to `auto` first so it can shrink when text is deleted, then height = scrollHeight) clamped at `maxH`, and
+// keep overflow-y HIDDEN until the content genuinely overruns the cap — only there flip it to `auto`. Below
+// the cap the box is exactly as tall as its content, so a scrollbar can NEVER appear from the `.12s` height
+// transition lagging the content, nor from scrollHeight's sub-pixel rounding (line-height 19.5px) leaving the
+// content a fraction taller than the integer height. `maxH` is the only per-surface difference — the CSS cap
+// for the new-session box, half the terminal for the docked ❯ inbox — so every grow surface fits identically.
+function fitTextarea(ta, maxH) {
+  if (!ta) return
+  ta.style.height = 'auto'
+  ta.style.overflowY = ta.scrollHeight > maxH ? 'auto' : 'hidden'
+  ta.style.height = `${Math.min(ta.scrollHeight, maxH)}px`
+}
+
 // @@@ slash-command match - filter the fetched command list by the typed prefix (the text after `/`).
 // startsWith beats a mid-string include; server order (custom → built-in → skill) is preserved within a
 // score band because Array.sort is stable. Empty query (just `/`) lists everything. Mirrors CC's `/` menu.
@@ -413,26 +427,24 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   }, [open, active, selSession?.liveness])
 
   // @@@ auto-grow - the new-session box grows with its content (line wraps + newlines) up to the CSS
-  // max-height, then scrolls. Reset to 0/auto first so it can also shrink when text is deleted. Re-runs
-  // on `open` too, so a reopen with a cached multi-line draft restores its height instead of collapsing.
+  // max-height, then scrolls. Re-runs on `open` too, so a reopen with a cached multi-line draft restores its
+  // height instead of collapsing. Its cap lives in CSS (max-height) — read it back and hand it to fitTextarea.
   useEffect(() => {
     const ta = taRef.current
     if (!ta || active !== 'new' || !open) return
-    ta.style.height = 'auto'
-    ta.style.height = `${ta.scrollHeight}px`
+    fitTextarea(ta, parseFloat(getComputedStyle(ta).maxHeight) || Infinity)
   }, [prompt, active, open])
 
   // @@@ docked input auto-grow - the session ❯ box grows with its content too, but UPWARD: the bar is
   // absolutely anchored to the wrap's bottom (see CSS), so added lines extend over the terminal's lower
-  // edge and never push the terminal or any sibling. It caps at HALF the terminal's height — only there
-  // does overflow-y kick a scrollbar in; below the cap the textarea is exactly tall enough, so no scrollbar.
+  // edge and never push the terminal or any sibling. Its cap is dynamic — HALF the terminal's height — so we
+  // set max-height in JS, then hand the same value to fitTextarea (the shared grow routine does the rest).
   useEffect(() => {
     const ta = msgRef.current
     if (!ta || active === 'new' || !open) return
     const maxH = Math.round((termRef.current?.clientHeight || 360) * 0.5)
     ta.style.maxHeight = `${maxH}px`
-    ta.style.height = 'auto'
-    ta.style.height = `${Math.min(ta.scrollHeight, maxH)}px`
+    fitTextarea(ta, maxH)
   }, [msg, active, open])
 
   // @@@ composeLaunch - the grammar `/<preset> @<node>… <free text>` assembles ONE launch prompt:

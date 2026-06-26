@@ -41,13 +41,28 @@ export const githubDriver: ForgeDriver = {
     }))
   },
 
+  // @@@ best-effort transitive - `closingIssuesReferences` powers the TRANSITIVE link (issue ← PR → node),
+  // one of three sources and the only one needing a special field. The two CORE links (a `node/<id>` PR
+  // branch via headRefName, an issue-body `Spec:` marker) need nothing beyond the baseline fields, so an
+  // older `gh` that lacks this one JSON field must degrade ONLY transitive linking — it must not take the
+  // whole forge down (which `resident.ts` would then swallow into a no-badge, no-error blank). So: ask for
+  // the field, and ONLY on gh's specific "unknown JSON field" rejection retry without it (closesIssues
+  // empty). A real failure (no `gh`, no auth, no repo) is a different error and still throws LOUD.
   async listPRs(): Promise<ForgePR[]> {
-    const rows = await gh<
-      {
-        number: number; title: string; url: string; state: string; headRefName: string
-        closingIssuesReferences?: { number: number }[]
-      }[]
-    >(['pr', 'list', '--state', 'open', '--limit', '200', '--json', 'number,title,url,state,headRefName,closingIssuesReferences'])
+    type Row = {
+      number: number; title: string; url: string; state: string; headRefName: string
+      closingIssuesReferences?: { number: number }[]
+    }
+    const base = ['pr', 'list', '--state', 'open', '--limit', '200', '--json']
+    const fields = 'number,title,url,state,headRefName'
+    let rows: Row[]
+    try {
+      rows = await gh<Row[]>([...base, `${fields},closingIssuesReferences`])
+    } catch (err) {
+      if (!isUnknownFieldError(err)) throw err
+      warnNoTransitiveOnce()
+      rows = await gh<Row[]>([...base, fields])
+    }
     return rows.map((r) => ({
       number: r.number,
       title: r.title,
@@ -57,4 +72,26 @@ export const githubDriver: ForgeDriver = {
       closesIssues: (r.closingIssuesReferences ?? []).map((c) => c.number),
     }))
   },
+}
+
+// @@@ isUnknownFieldError - the narrow signal that THIS `gh` is too old for an enrichment field (it lists
+// the fields it does know and exits non-zero). Matched on gh's own message so only a field-version mismatch
+// triggers the degrade; auth/repo/network errors carry different text and fall through to a loud throw.
+function isUnknownFieldError(err: unknown): boolean {
+  const e = err as { stderr?: string; message?: string }
+  const text = `${e?.stderr ?? ''}\n${e?.message ?? ''}`
+  return /unknown json field/i.test(text)
+}
+
+// @@@ warnNoTransitiveOnce - surface the lost capability ONCE (not per reconcile, which would spam every
+// 60s board poll). Capability loss is exposed, not hidden: the core links still work, only the free
+// transitive link is unavailable until `gh` is new enough.
+let warnedNoTransitive = false
+function warnNoTransitiveOnce(): void {
+  if (warnedNoTransitive) return
+  warnedNoTransitive = true
+  console.warn(
+    'spec-forge: this `gh` is too old for `closingIssuesReferences` — transitive issue↔PR links are ' +
+      'disabled (branch + `Spec:` marker links still work). Upgrade `gh` to restore them.',
+  )
 }

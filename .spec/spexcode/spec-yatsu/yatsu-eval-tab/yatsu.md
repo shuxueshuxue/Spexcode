@@ -7,15 +7,15 @@ scenarios:
       tab (key `4`). The tab must NOT dead-end at a bare "no measurements yet" line: under that hint it
       lists each DECLARED scenario as a blind-spot row — an empty score ring, the scenario name, the
       files it tracks, and its `expected`. For a node where some scenarios are measured and others not,
-      the unmeasured ones gather in a band ("N declared scenario(s) not yet measured") ABOVE the reading
-      timeline. Screenshot the popup's eval tab and file with
+      the unmeasured ones LEAD the one reading timeline as the same kind of blind-spot row (no fenced-off
+      band, no second scrollbar — the empty ring is the only distinction). Screenshot the popup's eval tab and file with
       `spex yatsu eval yatsu-eval-tab --scenario declared-scenarios-visible-without-readings --image <png> --pass`.
     expected: >-
       The eval tab surfaces the WHOLE declared set, not only the readings: a scenario with no reading
       shows its name + expected (+ tracked files) under a blind-spot ring, so a node's measurable intent
       is legible inside the popup even before any reading lands — the only place it shows once the popup
       covers the focus panel. No reading at all → the declared list under a hint; some measured, some not
-      → the unmeasured ones in a band above the timeline.
+      → those same rows lead the one timeline (the empty ring is the only distinction, not a separate band).
     code:
       - spec-dashboard/src/NodeView.jsx
       - spec-dashboard/src/styles.css

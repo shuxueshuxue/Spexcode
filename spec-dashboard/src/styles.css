@@ -1178,14 +1178,10 @@ body {
    scrolls itself, and App's bumpScroll targets .pane-eval). */
 .pane-eval { flex: 1; min-width: 0; padding: 16px 20px; overflow: auto; }
 .pane-eval.empty { color: var(--muted); font-size: 13px; }
-/* the eval tab surfaces the WHOLE declared set: readings ride the timeline, unmeasured scenarios show as
-   blind-spot rows. With NO readings the whole pane is that list under a hint; with some, the unmeasured ones
-   gather in a band above the scrolling timeline ([[yatsu-eval-tab]]). */
-.pane-eval-stack { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
-.pane-eval-stack .pane-eval { flex: 1; }
+/* the eval tab surfaces the WHOLE declared set in ONE list: readings ride the timeline, and an unmeasured
+   scenario leads it as a blind-spot row — the empty score ring is the only distinction, no fenced-off band
+   ([[yatsu-eval-tab]]). */
 .eval-todo-note { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
-.eval-declared-band { flex: none; max-height: 40%; overflow: auto; padding: 12px 20px; border-bottom: 1px solid var(--line); background: var(--panel2); }
-.eval-declared-head { font-size: 11px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
 .eval-declared-row .eval-expected { padding-left: 23px; margin: 4px 0 0; }
 .eval-tracks { color: var(--muted); font-family: var(--mono); font-size: 10px; opacity: .85; }
 .eval-row { border-bottom: 1px solid var(--line); padding: 10px 0; }

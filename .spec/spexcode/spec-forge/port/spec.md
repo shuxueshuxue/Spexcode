@@ -26,6 +26,15 @@ the user's existing auth and `gh`'s repo auto-detection rather than handling tok
 loud**: an absent or unauthenticated `gh` throws with gh's own message, so a broken `gh` never looks like
 an empty forge.
 
+**One caveat, scoped to a single optional field.** `closesIssues` rides GitHub's `closingIssuesReferences`,
+a `gh pr list` JSON field that older `gh` builds don't know. Only the **transitive** link needs it; the two
+core links (the `node/<id>` PR branch and the `Spec:` issue marker) read baseline fields. So a `gh` too old
+for that one field must degrade **only** transitive linking, never take the whole driver down — otherwise
+[[freshness]]'s resident cache swallows the throw and the dashboard goes blank ([[dashboard-issues]]). The
+driver asks for the field, and **only** on gh's specific "unknown JSON field" rejection retries without it
+(`closesIssues` empty) and warns once. Every other failure (no `gh`, no auth, no repo) is a different error
+and still throws loud — the degrade is the narrow field-version case alone, not a blanket swallow.
+
 The contract holds at the port: it is **read-only**. A driver fetches and returns objects and writes
 nothing — not to the forge, and never to a node's version or status (which stays git-derived).
 

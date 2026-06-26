@@ -150,7 +150,8 @@ export default {
     loadingHistory: '正在加载历史…',
     eval: {
       noScenarios: '尚未声明场景 —— 此节点没有可测量的 yatsu.md。',
-      noReadings: '尚无测量 —— 运行 `spex yatsu eval` 归档一次。',
+      noReadings: '尚无测量 —— 运行 `spex yatsu eval` 归档一次。已声明的场景：',
+      unmeasuredHead: ({ n }) => `${n} 个已声明但尚未测量的场景`,
       staleAxes: ({ axes }) => `已过期：自本次读取以来 ${axes} 已变动`,
       pass: '✓ 通过',
       fail: '✗ 未通过',

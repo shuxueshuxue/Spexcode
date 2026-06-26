@@ -28,9 +28,13 @@ the file this node governs (the deeper mechanism lives in its [[source-of-truth]
 eval endpoints' contract belongs to [[spec-yatsu]], so their churn — the eval-blob comment reframed to
 serve a transcript or image, not just pixels — is that subtree's evolution, not spec-cli's drift).
 
-The `serve` script (the `npm run api` entry) hot-reloads the backend on its own source changes
-(`spec-cli/src/**`) — never on `.spec/**/spec.md` or dashboard edits, which it reads via fs rather than
-importing. **The reload must be zero-downtime: port 8787 never has a gap.** A `tsx watch` restart left a
+The `serve` script (the `npm run api` entry) hot-reloads the backend on changes to **any source tree the
+child actually imports** — its own `spec-cli/src/**` plus the sibling packages it loads at runtime
+(`spec-forge`, `spec-yatsu`) — never on `.spec/**/spec.md` or `spec-dashboard` edits, which it reads via fs
+or never imports (the frontend is a separate vite server with its own HMR). Watching only its own dir was a
+real gap: a merge touching `spec-forge` reached disk while the running child kept the stale code, so a fix
+could ship to `main` yet stay invisible on the live dashboard. **The reload must be zero-downtime: port 8787
+never has a gap.** A `tsx watch` restart left a
 ~1-2s window where every API call was refused (a node merge touching backend code took the dashboard
 down); that window must not exist.
 

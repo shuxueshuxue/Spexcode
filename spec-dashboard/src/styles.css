@@ -200,8 +200,8 @@ body {
 .react-flow__handle { background: var(--muted); border: none; width: 5px; height: 5px; border-radius: 1px; }
 /* spec-tree handles route edges but need no visible square (no manual edge-drawing, nodes aren't
    draggable) — hiding them de-clutters and frees the right edge for the ▸N expandable tab. The handles
-   stay in place (transparent) so edges still attach at the node's mid-sides. (SessionGraph keeps its
-   visible .sg-handle.) */
+   stay in place (transparent) so edges still attach at the node's mid-sides. (SessionGraph carries no
+   handles at all — its monitor gesture is left-click then right-click, not a drag.) */
 .spec-node .react-flow__handle { background: transparent; }
 
 /* ---- sidebar ---- */
@@ -985,10 +985,20 @@ body {
 .session-graph {
   position: absolute; inset: 0; background: var(--paper);
 }
-/* the lone `?` help, top-right of the pane (the brand/back chrome is gone — the tab is the frame). */
+/* the standing gesture hint + lone `?` help, top-right of the pane (the brand/back chrome is gone — the
+   tab is the frame). */
 .sg-hud {
   position: absolute; top: 12px; right: 14px; z-index: 5;
-  display: flex; gap: 6px; pointer-events: none;
+  display: flex; gap: 6px; align-items: center; pointer-events: none;
+}
+/* the standing monitor-gesture hint: states the left-click-then-right-click rule the user can't see (there
+   are no handles); double-click-to-open is conventional and goes unhinted. Non-interactive, so the HUD's
+   pointer-events:none is fine. */
+.sg-hint {
+  padding: 4px 9px; background: var(--panel); color: var(--muted);
+  border: 1px solid var(--line); border-radius: 6px;
+  font-family: var(--mono); font-size: 11px; white-space: nowrap;
+  box-shadow: 0 1px 3px rgba(0,0,0,.08);
 }
 /* a session node: avatar + label + status, ringed in its own hue (--sg from labelColor(id)). */
 .sg-node {
@@ -999,9 +1009,14 @@ body {
 }
 /* the keyboard cursor: the node arrows move and ⏎ opens, lifted with a hue-tinted ring + glow. */
 .sg-node--focus { border-width: 2.5px; box-shadow: 0 0 0 3px color-mix(in srgb, var(--sg) 35%, transparent), 0 2px 8px rgba(0,0,0,.14); }
+/* the picked monitor watcher: left-clicked, awaiting a right-click on the node it should watch. A dashed
+   hue outline sets the "mid-gesture" pick apart from the solid keyboard --focus glow. */
+.sg-node--source { outline: 2px dashed var(--sg); outline-offset: 3px; box-shadow: 0 0 0 3px color-mix(in srgb, var(--sg) 28%, transparent); }
 .sg-label { color: var(--ink2); font-size: 11px; font-weight: 700; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sg-status { color: var(--muted); font-size: 10px; }
-.sg-handle { width: 8px; height: 8px; background: var(--sg); border: none; }
+/* the node handles are invisible edge ANCHORS only — ReactFlow needs a handle to route an edge to a node,
+   but the monitor gesture is left-click + right-click (not a drag), so they show nothing and take no input. */
+.session-graph .react-flow__handle { opacity: 0; pointer-events: none; }
 /* directed monitor arrows: live = solid; pending = dashed (asked, not yet registered — see sg-pending). */
 .sg-edge .react-flow__edge-path { stroke-linecap: round; }
 .sg-pending .react-flow__edge-path { stroke-dasharray: 5 5; }

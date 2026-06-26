@@ -18,9 +18,11 @@ existing view. It lives as a tab **inside the session console** ([[session-conso
 Relationship"** view, reached by its icon button (paired with `＋ New Session` in the console's top button
 row) or — from the spec board — the small floating network button, which opens the
 console **on this tab**. The arrows are **observational** — they reflect who is watching whom right now and
-appear/disappear as watches start and stop. The one human gesture is **asking**: dragging A→B does not draw
-a stored edge, it **asks agent A to monitor B**. Clicking a node **opens that session's console** — which,
-since the graph and the consoles are sibling tabs of one board, simply switches to that session's tab.
+appear/disappear as watches start and stop. The two human gestures are **opening** and **asking**:
+**double-click** a node to **open that session's console** (since the graph and the consoles are sibling tabs
+of one board, this simply switches to that session's tab); and to **ask** a monitor, **left-click** a node to
+pick it as the watcher, then **right-click** another node — the watched — to ask the first to monitor the
+second. Asking does not draw a stored edge.
 
 ## expanded spec
 
@@ -49,7 +51,7 @@ view is the in-graph walk. You reach the tab from an **empty** New Session with 
 (a horizontal axis off New, the twin of the vertical session list) — the other arrows are **inert** here.
 Esc closes the view's `?` legend first, else the console. So the graph's cursor is **vim-only**: **hjkl** move
 it to the nearest node inside a 45° cone in that direction (the camera following), and **⏎** opens the focused
-session — the twin of a click, which **switches to that session's console tab**. The view's own keys keep the
+session — the twin of **double-clicking** a node, which **switches to that session's console tab**. The view's own keys keep the
 board's discipline: the **same discreet `?` help affordance the board uses** opens a small legend of its
 keymap and edge vocabulary, instead of a standing wall of text.
 
@@ -72,11 +74,16 @@ so a watch starting or stopping makes its arrow appear or vanish on its own, eac
 between live sessions, so closing a session removes its node and arrows together — the graph never shows a
 dangling arrow.
 
-Asking is the exception, faithful to the no-store rule. Dragging A→B **dispatches a prompt to agent A** (over
-the same `/keys` channel the console uses) telling it to monitor B (`spex watch B`); **no subscription is
-written**. The gesture must never fail for a reason the user can't see: on a ring nodes face arbitrary
-directions, so any anchor connects to any other and only the drag's **direction** carries meaning — the node
-the drag **started on is the watcher**, the other end the watched. To feel acknowledged at once, the moment
-the drag completes an **optimistic pending edge** (dashed, in A's hue) appears with a brief **toast**; that
-edge is provisional and **firms up to a solid live arrow** only once A's real `spex watch` registration
-arrives on the next poll (a pending edge is superseded by its live twin, never doubled). Nodes stay draggable.
+Asking is the exception, faithful to the no-store rule. Asking A to monitor B **dispatches a prompt to agent
+A** (over the same `/keys` channel the console uses) telling it to monitor B (`spex watch B`); **no
+subscription is written**. The gesture is **two clicks, not a drag**: you **left-click** a node to pick it as
+the **watcher** (it lights up as the selected source), then **right-click** another node — the watched.
+Direction lives in the order of the two clicks, so no handle and no drag is needed; left-clicking a different
+node re-picks the source, and a click on empty space clears it. Because the gesture has no visible handle to
+advertise it, the view **hints** it: a standing caption states the click-then-right-click rule, and picking a
+source raises a brief **toast** naming it and prompting the right-click (a right-click with nothing picked yet
+just reminds the user to pick first). Double-clicking to open needs no such hint — it is the conventional open
+gesture. To feel acknowledged at once, the moment the right-click lands an **optimistic pending edge** (dashed,
+in A's hue) appears with a brief **toast**; that edge is provisional and **firms up to a solid live arrow**
+only once A's real `spex watch` registration arrives on the next poll (a pending edge is superseded by its
+live twin, never doubled). Nodes stay draggable.

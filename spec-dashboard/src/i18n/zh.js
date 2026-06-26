@@ -222,7 +222,10 @@ export default {
 
   sessionGraph: {
     helpTitle: '快捷键与图例（?）',
+    gestureHint: '左键选中一个节点，再右键另一个即可建立监视',
     asked: ({ a, b }) => `已请求 ${a} 监视 ${b}`,
+    picked: ({ a }) => `已选中 ${a} —— 右键另一个节点即可让它监视`,
+    needSource: '请先左键选中一个节点，再右键另一个建立监视',
     monitorPrompt: ({ label, id }) => `请监视会话 ${label}（${id}）：在后台运行 \`spex watch ${id}\` 并保持运行，让其状态变化反馈给我。`,
     legend: {
       title: '会话关系',
@@ -231,7 +234,11 @@ export default {
       move: '将光标移到最近的会话',
       open: '打开聚焦的会话',
       leave: '返回新建会话',
-      monitor: '拖动 A→B 让 A 监视 B',
+      secMouse: '鼠标',
+      gDblClick: '双击',
+      gClickRight: '左键 → 右键',
+      openMouse: '双击会话即可打开',
+      monitor: '左键选中一个节点，再右键另一个，让前者监视后者',
       secEdges: '连线',
       edgesDesc: '每条箭头 A→B 都是一个实时监视——智能体 A 正在运行 `spex watch B`。',
     },

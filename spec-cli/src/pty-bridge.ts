@@ -217,10 +217,17 @@ export function resizeBridge(id: string, cols: number, rows: number): void {
   if (!(cols > 0 && rows > 0)) return
   lastFit.set(id, { cols, rows }); lastFitAny = { cols, rows }
   const b = bridges.get(id)
-  if (!b) return
+  if (b) applySize(b, cols, rows)
+}
+// resize the tmux client + repaint, WITHOUT recording the size as a viewer fit. This is the primitive both
+// a real viewer resize and the supervisor's pre-sizing use; only resizeBridge updates lastFit/lastFitAny,
+// so the supervisor applying a per-session size can never clobber the global last-fit with a stale value.
+// Always settles+repaints (a viewer reconnect re-sends its current size and still needs the frame after its
+// xterm reset); the supervisor avoids the per-tick repaint by only calling this when the size truly differs.
+function applySize(b: Bridge, cols: number, rows: number): void {
   if (cols !== b.cols || rows !== b.rows) {
     b.cols = cols; b.rows = rows
-    try { b.pty.resize(cols, rows) } catch { /* dead pty; next fit retries */ }
+    try { b.pty.resize(cols, rows) } catch { /* dead pty; next fit/tick retries */ }
   }
   void settleAndRepaint(b)
 }
@@ -235,7 +242,19 @@ async function reconcileOnce(): Promise<void> {
   for (const s of await listSessions()) {
     if (!(await alive(s.id))) continue
     live.add(s.id)
-    if (bridges.has(s.id)) { bridges.get(s.id)!.prewarmed = true; continue }  // already ours → keep warm
+    // already ours → keep warm AND keep at the last-known viewer size. A bridge spawned before any viewer
+    // fit (e.g. right after a cold start) sits at the fixed default; once a viewer has fitted, prewarmSize
+    // is the real dashboard size, so we resize the stale warm bridge here — off-screen, while no one watches.
+    // That way a first open finds the pane ALREADY at its size: no on-attach resize, no visible reflow. The
+    // size-diff guard makes a converged bridge a no-op (no per-tick repaint); watched sessions match too,
+    // since prewarmSize returns their own recorded fit.
+    const existing = bridges.get(s.id)
+    if (existing) {
+      existing.prewarmed = true
+      const want = prewarmSize(s.id)
+      if (want.cols !== existing.cols || want.rows !== existing.rows) applySize(existing, want.cols, want.rows)
+      continue
+    }
     // no bridge for a live session: either viewers are already waiting (their bridge died → RE-BIND, which
     // must fire settleAndRepaint so an idle pane doesn't sit frozen on the dead frame — nothing else re-arms
     // it, since the socket never reopened), or it's an idle detached session to pre-warm. Pre-warm spawns at

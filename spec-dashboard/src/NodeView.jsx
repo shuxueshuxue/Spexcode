@@ -260,7 +260,7 @@ function DiffEvidence({ diff }) {
 // evidence. Empty/loading states live in the consumers (each has its own vocabulary), so `items` is always a
 // non-empty array here. revealNext + its two triggers are the progressive reveal, lifted from the old
 // HistoryPane verbatim, so the history tab is unchanged and the eval tab inherits the same gesture.
-function ChronoPane({ items, itemKey, classes, rowClass, renderHeader, renderEvidence }) {
+function ChronoPane({ items, itemKey, classes, rowClass, renderHeader, renderEvidence, leading }) {
   const scRef = useRef(null)
   const [open, setOpen] = useState(() => new Set([0]))   // latest expanded; the rest reveal on scroll
   const toggle = useCallback((i) => setOpen((prev) => {
@@ -307,6 +307,7 @@ function ChronoPane({ items, itemKey, classes, rowClass, renderHeader, renderEvi
   }, [revealNext])
   return (
     <div className={classes.pane} ref={scRef}>
+      {leading}
       {items.map((it, i) => {
         const isOpen = open.has(i)
         const mod = rowClass ? rowClass(it, i) : ''
@@ -543,10 +544,12 @@ function DeclaredScenario({ s }) {
 // newest-first (the server already reversed the append-only sidecar). (Forge issue-events — the second
 // evidence source — arrive with a future sibling node; this shows LOCAL readings only.)
 //
-// The tab shows the WHOLE declared set, not only the readings: a declared scenario with no reading shows as a
-// DeclaredScenario blind-spot row, so the node's measurable intent is legible in the popup before any reading
-// lands. No reading at ALL → just that list under a hint; some measured, some not → the unmeasured ones in a
-// band above the timeline. The one presence-distinct empty state survives: no yatsu.md → no `evals` field.
+// The tab shows the WHOLE declared set in ONE list, not only the readings: a declared scenario with no
+// reading shows as a DeclaredScenario blind-spot row at the TOP of the same list (the empty ring IS the only
+// distinction — no fenced-off band, no second scrollbar), since an unmeasured scenario is the node's
+// outstanding loss and belongs where the attention is. No reading at ALL → just those rows under a hint; some
+// measured, some not → those rows lead the timeline. The one presence-distinct empty state survives: no
+// yatsu.md → no `evals` field.
 export function EvalPane({ node }) {
   const t = useT()
   const readings = node.evals
@@ -558,16 +561,11 @@ export function EvalPane({ node }) {
       {unmeasured.map((s) => <DeclaredScenario key={s.name} s={s} />)}
     </div>
   )
+  // unmeasured scenarios lead the one timeline as blind-spot rows — same row frame, just the empty ring
   return (
-    <div className="pane-eval-stack">
-      {unmeasured.length > 0 && (
-        <div className="eval-declared-band">
-          <div className="eval-declared-head">{t('nodeView.eval.unmeasuredHead', { n: unmeasured.length })}</div>
-          {unmeasured.map((s) => <DeclaredScenario key={s.name} s={s} />)}
-        </div>
-      )}
-      <ChronoPane
+    <ChronoPane
       items={readings}
+      leading={unmeasured.map((s) => <DeclaredScenario key={s.name} s={s} />)}
       itemKey={(r, i) => `${r.scenario}-${r.ts}-${i}`}
       classes={{ pane: 'pane-eval', row: 'eval-row', head: 'eval-head', evidence: 'eval-shot' }}
       renderHeader={(r, i, open) => (
@@ -586,8 +584,7 @@ export function EvalPane({ node }) {
         </>
       )}
       renderEvidence={(r) => <EvalEvidence r={r} />}
-      />
-    </div>
+    />
   )
 }
 

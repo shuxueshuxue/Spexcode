@@ -156,7 +156,6 @@ export default {
     eval: {
       noScenarios: 'no scenarios declared — this node has no yatsu.md to measure.',
       noReadings: 'no measurements yet — run `spex yatsu eval` to file one. The declared scenarios:',
-      unmeasuredHead: ({ n }) => `${n} declared scenario${n === 1 ? '' : 's'} not yet measured`,
       staleAxes: ({ axes }) => `stale: ${axes} moved since this reading`,
       pass: '✓ pass',
       fail: '✗ fail',

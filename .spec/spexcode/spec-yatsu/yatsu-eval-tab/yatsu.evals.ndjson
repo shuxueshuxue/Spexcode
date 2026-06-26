@@ -1,1 +1,2 @@
 {"scenario":"declared-scenarios-visible-without-readings","codeSha":"2b9d29c16954638d8671b2c31a8dbc8303483e3e","blob":"539b6e5dae73afeeb87bf538bd1ff829f66ac150f5e8cc09e851661dc3742e9f","blobKind":"image","evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-26T03:57:21.092Z"}
+{"scenario":"declared-scenarios-visible-without-readings","codeSha":"71aea0b6f767fbbc403e6cbe14469dd4863b567b","blob":"2fffa1051427b96c0900f783f2a38537e59ee76e5c840e42dd2bdcc749a546f6","blobKind":"image","evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-26T08:48:32.449Z"}

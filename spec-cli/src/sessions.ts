@@ -7,8 +7,9 @@ import { tmpdir } from 'node:os'
 import { createConnection } from 'node:net'
 import { fileURLToPath } from 'node:url'
 import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, type ReviewDiffFile } from './git.js'
-import { loadSystemConfig, loadSpecs, type ConfigPreset } from './specs.js'
+import { loadSpecs } from './specs.js'
 import { defaultHarness } from './harness.js'
+import { materialize } from './materialize.js'
 import { mainBranch, gitCommonDir, readConfig, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, readRawRecord, envSessionId, type RawRecord } from './layout.js'
 
 // @@@ sessions - the WORKTREE is the durable unit; tmux is a disposable runtime handle. Each session
@@ -60,32 +61,6 @@ function maxActive(): number {
   } catch { /* config unreadable — fall through to env/default */ }
   if (v === undefined) { const e = Number(process.env.SPEXCODE_MAX_ACTIVE); if (Number.isFinite(e) && e > 0) v = e }
   return Math.max(1, Math.floor(v ?? 6))
-}
-
-// @@@ appendSysArg - the system prompt folded into EVERY launched/resumed agent (both paths go through
-// launch() below), assembled ENTIRELY from the system config surface — there is NO baked-in core. The
-// contract lives as DATA in the spec tree, not as a string constant here: each ACTIVE node declaring
-// `surface: system` (gathered by loadSystemConfig) contributes its body, in name order. Without this a
-// dashboard/CLI-launched session gets ONLY the human's terse prompt and carries none of SpexCode's standing
-// contracts (agents kept proposing merge with UNCOMMITTED work). The core spec-discipline rules now live in
-// the `core/spec` system node, alongside opinionated rules like `voice-before-ask`; adding or editing ANY
-// always-on rule is a spec edit, not a code change here. A config node opts in by declaring `surface:
-// system` — no slash, no agent choice. Pending plugins are filtered out by loadSystemConfig, so a `status:
-// pending` stub never injects. Built fresh per launch, so editing a system node takes effect on the next
-// launch with no restart. The combined text is single-quoted onto the launch line and shell-escaped like the
-// prompt; the launch line is written to a script file (see launch()), so length is unbounded — it no longer
-// rides the ~2KB tmux send-keys limit that capped the inline prompt (the launch-prompt-limit lesson). If
-// ZERO system nodes are present, NO flag is emitted at all (empty string) — the launcher tolerates a missing
-// flag, so a config-less instance launches without an appended contract. `cfgs` defaults to the live system
-// load — it's a parameter only so the gathering is testable.
-export function appendSysArg(cfgs: ConfigPreset[] = loadSystemConfig()): string {
-  const parts: string[] = []
-  for (const cfg of cfgs) {
-    if (cfg.body.trim()) parts.push(cfg.body.trim())
-  }
-  if (parts.length === 0) return ''
-  const full = parts.join('\n\n')
-  return `--append-system-prompt '${full.replace(/'/g, `'\\''`)}'`
 }
 
 // @@@ rendezvous control socket - the DETERMINISTIC, ONLY input path for PROMPTS to sessions WE launch. We
@@ -686,60 +661,8 @@ function titleFromPrompt(prompt: string): string | null {
   return words.length > 50 ? words.slice(0, 49).trimEnd() + '…' : words
 }
 
-// @@@ hideClaudeMd - CLAUDE.md isolation. A DISPATCHED agent should run with full SpexCode control over
-// its own behavior, not be shaped by the project CLAUDE.md the way the managing session is (auto-discovery
-// would inject it as system context). At launch we move the worktree's CLAUDE.md OUT of the worktree entirely
-// — into the session's global store (`claude.md`, keyed by session_id) — so it is still on disk and fully
-// readable (NOT deleted) yet invisible to Claude Code's CLAUDE.md auto-discovery AND gone from the worktree;
-// plus `update-index --assume-unchanged CLAUDE.md` so the move is invisible to git and can NEVER be staged/
-// committed/merged back to main. Default ON; disable with SPEXCODE_HIDE_CLAUDE_MD=0. Best-effort: any failure
-// must not block launch.
-const HIDE_CLAUDE_MD = process.env.SPEXCODE_HIDE_CLAUDE_MD !== '0' && process.env.SPEXCODE_HIDE_CLAUDE_MD !== 'false'
-async function hideClaudeMd(id: string, path: string): Promise<void> {
-  if (!HIDE_CLAUDE_MD) return
-  const src = join(path, 'CLAUDE.md')
-  if (!existsSync(src)) return
-  try {
-    // pin the tracked path assume-unchanged FIRST, so the rename's deletion is never seen by git.
-    await gitA(['-C', path, 'update-index', '--assume-unchanged', 'CLAUDE.md'])
-    renameSync(src, join(storeDir(id), 'claude.md'))
-  } catch { /* isolation is best-effort; a failure must not block the launch */ }
-}
-
-// @@@ settingsJson - the hooks Claude Code loads via `--settings <FILE>` (per-worktree, ephemeral, removed
-// with the worktree — no global pollution). It is now a thin SHIM, not a hardcoded hook set: every event
-// binds to the shared [[hook-dispatch]] dispatcher, and the handler SET lives in the session's `.config`
-// (surface:hook nodes), discovered + compiled into a per-session manifest. So the launched agent's hooks are
-// the EDITABLE RUNTIME CONFIG: changing a hook is a `.config` edit, not a change here. SessionStart compiles
-// the manifest first; every other event runs `dispatch.sh <Event>`, which feeds each manifest handler the
-// hook stdin and propagates a block:true handler's exit-2. The dispatcher + sessionstart are MACHINERY (in
-// spec-cli/hooks), referenced at MAIN's path (a fresh worktree off main has no node_modules), run with
-// cwd = the worktree so `repoRoot()` resolves to THIS session's tree (its own `.config`); the handlers
-// locate the session's GLOBAL record from the payload session_id + this tree's project key ([[state]]).
-// `$SPEX` (MAIN's tsx+cli) is exported for the handlers that call the cli (stop-gate, spec-of-file, fail,
-// idle) and for the SessionStart compile. This delivers exactly the legacy hook map today (manifest ==
-// legacy: UserPromptSubmit/PreToolUse→mark-active, PreToolUse→spec-first, PostToolUse→spec-of-file,
-// Stop→stop-gate, StopFailure→session-fail, Notification→idle) while making the set spec-governed + editable.
-// EVERY event → dispatch.sh: its content-hash GATE re-materializes the persistent hook manifest (in the global
-// per-project store) (+ contract/shims/trust) on a .config change, then dispatches. No separate per-session compile — the
-// manifest persists and is refreshed only when the editable .config moves. The shim JSON itself is the
-// HARNESS adapter's job (it binds the harness's events + bakes the harness id into the dispatch call), so the
-// dashboard-launch settings stay in lockstep with the self-launch shim materialize writes ([[harness-adapter]]).
-function settingsJson(): string {
-  const root = pkgRoot()
-  const dispatch = join(root, 'hooks', 'dispatch.sh')
-  const spex = `${join(root, 'node_modules', '.bin', 'tsx')} ${join(root, 'src', 'cli.ts')}`
-  return HARNESS.shim(dispatch, spex).json
-}
-// write the hooks file into the session's global store and return the `--settings <file>` arg (the path is
-// absolute, so no shell-quoting hazard and it's outside the worktree — zero per-session pollution).
-function writeSettings(id: string): string {
-  const file = join(storeDir(id), 'hooks.json')
-  writeFileSync(file, settingsJson())
-  return `--settings ${file}`
-}
-// @@@ launchScript - the WHOLE launch invocation (rendezvous env prefix + claude + --append-system-prompt
-// + --settings + the human prompt) is written to an ephemeral `launch.sh` in the session's GLOBAL store and
+// @@@ launchScript - the WHOLE launch invocation (rendezvous env prefix + harness command + the human prompt)
+// is written to an ephemeral `launch.sh` in the session's GLOBAL store and
 // run via `bash <file>`, NOT typed inline. Inline send-keys TRUNCATES past ~2KB (the launch-prompt-limit trap),
 // and the system-surface gather can make --append-system-prompt arbitrarily large; a file has no length limit
 // and the only thing send-keys types is the short `bash <file>` line. It's the SAME command the inline path
@@ -750,7 +673,10 @@ function writeSettings(id: string): string {
 // worktree (in the store, keyed by session_id), so it never pollutes the spec/code work.
 function launchScript(id: string, tail: string): string {
   const file = join(storeDir(id), 'launch.sh')
-  writeFileSync(file, `${rvEnv(id)} ${HARNESS.launchCmd()} ${appendSysArg()} ${writeSettings(id)} ${tail}\n`)
+  // NO --append-system-prompt / --settings: the contract + hooks are materialized into the worktree at
+  // createSession ([[harness-delivery]]) and the agent auto-discovers them — the SAME path as a self-launched
+  // agent. The launch line is just the rendezvous env + the harness command + the session-id/spec-pointer/prompt tail.
+  writeFileSync(file, `${rvEnv(id)} ${HARNESS.launchCmd()} ${tail}\n`)
   return file
 }
 async function launch(id: string, path: string, tail: string): Promise<void> {
@@ -991,7 +917,12 @@ export async function newSession(node: string | null, prompt: string): Promise<S
   }
   writeRecord(rec)
   writePromptFile(id, prompt)   // capture the ORIGINATING prompt (the human/manager's ask) as store metadata (best-effort)
-  await hideClaudeMd(id, path)   // isolate the dispatched agent from the project CLAUDE.md (before launch)
+  // render the harness-discovered artifacts INTO the worktree (CLAUDE.md/AGENTS.md contract block, .claude/.codex
+  // shims, manifest to the global store) so the launched agent gets the contract + hooks the SAME way a
+  // self-launched one does — by auto-discovery, not CLI injection. This is why the launch line below carries no
+  // --append-system-prompt / --settings, and why we no longer hide CLAUDE.md: hiding it suppressed the agent's
+  // own memory load too. One delivery path for both launch modes ([[harness-delivery]]).
+  try { materialize(path) } catch { /* best-effort; the dispatch.sh gate re-renders on the first event anyway */ }
   // perform the directive's spec-tree mutation in the worktree, then PARK the finish-the-op prompt for launch.
   // the mutation is uncommitted, so the board's overlay shows it instantly (added ghost / deleted mark) even
   // while the session only sits queued.

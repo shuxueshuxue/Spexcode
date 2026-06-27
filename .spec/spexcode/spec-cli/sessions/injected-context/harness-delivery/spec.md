@@ -18,7 +18,11 @@ SpexCode must work for a user who installs it, runs `spex init`, and then launch
 or `--settings`. Therefore everything SpexCode contributes must arrive through files the harness
 **auto-discovers**, and getting there must cost the user **zero further steps**. The same render also feeds
 the dashboard path; the dashboard is one consumer, not a prerequisite — the spec engine never needs `spex
-serve` running.
+serve` running. Crucially the dashboard launcher uses the **SAME** delivery: it `materialize`s into the new
+worktree and then launches the agent PLAINLY — no `--append-system-prompt`, no `--settings`, no hiding of
+CLAUDE.md. One path for both launch modes. Hiding CLAUDE.md (the old isolation) is gone precisely because it
+also suppressed the agent's own MEMORY load; with the contract delivered by discovery instead, the agent
+loads its CLAUDE.md + memory normally ([[sessions-core]] launch).
 
 ## expanded spec
 

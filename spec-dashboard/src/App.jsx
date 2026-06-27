@@ -12,7 +12,7 @@ import SpecSearch from './SpecSearch.jsx'
 import BoardStats from './BoardStats.jsx'
 import MobileApp from './MobileApp.jsx'
 import { useIsMobile } from './useIsMobile.js'
-import { loadBoard, layout, X_GAP, Y_GAP, projectTitle } from './data.js'
+import { loadBoard, layout, X_GAP, Y_GAP, projectTitle, projectIcon, faviconHref } from './data.js'
 import { createMomentumScroll } from './scroll.js'
 import { cycleNext } from './cycle.js'
 import { labelColor } from './color.js'
@@ -464,6 +464,14 @@ export default function App() {
     const name = projectTitle(board)
     if (name) document.title = `${name} · SpexCode`
   }, [board?.project])
+  useEffect(() => {
+    // [[tab-icon]] - a configured dashboard.icon sets the tab favicon at runtime; empty keeps the html default.
+    const href = faviconHref(projectIcon(board))
+    if (!href) return
+    let link = document.querySelector("link[rel~='icon']")
+    if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link) }
+    link.setAttribute('href', href)
+  }, [board?.projectIcon])
   if (!board) return <div className="loading">{t('hud.loading')}</div>
   if (isMobile) return <MobileApp specs={board.nodes} sessions={board.sessions} project={projectTitle(board)} />
   return <Dashboard specs={board.nodes} sessions={board.sessions} reload={reload} />

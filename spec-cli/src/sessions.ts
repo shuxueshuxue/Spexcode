@@ -710,12 +710,14 @@ async function hideClaudeMd(path: string): Promise<void> {
 function settingsJson(): string {
   const root = pkgRoot()
   const dispatch = join(root, 'hooks', 'dispatch.sh')
-  const sessionstart = join(root, 'hooks', 'sessionstart.sh')
   const spex = `${join(root, 'node_modules', '.bin', 'tsx')} ${join(root, 'src', 'cli.ts')}`
-  const env = `SPEX='${spex}'`   // exported to the dispatcher → handlers that call the cli inherit it
+  const env = `SPEX='${spex}'`   // exported to the dispatcher → its gate (spex materialize) + cli-needing handlers inherit it
   const ev = (e: string) => [{ hooks: [{ type: 'command', command: `${env} bash ${dispatch} ${e}` }] }]
+  // EVERY event (incl SessionStart) → dispatch.sh: its content-hash GATE re-materializes the persistent
+  // .spexcode/hooks-manifest (+ contract/shims/trust) on a .config change, then dispatches. No separate
+  // per-session compile — the manifest persists and is refreshed only when the editable .config moves.
   const hooks: Record<string, unknown> = {
-    SessionStart: [{ hooks: [{ type: 'command', command: `${env} bash ${sessionstart}` }] }],
+    SessionStart: ev('SessionStart'),
     UserPromptSubmit: ev('UserPromptSubmit'),
     PreToolUse: ev('PreToolUse'),
     PostToolUse: ev('PostToolUse'),

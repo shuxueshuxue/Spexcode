@@ -14,6 +14,7 @@ import { useEffect, useRef, useState } from 'react'
 import Modal from './Modal.jsx'
 import { apiFetch, setSessionSort } from './data.js'
 import { sessionName } from './session.js'
+import { useEscLayer } from './escStack.js'
 import { useT } from './i18n/index.jsx'
 
 export default function SessionContextMenu({ menu, onClose, onChanged }) {
@@ -24,15 +25,20 @@ export default function SessionContextMenu({ menu, onClose, onChanged }) {
   const [busy, setBusy] = useState(false)
   const inputRef = useRef(null)
 
-  // standard context-menu dismissal: any click outside, Escape, or a scroll closes the popped menu. The
-  // menu div stops its own clicks (below) so picking an item never trips this. Bound only while it's open.
+  // standard context-menu dismissal: any click outside closes the popped menu. The menu div stops its own
+  // clicks (below) so picking an item never trips this. Bound only while it's open.
   useEffect(() => {
     if (!menu) return
-    const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); onClose() } }
     window.addEventListener('click', onClose)
-    window.addEventListener('keydown', onKey, true)
-    return () => { window.removeEventListener('click', onClose); window.removeEventListener('keydown', onKey, true) }
+    return () => window.removeEventListener('click', onClose)
   }, [menu, onClose])
+
+  // Esc dismissal goes through the shared [[esc-layers]] stack so each surface this component floats above
+  // the board peels in its own turn: the menu, then (after a pick) its rename or close-confirm modal — a
+  // press closes the topmost one, never the session panel behind it (the old bespoke window listener raced it).
+  useEscLayer(!!menu, onClose)
+  useEscLayer(!!renaming, () => setRenaming(null))
+  useEscLayer(!!closing, () => setClosing(null))
 
   // select the prefilled name when the prompt opens, so a human can just type the replacement.
   useEffect(() => { if (renaming) requestAnimationFrame(() => inputRef.current?.select()) }, [renaming])

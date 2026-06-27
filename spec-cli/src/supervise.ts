@@ -14,6 +14,7 @@ import { watch } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { installProcessGuards } from './resilience.js'
+import { resolvePublicConfig, startGateway, ensureDashboardBuilt } from './gateway.js'
 
 // the supervisor OWNS the public port, so it must outlive any transient throw: an uncaught error here is
 // logged and survived, never an exit that closes the port (and the tmux session) and takes the frontend down.
@@ -23,6 +24,17 @@ const here = dirname(fileURLToPath(import.meta.url))
 const tsx = join(here, '..', 'node_modules', '.bin', 'tsx')   // this package's own tsx (no build step)
 const entry = join(here, 'index.ts')                          // the real Hono server
 const publicPort = Number(process.env.PORT || 8787)
+
+// @@@ public mode ([[public-mode]]) - with `spex serve --public`, the supervisor is NOT the internet face:
+// the gateway is. The raw-TCP proxy retreats to a loopback internal port (the trusted boundary local agents
+// reach) and the password-gated TLS gateway takes the public port, proxying /api + WS back to that loopback
+// port. Off → unchanged: the proxy itself owns the public port and SPEXCODE_API_URL points there.
+const publicCfg = resolvePublicConfig(join(here, '..', '..'))
+// the port the raw-TCP proxy actually binds: a private loopback port in public mode, the public port otherwise.
+const proxyPort = publicCfg ? await freePort() : publicPort
+// what launched agents inherit as their `spex` endpoint — ALWAYS the loopback proxy, so local agents never
+// meet the password gate (loopback is the trust boundary). Equals the public port when public mode is off.
+const childApiBase = `http://127.0.0.1:${proxyPort}`
 
 // @@@ watched source roots - the child loads TS straight from these package src trees, so a change in ANY
 // of them is the child's "own source" for reload purposes. It is NOT just spec-cli/src: the child imports
@@ -79,7 +91,7 @@ async function boot(): Promise<Backend | null> {
   // PORT pins the child's PRIVATE bind port; SPEXCODE_API_URL pins everything the child SPAWNS (launched
   // sessions + their hooks) at the PUBLIC port, so a launched agent's own `spex` reaches the stable proxy
   // and never inherits this ephemeral, soon-retired port (apiBase() prefers SPEXCODE_API_URL over PORT).
-  const child = spawn(tsx, [entry], { stdio: 'inherit', env: { ...process.env, PORT: String(port), SPEXCODE_API_URL: process.env.SPEXCODE_API_URL || `http://127.0.0.1:${publicPort}` } })
+  const child = spawn(tsx, [entry], { stdio: 'inherit', env: { ...process.env, PORT: String(port), SPEXCODE_API_URL: process.env.SPEXCODE_API_URL || childApiBase } })
   // if the ACTIVE backend dies unexpectedly (crash, OOM), restart it so the public port keeps serving.
   // Planned retirement sets current to the NEW child first, so the old child's exit fails this identity
   // check and is ignored. boot()'s ~5s health budget rate-limits any crash loop.
@@ -129,7 +141,16 @@ process.on('SIGTERM', shutdown)
 const first = await boot()
 if (!first) { console.error('[supervisor] initial backend failed to start'); process.exit(1) }
 current = first
-proxy.listen(publicPort, () => console.log(`spec-cli supervisor serving on http://localhost:${publicPort} (zero-downtime reloads, backend :${first.port})`))
+if (publicCfg) {
+  // public mode: the raw proxy stays on loopback; the password-gated gateway owns the public port.
+  const repoRoot = join(here, '..', '..')
+  const distDir = join(repoRoot, 'spec-dashboard', 'dist')
+  ensureDashboardBuilt(repoRoot, distDir)
+  proxy.listen(proxyPort, '127.0.0.1', () => console.log(`spec-cli supervisor on loopback :${proxyPort} (zero-downtime reloads, backend :${first.port})`))
+  startGateway({ publicPort, upstreamPort: proxyPort, password: publicCfg.password, tls: publicCfg.tls, distDir })
+} else {
+  proxy.listen(publicPort, () => console.log(`spec-cli supervisor serving on http://localhost:${publicPort} (zero-downtime reloads, backend :${first.port})`))
+}
 
 // watch every imported source tree; debounce a burst of writes (a merge touching several files across
 // packages) into one reload. A root that can't be watched (a package absent in some checkout) is logged

@@ -1,0 +1,2 @@
+{"scenario":"auth-boundary","codeSha":"15ac5c944983cd5a2d2a5febf159e854586368bb","blob":"c6ad9fe8ec54921d8c94b4db311b300f04454b70e04b02349ae433711114fd90","blobKind":"transcript","evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-27T03:08:30.305Z"}
+{"scenario":"login-page","codeSha":"15ac5c944983cd5a2d2a5febf159e854586368bb","blob":"4659b6edb1e71f06aa6e9f01960c44f151a73863438070201d9b1b037466067b","blobKind":"image","evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-27T03:08:31.854Z"}

@@ -20,11 +20,20 @@ type Config = {
   sessions?: {
     maxActive?: number             // concurrency cap: max agents AUTONOMOUSLY PROGRESSING at once (default 6; see sessions.ts maxActive)
   }
+  serve?: {
+    // public-exposure config for `spex serve --public` (resolved gateway-side; see [[public-mode]] / gateway.ts).
+    // The password is NEVER read from here — flag/env only — so this file stays committable.
+    public?: {
+      enabled?: boolean              // turn public mode on without the --public flag
+      http?: boolean                 // drop TLS (the --http escape hatch) — password then travels in cleartext
+      tls?: { cert?: string; key?: string }   // PATHS to your own cert/key; omit for a cached self-signed default
+    }
+  }
 }
-// the resolved LAYOUT convention — main/branchPrefix/nodeFrom filled to defaults. `dashboard` and `sessions`
-// are frontend/runtime concerns (read separately via readConfig; see api-endpoint / sessions.ts maxActive),
-// NOT layout fields, so they stay out of the convention rather than forcing a meaningless default here.
-type Convention = Required<Omit<Config, 'dashboard' | 'sessions'>>
+// the resolved LAYOUT convention — main/branchPrefix/nodeFrom filled to defaults. `dashboard`, `sessions`,
+// and `serve` are frontend/runtime concerns (read separately; see api-endpoint / sessions.ts maxActive /
+// gateway.ts), NOT layout fields, so they stay out of the convention rather than forcing a meaningless default.
+type Convention = Required<Omit<Config, 'dashboard' | 'sessions' | 'serve'>>
 
 export type Worktree = {
   path: string; branch: string | null; node: string | null

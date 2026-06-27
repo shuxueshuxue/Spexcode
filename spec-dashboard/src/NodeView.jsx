@@ -106,9 +106,8 @@ function SpecBody({ body }) {
   return <div className="doc-body">{out}</div>
 }
 
-// the two labelled parts (node.parts): raw source (human) · expanded spec (agent). No agent-authored
-// "current state" part — what's-done is derived in the meta line, never narrated, because agents hallucinate
-// completion. Legacy bodies (parts === null) fall back to the whole-body SpecBody.
+// the two labelled parts (node.parts): raw source (human) · expanded spec (agent).
+// Legacy bodies (parts === null) fall back to the whole-body SpecBody.
 function PartCard({ kind, title, owner, ownerLabel, note, children }) {
   return (
     <section className={`spec-part part-${kind}`}>

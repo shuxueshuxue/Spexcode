@@ -74,7 +74,10 @@ right-click. It **auto-grows upward**, **capped at half** the terminal height, w
 button, or the reserved `⌥/⌘+I`: the `❯` box disables and **every keystroke — `⌃`/`⌥`/`⌘` combos included —
 forwards raw** to the pane, so a human drives the agent's terminal, not just its arrows. Those **reserved
 `⌥/⌘+I`** keys toggle nav mode and are **never forwarded to tmux nor overridable by the app**; entry is
-otherwise **manual**, and leaving the tab or going offline exits.
+otherwise **manual**, and leaving the tab or going offline exits — as does a **second `Esc` within 600 ms**
+(the first `Esc` still forwards to the pane to cancel the agent's own menu). A best-effort pane sniff — a
+select-caret line beside an `Esc`/Enter hint line — only ever **suggests** nav mode by pulsing the nav
+button, a non-authoritative nudge that never seizes keys.
 
 A **right-click on a session row** opens its context menu — rename or close ([[session-rename]]) — coexisting
 with the context-menu suppression; the shared `sessionName` puts that rename first in the label precedence.
@@ -87,7 +90,9 @@ Terminals are **warm and always connected**: every live pane mounts and opens it
 never lazily on focus — and stays mounted even while the console is closed, so switching tabs **never loses your
 place** (socket + scroll survive), New Session included (it hides its pane). Warmth is **state, not GPU**: only
 the **visible** pane holds a WebGL context, so many panes can't exhaust the browser's capped GPU contexts. List
-navigation lives at the **window level** (arrows walk the list whatever holds focus). The **header action row**
+navigation lives at the **window level** (arrows walk the list whatever holds focus), and **⌃/⌘+N** (or
+**⌃/⌘+↑**/**Home**) snaps the selection to New Session from anywhere — even from the graph or while nav mode
+forwards raw keys. The **header action row**
 is the same board-command registry, narrowed to the current state: **nav** whenever live, **proof** + **merge**
 at review/done — each a small **text** button (no glyphs) in its identity colour; an `offline` liveness
 (any lifecycle) swaps them for a relaunch panel, and review is **agent-proposed** at the stop-gate. There is

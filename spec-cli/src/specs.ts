@@ -227,7 +227,6 @@ export async function specDiffAt(id: string, hash: string) {
   return latestDiff(node.relPath, hash)
 }
 
-// kind ∈ mutating|report = the preset edits the graph vs only reports on it.
 export type ConfigPreset = { name: string; title: string; desc: string; kind: string; dir: string; files: string[]; body: string }
 function rootNode(): string | null {
   if (!existsSync(SPEC_DIR)) return null

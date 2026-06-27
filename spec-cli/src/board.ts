@@ -33,11 +33,6 @@ export async function buildBoard() {
   // resolveLayout already zeroed ops for unmanaged worktrees, so this is just "has pending changes".
   const opWts = worktrees.filter((w) => w.ops && w.ops.length)
 
-  // @@@ seed not colour - the board no longer PICKS colours. It emits a stable `seed` per worktree and the
-  // dashboard derives the colour from it (color.js), the SAME seed an avatar face is hashed from — so a
-  // session's face and every mark that names it (node ring, ⏎ link, reparent edge, session stripe) share
-  // one hue. The seed is the worktree's LIVE session id when it has one (so it matches the session-row
-  // stripe, which seeds off the same id), else the worktree path as a stable fallback.
   const sessIdByPath: Record<string, string> = {}
   sessions.forEach((s) => { sessIdByPath[s.path] = s.id })
   const seedOf = (path: string): string => sessIdByPath[path] || path
@@ -115,8 +110,6 @@ export async function buildBoard() {
 
   const opsByPath: Record<string, any[]> = {}
   opWts.forEach((w) => { opsByPath[w.path] = w.ops })
-  // session rows carry no colour — the dashboard seeds each row's stripe off the session id (labelColor),
-  // the same seed its avatar face uses, so the two always match.
   const sess = sessions.map((s) => ({ ...s, source: s.path, ops: opsByPath[s.path] || [] }))
 
   return { nodes, sessions: sess, project: readConfig(root).dashboard?.title || basename(root) }

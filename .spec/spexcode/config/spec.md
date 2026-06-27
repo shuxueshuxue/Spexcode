@@ -19,3 +19,5 @@ the dev-flow plugins live.**
 
 These nodes are reflexive: SpexCode's own behavior is configured by spec nodes, managed through the same
 dogfood ritual as any other node. Frontmatter: `title`, `status`, `desc`, and `surface` (the routing field).
+A preset may also carry `kind` — `mutating` (the default) if it edits the spec graph, `report` if it only
+reports on it — which the new-session `/` palette tags it by.

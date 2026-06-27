@@ -1,0 +1,6 @@
+{"scenario":"worktree-has-zero-session","codeSha":"3f14aabb477b668944d8d4bf56b6f29b1d685001","blob":null,"evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-27T12:45:49.807Z"}
+{"scenario":"multi-agent-one-folder-no-clobber","codeSha":"3f14aabb477b668944d8d4bf56b6f29b1d685001","blob":null,"evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-27T12:45:51.222Z"}
+{"scenario":"stop-gate-no-misfire-for-self-launch","codeSha":"3f14aabb477b668944d8d4bf56b6f29b1d685001","blob":null,"evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-27T12:45:52.615Z"}
+{"scenario":"dashboard-equivalence-governed","codeSha":"3f14aabb477b668944d8d4bf56b6f29b1d685001","blob":null,"evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-27T12:45:54.073Z"}
+{"scenario":"board-enumerates-global-store","codeSha":"3f14aabb477b668944d8d4bf56b6f29b1d685001","blob":null,"evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-27T12:45:55.735Z"}
+{"scenario":"spec-discipline-runs-for-non-governed","codeSha":"3f14aabb477b668944d8d4bf56b6f29b1d685001","blob":null,"evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-27T12:45:57.328Z"}

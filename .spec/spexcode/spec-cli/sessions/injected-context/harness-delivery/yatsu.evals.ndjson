@@ -1,0 +1,4 @@
+{"scenario":"self-launch-zero-friction-codex","codeSha":"3f14aabb477b668944d8d4bf56b6f29b1d685001","blob":null,"evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-27T12:46:39.101Z"}
+{"scenario":"managed-block-preserves-user-content","codeSha":"3f14aabb477b668944d8d4bf56b6f29b1d685001","blob":null,"evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-27T12:46:40.189Z"}
+{"scenario":"codex-trust-is-scoped-and-additive","codeSha":"3f14aabb477b668944d8d4bf56b6f29b1d685001","blob":null,"evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-27T12:46:41.273Z"}
+{"scenario":"pay-per-change-render","codeSha":"3f14aabb477b668944d8d4bf56b6f29b1d685001","blob":null,"evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-27T12:46:42.431Z"}

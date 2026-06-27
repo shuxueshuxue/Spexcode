@@ -21,8 +21,14 @@ reversible, and nothing auto-disappears.
 
 ## expanded spec
 
-The `.session/state` file is the source of truth (never an in-memory map) — one file in the worktree's
-`.session/` runtime dir ([[runtime]]). The statuses: `active` (working / undeclared this turn), `awaiting`
+The session **state** is the source of truth (never an in-memory map). It lives NOT in the worktree but in a
+per-user GLOBAL store `~/.spexcode/sessions/<session_id>/`, keyed by the **harness `session_id`** every hook
+payload carries (Claude + Codex). Keying by session_id, not worktree path, is deliberate: it keeps the
+worktree clean (no `.session/` pollution) AND gives EACH agent its own record — so a user may run several
+claude/codex in one folder without their states clobbering (a path key could not). Each record also carries
+a **`governed`** flag: the dashboard launcher ([[sessions-core]]) sets it true; a user-self-launched agent's
+record defaults false. `governed` is the explicit boundary that the old "is there a `.session/` dir"
+presence implied — see the Hooks split below. The statuses: `active` (working / undeclared this turn), `awaiting`
 (a proposal — review, done, or close-pending, by kind), `parked` (waiting on a background task;
 **self-resumes** — nothing for a human to do), `error` (a turn died), `asking` (stopped and **needs the
 human** — a question, or the stop-gate's auto-default for an undeclared/uncommitted stop), `queued` (held
@@ -62,7 +68,14 @@ idle-prompt hook fired since the last tool use, else working, **active-only guar
 a declaration. The compact `DisplayStatus` (the `spex ls` glyph, the row dot) is a **derived label
 composing both axes** for one-glyph surfaces — a convenience, never a third source of truth.
 
-### Hooks (injected per session via `--settings`, polluting nothing)
+### Hooks (delivered via the [[hook-dispatch]] dispatcher, gated by `governed`)
+
+The hooks split on the `governed` flag. The **board-lifecycle** hooks below (mark-active, the Stop gate,
+StopFailure→error, idle) act ONLY when the session's record is `governed: true`; on a non-governed
+(user-self-launched) record they no-op — a self-launched agent has no board to feed, so the Stop gate must
+NOT misfire its declare-demand. The **spec-discipline** hooks ([[spec-first]], [[spec-of-file]]) are NOT
+gated on `governed` — they serve any agent, using the global session record for their once-per-session
+sentinel/ledger. So board state is a managed-session concern; spec-awareness is universal.
 
 - **`UserPromptSubmit` + `PreToolUse` → one `mark-active` hook**: it writes **`asking`** on an
   **AskUserQuestion** (the question → the note), else **`active`** — the freshness signal that also flips

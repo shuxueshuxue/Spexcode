@@ -2,11 +2,10 @@
 title: hook-dispatch
 status: active
 hue: 280
-desc: The harness-agnostic hook delivery layer — discover surface:hook nodes, compile them once per session into a flat manifest, and run them deterministically through one pure-shell dispatcher the committed .claude/.codex shim binds to every lifecycle event.
+desc: The harness-agnostic hook delivery layer — discover surface:hook nodes, compile them into a PERSISTENT flat manifest, and run them deterministically through one pure-shell dispatcher whose cheap content-hash gate re-renders only when the editable .config moves.
 code:
   - spec-cli/src/hooks.ts
   - spec-cli/hooks/dispatch.sh
-  - spec-cli/hooks/sessionstart.sh
 ---
 
 # hook-dispatch
@@ -17,10 +16,15 @@ A launched agent's lifecycle hooks are not wired harness-by-harness in code; the
 the spec tree and delivered through one stable mechanism that works the same on Claude Code and Codex.
 Three parts: the **handlers** are `surface: hook` nodes (each a co-located script declaring the `events`
 it binds, an `order`, and whether it may `block`) — the spec-governed content, discovered recursively
-under the config roots. A **compiler** flattens them, once per session at SessionStart, into a flat
-per-session manifest (`event · order · block · script`); this is the only step that parses spec
-frontmatter, so the hot path never walks the tree. A pure-shell **dispatcher**, bound by the committed
-shim to one line per harness event, reads the manifest and runs every handler for that event.
+under the config roots. A **compiler** flattens them into a flat manifest (`event · order · block · script`),
+written PERSISTENTLY to `.spexcode/hooks-manifest` — it is a pure function of the `.config` content, so it
+is regenerated NOT per session but only when that content actually moves. The **dispatcher** (`dispatch.sh`,
+the one shim entry per event) runs in two steps: a **gate** — a ~10ms pure-shell content hash of the config
+roots on every event; on a mismatch with `.spexcode/content-hash` it runs `spex materialize`
+([[harness-delivery]], the ~0.85s node render) under a re-checked lock, so node boots only on a real change
+and concurrent sessions never race the write — then it dispatches the event's handlers from the (now-fresh)
+persistent manifest. The hash is content-based, so it catches bash/sed/user/other-agent/git edits alike;
+a tool-payload path would miss them.
 
 The dispatcher reproduces the native multi-hook contract — which on BOTH harnesses runs matching hooks in
 parallel with no ordering guarantee — but **deterministically**: it feeds each handler the original hook
@@ -31,5 +35,5 @@ that did not declare blocking can never block its event; a missing manifest disp
 
 This is the substrate the spec-aware injections ([[spec-first]], [[spec-of-file]]) and the lifecycle gates
 ride on. Which nodes plug in is a [[surface]] field decision, not a code change here; adding or retiring a
-hook is a spec edit. The system surface (the appended prompt) is delivered separately by the launcher, not
-through this layer — only the event hooks converge here.
+hook is a spec edit. The contract text (the `surface: system` bodies) is rendered by the same gate into the
+AGENTS.md/CLAUDE.md block ([[harness-delivery]]); only the event HOOKS converge through this dispatcher.

@@ -306,7 +306,10 @@ export async function specDiffAt(id: string, hash: string) {
 // preset ships for the agent to run deterministically. So each preset reports its folder `dir`
 // (repo-relative) and its `files` (co-located paths, spec.md excluded) alongside name/title/desc/kind/body.
 // `kind` ∈ mutating|report tells the launcher whether the preset edits the graph or only reports on it.
-export type ConfigPreset = { name: string; title: string; desc: string; kind: string; dir: string; files: string[]; body: string }
+// `events`/`order`/`block` are populated only for the `hook` surface (empty/0/false otherwise): which
+// harness lifecycle events the node binds, its deterministic intra-event order, and whether it intends to
+// block (honored only on block-capable events). See loadHookConfig + the hook compiler/dispatcher.
+export type ConfigPreset = { name: string; title: string; desc: string; kind: string; dir: string; files: string[]; body: string; events: string[]; order: number; block: boolean }
 // @@@ field-driven surface - a config plugin is a FLAT direct child of a config root (`<root>/<name>/spec.md`)
 // that carries a `surface: system|slash` frontmatter field naming where it plugs in. There are no `slash/` or
 // `system/` bucket dirs (those were graph-invisible grouping dirs with no spec.md, so the spec graph skipped
@@ -349,31 +352,45 @@ function bundleFiles(dir: string): string[] {
   walk(dir)
   return out.sort()
 }
-// gather the preset nodes that are flat children of a config root and declare `surface: <surface>`.
-function loadSurface(surface: 'slash' | 'system'): ConfigPreset[] {
+// gather the preset nodes under a config root that declare `surface: <surface>`. The scan is RECURSIVE —
+// `surface` is a FIELD, not a path (the design's core tenet), so a plugin may live at ANY depth and a
+// grouping parent may itself be a plugin (e.g. `.config/core` is a `surface: system` contract whose CHILDREN
+// are `surface: hook` nodes). The field filter keeps it safe: a node only gathers if it declares THIS
+// surface, so descending past a matched node never double-counts (children carry a different surface). For
+// `system`/`slash` the result is identical to the old one-level scan on the current tree — every existing
+// such node is a flat direct child and no nested node declares those surfaces — so the gather set (hence
+// the appended system prompt and the slash dropdown) is byte-for-byte unchanged.
+function loadSurface(surface: 'slash' | 'system' | 'hook'): ConfigPreset[] {
   const out: ConfigPreset[] = []
+  const visit = (nodeDir: string, name: string) => {
+    if (existsSync(join(nodeDir, 'spec.md'))) {
+      const { fm, body } = parseFrontmatter(readFileSync(join(nodeDir, 'spec.md'), 'utf8'))
+      // @@@ skip pending - a `status: pending` plugin is DECLARED INTENT, not yet active. It renders on the
+      // board (via loadSpecs) but must NOT gather: neither a slash preset, nor folded into a system prompt,
+      // nor a live hook. Only built/active plugins surface here, so pending stubs stay inert.
+      if (str(fm.surface) === surface && str(fm.status) !== 'pending') {
+        out.push({
+          name,
+          title: str(fm.title, name),
+          desc: str(fm.desc),
+          kind: str(fm.kind, 'mutating'),
+          dir: relative(ROOT, nodeDir),
+          files: bundleFiles(nodeDir),
+          body: body.trim(),
+          events: list(fm.events),
+          order: Number(str(fm.order, '0')) || 0,
+          block: str(fm.block) === 'true',
+        })
+      }
+    }
+    for (const e of readdirSync(nodeDir, { withFileTypes: true })) {
+      if (e.isDirectory()) visit(join(nodeDir, e.name), e.name)
+    }
+  }
   for (const root of configRoots()) {
     if (!existsSync(root)) continue
     for (const e of readdirSync(root, { withFileTypes: true })) {
-      const nodeDir = join(root, e.name)
-      if (!e.isDirectory() || !existsSync(join(nodeDir, 'spec.md'))) continue
-      const { fm, body } = parseFrontmatter(readFileSync(join(nodeDir, 'spec.md'), 'utf8'))
-      // surface is a FIELD: only nodes declaring this surface gather; the rest (other surface, or none —
-      // e.g. a doc node like `config/surface`) are skipped.
-      if (str(fm.surface) !== surface) continue
-      // @@@ skip pending - a `status: pending` plugin is DECLARED INTENT, not yet an active plugin. It still
-      // renders on the board (via loadSpecs), but it must NOT gather: neither offered as a slash preset nor
-      // folded into a system prompt. Only built/active plugins surface here, so pending stubs stay inert.
-      if (str(fm.status) === 'pending') continue
-      out.push({
-        name: e.name,
-        title: str(fm.title, e.name),
-        desc: str(fm.desc),
-        kind: str(fm.kind, 'mutating'),
-        dir: relative(ROOT, nodeDir),
-        files: bundleFiles(nodeDir),
-        body: body.trim(),
-      })
+      if (e.isDirectory()) visit(join(root, e.name), e.name)
     }
   }
   return out.sort((a, b) => a.name.localeCompare(b.name))
@@ -382,3 +399,6 @@ function loadSurface(surface: 'slash' | 'system'): ConfigPreset[] {
 export function loadConfig(): ConfigPreset[] { return loadSurface('slash') }
 // the system contracts (folded into a launched agent's --append-system-prompt).
 export function loadSystemConfig(): ConfigPreset[] { return loadSurface('system') }
+// the hook handlers (compiled into the per-session hook manifest the dispatcher reads). Each carries its
+// `events`/`order`/`block` binding + co-located script `files`.
+export function loadHookConfig(): ConfigPreset[] { return loadSurface('hook') }

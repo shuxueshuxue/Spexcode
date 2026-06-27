@@ -116,6 +116,7 @@ Specs / graph
   board                 dump the dashboard board state as JSON
   forge <sub>           trace a forge's issues/PRs onto spec nodes (read-only): links | eval-pending [--host github] [--node <id>] [--json]
   yatsu <sub>           measure a node's scenarios and keep score: scan | eval [.|<node>] [--scenario N] (--pass|--fail|--note T) [--image P|--result P|-] | show [.|<node>] [--json] | clean [--keep-latest|--all]
+  hooks <sub>           harness-agnostic hook system: compile [--out <file>] (flatten surface:hook nodes into the per-session manifest the dispatcher reads)
   review <SEL>          manager cockpit: review a session (ahead·merge-base diff·gates·proposal)  [--json]
   review proof <SEL>    render the session's proof of work — self-contained HTML, fully derived (diff·measured yatsu loss·gates)  [--open|--out P|--json]
   merge <SEL>           manager cockpit: gated atomic merge into main (re-checks gates, then closes)  [--keep]
@@ -302,6 +303,11 @@ if (cmd === 'serve') {
   // git-derived freshness, the blob cache — lives in spec-yatsu; this is just routing.
   const { runYatsu } = await import('../../spec-yatsu/src/cli.js')
   process.exit(await runYatsu(process.argv.slice(3)))
+} else if (cmd === 'hooks') {
+  // @@@ hooks - compile the surface:hook nodes into the per-session manifest the (pure-shell) dispatcher
+  // reads. Thin route, like forge/yatsu. `spex hooks compile [--out <file>]`. Logic in hooks.ts.
+  const { runHooks } = await import('./hooks.js')
+  process.exit(await runHooks(process.argv.slice(3)))
 } else if (cmd === 'board') {
   const { buildBoard } = await import('./board.js')
   console.log(JSON.stringify(await buildBoard(), null, 2))

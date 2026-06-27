@@ -114,16 +114,18 @@ export type RawRecord = {
   status: string; proposal: string | null; merges: number; note: string | null
   sortkey: number | null; createdAt: number; harness?: string
 }
-// the agent's OWN harness session id from the environment — the only locator now that the record left the
-// worktree. Each adapter names the var its agents carry (Claude CLAUDE_CODE_SESSION_ID, Codex CODEX_THREAD_ID —
-// [[harness-adapter]]); we read whichever the running agent set, so this works under ANY harness without
-// branching here. SPEXCODE_SESSION_ID is a portable override (a test / unrecognised harness). No worktree
-// fallback — the record left the worktree, so a session knows its id only from the harness env.
-// (sessions.ts's `ownSessionId` delegates to this; spec-yatsu reads it to resolve the current node.)
+// the agent's OWN session id from the environment — the only locator now that the record left the worktree.
+// SPEXCODE_SESSION_ID (the GOVERNED record id the launcher bakes in) wins, EXACTLY mirroring the shell hooks'
+// `hp_session_id` — this matters for codex, whose own CODEX_THREAD_ID is its un-pinnable minted id and does NOT
+// equal the governed record id, so resolving the harness var first would point a governed codex agent's own
+// `spex session …` at the wrong/nonexistent record. Else each adapter's env var (Claude CLAUDE_CODE_SESSION_ID
+// — already == the record id; Codex CODEX_THREAD_ID for a self-launched, non-governed agent). No worktree
+// fallback. (sessions.ts's `ownSessionId` delegates here; spec-yatsu reads it to resolve the current node.)
 export function envSessionId(): string | null {
-  for (const h of HARNESSES) { const v = process.env[h.sessionEnvVar]; if (v && v.trim()) return v.trim() }
   const o = process.env.SPEXCODE_SESSION_ID
-  return o && o.trim() ? o.trim() : null
+  if (o && o.trim()) return o.trim()
+  for (const h of HARNESSES) { const v = process.env[h.sessionEnvVar]; if (v && v.trim()) return v.trim() }
+  return null
 }
 export function readRawRecord(id: string): RawRecord | null {
   try {

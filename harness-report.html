@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SpexCode × Harness 适配 — 审查报告</title>
+<style>
+  :root{--bg:#0f1115;--fg:#e6e8ec;--mut:#9aa3b2;--ac:#7cc4ff;--ok:#5fd38a;--warn:#ffcf6b;--bad:#ff8a8a;--card:#171a21;--bd:#262b36}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 -apple-system,Segoe UI,Roboto,"Helvetica Neue","PingFang SC","Microsoft Yahei",sans-serif}
+  .wrap{max-width:920px;margin:0 auto;padding:40px 22px 90px}
+  h1{font-size:30px;line-height:1.25;margin:0 0 6px}
+  h2{font-size:21px;margin:42px 0 12px;padding-top:14px;border-top:1px solid var(--bd)}
+  h3{font-size:16px;margin:22px 0 6px;color:var(--ac)}
+  p,li{color:var(--fg)}
+  .mut{color:var(--mut)}
+  code{background:#0b0d11;border:1px solid var(--bd);border-radius:4px;padding:.5px 5px;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}
+  pre{background:#0b0d11;border:1px solid var(--bd);border-radius:8px;padding:14px 16px;overflow:auto;font:12.5px/1.55 ui-monospace,Menlo,monospace}
+  .card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:16px 18px;margin:14px 0}
+  .tag{display:inline-block;font-size:12px;padding:2px 9px;border-radius:99px;border:1px solid var(--bd);margin-right:6px}
+  .ok{color:var(--ok);border-color:#244} .warn{color:var(--warn);border-color:#443} .bad{color:var(--bad);border-color:#522} .ac{color:var(--ac);border-color:#245}
+  .banner{background:#1c2330;border:1px solid #2d3a52;border-left:4px solid var(--ac);border-radius:8px;padding:14px 18px;margin:18px 0}
+  table{border-collapse:collapse;width:100%;margin:12px 0;font-size:14px}
+  th,td{border:1px solid var(--bd);padding:8px 10px;text-align:left;vertical-align:top}
+  th{background:#11141a;color:var(--mut);font-weight:600}
+  .crux{background:#2a1d1d;border:1px solid #5b3636;border-left:4px solid var(--bad);border-radius:8px;padding:14px 18px;margin:18px 0}
+  .flow{font:13px/1.7 ui-monospace,Menlo,monospace;background:#0b0d11;border:1px solid var(--bd);border-radius:8px;padding:16px;white-space:pre;overflow:auto}
+  .small{font-size:13.5px}
+  hr{border:0;border-top:1px solid var(--bd);margin:30px 0}
+  a{color:var(--ac)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>SpexCode × Harness 适配</h1>
+<p class="mut">审查报告 · 分支 <code>node/Codex-93fd</code> · 2026-06-27 · <b>动手前请先审这份理解是否正确</b></p>
+
+<div class="banner">
+<b>这份报告的目的</b>:我这一程对架构反复误判了好几次(见末尾「§7 纠错日志」,如实记录)。在继续写代码前,把<b>最终纠正后的完整理解</b>摊开,请你核对。哪里还错了,就别让它进代码。
+</div>
+
+<h2>§1 目标与那个真正的难点</h2>
+<p><b>目标</b>:SpexCode 是装给用户、用来开发<b>别的项目</b>的工具(不是为了开发它自己)。用户装好后:<code>spex init</code> 初始化自己的项目 → 跑 <code>spex serve</code> 起后端(board/dashboard/session 的根)→ 然后<b>自己</b>启动 <code>claude</code> / <code>codex</code> 在项目里干活,并希望 SpexCode 的整套(hook + 契约)对这些<b>自启的 agent</b> 生效。</p>
+
+<div class="crux">
+<b>难点(核心)</b>:用户<b>自己</b>敲 <code>claude</code>/<code>codex</code> 时,启动命令里<b>没有任何 SpexCode 进程</b>去拼 <code>--append-system-prompt</code>。所以 <code>--append-system-prompt</code> <b>结构上不可能</b>把契约送达这些 agent。<br>
+→ 因此 SpexCode 的一切只能靠 <b>harness 自动发现的文件</b>到达:
+<ul style="margin:8px 0 0">
+<li><b>hook</b> → <code>.config</code>(surface:hook 节点)+ 裸启动 shim <code>.claude/settings.json</code> / <code>.codex/hooks.json</code> → 派发器</li>
+<li><b>系统提示/契约</b> → <code>CLAUDE.md</code> / <code>AGENTS.md</code>(唯一通道)</li>
+</ul>
+</div>
+
+<h2>§2 纠正后的架构(请重点核对)</h2>
+
+<h3>真相源 = spec 树</h3>
+<p><code>surface: system</code> 节点 = 契约文本;<code>.config</code> 下的 <code>surface: hook</code> 节点 = hook(可编辑运行时配置,DIY)。</p>
+
+<h3>谁来维护落盘文件:服务该项目的后端(就是守护进程)</h3>
+<table>
+<tr><th>进程 / 文件</th><th>是什么</th><th>对用户而言</th></tr>
+<tr><td><code>spex serve</code> = <code>supervise.ts</code> + 它 spawn 的 <code>index.ts</code></td><td>服务<b>用户项目</b>的后端(按 cwd 解析该项目,每项目一个)。board/dashboard/session 的根。</td><td><span class="tag ok">用 SpexCode 时一直在跑</span> 这就是「针对用户项目的守护进程」</td></tr>
+<tr><td><code>supervise.ts</code> 的 watch(spec-cli/src…)</td><td>监视 <b>SpexCode 自身源码</b>(import.meta.url 解析),改了就热重载后端。</td><td><span class="tag mut">开发 SpexCode 自己时才有用,装好的用户这条 watch 是死的</span></td></tr>
+</table>
+<p class="small mut">我之前最大的混淆就在这两行之间:把「supervise 的 watch 是自我开发用途」错推成「整个后端进程也只是自我开发、用户那边没有守护进程」。错。后端进程是真实的、绑定用户项目、一直在跑。</p>
+
+<h3>两层物化</h3>
+<table>
+<tr><th>层</th><th>内容</th><th>谁维护</th><th>可否覆盖</th></tr>
+<tr><td><b>init 首播种,之后手编</b></td><td><code>.config/core/*</code> hook(可编辑源)</td><td><code>spex init</code>(幂等增量,<code>existsSync</code> 跳过)</td><td><span class="bad">否——是用户的</span></td></tr>
+<tr><td><b>后端动态物化</b></td><td><code>CLAUDE.md</code> / <code>AGENTS.md</code>(← surface:system)、裸启动 shim(→ 派发器)</td><td><b>后端 index.ts</b>:boot 时 + <b>新加的「监视本项目 <code>.spec</code>」watcher</b> 触发时重写</td><td><span class="ok">是——派生物,随时可重生成</span></td></tr>
+</table>
+
+<h3>端到端数据流</h3>
+<div class="flow">spec 树 (.spec)
+  ├─ surface:system 节点 ──┐
+  └─ .config surface:hook ─┤
+                           ▼
+            后端 index.ts(spex serve, cwd=用户项目)
+              · boot + 监视本项目 .spec 变更
+              · 物化派生文件 ▼
+        ┌───────────────┬────────────────────────┐
+   AGENTS.md      .claude/CLAUDE.md         .claude/settings.json
+   (Codex 契约)   (Claude 契约)             .codex/hooks.json (shim→派发器)
+        └───────────────┴────────────────────────┘
+                           ▼
+        用户自启的 claude / codex  ── 自动发现这些文件 ──▶  拿到整套 SpexCode
+        (启动命令里无 SpexCode 进程 → --append-system-prompt 到不了, 故必须走文件)
+
+  .config/core/* hook(派发器在每个会话从本 worktree 的 .config 编译 manifest 运行)
+     └─ spex init 幂等播种, 用户可直接编辑 .config 改 hook (DIY)</div>
+
+<h2>§3 系统提示的两条路(都要,但层级不同)</h2>
+<table>
+<tr><th>路径</th><th>投递方式</th><th>层级</th><th>等价性</th></tr>
+<tr><td>Dashboard launcher 启动(SpexCode 拼命令)</td><td><code>--append-system-prompt</code>(现状,未改)</td><td><span class="ok">system-prompt 层(无上限)</span></td><td>与今天严格等价</td></tr>
+<tr><td>用户自启(无 SpexCode 进程)</td><td>后端物化的 <code>CLAUDE.md</code>/<code>AGENTS.md</code></td><td><span class="warn">user-message 层(harness 对「被发现文件」的天花板)</span></td><td>内容同源,层级是 harness 限制</td></tr>
+</table>
+<p class="small"><b>官方文档确认的落点</b>(已逐字核对):Claude 自动发现 <code>./CLAUDE.md</code> <b>或</b> <code>./.claude/CLAUDE.md</code>;Codex <b>只</b>自动发现仓库根 <code>./AGENTS.md</code>(项目级 <b>没有</b> <code>.codex/AGENTS.md</code> 这个发现路径;<code>.codex/</code> 只放 config.toml/hooks.json,<code>~/.codex/AGENTS.md</code> 是全局)。</p>
+
+<h3>不重写整个文件 —— 只维护标记之间的一段(managed block)</h3>
+<p class="small">后端<b>不</b>拥有/覆盖整个 CLAUDE.md/AGENTS.md,只维护一对标记之间的内容,其余(用户自己写的)原样保留;文件/标记不存在则创建。幂等。</p>
+<pre># 用户自己的内容(SpexCode 永不动)
+
+&lt;!-- spexcode:start --&gt;        ← 或 &lt;spexcode&gt;
+（后端从 surface:system 节点物化的契约,这一段动态维护）
+&lt;!-- spexcode:end --&gt;          ← &lt;/spexcode&gt;
+
+# 用户后面的内容也原样保留</pre>
+<p class="small">这<b>基本解掉了 <code>hideClaudeMd</code> 的张力</b>:不再需要藏用户的 CLAUDE.md——SpexCode 与之<b>共存</b>,只拥有自己那段标记块。注释式标记在渲染后 markdown 里隐形;<code>&lt;spexcode&gt;</code> 标签更显式好 grep——两者都能稳定定位做幂等替换。</p>
+<p class="small"><b>仍待定(原决定 a 的残留)</b>:dashboard 路径走 <code>--append-system-prompt</code>(system-prompt 层)+ 文件里又有 spexcode 块(user-message 层)→ <b>双重注入</b>。要么 dashboard 启动时跳过该块,要么 dashboard 也只靠文件块(放弃 append、降到 user-message 层)。</p>
+
+<h2>§4 已建成并验证(增量 1 + 2)</h2>
+<p><span class="tag ok">已提交</span><span class="tag ac">非破坏</span> 分支上 4 个 commit,<code>lint 0 error</code>,typecheck 0。</p>
+<ul>
+<li><b>surface:hook 机制</b>:递归 loader + 编译器 <code>spex hooks compile</code> + 纯 shell 派发器 <code>dispatch.sh</code>(PreToolUse 热路径无 node 启动)+ <code>sessionstart.sh</code>。</li>
+<li><b>6 个 <code>.config/core/*</code> hook 节点</b>(mark-active / spec-first / spec-of-file / stop-gate / session-fail / idle)= 可编辑运行时 hook。复制的 4 个脚本与原件<b>字节相同</b>。</li>
+<li><b>等价性已证</b>:系统提示 <code>appendSysArg</code> 字节级不变(3365 bytes);编译出的 manifest == 旧硬编码 hook 映射;派发器 4/4 单元测试;运行时链 e2e(compile→manifest→dispatch→真实 .config 处理器)通过(spec-first 用 <code>{"decision":"block"}</code> JSON 被派发器透传)。</li>
+<li><b>sessions.ts 已接派发器</b>(dashboard 路径):<code>settingsJson</code> 从硬编码 6 hook 改成薄 shim;每会话从<b>自己 worktree 的 <code>.config</code></b>编译 manifest(<code>repoRoot()</code> 按 cwd 解析,已验证)→ 编辑 <code>.config</code> 即改该会话 hook。</li>
+<li><b>不变量确认</b>:无任何 spec 节点 <code>code:</code>/<code>related:</code> 指向 <code>.spec/.config</code> 内部——<code>.config</code> 的脚本是运行时配置,靠 surface 发现,不被当源码治理。</li>
+</ul>
+
+<h2>§5 待建(动手前请确认本报告无误)</h2>
+<ol>
+<li><b>后端物化</b>:给 <code>index.ts</code> 加 boot + 监视本项目 <code>.spec</code> 的 watcher → 物化 <code>CLAUDE.md</code>/<code>AGENTS.md</code> + 裸启动 shim。<span class="mut">(不碰 supervise.ts 的自我开发 watch)</span></li>
+<li><b>init 模板</b>:把 6 个 hook 节点(spec.md+脚本)加进 <code>spec-cli/templates/spec/project/.config/core/</code> → <code>spex init</code> 幂等首播种核心 hook。</li>
+<li><b>协调 hideClaudeMd</b> 与生成的 CLAUDE.md/AGENTS.md(避免 dashboard 双重注入)。</li>
+<li><b>Codex 专项</b>:apply_patch 路径提取器(Codex hook stdin 无 <code>file_path</code>);<code>notify</code> 接 idle(Codex 无 Notification 事件);独立的 Codex launcher 节点。</li>
+<li><b>真实 claude 启动 e2e</b> + yatsu 测量(hook-dispatch 的场景就是这个)。</li>
+</ol>
+
+<h2>§6 待你拍的开放决定</h2>
+<ul>
+<li><b>(a)</b> 生成的 CLAUDE.md/AGENTS.md 与 <code>hideClaudeMd</code> 怎么协调?dashboard 路径保 <code>--append-system-prompt</code>,生成文件给用户自启路径——需要一个不双注入的规则。</li>
+<li><b>(b)</b> 派生文件(CLAUDE.md/AGENTS.md/shim)入库还是 gitignore-后端重生成?后端常在 → 可 gitignore;但首次/clone 时后端未跑过则缺文件 → 入库更稳。</li>
+<li><b>(c)</b> 裸启动 shim 若入库,<code>.gitignore</code> 现忽略 <code>.claude/*</code>(只 track agents/),需放行那一个文件。</li>
+</ul>
+
+<h2>§7 纠错日志(如实,供你判断我最终理解是否可信)</h2>
+<div class="card small">
+<p><span class="tag bad">误判1</span> 把核心 hook 脚本<b>复制进 .config</b> 后,又反向提议「hook 是源码、不该进 .config、要撤回」。<br><span class="ok">纠正</span>:.config 是<b>可编辑运行时配置</b>,hook 本就该在那(DIY);源码与运行时之别只是 <b>init 时复制</b>。增量 1 保留,未撤。</p>
+<p><span class="tag bad">误判2</span> 把 <code>supervise.ts</code> 当成「针对用户项目的守护进程」。<br><span class="ok">纠正</span>:supervise 的 <b>watch</b> 是监视 SpexCode 自身源码的自我开发热重载;但它 spawn 的 <code>index.ts</code> 后端进程才是服务用户项目的真实守护进程。</p>
+<p><span class="tag bad">误判3</span> 由误判2 推出「用户可能没后台进程,物化不能依赖守护进程」。<br><span class="ok">纠正(你指出的)</span>:<b>用 SpexCode 本身就意味着后端在跑</b>(整条链路的根)。所以后端就该承担动态物化;init 负责首播种。</p>
+</div>
+<p class="small mut">这些反复是真实的,不掩饰。最终模型(§2)是收敛后的结果。如果 §2 哪里仍不对,请直接戳破——我宁可现在被纠正,也不要把错的写进代码。</p>
+
+<h2>§16 理想路径 npm i / spex init / claude·codex(零操作) — 实测一处物理冲突</h2>
+<p class="small"><b>目标</b>: npm install spexcode → spex init → 用户自启 claude/codex, 之后零人为操作, 不污染全局 claude/codex, 不覆盖原有 CLAUDE.md/AGENTS.md.</p>
+<p class="small"><b>不覆盖 CLAUDE.md/AGENTS.md</b>: ✅ managed &lt;spexcode&gt; 块, 只动标记间, 用户内容保留. <b>shim/hooks/契约不进全局</b>: ✅ .claude/settings.json·.codex/hooks.json·AGENTS.md/CLAUDE.md 全项目本地.</p>
+<p class="small"><b>实测冲突: "零操作"与"不污染全局"对 Codex 不可兼得</b>. 把 trust 写进项目本地 .codex/config.toml → codex 仍弹目录信任窗("信任目录后才加载 project-local config/hooks")→ 声明 trust 的项目配置要等信任后才被读 = 鸡生蛋, <b>项目本地 trust 结构上不可能</b>(安全设计: 仓库不能自己声明可信). 故 Codex 目录+hook trust <b>只能写全局 ~/.codex/config.toml</b>.
+<br>→ 要零操作: init 往全局写 [projects."&lt;proj&gt;"]trust_level + 每 hook 一条 [hooks.state]trusted_hash(~7 条, 全 scoped 用户自己项目路径).
+<br>→ 要零全局写: 留一次性 2 键信任弹窗.
+<br>Claude 类似但更轻(可能一次性 folder-trust 写 ~/.claude.json; 本机 0 弹窗或因 root 已信任).</p>
+<p class="small"><b>取舍(唯一待定)</b>: (A) 零操作 + 全局写最小 scoped trust(只你自己项目路径几条, 不改他项目, additive) / (B) 零全局写 + 保留首次 2 键弹窗. 其余两约束都满足.</p>
+<h2>§15 等价性分析(持久 manifest + 哈希门设计)</h2>
+<p class="small"><b>等价定理(dashboard-Claude 路)</b>: 设 M(C)/A(C)=由 .config 内容确定性派生的 manifest/契约, C0=与今天硬编码 hook 集相等的内容(增量1已证 M(C0)==legacy). <b>当且仅当 "持久产物==derive(C当前)" 且 "C当前==C0" 时, 新行为=旧行为</b>(hooks=派发器(M(C0))=legacy; sysprompt=append-system-prompt(C0)=旧, 代码没动). 关键: 今天 hook 是冻结硬编码会话内永不变; 新设计让它动态随可编辑 .config → 等价只在 ".config 没被改+无待同步陈旧" 时成立.</p>
+<p class="small"><b>1. 可能不等价</b>: (天花板)自启路系统提示层级(append=system-prompt层 vs 文件=user-message层); (天花板)Codex hook(无 file_path/Notification/StopFailure→4 个 hook no-op); (条件)派发器顺序 vs 原生并行(仅因当前 hook 独立); (新)并发会话 hook 漂移(派发器每事件重读持久 manifest, A 改 .config→并发 B 下个 PreToolUse 就换 hook, 今天冻结不会).</p>
+<p class="small"><b>2. compromise</b>: 自启系统提示降 user-message 层(harness 极限); Codex 契约 developer-context 层; 自动写 Codex trust=替用户跳过任意代码 hook 的安全审查(可接受但需告知); 陈旧窗口有界.</p>
+<p class="small"><b>3. side effect</b>: hook 现在写文件(AGENTS/CLAUDE/manifest/trust, 必须幂等+只动 spexcode 块); 写用户全局 ~/.codex/config.toml(跑出项目外, 每路径累积一条); 哈希门给每热路径 hook +~10ms, 改动时触发的 hook 吞 0.85s; 多出持久产物+marker.</p>
+<p class="small"><b>4. 对不齐的瞬间</b>: (新)会话外改动→下次会话启动读旧契约(harness 启动时读, 此前无门跑过则旧; 今天没有此窗口); (继承非回归)会话内改动改的人自己当场看不到(今天同样); (实现)重生写竞态需原子(temp+rename/锁); (实现)manifest 与 AGENTS.md 非原子配对需整组原子交换; (Codex)仅我们改 shim 模板时 trust 变 Modified 重弹, shim+trust 须一起原子写(shim 稳定故罕见).</p>
+<p class="small"><b>结论</b>: 稳态 dashboard-Claude 严格等价; 所有偏差要么是 harness 物理天花板(系统提示层级/Codex 字段), 要么是"冻结 hook→动态 .config"本身的代价(陈旧窗口/并发漂移/写副作用)=DIY 可编辑换来的, 靠原子写+哈希门压到最小. 实现里必须解决的是 §4 原子性(竞态/配对/shim+trust 同步).</p>
+<h2>§14 确定性内容哈希门(实测;取代 payload-path,后者会漏)</h2>
+<p class="small"><b>payload-path 检测被否</b>(用户指正,正确): agent 用 bash/sed 改、用户自己改、别的 agent 改——payload 里都没那路径,会漏。<b>正解 = 内容哈希门</b>: 查文件实际内容状态, 与"谁改怎么改"无关, 一个不漏。</p>
+<p class="small"><b>实测</b>(.config+config 两根, 27 文件): 哈希门 <b>~10–20ms</b>(纯 shell, 可忽略; vs node 跑 spex 一条 <b>~0.85s</b>)。bash echo / sed / 新增文件 三种改法<b>全测到 ✅</b>; touch 不改内容→哈希不变(不误触发, 比 mtime 准); 还原→哈希复原(确定性)。</p>
+<p class="small"><b>确定性算法(SessionStart 与 PostToolUse 共享同一门)</b>:
+<br>(1) H' = sha256(配置根所有 .md/.sh 内容, 排序拼接) — 纯 shell ~10ms;
+<br>(2) 与存的 H(上次物化哈希, gitignore marker)比;
+<br>(3) H'==H → 立即退出(常态);
+<br>(4) H'≠H → 才付 ~0.85s node regen: 从当前内容幂等物化 AGENTS.md/CLAUDE.md 块+shim+Codex trust, 写回 H'。<b>只在真改时跑, 非随便全量替换。</b></p>
+<p class="small"><b>SessionStart 不砍</b>: manifest(派发器要读)每会话在 SessionStart 编译, 须在首个 PreToolUse 前就绪; 故 SessionStart 保留=编译 manifest+跑同一门, PostToolUse 只跑便宜门, 两者共享门逻辑非两套。(manifest 亦可用同哈希缓存: .config 没变即复用, 省 0.85s, 优化非必须。)</p>
+<h2>§13 materialization 改走 hook 层,不依赖 serve(取代 §2 的"后端物化")</h2>
+<p class="small"><b>调研结论</b>: <code>serve</code>(index.ts)是<b>纯 dashboard HTTP 后端</b>(/api/board·specs·sessions·终端 socket·merge),boot 时<b>无任何 .spec watch、无物化副作用</b>。spec 核心(specs/lint/yatsu/hooks/dispatcher/init)全跑在 <code>spex</code> CLI + hook 上, <b>不依赖 serve</b>; serve 只是 dashboard 数据 + 会话编排层。→ <b>serve 不是必须一直开的; materialization 绝不该依赖它。</b></p>
+<p class="small"><b>新方案(取代 §2 后端 watcher, 顺带消除两-watcher 混淆 + "后端没跑就缺文件"空窗)</b>:
+<br>• <b>spex init(bootstrap)</b>: 写 shim(.codex/hooks.json·.claude/settings.json)+ 播种 .config + 写 Codex trust + 首次生成 AGENTS.md/CLAUDE.md 块。(鸡蛋: shim 必须 init 写, SessionStart hook 才触发得了。)
+<br>• <b>SessionStart hook(全量重生·catch-all)</b>: 每次启动重生契约块(+已在做的 manifest 编译), 兜住一切非工具改动(git/批量/手改)。
+<br>• <b>PostToolUse hook(会话内增量)</b>: agent 改 spec/.config 即更新, 给并发 agent/下次启动用。</p>
+<p class="small"><b>高效探测(优化用户的三关)</b>: PostToolUse payload 自带被改路径(Claude tool_input.file_path; Codex apply_patch command)→ <b>第一关 = 看 payload 路径是否落在 config 根/surface 节点</b>(纯字符串, 零 FS, 绝大多数瞬间返回); 命中→确认 surface:system→幂等替换 &lt;spexcode&gt; 块; SessionStart 全量兜底漏网改动. <b>坑</b>: "看文件夹 mtime"——目录 mtime 改内容不变, 要 find -newer marker(比 payload 路径贵); 故 payload 路径当免费第一关 + SessionStart 兜底最优, mtime-marker 作可选加固.</p>
+<h2>§12 易误解 / 易栽跟头的点(开建前请逐条核对)</h2>
+<ol class="small">
+<li><b>两个 watcher 别混</b>: supervise.ts 监视 SpexCode 自身源码(自我开发); materialization 要在 index.ts 新加监视项目 .spec 的 watcher.</li>
+<li><b>dashboard 启动 vs 用户自启</b>是两条不同路: dashboard 由 SpexCode 拼命令(append-system-prompt/--settings/可 bypass); 用户自启无 SpexCode 进程, 只靠自动发现文件+预写 trust. 零摩擦 trust 只服务用户自启.</li>
+<li><b>源码/运行时/派生物三类别混</b>: spec-cli/hooks 模板=源码; .config=运行时(用户可编辑, init 播种); shim/契约块/trust=派生物(后端可重生成). .config 不被 code: 治理.</li>
+<li><b>系统提示层级不同</b>: dashboard=system-prompt 层; 用户自启=user-message/developer 层(被发现文件天花板). <b>双重注入</b>: 同会话 append + 文件块=注入两次, 需定规则(未拍). §9 SessionStart 兼发 与 §2 物化文件是同一目的两套机制, 别都上.</li>
+<li><b>同一 shim, hook 在两 harness 行为不一致</b>: Codex 无 file_path(apply_patch)→spec-first/spec-of-file 静默失效; 无 Notification/StopFailure→idle/session-fail 无对应(idle 走 notify).</li>
+<li><b>派发器暗坑</b>: 真实阻断靠 stdout {"decision":"block"}(exit0)非 exit2, 派发器透传 stdout; 两个吐 JSON 的 hook 同事件会拼成非法 JSON. 顺序跑等价仅因 hook 互相独立. block 标志只对 exit-2 hook 有意义.</li>
+<li><b>manifest 时机/作用域</b>: 每会话从自己 worktree 的 .config 编译; 分支无 .config/core hook→manifest 空→没 stop-gate! 故 sessions.ts 切换必须等 .config hook 合并到 main 后. 编辑 .config 下次 session 生效, 非运行中即时.</li>
+<li><b>Codex trust 写入细节</b>: 哈希用 env 替换前原始 command, 含 timeout(600)/async; 写错→Modified 重弹. KEY 含项目路径(每 worktree 一条), 哈希值与路径无关. 写全局 ~/.codex/config.toml 必须 additive. shim 升级→哈希变→旧 trust 重弹. 安全: 替用户自动信任任意代码 hook, 如实告知.</li>
+<li><b>文件落点/幂等</b>: Codex 只认根 ./AGENTS.md(非 .codex/AGENTS.md); Claude 认 ./CLAUDE.md 或 ./.claude/CLAUDE.md. managed 块只替换标记间, 保留其余, 幂等. hideClaudeMd 与"契约入 CLAUDE.md 块"冲突, 与双重注入决定绑定.</li>
+<li><b>上线顺序/后端未跑</b>: trust 条目 per-machine 不能入库(每机 init/后端写); CLAUDE.md/AGENTS.md/shim 入库 vs 重生成(首次/clone 空窗)需定. 等价性只对 dashboard-Claude 成立, Codex 是新增, 增量3 additive 不改 dashboard 路.</li>
+<li><b>已完成别重做</b>: 增量1+2(surface:hook 机制/6 hook 节点/派发器/sessions.ts 接入/等价证据)已提交验证; 增量3 在其上加"后端物化+init 模板+Codex trust 写入".</li>
+</ol>
+<h2>§11 trusted_hash 算法已反推(看 codex 源码,3/3 验证)</h2>
+<p class="small">来源 <code>openai/codex: codex-rs/hooks/src/engine/discovery.rs::command_hook_hash</code> + <code>config/src/fingerprint.rs::version_for_toml</code>。公式(已对 3 个已知样本验证通过):</p>
+<pre>trusted_hash = "sha256:" + sha256( canonical_compact_json({
+  "event_name": &lt;snake_event&gt;,        # pre_tool_use / session_start / stop / ...
+  "hooks": [{ "type":"command", "command":&lt;cmd&gt;,
+             "timeout": &lt;timeout 或 600&gt;, "async": &lt;bool&gt; }]
+}))   # canonical = 所有 key 递归排序; None 字段(matcher/commandWindows/statusMessage)经 TOML 省略</pre>
+<p class="small"><b>含义(回答"要不要测试/放哪")</b>:不需要"抓一次哈希+测漂移"。后端写 <code>.codex/hooks.json</code> shim 时<b>当场用此公式算出 trusted_hash 一并写入 config.toml</b> → 哈希与 shim 同源、<b>不可能漂</b>。唯一值得留的测试 = 一个<b>算法回归测试</b>(钉死已知向量,如 <code>pre_tool_use/echo PRE → d9c90ae8…</code>),CI/commit 跑;若某天升级 codex 后对不上,说明 codex 改了规则、我们的计算函数要更新。细节:哈希用 <b>env 替换前</b>的原始 command 串(<code>${VAR}</code> 占位符原样参与)。</p>
+<h2>§10 我们能替用户写入信任 → 0 弹窗(实测成立)</h2>
+<p class="small"><b>实测:直接把信任写进 <code>~/.codex/config.toml</code>,codex 启动 0 弹窗</b>(目录信任 + hooks 审查全跳过)。两点已验证:(1) <code>[projects."path"] trust_level="trusted"</code> 跳过目录提示;(2) hook 的 <code>trusted_hash</code> 是<b>内容哈希、与路径无关</b>——把同一份 <code>.codex/hooks.json</code> 的哈希复用到新路径项目,codex 照样信任 → 对固定 shim <b>算一次哈希、所有项目复用</b>即可。</p>
+<pre>[projects."&lt;项目路径&gt;"]
+trust_level = "trusted"
+[hooks.state."&lt;路径&gt;/.codex/hooks.json:session_start:0:0"]
+trusted_hash = "sha256:&lt;该 hook 内容的固定哈希&gt;"   # 每事件一条</pre>
+<p class="small"><b>含义</b>:<code>spex init</code>/后端可替用户写入这些条目 → 用户自启 codex <b>零摩擦</b>(Claude 文件路本就 0 弹窗)。算法尚未精确反推(含规范序列化),但"抓一次哈希复用"已实测可行。<b>安全</b>:等于 SpexCode 替用户自动信任自己的已知 hook(用户装了即信任),需如实告知。</p>
+<h2>§9 实测摩擦(真实 TUI,2026-06-27)</h2>
+<p class="small"><b>用户"hook 要一个一个启用"——实测证伪。</b></p>
+<table>
+<tr><th></th><th>Claude</th><th>Codex(已接通 sub2api auth 实测)</th></tr>
+<tr><td><b>文件路</b></td><td><b>0 弹窗</b>(真实 claude TUI,.claude/settings.json 4 hook 直接加载,/hooks 确认;CLAUDE.md 自动发现)</td><td><b>2 键一次性</b>:目录信任 + 「Trust all and continue」批量信任全部 hook;AGENTS.md 0 步</td></tr>
+<tr><td><b>plugin 路</b></td><td>marketplace+install+enable</td><td><b>2 命令</b>,plugin <b>复制进全局 ~/.codex/plugins/cache/</b></td></tr>
+<tr><td><b>逐个启用?</b></td><td>否</td><td><b>否</b>(Trust all 批量)</td></tr>
+<tr><td><b>DIY 改即生效</b></td><td>文件路✓ / plugin✗</td><td>文件路✓ / plugin✗(全局副本)</td></tr>
+</table>
+<p class="small"><b>红利</b>:Codex trust 按 <code>.codex/hooks.json</code> hash 记 → <b>稳定薄 shim 信任一次,底下 .config hook 随便改不重弹</b>。<b>结论(实测铁证)</b>:走文件路——摩擦更低或相当、信任一次且永不重弹、hook 仓库内可即时编辑(DIY)、不进全局 cache、跨两 harness 无需打包。</p>
+<h2>§8 Plugin 路 vs 文件路(深调研结论 + 待实测摩擦)</h2>
+<p class="small">Claude(<code>.claude-plugin/plugin.json</code>)/ Codex(<code>.codex-plugin/plugin.json</code>)都有 plugin 系统,hook 都能打包(<code>hooks/hooks.json</code>+<code>PLUGIN_ROOT</code>)。但两者 plugin <b>都不能</b>自动注入 CLAUDE.md/AGENTS.md;skill 只按需加载(渐进披露),非常在指令。仓库内 plugin <b>不自动生效</b>(需 install/enable,落全局配置);<b>无单一跨 harness plugin 包</b>(<code>.claude-plugin</code>≠<code>.codex-plugin</code>;只 SKILL.md 可移植且需改写)——早先"跨 harness 通用 plugin"设想<b>被证伪</b>。</p>
+<p class="small"><b>真正收获</b>:两 harness 常在注入都只靠 <code>SessionStart</code> hook 的 additionalContext → <code>sessionstart.sh</code> 本就能兼发契约(读 surface:system → additionalContext),<b>取消整个 CLAUDE.md/AGENTS.md 物化层</b>(无文件物化、无 managed-block、<code>hideClaudeMd</code> 张力消失、动态、两 harness 通用;代价同物化天花板:user-message 层 + Claude 10k/字段分片)。</p>
+<p class="small"><span class="tag ok">已实测</span> <b>Claude 文件路 = 0 步</b>(真实 claude TUI: 项目 .claude/settings.json 4 hook 无 trust 弹窗自动加载, /hooks 确认; CLAUDE.md 自动发现) → "hook 要逐个启用"对 Claude 不成立. <b>Codex plugin 路 = 2 命令</b>(marketplace add + plugin add)且 plugin 复制进全局 ~/.codex/plugins/cache/(副本). <b>Codex 文件路</b>: AGENTS.md 0 步(prompt-input 已证); hooks 需 trust(config.toml 逐 hook 记 hash)——逐条/批量 UX 未观测(codex 本机无 auth, 登录墙).</p>
+<p class="small"><b>实测关键发现</b>: plugin 路把 hook 复制进全局 cache → 改仓库那份不生效需重装 → <b>破坏 DIY 即时编辑</b>; 文件路 hook 活在仓库 .config → 改即生效 → 合 DIY. <b>结论(实测支撑)</b>: 走文件路 — Claude 零摩擦、hook 仓库内可即时编辑、不进全局 cache、无单一跨 harness 包; plugin 唯一卖点(打包)盖不过这些. 两路的安装/trust 都可被 spex init 自动化(但都动全局配置).</p>
+
+</div>
+</body>
+</html>

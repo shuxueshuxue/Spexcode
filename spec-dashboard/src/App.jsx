@@ -171,7 +171,7 @@ function Dashboard({ specs, sessions, reload }) {
       const hot = s.id === focusId || s.parent === focusId
       return {
         id: `${s.parent}-${s.id}`, source: s.parent, target: s.id, type: 'smoothstep',
-        style: { stroke: hot ? '#268bd2' : '#ded7bf', strokeWidth: hot ? 2 : 1 }, zIndex: hot ? 1 : 0,
+        style: { stroke: hot ? 'var(--blue)' : 'var(--line)', strokeWidth: hot ? 2 : 1 }, zIndex: hot ? 1 : 0,
       }
     })
     const moves = []

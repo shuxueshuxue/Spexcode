@@ -93,11 +93,9 @@ hp_is_ask() {
 }
 
 # the question text of an ask payload (best-effort; for the board note). Both harnesses carry it under a
-# "question" field of the tool input.
-hp_ask_note() {
-  printf '%s' "$1" | grep -o '"question"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 \
-    | sed 's/^"question"[[:space:]]*:[[:space:]]*"//; s/"$//'
-}
+# "question" field of the tool input — so it is just the first such JSON string value: collapse onto hp_field,
+# which (unlike the old grep `[^"]*`) handles an embedded `\"` and decodes escapes instead of truncating.
+hp_ask_note() { hp_field "$1" question; }
 
 # the CODE file(s) a payload touches, mapped to the trigger the spec hooks key on. $2 = mode:
 #   access  → the file being READ or edited ([[spec-first]] fires on any code touch)

@@ -1,5 +1,5 @@
 import { writeFileSync, mkdirSync } from 'node:fs'
-import { join, dirname } from 'node:path'
+import { join, dirname, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 import { loadSystemConfig } from './specs.js'
@@ -43,6 +43,7 @@ export function materialize(proj = process.cwd()): string {
   // (2) the contract = the surface:system bodies, in name order, written into EACH harness's contract file(s)
   //     + (3) each harness's thin shim → dispatch.sh + (4) its trust. All owned by the adapter.
   const contract = loadSystemConfig().map((c) => c.body.trim()).filter(Boolean).join('\n\n')
+  const shimPaths: string[] = []
   for (const h of HARNESSES) {
     if (contract) for (const f of h.contractFiles(proj)) writeManagedBlock(f, contract)
     const shimFile = h.shimFile(proj)
@@ -50,7 +51,13 @@ export function materialize(proj = process.cwd()): string {
     const shim = h.shim(DISPATCH, SPEX)
     writeFileSync(shimFile, shim.json)
     h.writeTrust(proj, shim.cmd)
+    shimPaths.push(relative(proj, shimFile))
   }
+  // (4b) the shims are machine-specific generated wiring (they bake this machine's absolute install path), so
+  // gitignore them — regenerated per-machine by this same gate. Derived from the adapters' shimFile(), not
+  // hardcoded; written as a managed `#` block so the user's own .gitignore is preserved. Keeps the worktree
+  // free of tracked machine-specific files (the contract md files stay tracked — they carry the user's prose).
+  if (shimPaths.length) writeManagedBlock(join(proj, '.gitignore'), shimPaths.sort().join('\n'), ['# ', ''])
   // (5) stamp the content-hash marker LAST (so a crash mid-render leaves it stale → re-renders next gate).
   const h = contentHash(proj)
   writeFileSync(join(rt, 'content-hash'), h)

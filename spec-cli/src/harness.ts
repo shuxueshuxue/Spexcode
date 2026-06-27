@@ -53,15 +53,17 @@ export interface Harness {
   slashCommands(): SlashCommand[]
 }
 
-const START = '<!-- spexcode:start -->'
-const END = '<!-- spexcode:end -->'
-
-// idempotent replace of the content between markers; the user's own content is preserved. (Shared by both
-// adapters' contract files; lives here since it is the contract-delivery mechanism, harness-agnostic.)
-export function writeManagedBlock(file: string, body: string): void {
+// idempotent replace of the content between sentinels; the user's own content above/below is preserved. The
+// comment STYLE is a parameter so ONE primitive serves every managed file — HTML for the md contracts
+// (CLAUDE.md/AGENTS.md), `#` for .gitignore — instead of a per-file-type writer. Default = HTML (the md case).
+export function writeManagedBlock(file: string, body: string, comment: readonly [string, string] = ['<!-- ', ' -->']): void {
+  const [open, close] = comment
+  const START = `${open}spexcode:start${close}`
+  const END = `${open}spexcode:end${close}`
+  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const block = `${START}\n${body}\n${END}`
   let cur = existsSync(file) ? readFileSync(file, 'utf8') : ''
-  const re = new RegExp(`${START}[\\s\\S]*?${END}`)
+  const re = new RegExp(`${esc(START)}[\\s\\S]*?${esc(END)}`)
   if (re.test(cur)) cur = cur.replace(re, block)
   else cur = cur.trim() ? `${cur.replace(/\n*$/, '')}\n\n${block}\n` : `${block}\n`
   writeFileSync(file, cur)

@@ -108,13 +108,13 @@ export async function specInit(targetArg: string | undefined): Promise<void> {
   // 3. next steps — what the human must do to bring the instance to life.
   console.log(`
 Next steps:
-  1. Install the SpexCode packages (so \`spex\` and the dashboard run):
-       cd <spec-cli> && npm install     # the package providing the \`spex\` CLI + server
-  2. Edit .spec/project/spec.md to describe YOUR project, then grow child nodes beneath it.
-  3. Set lint.governedRoots in spexcode.json to your source dir(s) — until you do, \`spex lint\`
+  1. Edit .spec/project/spec.md to describe YOUR project, then grow child nodes beneath it.
+  2. Set lint.governedRoots in spexcode.json to your source dir(s) — until you do, \`spex lint\`
      warns it is governing nothing (it ships pointing at "src").
-  4. Start the backend and open the board:
+  3. Start the backend and open the board:
        spex serve                       # http://localhost:8787
-  5. \`spex lint\` should report 0 errors. Coverage warnings are your adoption TODO (source files no
-     spec node claims yet). You're adopting SpexCode — the spec tree is now ground truth.`)
+  4. \`spex lint\` should report 0 errors. Coverage warnings are your adoption TODO (source files no
+     spec node claims yet). You're adopting SpexCode — the spec tree is now ground truth.
+  (On a fresh CLONE, re-run \`spex init\` — git never clones .git/hooks/, and the harness shims are
+   gitignored machine-local files that regenerate per-machine.)`)
 }

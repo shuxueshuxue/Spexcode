@@ -27,7 +27,8 @@ into the flat artifacts each consumer reads cheaply. It is invoked by `spex init
 when the config content actually moved — the cheap content-hash gate lives in the dispatcher ([[hook-dispatch]]),
 not a daemon. It writes, idempotently and scoped per project:
 
-- **the hook manifest** `.spexcode/hooks-manifest` (persistent; the [[hook-dispatch]] dispatcher reads it);
+- **the hook manifest** (persistent; the [[hook-dispatch]] dispatcher reads it) — in the GLOBAL per-project
+  store ([[runtime]]'s `runtimeRoot`), NOT the worktree;
 - **the contract** — the `surface: system` bodies, in name order, as a `<!-- spexcode:start -->…<!-- spexcode:end -->`
   **managed block** in `<repo>/AGENTS.md` (Codex) + `<repo>/CLAUDE.md` (Claude). Only the block is owned;
   the user's own content in those files is **never touched**. This replaces the launch-time `--append-system-prompt`
@@ -38,11 +39,14 @@ not a daemon. It writes, idempotently and scoped per project:
   algorithm, reverse-engineered + pinned), so a user-self-launched codex skips its trust prompts entirely.
   Trust is global-only by codex's security design (a repo cannot declare itself trusted) — this is the one
   necessary, minimal, scoped global write; everything else is project-local.
-- **the content-hash marker** `.spexcode/content-hash`, stamped LAST so a crash mid-render re-renders next gate.
+- **the content-hash marker** (in the same global store), stamped LAST so a crash mid-render re-renders next gate.
 
 Placement is harness-fact, not preference (verified): Codex auto-discovers ONLY the repo-root `./AGENTS.md`
-(never `.codex/AGENTS.md`); Claude discovers `./CLAUDE.md` or `./.claude/CLAUDE.md`. The shim files and the
-trust hash carry machine-absolute paths, so they are gitignored and re-rendered per machine — never committed.
+(never `.codex/AGENTS.md`); Claude discovers `./CLAUDE.md` or `./.claude/CLAUDE.md`. The shim files carry THIS
+machine's absolute install path, so materialize gitignores them — a managed `#` block in `<repo>/.gitignore`
+whose entries are the adapters' own `shimFile()`s (the user's existing .gitignore is preserved) — and they
+re-render per machine, never committed. The contract md files stay tracked (they carry the user's prose). The
+Codex trust hash is not in-tree at all — it lives in the global `~/.codex/config.toml`.
 
 The net ideal path is: `npm install spexcode` → `spex init` → the user launches their own `claude`/`codex`,
 zero further operation, no global pollution beyond the scoped Codex trust, no overwrite of existing contract files.

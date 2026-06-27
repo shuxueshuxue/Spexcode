@@ -1,14 +1,6 @@
 import { useT } from './i18n/index.jsx'
 import { useEscLayer } from './escStack.js'
 
-// @@@ ReviewProof - the dashboard's thin face on the [[review-proof]] engine. The `proof` board command
-// (and its header button, see [[session-console]]'s command registry) opens a review/done session's PROOF
-// OF WORK — the backend-rendered, self-contained HTML at /api/sessions/:id/proof — inside an overlay iframe.
-// This is deliberately thin: the dashboard renders NOTHING of the proof itself, it just opens the route (the
-// SAME bytes `spex review proof` writes and a bare browser shows). The open/close STATE is owned by
-// SessionInterface so the typed `/proof` command and the header button drive the one same overlay; this
-// component is just the overlay. "Natural support" = a browser renders the artifact; the dashboard frames it.
-
 export function ProofOverlay({ sessionId, onClose }) {
   const t = useT()
   const url = `/api/sessions/${encodeURIComponent(sessionId)}/proof`

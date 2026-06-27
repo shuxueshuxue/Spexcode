@@ -1,10 +1,3 @@
-// @@@ spex init - scaffold a repo to adopt SpexCode by COPYING shipped DATA templates (never embedding
-// prompt strings in code). Two artifacts get planted: the seed spec tree (a root `project` node + a
-// default `.config` of dev-flow plugins) under <dir>/.spec, and the git hooks (main-guard + session-
-// stamp) into the target's resolved hooks dir. Both template sources ship INSIDE this package and are
-// resolved from the package's OWN location (import.meta.url), so `init` works when spec-cli is installed
-// somewhere other than the dogfood repo. Nothing is ever overwritten: an existing .spec aborts the spec
-// copy, and an existing hook is left untouched — adoption is additive, never destructive.
 import { existsSync, mkdirSync, copyFileSync, readdirSync, statSync, chmodSync } from 'node:fs'
 import { join, resolve, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -64,10 +57,7 @@ export async function specInit(targetArg: string | undefined): Promise<void> {
     console.log(`✓ seeded ${planted.length} spec file(s) under .spec/ (root 'project' node + default .config)`)
   }
 
-  // 1b. plant a starter spexcode.json (the lint/layout knob). WITHOUT it, lint inherits SpexCode's own
-  // defaults whose governedRoots name THIS repo's dirs — absent in the adopter's tree, so lint silently
-  // governs nothing and reports a misleading "all clear". The starter points governedRoots at `src/`; the
-  // adopter edits it to their real source dirs (lint warns loudly until something is actually governed).
+  // 1b. plant a starter spexcode.json (the lint/layout knob), pointing governedRoots at `src/`.
   const cfgDest = join(targetDir, 'spexcode.json')
   if (existsSync(cfgDest)) {
     console.warn(`• spexcode.json already exists at ${cfgDest} — left untouched.`)

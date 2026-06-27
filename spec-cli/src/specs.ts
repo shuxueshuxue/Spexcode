@@ -2,16 +2,14 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { join, relative, basename } from 'node:path'
 import { repoRoot, historyIndex, rowsFor, statsFor, pathsStats, driftIndex, driftFor, fileDiffAt } from './git.js'
 
-// @@@ tree from filesystem - the spec tree IS the directory tree under .spec; a node is any
-// directory holding a spec.md, its parent is the nearest ancestor that also holds one.
+// a node is any directory under .spec holding a spec.md; its parent is the nearest ancestor that also holds one.
 const ROOT = repoRoot()
 const SPEC_DIR = join(ROOT, '.spec')
 
 type FmValue = string | string[]
 type Raw = { id: string; parent: string | null; relPath: string; fm: Record<string, FmValue>; body: string }
 
-// @@@ frontmatter - line-based, deliberately tiny. Scalars are `key: value`; a key with an empty
-// value followed by `- item` lines becomes a list (that's how `code:` declares its governed files).
+// line-based frontmatter: scalars are `key: value`; an empty key followed by `- item` lines is a list (e.g. `code:`).
 function parseFrontmatter(src: string) {
   const fm: Record<string, FmValue> = {}
   let body = src
@@ -36,18 +34,6 @@ function parseFrontmatter(src: string) {
 const str = (v: FmValue | undefined, d = '') => (Array.isArray(v) ? v.join(', ') : v ?? d)
 const list = (v: FmValue | undefined): string[] => (Array.isArray(v) ? v : v ? [v] : [])
 
-// @@@ two-part body - a spec body may be authored as two clearly-labelled parts, each with a
-// different owner and change-cadence:
-//   raw source    (human) — the short, rarely-changed human intent/decisions; editing it needs human
-//                            approval. This is the ground truth the expanded spec must satisfy.
-//   expanded spec (agent) — the detailed BEHAVIORAL understanding (not implementation); versioned
-//                            often, but must always still match the raw source.
-// There is deliberately NO agent-authored "current state" part: a node's what's-done is DERIVED, never
-// narrated — agents hallucinate completion. The derived 4-state status + version + drift (see
-// deriveStatus) carry "what's done" instead. Detected by `## raw source` / `## expanded spec` level-2
-// headings. A body WITHOUT these headings parses to null — the dashboard then renders the whole body as
-// before (back-compat). These are STRUCTURE headings, not `## vN` changelog headings, so `spex lint`'s
-// living rule is happy.
 export type SpecParts = {
   rawSource: string
   expandedSpec: string
@@ -82,19 +68,6 @@ function parseParts(body: string): SpecParts | null {
 
 export type DerivedStatus = 'pending' | 'active' | 'merged' | 'drift'
 
-// @@@ deriveStatus - a node's status is DERIVED, never hand-written. States, in precedence:
-//   pending - DECLARED todo: a node whose frontmatter says `status: pending` AND has no implementing
-//             code yet (empty/absent code:, no drift) is a written-but-unbuilt spec — it reads pending
-//             REGARDLESS of how many spec.md commits it has, and even while a worktree is merely adding
-//             its text (overlay). The arrival of governed code (a non-empty code: list, or drift) is
-//             what graduates it: from then on it derives active/drift/merged like any coded node. This
-//             check is FIRST so a todo isn't flipped to `active`/`merged` just by existing in git.
-//   active  - an unmerged managed worktree has pending ops on this node (live, in-flight work).
-//             Only buildBoard knows the overlay, so /api/specs (no overlay) never reports active.
-//   drift   - governed code has moved ahead of the spec's latest version (drift > 0) — maybe stale.
-//   merged  - has committed version(s) on main and is in sync.
-//   pending (fallback) - no committed version yet (version 0), or a DECLARED status when git is
-//             unreadable and every node would otherwise collapse to version 0 / pending.
 export function deriveStatus(d: { version: number; drift: number; hasOverlay?: boolean; hasCode?: boolean; fmStatus?: string }): DerivedStatus {
   if (d.fmStatus === 'pending' && !d.hasCode && d.drift === 0) return 'pending'
   if (d.hasOverlay) return 'active'
@@ -118,13 +91,8 @@ function walk(dir: string, parent: string | null, acc: Raw[]) {
   }
 }
 
-// @@@ unique-by-construction ids - a node's id was basename(dir), so two folders sharing a leaf name anywhere
-// in the tree (a `core` package vs the `.config/core` plugin) silently clobbered each other in the id-keyed
-// board / wikilinks / CLI. Re-key every node to the SHORTEST trailing path-suffix that is globally unique: a
-// node keeps its bare leaf name when that's unique (the common case — nothing changes), and only a real
-// collision grows the id by minimal parent qualification (`gugu/core` vs `.config/core`). Parent links are
-// recomputed by path-ancestry, so a basename collision can't leak into them either. The full path is always
-// unique, so the suffix search always terminates. walk's basename id/parent are placeholders this overrides.
+// re-key each node to the shortest globally-unique trailing path-suffix (overrides walk's placeholder
+// basename id/parent); the second loop recomputes parent by path-ancestry.
 function reId(acc: Raw[]): void {
   const segs = acc.map((r) => r.relPath.split(/[/\\]/).slice(1, -1))   // path under .spec, minus 'spec.md'
   const suffix = (s: string[], k: number) => s.slice(s.length - k).join('/')
@@ -151,12 +119,8 @@ function raws(): Raw[] {
   return acc
 }
 
-// @@@ specOwners - which spec node(s) GOVERN a file, by the same claim rule lint/yatsu use (exact path,
-// directory prefix, or *-glob). LIGHT: reads only frontmatter `code:` via raws() — no git history, drift,
-// or diff walk — so a per-edit PostToolUse hook can call it cheaply on every first-touch of a file. Takes
-// an absolute OR repo-relative path; returns {id, desc} per governing node. Several owners is fine (ordinary
-// composition); only an OVER-owned file (> maxOwners) is the smell the caller flags — split it (see
-// [[governed-related]]). Empty = uncovered.
+// spec node(s) that GOVERN a file by the claim rule (exact path, dir-prefix, or *-glob); reads only
+// frontmatter `code:` (cheap, no git) so a per-edit hook can call it. See [[governed-related]].
 export function specOwners(file: string): { id: string; desc: string }[] {
   const rel = file.startsWith('/') ? relative(ROOT, file) : file
   const claims = (cf: string): boolean => {
@@ -168,12 +132,8 @@ export function specOwners(file: string): { id: string; desc: string }[] {
   return raws().filter((r) => list(r.fm.code).some(claims)).map((r) => ({ id: r.id, desc: str(r.fm.desc) }))
 }
 
-// @@@ diff cache - a commit's patch is immutable, so memo fileDiffAt by (version sha + spec.md path).
-// loadSpecs precomputes every node's latest line-diff for the board (so the latest history item is
-// instant — no per-open fetch + git call), and specDiffAt serves any version's diff on demand over the
-// SAME cache. A warm entry makes both a Map lookup; only a sha not seen before pays a single git show.
-// `{hash:'',patch:''}` for an unversioned node — no git call, and the history item renders the honest
-// "no recorded change" instantly. Keyed by path too because one commit can patch several nodes' spec.md.
+// memo fileDiffAt by (version sha + spec.md path) — a commit's patch is immutable. Keyed by path too: one
+// commit can patch several nodes' spec.md. `{hash:'',patch:''}` for an unversioned node (no git call).
 const diffCache = new Map<string, { hash: string; patch: string }>()
 async function latestDiff(relPath: string, hash: string): Promise<{ hash: string; patch: string }> {
   if (!hash) return { hash: '', patch: '' }
@@ -185,11 +145,8 @@ async function latestDiff(relPath: string, hash: string): Promise<{ hash: string
   return val
 }
 
-// @@@ loadSpecsLite - the FILESYSTEM-ONLY slice of a node: id, title, path, desc, body — no git at all.
-// loadSpecs pays ~500ms of git history+drift walking to derive status/version/drift/session; a hot read like
-// the lexical [[spec-search]] floor (a cold CLI process on every call) needs none of that, only the text. So
-// it reads `raws()` (one fs walk + the id de-collision) and stops. Same id/title/desc/body loadSpecs would
-// report, so ranking is identical — just without the git tax. Synchronous: it touches no async git.
+// filesystem-only slice of a node (id/title/path/desc/body, no git) for hot lexical reads like
+// [[spec-search]]; same fields loadSpecs reports, without the git history/drift walk.
 export type SpecLite = { id: string; title: string; path: string; desc: string; body: string }
 export function loadSpecsLite(): SpecLite[] {
   return raws().map((r) => ({
@@ -202,26 +159,15 @@ export function loadSpecsLite(): SpecLite[] {
 }
 
 export async function loadSpecs() {
-  // both indexes are one cached git walk each and independent — fetch them in parallel (async git, so
-  // they don't block the server's event loop or pay sync fork() cost). Every node below is a pure lookup
-  // EXCEPT its precomputed latest diff, which is one cached git show that only re-runs on a new version.
+  // both indexes are one cached git walk each and independent — fetch them in parallel (async git, off
+  // the event loop). Every node below is then a pure lookup.
   const [idx, didx] = await Promise.all([historyIndex(ROOT), driftIndex(ROOT)])
-  // @@@ shared governance - a file may be GOVERNED by several nodes; that is ordinary composition, not a
-  // defect (see [[governed-related]]). Drift fans to EVERY governor — each owns the file and has a stake in
-  // a change to it — and no owner's signal is suppressed. An OVER-owned file (governed by > maxOwners) is the
-  // only smell, surfaced once by lint's `owners` rule; the remedy is to split the FILE, not hide its drift.
   const allRaws = raws()
   return Promise.all(allRaws.map(async (r) => {
     const h = rowsFor(idx, r.relPath)
-    // @@@ real session attribution - the node's session IS the Claude Code session that authored its
-    // latest version (the commit's `Session:` trailer, auto-stamped from CLAUDE_CODE_SESSION_ID). Since
-    // worktree sessions launch with `--session-id <that same id>`, this links a node to the live session
-    // in the dashboard. Frontmatter `session:` is only a fallback for nodes with no committed history.
+    // session = the Session: trailer of the node's latest version; frontmatter `session:` is the fallback.
     const fmSession = str(r.fm.session)
     const session = h[0]?.session || (fmSession && fmSession !== 'null' ? fmSession : null)
-    // @@@ drift - rigorous, by git ancestry: per governed file, how many commits it has moved AHEAD of
-    // this spec's latest version commit (S = h[0].hash). driftFiles lists the laggards; drift is the
-    // total "commits behind". 0 = the spec still describes its code. Replaces the old date-compare guess.
     const code = list(r.fm.code)
     const S = h[0]?.hash || ''
     const driftFiles = code
@@ -234,45 +180,29 @@ export async function loadSpecs() {
       parent: r.parent,
       path: r.relPath,
       title: str(r.fm.title, r.id),
-      // @@@ derived status - computed from git (version + drift), NOT the frontmatter. Without overlay
-      // knowledge here, /api/specs reports pending|drift|merged; buildBoard re-derives with the overlay
-      // so a live worktree's nodes read `active`. fmStatus is carried through only as the fallback.
       status: deriveStatus({ version: h.length, drift, hasCode: code.length > 0, fmStatus: fmStatus ?? undefined }),
       fmStatus,
       session,
       hue: Number(str(r.fm.hue, '210')),
       desc: str(r.fm.desc),
       code,
-      related: list(r.fm.related),   // files the node references but does NOT own — counted for coverage, never for drift/yatsu
+      related: list(r.fm.related),
       version: h.length,
       reason: h[0]?.reason || '',
-      // @@@ lastEdited - ISO date of the node's latest version commit (h is newest-first), or null
-      // when it has no committed version. The board's node row shows "last edited … ago" from this
-      // when no live session is currently editing the node (see SpecNode's second row).
+      // ISO date of the node's latest version commit (h is newest-first), or null if unversioned.
       lastEdited: h[0]?.date || null,
       drift,
       driftFiles,
-      // @@@ no precomputed diff - the latest version's spec.md patch is NOT computed here. Doing so cost
-      // TWO `git show` forks PER NODE on every cold board load (~158 subprocesses for ~80 nodes) just to
-      // make ONE rarely-viewed surface — a node's history-tab latest diff — render without a round-trip.
-      // The history tab fetches it lazily on expand via /api/specs/:id/diff/:hash (`specDiffAt`), exactly
-      // like older versions already do. See [[work-pane]].
+      // the latest version's spec.md patch is NOT precomputed here (it cost 2 git show forks per node on
+      // cold load); the history tab fetches it lazily via specDiffAt. See [[work-pane]].
       body: r.body.trim(),
-      // @@@ two parts - raw source (human) / expanded spec (agent), parsed from labelled `## …`
-      // sections. No agent-authored current-state part — what's-done is DERIVED (status/version/drift),
-      // never narrated. null for legacy bodies that aren't authored in two parts.
       parts: parseParts(r.body),
     }
   }))
 }
 
-// @@@ specHistory - per-node version timeline, each row's line-diff SCOPED to this node: its spec.md
-// (rename-followed via the bulk index's statsFor) PLUS the code it governs. Both stat sources are now
-// gathered in ONE git walk EACH (statsFor is a lookup into the cached HEAD index; pathsStats is one
-// `git log -- <code>` for the whole node), then summed per version. The old path ran `git show` once
-// PER version — N synchronous subprocesses, which the long-running server spawns progressively slower,
-// so a 10-version node's /history took >1s. The two sources stay separate because spec.md needs the
-// index's rename-following that a plain `git log -- <path>` can't do.
+// per-node version timeline; each row sums the node's spec.md stat (rename-followed, via statsFor) and its
+// governed-code stat (pathsStats) — separate because spec.md needs rename-following a plain `git log -- path` can't do.
 export async function specHistory(id: string) {
   const node = raws().find((r) => r.id === id)
   if (!node) return []
@@ -287,12 +217,9 @@ export async function specHistory(id: string) {
   })
 }
 
-// @@@ specDiffAt - the unified line-diff one specific version introduced to a node's spec.md, by commit
-// hash. The history tab fetches it lazily when an OLDER version's item expands (the latest version's diff
-// already ships with the board as node.lastDiff, so it never needs this). Uses the SAME sha-keyed cache
-// loadSpecs precomputes into, so a hash already seen as some node's lastDiff is an instant map hit, and
-// fileDiffAt resolves the spec.md path AT that commit so a since-reparented node still shows the right
-// patch. `{ hash:'', patch:'' }` for an empty hash; null for an unknown id.
+// the line-diff a specific version introduced to a node's spec.md, by hash; fetched lazily when a history
+// item expands. fileDiffAt resolves the spec.md path AT that commit (reparents). `{hash:'',patch:''}` for
+// an empty hash, null for an unknown id.
 export async function specDiffAt(id: string, hash: string) {
   const node = raws().find((r) => r.id === id)
   if (!node) return null
@@ -300,28 +227,7 @@ export async function specDiffAt(id: string, hash: string) {
   return latestDiff(node.relPath, hash)
 }
 
-// @@@ config presets - REFLEXIVE, SKILL-SHAPED preset nodes whose folder IS a skill bundle: `spec.md`'s
-// body is the agent prompt/contract (with a {{targets}} placeholder the launcher fills with the
-// @-referenced nodes), and the SAME folder may co-locate auxiliary files — scripts, assets — that the
-// preset ships for the agent to run deterministically. So each preset reports its folder `dir`
-// (repo-relative) and its `files` (co-located paths, spec.md excluded) alongside name/title/desc/kind/body.
-// `kind` ∈ mutating|report tells the launcher whether the preset edits the graph or only reports on it.
 export type ConfigPreset = { name: string; title: string; desc: string; kind: string; dir: string; files: string[]; body: string }
-// @@@ field-driven surface - a config plugin is a FLAT direct child of a config root (`<root>/<name>/spec.md`)
-// that carries a `surface: system|slash` frontmatter field naming where it plugs in. There are no `slash/` or
-// `system/` bucket dirs (those were graph-invisible grouping dirs with no spec.md, so the spec graph skipped
-// them — path != graph); the surface is a FIELD on the node, so the plugin is a real graph child of its root.
-// BOTH config roots participate: `.config` (the instance — DIY dev-flow plugins) and `config` (the project
-// system spec). loadConfig gathers the `slash` surface, loadSystemConfig the `system` surface; each scans the
-// flat children under every root and filters by the field. The plugins also show on the board as ordinary
-// spec nodes (via loadSpecs).
-// @@@ root node - the spec tree's single top-level node: the one directory directly under .spec/ that
-// holds a spec.md. The dogfood repo names it 'spexcode'; a repo scaffolded by `spex init` names it
-// 'project' (or whatever the adopter renames it to). Detected DYNAMICALLY so the config loaders resolve
-// the ACTUAL root's config dirs — never a hardcoded 'spexcode', which silently returned [] in an adopter
-// repo, so their .config/core contract never loaded and their launched agents got no system prompt.
-// Returns null when .spec holds no such directory. (resolveLayout's `main` is a checkout PATH, not the
-// root node NAME, so it can't serve this — a tiny filesystem probe is the right seam.)
 function rootNode(): string | null {
   if (!existsSync(SPEC_DIR)) return null
   for (const e of readdirSync(SPEC_DIR, { withFileTypes: true })) {
@@ -329,8 +235,7 @@ function rootNode(): string | null {
   }
   return null
 }
-// BOTH config roots under the detected root node: `.config` (the instance — DIY dev-flow plugins) and
-// `config` (the project system spec). Resolved at call time (not module-eval) so it tracks the live tree.
+// resolved at call time (not module-eval) so it tracks the live tree.
 function configRoots(): string[] {
   const root = rootNode()
   if (!root) return []
@@ -349,7 +254,6 @@ function bundleFiles(dir: string): string[] {
   walk(dir)
   return out.sort()
 }
-// gather the preset nodes that are flat children of a config root and declare `surface: <surface>`.
 function loadSurface(surface: 'slash' | 'system'): ConfigPreset[] {
   const out: ConfigPreset[] = []
   for (const root of configRoots()) {
@@ -358,12 +262,7 @@ function loadSurface(surface: 'slash' | 'system'): ConfigPreset[] {
       const nodeDir = join(root, e.name)
       if (!e.isDirectory() || !existsSync(join(nodeDir, 'spec.md'))) continue
       const { fm, body } = parseFrontmatter(readFileSync(join(nodeDir, 'spec.md'), 'utf8'))
-      // surface is a FIELD: only nodes declaring this surface gather; the rest (other surface, or none —
-      // e.g. a doc node like `config/surface`) are skipped.
       if (str(fm.surface) !== surface) continue
-      // @@@ skip pending - a `status: pending` plugin is DECLARED INTENT, not yet an active plugin. It still
-      // renders on the board (via loadSpecs), but it must NOT gather: neither offered as a slash preset nor
-      // folded into a system prompt. Only built/active plugins surface here, so pending stubs stay inert.
       if (str(fm.status) === 'pending') continue
       out.push({
         name: e.name,
@@ -378,7 +277,5 @@ function loadSurface(surface: 'slash' | 'system'): ConfigPreset[] {
   }
   return out.sort((a, b) => a.name.localeCompare(b.name))
 }
-// the slash presets (new-session `/` dropdown).
 export function loadConfig(): ConfigPreset[] { return loadSurface('slash') }
-// the system contracts (folded into a launched agent's --append-system-prompt).
 export function loadSystemConfig(): ConfigPreset[] { return loadSurface('system') }

@@ -4,11 +4,6 @@ import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { SESSION_LOG } from './data.js'
 
-// @@@ TermPane - the tmux embed as a READ-ONLY display; the command line lives OUTSIDE the
-// terminal (.term-input below). xterm renders capture-pane output; our external input mimics
-// the prompt and echoes commands into the display. Keeping the input external means the arrow
-// keys are ours, not xterm's: when the line is empty, ←/→ walk the tree (parent/child) and
-// ↑/↓ walk siblings instead of being swallowed by the terminal.
 export default function TermPane({ node, onNav }) {
   const hostRef = useRef(null)
   const inputRef = useRef(null)
@@ -78,9 +73,6 @@ export default function TermPane({ node, onNav }) {
     setCmd('')
   }
 
-  // @@@ arrow fall-through - the whole point. When the line is EMPTY the arrows are navigation,
-  // not text editing, so we hand them to the tree. With text present they edit the line as usual
-  // (and we stop them bubbling so nothing double-fires).
   const NAV = { ArrowLeft: 'parent', ArrowRight: 'child', ArrowUp: 'up', ArrowDown: 'down' }
   const onKeyDown = (e) => {
     if (e.key === 'Enter') { e.preventDefault(); run(); return }

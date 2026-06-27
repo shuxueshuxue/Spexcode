@@ -306,17 +306,10 @@ if (cmd === 'serve') {
   const { buildBoard } = await import('./board.js')
   console.log(JSON.stringify(await buildBoard(), null, 2))
 } else if (cmd === 'search') {
-  // @@@ search - the lexical retrieval floor ([[spec-search]]): rank spec NODES by term overlap for a
-  // natural-language query and return { id, title, path, score, snippet }. `--json` prints that array
-  // verbatim (the surface spec-scout's `--deep` and the spec→code relay reuse); default is a pretty list.
-  // Thin router: all scoring lives in search.ts so every consumer shares one implementation.
   const { searchSpecs } = await import('./search.js')
   const query = positionals(3).join(' ')
   if (!query.trim()) { console.error('usage: spex search <query> [--json] [--limit N]'); process.exit(2) }
   const limit = Number(flag('limit')) || 10
-  // @@@ compute timing - emit the PURE search-compute time (search.ts only — excludes this process's startup
-  // and the lazy import above) to stderr on every call, so --json's stdout stays the clean contract array
-  // while we can still track the cost. Tracked baseline lives in [[spec-search]]'s yatsu; alarm near ~1s.
   const results = await searchSpecs(query, { limit, onStats: (s) => console.error(`[spec-search] compute ${s.ms.toFixed(1)}ms · ${s.nodes} nodes · ${s.tokens} tokens (excludes process start)`) })
   if (has('json')) { console.log(JSON.stringify(results)); process.exit(0) }
   if (!results.length) { console.log(`no spec node matches "${query}"`); process.exit(0) }

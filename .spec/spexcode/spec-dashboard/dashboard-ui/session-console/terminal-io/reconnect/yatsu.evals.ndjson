@@ -1,0 +1,1 @@
+{"scenario":"reopen-backoff-reset-and-intentional-close","codeSha":"8b8e8fab13b634da84042e7b5f2f11ba229fa236","blob":"0acd3f3235f28d6c69fdb6ad2323a67b1891d2b1bdc56f332218dd1c417c880a","blobKind":"transcript","evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-27T15:37:07.043Z"}

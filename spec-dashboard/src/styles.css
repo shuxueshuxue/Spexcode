@@ -883,6 +883,20 @@ body {
 .si-hint { font-size: 11px; color: var(--muted); }
 .si-hint code { color: var(--blue); background: var(--panel2); padding: 0 4px; border-radius: 3px; }
 
+/* harness picker under the New Session box — a segmented control in the panel's pill idiom (mirrors .m-tab:
+   hairline pill, blue fill when active). Leading label reads like .si-hint so the row sits quietly. */
+.si-harness { display: flex; align-items: center; gap: 6px; }
+.si-harness-cap { font-size: 11px; color: var(--muted); margin-right: 2px; }
+.si-harness-opt {
+  padding: 4px 12px; min-height: 26px; cursor: pointer;
+  font-family: var(--mono); font-size: 11.5px; color: var(--ink);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
+  transition: border-color .12s ease, color .12s ease, background .12s ease;
+}
+.si-harness-opt:hover:not(.on):not(:disabled) { border-color: var(--blue); color: var(--ink2); }
+.si-harness-opt.on { color: var(--paper); background: var(--blue); border-color: var(--blue); }
+.si-harness-opt:disabled { opacity: .5; cursor: default; }
+
 /* Active session: terminal fills the area (expands from centre out), input docked at the bottom. */
 .si-content.is-session .si-term { animation: si-expand .22s ease; }
 /* margin-bottom reserves the RESTING (one-line) ❯ box footprint — ~38px box + 12px bottom offset + 12px

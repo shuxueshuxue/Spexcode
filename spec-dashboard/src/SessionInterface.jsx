@@ -143,6 +143,10 @@ function matchConfig(presets, query) {
 // flags one of OUR commands (close/merge/nav/proof) — it runs HERE, not in the agent (see boardCommandsFor).
 const SRC_TAG = { user: '(user)', project: '(project)', skill: '[skill]', 'built-in': 'built-in', board: '[board]' }
 
+// the harnesses the backend can launch (spec-cli/src/harness.ts HARNESSES) — `claude` is the default. The
+// New Session box lets the user pick one; its id rides along in the POST /api/sessions body.
+const HARNESSES = [{ id: 'claude', label: 'Claude Code' }, { id: 'codex', label: 'Codex' }]
+
 // bold the first case-insensitive hit of the query inside a label (the part the user has typed so far).
 function highlight(text, q) {
   if (!q) return text
@@ -162,6 +166,12 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // a single shared box. Survives tab switches and close/reopen (the panel stays mounted, see `open`).
   const [drafts, setDrafts] = useState({})
   const [sending, setSending] = useState(false)
+  // which harness the next New Session launches (claude | codex). Remembered for the session of use so a
+  // user who works in one harness doesn't re-pick each launch; rides along in the POST body (default claude).
+  const [harness, setHarness] = useState(() => {
+    try { return localStorage.getItem('si.harness') || 'claude' } catch { return 'claude' }
+  })
+  const pickHarness = (id) => { setHarness(id); try { localStorage.setItem('si.harness', id) } catch {} }
   const [sendErr, setSendErr] = useState(false)   // last /keys dispatch failed — surfaced under the ❯ box
   const [navMode, setNavMode] = useState(false)
   const [menuById, setMenuById] = useState({})   // per-pane menu-sniff flag from each SessionTerm; drives the nav button's `.suggest` pulse
@@ -390,7 +400,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       const text = composeLaunch(raw)
       const res = await fetch('/api/sessions', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: text }),
+        body: JSON.stringify({ prompt: text, harness }),
       })
       const data = await res.json().catch(() => null)
       setPrompt('')
@@ -804,6 +814,22 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 )}
                 {/* config-preset palette — same `/` dropdown, opening downward under the centered box. */}
                 {menu && menu.kind === 'config' && slashMenu(false, menu.query ? `/${menu.query}` : t('session.menuPresets'))}
+              </div>
+              {/* harness selector — which agent the launch boots (rides along in the POST body). A bare
+                  segmented control in the panel's design language; default Claude Code, no icon-emoji. */}
+              <div className="si-harness" role="radiogroup" aria-label={t('session.harnessLabel')}>
+                <span className="si-harness-cap">{t('session.harnessLabel')}</span>
+                {HARNESSES.map((h) => (
+                  <button
+                    key={h.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={harness === h.id}
+                    className={harness === h.id ? 'si-harness-opt on' : 'si-harness-opt'}
+                    onClick={() => pickHarness(h.id)}
+                    disabled={sending}
+                  >{h.label}</button>
+                ))}
               </div>
               <div className="si-hint">
                 {t('session.hint.before')}<code>@</code>{t('session.hint.mid')}<code>/</code>{t('session.hint.after')}

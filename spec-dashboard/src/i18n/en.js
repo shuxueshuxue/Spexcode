@@ -259,6 +259,7 @@ export default {
     menuSpecNodes: 'spec nodes',
     menuHint: '↑↓ pick · ⏎ insert',
     hint: { before: 'type ', mid: ' to reference a spec · ', after: ' to apply a config preset' },
+    harnessLabel: 'harness',
     navBtn: 'nav',
     navTitle: "nav mode — forward raw keystrokes incl. ⌃/⌥/⌘ combos to drive the agent's terminal (⌥/⌘+I)",
     relaunch: 'relaunch',

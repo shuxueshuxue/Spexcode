@@ -15,6 +15,7 @@ import { useIsMobile } from './useIsMobile.js'
 import { loadBoard, layout, X_GAP, Y_GAP, projectTitle, projectIcon, faviconHref } from './data.js'
 import { createMomentumScroll } from './scroll.js'
 import { cycleNext } from './cycle.js'
+import { firesKey } from './bindings.js'
 import { labelColor } from './color.js'
 import { sessionName } from './session.js'
 import { useT } from './i18n/index.jsx'
@@ -280,15 +281,15 @@ function Dashboard({ specs, sessions, reload }) {
         }
         return
       }
-      if (e.key === '?') { e.preventDefault(); setLegend(true); return }
+      if (firesKey('board.help', e.key)) { e.preventDefault(); setLegend(true); return }
       // settings modal owns its keys while open (only ,/Esc close it)
       if (settings) {
         if (e.key === 'Escape' || e.key === ',') { e.preventDefault(); setSettings(false); return }
         return
       }
       if (e.key === 'Escape' && highlightId) { e.preventDefault(); e.stopPropagation(); setHighlightId(null); return }
-      if (e.key === ',') { e.preventDefault(); setSettings(true); return }
-      if (e.key === '/') { e.preventDefault(); e.stopPropagation(); setSearch(true); return }
+      if (firesKey('board.settings', e.key)) { e.preventDefault(); setSettings(true); return }
+      if (firesKey('board.search', e.key)) { e.preventDefault(); e.stopPropagation(); setSearch(true); return }
       // chord buffer: a leader (n/d) holds, the next letter fires (CHORDS); a non-match or a 700ms lull clears it and falls through
       if (!e.metaKey && !e.ctrlKey && !e.altKey && /^[a-zA-Z]$/.test(e.key)) {
         const cur = chordRef.current
@@ -305,25 +306,28 @@ function Dashboard({ specs, sessions, reload }) {
         }
       }
       // hjkl mirror the arrows for graph nav (vim): k/j up/down the column, h/l to parent/child.
-      if (e.key === 'ArrowUp'    || e.key === 'k') return go(upTarget, e)
-      if (e.key === 'ArrowDown'  || e.key === 'j') return go(downTarget, e)
-      if (e.key === 'ArrowLeft'  || e.key === 'h') return go(parent, e)
-      if (e.key === 'ArrowRight' || e.key === 'l') return go(rightTarget, e)
+      // Keys resolved through the registry (firesKey) so they stay the single source the legend/controller share.
+      if (firesKey('nav.up', e.key))     return go(upTarget, e)
+      if (firesKey('nav.down', e.key))   return go(downTarget, e)
+      if (firesKey('nav.parent', e.key)) return go(parent, e)
+      if (firesKey('nav.child', e.key))  return go(rightTarget, e)
       // zoom & cycle are keyboard board ops too — they engage kbdMode so the mouse steps aside the same way.
-      if (e.key === '=' || e.key === '+') { e.preventDefault(); setKbdMode(true); centerOn(focus, clamp(getViewport().zoom * 1.2), 160) }
-      else if (e.key === '-' || e.key === '_') { e.preventDefault(); setKbdMode(true); centerOn(focus, clamp(getViewport().zoom / 1.2), 160) }
-      else if (e.key === '0') { e.preventDefault(); setKbdMode(true); centerOn(focus, 0.85, 200) }
-      else if (e.key === 'i' || e.key === 'I') { e.preventDefault(); setOverlay(true) }
-      else if (e.key === 'o' || e.key === 'O') {
+      if (firesKey('board.zoomIn', e.key)) { e.preventDefault(); setKbdMode(true); centerOn(focus, clamp(getViewport().zoom * 1.2), 160) }
+      else if (firesKey('board.zoomOut', e.key)) { e.preventDefault(); setKbdMode(true); centerOn(focus, clamp(getViewport().zoom / 1.2), 160) }
+      else if (firesKey('board.zoomReset', e.key)) { e.preventDefault(); setKbdMode(true); centerOn(focus, 0.85, 200) }
+      else if (firesKey('board.info', e.key)) { e.preventDefault(); setOverlay(true) }
+      // overlay cycle: o / O walk focus through changed nodes (scope follows the lock), wrapping
+      else if (firesKey('board.cycle', e.key) || firesKey('board.cycleRev', e.key)) {
         e.preventDefault()
         if (!cycleNodes.length) return
         setKbdMode(true)
-        const next = cycleNext(cycleNodes, focus.id, e.key === 'O' ? -1 : 1, (n) => n.id)
+        const next = cycleNext(cycleNodes, focus.id, firesKey('board.cycleRev', e.key) ? -1 : 1, (n) => n.id)
         if (next) setFocusId(next.id)
       }
       // Enter opens the session board at the remembered tab (boarding switch — see openBoard).
-      else if (e.key === 'Enter') { e.preventDefault(); openBoard() }
-      else if (e.key === '@') { e.preventDefault(); startNew(`@${focus.id} `) }
+      else if (firesKey('board.enter', e.key)) { e.preventDefault(); openBoard() }
+      // @-key: jump to a FRESH New Session on the focus (@<id> pre-seeded), unconditional — never enters an existing session
+      else if (firesKey('board.fresh', e.key)) { e.preventDefault(); startNew(`@${focus.id} `) }
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)

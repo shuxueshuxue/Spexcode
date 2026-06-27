@@ -63,7 +63,10 @@ same headline its session row and console title show** (`sessionHeadline`: a hum
 two stay identifiable as the agent renarrates. Layout is a **network**,
 not a tree, and **not a fixed ring** — it is **force-directed**: related sessions are pulled together into
 **clusters** while unlinked ones drift to the margins, so the edges stay **short** instead of slashing straight
-across a ring. It is **deterministic and still** — the same topology always yields the same frame, and the web
+across a ring. But short is **not cramped**: a linked pair keeps a **readable gap** — a minimum separation the
+crowding forces can't breach — so the edge and, for a talking pair, its **message count** stay legible between
+the two nodes, never crushed border-to-border. Linking draws sessions close, but no closer than legible.
+It is **deterministic and still** — the same topology always yields the same frame, and the web
 **re-settles only when the topology changes** (a watch starting or stopping, a session opening or closing), so
 across the edge polls it never jitters. Edges anchor **border-to-border** rather than to fixed handles, so an
 arrow leaves and lands cleanly whichever way two nodes settle.

@@ -3,28 +3,15 @@ import { promisify } from 'node:util'
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs'
 import { join, isAbsolute, resolve } from 'node:path'
 
-// @@@ git is the database - a spec's version history IS the git log of its spec.md.
-// %s (subject) = the reason for change; a `Session:` trailer = the attribution.
 const US = '\x1f', RS = '\x1e'
 
-// @@@ clean git env - git hooks export GIT_DIR / GIT_INDEX_FILE / GIT_WORK_TREE, and those override
-// git's normal repo discovery. Inside a hook that makes `rev-parse --show-toplevel` resolve to the
-// cwd instead of the real worktree root — so repoRoot() pointed at spec-cli/ and loaded zero specs.
-// Strip them so EVERY git call we make discovers the repo from the filesystem, hook or not.
+// strip git's hook-exported env (GIT_DIR etc.) so every call discovers the repo from the filesystem.
 export function git(args: string[]): string {
   const env = { ...process.env }
   delete env.GIT_DIR; delete env.GIT_WORK_TREE; delete env.GIT_INDEX_FILE; delete env.GIT_OBJECT_DIRECTORY
-  // @@@ capture stderr, don't inherit it - the default stdio leaks git's stderr to OUR stderr, so a probe
-  // that fails-soft (repoRoot() falls back to cwd) still spams `fatal: not a git repository` — visible the
-  // moment the CLI runs as a remote backend CLIENT from a non-repo dir (e.g. `spex capture` from ~). Piping
-  // stderr keeps it OFF the console; a real failure still throws with e.stderr populated for callers that care.
   return execFileSync('git', args, { encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'pipe'] })
 }
 
-// @@@ async git - same env-cleaning as git(), but non-blocking. The worktree-overlay diff runs many
-// git calls per /api/layout request; doing them with the SYNC git() blocks Node's one event loop for
-// the whole batch (~2s with several worktrees), starving every other request. gitA() + Promise.all
-// keeps the loop free and lets the per-worktree diffs run in parallel. Returns '' on error.
 const pexecFile = promisify(execFile)
 export async function gitA(args: string[]): Promise<string> {
   const env = { ...process.env }
@@ -35,10 +22,6 @@ export async function gitA(args: string[]): Promise<string> {
   } catch { return '' }
 }
 
-// @@@ gitTry - run git for a MUTATING op where the exit code IS the verdict (merge, merge --abort, …).
-// Unlike gitA (reads — hides failure as '') this NEVER swallows a failure: the caller gets ok + stderr and
-// can act on / surface the real reason (fail-loud). Same env-stripping as git()/gitA() so a hook's exported
-// GIT_DIR can't misdirect the op. execFile rejects on a non-zero exit with stdout/stderr on the error.
 export async function gitTry(args: string[]): Promise<{ ok: boolean; stdout: string; stderr: string }> {
   const env = { ...process.env }
   delete env.GIT_DIR; delete env.GIT_WORK_TREE; delete env.GIT_INDEX_FILE; delete env.GIT_OBJECT_DIRECTORY
@@ -50,8 +33,7 @@ export async function gitTry(args: string[]): Promise<{ ok: boolean; stdout: str
   }
 }
 
-// memoized: the repo root is constant for a process, but resolveLayout() calls this per request — without
-// the cache that's a sync `git` fork() on every /api/layout & /api/board (slow on the server's big RSS).
+// memoized: repoRoot is constant per process, but resolveLayout() calls it per request — avoid a git fork each time.
 let repoRootCache: string | null = null
 export function repoRoot(): string {
   if (repoRootCache !== null) return repoRootCache
@@ -63,14 +45,6 @@ export function repoRoot(): string {
   return repoRootCache
 }
 
-// @@@ headSha - the current HEAD commit sha read straight from the filesystem, NO git subprocess.
-// This is the cache key for the HEAD-keyed indexes below, hit on EVERY warm read. Using
-// `git rev-parse HEAD` for it cost a full subprocess spawn (~70ms here — fork()/exec on the
-// server's RSS), so a warm /api/specs paid ~2 spawns just to confirm "HEAD hasn't moved" before
-// returning cached data. Reading `.git/HEAD` + the ref it points at is a couple of sub-ms file reads,
-// so a warm hit spawns NO git at all. Strictly HEAD-derived (no TTL): a new commit rewrites HEAD/the
-// loose ref, the sha changes, the cache misses, we recompute — staleness is impossible. THROWS if the
-// sha can't be resolved; callers must then recompute (never serve a cache they can't validate).
 function gitDirOf(root: string): string {
   // a normal checkout has a `.git` DIRECTORY; a linked worktree has a `.git` FILE: `gitdir: <path>`.
   const dotgit = join(root, '.git')
@@ -111,15 +85,8 @@ export function headSha(root: string): string {
   throw new Error(`headSha: cannot resolve ${name}`)
 }
 
-// @@@ worktreeSpecSig - a subprocess-free fingerprint of a worktree's `.spec` WORKING TREE, the same
-// kind of filesystem-read cache key headSha is for the spec-history cache. The board overlay
-// (`worktreeSpecDelta`, the expensive part of /api/layout) is a pure function of three inputs: main's
-// HEAD, this worktree's HEAD, and its `.spec` working-tree state (committed + staged + unstaged +
-// untracked spec.md). A signature over that third input lets /api/layout reuse a cached delta until it
-// actually changes, instead of spawning the 3 git diffs per worktree on every warm read. We fingerprint
-// every file under `.spec` by path + mtimeMs + size: an edit bumps mtime, an add/delete/reparent changes
-// the path set — so any change the diff would notice changes the signature. Pure readdir/stat over a
-// tiny tree (sub-ms), NO git subprocess. '' when `.spec` is absent (an empty, stable overlay).
+// fingerprint of a worktree's `.spec` working tree by path + mtimeMs + size (no git); the overlay-cache
+// key for its working-tree state. '' when `.spec` is absent.
 export function worktreeSpecSig(wtPath: string): string {
   const root = join(wtPath, '.spec')
   if (!existsSync(root)) return ''
@@ -141,12 +108,8 @@ export function worktreeSpecSig(wtPath: string): string {
 export type Version = { hash: string; date: string; reason: string; session: string | null }
 export type DiffStat = { additions: number; deletions: number; files: number }
 
-// @@@ fileStatsFollow - per-commit numstat for ONE file, rename-followed. `git log --follow --numstat`
-// tracks the file across the reparent's moves (which `git show -- <path>` cannot — it only knows a
-// commit's then-current path). Returns hash -> {additions, deletions, files} for this file alone.
-// A pure rename reports 0/0, so callers can tell "moved" (not a version) from "changed" (a version).
-// This is the GENERAL per-file path, kept for files outside `.spec` (the lint coverage/drift checks
-// ask for governed *code* histories); `.spec` files go through the bulk index below instead.
+// per-commit numstat for one file, rename-followed; a pure rename is 0/0 so callers tell "moved" from
+// "changed". The per-file path for files outside `.spec` (`.spec` goes through the bulk index below).
 function fileStatsFollow(root: string, relPath: string): Map<string, DiffStat> {
   const m = new Map<string, DiffStat>()
   let out = ''
@@ -180,17 +143,15 @@ function historyFollow(root: string, relPath: string): Version[] {
   }).filter((v) => { const s = stats.get(v.hash); return s != null && s.additions + s.deletions > 0 })
 }
 
-// ---- bulk spec history index (one git walk for the whole .spec tree, cached on HEAD) ----
+// ---- bulk spec history index ----
 
 export type HistoryIndex = {
   versions: Map<string, Version[]>          // headPath -> rows newest-first (incl. pure-rename rows)
   stats: Map<string, Map<string, DiffStat>> // headPath -> (commit hash -> this file's diffstat there)
 }
 
-// @@@ parseStatPath - git --numstat renders a rename as `dir/{old => new}/file` (either side may be
-// empty: `.spec/{ => x}/f`), and a top-level move as `old => new`. Recover BOTH endpoints so we can
-// follow a spec.md across the reparents the project does. Spec paths are brace/space-free, so this
-// textual parse is unambiguous here (we also pass core.quotePath=false so non-ASCII stays literal).
+// git numstat encodes a rename as `dir/{old => new}/file` (either side may be empty) or `old => new`;
+// recover both endpoints. Spec paths are brace/space-free here, so the textual parse is unambiguous.
 function parseStatPath(token: string): { from: string; to: string } {
   const b = token.indexOf('{')
   if (b >= 0) {
@@ -210,17 +171,6 @@ function parseStatPath(token: string): { from: string; to: string } {
 
 let indexCache: { head: string; idx: HistoryIndex } | null = null
 
-// @@@ historyIndex - the ENTIRE spec timeline in ONE `git log` walk. The old path called
-// `git log --follow` twice PER node; with --follow each call re-walks all of history doing rename
-// detection, so loading every node was O(nodes × commits) — measurably quadratic (≈0.6s at 19 nodes,
-// ~20s at 100, ~5min at 500). Here we walk history once, read every commit's spec.md numstat + rename
-// status, and bucket rows by each file's CURRENT (head) path, following renames BACKWARD in-memory.
-// Cached on HEAD: a node's committed history is immutable, so a warm hit costs just a HEAD read.
-// @@@ filesystem HEAD key - the cache key comes from headSha() (a couple of file reads), NOT a
-// `git rev-parse HEAD` subprocess. The key is checked on EVERY warm read, so spawning git for it made
-// warm /api/specs cost ~2 spawns (~150ms) purely to confirm HEAD was unchanged. headSha() is sub-ms, so
-// a warm hit now spawns NO git. buildIndex (the MISS path, after a real commit) still uses gitA — async
-// so the one heavy walk stays off the event loop and flat regardless of the server's RSS.
 export async function historyIndex(root: string): Promise<HistoryIndex> {
   const head = headOrEmpty(root)
   if (indexCache && head && indexCache.head === head) return indexCache.idx
@@ -229,10 +179,7 @@ export async function historyIndex(root: string): Promise<HistoryIndex> {
   return idx
 }
 
-// @@@ headOrEmpty - resolve HEAD for cache-keying, '' if it can't be read. '' fails the
-// `cache.head === head` test, so we fall through to a recompute rather than serve a cache we can't
-// validate (the contract: never serve possibly-stale data). The first failure warns once so a broken
-// key surfaces loudly instead of silently degrading every read into a full rebuild.
+// resolve HEAD for cache-keying, '' if unreadable (fails the cache test → recompute); warns once.
 let headWarned = false
 function headOrEmpty(root: string): string {
   try { return headSha(root) }
@@ -283,11 +230,7 @@ async function buildIndex(root: string): Promise<HistoryIndex> {
 // reset the cache when a process knows HEAD will have moved out from under it (tests, hooks).
 export function resetHistoryCache(): void { indexCache = null }
 
-// @@@ pure lookups over a prebuilt index (NO git calls) - callers that resolve many nodes at once
-// (loadSpecs, specHistory) fetch the index ONCE via historyIndex() and then resolve every node with
-// these. Going through history()/specStats() per node instead would re-run `git rev-parse HEAD` (the
-// cache key) once per node — 20 subprocesses for a 20-node load. `rowsFor` drops pure-rename rows
-// (0/0 diff) just like the --follow path, so "moved" never reads as a new version.
+// pure lookups over a prebuilt index (no git). rowsFor drops pure-rename rows (0/0) so a move isn't a version.
 export function rowsFor(idx: HistoryIndex, relPath: string): Version[] {
   const rows = idx.versions.get(relPath) ?? []
   const st = idx.stats.get(relPath)
@@ -297,13 +240,8 @@ export function statsFor(idx: HistoryIndex, relPath: string): Map<string, DiffSt
   return idx.stats.get(relPath) ?? new Map()
 }
 
-// @@@ pathsStats - per-commit numstat summed over a SET of paths, gathered in ONE `git log` walk.
-// Replaces specHistory's old per-version `git show <hash> -- <code>` loop: that spawned one git
-// subprocess PER version, and SYNCHRONOUS subprocess spawning degrades badly inside the long-running
-// API server (each spawn gets progressively slower — a 10-version node's /history took >1s). One walk,
-// then a per-version map lookup, makes the whole request 2 spawns instead of ~N. No `--follow` (that
-// only takes a single path) — same no-rename-tracking behaviour the old `git show -- paths` had, so the
-// code-line numbers are identical; spec.md keeps its rename-followed stats via the bulk index above.
+// per-commit numstat summed over a SET of paths in one `git log` walk. No `--follow` (it takes a single
+// path), so no rename-tracking — same as the old `git show -- paths`; spec.md gets renames via the bulk index.
 export async function pathsStats(root: string, paths: string[]): Promise<Map<string, DiffStat>> {
   const m = new Map<string, DiffStat>()
   if (!paths.length) return m
@@ -323,28 +261,20 @@ export async function pathsStats(root: string, paths: string[]): Promise<Map<str
   return m
 }
 
-// @@@ history - a file's version timeline. `.spec` files are served from the bulk index (one walk,
-// cached); anything else (governed *code* files, asked for by lint) keeps the per-file --follow path.
-// For resolving MANY .spec nodes, prefer historyIndex()+rowsFor() to avoid a rev-parse per call.
+// a file's version timeline: `.spec` from the bulk index, anything else (governed code) via per-file --follow.
 export async function history(root: string, relPath: string): Promise<Version[]> {
   if (relPath.startsWith('.spec/')) return rowsFor(await historyIndex(root), relPath)
   return historyFollow(root, relPath)
 }
 
-// per-commit stat for this node's spec.md (rename-followed), exposed so specHistory can add it to
-// the governed-code stat for an accurate "this version touched N lines of THIS node" number.
+// per-commit stat for this node's spec.md (rename-followed), summed with governed-code stats by specHistory.
 export async function specStats(root: string, relPath: string): Promise<Map<string, DiffStat>> {
   if (relPath.startsWith('.spec/')) return statsFor(await historyIndex(root), relPath)
   return fileStatsFollow(root, relPath)
 }
 
-// @@@ fileDiffAt - the unified patch a spec.md received in a SINGLE commit (vs its parent), used by the
-// recent pane to show a spec's latest line changes when there's no A→B screenshot yet. The path is
-// resolved AT that commit, NOT assumed to be HEAD's: the project reparents nodes (a spec.md rename),
-// and a pure rename is not itself a version — so the latest *content* version can sit at an OLDER path
-// than now. We find it among the commit's files by the node's stable leaf dir (`…/<id>/spec.md` survives
-// reparents), then `git show` just that path. `--format=` drops the commit header so stdout is only the
-// diff; `-M` so a rename+edit commit still shows its body. Async (gitA); '' on error or an empty diff.
+// the patch a spec.md got in one commit (vs parent); resolve its path AT that commit (reparents move it)
+// via the stable leaf dir `…/<id>/spec.md`, then `git show` that path. `-M` keeps a rename+edit's body. '' on error.
 export async function fileDiffAt(root: string, relPath: string, hash: string): Promise<string> {
   if (!hash || !relPath.endsWith('/spec.md')) return ''
   const leaf = relPath.slice(relPath.lastIndexOf('/', relPath.length - '/spec.md'.length - 1) + 1) // `<id>/spec.md`
@@ -354,10 +284,9 @@ export async function fileDiffAt(root: string, relPath: string, hash: string): P
 }
 
 // ONE cached `git log` over HEAD (mirrors historyIndex): each commit's position (0 = newest) + per
-// file the commits that touched it. driftFor() is then a pure lookup. The old per-file `git rev-list`
-// spawned ~40 subprocesses per loadSpecs (~6s); this is a single walk, cached on HEAD.
-// `acks` / `specNodes` carry the Spec-OK convention (see driftFor): acks[hash] = node ids this commit
-// declared still-valid via `Spec-OK:` trailers; specNodes[hash] = node ids whose spec.md it touched.
+// file the commits that touched it; driftFor() is then a pure lookup. `acks`/`specNodes` carry the
+// Spec-OK convention (see driftFor): acks[hash] = node ids declared still-valid via `Spec-OK:` trailers;
+// specNodes[hash] = node ids whose spec.md it touched.
 export type DriftIndex = {
   pos: Map<string, number>
   fileCommits: Map<string, string[]>
@@ -372,7 +301,6 @@ async function buildDriftIndex(root: string): Promise<DriftIndex> {
   // RS-delimited records: `<hash>US<comma-joined Spec-OK values>` on line 1, then the --name-only file
   // list. `valueonly,separator` collapses the trailer block to one line so it never collides with the
   // file names below it (a raw `%b` body would interleave with them and be unparseable).
-  // gitA (async) not git(): keeps this off the fork()-on-a-big-RSS slow path — see historyIndex above.
   const out = await gitA(['-C', root, '-c', 'core.quotePath=false', 'log', '--name-only',
     `--format=${RS}%H${US}%(trailers:key=Spec-OK,valueonly,separator=%x2C)`, 'HEAD'])
   if (!out) return { pos, fileCommits, acks, specNodes }
@@ -408,15 +336,6 @@ export async function driftIndex(root: string): Promise<DriftIndex> {
 // pure lookup: how many commits to `path` are newer than `sinceHash` (the spec's last version) and not
 // yet acknowledged. No git calls.
 //
-// @@@ Spec-OK ack is a CHECKPOINT, not a per-commit stamp - a `Spec-OK: <node>` trailer means "the change
-// up to HERE keeps <node>'s spec valid — no spec edit needed". The NEWEST such trailer (itself newer than
-// the version) acknowledges EVERY drift commit at or below it, back to the version — so ONE `spex ack
-// <node>` at the tip clears the node's whole pending drift WHEREVER its files moved, with NO need to land
-// the trailer on the exact commit that moved a file. (The old rule — honour the trailer only on the same
-// commit that touched the file — made `spex ack` silently no-op the moment you stacked any commit on top
-// of the file-moving one, forcing a reset+amend dance to re-home the trailer. The checkpoint reading
-// removes that trap.) A change made AFTER the ack (newer than it) is fresh, un-acknowledged drift again.
-//
 // `sinceHash` is the node's OWN latest version commit, so the node(s) it's a version of
 // (specNodes[sinceHash]) name the node being measured; an ack counts only if its `Spec-OK:` set names one
 // of those — `Spec-OK: A` quiets A's drift, never B's.
@@ -446,9 +365,7 @@ export function driftFor(idx: DriftIndex, sinceHash: string, path: string): numb
   return n
 }
 
-// @@@ stagedFiles - the paths git is about to commit (the index vs HEAD), so the pre-commit drift gate
-// can scope itself to the files THIS commit touches instead of the whole backlog. git() (sync, env-
-// stripped) because the hook runs it once, synchronously, with an inherited GIT_DIR that must be ignored.
+// the paths git is about to commit (index vs HEAD), scoping the pre-commit drift gate to this commit's files.
 export function stagedFiles(root: string): string[] {
   try {
     return git(['-C', root, '-c', 'core.quotePath=false', 'diff', '--cached', '--name-only'])
@@ -458,10 +375,7 @@ export function stagedFiles(root: string): string[] {
 
 // ---- pending worktree changes (the board's runtime overlay) ----
 
-// @@@ NodeOp - one pending change a worktree makes to a spec node, RELATIVE TO MAIN. `op` is the net
-// effect on the node's spec.md; `committed` = the change is on the branch (a commit), `dirty` = there
-// are still-uncommitted working-tree edits. The dashboard overlays these onto main's merged board so a
-// human watching main sees in-flight work (a node about to be added/edited/deleted/moved) before merge.
+// one pending change a worktree makes to a spec node vs main; committed = on the branch, dirty = uncommitted edits.
 export type NodeOp = {
   nodeId: string
   op: 'added' | 'edited' | 'deleted' | 'moved'
@@ -489,11 +403,6 @@ function parseNameStatus(out: string): { code: string; from: string; to: string 
   return rows
 }
 
-// @@@ mergeBaseDiff - the worker's REAL changes vs main, for the manager cockpit's review payload.
-// Anchored at the FORK POINT (`git merge-base main HEAD`), then `base..HEAD` — the SAME staleness reasoning
-// as worktreeSpecDelta but over the WHOLE tree, not just `.spec`: diffing against main's HEAD would show
-// main's post-fork commits as phantom edits the worker never made. Flattened to per-file status + line
-// counts (one numstat + one name-status walk, merged by final path). '' base (no common ancestor) → [].
 export type ReviewDiffFile = { path: string; status: string; additions: number; deletions: number }
 const DIFF_STATUS: Record<string, string> = { A: 'added', M: 'modified', D: 'deleted', R: 'renamed', C: 'copied', T: 'type-changed' }
 export async function mergeBaseDiff(wtPath: string, mainRef = 'main'): Promise<ReviewDiffFile[]> {
@@ -516,12 +425,6 @@ export async function mergeBaseDiff(wtPath: string, mainRef = 'main'): Promise<R
   return files
 }
 
-// @@@ mergeConflicts - would merging this branch into main conflict, computed WITHOUT touching any working
-// tree. `git merge-tree --write-tree` performs the merge entirely in the object store (no checkout, no
-// index, nothing to abort) and exits 1 on conflicts / 0 on a clean merge — the SAFE dry-run the cockpit's
-// conflict gate needs (vs a real `git merge --no-commit` that would mutate main's tree). Any OTHER exit (bad
-// refs, a too-old git without --write-tree) resolves to false: a gate must not invent a conflict it could
-// not actually determine. env stripped like git()/gitA() so a hook's exported GIT_DIR can't misdirect it.
 export function mergeConflicts(wtPath: string, mainRef = 'main'): Promise<boolean> {
   return new Promise((resolve) => {
     const env = { ...process.env }
@@ -534,17 +437,8 @@ export function mergeConflicts(wtPath: string, mainRef = 'main'): Promise<boolea
   })
 }
 
-// @@@ worktreeSpecDelta - what this worktree changes about the spec tree vs main. The op set is read
-// from ONE diff of the FORK POINT against the worktree's WORKING TREE (`git diff <base>`), which folds
-// committed + staged + unstaged into the final state (an add-then-uncommitted-delete cancels out, etc.).
-// Untracked new spec.md don't show in that diff, so a `status --porcelain` pass adds them as `added` and
-// marks which paths are dirty; a third diff vs HEAD marks what's actually committed.
-// @@@ staleness gate - the base is `git merge-base main HEAD` (the worktree's FORK POINT), NOT main's
-// HEAD. Diffing against main HEAD made a worktree merely BEHIND main (stale — e.g. a long-lived session
-// that never advanced) show main's NEWER content as a phantom "edit" it never made. Anchoring the diff at
-// the fork point means main's post-fork commits live on main's side of the merge-base and never enter the
-// diff, so staleness registers as nothing — while EVERY genuine worktree change (committed on the branch
-// AND uncommitted/dirty, distinction preserved) still appears, since those live on the worktree's side.
+// this worktree's spec ops vs main: one working-tree diff off the fork point (folds committed+staged+unstaged),
+// a `status --porcelain` pass to add untracked spec.md, a third diff vs HEAD to mark what's committed.
 export async function worktreeSpecDelta(wtPath: string, mainRef: string, baseHint?: string): Promise<NodeOp[]> {
   const run = (args: string[]) => gitA(['-C', wtPath, '-c', 'core.quotePath=false', ...args])
   // fork point = where this worktree branched from main; '' (no common ancestor / unreadable ref) falls

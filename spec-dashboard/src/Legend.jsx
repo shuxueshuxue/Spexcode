@@ -2,12 +2,7 @@ import Modal from './Modal.jsx'
 import { STATUS, GLYPH } from './SpecNode.jsx'
 import { useT } from './i18n/index.jsx'
 
-// @@@ Legend - the single home for the keymap + visual vocabulary, shown in the shared centered Modal
-// opened by the HUD's discreet `?` (key or click). It reads STATUS and GLYPH straight from SpecNode.jsx
-// (the node renderer), so the swatches can NEVER drift from what the board actually draws — change a
-// colour or glyph there and the legend follows. All COPY routes through t() (the keys/glyphs themselves
-// are language-neutral and stay literal). Modal owns the backdrop/header/close chrome; Esc / `?` / ×
-// close it (see App + Modal).
+// reads STATUS and GLYPH straight from SpecNode.jsx, so the swatches can't drift from what the board draws.
 
 // keymap key-glyphs are language-neutral; the description for each row is pulled from t() by key.
 const BOARD_KEYS = [

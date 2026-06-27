@@ -4,23 +4,6 @@ import { STATUS } from './SpecNode.jsx'
 import { ScoreBadge, scenarioStates } from './score.jsx'
 import { cycleNext } from './cycle.js'
 
-// @@@ BoardStats - the per-node badges, COUNTED. A glanceable strip pinned to the graph's bottom-left that
-// counts, across the WHOLE spec tree, the same glyphs each node tile already wears — so it adds no new
-// visual vocabulary (the legend already decodes all of it) and needs no backend (every figure folds here
-// from the same /api/board payload the graph polls). Three clusters answer three questions:
-//   · composition — the four status dots, counted: what the tree IS (and how settled).
-//   · attention   — nodes whose code is ahead of spec (⚠) + distinct open issues (◆): what NEEDS a human.
-//   · coverage    — the yatsu score circles, counting SCENARIOS: how well-MEASURED the tree is.
-// Composition and attention count DISTINCT things, never a sum of badges: an issue linked to N nodes is ONE
-// issue (deduped by number), and a node ahead of spec counts once — summing per-node badges would multi-
-// count both (a shared file like styles.css drifts under all its owners). Coverage instead counts SCENARIOS,
-// the real unit of yatsu loss: a node owns several, so it adds EACH to its state's bucket (and a mixed node
-// falls under several coverage chips). Each chip is a WALK, not a single jump: clicking it steps focus to the
-// NEXT node it counts (cycleNext from the current focus — the same ring primitive the o/O overlay cycle uses),
-// so a repeated click cycles through them all, drilling each node's spine open and panning the camera to it.
-// The walk stays NODE-granular even for coverage: its ring is the nodes that OWN a scenario in that state (so
-// the empty chip walks you to the node carrying the unmeasured scenario). A zero-count chip dims and goes inert.
-
 const STATUS_ORDER = ['merged', 'active', 'drift', 'pending']
 // the score circles to surface: pass/fail are always shown as anchors (dim at 0); the stale + blind states
 // appear only when present. Each renders the SAME ringed ScoreBadge the tiles use, so stale reads as the

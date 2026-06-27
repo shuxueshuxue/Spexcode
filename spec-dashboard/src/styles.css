@@ -1026,6 +1026,15 @@ body {
   border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,.12);
   font-family: var(--mono); font-size: 12px;
 }
+/* the selection-bound pick hint: shown ONLY while a node is picked as the watcher (off sourceSel), gone the
+   instant the pick clears — not timed like .sg-toast. The dashed border echoes the picked node's dashed
+   --source outline so the hint reads as part of the same mid-gesture state. */
+.sg-pick-hint {
+  position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 6;
+  padding: 7px 14px; background: var(--panel); color: var(--ink2);
+  border: 1px dashed var(--line); border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,.12);
+  font-family: var(--mono); font-size: 12px;
+}
 
 /* ============================================================================
    MOBILE INTERFACE (MobileApp) — the touch-first face. Only mounted on a phone

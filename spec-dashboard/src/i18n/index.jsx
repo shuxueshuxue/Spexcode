@@ -2,15 +2,6 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import en from './en.js'
 import zh from './zh.js'
 
-// @@@ i18n - the dashboard's whole user-facing copy lives in the per-language dictionaries (en.js/zh.js);
-// components NEVER hardcode visible strings, they call t('some.key'). This module is the glue: it resolves
-// a dotted key against the active dictionary, falls back to English for any missing key, interpolates
-// `{name}` placeholders, and exposes the active language + a setter through React context.
-//
-// LANGUAGE RESOLUTION (initialLang): an explicit saved choice (localStorage) ALWAYS wins; absent one we
-// auto-detect from navigator.language (zh* → Chinese), else English. So a first visit follows the browser
-// and any later pick in Settings overrides detection permanently (until cleared).
-
 const DICTS = { en, zh }
 const LANG_KEY = 'spexcode.lang'   // localStorage key holding the explicit user choice
 
@@ -51,9 +42,7 @@ function interpolate(str, params) {
   return str.replace(/\{(\w+)\}/g, (_, k) => (params[k] != null ? params[k] : `{${k}}`))
 }
 
-// @@@ translate - resolve a key against the active dict, then English, then give up (return the key so a
-// missing translation is visible, not blank). A dict value may be a plain string (interpolated) or a
-// function (params)=>string for count-sensitive copy (plurals, "Nm ago"); both are supported here.
+// a dict value may be a plain string (interpolated) or a (params)=>string function for count-sensitive copy.
 function translate(dict, key, params) {
   let v = resolve(dict, key)
   if (v === undefined) v = resolve(en, key)        // graceful per-key fallback to the source locale

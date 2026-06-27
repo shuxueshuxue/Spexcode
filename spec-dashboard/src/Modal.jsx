@@ -1,9 +1,5 @@
-// @@@ Modal - the shared centered-popup chrome: a backdrop + a panel with a titled header (× close)
-// and a scrollable body. Reused by the help/legend (`?`) and settings (`,`) popups, and the home for
-// any future centered popup. Backdrop click closes; the inner panel stops propagation so a click inside
-// doesn't. Esc / the opener hotkey also close it (handled in App's key router). The CSS classes are
-// historically named `legend-*` (the legend was the first such modal) and are shared verbatim, so both
-// popups look and behave identically without a second copy of the markup.
+// CSS classes are named `legend-*` for history (the legend was the first such modal); shared verbatim by every popup.
+// Backdrop click closes; the inner panel stops propagation so a click inside doesn't.
 export default function Modal({ title, closeLabel, onClose, className, children }) {
   return (
     <div className="legend-backdrop" onClick={onClose}>

@@ -11,6 +11,14 @@ scenarios:
       open order — never the confirm and the panel together on a single press.
     related:
       - spec-dashboard/src/SessionContextMenu.jsx
+  - name: layering-survives-hot-reload
+    description: >
+      With the close-confirm gesture working, trigger a Vite HMR update to escStack.js (or its importers)
+      while the dashboard tab stays open — no page reload — then open the close-confirm again and press Escape.
+      This is the deploy-into-an-open-tab path that re-evaluates the module under the live listener.
+    expected: >
+      Escape still peels ONLY the confirm; the panel stays. The hot-swap does not strip the layering — the
+      listener and its stack stay one source of truth across the re-eval, never a live listener on a dead copy.
   - name: proof-peels-before-board
     description: >
       For a session in the review state, open its proof overlay (the cyan proof button or typed /proof) over

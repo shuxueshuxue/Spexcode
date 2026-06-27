@@ -8,7 +8,7 @@ import { createConnection } from 'node:net'
 import { fileURLToPath } from 'node:url'
 import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, type ReviewDiffFile } from './git.js'
 import { loadSpecs } from './specs.js'
-import { defaultHarness } from './harness.js'
+import { defaultHarness, harnessById, type Harness } from './harness.js'
 import { materialize } from './materialize.js'
 import { mainBranch, gitCommonDir, readConfig, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, readRawRecord, envSessionId, type RawRecord } from './layout.js'
 
@@ -251,7 +251,7 @@ type SessRec = {
   session: string; governed: boolean; worktreePath: string; branch: string | null
   node: string | null; title: string | null; name: string | null
   status: Lifecycle; proposal: Proposal | null; merges: number; note: string | null
-  sortKey: number | null; createdAt: number
+  sortKey: number | null; createdAt: number; harness: string
 }
 const LIFECYCLES = new Set<Lifecycle>(['active', 'idle', 'awaiting', 'parked', 'error', 'asking', 'queued'])
 const PROPOSALS = new Set<Proposal>(['merge', 'nothing', 'close'])
@@ -273,6 +273,7 @@ function fromRaw(raw: RawRecord): SessRec {
     session: raw.session_id, governed: !!raw.governed, worktreePath: raw.worktree_path || '', branch: raw.branch || null,
     node: raw.node || null, title: raw.title || null, name: raw.name || null,
     status, proposal, merges: Number(raw.merges) || 0, note: raw.note || null, sortKey, createdAt: Number(raw.createdAt) || 0,
+    harness: raw.harness || 'claude',   // records written before the harness field default to claude
   }
 }
 // @@@ session.json format - written one-field-per-line (JSON.stringify(_, null, 2)) with EVERY key ALWAYS
@@ -294,6 +295,7 @@ function writeRecord(rec: SessRec): void {
     note: rec.note ?? '',
     sortkey: rec.sortKey ?? '',
     createdAt: rec.createdAt,
+    harness: rec.harness || 'claude',
   }
   mkdirSync(sessionStoreDir(rec.session), { recursive: true })
   writeFileSync(sessionRecordPath(rec.session), JSON.stringify(obj, null, 2) + '\n')
@@ -676,17 +678,17 @@ function titleFromPrompt(prompt: string): string | null {
 // `reclaude` wrapper, a grandchild), so the pane command is the wrapper/shell — reconcile reads claude's
 // rendezvous socket instead (present while claude is alive, gone once it exits). The file lives OUTSIDE the
 // worktree (in the store, keyed by session_id), so it never pollutes the spec/code work.
-function launchScript(id: string, tail: string): string {
+function launchScript(id: string, tail: string, harness: Harness = HARNESS): string {
   const file = join(storeDir(id), 'launch.sh')
   // NO --append-system-prompt / --settings: the contract + hooks are materialized into the worktree at
   // createSession ([[harness-delivery]]) and the agent auto-discovers them — the SAME path as a self-launched
   // agent. The launch line is just the rendezvous env + the harness command + the session-id/spec-pointer/prompt tail.
-  writeFileSync(file, `${rvEnv(id)} ${HARNESS.launchCmd()} ${tail}\n`)
+  writeFileSync(file, `${rvEnv(id, harness)} ${harness.launchCmd()} ${tail}\n`)
   return file
 }
-async function launch(id: string, path: string, tail: string): Promise<void> {
+async function launch(id: string, path: string, tail: string, harness: Harness = HARNESS): Promise<void> {
   await tmux(['new-session', '-d', '-s', id, '-x', String(COLS), '-y', String(ROWS), '-c', path])
-  await tmux(['send-keys', '-t', id, '-l', '--', `bash ${launchScript(id, tail)}`])
+  await tmux(['send-keys', '-t', id, '-l', '--', `bash ${launchScript(id, tail, harness)}`])
   await tmux(['send-keys', '-t', id, 'Enter'])
   launchedAt.set(id, Date.now())   // stamp the boot window so reconcile reads 'starting', not 'offline', until the socket is up
 }
@@ -820,7 +822,8 @@ async function startQueued(id: string): Promise<boolean> {
   launching.add(id)   // hold the slot across the boot window BEFORE we launch, so a concurrent count can't race us
   try {
     const sq = `'${launchPrompt.replace(/'/g, `'\\''`)}'`
-    await launch(id, wt.path, `${HARNESS.sessionIdArg(id)} ${sq}`.trim())
+    const h = harnessById(wt.rec.harness || defaultHarness.id)   // launch THIS session's chosen harness
+    await launch(id, wt.path, `${h.sessionIdArg(id)} ${sq}`.trim(), h)
   } catch {
     launching.delete(id)
     return false   // launch failed → stays `queued`, retried on the next drain tick
@@ -877,17 +880,17 @@ export function superviseQueue(intervalMs = 3000): void {
 // the CLI POSTs to the running backend whenever one answers, making the backend the single owner of session
 // launching. Only when NO backend is reachable do we fall back to launching in this process (with a stderr
 // warning) — the backend's own POST handler calls newSession directly, so it never re-enters this path.
-export async function createSession(node: string | null, prompt: string): Promise<Session> {
+export async function createSession(node: string | null, prompt: string, harness: string = defaultHarness.id): Promise<Session> {
   let res: Response
   try {
     res = await fetch(`${apiBase()}/api/sessions`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ node, prompt }),
+      body: JSON.stringify({ node, prompt, harness }),
     })
   } catch {
     console.error('spex: no backend reachable — launching in-process (caller env owns auth, no concurrency cap)')
-    return newSession(node, prompt)
+    return newSession(node, prompt, harness)
   }
   if (!res.ok) throw new Error(`backend rejected session (${res.status}): ${await res.text().catch(() => '')}`)
   return await res.json() as Session
@@ -898,8 +901,9 @@ export async function createSession(node: string | null, prompt: string): Promis
 // immediately if we're under the concurrency cap, else it waits its turn. Backs both the dashboard POST and
 // `spex session new`. A board directive (nn/dd) additionally mutates the worktree's spec tree up front and
 // hands the agent a finish-the-op prompt.
-export async function newSession(node: string | null, prompt: string): Promise<Session> {
+export async function newSession(node: string | null, prompt: string, harness: string = defaultHarness.id): Promise<Session> {
   const id = randomUUID()
+  const h = harnessById(harness)   // throws on an unknown id — fail loud, never silently launch the wrong harness
   const directive = parseDirective(prompt)
   // node identity + label: a delete targets an existing node (link it); a new op has no id yet so it's
   // labeled by the human's text; otherwise explicit --node wins, else the prompt's first @-mention.
@@ -919,6 +923,7 @@ export async function newSession(node: string | null, prompt: string): Promise<S
   const rec: SessRec = {
     session: id, governed: true, worktreePath: path, branch,
     node: ref || null, title, name: null, status: 'queued', proposal: null, merges: 0, note: null, sortKey: null, createdAt: Date.now(),
+    harness: h.id,
   }
   writeRecord(rec)
   writePromptFile(id, prompt)   // capture the ORIGINATING prompt (the human/manager's ask) as store metadata (best-effort)

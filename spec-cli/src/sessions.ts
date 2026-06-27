@@ -11,44 +11,11 @@ import { guardWorktree } from './resilience.js'
 import { loadSystemConfig, loadSpecs, type ConfigPreset } from './specs.js'
 import { mainBranch, gitCommonDir, statePath, runtimePath, RUNTIME_DIR, readConfig } from './layout.js'
 
-// @@@ sessions - the WORKTREE is the durable unit; tmux is a disposable runtime handle. Each session
-// worktree carries an untracked `.session` file (the source of truth) that survives a kill / reboot /
-// moving the folder. We launch claude with `--session-id <id>` (id we choose) so the SAME conversation
-// can be `--resume`d into a fresh tmux. NO in-memory map: listSessions() reads worktrees every time.
-//
-// STATE MACHINE (only two real states; merge is an action, not a state):
-//   active   → liveness: working | idle | offline. working/offline are read LIVE (is the tmux alive and
-//              still running claude?); idle is PERSISTED (status: idle) by the Notification(idle_prompt)
-//              hook when claude sits waiting at its prompt — the ONE inferred state, guarded active-only so
-//              it never clobbers a declaration; the mark-active hook flips it back to active on real work.
-//              (offline = no tmux for the recorded id, or claude's rendezvous socket is gone — see reconcile)
-//   awaiting → the agent's PROPOSAL, awaiting a human:
-//                proposal=merge   → shown "review"        ("ready, merge me")
-//                proposal=nothing → shown "done"          ("finished, your call")
-//                proposal=close   → shown "close-pending" ("I suggest discarding this worktree")
-//   asking → the agent is pausing to ask the HUMAN a question. Written DETERMINISTICALLY two ways: the
-//                mark-active PreToolUse hook captures it the moment the agent invokes the AskUserQuestion
-//                tool (question → note), and the agent may also declare it via `spex session ask --note
-//                <question>`. Not inferred. Distinct from `parked` (which waits on a background task/
-//                schedule and self-resumes); an asking agent resumes only when a human sends it a prompt.
-//   (closed = the worktree is removed; not a stored status)
-// The agent only ever PROPOSES (awaiting); merge/close are human-only. Every proposal is reversible
-// via reopen() → active. `merges` is METADATA (how many times merged), shown as a badge, not a state.
-//
-// Launch rules (CLAUDE.md / memory): private `tmux -L <label>` socket + `--dangerously-skip-permissions`.
-// SPEXCODE_TMUX / SPEXCODE_CLAUDE_CMD override both for tests.
-
 const pexec = promisify(execFile)
 const TMUX_SOCK = process.env.SPEXCODE_TMUX || 'spexcode'
 const CLAUDE_CMD = process.env.SPEXCODE_CLAUDE_CMD || 'claude --dangerously-skip-permissions'
 const COLS = 120, ROWS = 32
-// @@@ concurrency cap - the most working agents we let run AT ONCE. Heavy multi-agent load (many claude
-// processes computing simultaneously) was the source of resource-pressure crashes, so a launch beyond the
-// cap is QUEUED, not started: it becomes a durable `queued` worktree that the drainer launches the moment a
-// slot frees (an agent stops working/dies). NOT hardcoded — configured PER PROJECT in `spexcode.json`
-// (`sessions.maxActive`), so a box can be tuned to its capacity without touching the toolchain. Precedence:
-// spexcode.json → `SPEXCODE_MAX_ACTIVE` env → default 6. Read LIVE (cheap file read) so an edit takes effect
-// on the next drain tick, no restart. Floored at 1 so a bad value can't wedge the queue to 0.
+// precedence: spexcode.json sessions.maxActive → SPEXCODE_MAX_ACTIVE env → default 6, read live, floored at 1.
 function maxActive(): number {
   let v: number | undefined
   try {
@@ -59,22 +26,6 @@ function maxActive(): number {
   return Math.max(1, Math.floor(v ?? 6))
 }
 
-// @@@ appendSysArg - the system prompt folded into EVERY launched/resumed agent (both paths go through
-// launch() below), assembled ENTIRELY from the system config surface — there is NO baked-in core. The
-// contract lives as DATA in the spec tree, not as a string constant here: each ACTIVE node declaring
-// `surface: system` (gathered by loadSystemConfig) contributes its body, in name order. Without this a
-// dashboard/CLI-launched session gets ONLY the human's terse prompt and carries none of SpexCode's standing
-// contracts (agents kept proposing merge with UNCOMMITTED work). The core spec-discipline rules now live in
-// the `core/spec` system node, alongside opinionated rules like `voice-before-ask`; adding or editing ANY
-// always-on rule is a spec edit, not a code change here. A config node opts in by declaring `surface:
-// system` — no slash, no agent choice. Pending plugins are filtered out by loadSystemConfig, so a `status:
-// pending` stub never injects. Built fresh per launch, so editing a system node takes effect on the next
-// launch with no restart. The combined text is single-quoted onto the launch line and shell-escaped like the
-// prompt; the launch line is written to a script file (see launch()), so length is unbounded — it no longer
-// rides the ~2KB tmux send-keys limit that capped the inline prompt (the launch-prompt-limit lesson). If
-// ZERO system nodes are present, NO flag is emitted at all (empty string) — the launcher tolerates a missing
-// flag, so a config-less instance launches without an appended contract. `cfgs` defaults to the live system
-// load — it's a parameter only so the gathering is testable.
 export function appendSysArg(cfgs: ConfigPreset[] = loadSystemConfig()): string {
   const parts: string[] = []
   for (const cfg of cfgs) {
@@ -85,18 +36,6 @@ export function appendSysArg(cfgs: ConfigPreset[] = loadSystemConfig()): string 
   return `--append-system-prompt '${full.replace(/'/g, `'\\''`)}'`
 }
 
-// @@@ rendezvous control socket - the DETERMINISTIC, ONLY input path for PROMPTS to sessions WE launch. We
-// start `claude` with CLAUDE_BG_BACKEND=daemon + CLAUDE_BG_RENDEZVOUS_SOCK=<per-session sock> set ONLY on
-// that one spawned command (env prefix on the launch line — never global/exported, never a plugin or global
-// setting). claude opens a unix socket at that path; writing one line `{"type":"reply","text":"…"}\n` to
-// it injects the text as a prompt and submits it — no PTY typing, so multi-line input and Enters can't be
-// corrupted the way `tmux send-keys` was. The path is uniquely derived from the session id, so we only
-// ever address OUR OWN sockets (HARD ethics rule: never touch a Claude Code session outside this product).
-// tmux stays the VISIBLE stream (pty-bridge); the socket is CONTROL (input) only. The socket lives in
-// tmpdir tied to the claude process, so no extra lifecycle — claude/the OS owns it. There is NO send-keys
-// fallback for prompts: a missing socket, a connect error, or a prompt the daemon does not confirm ACCEPTED
-// is a LOUD failure that propagates to the caller (API non-2xx) — never a silent degradation to typing into
-// the pane, which previously fooled us into thinking a dead dispatch had worked.
 const rvSock = (id: string) => join(tmpdir(), `spexcode-rv-${id}.sock`)
 // env prefix put in front of the spawned `claude` so it creates this session's rendezvous control socket.
 const rvEnv = (id: string) => `CLAUDE_BG_BACKEND=daemon CLAUDE_BG_RENDEZVOUS_SOCK=${rvSock(id)}`
@@ -106,17 +45,8 @@ const rvEnv = (id: string) => `CLAUDE_BG_BACKEND=daemon CLAUDE_BG_RENDEZVOUS_SOC
 export type DispatchResult = { ok: boolean; error?: string }
 const ACCEPT_TIMEOUT_MS = 2500
 
-// @@@ replyViaSocket - inject `text` as a prompt AND confirm the daemon ACCEPTED it (not mere write-success,
-// which is what silently masked dead dispatches before). The CLAUDE_BG_BACKEND=daemon rendezvous server
-// sends NO ack for an accepted reply, so we confirm via an IN-ORDER round-trip: we write
-// `{type:reply}\n{type:repaint}\n`. The daemon dispatches socket lines strictly in order (one handler per
-// newline-framed line) and ENQUEUES the reply BEFORE it handles the repaint and answers `{type:repaint-done}`
-// — so a `repaint-done` with NO preceding `reply-rejected` proves the reply was processed/enqueued. `repaint`
-// is auth-exempt and always answers, so it's a reliable probe even against a future daemon that gates
-// `reply` behind auth: a gated reply emits `reply-rejected` FIRST (in-order, before repaint-done), which we
-// treat as failure. `reply-rejected` / `shutting-down`, a connect/socket error, an early close, or no
-// confirmation within ACCEPT_TIMEOUT_MS ALL resolve to a loud failure with a specific reason. The forced
-// repaint is a harmless full redraw of the agent's OWN TUI. Never throws — the reason is returned, not swallowed.
+// confirm acceptance via an in-order round-trip: write reply then repaint; a repaint-done with no preceding
+// reply-rejected proves the reply was enqueued (the daemon acks no accepted reply, repaint is auth-exempt).
 function replyViaSocket(sock: string, text: string): Promise<DispatchResult> {
   return new Promise((resolve) => {
     let settled = false, buf = ''
@@ -174,11 +104,6 @@ export type Session = {
   sortKey: number | null   // manual drag-reorder override ([[session-reorder]]); null = sort by `created`
 }
 
-// @@@ originating prompt - what the session was ASKED to do, captured at launch so a manager (human or
-// agent) can later answer "what was this session for?" WITHOUT transcript archaeology. Prompts are
-// multi-line, so they live in their own untracked SIDECAR file (`.session-prompt`) beside `.session`,
-// not as a line in the line-based `.session`. Everything here is BEST-EFFORT: a missing/old sidecar (a
-// session launched before this existed) just means no prompt is shown — never an error, never blocks a launch.
 const PROMPT_FILE = '.session-prompt'   // legacy flat name; the live path is `.session/prompt` (runtime dir)
 function writePromptFile(dir: string, prompt: string): void {
   try { writeFileSync(join(runtimeDir(dir), 'prompt'), prompt) } catch { /* best-effort; must never block the launch */ }
@@ -191,12 +116,6 @@ function readPromptFile(dir: string): string | null {
     return s.trim() ? s : null
   } catch { return null }
 }
-// @@@ deferred launch prompt - a QUEUED session is a fully-prepared worktree we have NOT launched claude
-// into yet. The exact prompt to launch it with — the directive-generated finish-the-op prompt, or the plain
-// human prompt — is parked in its own untracked sidecar (`.session-launch`) so the drainer can launch it
-// later (possibly after a backend restart) WITHOUT re-deriving anything. It is CONSUMED (removed) the moment
-// the session launches, so it exists only while a session is still waiting in the queue. Distinct from
-// `.session-prompt` (the human-facing originating ask, which differs from the launch prompt for directives).
 const LAUNCH_FILE = '.session-launch'   // legacy flat name; the live path is `.session/launch` (runtime dir)
 function writeLaunchFile(dir: string, prompt: string): void {
   try { writeFileSync(join(runtimeDir(dir), 'launch'), prompt) } catch { /* best-effort; the drainer treats a missing file as nothing-to-launch */ }
@@ -220,12 +139,6 @@ function promptPreview(prompt: string, n = 60): string {
 // sessionName).
 export const sessionLabel = (s: Session): string => s.name || s.node || s.title || s.branch || s.id
 
-// @@@ sessionHeadline - the cross-surface HEADLINE: the SAME chain the board card shows (frontend session.js
-// `sessionHeadline`). A user-chosen NAME wins, else the worker's LIVE self-summary (`activity`, the Claude
-// Code pane title — see [[session-activity]]), else a fuller prompt preview, else node/title/branch/id. Use
-// it wherever a session is NAMED FOR A HUMAN in CROSS-SESSION comms (the reply-channel footer, the watch
-// greeting), so an agent recognises a peer the way it reads the board — NOT the bare 7-word prompt
-// truncation `title` that `sessionLabel` stops at. `sessionLabel` stays the stable name for tables/selectors.
 export const sessionHeadline = (s: Session): string => s.name || s.activity || s.promptPreview || s.node || s.title || s.branch || s.id
 
 async function tmux(args: string[]): Promise<string> {
@@ -241,10 +154,7 @@ function mainRoot(): string {
   catch { return repoRoot() }
 }
 
-// @@@ pkgRoot - the CLI package's OWN directory, derived from this module's location, never a hardcoded
-// repoRoot()+'spec-cli'. This file lives at <pkgRoot>/src/sessions.ts, so `..` from it is the package
-// root — making the launch-script paths (hooks/, node_modules/.bin/tsx, src/cli.ts) survive the package
-// being renamed or relocated out of the default <repo>/spec-cli layout.
+// the CLI package's own dir, derived from this module's location (<pkgRoot>/src/sessions.ts), never hardcoded.
 function pkgRoot(): string {
   return fileURLToPath(new URL('..', import.meta.url))
 }
@@ -271,8 +181,7 @@ function readSessionFile(dir: string): SessRec {
     else if (k === 'proposal' && v) r.proposal = v as Proposal
     else if (k === 'merges') r.merges = Number(v) || 0
     else if (k === 'note') r.note = v || null
-    // @@@ sortkey - the drag-reorder pseudo-time ([[session-reorder]]). A blank or non-numeric value falls
-    // back to null so the row reverts to `created` (Number('') is 0, not NaN, so reject the empty case first).
+    // Number('') is 0 (not NaN), so reject the empty case first → null reverts the row to `created` order.
     else if (k === 'sortkey') { const n = v === '' ? NaN : Number(v); r.sortKey = Number.isFinite(n) ? n : null }
   }
   return r
@@ -291,12 +200,6 @@ function writeSessionFile(dir: string, rec: SessRec): void {
   writeFileSync(p, lines.join('\n') + '\n')
 }
 
-// @@@ fail-loud enumeration - the worktree set is the board's EXISTENCE truth, so a failed enumeration must
-// NEVER masquerade as an empty repo. `gitA` swallows a git error to '' (→ zero rows), which a caller would
-// read as "every worktree was removed" — exactly the false mass-`closed` watchSessions would emit once the
-// flicker debounce is gone. `git worktree list` ALWAYS lists at least the main worktree, so an ok run with
-// zero `worktree ` lines is itself a failure. Both cases THROW; the caller (listSessions) propagates and
-// watchSessions' poll `catch` simply skips the tick with `prev` intact — no fabricated removals.
 async function listWorktrees(): Promise<{ path: string; branch: string | null }[]> {
   const r = await gitTry(['-C', mainRoot(), 'worktree', 'list', '--porcelain'])
   if (!r.ok) throw new Error(`git worktree list failed: ${r.stderr.trim() || 'unknown error'}`)
@@ -310,20 +213,7 @@ async function listWorktrees(): Promise<{ path: string; branch: string | null }[
   return list
 }
 
-// @@@ reconcile - the shown status. awaiting → the proposal's label (review/done/close-pending),
-// shown regardless of liveness. active/idle → their LIVENESS: offline if no tmux for the recorded id OR
-// claude's rendezvous socket is gone (claude exited), else idle if the idle_prompt hook has fired since
-// the last tool use, else working.
-
-// @@@ liveTmux - which of OUR tmux sessions exist, in ONE tmux call. reconcile used to spawn two tmux per
-// session (has-session + display-message), so listing N sessions was 2N spawns — the dominant /api/sessions
-// cost under multi-agent load. `tmux list-sessions` returns every session on our socket at once; a session
-// present in this set has a live tmux window (session_name = the id we created it with). tmux server down /
-// no sessions → empty set → everything reconciles to offline, which is correct. We deliberately do NOT read
-// `pane_current_command` any more: workers launch through the `reclaude` wrapper, which runs claude as a
-// CHILD rather than exec'ing it, so the pane's foreground command is the wrapper/shell even while claude is
-// very much alive — the pane command is NOT a liveness signal. claude liveness is its rendezvous socket
-// (see reconcile). The per-session alive() above stays for the single-session ops (capture / rawKey).
+// every tmux session on our socket in ONE call; a present session_name = a live tmux window for that id.
 async function liveTmux(): Promise<Set<string>> {
   const s = new Set<string>()
   let out = ''
@@ -332,12 +222,7 @@ async function liveTmux(): Promise<Set<string>> {
   return s
 }
 
-// @@@ paneTitles - each worker's LIVE self-summary, free from tmux. Claude Code continuously sets its
-// terminal title (an OSC escape) to a short description of what it is doing right now — and tmux captures
-// that as the pane title (NOT the window name; OSC titles never touch window_name). Our worker launches one
-// pane per session, named with the session id, so ONE `list-panes -a` maps id → "what it's doing". Same
-// shape and cost as liveTmux (one tmux call for the whole list); failure → empty map, so a tmux hiccup just
-// drops the subtitle for a tick, never the session. The leading status glyph is stripped at read time.
+// each worker's live pane title (its OSC self-summary) in one list-panes call, mapped id → summary.
 async function paneTitles(): Promise<Map<string, string>> {
   const m = new Map<string, string>()
   let out = ''
@@ -350,36 +235,19 @@ async function paneTitles(): Promise<Map<string, string>> {
   return m
 }
 
-// @@@ selfSummary - the agent's OWN live one-line description, parsed from its tmux pane title — the SINGLE
-// place the "is this the agent speaking?" rule lives, exported so it is unit-auditable. Claude Code sets that
-// title via an OSC escape and ALWAYS leads it with a status glyph: ✳ (and its ✶✻✽✢ blink frames) when idle, a
-// braille spinner frame (U+2800–U+28FF) while working. That leading glyph is the only reliable proof the
-// title is the agent and not tmux's default — which, from pane birth until the first turn, is the HOST NAME
-// (e.g. `ser581555022561`) or a bare `Claude Code` splash. So the glyph is REQUIRED: no leading glyph → null,
-// and the caller keeps showing the launch-prompt placeholder instead of flickering through the host name and
-// splash. The leading glyph run (with the spaces/`·` between and after) is stripped — the dashboard draws its
-// own status dot, a frozen spinner frame is just noise — leaving only the summary text (null if it is empty).
-// ONE regex is the single source of the glyph rule: it gates (requires ≥1 glyph) and strips in one match.
+// a genuine Claude Code self-summary always leads with a status glyph (✳/blink frames idle, braille spinner
+// working); the regex REQUIRES ≥1 such glyph (proof it's the agent's OSC title, not tmux's host-name/splash
+// default) and strips the glyph run, returning the summary text — null when absent or empty.
 export function selfSummary(paneTitle: string): string | null {
   const m = /^[\s·]*(?:[✳✶✻✽✢⠀-⣿][\s·]*)+(.*)$/u.exec(paneTitle)
   return m ? (m[1].trim() || null) : null
 }
 
-// @@@ launchedAt - when we last started a tmux window for an id (set in launch()). claude needs ~15-20s
-// after the window appears to recreate its rendezvous socket; in that window the socket is absent but the
-// session is booting, NOT dead. reconcile consults this to report 'starting' (a distinct transient state)
-// instead of 'offline' for BOOT_GRACE_MS after launch — so 'offline' only ever means genuinely dead. In-
-// memory in the single server process (lost on restart, which is fine: a restart has nothing in flight).
+// when we last started a tmux window for an id; the boot-grace window during which an absent socket reads
+// 'starting' not 'offline'. In-memory in the single server process (lost on restart — nothing in flight then).
 const launchedAt = new Map<string, number>()
 const BOOT_GRACE_MS = 25000   // > waitForSocket's 15s timeout, covering the observed ~15-20s socket boot window
 
-// @@@ liveness - the orthogonal axis ([[state]]): is the agent process up, for ANY session regardless of
-// lifecycle, from a prebuilt tmux set (no per-call spawn — see liveTmux) + the rendezvous socket. offline
-// iff the tmux window is gone OR claude's rendezvous socket is absent past the boot window. claude (via the
-// reclaude wrapper) holds CLAUDE_BG_RENDEZVOUS_SOCK open the whole time it is alive, so the socket — NOT
-// pane_current_command, which is the wrapper/shell while claude runs as its child — is the truth it is up.
-// A just-launched agent whose socket hasn't appeared yet reads the transient 'starting' for the grace
-// window; only past it (socket still gone) is it genuinely 'offline'.
 function liveness(rec: SessRec, live: Set<string>): Liveness {
   if (!rec.session || !live.has(rec.session)) return 'offline'
   if (!existsSync(rvSock(rec.session))) {
@@ -389,12 +257,6 @@ function liveness(rec: SessRec, live: Set<string>): Liveness {
   return 'online'
 }
 
-// reconcile the compact DisplayStatus — a DERIVED label composing lifecycle + liveness for one-glyph
-// surfaces ([[state]]), never a third source of truth. Lifecycle wins the label except where liveness must
-// show through: awaiting → its proposal label; parked/error/asking/queued → themselves; active/idle → their
-// liveness (offline/starting), else the active-only idle/working inference (the mark-active hook flips idle
-// → active on the next real work, self-correcting). The orthogonal liveness field is what the UI keys
-// terminal-mount and the relaunch panel on; this label is for badges and `spex ls`.
 function reconcile(rec: SessRec, live: Set<string>): DisplayStatus {
   if (rec.status === 'awaiting') return PROPOSAL_STATUS[rec.proposal || 'nothing']
   if (rec.status !== 'active' && rec.status !== 'idle') return rec.status  // parked | error | asking | queued (no tmux yet)
@@ -411,12 +273,8 @@ async function findWorktree(id: string): Promise<{ path: string; branch: string 
   return null
 }
 
-// @@@ createdAt - a session's birth instant = the WORKTREE DIRECTORY's birthtime. The dir is created once by
-// `git worktree add` and lives for the session's whole life, so its birthtime is the one stable anchor. The
-// `.session` file's birthtime is NOT usable: writers recreate that file (it's rewritten via replace, not an
-// in-place truncate), so its birthtime resets to "last major write" and the order would reshuffle — exactly
-// the instability we're avoiding. Falls back to dir mtime where a filesystem reports no birthtime, then 0.
-// Drives listSessions' ordering (oldest first, new sessions append).
+// a session's birth instant = the worktree DIRECTORY's birthtime (the .session file's resets on every
+// rewrite, so it can't anchor order); falls back to dir mtime where birthtime is unreported, then 0.
 function createdAt(dir: string): number {
   try { const s = statSync(dir); return s.birthtimeMs || s.mtimeMs || 0 } catch { return 0 }
 }
@@ -429,12 +287,6 @@ function toSession(rec: SessRec, branch: string | null, path: string, status: Di
   return { id: rec.session!, node: rec.node, title: rec.title, name: rec.name, branch, path, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, prompt, promptPreview: prompt ? promptPreview(prompt) : null, created: createdAt(path), activity: showActivity ? activity : null, sortKey: rec.sortKey }
 }
 
-// @@@ renameSession - set (or clear) a session's human display NAME: the user-chosen override that wins
-// over the derived label (node/title/branch/id) on every surface. Persisted to the worktree's `.session`
-// — the only writer of that file — so the name survives backend restarts and is read back like any other
-// field. A blank name CLEARS the override, reverting the row to its derived label. Works for a session in
-// any state (queued/live/offline) since it edits the on-disk record, not the live tmux. Unknown id → false
-// (the route answers 404). The frontend's right-click rename is the sole caller today.
 export async function renameSession(id: string, name: string): Promise<boolean> {
   const wt = await findWorktree(id)
   if (!wt) return false
@@ -442,10 +294,6 @@ export async function renameSession(id: string, name: string): Promise<boolean> 
   return true
 }
 
-// @@@ setSessionSort - set (or clear) a session's drag-reorder pseudo-time ([[session-reorder]]), parallel
-// to renameSession: persisted to the worktree's `.session` record so the manual order survives restarts and
-// shows on every surface (all sort by `sortKey ?? created`). A null key CLEARS it, dropping the row back to
-// its `created` slot. Works in any state since it edits the on-disk record. Unknown id → false (route 404s).
 export async function setSessionSort(id: string, key: number | null): Promise<boolean> {
   const wt = await findWorktree(id)
   if (!wt) return false
@@ -459,15 +307,11 @@ export async function sessionPrompt(id: string): Promise<string | null> {
   return wt ? readPromptFile(wt.path) : null
 }
 
-// @@@ lastKnownSession - the last successfully-read Session row per worktree path. A worktree's EXISTENCE
-// is definitive (it is in `git worktree list`, its directory is on disk); a transient failure reading its
-// `.session` (an ENOENT race, or a sibling read failing under a concurrent merge) must NOT drop it from the
-// board — that absence is exactly what watchSessions used to mis-read as a `closed · removed`. So a degraded
-// read serves this last-known row instead of vanishing. Pruned each poll to only paths still present.
+// the last successfully-read Session row per worktree path, served when a detail read degrades (see
+// guardWorktree) so a transient failure never drops a live worktree. Pruned each poll to present paths.
 const lastKnownSession = new Map<string, Session>()
 
-// @@@ listSessions - every worktree that IS a session (has a .session id), status reconciled. Offline
-// and awaiting ones still appear (their .session persists), so a session is never lost from view.
+// every worktree that IS a session (has a .session id), status reconciled.
 export async function listSessions(): Promise<Session[]> {
   // ONE worktree enumeration + ONE tmux liveness snapshot + ONE pane-title snapshot for the whole list (all
   // independent), then every session reconciles by a pure set lookup + one existsSync — no per-session tmux
@@ -491,36 +335,16 @@ export async function listSessions(): Promise<Session[]> {
   // prune last-known entries for worktrees that no longer appear at all (genuinely removed), keeping it bounded.
   const livePaths = new Set(wts.map((w) => w.path))
   for (const p of [...lastKnownSession.keys()]) if (!livePaths.has(p)) lastKnownSession.delete(p)
-  // @@@ creation order - git lists worktrees alphabetically by path, and a path is a slug of the launch
-  // prompt, so the raw enumeration order is effectively random AND reshuffles every time a session joins or
-  // leaves. Order by birth instead (oldest first): each session keeps its slot for life and a new one simply
-  // appends — a stable spatial map across every surface (dashboard window, session tabs, `spex ls`). A manual
-  // drag ([[session-reorder]]) overrides one row's slot via a pseudo-time `sortKey`, so sort by `sortKey ??
-  // created`: an undragged row stays at its birth time, a dragged one lands among its new neighbours. id
-  // breaks ties so same-instant births (or sort-keys) stay deterministic.
+  // order by `sortKey ?? created` (birth time, a manual drag overriding one row), id breaking ties.
   return rows.filter((s): s is Session => s != null).sort((a, b) => (a.sortKey ?? a.created) - (b.sortKey ?? b.created) || a.id.localeCompare(b.id))
 }
 
-// @@@ session graph = LIVE monitors, not a stored relationship. An edge A→B means "agent A is RIGHT NOW
-// running `spex watch B` (the Monitor tool) over B" — derived from live watch registrations, never a
-// persisted subscription. When a `spex watch` process starts it registers here and heartbeats; the edge
-// exists ONLY while that watch runs (deregistered on exit, dropped on a missed heartbeat). Single owner:
-// this in-memory map in the SERVER process — the watch process (a separate `spex watch`) talks to it over
-// HTTP (POST /api/sessions/graph/watch + …/unwatch). No datastore, no file: a backend restart starts
-// empty and live watches re-register on their next heartbeat. Kept isolated from the board assembler.
 // an edge is either a LIVE monitor arrow (A→B = A watches B, directed) or a recorded comms link (A↔B =
-// they have exchanged `count` direct messages, undirected). The dashboard renders the two kinds apart.
+// they have exchanged `count` direct messages, undirected).
 export type Edge = { from: string; to: string; kind: 'monitor' | 'comms'; count?: number }
 
-// @@@ comms log - direct agent talk ([[comms-edge]]), recorded per-worktree. `spex session send` goes
-// THROUGH the backend (sendKeys); on a delivered message that carries a sender, the backend appends one
-// {peer, ts} line to the RECIPIENT's comms log — each message counted exactly once, on the side the backend
-// already resolved. Persisted (survives a backend restart, unlike the in-memory monitor registrations) and
-// untracked (dies with the worktree, matching a graph of LIVE sessions). No sender → not logged.
-// LAYOUT-AWARE, like [[portable-layout]]'s statePath: a new session writes `.session/comms.ndjson`; a
-// still-draining LEGACY session (`.session` is a flat FILE, so the dir can't be made) writes the flat
-// sibling `.session-comms.ndjson` — both gitignored. Without this a legacy session silently recorded
-// nothing. Best-effort: a recording failure must NEVER fail the delivered message.
+// layout-aware (like statePath): a new session writes `.session/comms.ndjson`; a legacy session (`.session`
+// is a flat file, so the dir can't be made) writes the flat sibling `.session-comms.ndjson` — both gitignored.
 const COMMS_FILE = 'comms.ndjson'
 const LEGACY_COMMS = '.session-comms.ndjson'
 function commsLog(dir: string): { path: string; mkdir: boolean } {
@@ -573,11 +397,6 @@ function liveWatches(): WatchReg[] {
   }
   return out
 }
-// the graph: live sessions as nodes; edges DERIVED from live monitor registrations. Edge A→B = watcher A
-// is currently watching B. Selectors are resolved LIVE here via selectSessions (the same matcher `spex
-// ls/watch` use), so a global (@all/empty) watcher links to every CURRENT session — incl. ones launched
-// after the watch started — and a node/branch selector picks up future matches too. Self-edges and edges
-// touching a non-live session are dropped; duplicate A→B (two watches over the same pair) collapse to one.
 export async function sessionGraph(): Promise<{ nodes: Session[]; edges: Edge[] }> {
   const nodes = await listSessions()
   const live = new Set(nodes.map((s) => s.id))
@@ -611,10 +430,6 @@ export async function sessionGraph(): Promise<{ nodes: Session[]; edges: Edge[] 
   return { nodes, edges }
 }
 
-// @@@ watch registration (CLIENT side) - a `spex watch` process is separate from the server, so it
-// REPORTS itself to the backend's registration store over HTTP: register+heartbeat while it runs,
-// deregister on exit (see cli.ts `watch`). All best-effort — if the backend is down the watch still
-// streams its events; the graph edge just won't appear until a heartbeat lands. Never throws.
 export const apiBase = () => process.env.SPEXCODE_API_URL || `http://127.0.0.1:${process.env.PORT || 8787}`
 // the agent's OWN session id: Claude Code's env var if set, else the worktree `.session` in the cwd (the
 // `spex watch` runs from the worker's worktree, whose .session id equals the worker claude's session id).
@@ -624,17 +439,6 @@ export function ownSessionId(): string | null {
   return readSessionFile(process.cwd()).session
 }
 
-// @@@ withSenderHint - bidirectional agent messaging. `spex session send` delivers a prompt to the
-// recipient; this stamps WHO sent it and HOW to reply as a one-line insert appended to the delivered
-// message, so the recipient agent CAN reply (or ignore) and the reply rides the SAME send back into the
-// sender's prompt — a reply channel, no workflow enforcement, just a prompt insert. The sender is the
-// SENDING agent's OWN session (id from [[dispatch]]'s send-command process via ownSessionId, `label` its
-// board HEADLINE — sessionHeadline, the same title the recipient reads on the board); its FULL id is stamped
-// so the reply addresses exactly one session, never a prefix. A human running `send` from a plain shell has
-// no session id (sender=null) → the bare message, no hint, no loop.
-// @@@ delimited as a SESSION TITLE - the headline is wrapped `session "<headline>" (<id>)` so the recipient
-// reads it AS a session title, not as prose bleeding into the message (an un-delimited prompt-derived title
-// was unrecognisable as a name). A bare-id label (no better name in the chain) needs no quotes.
 export type MsgSender = { id: string; label: string | null }
 export function withSenderHint(text: string, sender: MsgSender | null): string {
   if (!sender) return text
@@ -650,22 +454,14 @@ export const reportWatch = (token: string, watcher: string, selectors: string[],
   postJSON('/api/sessions/graph/watch', { token, watcher, selectors, ttlMs })
 export const reportUnwatch = (token: string): Promise<void> => postJSON('/api/sessions/graph/unwatch', { token })
 
-// @@@ isBackendDown - a `client.ts` BackendError surfacing in the watch poll loop (whose session
-// `source` is the HTTP backend client). Matched by NAME, not `instanceof`, so sessions.ts never imports
-// client.ts at runtime (client.ts imports apiBase from here — a runtime import back would be a cycle). A
-// backend-down poll must NOT be swallowed as a transient git/tmux hiccup: watch warns ONCE and keeps
-// streaming rather than emitting false `closed` events for every session.
+// matched by NAME, not instanceof, so this module never imports client.ts at runtime (client.ts imports
+// apiBase from here — the back-import would be a cycle).
 export const isBackendDown = (e: unknown): boolean => e instanceof Error && e.name === 'BackendError'
 
 const slugify = (s: string | null) => (s || 'session').replace(/[^a-zA-Z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'session'
 
-// @@@ node + title from the prompt - the spec node a session works on is whatever it @-mentions, NOT a UI
-// "focused node": the dashboard prefills `@<focused> ` as a deletable convenience, so the node the user
-// actually left in the prompt (changed it, or deleted it for a node-agnostic prompt) is the truth. We read
-// the FIRST `@<id>` that begins a word (same positional rule the dashboard's mention menu uses). When there
-// is none, the session is node-agnostic and we label it by the first few words of the prompt instead.
-// The OPTIONAL leading dot is load-bearing: a node id is its dir basename, so a dot-prefixed config root
-// (`.config`) keeps the dot — without `\.?` here `@.config` captures nothing and never resolves to a node.
+// the FIRST `@<id>` that begins a word. The optional leading dot is load-bearing: without `\.?` here
+// `@.config` (a dot-prefixed config root) would capture nothing and never resolve to a node.
 const MENTION = /(?:^|\s)@(\.?[A-Za-z0-9_-]+)/
 const mentionedNode = (prompt: string): string | null => prompt.match(MENTION)?.[1] ?? null
 function titleFromPrompt(prompt: string): string | null {
@@ -675,13 +471,6 @@ function titleFromPrompt(prompt: string): string | null {
   return words.length > 50 ? words.slice(0, 49).trimEnd() + '…' : words
 }
 
-// @@@ hideClaudeMd - CLAUDE.md isolation. A DISPATCHED agent should run with full SpexCode control over
-// its own behavior, not be shaped by the project CLAUDE.md the way the managing session is (auto-discovery
-// would inject it as system context). At launch we move the worktree's CLAUDE.md → `.session/claude.md`
-// (still on disk, fully readable — NOT deleted, NOT --bare, so auth/hooks/repo stay intact; the lowercase
-// name in a dot-dir is invisible to Claude Code's CLAUDE.md auto-discovery), and `update-index
-// --assume-unchanged CLAUDE.md` so the move is invisible to git and can NEVER be staged/committed/merged
-// back to main. Default ON; disable with SPEXCODE_HIDE_CLAUDE_MD=0. Best-effort: any failure must not block launch.
 const HIDE_CLAUDE_MD = process.env.SPEXCODE_HIDE_CLAUDE_MD !== '0' && process.env.SPEXCODE_HIDE_CLAUDE_MD !== 'false'
 async function hideClaudeMd(path: string): Promise<void> {
   if (!HIDE_CLAUDE_MD) return
@@ -694,32 +483,9 @@ async function hideClaudeMd(path: string): Promise<void> {
   } catch { /* isolation is best-effort; a failure must not block the launch */ }
 }
 
-// @@@ stopHook - injected per session via `claude --settings '<inline JSON>'` (a CLI param, so it
-// pollutes NOTHING — no global ~/.claude, not even a worktree file). The Stop hook fires when the agent
-// finishes a turn and runs `spex session done` from the worktree cwd → the worktree structurally becomes
-// `awaiting` the human, with no reliance on the agent remembering. The command must point at MAIN's
-// tsx + cli (a fresh worktree off main has no node_modules), running with cwd = the worktree, so
-// markDoneFromCwd() writes that worktree's .session. JSON has only double quotes → safe single-quoted.
-// @@@ settingsJson - the hooks Claude Code loads via `--settings <FILE>`. Written to a per-worktree
-// file (NOT inline on the command line — inline JSON containing single quotes broke the shell quoting
-// and claude read it as a missing file path). The file is ephemeral (removed with the worktree), so
-// still no global pollution. UserPromptSubmit + PreToolUse → the branching `mark-active` hook (active on
-// any work; asking, with the question as the note, when the tool is AskUserQuestion — see
-// mark-active.sh); PreToolUse ALSO runs `spec-first` (a one-shot read-the-spec-before-code nudge —
-// sessions/spec-first; its own sentinel file, so it never races mark-active's `.session/state` write); Stop
-// → the blocking gate (with a loop-break); StopFailure → `error`;
-// Notification(idle_prompt) → `idle`. Hook commands use MAIN's tsx+cli by absolute path ($SPEX) since a
-// fresh worktree has no node_modules and `spex` may be off the session's PATH.
-// @@@ idle hook - the Notification hook fires `session idle` (guarded active-only) when claude sits
-// WAITING at its prompt without having declared a state — the case the Stop gate misses: an API error
-// killed the turn before the gate ran, or the brief window between stopping and declaring. (claude is
-// the pane's foreground process whether churning or idle-waiting, so reconcile alone can't tell them
-// apart — only idle_prompt can.) This is DISTINCT from `asking` (the agent asking the human, captured
-// from the AskUserQuestion tool or declared via `spex session ask`); idle is the inferred, undeclared
-// stop. The active-only guard in `session idle` is what keeps the two from clobbering each other (a
-// deliberate awaiting/asking/parked/error declaration always survives). The Notification fires for
-// many reasons, so the command keys on the structured `notification_type` field — acting only on the
-// idle_prompt one — rather than sniffing the payload blob for the bare word.
+// the spec-first PreToolUse hook keys on its OWN sentinel file so it never races mark-active's
+// `.session/state` write. Hook commands use MAIN's tsx+cli by absolute path ($SPEX) since a fresh worktree
+// has no node_modules. The idle command keys on the structured `notification_type` field, not the blob.
 function settingsJson(): string {
   const root = pkgRoot()
   const gate = join(root, 'hooks', 'stop-gate.sh')
@@ -744,16 +510,9 @@ function writeSettings(path: string): string {
   writeFileSync(file, settingsJson())
   return `--settings ${file}`
 }
-// @@@ launchScript - the WHOLE launch invocation (rendezvous env prefix + claude + --append-system-prompt
-// + --settings + the human prompt) is written to an ephemeral `.spex-launch.sh` in the worktree and run via
-// `bash <file>`, NOT typed inline. Inline send-keys TRUNCATES past ~2KB (the launch-prompt-limit trap), and
-// the system-surface gather can make --append-system-prompt arbitrarily large; a file has no length limit
-// and the only thing send-keys types is the short `bash <file>` line. It's the SAME command the inline path
-// ran (env prefix exports the rendezvous vars to the claude child), just relocated to a file. Liveness no
-// longer cares what the pane's foreground command is: claude runs as a child of bash (and, via the
-// `reclaude` wrapper, a grandchild), so the pane command is the wrapper/shell — reconcile reads claude's
-// rendezvous socket instead (present while claude is alive, gone once it exits). The file is a RUNTIME_FILE
-// (gitignored, ignored by the merge gate, removed with the worktree) so it never pollutes the spec/code work.
+// the whole launch invocation is written to a file and run via `bash <file>`, not typed inline: send-keys
+// truncates past ~2KB and the system-prompt gather can be arbitrarily large, so only the short `bash <file>`
+// line is typed.
 function launchScript(id: string, path: string, tail: string): string {
   const file = join(runtimeDir(path), 'launch.sh')
   writeFileSync(file, `${rvEnv(id)} ${CLAUDE_CMD} ${appendSysArg()} ${writeSettings(path)} ${tail}\n`)
@@ -766,12 +525,8 @@ async function launch(id: string, path: string, tail: string): Promise<void> {
   launchedAt.set(id, Date.now())   // stamp the boot window so reconcile reads 'starting', not 'offline', until the socket is up
 }
 
-// @@@ node directives - a dashboard board chord (nn / dd) prefixes the New Session prompt with a
-// structured op the server PERFORMS in the fresh worktree before the agent starts, then hands the agent
-// a prompt to finish it intelligently. The directive is anchored at the prompt start and carries an
-// @<target>, so it's unambiguous and wins over the plain first-@ mention. `rest` is the human's own text
-// after it (what they want the new node to be, or why the node is going away). No directive → the prompt
-// is an ordinary session prompt and nothing is mutated.
+// a directive is anchored at the prompt start and carries an @<target>, so it wins over the plain first-@
+// mention; `rest` is the human's own text after it.
 //   @new under @<parentId>: <describe the node>   → create a placeholder child, agent names+specs+codes it
 //   @delete @<nodeId>: <why / guidance>            → remove the node's dir, agent refactors per git history
 type Directive = { kind: 'new'; targetId: string; rest: string } | { kind: 'delete'; targetId: string; rest: string }
@@ -833,16 +588,6 @@ function removeNode(wtPath: string, nodeId: string): string | null {
   return rel
 }
 
-// @@@ directive prompts - the INTENT handed to the dispatched agent. The server did the mechanical
-// spec-tree mutation; the agent does the intelligent rest (name + spec + code, or history-driven
-// refactor). Like mergePrompt, the op is a DISPATCH: the server never authors specs or refactors code.
-// These state only the TASK — they deliberately do NOT restate the git flow's mechanics (commit format, the
-// Session: trailer, the node-branch flow, the merge style). Those are carried by product MECHANISM, not a
-// dispatch string: newSession makes the branch, the prepare-commit-msg hook stamps the trailer, the
-// `core/spec` system contract (gathered into appendSysArg) demands commit-before-declare, and mergePrompt
-// states the merge style at merge time. The only handoff detail kept here is "propose merge, don't merge
-// yourself" (the human triggers
-// the merge later, see mergePrompt).
 function newNodePrompt(placeholderId: string, parentId: string, relPath: string, rest: string): string {
   return `A placeholder spec node \`${placeholderId}\` was created under parent \`${parentId}\` at ${relPath} in this worktree. ` +
     `Turn it into a real node and build it, per this request:\n\n${rest || '(no extra description — infer the intent from the parent and the codebase)'}\n\n` +
@@ -863,15 +608,8 @@ function deleteNodePrompt(nodeId: string, relPath: string | null, rest: string):
     `When it's ready, propose merge for the human to review — do NOT merge it yourself.`
 }
 
-// @@@ concurrency cap + queue - keep at most maxActive() agents AUTONOMOUSLY PROGRESSING at once. A slot is
-// COMPUTE pressure, so only an agent actually consuming it holds one: genuinely live (tmux window + rendezvous
-// socket present) AND either churning (`working`) or paused-to-self-resume (`parked`). Every state that is
-// WAITING ON THE HUMAN frees its slot — `idle` (stopped at its prompt), `asking` (asked a question), and the
-// proposal states (review/done/close-pending) — exactly as `offline`/`queued` do. Those agents burn no
-// compute, so they must NEVER block a fresh launch: the old rule counted them, so a pile of "waiting on you"
-// sessions wedged the queue while the box sat near-idle (the reported blockage). Liveness is still checked
-// directly (the socket truth reconcile uses), so an authored `parked` whose claude has since died does NOT
-// pin a slot. The cap throttles concurrent COMPUTE; everything waiting-on-you waits cheap as a live pane.
+// a slot is COMPUTE pressure: only a genuinely live agent that is `working` or self-resuming `parked` holds
+// one; everything waiting on the human (idle/asking/proposals) frees it, like offline/queued.
 const OCCUPIES_SLOT = new Set<DisplayStatus>(['working', 'parked', 'starting'])  // starting's boot window is also held via `launching`
 function isOccupying(s: Session, live: Set<string>): boolean {
   if (!OCCUPIES_SLOT.has(s.status)) return false                          // waiting-on-human / proposed / queued / dead → free
@@ -908,11 +646,8 @@ async function startQueued(id: string): Promise<boolean> {
   return true
 }
 
-// @@@ drainQueue - start as many `queued` sessions as there are free slots, oldest first. Idempotent and
-// re-entrancy-guarded; safe to call on every slot-freeing event (newSession / close / propose) AND on a
-// periodic tick (superviseQueue) — the periodic tick is what catches the AGENT-authored transitions
-// (done/parked written by a hook SUBPROCESS, which can't reach this server's queue). Re-lists each iteration
-// so a freshly launched session (held in `launching`) counts immediately and we never exceed the cap.
+// start as many `queued` sessions as there are free slots, oldest first. Re-lists each iteration so a
+// freshly launched session (held in `launching`) counts immediately and we never exceed the cap.
 export async function drainQueue(): Promise<void> {
   if (draining) return
   draining = true
@@ -929,11 +664,8 @@ export async function drainQueue(): Promise<void> {
   } finally { draining = false }
 }
 
-// @@@ superviseQueue - the periodic drainer. Started once at serve(). The explicit drainQueue() calls on
-// newSession/close/propose cover the slot-freeing events the SERVER handles, but an agent proposing done or
-// going parked writes its .session from a hook subprocess the server never sees, and a crash just makes a
-// socket vanish — so a timer is what turns those into freed slots. Cheap: one worktree+tmux snapshot per tick,
-// and a no-op when nothing is queued. Idempotent (guarded), so a second call is harmless.
+// the periodic drainer (started once at serve()) catches frees the server never sees directly: an agent
+// proposing done/parked from a hook subprocess, or a crash that just makes a socket vanish.
 let supervisingQueue = false
 export function superviseQueue(intervalMs = 3000): void {
   if (supervisingQueue) return
@@ -945,13 +677,6 @@ export function superviseQueue(intervalMs = 3000): void {
   void tick()
 }
 
-// @@@ createSession (dispatch via backend) - `spex new` / `spex session new` must launch the worker in the
-// BACKEND's process, not the caller's. The backend owns the launch env (notably SPEXCODE_CLAUDE_CMD, which
-// reclaude strips from agent envs) AND the concurrency cap. An agent that runs `spex new` (e.g. a supervisor)
-// has a stripped env, so an in-process launch would spawn workers under plain `claude` and 401 at boot. So
-// the CLI POSTs to the running backend whenever one answers, making the backend the single owner of session
-// launching. Only when NO backend is reachable do we fall back to launching in this process (with a stderr
-// warning) — the backend's own POST handler calls newSession directly, so it never re-enters this path.
 export async function createSession(node: string | null, prompt: string): Promise<Session> {
   let res: Response
   try {
@@ -968,11 +693,6 @@ export async function createSession(node: string | null, prompt: string): Promis
   return await res.json() as Session
 }
 
-// @@@ newSession - durable worktree (branch node/<slug> off main) + .session label. The agent does NOT
-// launch inline any more: the worktree is prepared and parked as `queued`, then drainQueue() launches it
-// immediately if we're under the concurrency cap, else it waits its turn. Backs both the dashboard POST and
-// `spex session new`. A board directive (nn/dd) additionally mutates the worktree's spec tree up front and
-// hands the agent a finish-the-op prompt.
 export async function newSession(node: string | null, prompt: string): Promise<Session> {
   const id = randomUUID()
   const directive = parseDirective(prompt)
@@ -1003,11 +723,8 @@ export async function newSession(node: string | null, prompt: string): Promise<S
   } else if (directive?.kind === 'delete') {
     launchPrompt = deleteNodePrompt(directive.targetId, removeNode(path, directive.targetId), directive.rest)
   } else if (ref) {
-    // @@@ spec pointer - the ref (explicit --node, else the prompt's first @mention) named an EXISTING node.
-    // Append ONE line pointing the agent at that node's spec.md as an ABSOLUTE path INSIDE its own worktree, so
-    // it reads the LIVE file (never a stale snapshot we'd inject). relPath already carries the .spec/ prefix and
-    // is identical in this freshly-branched worktree, so the absolute path is just join(worktree, relPath). Only
-    // a real node gets a pointer; an unknown id resolves to nothing and we fail quiet (no pointer appended).
+    // ref named an EXISTING node: append one line pointing the agent at its spec.md (absolute path inside its
+    // own worktree, so it reads the live file). An unknown id resolves to nothing — fail quiet, no pointer.
     const spec = (await loadSpecs()).find((n) => n.id === ref)
     if (spec) launchPrompt = `${prompt}\n\nThe spec node \`${ref}\` is your ground truth — read its spec at ${join(path, spec.path)}.`
   }
@@ -1019,14 +736,8 @@ export async function newSession(node: string | null, prompt: string): Promise<S
   return toSession(after, branch, path, queued ? 'queued' : 'working', queued ? 'offline' : 'starting')
 }
 
-// @@@ waitForSocket - after a relaunch, the resumed claude needs SEVERAL SECONDS to boot and recreate its
-// rendezvous control socket; launch() only TYPES the start line via send-keys and returns immediately, so
-// the socket does not exist yet on return. Poll existsSync(rvSock(id)) at a small interval up to a bounded
-// timeout so a resumed agent counts as "ready" only once its socket is up — then a follow-on dispatch
-// (merge / send) lands in a LIVE socket instead of racing a not-yet-booted daemon and failing loud (409)
-// on a session that is actually recovering. BOUNDED + fail-loud preserved: a genuinely dead/unrecoverable
-// agent never creates the socket, so after the timeout we return and the caller's own socket-existence
-// check (sendKeys) fails loud exactly as before — this only closes the startup race, it adds no fallback.
+// poll for the resumed claude's rendezvous socket up to a bounded timeout, so a follow-on dispatch hits a
+// live socket instead of racing the boot. A dead agent never creates it → the caller's later check fails loud.
 const SOCKET_READY_TIMEOUT_MS = 15000
 const SOCKET_POLL_MS = 200
 async function waitForSocket(id: string, timeoutMs = SOCKET_READY_TIMEOUT_MS): Promise<boolean> {
@@ -1039,16 +750,6 @@ async function waitForSocket(id: string, timeoutMs = SOCKET_READY_TIMEOUT_MS): P
   return existsSync(sock)
 }
 
-// @@@ reopen - "back to working": clear any proposal → active, then ONE relaunch path. claude needs
-// (re)starting iff it isn't running for this id — the SAME deterministic liveness reconcile uses: no tmux,
-// or no rendezvous socket (claude exited, even though the wrapper/shell may still hold the pane). In both
-// cases we drop any stale pane and launch a fresh window that --resume's the SAME conversation (with its
-// rendezvous socket, via launch). When we DO relaunch we then WAIT for that socket to come up
-// (waitForSocket) before returning, so a caller that dispatches immediately after reopen (e.g.
-// mergeSession) addresses a live socket rather than racing the boot. If claude is still live we only
-// cleared the proposal — no wait, the socket already exists. Also serves the plain "relaunch" of an
-// offline (already-active) one. Fail-loud is unchanged: if the socket never appears, the later sendKeys
-// existsSync check still fails loud.
 export async function reopen(id: string): Promise<boolean> {
   const wt = await findWorktree(id)
   if (!wt) return false
@@ -1069,9 +770,6 @@ export async function propose(id: string, proposal: Proposal): Promise<boolean> 
   void drainQueue()   // a proposal frees this session's slot — start the next queued one if any
   return true
 }
-// @@@ agent-authored state - the agent (forced by gates at boundaries) writes its OWN state to
-// .session; it is the authority on what a stop MEANS (awaiting human vs parked on a background task).
-// External hooks only know SOMETHING changed, not the transition, so they force a write, never infer.
 export function markStateFromCwd(status: Lifecycle, opts: { proposal?: Proposal; note?: string } = {}): boolean {
   const rec = readSessionFile(process.cwd())
   if (!rec.session) return false
@@ -1084,32 +782,12 @@ export function markStateFromCwd(status: Lifecycle, opts: { proposal?: Proposal;
 }
 export const markDoneFromCwd = (proposal: Proposal = 'nothing') => markStateFromCwd('awaiting', { proposal })
 export const markErrorFromCwd = () => markStateFromCwd('error')
-// @@@ markIdleFromCwd - the ONE INFERRED state, so (unlike the agent-authored writers above) it carries a
-// strict active-only guard: the Notification(idle_prompt) hook fires it when claude is waiting at its
-// prompt, and it may ONLY overwrite `active` → `idle`. A deliberate declaration (awaiting / asking /
-// parked / error) must survive — idle only fills the gap where the agent stopped WITHOUT declaring (e.g.
-// an API error killed the turn before the Stop gate). The mark-active hook flips idle → active on resume.
 export function markIdleFromCwd(): boolean {
   const rec = readSessionFile(process.cwd())
   if (!rec.session || rec.status !== 'active') return false  // active-only: never clobber a declaration
   writeSessionFile(process.cwd(), { ...rec, status: 'idle' })
   return true
 }
-// @@@ asking has TWO writers, both deterministic (neither guarded active-only): (1) the mark-active
-// PreToolUse hook captures it the instant the agent invokes the AskUserQuestion tool (status=asking,
-// the question as the note) — a HARD signal that the agent is asking the human; (2) the agent declares it
-// itself via markStateFromCwd('asking', { note }) — `spex session ask`, e.g. at the Stop gate. Either
-// way the mark-active path clears it back to active on the next tool / prompt, same as any non-active state.
-
-// @@@ mergeReadiness - the deterministic commit gate the Stop hook enforces before a session may declare
-// done / propose merge. The dogfood ritual lands every change as a COMMIT on the node branch first, so two
-// states block a declaration: (1) uncommitted working-tree changes, ignoring the runtime files SpexCode
-// itself writes into the worktree (the whole `.session/` dir — state/prompt/launch/hooks.json/launch.sh/
-// claude.md — never part of the spec/code work), or (2) 0 commits ahead of main (nothing committed to
-// merge; see isRuntimePath). Runs from
-// cwd = the session worktree; ALL git goes through git() so the hook's exported GIT_DIR/GIT_INDEX_FILE can't
-// misdirect repo discovery to the cwd (the same trap git.ts documents). `main` resolves via the shared refs,
-// so `main..HEAD` works from any linked worktree regardless of where main is checked out.
 // legacy flat runtime files (pre runtime-dir refactor) — still recognised so an in-flight worktree's
 // sidecars never count as real work; drop this set once no flat-layout session remains.
 const LEGACY_RUNTIME = new Set(['.session', '.session-prompt', '.session-launch', '.spex-hooks.json', '.spex-launch.sh', 'CLAUDE.spexhidden.md'])
@@ -1144,13 +822,6 @@ function porcelainPath(line: string): string {
   return p
 }
 
-// @@@ MANAGER COCKPIT - the review payload (the cockpit's first verb; see the manager-cockpit spec node).
-// One server-side bundle that lets a manager (human or agent) decide whether to merge a session WITHOUT
-// hand-running git: how far ahead it is, its REAL changes (merge-base diff, never a phantom main..HEAD one),
-// whether uncommitted non-runtime work remains, the merge/typecheck/lint gates, and the agent's standing
-// proposal. ahead/dirty/diff/conflicts are computed against the SESSION's worktree (per id); typecheck and
-// lint reflect the CLI package's OWN location (where this runs) — the spec-cli that's actually live. null
-// when no session has that id.
 export type ReviewGates = {
   conflictsWithMain: boolean                       // a dry-run merge into main would conflict (in-memory, safe)
   typecheck: { ok: boolean; errorCount: number }   // `tsc --noEmit` on the CLI package
@@ -1165,10 +836,8 @@ export type ReviewPayload = {
   proposal: { kind: Proposal | null; note: string | null }   // the session's standing proposal + its note
 }
 
-// @@@ typecheckPkg - `tsc --noEmit` on the CLI package at its OWN location (pkgRoot — never a hardcoded
-// path), using the tsc binary from that package's node_modules. errorCount counts `error TSxxxx` lines; ok
-// is the exit status. If tsc can't be spawned at all (no node_modules) it resolves ok:false / 0 errors — a
-// loud "couldn't typecheck" rather than a false green.
+// `tsc --noEmit` on the CLI package; a spawn failure (no node_modules) resolves ok:false / 0 errors — a
+// loud "couldn't typecheck", never a false green.
 function typecheckPkg(): Promise<{ ok: boolean; errorCount: number }> {
   const root = pkgRoot()
   const tsc = join(root, 'node_modules', '.bin', 'tsc')
@@ -1180,10 +849,6 @@ function typecheckPkg(): Promise<{ ok: boolean; errorCount: number }> {
   })
 }
 
-// @@@ reviewPayload - assemble the cockpit review for one session. The five session-specific reads
-// (ahead / dirty / diff / conflict gate) plus the two location gates (typecheck / lint) are all
-// independent, so they run in parallel. lint is the existing spec-lint module run in-process (it reports
-// over this process's repo — the CLI package's own tree).
 export async function reviewPayload(id: string): Promise<ReviewPayload | null> {
   const wt = await findWorktree(id)
   if (!wt) return null
@@ -1214,13 +879,6 @@ export async function reviewPayload(id: string): Promise<ReviewPayload | null> {
   }
 }
 
-// @@@ mergePrompt - the human's merge INTENT, handed to the session's OWN agent. Merge is a DISPATCH, not a
-// server git script: the agent knows the work, so IT runs the merge, resolves any conflicts, and VERIFIES the
-// outcome — the guarantee lives in that verification, never a server-side gate. This is also the ONE place the
-// merge STYLE is stated (no other mechanism carries it): a --no-ff merge commit `merge <branch>: <reason>`
-// into main. The agent runs git from the MAIN checkout (`-C <mainPath>`; its own cwd is the node worktree).
-// After a clean merge the branch is 0 ahead of main, so the agent proposes CLOSE — not merge (the commit gate
-// would block a merge proposal; propose-close is exempt) — and the human confirms the close.
 function mergePrompt(mainPath: string, branch: string, reason: string): string {
   const base = mainBranch()
   return `Merge your branch \`${branch}\` into \`${base}\`, then propose close. You know this work, so resolve any conflicts yourself.\n\n` +
@@ -1230,14 +888,7 @@ function mergePrompt(mainPath: string, branch: string, reason: string): string {
     `4. Once you've verified \`${base}\` advanced cleanly, propose close for the human — do NOT close it yourself.`
 }
 
-// @@@ mergeSession - the cockpit's ACT verb, the sequel to review — but a DISPATCH, not a server script: the
-// SESSION'S OWN agent lands the merge, never the server (it carries no `git merge` logic and never touches
-// main's tree). It reopens the session (clears the proposal → active, `--resume`s via reopen if tmux died —
-// which waits for the rendezvous socket, closing the just-relaunched-no-socket race) and dispatches mergePrompt
-// through sendKeys. The reason = the node branch's latest commit subject minus a leading `spec: ` (visible from
-// the main checkout, no worktree path needed). Async + fail-loud: returns {dispatched:true} once the prompt is
-// CONFIRMED accepted, else {dispatched:false, reason} (the loud DispatchResult error). The server no longer
-// re-checks gates, runs git, bumps `merges`, or closes the session — review shows the gates; the agent verifies.
+// reason = the node branch's latest commit subject minus a leading `spec: ` (read from the main checkout).
 export async function mergeSession(id: string): Promise<{ dispatched: boolean; reason?: string }> {
   const wt = await findWorktree(id)
   if (!wt || !wt.branch) return { dispatched: false, reason: 'no such session' }
@@ -1250,23 +901,14 @@ export async function mergeSession(id: string): Promise<{ dispatched: boolean; r
   return { dispatched: true }
 }
 
-// @@@ stopAgentProcess - the shared teardown both exit and close begin with, so there is ONE kill path, not
-// two: kill the agent's tmux client, drop its boot-window stamp (else a just-launched id lingers in the grace
-// window reading `starting` instead of `offline`), and sweep its rendezvous socket. The socket lives in the OS
-// tmpdir (NOT the worktree), so worktree removal alone would leave it behind — closing many sessions over time
-// would accumulate stale `spexcode-rv-*.sock` files; we unlink it here (force = no error if claude/OS already
-// removed it). Deliberately does NOT drainQueue — the caller drains once, after it has settled the worktree.
+// shared kill path for exit+close. The rendezvous socket lives in the OS tmpdir (not the worktree), so unlink
+// it here or closing sessions leaks stale sock files. Does NOT drainQueue — the caller drains once, after.
 async function stopAgentProcess(id: string): Promise<void> {
   await tmuxOk(['kill-session', '-t', id])
   launchedAt.delete(id)
   try { rmSync(rvSock(id), { force: true }) } catch { /* best-effort sweep; tmpdir socket, claude/OS may already be gone */ }
 }
 
-// @@@ exitSession - the SOFT stop (vs closeSession's removal): stops the agent process but LEAVES the durable
-// worktree + branch + transcript intact. The session stays on the board, now reading `offline` (no tmux window)
-// whatever its lifecycle, so the relaunch panel offers to --resume the SAME conversation (see reopen). This is
-// "step away, come back later"; closeSession is "discard this work". An offline session occupies no slot, so
-// the freed capacity drains a queued session next (drainQueue).
 export async function exitSession(id: string): Promise<boolean> {
   const wt = await findWorktree(id)
   await stopAgentProcess(id)
@@ -1274,9 +916,6 @@ export async function exitSession(id: string): Promise<boolean> {
   return !!wt
 }
 
-// @@@ closeSession - the REMOVAL (human-confirmed): exit's soft stop PLUS removing the worktree + branch — the
-// work is gone, not just stopped. Same stop primitive as exitSession (no duplicate kill path), then the git
-// worktree/branch teardown that exit deliberately skips.
 export async function closeSession(id: string): Promise<boolean> {
   const wt = await findWorktree(id)
   await stopAgentProcess(id)
@@ -1288,14 +927,7 @@ export async function closeSession(id: string): Promise<boolean> {
   return !!wt
 }
 
-// @@@ captureSessionResult - the session's live pane as a one-shot snapshot (output), the server side of
-// `GET /api/sessions/:id/capture` that `spex capture` (a backend client) reads. A monitoring read MUST
-// distinguish "I failed to read" from "the pane is genuinely empty" — the old captureSession collapsed
-// unknown-id, offline, and capture-error all to `''`, indistinguishable from an empty pane (a blank screen
-// that exits 0 is worse than useless to a manager). So the result is DISCRIMINATED: an empty pane is a
-// legitimate `{ok:true, pane:''}`; the three failure modes carry distinct reasons the route maps to distinct
-// HTTP codes (unknown→404, offline→409, capture-failed→502). The known-vs-offline check only runs on the
-// cold/not-alive branch, so a live capture (the polled hot path) costs just the one capture-pane.
+// the known-vs-offline check only runs on the cold/not-alive branch, so a live capture costs one capture-pane.
 export type CaptureResult = { ok: true; pane: string } | { ok: false; reason: 'unknown' | 'offline' | 'capture-failed' }
 export async function captureSessionResult(id: string): Promise<CaptureResult> {
   if (!(await alive(id))) {
@@ -1306,15 +938,6 @@ export async function captureSessionResult(id: string): Promise<CaptureResult> {
   catch { return { ok: false, reason: 'capture-failed' } }
 }
 
-// @@@ watch - the event source for Claude Code's Monitor tool (first-class managing-agent support).
-// Polls the session list and emits the COMPLETE session lifecycle so it's a true "subscribe to all
-// session changes" feed: a LAUNCH (first sighting of an id, even though it enters at 'working', which is
-// not actionable — emitted ONCE per id so a manager learns a new session started), each ACTIONABLE state
-// transition — review / done / close-pending (agent proposals), offline (process died), error — and the
-// removal. Per Monitor's "silence is not success" rule a vanished session pings too. Net feed:
-// launched → [actionable transitions] → closed. Each line names the suggested next action(s). Drop into Monitor:
-//   Monitor({ command: 'spex watch', persistent: true, description: 'spex session state changes' })
-// @@@ presentation + selection - shared by `spex ls` (pretty), `spex watch` (events) and the API.
 export const STATUS_GLYPH: Record<DisplayStatus, string> = {
   working: '\u25cf', idle: '\u25cb', offline: '\u23fb', starting: '\u25d4', review: '\u25c6', done: '\u2713',
   'close-pending': '\u2715', parked: '\u29d6', error: '\u2717', asking: '\u2370', queued: '\u25cc',
@@ -1323,11 +946,6 @@ const ANSI: Record<DisplayStatus, string> = {
   working: '33', idle: '90', offline: '90', starting: '36', review: '35', done: '34', 'close-pending': '31', parked: '36', error: '31', asking: '93', queued: '90',
 }
 
-// @@@ session selectors - the ONE matcher every session command shares (see [[session-selectors]]). A
-// selector matches a session iff it is the session's full id, an id-PREFIX, its node, or its branch. This is
-// the single predicate; selectSessions (MANY) and resolveSession (ONE) both call it, so id-prefix/node/branch
-// resolution can never drift between "which sessions ls/watch/wait/graph show" and "which session
-// review/merge/send/close act on".
 export function matchesSelector(s: Session, q: string): boolean {
   return s.id === q || s.id.startsWith(q) || s.node === q || s.branch === q
 }
@@ -1341,12 +959,7 @@ export function selectSessions(all: Session[], selectors: string[], statuses?: s
   return out
 }
 
-// @@@ resolveSession - resolve ONE selector to ONE session against a board: the single-target counterpart of
-// selectSessions, for the control verbs (review/send/merge/close/reopen/capture/prompt). The backend matches
-// ids EXACTLY, so a verb resolves the selector here first and then calls with the FULL id — a node/branch/
-// prefix selector drives a verb just as it filters `ls`. The result is DISCRIMINATED so a caller can fail
-// precisely: an exact full-id hit wins outright (never reported ambiguous just for prefixing a longer id);
-// otherwise a lone match is `ok`, several is `ambiguous` (a prefix/node hitting many), none is `none`.
+// an exact full-id hit wins outright (never reported ambiguous just for prefixing a longer id).
 export type Resolved = { ok: Session } | { ambiguous: Session[] } | { none: true }
 export function resolveSession(selector: string, sessions: Session[]): Resolved {
   const exact = sessions.find((s) => s.id === selector)
@@ -1360,8 +973,7 @@ const trunc = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + '\u2
 // short display label per status (only close-pending differs from the status name) \u2014 used by the legend.
 const SHORT: Partial<Record<DisplayStatus, string>> = { 'close-pending': 'close' }
 
-// @@@ statusLegend - one-line glyph\u2192meaning key, BUILT from STATUS_GLYPH so it can never drift from
-// the glyphs the table actually prints. Shown under `spex ls` so the symbols are self-explanatory.
+// built from STATUS_GLYPH so the legend can never drift from the glyphs the table actually prints.
 export function statusLegend(color = true): string {
   const c = (code: string, t: string) => (color ? `\x1b[${code}m${t}\x1b[0m` : t)
   const parts = (Object.keys(STATUS_GLYPH) as DisplayStatus[]).map(
@@ -1405,25 +1017,15 @@ export function sessionEvent(s: Session): string {
   const asked = s.promptPreview ? ` · asked: ${s.promptPreview}` : ''
   return `[spex] ${s.status} · ${sessionLabel(s)} — act: ${NEXT[s.status] || '—'}${note}${asked}  [id ${s.id}]`
 }
-// @@@ launchEvent - a session's FIRST sighting. A launch goes straight to 'working' (not actionable), so
-// without this the watch feed would be blind to new sessions starting. Emitted ONCE per id, regardless of
-// status, so `spex watch` is a complete lifecycle feed: launched → [actionable transitions] → closed.
 export function launchEvent(s: Session): string {
   const note = s.note ? ` — note: ${s.note}` : ''
   const asked = s.promptPreview ? ` · asked: ${s.promptPreview}` : ''
   return `[spex] launched · ${sessionLabel(s)} — act: capture | send "<msg>"${note}${asked}  [id ${s.id}]`
 }
-// @@@ source - the session board the poll reads. The CLI passes the BACKEND CLIENT (client.ts
-// clientListSessions), so `spex watch` streams whatever backend SPEXCODE_API_URL points at — including a
-// REMOTE machine's. It is REQUIRED (no local default): a forgotten source must be a compile error, never a
-// silent in-process read of the wrong (local) board — the exact false-green the 2-machine test guards.
+// `source` is REQUIRED (no local default): a forgotten source must be a compile error, never a silent
+// in-process read of the wrong (local) board.
 export type WatchOpts = { source: () => Promise<Session[]>; selectors?: string[]; statuses?: string[]; includeIdle?: boolean; intervalMs?: number; as?: string; until?: { timeoutMs: number } }
-// @@@ watch outcome - only the BOUNDED `until` mode resolves (that mode is what `spex wait` runs on); a
-// plain watch (no `until`) streams forever and never resolves. The bound is what makes `wait` a one-shot
-// "block for a worker, then exit" that is GUARANTEED to return. The deadline is checked EVERY poll, before
-// EVERY sleep (and even when a poll throws), so a target stuck in ANY non-actionable state
-// (`working`/`parked`/`idle`/`queued`/`starting`) can never hang the caller — it exits at the deadline.
-// `reached` = the target hit an actionable status; the rest are the loud exits.
+// only the BOUNDED `until` mode resolves (what `spex wait` runs); a plain watch streams forever.
 export type WatchOutcome = { reached: DisplayStatus } | { timedOut: true } | { gone: true } | { backendDown: string }
 export async function watchSessions(emit: (line: string) => void, opts: WatchOpts): Promise<WatchOutcome> {
   const { source, selectors = [], statuses, includeIdle = false, intervalMs = 5000, as, until } = opts
@@ -1451,10 +1053,8 @@ export async function watchSessions(emit: (line: string) => void, opts: WatchOpt
         prev.set(s.id, s.status)
         if (passesStatus(s.status) && (WATCH_ACTIONABLE.has(s.status) || (includeIdle && s.status === 'idle'))) emit(tag + sessionEvent(s))
       }
-      // @@@ closed = the worktree is GONE. Because listSessions lists every EXISTING worktree (a flaky detail
-      // read degrades, never drops), an id absent from the board means its worktree directory was actually
-      // removed: a DEFINITIVE fact, not a flaky absence. So removal needs no 2-poll debounce / existsSync
-      // re-check; emit `closed` exactly once the moment the id leaves the list.
+      // an id absent from the board = its worktree is gone (listSessions degrades a flaky read, never drops),
+      // a definitive removal → emit `closed` once, no debounce.
       for (const id of [...prev.keys()]) {
         if (ids.has(id)) continue
         prev.delete(id)
@@ -1482,14 +1082,6 @@ export async function watchSessions(emit: (line: string) => void, opts: WatchOpt
   }
 }
 
-// @@@ sendKeys - PROMPT control for a session, through the per-session rendezvous socket ONLY. The socket
-// injects AND submits the prompt and confirms the agent ACCEPTED it (see replyViaSocket); there is NO
-// send-keys fallback. A prompt that can't go through the socket — no socket (socketless/old session, or the
-// agent is offline), a connect error, or no acceptance confirmation — FAILS LOUD: it returns ok:false with a
-// reason that propagates to the caller (API non-2xx, `spex session send`, the merge dispatch), instead of
-// silently degrading to typing into the pane and reporting a false success. The socket exists only for
-// sessions WE launched the new way and its path is derived from the id, so we never address another
-// session's socket. (The separate RAW nav-key channel keeps its own `tmux send-keys` path — see rawKey.)
 export async function sendKeys(id: string, text: string, from?: string): Promise<DispatchResult> {
   if (!text) return { ok: false, error: 'empty prompt — nothing to dispatch' }
   const sock = rvSock(id)
@@ -1501,17 +1093,9 @@ export async function sendKeys(id: string, text: string, from?: string): Promise
   return r
 }
 
-// @@@ rawKey - the RAW-KEYSTROKE nav path, kept DELIBERATELY on `tmux send-keys` and NEVER the rendezvous
-// socket. Two channels, two jobs: the socket INJECTS a whole prompt (text + submit), which can drive the
-// agent's normal prompt but CANNOT navigate an interactive TUI select menu (e.g. `/model`'s list — ↑/↓ to
-// move, ←/→ to adjust, Enter to set, `s` for this-session, Esc to cancel). When the agent is in that
-// keystroke-navigation state its input box is replaced by the menu, so the dashboard's nav mode forwards
-// each key here in real time. send-keys is exactly right for single raw keys: named keys map to tmux's own
-// key names; a single printable char is sent literally (`-l`) so tmux doesn't reinterpret it. The dashboard
-// also drives the agent with MODIFIER COMBOS — a terminal's three modifiers carried as a `C-`/`M-`/`S-`
-// prefix on the token (e.g. `C-r`, `M-b`, `S-Tab`, `C-M-x`); those are passed to tmux UNescaped so it parses
-// the combo. One key per call, no socket and no Enter-synthesis — this IS the send-keys channel. False if
-// the tmux session is gone, or if the token isn't a known base after its prefixes (defends the send-keys arg).
+// the raw-keystroke nav channel — single keys to drive an interactive TUI menu (e.g. `/model`'s list), one
+// per call. Named keys map to tmux key names; a bare printable char is sent literally (`-l`) so tmux doesn't
+// reinterpret it; a C-/M-/S- combo is passed unescaped so tmux parses it.
 const TMUX_KEY: Record<string, string> = {
   Up: 'Up', Down: 'Down', Left: 'Left', Right: 'Right',
   Enter: 'Enter', Escape: 'Escape', Tab: 'Tab', Space: 'Space', Backspace: 'BSpace',

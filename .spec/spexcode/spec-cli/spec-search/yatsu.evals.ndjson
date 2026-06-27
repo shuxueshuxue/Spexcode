@@ -5,3 +5,5 @@
 {"scenario":"search-compute-budget","codeSha":"78fd2daedf224b523e4301869abd9dae93699b47","blob":"e652585a2e882a956e6e63bb21ea5f07dbcf17bcc0361f9e7d951d4cad59c1d8","blobKind":"transcript","evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-25T18:31:05.637Z"}
 {"scenario":"retrieval-benchmark","codeSha":"406edb712a8ac8722996ee5b07ccc52a274645a9","blob":"afd6f1c967e17e0c2daed4234262ddd80227a20dbc8c1b54dfa035e082c2a3b5","blobKind":"transcript","evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-25T19:29:26.070Z"}
 {"scenario":"search-compute-budget","codeSha":"406edb712a8ac8722996ee5b07ccc52a274645a9","blob":"ffc486d4d4d32a5810fe2cdfedd0797caa0a5f5b0cbb3ce6d68eb94d2355e1f3","blobKind":"transcript","evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-25T19:29:27.686Z"}
+{"scenario":"retrieval-benchmark","codeSha":"50fb5ef76aea106ec251068486d5d8edcdeca79a","blob":null,"evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-27T03:34:23.775Z"}
+{"scenario":"search-compute-budget","codeSha":"50fb5ef76aea106ec251068486d5d8edcdeca79a","blob":null,"evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-27T03:34:25.415Z"}

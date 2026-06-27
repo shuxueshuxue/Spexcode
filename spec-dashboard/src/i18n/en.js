@@ -1,8 +1,3 @@
-// @@@ en dictionary - English, the SOURCE locale and the fallback every other locale degrades to
-// (see i18n/index.jsx: a key missing in another language is looked up here before giving up). Values
-// are either template strings with `{name}` placeholders or functions `(params) => string` for the
-// count-sensitive copy (plurals, "Nm ago"). Glyphs/punctuation (//, ❯, ＋, ↑↓⏎, op marks) are NOT
-// here on purpose — they're language-neutral and stay composed in the JSX.
 export default {
   common: {
     new: 'new',

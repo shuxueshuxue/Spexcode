@@ -1,12 +1,3 @@
-// @@@ ranker - the SHARED, I/O-FREE lexical scoring core. One ranking algorithm, two callers: the server
-// `searchSpecs` (spec-cli/src/search.ts) feeds it spec NODES; the dashboard `/` palette
-// (spec-dashboard/src/SpecSearch.jsx) feeds it all FOUR planes (nodes/sessions/issues/scenarios). Lifting it
-// here is the answer to "two diverging rank implementations": the SCORING is identical (human and agent rank
-// the same), while each caller keeps its own intent — the server tokenises a question, the palette can pass a
-// typed fragment — by simply choosing what `query` and `docs` it hands in. Pure: no fs, no git, no DOM, so
-// vite bundles it for the browser AND tsx runs it server-side. The score scale is one scale (same scorer), so
-// a caller mixing planes gets a single sortable list for free.
-
 // tier multipliers, name > desc > body. A doc's NAME is the strongest signal, its one-line DESC a curated
 // summary (next), its BODY the weakest per-hit — but the body carries BM25 term-frequency so a doc that
 // genuinely concentrates a rare word still climbs. IDF scales all three. The spread only ORDERS the tiers;
@@ -41,22 +32,14 @@ function words(text: string): string[] {
   return text.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean)
 }
 
-// @@@ asymmetric word-prefix - matching is by field, because the fields want different stemming:
-//   name  (forward only)   — the term begins a name word (`guard`→`main-guard`). A name is short and chosen;
-//                            we do NOT run the reverse direction, or a plural query (`specs`) would light up
-//                            every `spec-*` name in a tree where "spec" saturates.
-//   text  (bidirectional)  — either is a prefix of the other (`merge`→`merging` AND `specs`→`spec`), used for
-//                            desc and body, so a singular/plural mismatch still matches. Reverse is gated to
-//                            words ≥3 chars so a stray short word (`on`, `id`) can't swallow a longer term;
-//                            IDF neutralises whatever generic words this extra reach pulls in.
+// name match is forward-only (a chosen short field — reverse would let a plural query light up every `spec-*`
+// name); desc/body match bidirectionally so a singular/plural mismatch still hits, reverse gated to words ≥3
+// chars so a stray short word can't swallow a longer term (IDF neutralises the generic words it pulls in).
 function nameMatch(term: string, w: string): boolean { return w.startsWith(term) }
 function textMatch(term: string, w: string): boolean { return w.startsWith(term) || (w.length >= 3 && term.startsWith(w)) }
 
-// @@@ BM25 saturation - the body tier's strength is its term FREQUENCY, with diminishing returns and length-
-// normalised, so a doc that SAYS "owner" eight times outranks a long off-topic doc that mentions "file" once
-// — without a 50-mention doc swamping everything (saturation) and without a long doc scoring high merely by
-// being long (the len/avg term). Classic BM25 tf component; K1 sets how fast frequency saturates, B how hard
-// length is penalised. Both sit in a wide insensitive plateau. tf=0 → 0.
+// classic BM25 tf: frequency with saturation (K1 sets how fast it saturates) and length-normalisation (B),
+// both in a wide insensitive plateau. tf=0 → 0.
 const K1 = 1.2
 const B = 0.4
 function bm25tf(tf: number, len: number, avgLen: number): number {
@@ -104,12 +87,8 @@ function snippetFor(text: string, desc: string, qterms: string[], window = 140):
 export type RankInput<T> = { ref: T; name: string; desc: string; body: string }
 export type Ranked<T> = { ref: T; score: number; snippet: string }
 
-// @@@ rankDocs - the one entrypoint both callers share. Sums each query term's best-tier weight × its IDF
-// across the supplied corpus; a term saturating the corpus (`spec`, `node`, `session`) has IDF≈0 and is
-// near-neutral however many names it hits, while a rare content word carries the rank. Keeps only docs that
-// hit ≥1 term, sorts by score DESC, caps to `limit` (default 10). TIES: the sort is STABLE, so equal-scored
-// docs keep the caller's input order — the caller pre-sorts `inputs` in its own tiebreak (the server: shorter
-// id then id; the palette: plane order then shorter name) so this core stays free of any caller's identity.
+// the shared entrypoint: sum each query term's best-tier weight × IDF, keep docs hitting ≥1 term, sort by
+// score desc (stable — equal scores keep the caller's pre-sorted input order), cap to `limit` (default 10).
 export function rankDocs<T>(query: string, inputs: RankInput<T>[], opts: { limit?: number } = {}): Ranked<T>[] {
   const limit = opts.limit ?? 10
   const qterms = terms(query)
@@ -125,9 +104,8 @@ export function rankDocs<T>(query: string, inputs: RankInput<T>[], opts: { limit
     }
   })
 
-  // @@@ IDF - document frequency per query term = how many docs contain it (in any field); idf = ln(N/df), so
-  // a term in ALL docs contributes 0 (perfectly neutral) and a term in one doc contributes ln(N). Read FROM
-  // the corpus, not hand-set — the rarity weighting is what makes ranking robust to words that saturate it.
+  // IDF per query term: df = docs containing it (any field), idf = ln(N/df) — a term in every doc scores 0,
+  // a rare one carries the rank. Read from the corpus, not hand-set.
   const N = docs.length
   const avgBodyLen = docs.reduce((a, n) => a + n.bodyWords.length, 0) / (N || 1)
   const idf: Record<string, number> = {}

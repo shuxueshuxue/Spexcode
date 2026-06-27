@@ -3,47 +3,16 @@ import { join } from 'node:path'
 import { repoRoot, stagedFiles } from './git.js'
 import { loadSpecs } from './specs.js'
 
-// @@@ spec-lint - keeps the spec<->code GRAPH honest (the judge keeps the CONTENT honest, elsewhere):
-//   integrity (error): every file a spec lists in `code:` actually exists.
-//   living    (error): a spec body is a CURRENT-STATE document, never a changelog — no `## vN`
-//                      version headings. Version history is read from git (recent/history tabs).
-//   coverage  (warn) : every governed source file is claimed by >=1 spec — no orphan code.
-//   drift     (warn) : a governed file has commits newer than its spec's latest version -> maybe stale.
-//   altitude  (warn) : a body has slid BELOW contract altitude into a mechanics dump (too long, and/or
-//                      too dense with code identifiers, and/or step-by-step how-to) — see altitude().
-//   breadth   (warn) : a node has too many direct children (>= maxChildren) — altitude's structural twin:
-//                      the same comprehensibility limit on the tree's breadth, not a body's depth.
-//   owners    (warn) : a file is GOVERNED by > maxOwners nodes — breadth rotated onto the file: it holds
-//                      more separately-specified functionality than one file should. Remedy: split it.
-// No file hashes are stored anywhere: git already is the hash database, so drift is derived live.
-
 export type Finding = { level: 'error' | 'warn'; rule: string; spec?: string; file?: string; msg: string }
 
-// @@@ lint config - what makes `spex lint` a PRODUCT and not a SpexCode-only script: every value that is
-// project-shaped — which roots coverage governs, which extensions count as source / as code identifiers,
-// the altitude budgets — is read from an optional `spexcode.json` at the repo root, defaulting to the
-// values tuned against this tree. A consuming project (a Python/Go/Rust repo, a different layout) overrides
-// what fits it; absent the file, behaviour is exactly as before. Defaults live here so the file is optional.
 export type LintConfig = {
   governedRoots: string[]       // dirs whose source files must each be governed by a spec (coverage)
   sourceExtensions: string[]    // extensions coverage treats as source files
   identifierExtensions: string[]// extensions the altitude bare-filename signal recognises (see IDENT below)
   altitude: { lineBudget: number; charBudget: number; sizeable: number; dense: number; steps: number }
-  // @@@ maxChildren - the breadth budget: warn when a node has >= this many DIRECT child nodes. Altitude
-  // bounds a single body's depth; this bounds the tree's breadth, so the escape valve altitude pushes you
-  // toward — "split into children" — can't be satisfied by a wide flat fan-out that's just as hard to hold
-  // in your head. A soft taste dial (a flat list of genuine peers is sometimes right) → it's a WARN.
-  maxChildren: number
-  // @@@ driftErrorThreshold - drift stays an advisory WARN in `spex lint` (CI keeps it advisory — see the
-  // ci-gate node), but the commit-local pre-commit gate (`spex lint --gate`) HARD-BLOCKS a commit that
-  // touches a file whose node has accumulated >= this many commits of drift. Small drift nudges; a node
-  // that's fallen this far behind must be reconciled before you pile more change onto its files.
-  driftErrorThreshold: number
-  // @@@ maxOwners - the too-many-owners budget: warn when a single file is GOVERNED (code:) by MORE THAN
-  // this many nodes. Many owners per file is ordinary composition, not a defect (see [[governed-related]]);
-  // only an over-owned file is a smell — it has accreted more independently-specified functionality than
-  // one file should hold. The remedy blames the FILE (split it), not the ownership. A soft taste dial → WARN.
-  maxOwners: number
+  maxChildren: number        // breadth budget: warn at >= this many direct children
+  driftErrorThreshold: number// commit-local gate HARD-BLOCKS a commit touching a node >= this many commits behind
+  maxOwners: number          // warn when a file is governed (code:) by > this many nodes
 }
 const DEFAULT_CONFIG: LintConfig = {
   governedRoots: ['spec-dashboard/src', 'spec-cli/src'],
@@ -75,25 +44,17 @@ function sourceFiles(root: string, rel: string, acc: string[], src: RegExp) {
   }
 }
 
-// @@@ altitude - a spec body should state CONTRACT and INTENT, not re-narrate the implementation. A body
-// that has slid below that altitude reads like a how-to dump: it grows long, it thickens with code
-// identifiers (camelCase, snake_case, `backticked` symbols, foo( calls, file/paths), and it slips into
-// step-by-step phrasing. We can't judge meaning deterministically, but these are cheap, honest PROXIES.
-// Thresholds DEFAULT to values tuned against today's tree (concise specs top out at ~41 non-blank lines /
-// ~3.6k chars; genuine mechanics dumps start well above) but are overridable per project via spexcode.json
-// — see LintConfig. Soft budgets, so it's a WARN — lint stays 0 errors. Returns a one-line reason naming
-// whichever proxy(ies) tripped, or null when the body is at altitude.
-//
-// @@@ identRe - the code-identifier signals: camelCase | snake_case | foo( call | `backticked` | /a/path.ext
-// | bare file.ext. Only the bare-filename branch needs an extension allowlist (the /path branch accepts any
-// extension); without one a bare `word.word` would match ordinary prose like "e.g". The allowlist is config
-// (cfg.identifierExtensions) so a non-TS/JS project recognises ITS source files, not just this tree's.
+// code-identifier signals: camelCase | snake_case | foo( | `backticked` | /a/path.ext | bare file.ext. Only
+// the bare-filename branch needs the extension allowlist (config, so a non-TS project recognises its own
+// sources) — without it a bare `word.word` would match ordinary prose like "e.g".
 function identRe(extensions: string[]): RegExp {
   const ext = extensions.join('|')
   return new RegExp(`[a-z][A-Za-z0-9]*[A-Z][A-Za-z0-9]*|\\b[a-z]+_[a-z0-9_]+\\b|\\b\\w+\\(|\`[^\`]+\`|\\/[\\w./-]+\\.\\w+|\\b[\\w-]+\\.(${ext})\\b`, 'g')
 }
 // step-by-step how-to phrasing: numbered steps, or sequencing connectives that walk through mechanics.
 const STEP_LINE = /^\s*(\d+[.)]\s|[-*]\s*(first|then|next|finally)\b)|(^|[,;]\s*)(first|then|next|finally),/i
+// returns a one-line reason naming whichever low-altitude proxy(ies) tripped (length / identifier density /
+// step-by-step), or null when the body is at altitude.
 function altitude(body: string, cfg: LintConfig, ident: RegExp): string | null {
   const a = cfg.altitude
   const lines = body.split('\n')
@@ -177,10 +138,8 @@ export async function specLint(): Promise<Finding[]> {
   // coverage: every governed source file must be claimed by at least one spec.
   const governed: string[] = []
   for (const r of cfg.governedRoots) sourceFiles(root, r, governed, srcRe)
-  // @@@ governs-nothing - a fresh adopter who hasn't written a spexcode.json inherits the defaults, which
-  // name THIS repo's own dirs (spec-cli/src, spec-dashboard/src); in any other repo those don't exist, so
-  // coverage finds ZERO files and lint reports a misleading "all clear" while guarding nothing. Make that
-  // loud: if no governed source was found at all, the graph isn't governing any code — point at the knob.
+  // no governed source found at all → the defaults name this repo's own dirs, so an adopter who never set
+  // lint.governedRoots would otherwise see a falsely-clean board. Make it loud and point at the knob.
   if (governed.length === 0)
     out.push({ level: 'warn', rule: 'coverage', msg: `governing NOTHING — no source files under governedRoots [${cfg.governedRoots.join(', ')}]. Set lint.governedRoots in spexcode.json to your project's source dirs.` })
   for (const f of governed)
@@ -209,11 +168,6 @@ export async function specLint(): Promise<Finding[]> {
   return out
 }
 
-// @@@ drift is a forcing function - drift can't be auto-resolved (the machine can't tell which link of
-// raw intent → expanded spec → code: link → code structure → implementation broke), so `spex lint`
-// prints this when any drift exists: it names every honest remedy and the inspection commands, so the
-// agent diagnoses instead of blind-acking. The fix is composed from existing tools (lint + the spec.md +
-// git diff) — no bespoke `drift` command. The principle that governs it: never patch the symptom.
 export const DRIFT_GUIDANCE = `DRIFT — a governed file has moved ahead of its spec. A CHECKPOINT, not a chore: find WHERE the truth
 broke along  raw intent → expanded spec → code: link → code structure → implementation, fix THAT layer.
 
@@ -232,12 +186,9 @@ Diagnose, then apply the one honest remedy:
 
 Never patch. A reasoned ack or a real fix are recorded and re-judged at review; a blind ack is a lie.`
 
-// @@@ commit-local drift gate - the hard gate, with NO flag: `spex lint` reads the staged index itself.
-// Empty (CI, manual audit) → no commit in flight → returns no blockers, drift stays advisory (the
-// ci-gate contract). Non-empty (pre-commit) → block the commit IF one of its OWN staged files belongs to
-// a node already >= driftErrorThreshold behind ("reconcile this node before piling more onto its files").
-// Sub-threshold drift on a touched node is returned for an advisory nudge but doesn't block. The backlog
-// on untouched nodes never blocks — the gate is commit-local, not retroactive.
+// commit-local: an empty staged index (CI, audit) → no blockers, drift stays advisory; non-empty → block
+// only when an OWN staged file belongs to a node already >= driftErrorThreshold behind. Sub-threshold drift
+// on a touched node is returned for an advisory nudge; the backlog on untouched nodes never blocks.
 export async function driftGate(): Promise<{ blocked: string[]; touched: { id: string; drift: number }[]; threshold: number }> {
   const root = repoRoot()
   const cfg = loadConfig(root)

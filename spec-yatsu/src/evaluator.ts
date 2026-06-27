@@ -1,13 +1,3 @@
-// @@@ evaluator tag - yatsu runs NOTHING; the AGENT measures the loss. The only thing yatsu records about
-// WHO measured is an evaluator TAG `<name>@<version>` (e.g. `manual@1`) — pure metadata stamped on every
-// reading. There is no executor here: no Driver interface, no `capture()`, no producer registry. That
-// driver-as-executor seam is retired — a measuring hand (a human, a future computer-use "stupid user") is
-// just another tag, never a code path yatsu calls.
-//
-// `version` is the EVALUATOR freshness axis: bump an evaluator's version and every reading carrying its old
-// version reads stale (the measuring instrument changed, so re-measure). The core knows ONE evaluator,
-// `manual`, today; a new one slots in by adding an entry here, never by registering executable code.
-
 export const EVALUATORS: Record<string, number> = { manual: 1 }
 export const DEFAULT_EVALUATOR = 'manual'
 

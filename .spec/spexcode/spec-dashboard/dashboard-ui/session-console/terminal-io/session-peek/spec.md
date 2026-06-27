@@ -13,3 +13,9 @@ Embed the live session in the browser. tmux is client/server, so no attached
 terminal is needed: read a pane with `capture-pane -p -e`, write with `send-keys`,
 and xterm.js renders it. xterm grabs keyboard focus, so Escape is intercepted via
 `term.attachCustomKeyEventHandler` → onClose — Esc exits the peek reliably.
+
+The command line lives outside the terminal — a separate input element, not
+xterm's stdin — so the arrow keys stay ours rather than being swallowed by the
+terminal. While that input is empty the arrows fall through to navigation: ←/→
+walk the spec tree to parent/child and ↑/↓ to siblings (see [[keyboard-nav]])
+instead of editing text; once it holds text the arrows edit the line as usual.

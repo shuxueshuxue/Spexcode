@@ -3,13 +3,6 @@ import { mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync, rmSync
 import { join } from 'node:path'
 import { gitCommonDir } from '../../spec-cli/src/layout.js'
 
-// @@@ blob cache - a reading's pixels are big and disposable, so they are NEVER committed; only the
-// content HASH lives in the sidecar. The bytes go in a content-addressed store under the SHARED git
-// common dir (resolved via layout's gitCommonDir), so ALL worktrees share ONE copy — no per-worktree
-// duplication — and the bytes physically sit inside `.git/`, which git can never stage. That's why no
-// in-tree .gitignore is needed; a [[spec-yatsu]] pre-commit backstop catches a blob that somehow got
-// copied into the tree anyway. A reading whose blob is gone renders as the MISS sentinel below.
-
 export const MISS_BLOB = 'miss original file'
 
 // every cache fn takes an optional `dir` (defaulting to the live cache dir) so the logic is testable
@@ -52,10 +45,6 @@ export function listBlobs(dir = cacheDir()): string[] {
   return readdirSync(dir).filter((n) => BLOB_NAME.test(n)).sort()
 }
 
-// @@@ gc - delete every cached blob whose name is NOT in `keep`. `keep` is the set of blob hashes the
-// caller still references (every reading's blob, or just the latest-per-scenario for --keep-latest, or
-// the empty set for --all). Returns the names removed. The only deletion path; readingless blobs are
-// pure cache, so dropping them loses nothing recorded.
 export function gc(keep: Set<string>, dir = cacheDir()): string[] {
   const removed: string[] = []
   for (const name of listBlobs(dir)) {

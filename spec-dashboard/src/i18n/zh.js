@@ -1,6 +1,3 @@
-// @@@ zh dictionary - 简体中文. Mirrors en.js key-for-key; any key omitted here falls back to the
-// English value (see i18n/index.jsx), so a partial translation degrades gracefully rather than showing
-// a raw key. Same value shapes as en.js: strings with `{name}` placeholders, or `(params) => string`.
 export default {
   common: {
     new: '新建',

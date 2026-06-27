@@ -2,9 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { ScoreBadge, readingScore, ScenarioCount, scenarioStates } from './score.jsx'
 import { useT } from './i18n/index.jsx'
 
-// @@@ pane registry - add a face for a spec node by adding one entry + one render case below.
-// The node popup is now PURELY a reference view (spec doc + version timeline); the live terminal
-// moved out to the session interface (Enter), so there's no `work` pane and no keyboard special-case.
 export const PANES = [
   { key: 'spec',    label: 'spec' },
   { key: 'history', label: 'history' },
@@ -12,9 +9,6 @@ export const PANES = [
   { key: 'eval',    label: 'eval' },
 ]
 
-// @@@ panesFor - the edit tab exists ONLY when the node has a pending change (an overlay), and when it does
-// it LEADS, so a node mid-change opens with its in-flight change front-and-center. Shared by NodeView's tab
-// bar and App's keyboard pane-cycling so the two never disagree on order or on which tabs exist.
 export function panesFor(node) {
   return node?.overlays?.length ? [{ key: 'edit', label: 'edit' }, ...PANES] : PANES
 }
@@ -22,8 +16,7 @@ export function panesFor(node) {
 // op → glyph, kept local (a 4-entry map) so this popup never imports the graph node just for it.
 const OP_GLYPH = { added: '+', edited: '~', deleted: '✕', moved: '→' }
 
-// @@@ inline - the only inline markdown the spec bodies actually use: `code` (78×), **bold**,
-// and [[links]]. Anything else passes through as text. Keeps us off a full markdown dependency.
+// minimal inline markdown the spec bodies use — `code`, **bold**, [[links]]; anything else is plain text (no markdown dep)
 function inline(text) {
   const out = []
   const re = /`([^`]+)`|\*\*([^*]+)\*\*|\[\[([^\]]+)\]\]/g
@@ -60,10 +53,8 @@ function colAlign(cell) {
   return l && r ? 'center' : r ? 'right' : null
 }
 
-// @@@ SpecBody - render the spec.md body as a current-state document (markdown). It is NOT a
-// changelog — version history is the recent/history tabs, sourced from git (spex lint's `living`
-// rule keeps `## vN` headings out of the body). Fence-aware tokenizer: ``` code, # headings,
-// `- ` lists, | GFM tables |, paragraphs. The leading `# title` line is dropped (it duplicates the header).
+// fence-aware tokenizer for the spec.md body — ``` code, # headings, - lists, | GFM tables |, paragraphs;
+// drops the leading `# title` line (the header already shows it).
 function SpecBody({ body }) {
   if (!body) return null
   const lines = body.replace(/^#\s+[^\n]*\n+/, '').split('\n')
@@ -115,12 +106,8 @@ function SpecBody({ body }) {
   return <div className="doc-body">{out}</div>
 }
 
-// @@@ TwoPart - render the body as the two labelled parts the backend parses (node.parts):
-//   raw source (human, needs approval) · expanded spec (agent, must match raw). Each part is a card
-//   with an owner badge so the reader sees WHO owns it and how stable it is. There is deliberately NO
-//   agent-authored "current state" card — what's-done is DERIVED (the status/version/drift in the meta
-//   line), never narrated, because agents hallucinate completion. Legacy bodies (parts === null) fall
-//   back to the whole-body SpecBody in SpecPane.
+// the two labelled parts (node.parts): raw source (human) · expanded spec (agent).
+// Legacy bodies (parts === null) fall back to the whole-body SpecBody.
 function PartCard({ kind, title, owner, ownerLabel, note, children }) {
   return (
     <section className={`spec-part part-${kind}`}>
@@ -147,12 +134,6 @@ function TwoPart({ parts }) {
   )
 }
 
-// @@@ SpecPane - the node's INFORMATION BOARD: title, desc, a compact stat bar, the governed files, then the
-// body. The stat bar is the at-a-glance signal line — derived status (the SAME dot+colour vocabulary as the
-// tile, [[node-graph]]), version, the per-scenario yatsu COUNT (ScenarioCount over node.scenarios/evals,
-// [[yatsu-score-badge]] — the SAME ✓X/Y the tile shows) and the drift count when a governed file outran the
-// spec ([[source-of-truth]]) — with the last-editing session pushed to the end. Count and drift are surfaced
-// HERE from the tile so the popup stops hiding them.
 export function SpecPane({ node }) {
   const t = useT()
   const driftTitle = (node.driftFiles || []).map((d) => `${d.file}: ${t('specNode.driftAhead', { n: d.behind })}`).join('\n')
@@ -182,8 +163,7 @@ export function SpecPane({ node }) {
   )
 }
 
-// @@@ useHistory - the node's version log from git (/api/specs/:id/history), newest first. The single
-// `history` tab below reads it: the latest version is expanded, older ones reveal as the reader scrolls.
+// the node's version log from git (/api/specs/:id/history), newest first
 export function useHistory(id) {
   const [rows, setRows] = useState(null)
   useEffect(() => {
@@ -194,11 +174,8 @@ export function useHistory(id) {
   return rows
 }
 
-// @@@ useVersionDiff - one version's spec.md line-diff (/api/specs/:id/diff/:hash), fetched LAZILY the
-// first time its history item expands. `enabled` keeps collapsed items from ever fetching; the latest
-// item never uses this (the board already ships its diff as node.lastDiff, so it renders instantly). A
-// commit hash's diff is immutable, so results are memoised per (id,hash): collapsing then re-expanding an
-// older version — its evidence figure unmounts on collapse — reads the cache instead of refetching/flashing.
+// one version's spec.md line-diff (/api/specs/:id/diff/:hash), fetched lazily on expand (`enabled` gates it);
+// memoised per (id,hash) since a commit's diff is immutable, so re-expanding reads the cache, no refetch/flash.
 const versionDiffCache = new Map()
 function useVersionDiff(id, hash, enabled) {
   const key = `${id}/${hash}`
@@ -216,11 +193,8 @@ function useVersionDiff(id, hash, enabled) {
   return diff
 }
 
-// @@@ parseDiff - turn git's unified patch into renderable lines. Everything before the first `@@` is
-// file-header metadata (diff/index/`new file mode`/--- /+++) — skip it wholesale rather than per-prefix,
-// so an extended header line never gets mis-read as content and have its first char sliced off. In the
-// hunk body, lines start with ` `/`+`/`-` (slice that marker off); `@@` opens each hunk; `\` is git's
-// "No newline at end of file" note. Tag adds/dels so the view can colour them.
+// git unified patch → renderable lines. Skip everything before the first `@@` wholesale (file-header metadata),
+// so an extended header line isn't mis-read as content; in the hunk body slice the ` `/`+`/`-` marker; `\` is git's no-newline note.
 function parseDiff(patch) {
   const out = []
   let inBody = false
@@ -235,9 +209,7 @@ function parseDiff(patch) {
   return out
 }
 
-// @@@ DiffEvidence - a version's proof-of-change: the actual line diff it introduced to spec.md. `diff ==
-// null` = still loading (older items fetch lazily on expand); an empty patch = a version with no recorded
-// spec.md change.
+// diff == null → still loading (lazy on expand); empty patch → a version with no recorded spec.md change
 function DiffEvidence({ diff }) {
   const t = useT()
   if (diff == null) return <figcaption className="ev-note">{t('nodeView.loadingChange')}</figcaption>
@@ -251,15 +223,6 @@ function DiffEvidence({ diff }) {
   )
 }
 
-// @@@ ChronoPane - the shared chronological-timeline scaffold behind BOTH the history and eval tabs. It owns
-// the one scroll container, the open-set (item 0 — the latest — starts expanded, the rest REVEAL one at a time
-// on the down gesture, see revealNext), the manual click-toggle, and the per-item shape: a toggle-header button
-// over an evidence <figure> that unfolds when open. It is DATA-AGNOSTIC — it knows nothing of versions or
-// readings: each consumer supplies the items, their React key, the scaffold class names (so history and eval
-// keep their own CSS), an optional per-row modifier class, and two render props for the header and the
-// evidence. Empty/loading states live in the consumers (each has its own vocabulary), so `items` is always a
-// non-empty array here. revealNext + its two triggers are the progressive reveal, lifted from the old
-// HistoryPane verbatim, so the history tab is unchanged and the eval tab inherits the same gesture.
 function ChronoPane({ items, itemKey, classes, rowClass, renderHeader, renderEvidence, leading }) {
   const scRef = useRef(null)
   const [open, setOpen] = useState(() => new Set([0]))   // latest expanded; the rest reveal on scroll
@@ -268,9 +231,8 @@ function ChronoPane({ items, itemKey, classes, rowClass, renderHeader, renderEvi
     if (next.has(i)) next.delete(i); else next.add(i)
     return next
   }), [])
-  // @@@ revealNext - open the next still-collapsed item, but only once the reader has finished the deepest
-  // open item (0..frontier) — its END must be within the viewport. ONE per call, so each down gesture advances
-  // exactly one. getBoundingClientRect (not offsetTop) is correct regardless of the scroller's own positioning.
+  // reveal the next collapsed item, one per call, only once the deepest open item's end is in view
+  // (getBoundingClientRect, not offsetTop, so the scroller's own positioning doesn't matter).
   const revealNext = useCallback(() => setOpen((prev) => {
     const sc = scRef.current
     if (!sc) return prev
@@ -281,12 +243,8 @@ function ChronoPane({ items, itemKey, classes, rowClass, renderHeader, renderEvi
     if (!el || el.getBoundingClientRect().bottom - sc.getBoundingClientRect().top > sc.clientHeight + 40) return prev
     return new Set(prev).add(f + 1)
   }), [items])
-  // @@@ progressive reveal - the next item reveals on the DOWN gesture once you've read the open one. TWO
-  // triggers, because a "scroll down" can't always happen: (1) the wheel/drag SCROLL event, while there's
-  // overflow to move through; (2) a j/↓ KEYPRESS when the scroller can't move further — content shorter than a
-  // page (no scrollbar at all) or already at the bottom. Without (2) those cases dead-ended: no scroll event
-  // ever fired, so later items never expanded. They never double-fire — (2) acts only at the bottom, exactly
-  // where (1), which needs movement, cannot. (Mount and scroll-up never reveal.)
+  // two reveal triggers: (1) the scroll event while there's overflow to move through; (2) a j/↓ keypress when
+  // the scroller can't move further (sub-page content or already at the bottom) — without (2) those cases dead-end.
   useEffect(() => {
     const sc = scRef.current
     if (!sc) return
@@ -324,21 +282,12 @@ function ChronoPane({ items, itemKey, classes, rowClass, renderHeader, renderEvi
   )
 }
 
-// @@@ HistoryEvidence - one version's proof, mounted only while its row is open, so EVERY version's diff
-// (the latest included) fetches lazily on expand — memoised by hash so a re-open is instant (see
-// useVersionDiff). The latest is no longer shipped on the board: precomputing it cost a `git show` per node
-// on every cold load (see specs.ts / [[work-pane]]); one fetch when the row opens is the right trade.
+// every version's diff fetches lazily when its row opens (memoised by hash; see useVersionDiff)
 function HistoryEvidence({ node, r, latest }) {
   const fetched = useVersionDiff(node.id, r.hash, true)
   return <DiffEvidence diff={fetched} />
 }
 
-// @@@ HistoryPane - the merged version log (the old `recent` + `history` tabs, now one), a thin consumer of the
-// shared ChronoPane scaffold. Each row's header is the version line (number · hash · date · the +adds/−dels it
-// changed in THIS node · reason · files · session); its evidence is the spec.md line diff that version
-// introduced. The latest sits open with its proof; older ones reveal on the down gesture and fetch their diff
-// lazily on expand. `rows` is NodeView's one fetch, newest-first; the empty/loading states stay here so the
-// scaffold only ever sees a non-empty list.
 export function HistoryPane({ node, rows }) {
   const t = useT()
   if (!rows) return <div className="pane-hist empty">{t('nodeView.loadingHistory')}</div>
@@ -370,11 +319,6 @@ export function HistoryPane({ node, rows }) {
   )
 }
 
-// @@@ IssuesPane - the node's bound forge work, OPEN and CLOSED both (the popover/badge on the board show
-// only the open subset; this tab is the full ledger). The node arrives from the board already carrying
-// `node.issues` (the [[dashboard-issues]] fold, open-first then newest); we just group it open/closed and
-// render each as a card linking to the forge. Empty (or forge-less) → a plain "none yet" line, never a
-// blank pane. No fetch here — one board poll already has the data, so the tab is instant like the rest.
 function IssueRow({ i }) {
   return (
     <a className="issue-card" href={i.url} target="_blank" rel="noreferrer">
@@ -410,15 +354,9 @@ export function IssuesPane({ node }) {
   )
 }
 
-// @@@ useEditDiff - the node's PENDING change content, fetched LAZILY when the edit tab opens (like the
-// history tab's older diffs). The board's overlay markers say THAT a node changed, not WHAT — so this asks
-// the backend (/api/edit) for the unified diff of the node's spec.md in the editing worktree (`source`) vs
-// the fork point. `enabled` keeps a closed tab from ever fetching. The edit tab unmounts on every tab toggle
-// (panes are conditionally rendered), so — exactly like the history tab's per-version diffs (versionDiffCache)
-// — the result is MEMOISED per (source,path): toggling back seeds the first paint from the cache instead of
-// flashing the loading state. The one difference from a committed version's immutable diff is that a pending
-// change is LIVE, so this REVALIDATES on each open (cache seeds the paint, a background fetch then refreshes
-// it) rather than trusting the cache forever; a failed revalidate keeps the last good diff, never blanks it.
+// the node's pending change diff (/api/edit, editing worktree vs fork point), fetched lazily when the edit tab opens.
+// Memoised per (source,path) but revalidated each open (cache seeds the paint, a background fetch refreshes it) since
+// the change is live; a failed revalidate keeps the last good diff.
 const editDiffCache = new Map()
 function useEditDiff(source, path, enabled) {
   const key = `${source}\t${path}`
@@ -437,11 +375,6 @@ function useEditDiff(source, path, enabled) {
   return diff
 }
 
-// @@@ EditPane - the node's in-flight change, made REVIEWABLE from the board. spec/history are near-empty for
-// a node mid-change — a freshly-added ghost most of all (no committed version yet) — so this tab shows WHAT
-// each live session is changing: the overlay's op + commit-state + author, and the unified diff of its
-// spec.md vs the fork point, rendered with the SAME DiffEvidence the history tab uses. No overlay → a plain
-// "no pending change" line. The overlay set (op markers) rides the board; only the diff content is fetched.
 function EditOverlay({ node, ov }) {
   const t = useT()
   const diff = useEditDiff(ov.source, node.path, true)
@@ -463,9 +396,6 @@ export function EditPane({ node }) {
   return <div className="pane-edit">{overlays.map((ov, i) => <EditOverlay key={i} node={node} ov={ov} />)}</div>
 }
 
-// @@@ VerdictBadge - the loss the AGENT measured (the [[spec-yatsu]] verdict): ✓ pass (met expected, zero
-// loss) / ✗ fail / ≈ note (a how-far-off text, shown on hover). A reading taken before verdicts existed has
-// none → a muted `legacy` badge. This is the eval tab's headline — what the score actually SAYS.
 function VerdictBadge({ verdict }) {
   const t = useT()
   if (!verdict) return <span className="eval-verdict legacy">{t('nodeView.eval.legacy')}</span>
@@ -474,9 +404,6 @@ function VerdictBadge({ verdict }) {
   return <span className="eval-verdict note" title={verdict.note}>{t('nodeView.eval.note')}</span>
 }
 
-// @@@ TranscriptEvidence - a text transcript blob, fetched LAZILY by hash on expand (the component mounts
-// only when its row is open, like the image's lazy load). Same /api/yatsu/blob/:hash endpoint the image
-// uses; we read it as text and show it in a <pre>. A miss/empty fetch falls back to an empty transcript.
 function TranscriptEvidence({ hash }) {
   const t = useT()
   const [text, setText] = useState(null)
@@ -492,10 +419,6 @@ function TranscriptEvidence({ hash }) {
   return <pre className="eval-transcript">{text}</pre>
 }
 
-// @@@ EvalEvidence - one reading's evidence body: the scenario's `expected` (what zero loss looks like) over
-// the captured proof — an image inline, a transcript as text, the *miss original file* note when the record
-// outlived its bytes, else an evidence-less note (the agent attested without a capture). A `note` verdict's
-// how-far-off text shows here too, so the loss is spelled out beside the proof.
 function EvalEvidence({ r }) {
   const t = useT()
   return (
@@ -511,11 +434,6 @@ function EvalEvidence({ r }) {
   )
 }
 
-// @@@ DeclaredScenario - a declared scenario shown in the eval tab WITHOUT a reading to expand: the empty
-// score ring (a blind spot) over its name, its `expected` (what zero loss looks like), and the files it
-// tracks. This is what makes the declared SET — not just the readings that exist — visible inside the popup;
-// an unmeasured scenario is still a unit of loss, and once the popup is open the [[focus-panel]]'s list is
-// behind its backdrop, so the eval tab is the only place that intent can show. A static row (no toggle).
 function DeclaredScenario({ s }) {
   const t = useT()
   return (
@@ -530,26 +448,6 @@ function DeclaredScenario({ s }) {
   )
 }
 
-// @@@ EvalPane - the node's measurement timeline (the [[spec-yatsu]] eval tab), a thin consumer of the SAME
-// ChronoPane scaffold the history tab uses, so the scroll/reveal/toggle and the per-item header+evidence
-// shape live in ONE place. The readings RIDE THE BOARD (`node.evals`, the [[yatsu-eval-tab]] fold) — the SAME
-// single source as node.issues/overlays/lastDiff — so the tab is INSTANT and never shows the prior node's
-// readings on a switch (the old per-node fetch never reset, so stale readings lingered and the pane loaded out
-// of step with the rest). Each row's header is the score line (scenario · VERDICT ✓ pass / ✗ fail / ≈ note —
-// the loss the agent measured · the SCORE circle ([[yatsu-score-badge]]): green ✓ fresh pass / red ✗ fresh fail
-// / grey ✓/✗ stale (the last verdict greyed, the moved axis on hover) / empty ring no current score — the SAME
-// vocabulary the node tile's card badge speaks · evaluator · codeSha · time); its evidence is the scenario's `expected` over the
-// captured proof — an image inline or a transcript as text, fetched LAZILY by hash on expand, or — no capture
-// — *miss original file* when the record outlived its bytes, else an evidence-less note. Readings arrive
-// newest-first (the server already reversed the append-only sidecar). (Forge issue-events — the second
-// evidence source — arrive with a future sibling node; this shows LOCAL readings only.)
-//
-// The tab shows the WHOLE declared set in ONE list, not only the readings: a declared scenario with no
-// reading shows as a DeclaredScenario blind-spot row at the TOP of the same list (the empty ring IS the only
-// distinction — no fenced-off band, no second scrollbar), since an unmeasured scenario is the node's
-// outstanding loss and belongs where the attention is. No reading at ALL → just those rows under a hint; some
-// measured, some not → those rows lead the timeline. The one presence-distinct empty state survives: no
-// yatsu.md → no `evals` field.
 export function EvalPane({ node }) {
   const t = useT()
   const readings = node.evals
@@ -595,14 +493,9 @@ export default function NodeView({ node, pane, setPane, onClose }) {
   const t = useT()
   // one fetch per node, feeding the single history pane (the popup's only data dependency).
   const rows = useHistory(node.id)
-  // @@@ tab counts - the issues tab carries its open/closed counts right on the tab face (green open ·
-  // magenta closed, same vocabulary as the cards inside), so the bound-work tally reads at a glance
-  // without opening the tab. Each badge shows only when non-zero; no issues → a bare `issues` label.
   const issuesAll = node.issues || []
   const issueOpen = issuesAll.filter((i) => (i.state || '').toLowerCase() === 'open').length
   const issueClosed = issuesAll.length - issueOpen
-  // the edit tab carries the same kind of count: how many live sessions have a pending change to this node
-  // (its overlays), so an in-flight change is visible on the tab face without opening it.
   const editCount = (node.overlays || []).length
   const panes = panesFor(node)
   // render the pane the user picked, but fall back to the first available if it isn't valid for THIS node

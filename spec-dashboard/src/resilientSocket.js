@@ -1,17 +1,3 @@
-// @@@ resilientSocket - a WebSocket that reopens itself. The live terminal's socket is addressed by a STABLE
-// session id and the backend holds every bit of session state in tmux (pane + 50k scrollback) regardless of
-// clients, so a (re)open is answered identically to a first connect: one coherent full repaint. That is why
-// recovery here is a plain stateless REOPEN, not a resync/sequence protocol — there is nothing on the client
-// to rebuild. After the [[live-view]] fix the per-session bridge can die and respawn WITHOUT the socket
-// closing, so the only thing that genuinely drops this socket is a backend PROCESS restart (the zero-downtime
-// supervisor reload). When that happens the browser must reopen on its own, or the pane sits frozen until a
-// manual refresh — the exact symptom we are eliminating. So: reopen with capped backoff, indefinitely, and
-// surface a visible state so recovery is LOUD, never a silently dead pane. An intentional close() (the pane
-// unmounting) stops reopening for good.
-//
-// Framework-agnostic and fully injectable (WebSocket impl + timers) so the reconnect state machine is
-// testable headlessly, with no browser and no real network.
-
 const OPEN = 1 // WebSocket.OPEN — identical (1) in the browser and in Node's `ws`.
 const DEFAULT_BACKOFF = [500, 1000, 2000, 4000, 8000] // ms, indexed by attempt; the last value is the cap.
 const STABLE_MS = 3000 // a connection that stays open this long is healthy → reset backoff to its base.

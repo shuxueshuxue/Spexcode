@@ -1,10 +1,3 @@
-// @@@ guide - SpexCode's reference surface as a COMMAND (the model: install once, then an agent drives).
-// `spex guide` with no topic prints the human SETUP workflow; `spex guide spec` / `spex guide yatsu` are the
-// agent-facing FILE-FORMAT manuals — the whole detail of the two authored artifacts, so an agent can look up
-// the schema on demand instead of reverse-engineering it. The system prompt is the CLUE that these exist;
-// this is the manual that carries the detail. Static narration like printHelp, NOT a planted .spec template,
-// and not routed through the dashboard i18n (operator-facing CLI output, not browser UI).
-
 const SETUP = `spex guide — run SpexCode on your own repo
 
 The product model: install SpexCode ONCE, then use it across all your projects — an agent drives
@@ -127,9 +120,6 @@ code file, the scenario (the yatsu.md), or the evaluator moves since it was file
 
 const TOPICS: Record<string, string> = { spec: SPEC, yatsu: YATSU }
 
-// @@@ guideText - dispatch on the optional topic: no topic → the setup workflow; a known topic → its
-// file-format manual; anything else → a one-line pointer at the real topics (fail-loud, not a silent setup
-// dump). The single text surface `spex guide [topic]` routes through.
 export function guideText(topic?: string): string {
   if (!topic) return SETUP
   const t = TOPICS[topic]

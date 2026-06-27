@@ -11,12 +11,6 @@ import { evaluatorTag } from './evaluator.js'
 import { putBlob, listBlobs, gc, isStrayBlob } from './cache.js'
 import { evalTimeline, type EvalTimeline } from './evaltab.js'
 
-// @@@ yatsu cli - the eval/loss SCOREBOARD on the real `spex` surface (the [[forge-cli]] shape: spec-cli/
-// cli.ts carries only a thin `yatsu` route delegating here; all logic lives in this package). yatsu KEEPS
-// SCORE and EXECUTES NOTHING — four verbs over the readings sidecar: scan (which scores are stale), eval
-// (FILE the measurement the agent already took), show (read a node's scores), clean (GC the evidence
-// cache) — plus a check-staged backstop the pre-commit hook shims to. Freshness is derived live from git.
-
 function flag(args: string[], name: string): string | undefined {
   const i = args.indexOf(`--${name}`)
   return i >= 0 ? args[i + 1] : undefined
@@ -24,9 +18,7 @@ function flag(args: string[], name: string): string | undefined {
 const has = (args: string[], name: string) => args.includes(`--${name}`)
 const positional = (args: string[]) => args.find((a) => !a.startsWith('--'))
 
-// @@@ EvalNode - a yatsu node joined with the governed `code:` files of its spec.md (the code freshness
-// axis). The code list is read from the canonical spec loader so reparents/renames are handled the same
-// way lint sees them; we join by the node's directory (not just id) to be unambiguous.
+// join by node directory (not id) so a reparent/rename is seen the way lint sees it
 type EvalNode = YatsuNode & { codeFiles: string[] }
 
 async function gatherNodes(root: string): Promise<EvalNode[]> {
@@ -54,18 +46,10 @@ function currentNodeId(root: string): string | null {
   return null
 }
 
-// @@@ ui surface - a node has a MEASURABLE frontend surface when its governed code includes a UI file: a
-// component/style (.jsx/.tsx/.vue/.svelte/.css) or anything in the dashboard package. Such a node CAN be
-// measured (browser YATU) so having NO yatsu.md is a real blind spot — an obvious frontend change with no
-// loss signal. A pure-backend node legitimately has none (backend yatsu is still future — see [[spec-yatsu]]).
 const UI_FILE = /\.(jsx|tsx|vue|svelte|css)$/
 export const isUiPath = (p: string) => UI_FILE.test(p) || p.includes('spec-dashboard/')
 
-// @@@ changedSinceBase - every repo path THIS branch changed since it forked from the main branch
-// (committed OR still in the working tree, plus new untracked files), so `scan --changed` can scope the
-// loss-signal nudge to the nodes this agent actually touched — never nagging it about a score that went
-// stale in a node it never opened. merge-base anchored, so the main branch advancing isn't read as this
-// branch's change. Best-effort: a git error (detached, no base) yields ∅ → `--changed` scan stays silent.
+// merge-base anchored so the main branch advancing isn't counted as this branch's change; a git error yields ∅ (--changed scan stays silent)
 function changedSinceBase(root: string): Set<string> {
   const out = new Set<string>()
   const add = (s: string) => { for (const l of s.split('\n')) { const t = l.trim(); if (t) out.add(t) } }
@@ -90,18 +74,6 @@ export function nodeChanged(dirRel: string, codeFiles: string[], changed: Set<st
   })
 }
 
-// @@@ scan - the loss signal's BLIND SPOTS, mirroring `spex lint`'s code-drift output (the `•` glyph + one
-// line per finding). Five classes: a yatsu.md that violates the scenario schema (a missing required field, a
-// typo'd key, a duplicate name, a ghost `code`/`related` path) → `yatsu-schema` — a malformed loss function
-// the lenient parser would have silently swallowed; a node WITH a valid yatsu.md whose scenario's latest
-// reading went stale (a governed code file, the scenario, or the evaluator moved since its codeSha) →
-// `yatsu-drift`; a scenario with no reading at all → `yatsu-missing`; a frontend node (UI in its `code:`)
-// with NO yatsu.md → an `yatsu-uncovered` loss function that was never written; and one whole-repo summary,
-// a file governed by > maxOwners scenarios → `yatsu-owners` (split it, the scenario-axis twin of lint's
-// `owners`). `--changed` scopes the per-node classes to the nodes THIS branch touched (the proactive Stop
-// gate's view — see [[yatsu-proactive]]); plain scan is the whole-repo coverage report. Read-only; exits 0
-// (a status report) — the gate reads the finding lines, never the code. The pre-commit backstop is the HARD
-// twin: it shares validateScenarios and rejects a malformed staged yatsu.md.
 async function scan(args: string[] = []): Promise<number> {
   const root = repoRoot()
   const changedOnly = has(args, 'changed')
@@ -160,12 +132,7 @@ async function scan(args: string[] = []): Promise<number> {
     flaggedNodes++
     for (const f of findings) console.error(f)
   }
-  // @@@ yatsu-owners - the scenario-axis twin of lint's `owners` rule (see [[governed-related]]): a scenario
-  // GOVERNS the file in its `code:` (ideally one), and many scenarios may explicitly govern the same file —
-  // fine, ordinary composition. Only an OVER-governed file (> maxOwners scenarios naming it) is a smell: that
-  // file carries more separately-measured behaviour than one file should. ONE summary line; whole-repo only
-  // (never gated by --changed — it is a structural fact, not a per-branch freshness gap). Counts EXPLICIT
-  // scenario `code:` (an inherited node list isn't the scenario governing the file). Remedy: split the file.
+  // whole-repo only (never --changed): a structural fact, not a per-branch freshness gap. Counts only explicit scenario `code:`.
   let overOwned = 0
   if (!changedOnly) {
     const maxOwners = loadConfig(root).maxOwners
@@ -184,11 +151,6 @@ async function scan(args: string[] = []): Promise<number> {
   return 0
 }
 
-// @@@ eval - FILE the measurement the agent ALREADY took; yatsu RUNS NOTHING (no screenshot, no test, no
-// browser). It appends ONE reading for ONE scenario: the evidence the agent captured (`--image` a
-// screenshot OR `--result` a transcript, content-addressed the same way — `--result -` reads stdin) and
-// the verdict it reached (`--pass` | `--fail` | `--note <how far off>`). `.` / no arg = the current node,
-// a bare id = that node. `--scenario <name>` picks which scenario; optional when the node declares one.
 async function evalCmd(args: string[]): Promise<number> {
   const root = repoRoot()
   const sel = positional(args)
@@ -247,9 +209,6 @@ function parseVerdict(args: string[]): Verdict | null {
   return null
 }
 
-// @@@ clean - GC the evidence cache. Default: drop blobs referenced by NO reading record. `--keep-latest`:
-// keep only the latest reading's blob per scenario (drop superseded captures too). `--all`: drop every
-// blob. Records are untouched — a dropped blob just renders as the MISS sentinel until re-measured.
 async function clean(args: string[]): Promise<number> {
   const root = repoRoot()
   const all = has(args, 'all')
@@ -269,13 +228,6 @@ async function clean(args: string[]): Promise<number> {
   return 0
 }
 
-// @@@ check-staged - the pre-commit backstop, two rejections over the staged set (the hook shims to it,
-// `spex yatsu check-staged`, like the lint shim). (1) A stray evidence blob: a blob lives in the shared git
-// common dir (outside the tree), so the only way one reaches the index is a stray copy into the worktree —
-// reject it rather than let binary pixels into git history. (2) A malformed yatsu.md: a staged scenario file
-// must satisfy the schema (validateScenarios, the same gate `scan` reports), so a broken loss function — a
-// typo'd field, a scenario missing its `expected` — is rejected AT the commit, never landing silently for
-// the lenient parser to swallow. Prints every offender, then exits non-zero if either check failed.
 function checkStaged(): number {
   const root = repoRoot()
   const staged = stagedFiles(root)
@@ -302,11 +254,6 @@ function checkStaged(): number {
   return bad ? 1 : 0
 }
 
-// @@@ show - the CLI FACE of the eval timeline, the terminal twin of the dashboard's eval tab. Both read
-// ONE engine: the dashboard folds evalTimeline onto the board, this verb calls the same evalTimeline for one
-// node — exactly the `spex board` / `/api/board` byte-identical pattern (both call buildBoard). It's a thin
-// wrapper: resolve a single node, hand it to evalTimeline with NO ctx (the standalone path that derives its
-// own specs + driftIndex for one id, like the /api/specs/:id/evals route), then render. No timeline logic here.
 async function show(args: string[]): Promise<number> {
   const root = repoRoot()
   const sel = positional(args)
@@ -327,12 +274,6 @@ function verdictText(v: Verdict | undefined): string {
   return `≈ note: ${v.note ?? ''}`
 }
 
-// @@@ formatTimeline - the human rendering of an EvalTimeline (the SAME shape `--json` emits verbatim and the
-// dashboard rides on the board). NEWEST-FIRST, one row per reading: the VERDICT (the loss the agent
-// measured), the freshness badge in the board's code-drift vocabulary (✓ current / ⚠ stale, naming the moved
-// axes), the scenario, evaluator, short codeSha, the evidence state (image / transcript / miss / none), and
-// ts; the scenario's `expected` (what zero loss is) on a second indented line. The two empty states stay
-// distinct by hasYatsu, the way the eval tab keeps them apart.
 export function formatTimeline(tl: EvalTimeline): string {
   if (!tl.hasYatsu) return `spex yatsu show: '${tl.node}' declares no scenarios (no yatsu.md)`
   if (!tl.readings.length) return `spex yatsu show: '${tl.node}' has scenarios but no reading yet — run \`spex yatsu eval ${tl.node}\``
@@ -347,8 +288,6 @@ export function formatTimeline(tl: EvalTimeline): string {
   return [`spex yatsu show: '${tl.node}' — ${tl.readings.length} reading(s), newest first`, '', ...lines].join('\n')
 }
 
-// @@@ runYatsu - the package's single entrypoint, called by cli.ts's thin `yatsu` route with the arg slice
-// after `yatsu`. Routes to a verb and returns the process exit code (the route just exits on it).
 export async function runYatsu(args: string[]): Promise<number> {
   const sub = args[0]
   if (sub === 'scan') return scan(args.slice(1))

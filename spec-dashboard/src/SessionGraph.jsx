@@ -298,16 +298,17 @@ function GraphCanvas({ sessions = [], onOpen, active, legend, setLegend, edges =
   }, [byId, t, flash])
 
   // @@@ pick-then-connect - the monitor gesture is two clicks, no handles, no drag. A LEFT-click PICKS a node
-  // as the watcher (lights it as the source, also moving the keyboard cursor there) and toasts the user to
-  // right-click the watched. A RIGHT-click on another node then asks that picked watcher to monitor it
-  // (askMonitor) and clears the pick; a right-click with nothing picked just reminds the user to pick first.
-  // Opening a session is the DOUBLE-click (onNodeDoubleClick) — distinct from the single-click pick — and a
-  // click on empty space clears the pick. preventDefault on the context menu keeps the browser menu away.
+  // as the watcher (lights it as the source, also moving the keyboard cursor there); while a node is picked a
+  // selection-bound hint stands (rendered off sourceSel below — NOT a timed toast), telling the user to
+  // right-click the watched, and it vanishes the instant the pick clears. A RIGHT-click on another node then
+  // asks that picked watcher to monitor it (askMonitor) and clears the pick; a right-click with nothing picked
+  // just reminds the user to pick first. Opening a session is the DOUBLE-click (onNodeDoubleClick) — distinct
+  // from the single-click pick — and a click on empty space clears the pick. preventDefault on the context
+  // menu keeps the browser menu away.
   const onNodeClick = useCallback((_e, n) => {
     setFocusId(n.id)
     setSourceSel(n.id)
-    flash(t('sessionGraph.picked'))
-  }, [t, flash])
+  }, [])
   const onNodeContextMenu = useCallback((e, n) => {
     e.preventDefault()
     if (!sourceSel) { flash(t('sessionGraph.needSource')); return }
@@ -417,6 +418,9 @@ function GraphCanvas({ sessions = [], onOpen, active, legend, setLegend, edges =
       >
         <Background variant="dots" color="#cdc6ad" gap={20} size={1} />
       </ReactFlow>
+      {/* the pick hint is BOUND to the selection (sourceSel) — it stands while a node is picked and vanishes
+          the instant the pick clears; it is NOT the timed toast (that is for the asked/needSource flashes). */}
+      {sourceSel && <div className="sg-pick-hint">{t('sessionGraph.picked')}</div>}
       {toast && <div className="sg-toast">{toast}</div>}
     </>
   )

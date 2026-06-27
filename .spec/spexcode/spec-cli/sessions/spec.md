@@ -20,12 +20,14 @@ faces of the **same** state.
 
 ## expanded spec
 
-State lives on disk, not in memory: each worktree carries its own runtime record, so the session list is
-read from the worktrees every time and survives a backend restart ([[lifecycle]] owns the worktree, its
-state machine, and the `.session/` layout). The list is ordered by **session birth, oldest first** — by the
-worktree directory's birthtime, the one creation anchor that outlives every state rewrite — so each session
-keeps a permanent slot, new ones appending at the end: one spatial map shared by the dashboard window, the
-session tabs, and `spex ls`, instead of git's arbitrary alphabetical order.
+State lives on disk, not in memory, but NOT in the worktree: each session has a record in a per-user GLOBAL
+store keyed by its harness `session_id` ([[state]]/[[runtime]]), so the session list is **enumerated from
+that store** every time — filtered to the `governed` (dashboard-launched) records — and survives a backend
+restart, while the worktree itself stays pristine ([[lifecycle]] owns the store, the state machine, and the
+worktree↔record mapping). The list is ordered by **session birth, oldest first** — by the record's stored
+`createdAt`, the one creation anchor that outlives every state rewrite — so each session keeps a permanent
+slot, new ones appending at the end: one spatial map shared by the dashboard window, the session tabs, and
+`spex ls`. A self-launched (non-governed) agent gets spec-awareness but no board row.
 
 The subsystem divides into governed concerns:
 

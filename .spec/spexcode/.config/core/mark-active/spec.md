@@ -13,4 +13,6 @@ The single freshness signal for a session. Any work a session does — a new pro
 
 The state is read from ONE structured field in the hook payload, never sniffed from the terminal UI, so the signal is hard rather than guessed. Because it fires before the tool runs, a deliberate [[stop-gate]] declaration (itself made via a tool) lands after this and wins; the next real tool flips back to `active`, forcing a fresh declaration at the following stop. It is pure shell so it stays cheap firing on every tool call.
 
+It is a board-lifecycle hook, so it acts only on a GOVERNED (dashboard-launched) session — it resolves that session's record in the global per-session store from the payload's `session_id` and no-ops unless `governed: true`. The state it writes lives in that record's `session.json` ([[state]]), which it edits directly in shell (the hot path stays jq-free).
+
 This is the freshness half of the [[core]] discipline: it keeps the board honest about whether a session is working, waiting, or asking, so the gates and the dashboard read a true present state rather than a stale one.

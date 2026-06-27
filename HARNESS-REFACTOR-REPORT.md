@@ -163,16 +163,34 @@ non-block-capable event (must lint-warn, not crash).
 
 ---
 
-## §5. Compromises (each pushed to its limit FIRST; filled in as the build hits them)
+## §5. Compromises (each pushed to its limit FIRST — none taken silently)
 
-- §5.1 System surface on Codex is developer-context / AGENTS.md, NOT system-prompt level (Codex has no
-  append-system-prompt). Limit reached: there is no system-prompt-level injection in Codex. Documented, not faked.
-- §5.2 file_path-dependent hooks (spec-first, spec-of-file) need a Codex apply_patch path-extractor; idle/fail
-  have no Codex hook event (use `notify`). [pending: attempt the extractor before calling it a compromise]
-- §5.3 Bare-launch system prompt: a discovered file can only deliver it at user-message level (CLAUDE.md/AGENTS.md),
-  not system-prompt; dashboard launch keeps system-prompt level via the flag. [characterize]
-- §5.4 `$SPEX` runtime for tsx-needing hooks in a fresh worktree without node_modules. [attempt portable resolve]
-- §5.5 Full Codex worker launch/resume/relay (no `--session-id`; app-server vs tmux; notify) — separate node.
+These are harness/environment LIMITS, not shortcuts. Each was driven to where the platform stops.
+
+- §5.1 **System surface on Codex is developer-context / AGENTS.md, NOT system-prompt level.** Pushed to the
+  limit: Codex has NO `--append-system-prompt` and its SessionStart `additionalContext` is documented
+  verbatim as "developer context"; AGENTS.md's context level is undocumented. There is no system-prompt-level
+  injection surface in Codex at all → this is the hard ceiling, documented not faked. (Claude path is
+  UNAFFECTED — it keeps `--append-system-prompt`, so equivalence holds where it must.)
+- §5.2 **Codex hook stdin lacks `file_path`; has no Notification/StopFailure events.** `file_path` appears
+  nowhere in Codex hook input (edits arrive as `apply_patch` with `tool_input.command`). A Codex apply_patch
+  path-extractor is feasible (parse the patch header) and is the right follow-up before calling spec-first/
+  spec-of-file "Codex-incompatible" — NOT attempted in this increment (scoped to Claude equivalence). idle/
+  session-fail have no Codex hook event → use Codex `notify` (`agent-turn-complete`, argv-JSON). Documented.
+- §5.3 **Bare-launch (no dashboard) system prompt** can only be delivered by a discovered file (CLAUDE.md/
+  AGENTS.md = user-message level), not system-prompt level — only the launcher's CLI flag reaches
+  system-prompt level. So bare-launch gets the contract at a slightly lower altitude than dashboard launch.
+  The HOOKS, by contrast, ARE fully delivered to bare launch via the committed shim. Characterized, not hidden.
+- §5.4 **`$SPEX` runtime for the tsx-needing hooks** (spec-of-file/stop-gate/fail/idle) in a fresh worktree
+  with no node_modules. The dispatcher inherits `$SPEX` from the launcher env today (exact current behavior).
+  Truly de-absolutizing it needs `spex` on PATH for bare launch; `dispatch.sh` already falls back to `${SPEX:-spex}`
+  (loud failure if neither resolves). Pure-shell hooks (mark-active/spec-first) are fully de-absolutized via
+  `$CLAUDE_PROJECT_DIR`/cwd. Residual: bare-launch needs a `spex` on PATH or a vendored runtime.
+- §5.5 **Full Codex worker launch/resume/relay is a SEPARATE node** (sessions.ts CLAUDE_CMD/rendezvous are
+  Claude/reclaude-specific): no caller-chosen `--session-id` (resume by recorded id); `--dangerously-bypass-
+  approvals-and-sandbox`; reliable inbound relay via `codex app-server` (JSON-RPC, REFUTES the earlier
+  "tmux-send-keys only"); no OSC pane-title self-summary; hooks-under-`codex exec` trust behavior UNVERIFIED
+  (needs a live test). This increment delivers the harness-agnostic hook+prompt MECHANISM, not the Codex launcher.
 
 ---
 
@@ -195,4 +213,40 @@ non-block-capable event (must lint-warn, not crash).
   | stop-gate | Stop | 10 | true | $SPEX |
   | session-fail | StopFailure | 10 | false | $SPEX |
   | idle | Notification | 10 | false | $SPEX |
-- (next: compiled-manifest == legacy map; real launched session fires hooks identically; …)
+- **Compiled manifest == legacy hook map — VERIFIED.** `spex hooks compile` emits exactly:
+  UserPromptSubmit→mark-active; PreToolUse→mark-active(10)+spec-first(20,block) IN ORDER; PostToolUse→
+  spec-of-file; Stop→stop-gate(block); StopFailure→session-fail; Notification→idle. The 4 copied scripts
+  are byte-identical to the spec-cli/hooks originals (diff clean); fail.sh/idle.sh reproduce the inline
+  commands exactly.
+- **Dispatcher unit tests — 4/4 PASS.** (1) PreToolUse[mark-active(false), spec-first(true)]: both receive
+  the full stdin, run in order, stdout passes through, a block:true hook's exit-2 → dispatch exit 2 with its
+  stderr (side-effect hook still ran). (2) block:false + exit-2 → IGNORED, exit 0. (3) event filter (Stop
+  vs PreToolUse-only manifest) → no-op exit 0. (4) missing manifest → exit 0 fail-open.
+- **Committed** as bff734b (spec+code together; typecheck 0; lint 0 errors; 20 pre-existing warnings, none
+  on the new files — fully covered, no new owners/coverage/drift).
+
+## §7. STATUS & THE ONE DECISION THAT GATES INCREMENT 2
+
+**Done & verified (increment 1, non-breaking, committed):** the corrected doc-grounded plan; the
+`surface: hook` mechanism (recursive loader, compiler, pure-shell dispatcher, sessionstart); 6 migrated hook
+nodes; manifest == legacy map; dispatcher unit-tested; Claude system-surface proven byte-unchanged.
+
+**NOT done (increment 2 + beyond):** flipping sessions.ts onto the dispatcher; the committed `.claude/
+settings.json` + `.codex/hooks.json` shims; full de-absolutization; an end-to-end launched-session test;
+authored+measured yatsu scenarios; the Codex apply_patch path-extractor; the separate Codex launcher node.
+
+**The decision (yours — it's a spec-tree-shape call, and it gates increment 2):** the new hook handlers are
+forced under `.config/core/*` because `surface:hook` discovery only scans the config roots and you asked for
+"under core/". But the EXISTING nodes `injected-context/{spec-first, spec-of-file}` (and the lifecycle nodes
+governing mark-active/stop-gate) still govern the OLD `spec-cli/hooks/*.sh`. Increment 2 removes those old
+scripts (sessions.ts stops referencing them) → those nodes' `code:` pointers would dangle → lint integrity
+ERROR. So increment 2 cannot land cleanly until we decide what the old nodes become:
+  (A) **Migrate governance:** re-point/merge the old injected-context hook nodes into the new `.config/core/*`
+      nodes (delete the duplicates) — cleanest end state, but restructures that subtree and drops the old
+      nodes' continuity.
+  (B) **Split roles:** the old injected-context nodes keep the CONTRACT/intent; the `.config/core/*` nodes are
+      just the surface:hook REGISTRATION pointing at the same scripts (compiler reads a script-path
+      frontmatter field instead of a co-located copy — no duplicated scripts).
+I lean (B): it avoids duplicating scripts, keeps the existing contract nodes as the source of intent, and
+makes `.config/core` a thin registration layer — but it changes the compiler's script resolution. This is
+your call because it reshapes governance in a subtree you've curated.

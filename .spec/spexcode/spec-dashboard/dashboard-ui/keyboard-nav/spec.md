@@ -8,6 +8,8 @@ code:
   - spec-dashboard/src/SpecSearch.jsx
   - spec-dashboard/src/scroll.js
   - spec-dashboard/src/cycle.js
+  - spec-dashboard/src/keymap.js
+  - spec-dashboard/src/bindings.js
 related:
   - spec-dashboard/src/App.jsx
   - spec-dashboard/src/styles.css
@@ -19,6 +21,14 @@ Move through the spec tree by **relationship, not geometry** — the tree sits a
 ## keymap
 
 On the board, arrows (or vim keys) walk the focus through the tree (below); the rest are direct verbs — zoom and reset-to-overview, the node-info popup, search, cycle in-flight edits, cross into / start a fresh session, help, settings, new-child / delete chords. (The session relationship graph has no keybinding — it opens from its floating board button.) A board-level Esc only releases a locked session. Inside any popup the keys re-bind to it: left/right (or vim, or a numbered pane) switch panes, up/down scroll, Enter crosses, Esc closes.
+
+## one registry, three readers
+
+The keymap is **one declarative table, not a literal scattered across the handler**. `keymap.js` lists every binding as a record — `{ id, ctx, keys, pad, desc }`: a stable action id, the context it lives in (`board` / `popup`), its default keyboard key(s), its default game-controller button, and the i18n key for its one-line description. That single table is the source three readers project from, so they can never drift apart: the **handler** dispatches from it (below), the **help legend** renders it (the keymap half of the one help modal — see [[node-graph]]), and the **[[controller]]** maps a gamepad button to the same action. Add a verb once, in the table, and all three follow.
+
+The split that keeps this from spending complexity: **the registry owns the *binding*, never the *behavior*.** The handler bodies — the chord buffer, the focus-follow pan, the scope-following overlay cycle, the popup's pane-switch and momentum-scroll — stay exactly where they are; the registry only decides *which physical key (or button) names which action*. So the indirection is one resolver (`bindings.js`: `resolve(ctx, event) → id`, honoring user overrides), not a re-implementation of the keys.
+
+**Rebinding follows that same line.** The discrete board/popup **verbs** are rebindable — a user override (a key, or a controller button) is saved per-action in `localStorage`, merged over the table's defaults, and reset back to them on demand; the [[settings]] popup is the editor. The **structural** keys are *not* user-rebindable and the table marks them so: the arrow/vim **nav** keys (they ARE the relationship-walk, not a verb), the `n`/`d` **chords** (a two-key grammar, not a single binding), and the popup's numbered-pane keys. They still appear in the legend and the editor — shown, fixed.
 
 ## principles
 
@@ -37,4 +47,4 @@ A node does **not** belong to a session; `node.session` is only a last-editor at
 
 ## HUD & governed file
 
-While a session is locked a top-center **lock banner** names the grip and points at the overlay-cycle keys (or says it has none). **Esc releases the lock**, firing only with no modal open and a session locked. The full keymap and the node's visual vocabulary live in **one** centered scrollable modal that help opens; vim/arrow keys glide its body and the node-info popup's pane alike. The governed files are `App.jsx` — the capture-phase keydown handler routing every key to navigation or the active modal, rendering [[node-graph]] but existing for the keyboard contract — and `cycle.js`, the `cycleNext` ring primitive [[board-stats]] also walks. Its only slice of the shared `styles.css` is the keyboard-mode pointer-suppression rules; the yatsu eval tab's `.eval-*` classes there are a sibling's churn, not keyboard-nav's drift.
+While a session is locked a top-center **lock banner** names the grip and points at the overlay-cycle keys (or says it has none). **Esc releases the lock**, firing only with no modal open and a session locked. The full keymap and the node's visual vocabulary live in **one** centered scrollable modal that help opens; vim/arrow keys glide its body and the node-info popup's pane alike — and that modal renders the keymap straight from the registry, each row now also showing its controller button. The governed files are `App.jsx` — the capture-phase keydown handler that resolves each key against the registry (`resolve`) and routes the named action to navigation or the active modal, rendering [[node-graph]] but existing for the keyboard contract — `cycle.js`, the `cycleNext` ring primitive [[board-stats]] also walks, and the two files that are the registry itself: `keymap.js` (the action table) and `bindings.js` (override load/save/merge/reset + `resolve`). Its only slice of the shared `styles.css` is the keyboard-mode pointer-suppression rules; the yatsu eval tab's `.eval-*` classes there are a sibling's churn, not keyboard-nav's drift.

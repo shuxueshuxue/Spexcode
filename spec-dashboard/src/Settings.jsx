@@ -1,75 +1,49 @@
 import { useEffect, useState } from 'react'
 import Modal from './Modal.jsx'
 import { useI18n, LANGUAGES } from './i18n/index.jsx'
-import { ACT, keyCap, padCap } from './keymap.js'
-import { keysOf, padOf, isCustom, setBinding, resetBindings } from './bindings.js'
-import { getStatus, subscribeStatus, captureButton } from './gamepad.js'
+import { ACT, keyCap } from './keymap.js'
+import { keysOf, isCustom, setBinding, resetBindings } from './bindings.js'
 
 // @@@ Settings - the centered settings popup (`,`), rendered in the shared Modal so it matches the help
-// modal. It accretes sections (see the `settings` spec): today LANGUAGE and SHORTCUTS & CONTROLLER. The
-// shortcuts section is the EDITABLE twin of the read-only help legend — both project the one keymap
-// registry (keymap.js). A row's keyboard cell or controller cell is clicked to capture the next key /
-// button as that action's new binding (saved via bindings.js to localStorage); structural rows (nav, the
-// n/d chords) are shown but fixed. A live line reports whether a controller is connected.
+// modal. It accretes sections (see the `settings` spec): today LANGUAGE and SHORTCUTS. The shortcuts
+// section is the EDITABLE twin of the read-only help legend — both project the one keymap registry
+// (keymap.js). A row's keyboard cell is clicked to capture the next key as that action's new binding
+// (saved via bindings.js to localStorage); structural rows (nav, the n/d chords) are shown but fixed.
+// (Game-controller mapping is NOT here — it lives outside the browser as the specs-controller profile.)
 
-// Shortcuts editor — one row per action; a click on a rebindable cell captures the next key/button.
+// Shortcuts editor — one row per action; a click on a rebindable cell captures the next keypress.
 function Shortcuts({ t }) {
   const [tick, setTick] = useState(0)        // re-render after a binding changes
-  const [cap, setCap] = useState(null)       // { id, kind: 'key' | 'pad' } while capturing
-  const [status, setStatus] = useState(getStatus())
+  const [cap, setCap] = useState(null)       // action id being captured, or null
   const refresh = () => setTick((n) => n + 1)
-
-  useEffect(() => subscribeStatus(setStatus), [])
 
   // keyboard capture: grab the next real keypress as the binding (Esc cancels, bare modifiers ignored).
   useEffect(() => {
-    if (cap?.kind !== 'key') return
+    if (!cap) return
     const onKey = (e) => {
       e.preventDefault(); e.stopPropagation()
       if (e.key === 'Escape') { setCap(null); return }
       if (['Shift', 'Control', 'Alt', 'Meta'].includes(e.key)) return
-      setBinding(cap.id, { keys: [e.key] }); setCap(null); refresh()
+      setBinding(cap, { keys: [e.key] }); setCap(null); refresh()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [cap])
 
-  // controller capture: watch for the next button / stick direction.
-  useEffect(() => {
-    if (cap?.kind !== 'pad') return
-    const cancel = captureButton((token) => { setBinding(cap.id, { pad: token }); setCap(null); refresh() })
-    return cancel
-  }, [cap])
-
-  const capturing = (id, kind) => cap && cap.id === id && cap.kind === kind
-
   return (
     <section className="legend-sec">
-      <div className="legend-h legend-keymap-h">
-        <span>{t('settings.secShortcuts')}</span>
-        <span className={status.connected ? 'pad-status on' : 'pad-status'}>
-          {status.connected ? t('settings.padOn') : t('settings.padOff')}
-        </span>
-      </div>
+      <div className="legend-h">{t('settings.secShortcuts')}</div>
       <div className="set-keys">
         {ACT.map((a) => (
           <div className="set-key-row" key={a.id}>
             <span className="legend-desc">{t(a.desc)}</span>
             <button
-              className={`bind-cell${capturing(a.id, 'key') ? ' capturing' : ''}${a.rebind ? '' : ' fixed'}${isCustom(a.id) ? ' custom' : ''}`}
+              className={`bind-cell${cap === a.id ? ' capturing' : ''}${a.rebind ? '' : ' fixed'}${isCustom(a.id) ? ' custom' : ''}`}
               disabled={!a.rebind}
-              onClick={() => a.rebind && setCap({ id: a.id, kind: 'key' })}
+              onClick={() => a.rebind && setCap(a.id)}
             >
-              {capturing(a.id, 'key') ? <span className="bind-hint">{t('settings.bindPrompt')}</span>
+              {cap === a.id ? <span className="bind-hint">{t('settings.bindPrompt')}</span>
                 : keysOf(a.id).map((k, i) => <kbd key={i}>{keyCap(k)}</kbd>)}
-            </button>
-            <button
-              className={`bind-cell${capturing(a.id, 'pad') ? ' capturing' : ''}${a.rebind ? '' : ' fixed'}`}
-              disabled={!a.rebind}
-              onClick={() => a.rebind && setCap({ id: a.id, kind: 'pad' })}
-            >
-              {capturing(a.id, 'pad') ? <span className="bind-hint">{t('settings.bindPromptPad')}</span>
-                : padOf(a.id) ? <kbd className="pad">{padCap(padOf(a.id))}</kbd> : <span className="pad-none">—</span>}
             </button>
           </div>
         ))}

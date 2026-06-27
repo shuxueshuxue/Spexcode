@@ -1,0 +1,36 @@
+{
+  "$schema": "./profile.schema.md",
+  "name": "SpexCode",
+  "version": 1,
+  "description": "Game-controller → keyboard profile for the SpexCode web dashboard. Load it into a generic OS-level gamepad-to-keyboard remapper (AntiMicroX / JoyToKey / Steam Input). The remapper emits these as REAL OS keystrokes, so they drive the dashboard in the browser AND can trigger OS-level voice input (WeChat). Buttons use the W3C Standard Gamepad layout — translate to your tool's button names.",
+  "keepInSyncWith": "spec-dashboard/src/keymap.js (SpexCode's keyboard keymap — there is NO runtime link; if you rebind a key there, edit this profile too)",
+  "mappings": [
+    { "button": "DPadUp",            "key": "ArrowUp",    "action": "move up the focused column",     "rebindable": false },
+    { "button": "DPadDown",          "key": "ArrowDown",  "action": "move down the focused column",    "rebindable": false },
+    { "button": "DPadLeft",          "key": "ArrowLeft",  "action": "to the parent",                   "rebindable": false },
+    { "button": "DPadRight",         "key": "ArrowRight", "action": "to the nearest child",            "rebindable": false },
+    { "button": "LeftStick",         "key": "Arrow*",     "action": "same as the D-pad (directional)", "rebindable": false },
+    { "button": "X",                 "key": "i",          "action": "open the node-info popup" },
+    { "button": "Y",                 "key": "/",          "action": "search & jump" },
+    { "button": "A",                 "key": "Enter",      "action": "cross into the focus node's session / open board" },
+    { "button": "B",                 "key": "Escape",     "action": "close the open popup / back" },
+    { "button": "RightBumper",       "key": "o",          "action": "cycle through in-flight edits" },
+    { "button": "LeftBumper",        "key": "shift+o",    "action": "cycle in-flight edits (reverse)" },
+    { "button": "RightTrigger",      "key": "+",          "action": "zoom in" },
+    { "button": "LeftTrigger",       "key": "-",          "action": "zoom out" },
+    { "button": "RightStickButton",  "key": "0",          "action": "reset zoom to overview" },
+    { "button": "Start",             "key": "shift+2",    "action": "start a fresh session on the focus node (@)" },
+    { "button": "RightStickUp",      "key": "k",          "action": "scroll the open popup up" },
+    { "button": "RightStickDown",    "key": "j",          "action": "scroll the open popup down" }
+  ],
+  "voiceButton": {
+    "comment": "RESERVED for voice input / transcription toggle — change the button or the target freely. This emits a REAL OS hotkey (not a browser event), which is the ONLY way to trigger an OS-level voice IME. Default target = WeChat PC voice input's hands-free (start/stop) hotkey. A user with a different voice tool just changes 'target'.",
+    "button": "Back",
+    "target": {
+      "windows": "ctrl+win+shift",
+      "mac": "ctrl+fn",
+      "note": "WeChat 2026 PC voice input: Windows hold = Ctrl+Win, hands-free toggle = Ctrl+Win+Shift; Mac hold = Fn, continuous = Ctrl+Fn. All customizable in WeChat 设置-快捷键. Fn on Mac is special — some remappers cannot emit it; use the Windows machine or a custom WeChat hotkey if so."
+    },
+    "rebindable": true
+  }
+}

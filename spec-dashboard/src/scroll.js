@@ -1,11 +1,5 @@
-// @@@ momentum scroll - the j/k keyboard-scroll shared by every scrollable modal (the node-info popup's
-// open pane and the help/legend body). A keypress eases the element's scrollTop toward an ACCUMULATING
-// target that survives across keydowns, so held / repeated keys stack into one continuous glide instead
-// of restarting a fresh `behavior:'smooth'` tween each press (which stuttered on key-repeat).
-//
-// `createMomentumScroll()` returns a `bump(el, delta)` closure that owns its own animation + target
-// state. Each modal keeps one instance (so its glide is independent). The target resets whenever the
-// element changes (e.g. switching popup panes swaps the scroller), so a stale offset never carries over.
+// ease scrollTop toward an accumulating target that survives across keydowns, so held/repeated keys stack
+// into one glide instead of restarting a `behavior:'smooth'` tween each press (which stuttered on key-repeat).
 export function createMomentumScroll() {
   let animId = 0
   let target = null

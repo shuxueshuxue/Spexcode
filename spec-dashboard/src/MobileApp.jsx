@@ -6,14 +6,6 @@ import { SessionRow } from './SessionWindow.jsx'
 import { sessionName, STATUS_COLOR } from './session.js'
 import { useT } from './i18n/index.jsx'
 
-// @@@ MobileApp - the touch-first face of the SAME board the desktop renders. The desktop's spec GRAPH
-// (a zoomable React Flow canvas walked with hjkl) and its xterm console are mouse/keyboard instruments a
-// thumb can't play; here the tree becomes a native drill-DOWN (breadcrumb + tap-to-descend rows) and the
-// node's reading panes (spec/history/issues/edit) are the EXACT same components NodeView renders — no
-// second markdown/diff renderer, one source of truth for content. It is read-first: it shows what the
-// tree and the live sessions are doing. Launching work and streaming a session's console (xterm sizing +
-// input on a phone) are a deliberately separate, heavier scope, not folded in here.
-
 // the desktop pane keys → their localized tab labels (panesFor hands back English labels; we relabel so
 // the mobile tabs read in the active language like the rest of the UI).
 // one i18n-key per pane key panesFor() can return — MUST cover every key in NodeView's PANES (+ 'edit'),
@@ -29,10 +21,6 @@ function StatusDot({ status }) {
   return <span className="m-dot" style={{ background: s.color }} />
 }
 
-// @@@ NodeRow - one tappable spec-tree row in the drill-down list. The mobile parallel of a graph node's
-// first line: status dot · title · live-editor faces · version · a ▸N count when it has a hidden subtree.
-// Every row drills (tapping opens THAT node's detail), so a leaf and a branch tap the same way — the ▸N is
-// the only thing that says "there's more below".
 function NodeRow({ node, kids, editors, onTap }) {
   return (
     <button className="m-row" onClick={onTap}>
@@ -50,12 +38,8 @@ function NodeRow({ node, kids, editors, onTap }) {
   )
 }
 
-// @@@ MobileNode - the per-node detail screen: a compact sticky header (dot · title · status · version ·
-// live faces) over a segmented control. `children` leads when the node has any (a branch opens to its
-// subtree, the drill-down's core gesture); the rest are the SAME panes the desktop popup shows. The pane
-// is the single scroller — except `history`, whose own .pane-hist owns the scroll for its progressive
-// version reveal (so the host steps aside via `.fixed`). Keyed by node id from MobileApp, so useHistory
-// re-fetches per node and `pane` resets to the first tab on every fresh screen.
+// `history`'s own .pane-hist owns the scroll (the host steps aside via `.fixed`); keyed by node id so
+// useHistory re-fetches and the tab resets per node.
 function MobileNode({ node, childrenOf, sessions, onOpenChild }) {
   const t = useT()
   const rows = useHistory(node.id)
@@ -107,10 +91,6 @@ function MobileNode({ node, childrenOf, sessions, onOpenChild }) {
   )
 }
 
-// @@@ MobileSessions - the Sessions tab: the list reuses the SAME SessionRow face the desktop window/board
-// draw, so a session reads identically across surfaces. Tapping one opens its detail — status, the worker's
-// rolling activity line, and the nodes it is CHANGING (its overlay ops). Each changing-node row crosses back
-// into the Specs tab focused on that node (goToNode), the touch parallel of the desktop's lock→cycle.
 function MobileSessions({ sessions, openId, setOpenId, byId, goToNode }) {
   const t = useT()
   const open = openId ? sessions.find((s) => s.id === openId) : null

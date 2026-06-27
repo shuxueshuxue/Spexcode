@@ -1,24 +1,9 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { join, relative, basename } from 'node:path'
 
-// @@@ yatsu node model - a node declares its scenarios in a `yatsu.md` beside its `spec.md`. The
-// scenarios say how to MEASURE the node's loss; the readings the agent files against them live in a flat
-// `yatsu.evals.ndjson` sidecar in the same dir (the second git-as-database axis — see [[sidecar]]).
-// A node has scenarios IFF it has a yatsu.md; the spec walk (spec-cli) is unchanged — yatsu.md is a
-// sibling file it never looks at.
-
 export const YATSU_FILE = 'yatsu.md'
 export const SIDECAR_FILE = 'yatsu.evals.ndjson'
 
-// @@@ Scenario - one declared way to measure the node's loss, and the unit that GOVERNS code (a yatsu.md
-// owns nothing — only its scenarios do; see [[governed-related]]). A `description` (what to check), the
-// `expected` result (what zero loss looks like), and OPTIONALLY a `test` (a repo path to a co-located
-// runnable file — a playwright.spec.ts, a script — the AGENT may run by hand; yatsu runs nothing), `code`
-// (the file this scenario GOVERNS, ideally one — its own slice of the code freshness axis, so two scenarios
-// on one node go stale independently; absent → it inherits the spec node's `code:` list) and `related`
-// (files it REFERENCES but does not own — they do NOT stale it, the freshness mirror of spec govern/related).
-// A file governed by too many scenarios is yatsu scan's `yatsu-owners` smell (split it). `name` keys the
-// sidecar. No `driver`/`steps`: a scenario is a target the agent measures however it likes, not a script.
 export type Scenario = {
   name: string
   description: string
@@ -36,10 +21,6 @@ export type YatsuNode = {
   scenarios: Scenario[]
 }
 
-// @@@ scenario schema - the six fields a scenario may declare; `name`/`description`/`expected` are
-// required, `test`/`code`/`related` optional. Anything else inside an item is a typo or mistake —
-// validateScenarios rejects it loudly (the lenient parser below merely ignores it). `code` and `related`
-// are the two LIST fields (path lists). One source of truth for both faces.
 const SCENARIO_KEYS = ['name', 'description', 'expected', 'test', 'code', 'related'] as const
 type ScenarioKey = (typeof SCENARIO_KEYS)[number]
 const LIST_KEYS: readonly ScenarioKey[] = ['code', 'related']
@@ -48,15 +29,7 @@ const LIST_KEYS: readonly ScenarioKey[] = ['code', 'related']
 // carried — kept (not dropped) so the validator can name a typo'd field instead of silently swallowing it.
 type RawItem = { fields: Partial<Record<ScenarioKey, string>>; unknownKeys: string[] }
 
-// @@@ scenarios walk - the ONE indentation-driven pass over yatsu.md's frontmatter `scenarios:` block,
-// shared by the lenient reader (parseScenarios) and the strict gate (validateScenarios) so the two can
-// never disagree about what the file says. yatsu.md declares scenarios as a YAML block sequence of mappings
-// (name/description/expected/test); the spec-cli frontmatter reader is scalar / flat-string-list only, so
-// this is a small parser for exactly that shape — no YAML dependency, the same "deliberately tiny" spirit.
-// Sequence items are the dashes at the shallowest indent after `scenarios:`; `key: value` lines deeper set
-// the current item's fields; a value of `|`/`>` opens a block scalar (description/expected span lines). It
-// reports whether the frontmatter and the `scenarios:` key were present at all, so the validator can tell
-// "no scenarios declared" from "scenarios declared but malformed".
+// tiny indentation parser for yatsu.md's frontmatter `scenarios:` block (no YAML dep), shared by parseScenarios and validateScenarios so they can't disagree; reports hasFrontmatter/hasKey so the validator can tell "none declared" from "malformed"
 function walkScenarios(src: string): { hasFrontmatter: boolean; hasKey: boolean; items: RawItem[] } {
   const m = src.match(/^---\n([\s\S]*?)\n---/)
   if (!m) return { hasFrontmatter: false, hasKey: false, items: [] }
@@ -98,10 +71,7 @@ function assignField(cur: RawItem, kv: string, lines: string[], idx: number, key
   const f = kv.match(/^([A-Za-z_][\w-]*):\s*(.*)$/)
   if (!f) return idx
   const key = f[1]
-  // @@@ block-sequence lists - a LIST field (`code:`/`related:`) may be written inline (`code: a, b`) OR as a
-  // YAML block sequence — `- item` lines indented deeper, exactly like spec.md's `code:`. The scalar-only
-  // reader can't see those lines, so collect them HERE into the comma form parseCodeList expects; without
-  // this they'd be silently dropped and the scenario would read as having no list at all (a fail-silent footgun).
+  // a list field (`code:`/`related:`) may be a YAML block sequence (`- item` lines); the scalar reader can't see those, so collect them here into the comma form parseCodeList expects
   if ((LIST_KEYS as readonly string[]).includes(key) && f[2].trim() === '') {
     const items: string[] = []
     let j = idx + 1
@@ -150,10 +120,6 @@ function parseCodeList(raw: string): string[] {
   return raw.replace(/^\[|\]$/g, '').split(',').map((s) => unquote(s.trim())).filter(Boolean)
 }
 
-// @@@ parseScenarios - the LENIENT reader every consumer (scan/eval/show) uses: clean Scenario[] off the
-// walk, missing prose fields defaulting to '' and a nameless item dropped. Tolerant by design — the loud
-// gate is validateScenarios (run at scan + pre-commit), so a malformed file is rejected THERE, not silently
-// reshaped here.
 export function parseScenarios(src: string): Scenario[] {
   return walkScenarios(src).items
     .map((it): Scenario => {
@@ -171,12 +137,6 @@ export function parseScenarios(src: string): Scenario[] {
     .filter((s) => s.name)   // a scenario with no name is malformed — drop it (validateScenarios reports it)
 }
 
-// @@@ validateScenarios - the STRICT schema gate, the loud twin of parseScenarios. Returns one message per
-// problem (empty array = valid). A yatsu.md must carry a frontmatter `scenarios:` list of at least one item,
-// and every item must set a non-empty name + description + expected, declare no field outside the schema,
-// and use a name unique within the file. PURE (src → errors) so both faces share it: `spex yatsu scan`
-// emits each as a `yatsu-schema` finding, and the pre-commit backstop rejects a staged yatsu.md that fails
-// — a malformed loss function never lands silently the way the lenient parser would have let it.
 export function validateScenarios(src: string): string[] {
   const { hasFrontmatter, hasKey, items } = walkScenarios(src)
   if (!hasFrontmatter) return ['no frontmatter block — a yatsu.md must declare a `scenarios:` list']
@@ -196,8 +156,7 @@ export function validateScenarios(src: string): string[] {
   return errs
 }
 
-// @@@ yatsuNodes - walk `.spec` for every directory holding a yatsu.md and read its scenarios. The spec
-// root is `<root>/.spec`; a yatsu node's id is its leaf dir name (the same id its spec.md carries).
+// walk `.spec` for every dir holding a yatsu.md; a node's id is its leaf dir name (the same its spec.md carries)
 export function yatsuNodes(root: string): YatsuNode[] {
   const specDir = join(root, '.spec')
   const out: YatsuNode[] = []

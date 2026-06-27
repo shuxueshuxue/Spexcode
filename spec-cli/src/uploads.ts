@@ -2,11 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 
-// @@@ upload sink - the dashboard input box accepts pasted/dropped/picked files; each lands HERE, in the
-// BACKEND machine's tmpdir (the same machine every session/worker runs on), and its absolute path is what
-// gets inserted into the prompt. So "attach a file" becomes "the worker can read /tmp/…/<file>" with no
-// transport carried in the prompt text — the path IS the handoff. tmpdir() is /tmp on Linux, the same home
-// as the rendezvous sockets (sessions.ts), so an upload shares the worker's filesystem by construction.
+// the backend's tmpdir — same /tmp home as the rendezvous sockets (sessions.ts), shared with the worker.
 const UPLOAD_DIR = join(tmpdir(), 'spexcode-uploads')
 
 // a generous ceiling so a stray huge upload can't quietly fill /tmp — over it we fail loud (the route 413s)

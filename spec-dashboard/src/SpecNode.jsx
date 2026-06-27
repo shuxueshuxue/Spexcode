@@ -4,9 +4,7 @@ import { labelColor } from './color.js'
 import { ScenarioCount } from './score.jsx'
 import { useT } from './i18n/index.jsx'
 
-// @@@ timeAgo - compact "edited Nm/Nh/Nd ago" from an ISO date. Coarse on purpose (the row is tiny):
-// seconds→"just now", then minutes, hours, days, weeks. Returns null for a missing/unparseable date so
-// the caller can fall back to "no versions yet". The localized words come from the caller's `t`.
+// compact "edited Nm/Nh/Nd ago"; returns null for a missing/unparseable date so the caller can fall back.
 function timeAgo(iso, t) {
   if (!iso) return null
   const ms = Date.parse(iso)
@@ -35,11 +33,6 @@ export const STATUS = {
 // the pending-op glyphs an overlay can stamp on a node. Exported alongside STATUS for the Legend.
 export const GLYPH = { added: '+', edited: '~', deleted: '✕', moved: '→' }
 
-// @@@ EditorRow - the node's SECOND row. When live session(s) are editing this node (App decorates
-// `data.editors` from the live overlay), it shows their avatars — deterministic faces generated from
-// each session id (see avatar.jsx; later swappable for real assets via the provider registry). With no
-// live editor it falls back to "last edited … ago" (from `data.lastEdited`), or "no versions yet" for a
-// node with no committed history. So the row always says SOMETHING about the node's people/recency.
 function EditorRow({ data }) {
   const t = useT()
   const editors = data.editors || []
@@ -64,23 +57,11 @@ function EditorRow({ data }) {
   )
 }
 
-// @@@ IssueBadge - the at-a-glance count of OPEN issues the forge linked to this node (spec-forge, folded
-// into /api/board as data.openIssues). Rendered ONLY when there are any. Magenta, a hue distinct from the
-// status dot AND the drift-badge so the three signals never blur: status dot = derived state, drift-badge
-// = code ahead of spec, this = work pointing AT the node. This is purely the GLANCE; the DETAIL (the issue
-// list, alongside the node's scenarios) lives in the [[focus-panel]] for the focused node — no longer a
-// card popped on the node itself, so Issues and Scenarios share one place and one status.
 function IssueBadge({ issues, t }) {
   if (!issues || issues.length === 0) return null
   return <span className="issue-badge" title={t('specNode.openIssues', { n: issues.length })}>◆{issues.length}</span>
 }
 
-// @@@ SpecNode - two stacked rows, not a card. ROW 1 (the original thin file-tree line): status dot +
-// title + version + overlay marks. ROW 2: the live editors' avatars, or "last edited … ago" (EditorRow).
-// The tree flows left->right, so handles are on the sides. When a worktree has a PENDING change to this
-// node (from /api/board overlays), it carries `overlays`: the node takes the author session's colour
-// (dashed ring = uncommitted, solid = committed) and shows op glyphs. An `added` node not yet on main
-// renders as a translucent ghost.
 export default function SpecNode({ data, selected }) {
   const t = useT()
   const s = STATUS[data.status] || STATUS.pending
@@ -122,8 +103,7 @@ export default function SpecNode({ data, selected }) {
       <div className="node-row2">
         <EditorRow data={data} />
       </div>
-      {/* expandable hint — a collapsed node (children hidden to the right) gets a ▸N tab on its right
-          edge so a leaf and a closed branch never look alike. App sets data.collapsed/childCount. */}
+      {/* collapsed node gets a ▸N tab naming its hidden child count (App sets data.collapsed/childCount). */}
       {data.collapsed && (
         <span className="node-expand" title={t('specNode.expandable', { n: data.childCount })}>▸{data.childCount}</span>
       )}

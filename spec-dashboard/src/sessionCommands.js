@@ -1,19 +1,5 @@
-// @@@ board commands - the `/` commands the session ❯ inbox handles ITSELF (close, merge, nav mode, proof)
-// instead of dispatching the line to the agent. This registry is the SINGLE source of truth: a typed
-// `/<name>` and the matching header button are ONE action with ONE identity, never two codepaths and never
-// two hues. Each entry's `run` is bound in SessionInterface (it needs the live closures — act, setNavMode,
-// setProofOpen); here we hold only the static identity (name + colour + i18n keys + when-available).
-//
-// `color` is the load-bearing field: it is the command's identity, painting BOTH where it appears — the
-// header button and the coloured `/` menu row — the SAME hue, so the command and its button read as the
-// same thing. The hue follows each button's own accent: proof = cyan, nav = yellow (the keyboard-cursor
-// hue), merge = green (the "merged ×N" badge). The two terminal verbs split by destructiveness: `exit` is
-// the SOFT stop (muted grey — it just sends the session to the dormant/offline state, fully resumable),
-// `close` is the REMOVAL (red — it discards the worktree, the same act as the row's right-click Close).
-// `button:false` means the command has no header twin (both exit and close live as typed commands + the
-// right-click menu — there is deliberately no header close/kill button). `when(status)` gates a command to
-// the session states where it applies (nav whenever live; proof/merge only at review/done; exit/close
-// wherever the `❯` inbox exists, i.e. live).
+// `run` is bound in SessionInterface (it needs the live closures); here we hold only the static identity.
+// `button:false` = no header twin (exit/close live as typed commands + the right-click menu). `when` gates by state.
 export const BOARD_COMMANDS = [
   { name: 'nav',   color: 'yellow', button: true,  when: (st) => !!st && st !== 'offline',
     labelKey: 'session.navBtn', titleKey: 'session.navTitle', descKey: 'session.cmd.navDesc' },

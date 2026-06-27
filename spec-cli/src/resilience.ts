@@ -1,25 +1,5 @@
 import { existsSync } from 'node:fs'
 
-// @@@ resilience - the backend reads the worktree set LIVE on every /api/layout & /api/board, and a
-// dispatched worker can self-merge and have its worktree REMOVED at any instant (the merge ritual deletes
-// the node branch + retires the worktree). That makes every per-worktree DETAIL read a RACE: a readFileSync
-// can throw ENOENT because the directory vanished, and a `git diff`/`merge-base` can throw because a
-// concurrent merge holds an index/ref LOCK. Such a throw used to propagate out of resolveLayout()/
-// listSessions(), out of the request handler, and — as an unhandled async rejection — EXIT the process,
-// taking the backend (and the Vite-proxied frontend) down with it.
-//
-// @@@ existence is not contingent on a detail read - the FIRST version of this guard conflated the two:
-// ANY throw returned null and the caller DROPPED that worktree. That made a worktree's EXISTENCE — a
-// definitive fact (it is in `git worktree list`, its directory is on disk) — hostage to a FLAKY detail
-// read. Under a merge storm those detail reads throw on lock contention, so a LIVE worktree vanished from
-// the board for a poll, and watchSessions then mis-read the absence as a `closed · removed`. The fix:
-// guardWorktree decides omit-vs-degrade on the DIRECTORY, never on the read outcome. Dir gone → genuinely
-// removed → omit (null). Dir still present → a transient DETAIL failure → return a DEGRADED row from the
-// caller's fallback (raw facts + last-known), NEVER null. The board thus always lists every existing
-// worktree. installProcessGuards is the last-resort net — any unforeseen uncaught error/rejection is logged
-// and the process KEEPS SERVING. Nothing is swallowed silently: every omit, degrade, and caught crash is
-// logged, so a real bug stays loud — it just no longer kills the server or drops a live worktree.
-
 function describe(e: unknown): string {
   return e instanceof Error ? e.message : String(e)
 }

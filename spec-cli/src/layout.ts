@@ -112,7 +112,7 @@ export type RawRecord = {
   session_id: string; governed: boolean; worktree_path: string; branch: string | null
   node: string | null; title: string | null; name: string | null
   status: string; proposal: string | null; merges: number; note: string | null
-  sortkey: number | null; createdAt: number
+  sortkey: number | null; createdAt: number; harness?: string
 }
 // the agent's OWN harness session id from the environment — the only locator now that the record left the
 // worktree. Each adapter names the var its agents carry (Claude CLAUDE_CODE_SESSION_ID, Codex CODEX_THREAD_ID —

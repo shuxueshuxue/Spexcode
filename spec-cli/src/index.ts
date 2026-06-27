@@ -104,7 +104,10 @@ app.post('/api/sessions', async (c) => {
   const body = await c.req.json().catch(() => ({}))
   const prompt = typeof body?.prompt === 'string' ? body.prompt : ''
   if (!prompt.trim()) return c.json({ error: 'empty prompt' }, 400)
-  return c.json(await newSession(typeof body?.node === 'string' ? body.node : null, prompt), 201)
+  const harness = typeof body?.harness === 'string' ? body.harness : undefined
+  try {
+    return c.json(await newSession(typeof body?.node === 'string' ? body.node : null, prompt, harness), 201)
+  } catch (e) { return c.json({ error: String((e as Error).message || e) }, 400) }   // unknown harness id → 400, not a 500
 })
 // one server-side merge bundle (ahead/dirty/diff(merge-base)/gates/proposal) for the manager cockpit;
 // dashboard and `spex review` are thin callers. 404 for an unknown id. See [[manager-cockpit]].

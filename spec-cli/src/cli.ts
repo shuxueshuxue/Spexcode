@@ -15,7 +15,7 @@ function flag(name: string): string | undefined {
 }
 const has = (name: string) => process.argv.includes(`--${name}`)
 // bare positionals after argv index `from`, skipping flags and their values (selectors for ls/watch).
-const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--timeout', '--reason', '--out', '--password', '--tls-cert', '--tls-key'])
+const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--timeout', '--reason', '--out', '--password', '--tls-cert', '--tls-key', '--harness'])
 function positionals(from: number): string[] {
   const out: string[] = []
   for (let i = from; i < process.argv.length; i++) {
@@ -326,7 +326,7 @@ if (cmd === 'serve') {
   // it falls back to an in-process launch only when no backend answers.
   const { createSession } = await import('./sessions.js')
   const prompt = flag('prompt') ?? positionals(3)[0] ?? ''
-  console.log(JSON.stringify(await createSession(flag('node') ?? null, prompt), null, 2))
+  console.log(JSON.stringify(await createSession(flag('node') ?? null, prompt, flag('harness') ?? undefined), null, 2))
 } else if (cmd === 'session') {
   const sub = process.argv[3]
   // `s` (sessions.ts) backs the state PRODUCERS that stay local (state/done/park/fail/ask/idle write the
@@ -345,7 +345,7 @@ if (cmd === 'serve') {
     // route through the backend (auth env + concurrency cap); in-process only if no backend is reachable.
     // prompt = --prompt OR the first positional (after `session new`), so `session new "<prompt>"` works the
     // SAME as the `spex new "<prompt>"` shorthand — one prompt-resolution rule, not two.
-    console.log(JSON.stringify(await s.createSession(flag('node') ?? null, flag('prompt') ?? positionals(4)[0] ?? ''), null, 2))
+    console.log(JSON.stringify(await s.createSession(flag('node') ?? null, flag('prompt') ?? positionals(4)[0] ?? '', flag('harness') ?? undefined), null, 2))
   } else if (sub === 'list') {
     console.log(JSON.stringify(await c.clientListSessions(), null, 2))
   } else if (sub === 'reopen' || sub === 'resume') {

@@ -261,6 +261,43 @@ intended copy-at-init, not a governance bug.
 - `spex init` seeding `.config` from the templates.
 - Codex: the apply_patch path-extractor (§5.2), `notify` for idle, and the separate Codex launcher node (§5.5).
 
+## §8. Materialization pipeline — init seeds, daemon maintains (researched 2026-06-27)
+
+Source of truth = the spec tree: `surface:system` nodes (the contract) + `.config` `surface:hook` nodes (the
+hooks). Two materialization layers:
+
+**Layer 1 — INIT-SEEDED, then hand-editable (idempotent, NEVER regenerated):** the `.config/core/*` hooks.
+- `spex init` (init.ts) copies `spec-cli/templates/spec/` → `<dir>/.spec/` via `copyTreeNoClobber`: every
+  file is skipped if `existsSync(dest)` ("additive only — a pre-existing file is the user's"); an existing
+  `.spec` skips the whole scaffold with a warning. **Fully idempotent: additive, never overwrites/duplicates.** ✓
+- GAP: the templates' `.config/core/` holds only `spec.md`, NOT the 6 hook children. To reproduce the core
+  hooks at init, add the 6 hook nodes (spec.md + script) under `spec-cli/templates/spec/project/.config/core/`.
+  The mechanism is ready; only the templates need the hook nodes.
+
+**Layer 2 — DAEMON-MATERIALIZED (a pure function of the tree, safe to regenerate on every change):**
+- `AGENTS.md` (Codex) + `.claude/CLAUDE.md` (Claude) ← the `surface:system` bodies = the bare-launch / Codex
+  system-surface delivery (user-message level — the harness ceiling for discovered files; system-prompt level
+  is reachable only via the launch flag, which the dashboard path keeps).
+- the bare-launch harness shims `.claude/settings.json` + `.codex/hooks.json` ← point at the dispatcher.
+
+**System-prompt pipeline today:** `loadSystemConfig()` → `appendSysArg()` → `--append-system-prompt` on the
+launch line (sessions.ts:78-85, 734) — the only delivery, dashboard-only, system-prompt level. `hideClaudeMd()`
+(sessions.ts:686-693) MOVES the project CLAUDE.md aside so dispatched agents don't auto-inject it.
+
+**CLAUDE.md/AGENTS.md placement (official docs):** Claude auto-discovers `./CLAUDE.md` OR `./.claude/CLAUDE.md`
+(walks up from cwd; user-message after the system prompt). Codex auto-discovers `./AGENTS.md` (git-root→cwd,
+concatenated). Both exist as a place for the daemon to write the generated surface.
+
+**The backend daemon:** supervise.ts owns port 8787, spawns index.ts; watches `spec-cli/src`, `spec-forge/src`,
+`spec-yatsu/src` for `.ts/.js/.mjs/.json` → debounced reload (supervise.ts:134-146). It does NOT watch `.spec`
+and does NOT materialize derived files (only per-session `.session/` writes). SEAM for materialization: the
+`onSourceChange` callback (supervise.ts:138, extend to watch `.spec/**/*.md`) or an index.ts boot step.
+
+**Two decisions to settle before building:** (a) how the generated CLAUDE.md/AGENTS.md reconciles with
+`hideClaudeMd` (avoid double-injection on the dashboard path, which keeps `--append-system-prompt`);
+(b) whether the daemon also idempotently RE-SEEDS `.config` hooks on boot (additive, never overwriting hand
+edits) or relies on `spex init` alone.
+
 ## (historical) §7b. The earlier "fork" — now RESOLVED as a non-issue
 
 **Done & verified (increment 1, non-breaking, committed):** the corrected doc-grounded plan; the

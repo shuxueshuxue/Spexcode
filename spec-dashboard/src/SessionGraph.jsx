@@ -306,8 +306,8 @@ function GraphCanvas({ sessions = [], onOpen, active, legend, setLegend, edges =
   const onNodeClick = useCallback((_e, n) => {
     setFocusId(n.id)
     setSourceSel(n.id)
-    flash(t('sessionGraph.picked', { a: sessionLabel(byId[n.id] || { id: n.id }, t) }))
-  }, [byId, t, flash])
+    flash(t('sessionGraph.picked'))
+  }, [t, flash])
   const onNodeContextMenu = useCallback((e, n) => {
     e.preventDefault()
     if (!sourceSel) { flash(t('sessionGraph.needSource')); return }

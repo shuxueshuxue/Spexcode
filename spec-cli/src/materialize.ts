@@ -24,13 +24,13 @@ const SPEX = `${join(PKG, 'node_modules', '.bin', 'tsx')} ${join(PKG, 'src', 'cl
 // worktree — the worktree keeps zero SpexCode-rendered runtime; only the harness-discovered contract files +
 // shims (which the harness must find in-tree) are written under proj below.
 
-// the deterministic content fingerprint of the config roots — MUST match the shell gate (dispatch.sh).
+// the deterministic content fingerprint of the config roots. ONE definition — `hp_config_hash` in the shell
+// mirror (harness.sh) — which the dispatch.sh gate ALSO calls, so the gate and this renderer can never disagree
+// on "changed" (they used to inline the identical find-pipeline in two places, each commenting the other "MUST match").
 export function contentHash(proj: string): string {
   try {
-    const out = execFileSync('bash', ['-c',
-      `cd "${proj}" && find .spec/*/.config .spec/*/config \\( -name '*.md' -o -name '*.sh' \\) -type f -print0 2>/dev/null | sort -z | xargs -0 cat 2>/dev/null | sha256sum | cut -d' ' -f1`,
-    ]).toString().trim()
-    return out
+    const harnessSh = join(PKG, 'hooks', 'harness.sh')
+    return execFileSync('bash', ['-c', `cd "${proj}" && . "${harnessSh}" && hp_config_hash`]).toString().trim()
   } catch { return '' }
 }
 

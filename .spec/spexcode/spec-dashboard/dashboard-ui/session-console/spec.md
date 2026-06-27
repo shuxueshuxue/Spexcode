@@ -35,6 +35,12 @@ first `@<id>`). Both menus only insert text; the New prompt has **no** `/` slash
 appears in the list below (the next board poll surfaces it) — so you can fire off several in a row. The old
 auto-jump-to-the-new-session is gone; only a tab's *removal* (below) ever moves your selection for you.
 
+Beneath the box a **harness selector** (a bare segmented radio control in the panel's design language, no
+glyph) picks **which agent the launch boots** — Claude Code (the default) or Codex — from the set the backend
+can start ([[harness-adapter]]). The choice rides along in the launch `POST /api/sessions` body and is
+**remembered** (per-browser) so a user who lives in one harness never re-picks; it never assumes a node and
+composes orthogonally with the `/<preset> @<node>… text` grammar above.
+
 **View Session Relationship** fills the pane with the live monitor graph ([[session-graph]]) — its home now,
 not a `t` overlay; the board's `t`/network button open onto it, and clicking a node switches to that session's tab.
 
@@ -83,8 +89,9 @@ A **right-click on a session row** opens its context menu — rename or close ([
 with the context-menu suppression; the shared `sessionName` puts that rename first in the label precedence.
 A small **drag handle** at the far right of each row's second line reorders the list ([[session-reorder]]) —
 only the handle drags, so click/double-click/`↑↓`/focus on the row are untouched.
-Either input also accepts an **attached file** (paste, drop, or the 📎 picker), uploaded to the backend
-(= worker) `/tmp` with its path spliced in — see [[file-attach]].
+Either input also accepts an **attached file** (paste, drop, or the paperclip picker — a monochrome inline-SVG
+glyph in the dashboard's own icon vocabulary, swapping to a spinning ring while uploading, **never a colour
+emoji**), uploaded to the backend (= worker) `/tmp` with its path spliced in — see [[file-attach]].
 
 Terminals are **warm and always connected**: every live pane mounts and opens its socket when the board loads —
 never lazily on focus — and stays mounted even while the console is closed, so switching tabs **never loses your
@@ -107,8 +114,9 @@ board no longer has.
 
 **SessionWindow** is the read-only glance, built from the shared **`SessionRow`** face — a two-row block
 ([[session-activity]]): Row 1 is the avatar (no status dot) + the session **headline** (the worker's live
-tmux self-summary once it exists, else a launch-prompt placeholder; a rename always wins), with a 🔒 at its
-end when the row is locked; Row 2 is the **colour-coded status word** + pending-op count. It stays a
+tmux self-summary once it exists, else a launch-prompt placeholder; a rename always wins), with a **monochrome
+inline-SVG padlock** (the dashboard's own glyph vocabulary, not a colour emoji) at its end when the row is
+locked; Row 2 is the **colour-coded status word** + pending-op count. It stays a
 **bounded** glance: the window never grows into a curtain — its height is capped (~80% of the viewport, and
 always stopping short of the bottom **stats strip**), and a long session list **scrolls** inside it rather
 than extending down over the board's stats bar. A single click **locks** the board onto

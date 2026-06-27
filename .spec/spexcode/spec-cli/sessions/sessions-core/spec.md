@@ -17,9 +17,9 @@ foundation owner: the features govern their own surfaces and REFERENCE this modu
 
 ## expanded spec
 
-sessions-core owns `sessions.ts` — the common session layer: the `.session/` runtime record read/write,
-worktree↔branch↔node resolution, the launch/`--settings` assembly, and the poll loop the watch/wait
-subscriptions share. Each session feature ([[state]], [[launch]], [[dispatch]], [[comms-edge]], [[graph]],
+sessions-core owns `sessions.ts` — the common session layer: the global per-session record read/write
+(`session.json` keyed by session_id, [[runtime]]), session↔worktree↔node resolution, the launch/`--settings`
+assembly, and the poll loop the watch/wait subscriptions share. Each session feature ([[state]], [[launch]], [[dispatch]], [[comms-edge]], [[graph]],
 [[session-selectors]], [[agent-reply-channel]], [[spec-pointer]]) specializes a slice of it and lists it
 under `related:`, so a change here attributes its drift/yatsu to this one owner instead of all of them
 (see [[governed-related]]). That several features hold no code of their own is the honest signal that

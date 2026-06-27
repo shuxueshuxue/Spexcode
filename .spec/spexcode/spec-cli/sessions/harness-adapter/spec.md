@@ -59,13 +59,15 @@ product code. The genuinely NEW Codex pieces: the Codex `/` menu (taken from the
 same discovered-not-guessed way), and the **tool mapping** that closes the inert-on-codex gap.
 
 Because the hook handlers are pure shell, they cannot import `harness.ts`; `hooks/harness.sh` is its **shell
-mirror** (sourced by every handler, exported by `dispatch.sh`). It owns the harness-divergent payload parse:
-Codex reads/edits arrive as `tool_name:"Bash"` + `tool_input.command` with NO `file_path`, so `hp_code_path`
-translates a Bash command into the touched path — the apply_patch `*** File:` line for a mutation, else the
-last path-like token (`sed -n 1p f.ts` → `f.ts`) — and `hp_is_ask` maps Codex's `request_user_input` (and
-Claude's `AskUserQuestion`) onto the question capture. So [[spec-first]], [[spec-of-file]], and mark-active now
-fire on Codex, not just Claude. The session-id + global-store resolution every handler repeated is folded into
-the same helper.
+mirror** (sourced by every handler, exported by `dispatch.sh`). It owns the harness-divergent payload parse.
+Codex has NO `file_path`; the touched file lives inside `tool_input.command`, and the tool that carries it
+differs by operation: an **edit is its own first-class tool `tool_name:"apply_patch"`** whose command is the
+**bare patch envelope** (`*** Update File: <path>` lines, with NO literal `apply_patch` token), while a **read/
+shell is `tool_name:"Bash"`** + `tool_input.command`. So `hp_code_path` accepts BOTH tools and `_hp_codex_cmd_path`
+detects a mutation by the `*** … File:` markers themselves (not by an `apply_patch` token), else takes the last
+path-like token (`sed -n 1p f.ts` → `f.ts`); `hp_is_ask` maps Codex's `request_user_input` (and Claude's
+`AskUserQuestion`) onto the question capture. So [[spec-first]], [[spec-of-file]], and mark-active fire on Codex,
+not just Claude. The session-id + global-store resolution every handler repeated is folded into the same helper.
 
 ## verified codex facts (live round-trip, real codex 0.142.3)
 
@@ -74,9 +76,12 @@ The Codex impl of the adapter must encode these (measured against a real self-la
   e.g. `PreToolUse`), `model`, `permission_mode`, `tool_name`, `tool_input`, `tool_use_id`, `prompt`. No `file_path`.
 - **`.codex/hooks.json` event keys are CamelCase** (codex fired all 5: SessionStart/UserPromptSubmit/PreToolUse/
   PostToolUse/Stop) — the shim is correct as-is; snake_case is ONLY the trust-hash key format.
-- **codex tool model**: reads/edits go through `tool_name:"Bash"` + `tool_input.command` (e.g. `sed -n 1p f`),
-  NOT Claude's `Read/Edit/Write/NotebookEdit`. So the adapter's TOOL-TRIGGER mapping must translate codex's
-  Bash-command (and codex's ask path) into the code-access / AskUserQuestion triggers that [[spec-first]],
-  [[spec-of-file]], and mark-active's question-capture key on — until it does, those three are inert on codex.
-  This is the adapter's job, NOT a regression in the store/dispatch layer (those are proven under real codex:
-  zero-prompt launch, hooks fire from the global store, the governed gate / silent non-governed Stop all work).
+- **codex tool model** (corrected against a LIVE apply_patch round-trip — the earlier "everything is Bash"
+  reading was wrong for edits): a **read/shell** is `tool_name:"Bash"` + `tool_input.command` (e.g. `sed -n 1p
+  f`); an **edit is a distinct tool `tool_name:"apply_patch"`** whose `tool_input.command` is the **bare patch
+  envelope** — `*** Begin Patch` / `*** Update File: <path>` / … — carrying NO literal `apply_patch` token and
+  NO `file_path`. So the adapter keys the mutation off the `*** … File:` markers (NOT an `apply_patch` token)
+  and accepts both `apply_patch` and `Bash` as code-touch tools; otherwise [[spec-of-file]] and an edit-first
+  [[spec-first]] are INERT on codex (the first cut had both bugs — proven live, then fixed). The store/dispatch
+  layer is NOT implicated (proven under real codex: zero-prompt launch, hooks fire from the global store, the
+  governed mark-active flip + governed declare/commit gate + silent non-governed Stop all work live).

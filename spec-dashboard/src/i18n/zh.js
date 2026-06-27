@@ -63,6 +63,7 @@ export default {
       search: '跨节点、会话、议题与场景搜索并跳转',
       overlayCycle: '在工作树正在修改的节点间循环（⇧ 反向）',
       enter: '进入聚焦节点的实时会话',
+      fresh: '在聚焦节点上开启一个全新会话',
       newChild: '在聚焦节点下新建子节点（连击）',
       del: '删除聚焦节点（连击）',
       settings: '打开设置（语言…）',
@@ -298,6 +299,10 @@ export default {
     close: '关闭（esc 或 ,）',
     secLanguage: '语言',
     languageHint: '选择仪表盘语言。默认根据浏览器检测；你的选择会被记住。',
+    secShortcuts: '快捷键',
+    bindPrompt: '按一个键…',
+    shortcutsHint: '点击某个键即可重绑定。导航键与连击键固定不可改。（手柄映射在浏览器之外，是一个独立的 extension。）',
+    reset: '恢复默认',
   },
 
   search: {

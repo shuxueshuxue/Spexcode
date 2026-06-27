@@ -64,6 +64,7 @@ export default {
       search: 'search & jump across nodes, sessions, issues & scenarios',
       overlayCycle: 'cycle through nodes a worktree is changing (⇧ reverse)',
       enter: 'cross into the focus node’s live session',
+      fresh: 'start a fresh session on the focus node',
       newChild: 'new child node under the focus (chord)',
       del: 'delete the focused node (chord)',
       settings: 'open settings (language…)',
@@ -303,6 +304,10 @@ export default {
     close: 'close (esc or ,)',
     secLanguage: 'language',
     languageHint: 'choose the dashboard language. detected from your browser by default; your choice is remembered.',
+    secShortcuts: 'shortcuts',
+    bindPrompt: 'press a key…',
+    shortcutsHint: 'click a key to rebind it. nav & chord keys are fixed. (game-controller mapping lives outside the browser, as a separate extension.)',
+    reset: 'reset to defaults',
   },
 
   search: {

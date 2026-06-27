@@ -1,0 +1,40 @@
+// @@@ escStack - the dashboard's ONE Escape contract for overlays that float as their OWN component ABOVE
+// another surface: the proof iframe, a session row's rename / close-confirm modals, the row context-menu.
+// Each pushes itself onto a LIFO stack while open. A SINGLE capture-phase window listener — bound at module
+// load, so it is the FIRST keydown listener and beats every component's own — pops the TOPMOST layer on Esc
+// and swallows the event (stopImmediatePropagation) so the surface BEHIND never also closes. Esc therefore
+// peels exactly one layer per press, in reverse open order (close the confirm, THEN the panel; close the
+// proof, THEN the panel). When the stack is empty it does nothing, so the board's own single-handler Esc —
+// a locked-session release, a panel close, the help/settings modals, the panel's menu / nav-mode — is
+// untouched. This owns only the cross-component overlay layers: the ones that used to RACE the panel's
+// always-on window listener (whoever registered first won; proof papered over it by stealing iframe focus).
+import { useEffect, useRef } from 'react'
+
+const stack = []
+
+if (typeof window !== 'undefined' && !window.__escStackBound) {
+  window.__escStackBound = true
+  window.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || stack.length === 0) return
+    e.preventDefault()
+    e.stopImmediatePropagation()   // the layer below (a panel, the board) must NOT also close on this press
+    stack[stack.length - 1].close()
+  }, true)
+}
+
+// useEscLayer - register `onClose` as the top Esc layer while `active`. `onClose` is read through a ref so
+// the layer's identity is stable across renders (deps = [active] only) — the stack order never churns just
+// because a parent re-rendered with a fresh inline closure. Pops on unmount or when `active` goes false.
+export function useEscLayer(active, onClose) {
+  const ref = useRef(onClose)
+  ref.current = onClose
+  useEffect(() => {
+    if (!active) return undefined
+    const layer = { close: () => ref.current?.() }
+    stack.push(layer)
+    return () => {
+      const i = stack.indexOf(layer)
+      if (i >= 0) stack.splice(i, 1)
+    }
+  }, [active])
+}

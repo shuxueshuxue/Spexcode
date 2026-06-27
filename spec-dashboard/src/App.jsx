@@ -4,7 +4,7 @@ import '@xyflow/react/dist/style.css'
 import SpecNode from './SpecNode.jsx'
 import NodeView, { panesFor } from './NodeView.jsx'
 import FocusPanel from './FocusPanel.jsx'
-import SessionWindow from './SessionWindow.jsx'
+import SessionWindow, { LockGlyph } from './SessionWindow.jsx'
 import SessionInterface from './SessionInterface.jsx'
 import Legend from './Legend.jsx'
 import Settings from './Settings.jsx'
@@ -410,7 +410,7 @@ function Dashboard({ specs, sessions, reload }) {
 
         {lockedSession && (
           <div className="lock-hint" style={{ '--ov': labelColor(lockedSession.id) }}>
-            <span className="lock-hint-lead">🔒 {sessionName(lockedSession)}</span>
+            <span className="lock-hint-lead"><LockGlyph /> {sessionName(lockedSession)}</span>
             {lockedNodes.length ? (
               <span className="lock-hint-body">
                 {t('lockHint.cycleBefore')}<kbd>o</kbd><kbd>O</kbd>{t('lockHint.cycleAfter', { n: lockedNodes.length })}

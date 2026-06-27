@@ -90,7 +90,7 @@ function forceLayout(sessions, links) {
   const K = 250                                  // ideal edge length: linked nodes settle ~this far apart.
   //                                                Tuned for the node's real footprint (~140×84px): a linked
   //                                                pair must leave a clear span between the avatars for the
-  //                                                edge line and its 💬 message count, not crowd border-to-border.
+  //                                                edge line and its ⇄ message count, not crowd border-to-border.
   const MINSEP = 210                             // hard separation floor: the collision pass below keeps ANY
   //                                                two nodes at least this far apart center-to-center, so even a
   //                                                dense cluster (many links + gravity all pulling inward) can't
@@ -216,7 +216,7 @@ function GraphCanvas({ sessions = [], onOpen, active, legend, setLegend, edges =
       if (e.kind === 'comms') {
         return {
           id: `comms:${e.from}-${e.to}`, source: e.from, target: e.to, type: 'floating',
-          label: `💬 ${e.count ?? 1}`,
+          label: `⇄ ${e.count ?? 1}`,
           labelStyle: { fontSize: 10, fill: 'var(--sg-comms, #8a8f98)', fontWeight: 600 },
           labelShowBg: true,
           labelBgStyle: { fill: 'var(--sg-comms-bg, rgba(20,22,28,0.85))' }, labelBgPadding: [4, 2], labelBgBorderRadius: 4,

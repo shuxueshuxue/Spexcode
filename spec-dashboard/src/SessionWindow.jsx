@@ -4,6 +4,14 @@ import { GLYPH } from './SpecNode.jsx'
 import { sessionName, sessionHeadline, STATUS_COLOR } from './session.js'
 import { useT } from './i18n/index.jsx'
 
+// the "locked / claimed by another session" indicator — a monochrome inline-SVG padlock in the dashboard's
+// own glyph vocabulary (currentColor, no color emoji). Shared by the session row and App's lock-hint banner.
+export const LockGlyph = ({ size = 12 }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="3.5" y="7" width="9" height="6.5" rx="1.2" /><path d="M5.5 7 V5 a2.5 2.5 0 0 1 5 0 V7" />
+  </svg>
+)
+
 export function opSummary(ops) {
   if (!ops.length) return null
   const by = {}
@@ -21,7 +29,7 @@ export function SessionRow({ s, locked, handle }) {
     <>
       <Avatar seed={s.id} status={s.status} title={`${sessionName(s)} · ${t(`status.${s.status}`)} — ${s.id.slice(0, 8)}`} />
       <span className="sess-id" title={headline}>{headline}</span>
-      {locked && <span className="sess-lock" title={t('sessionWindow.lockedTitle')}>🔒</span>}
+      {locked && <span className="sess-lock" title={t('sessionWindow.lockedTitle')}><LockGlyph /></span>}
       <span className="sess-meta">
         <span className="sess-status" style={{ color: STATUS_COLOR[s.status] }}>{t(`status.${s.status}`)}</span>
         {ops && <span className="sess-ops">{ops}</span>}

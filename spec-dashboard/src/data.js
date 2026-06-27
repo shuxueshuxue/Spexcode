@@ -35,8 +35,6 @@ const LOGS = {
   ],
 }
 
-// @@@ begin-log - a spec is always the latest ground truth: no node is ever "closed".
-// Opening one with no live session just lets the agent start working on its content in place.
 function log(node) {
   const lines = LOGS[node.session] || [
     `\x1b[90m$ claude   worktree node/${node.id}  (branch node/${node.id})\x1b[0m`,

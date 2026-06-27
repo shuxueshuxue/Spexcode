@@ -163,10 +163,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [drafts, setDrafts] = useState({})
   const [sending, setSending] = useState(false)
   const [sendErr, setSendErr] = useState(false)   // last /keys dispatch failed — surfaced under the ❯ box
-  // `menuById` is a best-effort, non-authoritative hint (set by each SessionTerm) that a pane looks like a
-  // select menu — used only to SUGGEST nav mode (pulse the button), never to seize keys.
   const [navMode, setNavMode] = useState(false)
-  const [menuById, setMenuById] = useState({})
+  const [menuById, setMenuById] = useState({})   // per-pane menu-sniff flag from each SessionTerm; drives the nav button's `.suggest` pulse
   const [proofOpen, setProofOpen] = useState(false)
   // the graph's `?` legend, lifted here so the console's Esc handler can close it before the console
   // (Esc precedence — see the key router below).
@@ -600,8 +598,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       if ((e.altKey || e.metaKey) && isI && active !== 'new' && active !== 'graph') {
         e.preventDefault(); e.stopPropagation(); setNavMode((v) => !v); return
       }
-      // ⌃/⌘+N (also ⌃/⌘+↑/Home) jumps the selection to New Session. Kept ABOVE the graph branch and the
-      // nav-mode passthrough so it works from the graph and even while raw-key mode forwards to a pane.
+      // ⌃/⌘+N (also ⌃/⌘+↑/Home): kept ABOVE the graph branch and the nav-mode passthrough so the snap fires
+      // from the graph and even while raw-key mode forwards to a pane.
       if (((e.ctrlKey || e.metaKey) && (e.key === 'n' || e.key === 'N')) ||
           ((e.ctrlKey || e.metaKey) && (e.key === 'ArrowUp' || e.key === 'Home'))) {
         e.preventDefault(); e.stopPropagation(); setSel('new'); return
@@ -620,8 +618,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         if (e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); return }
         return
       }
-      // nav mode: forward EVERY key raw to the pane (⌃/⌥/⌘ combos encoded by navKeyToken), nothing else
-      // fires. Esc is forwarded too (it cancels the agent's menu); a SECOND Esc within 600ms exits nav mode.
+      // nav mode: forward EVERY key raw to the pane (⌃/⌥/⌘ combos encoded by navKeyToken), nothing else fires.
       if (navMode && active !== 'new') {
         e.preventDefault(); e.stopPropagation()
         if (e.key === 'Escape') {

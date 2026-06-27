@@ -5,11 +5,10 @@ import { WebglAddon } from '@xterm/addon-webgl'
 import { createResilientSocket } from './resilientSocket.js'
 import '@xterm/xterm/css/xterm.css'
 
-// @@@ best-effort menu sniff - does the pane currently show an interactive SELECT menu (e.g. `/model`'s
-// list) rather than the normal `❯` prompt? Heuristic only and NON-authoritative — the manual nav toggle is
-// the dependable path, so this NEVER seizes keys; it only lets the interface SUGGEST nav mode (pulse the
-// button). Signature: a select-caret line (`❯ <option>`) together with a hint line mentioning Esc plus
-// Enter/arrows/select (menus print "esc to cancel · enter to confirm"); the bare prompt has no such hint.
+// @@@ looksLikeMenu - does the pane currently show an interactive SELECT menu (e.g. `/model`'s list)
+// rather than the normal `❯` prompt? Heuristic signature: a select-caret line (`❯ <option>`) together with
+// a hint line mentioning Esc plus Enter/arrows/select (menus print "esc to cancel · enter to confirm"); the
+// bare prompt has no such hint.
 function looksLikeMenu(term) {
   const buf = term.buffer.active
   let caret = false, hint = false
@@ -181,8 +180,7 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
     }
     document.addEventListener('keydown', onCopyKey)
 
-    // @@@ menu sniff loop - poll the pane a few times a second and report whether it looks like a select
-    // menu, so the interface can SUGGEST nav mode. Best-effort and cheap; the manual toggle never needs it.
+    // poll the pane a few times a second and report via onMenu whether it currently looks like a select menu.
     const sniff = setInterval(() => { try { onMenuRef.current?.(sessionId, looksLikeMenu(term)) } catch { /* */ } }, 700)
 
     const raf = requestAnimationFrame(fitAndSync) // re-fit once layout settles

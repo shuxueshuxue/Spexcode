@@ -1,1 +1,2 @@
 {"scenario":"no-node-fallback-finds-the-governing-node","codeSha":"cd9c66e737e6825977c56dbcd8da10e3862ae81a","blob":"d84efa7a2da34ef1fbdc954bdb40172cc81e78adaeb54238243309cf082dd315","blobKind":"transcript","evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-25T16:36:55.403Z"}
+{"scenario":"no-node-fallback-finds-the-governing-node","codeSha":"10cfc2b87075d11b3bc2a1d2b222d9fc9037a939","blob":"e97657770a68779f8ebbb0f3aa37ba1fd44e80b1995073e8eb45e57168d7aa0d","blobKind":"transcript","evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-27T15:14:23.767Z"}

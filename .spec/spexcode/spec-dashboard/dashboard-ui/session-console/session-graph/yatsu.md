@@ -10,8 +10,10 @@ scenarios:
       `spex yatsu eval session-graph --image <png> --pass`.
     expected: >-
       The relationship graph renders inside the console's right pane: every live session shows as a
-      node and any live monitor shows as a directed arrow between two nodes. The filed reading carries
-      the screenshot as image evidence and a pass verdict.
+      node and any live monitor shows as a directed arrow between two nodes. Linked nodes keep a readable
+      gap — the connecting edge (and, for a talking pair, its 💬 message count) is clearly visible between
+      the two avatars, not crushed border-to-border. The filed reading carries the screenshot as image
+      evidence and a pass verdict.
   - name: node-gestures
     description: >-
       In the relationship graph, exercise the pointer gestures. (1) DOUBLE-click a session node — the

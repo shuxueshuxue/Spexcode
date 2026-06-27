@@ -1,7 +1,10 @@
 import { writeFileSync, readFileSync, existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { homedir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { createHash } from 'node:crypto'
+import { createConnection } from 'node:net'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { claudeSlashCommands, codexSlashCommands, type SlashCommand } from './slash-commands.js'
 
 // @@@ harness-adapter - the ONE seam between SpexCode and the coding-agent harness (Claude Code, Codex, …).
@@ -55,6 +58,117 @@ export interface Harness {
   // --- the `/` menu ---
   // the slash-command list, computed the way THIS harness computes its own `/` menu.
   slashCommands(): SlashCommand[]
+
+  // --- runtime: liveness + prompt delivery ([[harness-delivery]]) ---
+  // is this session's agent process up? The caller passes in the tmux-window presence it already computed
+  // (one tmux snapshot for the whole list — see sessions.ts liveTmux), and the adapter adds ONLY its own
+  // channel check. claude: online iff the tmux window is up AND its reclaude rendezvous socket exists (the
+  // socket is the truth claude is alive — the pane command is the wrapper/shell while claude runs as a child).
+  // codex: online iff the tmux window is up — the codex process itself holds the pane, so tmux presence IS
+  // liveness (codex opens no control socket). Product code asks the ADAPTER instead of hard-wiring the socket.
+  liveness(id: string, tmuxAlive: boolean): 'online' | 'offline'
+  // deliver a follow-up prompt to a LIVE session and report whether it landed. claude: through the rendezvous
+  // control socket, which injects + submits the prompt and CONFIRMS the daemon accepted it (loud failure on a
+  // missing/dead socket — never a silent degradation). codex: `tmux send-keys` typed into the pane it holds,
+  // then Enter to submit (no daemon ack — best-effort typed delivery; short follow-ups only, see the ~2KB
+  // send-keys truncation caveat in tmuxSendKeys). Returns ok=false with a reason that propagates to the API.
+  deliver(id: string, text: string): Promise<DispatchResult>
+  // the relaunch tail reopen() hands launch() to bring the SAME work back up. claude resumes the same
+  // conversation (`--resume <id>`, the id we pinned at launch). codex's own thread id is un-pinnable and the
+  // spexcode id is NOT a codex flag, so the MVP relaunches FRESH (empty tail → a new codex turn in the same
+  // worktree/record); once codex's real thread id is captured this becomes `resume <thread-id>`.
+  resumeArg(rec: { session: string; harnessSessionId?: string }): string
+}
+
+// a prompt-dispatch outcome. ok=true ONLY when delivery is CONFIRMED (claude: the daemon ACCEPTED the prompt;
+// codex: the keys were typed into a live pane). `error` carries a human-readable reason that propagates to the
+// API route (non-2xx) and the CLI/dashboard. Defined here because it is the harness DELIVERY contract; sessions.ts
+// re-exports it for its existing importers.
+export type DispatchResult = { ok: boolean; error?: string }
+
+// @@@ rendezvous control socket - claude's DETERMINISTIC, ONLY input path for PROMPTS to sessions WE launch.
+// sessions.ts starts `claude` with CLAUDE_BG_BACKEND=daemon + CLAUDE_BG_RENDEZVOUS_SOCK=<this path> set ONLY on
+// that one spawned command (env prefix, never global). claude opens a unix socket here; writing one line
+// `{"type":"reply","text":"…"}\n` injects + submits the text as a prompt — no PTY typing, so multi-line input
+// and Enters can't be corrupted the way `tmux send-keys` was. The path is uniquely derived from the session id,
+// so we only ever address OUR OWN sockets (HARD ethics rule: never touch a session outside this product). It
+// lives in tmpdir tied to the claude process, so no extra lifecycle. liveness reads its existence (present while
+// claude is alive, gone once it exits); deliver writes to it. Exported because sessions.ts builds the launch env
+// var from it and best-effort sweeps it on close — but the liveness/delivery USE is the adapter's, below.
+export const rvSock = (id: string) => join(tmpdir(), `spexcode-rv-${id}.sock`)
+
+const ACCEPT_TIMEOUT_MS = 2500
+// @@@ replyViaSocket - inject `text` as a prompt AND confirm the daemon ACCEPTED it (not mere write-success,
+// which is what silently masked dead dispatches before). The CLAUDE_BG_BACKEND=daemon rendezvous server sends
+// NO ack for an accepted reply, so we confirm via an IN-ORDER round-trip: we write `{type:reply}\n{type:repaint}\n`.
+// The daemon dispatches socket lines strictly in order and ENQUEUES the reply BEFORE it handles the repaint and
+// answers `{type:repaint-done}` — so a `repaint-done` with NO preceding `reply-rejected` proves the reply was
+// processed. `repaint` is auth-exempt and always answers, so it's a reliable probe even against a future daemon
+// that gates `reply` behind auth (a gated reply emits `reply-rejected` FIRST). `reply-rejected`/`shutting-down`,
+// a connect/socket error, an early close, or no confirmation within ACCEPT_TIMEOUT_MS ALL resolve to a loud
+// failure with a specific reason. The forced repaint is a harmless redraw of the agent's OWN TUI. Never throws.
+function replyViaSocket(sock: string, text: string): Promise<DispatchResult> {
+  return new Promise((resolve) => {
+    let settled = false, buf = ''
+    let c: ReturnType<typeof createConnection>
+    const done = (r: DispatchResult) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      try { c?.destroy() } catch { /* */ }
+      resolve(r)
+    }
+    const timer = setTimeout(
+      () => done({ ok: false, error: `rendezvous socket gave no acceptance confirmation within ${ACCEPT_TIMEOUT_MS}ms` }),
+      ACCEPT_TIMEOUT_MS,
+    )
+    try {
+      c = createConnection({ path: sock })
+    } catch (e) {
+      done({ ok: false, error: `rendezvous socket connect threw: ${String(e)}` })
+      return
+    }
+    c.on('error', (e: NodeJS.ErrnoException) => done({ ok: false, error: `rendezvous socket connect failed: ${e?.code || String(e)}` }))
+    c.on('close', () => done({ ok: false, error: 'rendezvous connection closed before the prompt was confirmed accepted' }))
+    c.on('connect', () => c.write(JSON.stringify({ type: 'reply', text }) + '\n' + JSON.stringify({ type: 'repaint' }) + '\n'))
+    c.on('data', (chunk: Buffer) => {
+      buf += chunk.toString('utf8')
+      let i: number
+      while ((i = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, i); buf = buf.slice(i + 1)
+        if (!line) continue
+        let type: string | undefined
+        try { type = JSON.parse(line)?.type } catch { continue }   // ignore any non-JSON noise on the wire
+        if (type === 'reply-rejected') return done({ ok: false, error: 'agent REJECTED the prompt (rendezvous reply-rejected — auth-gated daemon?)' })
+        if (type === 'shutting-down') return done({ ok: false, error: 'agent is shutting down — prompt not accepted' })
+        if (type === 'repaint-done') return done({ ok: true })   // reply was enqueued in-order before this
+        // heartbeat / state / other frames → keep waiting for the decisive repaint-done or a rejection.
+      }
+    })
+  })
+}
+// claude's deliver: fail loud BEFORE attempting the socket if it isn't there (a clearer message than a raw
+// connect error), exactly as the old sendKeys did, then inject + confirm via the rendezvous round-trip.
+function deliverViaRendezvous(id: string, text: string): Promise<DispatchResult> {
+  const sock = rvSock(id)
+  if (!existsSync(sock)) return Promise.resolve({ ok: false, error: `no rendezvous control socket for session ${id} (socketless/old session, or the agent is offline) — prompt NOT delivered` })
+  return replyViaSocket(sock, text)
+}
+
+// codex's deliver: TYPE the prompt into the pane the codex process holds, then Enter to submit — codex has no
+// control daemon, so this IS its input channel. NB tmux send-keys truncates a very large buffer (~2KB, the same
+// launch-prompt-limit trap launchScript avoids by running a file); codex follow-ups are short prompts, so this is
+// fine — a giant follow-up would need the file path. Best-effort: tmux reports only the send, not codex acceptance.
+const pexec = promisify(execFile)
+const TMUX_SOCK = process.env.SPEXCODE_TMUX || 'spexcode'
+async function deliverViaSendKeys(id: string, text: string): Promise<DispatchResult> {
+  try {
+    await pexec('tmux', ['-L', TMUX_SOCK, 'send-keys', '-t', id, '-l', '--', text])   // literal text, no key interpretation
+    await pexec('tmux', ['-L', TMUX_SOCK, 'send-keys', '-t', id, 'Enter'])            // submit
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: `tmux send-keys to codex pane ${id} failed (pane gone / agent offline?): ${String((e as Error)?.message || e)}` }
+  }
 }
 
 // idempotent replace of the content between sentinels; the user's own content above/below is preserved. The
@@ -146,6 +260,9 @@ export const claudeHarness: Harness = {
   shim: (dispatch, spex) => buildShim('claude', CLAUDE_EVENTS, dispatch, spex),
   writeTrust: () => { /* Claude relies on folder-trust — nothing to write */ },
   slashCommands: claudeSlashCommands,
+  liveness: (id, tmuxAlive) => (tmuxAlive && existsSync(rvSock(id)) ? 'online' : 'offline'),
+  deliver: (id, text) => deliverViaRendezvous(id, text),
+  resumeArg: (rec) => `--resume ${rec.session}`,
 }
 
 export const codexHarness: Harness = {
@@ -161,6 +278,9 @@ export const codexHarness: Harness = {
   shim: (dispatch, spex) => buildShim('codex', CODEX_EVENTS, dispatch, spex),
   writeTrust: (proj, cmdFor) => writeCodexTrust(proj, CODEX_EVENTS, cmdFor),
   slashCommands: codexSlashCommands,
+  liveness: (_id, tmuxAlive) => (tmuxAlive ? 'online' : 'offline'),   // the codex process holds the pane — tmux presence IS liveness
+  deliver: (id, text) => deliverViaSendKeys(id, text),
+  resumeArg: (rec) => (rec.harnessSessionId ? `resume ${rec.harnessSessionId}` : ''),   // captured id → resume; else relaunch FRESH
 }
 
 // every adapter — materialize iterates this to render each harness's artifacts in one pass.

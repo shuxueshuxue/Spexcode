@@ -1,31 +1,29 @@
 import Modal from './Modal.jsx'
 import { STATUS, GLYPH } from './SpecNode.jsx'
-import { ACT, padCap, keyCap } from './keymap.js'
-import { keysOf, padOf } from './bindings.js'
+import { ACT, keyCap } from './keymap.js'
+import { keysOf } from './bindings.js'
 import { useT } from './i18n/index.jsx'
 
 // @@@ Legend - the single home for the keymap + visual vocabulary, shown in the shared centered Modal
 // opened by the HUD's discreet `?` (key or click). The BOARD keymap is rendered straight from the keymap
 // registry (keymap.js, resolved through bindings.js), so the help can NEVER drift from what the handler
-// dispatches or the controller maps — and each row now shows its game-controller button beside its key.
-// Status dots / op glyphs read STATUS & GLYPH from SpecNode.jsx so the swatches match the board. The
-// node-info popup's own pane/scroll keys are a fixed structural set (POPUP_KEYS), listed but not in the
-// rebindable registry. All COPY routes through t(); keys/glyphs are language-neutral and stay literal.
+// dispatches. Status dots / op glyphs read STATUS & GLYPH from SpecNode.jsx so the swatches match the
+// board. The node-info popup's own pane/scroll keys are a fixed structural set (POPUP_KEYS), listed but
+// not in the rebindable registry. All COPY routes through t(); keys/glyphs are language-neutral.
 
 // alt keys not worth showing in the legend are dropped (the shift-less zoom variants, the capital of a
 // letter that's already shown). Glyphs come from keymap.js so the legend and the editor read the same.
 const KEY_SKIP = new Set(['=', '_', 'I'])
 
 // fold the registry into legend rows: consecutive actions sharing a description collapse into one row
-// (so up+down read as a single "move" line) while keeping every key and pad glyph.
+// (so up+down read as a single "move" line) while keeping every key.
 const BOARD_ROWS = (() => {
   const rows = []
   for (const a of ACT) {
     const keys = keysOf(a.id).filter((k) => !KEY_SKIP.has(k)).map(keyCap)
-    const pad = padOf(a.id) ? padCap(padOf(a.id)) : null
     const last = rows[rows.length - 1]
-    if (last && last.desc === a.desc) { last.keys.push(...keys); if (pad) last.pads.push(pad) }
-    else rows.push({ desc: a.desc, keys, pads: pad ? [pad] : [] })
+    if (last && last.desc === a.desc) last.keys.push(...keys)
+    else rows.push({ desc: a.desc, keys })
   }
   return rows
 })()
@@ -40,18 +38,14 @@ const POPUP_KEYS = [
 const STATUS_ROWS = ['merged', 'active', 'drift', 'pending']
 const OP_ROWS = ['added', 'edited', 'deleted', 'moved']
 
-// the board keymap — two binding columns (keyboard · controller) so a row reads as one action, both ways.
+// the board keymap, rendered from the registry so it can't drift from what the handler dispatches.
 function BoardKeymap({ t }) {
   return (
     <section className="legend-sec">
-      <div className="legend-h legend-keymap-h">
-        <span>{t('legend.secBoard')}</span>
-        <span className="legend-col-pad">{t('legend.colPad')}</span>
-      </div>
+      <div className="legend-h">{t('legend.secBoard')}</div>
       {BOARD_ROWS.map((r) => (
         <div className="legend-row" key={r.desc}>
           <span className="keymap-keys">{r.keys.map((k, i) => <kbd key={i}>{k}</kbd>)}</span>
-          <span className="keymap-pad">{r.pads.length ? r.pads.map((p, i) => <kbd className="pad" key={i}>{p}</kbd>) : <span className="pad-none">—</span>}</span>
           <span className="legend-desc">{t(r.desc)}</span>
         </div>
       ))}

@@ -683,19 +683,7 @@ body {
 .set-lang.on { border-color: var(--blue); color: var(--blue); background: var(--panel2); font-weight: 600; }
 .set-hint { display: block; color: var(--muted); font-size: 11px; line-height: 1.4; }
 
-/* ---- keymap: a controller column beside the keyboard column (legend + settings share these) ---- */
-/* section header that carries a right-aligned column label / controller-status chip. */
-.legend-keymap-h { display: flex; align-items: baseline; justify-content: space-between; }
-.legend-col-pad { font-weight: 700; color: var(--ink2); }
-/* the legend's controller column sits between the key cluster and the description, same fixed width feel. */
-.keymap-pad { flex: none; width: 64px; display: flex; flex-wrap: wrap; gap: 4px; }
-.legend kbd.pad, .bind-cell kbd.pad { color: var(--green); border-color: var(--green); }
-.pad-none { flex: none; width: 64px; color: var(--muted); }
-.keymap-pad .pad-none { width: auto; }
-.pad-status { font-size: 11px; font-weight: 600; color: var(--muted); }
-.pad-status.on { color: var(--green); }
-
-/* ---- shortcuts editor: one row per action, two click-to-rebind cells ---- */
+/* ---- shortcuts editor: one row per action, a click-to-rebind keyboard cell ---- */
 .set-keys { display: flex; flex-direction: column; gap: 2px; margin: 2px 0 8px; }
 .set-key-row { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
 .set-key-row .legend-desc { flex: 1; font-size: 12px; }
@@ -704,7 +692,6 @@ body {
   justify-content: center; cursor: pointer; background: var(--paper);
   border: 1px solid var(--line); border-radius: 4px; padding: 2px 6px;
 }
-.bind-cell:nth-of-type(2) { min-width: 64px; }
 .bind-cell:hover:not(.fixed) { border-color: var(--blue); }
 .bind-cell.capturing { border-color: var(--blue); border-style: dashed; background: var(--panel2); }
 .bind-cell.custom { border-color: var(--blue); }

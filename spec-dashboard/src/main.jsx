@@ -3,7 +3,6 @@ import ReactDOM from 'react-dom/client'
 import { ReactFlowProvider } from '@xyflow/react'
 import App from './App.jsx'
 import { I18nProvider } from './i18n/index.jsx'
-import './gamepad.js' // side-effect: the game-controller bridge mounts itself (board is unaware of it)
 import './styles.css'
 
 ReactDOM.createRoot(document.getElementById('root')).render(

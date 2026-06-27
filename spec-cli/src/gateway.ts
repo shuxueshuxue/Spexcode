@@ -30,8 +30,11 @@ export function resolvePublicConfig(repoRoot: string): PublicConfig | null {
   const enabled = argHas('public') || process.env.SPEXCODE_PUBLIC === '1' || fileCfg?.enabled === true
   if (!enabled) return null
 
+  // the gate is OPT-IN: a password (flag/env only — never spexcode.json) makes the login appear; WITHOUT one
+  // the dashboard is served OPEN. That is loud-warned, not refused — open public access drives the agents, so
+  // anyone who reaches the URL has them. The caller (you) chooses; we never silently gate or silently expose.
   const password = argFlag('password') ?? process.env.SPEXCODE_PASSWORD ?? ''
-  if (!password) { console.error('spex serve --public: a password is REQUIRED — pass --password <pw> or set SPEXCODE_PASSWORD (it is never read from spexcode.json).'); process.exit(1) }
+  if (!password) console.error('⚠ spex serve --public with NO password: the dashboard is OPEN — anyone who reaches it controls the agents. Add --password <pw> / SPEXCODE_PASSWORD to require a login.')
 
   // --http: knowingly drop TLS. Loud, because the password then crosses the wire in clear and secure-context
   // browser features (clipboard) break. Anything else resolves a cert; absent any source → self-signed.
@@ -102,19 +105,23 @@ const MIME: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js
 export type GatewayOpts = { publicPort: number; upstreamPort: number; password: string; tls: { cert: string; key: string } | null; distDir: string }
 
 export function startGateway(opts: GatewayOpts): void {
-  const token = authToken(opts.password)
+  // gated ONLY when a password is set; otherwise the login layer doesn't exist and the dashboard is served open.
+  const gated = !!opts.password
+  const token = gated ? authToken(opts.password) : ''
   const secure = !!opts.tls
   const setCookie = `${COOKIE}=${token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=2592000${secure ? '; Secure' : ''}`
 
   const handler = (req: http.IncomingMessage, res: http.ServerResponse) => {
     const url = (req.url || '/').split('?')[0]
-    // login surface — the only routes reachable without a cookie.
-    if (url === '/login' && req.method === 'POST') return doLogin(req, res, opts.password, setCookie)
-    if (url === '/login') return sendHtml(res, 200, loginPage())
-    if (url === '/logout') { res.writeHead(302, { 'Set-Cookie': `${COOKIE}=; Path=/; Max-Age=0`, Location: '/login' }); return res.end() }
-    if (!isAuthed(req, token)) {
-      if (url.startsWith('/api')) { res.writeHead(401, { 'Content-Type': 'application/json' }); return res.end('{"error":"authentication required"}') }
-      res.writeHead(302, { Location: '/login' }); return res.end()
+    if (gated) {
+      // login surface — the only routes reachable without a cookie. Absent entirely when ungated.
+      if (url === '/login' && req.method === 'POST') return doLogin(req, res, opts.password, setCookie)
+      if (url === '/login') return sendHtml(res, 200, loginPage())
+      if (url === '/logout') { res.writeHead(302, { 'Set-Cookie': `${COOKIE}=; Path=/; Max-Age=0`, Location: '/login' }); return res.end() }
+      if (!isAuthed(req, token)) {
+        if (url.startsWith('/api')) { res.writeHead(401, { 'Content-Type': 'application/json' }); return res.end('{"error":"authentication required"}') }
+        res.writeHead(302, { Location: '/login' }); return res.end()
+      }
     }
     if (url.startsWith('/api')) return proxyHttp(req, res, opts.upstreamPort)
     return serveStatic(res, opts.distDir, url)
@@ -126,7 +133,7 @@ export function startGateway(opts: GatewayOpts): void {
   // it on the same-origin handshake), then raw-pipe to the loopback supervisor, replaying the buffered
   // upgrade request so the child completes the WebSocket handshake. Mirrors supervise.ts's byte pipe.
   server.on('upgrade', (req, socket, head) => {
-    if (!isAuthed(req, token)) { socket.destroy(); return }
+    if (gated && !isAuthed(req, token)) { socket.destroy(); return }
     const up = net.connect(opts.upstreamPort, '127.0.0.1', () => {
       up.write(`${req.method} ${req.url} HTTP/1.1\r\n` + rawHeaders(req))
       if (head && head.length) up.write(head)
@@ -138,7 +145,7 @@ export function startGateway(opts: GatewayOpts): void {
 
   server.listen(opts.publicPort, () => {
     const scheme = secure ? 'https' : 'http'
-    console.log(`[gateway] public mode on ${scheme}://0.0.0.0:${opts.publicPort} — password-gated, proxying to loopback :${opts.upstreamPort}`)
+    console.log(`[gateway] public mode on ${scheme}://0.0.0.0:${opts.publicPort} — ${gated ? 'password-gated' : 'OPEN (no password)'}, proxying to loopback :${opts.upstreamPort}`)
     if (!secure) console.log('[gateway] (TLS off — --http)')
   })
 }

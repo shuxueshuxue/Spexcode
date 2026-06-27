@@ -37,3 +37,5 @@ harness-report-serve
 # os / editor
 .DS_Store
 *.log
+HARNESS-REFACTOR-REPORT.md
+firecoder-scout.md

@@ -26,7 +26,10 @@ const argHas = (name: string) => process.argv.includes(`--${name}`)
 
 export function resolvePublicConfig(repoRoot: string): PublicConfig | null {
   let fileCfg: any = {}
-  try { fileCfg = JSON.parse(readFileSync(join(repoRoot, 'spexcode.json'), 'utf8'))?.serve?.public ?? {} } catch { /* no/!json config */ }
+  // a MISSING spexcode.json is fine (defaults); a MALFORMED one fails LOUD — silently swallowing it would
+  // serve the dashboard with the wrong public/TLS posture, the opposite of what the file says.
+  try { fileCfg = JSON.parse(readFileSync(join(repoRoot, 'spexcode.json'), 'utf8'))?.serve?.public ?? {} }
+  catch (e) { if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw new Error(`spexcode.json is malformed (cannot resolve public-mode config): ${(e as Error).message}`) }
   const enabled = argHas('public') || process.env.SPEXCODE_PUBLIC === '1' || fileCfg?.enabled === true
   if (!enabled) return null
 

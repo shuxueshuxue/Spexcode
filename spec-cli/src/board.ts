@@ -112,5 +112,8 @@ export async function buildBoard() {
   opWts.forEach((w) => { opsByPath[w.path] = w.ops })
   const sess = sessions.map((s) => ({ ...s, source: s.path, ops: opsByPath[s.path] || [] }))
 
-  return { nodes, sessions: sess, project: readConfig(root).dashboard?.title || basename(root) }
+  const dash = readConfig(root).dashboard
+  // project names the tab ([[tab-title]]); projectIcon is the tab favicon ([[tab-icon]]) — both ride the
+  // /api/board poll so they re-derive from whichever backend the viewer reached. Empty icon → frontend default.
+  return { nodes, sessions: sess, project: dash?.title || basename(root), projectIcon: dash?.icon || '' }
 }

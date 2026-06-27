@@ -16,27 +16,31 @@ related:
 
 The bar this node is held to: **a developer with only a public IP — no domain, no reverse proxy, no
 extra tooling — runs one command and trusted people use the SpexCode dashboard over the internet behind
-a password.** If that is not true, the design is wrong. SpexCode is a technical fast-lane between people
-who trust each other, not a public service; it must never require the apparatus of one (DNS, a CA-issued
-cert, a separate proxy) to stand up. Because access to the dashboard is effectively remote code execution
-through the agents, the password gate must be real — not a hidden field, a genuine boundary.
+a password — or, when they choose, with no gate at all.** If that is not true, the design is wrong.
+SpexCode is a technical fast-lane between people who trust each other, not a public service; it must never
+require the apparatus of one (DNS, a CA-issued cert, a separate proxy) to stand up. **The gate is opt-in:**
+a password makes a real login appear; without one the dashboard is served open. Because access to the
+dashboard is effectively remote code execution through the agents, an open public deployment is loud-warned
+— the operator chooses, but the choice is never silent in either direction.
 
 ## expanded spec
 
-`spex serve --public --password <pw>` raises a **gateway** on `0.0.0.0:PORT` that is the only thing facing
-the internet. It terminates TLS, gates every request behind the password, serves the built dashboard, and
-reverse-proxies `/api/*` and the terminal WebSocket to the loopback supervisor. The supervisor and its
+`spex serve --public` raises a **gateway** on `0.0.0.0:PORT` that is the only thing facing the internet. It
+terminates TLS, serves the built dashboard, reverse-proxies `/api/*` and the terminal WebSocket to the
+loopback supervisor, and — **when `--password <pw>` is given** — gates every request behind a login. The supervisor and its
 child stay bound to `127.0.0.1`; **loopback is the trust boundary, the gateway is the internet face.**
 Locally launched agents reach the loopback supervisor directly, so they never carry the password — only
 outside traffic meets the gate. Without `--public` nothing changes: dev stays plain loopback, no TLS, no
 gate. This is a pure additive switch over [[spec-cli]]'s supervisor; the dashboard needs no change (it
 already calls `/api` same-origin and opens its socket as `wss://` under HTTPS).
 
-**The gate is a designed login, not the browser's Basic dialog.** An unauthenticated visitor gets a styled
-SpexCode login page; the posted password is compared in constant time and, on success, mints a signed
-`httpOnly` cookie (derived from the password via HMAC, so it survives a restart and stores no server-side
-session). The cookie authorises every later request including the WebSocket upgrade — the browser sends it
-on the same-origin handshake, so the terminal socket is gated by the same secret with no query-token hack.
+**When a password is set, the gate is a designed login, not the browser's Basic dialog.** An unauthenticated
+visitor gets a styled SpexCode login page; the posted password is compared in constant time and, on success,
+mints a signed `httpOnly` cookie (derived from the password via HMAC, so it survives a restart and stores no
+server-side session). The cookie authorises every later request including the WebSocket upgrade — the browser
+sends it on the same-origin handshake, so the terminal socket is gated by the same secret with no query-token
+hack. With **no** password the whole login layer is absent — no `/login`, no cookie check — and every request
+is served straight through; the operator has chosen open access (and was warned).
 
 **The certificate is a resolved value, never hardcoded.** Precedence: `--tls-cert/--tls-key` flags > the
 `SPEXCODE_TLS_CERT`/`SPEXCODE_TLS_KEY` env > `spexcode.json` `serve.public.tls` > a **self-signed default**,
@@ -50,5 +54,5 @@ not a requirement.
 
 **Secrets stay out of the repo, and failures are loud.** The password is taken only from the flag or env,
 never the committable `spexcode.json`; config holds cert file *paths*, the key file lives outside git.
-`--public` with no password is refused; a cert file that does not exist is a named error pointing at the
-repair, never a silent fallback to insecure serving.
+`--public` with no password serves open with a loud warning (never a silent exposure); a cert file that does
+not exist is a named error pointing at the repair, never a silent fallback to insecure serving.

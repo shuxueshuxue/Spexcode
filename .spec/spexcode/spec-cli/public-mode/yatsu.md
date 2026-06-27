@@ -24,6 +24,16 @@ scenarios:
       red "Incorrect password — try again." banner above the field. It is a designed page, NOT the browser's
       native Basic-auth dialog.
     code: spec-cli/src/login-page.ts
+  - name: open-no-password
+    description: >
+      Run `spex serve --public` with NO password (no --password / SPEXCODE_PASSWORD) and drive the public
+      endpoint: the startup line, an unauthenticated GET /, GET /api/board, and whether any /login gate exists.
+    expected: |
+      Startup prints a loud "OPEN — no password" warning and the gateway logs "OPEN (no password)". With no
+      cookie: GET / returns the dashboard (200, NOT a 302 to /login), GET /api/board returns the proxied board
+      JSON (200), and there is no /login gate — the login layer is absent entirely. The operator chose open
+      access and was warned; nothing is silently gated or silently exposed.
+    code: spec-cli/src/gateway.ts
 ---
 # public-mode loss
 

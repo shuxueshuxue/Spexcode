@@ -49,13 +49,15 @@ hp_ask_note() {
 #   mutate  → the file being EDITED      ([[spec-of-file]] fires only on a mutation)
 # Echoes the path, or nothing when the payload is not a code touch of that mode. The harness divergence:
 #   Claude — Read/Edit/Write/NotebookEdit + tool_input.file_path|notebook_path.
-#   Codex  — reads/edits go through tool_name:Bash + tool_input.command (NO file_path); we parse the command.
+#   Codex  — NO file_path. An EDIT is its own first-class tool `tool_name:"apply_patch"` whose tool_input.command
+#            is the bare patch envelope (`*** Update File: <path>`); a READ/shell is `tool_name:"Bash"` +
+#            tool_input.command. Both carry the touched file inside `command`, so we parse that one field.
 hp_code_path() {
   local payload="$1" mode="$2" tool
   tool=$(hp_tool "$payload")
   case "$SPEXCODE_HARNESS" in
     codex)
-      [ "$tool" = Bash ] || return 0
+      case "$tool" in apply_patch|Bash) ;; *) return 0 ;; esac
       _hp_codex_cmd_path "$(hp_field "$payload" command)" "$mode"
       ;;
     *)
@@ -70,19 +72,21 @@ hp_code_path() {
 }
 
 # @@@ codex command → path - the apply_patch / sed / cat path-extractor. Codex never sends a file_path; the
-# touched file is an argument of the Bash command. Two shapes: an apply_patch carries `*** (Add|Update|Delete)
-# File: <path>` lines (always a MUTATION); a plain command (sed/cat/head/rg/…) carries the path as a token.
-# A MUTATION is apply_patch or a write shape (a redirect, tee, `sed -i`, dd of=); in `mutate` mode a pure read
-# yields nothing. The path is the last path-like token (has a / or a .ext), ignoring flags — matches the
+# touched file lives inside `command`. Two shapes: a PATCH envelope carries `*** (Add|Update|Delete) File:
+# <path>` lines (always a MUTATION) — this is what the apply_patch tool sends, the bare envelope with NO literal
+# `apply_patch` token, so we detect it by the File: markers themselves (the legacy `apply_patch` token is kept
+# too, for a shell-wrapped invocation); a plain command (sed/cat/head/rg/…) carries the path as a token.
+# A MUTATION is a patch envelope or a write shape (a redirect, tee, `sed -i`, dd of=); in `mutate` mode a pure
+# read yields nothing. The path is the last path-like token (has a / or a .ext), ignoring flags — matches the
 # verified-facts example `sed -n 1p f.ts` → `f.ts`. Best-effort: an exotic command may not resolve, which only
 # means a missed nudge, never a wrong block.
 _hp_codex_cmd_path() {
   local mode="$2" cmd
   # the command arrives as a JSON STRING value, so its newlines are the two-character escape `\n` (and tabs
-  # `\t`). Decode them to real whitespace so an apply_patch File: line ends at a newline and tokens split.
+  # `\t`). Decode them to real whitespace so a patch File: line ends at a newline and tokens split.
   cmd=$(printf '%s' "$1" | awk '{gsub(/\\n/,"\n"); gsub(/\\t/,"\t")}1')
   case "$cmd" in
-    *apply_patch*|*applypatch*)
+    *apply_patch*|*applypatch*|*'*** Add File:'*|*'*** Update File:'*|*'*** Delete File:'*)
       printf '%s\n' "$cmd" | sed -n 's/^\*\*\* \(Add\|Update\|Delete\) File: \(.*\)$/\2/p' | head -1 | sed 's/[[:space:]]*$//'
       return 0 ;;
   esac

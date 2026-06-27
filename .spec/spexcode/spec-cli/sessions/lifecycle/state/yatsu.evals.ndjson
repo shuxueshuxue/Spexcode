@@ -4,3 +4,9 @@
 {"scenario":"dashboard-equivalence-governed","codeSha":"3f14aabb477b668944d8d4bf56b6f29b1d685001","blob":null,"evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-27T12:45:54.073Z"}
 {"scenario":"board-enumerates-global-store","codeSha":"3f14aabb477b668944d8d4bf56b6f29b1d685001","blob":null,"evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-27T12:45:55.735Z"}
 {"scenario":"spec-discipline-runs-for-non-governed","codeSha":"3f14aabb477b668944d8d4bf56b6f29b1d685001","blob":null,"evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-27T12:45:57.328Z"}
+{"scenario":"worktree-has-zero-session","codeSha":"53f6c3745a8d3ef3787fc0dba15a264fd3441584","blob":null,"evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-27T13:38:36.179Z"}
+{"scenario":"multi-agent-one-folder-no-clobber","codeSha":"53f6c3745a8d3ef3787fc0dba15a264fd3441584","blob":null,"evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-27T13:38:37.802Z"}
+{"scenario":"stop-gate-no-misfire-for-self-launch","codeSha":"53f6c3745a8d3ef3787fc0dba15a264fd3441584","blob":null,"evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-27T13:38:39.287Z"}
+{"scenario":"spec-discipline-runs-for-non-governed","codeSha":"53f6c3745a8d3ef3787fc0dba15a264fd3441584","blob":null,"evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-27T13:38:40.597Z"}
+{"scenario":"dashboard-equivalence-governed","codeSha":"53f6c3745a8d3ef3787fc0dba15a264fd3441584","blob":null,"evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-27T13:38:42.061Z"}
+{"scenario":"board-enumerates-global-store","codeSha":"53f6c3745a8d3ef3787fc0dba15a264fd3441584","blob":null,"evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-27T13:38:43.656Z"}

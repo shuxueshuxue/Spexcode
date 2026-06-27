@@ -343,7 +343,9 @@ if (cmd === 'serve') {
   const DECLARED = ' — recorded; the human sees it in the dashboard. Your next tool call resets this worktree to active (the mark-active hook, by design), so re-reading .session won\'t reflect it.'
   if (sub === 'new') {
     // route through the backend (auth env + concurrency cap); in-process only if no backend is reachable.
-    console.log(JSON.stringify(await s.createSession(flag('node') ?? null, flag('prompt') ?? ''), null, 2))
+    // prompt = --prompt OR the first positional (after `session new`), so `session new "<prompt>"` works the
+    // SAME as the `spex new "<prompt>"` shorthand — one prompt-resolution rule, not two.
+    console.log(JSON.stringify(await s.createSession(flag('node') ?? null, flag('prompt') ?? positionals(4)[0] ?? ''), null, 2))
   } else if (sub === 'list') {
     console.log(JSON.stringify(await c.clientListSessions(), null, 2))
   } else if (sub === 'reopen' || sub === 'resume') {

@@ -101,8 +101,16 @@ export function appendSysArg(cfgs: ConfigPreset[] = loadSystemConfig()): string 
 // is a LOUD failure that propagates to the caller (API non-2xx) — never a silent degradation to typing into
 // the pane, which previously fooled us into thinking a dead dispatch had worked.
 const rvSock = (id: string) => join(tmpdir(), `spexcode-rv-${id}.sock`)
-// env prefix put in front of the spawned `claude` so it creates this session's rendezvous control socket.
-const rvEnv = (id: string) => `CLAUDE_BG_BACKEND=daemon CLAUDE_BG_RENDEZVOUS_SOCK=${rvSock(id)}`
+// env prefix put in front of the spawned agent so it creates this session's rendezvous control socket — and
+// so its hooks + materialize render to the SAME store the backend uses. SPEXCODE_HOME/CODEX_HOME are
+// propagated when set, because the session inherits the tmux SERVER's env (not the backend's), so without this
+// an overridden home would silently leak the session's hook-state + codex-trust to the default ~/.spexcode /
+// ~/.codex. Deterministic: the session's store = the backend's store, never the ambient env's.
+const rvEnv = (id: string) => {
+  const parts = [`CLAUDE_BG_BACKEND=daemon`, `CLAUDE_BG_RENDEZVOUS_SOCK=${rvSock(id)}`]
+  for (const v of ['SPEXCODE_HOME', 'CODEX_HOME']) { const val = process.env[v]; if (val) parts.push(`${v}=${val}`) }
+  return parts.join(' ')
+}
 
 // a prompt-dispatch outcome. ok=true ONLY when the agent confirmably ACCEPTED the prompt; otherwise `error`
 // carries a human-readable reason that propagates to the API route (non-2xx) and the CLI/dashboard/manager.

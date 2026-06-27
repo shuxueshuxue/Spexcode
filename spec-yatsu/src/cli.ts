@@ -3,7 +3,7 @@ import { join, relative, dirname } from 'node:path'
 import { repoRoot, headSha, driftIndex, historyIndex, stagedFiles, git } from '../../spec-cli/src/git.js'
 import { loadSpecs } from '../../spec-cli/src/specs.js'
 import { loadConfig } from '../../spec-cli/src/lint.js'
-import { mainBranch, statePath } from '../../spec-cli/src/layout.js'
+import { mainBranch, envSessionId, readRawRecord } from '../../spec-cli/src/layout.js'
 import { yatsuNodes, validateScenarios, YATSU_FILE, type YatsuNode } from './yatsu.js'
 import { readReadings, appendReading, latestPerScenario, type Reading, type Verdict } from './sidecar.js'
 import { staleAxes } from './freshness.js'
@@ -36,17 +36,13 @@ async function gatherNodes(root: string): Promise<EvalNode[]> {
   return yatsuNodes(root).map((n) => ({ ...n, codeFiles: codeByDir.get(relative(root, n.dir)) ?? [] }))
 }
 
-// resolve `.` → the node this worktree works on: the session state's node line, else the `node/<id>`
-// branch. Reads through [[portable-layout]]'s statePath so it spans the runtime-dir migration — the new
-// `.session/state` file or a legacy flat `.session` — instead of EISDIR-ing on a new session's `.session/` dir.
+// resolve `.` → the node this worktree works on: the session record's `node` (the authoritative ref a
+// dashboard session was bound to — NOT derivable from the branch, whose slug carries a `-<id4>` suffix),
+// else the `node/<id>` branch. The record now lives in the GLOBAL store keyed by the harness session id
+// ([[state]]), so we read it via the env session id; a self-launched agent with no record falls back to the branch.
 function currentNodeId(root: string): string | null {
-  const sf = statePath(root)
-  if (existsSync(sf)) {
-    for (const line of readFileSync(sf, 'utf8').split('\n')) {
-      const m = line.match(/^\s*node:\s*(\S+)/)
-      if (m) return m[1]
-    }
-  }
+  const id = envSessionId()
+  if (id) { const rec = readRawRecord(id); if (rec?.node) return rec.node }
   try {
     const branch = git(['-C', root, 'symbolic-ref', '--short', 'HEAD']).trim()
     if (branch.startsWith('node/')) return branch.slice('node/'.length)

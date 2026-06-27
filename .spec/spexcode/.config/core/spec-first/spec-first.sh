@@ -3,17 +3,27 @@
 # ACCESSES code — READS or mutates a non-spec file — WITHOUT having touched its spec, it blocks once to
 # remind: read the node's spec AND its neighbors first, then reconcile against it (change the spec, or make
 # the code honor it) — never silently diverge. It once fired only on code-MUTATING tools, which let a pure
-# understanding/analysis session sail past it entirely (the grounding gap): an agent reasoned straight from
-# the code without ever opening the contract. Widening the trigger to Read closes that — grounding should
-# precede understanding, not just editing. The sentinel makes it fire at most once per session; the
-# re-issued tool call passes. An agent whose first code touch IS its spec — reading or editing it — is
-# blessed silently: doing it right never earns a nag. Pure shell (no node/tsx), cwd = the session worktree.
-# Only ever wired into post-runtime-dir sessions, so it assumes the `.session/` layout.
-sent=.session/spec-checked
-[ -f .session/state ] || exit 0    # not a session worktree (no folder-layout state) → nothing to nudge
+# understanding/analysis session sail past it (the grounding gap): an agent reasoned straight from the code
+# without ever opening the contract. Widening the trigger to Read closes that. The sentinel makes it fire at
+# most once per session; the re-issued tool call passes. An agent whose first code touch IS its spec — reading
+# or editing it — is blessed silently. Pure shell (no node/tsx).
+# @@@ all sessions, global sentinel - spec-awareness is UNIVERSAL, so this is NOT gated on `governed`: it
+# serves any agent (dashboard or user-self-launched). It has no worktree state to read any more — the
+# once-per-session sentinel lives in the session's GLOBAL store dir (keyed by the harness session_id from the
+# payload, grouped per-project — mirrors spec-cli/src/layout.ts), created on demand. The node it points at is
+# read from the global record when the session is bound to one (a dashboard session); a self-launched agent
+# has no record, so it falls back to the generic "find the governing node" nudge. cwd = the session worktree.
+payload=$(cat 2>/dev/null)
+sid=$(printf '%s' "$payload" | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
+[ -n "$sid" ] || exit 0
+gcd=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || gcd=$(realpath "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null)
+[ -n "$gcd" ] || exit 0
+enc=$(printf '%s' "$(dirname "$gcd")" | sed 's#[/.]#-#g')
+sdir="${SPEXCODE_HOME:-$HOME/.spexcode}/projects/$enc/sessions/$sid"
+rec="$sdir/session.json"
+sent="$sdir/spec-checked"
 [ -f "$sent" ] && exit 0           # already reminded or blessed this session → silent, every later access passes
 
-payload=$(cat 2>/dev/null)
 # the tool about to run; keyed on the field name, not a blind substring (an input mentioning "Edit" can't trip it).
 tool=$(printf '%s' "$payload" | sed -n 's/.*"tool_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
 case "$tool" in Read|Edit|Write|NotebookEdit) ;; *) exit 0 ;; esac   # code-ACCESS tools (read or mutate)
@@ -24,13 +34,12 @@ path=$(printf '%s' "$payload" | sed -n 's/.*"file_path"[[:space:]]*:[[:space:]]*
 
 # reading or editing the spec itself IS spec-first → bless silently (set the sentinel, allow). MUST come
 # first: the nudge tells the agent to read its spec, so a spec Read can never be the thing we block.
-case "$path" in */.spec/*|.spec/*|*/spec.md|spec.md) : > "$sent"; exit 0 ;; esac
-# the session's own runtime state is neither code nor grounding → ignore WITHOUT consuming the one-shot.
-case "$path" in */.session/*|.session/*|.session|"") exit 0 ;; esac
+case "$path" in */.spec/*|.spec/*|*/spec.md|spec.md) mkdir -p "$sdir"; : > "$sent"; exit 0 ;; esac
+case "$path" in "") exit 0 ;; esac   # no path → ignore WITHOUT consuming the one-shot.
 
 # first code access without having touched the spec → set the sentinel (so this fires exactly once), nudge once.
-: > "$sent"
-node=$(sed -n 's/^node:[[:space:]]*//p' .session/state 2>/dev/null | head -1)
+mkdir -p "$sdir"; : > "$sent"
+node=$(sed -n 's/.*"node"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$rec" 2>/dev/null | head -1)
 if [ -n "$node" ]; then
   sp=$(find .spec -path "*/$node/spec.md" 2>/dev/null | head -1)
   where="your node's spec (${sp:-.spec/.../$node/spec.md})"

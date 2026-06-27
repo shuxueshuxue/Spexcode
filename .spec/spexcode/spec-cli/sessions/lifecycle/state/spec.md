@@ -4,7 +4,7 @@ status: active
 hue: 280
 desc: Two orthogonal axes — agent-authored lifecycle and runtime-derived liveness — that never override each other; plus the gating hooks that force the lifecycle write.
 code:
-  - spec-cli/hooks/stop-gate.sh
+  - .spec/spexcode/.config/core/stop-gate/stop-gate.sh
 related:
   - spec-cli/src/sessions.ts
   - spec-cli/src/cli.ts
@@ -21,8 +21,24 @@ reversible, and nothing auto-disappears.
 
 ## expanded spec
 
-The `.session/state` file is the source of truth (never an in-memory map) — one file in the worktree's
-`.session/` runtime dir ([[runtime]]). The statuses: `active` (working / undeclared this turn), `awaiting`
+The session **state** is the source of truth (never an in-memory map). It lives NOT in the worktree but in a
+per-user GLOBAL store, keyed by the **harness `session_id`** every hook payload carries (Claude + Codex). The
+layout mirrors Claude's own `~/.claude/projects/<enc>/`: `<SPEXCODE_HOME or ~/.spexcode>/projects/<enc>/sessions/
+<session_id>/`, where `<enc>` encodes the **project root** (path separators → `-`). The project root is the MAIN
+checkout (`dirname` of the shared git **common** dir), which resolves identically from main or any linked
+worktree — so the board (running at main) and a hook (running in a worktree) compute the **same** dir; resolving
+it from `git rev-parse --show-toplevel` would not (in a worktree that is the worktree). The record itself is
+`session.json`, written one-field-per-line with every key always present, so the pure-shell hot-path hook
+(mark-active) value-replaces `status`/`proposal`/`note` with a single sed and never needs jq. Keying by
+session_id, not worktree path, is deliberate: it keeps the worktree **completely clean** (zero SpexCode files —
+the launcher products live in the store too, see [[runtime]]) AND gives EACH agent its own record, so a user may
+run several claude/codex in one folder without their states clobbering (a path key could not). The board
+ENUMERATES this store (`projects/<this-project>/sessions/*`), filtered to `governed:true` and ordered by the
+record's stored `createdAt` — it no longer scans `git worktree list`; each row's `worktree_path` (in the record)
+is what opens its terminal / diff / live-view. Each record carries a **`governed`** flag: the dashboard launcher
+([[sessions-core]]) sets it true; a user-self-launched agent has no governed record (a non-board session). The
+`governed` flag is the explicit boundary that the old "is there a `.session/` dir" presence implied — see the
+Hooks split below. The statuses: `active` (working / undeclared this turn), `awaiting`
 (a proposal — review, done, or close-pending, by kind), `parked` (waiting on a background task;
 **self-resumes** — nothing for a human to do), `error` (a turn died), `asking` (stopped and **needs the
 human** — a question, or the stop-gate's auto-default for an undeclared/uncommitted stop), `queued` (held
@@ -50,9 +66,10 @@ shows the relaunch panel whatever the lifecycle** — a dead `asking` agent stil
 the sole exception being `queued`, which has not launched yet and self-starts as a slot frees.
 
 Offline is reachable on purpose, not only by a crash. **`exit`** is the human-only *soft stop* — the inverse
-of `reopen`: it kills the agent's tmux + rendezvous socket but **leaves the worktree, branch, and transcript**,
-so the session simply reads `offline` and the relaunch panel offers to `--resume` the same conversation.
-Because it touches no `.session/state`, the lifecycle the agent last authored survives the stop untouched.
+of `reopen`: it kills the agent's tmux + rendezvous socket but **leaves the worktree, branch, transcript, and
+the global record**, so the session simply reads `offline` and the relaunch panel offers to `--resume` the same
+conversation. Because it touches no `session.json`, the lifecycle the agent last authored survives the stop
+untouched — whereas `close` removes the worktree AND sweeps the global record dir.
 Contrast **`close`**, the other human-only terminal verb: it *removes* the worktree, discarding the work. Both
 are human-only and direct (not agent proposals); exit is fully reversible (relaunch), close is not. An exited
 session occupies no working-set slot ([[launch]]) — offline never does — so the freed capacity drains a queued
@@ -62,15 +79,28 @@ idle-prompt hook fired since the last tool use, else working, **active-only guar
 a declaration. The compact `DisplayStatus` (the `spex ls` glyph, the row dot) is a **derived label
 composing both axes** for one-glyph surfaces — a convenience, never a third source of truth.
 
-### Hooks (injected per session via `--settings`, polluting nothing)
+### Hooks (delivered via the [[hook-dispatch]] dispatcher, gated by `governed`)
+
+Every hook reads the **`session_id`** from its own payload and resolves the global record the same way
+sessions.ts does (project key from the git common dir → `<store>/projects/<enc>/sessions/<id>/session.json`).
+The hooks split on the `governed` flag. The **board-lifecycle** hooks below (mark-active, the Stop gate,
+StopFailure→error, idle) act ONLY when that record reads `governed: true`; on a non-governed (user-self-launched)
+record — or none at all — they no-op (the Stop gate exits 0 SILENTLY), because a self-launched agent has no board
+to feed, so the Stop gate must NOT misfire its declare-demand. mark-active edits the record directly in shell (the
+hot path stays jq-free); the non-hot writers (idle/StopFailure, and the Stop gate's auto-declare) shell to `spex
+session … --session <id>` so the TS layer owns the JSON — they pass the id explicitly because there is no worktree
+`.session` to fall back on. The **spec-discipline** hooks ([[spec-first]], [[spec-of-file]]) are NOT gated on
+`governed` — they serve any agent, keeping their once-per-session sentinel/ledger as sibling files in the same
+global session dir (created on demand even for a session with no `session.json`). So board state is a managed-
+session concern; spec-awareness is universal.
 
 - **`UserPromptSubmit` + `PreToolUse` → one `mark-active` hook**: it writes **`asking`** on an
   **AskUserQuestion** (the question → the note), else **`active`** — the freshness signal that also flips
   a stale `idle`/`asking` back the moment work resumes.
 - **`Stop` → the gate**, two jobs each with a hard loop-break. A **commit gate** rejects a done/merge
-  proposal while the branch has uncommitted changes or is 0 ahead of the base branch — ignoring the runtime
-  files SpexCode writes into the worktree (the whole `.session/` runtime dir — [[runtime]]); propose-**close**
-  is exempt. A **declare gate** blocks a stop while still `active`,
+  proposal while the branch has uncommitted changes or is 0 ahead of the base branch — and since SpexCode now
+  writes NO files into the worktree (the runtime lives in the global store, [[runtime]]), every dirty path is
+  genuine work, with no runtime-file filtering to do; propose-**close** is exempt. A **declare gate** blocks a stop while still `active`,
   auto-defaulting on the forced continuation to **`asking`** (the stop needs a human — it never fakes a
   self-resuming `parked`), or to `awaiting`/`nothing` only when the work is actually committed and ahead.
   The block reason gives each option its **application condition**, not a menu: a state is a claim others
@@ -85,5 +115,5 @@ a stop with no declaration. Surfacing an `asking` is the manager's job (see [[gr
 writers live in `sessions.ts`; state's only stake in the shared `cli.ts` hub is the `spex session`
 declaration commands and the `spex ls` table — a sibling verb's churn there, like the `yatsu` usage line
 rewritten in the measure-and-score reframe, moves the file but is not state's drift. A declaration echoes a one-line confirmation — recorded for
-the dashboard, after which the next tool call flips the worktree back to `active`, so an agent never reads
+the dashboard, after which the next tool call (via mark-active) flips the record back to `active`, so an agent never reads
 that re-flip as a lost proposal.

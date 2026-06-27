@@ -1,13 +1,14 @@
-import { readFileSync, existsSync, statSync } from 'node:fs'
+import { readFileSync, existsSync, readdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
-import { git, repoRoot, gitA, gitTry, headSha, worktreeSpecSig, worktreeSpecDelta, type NodeOp } from './git.js'
+import { homedir } from 'node:os'
+import { git, repoRoot, gitA, headSha, worktreeSpecSig, worktreeSpecDelta, type NodeOp } from './git.js'
 import { guardWorktree } from './resilience.js'
+import { HARNESSES } from './harness.js'
 
 type Config = {
   main?: string                    // path to the source-of-truth checkout (default: the `main` worktree)
   mainBranch?: string              // source-of-truth BRANCH worktrees fork from (default: auto-detected — see mainBranch())
   branchPrefix?: string            // how a branch names its node (default: "node/")
-  nodeFrom?: 'branch' | 'session'  // resolve a worktree's node id from its branch or its .session file
   dashboard?: {
     apiUrl?: string                // the per-project backend the board proxies to (read frontend-side; see api-endpoint)
     title?: string                 // override for the browser-tab name (default: the repo-root basename; see tab-title)
@@ -26,9 +27,9 @@ type Config = {
     }
   }
 }
-// the resolved LAYOUT convention — main/branchPrefix/nodeFrom filled to defaults. `dashboard`, `sessions`,
-// and `serve` are frontend/runtime concerns (read separately; see api-endpoint / sessions.ts maxActive /
-// gateway.ts), NOT layout fields, so they stay out of the convention rather than forcing a meaningless default.
+// the resolved LAYOUT convention — main/mainBranch/branchPrefix filled to defaults. `dashboard`, `sessions`,
+// and `serve` are frontend/runtime concerns (read separately via readConfig; see api-endpoint / sessions.ts
+// maxActive / gateway.ts), NOT layout fields, so they stay out of the convention rather than forcing a default.
 type Convention = Required<Omit<Config, 'dashboard' | 'sessions' | 'serve'>>
 
 export type Worktree = {
@@ -63,55 +64,84 @@ export function mainBranch(): string {
   return 'main'
 }
 
-// the worktree set is the board's EXISTENCE truth — a FAILED enumeration must never read as an empty repo.
-// `git worktree list` always lists at least main, so a git error OR a zero-row parse is a failure: THROW
-// rather than return [] (which resolveLayout would render as "every worktree vanished"). gitTry, async like
-// gitA, keeps it off the sync fork() path. The caller surfaces the failure (a 502) instead of a false board.
-async function gitWorktrees(root: string): Promise<{ path: string; branch: string | null }[]> {
-  const r = await gitTry(['-C', root, 'worktree', 'list', '--porcelain'])
-  if (!r.ok) throw new Error(`git worktree list failed: ${r.stderr.trim() || 'unknown error'}`)
-  const list: { path: string; branch: string | null }[] = []
-  let cur: { path: string; branch: string | null } | null = null
-  for (const line of r.stdout.split('\n')) {
-    if (line.startsWith('worktree ')) { cur = { path: line.slice(9), branch: null }; list.push(cur) }
-    else if (line.startsWith('branch ') && cur) cur.branch = line.slice(7).replace('refs/heads/', '')
-  }
-  if (!list.length) throw new Error('git worktree list returned no worktrees (enumeration failed; main is always present)')
-  return list
+// @@@ global per-session store - Fork A: NO SpexCode files live in the worktree any more, so the worktree's
+// spec/code tree is pristine (zero per-session pollution). Every per-session runtime artifact — the
+// structured record (session.json) AND the launcher products (prompt, launch.sh, hooks.json, claude.md) AND
+// the spec-discipline sentinels — lives in a per-USER GLOBAL store, keyed by the harness `session_id` so two
+// agents in one folder never clobber, and grouped PER PROJECT (mirroring Claude's ~/.claude/projects/<enc>/)
+// so the board enumerates ONE directory. This is the single seam that knows where the store sits; sessions.ts
+// and the shell hooks resolve through the SAME scheme (the hooks reimplement it in bash, so any change here
+// must be mirrored in .config/core/*/). SPEXCODE_HOME overrides the root for test isolation.
+export function spexcodeHome(): string {
+  return process.env.SPEXCODE_HOME || join(homedir(), '.spexcode')
 }
+// encode a project-root path into ONE safe directory segment (Claude's scheme: path separators → '-'). The
+// SAME transform runs in TS and in the shell hooks, so a board read and a hook write land on the SAME dir.
+export function encodeProject(root: string): string {
+  return root.replace(/[/.]/g, '-')
+}
+// the project a store groups by = the MAIN checkout root (dirname of the shared git common dir). It resolves
+// IDENTICALLY from the main checkout OR any linked worktree, so the board (running at main) and a hook
+// (running in a worktree) agree on the key — unlike `git rev-parse --show-toplevel`, which in a worktree is
+// the worktree path and would scatter a session under a per-worktree key the board never reads.
+export function projectKey(): string {
+  return encodeProject(dirname(gitCommonDir()))
+}
+// this project's per-PROJECT runtime tier — the materialized hook manifest + content-hash marker (and the
+// gate's lock) — living alongside sessions/ under the SAME global per-project dir, so NOTHING SpexCode renders
+// stays in the worktree (not even the manifest; the worktree holds only the harness-discovered CLAUDE.md/
+// AGENTS.md + shims, which must sit in-tree). proj-aware for `spex init <dir>` / materialize(proj); cwd-based
+// default for the hooks/board. The shell hooks mirror this as hp_runtime_dir.
+export function runtimeRoot(proj?: string): string {
+  const gcd = proj
+    ? git(['-C', proj, 'rev-parse', '--path-format=absolute', '--git-common-dir']).trim()
+    : gitCommonDir()
+  return join(spexcodeHome(), 'projects', encodeProject(dirname(gcd)))
+}
+// this project's per-session records dir, one session's dir, its structured record, and a sibling artifact —
+// all keyed by session_id under <home>/projects/<enc>/sessions/.
+export function sessionsRoot(): string { return join(runtimeRoot(), 'sessions') }
+export function sessionStoreDir(id: string): string { return join(sessionsRoot(), id) }
+export function sessionRecordPath(id: string): string { return join(sessionStoreDir(id), 'session.json') }
+export function sessionArtifactPath(id: string, name: string): string { return join(sessionStoreDir(id), name) }
 
-// COMPAT: readers fall back to the legacy flat `.session` dotfile layout while it's still a file; drop the
-// fallbacks (here, sessions.ts, the hooks, .gitignore) once no pre-refactor worktree remains.
-export const RUNTIME_DIR = '.session'
-// the per-session state file. New layout: `.session/state`. Legacy: the flat `.session` FILE, detected
-// because `.session` stat's as a file, not a directory (missing → new layout, the brand-new-session case).
-export function statePath(dir: string): string {
-  const base = join(dir, RUNTIME_DIR)
-  try { if (statSync(base).isFile()) return base } catch { /* missing or a dir → folder layout */ }
-  return join(base, 'state')
+// the structured per-session record, as it sits on disk. Written one-field-per-line with EVERY key present
+// (see sessions.ts writeRecord) so the hot-path mark-active shell hook can value-replace status/proposal/note
+// with sed and never needs jq. Read here for the overlay; sessions.ts owns the full typed read/write.
+export type RawRecord = {
+  session_id: string; governed: boolean; worktree_path: string; branch: string | null
+  node: string | null; title: string | null; name: string | null
+  status: string; proposal: string | null; merges: number; note: string | null
+  sortkey: number | null; createdAt: number; harness?: string
 }
-// a runtime sidecar (prompt / launch / …): prefer the new `.session/<name>`, fall back to the legacy flat
-// name for an in-flight pre-refactor worktree. Returns the NEW path when neither exists, so writes adopt
-// the folder. The dir is created by the writer (runtimeDir in sessions.ts), not here.
-export function runtimePath(dir: string, name: string, legacy: string): string {
-  const neu = join(dir, RUNTIME_DIR, name)
-  if (existsSync(neu)) return neu
-  const old = join(dir, legacy)
-  if (existsSync(old)) return old
-  return neu
+// the agent's OWN session id from the environment — the only locator now that the record left the worktree.
+// SPEXCODE_SESSION_ID (the GOVERNED record id the launcher bakes in) wins, EXACTLY mirroring the shell hooks'
+// `hp_session_id` — this matters for codex, whose own CODEX_THREAD_ID is its un-pinnable minted id and does NOT
+// equal the governed record id, so resolving the harness var first would point a governed codex agent's own
+// `spex session …` at the wrong/nonexistent record. Else each adapter's env var (Claude CLAUDE_CODE_SESSION_ID
+// — already == the record id; Codex CODEX_THREAD_ID for a self-launched, non-governed agent). No worktree
+// fallback. (sessions.ts's `ownSessionId` delegates here; spec-yatsu reads it to resolve the current node.)
+export function envSessionId(): string | null {
+  const o = process.env.SPEXCODE_SESSION_ID
+  if (o && o.trim()) return o.trim()
+  for (const h of HARNESSES) { const v = process.env[h.sessionEnvVar]; if (v && v.trim()) return v.trim() }
+  return null
 }
-
-// the untracked per-worktree linker: node / session / status (ephemeral runtime state).
-function readSession(dir: string) {
-  const r = { node: null as string | null, session: null as string | null, status: null as string | null }
-  const p = statePath(dir)
-  if (!existsSync(p)) return r
-  for (const line of readFileSync(p, 'utf8').split('\n')) {
-    const i = line.indexOf(':'); if (i < 0) continue
-    const k = line.slice(0, i).trim(), v = line.slice(i + 1).trim()
-    if (k === 'node') r.node = v; else if (k === 'session') r.session = v; else if (k === 'status') r.status = v
-  }
-  return r
+export function readRawRecord(id: string): RawRecord | null {
+  try {
+    const raw = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
+    return raw && typeof raw === 'object' && raw.session_id ? raw as RawRecord : null
+  } catch { return null }
+}
+// every session_id this project has a record for (the board's enumeration source — replaces `git worktree
+// list`). A MISSING store dir means no session ever launched → []. But any OTHER readdir failure THROWS
+// (preserving the fail-loud-enumeration invariant `git worktree list` had): a transient FS error must never
+// read as "every session vanished" — the watch poll skips the tick on a throw, never emitting a false mass-close.
+export function listSessionIds(): string[] {
+  let ents
+  try { ents = readdirSync(sessionsRoot(), { withFileTypes: true }) }
+  catch (e) { if ((e as NodeJS.ErrnoException).code === 'ENOENT') return []; throw e }
+  return ents.filter((d) => d.isDirectory()).map((d) => d.name)
 }
 
 // memo the overlay (3 git diffs/worktree) keyed on fork-point merge-base + HEAD + spec sig — keying on the
@@ -141,45 +171,35 @@ async function cachedDelta(wtPath: string, mainRef: string): Promise<NodeOp[]> {
 
 export async function resolveLayout(): Promise<Layout> {
   const root = repoRoot()
-  const cfg = readConfig(root)
+  const main = dirname(gitCommonDir())   // the main checkout — same answer from main OR any linked worktree
+  const cfg = readConfig(main)
   const base = mainBranch()
   const convention: Convention = {
     main: cfg.main || '',
     mainBranch: base,
     branchPrefix: cfg.branchPrefix ?? 'node/',
-    nodeFrom: cfg.nodeFrom ?? 'branch',
   }
-  const raw = await gitWorktrees(root)
-  const mainWt = raw.find((w) => w.branch === base)
-  const mainRef = mainWt?.branch ?? base
-  // each worktree's spec delta is independent — compute (or cache-hit) them all in parallel. Each read is
-  // wrapped: a worktree whose directory was genuinely removed mid-read (a worker self-merged and retired it)
-  // is OMITTED, but one whose directory still exists and merely hit a transient DETAIL failure (a git index/
-  // ref lock under a concurrent merge) is kept as a DEGRADED row — never dropped. See resilience.guardWorktree.
-  const rows = await Promise.all(raw.map((w) => {
-    const isMain = w.branch === base
-    const fromBranch = w.branch && w.branch.startsWith(convention.branchPrefix)
-      ? w.branch.slice(convention.branchPrefix.length) : null
-    return guardWorktree<Worktree>(w.path, async (): Promise<Worktree> => {
-      const sess = readSession(w.path)
-      const node = isMain ? null
-        : convention.nodeFrom === 'session' ? sess.node : (fromBranch ?? sess.node)
-      const managed = !!sess.session || (!!w.branch && w.branch.startsWith(convention.branchPrefix))
-      const ops = isMain || !managed ? [] : await cachedDelta(w.path, mainRef)
-      return { path: w.path, branch: w.branch, node, session: sess.session, status: sess.status, isMain, ops }
-    }, (): Worktree => {
-      // DEGRADED: the directory still exists but a detail read failed (git lock under a concurrent merge, or
-      // a file-read hiccup). The worktree EXISTS, so it stays on the board. Built from RAW facts: node from
-      // the branch, ops from the last cached delta (or none), session/status best-effort from a cheap re-read.
-      const sess = (() => { try { return readSession(w.path) } catch { return { node: null, session: null, status: null } } })()
-      const node = isMain ? null : (fromBranch ?? sess.node)
-      return { path: w.path, branch: w.branch, node, session: sess.session, status: sess.status, isMain, ops: deltaCache.get(w.path)?.ops ?? [] }
-    })
+  const mainRef = base
+  // the board enumerates the GLOBAL per-session store (NOT `git worktree list`): every GOVERNED record this
+  // project owns, each carrying the worktree_path its spec-delta is computed from. Non-governed (user-self-
+  // launched) records are excluded — board state is a managed-session concern ([[state]]). Each delta is
+  // independent → compute (or cache-hit) in parallel, keyed by worktree path as before. guardWorktree wraps
+  // each: a worktree whose dir was genuinely removed mid-read (a worker self-merged + retired it) is OMITTED;
+  // one that still exists but hit a transient detail failure is kept as a DEGRADED row from the last cached delta.
+  const records = listSessionIds().map(readRawRecord).filter((r): r is RawRecord => !!r && r.governed)
+  const rows = await Promise.all(records.map((r) => {
+    const node = r.node ?? (r.branch && r.branch.startsWith(convention.branchPrefix) ? r.branch.slice(convention.branchPrefix.length) : null)
+    const base: Worktree = { path: r.worktree_path, branch: r.branch, node, session: r.session_id, status: r.status, isMain: false, ops: [] }
+    return guardWorktree<Worktree>(r.worktree_path,
+      async (): Promise<Worktree> => ({ ...base, ops: await cachedDelta(r.worktree_path, mainRef) }),
+      (): Worktree => ({ ...base, ops: deltaCache.get(r.worktree_path)?.ops ?? [] }))
   }))
-  const worktrees = rows.filter((w): w is Worktree => w !== null)
-  // drop cache entries for worktrees that no longer exist (a closed session), so the map stays bounded.
-  const live = new Set(raw.map((w) => w.path))
+  const sessionWorktrees = rows.filter((w): w is Worktree => w !== null)
+  // the main checkout row (isMain) — always present, carries no overlay; it anchors the merged tree the board draws.
+  const mainRow: Worktree = { path: main, branch: base, node: null, session: null, status: null, isMain: true, ops: [] }
+  const worktrees = [mainRow, ...sessionWorktrees]
+  // drop cache entries for worktrees no longer in the store (closed sessions), so the map stays bounded.
+  const live = new Set(sessionWorktrees.map((w) => w.path))
   for (const k of [...deltaCache.keys()]) if (!live.has(k)) deltaCache.delete(k)
-  const main = convention.main || worktrees.find((w) => w.isMain)?.path || root
-  return { main, convention, worktrees }
+  return { main: convention.main || main || root, convention, worktrees }
 }

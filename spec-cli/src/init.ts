@@ -88,16 +88,33 @@ export async function specInit(targetArg: string | undefined): Promise<void> {
     if (installed.length) console.log(`✓ installed git hooks (${installed.join(', ')}) → ${hooksDir}`)
   }
 
+  // 2c. RENDER the harness-discovered artifacts so a USER-self-launched claude/codex works with zero further
+  // steps: the hook manifest (in the GLOBAL per-project store, not the worktree), the AGENTS.md/CLAUDE.md
+  // <spexcode> contract block (user content preserved), the .claude/.codex shims, and the Codex trust (global,
+  // scoped) so codex self-launch is prompt-free. Runs with cwd = the target so the loaders read the just-seeded
+  // .config. Idempotent — the dispatch.sh gate keeps it fresh thereafter on every .config edit.
+  const prevCwd = process.cwd()
+  try {
+    process.chdir(targetDir)
+    const { materialize } = await import('./materialize.js')
+    materialize(targetDir)
+    console.log('✓ materialized harness artifacts (global hook manifest, AGENTS.md/CLAUDE.md block, .claude/.codex shims, Codex trust)')
+  } catch (e) {
+    console.warn(`• materialize skipped (${(e as Error).message}) — run \`spex materialize\` once the packages are installed.`)
+  } finally {
+    process.chdir(prevCwd)
+  }
+
   // 3. next steps — what the human must do to bring the instance to life.
   console.log(`
 Next steps:
-  1. Install the SpexCode packages (so \`spex\` and the dashboard run):
-       cd <spec-cli> && npm install     # the package providing the \`spex\` CLI + server
-  2. Edit .spec/project/spec.md to describe YOUR project, then grow child nodes beneath it.
-  3. Set lint.governedRoots in spexcode.json to your source dir(s) — until you do, \`spex lint\`
+  1. Edit .spec/project/spec.md to describe YOUR project, then grow child nodes beneath it.
+  2. Set lint.governedRoots in spexcode.json to your source dir(s) — until you do, \`spex lint\`
      warns it is governing nothing (it ships pointing at "src").
-  4. Start the backend and open the board:
+  3. Start the backend and open the board:
        spex serve                       # http://localhost:8787
-  5. \`spex lint\` should report 0 errors. Coverage warnings are your adoption TODO (source files no
-     spec node claims yet). You're adopting SpexCode — the spec tree is now ground truth.`)
+  4. \`spex lint\` should report 0 errors. Coverage warnings are your adoption TODO (source files no
+     spec node claims yet). You're adopting SpexCode — the spec tree is now ground truth.
+  (On a fresh CLONE, re-run \`spex init\` — git never clones .git/hooks/, and the harness shims are
+   gitignored machine-local files that regenerate per-machine.)`)
 }

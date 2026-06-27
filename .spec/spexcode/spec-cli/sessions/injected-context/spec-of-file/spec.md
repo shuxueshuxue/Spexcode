@@ -4,7 +4,7 @@ status: active
 hue: 280
 desc: A per-edit PostToolUse annotation that fires only when ACTIONABLE — the first edit of an over-owned (> maxOwners) or uncovered file flags it at the edit; a sanely-owned file is left silent.
 code:
-  - spec-cli/hooks/spec-of-file.sh
+  - .spec/spexcode/.config/core/spec-of-file/spec-of-file.sh
 ---
 
 # spec-of-file
@@ -19,10 +19,12 @@ fire **once per file, never per write**, and never block.
 
 ## expanded spec
 
-A PostToolUse hook (`spec-of-file.sh`), wired on PostToolUse via `settingsJson`. On the first `Edit` /
-`Write` / `NotebookEdit` of a given file it emits **non-blocking** `additionalContext` naming the file's
-governing spec; a `.session` ledger dedupes so each file is annotated **once per session**. Spec files and
-runtime state are skipped — not governed code.
+A PostToolUse hook (`spec-of-file.sh`), wired on PostToolUse via `settingsJson`. Like [[spec-first]], it is
+NOT gated on `governed` — spec-awareness serves any agent. On the first `Edit` / `Write` / `NotebookEdit` of a
+given file it emits **non-blocking** `additionalContext` naming the file's governing spec; a ledger dedupes so
+each file is annotated **once per session**. That ledger is a sibling file in the session's GLOBAL store dir
+(resolved from the payload's `session_id`, [[runtime]]) — the worktree holds no SpexCode state any more. Spec
+files are skipped — not governed code.
 
 The file→spec resolve is **`spex owner <path> --actionable`** (a thin verb in cli.ts, resolver `specOwners`
 in specs.ts), a light read of frontmatter `code:` only — no git walk. `--actionable` is the discipline: it

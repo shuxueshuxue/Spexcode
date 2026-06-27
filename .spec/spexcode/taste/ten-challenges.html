@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ten Challenges — 百家争鸣</title>
+<style>
+  :root{
+    --bg:#0c0e13; --bg2:#11141b; --card:#141822; --card2:#171c28;
+    --ink:#e7e9ef; --ink-dim:#a4abbb; --ink-faint:#717a8c;
+    --line:#232938; --line2:#2c3447;
+    --thesis:#5fb3f0; --anti:#f0a35f; --syn:#7be0a8; --syn-deep:#2a6f4d;
+    --accent:#b98bf0;
+    --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;background:radial-gradient(1200px 700px at 80% -10%,#161b29 0%,var(--bg) 55%) no-repeat,var(--bg);
+    color:var(--ink);font-family:var(--sans);line-height:1.62;
+    font-size:16.5px;-webkit-font-smoothing:antialiased;letter-spacing:.1px;
+  }
+  .wrap{max-width:920px;margin:0 auto;padding:64px 26px 120px}
+  header.top{margin-bottom:46px}
+  .kicker{font-family:var(--mono);font-size:12.5px;letter-spacing:2.5px;text-transform:uppercase;color:var(--accent);margin-bottom:14px}
+  h1{font-size:40px;line-height:1.12;margin:0 0 6px;font-weight:740;letter-spacing:-.5px}
+  h1 .cn{font-weight:600;color:var(--ink-dim);font-size:30px}
+  .sub{color:var(--ink-dim);font-size:17px;max-width:720px;margin-top:18px}
+  .sub b{color:var(--ink)}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;margin:30px 0 0;font-size:13px;color:var(--ink-faint)}
+  .legend span{display:inline-flex;align-items:center;gap:7px}
+  .dot{width:9px;height:9px;border-radius:50%;display:inline-block}
+  .d-th{background:var(--thesis)} .d-an{background:var(--anti)} .d-sy{background:var(--syn)}
+
+  .toc{margin:40px 0 8px;padding:22px 24px;background:linear-gradient(180deg,var(--bg2),transparent);border:1px solid var(--line);border-radius:14px}
+  .toc h4{margin:0 0 14px;font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--ink-faint);font-weight:600}
+  .toc ol{margin:0;padding:0;list-style:none;counter-reset:t;columns:2;column-gap:34px}
+  .toc li{counter-increment:t;break-inside:avoid;margin-bottom:9px;font-size:14.5px;color:var(--ink-dim)}
+  .toc li a{color:var(--ink-dim);text-decoration:none;display:flex;gap:11px;align-items:baseline}
+  .toc li a:hover{color:var(--ink)}
+  .toc li a::before{content:counter(t,decimal-leading-zero);font-family:var(--mono);font-size:11.5px;color:var(--accent);flex:none}
+
+  .card{background:linear-gradient(168deg,var(--card),var(--card2));border:1px solid var(--line);border-radius:18px;
+    padding:30px 32px 8px;margin:30px 0;box-shadow:0 1px 0 rgba(255,255,255,.02) inset,0 18px 40px -28px rgba(0,0,0,.8)}
+  .num{font-family:var(--mono);font-size:13px;color:var(--accent);letter-spacing:1px}
+  .card h2{font-size:23px;margin:6px 0 16px;font-weight:680;letter-spacing:-.3px}
+  .framing{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:24px}
+  @media(max-width:620px){.framing{grid-template-columns:1fr}.toc ol{columns:1}.wrap{padding:46px 18px 90px}h1{font-size:31px}}
+  .frame{background:#0e1119;border:1px solid var(--line);border-radius:11px;padding:13px 15px}
+  .frame .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:1.5px;text-transform:uppercase;color:var(--ink-faint);margin-bottom:6px}
+  .frame.concrete .lbl{color:#6fa8d8}
+  .frame.abstract .lbl{color:var(--accent)}
+  .frame p{margin:0;font-size:14px;color:var(--ink-dim)}
+
+  .ta{display:grid;grid-template-columns:1fr;gap:0;margin-bottom:22px;border-left:2px solid var(--line2);padding-left:0}
+  .move{padding:11px 0 11px 18px;border-left:2px solid transparent;margin-left:-2px;position:relative}
+  .move .tag{font-family:var(--mono);font-size:11px;letter-spacing:1.5px;text-transform:uppercase;font-weight:600;margin-bottom:3px;display:block}
+  .move p{margin:0;font-size:14.5px;color:var(--ink-dim)}
+  .move.th{border-left-color:var(--thesis)} .move.th .tag{color:var(--thesis)}
+  .move.an{border-left-color:var(--anti)} .move.an .tag{color:var(--anti)}
+  .move.an .tag::before{content:"↯ "}
+
+  .syn{background:linear-gradient(160deg,#0f1a16,#101d18 60%,#0d1512);border:1px solid var(--syn-deep);border-radius:14px;
+    padding:20px 22px;margin:0 0 26px;position:relative;overflow:hidden}
+  .syn::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:linear-gradient(var(--syn),transparent)}
+  .syn .stag{font-family:var(--mono);font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--syn);font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+  .syn .stag::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,var(--syn-deep),transparent)}
+  .syn .prob{font-size:16.5px;font-weight:600;color:#dff5e8;margin:0 0 13px;line-height:1.45}
+  .syn .row{margin:11px 0}
+  .syn .rl{font-family:var(--mono);font-size:10.5px;letter-spacing:1.5px;text-transform:uppercase;color:#6cc69a;display:block;margin-bottom:3px}
+  .syn .row p{margin:0;font-size:14.5px;color:#cfe6d9}
+  .syn .row p b{color:#eafff2}
+  .syn .impl{margin-top:14px;padding-top:13px;border-top:1px dashed var(--syn-deep)}
+  .syn .impl .rl{color:#9bd9b6}
+
+  .meta{margin-top:64px;padding-top:10px}
+  .meta .kicker{color:var(--syn)}
+  .meta h2{font-size:27px;font-weight:720;letter-spacing:-.4px;margin:6px 0 8px}
+  .meta>p.lead{color:var(--ink-dim);max-width:720px;margin-bottom:26px}
+  .mi{background:linear-gradient(165deg,var(--card),var(--card2));border:1px solid var(--line);border-radius:14px;padding:20px 24px;margin:14px 0}
+  .mi h3{margin:0 0 8px;font-size:17.5px;font-weight:660;color:var(--ink)}
+  .mi h3 .mn{font-family:var(--mono);color:var(--accent);font-size:13px;margin-right:10px}
+  .mi p{margin:0;font-size:15px;color:var(--ink-dim)}
+  .mi p b{color:var(--ink)}
+  code{font-family:var(--mono);font-size:.86em;background:#0c0f16;border:1px solid var(--line);border-radius:5px;padding:.5px 5px;color:#cdb6f5}
+  footer{margin-top:60px;padding-top:22px;border-top:1px solid var(--line);color:var(--ink-faint);font-size:13px}
+  footer code{color:var(--ink-dim)}
+  .pull{color:var(--ink);font-style:italic}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <div class="kicker">百家争鸣 · the distilled debate</div>
+  <h1>Ten Challenges Behind SpexCode<br><span class="cn">— thesis, naive antithesis, and the synthesis that exceeds both</span></h1>
+  <p class="sub">A self-referential spec-driven tool, built with itself, must answer ten hard questions about
+  <b>boundaries, identity, intent, and refusal</b>. Each was put through an adversarial run: state the first-principles
+  <b>thesis</b>, let a less-overfit naive taste attack it as an <b>antithesis</b>, then force a <b>synthesis</b> that
+  is sharper than either. The synthesis is the payload — a one-line problem, the resolution and <i>why it is
+  non-obvious</i>, and one concrete build implication. The aim is to move past the starting insight, not restate it.</p>
+  <div class="legend">
+    <span><i class="dot d-th"></i>Thesis — the first-principles right answer</span>
+    <span><i class="dot d-an"></i>Antithesis — the naive challenge that dares to question</span>
+    <span><i class="dot d-sy"></i>Synthesis — the non-obvious payload</span>
+  </div>
+</header>
+
+<nav class="toc">
+  <h4>The ten</h4>
+  <ol>
+    <li><a href="#c1">Harness-agnostic — honest vs decorative boundaries</a></li>
+    <li><a href="#c2">Self-launch as the main body</a></li>
+    <li><a href="#c3">The un-pinnable id — identity reconciliation</a></li>
+    <li><a href="#c4">Spec↔code as a measurable living contract</a></li>
+    <li><a href="#c5">Self-reference — the fixed point</a></li>
+    <li><a href="#c6">Complexity-as-currency — the calculus of refusal</a></li>
+    <li><a href="#c7">Memory hygiene — when a norm beats a mechanism</a></li>
+    <li><a href="#c8">Determinism over a flaky substrate</a></li>
+    <li><a href="#c9">Config-as-data vs imperative injection</a></li>
+    <li><a href="#c10">Forcing-function design — adversarial discovery</a></li>
+  </ol>
+</nav>
+
+<!-- 1 -->
+<section class="card" id="c1">
+  <div class="num">CHALLENGE 01</div>
+  <h2>Harness-agnostic: one adapter, zero <code>if(codex)</code></h2>
+  <div class="framing">
+    <div class="frame concrete"><div class="lbl">Concrete</div><p>Support N coding-agent harnesses (Claude Code, Codex, …) with zero product-code <code>if(codex)/if(claude)</code> branching — all divergence in one adapter.</p></div>
+    <div class="frame abstract"><div class="lbl">Abstract</div><p>Where does a "platform difference" end and "product semantics" begin? What makes an abstraction boundary load-bearing rather than decorative?</p></div>
+  </div>
+  <div class="ta">
+    <div class="move th"><span class="tag">Thesis</span><p>A true adapter isolates all harness divergence into one translation layer; product code speaks a single canonical vocabulary. <b>Zero branches counted = success.</b></p></div>
+    <div class="move an"><span class="tag">Antithesis</span><p>"Zero branches" is a vanity metric. An adapter can <b>advertise</b> a uniform interface the runtime never honors — a divergence the code claims to handle but silently doesn't (the project's own "decorative abstraction" finding). You can also reach uniformity by <i>erasure</i>: flattening a real semantic difference instead of translating it. The boundary can be a lie that passes the branch-count test.</p></div>
+  </div>
+  <div class="syn">
+    <div class="stag">Synthesis</div>
+    <p class="prob">An abstraction boundary is load-bearing only if violating it <b>breaks something observable</b>; the question is not "how many branches?" but "is the boundary <i>honest</i> — is every advertised capability actually honored on every harness at runtime?"</p>
+    <div class="row"><span class="rl">Resolution · why non-obvious</span><p>Harness-agnosticism is not a code-shape property you can lint by grep; it is a <b>behavioral-equivalence</b> property you can only prove through the product surface. Run the <i>same</i> YATU scenario through each harness and require an identical observable outcome. A decorative interface is one you could delete with no observable change — it fails the only test that matters. The counter-intuition: the dangerous abstraction is not the one with branches, it's the smooth one that <b>type-checks while lying</b>.</p></div>
+    <div class="row impl"><span class="rl">Implication for building</span><p>Ship a per-capability <b>conformance suite</b>, not a branch count. The adapter's contract IS the set of scenarios it must reproduce identically. A capability the runtime cannot honor on a harness must be <b>removed from the interface</b>, never stubbed — an interface may only promise what every backend will be made to deliver.</p></div>
+  </div>
+</section>
+
+<!-- 2 -->
+<section class="card" id="c2">
+  <div class="num">CHALLENGE 02</div>
+  <h2>Self-launch is the main body</h2>
+  <div class="framing">
+    <div class="frame concrete"><div class="lbl">Concrete</div><p>A user on naive Claude/Codex with NO dashboard or server still gets the full system via <code>spex init</code> + materialize→auto-discovery. The dashboard merely <i>reduces</i> to that path plus a minimal governed delta.</p></div>
+    <div class="frame abstract"><div class="lbl">Abstract</div><p>Designing for the usage you do <b>not</b> control as a forcing function for robustness and unification.</p></div>
+  </div>
+  <div class="ta">
+    <div class="move th"><span class="tag">Thesis</span><p>Design the uncontrolled path first; the controlled path (dashboard) is a strict superset. No capability can then hide behind a server.</p></div>
+    <div class="move an"><span class="tag">Antithesis</span><p>"Uncontrolled-first" risks the lowest common denominator — you forgo everything a live process could give (orchestration, real-time signals). Insisting the dashboard is "merely a reduction" is dogma that caps the ceiling. And auto-discovery is itself a control mechanism — you didn't remove control, you just <i>moved it to install time</i>.</p></div>
+  </div>
+  <div class="syn">
+    <div class="stag">Synthesis</div>
+    <p class="prob">"The usage you don't control" is not about giving up control — it is about choosing the <b>latest binding time you still own</b>, and that turns out to be the artifact, not the process.</p>
+    <div class="row"><span class="rl">Resolution · why non-obvious</span><p>Materialize-then-discover relocates control from a live process the naive user never starts, to a <b>durable artifact the harness cannot avoid loading</b> (<code>CLAUDE.md</code>, hooks). The forcing function works precisely because it <b>bans</b> "the server will handle it at runtime" — every capability must survive being frozen into a file and rediscovered by a process you didn't start. The non-obvious gift: a file-delivered system has <b>no single owner to crash</b>, which is exactly what makes it resumable and multi-agent-safe. The constraint you adopted for the naive user is the same constraint that buys you reliability everywhere.</p></div>
+    <div class="row impl"><span class="rl">Implication for building</span><p>Treat any dashboard-only capability as a bug-in-waiting. The real invariant is "<b>every capability has a file-only realization</b>"; the governed delta must stay minimal and declared so it can never become load-bearing. The dashboard is an accelerator, never a dependency.</p></div>
+  </div>
+</section>
+
+<!-- 3 -->
+<section class="card" id="c3">
+  <div class="num">CHALLENGE 03</div>
+  <h2>The un-pinnable id</h2>
+  <div class="framing">
+    <div class="frame concrete"><div class="lbl">Concrete</div><p>Codex mints its own session id (un-pinnable). A governed record must be keyed without owning that id — so an id is baked into the env, and every hook resolves it from there.</p></div>
+    <div class="frame abstract"><div class="lbl">Abstract</div><p>Identity reconciliation across systems with incompatible id-ownership.</p></div>
+  </div>
+  <div class="ta">
+    <div class="move th"><span class="tag">Thesis</span><p>When you can't own the foreign id, own a <i>correlation</i> id you inject into the environment; every hook reads it; you join on your key.</p></div>
+    <div class="move an"><span class="tag">Antithesis</span><p>Now you have <b>two</b> identities and a mapping that can desync — the classic distributed-systems trap, and itself a "decorative" second namespace. Why not just adopt the foreign id once Codex emits it? Env-injection is also fragile: subshells, re-execs, and agent self-launch can lose it.</p></div>
+  </div>
+  <div class="syn">
+    <div class="stag">Synthesis</div>
+    <p class="prob">You cannot reconcile two ids that never co-exist in time — Codex's id is born <i>after</i> the session starts, your governance record must exist <i>before</i>. So you don't reconcile. You <b>seed</b>.</p>
+    <div class="row"><span class="rl">Resolution · why non-obvious</span><p>The env-injected id is not a parallel identity to be mapped — it is a <b>pre-image</b> the foreign system inherits by environment, making your id the <i>causal ancestor</i> of every event the session emits. Identity reconciliation across incompatible-ownership systems is won not by capturing the canonical id but by <b>owning the earliest moment</b> and letting it flow downhill through inheritance. The late-born foreign id becomes a derived attribute you record but never key on.</p></div>
+    <div class="row impl"><span class="rl">Implication for building</span><p>Key governance on what you control at <b>t0</b> (the env-seeded id); demote any system-minted id to a recorded attribute. Carry the seed through the channel children automatically inherit — <b>the environment, not arguments</b> — so it survives re-exec and self-launch.</p></div>
+  </div>
+</section>
+
+<!-- 4 -->
+<section class="card" id="c4">
+  <div class="num">CHALLENGE 04</div>
+  <h2>Spec↔code alignment as a living contract</h2>
+  <div class="framing">
+    <div class="frame concrete"><div class="lbl">Concrete</div><p>Make alignment measurable and non-decaying: drift detection, a yatsu "loss signal," and fresh-context agents as complexity probes that round-trip spec→code→spec.</p></div>
+    <div class="frame abstract"><div class="lbl">Abstract</div><p>Can design intent be a first-class, entropy-resistant, measurable artifact? Is alignment a property of code, of spec, or of the gap?</p></div>
+  </div>
+  <div class="ta">
+    <div class="move th"><span class="tag">Thesis</span><p>Alignment is measurable: hash the spec, detect drift on commit, gate with a loss signal. Intent becomes a first-class, checksummed artifact.</p></div>
+    <div class="move an"><span class="tag">Antithesis</span><p>Drift-by-hash measures <i>co-change</i>, not alignment. Two files can change together and still mean different things; a spec can be perfectly un-drifted yet wrong. Alignment is semantic — you can't checksum it. Hash-drift is a smoke detector, not a thermometer.</p></div>
+  </div>
+  <div class="syn">
+    <div class="stag">Synthesis</div>
+    <p class="prob">Alignment is a property of <b>neither code nor spec but of the gap between them</b>, and the only honest measurement of a semantic gap is <b>reconstruction loss</b>.</p>
+    <div class="row"><span class="rl">Resolution · why non-obvious</span><p>Reframe the spec as a <b>compression codebook</b>: a good spec is one from which the code is <i>low-loss decodable</i>. The fresh-context agent is literally the decoder — give it the spec, have it reconstruct the code (and vice-versa); the divergence <b>is</b> the loss signal. Hash-drift is just the cheap proxy for "the codebook no longer decodes." Entropy-resistance does not come from <i>locking</i> the spec — it comes from continuously paying the small cost of <b>re-decoding</b>. Spec quality is decompression fidelity, not prose beauty or hash freshness.</p></div>
+    <div class="row impl"><span class="rl">Implication for building</span><p>Build the loss signal as an actual <b>round-trip test</b>: a fresh agent reconstructs the code from the spec; semantic mismatch = drift, even when the hash is clean. Judge a spec by whether a naive mind can decode the code from it — that confusion is the metric, and it is the cheapest entropy pump you have.</p></div>
+  </div>
+</section>
+
+<!-- 5 -->
+<section class="card" id="c5">
+  <div class="num">CHALLENGE 05</div>
+  <h2>Self-reference — the fixed point</h2>
+  <div class="framing">
+    <div class="frame concrete"><div class="lbl">Concrete</div><p>SpexCode is built with SpexCode; its guiding principles are sedimented into its own spec / <code>.config</code> / source so they are never compacted away.</p></div>
+    <div class="frame abstract"><div class="lbl">Abstract</div><p>A system that specifies its own construction (a fixed point) — what stabilizes the loop rather than letting it spiral?</p></div>
+  </div>
+  <div class="ta">
+    <div class="move th"><span class="tag">Thesis</span><p>Self-reference is strength: dogfooding forces every principle to survive its own application; the fixed point is where the tool's spec and the tool's behavior agree.</p></div>
+    <div class="move an"><span class="tag">Antithesis</span><p>Self-hosting amplifies blind spots and rationalizes its own complexity ("we needed this to build the feature"). It entrenches bad early choices because changing them means changing the thing you build with. Dogfooding can become an echo chamber that confirms the maintainer.</p></div>
+  </div>
+  <div class="syn">
+    <div class="stag">Synthesis</div>
+    <p class="prob">A self-referential system does not stabilize by merely <i>being</i> a fixed point — it stabilizes only if an <b>external contraction</b> pulls each iteration toward simplicity faster than self-justification pushes toward complexity.</p>
+    <div class="row"><span class="rl">Resolution · why non-obvious</span><p>The stabilizer is <b>not the self-reference</b> — it is the <b>fresh-context agent</b>, an outsider injected into the loop precisely because it has no stake in the existing structure. Self-reference supplies the <i>consistency</i> (principles live in the artifact); the naive critic supplies the <i>contraction</i> (entropy removal). A self-specifying system <b>without</b> an imported outside critic spirals; <b>with</b> one it becomes a controlled fixed-point iteration. The fixed point must be computed by a contraction map you import from <i>outside</i> the loop.</p></div>
+    <div class="row impl"><span class="rl">Implication for building</span><p>Never let the system's self-model be revised only by minds that already hold it. Institutionalize an outsider in <b>every</b> revision cycle — the freshness of the critic is not a nicety, it is the mathematical condition for the loop to converge instead of diverge.</p></div>
+  </div>
+</section>
+
+<!-- 6 -->
+<section class="card" id="c6">
+  <div class="num">CHALLENGE 06</div>
+  <h2>Complexity-as-currency — the calculus of refusal</h2>
+  <div class="framing">
+    <div class="frame concrete"><div class="lbl">Concrete</div><p>Spend complexity only to buy behavior. A need earns code ONLY if satisfying it reduces complexity or is a clever collapse — never "one more if-else."</p></div>
+    <div class="frame abstract"><div class="lbl">Abstract</div><p>A principled calculus for when <b>not</b> to write code; why refusal is the harder discipline.</p></div>
+  </div>
+  <div class="ta">
+    <div class="move th"><span class="tag">Thesis</span><p>Every feature has a complexity price; pay only when the behavior bought exceeds it, or when the change is net-negative complexity. Refuse otherwise.</p></div>
+    <div class="move an"><span class="tag">Antithesis</span><p>"Complexity" is unmeasurable and the calculus is post-hoc rationalization — you can frame anything as a "clever collapse." Refusal isn't accounting, it's a <i>power</i> problem: saying no to a real user need is socially costly, and deferred complexity can cost more later when the feature gets bolted on uglier.</p></div>
+  </div>
+  <div class="syn">
+    <div class="stag">Synthesis</div>
+    <p class="prob">Refusal is hard because of <b>asymmetric visibility</b>: the behavior you buy is concrete and demoable; the complexity you spend is diffuse, deferred, and paid by future readers who aren't in the room.</p>
+    <div class="row"><span class="rl">Resolution · why non-obvious</span><p>Because the two sides are incommensurable, the sound rule is <b>not</b> "weigh value vs cost" (always loseable to advocacy). It is the stricter SpexCode rule: a need earns code <b>only if the change is complexity-negative or behavior-equivalent-but-simpler</b>. That converts a judgment call into a near-<b>type-check</b>: does this change add a primitive or branch? If yes, reject — regardless of value — and require the value to be re-expressed as a <i>collapse onto existing primitives</i> (the 拧巴 → "not-yet-decomposed" reading). The counter-intuition: refusal is hard not because you must argue no, but because doing it well means <b>re-deriving the need until it fits the existing form</b>, which is more work than adding the branch.</p></div>
+    <div class="row impl"><span class="rl">Implication for building</span><p>Make "no new primitive / no new branch" the <b>default-deny gate</b>. Route every accepted need through a forced re-decomposition onto existing nouns. Budget the <b>re-derivation effort</b> explicitly — that, not the lines of code, is the true price of saying no well.</p></div>
+  </div>
+</section>
+
+<!-- 7 -->
+<section class="card" id="c7">
+  <div class="num">CHALLENGE 07</div>
+  <h2>Memory hygiene — when a soft norm beats a hard mechanism</h2>
+  <div class="framing">
+    <div class="frame concrete"><div class="lbl">Concrete</div><p>N agents share a project-keyed memory. Recording session/role-specific facts ("I am the supervisor") corrupts every agent's identity. Fixed by <b>instruction</b>, not programmatic control.</p></div>
+    <div class="frame abstract"><div class="lbl">Abstract</div><p>Durable-shared vs transient-per-instance knowledge; why a soft norm can beat a hard mechanism.</p></div>
+  </div>
+  <div class="ta">
+    <div class="move th"><span class="tag">Thesis</span><p>Shared memory holds durable project facts only; per-instance identity is poison. Enforce by instruction — the agent self-censors.</p></div>
+    <div class="move an"><span class="tag">Antithesis</span><p>"Fix by instruction" is the fragile thing the project's own principles warn against — <i>fail loudly, don't trust soft norms</i>. An instruction is a probabilistic guard on a flaky substrate; one disobedient agent corrupts the shared pool. Build a real mechanism: per-agent namespacing, a write filter.</p></div>
+  </div>
+  <div class="syn">
+    <div class="stag">Synthesis</div>
+    <p class="prob">The durable/transient boundary is <b>semantic and unbounded</b> — "I am the supervisor" is poison, "the supervisor role exists" is fine — so the guard must live where the <i>meaning</i> can be judged.</p>
+    <div class="row"><span class="rl">Resolution · why non-obvious</span><p>This <b>inverts</b> the usual "mechanism over norm" preference, under a precise condition. A hard filter would have to <i>understand meaning</i> to classify the write — which only the LLM can do — so a programmatic guard is either too coarse (blocks valid writes) or fake (a worse re-implementation of the LLM). The norm is not a weaker mechanism; when the invariant is semantic and only the agent can evaluate it, <b>the norm is the only correct locus of enforcement</b>. 画蛇添足 here means exactly "don't add a mechanism whose job only a mind can do."</p></div>
+    <div class="row impl"><span class="rl">Implication for building</span><p>Put the guard where the judgment is. Split the invariant: <b>namespace what is syntactic</b> (the store key — you genuinely can, with code) and <b>norm what is semantic</b> (content hygiene — leave to the instructed mind). Reserve hard mechanisms for invariants decidable without understanding.</p></div>
+  </div>
+</section>
+
+<!-- 8 -->
+<section class="card" id="c8">
+  <div class="num">CHALLENGE 08</div>
+  <h2>Determinism over a flaky substrate</h2>
+  <div class="framing">
+    <div class="frame concrete"><div class="lbl">Concrete</div><p>Impose reliability on non-deterministic agents + an unstable API via a Stop-gate forcing state declarations, a loss signal, milestone-merges for cheap rollback, and a keep-alive cron.</p></div>
+    <div class="frame abstract"><div class="lbl">Abstract</div><p>Reliable systems from unreliable parts; the minimal scaffolding that makes an unreliable agent trustworthy.</p></div>
+  </div>
+  <div class="ta">
+    <div class="move th"><span class="tag">Thesis</span><p>Wrap the flaky LLM in deterministic scaffolding — a Stop-gate forcing an explicit state declaration, cheap milestone rollback, a keep-alive restart. Reliability emerges from the harness, not the agent.</p></div>
+    <div class="move an"><span class="tag">Antithesis</span><p>Scaffolding can't manufacture reliability the substrate lacks. A Stop-gate forces a <i>declaration</i>, but a confabulating agent declares a false state confidently (the over-praise tell). You've added ceremony that produces <b>legible</b> output, not <b>correct</b> output — measuring compliance with the gate, not truth.</p></div>
+  </div>
+  <div class="syn">
+    <div class="stag">Synthesis</div>
+    <p class="prob">The scaffolding's job is not to make the agent reliable — it is to make the agent's <b>unreliability cheap to detect and cheap to undo</b>.</p>
+    <div class="row"><span class="rl">Resolution · why non-obvious</span><p>Determinism over a flaky substrate is achieved not by raising the agent's success probability but by driving the <b>cost of failure toward zero</b> (milestone merge = free rollback) and the <b>observability of failure</b> up (the Stop-gate forces a checkpoint where a loss signal can catch the lie). The keep-alive cron is the same principle at the process layer: assume death, make restart free. The decisive twist on the classic "reliable parts from unreliable ones": the audit must be performed by a <b>different context</b> — a fresh agent — because the context that erred will re-confirm its own error. A self-attested Stop-gate is theater; a cross-context-checked one is a real gate.</p></div>
+    <div class="row impl"><span class="rl">Implication for building</span><p>Invest in <b>reversibility + cross-context audit</b>, not agent compliance. Every single agent step should be reversible and audited by something that didn't produce it. The state declaration is valuable only if a different mind (or the loss signal) checks it.</p></div>
+  </div>
+</section>
+
+<!-- 9 -->
+<section class="card" id="c9">
+  <div class="num">CHALLENGE 09</div>
+  <h2>Config-as-data vs imperative injection</h2>
+  <div class="framing">
+    <div class="frame concrete"><div class="lbl">Concrete</div><p>Deliver an entire "system" (prompt, hooks, trust) to an agent purely through auto-discovered materialized files — no controlling process.</p></div>
+    <div class="frame abstract"><div class="lbl">Abstract</div><p>What is gained and lost by moving intent from runtime to artifact.</p></div>
+  </div>
+  <div class="ta">
+    <div class="move th"><span class="tag">Thesis</span><p>Materialized config is inspectable, version-controllable, resumable, owner-less — strictly better than a runtime injector.</p></div>
+    <div class="move an"><span class="tag">Antithesis</span><p>Data can't react, can't branch on live state, can't recover a partial state. "Config as data" is just <i>deferred</i> code — the logic still runs somewhere (the hook, the discovery loop), so you haven't removed imperative injection, you've hidden it in a harness you don't control.</p></div>
+  </div>
+  <div class="syn">
+    <div class="stag">Synthesis</div>
+    <p class="prob">The real gain isn't inspectability — it is that <b>data has no liveness requirement</b>. A process must be alive at the moment of need; an artifact must merely have been written before it.</p>
+    <div class="row"><span class="rl">Resolution · why non-obvious</span><p>Moving intent to artifact converts a <b>coordination problem</b> (the right process running at the right instant) into a <b>consistency problem</b> (the right file present on disk) — and consistency is far easier to guarantee across crashes, machines, and agents you didn't start (exactly the self-launch requirement, #2). The reactivity you "lose" you reclaim by noticing that the <b>harness's own discovery loop is a universal runtime you're borrowing</b>: you don't ship a process, you ship data into <i>someone else's</i> always-running one. So the only code you own is the thin discovery + hook execution you can't break because you don't maintain it.</p></div>
+    <div class="row impl"><span class="rl">Implication for building</span><p>The design test for every capability: "does this need to be <b>alive</b>, or merely <b>present</b>?" Default to present (data); spend a live process only where genuine reaction to runtime state is required — and even then, host it inside the harness's loop, not a process of your own.</p></div>
+  </div>
+</section>
+
+<!-- 10 -->
+<section class="card" id="c10">
+  <div class="num">CHALLENGE 10</div>
+  <h2>Forcing-function design — adversarial discovery</h2>
+  <div class="framing">
+    <div class="frame concrete"><div class="lbl">Concrete</div><p>The maintainer's method: state a taste, let a fresh agent challenge it hard, then hold or revise <b>on principle</b>. Design pressure via adversarial dialogue rather than upfront spec.</p></div>
+    <div class="frame abstract"><div class="lbl">Abstract</div><p>Is the best architecture <i>discovered</i> by sustained adversarial pressure rather than designed — and what does that imply for how we build?</p></div>
+  </div>
+  <div class="ta">
+    <div class="move th"><span class="tag">Thesis</span><p>Architecture emerges from adversarial dialogue: state a taste, let it be attacked, keep what survives. Empirically stress-tested beats big-design-upfront.</p></div>
+    <div class="move an"><span class="tag">Antithesis</span><p>Adversarial iteration wanders. "Survives challenge" selects for <i>defensibility</i>, not correctness; a maintainer with strong priors out-argues fresh agents and entrenches taste as truth. Design-by-debate can rationalize anything — sometimes you need a top-down invariant the debate may not touch.</p></div>
+  </div>
+  <div class="syn">
+    <div class="stag">Synthesis</div>
+    <p class="prob">Adversarial pressure does not <i>discover</i> the architecture — it <b>certifies which parts are load-bearing vs incidental</b> by seeing what survives attack. It is selection, not generation.</p>
+    <div class="row"><span class="rl">Resolution · why non-obvious</span><p>The method avoids "rationalize anything" only because the maintainer resolves a challenge by <b>appeal to a stated, externalized taste</b> (the spec / <code>.config</code> principles), never by who argues better. Those principles are the fixed objective the antithesis claimed was missing — and they live <i>outside</i> any single debate (sedimented per #5/#12). So the architecture is neither designed-upfront nor discovered-by-debate: it is the <b>fixed point of taste under adversarial iteration</b>. The engine is an <b>asymmetry of revision rates</b> — fast-moving code stressed against slow-moving, citable principles.</p></div>
+    <div class="row impl"><span class="rl">Implication for building</span><p>For debate to yield truth and not mere consensus: (a) keep taste <b>external and citable</b> so challenges resolve by appeal, not rhetoric; (b) let taste itself be revisable but only <b>slowly and on stated grounds</b>. Maintain the rate asymmetry deliberately — it is the whole machine.</p></div>
+  </div>
+</section>
+
+<!-- META -->
+<section class="meta">
+  <div class="kicker">cross-cutting · what emerged across all ten</div>
+  <h2>Five meta-insights</h2>
+  <p class="lead">Read together, the ten debates are not ten problems — they are one stance applied ten times. These are the
+  invariants the synthesis kept rediscovering.</p>
+
+  <div class="mi">
+    <h3><span class="mn">A</span>Honesty is behavioral, not structural</h3>
+    <p>The real invariant is almost never the shape of the code (branch count, presence of a gate, a clean hash) but
+    a <b>behavior at the surface</b>: is the boundary honored (#1), is the gate's claim checked (#8), does the spec
+    decode (#4)? The dangerous artifact is the one that <b>passes the structural test while lying</b> — the decorative
+    abstraction, the self-attested checkpoint, the un-drifted-but-wrong spec. <i>Prove invariants through the surface a
+    user touches (YATU), not the shape of the code.</i></p>
+  </div>
+
+  <div class="mi">
+    <h3><span class="mn">B</span>Prefer <i>present</i> over <i>alive</i>; own the earliest moment</h3>
+    <p>Self-launch (#2), config-as-data (#9), and the env-seeded id (#3) are the same move: push control to the
+    <b>earliest durable artifact you own</b> and let the harness's runtime carry it downhill. This converts brittle
+    <i>coordination</i> problems (right process, right instant) into robust <i>consistency</i> problems (right file,
+    present). <b>Liveness is the enemy of resumability; presence is its friend.</b></p>
+  </div>
+
+  <div class="mi">
+    <h3><span class="mn">C</span>Put the guard where the judgment lives</h3>
+    <p>When an invariant is <b>semantic</b> — memory hygiene (#7), the complexity collapse (#6), the alignment gap (#4)
+    — enforcement must live in a <b>mind</b> (an instructed agent, a fresh decoder), because only a mind can evaluate
+    meaning; a mechanism would be coarse or a fake re-implementation of the mind. Reserve hard mechanisms for
+    <b>syntactic</b> invariants (namespacing a key). This is a precise inversion of "mechanism over norm," and knowing
+    <i>which</i> invariant you hold is the whole skill.</p>
+  </div>
+
+  <div class="mi">
+    <h3><span class="mn">D</span>The outsider is the contraction operator</h3>
+    <p>The fresh-context agent recurs as the stabilizer of every loop — the de-drift decoder (#4), the self-reference
+    contraction (#5), the cross-context auditor (#8), the forcing-function challenger (#10). A self-referential or
+    self-improving system <b>cannot stabilize itself</b>; it amplifies its own priors unless an externally-imported
+    naive critic supplies the entropy-removing pull. <b>Entropy resistance = continuously paying for an outside
+    decode.</b></p>
+  </div>
+
+  <div class="mi">
+    <h3><span class="mn">E</span>The core competence is refusal — collapse, don't add</h3>
+    <p>Complexity-as-currency (#6), the decorative-boundary deletion (#1), 画蛇添足 (#7), present-not-alive (#9) all
+    reduce to one discipline: <b>not adding</b> — collapse onto existing primitives, delete the dishonest interface,
+    refuse the new branch. A system's quality is measured by what it <i>refused</i>, and refusal is hard because its
+    cost (re-derivation effort) is paid now and concretely, while its benefit (low complexity) is diffuse and
+    deferred. <b>The whole method is built to make refusal the cheap default and addition the thing you must justify.</b></p>
+  </div>
+</section>
+
+<footer>
+  <p>百家争鸣 — a distilled adversarial debate over SpexCode's ten deepest challenges. Reasoning/writing exercise; no
+  backends, browsers, or agent sessions were run. Source taste: <code>.spec/spexcode/taste/spec.md</code>.</p>
+</footer>
+
+</div>
+</body>
+</html>

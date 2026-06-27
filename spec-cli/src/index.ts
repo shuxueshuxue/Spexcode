@@ -7,7 +7,7 @@ import { resolveLayout, mainBranch } from './layout.js'
 import { buildBoard } from './board.js'
 import { gitA, gitTry } from './git.js'
 import { newSession, listSessions, sendKeys, rawKey, exitSession, closeSession, reopen, propose, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, superviseQueue } from './sessions.js'
-import { slashCommands } from './slash-commands.js'
+import { defaultHarness } from './harness.js'
 import { evalTimeline, readBlobByHash } from '../../spec-yatsu/src/evaltab.js'
 import { buildProofModel, renderProofHtml } from '../../spec-yatsu/src/proof.js'
 import { saveUpload, MAX_UPLOAD_BYTES } from './uploads.js'
@@ -65,9 +65,9 @@ app.get('/api/layout', async (c) => c.json(await resolveLayout()))
 // its prompt `body` ({{targets}} placeholder), `kind`, and folder `dir` + co-located `files`. surface is a
 // frontmatter field, not a dir (specs.ts loadSurface); `surface: system` siblings are gathered elsewhere.
 app.get('/api/config', (c) => c.json(loadConfig()))
-// the dashboard input's `/` dropdown — the union of built-in + user/project/skill commands, computed
-// the same way Claude Code computes its own `/` menu. Insert-only on the client; nothing executes here.
-app.get('/api/slash-commands', (c) => c.json(slashCommands()))
+// the dashboard input's `/` dropdown — computed by the launcher's HARNESS adapter the same way that harness
+// computes its own `/` menu ([[harness-adapter]]). Insert-only on the client; nothing executes here.
+app.get('/api/slash-commands', (c) => c.json(defaultHarness.slashCommands()))
 
 // write a pasted/dropped/picked file to this (worker) machine's /tmp and return its absolute path for the
 // client to splice into the prompt. Fail-loud: no/empty file → 400, over the size cap → 413, write error → 500.
@@ -104,7 +104,10 @@ app.post('/api/sessions', async (c) => {
   const body = await c.req.json().catch(() => ({}))
   const prompt = typeof body?.prompt === 'string' ? body.prompt : ''
   if (!prompt.trim()) return c.json({ error: 'empty prompt' }, 400)
-  return c.json(await newSession(typeof body?.node === 'string' ? body.node : null, prompt), 201)
+  const harness = typeof body?.harness === 'string' ? body.harness : undefined
+  try {
+    return c.json(await newSession(typeof body?.node === 'string' ? body.node : null, prompt, harness), 201)
+  } catch (e) { return c.json({ error: String((e as Error).message || e) }, 400) }   // unknown harness id → 400, not a 500
 })
 // one server-side merge bundle (ahead/dirty/diff(merge-base)/gates/proposal) for the manager cockpit;
 // dashboard and `spex review` are thin callers. 404 for an unknown id. See [[manager-cockpit]].

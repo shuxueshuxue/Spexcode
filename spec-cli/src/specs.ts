@@ -227,7 +227,31 @@ export async function specDiffAt(id: string, hash: string) {
   return latestDiff(node.relPath, hash)
 }
 
-export type ConfigPreset = { name: string; title: string; desc: string; kind: string; dir: string; files: string[]; body: string }
+// config presets - REFLEXIVE, SKILL-SHAPED preset nodes whose folder IS a skill bundle: `spec.md`'s
+// body is the agent prompt/contract (with a {{targets}} placeholder the launcher fills with the
+// @-referenced nodes), and the SAME folder may co-locate auxiliary files — scripts, assets — that the
+// preset ships for the agent to run deterministically. So each preset reports its folder `dir`
+// (repo-relative) and its `files` (co-located paths, spec.md excluded) alongside name/title/desc/kind/body.
+// `kind` ∈ mutating|report tells the launcher whether the preset edits the graph or only reports on it.
+// `events`/`order`/`block` are populated only for the `hook` surface (empty/0/false otherwise): which
+// harness lifecycle events the node binds, its deterministic intra-event order, and whether it intends to
+// block (honored only on block-capable events). See loadHookConfig + the hook compiler/dispatcher.
+export type ConfigPreset = { name: string; title: string; desc: string; kind: string; dir: string; files: string[]; body: string; events: string[]; order: number; block: boolean }
+// field-driven surface - a config plugin is a FLAT direct child of a config root (`<root>/<name>/spec.md`)
+// that carries a `surface: system|slash` frontmatter field naming where it plugs in. There are no `slash/` or
+// `system/` bucket dirs (those were graph-invisible grouping dirs with no spec.md, so the spec graph skipped
+// them — path != graph); the surface is a FIELD on the node, so the plugin is a real graph child of its root.
+// BOTH config roots participate: `.config` (the instance — DIY dev-flow plugins) and `config` (the project
+// system spec). loadConfig gathers the `slash` surface, loadSystemConfig the `system` surface; each scans the
+// flat children under every root and filters by the field. The plugins also show on the board as ordinary
+// spec nodes (via loadSpecs).
+// root node - the spec tree's single top-level node: the one directory directly under .spec/ that
+// holds a spec.md. The dogfood repo names it 'spexcode'; a repo scaffolded by `spex init` names it
+// 'project' (or whatever the adopter renames it to). Detected DYNAMICALLY so the config loaders resolve
+// the ACTUAL root's config dirs — never a hardcoded 'spexcode', which silently returned [] in an adopter
+// repo, so their .config/core contract never loaded and their launched agents got no system prompt.
+// Returns null when .spec holds no such directory. (resolveLayout's `main` is a checkout PATH, not the
+// root node NAME, so it can't serve this — a tiny filesystem probe is the right seam.)
 function rootNode(): string | null {
   if (!existsSync(SPEC_DIR)) return null
   for (const e of readdirSync(SPEC_DIR, { withFileTypes: true })) {
@@ -254,28 +278,51 @@ function bundleFiles(dir: string): string[] {
   walk(dir)
   return out.sort()
 }
-function loadSurface(surface: 'slash' | 'system'): ConfigPreset[] {
+// gather the preset nodes under a config root that declare `surface: <surface>`. The scan is RECURSIVE —
+// `surface` is a FIELD, not a path (the design's core tenet), so a plugin may live at ANY depth and a
+// grouping parent may itself be a plugin (e.g. `.config/core` is a `surface: system` contract whose CHILDREN
+// are `surface: hook` nodes). The field filter keeps it safe: a node only gathers if it declares THIS
+// surface, so descending past a matched node never double-counts (children carry a different surface). For
+// `system`/`slash` the result is identical to the old one-level scan on the current tree — every existing
+// such node is a flat direct child and no nested node declares those surfaces — so the gather set (hence
+// the appended system prompt and the slash dropdown) is byte-for-byte unchanged.
+function loadSurface(surface: 'slash' | 'system' | 'hook'): ConfigPreset[] {
   const out: ConfigPreset[] = []
+  const visit = (nodeDir: string, name: string) => {
+    if (existsSync(join(nodeDir, 'spec.md'))) {
+      const { fm, body } = parseFrontmatter(readFileSync(join(nodeDir, 'spec.md'), 'utf8'))
+      // @@@ skip pending - a `status: pending` plugin is DECLARED INTENT, not yet active. It renders on the
+      // board (via loadSpecs) but must NOT gather: neither a slash preset, nor folded into a system prompt,
+      // nor a live hook. Only built/active plugins surface here, so pending stubs stay inert.
+      if (str(fm.surface) === surface && str(fm.status) !== 'pending') {
+        out.push({
+          name,
+          title: str(fm.title, name),
+          desc: str(fm.desc),
+          kind: str(fm.kind, 'mutating'),
+          dir: relative(ROOT, nodeDir),
+          files: bundleFiles(nodeDir),
+          body: body.trim(),
+          events: list(fm.events),
+          order: Number(str(fm.order, '0')) || 0,
+          block: str(fm.block) === 'true',
+        })
+      }
+    }
+    for (const e of readdirSync(nodeDir, { withFileTypes: true })) {
+      if (e.isDirectory()) visit(join(nodeDir, e.name), e.name)
+    }
+  }
   for (const root of configRoots()) {
     if (!existsSync(root)) continue
     for (const e of readdirSync(root, { withFileTypes: true })) {
-      const nodeDir = join(root, e.name)
-      if (!e.isDirectory() || !existsSync(join(nodeDir, 'spec.md'))) continue
-      const { fm, body } = parseFrontmatter(readFileSync(join(nodeDir, 'spec.md'), 'utf8'))
-      if (str(fm.surface) !== surface) continue
-      if (str(fm.status) === 'pending') continue
-      out.push({
-        name: e.name,
-        title: str(fm.title, e.name),
-        desc: str(fm.desc),
-        kind: str(fm.kind, 'mutating'),
-        dir: relative(ROOT, nodeDir),
-        files: bundleFiles(nodeDir),
-        body: body.trim(),
-      })
+      if (e.isDirectory()) visit(join(root, e.name), e.name)
     }
   }
   return out.sort((a, b) => a.name.localeCompare(b.name))
 }
 export function loadConfig(): ConfigPreset[] { return loadSurface('slash') }
 export function loadSystemConfig(): ConfigPreset[] { return loadSurface('system') }
+// the hook handlers (compiled into the per-session hook manifest the dispatcher reads). Each carries its
+// `events`/`order`/`block` binding + co-located script `files`.
+export function loadHookConfig(): ConfigPreset[] { return loadSurface('hook') }

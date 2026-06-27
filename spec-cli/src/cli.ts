@@ -15,7 +15,7 @@ function flag(name: string): string | undefined {
 }
 const has = (name: string) => process.argv.includes(`--${name}`)
 // bare positionals after argv index `from`, skipping flags and their values (selectors for ls/watch).
-const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--timeout', '--reason', '--out', '--password', '--tls-cert', '--tls-key'])
+const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--timeout', '--reason', '--out', '--password', '--tls-cert', '--tls-key', '--harness'])
 function positionals(from: number): string[] {
   const out: string[] = []
   for (let i = from; i < process.argv.length; i++) {
@@ -92,6 +92,7 @@ Specs / graph
   board                 dump the dashboard board state as JSON
   forge <sub>           trace a forge's issues/PRs onto spec nodes (read-only): links | eval-pending [--host github] [--node <id>] [--json]
   yatsu <sub>           measure a node's scenarios and keep score: scan | eval [.|<node>] [--scenario N] (--pass|--fail|--note T) [--image P|--result P|-] | show [.|<node>] [--json] | clean [--keep-latest|--all]
+  hooks <sub>           harness-agnostic hook system: compile [--out <file>] (flatten surface:hook nodes into the per-session manifest the dispatcher reads)
   review <SEL>          manager cockpit: review a session (ahead·merge-base diff·gates·proposal)  [--json]
   review proof <SEL>    render the session's proof of work — self-contained HTML, fully derived (diff·measured yatsu loss·gates)  [--open|--out P|--json]
   merge <SEL>           manager cockpit: gated atomic merge into main (re-checks gates, then closes)  [--keep]
@@ -238,6 +239,16 @@ if (cmd === 'serve') {
   // thin route — all logic lives in spec-yatsu.
   const { runYatsu } = await import('../../spec-yatsu/src/cli.js')
   process.exit(await runYatsu(process.argv.slice(3)))
+} else if (cmd === 'hooks') {
+  // @@@ hooks - compile the surface:hook nodes into the per-session manifest the (pure-shell) dispatcher
+  // reads. Thin route, like forge/yatsu. `spex hooks compile [--out <file>]`. Logic in hooks.ts.
+  const { runHooks } = await import('./hooks.js')
+  process.exit(await runHooks(process.argv.slice(3)))
+} else if (cmd === 'materialize') {
+  // @@@ materialize - the pay-per-change render: surface nodes → manifest + AGENTS.md/CLAUDE.md block +
+  // shims + Codex trust, for cwd's project. The cheap shell gate (dispatch.sh) invokes it only on change.
+  const { materialize } = await import('./materialize.js')
+  console.log(`materialized — content-hash ${materialize()}`)
 } else if (cmd === 'board') {
   const { buildBoard } = await import('./board.js')
   console.log(JSON.stringify(await buildBoard(), null, 2))
@@ -315,20 +326,26 @@ if (cmd === 'serve') {
   // it falls back to an in-process launch only when no backend answers.
   const { createSession } = await import('./sessions.js')
   const prompt = flag('prompt') ?? positionals(3)[0] ?? ''
-  console.log(JSON.stringify(await createSession(flag('node') ?? null, prompt), null, 2))
+  console.log(JSON.stringify(await createSession(flag('node') ?? null, prompt, flag('harness') ?? undefined), null, 2))
 } else if (cmd === 'session') {
   const sub = process.argv[3]
-  // `s` (sessions.ts) backs the state PRODUCERS that stay local (state/done/park/fail/ask/idle/commit-gate
-  // write the cwd .session) and `new` (its own launch path). `c` (client.ts) backs the read/control subs that
-  // route through the backend — exactly the split the refactor draws. Both lazily imported here.
+  // `s` (sessions.ts) backs the state PRODUCERS that stay local (state/done/park/fail/ask/idle write the
+  // global record by session_id; commit-gate is a pure git check of the cwd worktree) and `new` (its own
+  // launch path). `c` (client.ts) backs the read/control subs that route through the backend. Lazily imported.
   const s = await import('./sessions.js')
   const c = await import('./client.js')
   const id = process.argv[4]
+  // the agent-authored state writers resolve WHICH session by id: a `--session <id>` flag (the lifecycle
+  // hooks pass it, parsed from the payload, since they no longer have a cwd `.session`) wins, else the
+  // harness env var (ownSessionId — the agent's own `spex session …` carries the harness session id).
+  const sess = flag('session')
   // appended to a done/ask/block declaration: states (not commands) that the next tool call's mark-active hook re-flips .session to active, so a re-read won't show this.
   const DECLARED = ' — recorded; the human sees it in the dashboard. Your next tool call resets this worktree to active (the mark-active hook, by design), so re-reading .session won\'t reflect it.'
   if (sub === 'new') {
     // route through the backend (auth env + concurrency cap); in-process only if no backend is reachable.
-    console.log(JSON.stringify(await s.createSession(flag('node') ?? null, flag('prompt') ?? ''), null, 2))
+    // prompt = --prompt OR the first positional (after `session new`), so `session new "<prompt>"` works the
+    // SAME as the `spex new "<prompt>"` shorthand — one prompt-resolution rule, not two.
+    console.log(JSON.stringify(await s.createSession(flag('node') ?? null, flag('prompt') ?? positionals(4)[0] ?? '', flag('harness') ?? undefined), null, 2))
   } else if (sub === 'list') {
     console.log(JSON.stringify(await c.clientListSessions(), null, 2))
   } else if (sub === 'reopen' || sub === 'resume') {
@@ -338,25 +355,25 @@ if (cmd === 'serve') {
   } else if (sub === 'review') {
     console.log(await s.propose(id, 'merge') ? `${id} -> review` : `no such session ${id}`)
   } else if (sub === 'state') {
-    // the agent authors ITS OWN state (from cwd): active|awaiting|parked|error  [--propose] [--note]
+    // the agent authors ITS OWN state: active|awaiting|parked|error  [--propose] [--note] [--session]
     const st = process.argv[4] as any
-    const ok = s.markStateFromCwd(st, { proposal: flag('propose') as any, note: flag('note') })
-    console.log(ok ? `state -> ${st}` : 'no .session in cwd (or bad status)')
+    const ok = s.markState(st, { proposal: flag('propose') as any, note: flag('note'), sessionId: sess })
+    console.log(ok ? `state -> ${st}` : 'no session record (unknown --session / no CLAUDE_CODE_SESSION_ID, or bad status)')
   } else if (sub === 'done') {
     // sugar for awaiting; --propose merge|nothing|close, optional --note
     const p = (flag('propose') as any) || 'nothing'
-    console.log(s.markStateFromCwd('awaiting', { proposal: p, note: flag('note') }) ? `done (${p})${DECLARED}` : 'no .session in cwd')
+    console.log(s.markDone(p, sess) ? `done (${p})${DECLARED}` : 'no session record')
   } else if (sub === 'park') {
     // sugar: the agent is waiting on a background task; it will self-resume (NOT idle/awaiting)
-    console.log(s.markStateFromCwd('parked', { note: flag('note') }) ? `parked${DECLARED}` : 'no .session in cwd')
+    console.log(s.markState('parked', { note: flag('note'), sessionId: sess }) ? `parked${DECLARED}` : 'no session record')
   } else if (sub === 'fail') {
-    // the StopFailure hook marks ITS OWN worktree (from cwd) as error (turn died on an API error)
-    console.log(s.markStateFromCwd('error') ? 'marked error' : 'no .session in cwd')
+    // the StopFailure hook marks its session (--session from the payload) as error (turn died on an API error)
+    console.log(s.markError(sess) ? 'marked error' : 'no session record')
   } else if (sub === 'ask') {
     // the agent DELIBERATELY declares it is pausing to ask the human a question (like `done`/`park`, an
     // authored state — NOT guarded active-only). The --note carries the question. Distinct from `park`
     // (waiting on a background task, self-resumes): an asking agent resumes only when the human replies.
-    console.log(s.markStateFromCwd('asking', { note: flag('note') }) ? `asking${DECLARED}` : 'no .session in cwd')
+    console.log(s.markState('asking', { note: flag('note'), sessionId: sess }) ? `asking${DECLARED}` : 'no session record')
   } else if (sub === 'commit-gate') {
     // the Stop gate's deterministic commit check (from cwd = the worktree): exit 0 if the node branch is
     // ready to declare done/merge (work committed + ahead of main), else print the reason and exit 1. Uses
@@ -366,11 +383,11 @@ if (cmd === 'serve') {
     console.log(r.reason)
     process.exit(1)
   } else if (sub === 'idle') {
-    // the Notification(idle_prompt) hook marks ITS OWN worktree (from cwd) idle when claude waits at its
-    // prompt. INFERRED, so guarded active-only: it no-ops unless the current status is exactly `active`,
+    // the Notification(idle_prompt) hook marks its session (--session from the payload) idle when claude waits
+    // at its prompt. INFERRED, so guarded active-only: it no-ops unless the current status is exactly `active`,
     // never clobbering a deliberate awaiting/asking/parked/error declaration. Distinct from `ask`
     // (the agent deliberately asking the human) — idle is the undeclared stop the Stop gate missed.
-    console.log(s.markIdleFromCwd() ? 'idle' : 'noop (no .session in cwd, or not active)')
+    console.log(s.markIdle(sess) ? 'idle' : 'noop (no session record, or not active)')
   } else if (sub === 'merge') {
     // merge dispatch (same as top-level `spex merge`): reopen the session and hand its OWN agent the merge
     // prompt — the agent runs the --no-ff merge, resolves conflicts, verifies main advanced, and proposes
@@ -393,7 +410,7 @@ if (cmd === 'serve') {
     // reason AND exits non-zero, so a manager/script never mistakes a dead dispatch for success.
     const full = await resolveSelectorOrExit(id)
     // BIDIRECTIONAL: stamp the SENDER (this send process's OWN session — the only process that knows it, via
-    // ownSessionId from CLAUDE_CODE_SESSION_ID / cwd .session) + a one-line reply hint into the delivered
+    // ownSessionId from CLAUDE_CODE_SESSION_ID) + a one-line reply hint into the delivered
     // message, so the recipient can reply over the SAME send. The sender's row (hence its display label) is
     // resolved through the shared resolver; a human in a plain shell has no session id → bare message, no
     // hint (see [[agent-reply-channel]]).

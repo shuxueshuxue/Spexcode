@@ -7,7 +7,7 @@ import { resolveLayout, mainBranch } from './layout.js'
 import { buildBoard } from './board.js'
 import { gitA, gitTry } from './git.js'
 import { newSession, listSessions, sendKeys, rawKey, exitSession, closeSession, reopen, propose, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, superviseQueue } from './sessions.js'
-import { slashCommands } from './slash-commands.js'
+import { defaultHarness } from './harness.js'
 import { evalTimeline, readBlobByHash } from '../../spec-yatsu/src/evaltab.js'
 import { buildProofModel, renderProofHtml } from '../../spec-yatsu/src/proof.js'
 import { saveUpload, MAX_UPLOAD_BYTES } from './uploads.js'
@@ -82,9 +82,9 @@ app.get('/api/layout', async (c) => c.json(await resolveLayout()))
 // (mutating|report), and its folder `dir` + co-located `files` so the launcher can list these presets in the
 // new-session `/` dropdown. Read live from disk (no git), like specs.
 app.get('/api/config', (c) => c.json(loadConfig()))
-// the dashboard input's `/` dropdown — the union of built-in + user/project/skill commands, computed
-// the same way Claude Code computes its own `/` menu. Insert-only on the client; nothing executes here.
-app.get('/api/slash-commands', (c) => c.json(slashCommands()))
+// the dashboard input's `/` dropdown — computed by the launcher's HARNESS adapter the same way that harness
+// computes its own `/` menu ([[harness-adapter]]). Insert-only on the client; nothing executes here.
+app.get('/api/slash-commands', (c) => c.json(defaultHarness.slashCommands()))
 
 // @@@ file attach - the New Session prompt and a session's ❯ box accept pasted/dropped/picked files. Each
 // is POSTed here as multipart, written to THIS (the backend = worker) machine's /tmp, and its absolute path

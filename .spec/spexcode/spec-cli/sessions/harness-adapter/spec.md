@@ -1,8 +1,11 @@
 ---
 title: harness-adapter
-status: pending
+status: active
 hue: 280
 desc: One seam between SpexCode and the coding-agent harness (Claude Code, Codex, …). Every harness-specific fact lives behind a single Adapter interface with one impl per harness; product code never branches on which harness it is.
+code:
+  - spec-cli/src/harness.ts
+  - spec-cli/hooks/harness.sh
 related:
   - spec-cli/src/slash-commands.ts
   - spec-cli/src/materialize.ts
@@ -22,9 +25,13 @@ that branching belongs to the harness detector and the adapter only.
 
 ## expanded spec
 
-The harness is resolved ONCE (per launch from the launcher's choice, or per hook from a payload/env marker)
-into the matching adapter; everything downstream calls the adapter. The Adapter owns exactly these
-divergence points — its whole surface:
+The harness is resolved ONCE into the matching adapter; everything downstream calls the adapter. DETECTION is
+not payload-sniffing: each adapter OWNS its shim, and the shim bakes the harness id as the dispatcher's first
+argument (`dispatch.sh <id> <Event>`), so `dispatch.sh` exports `SPEXCODE_HARNESS` and a hook subprocess learns
+its harness from the shim that wired it — deterministically, never by guessing the payload shape. On the TS
+side the harness is the launcher's choice (the dashboard launches `defaultHarness`) or ALL adapters at once
+(materialize renders every harness's artifacts). The Adapter owns exactly these divergence points — its whole
+surface:
 
 - **slashCommands()** — the `/` menu, computed the way THAT harness computes its own (Claude: a captured
   built-in set + `.claude/commands/**` + skills; Codex: its built-ins + `~/.codex/prompts/**` + plugin
@@ -44,11 +51,21 @@ divergence points — its whole surface:
 - **worktree** — Claude has a native `--worktree` + `WorktreeCreate`/`WorktreeRemove` hooks; Codex has none
   (SpexCode manages the worktree itself). The adapter exposes whether the harness owns worktrees.
 
-Most of this is **consolidation**, not new behavior: the event/snake maps, the Codex trust writer, and the
-shim writers already exist scattered in [[harness-delivery]]'s materialize; `CLAUDE_CMD` in [[sessions-core]];
-the Claude `/` menu in [[slash-commands]]. The adapter gathers them under one interface and adds the missing
-Codex implementations — chiefly the Codex `/` menu (replicated as Claude's was) and the apply_patch
-path-extractor. Sequenced AFTER the global-session-store refactor lands (both touch sessions.ts).
+Most of this was **consolidation**: the event/snake maps, the Codex trust writer, and the shim writers were
+scattered in [[harness-delivery]]'s materialize; `CLAUDE_CMD` in [[sessions-core]]; the Claude `/` menu in
+[[slash-commands]]. They now live in `harness.ts` (`claudeHarness` / `codexHarness`, gathered in `HARNESSES`),
+which materialize loops over and sessions reads through `defaultHarness` — there is no `if (codex)` left in
+product code. The genuinely NEW Codex pieces: the Codex `/` menu (taken from the pinned codex-rs source the
+same discovered-not-guessed way), and the **tool mapping** that closes the inert-on-codex gap.
+
+Because the hook handlers are pure shell, they cannot import `harness.ts`; `hooks/harness.sh` is its **shell
+mirror** (sourced by every handler, exported by `dispatch.sh`). It owns the harness-divergent payload parse:
+Codex reads/edits arrive as `tool_name:"Bash"` + `tool_input.command` with NO `file_path`, so `hp_code_path`
+translates a Bash command into the touched path — the apply_patch `*** File:` line for a mutation, else the
+last path-like token (`sed -n 1p f.ts` → `f.ts`) — and `hp_is_ask` maps Codex's `request_user_input` (and
+Claude's `AskUserQuestion`) onto the question capture. So [[spec-first]], [[spec-of-file]], and mark-active now
+fire on Codex, not just Claude. The session-id + global-store resolution every handler repeated is folded into
+the same helper.
 
 ## verified codex facts (live round-trip, real codex 0.142.3)
 

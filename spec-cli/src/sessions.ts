@@ -8,6 +8,7 @@ import { createConnection } from 'node:net'
 import { fileURLToPath } from 'node:url'
 import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, type ReviewDiffFile } from './git.js'
 import { loadSystemConfig, loadSpecs, type ConfigPreset } from './specs.js'
+import { defaultHarness, HARNESSES } from './harness.js'
 import { mainBranch, gitCommonDir, readConfig, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, readRawRecord, type RawRecord } from './layout.js'
 
 // @@@ sessions - the WORKTREE is the durable unit; tmux is a disposable runtime handle. Each session
@@ -39,7 +40,10 @@ import { mainBranch, gitCommonDir, readConfig, sessionStoreDir, sessionRecordPat
 
 const pexec = promisify(execFile)
 const TMUX_SOCK = process.env.SPEXCODE_TMUX || 'spexcode'
-const CLAUDE_CMD = process.env.SPEXCODE_CLAUDE_CMD || 'claude --dangerously-skip-permissions'
+// the harness the dashboard/CLI launcher drives. ALL harness-specific launch facts (the agent command, the
+// session-id flag, the hook shim, the session env var) come from this adapter — the launcher never names
+// Claude. Resolved once here ([[harness-adapter]]); a future codex launcher flips defaultHarness, nothing else.
+const HARNESS = defaultHarness
 const COLS = 120, ROWS = 32
 // @@@ concurrency cap - the most working agents we let run AT ONCE. Heavy multi-agent load (many claude
 // processes computing simultaneously) was the source of resource-pressure crashes, so a launch beyond the
@@ -617,14 +621,16 @@ export async function sessionGraph(): Promise<{ nodes: Session[]; edges: Edge[] 
 // deregister on exit (see cli.ts `watch`). All best-effort — if the backend is down the watch still
 // streams its events; the graph edge just won't appear until a heartbeat lands. Never throws.
 export const apiBase = () => process.env.SPEXCODE_API_URL || `http://127.0.0.1:${process.env.PORT || 8787}`
-// the agent's OWN session id: the harness env var. Claude Code sets CLAUDE_CODE_SESSION_ID in every agent
-// (and hook) subprocess; SPEXCODE_SESSION_ID is a portable override (e.g. a Codex self-launch, or a test).
-// There is NO worktree fallback any more — the record left the worktree, so a session knows its id only from
-// the harness. Used by `spex watch` (the worker's own env carries it) and the agent-typed `spex session …`
-// declarations; the hooks instead pass `--session <id>` parsed from the payload, so they never depend on this.
+// the agent's OWN session id: the HARNESS env var. Each adapter names the var its agents carry (Claude
+// CLAUDE_CODE_SESSION_ID, Codex CODEX_THREAD_ID — [[harness-adapter]]); we read whichever the running agent
+// set, so this works under any harness without branching. SPEXCODE_SESSION_ID is a portable override (a test
+// or an unrecognised harness). There is NO worktree fallback — the record left the worktree, so a session
+// knows its id only from the harness. Used by `spex watch` and the agent-typed `spex session …` declarations;
+// the hooks instead pass `--session <id>` parsed from the payload, so they never depend on this.
 export function ownSessionId(): string | null {
-  const env = process.env.CLAUDE_CODE_SESSION_ID || process.env.SPEXCODE_SESSION_ID
-  return env && env.trim() ? env.trim() : null
+  for (const h of HARNESSES) { const v = process.env[h.sessionEnvVar]; if (v && v.trim()) return v.trim() }
+  const o = process.env.SPEXCODE_SESSION_ID
+  return o && o.trim() ? o.trim() : null
 }
 
 // @@@ withSenderHint - bidirectional agent messaging. `spex session send` delivers a prompt to the
@@ -712,25 +718,16 @@ async function hideClaudeMd(id: string, path: string): Promise<void> {
 // idle) and for the SessionStart compile. This delivers exactly the legacy hook map today (manifest ==
 // legacy: UserPromptSubmit/PreToolUse→mark-active, PreToolUse→spec-first, PostToolUse→spec-of-file,
 // Stop→stop-gate, StopFailure→session-fail, Notification→idle) while making the set spec-governed + editable.
+// EVERY event → dispatch.sh: its content-hash GATE re-materializes the persistent .spexcode/hooks-manifest
+// (+ contract/shims/trust) on a .config change, then dispatches. No separate per-session compile — the
+// manifest persists and is refreshed only when the editable .config moves. The shim JSON itself is the
+// HARNESS adapter's job (it binds the harness's events + bakes the harness id into the dispatch call), so the
+// dashboard-launch settings stay in lockstep with the self-launch shim materialize writes ([[harness-adapter]]).
 function settingsJson(): string {
   const root = pkgRoot()
   const dispatch = join(root, 'hooks', 'dispatch.sh')
   const spex = `${join(root, 'node_modules', '.bin', 'tsx')} ${join(root, 'src', 'cli.ts')}`
-  const env = `SPEX='${spex}'`   // exported to the dispatcher → its gate (spex materialize) + cli-needing handlers inherit it
-  const ev = (e: string) => [{ hooks: [{ type: 'command', command: `${env} bash ${dispatch} ${e}` }] }]
-  // EVERY event (incl SessionStart) → dispatch.sh: its content-hash GATE re-materializes the persistent
-  // .spexcode/hooks-manifest (+ contract/shims/trust) on a .config change, then dispatches. No separate
-  // per-session compile — the manifest persists and is refreshed only when the editable .config moves.
-  const hooks: Record<string, unknown> = {
-    SessionStart: ev('SessionStart'),
-    UserPromptSubmit: ev('UserPromptSubmit'),
-    PreToolUse: ev('PreToolUse'),
-    PostToolUse: ev('PostToolUse'),
-    Stop: ev('Stop'),
-    StopFailure: ev('StopFailure'),
-    Notification: ev('Notification'),
-  }
-  return JSON.stringify({ hooks }, null, 2)
+  return HARNESS.shim(dispatch, spex).json
 }
 // write the hooks file into the session's global store and return the `--settings <file>` arg (the path is
 // absolute, so no shell-quoting hazard and it's outside the worktree — zero per-session pollution).
@@ -751,7 +748,7 @@ function writeSettings(id: string): string {
 // worktree (in the store, keyed by session_id), so it never pollutes the spec/code work.
 function launchScript(id: string, tail: string): string {
   const file = join(storeDir(id), 'launch.sh')
-  writeFileSync(file, `${rvEnv(id)} ${CLAUDE_CMD} ${appendSysArg()} ${writeSettings(id)} ${tail}\n`)
+  writeFileSync(file, `${rvEnv(id)} ${HARNESS.launchCmd()} ${appendSysArg()} ${writeSettings(id)} ${tail}\n`)
   return file
 }
 async function launch(id: string, path: string, tail: string): Promise<void> {
@@ -890,7 +887,7 @@ async function startQueued(id: string): Promise<boolean> {
   launching.add(id)   // hold the slot across the boot window BEFORE we launch, so a concurrent count can't race us
   try {
     const sq = `'${launchPrompt.replace(/'/g, `'\\''`)}'`
-    await launch(id, wt.path, `--session-id ${id} ${sq}`)
+    await launch(id, wt.path, `${HARNESS.sessionIdArg(id)} ${sq}`.trim())
   } catch {
     launching.delete(id)
     return false   // launch failed → stays `queued`, retried on the next drain tick

@@ -917,12 +917,16 @@ body {
 /* fail-loud: /keys dispatch failed — outline red and show the message wasn't delivered (draft restored). */
 .si-bottom.err { border-color: var(--orange); }
 .si-send-err { flex: none; color: var(--orange); font-size: 11px; white-space: nowrap; }
-/* @@@ file attach - the 📎 button (both input surfaces) opens the picker; a paste/drop attaches too. A small,
-   muted affordance that brightens on hover, sits at the input's bottom edge, and dims while disabled/uploading.
-   `.dragover` rings the surface green so a dragged file reads as droppable; the error chip mirrors .si-send-err. */
-.si-attach { flex: none; align-self: flex-end; background: transparent; border: none; cursor: pointer; color: var(--muted); font-size: 14px; line-height: 1.5; padding: 0 2px; }
+/* @@@ file attach - the paperclip-glyph button (both input surfaces) opens the picker; a paste/drop attaches
+   too. A small, muted inline-SVG affordance (the dashboard's own monochrome glyph vocabulary, currentColor
+   stroke — no color emoji) that brightens on hover, sits at the input's bottom edge, and dims while
+   disabled/uploading; while uploading it shows a spinning ring. `.dragover` rings the surface green so a
+   dragged file reads as droppable; the error chip mirrors .si-send-err. */
+.si-attach { flex: none; align-self: flex-end; display: inline-flex; align-items: center; background: transparent; border: none; cursor: pointer; color: var(--muted); line-height: 1.5; padding: 0 2px; }
 .si-attach:hover:not(:disabled) { color: var(--blue); }
 .si-attach:disabled { opacity: .5; cursor: default; }
+.si-attach-busy { animation: si-attach-spin .8s linear infinite; }
+@keyframes si-attach-spin { to { transform: rotate(360deg); } }
 .si-inputwrap.dragover, .si-bottom.dragover { border-color: var(--green); }
 .si-attach-err { flex: none; align-self: center; color: var(--orange); font-size: 11px; white-space: nowrap; }
 

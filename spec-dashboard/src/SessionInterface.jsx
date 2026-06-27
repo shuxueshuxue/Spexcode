@@ -12,6 +12,20 @@ import { ProofOverlay } from './ReviewProof.jsx'
 import { boardCommandsFor } from './sessionCommands.js'
 import { useT } from './i18n/index.jsx'
 
+// the attach affordance — a monochrome inline glyph in the dashboard's own SVG vocabulary (currentColor
+// stroke, so it inherits the .si-attach muted→blue hover), NOT a color emoji. AttachGlyph is the paperclip;
+// BusyGlyph is the in-flight (uploading) state, a spinning ring.
+const AttachGlyph = () => (
+  <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M12.5 7.2 L7 12.6 a2.6 2.6 0 0 1-3.7-3.7 L9 3.2 a1.7 1.7 0 0 1 2.4 2.4 L5.8 11.2 a0.8 0.8 0 0 1-1.2-1.2 L9.7 5" />
+  </svg>
+)
+const BusyGlyph = () => (
+  <svg className="si-attach-busy" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+    <circle cx="8" cy="8" r="5.5" opacity="0.3" /><path d="M8 2.5 a5.5 5.5 0 0 1 5.5 5.5" />
+  </svg>
+)
+
 // Window-level (capture) key handling, not panel onKeyDown: arrowing off the New Session tab unmounts its
 // textarea, so a panel listener would lose focus and kill nav; a window listener is focus-independent.
 
@@ -791,7 +805,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   title={t('session.attachTitle')}
                   onClick={() => pickFiles('new')}
                   disabled={uploading || sending}
-                >{uploading && attachAt === 'new' ? '⏳' : '📎'}</button>
+                >{uploading && attachAt === 'new' ? <BusyGlyph /> : <AttachGlyph />}</button>
                 {uploadErr && attachAt === 'new' && <span className="si-attach-err" role="alert">{t('session.attachError')}</span>}
                 {menu && menu.kind === 'mention' && (
                   <ul className="mention-menu" role="listbox">
@@ -919,7 +933,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                     title={t('session.attachTitle')}
                     onClick={() => pickFiles('msg')}
                     disabled={uploading || noLivePane}
-                  >{uploading && attachAt === 'msg' ? '⏳' : '📎'}</button>
+                  >{uploading && attachAt === 'msg' ? <BusyGlyph /> : <AttachGlyph />}</button>
                   {uploadErr && attachAt === 'msg' && <span className="si-attach-err" role="alert">{t('session.attachError')}</span>}
                   {sendErr && <span className="si-send-err" role="alert">{t('session.msgError')}</span>}
                   {/* slash-command menu — docked at the bottom, so it opens UPWARD (`up`) above the ❯ box. */}

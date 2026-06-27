@@ -31,7 +31,7 @@ as a table you can edit — one row per action with its keyboard key. Clicking a
 keypress as that action's new binding, saved per-user and reset to defaults on demand. The help legend
 (`?`) stays the read-only view; this is its rebinding twin, the two projecting the one table from
 different entry points. (Game-controller mapping is **not** here — it lives outside the browser as the
-standalone `specs-controller` profile; see [[keyboard-nav]].)
+[[game-controller]] extension; see [[keyboard-nav]].)
 
 ## expanded spec
 

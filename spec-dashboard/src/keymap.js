@@ -7,11 +7,10 @@
 // handler bodies (chord buffer, focus-follow pan, scope-following cycle) stay in App.jsx. So this is a
 // name→keys map, not a re-implementation of the keys.
 //
-// Game-controller support is deliberately NOT here: it lives entirely OUTSIDE the browser as the standalone
-// `specs-controller` profile for a generic OS-level gamepad→keyboard remapper (AntiMicroX / JoyToKey / Steam
-// Input). That profile emits the SAME keys this table names, as REAL OS keystrokes — so it reaches the board
-// (and OS-level voice input like WeChat's Ctrl+Win / Fn, which a synthetic in-page event never could). The
-// two are kept consistent BY HAND, on purpose: no runtime link, no sync (see the specs-controller README).
+// Game-controller support is deliberately NOT here: it lives entirely OUTSIDE the browser as the
+// game-controller extension (its own package/repo), which maps the pad to the SAME keys this table names,
+// as REAL OS keystrokes — so it reaches the board (and OS-level facilities a synthetic in-page event never
+// could). The two are kept consistent BY HAND, on purpose: no runtime link, no sync.
 //
 // Scope: the BOARD layer (where rebinding matters). The node-info popup's internal pane-switch / scroll keys
 // are a fixed structural set handled literally in App.jsx and listed separately by the Legend.

@@ -5,10 +5,8 @@ import { WebglAddon } from '@xterm/addon-webgl'
 import { createResilientSocket } from './resilientSocket.js'
 import '@xterm/xterm/css/xterm.css'
 
-// @@@ looksLikeMenu - does the pane currently show an interactive SELECT menu (e.g. `/model`'s list)
-// rather than the normal `❯` prompt? Heuristic signature: a select-caret line (`❯ <option>`) together with
-// a hint line mentioning Esc plus Enter/arrows/select (menus print "esc to cancel · enter to confirm"); the
-// bare prompt has no such hint.
+// heuristic: a select-caret line (`❯ <option>`) plus a hint line mentioning Esc + Enter/arrows distinguishes
+// an interactive menu (e.g. `/model`'s list) from the bare `❯` prompt, which carries no such hint line.
 function looksLikeMenu(term) {
   const buf = term.buffer.active
   let caret = false, hint = false

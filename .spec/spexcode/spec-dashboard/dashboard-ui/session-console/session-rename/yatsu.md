@@ -13,6 +13,14 @@ scenarios:
       id` precedence), because every surface reads that one shared precedence after the board reload. A blank
       name is a RESET, not an error: it clears the override and the row falls back to its derived label
       (node/title/branch/id). The rename never edits the live terminal — a session in any state is renamable.
+  - name: close-confirm-titles-by-headline
+    description: >
+      Open the console, right-click a session row whose label comes from its live activity (no human rename),
+      and pick "close" to raise the confirm. Read the confirm's title and compare it to that row's card
+      headline and the console header (si-th-name). Press Escape to dismiss — never confirm the removal.
+    expected: >
+      The confirm's title shows the SAME headline the card and console header show (the session's activity/
+      description, not its node/branch handle), so the human reads the very words they right-clicked.
   - name: close-confirm-removes-row
     description: >
       Through the running dashboard in a real browser, open the console (Enter), right-click a session row,

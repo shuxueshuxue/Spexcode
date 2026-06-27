@@ -10,15 +10,22 @@
 // always-on window listener (whoever registered first won; proof papered over it by stealing iframe focus).
 import { useEffect, useRef } from 'react'
 
-const stack = []
+// The stack and the bound-flag live on `window`, NOT in module scope, so a Vite HMR hot-swap — which
+// re-evaluates this module (a fresh array) WITHOUT a page reload — reuses the one array the already-bound
+// listener reads. Module scope would split them: an open tab that hot-swapped across a deploy would leave
+// the live listener watching the dead old array while useEscLayer pushed to the new one, so Esc would fall
+// through and close the surface BEHIND the top overlay too. Reading the global inside the listener keeps a
+// single source of truth across any number of re-evals.
+const stack = typeof window !== 'undefined' ? (window.__escStack || (window.__escStack = [])) : []
 
 if (typeof window !== 'undefined' && !window.__escStackBound) {
   window.__escStackBound = true
   window.addEventListener('keydown', (e) => {
-    if (e.key !== 'Escape' || stack.length === 0) return
+    const s = window.__escStack
+    if (e.key !== 'Escape' || !s || s.length === 0) return
     e.preventDefault()
     e.stopImmediatePropagation()   // the layer below (a panel, the board) must NOT also close on this press
-    stack[stack.length - 1].close()
+    s[s.length - 1].close()
   }, true)
 }
 

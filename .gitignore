@@ -28,6 +28,12 @@ CLAUDE.spexhidden.md
 # launcher resolves `claude` from PATH (SPEXCODE_CLAUDE_CMD), so this is never vendored
 spec-cli/bin/claude
 
+# generated review artifacts at the worktree root — a one-off harness-adapter review report (machine-emitted,
+# self-contained HTML, no human curation). The project folder holds only human-readable, curated prose
+# (curated HTML docs live under .spec/.../taste/, not the root); a regenerated report stays untracked.
+harness-report.html
+harness-report-serve
+
 # os / editor
 .DS_Store
 *.log

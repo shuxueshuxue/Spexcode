@@ -33,8 +33,9 @@ proj="${CLAUDE_PROJECT_DIR:-$PWD}"
 rt="$(cd "$proj" 2>/dev/null && hp_runtime_dir)" || rt=""
 
 # --- (1) gate -------------------------------------------------------------------------------------------
-cfghash() { ( cd "$proj" 2>/dev/null && find .spec/*/.config .spec/*/config \( -name '*.md' -o -name '*.sh' \) -type f -print0 2>/dev/null | sort -z | xargs -0 cat 2>/dev/null | sha256sum | cut -d' ' -f1 ); }
-cur="$(cfghash)"
+# the config fingerprint is hp_config_hash (harness.sh, already sourced) — the SAME function materialize.ts
+# shells to, so the gate and the renderer never disagree on "changed".
+cur="$( (cd "$proj" 2>/dev/null && hp_config_hash) )"
 if [ -n "$rt" ] && [ -n "$cur" ] && [ "$cur" != "$(cat "$rt/content-hash" 2>/dev/null || true)" ]; then
   mkdir -p "$rt" 2>/dev/null
   ( flock 9

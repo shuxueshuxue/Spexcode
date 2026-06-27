@@ -313,7 +313,7 @@ export default {
     languageHint: 'choose the dashboard language. detected from your browser by default; your choice is remembered.',
     secShortcuts: 'shortcuts',
     bindPrompt: 'press a key…',
-    shortcutsHint: 'click a key to rebind it. nav & chord keys are fixed. (controller mapping lives outside the browser — see specs-controller.)',
+    shortcutsHint: 'click a key to rebind it. nav & chord keys are fixed. (game-controller mapping lives outside the browser, as a separate extension.)',
     reset: 'reset to defaults',
   },
 

@@ -306,7 +306,7 @@ export default {
     languageHint: '选择仪表盘语言。默认根据浏览器检测；你的选择会被记住。',
     secShortcuts: '快捷键',
     bindPrompt: '按一个键…',
-    shortcutsHint: '点击某个键即可重绑定。导航键与连击键固定不可改。（手柄映射在浏览器之外——见 specs-controller。）',
+    shortcutsHint: '点击某个键即可重绑定。导航键与连击键固定不可改。（手柄映射在浏览器之外，是一个独立的 extension。）',
     reset: '恢复默认',
   },
 

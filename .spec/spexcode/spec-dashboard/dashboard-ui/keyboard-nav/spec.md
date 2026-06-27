@@ -30,7 +30,7 @@ The split that keeps this from spending complexity: **the registry owns the *bin
 
 **Rebinding follows that same line.** The discrete board **verbs** are rebindable — a user key override is saved per-action in `localStorage`, merged over the table's defaults, and reset on demand; the [[settings]] popup is the editor. The **structural** keys are *not* user-rebindable and the table marks them so: the arrow/vim **nav** keys (they ARE the relationship-walk, not a verb), and the `n`/`d` **chords** (a two-key grammar, not a single binding). They still appear in the legend and the editor — shown, fixed.
 
-A **game controller** drives this same keymap, but from **entirely outside the browser**: the standalone `specs-controller` profile configures a generic OS-level gamepad→keyboard remapper to emit these very keys as **real** OS keystrokes. That is deliberate — a real keystroke reaches the board AND an OS-level voice input (WeChat's `Ctrl+Win` / `Fn`), which an in-page synthetic event never could. There is **no runtime link** between that profile and this registry: if a user rebinds a key here, they re-edit the profile too. This node owns the keyboard contract only.
+A **game controller** drives this same keymap, but from **entirely outside the browser** — the [[game-controller]] extension (its own package, its own repo) maps the pad to these very keys as **real** OS keystrokes. That is deliberate: a real keystroke reaches the board AND OS-level facilities an in-page synthetic event never could. There is **no runtime link** to this registry — if a user rebinds a key here, they re-configure the controller too. This node owns the keyboard contract only.
 
 ## principles
 

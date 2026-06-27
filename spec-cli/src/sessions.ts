@@ -3,12 +3,10 @@ import { promisify } from 'node:util'
 import { randomUUID } from 'node:crypto'
 import { readFileSync, writeFileSync, appendFileSync, existsSync, renameSync, mkdirSync, rmSync, readdirSync } from 'node:fs'
 import { join, dirname, relative } from 'node:path'
-import { tmpdir } from 'node:os'
-import { createConnection } from 'node:net'
 import { fileURLToPath } from 'node:url'
 import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, type ReviewDiffFile } from './git.js'
 import { loadSpecs } from './specs.js'
-import { defaultHarness, harnessById, type Harness } from './harness.js'
+import { defaultHarness, harnessById, rvSock, type Harness, type DispatchResult } from './harness.js'
 import { materialize } from './materialize.js'
 import { mainBranch, gitCommonDir, readConfig, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, readRawRecord, envSessionId, type RawRecord } from './layout.js'
 
@@ -63,19 +61,10 @@ function maxActive(): number {
   return Math.max(1, Math.floor(v ?? 6))
 }
 
-// @@@ rendezvous control socket - the DETERMINISTIC, ONLY input path for PROMPTS to sessions WE launch. We
-// start `claude` with CLAUDE_BG_BACKEND=daemon + CLAUDE_BG_RENDEZVOUS_SOCK=<per-session sock> set ONLY on
-// that one spawned command (env prefix on the launch line — never global/exported, never a plugin or global
-// setting). claude opens a unix socket at that path; writing one line `{"type":"reply","text":"…"}\n` to
-// it injects the text as a prompt and submits it — no PTY typing, so multi-line input and Enters can't be
-// corrupted the way `tmux send-keys` was. The path is uniquely derived from the session id, so we only
-// ever address OUR OWN sockets (HARD ethics rule: never touch a Claude Code session outside this product).
-// tmux stays the VISIBLE stream (pty-bridge); the socket is CONTROL (input) only. The socket lives in
-// tmpdir tied to the claude process, so no extra lifecycle — claude/the OS owns it. There is NO send-keys
-// fallback for prompts: a missing socket, a connect error, or a prompt the daemon does not confirm ACCEPTED
-// is a LOUD failure that propagates to the caller (API non-2xx) — never a silent degradation to typing into
-// the pane, which previously fooled us into thinking a dead dispatch had worked.
-const rvSock = (id: string) => join(tmpdir(), `spexcode-rv-${id}.sock`)
+// the rendezvous control socket path + its prompt-delivery/liveness logic now live in the [[harness-adapter]]
+// (claude OWNS the rendezvous; codex does not), so product code asks the adapter rather than hard-wiring it.
+// rvSock is imported only for the two NON-delivery uses that remain product-level: building the launch env var
+// (rvEnv, below) and the best-effort socket sweep on close.
 // env prefix put in front of the spawned agent so it creates this session's rendezvous control socket — and
 // so its hooks + materialize render to the SAME store the backend uses. SPEXCODE_HOME/CODEX_HOME are
 // propagated when set, because the session inherits the tmux SERVER's env (not the backend's), so without this
@@ -92,62 +81,10 @@ const rvEnv = (id: string, harness = HARNESS) => {
   return parts.join(' ')
 }
 
-// a prompt-dispatch outcome. ok=true ONLY when the agent confirmably ACCEPTED the prompt; otherwise `error`
-// carries a human-readable reason that propagates to the API route (non-2xx) and the CLI/dashboard/manager.
-export type DispatchResult = { ok: boolean; error?: string }
-const ACCEPT_TIMEOUT_MS = 2500
-
-// @@@ replyViaSocket - inject `text` as a prompt AND confirm the daemon ACCEPTED it (not mere write-success,
-// which is what silently masked dead dispatches before). The CLAUDE_BG_BACKEND=daemon rendezvous server
-// sends NO ack for an accepted reply, so we confirm via an IN-ORDER round-trip: we write
-// `{type:reply}\n{type:repaint}\n`. The daemon dispatches socket lines strictly in order (one handler per
-// newline-framed line) and ENQUEUES the reply BEFORE it handles the repaint and answers `{type:repaint-done}`
-// — so a `repaint-done` with NO preceding `reply-rejected` proves the reply was processed/enqueued. `repaint`
-// is auth-exempt and always answers, so it's a reliable probe even against a future daemon that gates
-// `reply` behind auth: a gated reply emits `reply-rejected` FIRST (in-order, before repaint-done), which we
-// treat as failure. `reply-rejected` / `shutting-down`, a connect/socket error, an early close, or no
-// confirmation within ACCEPT_TIMEOUT_MS ALL resolve to a loud failure with a specific reason. The forced
-// repaint is a harmless full redraw of the agent's OWN TUI. Never throws — the reason is returned, not swallowed.
-function replyViaSocket(sock: string, text: string): Promise<DispatchResult> {
-  return new Promise((resolve) => {
-    let settled = false, buf = ''
-    let c: ReturnType<typeof createConnection>
-    const done = (r: DispatchResult) => {
-      if (settled) return
-      settled = true
-      clearTimeout(timer)
-      try { c?.destroy() } catch { /* */ }
-      resolve(r)
-    }
-    const timer = setTimeout(
-      () => done({ ok: false, error: `rendezvous socket gave no acceptance confirmation within ${ACCEPT_TIMEOUT_MS}ms` }),
-      ACCEPT_TIMEOUT_MS,
-    )
-    try {
-      c = createConnection({ path: sock })
-    } catch (e) {
-      done({ ok: false, error: `rendezvous socket connect threw: ${String(e)}` })
-      return
-    }
-    c.on('error', (e: NodeJS.ErrnoException) => done({ ok: false, error: `rendezvous socket connect failed: ${e?.code || String(e)}` }))
-    c.on('close', () => done({ ok: false, error: 'rendezvous connection closed before the prompt was confirmed accepted' }))
-    c.on('connect', () => c.write(JSON.stringify({ type: 'reply', text }) + '\n' + JSON.stringify({ type: 'repaint' }) + '\n'))
-    c.on('data', (chunk: Buffer) => {
-      buf += chunk.toString('utf8')
-      let i: number
-      while ((i = buf.indexOf('\n')) >= 0) {
-        const line = buf.slice(0, i); buf = buf.slice(i + 1)
-        if (!line) continue
-        let type: string | undefined
-        try { type = JSON.parse(line)?.type } catch { continue }   // ignore any non-JSON noise on the wire
-        if (type === 'reply-rejected') return done({ ok: false, error: 'agent REJECTED the prompt (rendezvous reply-rejected — auth-gated daemon?)' })
-        if (type === 'shutting-down') return done({ ok: false, error: 'agent is shutting down — prompt not accepted' })
-        if (type === 'repaint-done') return done({ ok: true })   // reply was enqueued in-order before this
-        // heartbeat / state / other frames → keep waiting for the decisive repaint-done or a rejection.
-      }
-    })
-  })
-}
+// the prompt-dispatch outcome type + its claude/codex delivery implementations live in the [[harness-adapter]]
+// (each harness OWNS its input channel — claude the rendezvous socket, codex tmux send-keys). Re-exported here
+// for the existing importers (client.ts) that read it off the sessions module.
+export type { DispatchResult }
 
 export type Lifecycle = 'active' | 'idle' | 'awaiting' | 'parked' | 'error' | 'asking' | 'queued'
 export type Proposal = 'merge' | 'nothing' | 'close'
@@ -160,6 +97,7 @@ const PROPOSAL_STATUS: Record<Proposal, DisplayStatus> = { merge: 'review', noth
 
 export type Session = {
   id: string; node: string | null; title: string | null; name: string | null; branch: string | null; path: string
+  harness: string   // which harness (claude|codex) runs this session — carried so liveness/occupancy route through its adapter
   lifecycle: Lifecycle; proposal: Proposal | null; merges: number; status: DisplayStatus; liveness: Liveness; note: string | null
   prompt: string | null; promptPreview: string | null; created: number; activity: string | null
   sortKey: number | null   // manual drag-reorder override ([[session-reorder]]); null = sort by `created`
@@ -381,7 +319,7 @@ export function selfSummary(paneTitle: string): string | null {
 // instead of 'offline' for BOOT_GRACE_MS after launch — so 'offline' only ever means genuinely dead. In-
 // memory in the single server process (lost on restart, which is fine: a restart has nothing in flight).
 const launchedAt = new Map<string, number>()
-const BOOT_GRACE_MS = 25000   // > waitForSocket's 15s timeout, covering the observed ~15-20s socket boot window
+const BOOT_GRACE_MS = 25000   // > waitForReady's 15s timeout, covering the observed ~15-20s agent boot window
 
 // @@@ liveness - the orthogonal axis ([[state]]): is the agent process up, for ANY session regardless of
 // lifecycle, from a prebuilt tmux set (no per-call spawn — see liveTmux) + the rendezvous socket. offline
@@ -391,12 +329,14 @@ const BOOT_GRACE_MS = 25000   // > waitForSocket's 15s timeout, covering the obs
 // A just-launched agent whose socket hasn't appeared yet reads the transient 'starting' for the grace
 // window; only past it (socket still gone) is it genuinely 'offline'.
 function liveness(rec: SessRec, live: Set<string>): Liveness {
-  if (!rec.session || !live.has(rec.session)) return 'offline'
-  if (!existsSync(rvSock(rec.session))) {
-    const at = launchedAt.get(rec.session)
-    return at && Date.now() - at < BOOT_GRACE_MS ? 'starting' : 'offline'
-  }
-  return 'online'
+  if (!rec.session) return 'offline'
+  // ask the ADAPTER ([[harness-adapter]]): claude = tmux up AND its rendezvous socket present; codex = tmux up
+  // (the codex process holds the pane). The 'starting' grace stays here (a launcher concern): a just-launched
+  // agent whose online-signal hasn't appeared yet reads 'starting' for the boot window, only past it 'offline'.
+  const h = harnessById(rec.harness || defaultHarness.id)
+  if (h.liveness(rec.session, live.has(rec.session)) === 'online') return 'online'
+  const at = launchedAt.get(rec.session)
+  return at && Date.now() - at < BOOT_GRACE_MS ? 'starting' : 'offline'
 }
 
 // reconcile the compact DisplayStatus — a DERIVED label composing lifecycle + liveness for one-glyph
@@ -427,7 +367,7 @@ function toSession(rec: SessRec, status: DisplayStatus, lv: Liveness, activity: 
   // activity is the LIVE pane title; it only means anything while the worker is genuinely up — a
   // dead/booting session would show a stale or absent title, so it's suppressed unless liveness is online.
   const showActivity = lv === 'online'
-  return { id: rec.session, node: rec.node, title: rec.title, name: rec.name, branch: rec.branch, path: rec.worktreePath, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, prompt, promptPreview: prompt ? promptPreview(prompt) : null, created: rec.createdAt, activity: showActivity ? activity : null, sortKey: rec.sortKey }
+  return { id: rec.session, node: rec.node, title: rec.title, name: rec.name, branch: rec.branch, path: rec.worktreePath, harness: rec.harness, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, prompt, promptPreview: prompt ? promptPreview(prompt) : null, created: rec.createdAt, activity: showActivity ? activity : null, sortKey: rec.sortKey }
 }
 
 // @@@ renameSession - set (or clear) a session's human display NAME: the user-chosen override that wins
@@ -802,11 +742,12 @@ function deleteNodePrompt(nodeId: string, relPath: string | null, rest: string):
 const OCCUPIES_SLOT = new Set<DisplayStatus>(['working', 'parked', 'starting'])  // starting's boot window is also held via `launching`
 function isOccupying(s: Session, live: Set<string>): boolean {
   if (!OCCUPIES_SLOT.has(s.status)) return false                          // waiting-on-human / proposed / queued / dead → free
-  return live.has(s.id) && existsSync(rvSock(s.id))                       // and only while its claude is genuinely live
+  return harnessById(s.harness || defaultHarness.id).liveness(s.id, live.has(s.id)) === 'online'  // and only while the agent is genuinely live (its adapter's channel)
 }
-// sessions we've JUST launched whose rendezvous socket hasn't come up yet. During that boot window reconcile
-// reads them `offline` (socket absent) and isOccupying would miss them, so the drainer would over-launch and
-// blow past the cap. We hold the slot here from launch until the socket appears (waitForSocket) or times out.
+// sessions we've JUST launched whose agent hasn't come online yet. During that boot window reconcile reads them
+// `offline` (the adapter's online-signal not up yet) and isOccupying would miss them, so the drainer would
+// over-launch and blow past the cap. We hold the slot here from launch until the agent is online (waitForReady)
+// or it times out.
 // In-memory in the single server process (the only drainer) — lost on restart, which is fine: a restart drains
 // the durable `queued` worktrees fresh with nothing in flight.
 const launching = new Set<string>()
@@ -820,9 +761,9 @@ async function startQueued(id: string): Promise<boolean> {
   const launchPrompt = readLaunchFile(id)
   if (launchPrompt == null) return false   // a queued session always has one; if it's gone, don't spin on it
   launching.add(id)   // hold the slot across the boot window BEFORE we launch, so a concurrent count can't race us
+  const h = harnessById(wt.rec.harness || defaultHarness.id)   // launch THIS session's chosen harness (also drives waitForReady below)
   try {
     const sq = `'${launchPrompt.replace(/'/g, `'\\''`)}'`
-    const h = harnessById(wt.rec.harness || defaultHarness.id)   // launch THIS session's chosen harness
     await launch(id, wt.path, `${h.sessionIdArg(id)} ${sq}`.trim(), h)
   } catch {
     launching.delete(id)
@@ -832,7 +773,7 @@ async function startQueued(id: string): Promise<boolean> {
   removeLaunchFile(id)   // consumed
   // release the boot-window hold once the socket is up (then isOccupying takes over) or after the bounded
   // wait — so a launch that never booted reads offline and the drainer reclaims the slot instead of pinning it.
-  void waitForSocket(id).finally(() => launching.delete(id))
+  void waitForReady(id, h).finally(() => launching.delete(id))
   return true
 }
 
@@ -960,44 +901,44 @@ export async function newSession(node: string | null, prompt: string, harness: s
   return toSession(after, queued ? 'queued' : 'working', queued ? 'offline' : 'starting')
 }
 
-// @@@ waitForSocket - after a relaunch, the resumed claude needs SEVERAL SECONDS to boot and recreate its
-// rendezvous control socket; launch() only TYPES the start line via send-keys and returns immediately, so
-// the socket does not exist yet on return. Poll existsSync(rvSock(id)) at a small interval up to a bounded
-// timeout so a resumed agent counts as "ready" only once its socket is up — then a follow-on dispatch
-// (merge / send) lands in a LIVE socket instead of racing a not-yet-booted daemon and failing loud (409)
-// on a session that is actually recovering. BOUNDED + fail-loud preserved: a genuinely dead/unrecoverable
-// agent never creates the socket, so after the timeout we return and the caller's own socket-existence
-// check (sendKeys) fails loud exactly as before — this only closes the startup race, it adds no fallback.
+// @@@ waitForReady - after a launch/relaunch, the agent needs SEVERAL SECONDS to come up; launch() only TYPES
+// the start line via send-keys and returns immediately, so the agent's online-signal does not exist yet on
+// return. Poll the ADAPTER's liveness ([[harness-adapter]]) at a small interval up to a bounded timeout so the
+// agent counts as "ready" only once it is genuinely online — claude: its rendezvous socket up; codex: its
+// process holding the tmux pane — then a follow-on dispatch (merge / send) lands in a LIVE agent instead of
+// racing the boot and failing loud on a session that is actually recovering. BOUNDED + fail-loud preserved: a
+// genuinely dead/unrecoverable agent never goes online, so after the timeout we return and the caller's own
+// deliver() fails loud exactly as before — this only closes the startup race, it adds no fallback.
 const SOCKET_READY_TIMEOUT_MS = 15000
 const SOCKET_POLL_MS = 200
-async function waitForSocket(id: string, timeoutMs = SOCKET_READY_TIMEOUT_MS): Promise<boolean> {
-  const sock = rvSock(id)
+async function waitForReady(id: string, harness: Harness, timeoutMs = SOCKET_READY_TIMEOUT_MS): Promise<boolean> {
   const deadline = Date.now() + timeoutMs
-  while (Date.now() < deadline) {
-    if (existsSync(sock)) return true
+  for (;;) {
+    if (harness.liveness(id, await alive(id)) === 'online') return true
+    if (Date.now() >= deadline) return false
     await new Promise((r) => setTimeout(r, SOCKET_POLL_MS))
   }
-  return existsSync(sock)
 }
 
-// @@@ reopen - "back to working": clear any proposal → active, then ONE relaunch path. claude needs
-// (re)starting iff it isn't running for this id — the SAME deterministic liveness reconcile uses: no tmux,
-// or no rendezvous socket (claude exited, even though the wrapper/shell may still hold the pane). In both
-// cases we drop any stale pane and launch a fresh window that --resume's the SAME conversation (with its
-// rendezvous socket, via launch). When we DO relaunch we then WAIT for that socket to come up
-// (waitForSocket) before returning, so a caller that dispatches immediately after reopen (e.g.
-// mergeSession) addresses a live socket rather than racing the boot. If claude is still live we only
-// cleared the proposal — no wait, the socket already exists. Also serves the plain "relaunch" of an
-// offline (already-active) one. Fail-loud is unchanged: if the socket never appears, the later sendKeys
-// existsSync check still fails loud.
+// @@@ reopen - "back to working": clear any proposal → active, then ONE relaunch path. The agent needs
+// (re)starting iff it isn't running for this id — the SAME deterministic liveness the adapter computes
+// ([[harness-adapter]]): claude offline = no tmux OR no rendezvous socket (claude exited, even though the
+// wrapper/shell may still hold the pane); codex offline = no tmux. When it IS offline we drop any stale pane
+// and launch a fresh window through the adapter's resumeArg — claude `--resume <id>` (the SAME conversation),
+// codex a FRESH turn in the same worktree (its thread id is un-pinnable until captured). Then we WAIT for the
+// agent to come online (waitForReady) before returning, so a caller that dispatches immediately after reopen
+// (e.g. mergeSession) addresses a LIVE agent rather than racing the boot. If it's still live we only cleared
+// the proposal — no wait. Also serves the plain "relaunch" of an offline (already-active) one. Fail-loud is
+// unchanged: if the agent never comes online, the later deliver() fails loud.
 export async function reopen(id: string): Promise<boolean> {
   const wt = await findWorktree(id)
   if (!wt) return false
+  const h = harnessById(wt.rec.harness || defaultHarness.id)
   writeRecord({ ...wt.rec, status: 'active', proposal: null })
-  if (!(await alive(id)) || !existsSync(rvSock(id))) {
-    await tmuxOk(['kill-session', '-t', id])   // drop a dead/socketless pane if any (no-op when none)
-    await launch(id, wt.path, `--resume ${id}`)
-    await waitForSocket(id)   // a relaunched agent is "ready" only once its rendezvous socket is up
+  if (h.liveness(id, await alive(id)) !== 'online') {
+    await tmuxOk(['kill-session', '-t', id])   // drop a dead/offline pane if any (no-op when none)
+    await launch(id, wt.path, h.resumeArg(wt.rec).trim(), h)
+    await waitForReady(id, h)   // a relaunched agent is "ready" only once the adapter reads it online
   }
   return true
 }
@@ -1422,19 +1363,18 @@ export async function watchSessions(emit: (line: string) => void, opts: WatchOpt
   }
 }
 
-// @@@ sendKeys - PROMPT control for a session, through the per-session rendezvous socket ONLY. The socket
-// injects AND submits the prompt and confirms the agent ACCEPTED it (see replyViaSocket); there is NO
-// send-keys fallback. A prompt that can't go through the socket — no socket (socketless/old session, or the
-// agent is offline), a connect error, or no acceptance confirmation — FAILS LOUD: it returns ok:false with a
-// reason that propagates to the caller (API non-2xx, `spex session send`, the merge dispatch), instead of
-// silently degrading to typing into the pane and reporting a false success. The socket exists only for
-// sessions WE launched the new way and its path is derived from the id, so we never address another
-// session's socket. (The separate RAW nav-key channel keeps its own `tmux send-keys` path — see rawKey.)
+// @@@ sendKeys - PROMPT control for a session, delivered through the session's HARNESS ADAPTER
+// ([[harness-adapter]]) — claude the rendezvous control socket (inject + submit + confirm accepted), codex
+// `tmux send-keys` into the pane it holds. Either way there is NO silent fallback: a prompt that can't be
+// delivered — no socket / dead agent (claude), a tmux send failure / gone pane (codex) — FAILS LOUD, returning
+// ok:false with a reason that propagates to the caller (API non-2xx, `spex session send`, the merge dispatch),
+// instead of reporting a false success. The harness is resolved from the record; an unknown id resolves to no
+// record → the default adapter, whose deliver still fails loud for a non-existent session. (The separate RAW
+// nav-key channel keeps its own `tmux send-keys` path — see rawKey.)
 export async function sendKeys(id: string, text: string, from?: string): Promise<DispatchResult> {
   if (!text) return { ok: false, error: 'empty prompt — nothing to dispatch' }
-  const sock = rvSock(id)
-  if (!existsSync(sock)) return { ok: false, error: `no rendezvous control socket for session ${id} (socketless/old session, or the agent is offline) — prompt NOT delivered` }
-  const r = await replyViaSocket(sock, text)
+  const h = harnessById(readRecord(id)?.harness || defaultHarness.id)
+  const r = await h.deliver(id, text)
   // record the delivered agent-to-agent message ([[comms-edge]]): only when it carries a sender (an agent
   // send, not a raw human dispatch) and actually landed. Fire-and-forget — never gates the send result.
   if (r.ok && from) void recordComms(id, from)

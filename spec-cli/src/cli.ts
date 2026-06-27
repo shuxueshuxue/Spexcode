@@ -254,8 +254,6 @@ if (cmd === 'serve') {
   })
   process.exit(0)
 } else if (cmd === 'relay') {
-  // @@@ relay - spec→code: the floor's top hits, each with its governed `code:` files, so an agent jumps
-  // topic→spec→code in one call ([[relay]]). Reuses search.ts's ranking; --json for machine use, else a list.
   const { relaySearch } = await import('./relay.js')
   const query = positionals(3).join(' ')
   if (!query.trim()) { console.error('usage: spex relay <query> [--json] [--limit N]'); process.exit(2) }

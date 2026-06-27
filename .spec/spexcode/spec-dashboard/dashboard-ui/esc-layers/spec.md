@@ -35,7 +35,10 @@ all listening on the window at once. With nothing arbitrating, the winner was de
 order** (the always-mounted panel listened first, so its Esc closed the panel before a later-mounted modal
 could stop it) — papered over with `stopImmediatePropagation` races and, for the proof, by stealing iframe
 focus so the parent never saw the key. One stack listener, bound **before any component** so it runs first,
-replaces all of that: it consumes Esc when a layer is open and stays silent when none is.
+replaces all of that: it consumes Esc when a layer is open and stays silent when none is. Listener and stack
+are **one source of truth that survives a hot-reload** — both live on a single global, so re-evaluating the
+module reuses the array the live listener reads; a module-scoped copy would let an open tab that hot-swapped
+across a deploy keep watching a dead stack, and Esc would close the surface behind the top overlay again.
 
 **Scope is deliberately the cross-component overlays** — the proof, a row's rename and close-confirm modals,
 the row context-menu. The board's own keys are **out of scope and unchanged**: the help/settings/search

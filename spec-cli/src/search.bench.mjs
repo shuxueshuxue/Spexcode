@@ -8,7 +8,7 @@ const BIN = join(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'spex.mjs
 
 const CASES = [
   ['exit-cleanup', "does /exit remove the session's worktree and tmux, or just orphan them?", ['session-console']],
-  ['owner-at-edit', 'how does an agent learn which spec governs a file it just edited?', ['spec-of-file']],
+  ['owner-at-edit', 'how does an agent learn which spec governs a file it just edited?', ['injected-context/spec-of-file']],
   ['main-block', 'what stops an agent from committing or merging straight into main?', ['main-guard']],
   ['main-escape', 'the escape hatch that lets seeding run on the main branch', ['main-guard']],
   ['inter-agent-msg', 'how do two running agent sessions send messages to each other?', ['agent-reply-channel', 'comms']],
@@ -18,7 +18,7 @@ const CASES = [
   ['dashboard-backend', 'how does the dashboard reach the backend API and on which port?', ['api-endpoint']],
   ['loss-measured', "how is a node's loss measured and its scenarios scored?", ['yatsu-core']],
   ['launch-injection', "what context gets injected into a freshly launched agent's prompt?", ['injected-context']],
-  ['read-before-code', 'the one-shot nudge that makes an agent read its spec before touching code', ['spec-first']],
+  ['read-before-code', 'the one-shot nudge that makes an agent read its spec before touching code', ['injected-context/spec-first']],
   ['hot-reload', 'zero-downtime backend reload without dropping connections', ['supervisor']],
   ['many-owners', 'can several specs own the same code file, and what happens if too many do?', ['governed-related']],
   ['active-spec-search', 'an injected sub-agent that searches specs for the agent, the spec analog of Explore', ['spec-scout']],

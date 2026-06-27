@@ -694,47 +694,34 @@ async function hideClaudeMd(path: string): Promise<void> {
   } catch { /* isolation is best-effort; a failure must not block the launch */ }
 }
 
-// @@@ stopHook - injected per session via `claude --settings '<inline JSON>'` (a CLI param, so it
-// pollutes NOTHING — no global ~/.claude, not even a worktree file). The Stop hook fires when the agent
-// finishes a turn and runs `spex session done` from the worktree cwd → the worktree structurally becomes
-// `awaiting` the human, with no reliance on the agent remembering. The command must point at MAIN's
-// tsx + cli (a fresh worktree off main has no node_modules), running with cwd = the worktree, so
-// markDoneFromCwd() writes that worktree's .session. JSON has only double quotes → safe single-quoted.
-// @@@ settingsJson - the hooks Claude Code loads via `--settings <FILE>`. Written to a per-worktree
-// file (NOT inline on the command line — inline JSON containing single quotes broke the shell quoting
-// and claude read it as a missing file path). The file is ephemeral (removed with the worktree), so
-// still no global pollution. UserPromptSubmit + PreToolUse → the branching `mark-active` hook (active on
-// any work; asking, with the question as the note, when the tool is AskUserQuestion — see
-// mark-active.sh); PreToolUse ALSO runs `spec-first` (a one-shot read-the-spec-before-code nudge —
-// sessions/spec-first; its own sentinel file, so it never races mark-active's `.session/state` write); Stop
-// → the blocking gate (with a loop-break); StopFailure → `error`;
-// Notification(idle_prompt) → `idle`. Hook commands use MAIN's tsx+cli by absolute path ($SPEX) since a
-// fresh worktree has no node_modules and `spex` may be off the session's PATH.
-// @@@ idle hook - the Notification hook fires `session idle` (guarded active-only) when claude sits
-// WAITING at its prompt without having declared a state — the case the Stop gate misses: an API error
-// killed the turn before the gate ran, or the brief window between stopping and declaring. (claude is
-// the pane's foreground process whether churning or idle-waiting, so reconcile alone can't tell them
-// apart — only idle_prompt can.) This is DISTINCT from `asking` (the agent asking the human, captured
-// from the AskUserQuestion tool or declared via `spex session ask`); idle is the inferred, undeclared
-// stop. The active-only guard in `session idle` is what keeps the two from clobbering each other (a
-// deliberate awaiting/asking/parked/error declaration always survives). The Notification fires for
-// many reasons, so the command keys on the structured `notification_type` field — acting only on the
-// idle_prompt one — rather than sniffing the payload blob for the bare word.
+// @@@ settingsJson - the hooks Claude Code loads via `--settings <FILE>` (per-worktree, ephemeral, removed
+// with the worktree — no global pollution). It is now a thin SHIM, not a hardcoded hook set: every event
+// binds to the shared [[hook-dispatch]] dispatcher, and the handler SET lives in the session's `.config`
+// (surface:hook nodes), discovered + compiled into a per-session manifest. So the launched agent's hooks are
+// the EDITABLE RUNTIME CONFIG: changing a hook is a `.config` edit, not a change here. SessionStart compiles
+// the manifest first; every other event runs `dispatch.sh <Event>`, which feeds each manifest handler the
+// hook stdin and propagates a block:true handler's exit-2. The dispatcher + sessionstart are MACHINERY (in
+// spec-cli/hooks), referenced at MAIN's path (a fresh worktree off main has no node_modules), run with
+// cwd = the worktree so `repoRoot()` resolves to THIS session's tree (its own `.config`, its own `.session`).
+// `$SPEX` (MAIN's tsx+cli) is exported for the handlers that call the cli (stop-gate, spec-of-file, fail,
+// idle) and for the SessionStart compile. This delivers exactly the legacy hook map today (manifest ==
+// legacy: UserPromptSubmit/PreToolUse→mark-active, PreToolUse→spec-first, PostToolUse→spec-of-file,
+// Stop→stop-gate, StopFailure→session-fail, Notification→idle) while making the set spec-governed + editable.
 function settingsJson(): string {
   const root = pkgRoot()
-  const gate = join(root, 'hooks', 'stop-gate.sh')
-  const markCmd = `bash ${join(root, 'hooks', 'mark-active.sh')}`
-  const specFirstCmd = `bash ${join(root, 'hooks', 'spec-first.sh')}`   // one-shot read-the-spec nudge (sessions/spec-first)
+  const dispatch = join(root, 'hooks', 'dispatch.sh')
+  const sessionstart = join(root, 'hooks', 'sessionstart.sh')
   const spex = `${join(root, 'node_modules', '.bin', 'tsx')} ${join(root, 'src', 'cli.ts')}`
-  const specOfFileCmd = `SPEX='${spex}' bash ${join(root, 'hooks', 'spec-of-file.sh')}`   // per-edit, once-per-file: name the governing spec (sessions/spec-first)
-  const idleCmd = `p=$(cat); case "$p" in *'"notification_type":"idle_prompt"'*) ${spex} session idle ;; esac`
+  const env = `SPEX='${spex}'`   // exported to the dispatcher → handlers that call the cli inherit it
+  const ev = (e: string) => [{ hooks: [{ type: 'command', command: `${env} bash ${dispatch} ${e}` }] }]
   const hooks: Record<string, unknown> = {
-    UserPromptSubmit: [{ hooks: [{ type: 'command', command: markCmd }] }],
-    PreToolUse: [{ hooks: [{ type: 'command', command: markCmd }, { type: 'command', command: specFirstCmd }] }],
-    PostToolUse: [{ hooks: [{ type: 'command', command: specOfFileCmd }] }],
-    Stop: [{ hooks: [{ type: 'command', command: `SPEX='${spex}' bash ${gate}` }] }],
-    StopFailure: [{ hooks: [{ type: 'command', command: `${spex} session fail` }] }],
-    Notification: [{ hooks: [{ type: 'command', command: idleCmd }] }],
+    SessionStart: [{ hooks: [{ type: 'command', command: `${env} bash ${sessionstart}` }] }],
+    UserPromptSubmit: ev('UserPromptSubmit'),
+    PreToolUse: ev('PreToolUse'),
+    PostToolUse: ev('PostToolUse'),
+    Stop: ev('Stop'),
+    StopFailure: ev('StopFailure'),
+    Notification: ev('Notification'),
   }
   return JSON.stringify({ hooks }, null, 2)
 }

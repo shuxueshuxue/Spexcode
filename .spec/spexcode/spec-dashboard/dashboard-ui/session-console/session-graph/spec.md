@@ -82,8 +82,9 @@ Direction lives in the order of the two clicks, so no handle and no drag is need
 node re-picks the source, and a click on empty space clears it. The gesture has no visible handle, but the
 view does **not** stand a permanent caption over the graph to advertise it: clicking a node is itself the
 intuitive first move and needs no prompt to remind the user to make it. Instead the hint is **reactive** —
-it surfaces only once the user engages. Picking a source raises a brief **toast** naming it and prompting the
-right-click, and a right-click with nothing picked yet just reminds the user to pick first; the full
+it surfaces only once the user engages. Picking a source raises a brief **toast** that does **not** re-announce
+which node was clicked (the user plainly sees that) — it only states the next step: right-click the node *this
+one* should monitor. A right-click with nothing picked yet just reminds the user to pick first; the full
 click-then-right-click rule also lives in the `?` legend for anyone who looks. Double-clicking to open needs
 no such hint — it is the conventional open gesture. To feel acknowledged at once, the moment the right-click lands an **optimistic pending edge** (dashed,
 in A's hue) appears with a brief **toast**; that edge is provisional and **firms up to a solid live arrow**

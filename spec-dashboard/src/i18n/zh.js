@@ -223,7 +223,7 @@ export default {
   sessionGraph: {
     helpTitle: '快捷键与图例（?）',
     asked: ({ a, b }) => `已请求 ${a} 监视 ${b}`,
-    picked: ({ a }) => `已选中 ${a} —— 右键另一个节点即可让它监视`,
+    picked: '右键点击另一个节点，让此节点监视它',
     needSource: '请先左键选中一个节点，再右键另一个建立监视',
     monitorPrompt: ({ label, id }) => `请监视会话 ${label}（${id}）：在后台运行 \`spex watch ${id}\` 并保持运行，让其状态变化反馈给我。`,
     legend: {

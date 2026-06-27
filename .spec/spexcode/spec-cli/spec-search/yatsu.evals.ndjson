@@ -9,3 +9,4 @@
 {"scenario":"search-compute-budget","codeSha":"50fb5ef76aea106ec251068486d5d8edcdeca79a","blob":null,"evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-27T03:34:25.415Z"}
 {"scenario":"retrieval-benchmark","codeSha":"10cfc2b87075d11b3bc2a1d2b222d9fc9037a939","blob":"2bd2667c972e68735526441953be33c6adf7ff9507db7906ae7ff167fe4e0375","blobKind":"transcript","evaluator":"manual@1","verdict":{"status":"fail"},"ts":"2026-06-27T15:12:21.007Z"}
 {"scenario":"search-compute-budget","codeSha":"10cfc2b87075d11b3bc2a1d2b222d9fc9037a939","blob":"27d7daf335a00b7969131dd5a2e9c94db6dfb7c4e89461f837db10a6c3a94457","blobKind":"transcript","evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-27T15:12:23.073Z"}
+{"scenario":"retrieval-benchmark","codeSha":"02ea4a8143dd3d5ae3e31e9579b2e60f252b9f16","blob":null,"evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-27T16:04:54.178Z"}

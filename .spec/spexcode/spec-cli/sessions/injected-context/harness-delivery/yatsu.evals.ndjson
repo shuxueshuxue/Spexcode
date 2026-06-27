@@ -2,3 +2,7 @@
 {"scenario":"managed-block-preserves-user-content","codeSha":"3f14aabb477b668944d8d4bf56b6f29b1d685001","blob":null,"evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-27T12:46:40.189Z"}
 {"scenario":"codex-trust-is-scoped-and-additive","codeSha":"3f14aabb477b668944d8d4bf56b6f29b1d685001","blob":null,"evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-27T12:46:41.273Z"}
 {"scenario":"pay-per-change-render","codeSha":"3f14aabb477b668944d8d4bf56b6f29b1d685001","blob":null,"evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-27T12:46:42.431Z"}
+{"scenario":"self-launch-zero-friction-codex","codeSha":"53f6c3745a8d3ef3787fc0dba15a264fd3441584","blob":null,"evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-27T13:39:49.918Z"}
+{"scenario":"managed-block-preserves-user-content","codeSha":"53f6c3745a8d3ef3787fc0dba15a264fd3441584","blob":null,"evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-27T13:39:51.593Z"}
+{"scenario":"codex-trust-is-scoped-and-additive","codeSha":"53f6c3745a8d3ef3787fc0dba15a264fd3441584","blob":null,"evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-27T13:39:53.305Z"}
+{"scenario":"pay-per-change-render","codeSha":"53f6c3745a8d3ef3787fc0dba15a264fd3441584","blob":null,"evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-27T13:39:54.836Z"}

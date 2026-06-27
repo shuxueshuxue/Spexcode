@@ -1,41 +1,31 @@
 #!/usr/bin/env bash
 # @@@ mark-active - the SINGLE freshness hook, wired to BOTH UserPromptSubmit and PreToolUse. It branches
-# on ONE structured field read straight from the hook payload (stdin JSON), so the state is HARD — never
+# on ONE structured signal read straight from the hook payload (stdin JSON), so the state is HARD — never
 # text-sniffed from the TUI:
-#   tool_name == AskUserQuestion → the agent is pausing to ask the HUMAN → status: asking, with the
-#                                  first question's text as the note (the deterministic capture of a question).
-#   any other tool, or a prompt submit (no tool_name) → the agent is working → status: active (drop a now-
-#                                  stale proposal/note).
+#   the agent is pausing to ask the HUMAN (hp_is_ask) → status: asking, with the question text as the note
+#                                  (the deterministic capture of a question).
+#   any other tool, or a prompt submit → the agent is working → status: active (drop a now-stale proposal/note).
+# WHAT counts as "asking" is the [[harness-adapter]]'s call (Claude: the AskUserQuestion tool; Codex: the
+# request_user_input tool) — read via hp_is_ask, so this hook never names a harness tool.
 # Fires BEFORE the tool runs, so a `spex session done` declaration (itself a tool) lands AFTER this and wins;
 # the next real tool flips back to active, forcing a fresh Stop-gate declaration. Pure shell (no node/tsx) so
 # it stays cheap on every tool call — it value-replaces status/proposal/note in session.json with sed, never jq.
 # @@@ global store - state lives NOT in the worktree but in the per-session GLOBAL record session.json, keyed
-# by the harness session_id from the payload, grouped per-project (mirrors spec-cli/src/layout.ts — keep in
-# lockstep). GATED on `governed`: a user-self-launched (non-governed) session has no board to feed, so this
-# no-ops on it. cwd = the session worktree (used only to resolve the project key).
+# by the harness session_id, grouped per-project (see hp_store_dir). GATED on `governed`: a user-self-launched
+# (non-governed) session has no board to feed, so this no-ops on it. cwd = the session worktree.
+. "${SPEXCODE_HARNESS_LIB:?harness.sh not exported by dispatch.sh}"
 payload=$(cat 2>/dev/null)
-# resolve this session's global record: <SPEXCODE_HOME:-~/.spexcode>/projects/<enc(main-root)>/sessions/<id>/.
-# main-root = dirname(ABSOLUTE git-common-dir) — the same answer from main or any worktree (NOT --show-toplevel,
-# which in a worktree is the worktree). Resolve to ABSOLUTE first (never dirname a relative `.git`).
-sid=$(printf '%s' "$payload" | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
-[ -n "$sid" ] || exit 0
-gcd=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || gcd=$(realpath "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null)
-[ -n "$gcd" ] || exit 0
-enc=$(printf '%s' "$(dirname "$gcd")" | sed 's#[/.]#-#g')
-rec="${SPEXCODE_HOME:-$HOME/.spexcode}/projects/$enc/sessions/$sid/session.json"
+sid=$(hp_session_id "$payload"); [ -n "$sid" ] || exit 0
+sdir=$(hp_store_dir "$sid") || exit 0
+rec="$sdir/session.json"
 # board-lifecycle gate: only a GOVERNED (dashboard-launched) session has a board state to maintain.
 grep -q '"governed"[[:space:]]*:[[:space:]]*true' "$rec" 2>/dev/null || exit 0
 
 jget() { sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" "$rec" 2>/dev/null | head -1; }
-# the value of the "tool_name" field (empty on UserPromptSubmit). Keyed on the field name, not a blind
-# substring, so another tool's input mentioning the word can't trip it.
-tool=$(printf '%s' "$payload" | sed -n 's/.*"tool_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
 
-if [ "$tool" = AskUserQuestion ]; then
+if [ -n "$(hp_is_ask "$payload")" ]; then
   status=asking
-  # first question's text → the note (best-effort; a question with embedded quotes may truncate).
-  note=$(printf '%s' "$payload" | grep -o '"question"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 \
-    | sed 's/^"question"[[:space:]]*:[[:space:]]*"//; s/"$//')
+  note=$(hp_ask_note "$payload")   # first question's text → the note (best-effort)
 else
   status=active
   note=

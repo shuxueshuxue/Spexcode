@@ -5,22 +5,20 @@
 # commit (lint/drift). NON-BLOCKING (additionalContext only — never a verdict) and dedup'd PER FILE via a
 # ledger, so a 50-edit refactor annotates each file ONCE. Uses MAIN's tsx+cli ($SPEX) for the file→spec
 # resolve (`spex owner`); cwd = the session worktree.
+# @@@ harness-agnostic - WHICH tool/path counts as a code MUTATION is the [[harness-adapter]]'s call, read via
+# hp_code_path … mutate (Claude Edit/Write/NotebookEdit + file_path; Codex tool_name:Bash + an apply_patch /
+# write-shape command). So this annotates edits on Claude AND Codex.
 # @@@ all sessions, global ledger - like [[spec-first]], spec-awareness is UNIVERSAL so this is NOT gated on
-# `governed`. It has no worktree state any more — the once-per-file ledger lives in the session's GLOBAL store
-# dir (keyed by the harness session_id from the payload, grouped per-project — mirrors spec-cli/src/layout.ts).
+# `governed`. The once-per-file ledger lives in the session's GLOBAL store dir (keyed by the harness
+# session_id, grouped per-project — see hp_store_dir).
+. "${SPEXCODE_HARNESS_LIB:?harness.sh not exported by dispatch.sh}"
 S="${SPEX:-spex}"
 payload=$(cat 2>/dev/null)
-sid=$(printf '%s' "$payload" | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
-[ -n "$sid" ] || exit 0
-gcd=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || gcd=$(realpath "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null)
-[ -n "$gcd" ] || exit 0
-enc=$(printf '%s' "$(dirname "$gcd")" | sed 's#[/.]#-#g')
-sdir="${SPEXCODE_HOME:-$HOME/.spexcode}/projects/$enc/sessions/$sid"
+sid=$(hp_session_id "$payload"); [ -n "$sid" ] || exit 0
+sdir=$(hp_store_dir "$sid") || exit 0
 
-tool=$(printf '%s' "$payload" | sed -n 's/.*"tool_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
-case "$tool" in Edit|Write|NotebookEdit) ;; *) exit 0 ;; esac
-path=$(printf '%s' "$payload" | sed -n 's/.*"file_path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
-[ -n "$path" ] || path=$(printf '%s' "$payload" | sed -n 's/.*"notebook_path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
+# the code file just MUTATED (empty when this tool didn't mutate a file, e.g. a pure read).
+path=$(hp_code_path "$payload" mutate)
 [ -n "$path" ] || exit 0
 # editing the spec itself is not a governed-code edit → nothing to annotate.
 case "$path" in */.spec/*|.spec/*|*/spec.md|spec.md) exit 0 ;; esac

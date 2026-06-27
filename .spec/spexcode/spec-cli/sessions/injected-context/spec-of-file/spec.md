@@ -4,7 +4,7 @@ status: active
 hue: 280
 desc: A per-edit PostToolUse annotation that fires only when ACTIONABLE — the first edit of an over-owned (> maxOwners) or uncovered file flags it at the edit; a sanely-owned file is left silent.
 code:
-  - spec-cli/hooks/spec-of-file.sh
+  - .spec/spexcode/.config/core/spec-of-file/spec-of-file.sh
 ---
 
 # spec-of-file

@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # @@@ dispatch - the SINGLE hook entry point for ALL harness lifecycle events. The shim (.claude/settings.json
-# / .codex/hooks.json, written by `spex materialize`) binds one line per event to `dispatch.sh <Event>`. Two
-# jobs, in order:
+# / .codex/hooks.json, written by each [[harness-adapter]]) binds one line per event to
+# `dispatch.sh <harness> <Event>` — the harness id is BAKED IN by the adapter that wrote the shim, so this is
+# the deterministic harness DETECTOR for the shell side: we export SPEXCODE_HARNESS (read by harness.sh, the
+# adapter's shell mirror, which the hook handlers source) without ever sniffing the payload shape. Two jobs,
+# in order:
 #   (1) GATE — a cheap pure-shell content hash of the config roots (~10ms, every event). If it moved since the
 #       last render, re-run `spex materialize` (the ~0.85s node step) to bring manifest + contract (AGENTS.md/
 #       CLAUDE.md block) + shims + Codex trust back in lockstep with the EDITABLE .config. Content-based, so it
@@ -14,7 +17,14 @@
 #       the harness propagates. Pure bash, no node boot on the hot path (node runs only inside the gate, only
 #       on actual change). cwd = the project/worktree. $SPEX (abs tsx+cli) is inherited from the shim env.
 set -u
-event="${1:?usage: dispatch.sh <Event>}"
+# args: `<harness> <Event>`. A harness id as $1 (claude|codex) is consumed; otherwise we keep $1 as the event
+# and default the harness to claude — so a stale shim still rendered as `dispatch.sh <Event>` keeps working.
+harness=claude
+case "${1:-}" in claude|codex) harness="$1"; shift ;; esac
+event="${1:?usage: dispatch.sh <harness> <Event>}"
+export SPEXCODE_HARNESS="$harness"
+# the harness.sh path (the adapter's shell mirror) — sibling of this script; hook handlers source it.
+export SPEXCODE_HARNESS_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/harness.sh"
 proj="${CLAUDE_PROJECT_DIR:-$PWD}"
 rt="$proj/.spexcode"
 

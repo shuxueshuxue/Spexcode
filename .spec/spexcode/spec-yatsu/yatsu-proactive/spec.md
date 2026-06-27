@@ -5,7 +5,7 @@ hue: 140
 session: 435bdb69-6162-45e8-9f5e-853047a2247b
 desc: The proactive loop that keeps the loss signal fresh AND covered — the core contract tells every agent to measure what it changed, and the Stop gate, scoped to that agent's own changed nodes, nudges once on a stale score or an uncovered frontend node. Both reuse `spex yatsu scan --changed`.
 related:
-  - spec-cli/hooks/stop-gate.sh
+  - .spec/spexcode/.config/core/stop-gate/stop-gate.sh
 ---
 # yatsu-proactive
 

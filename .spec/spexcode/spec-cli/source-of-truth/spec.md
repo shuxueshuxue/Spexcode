@@ -15,6 +15,8 @@ code:
 
 The canonical spec state is `.spec` on `main`. A worktree's `.spec` is never a rival truth — it is a
 pending proposal, attributed to a session, that becomes the new version plus one history row on merge.
+The spec is always the latest ground truth, never a record of finished work: a node is never "closed",
+and one with no live session is simply content the next session opens and edits in place.
 The dashboard is a **read-time aggregator over git, not a separate store**: because git *is* the
 database, reading must scale with history, not with the number of nodes.
 

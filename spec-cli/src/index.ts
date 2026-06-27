@@ -23,9 +23,8 @@ app.use('/api/*', cors())
 const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app })
 
 app.get('/', (c) => c.text('spec-cli — GET /api/board · /api/specs · /api/specs/:id/history · /api/layout · /api/sessions · /api/slash-commands'))
-// @@@ health - the supervisor's readiness gate (src/supervise.ts). Deliberately cheap: a bare 200 with
-// no git/.spec read, so a booting child reports "serving" the instant Hono is listening and the proxy
-// can flip to it. Not under /api/* (no CORS needed) — it's loopback-only, supervisor→child.
+// the supervisor's readiness gate (supervise.ts): a bare git-free 200 so a booting child reports ready the
+// instant Hono is listening. Not under /api/* — loopback-only (supervisor→child), no CORS needed.
 app.get('/health', (c) => c.text('ok'))
 // the assembled board (merged tree + overlay + sessions) — the dashboard's single source. Same data
 // as `spex board`; the frontend only adds x/y pixels on top.
@@ -35,16 +34,10 @@ app.get('/api/specs/:id/history', async (c) => c.json(await specHistory(c.req.pa
 // the spec.md line diff one version introduced — the history tab's per-version proof-of-change, fetched
 // lazily when an older version's item expands (the latest version's diff ships with the board as node.lastDiff).
 app.get('/api/specs/:id/diff/:hash', async (c) => c.json(await specDiffAt(c.req.param('id'), c.req.param('hash'))))
-// @@@ pending edit - the CONTENT of a node's in-flight change, which the board's overlay markers don't carry.
-// A unified diff of the node's spec.md between the fork point (the editing worktree's merge-base with main)
-// and that worktree's WORKING tree, so it includes uncommitted edits. The node-info `edit` tab fetches this
-// lazily to make an in-flight change reviewable from the board. `source` = the overlay's worktree path;
-// `path` = the node's spec.md path (repo-relative).
-// @@@ untracked ghost - a freshly-added node's spec.md is UNTRACKED until its first commit, and `git diff <base>`
-// is blind to untracked files (returns '') — so the edit tab showed NOTHING for a brand-new uncommitted node.
-// When the base diff is empty AND the path is untracked (`status` reports `??`), synthesize the all-additions
-// view with `diff --no-index /dev/null <path>` (gitTry, since --no-index exits 1 when files differ and gitA
-// would swallow that). Gated on `??` so a tracked file with no pending change correctly stays empty.
+// a unified diff of a node's spec.md from its fork point (the worktree's merge-base with main) to that
+// worktree's working tree. An untracked brand-new node is invisible to `git diff <base>`, so when the base
+// diff is empty AND status is `??` synthesize an all-additions view via `diff --no-index` (gitTry — --no-index
+// exits 1, which gitA would swallow). Gated on `??` so a tracked file with no pending change stays empty.
 app.get('/api/edit', async (c) => {
   const source = c.req.query('source') || '', path = c.req.query('path') || ''
   if (!source || !path) return c.json({ patch: '' })
@@ -57,40 +50,27 @@ app.get('/api/edit', async (c) => {
   }
   return c.json({ patch })
 })
-// @@@ eval timeline - a node's chronological evaluation history for the dashboard eval tab (the READ half of
-// `spex yatsu`). Each reading from the yatsu.evals.ndjson sidecar (scenario/codeSha/blob/evaluator/ts) joined
-// with a LIVE freshness flag — the same git-derived staleness `spex yatsu scan` reports, so the tab mirrors
-// code-drift. Newest-first; `hasYatsu:false` for a node that declares no scenarios. LOCAL readings only —
-// the forge issue-events source is a future sibling (see the yatsu-eval-tab spec).
+// a node's eval timeline (read half of `spex yatsu`): yatsu-sidecar readings joined with a live freshness
+// flag, newest-first; `hasYatsu:false` when none declared. Contract belongs to [[spec-yatsu]].
 app.get('/api/specs/:id/evals', async (c) => c.json(await evalTimeline(c.req.param('id'))))
-// @@@ eval blob - serve a reading's captured evidence by content hash from the shared common-dir cache (the
-// bytes never enter git). A malformed hash → 400; a record whose bytes are gone → 404 with the `miss original
-// file` sentinel (the tab shows that instead); present → the bytes with a MIME sniffed from the content (an
-// image type, or text/plain for a transcript), and an immutable cache header since the name IS the content hash.
+// serve a reading's evidence blob by content hash (bytes never enter git): bad hash → 400, missing → 404,
+// else the bytes with a sniffed MIME and an immutable cache header (the name IS the content hash).
 app.get('/api/yatsu/blob/:hash', (c) => {
   const r = readBlobByHash(c.req.param('hash'))
   if (!r.ok) return c.text(r.message, r.reason === 'invalid' ? 400 : 404)
   return c.body(new Uint8Array(r.bytes), 200, { 'Content-Type': r.mime, 'Cache-Control': 'public, max-age=31536000, immutable' })
 })
 app.get('/api/layout', async (c) => c.json(await resolveLayout()))
-// @@@ config presets - the SLASH-surface config nodes: reflexive, skill-shaped plugins that are FLAT direct
-// children of a config root (`.config/<name>` instance plugins, `config/<name>` project system). A node's
-// surface is a `surface: slash|system` FRONTMATTER FIELD, not its location (see specs.ts loadSurface) — there
-// are no `slash/`/`system/` bucket dirs. The sibling `surface: system` nodes are gathered separately into
-// launched agents' system prompts and are NOT listed here. Pending plugins are excluded — only built/active
-// ones gather. Each entry carries its prompt `body` (with a {{targets}} placeholder), its `kind`
-// (mutating|report), and its folder `dir` + co-located `files` so the launcher can list these presets in the
-// new-session `/` dropdown. Read live from disk (no git), like specs.
+// the `surface: slash` config-root plugins (built/active only) for the new-session `/` dropdown — each with
+// its prompt `body` ({{targets}} placeholder), `kind`, and folder `dir` + co-located `files`. surface is a
+// frontmatter field, not a dir (specs.ts loadSurface); `surface: system` siblings are gathered elsewhere.
 app.get('/api/config', (c) => c.json(loadConfig()))
 // the dashboard input's `/` dropdown — computed by the launcher's HARNESS adapter the same way that harness
 // computes its own `/` menu ([[harness-adapter]]). Insert-only on the client; nothing executes here.
 app.get('/api/slash-commands', (c) => c.json(defaultHarness.slashCommands()))
 
-// @@@ file attach - the New Session prompt and a session's ❯ box accept pasted/dropped/picked files. Each
-// is POSTed here as multipart, written to THIS (the backend = worker) machine's /tmp, and its absolute path
-// is returned for the client to splice into the prompt — so an attachment reaches the agent as a readable
-// local path, not bytes in the prompt. Fail-loud: missing/empty file → 400, over the size cap → 413, a write
-// error → 500; only a real write returns 201 {path}.
+// write a pasted/dropped/picked file to this (worker) machine's /tmp and return its absolute path for the
+// client to splice into the prompt. Fail-loud: no/empty file → 400, over the size cap → 413, write error → 500.
 app.post('/api/uploads', async (c) => {
   const body = await c.req.parseBody().catch(() => ({} as Record<string, string | File>))
   const file = body['file']
@@ -106,10 +86,8 @@ app.post('/api/uploads', async (c) => {
 // sessions: real tmux-backed Claude Code sessions. List + spawn, stream the live pane (WebSocket),
 // forward keystrokes, and close.
 app.get('/api/sessions', async (c) => c.json(await listSessions()))
-// @@@ session graph - edges DERIVED from LIVE monitors, not a stored relationship. GET returns live
-// sessions as nodes + edges where each A→B means "agent A is running `spex watch B` right now". A running
-// `spex watch` registers + heartbeats here (watch) and deregisters on exit (unwatch); there is no
-// persisted subscription. A literal `graph` segment, so it never collides with the `:id` routes below.
+// edges derived live from `spex watch` monitors (A→B = agent A is watching B), not a stored subscription;
+// watch/unwatch register + heartbeat. A literal `graph` segment so it never collides with the `:id` routes.
 app.get('/api/sessions/graph', async (c) => c.json(await sessionGraph()))
 app.post('/api/sessions/graph/watch', async (c) => {
   const b = await c.req.json().catch(() => ({}))
@@ -128,29 +106,22 @@ app.post('/api/sessions', async (c) => {
   if (!prompt.trim()) return c.json({ error: 'empty prompt' }, 400)
   return c.json(await newSession(typeof body?.node === 'string' ? body.node : null, prompt), 201)
 })
-// @@@ manager cockpit - the review payload (the cockpit's first verb; see the manager-cockpit spec node).
-// ONE server-side bundle for "should I merge this session?": ahead/dirty/diff(merge-base)/gates/proposal,
-// computed in reviewPayload so the dashboard and `spex review` are thin callers. 404 for an unknown id.
+// one server-side merge bundle (ahead/dirty/diff(merge-base)/gates/proposal) for the manager cockpit;
+// dashboard and `spex review` are thin callers. 404 for an unknown id. See [[manager-cockpit]].
 app.get('/api/sessions/:id/review', async (c) => {
   const r = await reviewPayload(c.req.param('id'))
   return r ? c.json(r) : c.json({ error: 'no such session' }, 404)
 })
-// @@@ review proof - the agent's review state, marshaled into one self-contained HTML proof of work (the
-// [[review-proof]] engine): the diff grouped by node, each node's measured yatsu loss with its evidence
-// inlined as data-URIs, and the merge gates, under the agent's authored claim. The dashboard overlay and
-// `spex review proof` are thin fetchers of this one route. `?format=json` returns the model; default = the
-// rendered HTML. 404 for an unknown id.
+// the [[review-proof]] HTML: the diff grouped by node, each node's measured yatsu loss with evidence inlined
+// as data-URIs, and the merge gates. `?format=json` returns the model; default = rendered HTML. 404 unknown id.
 app.get('/api/sessions/:id/proof', async (c) => {
   const m = await buildProofModel(c.req.param('id'))
   if (!m) return c.text('no such session', 404)
   if (c.req.query('format') === 'json') return c.json(m)
   return c.html(renderProofHtml(m))
 })
-// @@@ capture - the session's live pane as TEXT (one-shot snapshot), the read surface a backend client
-// (`spex capture`, incl. a REMOTE one over SPEXCODE_API_URL) polls to monitor an agent's actual screen
-// without the binary terminal WebSocket. Fail and empty stay DISTINCT: a genuinely empty pane is 200 with an
-// empty body; the failure modes map to distinct codes so a client never mistakes "couldn't read" for "blank
-// screen" — unknown id → 404, session offline (no live pane) → 409, capture-pane errored → 502.
+// the session's live pane as text (one-shot snapshot) for a backend client (`spex capture`). Empty and fail
+// stay distinct: an empty pane is 200 with empty body; unknown id → 404, offline (no live pane) → 409, error → 502.
 app.get('/api/sessions/:id/capture', async (c) => {
   const r = await captureSessionResult(c.req.param('id'))
   if (r.ok) return c.text(r.pane)
@@ -166,20 +137,16 @@ app.get('/api/sessions/:id/prompt', async (c) => {
 // lifecycle transitions (thin callers of the session state machine)
 app.post('/api/sessions/:id/resume', async (c) => c.json({ ok: await reopen(c.req.param('id')) }))   // back-to-working / relaunch
 app.post('/api/sessions/:id/review', async (c) => c.json({ ok: await propose(c.req.param('id'), 'merge') }))
-// @@@ merge - a DISPATCH to the session's OWN agent, NOT a server merge: reopen the session and hand it the
-// merge prompt (it runs the --no-ff merge, resolves conflicts, verifies, proposes close). The server never
-// touches main's tree. Async + fail-loud → 200 {dispatched:true} once the prompt is confirmed accepted, 409
-// {dispatched:false, reason} if the agent is unreachable. See mergeSession.
+// a dispatch to the session's own agent (it runs the merge), never a server merge — the server never touches
+// main's tree. 200 {dispatched:true} once the prompt is accepted, 409 {dispatched:false} if the agent is unreachable.
 app.post('/api/sessions/:id/merge', async (c) => {
   const r = await mergeSession(c.req.param('id'))
   return c.json(r, r.dispatched ? 200 : 409)
 })
 
-// @@@ terminal socket - ONE bidirectional WebSocket replaces the old SSE-down + POST/keys + POST/resize
-// trio. The browser is wired to a shared tmux client (pty-bridge): server→client = raw pane bytes
-// (binary); client→server = raw terminal input (binary: keystrokes + mouse) and a control frame (text
-// JSON {t:'resize',cols,rows}). No base64, no snapshot splice — the bridge is a real tmux client, so
-// scrollback is tmux's own (mouse wheel → copy-mode) and the first paint is one coherent repaint.
+// one bidirectional WS over a shared tmux client (pty-bridge): server→client = raw pane bytes (binary);
+// client→server = raw terminal input (binary) + a text control frame {t:'resize',cols,rows}. A real tmux
+// client, so scrollback is tmux's own and the first paint is one coherent repaint.
 app.get('/api/sessions/:id/socket', upgradeWebSocket((c) => {
   const id = c.req.param('id') as string
   let viewer: Viewer | null = null
@@ -213,30 +180,27 @@ app.post('/api/sessions/:id/keys', async (c) => {
   const r = await sendKeys(c.req.param('id'), typeof body?.text === 'string' ? body.text : '', typeof body?.from === 'string' ? body.from : undefined)
   return c.json(r, r.ok ? 200 : 502)
 })
-// @@@ raw single-keystroke nav - the PRESERVED tmux send-keys path, distinct from the prompt socket the
-// ❯ box uses. The dashboard's nav mode POSTs one key per keydown so a human can drive the agent's
-// interactive TUI menus in real time: Up/Down/Left/Right/Enter/Escape/Tab/Space/Backspace + single
-// printable chars (e.g. `s`). It forwards keystrokes only — no other behavior rides on this channel.
+// the preserved tmux send-keys path (distinct from the ❯ prompt socket): one key per keydown so a human can
+// drive the agent's interactive TUI menus in real time. Forwards keystrokes only.
 app.post('/api/sessions/:id/rawkey', async (c) => {
   const body = await c.req.json().catch(() => ({}))
   const ok = await rawKey(c.req.param('id'), typeof body?.key === 'string' ? body.key : '')
   return c.json({ ok }, ok ? 200 : 404)
 })
-// @@@ exit - the soft stop: kill the agent's tmux + socket, KEEP the worktree (the session goes offline and
-// can relaunch/--resume). Distinct from close, which removes the worktree. {ok:false} = no such session.
+// soft stop: kill the agent's tmux + socket but KEEP the worktree (relaunchable). Distinct from close, which
+// removes the worktree. {ok:false} = no such session.
 app.post('/api/sessions/:id/exit', async (c) => c.json({ ok: await exitSession(c.req.param('id')) }))
 app.post('/api/sessions/:id/close', async (c) => c.json({ ok: await closeSession(c.req.param('id')) }))
-// @@@ rename - set a session's human display NAME (the override that wins over the derived label), or clear
-// it with a blank name. Persists to the worktree's `.session` so it shows on every surface and survives a
-// restart. Unknown id → 404. The dashboard's right-click session menu is the caller.
+// set (or clear, with a blank) a session's display-name override; persists to the worktree's `.session` so
+// it survives a restart. Unknown id → 404.
 app.post('/api/sessions/:id/rename', async (c) => {
   const body = await c.req.json().catch(() => ({}))
   const ok = await renameSession(c.req.param('id'), typeof body?.name === 'string' ? body.name : '')
   return c.json({ ok }, ok ? 200 : 404)
 })
 
-// @@@ drag-reorder ([[session-reorder]]) - set/clear a session's pseudo-time sort-key. A finite number pins
-// the row's slot; null (or anything non-numeric) clears it back to birth order. Mirrors /rename.
+// set/clear a session's sort-key ([[session-reorder]]): a finite number pins the row's slot, null (or
+// non-numeric) restores birth order. Mirrors /rename.
 app.post('/api/sessions/:id/sort', async (c) => {
   const body = await c.req.json().catch(() => ({}))
   const key = typeof body?.key === 'number' && Number.isFinite(body.key) ? body.key : null
@@ -251,12 +215,9 @@ superviseBridges()   // keep a warm tmux client per live session, so opening a t
 superviseQueue()     // launch queued sessions as slots free (catches agent-authored proposals/crashes the server never sees directly)
 console.log(`spec-cli serving .spec (from git) on http://localhost:${port}`)
 
-// @@@ graceful drain - the other half of the zero-downtime reload (src/supervise.ts). When the supervisor
-// retires this child it sends SIGTERM; we must NOT die mid-response or the in-flight /api/board (~1.5s of
-// git work) is RESET. So: stop accepting new connections (server.close), let active requests finish, and
-// repeatedly drop now-idle keep-alive sockets so close()'s callback fires the instant the last request
-// drains — then exit. By flip time the proxy already routes NEW traffic to our successor, so this only
-// drains the requests we already owned. A hard cap guarantees we still exit if a connection won't close.
+// graceful drain (the other half of zero-downtime reload, supervise.ts): on SIGTERM stop accepting new
+// connections, let in-flight requests finish, and sweep now-idle keep-alive sockets so close() fires the
+// instant the last request drains. A hard cap still forces exit if a connection won't close.
 process.on('SIGTERM', () => {
   const srv = server as unknown as { close(cb?: () => void): void; closeIdleConnections?(): void }
   const sweep = setInterval(() => srv.closeIdleConnections?.(), 200)

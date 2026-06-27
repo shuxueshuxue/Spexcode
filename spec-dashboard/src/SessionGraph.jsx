@@ -10,44 +10,15 @@ import { STATUS_COLOR, sessionHeadline } from './session.js'
 import Modal from './Modal.jsx'
 import { useT } from './i18n/index.jsx'
 
-// @@@ session-graph - the EXPERIMENTAL directed monitor network: each session is a node, each LIVE
-// monitor a directed arrow A→B meaning "agent A is right now running `spex watch B`". The NODES are the
-// preloaded board sessions the dashboard already polls (passed in as `sessions`) — the same source every
-// other surface reads — so the view opens INSTANTLY, never blocking on its own cold session fetch. Live
-// edges are DERIVED from live watches (the `edges` of GET /api/sessions/graph), never stored. The view is OBSERVATIONAL — it
-// reflects who is watching whom and updates as watches start/stop — but it ALSO lets a human ASK: LEFT-click
-// a node to pick the watcher, then RIGHT-click another (the watched), and a PROMPT goes to agent A telling it
-// to monitor B (POST /keys; NO subscription store). That gesture is optimistic — a pending dashed edge + a
-// toast appear immediately so the user never wonders if it worked — and the edge goes solid once A's real
-// `spex watch` registration shows up on the next poll.
-// This view LIVES INSIDE the session console as the "View Session Relationship" tab (see SessionInterface):
-// it fills the right content pane when that tab is active, NOT a fullscreen overlay. It stays ISOLATED all
-// the same — its own ReactFlowProvider (so it never shares the board's or any other ReactFlow's
-// camera/selection state) and its own data. The CONSOLE owns the ARROWS and Esc: you reach this tab from an
-// empty New Session with → and leave it with ← (a horizontal axis off New), the other arrows are inert, and
-// Esc closes the console (or this view's legend first). What's LEFT to this view is the in-graph nav: hjkl
-// walk the web to the nearest node in that direction (the camera following) — arrows never move the cursor —
-// and ⏎ opens the focused session, the twin of a double-click, which here switches to that session's console
-// tab (onOpen → setSel).
-// Nodes REUSE the shared seed-to-hue colour + avatar (color.js / avatar.jsx) keyed off the session id, so
-// a face here matches the same session's stripe/avatar everywhere else on the dashboard.
-
-// a node's label is the SAME headline its session row/card/console title shows (sessionHeadline): a human
-// rename, else the worker's LIVE tmux self-summary (`activity` — the agent's own description of what it's
-// doing right now), else the launch-prompt preview, else node/title/branch. So a node here reads identically
-// to that session everywhere else — never a divergent stable-id name. Only the bare-id fallback is the
-// graph's own (short 8-char id), since a full id is too wide for a node chip.
+// label = the session's shared headline (sessionHeadline); the bare-id fallback is shortened to 8 chars
+// (a full id is too wide for a node chip).
 const sessionLabel = (s, t) => {
   const h = sessionHeadline(s)
   return h && h !== s.id ? h : (s.id ? s.id.slice(0, 8) : t('common.session'))
 }
 
-// @@@ GraphNode - a session as a network node: its avatar + label, ringed in its own hue. The two handles
-// are NOT drag affordances any more — the monitor gesture is LEFT-click the watcher then RIGHT-click the
-// watched (see onNodeClick/onNodeContextMenu), and nodesConnectable is OFF so a handle can't start a drag.
-// They stay only as the INVISIBLE anchor points ReactFlow needs to route an edge to a node at all (without a
-// handle it logs "couldn't create edge … handle id null" and draws nothing); they're hidden via CSS and the
-// arrows still float border-to-border between node borders (see FloatingEdge), not through these points.
+// the handles are hidden CSS anchors ReactFlow needs to route an edge at all (without one it draws nothing);
+// they are not drag affordances — nodesConnectable is off and the monitor gesture is click, not drag.
 function GraphNode({ data }) {
   const t = useT()
   const color = labelColor(data.id)
@@ -66,13 +37,8 @@ function GraphNode({ data }) {
 }
 const nodeTypes = { session: GraphNode }
 
-// @@@ FloatingEdge - an edge that anchors BORDER-TO-BORDER, not to the fixed Top/Bottom handles. In a
-// force layout two nodes can settle in any direction from each other, so a handle-routed arrow would leave
-// the bottom of one node to reach a node sitting to its LEFT — the tell-tale "naive graph" detour. Instead
-// we intersect the straight line between the two node centres with each node's rectangle and draw a gentle
-// bezier between those two boundary points, so every arrow leaves and lands cleanly whichever way the web
-// settles. ReactFlow resolves edge.markerEnd/label into the props below before handing them here, so we just
-// forward them to BaseEdge. (Geometry ported from ReactFlow's floating-edges example.)
+// anchors an edge border-to-border by intersecting the centre-to-centre line with each node's rectangle
+// (ported from ReactFlow's floating-edges example).
 function nodeCenterIntersection(node, other) {
   const { width: w, height: h } = node.measured
   const p = node.internals.positionAbsolute
@@ -114,15 +80,8 @@ function FloatingEdge({ id, source, target, markerEnd, style, label, labelStyle,
 }
 const edgeTypes = { floating: FloatingEdge }
 
-// @@@ force-directed layout - a network relaxation, NOT a tree and NOT a fixed ring: every pair of nodes
-// repels (a Coulomb push) and every live link (monitor or comms) pulls its two ends together (a Hooke
-// spring), with a gentle gravity toward the origin so disconnected components stay framed. So linked
-// sessions settle into CLUSTERS, unlinked ones drift to the margins, and the arrows stay short instead of
-// slashing across a ring. Pure view concern, computed client-side (the backend serves topology, never
-// pixels). DETERMINISTIC: nodes are seeded on a ring by SORTED id (never Math.random) and the sim runs a
-// fixed cooling schedule to a settled frame, so the same topology always yields the same picture — and the
-// caller recomputes it ONLY when the topology (node set or link set) changes, so the web never jitters
-// across the 4s edge polls. `links` is the live [fromId, toId] pairs; direction doesn't matter for layout.
+// deterministic force-directed relaxation: seeded on a ring by sorted id (never Math.random) so the same
+// topology always yields the same frame. `links` is the live [fromId, toId] pairs; direction is irrelevant.
 function forceLayout(sessions, links) {
   const ids = sessions.map((s) => s.id).sort()
   const n = ids.length
@@ -179,15 +138,6 @@ function forceLayout(sessions, links) {
 
 function GraphCanvas({ sessions = [], onOpen, active, legend, setLegend, edges = [], edgesLoaded = false }) {
   const t = useT()
-  // @@@ nodes AND edges in hand on the first render - the graph's NODES are the SHARED session list the
-  // dashboard already polls (`board.sessions`, refreshed every 4s by App), and its EDGES (the live monitor +
-  // comms network) are polled by the always-mounted CONSOLE and handed down as a prop too — NOT cold-fetched
-  // here. So both halves are present on the first paint: the layout is the FINAL force-clustered web from the
-  // start, never an edgeless placeholder that re-settles a few seconds later (the old self-poll lived in this
-  // remount-on-reselect component, so every entry flashed nodes-only then jumped when the first poll landed).
-  // `edgesLoaded` (the console's first edge response landed, even an empty one) gates the reveal so the first
-  // VISIBLE frame already carries the relationships. Pending/optimistic edges are interaction state, so they
-  // stay local here.
   const [pending, setPending] = useState([])         // optimistic monitor edges, awaiting the live watch
   const [toast, setToast] = useState(null)           // brief "asked A to monitor B" reassurance
   const [focusId, setFocusId] = useState(null)       // keyboard cursor: the node arrows move and ⏎ opens
@@ -197,10 +147,7 @@ function GraphCanvas({ sessions = [], onOpen, active, legend, setLegend, edges =
   const [framed, setFramed] = useState(false)         // mask the pre-fit frame; reveal the already-centred web (no intro motion)
   const toastTimer = useRef(0)
 
-  // The CONSOLE owns the universal keys (↑/↓ walk the tab list, Esc closes the console/this legend). What's
-  // LEFT to this view — handled in the nav effect below — is the in-graph nav: hjkl move the cursor, ⏎ opens
-  // the focused session, `?` toggles the legend. The console's window listener runs FIRST (it mounts first)
-  // and consumes ↑/↓/Esc; the keys it doesn't touch (hjkl/⏎/?) fall through to ours.
+  // the console's key listener mounts first and consumes ↑/↓/Esc; hjkl/⏎/? fall through to our nav effect below.
 
   const byId = useMemo(() => Object.fromEntries(sessions.map((s) => [s.id, s])), [sessions])
   // the links the force layout relaxes around: live monitor + comms edges whose BOTH ends are present
@@ -210,11 +157,7 @@ function GraphCanvas({ sessions = [], onOpen, active, legend, setLegend, edges =
     () => edges.filter((e) => byId[e.from] && byId[e.to] && e.from !== e.to).map((e) => [e.from, e.to]),
     [edges, byId],
   )
-  // @@@ re-relax only on topology change - the layout is a settled frame, not a live animation, so we
-  // recompute it ONLY when the node set or the link set actually changes, keyed off this string. Across the
-  // 4s edge polls that return the same shape the memo is reused and the web sits perfectly still — no jitter,
-  // no re-seed — exactly the stillness the spec promises; a started/stopped watch or a new/closed session
-  // re-lays it out once. (Sorted so order-only churn in the poll never counts as a change.)
+  // re-layout only when the node set or link set changes (sorted, so poll order-churn isn't a change).
   const topoKey = useMemo(() => {
     const ns = sessions.map((s) => s.id).slice().sort().join(',')
     const es = linkPairs.map(([a, b]) => `${a}~${b}`).sort().join(';')
@@ -280,10 +223,6 @@ function GraphCanvas({ sessions = [], onOpen, active, legend, setLegend, edges =
   }, [])
   useEffect(() => () => clearTimeout(toastTimer.current), [])
 
-  // @@@ ask-to-monitor - asking A to monitor B is NOT drawing a stored edge: it dispatches a PROMPT to agent A
-  // (the watcher) over the existing /keys channel, asking it to run `spex watch B` (its monitor tool). We add
-  // an optimistic pending edge + a toast right away so the gesture feels acknowledged; the real arrow firms up
-  // when A's live watch registration arrives on the next poll. No subscription is ever written here.
   const askMonitor = useCallback((source, target) => {
     if (!source || !target || source === target) return
     const a = byId[source], b = byId[target]
@@ -297,17 +236,10 @@ function GraphCanvas({ sessions = [], onOpen, active, legend, setLegend, edges =
     }).catch(() => { /* the optimistic edge stands until a poll proves it never registered */ })
   }, [byId, t, flash])
 
-  // @@@ pick-then-connect - the monitor gesture is two clicks, no handles, no drag. A LEFT-click PICKS a node
-  // as the watcher (lights it as the source, also moving the keyboard cursor there) and toasts the user to
-  // right-click the watched. A RIGHT-click on another node then asks that picked watcher to monitor it
-  // (askMonitor) and clears the pick; a right-click with nothing picked just reminds the user to pick first.
-  // Opening a session is the DOUBLE-click (onNodeDoubleClick) — distinct from the single-click pick — and a
-  // click on empty space clears the pick. preventDefault on the context menu keeps the browser menu away.
   const onNodeClick = useCallback((_e, n) => {
     setFocusId(n.id)
     setSourceSel(n.id)
-    flash(t('sessionGraph.picked', { a: sessionLabel(byId[n.id] || { id: n.id }, t) }))
-  }, [byId, t, flash])
+  }, [])
   const onNodeContextMenu = useCallback((e, n) => {
     e.preventDefault()
     if (!sourceSel) { flash(t('sessionGraph.needSource')); return }
@@ -326,12 +258,8 @@ function GraphCanvas({ sessions = [], onOpen, active, legend, setLegend, edges =
     if (!focusId || !sessions.some((s) => s.id === focusId)) setFocusId(sessions[0].id)
   }, [sessions, focusId])
 
-  // @@@ directional nav - the radial layout is a network, not a tree, so there is no parent/child to walk:
-  // an hjkl key moves the cursor to the NEAREST node inside a 45° cone in that screen direction, which reads
-  // naturally on a ring. We pan the camera to follow (keyboard-only — click never moves it). ⏎ opens the
-  // focused session (the keyboard twin of a double-click). pos/byId are flow coords, the same space setCenter wants,
-  // so no projection is needed. The ARROWS are deliberately NOT bound here — the console owns them (← leaves
-  // to New Session, the rest inert), so the graph's web-walk is vim-only: hjkl move the cursor, nothing else.
+  // hjkl moves the cursor to the nearest node inside a 45° cone in that direction; pos is in flow coords
+  // (the space setCenter wants), so no projection is needed.
   const CONES = useMemo(() => ({
     l: (dx, dy) => dx > 0 && dx >= Math.abs(dy),
     h: (dx, dy) => dx < 0 && -dx >= Math.abs(dy),
@@ -378,20 +306,9 @@ function GraphCanvas({ sessions = [], onOpen, active, legend, setLegend, edges =
     return () => window.removeEventListener('keydown', onKey, true)
   }, [active, byId, pos, sessions, CONES, onOpen, setCenter, getViewport, legend, setLegend])
 
-  // @@@ frame BEFORE the first visible frame, on the FINAL layout - the web is origin-centred in flow coords,
-  // so its very first paint lands in the top-left corner at the default zoom. We keep the canvas hidden
-  // (opacity 0, see the ReactFlow style) through that first paint, then in the rAF fit the web AND reveal it in
-  // the same commit — so the first VISIBLE frame is already centred and STATIC, never an intro animation. The
-  // reveal is also HELD until `edgesLoaded` (the console's first edge response has landed): nodes are preloaded
-  // but the force layout clusters around the live edges, so revealing before they arrive would show the
-  // edgeless placeholder and then JUMP when the topology lands. Gating on edgesLoaded means the masked frame
-  // we finally fit-and-reveal already carries the relationships — the final clustered web, no shuffle. An empty
-  // board reveals at once (nothing to frame). A later session-count change reframes with a gentle pan (300ms,
-  // already visible); a topology change re-settles the nodes in place without a reframe (length-keyed deps).
-  // framedRef flips inside the rAF, NOT in the effect body: under StrictMode the first effect run's rAF is
-  // cancelled by its cleanup before it fires, so a body-side flag would make the surviving remount read
-  // "not first" and skip the reveal (canvas stuck hidden). Setting it only when the rAF actually runs keeps
-  // the instant first-fit + reveal correct in dev and prod alike.
+  // framedRef flips inside the rAF, NOT in the effect body: under StrictMode the first run's rAF is cancelled
+  // by its cleanup before it fires, so a body-side flag would make the surviving remount skip the reveal and
+  // leave the canvas hidden. The mask is held until edgesLoaded so the first visible frame is the final web.
   useEffect(() => {
     if (!rfNodes.length) { setFramed(true); return }  // empty: show the bare board, nothing to frame
     if (!edgesLoaded) return                          // hold the mask until the live edges land (final layout)
@@ -417,17 +334,14 @@ function GraphCanvas({ sessions = [], onOpen, active, legend, setLegend, edges =
       >
         <Background variant="dots" color="#cdc6ad" gap={20} size={1} />
       </ReactFlow>
+      {/* the pick hint is BOUND to the selection (sourceSel) — it stands while a node is picked and vanishes
+          the instant the pick clears; it is NOT the timed toast (that is for the asked/needSource flashes). */}
+      {sourceSel && <div className="sg-pick-hint">{t('sessionGraph.picked')}</div>}
       {toast && <div className="sg-toast">{toast}</div>}
     </>
   )
 }
 
-// @@@ SessionGraphLegend - the session graph's keymap + mouse gestures + edge vocabulary, shown in the shared
-// centered Modal opened by the tab's discreet `?` (key or click) — the SAME affordance the spec board uses
-// (see Legend.jsx), so the wall of inline hints that used to stand in the HUD lives behind one button. The
-// keymap mirrors the embedded model: hjkl walk the web (arrows are the console tab-list's), ⏎ opens, and you
-// leave via the tabs. The mouse section spells out the pointer gestures: double-click opens a session, and a
-// left-click then a right-click on another node asks the first to monitor the second.
 function SessionGraphLegend({ onClose }) {
   const t = useT()
   const KEYS = [
@@ -469,26 +383,11 @@ function SessionGraphLegend({ onClose }) {
   )
 }
 
-// @@@ SessionGraph - the "View Session Relationship" tab body: it FILLS the console's right content pane
-// (absolute inset:0 over a positioned pane), NOT a fullscreen overlay. Wrapped in its OWN ReactFlowProvider
-// so it shares NOTHING with the spec board's ReactFlow instance (separate camera, selection, store) — the
-// isolation that lets it sit inside the console without touching the board behind it. `onOpen` switches the
-// console to a clicked node's session tab (setSel). `active` is true while this tab is the one selected;
-// `legend`/`setLegend` are LIFTED to the console so its Esc handler can close the legend before the console.
-// `sessions` is the preloaded board session list (the console already holds it) — the graph's NODES, so the
-// view opens instantly without a cold listSessions() fetch. `edges`/`edgesLoaded` are the live monitor+comms
-// network the CONSOLE polls and hands down (so they persist across this tab's remount-on-reselect and stay
-// current in the background) — see GraphCanvas; the view never polls them itself.
 export default function SessionGraph({ sessions = [], onOpen, active = true, legend, setLegend, edges = [], edgesLoaded = false }) {
   const t = useT()
   return (
     <div className="session-graph">
-      {/* a standing gesture hint + a single discreet `?` (the same help affordance the spec board uses) opens
-          the keymap/edge legend. The hint advertises the no-handle monitor gesture (left-click then
-          right-click) the user can't otherwise see; double-click-to-open is conventional and needs no hint.
-          No brand/back chrome: the tab IS the frame, and leaving is just picking another tab. */}
       <div className="sg-hud">
-        <span className="sg-hint">{t('sessionGraph.gestureHint')}</span>
         <button className="hud-help" onClick={() => setLegend((v) => !v)} title={t('sessionGraph.helpTitle')}>?</button>
       </div>
       <ReactFlowProvider>

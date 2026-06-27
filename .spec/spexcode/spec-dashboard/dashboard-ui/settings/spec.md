@@ -25,7 +25,13 @@ The setting changes the whole UI live — no refresh.
 
 A settings popup is the home for this and for choices like it later. It is reached by a hotkey, looks
 and behaves like the help/legend modal, and is the deliberate place future preferences accrete — adding
-one must not mean inventing a new surface.
+one must not mean inventing a new surface. Its second accreted section is **Shortcuts**: the editable
+twin of the help legend. The same [[keyboard-nav]] registry the help modal shows read-only is shown here
+as a table you can edit — one row per action with its keyboard key. Clicking a cell captures the next
+keypress as that action's new binding, saved per-user and reset to defaults on demand. The help legend
+(`?`) stays the read-only view; this is its rebinding twin, the two projecting the one table from
+different entry points. (Game-controller mapping is **not** here — it lives outside the browser as the
+[[game-controller]] extension; see [[keyboard-nav]].)
 
 ## expanded spec
 

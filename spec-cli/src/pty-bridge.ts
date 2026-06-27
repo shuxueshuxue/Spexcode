@@ -4,27 +4,9 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { listSessions, alive } from './sessions.js'
 
-// @@@ pty-bridge - the live terminal is now a REAL tmux client, not an output tap. For each session we
-// spawn ONE node-pty running `tmux attach-session -t <id>` (a genuine tmux client on a real PTY) and
-// share it across every browser viewer. The browser's xterm forwards raw keystrokes AND mouse bytes
-// down the PTY, so the wheel drives tmux copy-mode — you scroll the actual pane history like real tmux.
-// This replaces the old capture-pane snapshot + raw pipe-pane delta splice (the source of the scramble:
-// deltas assumed a screen the snapshot only approximated, and the tail could start mid-escape-sequence).
-// A fresh attach makes tmux emit ONE coherent full repaint at the PTY size — no splice, no scramble.
-//
-// ONE client per session (not one per viewer): all viewers subscribe to the same PTY's output and write
-// into the same PTY, so there's exactly one tmux client and one authoritative size (last fit wins). Two
-// clients would fight over the session size; one never does.
-//
-// Pre-warm (the cache): a supervisor keeps a bridge attached to every live session, so the PTY + tmux
-// client are already streaming before a tab is opened. Opening a tab just subscribes to a warm bridge
-// and nudges a refresh — paint is instant, no cold capture-pane/spawn chain.
-
 const pexec = promisify(execFile)
 const TMUX_SOCK = process.env.SPEXCODE_TMUX || 'spexcode'
-// only a COLD fallback for a session no viewer has ever sized — see lastFit below. The bug was
-// pre-warming EVERY bridge at this fixed size: the dashboard viewer is smaller, so reattaching to a
-// 120x40 pre-warm and shrinking it to (e.g.) 103x33 raced the repaint and doubled the status bar.
+// cold fallback size for a session no viewer has ever sized (see lastFit).
 const DEFAULT_COLS = 120, DEFAULT_ROWS = 40
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
@@ -33,17 +15,10 @@ export type Viewer = { send: (data: Buffer) => void }
 
 type Bridge = { id: string; pty: IPty; cols: number; rows: number; prewarmed: boolean; clientTty?: string; repaintToken: number }
 const bridges = new Map<string, Bridge>()
-// @@@ stable subscription registry - the fix for the frozen-pane bug. Viewers are keyed by SESSION ID and
-// live HERE, never on the Bridge. The old Bridge.viewers Set died with the pty (p.onExit → bridges.delete),
-// orphaning the still-open WebSocket onto a deleted object — inactive, unscrollable, no repaint, until a
-// manual page refresh. Now only detachViewer (a real socket close) removes a viewer; a bridge dying and
-// respawning underneath is invisible to the browser, so client reconnection is unnecessary for bridge churn.
+// viewers keyed by session id (not the Bridge), so a subscription outlives any bridge death/respawn.
 const subscribers = new Map<string, Set<Viewer>>()
 
-// @@@ last-known viewer size - the cure for the pre-warm mismatch. Every viewer fit records its
-// cols/rows here (per session, plus a global fallback for a session this viewer hasn't opened before),
-// so the supervisor pre-warms a bridge at the size a viewer will actually want — no shrink on attach,
-// no shrink-vs-repaint race. Only a session NO viewer has ever sized falls back to DEFAULT_COLS/ROWS.
+// last size each viewer fitted (per session + a global fallback), so pre-warm spawns at the wanted size.
 const lastFit = new Map<string, { cols: number; rows: number }>()
 let lastFitAny: { cols: number; rows: number } | null = null
 function prewarmSize(id: string): { cols: number; rows: number } {
@@ -53,8 +28,7 @@ function prewarmSize(id: string): { cols: number; rows: number } {
 async function tmuxRaw(args: string[]): Promise<void> {
   try { await pexec('tmux', ['-L', TMUX_SOCK, ...args]) } catch { /* best-effort */ }
 }
-// how many clients are attached to this session. Used to keep pre-warm from attaching to a session a
-// HUMAN is already in (their real terminal) — a second client would fight over the pane size.
+// how many clients are attached — pre-warm skips a session a human is already in (avoids a size-fight).
 async function attachedCount(id: string): Promise<number> {
   try {
     const { stdout } = await pexec('tmux', ['-L', TMUX_SOCK, 'display-message', '-p', '-t', id, '-F', '#{session_attached}'])
@@ -62,8 +36,8 @@ async function attachedCount(id: string): Promise<number> {
   } catch { return 0 }
 }
 
-// @@@ tmux opts - mouse on (wheel → copy-mode scrollback) + a deep history. set -g sets the server
-// default; mouse is inherited live by all sessions, history-limit applies to panes created afterwards.
+// mouse on + deep history. set -g is the server default: mouse is inherited live, history-limit applies
+// only to panes created afterwards.
 let optsEnsured = false
 async function ensureTmuxOpts(): Promise<void> {
   if (optsEnsured) return
@@ -76,14 +50,12 @@ async function ensureTmuxOpts(): Promise<void> {
 function ensureBridge(id: string, prewarm = false): Bridge | null {
   let b = bridges.get(id)
   if (b) { if (prewarm) b.prewarmed = true; return b }
-  // spawn at the LAST-KNOWN viewer size (not a fixed default) so a pre-warmed bridge already matches
-  // the dashboard's pane — the on-attach shrink that doubled the status bar simply never happens.
+  // spawn at the last-known viewer size so a pre-warmed bridge already matches the dashboard's pane.
   const { cols, rows } = prewarmSize(id)
   let p: IPty
   try {
-    // -u + a UTF-8 LANG force this tmux CLIENT to emit UTF-8 even when the host's locale is empty/non-UTF-8
-    // (a macOS LaunchAgent gives LANG="" → tmux would substitute `_` for every wide char: CJK, ▸, ★, …).
-    // Locale-independent so the live terminal renders non-ASCII intact regardless of how the backend started.
+    // -u + a UTF-8 LANG force this client to emit UTF-8 even when the host locale is empty (a LaunchAgent
+    // gives LANG="" → tmux substitutes `_` for every wide char).
     p = pty.spawn('tmux', ['-u', '-L', TMUX_SOCK, 'attach-session', '-t', id], {
       name: 'xterm-256color', cols, rows,
       env: { ...process.env, LANG: process.env.LANG || 'en_US.UTF-8' } as Record<string, string>,
@@ -91,16 +63,13 @@ function ensureBridge(id: string, prewarm = false): Bridge | null {
   } catch { return null }
   b = { id, pty: p, cols, rows, prewarmed: prewarm, repaintToken: 0 }
   bridges.set(id, b)
-  // tmux output (string, utf8-boundary-safe from node-pty) → broadcast as raw bytes to every viewer. The
-  // viewer set lives in `subscribers` (keyed by session id), so it survives this bridge being replaced.
+  // tmux output → broadcast as raw bytes to every viewer in `subscribers` (which survives a bridge swap).
   p.onData((data) => {
     const buf = Buffer.from(data, 'utf8')
     for (const v of subscribers.get(id) ?? []) { try { v.send(buf) } catch { /* drop a wedged viewer */ } }
   })
-  // attach-session exits when the session dies or we detach — drop the bridge so it's re-made if needed.
-  // The subscribers are untouched; if any remain, kick a reconcile to RE-BIND fast (respawn + repaint)
-  // instead of waiting up to a full supervisor tick. The kick is alive-gated + serialized, so a session
-  // that died for real just reaps (no respawn) and a burst of exits collapses to one pass — never a storm.
+  // attach-session exited (session died or we detached): drop the bridge, and if viewers remain kick a
+  // reconcile to re-bind fast instead of waiting a full tick (the kick is alive-gated + serialized).
   p.onExit(() => {
     if (bridges.get(id) === b) bridges.delete(id)
     if ((subscribers.get(id)?.size ?? 0) > 0) kickSupervisor()
@@ -115,18 +84,8 @@ function killBridge(id: string): void {
   try { b.pty.kill() } catch { /* already gone */ }
 }
 
-// a browser viewer connects: subscribe it to the (warm or fresh) bridge, then trigger ONE coherent full
-// repaint so the freshly-reset xterm paints in a single clean frame. We do NOT splice a capture-pane
-// snapshot into the mid-flight live stream — THAT was the tab-switch scramble: the snapshot is an
-// out-of-band screen state, the live deltas assume a different cursor/size, and the join can land
-// mid-escape-sequence, so the two splice into a garbled screen (doubled status bars, interleaved text).
-// Instead we ask tmux to `refresh-client` OUR attach client, which emits a full redraw down the SAME pty
-// the deltas flow on — coherent with them by construction. The redraw reaches every viewer of this bridge
-// (a brief, harmless re-paint for any others — far better than a persistent splice). The client resets its
-// xterm on (re)connect and its open-time resize re-syncs the size; the repaint is DEFERRED until that
-// resize has actually landed in tmux (see settleAndRepaint), so it paints at the viewer's exact rows and
-// the status bar lands exactly once. There is no per-viewer partial seed, so rapid attach/detach can
-// never leave a half-seed behind.
+// a browser viewer connects: subscribe it to the (warm or fresh) bridge, then settleAndRepaint for one
+// coherent frame (a refresh-client down the same pty, never a spliced capture-pane snapshot).
 export function attachViewer(id: string, v: Viewer): boolean {
   let s = subscribers.get(id)
   if (!s) subscribers.set(id, s = new Set())
@@ -136,9 +95,8 @@ export function attachViewer(id: string, v: Viewer): boolean {
   void settleAndRepaint(b)
   return true
 }
-// our tmux attach client's tty, matched by pid (b.pty.pid === the attach process === client_pid) and cached.
-// refresh-client must target OUR client specifically so the redraw hits only the dashboard's pty — never a
-// human's separate terminal that happens to share the same session.
+// our attach client's tty, matched by pid (b.pty.pid === client_pid) and cached. refresh-client must
+// target OUR client so the redraw hits only the dashboard's pty, not a human sharing the same session.
 async function clientTty(b: Bridge): Promise<string | null> {
   if (b.clientTty) return b.clientTty
   try {
@@ -150,13 +108,9 @@ async function clientTty(b: Bridge): Promise<string | null> {
   } catch { /* client not registered yet; a size-changing open resize will repaint instead */ }
   return null
 }
-// force tmux to emit a full, coherent repaint of our client down the shared pty (in-band with the live
-// stream → no splice). All viewers of this bridge see it — an acceptable brief redraw, never a scramble.
-// @@@ fail-loud on re-bind - the repaint MUST land. On a fresh respawn (the re-bind path) the new tmux
-// client may not be registered with the server yet, so clientTty is briefly null; the old code's silent
-// `if (tty)` skip then left a re-bound idle pane frozen forever (no browser resize re-arms it, because the
-// socket never reopened). So retry until the client resolves, bounded (~0.5s), and bail if a newer attach/
-// resize supersedes us (token) so we never clobber a fresher size.
+// force a full coherent repaint of our client down the shared pty. On a fresh respawn the new client may
+// not be registered yet (clientTty briefly null), so retry until it resolves, bounded (~0.5s); a newer
+// token supersedes us so we never clobber a fresher size.
 async function repaint(b: Bridge, token: number): Promise<void> {
   for (let i = 0; i < 24; i++) {
     if (token !== b.repaintToken) return
@@ -174,13 +128,9 @@ async function paneSize(b: Bridge): Promise<{ cols: number; rows: number } | nul
   } catch { /* session momentarily ungettable; treat as not-yet-settled */ }
   return null
 }
-// @@@ the single clean frame - the heart of the fix. Every (re)attach and every resize routes here.
-// We bump a per-bridge token so a rapid burst (attach + the client's open-time resize) COALESCES to one
-// run: a brief settle window lets the final size win, then we POLL tmux's real pane geometry until it
-// equals the size we asked the pty for (xterm rows == tmux pane rows), and ONLY THEN fire a SINGLE
-// refresh-client. Repainting before the shrink lands is exactly what doubled the status bar — the redraw
-// drew 40 rows while the screen was settling to 33. A later token supersedes us at every checkpoint, so
-// no stale repaint ever races a newer size. Bounded (~0.5s) so a wedged tmux can't hang the attach.
+// every (re)attach and resize routes here. A per-bridge token coalesces a burst (attach + open-time
+// resize) to one run: settle, poll tmux's real pane geometry until it equals the size we asked for, then
+// fire a single refresh-client. A newer token supersedes us at every checkpoint. Bounded (~0.5s).
 async function settleAndRepaint(b: Bridge): Promise<void> {
   const token = ++b.repaintToken
   await sleep(30)                                   // coalesce an attach+resize burst to the final size
@@ -198,9 +148,8 @@ export function detachViewer(id: string, v: Viewer): void {
   if (!s) return
   s.delete(v)
   if (s.size > 0) return
-  // last viewer gone → drop the registry entry, then release the tmux client unless it's kept warm (the
-  // session itself stays alive, detached). Subscriber-set emptiness is now the single authority for "no one
-  // watching" — used here AND in the supervisor reap, so the two never disagree.
+  // last viewer gone → drop the registry entry, then release the client unless it's kept warm. An empty
+  // subscriber set is the single authority for "no one watching" (used here and in the supervisor reap).
   subscribers.delete(id)
   const b = bridges.get(id)
   if (b && !b.prewarmed) killBridge(id)
@@ -209,21 +158,16 @@ export function detachViewer(id: string, v: Viewer): void {
 export function writeViewer(id: string, data: Buffer): void {
   bridges.get(id)?.pty.write(data.toString('utf8'))
 }
-// a viewer fitted xterm to its panel → resize the shared client so tmux re-renders at that exact size,
-// then fire the single settled repaint. We RECORD the size as the last-known viewer fit even if there's
-// no bridge yet, so a future pre-warm spawns at it. When the size is unchanged (a reconnect re-sends its
-// current size) we still settle+repaint, because the client just reset its xterm and needs the frame.
+// a viewer fitted xterm → record the size as the last-known fit (even with no bridge yet, for pre-warm)
+// and resize the shared client. Repaints even on an unchanged size (a reconnect needs the frame).
 export function resizeBridge(id: string, cols: number, rows: number): void {
   if (!(cols > 0 && rows > 0)) return
   lastFit.set(id, { cols, rows }); lastFitAny = { cols, rows }
   const b = bridges.get(id)
   if (b) applySize(b, cols, rows)
 }
-// resize the tmux client + repaint, WITHOUT recording the size as a viewer fit. This is the primitive both
-// a real viewer resize and the supervisor's pre-sizing use; only resizeBridge updates lastFit/lastFitAny,
-// so the supervisor applying a per-session size can never clobber the global last-fit with a stale value.
-// Always settles+repaints (a viewer reconnect re-sends its current size and still needs the frame after its
-// xterm reset); the supervisor avoids the per-tick repaint by only calling this when the size truly differs.
+// resize the client + repaint WITHOUT recording a viewer fit — the primitive both a real resize and the
+// supervisor's pre-sizing share, so the supervisor can't clobber lastFit/lastFitAny with a stale value.
 function applySize(b: Bridge, cols: number, rows: number): void {
   if (cols !== b.cols || rows !== b.rows) {
     b.cols = cols; b.rows = rows
@@ -232,22 +176,16 @@ function applySize(b: Bridge, cols: number, rows: number): void {
   void settleAndRepaint(b)
 }
 
-// @@@ supervisor - the cache AND the re-bind owner. One reconciliation pass: ensure a warm bridge per live
-// session, RE-BIND (respawn + repaint) any watched session whose pty just died, and reap bridges whose
-// session is gone and that no one is watching. Re-bind lives HERE, not in pty.onExit, because this pass is
-// alive-gated (a genuinely dead session reaps, never respawns) and rate-limited (the tick + the serialize
-// guard below), so a flaky session can't trigger a respawn storm. Started once at serve().
+// one reconcile pass: warm a bridge per live session, re-bind a watched session whose pty died, reap a
+// dead+unwatched bridge. Re-bind lives here (not pty.onExit) because this pass is alive-gated and
+// rate-limited, so a flaky session can't storm respawns.
 async function reconcileOnce(): Promise<void> {
   const live = new Set<string>()
   for (const s of await listSessions()) {
     if (!(await alive(s.id))) continue
     live.add(s.id)
-    // already ours → keep warm AND keep at the last-known viewer size. A bridge spawned before any viewer
-    // fit (e.g. right after a cold start) sits at the fixed default; once a viewer has fitted, prewarmSize
-    // is the real dashboard size, so we resize the stale warm bridge here — off-screen, while no one watches.
-    // That way a first open finds the pane ALREADY at its size: no on-attach resize, no visible reflow. The
-    // size-diff guard makes a converged bridge a no-op (no per-tick repaint); watched sessions match too,
-    // since prewarmSize returns their own recorded fit.
+    // already ours → keep warm and resize a stale warm bridge to the last-known viewer size off-screen,
+    // so a first open finds the pane already at its size. The size-diff guard makes a converged bridge a no-op.
     const existing = bridges.get(s.id)
     if (existing) {
       existing.prewarmed = true
@@ -255,12 +193,8 @@ async function reconcileOnce(): Promise<void> {
       if (want.cols !== existing.cols || want.rows !== existing.rows) applySize(existing, want.cols, want.rows)
       continue
     }
-    // no bridge for a live session: either viewers are already waiting (their bridge died → RE-BIND, which
-    // must fire settleAndRepaint so an idle pane doesn't sit frozen on the dead frame — nothing else re-arms
-    // it, since the socket never reopened), or it's an idle detached session to pre-warm. Pre-warm spawns at
-    // the last-known viewer size (prewarmSize), so a reattach finds the bridge already at the dashboard's
-    // pane size — no shrink, no shrink-vs-repaint race. A watched session attaches regardless of any human
-    // client (matching attachViewer), since refresh-client targets only our own client's tty.
+    // no bridge for a live session: viewers waiting → re-bind and settleAndRepaint (nothing else re-arms an
+    // idle pane); else pre-warm an idle detached session, but only if no human client is already attached.
     if ((subscribers.get(s.id)?.size ?? 0) > 0) {
       const b = ensureBridge(s.id, true)
       if (b) void settleAndRepaint(b)
@@ -275,8 +209,7 @@ async function reconcileOnce(): Promise<void> {
   }
 }
 
-// serialize reconcile passes: at most one runs at a time, at most one queued. A burst of onExit kicks
-// therefore collapses to a single rerun — the natural rate-limit that stops a flaky session from storming.
+// serialize reconcile passes (one running, one queued), so a burst of onExit kicks collapses to one rerun.
 let reconciling = false
 let reconcilePending = false
 async function runReconcile(): Promise<void> {
@@ -296,8 +229,7 @@ export function superviseBridges(intervalMs = 4000): void {
   tick()
 }
 
-// a watched bridge's pty just died — recover NOW instead of waiting up to a full tick. Safe by construction:
-// runReconcile is alive-gated (a dead session reaps, never respawns) and serialized (kicks collapse), so no storm.
+// a watched bridge's pty died — recover now instead of waiting a full tick (alive-gated + serialized).
 function kickSupervisor(): void {
   if (supervising) void runReconcile()
 }

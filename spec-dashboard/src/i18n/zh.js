@@ -1,6 +1,3 @@
-// @@@ zh dictionary - 简体中文. Mirrors en.js key-for-key; any key omitted here falls back to the
-// English value (see i18n/index.jsx), so a partial translation degrades gracefully rather than showing
-// a raw key. Same value shapes as en.js: strings with `{name}` placeholders, or `(params) => string`.
 export default {
   common: {
     new: '新建',
@@ -66,6 +63,7 @@ export default {
       search: '跨节点、会话、议题与场景搜索并跳转',
       overlayCycle: '在工作树正在修改的节点间循环（⇧ 反向）',
       enter: '进入聚焦节点的实时会话',
+      fresh: '在聚焦节点上开启一个全新会话',
       newChild: '在聚焦节点下新建子节点（连击）',
       del: '删除聚焦节点（连击）',
       settings: '打开设置（语言…）',
@@ -222,9 +220,8 @@ export default {
 
   sessionGraph: {
     helpTitle: '快捷键与图例（?）',
-    gestureHint: '左键选中一个节点，再右键另一个即可建立监视',
     asked: ({ a, b }) => `已请求 ${a} 监视 ${b}`,
-    picked: ({ a }) => `已选中 ${a} —— 右键另一个节点即可让它监视`,
+    picked: '右键点击另一个节点，让此节点监视它',
     needSource: '请先左键选中一个节点，再右键另一个建立监视',
     monitorPrompt: ({ label, id }) => `请监视会话 ${label}（${id}）：在后台运行 \`spex watch ${id}\` 并保持运行，让其状态变化反馈给我。`,
     legend: {
@@ -302,6 +299,10 @@ export default {
     close: '关闭（esc 或 ,）',
     secLanguage: '语言',
     languageHint: '选择仪表盘语言。默认根据浏览器检测；你的选择会被记住。',
+    secShortcuts: '快捷键',
+    bindPrompt: '按一个键…',
+    shortcutsHint: '点击某个键即可重绑定。导航键与连击键固定不可改。（手柄映射在浏览器之外，是一个独立的 extension。）',
+    reset: '恢复默认',
   },
 
   search: {

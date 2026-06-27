@@ -3,11 +3,11 @@ import { join, relative } from 'node:path'
 import { homedir } from 'node:os'
 import { repoRoot } from './git.js'
 
-// @@@ slash-commands - the data behind the new-session input's `/` dropdown, computed the SAME way the
-// chosen HARNESS computes its own `/` menu so the two stay in lockstep. This module is the slash surface of
-// the [[harness-adapter]]: one menu builder per harness (`claudeSlashCommands` / `codexSlashCommands`), wired
-// into the adapters in harness.ts. The ONLY job here: produce [{name, description, source}]. It is DECOUPLED
-// from any execution — the dashboard merely inserts the chosen `/<name> ` text.
+// the data behind the new-session input's `/` dropdown, computed the SAME way the chosen HARNESS computes
+// its own `/` menu so the two stay in lockstep. This module is the slash surface of the [[harness-adapter]]:
+// one menu builder per harness (`claudeSlashCommands` / `codexSlashCommands`), wired into the adapters in
+// harness.ts. The ONLY job here: produce [{name, description, source}]. It is DECOUPLED from any execution —
+// the dashboard merely inserts the chosen `/<name> ` text.
 //
 // The Claude list is the union of:
 //   · BUILT_IN   - the large fixed set CC ships (seeded below from a live capture, see the comment there)
@@ -18,10 +18,8 @@ import { repoRoot } from './git.js'
 
 export type SlashCommand = { name: string; description: string; source: 'built-in' | 'user' | 'project' | 'skill' }
 
-// @@@ BUILT_IN seed - captured LIVE from `claude --dangerously-skip-permissions` v2.1.x by typing `/`
-// and paging the dropdown (the built-in block, alphabetical /add-dir … /workflows). This is the one
-// part that is version-specific: to refresh for a new CC version, re-capture that block and replace this
-// array. Custom/user/project/skill commands are discovered from disk and need no maintenance.
+// captured live from `claude --dangerously-skip-permissions` v2.1.x by typing `/` and paging the dropdown;
+// version-specific — re-capture this block to refresh for a new CC version (the disk-discovered sources don't).
 const BUILT_IN: ReadonlyArray<readonly [string, string]> = [
   ['add-dir', 'Add a new working directory'],
   ['advisor', 'Let Claude consult a stronger model at key moments'],
@@ -94,9 +92,8 @@ const BUILT_IN: ReadonlyArray<readonly [string, string]> = [
   ['workflows', 'Browse running and completed workflows'],
 ]
 
-// @@@ description - same precedence CC uses for custom commands: a `description:` frontmatter line wins,
-// else the first non-empty body line (stripped of leading `#`). Frontmatter parsing is deliberately
-// tiny (one `key: value` line); we only need `description`.
+// describe precedence (mirrors CC): a `description:` frontmatter line wins, else the first non-empty body
+// line (leading `#` stripped). Frontmatter parsing is intentionally one `key: value` line.
 function describe(src: string): string {
   const m = src.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/)
   const fm = m ? m[1] : ''
@@ -141,9 +138,8 @@ function scanSkills(root: string, out: SlashCommand[]) {
   }
 }
 
-// @@@ ordering - mirror what CC shows: custom (user, then project) first, then the built-in block, then
-// skills; alphabetical within each group. A custom command shadows a built-in of the same name (custom
-// wins) — dedupe by name keeping the higher-priority source.
+// ordering mirrors CC: custom (user, then project), then built-in, then skills; alphabetical within each
+// group. A same-named custom command shadows a built-in — dedupe keeps the higher-priority source.
 const RANK: Record<SlashCommand['source'], number> = { user: 0, project: 1, 'built-in': 2, skill: 3 }
 
 // dedupe by name keeping the higher-priority source, then sort by source rank then name.

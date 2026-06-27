@@ -1,12 +1,7 @@
-// @@@ spex - the SpexCode CLI. `spex lint` checks the spec<->code graph; `spex serve` runs the API;
-// `spex session …` is the worktree/session state machine (the dashboard is a thin caller of these).
 export {} // make this a module so top-level await is allowed
 const cmd = process.argv[2]
 
-// @@@ fail-loud client errors - the read/control commands are backend clients (client.ts); when no backend
-// is reachable they throw BackendError. Convert that (matched by name, no import) into ONE clean line + a
-// non-zero exit, never a stack dump — so a down/wrong SPEXCODE_API_URL is obvious, never a silent miss.
-// Registered before any await so a top-level-await rejection lands here, not in Node's default reporter.
+// registered before any await so a top-level-await rejection lands here; BackendError matched by name to avoid importing it.
 process.on('unhandledRejection', (e: unknown) => {
   if (e instanceof Error && e.name === 'BackendError') console.error(`spex: ${e.message}`)
   else console.error(e)
@@ -20,7 +15,7 @@ function flag(name: string): string | undefined {
 }
 const has = (name: string) => process.argv.includes(`--${name}`)
 // bare positionals after argv index `from`, skipping flags and their values (selectors for ls/watch).
-const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--timeout', '--reason', '--out'])
+const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--timeout', '--reason', '--out', '--password', '--tls-cert', '--tls-key'])
 function positionals(from: number): string[] {
   const out: string[] = []
   for (let i = from; i < process.argv.length; i++) {
@@ -31,19 +26,6 @@ function positionals(from: number): string[] {
   return out
 }
 
-// @@@ watch edge - the watcher→targets session-graph edge, shared by BOTH `watch` (stream) and `wait`
-// (one-shot). Running EITHER reports the edge to the backend (register + TTL heartbeat) and clears it on
-// exit, so the edge exists for exactly as long as the subscription does — a supervisor blocking on
-// `spex wait <worker>` is VISIBLE on the graph for the whole wait, just like a stream watch, and it clears
-// the instant the wait resolves (supervision ended). Edge writes are BEST-EFFORT (fire-and-forget): the
-// edge is cosmetic and must NEVER fail the underlying watch/wait when the backend is unreachable — the poll
-// already needs the backend, and the TTL expires a stale edge if a killed process never deregisters. This
-// is the single place edge lifecycle lives, so `watch` and `wait` are just consumption policies over it.
-// @@@ watch handshake ([[comms-edge]]) - on a `spex watch` over a SPECIFIC target, tell that target who now
-// supervises it, ONCE, so the connection is live in the target's context the moment the watch starts (the
-// monitor edge alone tells the target nothing). Skips a global/@all watcher (never greet a whole fleet) and
-// any selector that doesn't resolve to exactly one live session. Greeted-once per watch process; the
-// greeting rides a plain send (NO sender id → it is the connection notice itself, not logged as agent talk).
 const greeted = new Set<string>()
 async function greetWatchTargets(watcher: string, selectors: string[]): Promise<void> {
   try {
@@ -83,12 +65,6 @@ async function withWatchEdge<T>(selectors: string[], intervalMs: number, body: (
   try { return await body() } finally { cleanup() }   // one-shot `wait` clears on return; stream `watch` clears on signal
 }
 
-// @@@ resolveSelectorOrExit - the ONE glue that turns a control verb's user SELECTOR (full id, id-prefix,
-// node, or branch — the same grammar `ls`/`watch` take) into the FULL id the backend matches exactly. It
-// resolves against the live board (client.ts's resolveClientSession → the shared resolveSession), and on
-// anything but a clean single hit prints a precise error and exits non-zero: `none` → no such session;
-// `ambiguous` → the candidate sessions. So review/merge/reopen/close/send/capture/prompt all accept selectors
-// with ZERO per-command matching — the matcher lives once in [[session-selectors]]; this is present-error glue.
 async function resolveSelectorOrExit(selector: string): Promise<string> {
   if (!selector) { console.error('spex: missing session selector (id | id-prefix | node | branch)'); process.exit(2) }
   const { resolveClientSession } = await import('./client.js')
@@ -100,8 +76,6 @@ async function resolveSelectorOrExit(selector: string): Promise<string> {
   process.exit(2)
 }
 
-// @@@ help - tidy one-screen command summary for humans AND agents (no args or `spex help`). Grouped
-// by purpose; flags shown inline so the surface is self-explanatory without reading the source.
 function printHelp(): void {
   console.log(`spex — SpexCode CLI (spec↔code graph + worktree session state machine)
 
@@ -113,6 +87,8 @@ Specs / graph
   lint                  check the spec↔code graph (integrity·living·coverage·drift); when committing, gates on heavy commit-local drift
   ack <node>… --reason  stamp Spec-OK on HEAD for one or more nodes (this change keeps their specs valid); --reason required, not stored
   serve                 run the API server (http://localhost:8787)
+    --public --password <pw>   expose it on a public IP behind a password + self-signed TLS (no domain
+                               needed). [--tls-cert F --tls-key F] for your own cert · [--http] to drop TLS
   board                 dump the dashboard board state as JSON
   forge <sub>           trace a forge's issues/PRs onto spec nodes (read-only): links | eval-pending [--host github] [--node <id>] [--json]
   yatsu <sub>           measure a node's scenarios and keep score: scan | eval [.|<node>] [--scenario N] (--pass|--fail|--note T) [--image P|--result P|-] | show [.|<node>] [--json] | clean [--keep-latest|--all]
@@ -133,12 +109,7 @@ Sessions
         review·merge·reopen·exit·close·send·capture·prompt); none (or @all) = every session.`)
 }
 
-// @@@ help guard - `--help`/`-h` after ANY subcommand prints the summary and EXITS, never running the
-// command. Without this the flag was an ignored no-op that fell THROUGH to the side effect: `spex watch
-// --help` started a watch that never exits and BLOCKED the caller forever; `spex session new --help`
-// CREATED a stray session. A help PROBE must never fire a streaming or mutating verb — the footguns the
-// supervisor prompt could only warn about, fixed at the mechanism instead. (`spex help`/`spex` with no
-// command keep their own paths below; this guards `cmd` + a trailing help flag.)
+// a trailing --help/-h prints the summary and exits BEFORE any verb runs, so a help probe never fires a streaming/mutating command.
 if (cmd && cmd !== 'help' && (has('help') || process.argv.includes('-h'))) {
   printHelp()
   process.exit(0)
@@ -151,17 +122,9 @@ if (cmd === 'serve') {
 } else if (cmd === undefined || cmd === 'help' || cmd === '--help' || cmd === '-h') {
   printHelp()
 } else if (cmd === 'guide') {
-  // @@@ guide - SpexCode's reference surface as a COMMAND, not buried docs. No topic → the human SETUP
-  // workflow (install once, then an agent drives); `spec` / `yatsu` → the agent-facing file-format manual.
-  // The narration lives in guide.ts (kept out of this shared hub), the help-text spirit of printHelp — not
-  // a planted `.spec` template. process.argv[3] is the optional topic.
   const { guideText } = await import('./guide.js')
   console.log(guideText(process.argv[3]))
 } else if (cmd === 'owner') {
-  // @@@ owner - which spec node(s) GOVERN a path: the file→spec map the per-edit annotate hook (spec-of-file)
-  // surfaces at the moment of an edit. Light (frontmatter only, no git walk). 0 owners → uncovered; a sanely
-  // owned file (1..maxOwners) → name the owners + the contract; OVER-owned (> maxOwners) → flag the file as
-  // doing too much and point at the split (see [[governed-related]]). Read-only.
   const { specOwners } = await import('./specs.js')
   const { loadConfig } = await import('./lint.js')
   const p = positionals(3)[0]
@@ -198,18 +161,7 @@ if (cmd === 'serve') {
   if (blocked.length) console.error(`\n✗ SpexCode: ${blocked.join(', ')} ${blocked.length === 1 ? 'is' : 'are'} ≥ ${threshold} commit(s) behind. Reconcile (above) or bypass with SPEXCODE_SKIP_LINT=1.`)
   process.exit(errors.length || blocked.length ? 1 : 0)
 } else if (cmd === 'ack') {
-  // stamp a `Spec-OK: <node>` trailer onto HEAD per node: "the change up to here keeps <node>'s spec valid
-  // — no spec edit needed", so git.ts's drift won't count the acknowledged commits against <node>. The ack
-  // is a CHECKPOINT covering ALL of a node's pending drift at or below HEAD (see driftFor), so it need NOT
-  // sit on the exact commit that moved a file — land your commit(s), stack freely, then `spex ack <node>…
-  // --reason "<why>"` ONCE at the tip. --amend adds the trailers to HEAD (in the same block as Session:);
-  // git de-dupes identical adjacent trailers, so re-acking is harmless. One amend carries all nodes — when a
-  // commit touches a SHARED file (styles.css, an i18n catalog) it acks every co-owner at once.
-  //
-  // @@@ forced reason - --reason is REQUIRED but deliberately NOT stored: git records only `Spec-OK:
-  // <node>`, never the prose. Its whole job is to make the agent ARTICULATE why each spec still holds
-  // before quieting its drift — a blind ack must cost a sentence of thought. The thinking is the gate; the
-  // text is discarded (a stored reason would just invite stale boilerplate). Empty/whitespace → rejected.
+  // --amend stamps the Spec-OK trailers in the same block as Session:; git de-dupes adjacent trailers, so re-acking is harmless.
   const { git } = await import('./git.js')
   const nodes = positionals(3)
   const reason = (flag('reason') ?? '').trim()
@@ -230,10 +182,6 @@ if (cmd === 'serve') {
   const { specInit } = await import('./init.js')
   await specInit(positionals(3)[0])
 } else if (cmd === 'review' && positionals(3)[0] === 'proof') {
-  // @@@ review proof - render a session's PROOF OF WORK ([[review-proof]]): a self-contained HTML document
-  // the backend builds FULLY DERIVED (the merge-base diff + the measured yatsu loss with its evidence + the
-  // gates) — no agent input, generated on the fly. This is a thin backend CLIENT — it fetches the rendered
-  // bytes and writes or opens them, so it works against a REMOTE backend unchanged.
   const sel = positionals(3)[1]
   if (!sel) { console.error('usage: spex review proof <selector> [--open | --out <path> | --json]'); process.exit(2) }
   const id = await resolveSelectorOrExit(sel)
@@ -254,10 +202,6 @@ if (cmd === 'serve') {
   } else console.log(out)
   process.exit(0)
 } else if (cmd === 'review') {
-  // @@@ review - the manager cockpit's first verb: print ONE review payload for a session (ahead, the
-  // merge-base diff = its REAL changes, the merge/typecheck/lint gates, and its standing proposal) so a
-  // manager can decide whether to merge without hand-running git. `--json` for the raw payload. This is
-  // the human-facing INSPECT verb; `spex session review` is the distinct agent action "propose merge".
   const { clientReview } = await import('./client.js')
   const sel = positionals(3)[0]
   if (!sel) { console.error('usage: spex review <session-selector>  (id | id-prefix | node | branch)'); process.exit(2) }
@@ -279,10 +223,6 @@ if (cmd === 'serve') {
     for (const f of r.diff) console.log(`    ${f.status.padEnd(12)} +${f.additions} -${f.deletions}  ${f.path}`)
   }
 } else if (cmd === 'merge') {
-  // @@@ merge - the cockpit's ACT verb (review's sequel), a DISPATCH not a server merge: it reopens the
-  // session and hands the session's OWN agent the merge prompt — the agent runs the --no-ff merge, resolves
-  // conflicts, verifies main advanced, and proposes close. The server never touches main. Fail-loud: an
-  // unreachable agent prints the reason and exits non-zero.
   const { clientMerge } = await import('./client.js')
   const sel = positionals(3)[0]
   if (!sel) { console.error('usage: spex merge <selector>  (id | id-prefix | node | branch)'); process.exit(2) }
@@ -292,15 +232,11 @@ if (cmd === 'serve') {
   else console.error(`merge dispatch failed: ${r.reason}`)
   process.exit(r.dispatched ? 0 : 1)
 } else if (cmd === 'forge') {
-  // @@@ forge - the spec-forge link tracer on this CLI: read a forge's open issues/PRs and resolve each to
-  // the spec node it serves (read-only — a node's status stays git-derived). Logic lives in spec-forge;
-  // this is just routing. `spex forge links [--host github] [--node <id>] [--json]`.
+  // thin route — all logic lives in spec-forge.
   const { runForge } = await import('../../spec-forge/src/cli.js')
   process.exit(await runForge(process.argv.slice(3)))
 } else if (cmd === 'yatsu') {
-  // @@@ yatsu - the eval/loss engine on this CLI (the same thin-route shape as `forge`): a lazy import of
-  // runYatsu, handed the arg slice after `yatsu`. All logic — yatsu.md scenarios, the readings sidecar,
-  // git-derived freshness, the blob cache — lives in spec-yatsu; this is just routing.
+  // thin route — all logic lives in spec-yatsu.
   const { runYatsu } = await import('../../spec-yatsu/src/cli.js')
   process.exit(await runYatsu(process.argv.slice(3)))
 } else if (cmd === 'hooks') {
@@ -317,17 +253,10 @@ if (cmd === 'serve') {
   const { buildBoard } = await import('./board.js')
   console.log(JSON.stringify(await buildBoard(), null, 2))
 } else if (cmd === 'search') {
-  // @@@ search - the lexical retrieval floor ([[spec-search]]): rank spec NODES by term overlap for a
-  // natural-language query and return { id, title, path, score, snippet }. `--json` prints that array
-  // verbatim (the surface spec-scout's `--deep` and the spec→code relay reuse); default is a pretty list.
-  // Thin router: all scoring lives in search.ts so every consumer shares one implementation.
   const { searchSpecs } = await import('./search.js')
   const query = positionals(3).join(' ')
   if (!query.trim()) { console.error('usage: spex search <query> [--json] [--limit N]'); process.exit(2) }
   const limit = Number(flag('limit')) || 10
-  // @@@ compute timing - emit the PURE search-compute time (search.ts only — excludes this process's startup
-  // and the lazy import above) to stderr on every call, so --json's stdout stays the clean contract array
-  // while we can still track the cost. Tracked baseline lives in [[spec-search]]'s yatsu; alarm near ~1s.
   const results = await searchSpecs(query, { limit, onStats: (s) => console.error(`[spec-search] compute ${s.ms.toFixed(1)}ms · ${s.nodes} nodes · ${s.tokens} tokens (excludes process start)`) })
   if (has('json')) { console.log(JSON.stringify(results)); process.exit(0) }
   if (!results.length) { console.log(`no spec node matches "${query}"`); process.exit(0) }
@@ -338,8 +267,6 @@ if (cmd === 'serve') {
   })
   process.exit(0)
 } else if (cmd === 'relay') {
-  // @@@ relay - spec→code: the floor's top hits, each with its governed `code:` files, so an agent jumps
-  // topic→spec→code in one call ([[relay]]). Reuses search.ts's ranking; --json for machine use, else a list.
   const { relaySearch } = await import('./relay.js')
   const query = positionals(3).join(' ')
   if (!query.trim()) { console.error('usage: spex relay <query> [--json] [--limit N]'); process.exit(2) }
@@ -362,11 +289,6 @@ if (cmd === 'serve') {
   const picked = selectSessions(await clientListSessions(), positionals(3), flag('status')?.split(','))
   console.log(has('json') ? JSON.stringify(picked, null, 2) : formatTable(picked))
 } else if (cmd === 'watch') {
-  // @@@ watch = the STREAMING subscription (a human's monitor). `spex watch [SEL...] [--status a,b]
-  // [--as NAME] [--idle] [--interval N]` streams one line per actionable transition, FOREVER — it never
-  // exits, so don't block a turn on it (that's what `spex wait` is for). withWatchEdge draws the
-  // watcher→targets graph edge for as long as it runs (empty/@all selectors = a global watcher → every
-  // session). watch and wait are two consumption policies over the SAME poll loop + edge lifecycle.
   const { watchSessions } = await import('./sessions.js')
   const { clientListSessions } = await import('./client.js')
   const selectors = positionals(3)
@@ -380,14 +302,6 @@ if (cmd === 'serve') {
     intervalMs,
   }), true)   // greet=true: a stream watch greets its specific targets once; `wait` (one-shot) does not
 } else if (cmd === 'wait') {
-  // @@@ wait = the ONE-SHOT subscription (an agent's event loop). `spex wait <id> [--timeout S] [--interval
-  // S] [--idle]` polls the SAME board until <id> reaches an actionable status, prints that status, and
-  // EXITS — an agent backgrounds it and the harness re-invokes when the command exits, so the exit IS the
-  // wake-up. Like `watch`, it draws the watcher→<id> graph edge via withWatchEdge for as long as it blocks
-  // (so supervision is VISIBLE, not an invisible spin) and clears it the instant the wait resolves. The emit
-  // is a no-op — a backgrounded wait wants a single clean status line on exit, not the streamed transitions.
-  // GUARANTEED to terminate: the `--timeout` (default 1200s) deadline is checked every poll (see
-  // watchSessions), so a target stuck in any non-actionable state can never hang the caller.
   const { watchSessions } = await import('./sessions.js')
   const { clientListSessions } = await import('./client.js')
   const [id] = positionals(3)
@@ -421,15 +335,11 @@ if (cmd === 'serve') {
   const s = await import('./sessions.js')
   const c = await import('./client.js')
   const id = process.argv[4]
-  // @@@ --session - the agent-authored state writers resolve WHICH session by id: a `--session <id>` flag
-  // (the lifecycle hooks pass it, parsed from the payload, since they no longer have a cwd `.session`) wins,
-  // else the harness env var (ownSessionId — the agent's own `spex session …` carries CLAUDE_CODE_SESSION_ID).
+  // the agent-authored state writers resolve WHICH session by id: a `--session <id>` flag (the lifecycle
+  // hooks pass it, parsed from the payload, since they no longer have a cwd `.session`) wins, else the
+  // harness env var (ownSessionId — the agent's own `spex session …` carries the harness session id).
   const sess = flag('session')
-  // @@@ declaredNote - appended to a successful done/ask/block declaration. The agent often wants to
-  // self-verify the write, but the mark-active PreToolUse hook rewrites .session back to `active` BEFORE
-  // the next tool runs (by design — see [[state]] / mark-active.sh), so any re-read shows `active`, never
-  // the state just written. We STATE that fact rather than commanding "stop", so the agent can reason on
-  // its own that the dashboard — not a follow-up tool call — is where this declaration is seen.
+  // appended to a done/ask/block declaration: states (not commands) that the next tool call's mark-active hook re-flips .session to active, so a re-read won't show this.
   const DECLARED = ' — recorded; the human sees it in the dashboard. Your next tool call resets this worktree to active (the mark-active hook, by design), so re-reading .session won\'t reflect it.'
   if (sub === 'new') {
     // route through the backend (auth env + concurrency cap); in-process only if no backend is reachable.

@@ -25,7 +25,9 @@ node's at-a-glance signals, the same the tile speaks: derived **status**, **vers
 score** ([[yatsu-score-badge]]), and the **drift** count when a governed file outran the spec
 ([[source-of-truth]]) — so score and drift live in the popup now, not only on the tile. Below it the governed
 files, then the body as a living current-state document (the two
-labelled parts — raw source / expanded spec — when authored that way, else the flat body). The proof and
+labelled parts — raw source / expanded spec — when authored that way, else the flat body). Neither part is
+an agent-authored *current state* — what's-done is read from the derived status, never narrated, because
+agents hallucinate completion. The proof and
 evolution of that intent live in the **history** tab.
 An **issues** tab lists the forge work bound to this node — open and closed alike, with both counts on the
 tab face (the board's badge/card show only the open ones; see [[dashboard-issues]]); the data already rides

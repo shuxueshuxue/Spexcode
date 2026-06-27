@@ -1,29 +1,33 @@
 import Modal from './Modal.jsx'
 import { STATUS, GLYPH } from './SpecNode.jsx'
+import { ACT, keyCap } from './keymap.js'
+import { keysOf } from './bindings.js'
 import { useT } from './i18n/index.jsx'
 
 // @@@ Legend - the single home for the keymap + visual vocabulary, shown in the shared centered Modal
-// opened by the HUD's discreet `?` (key or click). It reads STATUS and GLYPH straight from SpecNode.jsx
-// (the node renderer), so the swatches can NEVER drift from what the board actually draws — change a
-// colour or glyph there and the legend follows. All COPY routes through t() (the keys/glyphs themselves
-// are language-neutral and stay literal). Modal owns the backdrop/header/close chrome; Esc / `?` / ×
-// close it (see App + Modal).
+// opened by the HUD's discreet `?` (key or click). The BOARD keymap is rendered straight from the keymap
+// registry (keymap.js, resolved through bindings.js), so the help can NEVER drift from what the handler
+// dispatches. Status dots / op glyphs read STATUS & GLYPH from SpecNode.jsx so the swatches match the
+// board. The node-info popup's own pane/scroll keys are a fixed structural set (POPUP_KEYS), listed but
+// not in the rebindable registry. All COPY routes through t(); keys/glyphs are language-neutral.
 
-// keymap key-glyphs are language-neutral; the description for each row is pulled from t() by key.
-const BOARD_KEYS = [
-  [['↑', 'k', '↓', 'j'], 'legend.board.move'],
-  [['←', 'h'], 'legend.board.parent'],
-  [['→', 'l'], 'legend.board.child'],
-  [['+', '−', '0'], 'legend.board.zoom'],
-  [['i'], 'legend.board.info'],
-  [['/'], 'legend.board.search'],
-  [['o', 'O'], 'legend.board.overlayCycle'],
-  [['⏎'], 'legend.board.enter'],
-  [['n', 'n'], 'legend.board.newChild'],
-  [['d', 'd'], 'legend.board.del'],
-  [[','], 'legend.board.settings'],
-  [['?'], 'legend.board.help'],
-]
+// alt keys not worth showing in the legend are dropped (the shift-less zoom variants, the capital of a
+// letter that's already shown). Glyphs come from keymap.js so the legend and the editor read the same.
+const KEY_SKIP = new Set(['=', '_', 'I'])
+
+// fold the registry into legend rows: consecutive actions sharing a description collapse into one row
+// (so up+down read as a single "move" line) while keeping every key.
+const BOARD_ROWS = (() => {
+  const rows = []
+  for (const a of ACT) {
+    const keys = keysOf(a.id).filter((k) => !KEY_SKIP.has(k)).map(keyCap)
+    const last = rows[rows.length - 1]
+    if (last && last.desc === a.desc) last.keys.push(...keys)
+    else rows.push({ desc: a.desc, keys })
+  }
+  return rows
+})()
+
 const POPUP_KEYS = [
   [['←', '→', 'h', 'l', '⇥', '1', '2'], 'legend.popup.switch'],
   [['j', 'k', '↑', '↓'], 'legend.popup.scroll'],
@@ -31,11 +35,23 @@ const POPUP_KEYS = [
   [['esc'], 'legend.popup.esc'],
 ]
 
-// status dot meanings — keyed off STATUS so the colour is always the live one; copy via t().
 const STATUS_ROWS = ['merged', 'active', 'drift', 'pending']
-
-// overlay op glyphs — keyed off GLYPH; each is a worktree's pending change to a node.
 const OP_ROWS = ['added', 'edited', 'deleted', 'moved']
+
+// the board keymap, rendered from the registry so it can't drift from what the handler dispatches.
+function BoardKeymap({ t }) {
+  return (
+    <section className="legend-sec">
+      <div className="legend-h">{t('legend.secBoard')}</div>
+      {BOARD_ROWS.map((r) => (
+        <div className="legend-row" key={r.desc}>
+          <span className="keymap-keys">{r.keys.map((k, i) => <kbd key={i}>{k}</kbd>)}</span>
+          <span className="legend-desc">{t(r.desc)}</span>
+        </div>
+      ))}
+    </section>
+  )
+}
 
 function KeymapSection({ title, rows, t }) {
   return (
@@ -55,7 +71,7 @@ export default function Legend({ onClose }) {
   const t = useT()
   return (
     <Modal title={t('legend.title')} closeLabel={t('legend.close')} onClose={onClose}>
-          <KeymapSection title={t('legend.secBoard')} rows={BOARD_KEYS} t={t} />
+          <BoardKeymap t={t} />
           <KeymapSection title={t('legend.secPopup')} rows={POPUP_KEYS} t={t} />
 
           <section className="legend-sec">

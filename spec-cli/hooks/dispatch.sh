@@ -23,15 +23,19 @@ harness=claude
 case "${1:-}" in claude|codex) harness="$1"; shift ;; esac
 event="${1:?usage: dispatch.sh <harness> <Event>}"
 export SPEXCODE_HARNESS="$harness"
-# the harness.sh path (the adapter's shell mirror) — sibling of this script; hook handlers source it.
+# the harness.sh path (the adapter's shell mirror) — sibling of this script; hook handlers source it, and we
+# source it here too for hp_runtime_dir (the per-project store dir).
 export SPEXCODE_HARNESS_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/harness.sh"
+. "$SPEXCODE_HARNESS_LIB"
 proj="${CLAUDE_PROJECT_DIR:-$PWD}"
-rt="$proj/.spexcode"
+# the manifest + content-hash + gate lock live in the GLOBAL per-project store (mirrors layout.runtimeRoot),
+# NOT the worktree — so the worktree carries zero SpexCode-rendered runtime. Empty if git can't resolve.
+rt="$(cd "$proj" 2>/dev/null && hp_runtime_dir)" || rt=""
 
 # --- (1) gate -------------------------------------------------------------------------------------------
 cfghash() { ( cd "$proj" 2>/dev/null && find .spec/*/.config .spec/*/config \( -name '*.md' -o -name '*.sh' \) -type f -print0 2>/dev/null | sort -z | xargs -0 cat 2>/dev/null | sha256sum | cut -d' ' -f1 ); }
 cur="$(cfghash)"
-if [ -n "$cur" ] && [ "$cur" != "$(cat "$rt/content-hash" 2>/dev/null || true)" ]; then
+if [ -n "$rt" ] && [ -n "$cur" ] && [ "$cur" != "$(cat "$rt/content-hash" 2>/dev/null || true)" ]; then
   mkdir -p "$rt" 2>/dev/null
   ( flock 9
     if [ "$cur" != "$(cat "$rt/content-hash" 2>/dev/null || true)" ]; then   # re-check: a sibling dispatch may have just rendered

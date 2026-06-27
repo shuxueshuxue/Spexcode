@@ -14,15 +14,22 @@ hp_field() { printf '%s' "$1" | sed -n "s/.*\"$2\"[[:space:]]*:[[:space:]]*\"\([
 # the session id from a payload (both harnesses use session_id).
 hp_session_id() { hp_field "$1" session_id; }
 
-# the per-session GLOBAL store dir for a session id (mirrors spec-cli/src/layout.ts): keyed by the project
-# (dirname of the ABSOLUTE git-common-dir, so the answer is identical from main or any worktree). Echoes the
-# dir; returns non-zero (echoing nothing) when git can't resolve, so a caller can `|| exit 0`.
-hp_store_dir() {
-  local gcd enc
+# the per-PROJECT GLOBAL runtime dir (mirrors spec-cli/src/layout.ts `runtimeRoot`): <store>/projects/<enc>,
+# keyed by the project (dirname of the ABSOLUTE git-common-dir, so the answer is identical from main or any
+# worktree). This is where the materialized hook manifest + content-hash + gate lock live — NOT the worktree.
+# Echoes the dir; returns non-zero (echoing nothing) when git can't resolve, so a caller can `|| exit 0`.
+hp_runtime_dir() {
+  local gcd
   gcd=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || gcd=$(realpath "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null)
   [ -n "$gcd" ] || return 1
-  enc=$(printf '%s' "$(dirname "$gcd")" | sed 's#[/.]#-#g')
-  printf '%s/projects/%s/sessions/%s' "${SPEXCODE_HOME:-$HOME/.spexcode}" "$enc" "$1"
+  printf '%s/projects/%s' "${SPEXCODE_HOME:-$HOME/.spexcode}" "$(printf '%s' "$(dirname "$gcd")" | sed 's#[/.]#-#g')"
+}
+
+# the per-session GLOBAL store dir for a session id — <runtime>/sessions/<id> (sibling of the per-project
+# runtime above). Echoes the dir; returns non-zero (echoing nothing) when git can't resolve.
+hp_store_dir() {
+  local rd; rd=$(hp_runtime_dir) || return 1
+  printf '%s/sessions/%s' "$rd" "$1"
 }
 
 # the tool a payload is about to run / just ran (harness-agnostic field name).

@@ -3,6 +3,7 @@ import { join, dirname } from 'node:path'
 import { homedir } from 'node:os'
 import { git, repoRoot, gitA, headSha, worktreeSpecSig, worktreeSpecDelta, type NodeOp } from './git.js'
 import { guardWorktree } from './resilience.js'
+import { HARNESSES } from './harness.js'
 
 // @@@ portable layout - the ONE seam where "where things live" is policy, not hardcode.
 // Mechanism (read .spec, git log) is fixed; this resolves: where is main, how to enumerate the
@@ -97,9 +98,20 @@ export function encodeProject(root: string): string {
 export function projectKey(): string {
   return encodeProject(dirname(gitCommonDir()))
 }
+// this project's per-PROJECT runtime tier — the materialized hook manifest + content-hash marker (and the
+// gate's lock) — living alongside sessions/ under the SAME global per-project dir, so NOTHING SpexCode renders
+// stays in the worktree (not even the manifest; the worktree holds only the harness-discovered CLAUDE.md/
+// AGENTS.md + shims, which must sit in-tree). proj-aware for `spex init <dir>` / materialize(proj); cwd-based
+// default for the hooks/board. The shell hooks mirror this as hp_runtime_dir.
+export function runtimeRoot(proj?: string): string {
+  const gcd = proj
+    ? git(['-C', proj, 'rev-parse', '--path-format=absolute', '--git-common-dir']).trim()
+    : gitCommonDir()
+  return join(spexcodeHome(), 'projects', encodeProject(dirname(gcd)))
+}
 // this project's per-session records dir, one session's dir, its structured record, and a sibling artifact —
 // all keyed by session_id under <home>/projects/<enc>/sessions/.
-export function sessionsRoot(): string { return join(spexcodeHome(), 'projects', projectKey(), 'sessions') }
+export function sessionsRoot(): string { return join(runtimeRoot(), 'sessions') }
 export function sessionStoreDir(id: string): string { return join(sessionsRoot(), id) }
 export function sessionRecordPath(id: string): string { return join(sessionStoreDir(id), 'session.json') }
 export function sessionArtifactPath(id: string, name: string): string { return join(sessionStoreDir(id), name) }
@@ -114,11 +126,15 @@ export type RawRecord = {
   sortkey: number | null; createdAt: number
 }
 // the agent's OWN harness session id from the environment — the only locator now that the record left the
-// worktree. Claude Code sets CLAUDE_CODE_SESSION_ID in every agent/hook subprocess; SPEXCODE_SESSION_ID is a
-// portable override (Codex self-launch, tests). No worktree fallback. (sessions.ts re-exports this as ownSessionId.)
+// worktree. Each adapter names the var its agents carry (Claude CLAUDE_CODE_SESSION_ID, Codex CODEX_THREAD_ID —
+// [[harness-adapter]]); we read whichever the running agent set, so this works under ANY harness without
+// branching here. SPEXCODE_SESSION_ID is a portable override (a test / unrecognised harness). No worktree
+// fallback — the record left the worktree, so a session knows its id only from the harness env.
+// (sessions.ts's `ownSessionId` delegates to this; spec-yatsu reads it to resolve the current node.)
 export function envSessionId(): string | null {
-  const e = process.env.CLAUDE_CODE_SESSION_ID || process.env.SPEXCODE_SESSION_ID
-  return e && e.trim() ? e.trim() : null
+  for (const h of HARNESSES) { const v = process.env[h.sessionEnvVar]; if (v && v.trim()) return v.trim() }
+  const o = process.env.SPEXCODE_SESSION_ID
+  return o && o.trim() ? o.trim() : null
 }
 export function readRawRecord(id: string): RawRecord | null {
   try {

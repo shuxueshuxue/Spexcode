@@ -8,8 +8,8 @@ import { createConnection } from 'node:net'
 import { fileURLToPath } from 'node:url'
 import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, type ReviewDiffFile } from './git.js'
 import { loadSystemConfig, loadSpecs, type ConfigPreset } from './specs.js'
-import { defaultHarness, HARNESSES } from './harness.js'
-import { mainBranch, gitCommonDir, readConfig, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, readRawRecord, type RawRecord } from './layout.js'
+import { defaultHarness } from './harness.js'
+import { mainBranch, gitCommonDir, readConfig, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, readRawRecord, envSessionId, type RawRecord } from './layout.js'
 
 // @@@ sessions - the WORKTREE is the durable unit; tmux is a disposable runtime handle. Each session
 // worktree carries an untracked `.session` file (the source of truth) that survives a kill / reboot /
@@ -621,17 +621,11 @@ export async function sessionGraph(): Promise<{ nodes: Session[]; edges: Edge[] 
 // deregister on exit (see cli.ts `watch`). All best-effort — if the backend is down the watch still
 // streams its events; the graph edge just won't appear until a heartbeat lands. Never throws.
 export const apiBase = () => process.env.SPEXCODE_API_URL || `http://127.0.0.1:${process.env.PORT || 8787}`
-// the agent's OWN session id: the HARNESS env var. Each adapter names the var its agents carry (Claude
-// CLAUDE_CODE_SESSION_ID, Codex CODEX_THREAD_ID — [[harness-adapter]]); we read whichever the running agent
-// set, so this works under any harness without branching. SPEXCODE_SESSION_ID is a portable override (a test
-// or an unrecognised harness). There is NO worktree fallback — the record left the worktree, so a session
-// knows its id only from the harness. Used by `spex watch` and the agent-typed `spex session …` declarations;
-// the hooks instead pass `--session <id>` parsed from the payload, so they never depend on this.
-export function ownSessionId(): string | null {
-  for (const h of HARNESSES) { const v = process.env[h.sessionEnvVar]; if (v && v.trim()) return v.trim() }
-  const o = process.env.SPEXCODE_SESSION_ID
-  return o && o.trim() ? o.trim() : null
-}
+// the agent's OWN session id from the HARNESS env var — the public name used across cli.ts/sessions.ts.
+// Single adapter-routed impl lives in layout.ts (`envSessionId`, iterating each adapter's sessionEnvVar);
+// re-exported here so callers keep one name. Used by `spex watch` + the agent-typed `spex session …`
+// declarations; the hooks instead pass `--session <id>` from the payload, so they never depend on this.
+export const ownSessionId = envSessionId
 
 // @@@ withSenderHint - bidirectional agent messaging. `spex session send` delivers a prompt to the
 // recipient; this stamps WHO sent it and HOW to reply as a one-line insert appended to the delivered
@@ -718,8 +712,8 @@ async function hideClaudeMd(id: string, path: string): Promise<void> {
 // idle) and for the SessionStart compile. This delivers exactly the legacy hook map today (manifest ==
 // legacy: UserPromptSubmit/PreToolUse→mark-active, PreToolUse→spec-first, PostToolUse→spec-of-file,
 // Stop→stop-gate, StopFailure→session-fail, Notification→idle) while making the set spec-governed + editable.
-// EVERY event → dispatch.sh: its content-hash GATE re-materializes the persistent .spexcode/hooks-manifest
-// (+ contract/shims/trust) on a .config change, then dispatches. No separate per-session compile — the
+// EVERY event → dispatch.sh: its content-hash GATE re-materializes the persistent hook manifest (in the global
+// per-project store) (+ contract/shims/trust) on a .config change, then dispatches. No separate per-session compile — the
 // manifest persists and is refreshed only when the editable .config moves. The shim JSON itself is the
 // HARNESS adapter's job (it binds the harness's events + bakes the harness id into the dispatch call), so the
 // dashboard-launch settings stay in lockstep with the self-launch shim materialize writes ([[harness-adapter]]).

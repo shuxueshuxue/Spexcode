@@ -17,13 +17,14 @@ the spec tree and delivered through one stable mechanism that works the same on 
 Three parts: the **handlers** are `surface: hook` nodes (each a co-located script declaring the `events`
 it binds, an `order`, and whether it may `block`) — the spec-governed content, discovered recursively
 under the config roots. A **compiler** flattens them into a flat manifest (`event · order · block · script`),
-written PERSISTENTLY to `.spexcode/hooks-manifest` — it is a pure function of the `.config` content, so it
-is regenerated NOT per session but only when that content actually moves. The **dispatcher** (`dispatch.sh`,
-the one shim entry per event) runs in two steps: a **gate** — a ~10ms pure-shell content hash of the config
-roots on every event; on a mismatch with `.spexcode/content-hash` it runs `spex materialize`
-([[harness-delivery]], the ~0.85s node render) under a re-checked lock, so node boots only on a real change
-and concurrent sessions never race the write — then it dispatches the event's handlers from the (now-fresh)
-persistent manifest. The hash is content-based, so it catches bash/sed/user/other-agent/git edits alike;
+written PERSISTENTLY to `<runtime>/hooks-manifest` — the per-project GLOBAL store dir (`layout.runtimeRoot`,
+mirrored in shell as `hp_runtime_dir`), NOT the worktree, so rendering leaves zero SpexCode runtime in the
+tree ([[runtime]]). It is a pure function of the `.config` content, so it is regenerated NOT per session but
+only when that content actually moves. The **dispatcher** (`dispatch.sh`, the one shim entry per event) runs
+in two steps: a **gate** — a ~10ms pure-shell content hash of the config roots on every event; on a mismatch
+with the stored `<runtime>/content-hash` it runs `spex materialize` ([[harness-delivery]], the ~0.85s node
+render) under a re-checked lock (also in `<runtime>`), so node boots only on a real change and concurrent
+sessions never race the write — then it dispatches the event's handlers from the (now-fresh) persistent manifest. The hash is content-based, so it catches bash/sed/user/other-agent/git edits alike;
 a tool-payload path would miss them.
 
 The dispatcher reproduces the native multi-hook contract — which on BOTH harnesses runs matching hooks in

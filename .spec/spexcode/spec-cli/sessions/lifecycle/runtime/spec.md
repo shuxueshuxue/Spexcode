@@ -45,9 +45,14 @@ a file in that dir:
 | `comms.ndjson` | recorded inter-agent talk ([[comms-edge]]) |
 
 `layout.ts` owns the seam — the one place that knows where the store sits: `spexcodeHome()` (the `SPEXCODE_HOME`
-override → `~/.spexcode`), `encodeProject()` / `projectKey()`, `sessionsRoot()` (the board's enumeration dir),
-`sessionStoreDir(id)`, `sessionRecordPath(id)`, `sessionArtifactPath(id, name)`, plus `readRawRecord` /
-`listSessionIds` for the board. `sessions.ts` writes through `storeDir(id)` (mkdir-and-return) and the full typed
+override → `~/.spexcode`), `encodeProject()` / `projectKey()`, `runtimeRoot()` (the per-PROJECT tier:
+`projects/<enc>`), `sessionsRoot()` (its `sessions/` child — the board's enumeration dir), `sessionStoreDir(id)`,
+`sessionRecordPath(id)`, `sessionArtifactPath(id, name)`, plus `readRawRecord` / `listSessionIds` for the board.
+The store has TWO tiers under one per-project dir: the per-session dirs above, AND the per-project runtime that
+[[hook-dispatch]] / [[harness-delivery]] render — the hook manifest, the gate's content-hash marker, the
+materialize lock — which now live in `runtimeRoot()` too, NOT the worktree. So the worktree holds ZERO
+SpexCode-rendered runtime; the only in-tree artifacts are the harness-discovered contract files (CLAUDE.md/
+AGENTS.md block) + shims, which MUST sit in-tree for the harness to find them. `sessions.ts` writes through `storeDir(id)` (mkdir-and-return) and the full typed
 `readRecord` / `writeRecord`; the shell hooks reimplement the SAME path scheme in bash (the one cross-language
 mirror — a change to the seam must update both, noted at the layout.ts helpers). Because no SpexCode file is in
 the worktree any more, the Stop-gate's dirty count needs no runtime filtering, and `session.json` is written

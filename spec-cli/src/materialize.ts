@@ -5,6 +5,7 @@ import { execFileSync } from 'node:child_process'
 import { loadSystemConfig } from './specs.js'
 import { compileManifest } from './hooks.js'
 import { HARNESSES, writeManagedBlock } from './harness.js'
+import { runtimeRoot } from './layout.js'
 
 // @@@ materialize - the "pay-per-change" node step (≈0.85s) the cheap shell gate invokes ONLY when the
 // .config content-hash moved. It renders the spec tree's surface nodes into the flat artifacts each
@@ -19,7 +20,9 @@ import { HARNESSES, writeManagedBlock } from './harness.js'
 const PKG = fileURLToPath(new URL('..', import.meta.url))                 // installed spec-cli root
 const DISPATCH = join(PKG, 'hooks', 'dispatch.sh')
 const SPEX = `${join(PKG, 'node_modules', '.bin', 'tsx')} ${join(PKG, 'src', 'cli.ts')}`
-const RUNTIME = '.spexcode'                                              // gitignored per-project runtime dir
+// the manifest + content-hash marker render into the GLOBAL per-project store (layout.runtimeRoot), NOT the
+// worktree — the worktree keeps zero SpexCode-rendered runtime; only the harness-discovered contract files +
+// shims (which the harness must find in-tree) are written under proj below.
 
 // the deterministic content fingerprint of the config roots — MUST match the shell gate (dispatch.sh).
 export function contentHash(proj: string): string {
@@ -33,9 +36,10 @@ export function contentHash(proj: string): string {
 
 // the whole pay-per-change render. proj defaults to cwd. Returns the new content-hash it stamped.
 export function materialize(proj = process.cwd()): string {
-  mkdirSync(join(proj, RUNTIME), { recursive: true })
+  const rt = runtimeRoot(proj)                                            // global per-project store, not the worktree
+  mkdirSync(rt, { recursive: true })
   // (1) hook manifest (persistent — the dispatcher reads it; regenerated only here, on change).
-  writeFileSync(join(proj, RUNTIME, 'hooks-manifest'), compileManifest())
+  writeFileSync(join(rt, 'hooks-manifest'), compileManifest())
   // (2) the contract = the surface:system bodies, in name order, written into EACH harness's contract file(s)
   //     + (3) each harness's thin shim → dispatch.sh + (4) its trust. All owned by the adapter.
   const contract = loadSystemConfig().map((c) => c.body.trim()).filter(Boolean).join('\n\n')
@@ -49,6 +53,6 @@ export function materialize(proj = process.cwd()): string {
   }
   // (5) stamp the content-hash marker LAST (so a crash mid-render leaves it stale → re-renders next gate).
   const h = contentHash(proj)
-  writeFileSync(join(proj, RUNTIME, 'content-hash'), h)
+  writeFileSync(join(rt, 'content-hash'), h)
   return h
 }

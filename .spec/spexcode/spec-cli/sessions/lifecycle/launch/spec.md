@@ -19,12 +19,13 @@ launching has a **single owner**: the running backend process, never whichever s
 
 ## expanded spec
 
-`newSession` adds the `node/<slug>` worktree (off the base branch), writes `.session/state` (+ best-effort
-the `.session/prompt` sidecar, and at launch the hooks/launch scripts — all under the worktree's `.session/`
-runtime dir, [[runtime]]), isolates `CLAUDE.md`, and **queues the worktree for launch** on a private `tmux
--L` socket (`spex new "<prompt>" [--node X]`). `claude` launches with `--session-id
-<uuid>` — the id equals the `.session/state` id and the commit attribution, so the conversation `--resume`s
-after death and a spec node links to it. Workers run through the **`reclaude` wrapper**
+`newSession` mints the session `<uuid>`, adds the `node/<slug>` worktree (off the base branch), then writes
+the session's `governed:true` record `session.json` (+ best-effort the `prompt` artifact, and at launch the
+hooks.json/launch.sh scripts) into the GLOBAL per-session store ([[runtime]]) — NOT the worktree, which stays
+pristine — isolates `CLAUDE.md` (moved into the store too), and **queues the worktree for launch** on a private
+`tmux -L` socket (`spex new "<prompt>" [--node X]`). `claude` launches with `--session-id <uuid>` — the SAME id
+the record is keyed by, the tmux window name, the rendezvous socket, and the commit attribution, so the
+conversation `--resume`s after death, the board maps it to its worktree, and a spec node links to it. Workers run through the **`reclaude` wrapper**
 (`SPEXCODE_CLAUDE_CMD`), which runs claude as a **child** rather than exec'ing it, so the pane's foreground
 command is the wrapper/shell — **not** a liveness signal ([[state]] reads the socket instead). The spawned
 command alone carries `CLAUDE_BG_BACKEND=daemon` and a `CLAUDE_BG_RENDEZVOUS_SOCK` path **derived from the
@@ -57,9 +58,9 @@ At most **N** agents run **autonomously progressing** at once — **N configured
 live AND `working` or `parked`** (self-resuming). Everything **waiting on the human frees its slot** — `idle`,
 `asking`, and the proposals (review/done/close-pending) — like offline/closed, since they burn no compute and
 must never block a launch. A launch beyond the cap lands as a durable **`queued`** worktree
-(fully prepared, claude not started, its prompt parked in a `.session-launch` sidecar). A **drainer** starts
+(fully prepared, claude not started, its prompt parked as the `launch` artifact in the global store). A **drainer** starts
 queued sessions oldest-first the instant a slot frees — on every slot-freeing server action and on a
 periodic tick (catching frees the server never sees: a hook subprocess, a crash). A restart re-drains
 survivors. `reopen` relaunches a dead session and **waits for its rendezvous socket** before returning, so
 a follow-on [[dispatch]] hits a live socket. `closeSession` is the only removal — human-only, deleting the
-worktree and **sweeping the rendezvous socket**, which lives in the tmpdir outside the worktree.
+worktree, **sweeping the rendezvous socket** (in the tmpdir), and removing the session's global record dir.

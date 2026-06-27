@@ -1,15 +1,14 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { randomUUID } from 'node:crypto'
-import { readFileSync, writeFileSync, appendFileSync, existsSync, renameSync, mkdirSync, rmSync, readdirSync, statSync } from 'node:fs'
+import { readFileSync, writeFileSync, appendFileSync, existsSync, renameSync, mkdirSync, rmSync, readdirSync } from 'node:fs'
 import { join, dirname, relative } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createConnection } from 'node:net'
 import { fileURLToPath } from 'node:url'
 import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, type ReviewDiffFile } from './git.js'
-import { guardWorktree } from './resilience.js'
 import { loadSystemConfig, loadSpecs, type ConfigPreset } from './specs.js'
-import { mainBranch, gitCommonDir, statePath, runtimePath, RUNTIME_DIR, readConfig } from './layout.js'
+import { mainBranch, gitCommonDir, readConfig, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, readRawRecord, type RawRecord } from './layout.js'
 
 // @@@ sessions - the WORKTREE is the durable unit; tmux is a disposable runtime handle. Each session
 // worktree carries an untracked `.session` file (the source of truth) that survives a kill / reboot /
@@ -174,18 +173,21 @@ export type Session = {
   sortKey: number | null   // manual drag-reorder override ([[session-reorder]]); null = sort by `created`
 }
 
+// ensure a session's GLOBAL store dir exists, returning its path. Idempotent (recursive mkdir) — every
+// writer that drops an artifact (record/prompt/launch/hooks.json/claude.md) calls this first so order never matters.
+function storeDir(id: string): string { const d = sessionStoreDir(id); mkdirSync(d, { recursive: true }); return d }
+
 // @@@ originating prompt - what the session was ASKED to do, captured at launch so a manager (human or
 // agent) can later answer "what was this session for?" WITHOUT transcript archaeology. Prompts are
-// multi-line, so they live in their own untracked SIDECAR file (`.session-prompt`) beside `.session`,
-// not as a line in the line-based `.session`. Everything here is BEST-EFFORT: a missing/old sidecar (a
+// multi-line, so they live as their own artifact (`prompt`) in the session's GLOBAL store dir (keyed by
+// session_id, [[state]]), never in the worktree. Everything here is BEST-EFFORT: a missing artifact (a
 // session launched before this existed) just means no prompt is shown — never an error, never blocks a launch.
-const PROMPT_FILE = '.session-prompt'   // legacy flat name; the live path is `.session/prompt` (runtime dir)
-function writePromptFile(dir: string, prompt: string): void {
-  try { writeFileSync(join(runtimeDir(dir), 'prompt'), prompt) } catch { /* best-effort; must never block the launch */ }
+function writePromptFile(id: string, prompt: string): void {
+  try { writeFileSync(join(storeDir(id), 'prompt'), prompt) } catch { /* best-effort; must never block the launch */ }
 }
-function readPromptFile(dir: string): string | null {
+function readPromptFile(id: string): string | null {
   try {
-    const p = runtimePath(dir, 'prompt', PROMPT_FILE)
+    const p = sessionArtifactPath(id, 'prompt')
     if (!existsSync(p)) return null
     const s = readFileSync(p, 'utf8')
     return s.trim() ? s : null
@@ -193,19 +195,17 @@ function readPromptFile(dir: string): string | null {
 }
 // @@@ deferred launch prompt - a QUEUED session is a fully-prepared worktree we have NOT launched claude
 // into yet. The exact prompt to launch it with — the directive-generated finish-the-op prompt, or the plain
-// human prompt — is parked in its own untracked sidecar (`.session-launch`) so the drainer can launch it
-// later (possibly after a backend restart) WITHOUT re-deriving anything. It is CONSUMED (removed) the moment
-// the session launches, so it exists only while a session is still waiting in the queue. Distinct from
-// `.session-prompt` (the human-facing originating ask, which differs from the launch prompt for directives).
-const LAUNCH_FILE = '.session-launch'   // legacy flat name; the live path is `.session/launch` (runtime dir)
-function writeLaunchFile(dir: string, prompt: string): void {
-  try { writeFileSync(join(runtimeDir(dir), 'launch'), prompt) } catch { /* best-effort; the drainer treats a missing file as nothing-to-launch */ }
+// human prompt — is parked as the `launch` artifact in the store dir so the drainer can launch it later
+// (possibly after a backend restart) WITHOUT re-deriving anything. CONSUMED (removed) the moment the session
+// launches, so it exists only while the session waits in the queue. Distinct from `prompt` (the originating ask).
+function writeLaunchFile(id: string, prompt: string): void {
+  try { writeFileSync(join(storeDir(id), 'launch'), prompt) } catch { /* best-effort; the drainer treats a missing file as nothing-to-launch */ }
 }
-function readLaunchFile(dir: string): string | null {
-  try { const p = runtimePath(dir, 'launch', LAUNCH_FILE); return existsSync(p) ? readFileSync(p, 'utf8') : null } catch { return null }
+function readLaunchFile(id: string): string | null {
+  try { const p = sessionArtifactPath(id, 'launch'); return existsSync(p) ? readFileSync(p, 'utf8') : null } catch { return null }
 }
-function removeLaunchFile(dir: string): void {
-  try { rmSync(runtimePath(dir, 'launch', LAUNCH_FILE), { force: true }) } catch { /* best-effort */ }
+function removeLaunchFile(id: string): void {
+  try { rmSync(sessionArtifactPath(id, 'launch'), { force: true }) } catch { /* best-effort */ }
 }
 
 // a one-line preview of the originating prompt for tables/events: first non-empty line, truncated.
@@ -249,46 +249,62 @@ function pkgRoot(): string {
   return fileURLToPath(new URL('..', import.meta.url))
 }
 
-// `name` is the user-chosen display override set by the rename gesture — distinct from the auto-derived
-// `title` (from the prompt), so a rename never has to fight or overwrite the launch-time derivation.
-type SessRec = { node: string | null; title: string | null; name: string | null; session: string | null; status: Lifecycle; proposal: Proposal | null; merges: number; note: string | null; sortKey: number | null }
-// ensure a worktree's `.session/` runtime dir exists, returning its path. Idempotent (recursive mkdir) —
-// every writer that drops a file under the runtime dir calls this first so launch order never matters.
-function runtimeDir(path: string): string { const d = join(path, RUNTIME_DIR); mkdirSync(d, { recursive: true }); return d }
-
-function readSessionFile(dir: string): SessRec {
-  const r: SessRec = { node: null, title: null, name: null, session: null, status: 'active', proposal: null, merges: 0, note: null, sortKey: null }
-  const p = statePath(dir)
-  if (!existsSync(p)) return r
-  for (const line of readFileSync(p, 'utf8').split('\n')) {
-    const i = line.indexOf(':'); if (i < 0) continue
-    const k = line.slice(0, i).trim(), v = line.slice(i + 1).trim()
-    if (k === 'node') r.node = v || null
-    else if (k === 'title') r.title = v || null
-    else if (k === 'name') r.name = v || null
-    else if (k === 'session') r.session = v || null
-    else if (k === 'status' && (v === 'active' || v === 'idle' || v === 'awaiting' || v === 'parked' || v === 'error' || v === 'asking' || v === 'queued')) r.status = v
-    else if (k === 'proposal' && v) r.proposal = v as Proposal
-    else if (k === 'merges') r.merges = Number(v) || 0
-    else if (k === 'note') r.note = v || null
-    // @@@ sortkey - the drag-reorder pseudo-time ([[session-reorder]]). A blank or non-numeric value falls
-    // back to null so the row reverts to `created` (Number('') is 0, not NaN, so reject the empty case first).
-    else if (k === 'sortkey') { const n = v === '' ? NaN : Number(v); r.sortKey = Number.isFinite(n) ? n : null }
-  }
-  return r
+// the in-memory session record — the typed view of session.json. `governed` (dashboard-launched=true vs
+// user-self-launched=false), `worktreePath`/`branch`/`createdAt` are the fields the board USED to read off
+// the worktree (its path/birthtime); now they live IN the record, since the record is the enumeration source.
+// `name` is the rename override (distinct from the prompt-derived `title`); `session` is the harness session_id
+// (the store key). The launcher mints the id (`claude --session-id <id>`) so it equals what every hook payload
+// and CLAUDE_CODE_SESSION_ID carry — one id across the record dir, tmux window, rendezvous socket, and commits.
+type SessRec = {
+  session: string; governed: boolean; worktreePath: string; branch: string | null
+  node: string | null; title: string | null; name: string | null
+  status: Lifecycle; proposal: Proposal | null; merges: number; note: string | null
+  sortKey: number | null; createdAt: number
 }
-function writeSessionFile(dir: string, rec: SessRec): void {
-  const lines = [`node: ${rec.node || ''}`]
-  if (rec.title) lines.push(`title: ${rec.title}`)
-  if (rec.name) lines.push(`name: ${rec.name}`)
-  lines.push(`session: ${rec.session || ''}`, `status: ${rec.status}`)
-  if (rec.status === 'awaiting' && rec.proposal) lines.push(`proposal: ${rec.proposal}`)
-  if (rec.merges) lines.push(`merges: ${rec.merges}`)
-  if (rec.note) lines.push(`note: ${rec.note}`)
-  if (rec.sortKey != null) lines.push(`sortkey: ${rec.sortKey}`)
-  const p = statePath(dir)   // `.session/state` for a new session; the flat `.session` file for a legacy one
-  mkdirSync(dirname(p), { recursive: true })   // creates `.session/`; no-op when p is the legacy flat file
-  writeFileSync(p, lines.join('\n') + '\n')
+const LIFECYCLES = new Set<Lifecycle>(['active', 'idle', 'awaiting', 'parked', 'error', 'asking', 'queued'])
+const PROPOSALS = new Set<Proposal>(['merge', 'nothing', 'close'])
+
+// typed read of a session's record from the global store (null if it has none — a self-launched session that
+// only ever wrote spec-discipline sentinels has a store dir but no session.json). Goes through layout's
+// readRawRecord (the seam that owns the path), then validates the loose on-disk fields into the typed shape.
+function readRecord(id: string): SessRec | null {
+  const raw = readRawRecord(id)
+  if (!raw) return null
+  return fromRaw(raw)
+}
+function fromRaw(raw: RawRecord): SessRec {
+  const status = LIFECYCLES.has(raw.status as Lifecycle) ? raw.status as Lifecycle : 'active'
+  const proposal = raw.proposal && PROPOSALS.has(raw.proposal as Proposal) ? raw.proposal as Proposal : null
+  const sk = raw.sortkey
+  const sortKey = typeof sk === 'number' && Number.isFinite(sk) ? sk : null
+  return {
+    session: raw.session_id, governed: !!raw.governed, worktreePath: raw.worktree_path || '', branch: raw.branch || null,
+    node: raw.node || null, title: raw.title || null, name: raw.name || null,
+    status, proposal, merges: Number(raw.merges) || 0, note: raw.note || null, sortKey, createdAt: Number(raw.createdAt) || 0,
+  }
+}
+// @@@ session.json format - written one-field-per-line (JSON.stringify(_, null, 2)) with EVERY key ALWAYS
+// present (nulls rendered as "" / the empty value, never an absent key). That stable shape is the contract the
+// pure-shell hot-path hook (mark-active) relies on: it value-replaces `"status"`/`"proposal"`/`"note"` with a
+// single sed and never needs jq on the user's box. So do NOT switch to conditional keys or a compact dump.
+function writeRecord(rec: SessRec): void {
+  const obj = {
+    session_id: rec.session,
+    governed: rec.governed,
+    worktree_path: rec.worktreePath,
+    branch: rec.branch ?? '',
+    node: rec.node ?? '',
+    title: rec.title ?? '',
+    name: rec.name ?? '',
+    status: rec.status,
+    proposal: rec.proposal ?? '',
+    merges: rec.merges,
+    note: rec.note ?? '',
+    sortkey: rec.sortKey ?? '',
+    createdAt: rec.createdAt,
+  }
+  mkdirSync(sessionStoreDir(rec.session), { recursive: true })
+  writeFileSync(sessionRecordPath(rec.session), JSON.stringify(obj, null, 2) + '\n')
 }
 
 // @@@ fail-loud enumeration - the worktree set is the board's EXISTENCE truth, so a failed enumeration must
@@ -403,30 +419,21 @@ function reconcile(rec: SessRec, live: Set<string>): DisplayStatus {
   return rec.status === 'idle' ? 'idle' : 'working'
 }
 
+// resolve a session id to its record + worktree. Now a DIRECT store read (the record carries worktree_path),
+// not a scan of every worktree reading its `.session` — O(1) and exact. null when the id has no governed-or-not
+// record. Shape kept ({path, branch, rec}) so the many callers (rename/propose/reopen/merge/close/…) are unchanged.
 async function findWorktree(id: string): Promise<{ path: string; branch: string | null; rec: SessRec } | null> {
-  for (const w of await listWorktrees()) {
-    const rec = readSessionFile(w.path)
-    if (rec.session === id) return { path: w.path, branch: w.branch, rec }
-  }
-  return null
+  const rec = readRecord(id)
+  if (!rec) return null
+  return { path: rec.worktreePath, branch: rec.branch, rec }
 }
 
-// @@@ createdAt - a session's birth instant = the WORKTREE DIRECTORY's birthtime. The dir is created once by
-// `git worktree add` and lives for the session's whole life, so its birthtime is the one stable anchor. The
-// `.session` file's birthtime is NOT usable: writers recreate that file (it's rewritten via replace, not an
-// in-place truncate), so its birthtime resets to "last major write" and the order would reshuffle — exactly
-// the instability we're avoiding. Falls back to dir mtime where a filesystem reports no birthtime, then 0.
-// Drives listSessions' ordering (oldest first, new sessions append).
-function createdAt(dir: string): number {
-  try { const s = statSync(dir); return s.birthtimeMs || s.mtimeMs || 0 } catch { return 0 }
-}
-
-function toSession(rec: SessRec, branch: string | null, path: string, status: DisplayStatus, lv: Liveness, activity: string | null = null): Session {
-  const prompt = readPromptFile(path)   // the originating ask, captured at launch (sidecar; null for old sessions)
+function toSession(rec: SessRec, status: DisplayStatus, lv: Liveness, activity: string | null = null): Session {
+  const prompt = readPromptFile(rec.session)   // the originating ask, captured at launch (store artifact; null for old sessions)
   // activity is the LIVE pane title; it only means anything while the worker is genuinely up — a
   // dead/booting session would show a stale or absent title, so it's suppressed unless liveness is online.
   const showActivity = lv === 'online'
-  return { id: rec.session!, node: rec.node, title: rec.title, name: rec.name, branch, path, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, prompt, promptPreview: prompt ? promptPreview(prompt) : null, created: createdAt(path), activity: showActivity ? activity : null, sortKey: rec.sortKey }
+  return { id: rec.session, node: rec.node, title: rec.title, name: rec.name, branch: rec.branch, path: rec.worktreePath, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, prompt, promptPreview: prompt ? promptPreview(prompt) : null, created: rec.createdAt, activity: showActivity ? activity : null, sortKey: rec.sortKey }
 }
 
 // @@@ renameSession - set (or clear) a session's human display NAME: the user-chosen override that wins
@@ -438,67 +445,72 @@ function toSession(rec: SessRec, branch: string | null, path: string, status: Di
 export async function renameSession(id: string, name: string): Promise<boolean> {
   const wt = await findWorktree(id)
   if (!wt) return false
-  writeSessionFile(wt.path, { ...wt.rec, name: name.trim() || null })
+  writeRecord({ ...wt.rec, name: name.trim() || null })
   return true
 }
 
 // @@@ setSessionSort - set (or clear) a session's drag-reorder pseudo-time ([[session-reorder]]), parallel
-// to renameSession: persisted to the worktree's `.session` record so the manual order survives restarts and
+// to renameSession: persisted to the session's global record so the manual order survives restarts and
 // shows on every surface (all sort by `sortKey ?? created`). A null key CLEARS it, dropping the row back to
 // its `created` slot. Works in any state since it edits the on-disk record. Unknown id → false (route 404s).
 export async function setSessionSort(id: string, key: number | null): Promise<boolean> {
   const wt = await findWorktree(id)
   if (!wt) return false
-  writeSessionFile(wt.path, { ...wt.rec, sortKey: key != null && Number.isFinite(key) ? key : null })
+  writeRecord({ ...wt.rec, sortKey: key != null && Number.isFinite(key) ? key : null })
   return true
 }
 
 // the session's full ORIGINATING prompt (what it was asked to do), or null if none was recorded.
 export async function sessionPrompt(id: string): Promise<string | null> {
-  const wt = await findWorktree(id)
-  return wt ? readPromptFile(wt.path) : null
+  return readRecord(id) ? readPromptFile(id) : null
 }
 
-// @@@ lastKnownSession - the last successfully-read Session row per worktree path. A worktree's EXISTENCE
-// is definitive (it is in `git worktree list`, its directory is on disk); a transient failure reading its
-// `.session` (an ENOENT race, or a sibling read failing under a concurrent merge) must NOT drop it from the
-// board — that absence is exactly what watchSessions used to mis-read as a `closed · removed`. So a degraded
-// read serves this last-known row instead of vanishing. Pruned each poll to only paths still present.
+// @@@ lastKnownSession - the last successfully-read Session row per session_id. The record's EXISTENCE in
+// the store is definitive; a transient failure reading it (an ENOENT race, or a sibling read failing under a
+// concurrent merge) must NOT drop the row from the board — that absence is exactly what watchSessions used to
+// mis-read as a `closed · removed`. So a degraded read serves this last-known row instead of vanishing. Pruned
+// each poll to only ids still present.
 const lastKnownSession = new Map<string, Session>()
 
-// @@@ listSessions - every worktree that IS a session (has a .session id), status reconciled. Offline
-// and awaiting ones still appear (their .session persists), so a session is never lost from view.
+// @@@ listSessions - the board's session list, enumerated from the GLOBAL per-session store (replacing the
+// old `git worktree list` scan). Every GOVERNED record this project owns becomes a row, status reconciled;
+// non-governed (user-self-launched) records are excluded — board state is a managed-session concern ([[state]]).
+// Offline and awaiting ones still appear (their record persists), so a session is never lost from view.
 export async function listSessions(): Promise<Session[]> {
-  // ONE worktree enumeration + ONE tmux liveness snapshot + ONE pane-title snapshot for the whole list (all
-  // independent), then every session reconciles by a pure set lookup + one existsSync — no per-session tmux
-  // spawn.
-  const [wts, live, titles] = await Promise.all([listWorktrees(), liveTmux(), paneTitles()])
-  // each row reads that worktree's .session + prompt sidecar. A worktree whose directory is GENUINELY gone
-  // (a worker self-merged and retired it) is omitted; one whose directory still exists but hit a transient
-  // read failure is served from its last-known row — never dropped. See resilience.guardWorktree.
-  const rows = await Promise.all(wts.map((w) => guardWorktree<Session | null>(w.path, () => {
-    const rec = readSessionFile(w.path)
-    if (!rec.session) { lastKnownSession.delete(w.path); return null }   // exists but isn't a session
-    const s = toSession(rec, w.branch, w.path, reconcile(rec, live), liveness(rec, live), titles.get(rec.session) ?? null)
-    lastKnownSession.set(w.path, s)
+  // ONE store enumeration + ONE tmux liveness snapshot + ONE pane-title snapshot for the whole list (all
+  // independent), then every session reconciles by a pure set lookup + one existsSync — no per-session tmux spawn.
+  const [ids, live, titles] = await Promise.all([
+    Promise.resolve(listSessionIds()), liveTmux(), paneTitles(),
+  ])
+  const rows = ids.map((id) => guardSession(id, () => {
+    const rec = readRecord(id)
+    if (!rec || !rec.governed) { lastKnownSession.delete(id); return null }   // no record, or a self-launched (non-board) one
+    const s = toSession(rec, reconcile(rec, live), liveness(rec, live), titles.get(id) ?? null)
+    lastKnownSession.set(id, s)
     return s
   }, () => {
-    // DEGRADED: the directory still exists but reading its .session failed transiently. NEVER drop a live
+    // DEGRADED: the record dir still exists but reading session.json failed transiently. NEVER drop a live
     // session — serve its last-known row. (No last-known means a first sighting raced a failure; nothing to
     // show yet, it reappears next poll — and since it was never in watchSessions' `prev`, no false closed.)
-    return lastKnownSession.get(w.path) ?? null
-  })))
-  // prune last-known entries for worktrees that no longer appear at all (genuinely removed), keeping it bounded.
-  const livePaths = new Set(wts.map((w) => w.path))
-  for (const p of [...lastKnownSession.keys()]) if (!livePaths.has(p)) lastKnownSession.delete(p)
-  // @@@ creation order - git lists worktrees alphabetically by path, and a path is a slug of the launch
-  // prompt, so the raw enumeration order is effectively random AND reshuffles every time a session joins or
-  // leaves. Order by birth instead (oldest first): each session keeps its slot for life and a new one simply
-  // appends — a stable spatial map across every surface (dashboard window, session tabs, `spex ls`). A manual
-  // drag ([[session-reorder]]) overrides one row's slot via a pseudo-time `sortKey`, so sort by `sortKey ??
-  // created`: an undragged row stays at its birth time, a dragged one lands among its new neighbours. id
-  // breaks ties so same-instant births (or sort-keys) stay deterministic.
+    return lastKnownSession.get(id) ?? null
+  }))
+  // prune last-known entries for ids that no longer appear at all (genuinely removed), keeping it bounded.
+  const liveIds = new Set(ids)
+  for (const k of [...lastKnownSession.keys()]) if (!liveIds.has(k)) lastKnownSession.delete(k)
+  // @@@ creation order - order by birth (oldest first): each session keeps its slot for life and a new one
+  // simply appends — a stable spatial map across every surface (dashboard window, session tabs, `spex ls`).
+  // `created` is the record's stored createdAt (set once at launch). A manual drag ([[session-reorder]])
+  // overrides one row's slot via a pseudo-time `sortKey`, so sort by `sortKey ?? created`; id breaks ties so
+  // same-instant births (or sort-keys) stay deterministic.
   return rows.filter((s): s is Session => s != null).sort((a, b) => (a.sortKey ?? a.created) - (b.sortKey ?? b.created) || a.id.localeCompare(b.id))
+}
+
+// a per-session read guard mirroring resilience.guardWorktree but keyed on the store record (not a worktree
+// path): run `primary`; if it throws AND the record dir still exists, the failure is transient → serve the
+// `degraded` fallback; if the dir is gone (a genuine close), return null (omit). No async git, so it's sync.
+function guardSession(id: string, primary: () => Session | null, degraded: () => Session | null): Session | null {
+  try { return primary() }
+  catch { return existsSync(sessionStoreDir(id)) ? degraded() : null }
 }
 
 // @@@ session graph = LIVE monitors, not a stored relationship. An edge A→B means "agent A is RIGHT NOW
@@ -516,32 +528,21 @@ export type Edge = { from: string; to: string; kind: 'monitor' | 'comms'; count?
 // THROUGH the backend (sendKeys); on a delivered message that carries a sender, the backend appends one
 // {peer, ts} line to the RECIPIENT's comms log — each message counted exactly once, on the side the backend
 // already resolved. Persisted (survives a backend restart, unlike the in-memory monitor registrations) and
-// untracked (dies with the worktree, matching a graph of LIVE sessions). No sender → not logged.
-// LAYOUT-AWARE, like [[portable-layout]]'s statePath: a new session writes `.session/comms.ndjson`; a
-// still-draining LEGACY session (`.session` is a flat FILE, so the dir can't be made) writes the flat
-// sibling `.session-comms.ndjson` — both gitignored. Without this a legacy session silently recorded
-// nothing. Best-effort: a recording failure must NEVER fail the delivered message.
-const COMMS_FILE = 'comms.ndjson'
-const LEGACY_COMMS = '.session-comms.ndjson'
-function commsLog(dir: string): { path: string; mkdir: boolean } {
-  const base = join(dir, RUNTIME_DIR)
-  try { if (statSync(base).isFile()) return { path: join(dir, LEGACY_COMMS), mkdir: false } } catch { /* missing or dir */ }
-  return { path: join(base, COMMS_FILE), mkdir: true }
-}
+// untracked, in the session's GLOBAL store dir (`comms.ndjson`, keyed by session_id) — it dies with the
+// session record, matching a graph of LIVE sessions. No sender → not logged. Best-effort: a recording failure
+// must NEVER fail the delivered message.
+function commsLog(id: string): string { return sessionArtifactPath(id, 'comms.ndjson') }
 async function recordComms(toId: string, fromId: string): Promise<void> {
   if (!fromId || fromId === toId) return
   try {
-    const wt = await findWorktree(toId)
-    if (!wt) return
-    const { path, mkdir } = commsLog(wt.path)
-    if (mkdir) mkdirSync(join(wt.path, RUNTIME_DIR), { recursive: true })
-    appendFileSync(path, JSON.stringify({ peer: fromId, ts: new Date().toISOString() }) + '\n')
+    if (!readRecord(toId)) return
+    appendFileSync(join(storeDir(toId), 'comms.ndjson'), JSON.stringify({ peer: fromId, ts: new Date().toISOString() }) + '\n')
   } catch { /* a recording failure must not fail the delivered send */ }
 }
 // the peers this session has exchanged messages with — one entry per message, newest appended last.
-function readComms(dir: string): string[] {
+function readComms(id: string): string[] {
   try {
-    const { path } = commsLog(dir)
+    const path = commsLog(id)
     if (!existsSync(path)) return []
     return readFileSync(path, 'utf8').split('\n').filter(Boolean)
       .map((l) => { try { return String(JSON.parse(l).peer || '') } catch { return '' } }).filter(Boolean)
@@ -598,7 +599,7 @@ export async function sessionGraph(): Promise<{ nodes: Session[]; edges: Edge[] 
   // edge to a non-live session is dropped, like the monitor edges.
   const commsCount = new Map<string, number>()
   for (const n of nodes) {
-    for (const peer of readComms(n.path)) {
+    for (const peer of readComms(n.id)) {
       if (peer === n.id || !live.has(peer)) continue
       const key = n.id < peer ? `${n.id}\t${peer}` : `${peer}\t${n.id}`
       commsCount.set(key, (commsCount.get(key) ?? 0) + 1)
@@ -616,12 +617,14 @@ export async function sessionGraph(): Promise<{ nodes: Session[]; edges: Edge[] 
 // deregister on exit (see cli.ts `watch`). All best-effort — if the backend is down the watch still
 // streams its events; the graph edge just won't appear until a heartbeat lands. Never throws.
 export const apiBase = () => process.env.SPEXCODE_API_URL || `http://127.0.0.1:${process.env.PORT || 8787}`
-// the agent's OWN session id: Claude Code's env var if set, else the worktree `.session` in the cwd (the
-// `spex watch` runs from the worker's worktree, whose .session id equals the worker claude's session id).
+// the agent's OWN session id: the harness env var. Claude Code sets CLAUDE_CODE_SESSION_ID in every agent
+// (and hook) subprocess; SPEXCODE_SESSION_ID is a portable override (e.g. a Codex self-launch, or a test).
+// There is NO worktree fallback any more — the record left the worktree, so a session knows its id only from
+// the harness. Used by `spex watch` (the worker's own env carries it) and the agent-typed `spex session …`
+// declarations; the hooks instead pass `--session <id>` parsed from the payload, so they never depend on this.
 export function ownSessionId(): string | null {
-  const env = process.env.CLAUDE_CODE_SESSION_ID
-  if (env && env.trim()) return env.trim()
-  return readSessionFile(process.cwd()).session
+  const env = process.env.CLAUDE_CODE_SESSION_ID || process.env.SPEXCODE_SESSION_ID
+  return env && env.trim() ? env.trim() : null
 }
 
 // @@@ withSenderHint - bidirectional agent messaging. `spex session send` delivers a prompt to the
@@ -677,20 +680,21 @@ function titleFromPrompt(prompt: string): string | null {
 
 // @@@ hideClaudeMd - CLAUDE.md isolation. A DISPATCHED agent should run with full SpexCode control over
 // its own behavior, not be shaped by the project CLAUDE.md the way the managing session is (auto-discovery
-// would inject it as system context). At launch we move the worktree's CLAUDE.md → `.session/claude.md`
-// (still on disk, fully readable — NOT deleted, NOT --bare, so auth/hooks/repo stay intact; the lowercase
-// name in a dot-dir is invisible to Claude Code's CLAUDE.md auto-discovery), and `update-index
-// --assume-unchanged CLAUDE.md` so the move is invisible to git and can NEVER be staged/committed/merged
-// back to main. Default ON; disable with SPEXCODE_HIDE_CLAUDE_MD=0. Best-effort: any failure must not block launch.
+// would inject it as system context). At launch we move the worktree's CLAUDE.md OUT of the worktree entirely
+// — into the session's global store (`claude.md`, keyed by session_id) — so it is still on disk and fully
+// readable (NOT deleted) yet invisible to Claude Code's CLAUDE.md auto-discovery AND gone from the worktree;
+// plus `update-index --assume-unchanged CLAUDE.md` so the move is invisible to git and can NEVER be staged/
+// committed/merged back to main. Default ON; disable with SPEXCODE_HIDE_CLAUDE_MD=0. Best-effort: any failure
+// must not block launch.
 const HIDE_CLAUDE_MD = process.env.SPEXCODE_HIDE_CLAUDE_MD !== '0' && process.env.SPEXCODE_HIDE_CLAUDE_MD !== 'false'
-async function hideClaudeMd(path: string): Promise<void> {
+async function hideClaudeMd(id: string, path: string): Promise<void> {
   if (!HIDE_CLAUDE_MD) return
   const src = join(path, 'CLAUDE.md')
   if (!existsSync(src)) return
   try {
     // pin the tracked path assume-unchanged FIRST, so the rename's deletion is never seen by git.
     await gitA(['-C', path, 'update-index', '--assume-unchanged', 'CLAUDE.md'])
-    renameSync(src, join(runtimeDir(path), 'claude.md'))
+    renameSync(src, join(storeDir(id), 'claude.md'))
   } catch { /* isolation is best-effort; a failure must not block the launch */ }
 }
 
@@ -702,7 +706,8 @@ async function hideClaudeMd(path: string): Promise<void> {
 // the manifest first; every other event runs `dispatch.sh <Event>`, which feeds each manifest handler the
 // hook stdin and propagates a block:true handler's exit-2. The dispatcher + sessionstart are MACHINERY (in
 // spec-cli/hooks), referenced at MAIN's path (a fresh worktree off main has no node_modules), run with
-// cwd = the worktree so `repoRoot()` resolves to THIS session's tree (its own `.config`, its own `.session`).
+// cwd = the worktree so `repoRoot()` resolves to THIS session's tree (its own `.config`); the handlers
+// locate the session's GLOBAL record from the payload session_id + this tree's project key ([[state]]).
 // `$SPEX` (MAIN's tsx+cli) is exported for the handlers that call the cli (stop-gate, spec-of-file, fail,
 // idle) and for the SessionStart compile. This delivers exactly the legacy hook map today (manifest ==
 // legacy: UserPromptSubmit/PreToolUse→mark-active, PreToolUse→spec-first, PostToolUse→spec-of-file,
@@ -727,30 +732,31 @@ function settingsJson(): string {
   }
   return JSON.stringify({ hooks }, null, 2)
 }
-// write the hooks file into the worktree and return the `--settings <file>` arg (no shell-quoting hazard).
-function writeSettings(path: string): string {
-  const file = join(runtimeDir(path), 'hooks.json')
+// write the hooks file into the session's global store and return the `--settings <file>` arg (the path is
+// absolute, so no shell-quoting hazard and it's outside the worktree — zero per-session pollution).
+function writeSettings(id: string): string {
+  const file = join(storeDir(id), 'hooks.json')
   writeFileSync(file, settingsJson())
   return `--settings ${file}`
 }
 // @@@ launchScript - the WHOLE launch invocation (rendezvous env prefix + claude + --append-system-prompt
-// + --settings + the human prompt) is written to an ephemeral `.spex-launch.sh` in the worktree and run via
-// `bash <file>`, NOT typed inline. Inline send-keys TRUNCATES past ~2KB (the launch-prompt-limit trap), and
-// the system-surface gather can make --append-system-prompt arbitrarily large; a file has no length limit
+// + --settings + the human prompt) is written to an ephemeral `launch.sh` in the session's GLOBAL store and
+// run via `bash <file>`, NOT typed inline. Inline send-keys TRUNCATES past ~2KB (the launch-prompt-limit trap),
+// and the system-surface gather can make --append-system-prompt arbitrarily large; a file has no length limit
 // and the only thing send-keys types is the short `bash <file>` line. It's the SAME command the inline path
 // ran (env prefix exports the rendezvous vars to the claude child), just relocated to a file. Liveness no
 // longer cares what the pane's foreground command is: claude runs as a child of bash (and, via the
 // `reclaude` wrapper, a grandchild), so the pane command is the wrapper/shell — reconcile reads claude's
-// rendezvous socket instead (present while claude is alive, gone once it exits). The file is a RUNTIME_FILE
-// (gitignored, ignored by the merge gate, removed with the worktree) so it never pollutes the spec/code work.
-function launchScript(id: string, path: string, tail: string): string {
-  const file = join(runtimeDir(path), 'launch.sh')
-  writeFileSync(file, `${rvEnv(id)} ${CLAUDE_CMD} ${appendSysArg()} ${writeSettings(path)} ${tail}\n`)
+// rendezvous socket instead (present while claude is alive, gone once it exits). The file lives OUTSIDE the
+// worktree (in the store, keyed by session_id), so it never pollutes the spec/code work.
+function launchScript(id: string, tail: string): string {
+  const file = join(storeDir(id), 'launch.sh')
+  writeFileSync(file, `${rvEnv(id)} ${CLAUDE_CMD} ${appendSysArg()} ${writeSettings(id)} ${tail}\n`)
   return file
 }
 async function launch(id: string, path: string, tail: string): Promise<void> {
   await tmux(['new-session', '-d', '-s', id, '-x', String(COLS), '-y', String(ROWS), '-c', path])
-  await tmux(['send-keys', '-t', id, '-l', '--', `bash ${launchScript(id, path, tail)}`])
+  await tmux(['send-keys', '-t', id, '-l', '--', `bash ${launchScript(id, tail)}`])
   await tmux(['send-keys', '-t', id, 'Enter'])
   launchedAt.set(id, Date.now())   // stamp the boot window so reconcile reads 'starting', not 'offline', until the socket is up
 }
@@ -879,7 +885,7 @@ let draining = false   // re-entrancy guard: only one drain pass runs at a time 
 async function startQueued(id: string): Promise<boolean> {
   const wt = await findWorktree(id)
   if (!wt) return false
-  const launchPrompt = readLaunchFile(wt.path)
+  const launchPrompt = readLaunchFile(id)
   if (launchPrompt == null) return false   // a queued session always has one; if it's gone, don't spin on it
   launching.add(id)   // hold the slot across the boot window BEFORE we launch, so a concurrent count can't race us
   try {
@@ -889,8 +895,8 @@ async function startQueued(id: string): Promise<boolean> {
     launching.delete(id)
     return false   // launch failed → stays `queued`, retried on the next drain tick
   }
-  writeSessionFile(wt.path, { ...wt.rec, status: 'active', proposal: null })
-  removeLaunchFile(wt.path)   // consumed
+  writeRecord({ ...wt.rec, status: 'active', proposal: null })
+  removeLaunchFile(id)   // consumed
   // release the boot-window hold once the socket is up (then isOccupying takes over) or after the bounded
   // wait — so a launch that never booted reads offline and the drainer reclaims the slot instead of pinning it.
   void waitForSocket(id).finally(() => launching.delete(id))
@@ -976,11 +982,17 @@ export async function newSession(node: string | null, prompt: string): Promise<S
   const path = join(mainRoot(), '.worktrees', slug)
   await gitA(['-C', mainRoot(), 'worktree', 'add', '-b', branch, path, mainBranch()])
   // prepared but NOT launched: enters the queue as `queued`. drainQueue() below launches it at once when a
-  // slot is free, else it waits — durable as a worktree, so it survives a backend restart and is still findable.
-  const rec: SessRec = { node: ref || null, title, name: null, session: id, status: 'queued', proposal: null, merges: 0, note: null, sortKey: null }
-  writeSessionFile(path, rec)
-  writePromptFile(path, prompt)   // capture the ORIGINATING prompt (the human/manager's ask) as sidecar metadata (best-effort)
-  await hideClaudeMd(path)   // isolate the dispatched agent from the project CLAUDE.md (before launch)
+  // slot is free, else it waits — durable as a global record (+ its worktree), so it survives a backend
+  // restart and is still findable. governed:true — this is a DASHBOARD/CLI-launched session, so it feeds the
+  // board and the lifecycle hooks act on it; worktreePath/branch/createdAt are stamped here (the record, not
+  // the worktree, is the board's enumeration source now).
+  const rec: SessRec = {
+    session: id, governed: true, worktreePath: path, branch,
+    node: ref || null, title, name: null, status: 'queued', proposal: null, merges: 0, note: null, sortKey: null, createdAt: Date.now(),
+  }
+  writeRecord(rec)
+  writePromptFile(id, prompt)   // capture the ORIGINATING prompt (the human/manager's ask) as store metadata (best-effort)
+  await hideClaudeMd(id, path)   // isolate the dispatched agent from the project CLAUDE.md (before launch)
   // perform the directive's spec-tree mutation in the worktree, then PARK the finish-the-op prompt for launch.
   // the mutation is uncommitted, so the board's overlay shows it instantly (added ghost / deleted mark) even
   // while the session only sits queued.
@@ -1000,12 +1012,12 @@ export async function newSession(node: string | null, prompt: string): Promise<S
     const spec = (await loadSpecs()).find((n) => n.id === ref)
     if (spec) launchPrompt = `${prompt}\n\nThe spec node \`${ref}\` is your ground truth — read its spec at ${join(path, spec.path)}.`
   }
-  writeLaunchFile(path, launchPrompt)   // park the exact launch prompt for the drainer (consumed at launch)
+  writeLaunchFile(id, launchPrompt)     // park the exact launch prompt for the drainer (consumed at launch)
   await drainQueue()                    // launch now if under the cap, else leave it queued for a free slot
-  const after = readSessionFile(path)   // 'active' if the drain launched it, else still 'queued'
+  const after = readRecord(id) ?? rec   // 'active' if the drain launched it, else still 'queued'
   // queued → no process yet (offline liveness); just-launched → its socket is still booting (starting).
   const queued = after.status === 'queued'
-  return toSession(after, branch, path, queued ? 'queued' : 'working', queued ? 'offline' : 'starting')
+  return toSession(after, queued ? 'queued' : 'working', queued ? 'offline' : 'starting')
 }
 
 // @@@ waitForSocket - after a relaunch, the resumed claude needs SEVERAL SECONDS to boot and recreate its
@@ -1041,7 +1053,7 @@ async function waitForSocket(id: string, timeoutMs = SOCKET_READY_TIMEOUT_MS): P
 export async function reopen(id: string): Promise<boolean> {
   const wt = await findWorktree(id)
   if (!wt) return false
-  writeSessionFile(wt.path, { ...wt.rec, status: 'active', proposal: null })
+  writeRecord({ ...wt.rec, status: 'active', proposal: null })
   if (!(await alive(id)) || !existsSync(rvSock(id))) {
     await tmuxOk(['kill-session', '-t', id])   // drop a dead/socketless pane if any (no-op when none)
     await launch(id, wt.path, `--resume ${id}`)
@@ -1054,65 +1066,61 @@ export async function reopen(id: string): Promise<boolean> {
 export async function propose(id: string, proposal: Proposal): Promise<boolean> {
   const wt = await findWorktree(id)
   if (!wt) return false
-  writeSessionFile(wt.path, { ...wt.rec, status: 'awaiting', proposal })
+  writeRecord({ ...wt.rec, status: 'awaiting', proposal })
   void drainQueue()   // a proposal frees this session's slot — start the next queued one if any
   return true
 }
-// @@@ agent-authored state - the agent (forced by gates at boundaries) writes its OWN state to
-// .session; it is the authority on what a stop MEANS (awaiting human vs parked on a background task).
-// External hooks only know SOMETHING changed, not the transition, so they force a write, never infer.
-export function markStateFromCwd(status: Lifecycle, opts: { proposal?: Proposal; note?: string } = {}): boolean {
-  const rec = readSessionFile(process.cwd())
-  if (!rec.session) return false
-  writeSessionFile(process.cwd(), {
+// @@@ agent-authored state - the agent (forced by gates at boundaries) writes its OWN state; it is the
+// authority on what a stop MEANS (awaiting human vs parked on a background task). External hooks only know
+// SOMETHING changed, not the transition, so they force a write, never infer. The session it writes is resolved
+// by id: `sessionId` (the hooks pass `--session <id>` from the payload) wins, else ownSessionId() (the env var
+// the agent's own `spex session …` carries). Unknown id / no record → false (the route/CLI reports it).
+export function markState(status: Lifecycle, opts: { proposal?: Proposal; note?: string; sessionId?: string } = {}): boolean {
+  const id = opts.sessionId || ownSessionId()
+  if (!id) return false
+  const rec = readRecord(id)
+  if (!rec) return false
+  writeRecord({
     ...rec, status,
     proposal: status === 'awaiting' ? (opts.proposal ?? 'nothing') : null,
     note: opts.note ?? null,
   })
   return true
 }
-export const markDoneFromCwd = (proposal: Proposal = 'nothing') => markStateFromCwd('awaiting', { proposal })
-export const markErrorFromCwd = () => markStateFromCwd('error')
-// @@@ markIdleFromCwd - the ONE INFERRED state, so (unlike the agent-authored writers above) it carries a
-// strict active-only guard: the Notification(idle_prompt) hook fires it when claude is waiting at its
-// prompt, and it may ONLY overwrite `active` → `idle`. A deliberate declaration (awaiting / asking /
-// parked / error) must survive — idle only fills the gap where the agent stopped WITHOUT declaring (e.g.
-// an API error killed the turn before the Stop gate). The mark-active hook flips idle → active on resume.
-export function markIdleFromCwd(): boolean {
-  const rec = readSessionFile(process.cwd())
-  if (!rec.session || rec.status !== 'active') return false  // active-only: never clobber a declaration
-  writeSessionFile(process.cwd(), { ...rec, status: 'idle' })
+export const markDone = (proposal: Proposal = 'nothing', sessionId?: string) => markState('awaiting', { proposal, sessionId })
+export const markError = (sessionId?: string) => markState('error', { sessionId })
+// @@@ markIdle - the ONE INFERRED state, so (unlike the agent-authored writers above) it carries a strict
+// active-only guard: the Notification(idle_prompt) hook fires it when claude is waiting at its prompt, and it
+// may ONLY overwrite `active` → `idle`. A deliberate declaration (awaiting / asking / parked / error) must
+// survive — idle only fills the gap where the agent stopped WITHOUT declaring (e.g. an API error killed the
+// turn before the Stop gate). The mark-active hook flips idle → active on resume. Same id resolution as markState.
+export function markIdle(sessionId?: string): boolean {
+  const id = sessionId || ownSessionId()
+  if (!id) return false
+  const rec = readRecord(id)
+  if (!rec || rec.status !== 'active') return false  // active-only: never clobber a declaration
+  writeRecord({ ...rec, status: 'idle' })
   return true
 }
 // @@@ asking has TWO writers, both deterministic (neither guarded active-only): (1) the mark-active
 // PreToolUse hook captures it the instant the agent invokes the AskUserQuestion tool (status=asking,
 // the question as the note) — a HARD signal that the agent is asking the human; (2) the agent declares it
-// itself via markStateFromCwd('asking', { note }) — `spex session ask`, e.g. at the Stop gate. Either
+// itself via markState('asking', { note }) — `spex session ask`, e.g. at the Stop gate. Either
 // way the mark-active path clears it back to active on the next tool / prompt, same as any non-active state.
 
 // @@@ mergeReadiness - the deterministic commit gate the Stop hook enforces before a session may declare
 // done / propose merge. The dogfood ritual lands every change as a COMMIT on the node branch first, so two
-// states block a declaration: (1) uncommitted working-tree changes, ignoring the runtime files SpexCode
-// itself writes into the worktree (the whole `.session/` dir — state/prompt/launch/hooks.json/launch.sh/
-// claude.md — never part of the spec/code work), or (2) 0 commits ahead of main (nothing committed to
-// merge; see isRuntimePath). Runs from
-// cwd = the session worktree; ALL git goes through git() so the hook's exported GIT_DIR/GIT_INDEX_FILE can't
-// misdirect repo discovery to the cwd (the same trap git.ts documents). `main` resolves via the shared refs,
-// so `main..HEAD` works from any linked worktree regardless of where main is checked out.
-// legacy flat runtime files (pre runtime-dir refactor) — still recognised so an in-flight worktree's
-// sidecars never count as real work; drop this set once no flat-layout session remains.
-const LEGACY_RUNTIME = new Set(['.session', '.session-prompt', '.session-launch', '.spex-hooks.json', '.spex-launch.sh', 'CLAUDE.spexhidden.md'])
-// is this `git status` path one of SpexCode's own runtime artifacts (the whole `.session/` dir, or a
-// legacy flat sidecar) rather than the agent's spec/code work? Belt-and-suspenders to .gitignore — an
-// adopted project's ignore list may differ, so the gate filters by path, not just by tracking state.
-function isRuntimePath(p: string): boolean {
-  return p === RUNTIME_DIR || p.startsWith(RUNTIME_DIR + '/') || LEGACY_RUNTIME.has(p)
-}
+// states block a declaration: (1) any uncommitted working-tree change, or (2) 0 commits ahead of main
+// (nothing committed to merge). Since the global-store refactor, SpexCode writes NO per-session files into
+// the worktree (the runtime lives in ~/.spexcode, and the isolated CLAUDE.md is `--assume-unchanged`), so the
+// worktree is pristine and EVERY dirty path is genuine spec/code work — no runtime-file filtering needed.
+// Runs from cwd = the session worktree; ALL git goes through git() so the hook's exported GIT_DIR/GIT_INDEX_FILE
+// can't misdirect repo discovery to the cwd (the same trap git.ts documents). `main` resolves via the shared
+// refs, so `main..HEAD` works from any linked worktree regardless of where main is checked out.
 export function mergeReadiness(): { ready: boolean; reason?: string } {
   let dirty: string[] = []
   try {
-    dirty = git(['status', '--porcelain', '--untracked-files=all']).split('\n').filter(Boolean)
-      .map(porcelainPath).filter((p) => !isRuntimePath(p))
+    dirty = git(['status', '--porcelain', '--untracked-files=all']).split('\n').filter(Boolean).map(porcelainPath)
   } catch { /* git status failed — fall through to the ahead check, still a real guard */ }
   if (dirty.length) {
     const shown = dirty.slice(0, 8).join(', ') + (dirty.length > 8 ? ', …' : '')
@@ -1186,8 +1194,9 @@ export async function reviewPayload(id: string): Promise<ReviewPayload | null> {
     typecheckPkg(),
     specLint(),
   ])
-  const dirtyNonRuntime = statusOut.split('\n').filter(Boolean)
-    .map(porcelainPath).filter((p) => !isRuntimePath(p)).length
+  // the worktree carries no SpexCode runtime files any more (the store lives in ~/.spexcode), so every dirty
+  // path is genuine work — this is just the total uncommitted count.
+  const dirtyNonRuntime = statusOut.split('\n').filter(Boolean).map(porcelainPath).length
   return {
     id, node: wt.rec.node, branch: wt.branch,
     ahead: Number(aheadOut.trim()) || 0,
@@ -1263,9 +1272,10 @@ export async function exitSession(id: string): Promise<boolean> {
   return !!wt
 }
 
-// @@@ closeSession - the REMOVAL (human-confirmed): exit's soft stop PLUS removing the worktree + branch — the
-// work is gone, not just stopped. Same stop primitive as exitSession (no duplicate kill path), then the git
-// worktree/branch teardown that exit deliberately skips.
+// @@@ closeSession - the REMOVAL (human-confirmed): exit's soft stop PLUS removing the worktree + branch AND
+// the session's whole global-store record dir — the work is gone, not just stopped. Same stop primitive as
+// exitSession (no duplicate kill path), then the git worktree/branch teardown that exit deliberately skips,
+// then the store sweep (exit KEEPS the record so the session stays on the board offline; close discards it).
 export async function closeSession(id: string): Promise<boolean> {
   const wt = await findWorktree(id)
   await stopAgentProcess(id)
@@ -1273,6 +1283,7 @@ export async function closeSession(id: string): Promise<boolean> {
     await gitA(['-C', mainRoot(), 'worktree', 'remove', '--force', wt.path])
     if (wt.branch) await gitA(['-C', mainRoot(), 'branch', '-D', wt.branch])
   }
+  try { rmSync(sessionStoreDir(id), { recursive: true, force: true }) } catch { /* best-effort sweep of the global record */ }
   void drainQueue()   // a close frees a slot — start the next queued session if any
   return !!wt
 }

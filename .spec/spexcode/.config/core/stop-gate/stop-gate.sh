@@ -9,16 +9,28 @@
 #         active, first stop  (stop_hook_active false) .. block ONCE — instruct the agent to declare
 #         active, the continuation (stop_hook_active true) auto-declare a safe default (awaiting/nothing if
 #                                          committed, else `asking` — needs the human) and allow. Guaranteed to end.
-# $SPEX is the PATH-independent CLI invocation (abs tsx + cli) injected by settingsArg, so the gate's
-# own auto-default AND the command it shows the agent both work even when `spex` is absent from PATH.
-# Runs with cwd = the session worktree; state is the deterministic, file-based session record.
-# @@@ runtime dir - state lives at `.session/state` (the runtime-dir layout); a legacy in-flight worktree
-# still has the flat `.session` FILE. Resolve to whichever exists so the gate spans the migration.
+# $SPEX is the PATH-independent CLI invocation (abs tsx + cli) injected by settingsArg, so the gate's own
+# auto-default AND the command it shows the agent both work even when `spex` is absent from PATH.
+# @@@ global store + governed gate - state lives in the per-session GLOBAL record session.json (keyed by the
+# harness session_id from the payload, grouped per-project — mirrors spec-cli/src/layout.ts). The gate acts
+# ONLY on a GOVERNED (dashboard-launched) session: a user-self-launched agent has no board to feed, so an
+# undeclared stop is none of our business — we exit 0 SILENTLY (the bug this fixes: the declare-demand
+# misfiring on a self-launched codex/claude). cwd = the session worktree (resolves the project key + the
+# commit-gate's git); state writes go through `$SPEX session … --session <id>` (TS owns the JSON).
 S="${SPEX:-spex}"
-if [ -d .session ]; then SF=.session/state; else SF=.session; fi
 input=$(cat 2>/dev/null || true)
-status=$(sed -n 's/^status:[[:space:]]*//p' "$SF" 2>/dev/null | head -1)
-proposal=$(sed -n 's/^proposal:[[:space:]]*//p' "$SF" 2>/dev/null | head -1)
+sid=$(printf '%s' "$input" | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
+[ -n "$sid" ] || exit 0
+gcd=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || gcd=$(realpath "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null)
+[ -n "$gcd" ] || exit 0
+enc=$(printf '%s' "$(dirname "$gcd")" | sed 's#[/.]#-#g')
+rec="${SPEXCODE_HOME:-$HOME/.spexcode}/projects/$enc/sessions/$sid/session.json"
+# non-governed (or no record) → silently let the stop through. THIS is the self-launch fix.
+grep -q '"governed"[[:space:]]*:[[:space:]]*true' "$rec" 2>/dev/null || exit 0
+
+jget() { sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" "$rec" 2>/dev/null | head -1; }
+status=$(jget status)
+proposal=$(jget proposal)
 
 # the value of the payload's structured `stop_hook_active` field (true on the hook-forced continuation),
 # read by field name rather than substring-sniffing the JSON blob. ([a-z]* captures true/false portably —
@@ -63,7 +75,7 @@ if [ "${status:-active}" = awaiting ] && { [ "$proposal" = merge ] || [ "$propos
     exit 0   # work is committed and ahead of main -> the proposal is honest, let it stop.
   fi
   if [ "$cont" = true ]; then
-    $S session ask --note "stopped with uncommitted work — commit your spec+code on the node branch, then re-declare done" >/dev/null 2>&1 || true
+    $S session ask --session "$sid" --note "stopped with uncommitted work — commit your spec+code on the node branch, then re-declare done" >/dev/null 2>&1 || true
     exit 0
   fi
   esc=$(printf '%s' "$gatemsg" | sed 's/[\\"]/\\&/g')
@@ -79,12 +91,12 @@ if [ "$cont" = true ]; then
   # gate airtight: default to awaiting/nothing only when the branch is actually committed+ahead; otherwise an
   # undeclared stop with uncommitted work becomes `asking` (needs the human), never a false awaiting/done.
   if $S session commit-gate >/dev/null 2>&1; then
-    $S session state awaiting --propose nothing --note "auto: stopped without declaring" >/dev/null 2>&1 || true
+    $S session state awaiting --session "$sid" --propose nothing --note "auto: stopped without declaring" >/dev/null 2>&1 || true
     # NOTE: no yatsu nudge on the auto-declare path. It only runs on the forced continuation (cont=true),
     # where a guarded advisory could never fire anyway, and an unguarded one was a second loop vector (a
     # mark-active tool call could re-enter this branch). The clean-done path above is the single nudge site.
   else
-    $S session ask --note "auto: stopped without declaring and with uncommitted work — commit your spec+code on the node branch, then declare" >/dev/null 2>&1 || true
+    $S session ask --session "$sid" --note "auto: stopped without declaring and with uncommitted work — commit your spec+code on the node branch, then declare" >/dev/null 2>&1 || true
   fi
   exit 0
 fi

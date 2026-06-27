@@ -308,6 +308,11 @@ if (cmd === 'serve') {
   // reads. Thin route, like forge/yatsu. `spex hooks compile [--out <file>]`. Logic in hooks.ts.
   const { runHooks } = await import('./hooks.js')
   process.exit(await runHooks(process.argv.slice(3)))
+} else if (cmd === 'materialize') {
+  // @@@ materialize - the pay-per-change render: surface nodes → manifest + AGENTS.md/CLAUDE.md block +
+  // shims + Codex trust, for cwd's project. The cheap shell gate (dispatch.sh) invokes it only on change.
+  const { materialize } = await import('./materialize.js')
+  console.log(`materialized — content-hash ${materialize()}`)
 } else if (cmd === 'board') {
   const { buildBoard } = await import('./board.js')
   console.log(JSON.stringify(await buildBoard(), null, 2))

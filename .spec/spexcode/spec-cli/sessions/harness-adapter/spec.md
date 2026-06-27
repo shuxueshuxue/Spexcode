@@ -49,3 +49,17 @@ shim writers already exist scattered in [[harness-delivery]]'s materialize; `CLA
 the Claude `/` menu in [[slash-commands]]. The adapter gathers them under one interface and adds the missing
 Codex implementations — chiefly the Codex `/` menu (replicated as Claude's was) and the apply_patch
 path-extractor. Sequenced AFTER the global-session-store refactor lands (both touch sessions.ts).
+
+## verified codex facts (live round-trip, real codex 0.142.3)
+
+The Codex impl of the adapter must encode these (measured against a real self-launched codex):
+- **payload fields**: `session_id`(uuid), `turn_id`, `transcript_path`, `cwd`, `hook_event_name` (CamelCase,
+  e.g. `PreToolUse`), `model`, `permission_mode`, `tool_name`, `tool_input`, `tool_use_id`, `prompt`. No `file_path`.
+- **`.codex/hooks.json` event keys are CamelCase** (codex fired all 5: SessionStart/UserPromptSubmit/PreToolUse/
+  PostToolUse/Stop) — the shim is correct as-is; snake_case is ONLY the trust-hash key format.
+- **codex tool model**: reads/edits go through `tool_name:"Bash"` + `tool_input.command` (e.g. `sed -n 1p f`),
+  NOT Claude's `Read/Edit/Write/NotebookEdit`. So the adapter's TOOL-TRIGGER mapping must translate codex's
+  Bash-command (and codex's ask path) into the code-access / AskUserQuestion triggers that [[spec-first]],
+  [[spec-of-file]], and mark-active's question-capture key on — until it does, those three are inert on codex.
+  This is the adapter's job, NOT a regression in the store/dispatch layer (those are proven under real codex:
+  zero-prompt launch, hooks fire from the global store, the governed gate / silent non-governed Stop all work).

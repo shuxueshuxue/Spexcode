@@ -230,7 +230,7 @@ export default {
   sessionGraph: {
     helpTitle: 'keymap & legend (?)',
     asked: ({ a, b }) => `asked ${a} to monitor ${b}`,
-    picked: ({ a }) => `picked ${a} — right-click another node to monitor it`,
+    picked: 'right-click another node for this one to monitor',
     needSource: 'left-click a node first, then right-click another to monitor it',
     monitorPrompt: ({ label, id }) => `Please monitor session ${label} (${id}): run \`spex watch ${id}\` in the background and keep it running so its transitions surface to me.`,
     legend: {

@@ -15,6 +15,7 @@ import { useIsMobile } from './useIsMobile.js'
 import { loadBoard, layout, X_GAP, Y_GAP, projectTitle } from './data.js'
 import { createMomentumScroll } from './scroll.js'
 import { cycleNext } from './cycle.js'
+import { firesKey } from './bindings.js'
 import { labelColor } from './color.js'
 import { sessionName } from './session.js'
 import { useT } from './i18n/index.jsx'
@@ -359,7 +360,7 @@ function Dashboard({ specs, sessions, reload }) {
         }
         return
       }
-      if (e.key === '?') { e.preventDefault(); setLegend(true); return }
+      if (firesKey('board.help', e.key)) { e.preventDefault(); setLegend(true); return }
       // settings modal — same modal contract as the help: while open it OWNS the keys (only `,`/Esc
       // close it), nav never leaks to the board behind. `,` opens it from the board (chosen because it
       // collides with no existing binding — t/?/nav keys/chords are all unaffected).
@@ -372,11 +373,11 @@ function Dashboard({ specs, sessions, reload }) {
       // un-greys the board and drops the lock banner (the keyboard mirror of clicking the banner's release).
       // With nothing locked it falls through to the board's other keys, so a bare-board Esc is a no-op.
       if (e.key === 'Escape' && highlightId) { e.preventDefault(); e.stopPropagation(); setHighlightId(null); return }
-      if (e.key === ',') { e.preventDefault(); setSettings(true); return }
+      if (firesKey('board.settings', e.key)) { e.preventDefault(); setSettings(true); return }
       // @@@ search key - `/` opens the jump-to-node search palette (the classic "slash to search"). It's
       // unbound elsewhere on the board and is the unshifted key (Shift+/ is `?`, the help modal — handled
       // above), so the two never collide. preventDefault stops the browser's own find-as-you-type / quick-find.
-      if (e.key === '/') { e.preventDefault(); e.stopPropagation(); setSearch(true); return }
+      if (firesKey('board.search', e.key)) { e.preventDefault(); e.stopPropagation(); setSearch(true); return }
       // @@@ chord buffer - a small vim-style key buffer for multi-key board commands. A leader letter
       // (n/d) opens a pending buffer; the matching next letter fires the chord (open the session board
       // with its @-directive pre-seeded — see CHORDS/startNew). A non-matching key (or a 700ms lull)
@@ -398,36 +399,37 @@ function Dashboard({ specs, sessions, reload }) {
         }
       }
       // hjkl mirror the arrows for graph nav (vim): k/j up/down the column, h/l to parent/child.
-      if (e.key === 'ArrowUp'    || e.key === 'k') return go(upTarget, e)
-      if (e.key === 'ArrowDown'  || e.key === 'j') return go(downTarget, e)
-      if (e.key === 'ArrowLeft'  || e.key === 'h') return go(parent, e)
-      if (e.key === 'ArrowRight' || e.key === 'l') return go(rightTarget, e)
+      // Keys resolved through the registry (firesKey) so they stay the single source the legend/controller share.
+      if (firesKey('nav.up', e.key))     return go(upTarget, e)
+      if (firesKey('nav.down', e.key))   return go(downTarget, e)
+      if (firesKey('nav.parent', e.key)) return go(parent, e)
+      if (firesKey('nav.child', e.key))  return go(rightTarget, e)
       // zoom & cycle are keyboard board ops too — they engage kbdMode so the mouse steps aside the same way.
-      if (e.key === '=' || e.key === '+') { e.preventDefault(); setKbdMode(true); centerOn(focus, clamp(getViewport().zoom * 1.2), 160) }
-      else if (e.key === '-' || e.key === '_') { e.preventDefault(); setKbdMode(true); centerOn(focus, clamp(getViewport().zoom / 1.2), 160) }
-      else if (e.key === '0') { e.preventDefault(); setKbdMode(true); centerOn(focus, 0.85, 200) }
-      else if (e.key === 'i' || e.key === 'I') { e.preventDefault(); setOverlay(true) }
+      if (firesKey('board.zoomIn', e.key)) { e.preventDefault(); setKbdMode(true); centerOn(focus, clamp(getViewport().zoom * 1.2), 160) }
+      else if (firesKey('board.zoomOut', e.key)) { e.preventDefault(); setKbdMode(true); centerOn(focus, clamp(getViewport().zoom / 1.2), 160) }
+      else if (firesKey('board.zoomReset', e.key)) { e.preventDefault(); setKbdMode(true); centerOn(focus, 0.85, 200) }
+      else if (firesKey('board.info', e.key)) { e.preventDefault(); setOverlay(true) }
       // @@@ overlay cycle - `o` walks focus through the changed nodes (`O` = ⇧, reverse), wrapping at the
       // ends. SCOPE follows the lock: with a session locked it walks just THAT session's changed nodes
       // (the top banner names the count); with nothing locked it walks every changed node on the board.
       // It's a jump like `/` search: focus lands on the node and the expand-on-focus follow effect drills
       // its spine open + pans the camera, so a change buried in a collapsed subtree is one keystroke away.
       // When focus isn't on a marked node, it enters the ring at the first (or last, reversed) one.
-      else if (e.key === 'o' || e.key === 'O') {
+      else if (firesKey('board.cycle', e.key) || firesKey('board.cycleRev', e.key)) {
         e.preventDefault()
         if (!cycleNodes.length) return
         setKbdMode(true)
-        const next = cycleNext(cycleNodes, focus.id, e.key === 'O' ? -1 : 1, (n) => n.id)
+        const next = cycleNext(cycleNodes, focus.id, firesKey('board.cycleRev', e.key) ? -1 : 1, (n) => n.id)
         if (next) setFocusId(next.id)
       }
       // Enter opens the session board at the remembered tab (boarding switch — see openBoard).
-      else if (e.key === 'Enter') { e.preventDefault(); openBoard() }
+      else if (firesKey('board.enter', e.key)) { e.preventDefault(); openBoard() }
       // @@@ @-key - the spec-oriented launch shortcut: jump straight to a FRESH New Session targeting the
       // focused node. It always lands on the New tab (never the remembered tab) with `@<focus> ` pre-seeded,
       // so starting a node-scoped session is one keystroke. Unlike Enter (which boards at the remembered tab
       // and resolves live editors), `@` is UNCONDITIONAL — it never jumps into an existing session. Reuses
       // startNew (the chord seed path); the seeded `@<id> ` reads as an accepted @-mention, caret after it.
-      else if (e.key === '@') { e.preventDefault(); startNew(`@${focus.id} `) }
+      else if (firesKey('board.fresh', e.key)) { e.preventDefault(); startNew(`@${focus.id} `) }
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)

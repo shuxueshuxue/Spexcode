@@ -98,6 +98,23 @@ export async function specInit(targetArg: string | undefined): Promise<void> {
     if (installed.length) console.log(`✓ installed git hooks (${installed.join(', ')}) → ${hooksDir}`)
   }
 
+  // 2c. RENDER the harness-discovered artifacts so a USER-self-launched claude/codex works with zero further
+  // steps: the .spexcode/hooks-manifest, the AGENTS.md/CLAUDE.md <spexcode> contract block (user content
+  // preserved), the .claude/.codex shims, and the Codex trust (global, scoped) so codex self-launch is
+  // prompt-free. Runs with cwd = the target so the loaders read the just-seeded .config. Idempotent — the
+  // dispatch.sh gate keeps it fresh thereafter on every .config edit.
+  const prevCwd = process.cwd()
+  try {
+    process.chdir(targetDir)
+    const { materialize } = await import('./materialize.js')
+    materialize(targetDir)
+    console.log('✓ materialized harness artifacts (.spexcode manifest, AGENTS.md/CLAUDE.md block, .claude/.codex shims, Codex trust)')
+  } catch (e) {
+    console.warn(`• materialize skipped (${(e as Error).message}) — run \`spex materialize\` once the packages are installed.`)
+  } finally {
+    process.chdir(prevCwd)
+  }
+
   // 3. next steps — what the human must do to bring the instance to life.
   console.log(`
 Next steps:

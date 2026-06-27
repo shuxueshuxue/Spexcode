@@ -87,7 +87,16 @@ function forceLayout(sessions, links) {
   const n = ids.length
   if (!n) return {}
   const idx = Object.fromEntries(ids.map((id, i) => [id, i]))
-  const K = 190                                  // ideal edge length: linked nodes settle ~this far apart
+  const K = 250                                  // ideal edge length: linked nodes settle ~this far apart.
+  //                                                Tuned for the node's real footprint (~140×84px): a linked
+  //                                                pair must leave a clear span between the avatars for the
+  //                                                edge line and its 💬 message count, not crowd border-to-border.
+  const MINSEP = 210                             // hard separation floor: the collision pass below keeps ANY
+  //                                                two nodes at least this far apart center-to-center, so even a
+  //                                                dense cluster (many links + gravity all pulling inward) can't
+  //                                                crush a pair tight enough to hide the edge and count behind the
+  //                                                nodes. The spring rests linked pairs at K (>floor); the floor
+  //                                                only catches the over-packed cases the spring alone would lose.
   const RCUT = K * 2.2                            // repulsion cutoff: beyond this two nodes stop shoving each
   //                                                other apart, so DISCONNECTED clusters don't fly to opposite
   //                                                corners (the classic Fruchterman-Reingold sprawl) — gravity
@@ -129,6 +138,24 @@ function forceLayout(sessions, links) {
       const d = Math.hypot(dx[i], dy[i]) || 0.01
       const step = Math.min(d, temp)
       px[i] += (dx[i] / d) * step; py[i] += (dy[i] / d) * step
+    }
+    // collision pass: after the forces move everyone, separate any pair the spring + gravity packed closer
+    // than MINSEP — split the overlap evenly so neither node is privileged. Run last each round so the
+    // settled frame always honours the floor; deterministic (sorted seed, fixed order), so the frame is stable.
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        let ex = px[i] - px[j], ey = py[i] - py[j]
+        let d = Math.hypot(ex, ey)
+        if (d >= MINSEP) continue
+        if (d < 1e-6) {                          // exactly coincident (a spring can overshoot two nodes onto
+          const a = (i * 2 + j) * 1.2399         //   the same point): the separation vector is zero, so pick a
+          ex = Math.cos(a); ey = Math.sin(a); d = 1   //   deterministic per-pair direction to break the tie
+        }
+        const push = (MINSEP - d) / 2
+        ex /= d; ey /= d
+        px[i] += ex * push; py[i] += ey * push
+        px[j] -= ex * push; py[j] -= ey * push
+      }
     }
   }
   const pos = {}

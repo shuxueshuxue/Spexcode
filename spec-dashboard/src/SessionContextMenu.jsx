@@ -1,19 +1,8 @@
-// @@@ SessionContextMenu - the right-click menu on a session row, with two gestures. "Rename" swaps the
-// menu for a centred prompt (the shared Modal) prefilled with the session's CURRENT name override;
-// submitting POSTs to /api/sessions/:id/rename — the backend persists it to the worktree's `.session` as the
-// `name` override that wins over the derived label — and a blank name CLEARS the override. "Close" POSTs
-// /api/sessions/:id/close (the human-only worktree removal) — the only REMOVAL gesture on a row (there is no
-// header close button; its "close" label misread as "close the panel"). The typed `/close` command is its twin
-// on a live session; this menu also reaches offline/queued rows that have no `❯` inbox. It sits behind a
-// **confirm prompt**, because a right-click is easy to mis-aim and the removal is destructive (the soft `/exit`
-// stop, which keeps the worktree, is a typed command only — not offered here). Either gesture calls onChanged so
-// the board reloads and every surface reflects it at once.
-// The menu is its own pop-over (not a board node), so the window stays a thin glance and this owns the gesture.
-
 import { useEffect, useRef, useState } from 'react'
 import Modal from './Modal.jsx'
 import { apiFetch, setSessionSort } from './data.js'
-import { sessionName } from './session.js'
+import { sessionName, sessionHeadline } from './session.js'
+import { useEscLayer } from './escStack.js'
 import { useT } from './i18n/index.jsx'
 
 export default function SessionContextMenu({ menu, onClose, onChanged }) {
@@ -24,15 +13,20 @@ export default function SessionContextMenu({ menu, onClose, onChanged }) {
   const [busy, setBusy] = useState(false)
   const inputRef = useRef(null)
 
-  // standard context-menu dismissal: any click outside, Escape, or a scroll closes the popped menu. The
-  // menu div stops its own clicks (below) so picking an item never trips this. Bound only while it's open.
+  // standard context-menu dismissal: any click outside closes the popped menu. The menu div stops its own
+  // clicks (below) so picking an item never trips this. Bound only while it's open.
   useEffect(() => {
     if (!menu) return
-    const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); onClose() } }
     window.addEventListener('click', onClose)
-    window.addEventListener('keydown', onKey, true)
-    return () => { window.removeEventListener('click', onClose); window.removeEventListener('keydown', onKey, true) }
+    return () => window.removeEventListener('click', onClose)
   }, [menu, onClose])
+
+  // Esc dismissal goes through the shared [[esc-layers]] stack so each surface this component floats above
+  // the board peels in its own turn: the menu, then (after a pick) its rename or close-confirm modal — a
+  // press closes the topmost one, never the session panel behind it (the old bespoke window listener raced it).
+  useEscLayer(!!menu, onClose)
+  useEscLayer(!!renaming, () => setRenaming(null))
+  useEscLayer(!!closing, () => setClosing(null))
 
   // select the prefilled name when the prompt opens, so a human can just type the replacement.
   useEffect(() => { if (renaming) requestAnimationFrame(() => inputRef.current?.select()) }, [renaming])
@@ -44,8 +38,6 @@ export default function SessionContextMenu({ menu, onClose, onChanged }) {
     onClose()
   }
 
-  // @@@ reset order ([[session-reorder]]) - clear this row's drag-reorder pseudo-time, dropping it back to its
-  // birth slot. Non-destructive, no confirm: one POST then reload. Only offered when the row has a `sortKey`.
   const resetOrder = async (e) => {
     e.stopPropagation()
     const id = menu.session.id
@@ -117,7 +109,7 @@ export default function SessionContextMenu({ menu, onClose, onChanged }) {
       )}
       {closing && (
         <Modal
-          title={t('sessionWindow.closeTitle', { name: sessionName(closing) })}
+          title={t('sessionWindow.closeTitle', { name: sessionHeadline(closing) })}
           closeLabel={t('common.close')}
           className="sess-rename-modal"
           onClose={() => setClosing(null)}

@@ -1,20 +1,3 @@
-// @@@ client - the CLI as a thin BACKEND CLIENT. The read/control session commands (ls, watch, wait,
-// capture, send, review, merge, reopen, close, prompt) do NOT touch tmux/git in the CLI's own process: they
-// call the running backend over HTTP. So there is exactly ONE actor on the tmux socket — the backend — and
-// pointing SPEXCODE_API_URL at a REMOTE backend monitors a remote machine's sessions with no code change.
-//
-// The split is deliberate and is the whole point of the refactor:
-//   - state PRODUCERS (`session done|ask|block|idle` + the lifecycle hooks) stay LOCAL — they write the cwd
-//     worktree's `.session`, which is HOW the backend learns state; routing them through a live backend would
-//     be fragile (an agent must be able to declare its own state even with no backend up — see the state node).
-//   - launch (`spex new`) keeps its own already-spec'd POST-then-in-process path: it needs the backend's auth
-//     env, and degrades loudly with a warning (see the launch node). It is out of this client's scope.
-//
-// ONE availability rule, stated once, for everything here: FAIL LOUD. Unlike sessions.ts's `postJSON` (a
-// best-effort telemetry POST that swallows a down backend), every call here treats an unreachable backend as
-// EXCEPTIONAL — it throws BackendError. It NEVER silently falls back to a local in-process path, because that
-// is exactly what would re-create the dual-actor-on-tmux hazard this refactor removes. HTTP error *statuses*
-// (404/409/502) are returned as data, not thrown, so a caller keeps "I failed to read" distinct from "empty".
 import { apiBase, resolveSession, type Session, type Resolved, type DispatchResult, type ReviewPayload } from './sessions.js'
 
 export class BackendError extends Error {
@@ -43,11 +26,7 @@ export async function clientListSessions(): Promise<Session[]> {
   return await r.json() as Session[]
 }
 
-// @@@ resolveClientSession - turn a user SELECTOR (full id, id-prefix, node, or branch — exactly the grammar
-// `ls`/`watch` accept) into ONE session by resolving it against the LIVE backend board. The control verbs hit
-// `/api/sessions/:id`, which matches the id EXACTLY, so each resolves here FIRST and then calls with the full
-// id — no verb re-implements selector matching. The list fetch is the ONE backend round-trip a selector costs
-// (fail-loud like every call here); the matching itself is the shared resolveSession (see [[session-selectors]]).
+// resolve a selector (full id, id-prefix, node, or branch) against the live board, then call with the full id.
 export async function resolveClientSession(selector: string): Promise<Resolved> {
   return resolveSession(selector, await clientListSessions())
 }

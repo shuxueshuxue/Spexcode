@@ -79,11 +79,17 @@ A** (over the same `/keys` channel the console uses) telling it to monitor B (`s
 subscription is written**. The gesture is **two clicks, not a drag**: you **left-click** a node to pick it as
 the **watcher** (it lights up as the selected source), then **right-click** another node — the watched.
 Direction lives in the order of the two clicks, so no handle and no drag is needed; left-clicking a different
-node re-picks the source, and a click on empty space clears it. Because the gesture has no visible handle to
-advertise it, the view **hints** it: a standing caption states the click-then-right-click rule, and picking a
-source raises a brief **toast** naming it and prompting the right-click (a right-click with nothing picked yet
-just reminds the user to pick first). Double-clicking to open needs no such hint — it is the conventional open
-gesture. To feel acknowledged at once, the moment the right-click lands an **optimistic pending edge** (dashed,
+node re-picks the source, and a click on empty space clears it. The gesture has no visible handle, but the
+view does **not** stand a permanent caption over the graph to advertise it: clicking a node is itself the
+intuitive first move and needs no prompt to remind the user to make it. Instead the hint is **reactive** —
+it surfaces only once the user engages, and it is **bound to the selection**: the moment a node is picked the
+hint appears, and the instant the pick is cleared (a click on empty space, the completing right-click, or
+opening a session) it **vanishes** — it is **not** a timed toast that fades out while the node stays picked,
+nor one that lingers after the pick is dropped. The hint does **not** re-announce which node was clicked (the
+user plainly sees that) — it only states the next step: right-click the node *this one* should monitor. A
+right-click with nothing picked yet raises a brief reminder toast to pick first; the full click-then-right-click
+rule also lives in the `?` legend for anyone who looks. Double-clicking to open needs
+no such hint — it is the conventional open gesture. To feel acknowledged at once, the moment the right-click lands an **optimistic pending edge** (dashed,
 in A's hue) appears with a brief **toast**; that edge is provisional and **firms up to a solid live arrow**
 only once A's real `spex watch` registration arrives on the next poll (a pending edge is superseded by its
 live twin, never doubled). Nodes stay draggable.

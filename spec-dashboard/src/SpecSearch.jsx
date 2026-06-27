@@ -5,14 +5,6 @@ import { STATUS_COLOR, sessionName } from './session.js'
 import { useT } from './i18n/index.jsx'
 import { rankDocs } from '../../spec-cli/src/ranker.ts'
 
-// @@@ SpecSearch - the `/` palette. It searches the board's FOUR planes at once — spec nodes, live
-// sessions, the issues bound to nodes, and those nodes' scenarios — through ONE uniform pipeline: every
-// searchable thing is flattened to a typed `entry` of the same shape (three ranking tiers + display fields +
-// a target), so one rank() and one row renderer serve all four. On pick the entry is handed back whole; App
-// routes by kind — a spec, issue, or scenario FOCUSES its node (the board's drill-down then opens its spine +
-// pans the camera, the same focus state the arrows drive), a session JUMPS to its tab on the session board.
-// No per-type branching lives here beyond building the entries; the palette itself is type-agnostic.
-
 // a scenario row's dot reads its satisfaction the way the tile/panel do (score.jsx): green fresh pass · red
 // fresh fail · grey stale / never-measured.
 const SCEN_COLOR = { pass: 'var(--green)', fail: 'var(--red)', stalePass: 'var(--muted)', staleFail: 'var(--muted)', empty: 'var(--muted)', missing: 'var(--muted)' }
@@ -25,10 +17,8 @@ const specPath = (p) => (p || '').replace(/^\.spec\//, '').replace(/\/spec\.md$/
 // query reads as an ordered jump-list rather than an interleaved jumble.
 const KIND_ORDER = { spec: 0, session: 1, issue: 2, scenario: 3 }
 
-// @@@ buildEntries - fold the FOUR planes into one flat list of uniform entries. Each carries what a row
-// renders (kind, dot colour, title, sub) and the `target` App acts on, PLUS the three fields the shared scorer
-// reads — name / desc / body — mapped per plane. Issues and scenarios are flattened OFF their host node (board
-// folds `node.issues`/`node.scenarios` on); each remembers its node so picking it focuses where it lives.
+// fold the four planes into one flat list of uniform entries; each carries the row's display fields, the
+// `target` App acts on, and the scorer's name/desc/body fields mapped per plane (issues/scenarios keep their host node).
 function buildEntries(specs, sessions) {
   const entries = []
   for (const s of specs) {

@@ -55,7 +55,9 @@ contract; it rides in this pop-over because the same right-click is where a huma
 The menu's second item, **close**, runs the same human-only worktree removal as the typed `/close` command,
 but behind a **confirm prompt** — a right-click is easy to mis-aim and the removal is destructive, so unlike
 the typed command (whose deliberate keystrokes ARE the confirmation) it asks first (the confirm is the shared
-modal, its commit button styled as the destructive verb). Confirming POSTs the close and asks the board to
+modal, its commit button styled as the destructive verb). The confirm **titles itself with the session's
+headline** — the same label its card shows ([[session-activity]]), not the stable rename handle — so the
+human reads the very words they right-clicked and never has to map a different name onto the row. Confirming POSTs the close and asks the board to
 reload, so the closed row drops off every surface at once; cancelling does nothing. The menu carries only the
 decisive **close**, never the soft `/exit` stop — stopping-to-resume is a typed command on a live session.
 

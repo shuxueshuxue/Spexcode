@@ -1,9 +1,4 @@
-// @@@ mock backend - what's left here is the client-side view decoration + a stand-in session log.
-// - spec tree   -> reading .spec on `main` (the source of truth, via /api/specs)
-// - session     -> the worktree linker (`git worktree list` + .session file + `tmux capture-pane`)
-
-// @@@ session log - fake tmux scrollback. for the active nodes it mirrors the REAL work from
-// our conversation; root is the meta session (this very chat) building the whole board.
+// LOGS: stand-in mock tmux scrollback for the demo board (the real session log comes from the backend).
 const LOGS = {
   'sess-meta': [
     `\x1b[90m$ claude --resume   worktree node/root · this conversation\x1b[0m`,
@@ -40,8 +35,6 @@ const LOGS = {
   ],
 }
 
-// @@@ begin-log - a spec is always the latest ground truth: no node is ever "closed".
-// Opening one with no live session just lets the agent start working on its content in place.
 function log(node) {
   const lines = LOGS[node.session] || [
     `\x1b[90m$ claude   worktree node/${node.id}  (branch node/${node.id})\x1b[0m`,
@@ -55,17 +48,7 @@ function log(node) {
   return [...lines, `\x1b[36mtype here — keystrokes forward via\x1b[0m \x1b[1msend-keys\x1b[0m`, ``]
 }
 
-// @@@ tidy-tree layout, drill-down - left->right: depth sets the column (x). TOP-DOWN: each node takes
-// exactly ONE row in its own column, and an expanded node's children are an evenly-spaced block CENTRED on
-// the parent's row, sized only by that node's OWN child count. So switching focus within a column never
-// moves that column — only the deeper column (the newly-focused node's children) appears, centred on it.
-// This deliberately replaces the bottom-up centroid model (leaves stacked into ONE global row counter,
-// parents at their kids' midpoint), under which a deep expansion's leaf count spread the SHALLOW siblings
-// apart. `expanded` is the focused node's ancestor SPINE (the caller passes exactly that), so there is one
-// expanded node per column and sibling children-blocks never collide; every other subtree is a collapsed
-// leaf tile, which keeps the root layer a short column however deep/bushy the real tree is. Gaps track the
-// node box: a node is TWO rows (title + editor/last-edited line) and a touch wider for longer titles, so
-// X_GAP/Y_GAP keep rows from touching.
+// drill-down tidy-tree layout ([[node-graph]]); `expanded` is the focused node's ancestor spine.
 export const X_GAP = 280, Y_GAP = 54
 export function layout(nodes, expanded) {
   const kids = {}
@@ -82,12 +65,8 @@ export function layout(nodes, expanded) {
   return pos
 }
 
-// @@@ apiFetch - ride through a zero-downtime backend reload. The supervisor (spec-cli) flips port 8787
-// to a freshly health-checked child on a code change; a request landing in that sub-second window can
-// still hit a refused/reset connection. A thrown fetch error is a TRANSIENT network failure (connection
-// refused/reset) — retry it with bounded backoff (5 attempts over ~2s) so a reload is invisible. An
-// actual HTTP response (even 4xx/5xx) is NOT transient: return it, don't retry. Exhausting the backoff
-// rethrows the real error loudly rather than masking a genuinely-down backend.
+// retry a thrown (transient: refused/reset) fetch with bounded backoff so a zero-downtime backend reload is
+// invisible; an actual HTTP response (even 4xx/5xx) is returned, never retried.
 const BACKOFF = [150, 350, 600, 900]   // waits between 5 attempts (~2.0s total)
 export async function apiFetch(input, init) {
   for (let i = 0; ; i++) {
@@ -99,19 +78,12 @@ export async function apiFetch(input, init) {
   }
 }
 
-// @@@ loadBoard - THIN wrapper. The board (merged tree + overlay + ghosts + sessions) is assembled by
-// the backend `buildBoard()` and served at /api/board — the SAME data `spex board` prints, so human and
-// agent share one source of truth. Returns the RAW nodes: the x/y tidy-tree layout is a pure view
-// concern that now depends on which node is focused (drill-down expand-on-focus), so it lives in the
-// view component (see App.jsx), not here. All overlay/ghost/session logic is server-side.
 export async function loadBoard() {
   const res = await apiFetch('/api/board')
   return res.json()
 }
 
-// @@@ setSessionSort - persist a session's drag-reorder pseudo-time ([[session-reorder]]). A finite number
-// pins the row's slot; null clears the override back to birth order. The backend stores it on the `.session`
-// record so the manual order shows on every surface after the next reload.
+// persist a session's drag-reorder pseudo-time ([[session-reorder]]); null clears the override.
 export async function setSessionSort(id, key) {
   return apiFetch(`/api/sessions/${id}/sort`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -119,16 +91,22 @@ export async function setSessionSort(id, key) {
   })
 }
 
-// @@@ projectTitle - the self-identifying NAME of the project a backend serves: its spexcode.json
-// dashboard.title override, else its launch-folder basename (resolved backend-side, arriving as
-// board.project). The ONE source for that name, so the browser tab and the session-board list header
-// read the same identity rather than each re-deriving it.
+// the project's self-identifying name ([[tab-title]]), resolved backend-side as board.project.
 export const projectTitle = (board) => board?.project || ''
 
-// @@@ loadConfig - the reflexive, skill-shaped slash presets (config nodes carrying `surface: slash`) the
-// backend serves at /api/config: [{ name, title, desc, kind, dir, files, body }]. The new-session box lists these under its
-// `/` palette and composes the picked preset's `body` (its {{targets}} filled by @-resolved nodes) into the
-// launch prompt. Rides the same zero-downtime backoff as the board fetch.
+// @@@ favicon source ([[tab-icon]]) - the configured dashboard.icon rides the board as board.projectIcon.
+// Three painless forms, NONE needing a downloaded/vendored asset: a full URL (used as-is), an Iconify
+// name `set:name` → its CDN SVG (api.iconify.design, 200k+ icons), or anything else treated as an emoji/
+// glyph rendered into an inline SVG data-URI (zero network). Empty → '' so the html default stands.
+export const projectIcon = (board) => board?.projectIcon || ''
+export function faviconHref(icon) {
+  if (!icon) return ''
+  if (/^https?:\/\//.test(icon)) return icon
+  if (/^[a-z0-9-]+[:/][a-z0-9-]+$/i.test(icon)) return `https://api.iconify.design/${icon.replace(':', '/')}.svg`
+  return 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">${icon}</text></svg>`)
+}
+
+// the slash presets (config nodes with `surface: slash`) the backend serves at /api/config.
 export async function loadConfig() {
   const res = await apiFetch('/api/config')
   return res.json()

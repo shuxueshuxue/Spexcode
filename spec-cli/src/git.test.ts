@@ -3,10 +3,7 @@ import assert from 'node:assert/strict'
 
 import { driftFor, type DriftIndex } from './git.js'
 
-// @@@ driftFor unit - drift is a pure function of a DriftIndex (commit positions, which commits touched a
-// file, the Spec-OK acks, and which nodes each commit versioned), so we build one by hand and assert the
-// count. pos: 0 = newest (HEAD), increasing into the past. The KEY case is `ack at the tip`: an ack quiets
-// a node's drift WHEREVER its files moved, so `spex ack` at HEAD just works after stacking commits.
+// build a DriftIndex by hand; pos: 0 = newest (HEAD), increasing into the past.
 function idx(parts: Partial<DriftIndex>): DriftIndex {
   return { pos: new Map(), fileCommits: new Map(), acks: new Map(), specNodes: new Map(), ...parts }
 }

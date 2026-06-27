@@ -45,7 +45,10 @@ it, then **gracefully drains** the old child — which stops accepting new conne
 in-flight requests before exiting. The public socket never closes, so the flip is invisible. (SO_REUSEPORT
 is the obvious alternative but is unsupported on this platform, hence the proxy.) An unhealthy new child
 is discarded and the current one kept, so a broken edit degrades to "still serving old code", never a gap.
-Live ws/pty bridges drop and reconnect; detached tmux sessions survive untouched. The dashboard also
+Live ws/pty bridges drop and reconnect; detached tmux sessions survive untouched. (Under `spex serve
+--public` the supervisor's raw proxy retreats to a **loopback** port and the password-gated [[public-mode]]
+gateway takes the public port — loopback stays the trusted face local agents reach; the gateway is the
+internet face. Default `serve` is unchanged: the proxy itself owns the public port.) The dashboard also
 retries a transient failure with bounded backoff, so a poll landing on the flip is masked. Because the
 child binds a **private** port that changes on every reload, the supervisor hands it a fixed
 `SPEXCODE_API_URL` at the **public** port; every session the child launches inherits it, so a launched

@@ -1,12 +1,5 @@
-// @@@ supervisor - zero-downtime backend reloads. SO_REUSEPORT (two processes binding 8787 so the new
-// one is live before the old drains) is unsupported on this platform (macOS/Node → ENOTSUP), so instead
-// the supervisor OWNS the public port (8787) as a tiny raw-TCP proxy and runs the real Hono server as a
-// CHILD on a private internal port. On a code change we boot a NEW child, wait for its GET /health to
-// answer 200, atomically flip the proxy's upstream to it, then retire the old child after a short drain.
-// The public socket never closes, so port 8787 has no gap — a reload (e.g. a node merge touching
-// spec-cli/src or an imported sibling package) is invisible to API callers. Raw byte-piping also carries the WebSocket upgrades
-// (terminal socket / pty bridges) for new connections transparently; in-flight WS on the old child drop
-// at drain time and the client reconnects, exactly as the no-supervisor reload already did.
+// SO_REUSEPORT is ENOTSUP on macOS/Node, so the supervisor owns the public port as a raw-TCP proxy and
+// runs the Hono server as a child on a private port (raw piping carries WS upgrades too).
 import net from 'node:net'
 import http from 'node:http'
 import { spawn, type ChildProcess } from 'node:child_process'
@@ -14,6 +7,7 @@ import { watch } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { installProcessGuards } from './resilience.js'
+import { resolvePublicConfig, startGateway, ensureDashboardBuilt } from './gateway.js'
 
 // the supervisor OWNS the public port, so it must outlive any transient throw: an uncaught error here is
 // logged and survived, never an exit that closes the port (and the tmux session) and takes the frontend down.
@@ -24,13 +18,18 @@ const tsx = join(here, '..', 'node_modules', '.bin', 'tsx')   // this package's 
 const entry = join(here, 'index.ts')                          // the real Hono server
 const publicPort = Number(process.env.PORT || 8787)
 
-// @@@ watched source roots - the child loads TS straight from these package src trees, so a change in ANY
-// of them is the child's "own source" for reload purposes. It is NOT just spec-cli/src: the child imports
-// spec-forge and spec-yatsu at runtime, so a merge touching e.g. spec-forge would otherwise reach disk
-// while the running child kept the stale code (a fix on `main` invisible on the live board). The frontend
-// (spec-dashboard) is deliberately ABSENT — the child never imports it (it is a separate vite dev server
-// with its own HMR), so watching it would bounce the backend on pure-frontend edits for nothing. Add a
-// root here if the backend ever imports a new sibling package.
+// @@@ public mode ([[public-mode]]) - with `spex serve --public`, the supervisor is NOT the internet face:
+// the gateway is. The raw-TCP proxy retreats to a loopback internal port (the trusted boundary local agents
+// reach) and the password-gated TLS gateway takes the public port, proxying /api + WS back to that loopback
+// port. Off → unchanged: the proxy itself owns the public port and SPEXCODE_API_URL points there.
+const publicCfg = resolvePublicConfig(join(here, '..', '..'))
+// the port the raw-TCP proxy actually binds: a private loopback port in public mode, the public port otherwise.
+const proxyPort = publicCfg ? await freePort() : publicPort
+// what launched agents inherit as their `spex` endpoint — ALWAYS the loopback proxy, so local agents never
+// meet the password gate (loopback is the trust boundary). Equals the public port when public mode is off.
+const childApiBase = `http://127.0.0.1:${proxyPort}`
+
+// every package src tree the child imports at runtime; spec-dashboard is absent (its own vite/HMR).
 const repoRoot = join(here, '..', '..')
 const watchRoots = [
   here,                                  // spec-cli/src — the backend's own source
@@ -43,8 +42,7 @@ let current: Backend | null = null   // which internal port new proxy connection
 let reloading = false                // single-flight guard for reload()
 let pending = false                  // a code change arrived mid-reload → reload again when done
 
-// @@@ freePort - grab an ephemeral port by binding :0 and reading it back, then release it for the
-// child to claim. The release→rebind window is a negligible local-dev race.
+// grab an ephemeral port by binding :0, then release it for the child to claim (negligible rebind race).
 function freePort(): Promise<number> {
   return new Promise((res, rej) => {
     const s = net.createServer()
@@ -53,11 +51,7 @@ function freePort(): Promise<number> {
   })
 }
 
-// @@@ waitHealthy - poll GET /health on the child until it answers 200. This is the gate that makes the
-// flip safe: we never route traffic at a child that isn't serving yet. ~15s budget (150 × 100ms) is
-// generous on purpose — a tsx+Hono cold start on a loaded box can take several seconds, and overshooting
-// only delays a flip, never drops a connection (the old child keeps serving the whole time). A child
-// that never goes healthy returns false, so the old one is kept rather than flipped to a dead port.
+// poll GET /health until 200; ~15s budget (150 × 100ms) covers a slow tsx+Hono cold start. False → keep old.
 function waitHealthy(port: number, tries = 150): Promise<boolean> {
   return new Promise((resolve) => {
     const retry = (left: number) => { if (left <= 1) resolve(false); else setTimeout(() => attempt(left - 1), 100) }
@@ -79,7 +73,7 @@ async function boot(): Promise<Backend | null> {
   // PORT pins the child's PRIVATE bind port; SPEXCODE_API_URL pins everything the child SPAWNS (launched
   // sessions + their hooks) at the PUBLIC port, so a launched agent's own `spex` reaches the stable proxy
   // and never inherits this ephemeral, soon-retired port (apiBase() prefers SPEXCODE_API_URL over PORT).
-  const child = spawn(tsx, [entry], { stdio: 'inherit', env: { ...process.env, PORT: String(port), SPEXCODE_API_URL: process.env.SPEXCODE_API_URL || `http://127.0.0.1:${publicPort}` } })
+  const child = spawn(tsx, [entry], { stdio: 'inherit', env: { ...process.env, PORT: String(port), SPEXCODE_API_URL: process.env.SPEXCODE_API_URL || childApiBase } })
   // if the ACTIVE backend dies unexpectedly (crash, OOM), restart it so the public port keeps serving.
   // Planned retirement sets current to the NEW child first, so the old child's exit fails this identity
   // check and is ignored. boot()'s ~5s health budget rate-limits any crash loop.
@@ -91,10 +85,8 @@ async function boot(): Promise<Backend | null> {
   return null
 }
 
-// @@@ reload - boot → health-gate → atomic flip → drain old. The flip is a single assignment, so a
-// connection arriving mid-flip lands on whichever child its capture saw; both are alive (old is killed
-// only after the drain delay), so no connection is ever refused. A change during a reload sets `pending`
-// so we immediately reload once more against the latest source.
+// boot → health-gate → atomic flip → drain old. The flip is a single assignment; the old child is killed
+// only after a drain delay, so a connection mid-flip is never refused.
 async function reload(reason: string): Promise<void> {
   if (reloading) { pending = true; return }
   reloading = true
@@ -129,7 +121,15 @@ process.on('SIGTERM', shutdown)
 const first = await boot()
 if (!first) { console.error('[supervisor] initial backend failed to start'); process.exit(1) }
 current = first
-proxy.listen(publicPort, () => console.log(`spec-cli supervisor serving on http://localhost:${publicPort} (zero-downtime reloads, backend :${first.port})`))
+if (publicCfg) {
+  // public mode: the raw proxy stays on loopback; the password-gated gateway owns the public port.
+  const distDir = join(repoRoot, 'spec-dashboard', 'dist')
+  ensureDashboardBuilt(repoRoot, distDir)
+  proxy.listen(proxyPort, '127.0.0.1', () => console.log(`spec-cli supervisor on loopback :${proxyPort} (zero-downtime reloads, backend :${first.port})`))
+  startGateway({ publicPort, upstreamPort: proxyPort, password: publicCfg.password, tls: publicCfg.tls, distDir })
+} else {
+  proxy.listen(publicPort, () => console.log(`spec-cli supervisor serving on http://localhost:${publicPort} (zero-downtime reloads, backend :${first.port})`))
+}
 
 // watch every imported source tree; debounce a burst of writes (a merge touching several files across
 // packages) into one reload. A root that can't be watched (a package absent in some checkout) is logged

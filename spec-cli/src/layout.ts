@@ -5,11 +5,6 @@ import { git, repoRoot, gitA, headSha, worktreeSpecSig, worktreeSpecDelta, type 
 import { guardWorktree } from './resilience.js'
 import { HARNESSES } from './harness.js'
 
-// @@@ portable layout - the ONE seam where "where things live" is policy, not hardcode.
-// Mechanism (read .spec, git log) is fixed; this resolves: where is main, how to enumerate the
-// other checkouts, how each declares its node. No spexcode.json => our convention. With it =>
-// adapt to any layout (main in a different folder, a different branch naming, etc.).
-
 type Config = {
   main?: string                    // path to the source-of-truth checkout (default: the `main` worktree)
   mainBranch?: string              // source-of-truth BRANCH worktrees fork from (default: auto-detected — see mainBranch())
@@ -17,15 +12,25 @@ type Config = {
   dashboard?: {
     apiUrl?: string                // the per-project backend the board proxies to (read frontend-side; see api-endpoint)
     title?: string                 // override for the browser-tab name (default: the repo-root basename; see tab-title)
+    icon?: string                  // the browser-tab favicon: an emoji ("🔭") or an Iconify name ("mdi:rocket-launch"); see tab-icon
   }
   sessions?: {
     maxActive?: number             // concurrency cap: max agents AUTONOMOUSLY PROGRESSING at once (default 6; see sessions.ts maxActive)
   }
+  serve?: {
+    // public-exposure config for `spex serve --public` (resolved gateway-side; see [[public-mode]] / gateway.ts).
+    // The password is NEVER read from here — flag/env only — so this file stays committable.
+    public?: {
+      enabled?: boolean              // turn public mode on without the --public flag
+      http?: boolean                 // drop TLS (the --http escape hatch) — password then travels in cleartext
+      tls?: { cert?: string; key?: string }   // PATHS to your own cert/key; omit for a cached self-signed default
+    }
+  }
 }
-// the resolved LAYOUT convention — main/mainBranch/branchPrefix filled to defaults. `dashboard` and `sessions`
-// are frontend/runtime concerns (read separately via readConfig; see api-endpoint / sessions.ts maxActive),
-// NOT layout fields, so they stay out of the convention rather than forcing a meaningless default here.
-type Convention = Required<Omit<Config, 'dashboard' | 'sessions'>>
+// the resolved LAYOUT convention — main/mainBranch/branchPrefix filled to defaults. `dashboard`, `sessions`,
+// and `serve` are frontend/runtime concerns (read separately via readConfig; see api-endpoint / sessions.ts
+// maxActive / gateway.ts), NOT layout fields, so they stay out of the convention rather than forcing a default.
+type Convention = Required<Omit<Config, 'dashboard' | 'sessions' | 'serve'>>
 
 export type Worktree = {
   path: string; branch: string | null; node: string | null
@@ -40,30 +45,14 @@ export function readConfig(root: string): Config {
   try { return JSON.parse(readFileSync(p, 'utf8')) } catch { return {} }
 }
 
-// @@@ gitCommonDir - the SHARED git common dir (absolute), the one git directory every worktree of a
-// repo points at. A "where things live" primitive: linked-worktree state (HEAD, index) is per-worktree,
-// but the common dir is shared, so anything that must be ONE copy across all worktrees (and never end up
-// committed) belongs under it — e.g. yatsu's content-addressed pixel cache. Same `git rev-parse` mainBranch
-// uses, via the env-stripped git() so a hook's exported GIT_DIR can't misdirect it.
-// memoized: the git common dir is a PROCESS CONSTANT (it never changes for a running backend), but
-// mainBranch()/mainRoot() resolve it on every call — without the cache that was a `git rev-parse` fork
-// per call, ~60 forks on a single board build (mainBranch is called per session/overlay). Cache it like
-// [[source-of-truth]]'s repoRoot does. (HEAD/branch CAN move, so mainBranch still reads those live below;
-// only the common-dir path itself is cached.)
+// the shared git common dir (env-stripped git() so a hook's exported GIT_DIR can't misdirect it). Memoized:
+// it's a process constant, but mainBranch()/mainRoot() resolve it per call (~60 git rev-parse forks per board build without the cache).
 let commonDirCache: string | null = null
 export function gitCommonDir(): string {
   if (commonDirCache === null) commonDirCache = git(['rev-parse', '--path-format=absolute', '--git-common-dir']).trim()
   return commonDirCache
 }
 
-// @@@ mainBranch - the source-of-truth BRANCH: what worktrees fork from, what merges land on, what review
-// diffs against. NOT hardcoded 'main' — that assumption broke every adopted repo whose default branch is
-// named otherwise (e.g. a project on `staging` or `feat/x`). Resolved from the MAIN checkout (the parent of
-// the shared git *common* dir, so the answer is the same whether called from the main checkout, a linked
-// worktree, or a commit hook), in order: (1) a `spexcode.json` `mainBranch` override; (2) auto-detect — the
-// branch that main checkout is currently on, so an adopted repo on its own default branch just works with no
-// config; (3) 'main' as the last resort. Sync (via git(), which strips a hook's GIT_DIR) so the Stop-gate's
-// commit-gate can call it too.
 export function mainBranch(): string {
   try {
     const mainCheckout = dirname(gitCommonDir())
@@ -153,20 +142,8 @@ export function listSessionIds(): string[] {
   return ents.filter((d) => d.isDirectory()).map((d) => d.name)
 }
 
-// @@@ overlay cache - the board overlay (each managed worktree's spec-delta vs main) is the expensive
-// part of /api/layout: `worktreeSpecDelta` spawns 3 git diffs PER worktree, and warm that WAS the whole
-// cost (the result is ~2KB, so the ~230ms was pure spawn overhead). The delta is anchored at the worktree's
-// FORK POINT — `git merge-base main HEAD`, NOT main's HEAD — so it shows strictly what THIS worktree changed
-// and never a phantom for files it never touched when main advances (see git.worktreeSpecDelta). The ops are
-// therefore a pure function of that merge-base, the worktree's HEAD, and its `.spec` working-tree state, so
-// we memo `ops` per worktree keyed on those three. The merge-base (not main's HEAD) is the right key field:
-// when main advances on UNRELATED branches the fork point is unchanged, so the overlay is a cache HIT — keying
-// on main's raw HEAD would needlessly recompute every worktree's 3 diffs on every merge. The trade is one cheap
-// `git merge-base` per managed worktree to compute the key (its result is reused as the diff base on a miss, so
-// no redundant subprocess); HEAD + sig come from the FILESYSTEM (headSha + worktreeSpecSig). A worktree's diffs
-// re-run ONLY when its key changes (its branch advances, main moves the fork point, or a spec edit / new
-// untracked spec.md moves the sig). Correctness over speed: the key reflects every real change — never stale;
-// the cheap fields (node/session/status from `.session`) are re-read fresh, never cached.
+// memo the overlay (3 git diffs/worktree) keyed on fork-point merge-base + HEAD + spec sig — keying on the
+// merge-base NOT main's HEAD means unrelated merges that don't move the fork point stay cache hits.
 const deltaCache = new Map<string, { key: string; ops: NodeOp[] }>()
 const safeHead = (p: string): string => { try { return headSha(p) } catch { return '' } }
 const safeMergeBase = async (wtPath: string, mainRef: string): Promise<string> => {

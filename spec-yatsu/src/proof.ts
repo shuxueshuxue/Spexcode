@@ -6,15 +6,6 @@ import { reviewPayload } from '../../spec-cli/src/sessions.js'
 import { evalTimeline, evalContext, readBlobByHash, type EvalEntry } from './evaltab.js'
 import { isUiPath } from './cli.js'
 
-// @@@ review proof - the review state, marshaled. When a session is in review, this is the engine that turns
-// what the system ALREADY KNOWS into a self-contained PROOF OF WORK — no agent authoring, nothing to fill in.
-// It JOINS two derived sources: [[manager-cockpit]]'s reviewPayload (the merge-base diff + the merge gates)
-// and each changed node's [[yatsu-eval-tab]] timeline (the measured loss + its evidence), and renders ONE HTML
-// document with the yatsu evidence inlined as data-URIs ([[yatsu-core]]'s cache) so the page stands alone as a
-// plain file. Because it is FULLY DERIVED it can never go stale and costs the agent nothing — it is generated
-// on the fly each time it is opened. It lives in spec-yatsu because a proof IS the marshaled evaluation; it
-// runs ONLY on the backend (the CLI and dashboard fetch the bytes it renders — one engine, thin faces).
-
 // ---- the model ----
 
 type ScoreState = 'pass' | 'fail' | 'stalePass' | 'staleFail' | 'empty' | null
@@ -37,11 +28,7 @@ export type ProofReading = {
     | { kind: 'none' }
 }
 
-// @@@ ProofFile - a changed file the proof lets you DRILL INTO: the cockpit's status + line counts, plus the
-// unified diff and the full before/after content (the merge-base side ↔ the HEAD side) — all derived from
-// git, so the proof page lets a reviewer jump summary → diff → whole-file comparison with no extra fetch.
-// patch '' / old·new null when there is nothing to show (added → no old, deleted → no new) or when the file
-// was past the enrichment cap (`omitted`) or too large (`truncated`) — kept honest, never silently blank.
+// patch ''/old·new null = nothing to show (added → no old, deleted → no new), past the enrichment cap (omitted), or too large (truncated)
 export type ProofFile = ReviewDiffFile & {
   patch: string
   oldText: string | null
@@ -82,20 +69,13 @@ export type ProofModel = {
   otherFiles: ProofFile[]        // changed files no spec node claims
 }
 
-// @@@ buildProofModel - assemble the proof for one session, FULLY DERIVED. reviewPayload does the cockpit
-// reads (the merge-base diff + the merge gates); we map its diff onto spec nodes, fold each node's eval
-// timeline (the SAME engine the eval tab rides), and resolve the evidence bytes for inlining. No manifest, no
-// agent input — the headline is derived from the node/branch. null when no session has that id (route → 404).
+// null when no session has that id (route → 404).
 export async function buildProofModel(id: string): Promise<ProofModel | null> {
   const payload = await reviewPayload(id)
   if (!payload) return null
   const specs = await loadSpecs()
   const specById = new Map(specs.map((s) => [s.id, s]))
-  // @@@ root at the SESSION worktree, not the backend - the session's readings, evidence, and git freshness
-  // live on ITS branch in ITS worktree; reading them from the backend's own checkout would show main's
-  // readings (the wrong loss) and mis-judge freshness across branches. So the eval context is rooted at the
-  // session worktree (the same `-C wt.path` reviewPayload already uses for the diff/gates). specs stay from
-  // the backend (the node paths/titles/hues are branch-shared); only the readings + drift are per-worktree.
+  // root the eval context at the SESSION's worktree (its branch's readings/freshness), not the backend checkout which would show main's; specs stay backend-shared (paths/titles/hues), only readings + drift are per-worktree
   const wtPath = worktreePathForBranch(payload.branch)
   const ctxRoot = wtPath ?? repoRoot()
   const ctx = evalContext(ctxRoot, specs, await driftIndex(ctxRoot), await historyIndex(ctxRoot))
@@ -184,10 +164,7 @@ function gateRows(p: NonNullable<Awaited<ReturnType<typeof reviewPayload>>>): Pr
   ]
 }
 
-// @@@ enrichFile - the per-file drill-down, derived from the session worktree: the unified diff (base..HEAD),
-// the full OLD content (the merge-base side — null for an added file) and the full NEW content (the HEAD side
-// — null for a deleted file). Each capped to MAX_FILE_BYTES so one giant file can't bloat the page. gitA
-// returns '' on a missing path, which is exactly the add/delete (and best-effort rename) case.
+// gitA returns '' for a missing path — exactly the added/deleted (and best-effort rename) side; each side capped to MAX_FILE_BYTES
 const MAX_ENRICHED_FILES = 60
 const MAX_FILE_BYTES = 200_000
 async function enrichFile(wtPath: string, base: string, f: ReviewDiffFile): Promise<ProofFile> {
@@ -348,8 +325,7 @@ function renderReading(r: ProofReading): string {
   </div>`
 }
 
-// @@@ renderPatch - colour a unified diff by line: additions green, deletions red, hunk headers blue, the
-// git metadata lines muted. Each line is its own block so a long diff scrolls inside its box. Escaped first.
+// each diff line is its own block so a long diff scrolls inside its box
 function renderPatch(patch: string): string {
   return patch.split('\n').map((ln) => {
     const cls = /^@@/.test(ln) ? 'h'
@@ -359,10 +335,6 @@ function renderPatch(patch: string): string {
   }).join('')
 }
 
-// @@@ renderFile - one changed file as a DRILL-DOWN: the summary row (status · path · ±) expands to the
-// unified diff, which itself nests a further toggle for the full original ↔ new content side by side. All
-// inlined (no fetch), native <details>, so the page stays a self-contained plain file. A file past the
-// enrichment cap keeps its row but says `omitted`; an added/deleted side shows an explicit absence marker.
 function renderFile(f: ProofFile): string {
   const row = `<span class="fstatus ${esc(f.status)}">${esc(f.status)}</span> <span class="fpath">${esc(f.path)}</span> <span class="fnum"><span class="add">+${f.additions}</span> <span class="del">−${f.deletions}</span></span>`
   if (f.omitted) return `<div class="file flat"><div class="frow">${row}<span class="note">diff omitted — large changeset</span></div></div>`
@@ -398,10 +370,6 @@ function renderNode(n: ProofNode): string {
   </article>`
 }
 
-// @@@ renderProofHtml - the PURE renderer: a ProofModel → one self-contained HTML document. All evidence is
-// already inlined in the model (data-URIs / text), so the page needs no further fetch and works saved to disk,
-// emailed, or inside the dashboard's overlay. The styling matches the board's dark vocabulary and the yatsu
-// score colours; node accents use each node's hue.
 export function renderProofHtml(m: ProofModel): string {
   const idShort = m.id.slice(0, 8)
   const ribbon = [

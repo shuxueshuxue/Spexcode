@@ -1,12 +1,6 @@
 import { scenarioStates, aggregateState } from './score.jsx'
 import { useT } from './i18n/index.jsx'
 
-// @@@ focus panel - the right column: the FOCUSED node's Issues AND Scenarios in one place, with their
-// satisfaction status. The proposal's core move — Issues and Scenarios are BOTH stateful bound work, so they
-// share one surface and one status here instead of an issue popup that popped only on the node (privileging
-// issues). It reads the focused board node verbatim (node.scenarios + node.evals + node.issues, all folded by
-// /api/board), so it needs no fetch of its own and tracks focus instantly as the board polls.
-
 // the state mark a scenario row leads with — the score vocabulary as a glyph (✓ pass · ✗ fail · ○ blind
 // spot · · never measured). The colour comes from the row's state class (styles.css), so this is shape only.
 const MARK = { pass: '✓', fail: '✗', stalePass: '✓', staleFail: '✗', empty: '○', missing: '·' }

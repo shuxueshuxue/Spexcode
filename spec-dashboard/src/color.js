@@ -1,9 +1,3 @@
-// @@@ color - the SINGLE source of colour from a seed. One hash → one hue → both an avatar face AND its
-// labelling colour (node ring, ⏎ link, reparent edge, session-row stripe), so a session's face and every
-// mark that names it always agree. Seed the same string everywhere (the session id) and they can't drift.
-// Previously these were two systems: a round-robin PALETTE keyed by worktree path for the labels, and a
-// separate hash of the session id for the face — so they MISALIGNED. Now there is only this.
-
 // FNV-1a-ish 32-bit string hash. Deterministic, fast, well-spread — enough to slice into independent
 // picks (hue / glyph / shape) at the call site. `Math.imul` keeps it a real 32-bit multiply.
 export function hash(str) {

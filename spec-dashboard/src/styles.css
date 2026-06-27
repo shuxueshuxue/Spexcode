@@ -683,6 +683,28 @@ body {
 .set-lang.on { border-color: var(--blue); color: var(--blue); background: var(--panel2); font-weight: 600; }
 .set-hint { display: block; color: var(--muted); font-size: 11px; line-height: 1.4; }
 
+/* ---- shortcuts editor: one row per action, a click-to-rebind keyboard cell ---- */
+.set-keys { display: flex; flex-direction: column; gap: 2px; margin: 2px 0 8px; }
+.set-key-row { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
+.set-key-row .legend-desc { flex: 1; font-size: 12px; }
+.bind-cell {
+  flex: none; min-width: 92px; min-height: 24px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
+  justify-content: center; cursor: pointer; background: var(--paper);
+  border: 1px solid var(--line); border-radius: 4px; padding: 2px 6px;
+}
+.bind-cell:hover:not(.fixed) { border-color: var(--blue); }
+.bind-cell.capturing { border-color: var(--blue); border-style: dashed; background: var(--panel2); }
+.bind-cell.custom { border-color: var(--blue); }
+.bind-cell.fixed { cursor: default; opacity: .6; }
+.bind-cell kbd { border: none; padding: 0 2px; background: transparent; }
+.bind-hint { font-size: 11px; color: var(--blue); }
+.set-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.set-reset {
+  flex: none; font-family: var(--mono); font-size: 11px; color: var(--muted); cursor: pointer;
+  border: 1px solid var(--line); border-radius: 4px; padding: 3px 10px; background: var(--paper);
+}
+.set-reset:hover { border-color: var(--red); color: var(--red); }
+
 /* @@@ search palette (Alt+F) - a command-palette over the spec tree: an input + ranked result rows.
    Top-aligned (not centred like .legend) so the list grows downward without the panel jumping as
    results change. Shares the dimmed/blurred .legend-backdrop look but anchors the panel near the top. */
@@ -987,20 +1009,12 @@ body {
 .session-graph {
   position: absolute; inset: 0; background: var(--paper);
 }
-/* the standing gesture hint + lone `?` help, top-right of the pane (the brand/back chrome is gone — the
-   tab is the frame). */
+/* the lone `?` help, top-right of the pane (the brand/back chrome is gone — the tab is the frame). No
+   standing gesture caption lives here: the monitor gesture is hinted reactively (toasts), not by a
+   permanent label over the graph. */
 .sg-hud {
   position: absolute; top: 12px; right: 14px; z-index: 5;
   display: flex; gap: 6px; align-items: center; pointer-events: none;
-}
-/* the standing monitor-gesture hint: states the left-click-then-right-click rule the user can't see (there
-   are no handles); double-click-to-open is conventional and goes unhinted. Non-interactive, so the HUD's
-   pointer-events:none is fine. */
-.sg-hint {
-  padding: 4px 9px; background: var(--panel); color: var(--muted);
-  border: 1px solid var(--line); border-radius: 6px;
-  font-family: var(--mono); font-size: 11px; white-space: nowrap;
-  box-shadow: 0 1px 3px rgba(0,0,0,.08);
 }
 /* a session node: avatar + label + status, ringed in its own hue (--sg from labelColor(id)). */
 .sg-node {
@@ -1032,6 +1046,15 @@ body {
   position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 6;
   padding: 7px 14px; background: var(--panel); color: var(--ink2);
   border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,.12);
+  font-family: var(--mono); font-size: 12px;
+}
+/* the selection-bound pick hint: shown ONLY while a node is picked as the watcher (off sourceSel), gone the
+   instant the pick clears — not timed like .sg-toast. The dashed border echoes the picked node's dashed
+   --source outline so the hint reads as part of the same mid-gesture state. */
+.sg-pick-hint {
+  position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 6;
+  padding: 7px 14px; background: var(--panel); color: var(--ink2);
+  border: 1px dashed var(--line); border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,.12);
   font-family: var(--mono); font-size: 12px;
 }
 

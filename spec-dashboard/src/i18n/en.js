@@ -1,8 +1,3 @@
-// @@@ en dictionary - English, the SOURCE locale and the fallback every other locale degrades to
-// (see i18n/index.jsx: a key missing in another language is looked up here before giving up). Values
-// are either template strings with `{name}` placeholders or functions `(params) => string` for the
-// count-sensitive copy (plurals, "Nm ago"). Glyphs/punctuation (//, ❯, ＋, ↑↓⏎, op marks) are NOT
-// here on purpose — they're language-neutral and stay composed in the JSX.
 export default {
   common: {
     new: 'new',
@@ -69,6 +64,7 @@ export default {
       search: 'search & jump across nodes, sessions, issues & scenarios',
       overlayCycle: 'cycle through nodes a worktree is changing (⇧ reverse)',
       enter: 'cross into the focus node’s live session',
+      fresh: 'start a fresh session on the focus node',
       newChild: 'new child node under the focus (chord)',
       del: 'delete the focused node (chord)',
       settings: 'open settings (language…)',
@@ -229,9 +225,8 @@ export default {
 
   sessionGraph: {
     helpTitle: 'keymap & legend (?)',
-    gestureHint: 'click a node, then right-click another to monitor',
     asked: ({ a, b }) => `asked ${a} to monitor ${b}`,
-    picked: ({ a }) => `picked ${a} — right-click another node to monitor it`,
+    picked: 'right-click another node for this one to monitor',
     needSource: 'left-click a node first, then right-click another to monitor it',
     monitorPrompt: ({ label, id }) => `Please monitor session ${label} (${id}): run \`spex watch ${id}\` in the background and keep it running so its transitions surface to me.`,
     legend: {
@@ -309,6 +304,10 @@ export default {
     close: 'close (esc or ,)',
     secLanguage: 'language',
     languageHint: 'choose the dashboard language. detected from your browser by default; your choice is remembered.',
+    secShortcuts: 'shortcuts',
+    bindPrompt: 'press a key…',
+    shortcutsHint: 'click a key to rebind it. nav & chord keys are fixed. (game-controller mapping lives outside the browser, as a separate extension.)',
+    reset: 'reset to defaults',
   },
 
   search: {

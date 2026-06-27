@@ -12,46 +12,16 @@ import { ProofOverlay } from './ReviewProof.jsx'
 import { boardCommandsFor } from './sessionCommands.js'
 import { useT } from './i18n/index.jsx'
 
-// @@@ SessionInterface - the Enter surface. TWO panes: a left session list and a right content area
-// that MORPHS by what's focused in the list:
-//   · "New Session" focused -> input box + avatar CENTERED (terminal vibe). Nothing is prefilled — the
-//     focused spec node is instead the FIRST @-mention suggestion, so you opt into targeting it by typing
-//     `@`. Enter launches a real session, then we SWITCH to it.
-//   · "View Session Relationship" focused -> the content becomes the live monitor GRAPH (SessionGraph): the
-//     who-watches-whom network of all sessions, filling the pane. Its trigger (was a fullscreen `t` overlay)
-//     is a compact icon button paired with the ＋ New Session button in a top ROW — neither sits in the ↑/↓
-//     path to a session. New ⇄ graph is a HORIZONTAL axis: → from an EMPTY New Session enters the graph, ←
-//     leaves it. Inside, hjkl walk the web and clicking a node (or ⏎) switches to that session's tab.
-//   · an existing session focused -> the content becomes a READ-ONLY live tmux terminal (SessionTerm),
-//     with the SINGLE human input docked at the BOTTOM. The terminal never accepts typing; the bottom box
-//     is the only input — submitting dispatches the line through the CONTROL SOCKET (POST /keys, which
-//     injects via the daemon socket, bypassing tmux), NEVER by writing into the pane. That is what makes a
-//     message land even when tmux is in copy-mode (which scrolling the terminal enters); the WebSocket the
-//     terminal holds is for the read-only display + scroll only.
-// "BOARDING SWITCH" not "temporary modal": the surface stays MOUNTED while the board is open AND while
-// it's hidden (driven by the `open` prop — App never unmounts it). So the selected tab (`sel`, lifted to
-// App) AND any typed-but-unsent input survive a close/reopen — you switch back to exactly where you were.
-//
-// KEY HANDLING is at the WINDOW level (capture), not the panel's onKeyDown: when you arrow off the
-// New Session tab its textarea unmounts and focus would leave the panel, which used to kill further
-// nav. A window listener is focus-independent, so ↑/↓ keep walking the list no matter what's focused.
+// Window-level (capture) key handling, not panel onKeyDown: arrowing off the New Session tab unmounts its
+// textarea, so a panel listener would lose focus and kill nav; a window listener is focus-independent.
 
-// @@@ nav-mode keymap - DOM KeyboardEvent.key → the BASE key NAME our /rawkey backend feeds to tmux
-// send-keys. Modifier combos (⌃/⌥/⌘) are encoded separately by navKeyToken below; this maps only the
-// non-printable bases. Escape is handled separately (it cancels a menu, and a second Esc exits nav mode),
-// so it's intentionally absent here.
+// DOM KeyboardEvent.key → the base key name /rawkey feeds tmux send-keys (non-printables only; modifier
+// combos are encoded by navKeyToken). Escape is intentionally absent — handled separately.
 const RAWKEY = { ArrowUp: 'Up', ArrowDown: 'Down', ArrowLeft: 'Left', ArrowRight: 'Right', Enter: 'Enter', Tab: 'Tab', Backspace: 'Backspace', Delete: 'Delete', Home: 'Home', End: 'End', ' ': 'Space' }
 
-// @@@ navKeyToken - encode a keydown into the tmux-style token /rawkey forwards (`C-r`, `M-b`, `S-Tab`,
-// `C-M-x`, or a bare char / named key). Nav mode drives the agent's REAL terminal, so modifier combos must
-// REACH tmux, not be dropped. A terminal knows only three modifiers, so we map ⌃→`C-`, ⌥/⌘→`M-` (the
-// Command key has no terminal meaning, so it folds into Meta beside Option — the same modifier a mac user
-// already reaches for), and Shift→`S-` on a NAMED key (e.g. S-Tab); a modified letter carries Shift as its
-// case (`M-B`) and a bare shifted printable already carries its glyph. The BASE of a MODIFIED letter/digit
-// is read from e.code, NOT e.key: the moment a
-// real modifier is held, e.key is unreliable — ⌥B prints '∫' on a mac, ⌃-letters print control chars — but
-// the physical KeyB / Digit3 code is stable. Returns null when there is no sendable base (a lone modifier,
-// an unmapped non-printable), so those keys are simply swallowed rather than forwarded as junk.
+// Encode a keydown into a tmux token (⌃→`C-`, ⌥/⌘→`M-`, Shift→`S-` on named keys). The base of a
+// modified letter/digit comes from e.code, not e.key: a held modifier makes e.key unreliable (⌥B prints
+// '∫' on a mac), but the physical KeyB/Digit3 code is stable. null = nothing sendable → key swallowed.
 function navKeyToken(e) {
   const named = RAWKEY[e.key]
   const mod = e.ctrlKey || e.altKey || e.metaKey
@@ -72,8 +42,7 @@ function navKeyToken(e) {
   return pfx + base
 }
 
-// @@@ @-mention helpers - the spec path the menu matches against (`.spec/a/b/<id>/spec.md`), shown
-// minus the `.spec/` shell and the `/spec.md` leaf, so the row reads like the tree breadcrumb it is.
+// the menu's spec path, minus the `.spec/` shell and `/spec.md` leaf, so a row reads like a breadcrumb.
 const specPath = (p) => (p || '').replace(/^\.spec\//, '').replace(/\/spec\.md$/, '')
 
 // rank spec nodes for a partial @query. The focused node always floats to the very top (so just typing
@@ -98,12 +67,10 @@ function matchSpecs(specs, query, focusId) {
   return scored.slice(0, 8).map((x) => x.s)
 }
 
-// @@@ caretAtEdge - is the <textarea> caret on its FIRST (dir:'up') or LAST (dir:'down') VISUAL line,
-// counting WRAPPED lines, not just '\n'? The window-level ↑/↓ owns tab nav, but inside a multi-line
-// input the arrows must first walk the caret; only at the visual edge — no line to move to in that
-// direction — should they fall through to switching tabs. Browsers expose no caret-line API for a
-// textarea, so we mirror it into an off-screen div with the SAME wrapping geometry (width, padding,
-// font) and read which line the caret pixel lands on. One reused hidden node, measured synchronously.
+// is the caret on its first ('up') or last ('down') VISUAL line, counting wraps? Browsers expose no
+// caret-line API for a textarea, so mirror its value into an off-screen div with the SAME wrapping
+// geometry (width, padding, font) and read which visual line the caret pixel lands on. Only at the visual
+// edge do ↑/↓ fall through to tab nav. One reused hidden node, measured synchronously.
 let mirror
 function caretAtEdge(el, dir) {
   const cs = getComputedStyle(el)
@@ -126,13 +93,10 @@ function caretAtEdge(el, dir) {
   return dir === 'up' ? top < lh : top >= textHeight - lh - 1
 }
 
-// @@@ fitTextarea - the ONE auto-grow routine every `.si-input` shares. Size the box to its content (reset
-// to `auto` first so it can shrink when text is deleted, then height = scrollHeight) clamped at `maxH`, and
-// keep overflow-y HIDDEN until the content genuinely overruns the cap — only there flip it to `auto`. Below
-// the cap the box is exactly as tall as its content, so a scrollbar can NEVER appear from the `.12s` height
-// transition lagging the content, nor from scrollHeight's sub-pixel rounding (line-height 19.5px) leaving the
-// content a fraction taller than the integer height. `maxH` is the only per-surface difference — the CSS cap
-// for the new-session box, half the terminal for the docked ❯ inbox — so every grow surface fits identically.
+// the shared auto-grow routine: reset to `auto` (so it can shrink), then height = scrollHeight clamped at
+// `maxH`. overflow-y stays HIDDEN below the cap so a scrollbar never appears from the height transition
+// lagging or from scrollHeight's sub-pixel rounding; only past the cap does it flip to `auto`. `maxH` is the
+// only per-surface difference.
 function fitTextarea(ta, maxH) {
   if (!ta) return
   ta.style.height = 'auto'
@@ -140,9 +104,8 @@ function fitTextarea(ta, maxH) {
   ta.style.height = `${Math.min(ta.scrollHeight, maxH)}px`
 }
 
-// @@@ slash-command match - filter the fetched command list by the typed prefix (the text after `/`).
-// startsWith beats a mid-string include; server order (custom → built-in → skill) is preserved within a
-// score band because Array.sort is stable. Empty query (just `/`) lists everything. Mirrors CC's `/` menu.
+// filter the command list by the typed prefix: startsWith beats a mid-string include; server order is
+// preserved within a score band (stable sort). Empty query (just `/`) lists everything.
 function matchSlash(cmds, query) {
   const q = query.toLowerCase()
   const scored = []
@@ -159,8 +122,7 @@ function matchSlash(cmds, query) {
   return scored.slice(0, 10).map((x) => x.c)
 }
 
-// @@@ config-preset match - the New Session `/` palette: same prefix-rank shape as matchSlash, over the
-// config presets (GET /api/config). startsWith beats a mid-string include; empty query (just `/`) lists all.
+// the New Session `/` palette over config presets — same prefix-rank shape as matchSlash.
 function matchConfig(presets, query) {
   const q = query.toLowerCase()
   const scored = []
@@ -201,27 +163,16 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [drafts, setDrafts] = useState({})
   const [sending, setSending] = useState(false)
   const [sendErr, setSendErr] = useState(false)   // last /keys dispatch failed — surfaced under the ❯ box
-  // @@@ nav mode - when ON, the ❯ box is disabled and every keystroke is forwarded RAW to the active
-  // session's pane (POST /rawkey → tmux send-keys) so the human drives the agent's interactive TUI menus.
-  // `menuById` is the best-effort, NON-authoritative hint (set by each SessionTerm) that a pane currently
-  // looks like a select menu — used only to SUGGEST nav mode (pulse the button), never to seize keys.
   const [navMode, setNavMode] = useState(false)
-  const [menuById, setMenuById] = useState({})
-  // @@@ proof overlay - the review-proof iframe's open state lives HERE (not inside the button) so the typed
-  // `/proof` board command and the header button drive the ONE same overlay (see the command registry below).
+  const [menuById, setMenuById] = useState({})   // per-pane menu-sniff flag from each SessionTerm; drives the nav button's `.suggest` pulse
   const [proofOpen, setProofOpen] = useState(false)
-  // @@@ graph legend - the relationship tab's `?` keymap modal. LIFTED here (not inside SessionGraph) so the
-  // console's own Esc handler can close it before closing the console — the console's window listener runs
-  // first, so it must own this Esc precedence (see the key router below).
+  // the graph's `?` legend, lifted here so the console's Esc handler can close it before the console
+  // (Esc precedence — see the key router below).
   const [graphLegend, setGraphLegend] = useState(false)
-  // @@@ relationship-graph edges - the live monitor + comms network for the "View Session Relationship" tab,
-  // polled HERE in the always-mounted console rather than inside SessionGraph. The graph tab REMOUNTS on every
-  // reselect, so a poll living inside it would cold-refetch each time and flash an edgeless placeholder that
-  // then re-lays-out and jumps once the first poll lands. Owning the edges one level up keeps them in hand
-  // across reselects (instant FINAL layout, no jump) and keeps the web current in the BACKGROUND while the
-  // console is open — a new watch / rising comms count appears live, no tab round-trip. `graphEdgesLoaded`
-  // lets the graph hold its first reveal until the real edges land, so the first visible frame is already the
-  // final clustered web. The NODES are the preloaded `sessions`; only these observational edges are polled.
+  // the graph's edges, polled HERE in the always-mounted console (not inside SessionGraph, which remounts on
+  // every reselect): owning them one level up frames the FINAL clustered web on reselect with no cold fetch
+  // or edgeless-then-jump, and keeps the web live in the background. `graphEdgesLoaded` holds the graph's
+  // first reveal until the real edges land.
   const [graphEdges, setGraphEdges] = useState([])
   const [graphEdgesLoaded, setGraphEdgesLoaded] = useState(false)
   useEffect(() => {
@@ -239,9 +190,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     const id = setInterval(pull, 4000)
     return () => { live = false; clearInterval(id) }
   }, [open])
-  // @@@ file attach - a pasted/dropped/picked file is uploaded to the backend (= worker) machine's /tmp and
-  // its returned path is spliced into the prompt. `uploading` guards/announces the in-flight POST; `uploadErr`
-  // is the fail-loud flag; `dragTarget` lights the surface ('new' | 'msg') a file is currently dragged over.
   const [uploading, setUploading] = useState(false)
   const [uploadErr, setUploadErr] = useState(false)
   const [dragTarget, setDragTarget] = useState(null)
@@ -254,12 +202,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const fileRef = useRef(null)         // the one hidden <input type=file>; the attach buttons trigger it
   const fileTargetRef = useRef('new')  // which surface the pending pick inserts into ('new' | 'msg')
 
-  // @@@ drag-reorder ([[session-reorder]]) - a POINTER drag started ONLY from the per-row handle (mousedown →
-  // window mousemove past a threshold → mouseup). NOT native HTML5 DnD: that needs an un-preventDefaulted
-  // mousedown, but keepFocus preventDefaults the row mousedown to keep the ❯ box focused — the two can't both
-  // win, and native dnd on a span-in-a-button was unreliable for a real mouse anyway. A pointer drag is immune
-  // to that preventDefault (it rides window mousemove/mouseup), so the handle's mousedown can flow through
-  // keepFocus untouched — the input KEEPS focus — while the drag still works. dropHint lights the insertion line.
+  // [[session-reorder]] drag: a POINTER drag from the per-row handle, not native HTML5 DnD. keepFocus
+  // preventDefaults the row mousedown to keep the ❯ box focused, which would block native DnD; a pointer
+  // drag rides window mousemove/mouseup, immune to that preventDefault. dropHint lights the insertion line.
   const [dropHint, setDropHint] = useState(null)
   const applyReorder = async (plan) => {
     if (!plan) return
@@ -301,9 +246,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)
   }
-  // @@@ dragHandle - the grip at the far right of row 2, the ONLY drag affordance. Its mousedown starts a
-  // POINTER drag (onHandleDown) and flows through keepFocus so the ❯ input keeps focus; its click is stopped so
-  // grabbing the grip never switches tab. The row body keeps every other gesture — click, double-click, focus.
   const dragHandle = (s) => (
     <span
       className="si-drag-handle"
@@ -313,32 +255,24 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     >⠿</span>
   )
 
-  // @@@ the vertical ↑/↓ ring - New Session, then each live session. The relationship graph is DELIBERATELY
-  // NOT in this ring: it sits on a HORIZONTAL axis off New (New's → enters it when the prompt is empty, the
-  // graph's ← returns) so it never blocks the path down to a session. 'graph' is a valid `sel` all the same.
   const order = useMemo(() => ['new', ...sessions.map((s) => s.id)], [sessions])
   const active = sel === 'graph' || order.includes(sel) ? sel : 'new'
-  // @@@ stale-tab fallback - a selected session can leave the board out from under you: closed via the
-  // header here, ended on its own, or closed from another window. This removal — not the close button — is
-  // what drives tab fallback. If `sel` no longer resolves (you're still on the now-gone tab) we land on New
-  // Session; if you'd already switched to another valid tab the close stands and `sel` still resolves, so
-  // this never fires. Mirrors `active`'s validity test so the lifted `sel` is never left stale behind it.
+  // a removed session (closed here, ended on its own, or closed elsewhere) leaves the tab unresolved: land
+  // on New only if you're still on the now-gone tab. Mirrors `active`'s validity test.
   useEffect(() => {
     if (sel !== 'graph' && !order.includes(sel)) setSel('new')
   }, [order, sel, setSel])
   const focusId = focusNode?.id || null
   const selSession = sessions.find((s) => s.id === active)
-  // liveness (NOT the lifecycle label) gates the terminal vs the relaunch panel — see [[state]]/[[session-console]].
-  // noLivePane: no live tmux to attach or message (offline, incl a never-launched `queued`). showRelaunch:
-  // offer to resume — every dead session EXCEPT `queued`, which self-starts as a slot frees, so it gets no button.
+  // liveness, not the lifecycle label, gates terminal vs relaunch ([[state]]). showRelaunch skips `queued`
+  // (it self-starts as a slot frees, so it gets no relaunch button).
   const noLivePane = selSession?.liveness === 'offline'
   const showRelaunch = noLivePane && selSession?.status !== 'queued'
   // the active session tab's bottom-input draft (per-session, see `drafts`).
   const msg = drafts[active] || ''
   const setMsg = (v) => setDrafts((d) => ({ ...d, [active]: v }))
 
-  // fetch the `/` command list once — same data CC's own `/` menu is built from (see backend
-  // /api/slash-commands). Purely for display+insert; we never execute a command from it.
+  // fetch the `/` command list once — the same data CC's `/` menu uses. Display+insert only; never executed.
   useEffect(() => {
     fetch('/api/slash-commands').then((r) => r.json()).then((d) => { if (Array.isArray(d)) setSlashCmds(d) }).catch(() => {})
   }, [])
@@ -348,19 +282,15 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   useEffect(() => {
     loadConfig().then((d) => { if (Array.isArray(d)) setPresets(d) }).catch(() => {})
   }, [])
-  // @@@ slash surface - /api/config returns ONLY slash-surface nodes (those living under a `slash/` dir;
-  // the backend routes on location now, see specs.ts loadSurface), so the presets ARE the launchable set —
-  // no client-side filter. system nodes plug in via the launcher's system prompt and never reach here.
+  // /api/config returns only slash-surface nodes, so the presets ARE the launchable set — no client filter.
   const slashPresets = presets
 
   // nav mode binds to ONE live session's menu — leaving the tab (or it going offline) exits it, so raw
   // keystrokes can never leak into the wrong pane.
   useEffect(() => { setNavMode(false); setSendErr(false); setMenu(null); setProofOpen(false) }, [active])
   useEffect(() => { if (selSession?.liveness === 'offline') setNavMode(false) }, [selSession?.liveness])
-  // @@@ refocus on nav exit - leaving nav mode (chord, double-Esc, header button, or bottom-bar click)
-  // hands the keyboard back to the bottom message box, so you can type without re-clicking it. Guarded to
-  // the on→off edge for a live session tab; a tab switch or going offline exits nav too, but the tab-focus
-  // effect owns focus there (and an offline tab has no input box to land in).
+  // leaving nav mode hands focus back to the ❯ box. Guarded to the on→off edge for a live tab — a tab
+  // switch or going offline exits nav too, but the tab-focus effect owns focus there.
   const wasNavRef = useRef(false)
   useEffect(() => {
     if (wasNavRef.current && !navMode && active !== 'new' && selSession?.liveness !== 'offline') msgRef.current?.focus()
@@ -375,19 +305,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // each SessionTerm reports whether its pane currently looks like a select menu (best-effort hint).
   const reportMenu = (id, likely) => setMenuById((m) => (m[id] === likely ? m : { ...m, [id]: likely }))
 
-  // @@@ warm, always-connected terminals - mount EVERY live session's terminal as soon as the board data
-  // arrives, not lazily on first focus. Each SessionTerm opens its WebSocket on mount, so by the time you
-  // click a tab the socket + scroll are already live and switching is instant — never a focus-triggered
-  // cold load. And because App keeps this whole surface mounted (hidden via `open`, never unmounted), the
-  // sockets stay connected even while the session console is CLOSED — reopening the board reveals panes
-  // that are already warm. Mounting while hidden is safe: SessionTerm's fit bails on a near-0 host (its
-  // shrink guard) and re-fits via ResizeObserver/animationend the instant a layer is revealed. We track
-  // exactly the set of live sessions, dropping any that vanish or go offline (an offline tab shows the
-  // relaunch panel, not a dead terminal). Liveness — NOT the lifecycle label — gates this: a session whose
-  // process is gone reads liveness 'offline' whatever its authored lifecycle (asking/review/error/…), so we
-  // never mount a tmux client against a dead id (which would leak tmux's bare "no sessions"). queued reads
-  // 'offline' too (never launched), so it also stays unmounted. This is the key experience — no warmth is
-  // traded for laziness.
+  // track exactly the set of live sessions (liveness, not lifecycle, gates membership) so every live pane
+  // stays mounted — see the warm-terminals contract in [[session-console]].
   const [opened, setOpened] = useState(() => new Set())
   useEffect(() => {
     setOpened((prev) => {
@@ -399,10 +318,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     })
   }, [sessions])
 
-  // @@@ seed - a board chord (nn/dd) opens this surface with a pre-filled @-directive. Apply it to the
-  // New Session draft ONCE, land on the New tab, place the caret at the end, then clear it upstream so a
-  // later reopen restores the user's own draft instead of re-seeding. Clobbering the draft is intended
-  // here (unlike a normal tab switch): the chord is an explicit "start this op".
+  // a board chord (nn/dd) seeds this surface with an @-directive. Apply ONCE to the New draft, then clear it
+  // upstream so a later reopen restores the user's own draft. Clobbering the draft is intended here.
   useEffect(() => {
     if (seed == null) return
     setSel('new')
@@ -412,10 +329,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     requestAnimationFrame(() => { const el = taRef.current; if (el) { el.focus(); el.setSelectionRange(seed.length, seed.length) } })
   }, [seed])
 
-  // @@@ focus on tab switch - whenever the board is open and you land on a tab, focus that tab's input:
-  // the New Session prompt, or a live session's bottom message box. NOTHING is prefilled — the focused
-  // node is instead the first @-mention suggestion, so you opt into it by typing `@`. (No setPrompt here:
-  // the per-tab drafts must survive a tab switch / reopen, so we never clobber them.)
+  // on landing on a tab, focus that tab's input (New prompt or a live session's ❯ box). No setPrompt here —
+  // the per-tab drafts must survive a tab switch / reopen, so we never clobber them.
   useEffect(() => {
     if (!open) return
     const id = setTimeout(() => {
@@ -426,19 +341,16 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     return () => clearTimeout(id)
   }, [open, active, selSession?.liveness])
 
-  // @@@ auto-grow - the new-session box grows with its content (line wraps + newlines) up to the CSS
-  // max-height, then scrolls. Re-runs on `open` too, so a reopen with a cached multi-line draft restores its
-  // height instead of collapsing. Its cap lives in CSS (max-height) — read it back and hand it to fitTextarea.
+  // auto-grow the new-session box; re-runs on `open` so a reopened multi-line draft restores its height.
+  // Its cap lives in CSS (max-height) — read it back and hand it to fitTextarea.
   useEffect(() => {
     const ta = taRef.current
     if (!ta || active !== 'new' || !open) return
     fitTextarea(ta, parseFloat(getComputedStyle(ta).maxHeight) || Infinity)
   }, [prompt, active, open])
 
-  // @@@ docked input auto-grow - the session ❯ box grows with its content too, but UPWARD: the bar is
-  // absolutely anchored to the wrap's bottom (see CSS), so added lines extend over the terminal's lower
-  // edge and never push the terminal or any sibling. Its cap is dynamic — HALF the terminal's height — so we
-  // set max-height in JS, then hand the same value to fitTextarea (the shared grow routine does the rest).
+  // the ❯ box auto-grows UPWARD (anchored to the wrap's bottom). Its cap is dynamic — half the terminal
+  // height — so we set max-height in JS, then hand the same value to fitTextarea.
   useEffect(() => {
     const ta = msgRef.current
     if (!ta || active === 'new' || !open) return
@@ -447,15 +359,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     fitTextarea(ta, maxH)
   }, [msg, active, open])
 
-  // @@@ composeLaunch - the grammar `/<preset> @<node>… <free text>` assembles ONE launch prompt:
-  //   · /<preset>  → a config preset (GET /api/config) whose `body` is the contract the agent runs.
-  //   · @<node>…   → the targets; resolved (via the @-mention specs) to `@id — path` lines that REPLACE the
-  //                  body's {{targets}} placeholder. No @ = a no-target note: use the prompt's scope, else ask the human (never assume a node).
-  //   · free text  → appended after the body as the human's extra steer.
-  // Keeping each target as `@id` in the targets block is load-bearing: the server derives the session's node
-  // from the FIRST `@<id>` it sees, so the composed prompt stays node-associated for free. A leading `/` that
-  // names no known preset is left verbatim (no hijack) — and a plain or @-only prompt returns unchanged, so
-  // the existing launch paths keep working.
+  // assemble the `/<preset> @<node>… <free text>` launch grammar into one prompt: the preset body with its
+  // {{targets}} placeholder filled from the @-mentions (the server later derives the node from the first
+  // @<id>), free text appended. A `/` naming no known preset, or a plain/@-only prompt, passes through.
   const composeLaunch = (raw) => {
     const m = raw.match(/^\/(\S+)\s*([\s\S]*)$/)
     if (!m) return raw
@@ -475,19 +381,12 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     return free ? `${body}\n\n${free}` : body
   }
 
-  // launch a real session, then STAY on the New tab — no tab switch. The new session just appears in the
-  // list below once `reload` (and the 4s poll) picks it up, so you can fire off several in a row. Removing
-  // the old jump-to-the-new-session also kills its race with the stale-tab fallback, which used to bounce
-  // you back to New whenever the backend hadn't listed the session yet by the time the post-create reload
-  // landed — the unstable "sometimes the new tab, sometimes back to New" jump.
+  // launch a session, then stay on the New tab — it appears in the list below on the next reload/poll.
   const submit = async () => {
     const raw = prompt.trim()
     if (!raw || sending) return
     setSending(true)
     try {
-      // compose a `/preset @node text` prompt into the preset's body (targets filled); a plain/@-only prompt
-      // passes through unchanged. The server then derives the node from the @-mention the prompt carries and
-      // titles a node-agnostic session by its first words — so the @ you type decides the node.
       const text = composeLaunch(raw)
       const res = await fetch('/api/sessions', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -501,17 +400,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     }
   }
 
-  // @@@ completion menus - one state machine, but each input surface drives its own dropdowns:
-  //   · New Session prompt → mention + config - an `@` that begins a word opens the spec-node dropdown
-  //     (the node a new session targets); a leading `/token` (whole line, no space yet) opens the CONFIG
-  //     PRESET palette (tidy/health/…, GET /api/config). The two compose: `/tidy @node text` picks a preset
-  //     and its targets (see submit). Picking a preset only inserts `/<name> ` — composition happens at launch.
-  //   · a session's ❯ inbox → slash - the WHOLE line is a single `/token` (no space yet): mirrors Claude
-  //     Code's `/` menu, listing commands whose name matches the prefix. Typing a space (→ args) dismisses
-  //     it, exactly like CC. DECOUPLED — picking one only inserts `/<name> ` text into the draft, nothing
-  //     runs; you still press Enter to dispatch the line to the agent.
-  // The trigger is purely positional. For mention we scan back from the caret over non-space chars; it's
-  // a mention only if we hit an `@` at a word boundary with no space up to the caret.
+  // build the completion dropdown for the active surface: the New prompt drives @-mention (spec nodes) +
+  // config-preset (`/`) menus; a session's ❯ inbox drives the slash-command menu. The trigger is purely
+  // positional — for a mention we scan back from the caret over non-space chars to an `@` at a word boundary.
   const buildMenu = (value, caret) => {
     if (active === 'new') {
       let i = caret - 1
@@ -550,9 +441,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const accept = (item) => {
     if (!item || !menu) return
     if (menu.kind === 'slash') {
-      // a BOARD command is the one row that RUNS rather than inserts: it IS the board's control plane (the
-      // typed twin of its header button), so accepting it does the thing — close / merge / nav / open proof —
-      // exactly as clicking the button would. CC's own commands still only insert text (you Enter to dispatch).
+      // a board command RUNS on pick (the typed twin of its button); CC commands only insert text.
       if (item.board) { const c = boardCmds.find((x) => x.name === item.name); setMsg(''); setMenu(null); c?.run(); return }
       const insert = `/${item.name} `
       const before = msg.slice(0, menu.start)
@@ -571,16 +460,13 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     requestAnimationFrame(() => { const el = taRef.current; if (el) { el.focus(); el.setSelectionRange(caret, caret) } })
   }
 
-  // @@@ slash dropdown - ONE render for both `/` palettes: the session inbox's CC-command menu (`up`, opens
-  // above the docked box) and the New Session box's config-preset menu (opens downward). Same markup, keys,
-  // and CSS; only the right-hand tag differs — a command's source (user/project/skill/built-in) vs a preset's
-  // kind (mutating/report). `head` is the dim title row's label.
+  // ONE render for both `/` palettes — the inbox's CC-command menu (`up`, opens above the box) and the New
+  // box's config-preset menu (downward). Only the right-hand tag differs. `head` is the dim title label.
   const slashMenu = (up, head) => (
     <ul className={up ? 'mention-menu up' : 'mention-menu'} role="listbox">
       <li className="mention-head">// {head} — {t('session.menuHint')}</li>
       {menu.items.map((it, i) => {
-        // a BOARD command carries its own identity hue (sc-<color> sets --sc), tinting BOTH its `/name` and
-        // its `[board]` tag the same colour as its header button. CC commands → source tag; presets → kind.
+        // a board command carries its identity hue (sc-<color>); CC commands → source tag, presets → kind.
         const tag = it.board ? 'board' : (it.source ?? it.kind)
         const hue = it.board ? ` sc-${it.color}` : ''
         return (
@@ -601,23 +487,12 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     </ul>
   )
 
-  // @@@ control-socket dispatch - the message ALWAYS goes through the rendezvous CONTROL SOCKET
-  // (POST /keys → daemon socket, bypassing tmux), NEVER by writing into the tmux pane. Writing pane bytes
-  // (the old WebSocket path) breaks whenever tmux is in COPY MODE — which scrolling the terminal enters —
-  // because copy-mode eats those bytes as navigation instead of delivering them to the agent. /keys injects
-  // out-of-band, so a message lands regardless of scroll/copy-mode state. The WebSocket stays for the
-  // read-only DISPLAY stream + wheel→copy-mode scroll only. Fail-loud: /keys 502s if dispatch fails, and we
-  // surface that (restore the draft, flag the error) rather than pretend it sent.
   const sendMsg = async () => {
     const text = msg
     if (!text.trim() || active === 'new') return
-    // @@@ board command → run, don't dispatch - a line that is EXACTLY `/<name>` of an available board
-    // command (close, merge, nav, proof) runs that command HERE instead of being sent to the agent — the
-    // same action its header button fires, from the same registry. This generalises the old `/exit`-only
-    // intercept: `/exit` still closes this session directly (the no-prompt removal the row-menu Close does),
-    // and sending any of these words to a live agent would only drive the agent's own process, not the board.
-    // The menu's accept() already runs a board command on pick; this covers the no-menu submit (line typed or
-    // pasted whole). trim() covers the trailing space the `/` completion leaves and a stray newline.
+    // a line that is EXACTLY `/<name>` of an available board command runs HERE instead of being sent to the
+    // agent (this covers the no-menu submit; accept() handles the menu pick). trim() covers the `/`
+    // completion's trailing space and a stray newline.
     const cmd = boardCmds.find((c) => text.trim() === `/${c.name}`)
     if (cmd) { setMsg(''); setMenu(null); cmd.run(); return }
     setMsg('')
@@ -634,11 +509,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     }
   }
 
-  // @@@ file attach - paste, drop, or pick a file → POST it to /api/uploads (the backend writes it to the
-  // worker machine's /tmp) → splice the returned path into the active input. The path is the whole handoff:
-  // the agent runs on that same machine, so `/tmp/spexcode-uploads/<file>` is a path it can just read. Works
-  // on both surfaces; `target` ('new' | 'msg') picks which draft receives the path. Fail-loud: an upload that
-  // doesn't return a path flags `uploadErr` instead of silently dropping the file.
   const uploadFile = async (file) => {
     const fd = new FormData()
     fd.append('file', file, file.name || 'pasted')
@@ -699,21 +569,14 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // open the file picker, remembering which surface its result should land in.
   const pickFiles = (target) => { fileTargetRef.current = target; fileRef.current?.click() }
 
-  // lifecycle actions — thin POSTs to the session state machine, then reload the board. No tab jump on
-  // close: the reload drops the closed session from the board and the stale-tab fallback above lands the
-  // viewer on New Session only if they're still on that tab.
+  // lifecycle actions — thin POSTs to the session state machine, then reload the board.
   const act = async (verb) => {
     await fetch(`/api/sessions/${active}/${verb}`, { method: 'POST' }).catch(() => {})
     await reload?.()
   }
 
-  // @@@ board commands - ONE registry (sessionCommands.js) feeds BOTH the header buttons AND the `❯` inbox's
-  // `/`-command interception, so a typed `/<name>` and the clicked button are the same action with the same
-  // identity colour. `runners` binds each command name to the closure that DOES it — the SAME closure the
-  // button's onClick fires — so the two surfaces can never drift. `boardCmds` is that registry narrowed to
-  // the commands available in the current session state (nav whenever live; proof/merge at review/done; exit
-  // whenever live). Used by buildMenu (to list them, coloured, atop the inbox `/` menu), accept/sendMsg (to
-  // RUN one), and the action row (to render the buttons).
+  // `runners` binds each board-command name to the closure that DOES it — the SAME closure the header
+  // button's onClick fires; `boardCmds` narrows the registry to the current session state. See [[term-input]].
   const runners = {
     nav: () => setNavMode((v) => !v),
     proof: () => setProofOpen(true),
@@ -722,34 +585,28 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     close: () => act('close'),   // removal: kill + remove the worktree + branch (the row right-click Close's twin)
   }
   const boardCmds = boardCommandsFor(selSession?.status, runners)
-  // @@@ window-level list nav - ↑/↓ move the selection regardless of focus; Enter on New launches.
+  // window-level key router: ↑/↓ walk the list regardless of focus; Enter on New launches.
   const stateRef = useRef({})
   stateRef.current = { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, navMode, setNavMode, sendRawKey, graphLegend, setGraphLegend }
   useEffect(() => {
     const onKey = (e) => {
       const { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, navMode, setNavMode, sendRawKey, graphLegend, setGraphLegend } = stateRef.current
       if (!open) return   // panel hidden (board not the active surface): nothing here listens
-      // @@@ reserved nav-toggle (⌥/⌘+I) - the dependable keyboard entry/exit, alongside the header button.
-      // ⌥I and ⌘I are RESERVED: handled before everything else (so they work whether nav mode is on or off),
-      // never forwarded to tmux, never overridable by the app. Matched by e.code (the physical I key) because
-      // ⌥I on a mac prints a dead-key glyph rather than 'i', which a plain e.key check would miss.
+      // reserved ⌥/⌘+I toggles nav mode: handled before everything else, never forwarded to tmux. Matched by
+      // e.code (the physical I key) because ⌥I on a mac prints a dead-key glyph, not 'i'.
       const isI = e.code === 'KeyI' || e.key === 'i' || e.key === 'I'
       if ((e.altKey || e.metaKey) && isI && active !== 'new' && active !== 'graph') {
         e.preventDefault(); e.stopPropagation(); setNavMode((v) => !v); return
       }
-      // @@@ jump to New Session - ⌃/⌘+N (also ⌃/⌘+↑/Home) snaps the selection to the New Session tab from
-      // anywhere in the panel, no arrowing up the whole list. Kept ABOVE both the relationship-tab branch and
-      // the nav-mode passthrough so it works from the graph and even while raw-key mode forwards to a pane.
-      // The tab-switch focus effect then drops the caret into the prompt box. (⌘+N is OS-reserved on macOS.)
+      // ⌃/⌘+N (also ⌃/⌘+↑/Home): kept ABOVE the graph branch and the nav-mode passthrough so the snap fires
+      // from the graph and even while raw-key mode forwards to a pane.
       if (((e.ctrlKey || e.metaKey) && (e.key === 'n' || e.key === 'N')) ||
           ((e.ctrlKey || e.metaKey) && (e.key === 'ArrowUp' || e.key === 'Home'))) {
         e.preventDefault(); e.stopPropagation(); setSel('new'); return
       }
-      // @@@ relationship-tab keys - the graph fills the pane and walks by hjkl ALONE (handled in its own
-      // listener, which runs after ours). Arrows are NOT the graph's: ← returns to New Session (the spatial
-      // twin of New's → into the graph), and the other arrows are inert here — we swallow them so they never
-      // scroll or fall through to tab nav. Esc closes the graph's `?` legend first (if open), else the console;
-      // ⌃/⌘+N above still escapes to New. We let hjkl / ⏎ / ? pass UNTOUCHED to the graph's own listener.
+      // graph tab: hjkl/⏎/? pass through to the graph's own listener; ← returns to New Session; the other
+      // arrows are swallowed (so they neither scroll nor fall through to tab nav). Esc closes the `?` legend
+      // first, else the console.
       if (active === 'graph') {
         if (e.key === 'Escape') {
           e.preventDefault(); e.stopPropagation()
@@ -761,12 +618,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         if (e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); return }
         return
       }
-      // @@@ nav mode passthrough - while ON, EVERY key is forwarded raw to the session pane and nothing else
-      // fires (no list nav, no page scroll), so the human drives the agent's terminal directly — INCLUDING
-      // ⌃/⌥/⌘ + key combos (encoded by navKeyToken into a `C-r` / `M-b` / `S-Tab` token tmux understands).
-      // The only keys NOT forwarded are the ones claimed above: the reserved ⌥/⌘+I toggle and the
-      // jump-to-New chords. Esc is forwarded too (it cancels the agent's menu); a SECOND Esc within 600ms
-      // exits nav mode. preventDefault/stopPropagation keep keys from leaking anywhere else.
+      // nav mode: forward EVERY key raw to the pane (⌃/⌥/⌘ combos encoded by navKeyToken), nothing else fires.
       if (navMode && active !== 'new') {
         e.preventDefault(); e.stopPropagation()
         if (e.key === 'Escape') {
@@ -792,9 +644,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       // Esc closes the whole interface (App delegates it here so the menu can claim it first, above). The
       // relationship tab's Esc is owned by its branch up top (legend-then-console); this is the other tabs'.
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onClose(); return }
-      // @@@ New → graph - from New Session, → crosses into the relationship graph, but ONLY when the prompt is
-      // EMPTY, so a non-empty draft still moves the caret normally. The graph's ← crosses back (see its branch
-      // above). This is the horizontal twin of the vertical ↑/↓ ring, mirroring the New/graph button pair.
+      // from New, → crosses into the graph, but ONLY when the prompt is empty (a non-empty draft moves the
+      // caret normally). The graph's ← crosses back.
       if (active === 'new' && e.key === 'ArrowRight' && (taRef.current?.value ?? '') === '') {
         e.preventDefault(); e.stopPropagation(); setSel('graph'); return
       }
@@ -823,14 +674,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     if (el) requestAnimationFrame(() => el.focus())
   }
 
-  // @@@ keep input focus - mousedown is what MOVES focus, so a LEFT click on panel chrome (a tab button, the
-  // list's empty padding, the header) would blur the docked input and leave you with nowhere to type. We
-  // cancel that focus shift for any left-click target that isn't itself a text field: preventDefault on
-  // mousedown blocks the blur, not the click, so buttons still fire their onClick. The terminal is the one
-  // exception — it owns its own text selection. RIGHT clicks are NOT our concern here: focus retention on a
-  // right-press belongs to the contextmenu blocker below (refocusInput), and preventDefault on a right-button
-  // mousedown SUPPRESSES the subsequent contextmenu in some browsers (Safari/Firefox), which would silently
-  // kill the rename pop-over. So we touch left clicks only — right clicks fall straight through to onContextmenu.
+  // keep the docked input focused: preventDefault on a left-click mousedown over non-text chrome blocks the
+  // blur but not the click (buttons still fire onClick). Left clicks ONLY — preventDefault on a right-button
+  // mousedown suppresses the contextmenu in some browsers (Safari/Firefox), killing the rename pop-over;
+  // right-click focus retention is handled by the contextmenu blocker below. The terminal owns its selection.
   const keepFocus = (e) => {
     e.stopPropagation()   // also guards the backdrop from closing on an inside click (any button)
     if (e.button !== 0) return
@@ -842,13 +689,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     e.preventDefault()
   }
 
-  // @@@ no browser context menu - blocking the menu must NOT rely on a React onContextMenu (unreliable for
-  // repeated right-clicks). A native WINDOW listener in the CAPTURE phase intercepts every contextmenu over
-  // the panel — first, double, triple click alike — and cancels it: a terminal-app feel, and crucially the
-  // menu can no longer seize focus. We also refocus the docked input afterwards, since the right-button press
-  // itself may already have blurred it (preventDefault on the menu can't undo a blur the mousedown caused).
-  // This blocks EVERYWHERE in the panel, list rows included — preventDefault here does not stop propagation,
-  // so a row's own onContextMenu still fires and opens the rename pop-over; we just also kill the OS menu.
+  // suppress the OS context menu via a native window listener in the CAPTURE phase (a React onContextMenu is
+  // unreliable for repeated right-clicks), then refocus the docked input (the right-press may have blurred
+  // it). preventDefault here does not stop propagation, so a row's own onContextMenu still opens the rename.
   useEffect(() => {
     if (!open) return
     const onMenu = (e) => {
@@ -874,10 +717,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           onChange={(e) => { attachFiles(e.target.files, fileTargetRef.current); e.target.value = '' }}
         />
         <aside className="si-list">
-          {/* @@@ top button row - two compact icon buttons, NOT full-width list rows, so neither blocks the
-              ↑/↓ path down to a session. `＋` starts a New Session; the network glyph opens the relationship
-              graph (same glyph the spec board's HUD carries). New ⇄ graph is the ←/→ horizontal axis (see the
-              key router); the live session rows below are the ↑/↓ vertical ring. */}
           <div className="si-toprow">
             <button className={active === 'new' ? 'si-pill new on' : 'si-pill new'} title={t('session.newSessionTitle')} onClick={() => setSel('new')}>
               <span className="si-pill-glyph">＋</span>
@@ -890,11 +729,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             </button>
           </div>
           {sessions.map((s) => (
-            // @@@ single = switch, double = lock - a single click just switches to the tab; a DOUBLE click
-            // locks that session and returns to the graph focused on its overlay (onPickSession toggle=false
-            // always grips). Precondition: a node to focus — with no overlay the double click is a no-op
-            // beyond the switch. The face is the SHARED SessionRow, so a tab reads IDENTICALLY to the
-            // top-right window (same status + same overlay tally, e.g. "review ~2"), not a divergent subset.
+            // single click switches tab; double-click locks the session (needs an overlay to focus, else a
+            // no-op beyond the switch). The face is the shared SessionRow.
             <button
               key={s.id}
               data-sid={s.id}
@@ -911,13 +747,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         </aside>
 
         <section className={active === 'new' ? 'si-content is-new' : active === 'graph' ? 'si-content is-graph' : 'si-content is-session'}>
-          {/* @@@ relationship graph - mounted only while its tab is active AND the console is open. It
-              remounts (instantly framed) on reselect, but both its NODES (the preloaded `sessions`) AND its
-              EDGES (graphEdges, polled HERE in the always-mounted console) are handed straight in — so reselect
-              frames the FINAL clustered web with no cold fetch and no edgeless-then-jump shuffle, and the web
-              keeps updating live while the console is open. onOpen switches the console to the clicked
-              session's tab — the graph's "open" is a tab switch, not a cross-surface jump. Its legend is
-              lifted here (graphLegend) for Esc precedence (see key router). */}
+          {/* nodes (preloaded `sessions`) and edges (polled in this console) are handed straight in, so a
+              reselect frames the final web with no cold fetch; onOpen is a tab switch, not a cross-surface jump. */}
           {open && active === 'graph' && (
             <SessionGraph sessions={sessions} onOpen={(id) => setSel(id)} active legend={graphLegend} setLegend={setGraphLegend} edges={graphEdges} edgesLoaded={graphEdgesLoaded} />
           )}
@@ -979,10 +810,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               </div>
             </div>
           )}
-          {/* @@@ persistent session pane - stays MOUNTED even while the "new session" tab is active
-              (just hidden via display:none) so the terminals' WebSockets + scroll survive the tab
-              switch. Earlier this branch was a ternary alternative to "new", so visiting "new" tore
-              down every SessionTerm and coming back forced a reconnect/repaint — the "reload" feel. */}
+          {/* the session pane stays MOUNTED even on the new/graph tabs (just display:none) so the terminals'
+              WebSockets + scroll survive the tab switch. */}
           <div
             className="si-session-wrap"
             style={{ display: (active === 'new' || active === 'graph') ? 'none' : 'flex', flexDirection: 'column', flex: 1, minWidth: 0, minHeight: 0, position: 'relative' }}
@@ -990,19 +819,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               <div className="si-term" ref={termRef}>
                 <div className="si-term-head">
                   <span className="si-dot" style={{ background: STATUS_COLOR[selSession?.status] || STATUS_COLOR.offline }} />
-                  {/* the big-title reads the SHARED sessionHeadline (live tmux self-summary, else a launch-
-                      prompt placeholder; a rename always wins) — the SAME source/content as the session rows
-                      ([[session-activity]]), only with more room before it truncates, so the title over the
-                      terminal never disagrees with the row that opened it. */}
+                  {/* the title reads the shared sessionHeadline ([[session-activity]]) — same source/content
+                      as the session rows, so it never disagrees with the row that opened it. */}
                   <span className="si-th-name" title={selSession ? sessionHeadline(selSession) : active}>{(selSession && sessionHeadline(selSession)) || active}</span>
                   <span className="si-th-st" style={{ color: STATUS_COLOR[selSession?.status] }}>{selSession?.status ? t(`status.${selSession.status}`) : ''}</span>
                   {selSession?.merges > 0 && <span className="si-merges" title={t('session.mergesTitle')}>{t('session.merges', { n: selSession.merges })}</span>}
-                  {/* @@@ action row - the buttons are the SAME board commands as the typed `/` commands, from
-                      the one registry: each carries its identity hue (sc-<color>) and fires the SAME run()
-                      the typed command does, so button and command never diverge. exit has no button here
-                      (button:false) — closing lives on the row's right-click menu, behind a confirm; relaunch
-                      is a plain lifecycle action, not a board command. No "request review": agents propose it
-                      at the stop-gate (`session done --propose merge`). */}
                   <div className="si-actions">
                     {showRelaunch
                       ? <button className="si-act go" onClick={() => act('resume')}>{t('session.relaunch')}</button>
@@ -1084,8 +905,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       </div>
     </div>
     <SessionContextMenu menu={ctxMenu} onClose={() => setCtxMenu(null)} onChanged={reload} />
-    {/* the review-proof overlay ([[review-proof]]) — one instance driven by the lifted `proofOpen`, opened
-        identically by the `proof` header button and the typed `/proof` board command. */}
+    {/* the review-proof overlay ([[review-proof]]) — one instance driven by the lifted `proofOpen`. */}
     {proofOpen && active !== 'new' && active !== 'graph' && <ProofOverlay sessionId={active} onClose={() => setProofOpen(false)} />}
     </>
   )

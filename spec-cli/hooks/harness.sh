@@ -8,8 +8,50 @@
 # lives here too, so the six hooks no longer each repeat the git-common-dir → project-key dance.
 
 # the string value of a top-level JSON string field (first match). Harness-agnostic — both harnesses' payloads
-# carry session_id / tool_name as plain string fields. $1 = payload, $2 = field name.
-hp_field() { printf '%s' "$1" | sed -n "s/.*\"$2\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" | head -1; }
+# carry session_id / tool_name as plain string fields. $1 = payload, $2 = field name. The value is scanned as a
+# real JSON string: the closing quote is the first UNESCAPED `"`, so a value containing `\"` (a quoted literal
+# inside a codex Bash/apply_patch command — extremely common) is captured WHOLE, not truncated at the inner
+# quote. The standard escapes are decoded (`\"` `\\` `\/` `\n` `\t` `\r` `\b` `\f`), so a patch envelope's `\n`
+# arrives as a real newline here (the downstream codex decode then no-ops). Pure awk, no jq on the hot path.
+hp_field() {
+  printf '%s' "$1" | awk -v field="$2" '
+    BEGIN { s = ""; while ((getline line) > 0) s = s (s == "" ? "" : "\n") line }
+    END {
+      key = "\"" field "\""
+      n = length(s); i = 1
+      while (i <= n) {
+        p = index(substr(s, i), key)
+        if (p == 0) exit
+        i += p + length(key) - 1
+        # skip whitespace, require a colon, skip whitespace, require an opening quote
+        while (i <= n && substr(s, i, 1) ~ /[ \t\n]/) i++
+        if (substr(s, i, 1) != ":") continue
+        i++
+        while (i <= n && substr(s, i, 1) ~ /[ \t\n]/) i++
+        if (substr(s, i, 1) != "\"") continue
+        i++
+        out = ""
+        while (i <= n) {
+          c = substr(s, i, 1)
+          if (c == "\\") {
+            e = substr(s, i + 1, 1)
+            if      (e == "n") out = out "\n"
+            else if (e == "t") out = out "\t"
+            else if (e == "r") out = out "\r"
+            else if (e == "b") out = out "\b"
+            else if (e == "f") out = out "\f"
+            else               out = out e   # \" \\ \/ and any other → the literal char
+            i += 2
+          } else if (c == "\"") {
+            print out; exit
+          } else {
+            out = out c; i++
+          }
+        }
+        exit
+      }
+    }'
+}
 
 # the session id from a payload (both harnesses use session_id).
 # the GOVERNED record id the launcher baked into the session env (SPEXCODE_SESSION_ID) wins over the harness's
@@ -57,10 +99,12 @@ hp_ask_note() {
     | sed 's/^"question"[[:space:]]*:[[:space:]]*"//; s/"$//'
 }
 
-# the CODE file a payload touches, mapped to the trigger the spec hooks key on. $2 = mode:
+# the CODE file(s) a payload touches, mapped to the trigger the spec hooks key on. $2 = mode:
 #   access  → the file being READ or edited ([[spec-first]] fires on any code touch)
 #   mutate  → the file being EDITED      ([[spec-of-file]] fires only on a mutation)
-# Echoes the path, or nothing when the payload is not a code touch of that mode. The harness divergence:
+# Echoes the path(s), ONE PER LINE — a codex multi-file apply_patch (several `*** Update File:` markers)
+# touches several files in one tool call, so every consuming hook iterates the lines. Echoes nothing when the
+# payload is not a code touch of that mode. The harness divergence:
 #   Claude — Read/Edit/Write/NotebookEdit + tool_input.file_path|notebook_path.
 #   Codex  — NO file_path. An EDIT is its own first-class tool `tool_name:"apply_patch"` whose tool_input.command
 #            is the bare patch envelope (`*** Update File: <path>`); a READ/shell is `tool_name:"Bash"` +
@@ -90,17 +134,19 @@ hp_code_path() {
 # `apply_patch` token, so we detect it by the File: markers themselves (the legacy `apply_patch` token is kept
 # too, for a shell-wrapped invocation); a plain command (sed/cat/head/rg/…) carries the path as a token.
 # A MUTATION is a patch envelope or a write shape (a redirect, tee, `sed -i`, dd of=); in `mutate` mode a pure
-# read yields nothing. The path is the last path-like token (has a / or a .ext), ignoring flags — matches the
-# verified-facts example `sed -n 1p f.ts` → `f.ts`. Best-effort: an exotic command may not resolve, which only
-# means a missed nudge, never a wrong block.
+# read yields nothing. A patch envelope can carry SEVERAL `*** Update File:` markers (a multi-file edit) — ALL
+# of them are emitted, one per line, so the consuming hook acts on every touched file (a single-file patch
+# emits one line; a plain command emits its one token). The plain-command path is the last path-like token
+# (has a / or a .ext), ignoring flags — matches the verified-facts example `sed -n 1p f.ts` → `f.ts`.
+# Best-effort: an exotic command may not resolve, which only means a missed nudge, never a wrong block.
 _hp_codex_cmd_path() {
   local mode="$2" cmd
-  # the command arrives as a JSON STRING value, so its newlines are the two-character escape `\n` (and tabs
-  # `\t`). Decode them to real whitespace so a patch File: line ends at a newline and tokens split.
+  # the command arrives as a JSON STRING value; hp_field already decodes JSON escapes (so a patch File: line
+  # already ends at a real newline). This gsub is a no-op safety net for any caller that bypassed hp_field.
   cmd=$(printf '%s' "$1" | awk '{gsub(/\\n/,"\n"); gsub(/\\t/,"\t")}1')
   case "$cmd" in
     *apply_patch*|*applypatch*|*'*** Add File:'*|*'*** Update File:'*|*'*** Delete File:'*)
-      printf '%s\n' "$cmd" | sed -n 's/^\*\*\* \(Add\|Update\|Delete\) File: \(.*\)$/\2/p' | head -1 | sed 's/[[:space:]]*$//'
+      printf '%s\n' "$cmd" | sed -n 's/^\*\*\* \(Add\|Update\|Delete\) File: \(.*\)$/\2/p' | sed 's/[[:space:]]*$//'
       return 0 ;;
   esac
   local is_mutate=0

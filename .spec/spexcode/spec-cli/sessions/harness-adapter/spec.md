@@ -80,9 +80,14 @@ differs by operation: an **edit is its own first-class tool `tool_name:"apply_pa
 **bare patch envelope** (`*** Update File: <path>` lines, with NO literal `apply_patch` token), while a **read/
 shell is `tool_name:"Bash"`** + `tool_input.command`. So `hp_code_path` accepts BOTH tools and `_hp_codex_cmd_path`
 detects a mutation by the `*** … File:` markers themselves (not by an `apply_patch` token), else takes the last
-path-like token (`sed -n 1p f.ts` → `f.ts`); `hp_is_ask` maps Codex's `request_user_input` (and Claude's
-`AskUserQuestion`) onto the question capture. So [[spec-first]], [[spec-of-file]], and mark-active fire on Codex,
-not just Claude. The session-id + global-store resolution every handler repeated is folded into the same helper.
+path-like token (`sed -n 1p f.ts` → `f.ts`). A patch can bundle SEVERAL `*** … File:` markers (a multi-file
+edit), so `hp_code_path` emits ALL touched paths — one per line — and every consuming hook iterates them
+([[spec-first]] nudges if ANY is non-spec code; [[spec-of-file]] annotates EACH governed code file). The shared
+`hp_field` reads a top-level JSON string value as a real JSON string: the close quote is the first UNESCAPED `"`,
+so a `command` carrying a quoted literal (`sed -n "1,5p" f.ts`) is captured whole, not truncated at the inner
+quote. `hp_is_ask` maps Codex's `request_user_input` (and Claude's `AskUserQuestion`) onto the question capture.
+So [[spec-first]], [[spec-of-file]], and mark-active fire on Codex, not just Claude. The session-id + global-store
+resolution every handler repeated is folded into the same helper.
 
 ## verified codex facts (live round-trip, real codex 0.142.3)
 

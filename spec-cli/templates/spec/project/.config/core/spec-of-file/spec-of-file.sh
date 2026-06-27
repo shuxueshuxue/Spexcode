@@ -17,17 +17,26 @@ payload=$(cat 2>/dev/null)
 sid=$(hp_session_id "$payload"); [ -n "$sid" ] || exit 0
 sdir=$(hp_store_dir "$sid") || exit 0
 
-# the code file just MUTATED (empty when this tool didn't mutate a file, e.g. a pure read).
-path=$(hp_code_path "$payload" mutate)
-[ -n "$path" ] || exit 0
-# editing the spec itself is not a governed-code edit → nothing to annotate.
-case "$path" in */.spec/*|.spec/*|*/spec.md|spec.md) exit 0 ;; esac
-# dedupe: once per session per file. The ledger lists already-annotated paths.
-led="$sdir/spec-of-file-seen"
-[ -f "$led" ] && grep -qxF -- "$path" "$led" && exit 0
-mkdir -p "$sdir"; echo "$path" >> "$led"
-msg=$($S owner "$path" --actionable 2>/dev/null)   # --actionable: silent on a sanely-owned file; speaks only for an OVER-owned / uncovered file
+# the code file(s) just MUTATED (empty when this tool didn't mutate a file, e.g. a pure read). A codex
+# multi-file apply_patch yields several paths (one per line) — annotate EACH governed code file, once.
+paths=$(hp_code_path "$payload" mutate)
+[ -n "$paths" ] || exit 0
+led="$sdir/spec-of-file-seen"   # dedupe: once per session per file. Lists already-annotated paths.
+msg=""
+while IFS= read -r path; do
+  [ -n "$path" ] || continue
+  # editing the spec itself is not a governed-code edit → nothing to annotate.
+  case "$path" in */.spec/*|.spec/*|*/spec.md|spec.md) continue ;; esac
+  [ -f "$led" ] && grep -qxF -- "$path" "$led" && continue
+  mkdir -p "$sdir"; echo "$path" >> "$led"
+  m=$($S owner "$path" --actionable 2>/dev/null)   # --actionable: silent on a sanely-owned file; speaks only for an OVER-owned / uncovered file
+  [ -n "$m" ] || continue
+  msg="${msg:+$msg
+}$m"
+done <<EOF
+$paths
+EOF
 [ -n "$msg" ] || exit 0
-esc=$(printf '%s' "$msg" | sed 's/\\/\\\\/g; s/"/\\"/g')
+esc=$(printf '%s' "$msg" | sed 's/\\/\\\\/g; s/"/\\"/g' | awk 'BEGIN{ORS=""} NR>1{print "\\n"} {print}')
 printf '{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"%s"}}\n' "$esc"
 exit 0

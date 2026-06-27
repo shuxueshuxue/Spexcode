@@ -80,6 +80,15 @@ hp_store_dir() {
   printf '%s/sessions/%s' "$rd" "$1"
 }
 
+# the deterministic content fingerprint of the EDITABLE config roots (.config + config md/sh) — the gate's
+# "did the .config move?" signal. Run with cwd = the project. ONE definition: the dispatch.sh gate sources this
+# and materialize.ts shells to it, so the gate and the renderer can NEVER disagree on what "changed" means (the
+# two used to inline this pipeline verbatim, each commenting the other "MUST match").
+hp_config_hash() {
+  find .spec/*/.config .spec/*/config \( -name '*.md' -o -name '*.sh' \) -type f -print0 2>/dev/null \
+    | sort -z | xargs -0 cat 2>/dev/null | sha256sum | cut -d' ' -f1
+}
+
 # the tool a payload is about to run / just ran (harness-agnostic field name).
 hp_tool() { hp_field "$1" tool_name; }
 

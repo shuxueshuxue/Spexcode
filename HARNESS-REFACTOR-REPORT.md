@@ -225,7 +225,43 @@ These are harness/environment LIMITS, not shortcuts. Each was driven to where th
 - **Committed** as bff734b (spec+code together; typecheck 0; lint 0 errors; 20 pre-existing warnings, none
   on the new files — fully covered, no new owners/coverage/drift).
 
-## §7. STATUS & THE ONE DECISION THAT GATES INCREMENT 2
+- **Increment 2 (sessions.ts → dispatcher, dashboard path) — BUILT + RUNTIME-CHAIN VERIFIED.** `settingsJson`
+  rewritten from 6 hardcoded hooks to a thin shim: SessionStart→sessionstart.sh (compile), every event→
+  dispatch.sh. The handler set now comes from the SESSION's `.config` (repoRoot() is cwd-based → each session
+  compiles from its OWN worktree `.config` → editing `.config` changes that session's hooks = the DIY model).
+  `appendSysArg` UNCHANGED (system surface byte-identical). E2E runtime chain (compile→manifest→dispatch→real
+  `.config` handlers, isolated temp .session): PreToolUse fired mark-active + spec-first; **spec-first blocked
+  via its `{"decision":"block"}` JSON on stdout** (NOT exit 2 — the real blocking hooks all use the stdout-JSON
+  decision mechanism; the dispatcher passes stdout through verbatim → Claude blocks identically); the one-shot
+  sentinel made the 2nd PreToolUse pass; idle fired on idle_prompt. typecheck 0.
+  CAVEAT: a dashboard-launched session runs the backend's cli, so `spex hooks compile` only exists post-merge
+  (or when launched with this worktree's cli) — the standard "hooks run MAIN cli" constraint; my e2e used the
+  worktree cli. A full real-`claude`-launch test (Claude interpreting the dispatcher's stdout) is the remaining
+  validation; the runtime chain produces the exact bytes Claude's documented hook contract consumes.
+
+## §7. STATUS — DASHBOARD PATH DONE; REMAINING = BARE-LAUNCH SHIMS + DE-ABSOLUTIZE + CODEX
+
+**Done & verified (committed):** corrected doc-grounded plan; `surface: hook` mechanism (recursive loader,
+compiler, pure-shell dispatcher unit-tested, sessionstart); 6 `.config/core` hook nodes (the EDITABLE RUNTIME
+config — the DIY home; scripts byte-identical to the spec-cli init templates); manifest == legacy map;
+sessions.ts wired to the dispatcher (dashboard path), runtime chain e2e-verified; system surface byte-unchanged.
+
+**The model (corrected per the user):** `.config` is the project's EDITABLE RUNTIME config — hooks live there,
+a user changes them by editing `.config` (DIY). The source (spec-cli) relationship is ONLY init-time: `spex
+init` copies the default hooks into `.config`. So spec-cli/hooks/*.sh are init TEMPLATES (still governed by the
+injected-context/lifecycle source nodes); `.config/core/*` are the runtime instance. The "duplication" is the
+intended copy-at-init, not a governance bug.
+
+**Remaining:**
+- Committed bare-launch shims (`.claude/settings.json` + `.codex/hooks.json`) — needs the `.gitignore`
+  decision (`.claude/*` is currently gitignored except agents/); these are what let a NON-dashboard `claude`/
+  `codex` in the repo pick up the hooks.
+- Full de-absolutization (`$CLAUDE_PROJECT_DIR`; the `$SPEX` runtime for bare launch — §5.4).
+- A real `claude`-launch e2e (Claude interpreting the dispatcher output end to end).
+- `spex init` seeding `.config` from the templates.
+- Codex: the apply_patch path-extractor (§5.2), `notify` for idle, and the separate Codex launcher node (§5.5).
+
+## (historical) §7b. The earlier "fork" — now RESOLVED as a non-issue
 
 **Done & verified (increment 1, non-breaking, committed):** the corrected doc-grounded plan; the
 `surface: hook` mechanism (recursive loader, compiler, pure-shell dispatcher, sessionstart); 6 migrated hook

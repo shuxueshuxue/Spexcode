@@ -12,7 +12,13 @@
 hp_field() { printf '%s' "$1" | sed -n "s/.*\"$2\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" | head -1; }
 
 # the session id from a payload (both harnesses use session_id).
-hp_session_id() { hp_field "$1" session_id; }
+# the GOVERNED record id the launcher baked into the session env (SPEXCODE_SESSION_ID) wins over the harness's
+# own payload session_id. This is what lets a dashboard-launched CODEX session feed its governed record: codex
+# mints its OWN thread id (un-pinnable), so the record can't be keyed by it — instead the launcher keys the
+# record by a SpexCode id and exports it into the launch, and every hook resolves THAT. Claude's payload id is
+# already the record id, so the env (= same value) is a harmless no-op there. A self-launched agent sets no
+# env → falls back to the payload session_id (its own non-governed record). One resolver, both harnesses.
+hp_session_id() { printf '%s' "${SPEXCODE_SESSION_ID:-$(hp_field "$1" session_id)}"; }
 
 # the per-PROJECT GLOBAL runtime dir (mirrors spec-cli/src/layout.ts `runtimeRoot`): <store>/projects/<enc>,
 # keyed by the project (dirname of the ABSOLUTE git-common-dir, so the answer is identical from main or any

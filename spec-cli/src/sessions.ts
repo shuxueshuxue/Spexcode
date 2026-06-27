@@ -81,8 +81,13 @@ const rvSock = (id: string) => join(tmpdir(), `spexcode-rv-${id}.sock`)
 // propagated when set, because the session inherits the tmux SERVER's env (not the backend's), so without this
 // an overridden home would silently leak the session's hook-state + codex-trust to the default ~/.spexcode /
 // ~/.codex. Deterministic: the session's store = the backend's store, never the ambient env's.
-const rvEnv = (id: string) => {
-  const parts = [`CLAUDE_BG_BACKEND=daemon`, `CLAUDE_BG_RENDEZVOUS_SOCK=${rvSock(id)}`]
+const rvEnv = (id: string, harness = HARNESS) => {
+  // SPEXCODE_SESSION_ID is the GOVERNED record id every hook resolves (hp_session_id prefers it) — it makes a
+  // codex session, whose own thread id is un-pinnable, still feed its governed record; harmless for claude
+  // (= its pinned id). The CLAUDE_BG rendezvous control socket is the reclaude prompt-delivery path and exists
+  // ONLY for harnesses that own one (claude) — codex has no such daemon, so it's omitted there.
+  const parts = [`SPEXCODE_SESSION_ID=${id}`]
+  if (harness.ownsRendezvous) parts.push(`CLAUDE_BG_BACKEND=daemon`, `CLAUDE_BG_RENDEZVOUS_SOCK=${rvSock(id)}`)
   for (const v of ['SPEXCODE_HOME', 'CODEX_HOME']) { const val = process.env[v]; if (val) parts.push(`${v}=${val}`) }
   return parts.join(' ')
 }

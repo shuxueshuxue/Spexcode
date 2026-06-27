@@ -85,3 +85,12 @@ The Codex impl of the adapter must encode these (measured against a real self-la
   [[spec-first]] are INERT on codex (the first cut had both bugs — proven live, then fixed). The store/dispatch
   layer is NOT implicated (proven under real codex: zero-prompt launch, hooks fire from the global store, the
   governed mark-active flip + governed declare/commit gate + silent non-governed Stop all work live).
+- **session-id model** (codex-rs source-verified): codex MINTS its own thread id internally (`Uuid::new_v4`/
+  `ThreadId::new`) — there is NO flag/env to pin a NEW session's id (`CODEX_THREAD_ID` is an OUTPUT codex
+  injects, not an input; resume takes an existing rollout id). So a dashboard-launched codex session can't have
+  its governed record keyed by the harness id the way claude's `--session-id` allows. The adapter's resolution:
+  the launcher keys the record by a SpexCode id and exports it as `SPEXCODE_SESSION_ID` into the launch env, and
+  every hook resolves THAT first (`hp_session_id`), falling back to the payload id only when unset (self-launch).
+  One resolver, both harnesses — claude's exported id equals its payload id, so it's a no-op there.
+- **no rendezvous** (`ownsRendezvous:false`): codex has no reclaude control socket, so its liveness reads from
+  the tmux session (not a socket) and a follow-up prompt goes through `codex resume`, not the socket dispatch.

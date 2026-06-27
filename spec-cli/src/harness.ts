@@ -25,6 +25,10 @@ export interface Harness {
   readonly events: readonly string[]
   // whether the harness manages its own worktrees (Claude `--worktree`); if false SpexCode owns them (Codex).
   readonly ownsWorktrees: boolean
+  // whether the harness's agent opens a reclaude rendezvous control socket — the deterministic prompt-delivery
+  // + liveness path. Claude (via reclaude) does; Codex has no such daemon, so its liveness reads from tmux and
+  // follow-up prompts go through the harness's own resume, not the socket.
+  readonly ownsRendezvous: boolean
 
   // --- launch / sessionId ---
   // the base agent command (env-overridable for tests). Claude: `claude …`; Codex: `codex --yolo`.
@@ -133,6 +137,7 @@ export const claudeHarness: Harness = {
   id: 'claude',
   events: CLAUDE_EVENTS,
   ownsWorktrees: true,                               // Claude has a native --worktree + WorktreeCreate/Remove hooks
+  ownsRendezvous: true,                              // reclaude opens the rendezvous control socket (prompt delivery + liveness)
   launchCmd: () => process.env.SPEXCODE_CLAUDE_CMD || 'claude --dangerously-skip-permissions',
   sessionIdArg: (id) => `--session-id ${id}`,        // the caller chooses the id
   sessionEnvVar: 'CLAUDE_CODE_SESSION_ID',
@@ -147,6 +152,7 @@ export const codexHarness: Harness = {
   id: 'codex',
   events: CODEX_EVENTS,
   ownsWorktrees: false,                              // Codex has no worktree primitive — SpexCode manages it
+  ownsRendezvous: false,                             // no reclaude daemon — liveness from tmux, prompts via `codex resume`
   launchCmd: () => process.env.SPEXCODE_CODEX_CMD || 'codex --yolo',
   sessionIdArg: () => '',                            // codex assigns its own id (resumed by a captured id)
   sessionEnvVar: 'CODEX_THREAD_ID',

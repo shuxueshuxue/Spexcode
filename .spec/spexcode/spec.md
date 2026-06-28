@@ -12,8 +12,10 @@ The project root. This node is the hour-0 founding spec (it literally grew from
 intent that started it.
 
 Everything else is a child package: **spec-dashboard** (the node-graph UI), **spec-cli** (the server,
-the git-as-database reader, and the source-of-truth guards), and **spec-yatsu** (computer-use A→B
-evidence, not built yet).
+the git-as-database reader, and the source-of-truth guards), **spec-forge** (a read-only tracer that
+resolves a forge's open issues/PRs to the spec nodes they serve), and **spec-yatsu** (the
+loss-measurement system — each node's scenarios scored against their expected outcome, the signal the
+optimizer reads).
 
 `config/` holds **reflexive, skill-shaped preset nodes** — each a spec node whose folder bundles a prompt
 template (`spec.md`, with a `{{targets}}` placeholder) plus any helper scripts/assets, served by

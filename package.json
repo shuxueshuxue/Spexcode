@@ -1,8 +1,8 @@
 {
-  "name": "spexcode",
+  "name": "spexcode-monorepo",
   "private": true,
   "version": "0.0.0",
-  "description": "SpexCode — spec-driven self-developing dev tool: spec-cli, spec-dashboard, spec-yatsu",
+  "description": "SpexCode dev monorepo (private, unpublished). The published npm package is `spexcode`, built from spec-cli — see .spec/spexcode/spec-cli/packaging.",
   "scripts": {
     "api": "npm --prefix spec-cli run serve",
     "web": "npm --prefix spec-dashboard run dev",

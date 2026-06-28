@@ -155,7 +155,7 @@ export default {
     loadingHistory: 'loading history…',
     eval: {
       noScenarios: 'no scenarios declared — this node has no yatsu.md to measure.',
-      noReadings: 'no measurements yet — run `spex yatsu eval` to file one.',
+      noReadings: 'no measurements yet — run `spex yatsu eval` to file one. The declared scenarios:',
       staleAxes: ({ axes }) => `stale: ${axes} moved since this reading`,
       pass: '✓ pass',
       fail: '✗ fail',
@@ -170,20 +170,20 @@ export default {
     },
   },
 
-  // the bottom-left board-stats strip — every per-node badge, COUNTED across the whole tree (distinct
-  // things, never a sum of badges). Each chip's title says what it counts; clicking WALKS focus through
-  // those nodes one per click.
+  // the bottom-left board-stats strip — the per-node badges COUNTED across the whole tree (distinct things,
+  // never a sum of badges), except coverage which counts SCENARIOS (the unit of yatsu loss). Each chip's
+  // title says what it counts; clicking WALKS focus through the nodes behind it, one per click.
   stats: {
     aria: 'board statistics',
     totalTitle: ({ n }) => `${n} spec node${n === 1 ? '' : 's'} in the tree`,
     statusTitle: ({ n, status }) => `${n} ${status} — click to walk them`,
     driftTitle: ({ n }) => `${n} node${n === 1 ? '' : 's'} whose code is ahead of its spec — click to walk them`,
     issueTitle: ({ n }) => `${n} distinct open issue${n === 1 ? '' : 's'} linked to the tree — click to walk the nodes carrying them`,
-    scorePass: ({ n }) => `${n} node${n === 1 ? '' : 's'} measured fresh & passing — click to walk them`,
-    scoreFail: ({ n }) => `${n} node${n === 1 ? '' : 's'} measured fresh & failing — click to walk them`,
-    scoreStalePass: ({ n }) => `${n} node${n === 1 ? '' : 's'} with a stale pass (code moved since the last passing measurement) — click to walk them`,
-    scoreStaleFail: ({ n }) => `${n} node${n === 1 ? '' : 's'} with a stale fail (code moved since the last failing measurement) — click to walk them`,
-    scoreEmpty: ({ n }) => `${n} node${n === 1 ? '' : 's'} with an unmeasured or unscored scenario (a blind spot) — click to walk them`,
+    scorePass: ({ n }) => `${n} scenario${n === 1 ? '' : 's'} measured fresh & passing — click to walk the nodes carrying them`,
+    scoreFail: ({ n }) => `${n} scenario${n === 1 ? '' : 's'} measured fresh & failing — click to walk the nodes carrying them`,
+    scoreStalePass: ({ n }) => `${n} scenario${n === 1 ? '' : 's'} with a stale pass (code moved since the last passing measurement) — click to walk the nodes carrying them`,
+    scoreStaleFail: ({ n }) => `${n} scenario${n === 1 ? '' : 's'} with a stale fail (code moved since the last failing measurement) — click to walk the nodes carrying them`,
+    scoreEmpty: ({ n }) => `${n} unmeasured or unscored scenario${n === 1 ? '' : 's'} (a blind spot) — click to walk the nodes carrying them`,
   },
 
   // the yatsu SCORE vocabulary — one set of words across the node-tile count, the focus panel, and the eval
@@ -230,6 +230,8 @@ export default {
   sessionGraph: {
     helpTitle: 'keymap & legend (?)',
     asked: ({ a, b }) => `asked ${a} to monitor ${b}`,
+    picked: 'right-click another node for this one to monitor',
+    needSource: 'left-click a node first, then right-click another to monitor it',
     monitorPrompt: ({ label, id }) => `Please monitor session ${label} (${id}): run \`spex watch ${id}\` in the background and keep it running so its transitions surface to me.`,
     legend: {
       title: 'session relationships',
@@ -238,7 +240,11 @@ export default {
       move: 'move the cursor to the nearest session',
       open: 'open the focused session',
       leave: 'back to New Session',
-      monitor: 'drag A→B to ask A to monitor B',
+      secMouse: 'mouse',
+      gDblClick: 'double-click',
+      gClickRight: 'click → right-click',
+      openMouse: 'double-click a session to open it',
+      monitor: 'left-click a node, then right-click another to ask the first to monitor it',
       secEdges: 'edges',
       edgesDesc: 'each arrow A→B is a live monitor — agent A is running `spex watch B` right now.',
     },

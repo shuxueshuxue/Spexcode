@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ScoreBadge, readingScore, ScenarioCount } from './score.jsx'
+import { ScoreBadge, readingScore, ScenarioCount, scenarioStates } from './score.jsx'
 import { useT } from './i18n/index.jsx'
 
 // @@@ pane registry - add a face for a spec node by adding one entry + one render case below.
@@ -39,10 +39,31 @@ function inline(text) {
   return out
 }
 
+// a GFM table delimiter row — `|---|:--:|--:|` — what separates the header from the body and marks a
+// pipe-line as a real TABLE (not prose that happens to contain a `|`). Must carry a pipe so a bare `---`
+// horizontal rule after a pipe-paragraph isn't misread as one.
+function isTableDelim(line) {
+  const s = line.trim()
+  return s.includes('|') && /^\|?(\s*:?-+:?\s*\|)+(\s*:?-+:?\s*)?$/.test(s)
+}
+// split one table row into trimmed cells, dropping the outer pipes. Cell text keeps its inline markdown
+// (`code`, **bold**, [[links]]) — it runs back through inline() like any other prose.
+function tableCells(line) {
+  let s = line.trim()
+  if (s.startsWith('|')) s = s.slice(1)
+  if (s.endsWith('|')) s = s.slice(0, -1)
+  return s.split('|').map((c) => c.trim())
+}
+// per-column alignment from the delimiter cell: `:--:` center · `--:` right · else default (left).
+function colAlign(cell) {
+  const l = cell.startsWith(':'), r = cell.endsWith(':')
+  return l && r ? 'center' : r ? 'right' : null
+}
+
 // @@@ SpecBody - render the spec.md body as a current-state document (markdown). It is NOT a
 // changelog — version history is the recent/history tabs, sourced from git (spex lint's `living`
 // rule keeps `## vN` headings out of the body). Fence-aware tokenizer: ``` code, # headings,
-// `- ` lists, paragraphs. The leading `# title` line is dropped (it duplicates the panel header).
+// `- ` lists, | GFM tables |, paragraphs. The leading `# title` line is dropped (it duplicates the header).
 function SpecBody({ body }) {
   if (!body) return null
   const lines = body.replace(/^#\s+[^\n]*\n+/, '').split('\n')
@@ -57,6 +78,22 @@ function SpecBody({ body }) {
       out.push(<pre className="doc-pre" key={k++}><code>{buf.join('\n')}</code></pre>)
     } else if (/^#{1,6}\s+/.test(lines[i])) {
       out.push(<h4 className="doc-h" key={k++}>{inline(lines[i].replace(/^#+\s+/, ''))}</h4>); i++
+    } else if (t.includes('|') && i + 1 < lines.length && isTableDelim(lines[i + 1])) {
+      const head = tableCells(lines[i])
+      const aligns = tableCells(lines[i + 1]).map(colAlign)
+      i += 2
+      const rows = []
+      while (i < lines.length && lines[i].includes('|') && lines[i].trim() !== '' && !/^```/.test(lines[i].trim())) {
+        rows.push(tableCells(lines[i])); i++
+      }
+      out.push(
+        <table className="doc-table" key={k++}>
+          <thead><tr>{head.map((c, j) => <th key={j} style={aligns[j] ? { textAlign: aligns[j] } : undefined}>{inline(c)}</th>)}</tr></thead>
+          <tbody>{rows.map((r, ri) => (
+            <tr key={ri}>{head.map((_, ci) => <td key={ci} style={aligns[ci] ? { textAlign: aligns[ci] } : undefined}>{inline(r[ci] ?? '')}</td>)}</tr>
+          ))}</tbody>
+        </table>
+      )
     } else if (/^-\s+/.test(t)) {
       const items = []
       while (i < lines.length && /^-\s+/.test(lines[i].trim())) items.push(lines[i++].trim().replace(/^-\s+/, ''))
@@ -68,6 +105,8 @@ function SpecBody({ body }) {
       while (i < lines.length) {
         const l = lines[i]
         if (l.trim() === '' || /^```/.test(l.trim()) || /^#{1,6}\s+/.test(l) || /^-\s+/.test(l.trim())) break
+        // a table starting on the next line ends this paragraph even without a blank separator.
+        if (l.includes('|') && i + 1 < lines.length && isTableDelim(lines[i + 1])) break
         buf.push(l); i++
       }
       out.push(<p key={k++}>{inline(buf.join(' '))}</p>)
@@ -221,7 +260,7 @@ function DiffEvidence({ diff }) {
 // evidence. Empty/loading states live in the consumers (each has its own vocabulary), so `items` is always a
 // non-empty array here. revealNext + its two triggers are the progressive reveal, lifted from the old
 // HistoryPane verbatim, so the history tab is unchanged and the eval tab inherits the same gesture.
-function ChronoPane({ items, itemKey, classes, rowClass, renderHeader, renderEvidence }) {
+function ChronoPane({ items, itemKey, classes, rowClass, renderHeader, renderEvidence, leading }) {
   const scRef = useRef(null)
   const [open, setOpen] = useState(() => new Set([0]))   // latest expanded; the rest reveal on scroll
   const toggle = useCallback((i) => setOpen((prev) => {
@@ -268,6 +307,7 @@ function ChronoPane({ items, itemKey, classes, rowClass, renderHeader, renderEvi
   }, [revealNext])
   return (
     <div className={classes.pane} ref={scRef}>
+      {leading}
       {items.map((it, i) => {
         const isOpen = open.has(i)
         const mod = rowClass ? rowClass(it, i) : ''
@@ -471,6 +511,25 @@ function EvalEvidence({ r }) {
   )
 }
 
+// @@@ DeclaredScenario - a declared scenario shown in the eval tab WITHOUT a reading to expand: the empty
+// score ring (a blind spot) over its name, its `expected` (what zero loss looks like), and the files it
+// tracks. This is what makes the declared SET — not just the readings that exist — visible inside the popup;
+// an unmeasured scenario is still a unit of loss, and once the popup is open the [[focus-panel]]'s list is
+// behind its backdrop, so the eval tab is the only place that intent can show. A static row (no toggle).
+function DeclaredScenario({ s }) {
+  const t = useT()
+  return (
+    <div className="eval-row eval-declared-row">
+      <span className="eval-top">
+        <ScoreBadge state="empty" title={t('score.missing')} />
+        <span className="eval-scenario">{s.name}</span>
+        {s.code?.length > 0 && <code className="eval-tracks">{s.code.join(', ')}</code>}
+      </span>
+      {s.expected && <div className="eval-expected"><span className="eval-expected-label">{t('nodeView.eval.expected')}</span> {s.expected}</div>}
+    </div>
+  )
+}
+
 // @@@ EvalPane - the node's measurement timeline (the [[spec-yatsu]] eval tab), a thin consumer of the SAME
 // ChronoPane scaffold the history tab uses, so the scroll/reveal/toggle and the per-item header+evidence
 // shape live in ONE place. The readings RIDE THE BOARD (`node.evals`, the [[yatsu-eval-tab]] fold) — the SAME
@@ -481,19 +540,32 @@ function EvalEvidence({ r }) {
 // / grey ✓/✗ stale (the last verdict greyed, the moved axis on hover) / empty ring no current score — the SAME
 // vocabulary the node tile's card badge speaks · evaluator · codeSha · time); its evidence is the scenario's `expected` over the
 // captured proof — an image inline or a transcript as text, fetched LAZILY by hash on expand, or — no capture
-// — *miss original file* when the record outlived its bytes, else an evidence-less note. Two empty states stay
-// distinct by presence: a node that declares no scenarios (no yatsu.md → no `evals` field at all) and one that
-// declares some but hasn't been measured (an empty array). Readings arrive newest-first (the server already
-// reversed the append-only sidecar). (Forge issue-events — the second evidence source — arrive with a future
-// sibling node; this shows LOCAL readings only.)
+// — *miss original file* when the record outlived its bytes, else an evidence-less note. Readings arrive
+// newest-first (the server already reversed the append-only sidecar). (Forge issue-events — the second
+// evidence source — arrive with a future sibling node; this shows LOCAL readings only.)
+//
+// The tab shows the WHOLE declared set in ONE list, not only the readings: a declared scenario with no
+// reading shows as a DeclaredScenario blind-spot row at the TOP of the same list (the empty ring IS the only
+// distinction — no fenced-off band, no second scrollbar), since an unmeasured scenario is the node's
+// outstanding loss and belongs where the attention is. No reading at ALL → just those rows under a hint; some
+// measured, some not → those rows lead the timeline. The one presence-distinct empty state survives: no
+// yatsu.md → no `evals` field.
 export function EvalPane({ node }) {
   const t = useT()
   const readings = node.evals
   if (!readings) return <div className="pane-eval empty">{t('nodeView.eval.noScenarios')}</div>
-  if (!readings.length) return <div className="pane-eval empty">{t('nodeView.eval.noReadings')}</div>
+  const unmeasured = scenarioStates(node.scenarios, readings).filter((s) => !s.reading)
+  if (!readings.length) return (
+    <div className="pane-eval pane-eval-declared">
+      <div className="eval-todo-note">{t('nodeView.eval.noReadings')}</div>
+      {unmeasured.map((s) => <DeclaredScenario key={s.name} s={s} />)}
+    </div>
+  )
+  // unmeasured scenarios lead the one timeline as blind-spot rows — same row frame, just the empty ring
   return (
     <ChronoPane
       items={readings}
+      leading={unmeasured.map((s) => <DeclaredScenario key={s.name} s={s} />)}
       itemKey={(r, i) => `${r.scenario}-${r.ts}-${i}`}
       classes={{ pane: 'pane-eval', row: 'eval-row', head: 'eval-head', evidence: 'eval-shot' }}
       renderHeader={(r, i, open) => (

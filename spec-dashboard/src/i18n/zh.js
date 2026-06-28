@@ -150,7 +150,7 @@ export default {
     loadingHistory: '正在加载历史…',
     eval: {
       noScenarios: '尚未声明场景 —— 此节点没有可测量的 yatsu.md。',
-      noReadings: '尚无测量 —— 运行 `spex yatsu eval` 归档一次。',
+      noReadings: '尚无测量 —— 运行 `spex yatsu eval` 归档一次。已声明的场景：',
       staleAxes: ({ axes }) => `已过期：自本次读取以来 ${axes} 已变动`,
       pass: '✓ 通过',
       fail: '✗ 未通过',
@@ -165,18 +165,18 @@ export default {
     },
   },
 
-  // 左下角的看板统计条 —— 把每个节点的徽章在整棵树上「计数」（去重的不同对象，而非徽章求和）。每个小块的悬停说明标明它统计什么；点击会沿这些节点逐个走查（每点一次走到下一个）。
+  // 左下角的看板统计条 —— 把节点徽章在整棵树上「计数」（去重的不同对象，而非徽章求和），唯独覆盖度按「场景」计数（yatsu 损失的真实单位）。每个小块的悬停说明标明它统计什么；点击会沿其背后的节点逐个走查（每点一次走到下一个）。
   stats: {
     aria: '看板统计',
     totalTitle: ({ n }) => `树中共有 ${n} 个规格节点`,
     statusTitle: ({ n, status }) => `${n} 个${status} —— 点击逐个走查`,
     driftTitle: ({ n }) => `${n} 个节点的代码领先于其规格 —— 点击逐个走查`,
     issueTitle: ({ n }) => `链接到树上的不同未关闭议题共 ${n} 个 —— 点击逐个走查承载它们的节点`,
-    scorePass: ({ n }) => `${n} 个节点测量为最新且通过 —— 点击逐个走查`,
-    scoreFail: ({ n }) => `${n} 个节点测量为最新且未通过 —— 点击逐个走查`,
-    scoreStalePass: ({ n }) => `${n} 个节点为过期通过（最近一次通过测量后代码有变动）—— 点击逐个走查`,
-    scoreStaleFail: ({ n }) => `${n} 个节点为过期未通过（最近一次未通过测量后代码有变动）—— 点击逐个走查`,
-    scoreEmpty: ({ n }) => `${n} 个节点存在未测量或未评分的场景（盲点）—— 点击逐个走查`,
+    scorePass: ({ n }) => `${n} 个场景测量为最新且通过 —— 点击逐个走查承载它们的节点`,
+    scoreFail: ({ n }) => `${n} 个场景测量为最新且未通过 —— 点击逐个走查承载它们的节点`,
+    scoreStalePass: ({ n }) => `${n} 个场景为过期通过（最近一次通过测量后代码有变动）—— 点击逐个走查承载它们的节点`,
+    scoreStaleFail: ({ n }) => `${n} 个场景为过期未通过（最近一次未通过测量后代码有变动）—— 点击逐个走查承载它们的节点`,
+    scoreEmpty: ({ n }) => `${n} 个场景未测量或未评分（盲点）—— 点击逐个走查承载它们的节点`,
   },
 
   // yatsu 评分词汇 —— 节点卡片计数、聚焦面板与 eval 标签页共用一套词汇。count 是卡片/状态栏的计数；
@@ -223,6 +223,8 @@ export default {
   sessionGraph: {
     helpTitle: '快捷键与图例（?）',
     asked: ({ a, b }) => `已请求 ${a} 监视 ${b}`,
+    picked: '右键点击另一个节点，让此节点监视它',
+    needSource: '请先左键选中一个节点，再右键另一个建立监视',
     monitorPrompt: ({ label, id }) => `请监视会话 ${label}（${id}）：在后台运行 \`spex watch ${id}\` 并保持运行，让其状态变化反馈给我。`,
     legend: {
       title: '会话关系',
@@ -231,7 +233,11 @@ export default {
       move: '将光标移到最近的会话',
       open: '打开聚焦的会话',
       leave: '返回新建会话',
-      monitor: '拖动 A→B 让 A 监视 B',
+      secMouse: '鼠标',
+      gDblClick: '双击',
+      gClickRight: '左键 → 右键',
+      openMouse: '双击会话即可打开',
+      monitor: '左键选中一个节点，再右键另一个，让前者监视后者',
       secEdges: '连线',
       edgesDesc: '每条箭头 A→B 都是一个实时监视——智能体 A 正在运行 `spex watch B`。',
     },

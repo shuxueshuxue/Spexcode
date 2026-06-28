@@ -4,7 +4,7 @@
 // CHILD on a private internal port. On a code change we boot a NEW child, wait for its GET /health to
 // answer 200, atomically flip the proxy's upstream to it, then retire the old child after a short drain.
 // The public socket never closes, so port 8787 has no gap — a reload (e.g. a node merge touching
-// spec-cli/src) is invisible to API callers. Raw byte-piping also carries the WebSocket upgrades
+// spec-cli/src or an imported sibling package) is invisible to API callers. Raw byte-piping also carries the WebSocket upgrades
 // (terminal socket / pty bridges) for new connections transparently; in-flight WS on the old child drop
 // at drain time and the client reconnects, exactly as the no-supervisor reload already did.
 import net from 'node:net'
@@ -23,6 +23,20 @@ const here = dirname(fileURLToPath(import.meta.url))
 const tsx = join(here, '..', 'node_modules', '.bin', 'tsx')   // this package's own tsx (no build step)
 const entry = join(here, 'index.ts')                          // the real Hono server
 const publicPort = Number(process.env.PORT || 8787)
+
+// @@@ watched source roots - the child loads TS straight from these package src trees, so a change in ANY
+// of them is the child's "own source" for reload purposes. It is NOT just spec-cli/src: the child imports
+// spec-forge and spec-yatsu at runtime, so a merge touching e.g. spec-forge would otherwise reach disk
+// while the running child kept the stale code (a fix on `main` invisible on the live board). The frontend
+// (spec-dashboard) is deliberately ABSENT — the child never imports it (it is a separate vite dev server
+// with its own HMR), so watching it would bounce the backend on pure-frontend edits for nothing. Add a
+// root here if the backend ever imports a new sibling package.
+const repoRoot = join(here, '..', '..')
+const watchRoots = [
+  here,                                  // spec-cli/src — the backend's own source
+  join(repoRoot, 'spec-forge', 'src'),
+  join(repoRoot, 'spec-yatsu', 'src'),
+]
 
 type Backend = { port: number; child: ChildProcess }
 let current: Backend | null = null   // which internal port new proxy connections forward to
@@ -117,10 +131,16 @@ if (!first) { console.error('[supervisor] initial backend failed to start'); pro
 current = first
 proxy.listen(publicPort, () => console.log(`spec-cli supervisor serving on http://localhost:${publicPort} (zero-downtime reloads, backend :${first.port})`))
 
-// watch the source tree; debounce a burst of writes (a merge touching several files) into one reload.
+// watch every imported source tree; debounce a burst of writes (a merge touching several files across
+// packages) into one reload. A root that can't be watched (a package absent in some checkout) is logged
+// and skipped — the supervisor owns the public port and must never die over a missing watch.
 let timer: NodeJS.Timeout | undefined
-watch(here, { recursive: true }, (_evt, file) => {
-  if (file && !/\.(ts|js|mjs|json)$/.test(file)) return
+const onSourceChange = (_evt: string, file: string | Buffer | null): void => {
+  if (file && !/\.(ts|js|mjs|json)$/.test(file.toString())) return
   clearTimeout(timer)
   timer = setTimeout(() => void reload('code change'), 150)
-})
+}
+for (const root of watchRoots) {
+  try { watch(root, { recursive: true }, onSourceChange) }
+  catch (e) { console.error(`[supervisor] cannot watch ${root} — changes there won't reload:`, (e as Error).message) }
+}

@@ -50,16 +50,18 @@ async function greetWatchTargets(watcher: string, selectors: string[]): Promise<
     const real = selectors.filter((sel) => sel && sel !== '@all')
     if (!real.length) return
     const { resolveClientSession, clientSend } = await import('./client.js')
-    const { sessionLabel } = await import('./sessions.js')
+    const { sessionHeadline } = await import('./sessions.js')
     const meR = await resolveClientSession(watcher)
-    const me = 'ok' in meR ? (sessionLabel(meR.ok) || watcher.slice(0, 8)) : watcher.slice(0, 8)
+    // name the watcher by its board HEADLINE (same as the reply-channel footer), delimited as a session title.
+    const me = 'ok' in meR ? sessionHeadline(meR.ok) : watcher
+    const meWho = me && me !== watcher ? `session "${me}" (${watcher})` : `session ${watcher}`
     for (const sel of real) {
       const r = await resolveClientSession(sel)
       if (!('ok' in r)) continue   // none/ambiguous → don't guess a target to interrupt
       const target = r.ok.id
       if (target === watcher || greeted.has(target)) continue
       greeted.add(target)
-      const text = `🔭 ${me} (${watcher}) is now supervising you — they started \`spex watch\` over this session. To reach them directly, run: spex session send ${watcher} "<your message>". (One-time heads-up; reply only if you need to.)`
+      const text = `🔭 ${meWho} is now supervising you — they started \`spex watch\` over this session. To reach them directly, run: spex session send ${watcher} "<your message>". (One-time heads-up; reply only if you need to.)`
       void clientSend(target, text)   // no sender id → the connection notice is not double-counted as comms
     }
   } catch { /* greeting is best-effort — it must never disturb the watch */ }
@@ -303,6 +305,43 @@ if (cmd === 'serve') {
 } else if (cmd === 'board') {
   const { buildBoard } = await import('./board.js')
   console.log(JSON.stringify(await buildBoard(), null, 2))
+} else if (cmd === 'search') {
+  // @@@ search - the lexical retrieval floor ([[spec-search]]): rank spec NODES by term overlap for a
+  // natural-language query and return { id, title, path, score, snippet }. `--json` prints that array
+  // verbatim (the surface spec-scout's `--deep` and the spec→code relay reuse); default is a pretty list.
+  // Thin router: all scoring lives in search.ts so every consumer shares one implementation.
+  const { searchSpecs } = await import('./search.js')
+  const query = positionals(3).join(' ')
+  if (!query.trim()) { console.error('usage: spex search <query> [--json] [--limit N]'); process.exit(2) }
+  const limit = Number(flag('limit')) || 10
+  // @@@ compute timing - emit the PURE search-compute time (search.ts only — excludes this process's startup
+  // and the lazy import above) to stderr on every call, so --json's stdout stays the clean contract array
+  // while we can still track the cost. Tracked baseline lives in [[spec-search]]'s yatsu; alarm near ~1s.
+  const results = await searchSpecs(query, { limit, onStats: (s) => console.error(`[spec-search] compute ${s.ms.toFixed(1)}ms · ${s.nodes} nodes · ${s.tokens} tokens (excludes process start)`) })
+  if (has('json')) { console.log(JSON.stringify(results)); process.exit(0) }
+  if (!results.length) { console.log(`no spec node matches "${query}"`); process.exit(0) }
+  results.forEach((r, i) => {
+    console.log(`${String(i + 1).padStart(2)}. ${r.title}  [${r.id}]  ·  score ${r.score}`)
+    console.log(`    ${r.path}`)
+    if (r.snippet) console.log(`    ${r.snippet}`)
+  })
+  process.exit(0)
+} else if (cmd === 'relay') {
+  // @@@ relay - spec→code: the floor's top hits, each with its governed `code:` files, so an agent jumps
+  // topic→spec→code in one call ([[relay]]). Reuses search.ts's ranking; --json for machine use, else a list.
+  const { relaySearch } = await import('./relay.js')
+  const query = positionals(3).join(' ')
+  if (!query.trim()) { console.error('usage: spex relay <query> [--json] [--limit N]'); process.exit(2) }
+  const limit = Number(flag('limit')) || 3
+  const hits = await relaySearch(query, { limit })
+  if (has('json')) { console.log(JSON.stringify(hits)); process.exit(0) }
+  if (!hits.length) { console.log(`no spec node matches "${query}"`); process.exit(0) }
+  hits.forEach((h, i) => {
+    console.log(`${String(i + 1).padStart(2)}. ${h.title}  [${h.id}]  ·  score ${h.score}`)
+    if (h.code.length) h.code.forEach((c) => console.log(`    ${c}`))
+    else console.log(`    (no governed code: files — a pure-prose node)`)
+  })
+  process.exit(0)
 } else if (cmd === 'ls' || cmd === 'sessions') {
   // pretty list of living sessions + states. `spex ls [SEL...] [--status a,b] [--json]`
   // the board comes from the backend (so `spex ls` shows the sessions of whatever SPEXCODE_API_URL points at,
@@ -452,7 +491,9 @@ if (cmd === 'serve') {
     let sender = null
     if (senderId) {
       const sr = await c.resolveClientSession(senderId)
-      sender = 'ok' in sr ? { id: sr.ok.id, label: s.sessionLabel(sr.ok) } : { id: senderId, label: null }
+      // name the sender by the board HEADLINE (sessionHeadline — the live self-summary the recipient sees on
+      // the board), NOT the stable sessionLabel that stops at the bare prompt-truncation title.
+      sender = 'ok' in sr ? { id: sr.ok.id, label: s.sessionHeadline(sr.ok) } : { id: senderId, label: null }
     }
     const r = await c.clientSend(full, s.withSenderHint(process.argv[5] ?? '', sender), senderId ?? undefined)
     console.log(r.ok ? 'sent' : `dispatch failed: ${r.error}`)

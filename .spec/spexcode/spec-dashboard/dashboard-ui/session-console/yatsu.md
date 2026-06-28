@@ -143,6 +143,22 @@ scenarios:
       and forward NOTHING — no `/rawkey` attempt is recorded for either. An ordinary key pressed while nav
       mode is ON DOES forward (recorded), so the carve-out is exactly the two reserved chords, not a blanket
       block. The browser/app takes no other action on ⌥/⌘+I.
+  - name: input-grows-no-premature-scrollbar
+    description: >
+      Through the running dashboard in a real browser, on the New Session prompt (the `.si-input` textarea),
+      type and grow the box line by line: paste/enter ONE line, then TWO, then keep adding newlines well past
+      the resting single row but still BELOW the CSS cap (max-height 180px ≈ 9 lines), then finally enough
+      lines to EXCEED the cap. After each step let the .12s height transition settle, then screenshot the box.
+      Watch specifically for a vertical scrollbar (and any 1px scroll jiggle) on the textarea while its
+      rendered height is still under the cap. Compare against the MAIN baseline where `.si-input` carried
+      `overflow-y: auto` unconditionally.
+    expected: |
+      Below the cap the box is exactly as tall as its content and shows NO scrollbar — not at rest, not mid-
+      grow, not as a sub-pixel flicker — because overflow-y stays `hidden` until content actually exceeds the
+      180px cap. Only once the content passes the cap does the height stop at 180px and a vertical scrollbar
+      appear (overflow-y flips to `auto`), and scrolling reaches the last line. The same holds for the docked
+      `❯` inbox against its half-terminal cap. On the MAIN baseline a scrollbar can show below the cap (a
+      transient flash during the grow transition, or a persistent bar from scrollHeight sub-pixel rounding).
 ---
 
 # session-console — yatsu

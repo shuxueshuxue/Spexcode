@@ -9,7 +9,7 @@ import { readReadings, appendReading, latestPerScenario, type Reading } from './
 import { changedSince, staleAxes } from './freshness.js'
 import { putBlob, listBlobs, gc, resolveBlob, MISS_BLOB, isStrayBlob } from './cache.js'
 import { evaluatorTag, parseEvaluator, isEvaluatorStale } from './evaluator.js'
-import type { DriftIndex } from '../../spec-cli/src/git.js'
+import type { DriftIndex, HistoryIndex, Version, DiffStat } from '../../spec-cli/src/git.js'
 
 const tmp = () => mkdtempSync(join(tmpdir(), 'yatsu-test-'))
 
@@ -223,7 +223,7 @@ test('sidecar: latestPerScenario keeps the last line per scenario', () => {
   assert.equal(latest.get('s')!.codeSha, 'new')
 })
 
-// ---- freshness / drift (synthetic DriftIndex — the same shape git.ts builds) ----
+// ---- freshness / drift (synthetic indices — the same shapes git.ts builds) ----
 
 // commits newest→oldest: c3 (pos 0), c2 (pos 1), c1 (pos 2).
 function fakeIndex(fileCommits: Record<string, string[]>): DriftIndex {
@@ -233,6 +233,20 @@ function fakeIndex(fileCommits: Record<string, string[]>): DriftIndex {
     acks: new Map(),
     specNodes: new Map(),
   }
+}
+
+// the HistoryIndex the rename-safe scenario axis reads through rowsFor: per .spec path, its version rows
+// + per-commit diffstat. A row with add+del === 0 is a PURE RENAME (a reparent) — rowsFor drops it, so it
+// must NOT stale a scenario; a row with content (add/del > 0) is a real edit and must.
+function fakeHistory(versions: Record<string, Array<{ hash: string; add?: number; del?: number }>>): HistoryIndex {
+  const v = new Map<string, Version[]>(), s = new Map<string, Map<string, DiffStat>>()
+  for (const [path, rows] of Object.entries(versions)) {
+    v.set(path, rows.map((r) => ({ hash: r.hash, date: '', reason: '', session: null }) as Version))
+    const sm = new Map<string, DiffStat>()
+    for (const r of rows) sm.set(r.hash, { additions: r.add ?? 1, deletions: r.del ?? 0, files: 1 })
+    s.set(path, sm)
+  }
+  return { versions: v, stats: s }
 }
 
 test('changedSince: true when a newer commit touched the path, false otherwise', () => {
@@ -249,32 +263,41 @@ test('changedSince: an unknown sinceSha is treated as stale (can\'t prove fresh)
 
 test('staleAxes: code axis — a governed file moved since the reading', () => {
   const idx = fakeIndex({ 'src/x.ts': ['c3', 'c1'], '.spec/n/yatsu.md': ['c1'] })
+  const hidx = fakeHistory({ '.spec/n/yatsu.md': [{ hash: 'c1', add: 4 }] })  // scenario unchanged since c1
   const reading: Reading = { scenario: 's', codeSha: 'c1', blob: null, evaluator: 'manual@1', ts: 't' }
-  assert.deepEqual(staleAxes(reading, ['src/x.ts'], '.spec/n/yatsu.md', idx), ['code'])
+  assert.deepEqual(staleAxes(reading, ['src/x.ts'], '.spec/n/yatsu.md', idx, hidx), ['code'])
 })
 
-test('staleAxes: scenario axis — the yatsu.md moved since the reading', () => {
-  const idx = fakeIndex({ 'src/x.ts': ['c1'], '.spec/n/yatsu.md': ['c3'] })
+// the rename-safe scenario axis: a CONTENT edit to the yatsu.md stales; a pure `git mv` reparent (a 0/0
+// version row, dropped by rowsFor) does NOT — matching how a reparented spec node stays fresh.
+test('staleAxes: scenario axis is content-based — a content edit stales, a pure reparent does not', () => {
+  const idx = fakeIndex({ 'src/x.ts': ['c1'] })  // code fresh on both
   const reading: Reading = { scenario: 's', codeSha: 'c1', blob: null, evaluator: 'manual@1', ts: 't' }
-  assert.deepEqual(staleAxes(reading, ['src/x.ts'], '.spec/n/yatsu.md', idx), ['scenario'])
+  const edited = fakeHistory({ '.spec/n/yatsu.md': [{ hash: 'c3', add: 6 }] })       // real edit at c3 (> c1)
+  assert.deepEqual(staleAxes(reading, ['src/x.ts'], '.spec/n/yatsu.md', idx, edited), ['scenario'])
+  const reparented = fakeHistory({ '.spec/n/yatsu.md': [{ hash: 'c3', add: 0, del: 0 }] })  // pure rename at c3
+  assert.deepEqual(staleAxes(reading, ['src/x.ts'], '.spec/n/yatsu.md', idx, reparented), [])
 })
 
 test('staleAxes: evaluator axis — the evaluator version moved since the reading', () => {
-  const idx = fakeIndex({ 'src/x.ts': ['c1'], '.spec/n/yatsu.md': ['c1'] })
+  const idx = fakeIndex({ 'src/x.ts': ['c1'] })
+  const hidx = fakeHistory({ '.spec/n/yatsu.md': [{ hash: 'c1', add: 4 }] })
   const reading: Reading = { scenario: 's', codeSha: 'c1', blob: null, evaluator: 'manual@0', ts: 't' }  // manual is version 1 ⇒ manual@1 ≠ manual@0
-  assert.deepEqual(staleAxes(reading, ['src/x.ts'], '.spec/n/yatsu.md', idx), ['evaluator'])
+  assert.deepEqual(staleAxes(reading, ['src/x.ts'], '.spec/n/yatsu.md', idx, hidx), ['evaluator'])
 })
 
 test('staleAxes: fully fresh reading → no axes', () => {
-  const idx = fakeIndex({ 'src/x.ts': ['c1'], '.spec/n/yatsu.md': ['c1'] })
+  const idx = fakeIndex({ 'src/x.ts': ['c1'] })
+  const hidx = fakeHistory({ '.spec/n/yatsu.md': [{ hash: 'c1', add: 4 }] })
   const reading: Reading = { scenario: 's', codeSha: 'c1', blob: null, evaluator: evaluatorTag(), ts: 't' }
-  assert.deepEqual(staleAxes(reading, ['src/x.ts'], '.spec/n/yatsu.md', idx), [])
+  assert.deepEqual(staleAxes(reading, ['src/x.ts'], '.spec/n/yatsu.md', idx, hidx), [])
 })
 
 test('staleAxes: unknown evaluator invents no staleness on the evaluator axis', () => {
-  const idx = fakeIndex({ 'src/x.ts': ['c1'], '.spec/n/yatsu.md': ['c1'] })
+  const idx = fakeIndex({ 'src/x.ts': ['c1'] })
+  const hidx = fakeHistory({ '.spec/n/yatsu.md': [{ hash: 'c1', add: 4 }] })
   const reading: Reading = { scenario: 's', codeSha: 'c1', blob: null, evaluator: 'ghost@9', ts: 't' }  // no such evaluator
-  assert.deepEqual(staleAxes(reading, ['src/x.ts'], '.spec/n/yatsu.md', idx), [])
+  assert.deepEqual(staleAxes(reading, ['src/x.ts'], '.spec/n/yatsu.md', idx, hidx), [])
 })
 
 // ---- evaluator tag (metadata only — no executor) ----

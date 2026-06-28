@@ -46,9 +46,10 @@ The **verdict** is the loss against `expected`: `pass`, `fail`, or a `note` (fre
 verdicts existed renders as *legacy*.
 
 **Freshness is derived live from git, never stored.** A reading goes stale on three axes since its codeSha —
-a governed `code:` file moved (its own subset when it scopes one), its scenario (the yatsu.md) moved, or the
-evaluator moved. The code/scenario axes reuse the drift index `spex lint` uses; no hashes kept. An ack
-vindicates a *spec*, not a reading.
+a governed `code:` file changed, its scenario's *content* changed, or the evaluator version moved. A bare
+`git mv` reparent is not a content change, so it never stales a reading: the scenario axis judges content the
+way a spec node's own freshness does, not the yatsu.md's path. No hashes kept; an ack vindicates a *spec*,
+not a reading.
 
 The surface mirrors the code-drift report:
 - **scan [--changed]** — the loss signal's blind spots: a malformed yatsu.md (`yatsu-schema` — missing field,

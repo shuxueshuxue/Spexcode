@@ -43,14 +43,15 @@ handshake greeting ([[comms-edge]]) names the watcher by the same `sessionHeadli
 **The sender is resolved in the send command's OWN process, because only it knows who's sending.** The
 injection itself happens in the backend (the rendezvous socket — [[dispatch]]), a *different* process that
 has no idea which agent invoked the CLI. So the sender identity must be captured and the message wrapped
-**before** it leaves the CLI: the `session send` verb reads its own `ownSessionId` (Claude Code's
-`CLAUDE_CODE_SESSION_ID`, else the cwd `.session`), resolves that id against the live board through the
+**before** it leaves the CLI: the `session send` verb reads its own `ownSessionId` (the launcher's
+`SPEXCODE_SESSION_ID`, else the harness session env var like Claude Code's `CLAUDE_CODE_SESSION_ID`),
+resolves that id against the live board through the
 shared [[remote-client]] `resolveClientSession` to get the display label ([[session-selectors]] is reused
 for the **recipient** too), wraps with `withSenderHint`, and only then calls `clientSend`. The transport
 stays dumb — `clientSend` / `POST …/keys` carry the already-wrapped text and learn nothing about senders,
 so the reply-channel is product semantics living at the compose layer, not smuggled into the socket.
 
-**Graceful when there's no sender.** A human at a plain shell (no `CLAUDE_CODE_SESSION_ID`, no `.session`
-in cwd) yields `ownSessionId() === null` → `sender = null` → the bare message is delivered, exactly as
+**Graceful when there's no sender.** A human at a plain shell (no `SPEXCODE_SESSION_ID`, no harness
+session env var) yields `ownSessionId() === null` → `sender = null` → the bare message is delivered, exactly as
 before this node existed. A sender id that resolves to no board row still stamps that **full id** (label
 omitted), so the reply target is never lost even if the row is momentarily unlistable.

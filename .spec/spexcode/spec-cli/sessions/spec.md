@@ -32,7 +32,7 @@ slot, new ones appending at the end: one spatial map shared by the dashboard win
 The subsystem divides into governed concerns:
 
 - **[[lifecycle]]** — a session's existence: [[launch]] (bring a worker up), [[state]] (the agent-authored
-  status machine + liveness), [[runtime]] (the ignored `.session/` scratch dir).
+  status machine + liveness), [[runtime]] (the per-session global store under `~/.spexcode`).
 - **[[comms]]** — the inter-agent mesh over one rendezvous socket: [[dispatch]] (deliver a prompt; merge as
   a dispatched prompt), [[agent-reply-channel]] (reply hint), [[comms-edge]] (recorded talk + graph edge),
   [[graph]] (the live watch network).

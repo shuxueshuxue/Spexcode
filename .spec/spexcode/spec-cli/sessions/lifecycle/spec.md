@@ -30,6 +30,6 @@ The three concerns each own their detail:
   launch script, recorded comms, spec sentinels) lives there, so the worktree holds zero per-session
   SpexCode files and stays mergeable-clean.
 
-The shared guarantee: state is read from the worktrees every time (no in-memory map), so a session's life
-is reconstructed from disk after any backend restart — the worktree, its `.session/state`, and its socket
-liveness are the whole truth.
+The shared guarantee: state is read from the global store every time (no in-memory map), so a session's life
+is reconstructed from disk after any backend restart — the durable worktree, its global state record, and its
+socket liveness are the whole truth.

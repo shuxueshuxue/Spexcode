@@ -16,7 +16,7 @@ scenarios:
   - name: spec-body-renders-tables
     description: >-
       Open the dashboard and drill to a node whose spec body contains a GFM markdown table — e.g.
-      `runtime` (spec-cli ▸ sessions ▸ lifecycle ▸ runtime), whose body has the `.session/*` paths
+      `runtime` (spec-cli ▸ sessions ▸ lifecycle ▸ runtime), whose body has the global-store files
       table. Press `i`, then the `spec` tab, and read the body. The `| … |` rows must render as a real
       HTML table — a tinted header row, bordered cells — NOT as a run-together paragraph of pipes. Cell
       text keeps its inline markdown (`` `code` ``, [[links]]). Screenshot the rendered table and file

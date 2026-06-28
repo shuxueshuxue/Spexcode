@@ -27,7 +27,7 @@ Existence and details are **separate facts**, and the guard decides on existence
 **Existence is definitive.** A worktree listed by `git worktree list` whose directory is still on disk
 **exists**, no matter what reading its details did. So the per-read guard branches on the **directory**,
 never on the read outcome: directory gone → the worktree was genuinely removed → **omit** that row;
-directory still present but the detail read threw (a `.session` ENOENT race, or a `git diff`/`merge-base`
+directory still present but the detail read threw (a session-record ENOENT race, or a `git diff`/`merge-base`
 hitting an index/ref lock under a concurrent merge) → a transient **detail** failure → serve a **degraded**
 row built from raw facts (path, branch, branch-derived node) plus the last-known value, **never** drop it.
 Every place that walks the worktree set — the layout overlay and the session list — passes such a degraded

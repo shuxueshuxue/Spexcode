@@ -32,8 +32,8 @@ over the node a session references, so the human's label is authoritative wherev
 named — the top-left window, the [[session-graph]], the [[session-console]] tabs, and the CLI's `spex`
 listings — because they all read that one shared precedence.
 
-The name lives where the rest of a session's record lives: the worktree's `.session` file, written by
-the one backend that owns that file. So a rename **persists** — it survives a backend restart and is read
+The name lives where the rest of a session's record lives: the session's record in the per-user global
+store ([[state]]/[[runtime]]), written by the one backend that owns it. So a rename **persists** — it survives a backend restart and is read
 back like any other field, never held only in the browser. A session in **any** state is renamable
 (queued, live, or offline), because the gesture edits the on-disk record, not the live terminal.
 

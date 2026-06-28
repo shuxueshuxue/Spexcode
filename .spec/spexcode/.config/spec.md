@@ -14,6 +14,6 @@ that names where it plugs in, per [[config]]'s [[surface]] field-driven routing.
 intent, not yet an active plugin, so it renders on the board but is neither offered as a slash preset nor
 materialized into the agent's contract.
 
-Which of these plugins `spex init` ships to an adopter vs. keeps **spexcode-only** is [[config|the init preset]]
+Which of these plugins `spex init` ships to an adopter vs. keeps **spexcode-only** is the [[init-preset]]
 rule. Only two are spexcode-only here — `taste` (this repo's *own* engineering principles) and `voice-before-ask`
 (needs this repo's local voice MCP); every other active plugin ships.

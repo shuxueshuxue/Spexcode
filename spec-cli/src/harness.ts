@@ -5,8 +5,9 @@ import { createHash, randomBytes } from 'node:crypto'
 import { createConnection, type Socket } from 'node:net'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import { fileURLToPath } from 'node:url'
 import { claudeSlashCommands, codexSlashCommands, type SlashCommand } from './slash-commands.js'
-import { sessionStoreDir } from './layout.js'
+import { runtimeRoot } from './layout.js'
 
 // @@@ harness-adapter - the ONE seam between SpexCode and the coding-agent harness (Claude Code, Codex, …).
 // Every harness-specific fact lives behind THIS interface with one implementation per harness; product code
@@ -68,8 +69,9 @@ export interface Harness {
   // (one tmux snapshot for the whole list — see sessions.ts liveTmux), and the adapter adds ONLY its own
   // channel check. claude: online iff the tmux window is up AND its reclaude rendezvous socket exists (the
   // socket is the truth claude is alive — the pane command is the wrapper/shell while claude runs as a child).
-  // codex: online iff the tmux window is up, its project-scoped app-server socket exists, AND its native
-  // thread id has been captured; the socket is a project control plane, not session identity.
+  // codex: online iff the tmux window is up AND the project-scoped app-server socket exists (one socket per
+  // PROJECT, shared by every worktree's thread); the per-session window presence is the session signal, the
+  // socket is a project control plane, not session identity.
   liveness(rec: HarnessLivenessRecord, tmuxAlive: boolean, runtimeDir?: string): 'online' | 'offline'
   // deliver a follow-up prompt to a LIVE session and report whether it landed. claude: through the rendezvous
   // control socket, which injects + submits the prompt and CONFIRMS the daemon accepted it (loud failure on a
@@ -79,11 +81,11 @@ export interface Harness {
   // Returns ok=false with a reason that propagates to the API.
   deliver(rec: HarnessDeliveryRecord, text: string): Promise<DispatchResult>
   // the relaunch tail reopen() hands launch() to bring the SAME work back up. claude resumes the same
-  // conversation (`--resume <id>`, the id we pinned at launch). codex's own thread id is un-pinnable at launch,
-  // but the rollout capture gives us the real thread id afterwards, so reopen resumes the SAME conversation via
-  // codex's own `resume <thread-id>` subcommand (the captured harness_session_id). Only a session whose thread
-  // id was never captured (e.g. it died before SessionStart) relaunches FRESH (empty tail) in the same
-  // worktree/record — there is nothing to resume.
+  // conversation (`--resume <id>`, the id we pinned at launch). codex's own thread id is un-pinnable on the
+  // launch flag, so the BACKEND owns it: it `thread/start`s the thread and stores the id at launch, so reopen
+  // resumes the SAME conversation via codex's own `resume <thread-id>` subcommand (the stored harnessSessionId,
+  // its rollout persisted on disk). Only a session whose thread id was never stored relaunches FRESH (empty
+  // tail) in the same worktree/record — there is nothing to resume.
   resumeArg(rec: { session: string; harnessSessionId?: string | null }): string
 }
 
@@ -110,6 +112,12 @@ export const codexAppServerPid = (dir = process.env.SPEXCODE_CODEX_SOCKET_DIR ||
 function shQuote(s: string): string {
   return `'${s.replace(/'/g, `'\\''`)}'`
 }
+
+// the tsx + cli.ts invocation, baked into the codex launch script (mirrors materialize.ts's SPEX) so the
+// launch shell can call back into `spex codex-launch` to own the thread + fire the first turn before it
+// exec's the visible TUI.
+const PKG = fileURLToPath(new URL('..', import.meta.url))
+const SPEX = `${join(PKG, 'node_modules', '.bin', 'tsx')} ${join(PKG, 'src', 'cli.ts')}`
 
 const ACCEPT_TIMEOUT_MS = 2500
 // @@@ replyViaSocket - inject `text` as a prompt AND confirm the daemon ACCEPTED it (not mere write-success,
@@ -217,7 +225,7 @@ export function activeTurnIdFromThread(readResult: unknown): string | null {
   return active?.id ?? null
 }
 
-export function codexLaunchCommand(_id: string, codexCmd = process.env.SPEXCODE_CODEX_CMD || 'codex --yolo', serverCmd = process.env.SPEXCODE_CODEX_SERVER_CMD || 'codex', dir = process.env.SPEXCODE_CODEX_SOCKET_DIR || tmpdir()): string {
+export function codexLaunchCommand(_id: string, codexCmd = process.env.SPEXCODE_CODEX_CMD || 'codex --yolo', serverCmd = process.env.SPEXCODE_CODEX_SERVER_CMD || 'codex', dir = process.env.SPEXCODE_CODEX_SOCKET_DIR || runtimeRoot()): string {
   const sock = codexAppServerSock(dir)
   const pid = codexAppServerPid(dir)
   const log = join(dir, 'codex-app-server.log')
@@ -235,15 +243,20 @@ export function codexLaunchCommand(_id: string, codexCmd = process.env.SPEXCODE_
     '  if [ ! -S "$sock" ]; then',
     // 9>&- : do NOT let the long-lived app-server inherit fd 9 (the flock fd). An flock is held until
     // EVERY fd on its open file description is closed; if the daemon keeps fd 9 open it pins the lock
-    // forever, so every later launcher blocks on `flock 9` and never reaches `exec codex --remote`
-    // (the pane stays at the shell, no TUI, no thread, no harness_session_id). </dev/null detaches
-    // its stdin from the pane so it can't fight the TUI for the tty.
+    // forever, so every later launcher blocks on `flock 9` and never reaches the thread-owning step
+    // (the pane stays at the shell, no TUI, no thread). </dev/null detaches its stdin from the pane so
+    // it can't fight the TUI for the tty.
     `    ${serverCmd} app-server --listen unix://"$sock" >"$log" 2>&1 9>&- </dev/null &`,
     '    echo $! > "$pid"',
     '    for i in $(seq 1 100); do [ -S "$sock" ] && break; sleep 0.05; done',
     '  fi',
     ') 9>"$lock"',
-    `exec ${codexCmd} --remote unix://"$sock" "$@"`,
+    // BACKEND owns the thread: `codex-launch` does thread/start { cwd = this worktree } on the shared
+    // per-project app-server, stores the new thread id on the governed record (SPEXCODE_SESSION_ID), and
+    // fires the launch prompt as the first turn — materializing the rollout. It prints the thread id, which
+    // the visible TUI then RESUMES (the rollout persists on disk), rendering it natively. "$@" is the prompt.
+    `tid=$(${SPEX} codex-launch "$sock" "$PWD" "$@")`,
+    `exec ${codexCmd} --remote unix://"$sock" resume "$tid"`,
   ].join('\n')
   return `bash -lc ${shQuote(script)} spexcode-codex`
 }
@@ -299,11 +312,10 @@ function drainWsFrames(s: FrameState, conn: Socket, onText: (json: string) => vo
 const WS_UPGRADE = (key: string) => `GET /rpc HTTP/1.1\r\nHost: localhost\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: ${key}\r\n\r\n`
 const wsInitialize: JsonRpc = { id: 1, method: 'initialize', params: { clientInfo: { name: 'spexcode', title: 'SpexCode', version: '0.0.0' }, capabilities: { experimentalApi: true, requestAttestation: false } } }
 
-// Read the ONE thread the visible TUI loaded on a PER-SESSION app-server socket: `thread/loaded/list` returns
-// the loaded thread ids, and with exactly one socket per session there is exactly one. This is the deterministic
-// capture that replaces the rollout-cwd scan — no filesystem hunt, no "which of N threads", no thread/start
-// (whose thread evaporates when the creating connection closes). The TUI's own thread is durable + running, so
-// the list reflects it. Empty until the TUI has booted its thread (caller retries). Never throws.
+// Read a loaded thread id off the app-server via `thread/loaded/list`. With the backend now OWNING the thread
+// id at launch (codexStartThread → stored on the record), this is only the DELIVERY FALLBACK for a pre-existing
+// session whose id was never stored: it returns the first loaded thread. On a shared per-project server several
+// threads may be loaded, so it is no longer the deterministic capture path — the stored id is. Never throws.
 export function codexThreadId(sock: string): Promise<{ ok: true; threadId: string } | { ok: false; error: string }> {
   return new Promise((resolve) => {
     const conn: Socket = createConnection(sock)
@@ -348,6 +360,55 @@ export function codexThreadId(sock: string): Promise<{ ok: true; threadId: strin
   })
 }
 
+// @@@ codexStartThread - the BACKEND owns the thread. On the shared PER-PROJECT app-server we `thread/start
+// { cwd }` (codex resolves config/hooks/AGENTS.md from that worktree cwd — exactly as claude loads CLAUDE.md
+// per-worktree — so one project-scoped server behaves analogously to a per-worktree launch), and the result
+// carries the new thread id (`result.thread.id`). The launcher stores that id on the governed record and
+// fires the first turn; there is no capture hook and no rollout/cwd scan. Same WS framing as codexThreadId.
+// Never throws.
+export function codexStartThread(sock: string, cwd?: string): Promise<{ ok: true; threadId: string } | { ok: false; error: string }> {
+  return new Promise((resolve) => {
+    const conn: Socket = createConnection(sock)
+    const fs: FrameState = { buf: Buffer.alloc(0), fragOp: 0, fragBuf: Buffer.alloc(0) }
+    let upgraded = false, settled = false
+    const done = (r: { ok: true; threadId: string } | { ok: false; error: string }) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      try { conn.destroy() } catch { /* */ }
+      resolve(r)
+    }
+    const timer = setTimeout(() => done({ ok: false, error: 'codex app-server did not start a thread within 15000ms' }), 15000)
+    conn.on('error', (e) => done({ ok: false, error: `codex app-server connection failed: ${rpcError(e)}` }))
+    conn.on('close', () => done({ ok: false, error: 'codex app-server closed before thread/start was answered' }))
+    const send = (m: JsonRpc) => conn.write(wsText(JSON.stringify(m)))
+    conn.on('connect', () => conn.write(WS_UPGRADE(randomBytes(16).toString('base64'))))
+    const handle = (json: string) => {
+      let m: JsonRpc
+      try { m = JSON.parse(json) } catch { return }
+      if (m.error) return done({ ok: false, error: `codex app-server ${m.id ? `request ${m.id}` : 'notification'} failed: ${m.error.message || JSON.stringify(m.error)}` })
+      if (m.id === 1 && m.result) { send({ method: 'initialized', params: {} }); return send({ id: 2, method: 'thread/start', params: cwd ? { cwd } : {} }) }
+      if (m.id === 2 && m.result) {
+        const tid = (m.result as { thread?: { id?: string } })?.thread?.id
+        return tid ? done({ ok: true, threadId: tid }) : done({ ok: false, error: 'codex thread/start returned no thread id' })
+      }
+    }
+    conn.on('data', (chunk: Buffer) => {
+      fs.buf = Buffer.concat([fs.buf, chunk])
+      if (!upgraded) {
+        const i = fs.buf.indexOf('\r\n\r\n')
+        if (i < 0) return
+        const head = fs.buf.slice(0, i).toString('utf8')
+        if (!/^HTTP\/1\.1 101/.test(head)) return done({ ok: false, error: `codex app-server refused the WebSocket upgrade: ${head.split('\r\n')[0]}` })
+        upgraded = true
+        fs.buf = fs.buf.slice(i + 4)
+        send(wsInitialize)
+      }
+      if (drainWsFrames(fs, conn, handle)) done({ ok: false, error: 'codex app-server sent a WebSocket close before thread/start was confirmed' })
+    })
+  })
+}
+
 function sendCodexAppServerTurn(sock: string, threadId: string, text: string, cwd?: string): Promise<DispatchResult> {
   return new Promise((resolve) => {
     const conn: Socket = createConnection(sock)
@@ -376,6 +437,8 @@ function sendCodexAppServerTurn(sock: string, threadId: string, text: string, cw
       if (m.error) {
         if (m.id === 4 && steering)                                         // active turn ended in the read→steer window → just start a fresh turn
           return send(codexInjectMessage(threadId, text, cwd, null, 5))
+        if (m.id === 3)                                                     // thread not readable yet (a freshly-started thread is "not materialized
+          return send(codexInjectMessage(threadId, text, cwd, null, 5))     // before its first user message") → no in-progress turn possible, so just turn/start
         return done({ ok: false, error: `codex app-server ${m.id ? `request ${m.id}` : 'notification'} failed: ${m.error.message || JSON.stringify(m.error)}` })
       }
       if (m.id === 1 && m.result) return send(hs[2])                       // initialize ack → ask which threads are loaded
@@ -428,6 +491,13 @@ function sendCodexAppServerTurn(sock: string, threadId: string, text: string, cw
   })
 }
 
+// fire a turn on an owned thread over the per-project socket — the same steer-vs-start delivery the live UI
+// uses. The launcher calls this to materialize a freshly-started thread's rollout (the first turn = the launch
+// prompt), and delivery reuses it for follow-ups. Exported so the CLI's `codex-launch` can fire the first turn.
+export function codexTurn(sock: string, threadId: string, text: string, cwd?: string): Promise<DispatchResult> {
+  return sendCodexAppServerTurn(sock, threadId, text, cwd)
+}
+
 // codex's deliver: use the Codex app-server JSON-RPC channel that also powers rich clients, never TUI typing.
 // The visible TUI is launched against the same project app-server Unix socket, so this injects into the same
 // thread the pane is showing — steering an in-progress turn or starting one if idle. A missing captured thread
@@ -435,11 +505,12 @@ function sendCodexAppServerTurn(sock: string, threadId: string, text: string, cw
 const pexec = promisify(execFile)
 const TMUX_SOCK = process.env.SPEXCODE_TMUX || 'spexcode'
 async function deliverViaCodexAppServer(rec: HarnessDeliveryRecord, text: string): Promise<DispatchResult> {
-  // the socket is PER-SESSION (its store dir), so the app-server holds exactly this session's thread.
-  const sock = codexAppServerSock(sessionStoreDir(rec.session))
-  if (!existsSync(sock)) return { ok: false, error: `no Codex app-server socket for session ${rec.session} — prompt NOT delivered` }
-  // prefer the captured thread id; if the hook hasn't stored it yet, read it LIVE off the one loaded thread
-  // (deterministic on a per-session socket) — so delivery never depends on capture-timing.
+  // the socket is PER-PROJECT (the runtime root), shared by every worktree's thread; the owned thread id on
+  // the record picks out THIS session's thread.
+  const sock = codexAppServerSock(rec.runtimeDir)
+  if (!existsSync(sock)) return { ok: false, error: `no Codex app-server socket for this project — prompt NOT delivered` }
+  // use the backend-owned thread id stored at launch; fall back to reading the one loaded thread only if it's
+  // empty (a pre-existing session from before the id was stored).
   let threadId = rec.harnessSessionId
   if (!threadId) {
     const r = await codexThreadId(sock)
@@ -547,8 +618,8 @@ export const codexHarness: Harness = {
   id: 'codex',
   events: CODEX_EVENTS,
   ownsRendezvous: false,                             // no reclaude daemon — liveness + prompts through the project app-server socket
-  launchCmd: (id) => codexLaunchCommand(id, undefined, undefined, sessionStoreDir(id)),
-  sessionIdArg: () => '',                            // codex assigns its own id (resumed by a captured id)
+  launchCmd: (id, runtimeDir) => codexLaunchCommand(id, undefined, undefined, runtimeDir ?? runtimeRoot()),   // ONE app-server per PROJECT
+  sessionIdArg: () => '',                            // codex assigns its own id (the backend owns it via thread/start)
   sessionEnvVar: 'CODEX_THREAD_ID',
   shimFile: (proj) => join(proj, '.codex', 'hooks.json'),
   contractFiles: (proj) => [join(proj, 'AGENTS.md')],
@@ -556,9 +627,9 @@ export const codexHarness: Harness = {
   shim: (dispatch, spex) => buildShim('codex', CODEX_EVENTS, dispatch, spex),
   writeTrust: (proj, cmdFor) => writeCodexTrust(proj, CODEX_EVENTS, cmdFor),
   slashCommands: codexSlashCommands,
-  liveness: (rec, tmuxAlive) => (tmuxAlive && existsSync(codexAppServerSock(sessionStoreDir(rec.session))) ? 'online' : 'offline'),
+  liveness: (rec, tmuxAlive, runtimeDir) => (tmuxAlive && existsSync(codexAppServerSock(runtimeDir)) ? 'online' : 'offline'),
   deliver: (rec, text) => deliverViaCodexAppServer(rec, text),
-  resumeArg: (rec) => (rec.harnessSessionId ? `resume ${rec.harnessSessionId}` : ''),   // captured thread id → codex `resume <id>` (SAME conversation); none → relaunch FRESH
+  resumeArg: (rec) => (rec.harnessSessionId ? `resume ${rec.harnessSessionId}` : ''),   // owned thread id → codex `resume <id>` (SAME conversation); none → relaunch FRESH
 }
 
 // every adapter — materialize iterates this to render each harness's artifacts in one pass.

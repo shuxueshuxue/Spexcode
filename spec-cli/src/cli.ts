@@ -377,10 +377,6 @@ if (cmd === 'serve') {
   } else if (sub === 'fail') {
     // the StopFailure hook marks its session (--session from the payload) as error (turn died on an API error)
     console.log(s.markError(sess) ? 'marked error' : 'no session record')
-  } else if (sub === 'harness-id') {
-    // Codex mints its own thread id; SessionStart captures it into the governed SpexCode record so the
-    // app-server control path can address the same thread the visible TUI is showing.
-    console.log(s.markHarnessSessionId(sess, flag('harness-session') ?? id) ? 'marked harness session id' : 'no session record')
   } else if (sub === 'ask') {
     // the agent DELIBERATELY declares it is pausing to ask the human a question (like `done`/`park`, an
     // authored state — NOT guarded active-only). The --note carries the question. Distinct from `park`
@@ -453,14 +449,33 @@ if (cmd === 'serve') {
   } else {
     console.error('spex session: new|list|reopen|review|done|park|ask|idle|merge|exit|close|send|capture|prompt'); process.exit(2)
   }
-} else if (cmd === 'codex-thread') {
-  // Read the deterministic thread id from a PER-SESSION codex app-server socket (thread/loaded/list → the one
-  // loaded thread). Replaces the rollout-cwd scan; used by capture/liveness to learn the session's thread id.
-  const { codexThreadId } = await import('./harness.js')
-  const sock = process.argv[3]
-  if (!sock) { console.error('usage: spex codex-thread <sock>'); process.exit(2) }
-  const r = await codexThreadId(sock)
-  if (r.ok) { console.log(r.threadId) } else { console.error(r.error); process.exit(1) }
+} else if (cmd === 'codex-launch') {
+  // BACKEND-owned codex thread. On the shared per-project app-server: thread/start { cwd = this worktree }
+  // (codex loads that worktree's config/hooks/AGENTS.md), store the new id on the governed record (keyed by
+  // SPEXCODE_SESSION_ID), fire the launch prompt as the FIRST turn — materializing the rollout — and print the
+  // thread id. The launch script then `resume`s it in the visible TUI.
+  const { codexStartThread, codexTurn } = await import('./harness.js')
+  const { markHarnessSessionId } = await import('./sessions.js')
+  const sock = process.argv[3], cwd = process.argv[4]
+  const prompt = process.argv.slice(5).join(' ')
+  if (!sock || !cwd) { console.error('usage: spex codex-launch <sock> <cwd> [prompt...]'); process.exit(2) }
+  const r = await codexStartThread(sock, cwd)
+  if (!r.ok) { console.error(r.error); process.exit(1) }
+  const sid = process.env.SPEXCODE_SESSION_ID
+  if (sid) markHarnessSessionId(sid, r.threadId)
+  if (prompt) {
+    const t = await codexTurn(sock, r.threadId, prompt, cwd)
+    if (!t.ok) { console.error(t.error); process.exit(1) }
+  }
+  console.log(r.threadId)
+} else if (cmd === 'codex-turn') {
+  // fire a follow-up turn on an OWNED thread over the per-project socket (the delivery channel, exposed for
+  // tests / scripts). steer-vs-start is chosen live from the thread read.
+  const { codexTurn } = await import('./harness.js')
+  const sock = process.argv[3], tid = process.argv[4], text = process.argv.slice(5).join(' ')
+  if (!sock || !tid || !text) { console.error('usage: spex codex-turn <sock> <threadId> <text...>'); process.exit(2) }
+  const r = await codexTurn(sock, tid, text)
+  if (r.ok) { console.log('ok') } else { console.error(r.error); process.exit(1) }
 } else {
   console.error(`spex: unknown command '${cmd}' (try: spex help)`)
   process.exit(2)

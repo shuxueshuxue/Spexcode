@@ -102,9 +102,12 @@ Terminals are **warm and always connected**: every live pane mounts and opens it
 never lazily on focus — and stays mounted even while the console is closed, so switching tabs **never loses your
 place** (socket + scroll survive), New Session included (it hides its pane). Warmth is **state, not GPU**: only
 the **visible** pane holds a WebGL context, so many panes can't exhaust the browser's capped GPU contexts. List
-navigation lives at the **window level** (arrows walk the list whatever holds focus), and **⌃/⌘+N** (or
-**⌃/⌘+↑**/**Home**) snaps the selection to New Session from anywhere — even from the graph or while nav mode
-forwards raw keys. The **header action row**
+navigation lives at the **window level**: plain **↑/↓** walk the list whatever holds focus (inside a
+multi-line input they first move the caret, falling through to the list only at its visual edge), while
+**⌘/⌥/⌃+↑/↓** are an **unconditional** switch — they step the selection up/down the list from anywhere, no
+matter which input has focus or what mode you're in (the guaranteed up/down switch a chat app gives you), even
+from the graph or while nav mode forwards raw keys. **⌘/⌥/⌃+N** snaps the selection to New Session the same
+way, from anywhere. The **header action row**
 is the same board-command registry, narrowed to the current state: **nav** whenever live, **proof** + **merge**
 at review/done — each a small **text** button (no glyphs) in its identity colour; an `offline` liveness
 (any lifecycle) swaps them for a relaunch panel, and review is **agent-proposed** at the stop-gate. There is

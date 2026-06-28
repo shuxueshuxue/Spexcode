@@ -158,15 +158,18 @@ export function startGateway(opts: GatewayOpts): void {
     socket.on('error', bail); up.on('error', bail)
   })
 
-  const host = opts.host ?? '0.0.0.0'
-  const isLocal = host !== '0.0.0.0'   // `spex dashboard` binds loopback; `--public` faces the internet
-  server.listen(opts.publicPort, host, () => {
+  // `spex dashboard` passes an explicit loopback host; `--public` passes none → bind ALL interfaces (the
+  // original behaviour, IPv4+IPv6), so adding the local path never narrows the public gateway's reach.
+  const isLocal = !!opts.host
+  const onListen = () => {
     const scheme = secure ? 'https' : 'http'
     const label = opts.label ?? 'public mode'
     const gate = isLocal ? '' : ` — ${gated ? 'password-gated' : 'OPEN (no password)'}`   // ungated loopback is normal, not a warning
     console.log(`[gateway] ${label} on ${scheme}://${isLocal ? 'localhost' : '0.0.0.0'}:${opts.publicPort}${gate}, proxying /api to :${opts.upstreamPort}`)
     if (!secure && !isLocal) console.log('[gateway] (TLS off — --http)')
-  })
+  }
+  if (opts.host) server.listen(opts.publicPort, opts.host, onListen)
+  else server.listen(opts.publicPort, onListen)
 }
 
 function rawHeaders(req: http.IncomingMessage): string {

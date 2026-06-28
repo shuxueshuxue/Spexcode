@@ -3,7 +3,7 @@
 import net from 'node:net'
 import http from 'node:http'
 import { spawn, type ChildProcess } from 'node:child_process'
-import { watch } from 'node:fs'
+import { statSync, readdirSync, type Dirent } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { installProcessGuards } from './resilience.js'
@@ -134,13 +134,25 @@ if (publicCfg) {
 // watch every imported source tree; debounce a burst of writes (a merge touching several files across
 // packages) into one reload. A root that can't be watched (a package absent in some checkout) is logged
 // and skipped — the supervisor owns the public port and must never die over a missing watch.
+// fs.watch — even recursive — is NOT reliable for a long-lived supervisor: its inotify watches are silently
+// dropped when a watched dir is rewritten (a git merge, a `materialize`) and NEVER re-established, so reloads
+// quietly stop (observed: the watcher fired a few times then went deaf for hours). A cheap mtime poll can't go
+// deaf: every 2s, take the newest .ts/.js/.json mtime across the trees; a jump triggers the debounced reload
+// (a burst of writes still lands as one). Polling a few small src trees is negligible cost.
 let timer: NodeJS.Timeout | undefined
-const onSourceChange = (_evt: string, file: string | Buffer | null): void => {
-  if (file && !/\.(ts|js|mjs|json)$/.test(file.toString())) return
-  clearTimeout(timer)
-  timer = setTimeout(() => void reload('code change'), 150)
+const newestMtime = (dir: string): number => {
+  let max = 0
+  let entries: Dirent[]
+  try { entries = readdirSync(dir, { withFileTypes: true }) } catch { return 0 }   // a tree absent in some checkout → skip
+  for (const e of entries) {
+    if (e.isDirectory()) { if (e.name !== 'node_modules') max = Math.max(max, newestMtime(join(dir, e.name))) }
+    else if (/\.(ts|js|mjs|json)$/.test(e.name)) { try { max = Math.max(max, statSync(join(dir, e.name)).mtimeMs) } catch { /* raced unlink */ } }
+  }
+  return max
 }
-for (const root of watchRoots) {
-  try { watch(root, { recursive: true }, onSourceChange) }
-  catch (e) { console.error(`[supervisor] cannot watch ${root} — changes there won't reload:`, (e as Error).message) }
-}
+const scanMtime = (): number => { let m = 0; for (const root of watchRoots) m = Math.max(m, newestMtime(root)); return m }
+let lastMtime = scanMtime()   // baseline at boot — only a LATER change reloads
+setInterval(() => {
+  const m = scanMtime()
+  if (m > lastMtime) { lastMtime = m; clearTimeout(timer); timer = setTimeout(() => void reload('code change'), 150) }
+}, 2000).unref()

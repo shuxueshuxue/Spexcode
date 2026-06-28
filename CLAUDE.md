@@ -165,6 +165,12 @@ together — that is a project choice, not a git requirement.
 
 ## Running it
 
+> **Live dogfood deployment** (the public `:443` dashboard, the multi-process topology, the watchdog, and
+> the **rebuild-the-dist-on-merge** discipline) is operator infra, deliberately **not** in this product repo
+> — it lives in the sibling **`spexcode-ops`** repo (`deploy/` scripts + recipe; secrets via a git-ignored
+> `.env`). Reach for it when serving SpexCode publicly or when a merged dashboard change isn't showing up on
+> a deployed instance. The notes below are the plain local dev loop.
+
 - Backend: `npm run api` → http://localhost:8787 (a supervisor that hot-reloads `spec-cli/src` and
   owns the public port for zero-downtime restarts).
   - **The supervisor hot-reloads the CHILD server, never ITSELF.** On a `spec-cli/src` change it boots a

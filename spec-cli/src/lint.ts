@@ -1,13 +1,14 @@
 import { readdirSync, readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { repoRoot, stagedFiles } from './git.js'
+import { repoRoot, stagedFiles, git } from './git.js'
 import { loadSpecs } from './specs.js'
 
 export type Finding = { level: 'error' | 'warn'; rule: string; spec?: string; file?: string; msg: string }
 
 export type LintConfig = {
-  governedRoots: string[]       // dirs whose source files must each be governed by a spec (coverage)
+  governedRoots: string[]       // dirs whose source files must each be governed by a spec (coverage). '.' = whole project (safe: only git-TRACKED files, so node_modules/build/nested worktrees never count).
   sourceExtensions: string[]    // extensions coverage treats as source files
+  testGlobs: string[]           // globs EXCLUDED from coverage — tests aren't governed product (default ['**/*.test.*']; set [] to govern tests too)
   identifierExtensions: string[]// extensions the altitude bare-filename signal recognises (see IDENT below)
   altitude: { lineBudget: number; charBudget: number; sizeable: number; dense: number; steps: number }
   maxChildren: number        // breadth budget: warn at >= this many direct children
@@ -17,6 +18,7 @@ export type LintConfig = {
 const DEFAULT_CONFIG: LintConfig = {
   governedRoots: ['spec-dashboard/src', 'spec-cli/src'],
   sourceExtensions: ['ts', 'tsx', 'js', 'jsx'],
+  testGlobs: ['**/*.test.*'],
   identifierExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'md'],
   altitude: { lineBudget: 50, charBudget: 4200, sizeable: 35, dense: 1.3, steps: 3 },
   maxChildren: 8,
@@ -33,15 +35,35 @@ export function loadConfig(root: string): LintConfig {
   }
 }
 
-const SKIP_DIRS = new Set(['node_modules', 'dist', '.vite'])
+// a minimal glob → RegExp anchored to the full repo-relative path: `**` = any dirs, `*` = within a segment.
+function globToRe(glob: string): RegExp {
+  const body = glob.split(/(\*\*\/|\*\*|\*|\?)/).map((seg) => {
+    if (seg === '**/') return '(?:.*/)?'
+    if (seg === '**') return '.*'
+    if (seg === '*') return '[^/]*'
+    if (seg === '?') return '[^/]'
+    return seg.replace(/[.+^${}()|[\]\\]/g, '\\$&')
+  }).join('')
+  return new RegExp(`^${body}$`)
+}
 
-function sourceFiles(root: string, rel: string, acc: string[], src: RegExp) {
-  const abs = join(root, rel)
-  if (!existsSync(abs)) return
-  for (const e of readdirSync(abs, { withFileTypes: true })) {
-    if (e.isDirectory()) { if (!SKIP_DIRS.has(e.name)) sourceFiles(root, join(rel, e.name), acc, src) }
-    else if (src.test(e.name)) acc.push(join(rel, e.name))
+// coverage enumerates source via GIT-TRACKED files (`git ls-files`, through git() which strips the hook's
+// GIT_DIR), NOT a raw fs walk. Tracked-only auto-excludes node_modules + build output (gitignored), nested
+// or linked worktrees + submodules (a separate index), `.git`, and anything untracked — so governedRoots
+// '.' means "all tracked source" with no fs explosion and no hand-maintained skip list (git IS the database).
+// Test files drop per cfg.testGlobs (default *.test.*; set [] to govern tests too).
+function trackedSourceFiles(root: string, roots: string[], src: RegExp, testGlobs: string[]): string[] {
+  const testRes = testGlobs.map(globToRe)
+  const out = new Set<string>()
+  for (const r of roots) {
+    let listed = ''
+    try { listed = git(['-C', root, 'ls-files', '-z', '--', r]) } catch { continue }
+    for (const f of listed.split('\0')) {
+      if (!f || !src.test(f) || testRes.some((re) => re.test(f))) continue
+      out.add(f)
+    }
   }
+  return [...out]
 }
 
 // code-identifier signals: camelCase | snake_case | foo( | `backticked` | /a/path.ext | bare file.ext. Only
@@ -136,8 +158,7 @@ export async function specLint(): Promise<Finding[]> {
   }
 
   // coverage: every governed source file must be claimed by at least one spec.
-  const governed: string[] = []
-  for (const r of cfg.governedRoots) sourceFiles(root, r, governed, srcRe)
+  const governed = trackedSourceFiles(root, cfg.governedRoots, srcRe, cfg.testGlobs)
   // no governed source found at all → the defaults name this repo's own dirs, so an adopter who never set
   // lint.governedRoots would otherwise see a falsely-clean board. Make it loud and point at the knob.
   if (governed.length === 0)

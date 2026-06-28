@@ -31,7 +31,9 @@ when the package is installed outside the dogfood repo — never a hardcoded rep
 - **A starter `spexcode.json`** — `templates/spexcode.json` copied to `<dir>/spexcode.json`. Without it
   an adopter inherits SpexCode's own [[spec-lint]] defaults, whose `governedRoots` name *this* repo's
   dirs; absent in the adopter's tree, lint would silently govern nothing and read falsely-clean. The
-  starter points `governedRoots` at `src/`; the adopter retargets it, and lint stays loud until it does.
+  starter ships `governedRoots: ["."]` — the zero-config safe default: `.` governs the *whole* project,
+  but only git-**tracked** source (so node_modules/build/nested worktrees never count) minus tests, so a
+  fresh repo just works and a mature one can still curate explicit roots.
 
 **A git work tree is a precondition, checked first.** SpexCode is git-backed — git is the version
 database and the hooks live in `.git` — so a non-git target would leave a *half-state*: specs on disk but

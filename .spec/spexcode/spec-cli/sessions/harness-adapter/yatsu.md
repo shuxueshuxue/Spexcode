@@ -19,8 +19,13 @@ scenarios:
       sentinel/ledger AND mark-active's re-flip must reach the SpexCode-id GOVERNED record resolved via the
       thread-id→`harness_session_id` alias (`hp_store_dir`), NOT a phantom `<runtime>/sessions/<thread-id>` dir.
       The failure this locks: without the alias the writes silently target a non-existent dir and the board never
-      sees the codex session flip to `active` / `asking`, while the agent's explicit `spex session` calls (run in
-      the TUI pane, which DOES carry the env) still work — so the loss hides unless measured from a real hook.
+      sees the codex session flip to `active` / `asking`. The agent's explicit `spex session done/park/ask` calls
+      run in the SAME shared app-server process (NOT a per-session TUI pane), so they too inherit the baked FIRST
+      session's `SPEXCODE_SESSION_ID` and — before the fix — cross-contaminated, every codex session's declaration
+      landing on the first; they attribute per-thread ONLY because `envSessionId` resolves codex's injected
+      `CODEX_THREAD_ID` (the acting thread) through the same `harness_session_id` alias BEFORE the contaminated
+      `SPEXCODE_SESSION_ID` — so both the hook writes and the interactive declarations hide this until measured
+      through a real codex round-trip, not a synthetic Bash-only payload.
     code: spec-cli/hooks/harness.sh
   - name: codex-delivery-steers-midturn-and-resumes
     description: >-

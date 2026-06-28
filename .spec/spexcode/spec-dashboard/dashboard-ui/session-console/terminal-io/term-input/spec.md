@@ -39,8 +39,9 @@ aids, not a second control plane. The **one exception** is a **board command** (
 typed twin of a header button, so accepting it **runs the action** — it *is* the board's control plane,
 not a hint toward one.
 
-- **`@` — spec nodes.** Which node does this target? The focused node is the first suggestion, so just
-  typing `@` opts into it.
+- **`@` — spec nodes, on every prompt.** Which node does this target? The focused node is the first
+  suggestion, so just typing `@` opts into it. It is the **same** dropdown on the New Session prompt and on
+  a running session's `❯` inbox — one menu, not two.
 - **`/` on the New Session prompt — the config presets** (our own bespoke preset set), *not* Claude
   Code's palette.
 - **`/` on a running session's `❯` inbox — the board commands, then Claude Code's own `/` menu.** The
@@ -55,6 +56,16 @@ The dropdown stays decoupled: picking a preset only inserts `/<name> `. The body
 with its targets placeholder filled by the `@`-resolved nodes, then the free text appended. No `@`
 leaves a "current/focused node" note for the body to handle. A leading `/` naming no known preset, and
 any plain or `@`-only prompt, launch verbatim — the existing paths are untouched.
+
+## the running session's `@` resolves at send
+
+The same authoring aid, mirrored into the live conversation. An `@<node>` typed into a running session's
+`❯` inbox is **resolved at send-time** — each token expands in place to its node id plus a pointer to that
+node's live `spec.md` path, so the driven agent is aimed at the node's current contract and reads the file
+itself, never a pasted body. This is the in-conversation twin of [[spec-pointer]]'s launch pointer: New
+Session resolves `@` at Enter into the launch prompt; a running session resolves it at send into the keyed
+message. An unknown id passes through untouched, and the rest of the line is sent verbatim — the `@` is the
+only thing rewritten.
 
 ## no source of its own
 

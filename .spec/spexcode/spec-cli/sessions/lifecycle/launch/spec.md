@@ -12,7 +12,9 @@ related:
 ## raw source
 
 Launching a worker must be **whole and bounded**: the launch prompt arrives complete (never truncated by
-the transport), a dispatched agent does **not** silently inherit the project `CLAUDE.md`, and no launch
+the transport), the spec-discipline contract reaches the agent through **materialized auto-discovered files**
+(so a dispatched agent loads its own `CLAUDE.md` + memory normally — the same launch a user takes, never a
+hidden or moved-away `CLAUDE.md`), and no launch
 ever crashes the box — past the concurrency cap a launch **waits its turn** instead of running. And
 launching has a **single owner**: the running backend process, never whichever shell happened to type
 `spex new` — because the launch env (and the cap) live in the backend, not in the caller.
@@ -21,8 +23,9 @@ launching has a **single owner**: the running backend process, never whichever s
 
 `newSession` mints the governed SpexCode session `<uuid>`, adds the `node/<slug>` worktree (off the base branch), then writes
 the session's `governed:true` record `session.json` (+ best-effort the `prompt` artifact, and at launch the
-hooks.json/launch.sh scripts) into the GLOBAL per-session store ([[runtime]]) — NOT the worktree, which stays
-pristine — isolates `CLAUDE.md` (moved into the store too), and **queues the worktree for launch** on a private
+`launch.sh` script) into the GLOBAL per-session store ([[runtime]]) — NOT the worktree, which stays
+pristine — `materialize`s the spec-discipline contract into the worktree's own `CLAUDE.md`/`AGENTS.md`
+([[harness-delivery]]), and **queues the worktree for launch** on a private
 `tmux -L` socket (`spex new "<prompt>" [--node X]`). The selected [[harness-adapter]] owns the actual agent
 command. Claude launches with `--session-id <uuid>` — the SAME id the record is keyed by, the tmux window name,
 the rendezvous socket, and the commit attribution, so the conversation `--resume`s after death, the board maps

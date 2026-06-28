@@ -20,14 +20,15 @@ inferred behind its back.
 The three concerns each own their detail:
 
 - **[[launch]]** — bringing a worker up: the `reclaude` wrapper, the per-session rendezvous socket, the
-  non-truncating system-prompt + launch-prompt delivery, `CLAUDE.md` isolation, and the concurrency cap
-  with its durable launch queue.
+  non-truncating launch-prompt delivery, the materialized-contract auto-discovery (no `--append-system-prompt`,
+  no hidden `CLAUDE.md`), and the concurrency cap with its durable launch queue.
 - **[[state]]** — the lifecycle state machine: the declared statuses, the per-session `Stop` / `PreToolUse`
   / `Notification` hooks that gate them, AskUserQuestion → `asking`, and socket-based liveness via
   `reconcile`. Agent-authored, never inferred.
-- **[[runtime]]** — the per-worktree `.session/` directory: every harness-written artifact (state record,
-  prompts, generated hooks, launch script, isolated `CLAUDE.md`) under one ignored, mergeable-clean folder,
-  with a bounded compat shim for legacy flat dotfiles.
+- **[[runtime]]** — the per-session GLOBAL store under `~/.spexcode` (keyed by `session_id`, grouped per
+  project), NOT the worktree: every harness-written artifact (state record, originating + queued prompts,
+  launch script, recorded comms, spec sentinels) lives there, so the worktree holds zero per-session
+  SpexCode files and stays mergeable-clean.
 
 The shared guarantee: state is read from the worktrees every time (no in-memory map), so a session's life
 is reconstructed from disk after any backend restart — the worktree, its `.session/state`, and its socket

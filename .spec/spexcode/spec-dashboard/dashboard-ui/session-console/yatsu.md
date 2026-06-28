@@ -158,15 +158,19 @@ scenarios:
       relationship graph tab; (4) in nav mode (so plain keys forward raw to the pane). From each, press ⌘+↓
       (or ⌥+↓) then ⌘+↑ (or ⌥+↑) and read which tab is selected after each. Separately, from any tab press
       ⌥+N (Option+N — note ⌥N emits a dead-key `˜` glyph on a mac, so this also proves the e.code match) and
-      read the selection. Screenshot the tab list before and after each press.
+      read the selection. Finally, test the input box's stability against PLAIN arrows: with the New prompt (or
+      a live `❯` box) focused, put the caret on its FIRST line and press a plain ↑, then on its LAST line and
+      press a plain ↓, and read whether the selected tab moved. Screenshot the tab list before and after each press.
     expected: |
       ⌘/⌥/⌃+↑/↓ ALWAYS step the selected tab one row up/down the session list, no matter which input holds
       focus — mid-word in a textarea, on the graph tab, or while nav mode forwards raw keys — and the
       modifier never moves the textarea caret nor reaches the agent's pane instead. ⌥/⌘+↑ no longer jumps to
       New Session; it simply steps up the list (from the graph it enters the list). ⌥+N snaps the selection to
       New Session from any tab, the graph and nav mode included — ⌘+N (mac) / ⌃+N (win/linux) are the browser's
-      reserved new-window chord a web page can't cancel, so they are not claimed. Plain ↑/↓ still walk the list
-      but yield to the caret inside a multi-line input until its visual edge.
+      reserved new-window chord a web page can't cancel, so they are not claimed. A plain ↑/↓ pressed inside a
+      text input NEVER switches tabs — at the first line a plain ↑ and at the last line a plain ↓ both stay in
+      the box (caret keys only), so typing never jerks the selection; plain ↑/↓ walk the list only when focus is
+      outside any text input.
   - name: input-grows-no-premature-scrollbar
     description: >
       Through the running dashboard in a real browser, on the New Session prompt (the `.si-input` textarea),

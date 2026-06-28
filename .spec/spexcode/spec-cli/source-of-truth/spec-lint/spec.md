@@ -28,9 +28,10 @@ rules:
 - **living** (error): a body stays current-state, with no `## vN` changelog headings — version history
   is read from git (recent/history tabs), not duplicated in prose. Fence-aware: a `## v2` inside a ```
   block is sample text, not a violation.
-- **coverage** (warn): every source file is claimed by ≥1 spec via `code:` **or** `related:` (no orphan
-  code) — related is the coverage net; and roots matching no files are flagged "governing nothing", so an
-  adopter who never set `lint.governedRoots` isn't shown a falsely-clean board.
+- **coverage** (warn): every source file is claimed by ≥1 spec via `code:` **or** `related:`. Source is
+  enumerated from **git-tracked** files (`git ls-files`), so `governedRoots: ["."]` safely means the whole
+  project (node_modules/build/nested-worktrees are never in the index). **`lint.testGlobs`** (default
+  `**/*.test.*`) drops tests; roots matching no tracked file warn "governing nothing".
 - **drift** (warn): a governed file has commits newer than its spec's latest version → maybe stale. A file
   governed by several nodes drifts **every** owner — shared governance is ordinary, and each has a stake.
 - **altitude** (warn): a body states *intent and contract*, not a re-narration of the implementation.

@@ -14,7 +14,13 @@ scenarios:
       identical user-observable behaviour to a Claude user's Read/Edit. The failure this locks: when the edit
       tool/envelope is not mapped, spec-of-file and edit-first spec-first go SILENTLY INERT on codex while Bash
       reads still work, so a synthetic Bash-only test passes green and the regression hides — it must be measured
-      through the real apply_patch round-trip.
+      through the real apply_patch round-trip. SECOND, ATTRIBUTION: because design C's hooks fire from the SHARED
+      app-server (env carries NO `SPEXCODE_SESSION_ID`), `hp_session_id` lands on the codex THREAD id, so the
+      sentinel/ledger AND mark-active's re-flip must reach the SpexCode-id GOVERNED record resolved via the
+      thread-id→`harness_session_id` alias (`hp_store_dir`), NOT a phantom `<runtime>/sessions/<thread-id>` dir.
+      The failure this locks: without the alias the writes silently target a non-existent dir and the board never
+      sees the codex session flip to `active` / `asking`, while the agent's explicit `spex session` calls (run in
+      the TUI pane, which DOES carry the env) still work — so the loss hides unless measured from a real hook.
     code: spec-cli/hooks/harness.sh
   - name: codex-delivery-steers-midturn-and-resumes
     description: >-

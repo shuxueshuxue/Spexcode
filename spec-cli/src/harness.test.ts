@@ -41,19 +41,27 @@ test('activeTurnIdFromThread finds the inProgress turn, else null', () => {
   assert.equal(activeTurnIdFromThread({}), null)
 })
 
-test('codex launch command starts app-server and remote TUI on same socket', () => {
+test('codex launch command starts app-server then resumes the backend-owned thread on the same socket', () => {
   const cmd = codexLaunchCommand('sess-1', 'codex --yolo', 'codex', '/tmp/spex-project')
   assert.match(cmd, /flock 9/)
   assert.match(cmd, /codex app-server --listen unix:\/\/"\$sock"/)
-  assert.match(cmd, /exec codex --yolo --remote unix:\/\/"\$sock" "\$@"/)
+  // design C: the BACKEND owns the thread — codex-launch does thread/start { cwd } + first turn, prints the id,
+  // and the visible TUI resumes THAT thread on the same project socket.
+  assert.match(cmd, /codex-launch "\$sock" "\$PWD" "\$@"/)
+  assert.match(cmd, /exec codex --yolo --remote unix:\/\/"\$sock" resume "\$tid"/)
   assert.match(cmd, /codex-app-server\.sock/)
   assert.match(cmd, /codex-app-server\.lock/)
   assert.match(cmd, /\/tmp\/spex-project/)
 })
 
-test('codex liveness requires the captured native thread id', () => {
+test('codex liveness tracks the per-project app-server socket + tmux, not the thread id', () => {
   const dir = mkdtempSync(join(tmpdir(), 'spex-codex-live-'))
+  // no socket yet → offline regardless of the stored thread id
+  assert.equal(codexHarness.liveness({ session: 'spex-1', harnessSessionId: 'codex-thread-1' }, true, dir), 'offline')
   writeFileSync(codexAppServerSock(dir), '')
-  assert.equal(codexHarness.liveness({ session: 'spex-1', harnessSessionId: null }, true, dir), 'offline')
+  // socket present + tmux up → online (the thread id is owned by the backend, not the liveness signal)
+  assert.equal(codexHarness.liveness({ session: 'spex-1', harnessSessionId: null }, true, dir), 'online')
   assert.equal(codexHarness.liveness({ session: 'spex-1', harnessSessionId: 'codex-thread-1' }, true, dir), 'online')
+  // tmux down → offline even with the socket present
+  assert.equal(codexHarness.liveness({ session: 'spex-1', harnessSessionId: 'codex-thread-1' }, false, dir), 'offline')
 })

@@ -8,7 +8,7 @@ import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, type Review
 import { loadSpecs } from './specs.js'
 import { defaultHarness, harnessById, rvSock, type Harness, type DispatchResult } from './harness.js'
 import { materialize } from './materialize.js'
-import { mainBranch, gitCommonDir, readConfig, runtimeRoot, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, readRawRecord, envSessionId, type RawRecord } from './layout.js'
+import { mainBranch, gitCommonDir, readConfig, runtimeRoot, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, readAliasedRawRecord, envSessionId, type RawRecord } from './layout.js'
 
 // @@@ sessions - the WORKTREE is the durable unit; tmux is a disposable runtime handle. The per-session
 // SOURCE OF TRUTH is an untracked record (`session.json`) in a per-user GLOBAL store keyed by the harness
@@ -200,9 +200,10 @@ const PROPOSALS = new Set<Proposal>(['merge', 'nothing', 'close'])
 
 // typed read of a session's record from the global store (null if it has none — a self-launched session that
 // only ever wrote spec-discipline sentinels has a store dir but no session.json). Goes through layout's
-// readRawRecord (the seam that owns the path), then validates the loose on-disk fields into the typed shape.
+// readAliasedRawRecord (the seam that owns the path + the codex-thread-id alias), then validates the loose
+// on-disk fields into the typed shape — so a codex hook resolving by its thread id reaches the real record.
 function readRecord(id: string): SessRec | null {
-  const raw = readRawRecord(id)
+  const raw = readAliasedRawRecord(id)
   if (!raw) return null
   return fromRaw(raw)
 }

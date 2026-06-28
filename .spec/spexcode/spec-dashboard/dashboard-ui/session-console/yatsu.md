@@ -149,6 +149,22 @@ scenarios:
       and forward NOTHING — no `/rawkey` attempt is recorded for either. An ordinary key pressed while nav
       mode is ON DOES forward (recorded), so the carve-out is exactly the two reserved chords, not a blanket
       block. The browser/app takes no other action on ⌥/⌘+I.
+  - name: modifier-arrow-switches-regardless-of-focus
+    description: >
+      Through the running dashboard in a real browser, open the session interface (Enter) with at least
+      three live sessions so the tab list has several rows. Exercise the modifier switch from the states
+      where a PLAIN arrow would NOT switch the tab: (1) caret parked in the middle of a multi-line draft in
+      the New Session prompt; (2) on a live session with the `❯` inbox focused mid-text; (3) on the
+      relationship graph tab; (4) in nav mode (so plain keys forward raw to the pane). From each, press ⌘+↓
+      (or ⌥+↓) then ⌘+↑ (or ⌥+↑) and read which tab is selected after each. Separately, from any tab press
+      ⌘+N (or ⌥+N) and read the selection. Screenshot the tab list before and after each press.
+    expected: |
+      ⌘/⌥/⌃+↑/↓ ALWAYS step the selected tab one row up/down the session list, no matter which input holds
+      focus — mid-word in a textarea, on the graph tab, or while nav mode forwards raw keys — and the
+      modifier never moves the textarea caret nor reaches the agent's pane instead. ⌥/⌘+↑ no longer jumps to
+      New Session; it simply steps up the list (from the graph it enters the list). ⌘/⌥/⌃+N snaps the
+      selection to New Session from any tab, the graph and nav mode included. Plain ↑/↓ still walk the list
+      but yield to the caret inside a multi-line input until its visual edge.
   - name: input-grows-no-premature-scrollbar
     description: >
       Through the running dashboard in a real browser, on the New Session prompt (the `.si-input` textarea),

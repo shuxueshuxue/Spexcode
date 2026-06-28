@@ -2,11 +2,12 @@
 node_modules
 dist/
 .vite/
-# the prebuilt dashboard bundled INTO the published `spexcode` package by prepublishOnly — a build
-# artifact (publish-time only), never committed to the repo (see .spec/.../spec-cli/packaging).
+# the published `spexcode` package (repo root) ships spec-dashboard/dist — covered by the `dist/` rule
+# above. It's a prepublishOnly build artifact (publish-time only), never committed (see .../spec-cli/packaging).
+# `npm pack` output (the publishable tarball) — a build artifact, never committed
+spexcode-*.tgz
+# legacy bundled-dist location (pre root-publish); ignore if a stale copy reappears
 spec-cli/dashboard-dist/
-# the npm-package copy of the repo README, also planted by prepublishOnly (canonical copy is the repo root).
-spec-cli/README.md
 
 # SpexCode worktrees live here — they are separate checkouts, never committed
 .worktrees/

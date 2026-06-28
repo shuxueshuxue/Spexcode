@@ -8,13 +8,14 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { installProcessGuards } from './resilience.js'
 import { resolvePublicConfig, startGateway, ensureDashboardBuilt, resolveDistDir } from './gateway.js'
+import { tsxBin } from './tsx-bin.js'
 
 // the supervisor OWNS the public port, so it must outlive any transient throw: an uncaught error here is
 // logged and survived, never an exit that closes the port (and the tmux session) and takes the frontend down.
 installProcessGuards()
 
 const here = dirname(fileURLToPath(import.meta.url))
-const tsx = join(here, '..', 'node_modules', '.bin', 'tsx')   // this package's own tsx (no build step)
+const tsx = tsxBin(join(here, '..'))   // this package's own tsx — spec-cli/node_modules (dev) or pkg root (published)
 const entry = join(here, 'index.ts')                          // the real Hono server
 const publicPort = Number(process.env.PORT || 8787)
 

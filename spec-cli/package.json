@@ -1,24 +1,14 @@
 {
-  "name": "spexcode",
-  "version": "0.1.1",
+  "name": "@spexcode/spec-cli",
+  "version": "0.0.0",
+  "private": true,
   "type": "module",
-  "description": "SpexCode — a spec-driven, self-developing dev tool. The `spex` CLI + spec server reads the .spec tree and its git history, and serves the dashboard.",
-  "license": "MIT",
+  "description": "SpexCode CLI + server — INTERNAL monorepo package. The published npm unit is `spexcode` at the repo ROOT (it ships this package's src plus the sibling spec-yatsu/spec-forge src and the dashboard dist, preserving the layout so the cross-package ../../spec-* imports resolve). See .spec/spexcode/spec-cli/packaging.",
   "bin": { "spex": "bin/spex.mjs" },
-  "files": [
-    "src",
-    "!src/**/*.test.ts",
-    "templates",
-    "bin",
-    "dashboard-dist",
-    "README.md"
-  ],
-  "engines": { "node": ">=22" },
   "scripts": {
     "serve": "tsx src/cli.ts serve",
     "lint": "tsx src/cli.ts lint",
     "test": "tsx --test src/*.test.ts",
-    "prepublishOnly": "node scripts/prepublish.mjs",
     "postinstall": "node -e \"try{require('fs').readdirSync('node_modules/node-pty/prebuilds').forEach(d=>{try{require('fs').chmodSync('node_modules/node-pty/prebuilds/'+d+'/spawn-helper',0o755)}catch{}})}catch{}\""
   },
   "dependencies": {

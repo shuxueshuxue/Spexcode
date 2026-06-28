@@ -1,13 +1,42 @@
 {
-  "name": "spexcode-monorepo",
-  "private": true,
-  "version": "0.0.0",
-  "description": "SpexCode dev monorepo (private, unpublished). The published npm package is `spexcode`, built from spec-cli — see .spec/spexcode/spec-cli/packaging.",
+  "name": "spexcode",
+  "version": "0.1.2",
+  "type": "module",
+  "description": "SpexCode — a spec-driven, self-developing dev tool. The `spex` CLI + spec server reads the .spec tree and its git history, and serves the dashboard.",
+  "license": "MIT",
+  "bin": { "spex": "spec-cli/bin/spex.mjs" },
+  "files": [
+    "spec-cli/src",
+    "!spec-cli/src/**/*.test.ts",
+    "spec-cli/bin",
+    "spec-cli/templates",
+    "spec-cli/hooks",
+    "spec-yatsu/src",
+    "!spec-yatsu/src/**/*.test.ts",
+    "spec-forge/src",
+    "!spec-forge/src/**/*.test.ts",
+    "spec-dashboard/dist",
+    "README.md"
+  ],
+  "engines": { "node": ">=22" },
   "scripts": {
     "api": "npm --prefix spec-cli run serve",
     "web": "npm --prefix spec-dashboard run dev",
     "lint": "npm --prefix spec-cli run -s lint",
     "seed": "bash scripts/seed-spec-history.sh",
-    "hooks": "bash scripts/install-hooks.sh"
+    "hooks": "bash scripts/install-hooks.sh",
+    "prepublishOnly": "node scripts/prepublish.mjs",
+    "postinstall": "node -e \"try{require('fs').readdirSync('node_modules/node-pty/prebuilds').forEach(d=>{try{require('fs').chmodSync('node_modules/node-pty/prebuilds/'+d+'/spawn-helper',0o755)}catch{}})}catch{}\""
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.7",
+    "@hono/node-ws": "^1.0.4",
+    "hono": "^4.6.14",
+    "node-pty": "^1.0.0",
+    "tsx": "^4.19.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.16.0",
+    "typescript": "^5.6.3"
   }
 }

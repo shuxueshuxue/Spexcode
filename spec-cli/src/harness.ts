@@ -8,6 +8,7 @@ import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import { claudeSlashCommands, codexSlashCommands, type SlashCommand } from './slash-commands.js'
 import { runtimeRoot, mainCheckout } from './layout.js'
+import { tsxBin } from './tsx-bin.js'
 
 // @@@ harness-adapter - the ONE seam between SpexCode and the coding-agent harness (Claude Code, Codex, …).
 // Every harness-specific fact lives behind THIS interface with one implementation per harness; product code
@@ -124,7 +125,7 @@ function shQuote(s: string): string {
 // launch shell can call back into `spex codex-launch` to own the thread + fire the first turn before it
 // exec's the visible TUI.
 const PKG = fileURLToPath(new URL('..', import.meta.url))
-const SPEX = `${join(PKG, 'node_modules', '.bin', 'tsx')} ${join(PKG, 'src', 'cli.ts')}`
+const SPEX = `${tsxBin(PKG)} ${join(PKG, 'src', 'cli.ts')}`
 
 const ACCEPT_TIMEOUT_MS = 2500
 // @@@ replyViaSocket - inject `text` as a prompt AND confirm the daemon ACCEPTED it (not mere write-success,

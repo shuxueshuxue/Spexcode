@@ -1,5 +1,5 @@
 {
   "lint": {
-    "governedRoots": ["src"]
+    "governedRoots": ["."]
   }
 }

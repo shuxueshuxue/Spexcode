@@ -52,6 +52,18 @@ test('codex launch command starts app-server then resumes the backend-owned thre
   assert.match(cmd, /codex-app-server\.sock/)
   assert.match(cmd, /codex-app-server\.lock/)
   assert.match(cmd, /\/tmp\/spex-project/)
+  // resume mode: a `--resume <tid>` tail (reopen's resumeArg) takes the OWNED thread id DIRECTLY — it must NOT
+  // run codex-launch (which would mint a NEW thread and fire the tail as a first-turn prompt — the resume bug).
+  assert.match(cmd, /if \[ "\$1" = "--resume" \]; then/)
+  assert.match(cmd, /tid=\$2/)
+})
+
+test('codex resumeArg is a --resume marker for the owned thread, empty when none captured', () => {
+  // the tail reopen() hands launch(): a captured thread id → `--resume <id>` (the launch script resumes that
+  // thread directly, the SAME conversation); none → empty (relaunch a fresh thread). It is NOT `resume <id>`,
+  // which the launch script would feed to codex-launch as a literal first-turn prompt.
+  assert.equal(codexHarness.resumeArg({ session: 's1', harnessSessionId: 'th_abc' }), '--resume th_abc')
+  assert.equal(codexHarness.resumeArg({ session: 's1', harnessSessionId: null }), '')
 })
 
 test('codex liveness tracks the per-project app-server socket + tmux, not the thread id', () => {

@@ -6,6 +6,7 @@ hue: 160
 desc: Where things live — main, worktree→node mapping, the spec root node — is detected policy, never a baked-in name.
 code:
   - spec-cli/src/layout.ts
+  - spec-cli/src/layout-session-id.test.ts
   - .nvmrc
 ---
 # portable-layout
@@ -49,6 +50,14 @@ absent. Beyond resolution, the seam produces the board's raw
 material: for each governed record it computes that worktree's pending spec-node changes vs main (`ops`,
 consumed by [[sessions]]' `buildBoard`) — the board ENUMERATES the global store (filtered to `governed:true`),
 NOT `git worktree list`, so an unmanaged scratch worktree (`agent-*`) never appears.
+
+Because the record left the worktree, an agent's `spex session done/park/ask` finds its OWN session in the
+ENVIRONMENT (`envSessionId()`), with a harness-aware precedence: a harness's per-thread env var
+(`sessionEnvVar`) that ALIASES to a governed record (via `harness_session_id`, [[runtime]]) beats
+`SPEXCODE_SESSION_ID`. Codex needs this — its ONE shared per-project app-server ([[harness-adapter]]) runs
+the agent's shell under the FIRST session's baked `SPEXCODE_SESSION_ID`, while codex injects the acting
+thread's `CODEX_THREAD_ID` per command, which aliases correctly. Claude is unchanged (its env var already
+equals its record id); a raw, un-aliased harness id is the last resort, below `SPEXCODE_SESSION_ID`.
 
 The same *policy-not-hardcode* rule governs where the config loaders look. The spec tree's **root
 node** — the single top-level directory under `.spec/` that holds a `spec.md` — is detected at read

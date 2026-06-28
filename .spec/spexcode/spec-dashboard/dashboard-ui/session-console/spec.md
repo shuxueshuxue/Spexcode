@@ -102,8 +102,11 @@ Terminals are **warm and always connected**: every live pane mounts and opens it
 never lazily on focus — and stays mounted even while the console is closed, so switching tabs **never loses your
 place** (socket + scroll survive), New Session included (it hides its pane). Warmth is **state, not GPU**: only
 the **visible** pane holds a WebGL context, so many panes can't exhaust the browser's capped GPU contexts. List
-navigation lives at the **window level**: plain **↑/↓** walk the list whatever holds focus (inside a
-multi-line input they first move the caret, falling through to the list only at its visual edge), while
+navigation lives at the **window level**: plain **↑/↓** walk the list, but a **text input keeps them
+entirely** — inside the New prompt or the `❯` box, ↑/↓ are always the textarea's own caret keys and **never
+switch tabs**, even at the first/last line, so typing in the box never jerks you onto another session (the box
+stays stable; the old visual-edge fall-through to the list is gone). Plain ↑/↓ still walk the list only when
+focus is **outside** any text input. To switch tabs while typing, use the modifier combos:
 **⌘/⌥/⌃+↑/↓** are an **unconditional** switch — they step the selection up/down the list from anywhere, no
 matter which input has focus or what mode you're in (the guaranteed up/down switch a chat app gives you), even
 from the graph or while nav mode forwards raw keys. **⌥+N** (Option/Alt+N) snaps the selection to New Session

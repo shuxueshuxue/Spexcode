@@ -32,8 +32,8 @@ scenarios govern and relate):
   reached by some node's related (or govern). No drift, no yatsu, no ack — a pointer, not a verdict.
 
 **too-many-owners** — the file-rotated twin of breadth ([[spec-lint]]): when a file is governed by more than
-`maxOwners` nodes (default 3), one summary warning fires, at lint and the commit gate. It blames the file's
-size, not its ownership, and offers three moves, split first:
+`maxOwners` nodes (default 3), one summary warning fires **at `spex lint`** (the commit gate blocks on drift
+only, never on ownership). It blames the file's size, not its ownership, and offers three moves, split first:
 
 - **split the file** so each governing node reclaims its own module — the honest fix the [[sessions-core]]
   monolith still awaits;

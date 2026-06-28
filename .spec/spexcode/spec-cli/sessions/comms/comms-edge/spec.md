@@ -27,20 +27,19 @@ know it has a supervisor. The connection should be established in B's context th
 
 **A send is recorded through the backend.** `spex session send` already goes through the backend (POST
 `/api/sessions/:id/keys`); it now also carries the SENDER's id. On a successful delivery the backend
-appends one line — `{peer, ts}` — to the RECIPIENT's per-worktree runtime log (the recipient's dir is the
-one the backend already resolved to deliver). The log path is layout-aware like [[portable-layout]]: a new
-session writes `.session/comms.ndjson`; a still-draining legacy session (`.session` is a flat file, so the
-dir can't be made) writes the gitignored flat sibling `.session-comms.ndjson`. Recording on the recipient
-side counts each message exactly once. The log is per-worktree and untracked: it lives and dies with the
-session, which is exactly right for a graph of LIVE sessions — and, unlike the in-memory monitor
-registrations, it SURVIVES a backend restart. A human sending from a plain shell has no sender id, so
+appends one line — `{peer, ts}` — to the RECIPIENT's `comms.ndjson` in its **global session store**
+(`sessionStoreDir(id)`, keyed by session_id — the same per-user runtime dir the session record lives in,
+outside any worktree, never a worktree `.session`). Recording on the recipient side — the dir the backend
+already resolved to deliver — counts each message exactly once. The log is untracked and lives and dies with
+the **session record**, which is exactly right for a graph of LIVE sessions — and, unlike the in-memory
+monitor registrations, it SURVIVES a backend restart. A human sending from a plain shell has no sender id, so
 nothing is recorded (no self-talk, no phantom edge) — the same rule [[agent-reply-channel]] uses for its
 reply hint.
 
 **The graph draws a second edge type.** `sessionGraph()` keeps its monitor edges (`kind: monitor`, the
 live `spex watch` arrows) and adds **comms edges** (`kind: comms`): it reads each live session's
-`.session/comms.ndjson`, aggregates by unordered pair, and emits one `A↔B` edge per talking pair carrying
-the message `count`. The frontend renders it distinctly from the monitor arrow — a subtler, undirected line
+`comms.ndjson` from its store dir, aggregates by unordered pair, and emits one `A↔B` edge per talking pair
+carrying the message `count`. The frontend renders it distinctly from the monitor arrow — a subtler, undirected line
 with the count — so "watching" and "talking" read apart at a glance. An edge to a non-live session is
 dropped, like the monitor edges.
 

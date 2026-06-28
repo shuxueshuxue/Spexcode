@@ -14,12 +14,6 @@ that names where it plugs in, per [[config]]'s [[surface]] field-driven routing.
 intent, not yet an active plugin, so it renders on the board but is neither offered as a slash preset nor
 materialized into the agent's contract.
 
-**Preset vs spexcode-only.** Two audiences read `.config`: this repo, and any project that runs `spex init`.
-Most plugins are the **preset** — the universal spec-discipline machinery `init` seeds into every adopter from
-`spec-cli/templates/spec/project/.config`: `core` (+ its hooks), `extract`, `forge-link`, `health`,
-`memory-hygiene`, `regroup`, `sanity-check`, `scenario`, `supervisor`, `tidy`. Two are **spexcode-only** and
-never ship, because they bind to this repo's own setup: `taste` (SpexCode's *own* engineering principles, which
-an adopter authors for themselves) and `voice-before-ask` (needs this repo's local voice MCP). The template IS
-the preset, node-for-node — a plugin added here ships to adopters unless it is one of those two. The template is
-hand-kept in sync today (drift risk: a new preset plugin must be copied over); regenerating it from this set
-minus the spexcode-only nodes is the durable fix.
+Which of these plugins `spex init` ships to an adopter vs. keeps **spexcode-only** is [[config|the init preset]]
+rule. Only two are spexcode-only here — `taste` (this repo's *own* engineering principles) and `voice-before-ask`
+(needs this repo's local voice MCP); every other active plugin ships.

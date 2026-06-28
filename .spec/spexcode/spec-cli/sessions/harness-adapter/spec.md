@@ -141,8 +141,14 @@ directly, find the one record that captured this id as `harness_session_id` (a `
 files on the shell hot path — no jq; the typed TS read mirrors it in `readAliasedRawRecord`). This is what lets
 the pure-shell `mark-active` re-flip and the ask-capture, plus every shell-to-`spex` lifecycle write, reach the
 right record from a thread id alone. The alias needs no cleanup artifact — it lives in the record's own
-`harness_session_id`, swept with the record on close. Claude is unaffected: its exported id equals both its
-payload id and the record key, so the direct hit always wins and the alias step never runs.
+`harness_session_id`, swept with the record on close. The agent's own interactive `spex session done/park/ask`
+calls take the SAME path for the SAME reason: codex runs them in the shared app-server shell (NOT a per-session
+pane), so they inherit the FIRST session's baked `SPEXCODE_SESSION_ID` — `envSessionId` ([[portable-layout]])
+therefore resolves codex's per-command `CODEX_THREAD_ID` (the acting thread's `sessionEnvVar`) through the same
+`harness_session_id` alias BEFORE that contaminated `SPEXCODE_SESSION_ID`, so each thread's declaration lands on
+its own record; the hook path and the interactive-CLI path share one harness-aware precedence rule. Claude is
+unaffected on both paths: its exported id equals both its payload id and the record key, so the direct hit always
+wins and the alias step never runs.
 
 ## verified codex facts (live round-trip, real codex 0.142.3)
 

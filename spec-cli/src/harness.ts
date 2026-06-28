@@ -34,6 +34,13 @@ export interface Harness {
   // whether the harness's agent opens a reclaude rendezvous control socket. Claude does; Codex has no such
   // daemon and uses its app-server JSON-RPC control plane instead.
   readonly ownsRendezvous: boolean
+  // whether this harness's tmux pane_title is the agent's OWN live task self-summary (so the board headline
+  // may derive from it — see [[session-activity]]). Claude continuously writes a one-line task summary into
+  // its OSC title → true. Codex sets the pane title to a spinner glyph + the cwd basename (the worktree FOLDER
+  // name), which is NOT a self-summary → false, so its headline falls through to the launch-prompt preview
+  // instead of showing the folder name. This is the ONLY harness branch in the headline path: the capability
+  // is data on the adapter, not an `if (codex)` in sessions.ts.
+  readonly paneTitleIsSelfSummary: boolean
 
   // --- launch / sessionId ---
   // the base agent command (env-overridable for tests). Claude: `claude …`; Codex starts a project-scoped
@@ -600,6 +607,7 @@ export const claudeHarness: Harness = {
   id: 'claude',
   events: CLAUDE_EVENTS,
   ownsRendezvous: true,                              // reclaude opens the rendezvous control socket (prompt delivery + liveness)
+  paneTitleIsSelfSummary: true,                      // claude writes its live task summary into the OSC pane title → headline derives from it
   launchCmd: () => process.env.SPEXCODE_CLAUDE_CMD || 'claude --dangerously-skip-permissions',
   sessionIdArg: (id) => `--session-id ${id}`,        // the caller chooses the id
   sessionEnvVar: 'CLAUDE_CODE_SESSION_ID',
@@ -618,6 +626,7 @@ export const codexHarness: Harness = {
   id: 'codex',
   events: CODEX_EVENTS,
   ownsRendezvous: false,                             // no reclaude daemon — liveness + prompts through the project app-server socket
+  paneTitleIsSelfSummary: false,                     // codex's pane title is a spinner + the cwd folder name, NOT a task summary → headline uses the prompt
   launchCmd: (id, runtimeDir) => codexLaunchCommand(id, undefined, undefined, runtimeDir ?? runtimeRoot()),   // ONE app-server per PROJECT
   sessionIdArg: () => '',                            // codex assigns its own id (the backend owns it via thread/start)
   sessionEnvVar: 'CODEX_THREAD_ID',

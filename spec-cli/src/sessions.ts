@@ -287,22 +287,35 @@ async function liveTmux(): Promise<Set<string>> {
   return s
 }
 
-// @@@ paneTitles - each worker's LIVE self-summary, free from tmux. Claude Code continuously sets its
-// terminal title (an OSC escape) to a short description of what it is doing right now — and tmux captures
-// that as the pane title (NOT the window name; OSC titles never touch window_name). Our worker launches one
-// pane per session, named with the session id, so ONE `list-panes -a` maps id → "what it's doing". Same
-// shape and cost as liveTmux (one tmux call for the whole list); failure → empty map, so a tmux hiccup just
-// drops the subtitle for a tick, never the session. The leading status glyph is stripped at read time.
+// @@@ paneTitles - every session pane's RAW tmux title, free from tmux. The worker launches one pane per
+// session, named with the session id, so ONE `list-panes -a` maps id → its raw `#{pane_title}`. Same shape
+// and cost as liveTmux (one tmux call for the whole list); failure → empty map, so a tmux hiccup just drops
+// the subtitle for a tick, never the session. The raw title is NOT yet a headline — what a pane title MEANS
+// is harness-specific (claude: a self-authored task summary; codex: a spinner + the cwd folder name), so the
+// id→harness gating + glyph parse happens per session in paneActivity, not here.
 async function paneTitles(): Promise<Map<string, string>> {
   const m = new Map<string, string>()
   let out = ''
   try { out = await tmux(['list-panes', '-a', '-F', '#{session_name}\t#{pane_title}']) } catch { return m }
   for (const line of out.split('\n')) {
     const tab = line.indexOf('\t'); if (tab < 0) continue
-    const id = line.slice(0, tab), title = selfSummary(line.slice(tab + 1))
+    const id = line.slice(0, tab), title = line.slice(tab + 1)
     if (id && title) m.set(id, title)
   }
   return m
+}
+
+// @@@ paneActivity - the harness-aware live self-summary: the SINGLE place a raw pane title becomes (or does
+// NOT become) a session's headline activity. The board headline derives from the pane title ONLY for a
+// harness whose pane title is its own task self-summary (`paneTitleIsSelfSummary`, an adapter capability —
+// [[harness-adapter]]). claude qualifies (it writes its task summary into the OSC title), so we parse it with
+// selfSummary (glyph-gated). codex does NOT — its pane title is a spinner glyph + the cwd FOLDER name, so
+// returning it would headline the worktree folder, not the task; we refuse it (→ null) and sessionHeadline
+// falls through to promptPreview (the launch prompt). The ONLY harness branch is the capability read here —
+// no `if (codex)`, no glyph special-case; selfSummary stays the pure claude-title parser.
+export function paneActivity(harness: Harness, paneTitle: string | null | undefined): string | null {
+  if (paneTitle == null || !harness.paneTitleIsSelfSummary) return null
+  return selfSummary(paneTitle)
 }
 
 // @@@ selfSummary - the agent's OWN live one-line description, parsed from its tmux pane title — the SINGLE
@@ -427,7 +440,10 @@ export async function listSessions(): Promise<Session[]> {
   const rows = ids.map((id) => guardSession(id, () => {
     const rec = readRecord(id)
     if (!rec || !rec.governed) { lastKnownSession.delete(id); return null }   // no record, or a self-launched (non-board) one
-    const s = toSession(rec, reconcile(rec, live), liveness(rec, live), titles.get(id) ?? null)
+    // the pane title → headline activity, gated by THIS session's harness ([[harness-adapter]]): claude's title
+    // is its task self-summary (used); codex's is the cwd folder name (refused → headline falls to the prompt).
+    const activity = paneActivity(harnessById(rec.harness || defaultHarness.id), titles.get(id))
+    const s = toSession(rec, reconcile(rec, live), liveness(rec, live), activity)
     lastKnownSession.set(id, s)
     return s
   }, () => {

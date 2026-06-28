@@ -5,11 +5,11 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { codexAppServerSock, codexAppServerTurnMessages, codexHarness, codexLaunchCommand } from './harness.js'
 
-test('codex app-server turn messages resume then start a text turn', () => {
+test('codex app-server turn messages confirm the loaded thread then start a text turn', () => {
   const msgs = codexAppServerTurnMessages('thr_1', 'hello', '/repo')
   assert.equal(msgs[0].method, 'initialize')
   assert.deepEqual(msgs[1], { method: 'initialized', params: {} })
-  assert.deepEqual(msgs[2], { id: 2, method: 'thread/resume', params: { threadId: 'thr_1', cwd: '/repo' } })
+  assert.deepEqual(msgs[2], { id: 2, method: 'thread/loaded/list', params: {} })
   assert.deepEqual(msgs[3], {
     id: 3,
     method: 'turn/start',

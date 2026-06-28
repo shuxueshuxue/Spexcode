@@ -347,8 +347,8 @@ if (cmd === 'serve') {
   // hooks pass it, parsed from the payload, since they no longer have a cwd `.session`) wins, else the
   // harness env var (ownSessionId — the agent's own `spex session …` carries the harness session id).
   const sess = flag('session')
-  // appended to a done/ask/block declaration: states (not commands) that the next tool call's mark-active hook re-flips .session to active, so a re-read won't show this.
-  const DECLARED = ' — recorded; the human sees it in the dashboard. Your next tool call resets this worktree to active (the mark-active hook, by design), so re-reading .session won\'t reflect it.'
+  // appended to a done/ask/block declaration: states (not commands) that the next tool call's mark-active hook re-flips the global record to active, so a re-read won't show this.
+  const DECLARED = ' — recorded; the human sees it in the dashboard. This state lives in your session\'s global record; your next tool call flips that record back to active (the mark-active hook, by design), so it is normal for this declaration not to persist.'
   if (sub === 'new') {
     // route through the backend (auth env + concurrency cap); in-process only if no backend is reachable.
     // prompt = --prompt OR the first positional (after `session new`), so `session new "<prompt>"` works the

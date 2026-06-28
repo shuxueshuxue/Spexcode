@@ -296,10 +296,13 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const msg = drafts[active] || ''
   const setMsg = (v) => setDrafts((d) => ({ ...d, [active]: v }))
 
-  // fetch the `/` command list once — the same data CC's `/` menu uses. Display+insert only; never executed.
+  // fetch the `/` command list for the ACTIVE session's harness — recomputed when you switch tabs, so a codex
+  // session gets codex's menu and a claude session gets claude's. The same data each harness's `/` menu uses.
+  // Display+insert only; never executed.
   useEffect(() => {
-    fetch('/api/slash-commands').then((r) => r.json()).then((d) => { if (Array.isArray(d)) setSlashCmds(d) }).catch(() => {})
-  }, [])
+    const harness = selSession?.harness || 'claude'
+    fetch(`/api/slash-commands?harness=${harness}`).then((r) => r.json()).then((d) => { if (Array.isArray(d)) setSlashCmds(d) }).catch(() => {})
+  }, [selSession?.harness])
 
   // fetch the config presets once — the New Session box's `/` palette (tidy/health/…). Picking one composes
   // its body into the launch prompt (see submit); listing is display-only, like the slash menu.

@@ -7,7 +7,7 @@ import { resolveLayout, mainBranch } from './layout.js'
 import { buildBoard } from './board.js'
 import { gitA, gitTry } from './git.js'
 import { newSession, listSessions, sendKeys, rawKey, exitSession, closeSession, reopen, propose, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, superviseQueue } from './sessions.js'
-import { defaultHarness } from './harness.js'
+import { defaultHarness, HARNESSES } from './harness.js'
 import { evalTimeline, readBlobByHash } from '../../spec-yatsu/src/evaltab.js'
 import { buildProofModel, renderProofHtml } from '../../spec-yatsu/src/proof.js'
 import { saveUpload, MAX_UPLOAD_BYTES } from './uploads.js'
@@ -66,8 +66,12 @@ app.get('/api/layout', async (c) => c.json(await resolveLayout()))
 // frontmatter field, not a dir (specs.ts loadSurface); `surface: system` siblings are gathered elsewhere.
 app.get('/api/config', (c) => c.json(loadConfig()))
 // the dashboard input's `/` dropdown — computed by the launcher's HARNESS adapter the same way that harness
-// computes its own `/` menu ([[harness-adapter]]). Insert-only on the client; nothing executes here.
-app.get('/api/slash-commands', (c) => c.json(defaultHarness.slashCommands()))
+// computes its own `/` menu ([[harness-adapter]]). The client passes `?harness=<id>` for the ACTIVE session,
+// so a codex tab gets CODEX's menu, not the default's; unknown/absent → default. Insert-only on the client.
+app.get('/api/slash-commands', (c) => {
+  const h = HARNESSES.find((x) => x.id === c.req.query('harness')) || defaultHarness
+  return c.json(h.slashCommands())
+})
 
 // write a pasted/dropped/picked file to this (worker) machine's /tmp and return its absolute path for the
 // client to splice into the prompt. Fail-loud: no/empty file → 400, over the size cap → 413, write error → 500.

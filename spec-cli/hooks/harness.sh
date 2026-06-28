@@ -63,15 +63,23 @@ hp_field() {
 hp_session_id() { printf '%s' "${SPEXCODE_SESSION_ID:-$(hp_field "$1" session_id)}"; }
 
 # the harness-native conversation/thread id when it differs from SpexCode's governed record id. Claude's
-# pinned id is the record id already, so it contributes nothing. Codex mints an unpinnable thread id and reports
-# it as payload session_id; SpexCode stores that as harness_session_id for app-server delivery.
+# pinned id is the record id already, so it contributes nothing. Codex mints an unpinnable thread id, but in
+# app-server mode (our launch) its hook PAYLOAD does NOT carry it — the only place it lives is Codex's own
+# rollout `session_meta`, which records both the thread `session_id` AND the `cwd`. So find the NEWEST rollout
+# whose cwd is THIS worktree ($PWD, where Codex runs the hook) and read its id. SpexCode stores it as
+# harness_session_id, which app-server delivery + liveness + resume all key on. Empty if no rollout yet (the
+# capture re-runs on later events until one exists).
 hp_harness_session_id() {
   case "$SPEXCODE_HARNESS" in
     codex)
-      local hid sid
-      hid=$(hp_field "$1" session_id)
-      sid=$(hp_session_id "$1")
-      [ -n "$hid" ] && [ "$hid" != "$sid" ] && printf '%s' "$hid"
+      local home r cwd id
+      home="${CODEX_HOME:-$HOME/.codex}"
+      for r in $(ls -t "$home"/sessions/*/*/*/rollout-*.jsonl 2>/dev/null); do
+        cwd=$(head -1 "$r" 2>/dev/null | sed -n 's/.*"cwd"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
+        [ "$cwd" = "$PWD" ] || continue
+        id=$(head -1 "$r" 2>/dev/null | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([0-9a-fA-F][0-9a-fA-F-]\{34,\}\)".*/\1/p' | head -1)
+        [ -n "$id" ] && { printf '%s' "$id"; return; }
+      done
       ;;
   esac
 }

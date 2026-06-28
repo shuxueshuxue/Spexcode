@@ -258,11 +258,19 @@ export function codexLaunchCommand(_id: string, codexCmd = process.env.SPEXCODE_
     '    for i in $(seq 1 100); do [ -S "$sock" ] && break; sleep 0.05; done',
     '  fi',
     ') 9>"$lock"',
-    // BACKEND owns the thread: `codex-launch` does thread/start { cwd = this worktree } on the shared
-    // per-project app-server, stores the new thread id on the governed record (SPEXCODE_SESSION_ID), and
-    // fires the launch prompt as the first turn — materializing the rollout. It prints the thread id, which
-    // the visible TUI then RESUMES (the rollout persists on disk), rendering it natively. "$@" is the prompt.
-    `tid=$(${SPEX} codex-launch "$sock" "$PWD" "$@")`,
+    // TWO launch modes, on ONE tail channel ("$@"). reopen() hands a `--resume <thread-id>` tail (see
+    // codexHarness.resumeArg) to bring the SAME conversation back: resume that OWNED thread DIRECTLY — no new
+    // thread, no first-turn prompt. ANY other tail is a NEW launch: BACKEND owns the thread — `codex-launch`
+    // does thread/start { cwd = this worktree } on the shared per-project app-server, stores the new id on the
+    // governed record (SPEXCODE_SESSION_ID), and fires the tail as the FIRST turn, materializing the rollout.
+    // Either way it ends with a thread id, which the visible TUI then RESUMES (the rollout persists on disk),
+    // rendering it natively. A new launch's tail is always ONE single-quoted prompt arg, so it can never be the
+    // literal "--resume" marker — the discriminator is unambiguous.
+    `if [ "$1" = "--resume" ]; then`,
+    `  tid=$2`,
+    `else`,
+    `  tid=$(${SPEX} codex-launch "$sock" "$PWD" "$@")`,
+    `fi`,
     `exec ${codexCmd} --remote unix://"$sock" resume "$tid"`,
   ].join('\n')
   return `bash -lc ${shQuote(script)} spexcode-codex`
@@ -645,7 +653,10 @@ export const codexHarness: Harness = {
   slashCommands: codexSlashCommands,
   liveness: (rec, tmuxAlive, runtimeDir) => (tmuxAlive && existsSync(codexAppServerSock(runtimeDir)) ? 'online' : 'offline'),
   deliver: (rec, text) => deliverViaCodexAppServer(rec, text),
-  resumeArg: (rec) => (rec.harnessSessionId ? `resume ${rec.harnessSessionId}` : ''),   // owned thread id → codex `resume <id>` (SAME conversation); none → relaunch FRESH
+  // owned thread id → `--resume <id>` MARKER the codex launch script reads to resume that thread DIRECTLY (NOT
+  // a tail handed to a bare `codex` — the script's final `codex … resume "$tid"` performs codex's own resume on
+  // the owned id, the SAME conversation); none → empty tail → relaunch a FRESH thread on the same worktree/record.
+  resumeArg: (rec) => (rec.harnessSessionId ? `--resume ${rec.harnessSessionId}` : ''),
 }
 
 // every adapter — materialize iterates this to render each harness's artifacts in one pass.

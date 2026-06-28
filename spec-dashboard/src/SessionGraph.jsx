@@ -217,10 +217,10 @@ function GraphCanvas({ sessions = [], onOpen, active, legend, setLegend, edges =
         return {
           id: `comms:${e.from}-${e.to}`, source: e.from, target: e.to, type: 'floating',
           label: `⇄ ${e.count ?? 1}`,
-          labelStyle: { fontSize: 10, fill: 'var(--sg-comms, #8a8f98)', fontWeight: 600 },
+          labelStyle: { fontSize: 10, fill: 'var(--sg-comms, #93a1a1)', fontWeight: 600 },
           labelShowBg: true,
-          labelBgStyle: { fill: 'var(--sg-comms-bg, rgba(20,22,28,0.85))' }, labelBgPadding: [4, 2], labelBgBorderRadius: 4,
-          style: { stroke: 'var(--sg-comms, #8a8f98)', strokeWidth: 1.5, strokeDasharray: '2 4', opacity: 0.8 },
+          labelBgStyle: { fill: 'var(--sg-comms-bg, rgba(238,232,213,0.9))' }, labelBgPadding: [4, 2], labelBgBorderRadius: 4,
+          style: { stroke: 'var(--sg-comms, #93a1a1)', strokeWidth: 1.5, strokeDasharray: '2 4', opacity: 0.8 },
           className: 'sg-edge sg-comms',
         }
       }

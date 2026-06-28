@@ -27,11 +27,29 @@ scenarios:
       reaches the spec itself rather than just its name.
     code:
       - spec-dashboard/src/SpecSearch.jsx
+  - name: manual-scroll-wins-over-keyboard-glide
+    description: >-
+      Open a long scrollable surface (the help/keymap modal or a node-info popup with overflow). Press
+      `J` (or down) a few times to start the momentum glide scrolling the body downward, then — while the
+      glide is still easing (within ~0.5s of the last keypress) — immediately scroll the mouse wheel the
+      other way. Screenshot the surface right after the wheel scroll and file with
+      `spex yatsu eval keyboard-nav --image <png> --pass`. The view must rest where the wheel left it, not
+      snap back to the keyboard-reached position.
+    expected: >-
+      A mouse-wheel (or trackpad/drag) scroll during an in-flight keyboard glide cancels the glide and
+      keeps the wheel position — the view does NOT snap back to the last J/K-reached spot. Held/repeated
+      J/K still stack into one glide, and switching to a different scrollable surface still drops the
+      stale target.
+    code:
+      - spec-dashboard/src/scroll.js
 ---
 # yatsu.md — keyboard-nav
 
 Product surface, measured by **looking** (YATU): the agent opens the `/` palette and screenshots it —
 once returning rows across all four planes, once surfacing a node by a word found only in its spec prose
 (the body-reaching match is the latest behaviour) — filing each with image evidence and a verdict. Both
-scenarios scope their freshness `code:` to the search palette (`SpecSearch.jsx`) — not the whole keyboard
-shell (`App.jsx`) — so unrelated keyboard-nav edits don't stale these readings.
+search scenarios scope their freshness `code:` to the search palette (`SpecSearch.jsx`) — not the whole
+keyboard shell (`App.jsx`) — so unrelated keyboard-nav edits don't stale these readings. The
+**manual-scroll-wins** scenario is looked at the same way — start a J/K glide on a scrollable surface,
+wheel against it mid-flight, screenshot that the wheel position holds — and scopes its freshness to the
+shared momentum scroller (`scroll.js`).

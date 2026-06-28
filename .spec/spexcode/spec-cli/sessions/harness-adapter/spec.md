@@ -63,6 +63,12 @@ surface:
   harness's env (`CLAUDE_CODE_SESSION_ID` / …).
 - **worktree** — Claude has a native `--worktree` + `WorktreeCreate`/`WorktreeRemove` hooks; Codex has none
   (SpexCode manages the worktree itself). The adapter exposes whether the harness owns worktrees.
+- **pane-title semantics** (`paneTitleIsSelfSummary`) — whether the harness's tmux pane title IS the agent's
+  own live task self-summary, so the board headline may derive from it. Claude continuously writes a one-line
+  task summary into its OSC title → true; Codex sets the title to a spinner glyph + the cwd FOLDER name (not a
+  summary) → false, so its headline falls through to the launch-prompt preview rather than showing the folder.
+  Consumed by [[session-activity]]'s headline resolver — this capability field is the ONLY harness branch in
+  that path (no `if (codex)`).
 - **runtime: liveness + delivery** — the RUNTIME transport, lifted onto the adapter so product code honours
   `ownsRendezvous` instead of hard-wiring the claude rendezvous socket. `liveness(rec, tmuxAlive, runtimeDir)` answers "is
   this session's agent ready?": **claude** = the tmux window is up AND its reclaude rendezvous socket exists

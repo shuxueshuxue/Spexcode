@@ -77,7 +77,11 @@ export function materialize(proj = process.cwd()): string {
   // only ignore paths that live INSIDE proj. The codex hooks shim now materializes at the MAIN checkout (codex
   // reads a linked worktree's hooks from the root checkout — see harness.ts); from a linked worktree that path
   // escapes proj (`../…`) and is gitignored by the main checkout's OWN materialize, not the worktree's.
-  const ignorable = shimPaths.filter((p) => !p.startsWith('..'))
+  // spexcode.local.json — the machine-local config overlay (host-specific values, e.g. an absolute worker
+  // launcher path; see portable-layout) — joins the SAME block on the same rationale: machine-specific, must
+  // never be committed. Without it an adopter who follows our own guidance to put a host path there would
+  // `git add -A` and leak it — the exact thing the overlay exists to prevent.
+  const ignorable = [...shimPaths.filter((p) => !p.startsWith('..')), 'spexcode.local.json']
   if (ignorable.length) writeManagedBlock(join(proj, '.gitignore'), ignorable.sort().join('\n'), ['# ', ''])
   // (5) stamp the content-hash marker LAST (so a crash mid-render leaves it stale → re-renders next gate).
   const h = contentHash(proj)

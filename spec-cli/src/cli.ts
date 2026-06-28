@@ -15,7 +15,7 @@ function flag(name: string): string | undefined {
 }
 const has = (name: string) => process.argv.includes(`--${name}`)
 // bare positionals after argv index `from`, skipping flags and their values (selectors for ls/watch).
-const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--timeout', '--reason', '--out', '--password', '--tls-cert', '--tls-key', '--harness', '--harness-session'])
+const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--timeout', '--reason', '--out', '--password', '--tls-cert', '--tls-key', '--harness', '--harness-session', '--port', '--api-port'])
 function positionals(from: number): string[] {
   const out: string[] = []
   for (let i = from; i < process.argv.length; i++) {
@@ -89,6 +89,8 @@ Specs / graph
   serve                 run the API server (http://localhost:8787)
     --public --password <pw>   expose it on a public IP behind a password + self-signed TLS (no domain
                                needed). [--tls-cert F --tls-key F] for your own cert · [--http] to drop TLS
+  dashboard             serve the dashboard UI on its own port (default 5173), proxying /api to a running
+                        \`spex serve\`. [--port N] [--api-port N=8787]. The installed replacement for \`npm run web\`.
   board                 dump the dashboard board state as JSON
   forge <sub>           trace a forge's issues/PRs onto spec nodes (read-only): links | eval-pending [--host github] [--node <id>] [--json]
   yatsu <sub>           measure a node's scenarios and keep score: scan | eval [.|<node>] [--scenario N] (--pass|--fail|--note T) [--image P|--result P|-] | show [.|<node>] [--json] | clean [--keep-latest|--all]
@@ -120,6 +122,14 @@ if (cmd === 'serve') {
   // the supervisor owns the public port and runs index.ts as a child for zero-downtime reloads; it
   // (not `tsx watch`) is what watches spec-cli/src, so the package `serve` script must NOT use --watch.
   await import('./supervise.js')
+} else if (cmd === 'dashboard') {
+  // the natural post-install UI: serve the bundled dashboard on its OWN loopback port, proxying /api +
+  // the terminal socket to a separately-run `spex serve`. Replaces the dogfood-only `npm run web` (vite).
+  const { serveDashboardLocal } = await import('./gateway.js')
+  const port = Number(flag('port') ?? process.env.SPEXCODE_DASHBOARD_PORT ?? 5173)
+  const apiPort = Number(flag('api-port') ?? process.env.PORT ?? 8787)
+  if (!Number.isInteger(port) || !Number.isInteger(apiPort)) { console.error('spex dashboard: --port and --api-port must be integers'); process.exit(2) }
+  serveDashboardLocal({ port, apiPort })
 } else if (cmd === undefined || cmd === 'help' || cmd === '--help' || cmd === '-h') {
   printHelp()
 } else if (cmd === 'guide') {

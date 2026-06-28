@@ -9,7 +9,7 @@ work, *not* the plugins themselves. A config node is a folder where the folder *
 plus optional helper scripts/assets); it defines a tool behavior, and **where it plugs in is a `surface`
 frontmatter field**:
 
-- `surface: slash` — exposed as a new-session command.
+- `surface: command` — exposed as a new-session command.
 - `surface: system` — appended to agent system prompts.
 
 The field-driven routing rule is specified by the [[surface]] child. The **instances** — the DIY dev-flow

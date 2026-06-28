@@ -51,7 +51,7 @@ FRONTMATTER (YAML between the opening and closing --- lines; every field optiona
   related: files this node REFERENCES but does not own — a YAML list, same path forms. Carries coverage
            (never drift, never yatsu, nothing to ack); it is the many-to-many net that claims the files
            govern doesn't. Every listed path must exist (lint integrity error otherwise).
-  surface  config/.config nodes only: system (folded into every agent's prompt) | slash (a /command) |
+  surface  config/.config nodes only: system (folded into every agent's prompt) | command (a /command) |
            hook (a lifecycle hook handler — a co-located script the dispatcher runs on the harness events
            in events:, ordered by order:, blocking when block: true). hook nodes may nest under a grouping
            plugin (e.g. .config/core/<id>); surface is a field, discovered recursively.

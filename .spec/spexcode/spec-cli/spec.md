@@ -65,7 +65,7 @@ line-diff), `/api/edit` (a node's in-flight working-tree delta vs its fork point
 board — incl. a **brand-new, still-untracked node** as an all-additions diff, so a just-created uncommitted
 node shows its body not nothing), `/api/layout` (the resolved
 [[portable-layout]]), and `/api/config` + `/api/slash-commands` (the
-`/` dropdown — config-root plugins declaring `surface: slash`, plus the Claude-Code command union).
+`/` dropdown — config-root plugins declaring `surface: command`, plus the Claude-Code command union).
 
 Write/runtime routes are thin callers of the [[sessions]] state machine — no session logic lives here:
 `/api/sessions` list + spawn; per-session `resume`/`review`/`close`, plus reads `review` (the merge

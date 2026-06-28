@@ -18,7 +18,7 @@ when the package is installed outside the dogfood repo — never a hardcoded rep
 
 - **The seed spec tree** — `templates/spec/*` copied into `<dir>/.spec/`: a root `project` node plus a
   default `.config` of dev-flow plugins. The plugins are flat child nodes, each tagged with a `surface`
-  field: `core` + `forge-link` (`surface: system`, the contract) plus the `surface: slash` presets
+  field: `core` + `forge-link` (`surface: system`, the contract) plus the `surface: command` presets
   (`extract`, `memory-hygiene`, `regroup`, `scenario`, `supervisor`, `tidy`), each a verbatim copy of the
   dogfood `.config` node — kept in lockstep per [[init-preset]] so a fresh adopt ships the
   *current* plugin set, not a drifted one. The spexcode-only `taste` and `voice-before-ask` are

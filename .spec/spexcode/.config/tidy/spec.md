@@ -1,6 +1,6 @@
 ---
 title: tidy
-surface: slash
+surface: command
 status: active
 hue: 140
 desc: Diagnose or fix a node's body altitude — grade it against the contract-surface test (read-only), or rewrite it to contract altitude — by what the invocation asks for.

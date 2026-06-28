@@ -1,6 +1,6 @@
 ---
 title: scenario
-surface: slash
+surface: command
 status: active
 hue: 160
 kind: mutating

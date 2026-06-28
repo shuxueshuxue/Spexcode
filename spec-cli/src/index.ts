@@ -61,7 +61,7 @@ app.get('/api/yatsu/blob/:hash', (c) => {
   return c.body(new Uint8Array(r.bytes), 200, { 'Content-Type': r.mime, 'Cache-Control': 'public, max-age=31536000, immutable' })
 })
 app.get('/api/layout', async (c) => c.json(await resolveLayout()))
-// the `surface: slash` config-root plugins (built/active only) for the new-session `/` dropdown — each with
+// the `surface: command` config-root plugins (built/active only) for the new-session `/` dropdown — each with
 // its prompt `body` ({{targets}} placeholder), `kind`, and folder `dir` + co-located `files`. surface is a
 // frontmatter field, not a dir (specs.ts loadSurface); `surface: system` siblings are gathered elsewhere.
 app.get('/api/config', (c) => c.json(loadConfig()))

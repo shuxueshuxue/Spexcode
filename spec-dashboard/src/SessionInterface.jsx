@@ -295,8 +295,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   useEffect(() => {
     loadConfig().then((d) => { if (Array.isArray(d)) setPresets(d) }).catch(() => {})
   }, [])
-  // /api/config returns only slash-surface nodes, so the presets ARE the launchable set — no client filter.
-  const slashPresets = presets
+  // /api/config returns only command-surface nodes, so the presets ARE the launchable set — no client filter.
+  const commandPresets = presets
 
   // nav mode binds to ONE live session's menu — leaving the tab (or it going offline) exits it, so raw
   // keystrokes can never leak into the wrong pane.
@@ -379,7 +379,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const composeLaunch = (raw) => {
     const m = raw.match(/^\/(\S+)\s*([\s\S]*)$/)
     if (!m) return raw
-    const preset = slashPresets.find((p) => p.name === m[1])
+    const preset = commandPresets.find((p) => p.name === m[1])
     if (!preset) return raw
     const ids = []
     const free = m[2].replace(/(^|\s)@(\.?[A-Za-z0-9_-]+)/g, (_, sp, id) => { ids.push(id); return sp }).trim()
@@ -429,7 +429,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       }
       const cm = value.match(/^\/(\S*)$/)   // leading `/preset` (no space yet) → config-preset palette
       if (cm) {
-        const items = matchConfig(slashPresets, cm[1])
+        const items = matchConfig(commandPresets, cm[1])
         if (!items.length) return null
         return { kind: 'config', items, index: 0, start: 0, end: value.length, query: cm[1] }
       }

@@ -1,6 +1,6 @@
 ---
 title: extract
-surface: slash
+surface: command
 status: active
 hue: 30
 desc: Reverse-engineer a faithful spec tree out of existing code — responsibility nodes at contract altitude, intent never fabricated.

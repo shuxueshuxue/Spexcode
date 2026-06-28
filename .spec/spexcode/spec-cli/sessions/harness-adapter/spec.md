@@ -110,11 +110,11 @@ edit), so `hp_code_path` emits ALL touched paths — one per line — and every 
 so a `command` carrying a quoted literal (`sed -n "1,5p" f.ts`) is captured whole, not truncated at the inner
 quote. `hp_is_ask` maps Codex's `request_user_input` (and Claude's `AskUserQuestion`) onto the question capture.
 So [[spec-first]], [[spec-of-file]], and mark-active fire on Codex, not just Claude. The session-id + global-store
-resolution every handler repeated is folded into the same helper. The same mirror exposes
-`hp_harness_session_id`: Claude returns nothing because its pinned id already is the governed record id; Codex
-returns the payload `session_id` when `SPEXCODE_SESSION_ID` points at the governed SpexCode record, letting the
-generic `harness-session-id` hook store Codex's real app-server thread id without the dispatcher or lifecycle
-hooks branching on Codex.
+resolution every handler repeated is folded into the same helper (`hp_session_id`, `hp_store_dir`). Codex's
+native thread id is captured WITHOUT sniffing it from the payload (it isn't there) or scanning rollout files: the
+[[harness-session-id]] hook computes this session's own per-session app-server socket (`hp_store_dir`, the shell
+mirror of `sessionStoreDir`) and reads its single loaded thread via `spex codex-thread` — Claude needs none of
+this (its pinned id already is the record id), and no dispatcher or lifecycle hook branches on Codex.
 
 ## verified codex facts (live round-trip, real codex 0.142.3)
 

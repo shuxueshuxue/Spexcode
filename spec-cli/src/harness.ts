@@ -209,7 +209,12 @@ export function codexLaunchCommand(_id: string, codexCmd = process.env.SPEXCODE_
     '  flock 9',
     '  if [ -S "$sock" ] && [ -s "$pid" ] && ! kill -0 "$(cat "$pid")" 2>/dev/null; then rm -f "$sock"; fi',
     '  if [ ! -S "$sock" ]; then',
-    `    ${serverCmd} app-server --listen unix://"$sock" >"$log" 2>&1 &`,
+    // 9>&- : do NOT let the long-lived app-server inherit fd 9 (the flock fd). An flock is held until
+    // EVERY fd on its open file description is closed; if the daemon keeps fd 9 open it pins the lock
+    // forever, so every later launcher blocks on `flock 9` and never reaches `exec codex --remote`
+    // (the pane stays at the shell, no TUI, no thread, no harness_session_id). </dev/null detaches
+    // its stdin from the pane so it can't fight the TUI for the tty.
+    `    ${serverCmd} app-server --listen unix://"$sock" >"$log" 2>&1 9>&- </dev/null &`,
     '    echo $! > "$pid"',
     '    for i in $(seq 1 100); do [ -S "$sock" ] && break; sleep 0.05; done',
     '  fi',

@@ -31,7 +31,9 @@ neither blocks the `↑/↓` path); New ⇄ graph is horizontal — `→` from a
 **@-mention** suggestion, so the human opts in with `@`. A leading **`/`** opens the config-preset palette;
 the two compose the launch grammar `/<preset> @<node>… <free text>`, from which the server derives the node (the
 first `@<id>`). Both menus only insert text; the New prompt has **no** `/` slash-command menu (presets only). A preset launched with **no `@`-target** never assumes a node — the agent takes scope from the prompt, else asks first.
-**Submitting launches but never switches tabs**: the prompt clears and you stay on New Session — the new session just
+**Submitting launches but never switches tabs**: the prompt clears, **focus stays in the box** (the box disables
+while the launch is in flight — which the browser blurs — and focus lands back in the cleared box the moment it
+re-enables, so the next launch is type-ready without a click), and you stay on New Session — the new session just
 appears in the list below (the next board poll surfaces it) — so you can fire off several in a row. The old
 auto-jump-to-the-new-session is gone; only a tab's *removal* (below) ever moves your selection for you.
 

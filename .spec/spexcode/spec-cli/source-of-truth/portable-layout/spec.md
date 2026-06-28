@@ -59,9 +59,11 @@ it an adopter's `loadSystemConfig` finds nothing — the `.config/core` contract
 get no system prompt — so portability is only real when the config root travels with the rename.
 
 The reproducibility contract is concrete: `.nvmrc` pins Node (22) and both package-locks are tracked, so
-installs are deterministic. Machine-local artifacts never enter the tree — the `claude` binary the launcher
-drives is resolved from `PATH` (override via `SPEXCODE_CLAUDE_CMD`), so the `spec-cli/bin/claude` symlink
-some installs leave is `.gitignore`d. A launch generates NO per-session SpexCode files in the worktree: the
+installs are deterministic. Machine-local artifacts never enter the tree. The worker launcher resolves
+env `SPEXCODE_CLAUDE_CMD` → a machine-local `spexcode.local.json` (gitignored; `readConfig` layers it over
+the committed `spexcode.json`) → the default — so a host-specific absolute launcher path gets a *durable*
+home off the env (surviving a restart, the usual cause of a 401 wave) without leaking into a commit; the
+`spec-cli/bin/claude` symlink some installs leave is `.gitignore`d too. A launch generates NO per-session SpexCode files in the worktree: the
 record and the launcher products (prompt, launch, launch.sh, recorded comms) live in the per-user global
 store ([[runtime]]), keyed by session_id, outside the tree — so nothing per-session is left to ignore or
 commit (the contract instead reaches the agent by materializing into the worktree's OWN tracked

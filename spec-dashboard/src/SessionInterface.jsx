@@ -69,6 +69,11 @@ function navKeyToken(e) {
 // the menu's spec path, minus the `.spec/` shell and `/spec.md` leaf, so a row reads like a breadcrumb.
 const specPath = (p) => (p || '').replace(/^\.spec\//, '').replace(/\/spec\.md$/, '')
 
+// an `@<id>` mention token at a word boundary. Optional leading dot so `@.config` resolves (a node id is
+// its dir basename — see [[spec-pointer]]). Group 1 = the boundary (BOL or whitespace), 2 = the id. Used
+// for both the New Session launch grammar and the running-session send-time resolution — one pattern.
+const MENTION_RE = /(^|\s)@(\.?[A-Za-z0-9_-]+)/g
+
 // rank spec nodes for a partial @query. The focused node always floats to the very top (so just typing
 // `@` lists it first — the convenient default target). Otherwise id beats path; a prefix beats a mid-match;
 // shorter ids win ties so the most specific node floats up. Empty query (just typed `@`) lists everything.
@@ -382,7 +387,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     const preset = slashPresets.find((p) => p.name === m[1])
     if (!preset) return raw
     const ids = []
-    const free = m[2].replace(/(^|\s)@(\.?[A-Za-z0-9_-]+)/g, (_, sp, id) => { ids.push(id); return sp }).trim()
+    const free = m[2].replace(MENTION_RE, (_, sp, id) => { ids.push(id); return sp }).trim()
     const targets = ids.length
       ? ids.map((id) => {
           const s = specs.find((x) => x.id === id)
@@ -394,6 +399,15 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       : `${preset.body}\n\n${targets}`
     return free ? `${body}\n\n${free}` : body
   }
+
+  // the running-session twin of composeLaunch's @-resolution: expand each `@<id>` in a keyed message to an
+  // inline pointer at the node's live spec.md (`@<id> (<path>)`), so the driven agent is aimed at that
+  // contract and reads the file itself — never a pasted body (see [[spec-pointer]]). Unknown ids pass through.
+  const expandMentions = (text) =>
+    text.replace(MENTION_RE, (m, sp, id) => {
+      const s = specs.find((x) => x.id === id)
+      return s ? `${sp}@${s.id} (${s.path})` : m
+    })
 
   // launch a session, then stay on the New tab — it appears in the list below on the next reload/poll.
   // The box NEVER disables or blurs: clear the draft optimistically (so a fresh draft can't be clobbered when
@@ -414,19 +428,26 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       .catch(() => {})
   }
 
-  // build the completion dropdown for the active surface: the New prompt drives @-mention (spec nodes) +
-  // config-preset (`/`) menus; a session's ❯ inbox drives the slash-command menu. The trigger is purely
-  // positional — for a mention we scan back from the caret over non-space chars to an `@` at a word boundary.
+  // the @-mention dropdown — shared by the New prompt and a running session's ❯ inbox (one menu, not two).
+  // The trigger is purely positional: scan back from the caret over non-space chars to an `@` at a word
+  // boundary. Returns the menu descriptor, or null when the caret isn't inside a mention token.
+  const mentionMenu = (value, caret) => {
+    let i = caret - 1
+    while (i >= 0 && value[i] !== '@' && !/\s/.test(value[i])) i--
+    if (i >= 0 && value[i] === '@' && (i === 0 || /\s/.test(value[i - 1]))) {
+      const query = value.slice(i + 1, caret)
+      const items = matchSpecs(specs, query, focusId)
+      if (!items.length) return null
+      return { kind: 'mention', items, index: 0, start: i, end: caret, query }
+    }
+    return null
+  }
+  // build the completion dropdown for the active surface: @-mention (spec nodes) works on BOTH; the New
+  // prompt adds the config-preset (`/`) palette, a session's ❯ inbox adds the slash-command menu.
   const buildMenu = (value, caret) => {
+    const mm = mentionMenu(value, caret)
+    if (mm) return mm
     if (active === 'new') {
-      let i = caret - 1
-      while (i >= 0 && value[i] !== '@' && !/\s/.test(value[i])) i--
-      if (i >= 0 && value[i] === '@' && (i === 0 || /\s/.test(value[i - 1]))) {   // @ at a word boundary → mention
-        const query = value.slice(i + 1, caret)
-        const items = matchSpecs(specs, query, focusId)
-        if (!items.length) return null
-        return { kind: 'mention', items, index: 0, start: i, end: caret, query }
-      }
       const cm = value.match(/^\/(\S*)$/)   // leading `/preset` (no space yet) → config-preset palette
       if (cm) {
         const items = matchConfig(slashPresets, cm[1])
@@ -465,13 +486,18 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       requestAnimationFrame(() => { const el = msgRef.current; if (el) { el.focus(); el.setSelectionRange(caret, caret) } })
       return
     }
-    // config preset and mention both write the New Session prompt (taRef); the preset is composed at launch.
+    // config preset → the New prompt (composed at launch); a mention → whichever box is active: the New
+    // prompt (resolved at launch) or a running session's ❯ inbox (resolved at send, see expandMentions).
     const insert = menu.kind === 'config' ? `/${item.name} ` : `@${item.id} `
-    const before = prompt.slice(0, menu.start)
-    setPrompt(before + insert + prompt.slice(menu.end))
+    const onMsg = menu.kind === 'mention' && active !== 'new'
+    const ref = onMsg ? msgRef : taRef
+    const cur = onMsg ? msg : prompt
+    const setCur = onMsg ? setMsg : setPrompt
+    const before = cur.slice(0, menu.start)
+    setCur(before + insert + cur.slice(menu.end))
     setMenu(null)
     const caret = before.length + insert.length
-    requestAnimationFrame(() => { const el = taRef.current; if (el) { el.focus(); el.setSelectionRange(caret, caret) } })
+    requestAnimationFrame(() => { const el = ref.current; if (el) { el.focus(); el.setSelectionRange(caret, caret) } })
   }
 
   // ONE render for both `/` palettes — the inbox's CC-command menu (`up`, opens above the box) and the New
@@ -501,14 +527,39 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     </ul>
   )
 
+  // ONE render for the @-mention menu, on either surface — downward under the centered New box, or `up`
+  // above the docked ❯ inbox. Same rows, same data; only the open direction differs (like slashMenu).
+  const mentionMenuEl = (up) => (
+    <ul className={up ? 'mention-menu up' : 'mention-menu'} role="listbox">
+      <li className="mention-head">// {menu.query ? `@${menu.query}` : t('session.menuSpecNodes')} — {t('session.menuHint')}</li>
+      {menu.items.map((it, i) => (
+        <li
+          key={it.id}
+          role="option"
+          aria-selected={i === menu.index}
+          className={i === menu.index ? 'mention-item on' : 'mention-item'}
+          onMouseDown={(e) => { e.preventDefault(); accept(it) }}
+          onMouseEnter={() => setMenu((m) => (m ? { ...m, index: i } : m))}
+        >
+          <span className="mention-dot" style={{ background: STATUS_COLOR[it.status] || STATUS_COLOR.offline }} />
+          <span className="mention-id">@{highlight(it.id, menu.query)}</span>
+          <span className="mention-path">{specPath(it.path)}</span>
+        </li>
+      ))}
+    </ul>
+  )
+
   const sendMsg = async () => {
-    const text = msg
-    if (!text.trim() || active === 'new') return
+    const raw = msg
+    if (!raw.trim() || active === 'new') return
     // a line that is EXACTLY `/<name>` of an available board command runs HERE instead of being sent to the
     // agent (this covers the no-menu submit; accept() handles the menu pick). trim() covers the `/`
     // completion's trailing space and a stray newline.
-    const cmd = boardCmds.find((c) => text.trim() === `/${c.name}`)
+    const cmd = boardCmds.find((c) => raw.trim() === `/${c.name}`)
     if (cmd) { setMsg(''); setMenu(null); cmd.run(); return }
+    // resolve any `@<node>` to a live spec.md pointer before it reaches the agent (the running-session twin
+    // of the New Session launch composition — see [[term-input]]).
+    const text = expandMentions(raw)
     setMsg('')
     setSendErr(false)
     try {
@@ -518,7 +569,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       })
       if (!res.ok) throw new Error(`keys ${res.status}`)
     } catch {
-      setMsg(text)      // don't lose the message — put it back so the human can retry
+      setMsg(raw)       // don't lose the message — put the ORIGINAL line back so the human can retry
       setSendErr(true)
     }
   }
@@ -806,25 +857,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   disabled={uploading}
                 >{uploading && attachAt === 'new' ? <BusyGlyph /> : <AttachGlyph />}</button>
                 {uploadErr && attachAt === 'new' && <span className="si-attach-err" role="alert">{t('session.attachError')}</span>}
-                {menu && menu.kind === 'mention' && (
-                  <ul className="mention-menu" role="listbox">
-                    <li className="mention-head">// {menu.query ? `@${menu.query}` : t('session.menuSpecNodes')} — {t('session.menuHint')}</li>
-                    {menu.items.map((it, i) => (
-                      <li
-                        key={it.id}
-                        role="option"
-                        aria-selected={i === menu.index}
-                        className={i === menu.index ? 'mention-item on' : 'mention-item'}
-                        onMouseDown={(e) => { e.preventDefault(); accept(it) }}
-                        onMouseEnter={() => setMenu((m) => (m ? { ...m, index: i } : m))}
-                      >
-                        <span className="mention-dot" style={{ background: STATUS_COLOR[it.status] || STATUS_COLOR.offline }} />
-                        <span className="mention-id">@{highlight(it.id, menu.query)}</span>
-                        <span className="mention-path">{specPath(it.path)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                {menu && menu.kind === 'mention' && mentionMenuEl(false)}
                 {/* config-preset palette — same `/` dropdown, opening downward under the centered box. */}
                 {menu && menu.kind === 'config' && slashMenu(false, menu.query ? `/${menu.query}` : t('session.menuPresets'))}
               </div>
@@ -937,8 +970,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   >{uploading && attachAt === 'msg' ? <BusyGlyph /> : <AttachGlyph />}</button>
                   {uploadErr && attachAt === 'msg' && <span className="si-attach-err" role="alert">{t('session.attachError')}</span>}
                   {sendErr && <span className="si-send-err" role="alert">{t('session.msgError')}</span>}
-                  {/* slash-command menu — docked at the bottom, so it opens UPWARD (`up`) above the ❯ box. */}
+                  {/* slash-command + @-mention menus — docked at the bottom, so they open UPWARD above the ❯ box. */}
                   {menu && menu.kind === 'slash' && slashMenu(true, menu.query ? `/${menu.query}` : t('session.menuCommands'))}
+                  {menu && menu.kind === 'mention' && mentionMenuEl(true)}
                 </div>
               )}
           </div>

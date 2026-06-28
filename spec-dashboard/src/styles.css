@@ -883,19 +883,18 @@ body {
 .si-hint { font-size: 11px; color: var(--muted); }
 .si-hint code { color: var(--blue); background: var(--panel2); padding: 0 4px; border-radius: 3px; }
 
-/* harness picker under the New Session box — a segmented control in the panel's pill idiom (mirrors .m-tab:
-   hairline pill, blue fill when active). Leading label reads like .si-hint so the row sits quietly. */
-.si-harness { display: flex; align-items: center; gap: 6px; }
-.si-harness-cap { font-size: 11px; color: var(--muted); margin-right: 2px; }
-.si-harness-opt {
-  padding: 4px 12px; min-height: 26px; cursor: pointer;
-  font-family: var(--mono); font-size: 11.5px; color: var(--ink);
+/* agent picker under the New Session box — icon-only radios in the panel's pill idiom. */
+.si-agent-picker { display: flex; align-items: center; gap: 7px; }
+.si-agent-opt {
+  width: 32px; height: 28px; padding: 0; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; color: var(--ink);
   background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
-  transition: border-color .12s ease, color .12s ease, background .12s ease;
+  transition: border-color .12s ease, color .12s ease, background .12s ease, box-shadow .12s ease;
 }
-.si-harness-opt:hover:not(.on):not(:disabled) { border-color: var(--blue); color: var(--ink2); }
-.si-harness-opt.on { color: var(--paper); background: var(--blue); border-color: var(--blue); }
-.si-harness-opt:disabled { opacity: .5; cursor: default; }
+.si-agent-opt:hover:not(.on):not(:disabled) { border-color: var(--blue); color: var(--ink2); }
+.si-agent-opt.on { color: var(--paper); background: var(--blue); border-color: var(--blue); box-shadow: 0 2px 8px rgba(38, 139, 210, .22); }
+.si-agent-opt:disabled { opacity: .5; cursor: default; }
+.si-agent-glyph { width: 16px; height: 16px; display: block; fill: currentColor; }
 
 /* Active session: terminal fills the area (expands from centre out), input docked at the bottom. */
 .si-content.is-session .si-term { animation: si-expand .22s ease; }

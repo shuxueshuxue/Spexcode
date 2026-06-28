@@ -11,22 +11,24 @@ related:
 
 ## raw source
 
-Sessions form a **directed monitor network**, and an edge means exactly one thing: **A→B iff agent A is
-right now running `spex watch B`** over B. The graph is **derived from live watches, never persisted** —
-no subscription store, no datastore, no file; an edge exists **only while that watch runs**.
+Sessions form a **directed monitor network** — one of the two ties the graph draws (the *talking* tie is
+[[comms-edge]]'s). A **monitor** edge means exactly one thing: **A→B iff agent A is right now running `spex
+watch`/`spex wait` on B**. The monitor network is **derived from live watches, never persisted** — no
+subscription store, no datastore, no file; a monitor edge exists **only while that watch runs**.
 
 ## expanded spec
 
 When a `spex watch` starts it **registers with the backend** — reporting its own session id
-(`CLAUDE_CODE_SESSION_ID`, else the worktree `.session`) as the watcher plus its target selectors —
+(`ownSessionId` — the harness env var, e.g. `CLAUDE_CODE_SESSION_ID`; no worktree fallback) as the watcher plus its target selectors —
 **heartbeats** while it runs, and **deregisters on exit**; a missed heartbeat drops the registration as a
 backstop. Registrations are **in-memory in the server** (its single owner); the watch reports over HTTP
 (`POST …/graph/watch` register+heartbeat, `…/unwatch`). A restart starts empty and live watches re-register
 on their next beat. **Best-effort on the watch side** — a down backend delays only the edge, never the
 event stream.
 
-`GET /api/sessions/graph` returns `{ nodes, edges }`: live sessions as nodes and edges **computed at read
-time** from the registrations. Each watcher's **selectors are resolved live** with the same matcher `spex
+`GET /api/sessions/graph` returns `{ nodes, edges }`: live sessions as nodes. This node owns the **monitor**
+edges, **computed at read time** from the registrations (the persisted **comms** edges on the same payload
+are [[comms-edge]]'s). Each watcher's **selectors are resolved live** with the same matcher `spex
 ls`/`watch` use, so a **global** watcher links to **every** session (incl. ones launched after the watch
 started) and a node/branch selector picks up future matches too. Self-edges, edges touching a non-live
 session, and duplicate A→B all drop out. This stays **isolated from the board assembler** — nothing here

@@ -86,7 +86,8 @@ Specs / graph
   init [dir]            scaffold a repo to adopt SpexCode (seed .spec + install git hooks; default: cwd)
   lint                  check the spec↔code graph (integrity·living·coverage·drift); when committing, gates on heavy commit-local drift
   ack <node>… --reason  stamp Spec-OK on HEAD for one or more nodes (this change keeps their specs valid); --reason required, not stored
-  serve                 run the API server (http://localhost:8787)
+  serve                 run the API server (default :8787). [--port N] sets the listen port (mirrors
+                        dashboard --api-port, so many projects coexist on one host — cwd picks the project)
     --public --password <pw>   expose it on a public IP behind a password + self-signed TLS (no domain
                                needed). [--tls-cert F --tls-key F] for your own cert · [--http] to drop TLS
   dashboard             serve the dashboard UI on its own port (default 5173), proxying /api to a running
@@ -121,6 +122,14 @@ if (cmd && cmd !== 'help' && (has('help') || process.argv.includes('-h'))) {
 if (cmd === 'serve') {
   // the supervisor owns the public port and runs index.ts as a child for zero-downtime reloads; it
   // (not `tsx watch`) is what watches spec-cli/src, so the package `serve` script must NOT use --watch.
+  // --port is sugar over the PORT env supervise.ts reads — set BEFORE importing so it takes effect. This
+  // mirrors `spex dashboard --api-port`, so one host runs many projects (each `serve --port N` paired with
+  // a `dashboard --api-port N`), cwd picking which project's .spec is served — no shared default collides.
+  const portArg = flag('port')
+  if (portArg !== undefined) {
+    if (!Number.isInteger(Number(portArg))) { console.error('spex serve: --port must be an integer'); process.exit(2) }
+    process.env.PORT = portArg
+  }
   await import('./supervise.js')
 } else if (cmd === 'dashboard') {
   // the natural post-install UI: serve the bundled dashboard on its OWN loopback port, proxying /api +

@@ -40,5 +40,7 @@ precise error and a non-zero exit (`none` → no such session; `ambiguous` → t
 and the control verbs share one selector grammar, and no command carries its own matching.
 
 The **local state producers** (`session done` / `park` / `ask`, and `review`-as-propose) are deliberately NOT
-here: they write the cwd worktree's own `.session` and must work with no backend up ([[state]]), so they
-resolve against the local worktree, never the backend board.
+here: they never NAME another session at all. Each resolves the agent's OWN session by id — the `--session
+<id>` the hooks pass from the payload, else the harness env var (`ownSessionId`) — and writes (or, for
+`review`-as-propose, reads by exact id) that session's GLOBAL record directly ([[state]]), so it must work
+with no backend up. There is no selector to match here, and never a lookup against the backend board.

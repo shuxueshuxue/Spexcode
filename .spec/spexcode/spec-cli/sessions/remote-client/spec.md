@@ -19,8 +19,8 @@ backend is the single broker, and which machine you point at is just a URL.
 
 ## expanded spec
 
-The read/control commands — `ls`, `watch`, `wait`, `capture`, `send`, `review`, `merge`, `reopen`, `close`,
-`prompt` — call the backend over HTTP (`SPEXCODE_API_URL`, else the local default). They hold **no**
+The read/control commands — `ls`, `watch`, `wait`, `capture`, `send`, `review`, `merge`, `reopen`, `exit`,
+`close`, `prompt` — call the backend over HTTP (`SPEXCODE_API_URL`, else the local default). They hold **no**
 in-process tmux/git path, so the backend is the **single actor** on the tmux socket and the single source of
 derived state, and pointing `SPEXCODE_API_URL` at another machine's backend monitors and drives THAT
 machine's sessions with no code change — the dashboard's viewer-points-anywhere model, extended to the CLI.
@@ -34,8 +34,9 @@ matcher over `clientListSessions`) and the verb then calls with the resolved FUL
 precise — `none` → no such session, `ambiguous` → the candidate ids — never a silent miss against the backend.
 
 The split is load-bearing and is the whole point. State **producers** stay **local**: `done`/`ask`/`park`/
-`idle` and the lifecycle hooks write the cwd worktree's `.session` (see [[state]]) — that file is HOW the
-backend learns state, so an agent must be able to declare its own even with no backend up. **Launch**
+`idle` and the lifecycle hooks write the agent's OWN per-session record in the GLOBAL store directly (keyed
+by session_id — see [[state]]), so an agent must be able to declare its own state even with no backend up. The
+backend learns that state by ENUMERATING the store, not by a write of its own. **Launch**
 (`spex new`) keeps its own already-justified path (it needs the backend's auth env — see [[launch]]). Only
 the verbs that observe or drive live tmux route here.
 

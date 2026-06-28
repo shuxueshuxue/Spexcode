@@ -9,7 +9,7 @@ scenarios:
       once more to prove the order persisted server-side.
     expected: |
       After the drag the list reads B, C, A — ONLY the dragged row moved; B and C kept their relative birth
-      order. The new order SURVIVES the reload (persisted to the session's `.session` record as a `sortKey`).
+      order. The new order SURVIVES the reload (persisted to the session's global record as a `sortKey`).
       The drag handle appears only in the console's interactive list, not the read-only top-left window glance,
       and the manual order shows on every surface (window + console agree), all sorting by `sortKey ?? created`.
   - name: handle-leaves-row-gestures-intact

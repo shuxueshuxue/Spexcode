@@ -19,7 +19,7 @@ engine — the way `spex board` and `/api/board` stay byte-identical because bot
 ## expanded spec
 
 `spex yatsu show [.|<node>] [--json]` is a thin verb beside scan/eval/clean in the yatsu CLI. It resolves a
-SINGLE node (`.` or no arg = the current node by .session/node-branch, a bare id = that node) and calls the
+SINGLE node (`.` or no arg = the current node by the session's record or `node/<id>` branch, a bare id = that node) and calls the
 shared [[yatsu-eval-tab]] `evalTimeline()` with NO read-context — the standalone path that derives its own
 specs + driftIndex for one id, exactly what the `/api/specs/:id/evals` route does. It adds NO timeline logic
 and NO dashboard logic; the board fold stays the only other caller, so the two faces can never disagree.

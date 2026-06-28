@@ -2,8 +2,8 @@
 scenarios:
   - name: no-node-fallback-finds-the-governing-node
     description: >-
-      The full grounding closed loop, through the real hook + CLI (YATU). In a worktree whose
-      `.session/state` carries NO `node:` line (a session not bound to one node), run spec-first.sh on a
+      The full grounding closed loop, through the real hook + CLI (YATU). For a session whose global
+      record carries NO `node:` line (a session not bound to one node), run spec-first.sh on a
       first code-file access (sentinel absent) and capture its JSON decision; then run
       `spex search "<topic for that code area>" --json` against the same tree. File the transcript with
       `spex yatsu eval spec-first --scenario no-node-fallback-finds-the-governing-node --result <txt> --pass`.

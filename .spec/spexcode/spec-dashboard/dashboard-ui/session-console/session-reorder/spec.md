@@ -52,8 +52,8 @@ focus-retention **untouched** — the input keeps focus AND the drag works. Beca
 drag, the rest of the row is **completely untouched** — single click switches tab, double-click locks, the
 `↑/↓` ring walks the list, and a row click keeps the `❯` input focused.
 
-The `sortKey` lives where the rest of a session's record lives — the worktree's `.session` file, written by
-the one backend that owns it ([[sessions-core]]) — so a reorder **persists** across a backend restart and is
+The `sortKey` lives where the rest of a session's record lives — the session's record in the per-user global
+store, written by the one backend that owns it ([[sessions-core]]) — so a reorder **persists** across a backend restart and is
 read back like any other field. Every surface sorts by the same `sortKey ?? created`, so the manual order
 shows up **everywhere at once**: the [[session-console]] tabs and list, the top-left window, the relationship
 [[session-graph]], and the CLI's `spex` listings all agree. It is **global state**, not a per-browser view.

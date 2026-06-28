@@ -57,7 +57,7 @@ reverse — and a still-going `parked` agent is never mistaken for one with some
 independent facts, computed independently:
 
 - **lifecycle** — *what the work needs*, **authored by the agent** (`active`/`idle`/`awaiting`/`parked`/
-  `error`/`asking`/`queued`), never inferred — the `.session/state` value above.
+  `error`/`asking`/`queued`), never inferred — the `status` value above.
 - **liveness** — *whether the agent process is up and addressable*, **derived by the runtime for every
   session regardless of lifecycle**: `offline` (no tmux window for the id, or the harness adapter's online
   signal never became session-addressable — genuinely dead), transient `starting` (window up, adapter signal

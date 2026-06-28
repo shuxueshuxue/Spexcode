@@ -103,7 +103,7 @@ proxy, not the thermometer.
 
 **T14 · The project folder holds only human-readable things.**
 Manifests, hashes, locks, runtime scratch hide in the global store (`~/.spexcode/projects/...`); what
-stays in-tree is prose a human would accept. The worktree root stays clean; scratch dies with `.session/`.
+stays in-tree is prose a human would accept. The worktree root stays clean; scratch dies with the session's global record.
 *Smell:* a hash/lock/manifest or machine-only artifact committed into `.spec/` or the worktree root.
 
 **T15 · Memory & identity hygiene — namespace the syntactic, norm the semantic.**

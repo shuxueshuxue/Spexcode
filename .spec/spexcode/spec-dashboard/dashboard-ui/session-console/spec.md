@@ -55,7 +55,7 @@ An existing session shows its **live tmux terminal** (SessionTerm) with the dock
 label**: a session whose process is gone reads `offline` whatever its authored lifecycle (`asking`,
 `review`, `error`, …), so it never mounts a tmux client against a dead id (which would leak tmux's bare
 "no sessions" into the pane) — it shows the **relaunch panel** instead, offering to resume the same
-conversation (the transcript and `.session/` survive — see [[runtime]]). `queued` is the one exception: it
+conversation (the transcript and the session's global record survive — see [[runtime]]). `queued` is the one exception: it
 has intentionally not launched, so it shows neither a terminal nor a relaunch, and self-starts as a slot
 frees. The header bar above it (`si-th-name`) titles the
 terminal with the **shared session headline** ([[session-activity]]), not the stable `sessionName` — same

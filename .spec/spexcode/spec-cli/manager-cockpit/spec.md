@@ -29,8 +29,8 @@ same surface.
 branch (`mainBranch()`, auto-detected — never a hardcoded `main`). The payload carries:
 
 - **ahead** — commits the node branch is ahead of the base.
-- **dirtyNonRuntime** — uncommitted files, excluding the runtime files SpexCode itself writes into a
-  worktree (the same set [[state]]'s commit gate ignores), so it counts only real spec/code work.
+- **dirtyNonRuntime** — uncommitted files; SpexCode writes no runtime files into the worktree
+  ([[runtime]]), so every dirty path is genuine spec/code work — the basis [[state]]'s commit gate uses.
 - **diff** — the worker's REAL changes, anchored at the **merge-base** (`mergeBaseDiff` in
   [[source-of-truth]]'s `git.ts`): per-file status + added/deleted line counts. A two-dot `base..HEAD` diff
   would show the base's post-fork commits as phantom edits, so the fork point is the only honest base.
@@ -39,7 +39,7 @@ branch (`mainBranch()`, auto-detected — never a hardcoded `main`). The payload
   (`tsc --noEmit` on the CLI package at its own location); `lint` (the [[spec-lint]] module's error /
   warning counts). conflict/ahead/dirty/diff are session-specific; the typecheck/lint gates reflect the CLI
   package's own tree, where the command runs.
-- **proposal** — the session's standing proposal kind + note, read from its `.session`.
+- **proposal** — the session's standing proposal kind + note, read from its global record.
 
 `mergeSession(id)` is the ACT verb, served at `POST /api/sessions/:id/merge` and run by `spex merge <id>` —
 but it is a DISPATCH, not a server merge: the SESSION'S OWN agent lands the work, the server NEVER touches

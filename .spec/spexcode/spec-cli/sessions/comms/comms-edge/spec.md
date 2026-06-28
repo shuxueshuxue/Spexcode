@@ -2,7 +2,7 @@
 title: comms-edge
 status: active
 hue: 200
-desc: Direct agent-to-agent talk (spex session send) recorded through the backend into the per-worktree .session, surfaced as a second session-graph edge — a subtle line with a message count — beside the live monitor arrow. Plus a one-shot watch-start handshake that tells the watched agent who supervises it.
+desc: Direct agent-to-agent talk (spex session send) recorded through the backend into the session's global store, surfaced as a second session-graph edge — a subtle line with a message count — beside the live monitor arrow. Plus a one-shot watch-start handshake that tells the watched agent who supervises it.
 related:
   - spec-cli/src/sessions.ts
   - spec-cli/src/index.ts

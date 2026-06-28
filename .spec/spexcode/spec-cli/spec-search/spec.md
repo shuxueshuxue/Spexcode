@@ -2,7 +2,7 @@
 title: spec-search
 status: active
 hue: 200
-desc: The lexical floor of spec retrieval — `spex search <query>` ranks spec NODES by term overlap and returns {id,title,path,score,snippet}, the one return three consumers reuse.
+desc: The lexical floor of spec retrieval — `spex search <query>` ranks spec NODES by term overlap and returns {id,title,path,score,snippet}, the one return two consumers reuse.
 code:
   - spec-cli/src/search.ts
   - spec-cli/src/cli.ts
@@ -17,11 +17,11 @@ precise — minimal, elegant, purely lexical. **No embeddings, no LLM, no heuris
 benchmark.** Mirror the keyboard-nav `/` palette's ranking (title/id prefix > title/id substring > prose),
 but server-side, over nodes, in TS — don't import the JSX.
 
-One locked output contract, because three consumers reuse the SAME return: the CLI (a human reads it), the
-[[spec-scout]] `--deep` layer (re-ranks it with an LLM/user-story pass), and the spec→code relay (takes the
-top results' `id` → `loadSpecs` → their `code:` files → feeds Explore/grep). This node builds ONLY the floor:
-the lexical scorer + the `search` CLI verb + `--json`. It does NOT build `--deep`, embeddings, or the ranker
-on top — those belong to [[spec-scout]].
+One locked output contract, because two consumers reuse the SAME return: the CLI (a human reads it) and the
+[[spec-scout]] agent (re-ranks it with an LLM/user-story pass, then reads the winning bodies and takes their
+`code:` straight from the frontmatter — feeding Explore/grep without a second index). This node builds ONLY
+the floor: the lexical scorer + the `search` CLI verb + `--json`. It does NOT build the user-story rerank,
+embeddings, or the ranker on top — those belong to [[spec-scout]].
 
 Don't overfit. A holdout benchmark MEASURES robustness; it is not a target to game. If a case misses, prefer
 a simpler general rule over a special-case — a couple of clean misses beats a gamed rule.
@@ -38,7 +38,7 @@ returns results sorted by `score` DESC, each `{ id, title, path, score, snippet 
     WHY it matched (falls back to the desc when only the name matched).
 
 Default output is a pretty terminal list (rank · title · id · path · snippet); `--json` prints exactly the
-array above, verbatim — the machine surface that `--deep` and the spec→code relay both re-consume. `--limit`
+array above, verbatim — the machine surface that the [[spec-scout]] agent re-consumes. `--limit`
 caps the count (default 10).
 
 ### the ranking

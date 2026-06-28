@@ -16,12 +16,16 @@ they encode, and the code files to read next.
 1. Run `spex search "<the question>" --json` — the lexical floor's top candidate nodes
    (`{id,title,path,score,snippet}`). This is a deterministic keyword/IDF ranking — a starting point, NOT the
    final answer.
-2. READ the top candidates' `spec.md` files (the `path` field), and their neighbours when it helps. Judge
-   each by **user-story relevance**: which node's intent actually answers the question for a *user*, not
-   merely which shares keywords. Re-rank by that — the lexical top is something you correct, not trust.
-3. Get the code to read: `spex relay "<the question>" --json` returns each top hit's governed `code:` files
-   (with a codeless-parent fall-through to subtree files). If your user-story winner differs from the lexical
-   order, take *its* `code:` from that node's own spec frontmatter instead.
+2. READ the top candidates' `spec.md` files **in full** (the `path` field) — the body, not just the
+   frontmatter — and their neighbours (parent, siblings, children) when it helps. Specs are short — roughly
+   1/20th the size of the code they govern — so reading several whole bodies is cheap; reading more specs is
+   the whole point of this agent, never a `code:`-list shortcut. Judge each by **user-story relevance**:
+   which node's intent actually answers the question for a *user*, not merely which shares keywords. Re-rank
+   by that — the lexical top is something you correct, not trust.
+3. The code to read comes WITH the bodies you just read: each node's `code:` list is in its frontmatter, so
+   take it from your user-story winner (and its neighbours when the behaviour spans them). The `code:` paths
+   are meaningless without the prose that scopes them — that's why you read the body first, never harvest the
+   list alone. For a pure-prose parent (no own `code:`) the files live in its children, which its body names.
 4. Return a TIGHT conclusion: the governing node id(s) and path(s); the user-story each encodes (1–2
    sentences drawn from its spec, not a paste); and the code files to read next. If nothing genuinely governs
    the topic, say so plainly (a real gap worth a node) — never invent a node to look complete.

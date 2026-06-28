@@ -192,7 +192,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // bottom-input drafts, keyed by session id — each session tab keeps its OWN typed-but-unsent line, never
   // a single shared box. Survives tab switches and close/reopen (the panel stays mounted, see `open`).
   const [drafts, setDrafts] = useState({})
-  const [sending, setSending] = useState(false)
   // which harness the next New Session launches (claude | codex). Remembered for the session of use so a
   // user who works in one harness doesn't re-pick each launch; rides along in the POST body (default claude).
   const [harness, setHarness] = useState(() => {
@@ -370,8 +369,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   }, [seed])
 
   // on landing on a tab, focus that tab's input (New prompt or a live session's ❯ box). No setPrompt here —
-  // the per-tab drafts must survive a tab switch / reopen, so we never clobber them. `sending` is a dep so a
-  // submit that disables→re-enables the New box (which the browser blurs) lands focus back in it on completion.
+  // the per-tab drafts must survive a tab switch / reopen, so we never clobber them. Launch never blurs the box
+  // (it stays enabled and fires in the background), so there's no disable→re-enable round-trip to chase here.
   useEffect(() => {
     if (!open) return
     const id = setTimeout(() => {
@@ -380,7 +379,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       else if (selSession && selSession.liveness !== 'offline') msgRef.current?.focus()
     }, 0)
     return () => clearTimeout(id)
-  }, [open, active, selSession?.liveness, sending])
+  }, [open, active, selSession?.liveness])
 
   // auto-grow the new-session box; re-runs on `open` so a reopened multi-line draft restores its height.
   // Its cap lives in CSS (max-height) — read it back and hand it to fitTextarea.
@@ -423,24 +422,22 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   }
 
   // launch a session, then stay on the New tab — it appears in the list below on the next reload/poll.
-  // The box disables while in flight (sending) which the browser blurs; the focus effect's `sending` dep
-  // lands focus back in the cleared box on completion, so the next launch is type-ready without a click.
-  const submit = async () => {
+  // The box NEVER disables or blurs: clear the draft optimistically (so a fresh draft can't be clobbered when
+  // the POST lands) and fire the launch in the BACKGROUND. Gating the box on the in-flight POST + a board re-read
+  // (both seconds of real work — worktree, branch, tmux) left the whole pane greyed and unfocused until they
+  // returned; keeping it live makes the next launch type-ready at once. The empty-draft check guards double-fire.
+  const submit = () => {
     const raw = prompt.trim()
-    if (!raw || sending) return
-    setSending(true)
-    try {
-      const text = composeLaunch(raw)
-      const res = await fetch('/api/sessions', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: text, harness }),
-      })
-      const data = await res.json().catch(() => null)
-      setPrompt('')
-      await reload?.()
-    } finally {
-      setSending(false)
-    }
+    if (!raw) return
+    const text = composeLaunch(raw)
+    setPrompt('')
+    fetch('/api/sessions', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: text, harness }),
+    })
+      .then((res) => res.json().catch(() => null))
+      .then(() => reload?.())
+      .catch(() => {})
   }
 
   // build the completion dropdown for the active surface: the New prompt drives @-mention (spec nodes) +
@@ -816,14 +813,13 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   onBlur={() => setMenu(null)}
                   placeholder={t('session.inputPlaceholder')}
                   spellCheck={false}
-                  disabled={sending}
                 />
                 <button
                   type="button"
                   className="si-attach"
                   title={t('session.attachTitle')}
                   onClick={() => pickFiles('new')}
-                  disabled={uploading || sending}
+                  disabled={uploading}
                 >{uploading && attachAt === 'new' ? <BusyGlyph /> : <AttachGlyph />}</button>
                 {uploadErr && attachAt === 'new' && <span className="si-attach-err" role="alert">{t('session.attachError')}</span>}
                 {menu && menu.kind === 'mention' && (
@@ -862,7 +858,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                       title={h.label}
                       className={harness === h.id ? 'si-agent-opt on' : 'si-agent-opt'}
                       onClick={() => pickHarness(h.id)}
-                      disabled={sending}
                     ><Glyph /></button>
                   )
                 })}

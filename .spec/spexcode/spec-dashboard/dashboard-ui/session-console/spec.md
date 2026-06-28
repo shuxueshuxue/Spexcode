@@ -31,10 +31,12 @@ neither blocks the `↑/↓` path); New ⇄ graph is horizontal — `→` from a
 **@-mention** suggestion, so the human opts in with `@`. A leading **`/`** opens the config-preset palette;
 the two compose the launch grammar `/<preset> @<node>… <free text>`, from which the server derives the node (the
 first `@<id>`). Both menus only insert text; the New prompt has **no** `/` slash-command menu (presets only). A preset launched with **no `@`-target** never assumes a node — the agent takes scope from the prompt, else asks first.
-**Submitting launches but never switches tabs**: the prompt clears, **focus stays in the box** (the box disables
-while the launch is in flight — which the browser blurs — and focus lands back in the cleared box the moment it
-re-enables, so the next launch is type-ready without a click), and you stay on New Session — the new session just
-appears in the list below (the next board poll surfaces it) — so you can fire off several in a row. The old
+**Submitting launches but never switches tabs**: the prompt clears **immediately** and **focus stays in the box** —
+the box **never disables or blurs**; the launch fires in the **background**, so the box is type-ready at once and you
+can fire off several in a row **without waiting** for each launch's worktree+agent setup (seconds of real work) to
+finish. Disabling the box for the whole in-flight window was the bug: on a slow or remote launch the entire pane sat
+greyed and unfocused until the POST *and* a board re-read returned. You stay on New Session — the new session just
+appears in the list below (the immediate board refresh, else the next poll, surfaces it). The old
 auto-jump-to-the-new-session is gone; only a tab's *removal* (below) ever moves your selection for you.
 
 Beneath the box an **agent picker** (icon-only radio pills using the vendors' marks — Anthropic for Claude

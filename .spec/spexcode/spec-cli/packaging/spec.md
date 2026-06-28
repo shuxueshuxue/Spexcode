@@ -31,10 +31,16 @@ out of the registry so the one public name belongs to the tool a user installs.
 The natural way to run the installed tool is **two commands on two ports, deliberately kept apart** —
 starting the backend never drags the UI along:
 
-- `spex serve` — the backend (API + sessions) on its port.
+- `spex serve` — the backend (API + sessions). `--port N` sets its listen port (sugar over the `PORT` env).
 - `spex dashboard` — the UI on its own port, serving the bundled dist and proxying `/api` + the terminal
-  socket to a running `spex serve`. This is the post-install replacement for the dogfood-only
-  `npm run web` (a vite dev server against the source tree, which an installed user has no copy of).
+  socket to a running `spex serve` (`--api-port N` names that backend). This is the post-install
+  replacement for the dogfood-only `npm run web` (a vite dev server against the source tree, which an
+  installed user has no copy of).
+
+Both ports are **explicit flags**, which is what lets several projects coexist on one host:
+`spex serve --port 8788` beside `spex dashboard --port 5174 --api-port 8788` runs a second instance next
+to the dogfood's 8787/5173, with cwd choosing which project's `.spec` each serves — no shared default
+silently collides two projects.
 
 `spex dashboard` shares the serve-the-built-dashboard engine with [[public-mode]] — local serve is that
 same gateway on loopback with no TLS and no password. The dogfood monorepo is unaffected: its root keeps

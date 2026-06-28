@@ -1,1 +1,2 @@
 {"scenario":"dashboard-serves-bundled","codeSha":"b491fb812656c5931c9bf482fbff5d4cc07995d9","blob":"9b01f58abd6b88d720829d7ec45e313449c1516f4a88e8dee0e8dc06795b805e","blobKind":"transcript","evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-28T12:59:39.268Z"}
+{"scenario":"dashboard-serves-bundled","codeSha":"db49cb7083aab7cb7c51e0dc57eb3bb5155c1b94","blob":"f1edaa8d406bdf78615a8cbff831274989979ab4933a2b11b4e16e0cfee494e7","blobKind":"transcript","evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-28T13:03:34.025Z"}

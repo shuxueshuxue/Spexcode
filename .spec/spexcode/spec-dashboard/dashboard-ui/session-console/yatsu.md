@@ -22,14 +22,18 @@ scenarios:
       Through the running dashboard in a real browser, open the session interface (Enter) and land on the
       New Session tab. Type a short launch prompt (e.g. `@<some-node> quick smoke test`) and press Enter to
       submit. Without clicking anything, watch the active tab and the session list for several seconds (long
-      enough for at least one 4s board poll, so the new session has surely been listed). Then type a second
-      prompt and submit again. Screenshot the tab list + active pane right after each submit settles.
+      enough for at least one 4s board poll, so the new session has surely been listed). Crucially, AFTER the
+      first submit settles and without touching the mouse/keyboard, check `document.activeElement` (or start
+      typing the second prompt blind) to confirm the prompt box still holds focus. Then type a second prompt
+      and submit again. Screenshot the tab list + active pane right after each submit settles.
     expected: |
       Submitting never switches tabs: after each Enter the New Session tab stays the active/selected tab and
       its prompt is cleared, ready for the next launch — the view does NOT jump onto the freshly created
-      session, nor does it bounce between New and the new tab. Each new session simply appears as a new row
-      in the list below (surfaced by the board poll). Both sessions can be created back-to-back without ever
-      leaving New Session. The only thing that moves your selection is a tab's removal (the close-command /
+      session, nor does it bounce between New and the new tab. Focus stays in the prompt box across the submit
+      (the brief in-flight disable never strands it): once the launch settles `document.activeElement` is the
+      `.si-input` textarea, so the second prompt types with no click. Each new session simply appears as a new
+      row in the list below (surfaced by the board poll). Both sessions can be created back-to-back without
+      ever leaving New Session. The only thing that moves your selection is a tab's removal (the close-command /
       close-tab-fallback scenarios — note `/exit` does NOT remove a tab, it only stops the session), never a
       creation.
   - name: exit-command-stops-keeps-worktree

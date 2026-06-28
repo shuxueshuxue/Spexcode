@@ -370,7 +370,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   }, [seed])
 
   // on landing on a tab, focus that tab's input (New prompt or a live session's ❯ box). No setPrompt here —
-  // the per-tab drafts must survive a tab switch / reopen, so we never clobber them.
+  // the per-tab drafts must survive a tab switch / reopen, so we never clobber them. `sending` is a dep so a
+  // submit that disables→re-enables the New box (which the browser blurs) lands focus back in it on completion.
   useEffect(() => {
     if (!open) return
     const id = setTimeout(() => {
@@ -379,7 +380,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       else if (selSession && selSession.liveness !== 'offline') msgRef.current?.focus()
     }, 0)
     return () => clearTimeout(id)
-  }, [open, active, selSession?.liveness])
+  }, [open, active, selSession?.liveness, sending])
 
   // auto-grow the new-session box; re-runs on `open` so a reopened multi-line draft restores its height.
   // Its cap lives in CSS (max-height) — read it back and hand it to fitTextarea.
@@ -422,6 +423,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   }
 
   // launch a session, then stay on the New tab — it appears in the list below on the next reload/poll.
+  // The box disables while in flight (sending) which the browser blurs; the focus effect's `sending` dep
+  // lands focus back in the cleared box on completion, so the next launch is type-ready without a click.
   const submit = async () => {
     const raw = prompt.trim()
     if (!raw || sending) return

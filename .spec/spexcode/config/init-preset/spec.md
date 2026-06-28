@@ -23,8 +23,8 @@ preset means editing those template files (adoption is data, not code — [[spex
 kept in lockstep by hand today, so the durable fix is to regenerate it from "active `.config`
 minus the spexcode-only nodes".
 
-### 2. The shipped slash workflows
-Seeded as `surface: slash` new-session presets — the dev-flow commands every adopter gets:
+### 2. The shipped command workflows
+Seeded as `surface: command` new-session presets — the dev-flow commands every adopter gets:
 - `extract`
 - `regroup`
 - `scenario`

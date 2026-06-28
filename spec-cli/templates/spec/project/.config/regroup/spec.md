@@ -1,6 +1,6 @@
 ---
 title: regroup
-surface: slash
+surface: command
 status: active
 hue: 130
 desc: Resolve a node's breadth — a flat fan-out of too many children — by lifting children onto their true owner or a new grouping layer, only along real seams.

@@ -106,7 +106,7 @@ export function faviconHref(icon) {
   return 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">${icon}</text></svg>`)
 }
 
-// the slash presets (config nodes with `surface: slash`) the backend serves at /api/config.
+// the command presets (config nodes with `surface: command`) the backend serves at /api/config.
 export async function loadConfig() {
   const res = await apiFetch('/api/config')
   return res.json()

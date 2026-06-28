@@ -59,9 +59,11 @@ surface:
   `ownsRendezvous` instead of hard-wiring the claude rendezvous socket. `liveness(rec, tmuxAlive)` answers "is
   this session's agent ready?": **claude** = the tmux window is up AND its reclaude rendezvous socket exists
   (the socket is the truth claude is alive — the pane command is the wrapper/shell while claude runs as its
-  child); **codex** = the tmux window is up, the project-scoped Codex app-server Unix socket exists, AND this
-  record has a captured `harness_session_id`. The app-server socket is a project control plane shared by many
-  Codex sessions, so it proves transport availability but not which thread a follow-up would address. The
+  child); **codex** = the tmux window is up AND this session's **per-session** Codex app-server Unix socket
+  exists (one app-server per session, keyed on the session store dir, so the socket's existence proves this
+  pane's transport is up). That app-server holds exactly ONE thread — the visible TUI's own — so the session's
+  native thread id is read DETERMINISTICALLY off `thread/loaded/list` (the [[harness-session-id]] hook captures it
+  via `spex codex-thread`; no rollout-file scan, no cwd guess, no "which of N threads"). The
   app-server `--listen unix://<sock>` endpoint is a WebSocket at path `/rpc` (the same upgrade the `--remote`
   TUI performs); delivery speaks WebSocket JSON-RPC over that Unix socket directly — NOT `codex app-server
   proxy` (a dumb byte relay that performs no HTTP upgrade, which the server rejects).

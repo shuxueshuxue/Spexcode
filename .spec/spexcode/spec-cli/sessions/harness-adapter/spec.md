@@ -98,10 +98,18 @@ surface:
   turn that ends in the read→steer window fails that precondition and is retried as a `turn/start`. Either way
   the app-server response confirms it landed. There is NO tmux prompt typing fallback for Codex: typed keys can
   truncate and can only prove tmux accepted input, not that Codex accepted a
-  turn. `resumeArg(rec)` is the relaunch tail `reopen()` hands `launch()`: **claude** `--resume <id>` (the SAME
-  conversation, the id we pinned); **codex** `resume <thread-id>` (codex's own `resume` subcommand) on the
-  owned thread id — its rollout persists on disk — resuming the SAME conversation, else a fresh TUI on the same
-  worktree/record. sessions.ts's `liveness()`/`isOccupying()`/`sendKeys()`/
+  turn. `resumeArg(rec)` is the relaunch tail `reopen()` hands `launch()`, but the two harnesses consume that
+  tail differently and the codex side MUST honour that: **claude** `--resume <id>` is appended straight to the
+  `claude` command (the SAME conversation, the id we pinned). **codex** has no bare `codex` to append to — its
+  `launchCmd` is a bootstrap script that feeds the tail (`"$@"`) to `spex codex-launch`, which mints a NEW
+  thread and fires the tail AS the first-turn prompt. So the codex resume tail is a `--resume <thread-id>`
+  **marker** the script branches on: it resumes the owned thread DIRECTLY (skip `codex-launch`, no new thread,
+  no prompt turn — `tid=<thread-id>`), then its final `codex … resume "$tid"` performs codex's own resume on the
+  owned id — its rollout persists on disk, the SAME conversation. Empty marker (no captured id) → a fresh thread
+  on the same worktree/record. The discriminator is sound because a new launch's tail is always ONE
+  single-quoted prompt arg, never the literal `--resume` — so a resume can never be mistaken for a prompt and
+  fed to `codex-launch` (which would mint a NEW thread whose first message is the marker text).
+  sessions.ts's `liveness()`/`isOccupying()`/`sendKeys()`/
   `reopen()`/`waitForReady()` all route through these adapter methods — there is no socket hard-wire and no
   `if (codex)` left in the runtime path; the rendezvous-socket path + its `replyViaSocket` round-trip MOVED into
   `harness.ts` as the claude adapter's `deliver`/`liveness` implementation, while Codex's app-server launch and

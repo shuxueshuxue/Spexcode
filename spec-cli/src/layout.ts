@@ -55,13 +55,23 @@ export function gitCommonDir(): string {
 
 export function mainBranch(): string {
   try {
-    const mainCheckout = dirname(gitCommonDir())
-    const override = readConfig(mainCheckout).mainBranch?.trim()
+    const override = readConfig(mainCheckout()).mainBranch?.trim()
     if (override) return override
-    const cur = git(['-C', mainCheckout, 'symbolic-ref', '--short', 'HEAD']).trim()
+    const cur = git(['-C', mainCheckout(), 'symbolic-ref', '--short', 'HEAD']).trim()
     if (cur) return cur
   } catch { /* fall through to the conventional default */ }
   return 'main'
+}
+
+// the MAIN checkout (the root working tree) for a project — the SAME answer from main OR any linked worktree
+// (dirname of the shared git common dir). Codex reads a LINKED worktree's PROJECT hooks from the root checkout's
+// `.codex` (codex-rs hooks_config_folder override), NOT the worktree's, so the codex hooks shim + trust
+// materialize here while AGENTS.md/skills stay per-worktree — see [[harness-adapter]] (harness.ts).
+export function mainCheckout(proj?: string): string {
+  const gcd = proj
+    ? git(['-C', proj, 'rev-parse', '--path-format=absolute', '--git-common-dir']).trim()
+    : gitCommonDir()
+  return dirname(gcd)
 }
 
 // @@@ global per-session store - Fork A: NO SpexCode files live in the worktree any more, so the worktree's
@@ -132,6 +142,20 @@ export function readRawRecord(id: string): RawRecord | null {
     const raw = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
     return raw && typeof raw === 'object' && raw.session_id ? raw as RawRecord : null
   } catch { return null }
+}
+// resolve a possibly-ALIASED session id to its raw record. A codex hook fires from the shared per-project
+// app-server (no SPEXCODE_SESSION_ID in its env), so the id it carries is the codex THREAD id — the payload
+// session_id — not the SpexCode record id the store is keyed by. Direct id wins; else the one record that
+// captured this id as `harness_session_id` (the backend stored it at thread/start, before any tool turn).
+// Null when neither resolves. Mirrors the shell `hp_store_dir` alias grep — one resolution rule, both layers.
+export function readAliasedRawRecord(id: string): RawRecord | null {
+  const direct = readRawRecord(id)
+  if (direct) return direct
+  for (const sid of listSessionIds()) {
+    const r = readRawRecord(sid)
+    if (r && r.harness_session_id && r.harness_session_id === id) return r
+  }
+  return null
 }
 // every session_id this project has a record for (the board's enumeration source — replaces `git worktree
 // list`). A MISSING store dir means no session ever launched → []. But any OTHER readdir failure THROWS

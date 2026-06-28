@@ -38,7 +38,14 @@ surface:
   built-in set + `.claude/commands/**` + skills; Codex: its built-ins + `~/.codex/prompts/**` + plugin
   commands). Decoupled from execution — see [[slash-commands]] (today Claude-only; becomes the Claude impl).
 - **events / shim** — which lifecycle events to bind, and the per-harness hook shim that points each at the
-  dispatcher (`.claude/settings.json` vs `.codex/hooks.json`). Codex lacks Notification + StopFailure: codex's
+  dispatcher (`.claude/settings.json` vs `.codex/hooks.json`). The shim's LOCATION is a divergence point too:
+  Claude reads `.claude/settings.json` from the worktree, but Codex discovers a LINKED worktree's PROJECT hooks
+  from the **ROOT CHECKOUT** — codex-rs rewrites the hooks-config folder of any linked worktree to
+  `<repo_root>/<rel-from-checkout-root>/.codex` (`root_checkout_hooks_folder_for_dir`), so a thread whose cwd is
+  the worktree root reads `<mainCheckout>/.codex/hooks.json`, NEVER the worktree's own. So the Codex shim + its
+  trust materialize at the MAIN checkout (one shared `.codex/hooks.json` for the main checkout and every
+  worktree — a per-PROJECT artifact, mirroring the per-project runtime tier); `dispatch.sh` resolves its `proj`
+  from the thread cwd, so the one shared shim still gates each worktree correctly. Codex lacks Notification + StopFailure: codex's
   canonical hook event set (its `HookEventName` enum, codex 0.142.3) is preToolUse/permissionRequest/postToolUse/
   preCompact/postCompact/sessionStart/userPromptSubmit/subagentStart/subagentStop/stop — there is no idle/
   attention "notification" event and no failed-stop event, so those two claude-only events are genuinely absent,
@@ -64,9 +71,10 @@ surface:
   app-server per project, keyed on `runtimeRoot()` — the per-project runtime dir, NOT the session store —
   shared by every worktree's thread; the per-session window presence is the session signal, the socket is a
   project control plane). The session's thread id is NOT discovered at all — the BACKEND OWNS it: at launch it
-  `thread/start { cwd: <this worktree> }`s on the shared server (codex resolves that worktree's config/hooks/
-  AGENTS.md from the thread cwd, so one project-scoped server behaves analogously to a per-worktree claude
-  launch) and stores the returned `thread.id` on the governed record as `harness_session_id` — no capture hook,
+  `thread/start { cwd: <this worktree> }`s on the shared server (codex resolves that worktree's per-cwd
+  context — `AGENTS.md` + skills + project config — by walking the thread cwd, so one project-scoped server
+  behaves analogously to a per-worktree claude launch; its PROJECT HOOKS are the one exception, read from the
+  root checkout per the events/shim point above) and stores the returned `thread.id` on the governed record as `harness_session_id` — no capture hook,
   no rollout-file scan, no cwd guess. The
   app-server `--listen unix://<sock>` endpoint is a WebSocket at path `/rpc` (the same upgrade the `--remote`
   TUI performs); delivery speaks WebSocket JSON-RPC over that Unix socket directly — NOT `codex app-server
@@ -113,8 +121,9 @@ edit), so `hp_code_path` emits ALL touched paths — one per line — and every 
 `hp_field` reads a top-level JSON string value as a real JSON string: the close quote is the first UNESCAPED `"`,
 so a `command` carrying a quoted literal (`sed -n "1,5p" f.ts`) is captured whole, not truncated at the inner
 quote. `hp_is_ask` maps Codex's `request_user_input` (and Claude's `AskUserQuestion`) onto the question capture.
-So [[spec-first]], [[spec-of-file]], and mark-active fire on Codex, not just Claude — these shared hooks load
-per-thread-cwd, so they fire per-worktree even though the app-server is project-scoped. The session-id +
+So [[spec-first]], [[spec-of-file]], and mark-active fire on Codex, not just Claude — the shared shim lives at
+the main checkout, but its commands run `dispatch.sh` with the thread cwd as `proj`, so each worktree gates
+against its own tree even though one project-scoped server (and one shared shim) drives them all. The session-id +
 global-store resolution every handler repeated is folded into the same helper (`hp_session_id`, `hp_store_dir`).
 There is NO codex thread-id capture hook: the backend OWNS the thread id (it `thread/start`s the thread at
 launch and stores the id — see above), so no dispatcher or lifecycle hook branches on Codex and Claude needs
@@ -148,8 +157,12 @@ The Codex impl of the adapter must encode these (measured against a real self-la
   (flock-guarded, started once, reused) under the same global project runtime dir as the hook manifest. Each
   worktree session = ONE thread on that server, created by the BACKEND: the launch script runs `spex
   codex-launch <sock> <worktree-cwd> <prompt>`, which `thread/start { cwd }`s (codex loads that worktree's
-  config/hooks/AGENTS.md from the thread cwd — VERIFIED, so a per-project server behaves like a per-worktree
-  launch), stores the returned `thread.id` on the governed record (`harness_session_id`, keyed by
+  per-cwd context — AGENTS.md, skills, project config — from the thread cwd; PROJECT HOOKS are the exception,
+  read from the main checkout's `.codex` — VERIFIED both by codex-rs source and a live round-trip: with the
+  shim at `<mainCheckout>/.codex/hooks.json` all five events fire for a worktree thread, and removing that file
+  while the worktree's own `.codex/hooks.json` stays in place makes EVERY hook go silent — so a per-project
+  server behaves like a per-worktree launch for everything except the hooks, which are genuinely per-project),
+  stores the returned `thread.id` on the governed record (`harness_session_id`, keyed by
   `SPEXCODE_SESSION_ID`), then fires the prompt as the FIRST turn — materializing the thread's rollout on disk,
   which the visible `codex --remote unix://<sock> resume <tid>` TUI then renders natively (VERIFIED: the TUI
   resumes a backend-created thread once it has ≥1 turn, and a later `turn/steer`/`turn/start` also renders live

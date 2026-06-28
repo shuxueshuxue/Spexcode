@@ -7,7 +7,7 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import { claudeSlashCommands, codexSlashCommands, type SlashCommand } from './slash-commands.js'
-import { runtimeRoot } from './layout.js'
+import { runtimeRoot, mainCheckout } from './layout.js'
 
 // @@@ harness-adapter - the ONE seam between SpexCode and the coding-agent harness (Claude Code, Codex, …).
 // Every harness-specific fact lives behind THIS interface with one implementation per harness; product code
@@ -621,11 +621,18 @@ export const codexHarness: Harness = {
   launchCmd: (id, runtimeDir) => codexLaunchCommand(id, undefined, undefined, runtimeDir ?? runtimeRoot()),   // ONE app-server per PROJECT
   sessionIdArg: () => '',                            // codex assigns its own id (the backend owns it via thread/start)
   sessionEnvVar: 'CODEX_THREAD_ID',
-  shimFile: (proj) => join(proj, '.codex', 'hooks.json'),
+  // Codex discovers a LINKED worktree's PROJECT hooks from the ROOT CHECKOUT's `.codex`, NOT the worktree's
+  // (codex-rs `root_checkout_hooks_folder_for_dir` rewrites the hooks-config folder to <repo_root>/<rel>/.codex
+  // for any linked worktree). Every worktree's thread (cwd = worktree root) therefore reads the SAME
+  // <mainCheckout>/.codex/hooks.json — so the codex hooks shim + its trust materialize at the MAIN checkout
+  // (one per project, mirroring the per-project runtime tier), while the AGENTS.md contract + skills stay
+  // per-worktree (codex loads THOSE by walking the thread cwd). dispatch.sh resolves `proj` from the thread
+  // cwd, so one shared shim serves every worktree.
+  shimFile: (proj) => join(mainCheckout(proj), '.codex', 'hooks.json'),
   contractFiles: (proj) => [join(proj, 'AGENTS.md')],
   skillDir: (proj) => join(proj, '.codex', 'skills'),
   shim: (dispatch, spex) => buildShim('codex', CODEX_EVENTS, dispatch, spex),
-  writeTrust: (proj, cmdFor) => writeCodexTrust(proj, CODEX_EVENTS, cmdFor),
+  writeTrust: (proj, cmdFor) => writeCodexTrust(mainCheckout(proj), CODEX_EVENTS, cmdFor),
   slashCommands: codexSlashCommands,
   liveness: (rec, tmuxAlive, runtimeDir) => (tmuxAlive && existsSync(codexAppServerSock(runtimeDir)) ? 'online' : 'offline'),
   deliver: (rec, text) => deliverViaCodexAppServer(rec, text),

@@ -55,13 +55,23 @@ export function gitCommonDir(): string {
 
 export function mainBranch(): string {
   try {
-    const mainCheckout = dirname(gitCommonDir())
-    const override = readConfig(mainCheckout).mainBranch?.trim()
+    const override = readConfig(mainCheckout()).mainBranch?.trim()
     if (override) return override
-    const cur = git(['-C', mainCheckout, 'symbolic-ref', '--short', 'HEAD']).trim()
+    const cur = git(['-C', mainCheckout(), 'symbolic-ref', '--short', 'HEAD']).trim()
     if (cur) return cur
   } catch { /* fall through to the conventional default */ }
   return 'main'
+}
+
+// the MAIN checkout (the root working tree) for a project — the SAME answer from main OR any linked worktree
+// (dirname of the shared git common dir). Codex reads a LINKED worktree's PROJECT hooks from the root checkout's
+// `.codex` (codex-rs hooks_config_folder override), NOT the worktree's, so the codex hooks shim + trust
+// materialize here while AGENTS.md/skills stay per-worktree — see [[harness-adapter]] (harness.ts).
+export function mainCheckout(proj?: string): string {
+  const gcd = proj
+    ? git(['-C', proj, 'rev-parse', '--path-format=absolute', '--git-common-dir']).trim()
+    : gitCommonDir()
+  return dirname(gcd)
 }
 
 // @@@ global per-session store - Fork A: NO SpexCode files live in the worktree any more, so the worktree's

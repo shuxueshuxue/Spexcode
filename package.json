@@ -1,10 +1,12 @@
 {
   "name": "spexcode",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "type": "module",
   "description": "SpexCode — a spec-driven, self-developing dev tool. The `spex` CLI + spec server reads the .spec tree and its git history, and serves the dashboard.",
   "license": "MIT",
-  "bin": { "spex": "spec-cli/bin/spex.mjs" },
+  "bin": {
+    "spex": "spec-cli/bin/spex.mjs"
+  },
   "files": [
     "spec-cli/src",
     "!spec-cli/src/**/*.test.ts",
@@ -18,7 +20,9 @@
     "spec-dashboard/dist",
     "README.md"
   ],
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "api": "npm --prefix spec-cli run serve",
     "web": "npm --prefix spec-dashboard run dev",

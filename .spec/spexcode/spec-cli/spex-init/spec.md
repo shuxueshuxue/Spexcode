@@ -33,8 +33,13 @@ when the package is installed outside the dogfood repo — never a hardcoded rep
   dirs; absent in the adopter's tree, lint would silently govern nothing and read falsely-clean. The
   starter points `governedRoots` at `src/`; the adopter retargets it, and lint stays loud until it does.
 
+**A git work tree is a precondition, checked first.** SpexCode is git-backed — git is the version
+database and the hooks live in `.git` — so a non-git target would leave a *half-state*: specs on disk but
+no history, no hooks, no sessions. `init` therefore rejects a non-git target **before writing anything**,
+with one actionable error pointing at `git init`. It deliberately does **not** run `git init` itself:
+creating a repo is a side effect beyond init's remit (a subdir, a dir not meant as a repo root), and the
+repair is one command.
+
 **Adoption is additive, never destructive.** No existing file is overwritten: an existing `<dir>/.spec`
-aborts the spec phase with a warning, and an existing hook is left untouched. A non-git target skips the
-hook install loudly (pointing at `git init`) rather than failing the whole command. On success it prints
-the next steps — install the packages, edit `project/spec.md`, run the backend, confirm `spex lint` is
-clean.
+aborts the spec phase with a warning, and an existing hook is left untouched. On success it prints the
+next steps — install the packages, edit `project/spec.md`, run the backend, confirm `spex lint` is clean.

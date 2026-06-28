@@ -28,3 +28,12 @@ if (r.status !== 0 || !existsSync(join(builtDist, 'index.html'))) {
 rmSync(bundled, { recursive: true, force: true })
 cpSync(builtDist, bundled, { recursive: true })
 console.log(`[prepublish] bundled dashboard → ${bundled}`)
+
+// ship the repo README on the npm page too. The canonical copy lives at the repo root (rendered by
+// GitHub); the `files` allowlist lists README.md INSIDE the package, so copy it in at publish time —
+// single source, no committed duplicate. Without this the npm page reads "No README data found".
+const repoReadme = join(pkgRoot, '..', 'README.md')
+if (existsSync(repoReadme)) {
+  cpSync(repoReadme, join(pkgRoot, 'README.md'))
+  console.log('[prepublish] copied README.md into the package')
+}

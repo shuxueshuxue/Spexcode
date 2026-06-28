@@ -1,6 +1,6 @@
 {
   "name": "spexcode",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "description": "SpexCode — a spec-driven, self-developing dev tool. The `spex` CLI + spec server reads the .spec tree and its git history, and serves the dashboard.",
   "license": "MIT",

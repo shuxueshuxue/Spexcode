@@ -12,4 +12,4 @@ that names where it plugs in, per [[config]]'s [[surface]] field-driven routing.
 `/api/config` and the launcher's system gather read from here, not from [[config]] (which holds the
 *spec of the config system* itself). Only **built/active** plugins gather — a `pending` node is declared
 intent, not yet an active plugin, so it renders on the board but is neither offered as a slash preset nor
-folded into a system prompt.
+materialized into the agent's contract.

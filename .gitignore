@@ -39,3 +39,10 @@ harness-report-serve
 *.log
 HARNESS-REFACTOR-REPORT.md
 firecoder-scout.md
+
+# spexcode:start
+.claude/settings.json
+.claude/skills/taste/SKILL.md
+.codex/hooks.json
+.codex/skills/taste/SKILL.md
+# spexcode:end

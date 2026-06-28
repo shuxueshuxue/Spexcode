@@ -45,6 +45,8 @@ export interface Harness {
   shimFile(proj: string): string
   // the contract file(s) the `surface: system` block is folded into. Claude: ./CLAUDE.md; Codex: ONLY ./AGENTS.md.
   contractFiles(proj: string): string[]
+  // the dir this harness auto-discovers skills from, or null if it has no skill primitive — the ONLY place skill-surface divergence lives.
+  skillDir(proj: string): string | null
   // the shim payload: the settings/hooks JSON binding every event → the dispatcher (harness id baked in), and
   // the per-event command string (shared with the trust writer so they hash identically).
   shim(dispatch: string, spex: string): { json: string; cmd: (e: string) => string }
@@ -254,6 +256,7 @@ export const claudeHarness: Harness = {
   sessionEnvVar: 'CLAUDE_CODE_SESSION_ID',
   shimFile: (proj) => join(proj, '.claude', 'settings.json'),
   contractFiles: (proj) => [join(proj, 'CLAUDE.md')],
+  skillDir: (proj) => join(proj, '.claude', 'skills'),
   shim: (dispatch, spex) => buildShim('claude', CLAUDE_EVENTS, dispatch, spex),
   writeTrust: () => { /* Claude relies on folder-trust — nothing to write */ },
   slashCommands: claudeSlashCommands,
@@ -271,6 +274,7 @@ export const codexHarness: Harness = {
   sessionEnvVar: 'CODEX_THREAD_ID',
   shimFile: (proj) => join(proj, '.codex', 'hooks.json'),
   contractFiles: (proj) => [join(proj, 'AGENTS.md')],
+  skillDir: (proj) => join(proj, '.codex', 'skills'),
   shim: (dispatch, spex) => buildShim('codex', CODEX_EVENTS, dispatch, spex),
   writeTrust: (proj, cmdFor) => writeCodexTrust(proj, CODEX_EVENTS, cmdFor),
   slashCommands: codexSlashCommands,

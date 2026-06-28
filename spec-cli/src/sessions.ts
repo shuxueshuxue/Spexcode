@@ -611,7 +611,7 @@ function titleFromPrompt(prompt: string): string | null {
 // @@@ launchScript - the WHOLE launch invocation (rendezvous env prefix + harness command + the human prompt)
 // is written to an ephemeral `launch.sh` in the session's GLOBAL store and
 // run via `bash <file>`, NOT typed inline. Inline send-keys TRUNCATES past ~2KB (the launch-prompt-limit trap),
-// and the system-surface gather can make --append-system-prompt arbitrarily large; a file has no length limit
+// and a long human prompt + spec pointer can exceed it; a file has no length limit
 // and the only thing send-keys types is the short `bash <file>` line. It's the SAME command the inline path
 // ran (env prefix exports the rendezvous vars to the claude child), just relocated to a file. Liveness no
 // longer cares what the pane's foreground command is: claude runs as a child of bash (and, via the

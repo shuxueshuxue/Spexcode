@@ -51,7 +51,7 @@ server set up, handed to the agent to name+spec+code or refactor-away by git his
 **task** plus its own safety steps. It deliberately does **not** re-state the git flow's mechanics, because
 each is enforced by a product mechanism, not injected prose: the `node/<id>` branch by [[launch]]'s
 `newSession`, the `Session:` trailer by the prepare-commit-msg hook, commit-before-declare by the `core`
-system config node folded into the gathered system prompt (see [[launch]]), and the `--no-ff` / `merge
+system config node materialized into the agent's contract (see [[launch]]), and the `--no-ff` / `merge
 node/<id>: <reason>` style by the **merge prompt** at merge time (the one place no other mechanism carries
 it). No standing `ritual` config node is needed — the flow is the product default, not a per-project
 opinion. The one task-level detail the directive prompts keep is "propose merge, don't merge".

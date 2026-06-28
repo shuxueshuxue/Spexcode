@@ -238,13 +238,13 @@ export async function specDiffAt(id: string, hash: string) {
 // block (honored only on block-capable events). See loadHookConfig + the hook compiler/dispatcher.
 export type ConfigPreset = { name: string; title: string; desc: string; kind: string; dir: string; files: string[]; body: string; events: string[]; order: number; block: boolean }
 // field-driven surface - a config plugin is a FLAT direct child of a config root (`<root>/<name>/spec.md`)
-// that carries a `surface: system|slash` frontmatter field naming where it plugs in. There are no `slash/` or
-// `system/` bucket dirs (those were graph-invisible grouping dirs with no spec.md, so the spec graph skipped
-// them — path != graph); the surface is a FIELD on the node, so the plugin is a real graph child of its root.
-// BOTH config roots participate: `.config` (the instance — DIY dev-flow plugins) and `config` (the project
-// system spec). loadConfig gathers the `slash` surface, loadSystemConfig the `system` surface; each scans the
-// flat children under every root and filters by the field. The plugins also show on the board as ordinary
-// spec nodes (via loadSpecs).
+// that carries a `surface: system|slash|hook|skill` frontmatter field naming where it plugs in. There are no
+// `slash/`/`system/`/`hook/`/`skill/` bucket dirs (those were graph-invisible grouping dirs with no spec.md, so
+// the spec graph skipped them — path != graph); the surface is a FIELD on the node, so the plugin is a real
+// graph child of its root. BOTH config roots participate: `.config` (the instance — DIY dev-flow plugins) and
+// `config` (the project system spec). loadConfig gathers the `slash` surface, loadSystemConfig the `system`
+// surface, loadHookConfig the `hook` surface, loadSkillConfig the `skill` surface; each scans the children under
+// every root and filters by the field. The plugins also show on the board as ordinary spec nodes (via loadSpecs).
 // root node - the spec tree's single top-level node: the one directory directly under .spec/ that
 // holds a spec.md. The dogfood repo names it 'spexcode'; a repo scaffolded by `spex init` names it
 // 'project' (or whatever the adopter renames it to). Detected DYNAMICALLY so the config loaders resolve
@@ -286,7 +286,7 @@ function bundleFiles(dir: string): string[] {
 // `system`/`slash` the result is identical to the old one-level scan on the current tree — every existing
 // such node is a flat direct child and no nested node declares those surfaces — so the gather set (hence
 // the appended system prompt and the slash dropdown) is byte-for-byte unchanged.
-function loadSurface(surface: 'slash' | 'system' | 'hook'): ConfigPreset[] {
+function loadSurface(surface: 'slash' | 'system' | 'hook' | 'skill'): ConfigPreset[] {
   const out: ConfigPreset[] = []
   const visit = (nodeDir: string, name: string) => {
     if (existsSync(join(nodeDir, 'spec.md'))) {
@@ -326,3 +326,6 @@ export function loadSystemConfig(): ConfigPreset[] { return loadSurface('system'
 // the hook handlers (compiled into the per-session hook manifest the dispatcher reads). Each carries its
 // `events`/`order`/`block` binding + co-located script `files`.
 export function loadHookConfig(): ConfigPreset[] { return loadSurface('hook') }
+// the skill bundles (rendered into each harness's auto-discovered SKILL.md dir). Each node's `desc` is the
+// load-trigger and its `body` is the on-demand instructions; loadSurface passes the folder basename as `name`.
+export function loadSkillConfig(): ConfigPreset[] { return loadSurface('skill') }

@@ -99,8 +99,8 @@ function cookieOf(header: string | undefined, name: string): string | null {
   }
   return null
 }
-function isAuthed(req: http.IncomingMessage, token: string): boolean {
-  const c = cookieOf(req.headers.cookie, COOKIE)
+function isAuthed(req: http.IncomingMessage, token: string, cookieName: string): boolean {
+  const c = cookieOf(req.headers.cookie, cookieName)
   return c != null && constEq(c, token)
 }
 
@@ -124,7 +124,12 @@ export function startGateway(opts: GatewayOpts): void {
   const gated = !!opts.password
   const token = gated ? authToken(opts.password) : ''
   const secure = !!opts.tls
-  const setCookie = `${COOKIE}=${token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=2592000${secure ? '; Secure' : ''}`
+  // the auth cookie is HOST-scoped (RFC 6265 ignores the port), so two gateways on one IP would share a
+  // single 'spex_auth' jar entry and clobber each other's login. Key the name by the public port — the
+  // unique discriminator on a host, exactly what the user's two URLs differ by — so same-host instances
+  // (e.g. :8787 and :8788) stay logged in concurrently and a logout clears only its own.
+  const cookieName = `${COOKIE}_${opts.publicPort}`
+  const setCookie = `${cookieName}=${token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=2592000${secure ? '; Secure' : ''}`
 
   const handler = (req: http.IncomingMessage, res: http.ServerResponse) => {
     const url = (req.url || '/').split('?')[0]
@@ -132,8 +137,8 @@ export function startGateway(opts: GatewayOpts): void {
       // login surface — the only routes reachable without a cookie. Absent entirely when ungated.
       if (url === '/login' && req.method === 'POST') return doLogin(req, res, opts.password, setCookie)
       if (url === '/login') return sendHtml(res, 200, loginPage())
-      if (url === '/logout') { res.writeHead(302, { 'Set-Cookie': `${COOKIE}=; Path=/; Max-Age=0`, Location: '/login' }); return res.end() }
-      if (!isAuthed(req, token)) {
+      if (url === '/logout') { res.writeHead(302, { 'Set-Cookie': `${cookieName}=; Path=/; Max-Age=0`, Location: '/login' }); return res.end() }
+      if (!isAuthed(req, token, cookieName)) {
         if (url.startsWith('/api')) { res.writeHead(401, { 'Content-Type': 'application/json' }); return res.end('{"error":"authentication required"}') }
         res.writeHead(302, { Location: '/login' }); return res.end()
       }
@@ -148,7 +153,7 @@ export function startGateway(opts: GatewayOpts): void {
   // it on the same-origin handshake), then raw-pipe to the loopback supervisor, replaying the buffered
   // upgrade request so the child completes the WebSocket handshake. Mirrors supervise.ts's byte pipe.
   server.on('upgrade', (req, socket, head) => {
-    if (gated && !isAuthed(req, token)) { socket.destroy(); return }
+    if (gated && !isAuthed(req, token, cookieName)) { socket.destroy(); return }
     const up = net.connect(opts.upstreamPort, '127.0.0.1', () => {
       up.write(`${req.method} ${req.url} HTTP/1.1\r\n` + rawHeaders(req))
       if (head && head.length) up.write(head)

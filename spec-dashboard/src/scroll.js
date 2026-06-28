@@ -7,7 +7,7 @@ export function createMomentumScroll() {
   let lastWritten = null                                 // the scrollTop value the loop itself last wrote
   return function bump(el, delta) {
     if (!el) return
-    if (el !== lastEl) { lastEl = el; target = null }   // new scroller → drop the stale accumulated target
+    if (el !== lastEl) { lastEl = el; target = null; lastWritten = null }   // new scroller → drop the stale target AND the manual-scroll baseline (a different element's scrollTop isn't a manual move)
     const max = el.scrollHeight - el.clientHeight
     const base = target ?? el.scrollTop
     target = Math.max(0, Math.min(max, base + delta))

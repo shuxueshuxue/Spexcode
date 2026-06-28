@@ -37,7 +37,8 @@ already calls `/api` same-origin and opens its socket as `wss://` under HTTPS).
 **When a password is set, the gate is a designed login, not the browser's Basic dialog.** An unauthenticated
 visitor gets a styled SpexCode login page; the posted password is compared in constant time and, on success,
 mints a signed `httpOnly` cookie (derived from the password via HMAC, so it survives a restart and stores no
-server-side session). The cookie authorises every later request including the WebSocket upgrade — the browser
+server-side session) **named per public port** (`spex_auth_<port>`) so two same-host gateways — cookies are
+host-scoped — don't evict each other's login. The cookie authorises every later request including the WebSocket upgrade — the browser
 sends it on the same-origin handshake, so the terminal socket is gated by the same secret with no query-token
 hack. With **no** password the whole login layer is absent — no `/login`, no cookie check — and every request
 is served straight through; the operator has chosen open access (and was warned).

@@ -271,6 +271,81 @@ function encodeWsFrame(opcode: number, payload: Buffer): Buffer {
 }
 const wsText = (s: string) => encodeWsFrame(0x1, Buffer.from(s, 'utf8'))
 
+// Decode the unmasked server→client frames accumulated in `buf`, handing each complete text message to
+// `onText`; honors ping→pong and a close. Shared by every app-server WS client here. Returns the (possibly
+// shrunk) buffer + whether a close was seen, plus the running fragment state threaded back in on each call.
+type FrameState = { buf: Buffer; fragOp: number; fragBuf: Buffer }
+function drainWsFrames(s: FrameState, conn: Socket, onText: (json: string) => void): boolean {
+  for (;;) {
+    if (s.buf.length < 2) return false
+    const b0 = s.buf[0], b1 = s.buf[1], op = b0 & 0x0f, fin = (b0 & 0x80) !== 0, masked = (b1 & 0x80) !== 0
+    let len = b1 & 0x7f, off = 2
+    if (len === 126) { if (s.buf.length < 4) return false; len = s.buf.readUInt16BE(2); off = 4 }
+    else if (len === 127) { if (s.buf.length < 10) return false; len = Number(s.buf.readBigUInt64BE(2)); off = 10 }
+    const dataStart = off + (masked ? 4 : 0)
+    if (s.buf.length < dataStart + len) return false
+    let payload = s.buf.slice(dataStart, dataStart + len)
+    if (masked) { const mk = s.buf.slice(off, off + 4); const u = Buffer.alloc(len); for (let i = 0; i < len; i++) u[i] = payload[i] ^ mk[i % 4]; payload = u }
+    s.buf = s.buf.slice(dataStart + len)
+    if (op === 0x8) return true                                       // close
+    if (op === 0x9) { conn.write(encodeWsFrame(0xa, payload)); continue }   // ping → pong
+    if (op === 0xa) continue                                          // pong
+    if (op === 0x0) s.fragBuf = Buffer.concat([s.fragBuf, payload])   // continuation
+    else { s.fragOp = op; s.fragBuf = payload }
+    if (fin) { if (s.fragOp === 0x1) onText(s.fragBuf.toString('utf8')); s.fragBuf = Buffer.alloc(0); s.fragOp = 0 }
+  }
+}
+const WS_UPGRADE = (key: string) => `GET /rpc HTTP/1.1\r\nHost: localhost\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: ${key}\r\n\r\n`
+const wsInitialize: JsonRpc = { id: 1, method: 'initialize', params: { clientInfo: { name: 'spexcode', title: 'SpexCode', version: '0.0.0' }, capabilities: { experimentalApi: true, requestAttestation: false } } }
+
+// Create + OWN a fresh codex thread BEFORE the TUI attaches, so SpexCode holds the thread id deterministically
+// — no rollout-cwd scan, no "which of N threads on the shared server is mine". `thread/start` returns
+// ThreadStartResponse `{ thread: { id } }`; the launcher then runs `codex --remote <sock> resume <id>`, which
+// REJOINS this same running thread (ThreadResumeParams: "if thread_id identifies a running thread, app-server
+// rejoins that thread"). cwd ties the thread to the worktree. One round-trip; never throws.
+export function codexStartThread(sock: string, cwd?: string): Promise<{ ok: true; threadId: string } | { ok: false; error: string }> {
+  return new Promise((resolve) => {
+    const conn: Socket = createConnection(sock)
+    const fs: FrameState = { buf: Buffer.alloc(0), fragOp: 0, fragBuf: Buffer.alloc(0) }
+    let upgraded = false, settled = false
+    const done = (r: { ok: true; threadId: string } | { ok: false; error: string }) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      try { conn.destroy() } catch { /* */ }
+      resolve(r)
+    }
+    const timer = setTimeout(() => done({ ok: false, error: 'codex app-server did not return a thread id within 5000ms' }), 5000)
+    conn.on('error', (e) => done({ ok: false, error: `codex app-server connection failed: ${rpcError(e)}` }))
+    conn.on('close', () => done({ ok: false, error: 'codex app-server closed before thread/start was answered' }))
+    const send = (m: JsonRpc) => conn.write(wsText(JSON.stringify(m)))
+    conn.on('connect', () => conn.write(WS_UPGRADE(randomBytes(16).toString('base64'))))
+    const handle = (json: string) => {
+      let m: JsonRpc
+      try { m = JSON.parse(json) } catch { return }
+      if (m.error) return done({ ok: false, error: `codex app-server ${m.id ? `request ${m.id}` : 'notification'} failed: ${m.error.message || JSON.stringify(m.error)}` })
+      if (m.id === 1 && m.result) { send({ method: 'initialized', params: {} }); return send({ id: 2, method: 'thread/start', params: { ...(cwd ? { cwd } : {}) } }) }
+      if (m.id === 2 && m.result) {
+        const tid = (m.result as { thread?: { id?: string } })?.thread?.id
+        return tid ? done({ ok: true, threadId: tid }) : done({ ok: false, error: `thread/start returned no thread id: ${JSON.stringify(m.result).slice(0, 200)}` })
+      }
+    }
+    conn.on('data', (chunk: Buffer) => {
+      fs.buf = Buffer.concat([fs.buf, chunk])
+      if (!upgraded) {
+        const i = fs.buf.indexOf('\r\n\r\n')
+        if (i < 0) return
+        const head = fs.buf.slice(0, i).toString('utf8')
+        if (!/^HTTP\/1\.1 101/.test(head)) return done({ ok: false, error: `codex app-server refused the WebSocket upgrade: ${head.split('\r\n')[0]}` })
+        upgraded = true
+        fs.buf = fs.buf.slice(i + 4)
+        send(wsInitialize)
+      }
+      if (drainWsFrames(fs, conn, handle)) done({ ok: false, error: 'codex app-server sent a WebSocket close before thread/start was confirmed' })
+    })
+  })
+}
+
 function sendCodexAppServerTurn(sock: string, threadId: string, text: string, cwd?: string): Promise<DispatchResult> {
   return new Promise((resolve) => {
     const conn: Socket = createConnection(sock)

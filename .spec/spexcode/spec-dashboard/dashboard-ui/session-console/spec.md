@@ -106,8 +106,12 @@ navigation lives at the **window level**: plain **↑/↓** walk the list whatev
 multi-line input they first move the caret, falling through to the list only at its visual edge), while
 **⌘/⌥/⌃+↑/↓** are an **unconditional** switch — they step the selection up/down the list from anywhere, no
 matter which input has focus or what mode you're in (the guaranteed up/down switch a chat app gives you), even
-from the graph or while nav mode forwards raw keys. **⌘/⌥/⌃+N** snaps the selection to New Session the same
-way, from anywhere. The **header action row**
+from the graph or while nav mode forwards raw keys. **⌥+N** (Option/Alt+N) snaps the selection to New Session
+the same way, from anywhere — matched by the **physical N key (`e.code`)**, not `e.key`, so the mac Option
+dead-key (⌥N emits a `˜` glyph, not `'n'`, exactly as ⌥I does) still counts. The reason the chord is ⌥+N and
+not ⌘+N is a hard browser limit, not a choice: **⌘+N (mac) and ⌃+N (win/linux) are the browser's reserved
+new-window accelerator** — their keydown never reaches the page to be cancelled (no `preventDefault` can
+suppress it in a normal tab), so ⌥+N is the one modifier+N chord the app can actually own. The **header action row**
 is the same board-command registry, narrowed to the current state: **nav** whenever live, **proof** + **merge**
 at review/done — each a small **text** button (no glyphs) in its identity colour; an `offline` liveness
 (any lifecycle) swaps them for a relaunch panel, and review is **agent-proposed** at the stop-gate. There is

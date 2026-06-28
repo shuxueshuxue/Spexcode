@@ -245,7 +245,7 @@ export default {
     opsTitle: '此会话正在改动的节点 —— 双击标签锁定并聚焦它们',
     dragHandle: '拖动以排序',
     newSession: '新建会话',
-    newSessionTitle: '新建会话（⌘/⌥/⌃+N）',
+    newSessionTitle: '新建会话（⌥+N）',
     relationshipTitle: '查看会话关系 — 实时监视图（在空的新建会话框按 → 进入，← 返回）',
     ask: '你想做点什么？',
     inputPlaceholder: '描述工作 · @ 规格 · / 命令 · ⏎ 启动 · ⇧⏎ 换行',

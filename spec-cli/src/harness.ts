@@ -298,12 +298,12 @@ function drainWsFrames(s: FrameState, conn: Socket, onText: (json: string) => vo
 const WS_UPGRADE = (key: string) => `GET /rpc HTTP/1.1\r\nHost: localhost\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: ${key}\r\n\r\n`
 const wsInitialize: JsonRpc = { id: 1, method: 'initialize', params: { clientInfo: { name: 'spexcode', title: 'SpexCode', version: '0.0.0' }, capabilities: { experimentalApi: true, requestAttestation: false } } }
 
-// Create + OWN a fresh codex thread BEFORE the TUI attaches, so SpexCode holds the thread id deterministically
-// — no rollout-cwd scan, no "which of N threads on the shared server is mine". `thread/start` returns
-// ThreadStartResponse `{ thread: { id } }`; the launcher then runs `codex --remote <sock> resume <id>`, which
-// REJOINS this same running thread (ThreadResumeParams: "if thread_id identifies a running thread, app-server
-// rejoins that thread"). cwd ties the thread to the worktree. One round-trip; never throws.
-export function codexStartThread(sock: string, cwd?: string): Promise<{ ok: true; threadId: string } | { ok: false; error: string }> {
+// Read the ONE thread the visible TUI loaded on a PER-SESSION app-server socket: `thread/loaded/list` returns
+// the loaded thread ids, and with exactly one socket per session there is exactly one. This is the deterministic
+// capture that replaces the rollout-cwd scan — no filesystem hunt, no "which of N threads", no thread/start
+// (whose thread evaporates when the creating connection closes). The TUI's own thread is durable + running, so
+// the list reflects it. Empty until the TUI has booted its thread (caller retries). Never throws.
+export function codexThreadId(sock: string): Promise<{ ok: true; threadId: string } | { ok: false; error: string }> {
   return new Promise((resolve) => {
     const conn: Socket = createConnection(sock)
     const fs: FrameState = { buf: Buffer.alloc(0), fragOp: 0, fragBuf: Buffer.alloc(0) }
@@ -315,19 +315,20 @@ export function codexStartThread(sock: string, cwd?: string): Promise<{ ok: true
       try { conn.destroy() } catch { /* */ }
       resolve(r)
     }
-    const timer = setTimeout(() => done({ ok: false, error: 'codex app-server did not return a thread id within 5000ms' }), 5000)
+    const timer = setTimeout(() => done({ ok: false, error: 'codex app-server did not list threads within 5000ms' }), 5000)
     conn.on('error', (e) => done({ ok: false, error: `codex app-server connection failed: ${rpcError(e)}` }))
-    conn.on('close', () => done({ ok: false, error: 'codex app-server closed before thread/start was answered' }))
+    conn.on('close', () => done({ ok: false, error: 'codex app-server closed before thread/loaded/list was answered' }))
     const send = (m: JsonRpc) => conn.write(wsText(JSON.stringify(m)))
     conn.on('connect', () => conn.write(WS_UPGRADE(randomBytes(16).toString('base64'))))
     const handle = (json: string) => {
       let m: JsonRpc
       try { m = JSON.parse(json) } catch { return }
       if (m.error) return done({ ok: false, error: `codex app-server ${m.id ? `request ${m.id}` : 'notification'} failed: ${m.error.message || JSON.stringify(m.error)}` })
-      if (m.id === 1 && m.result) { send({ method: 'initialized', params: {} }); return send({ id: 2, method: 'thread/start', params: { ...(cwd ? { cwd } : {}) } }) }
+      if (m.id === 1 && m.result) { send({ method: 'initialized', params: {} }); return send({ id: 2, method: 'thread/loaded/list', params: {} }) }
       if (m.id === 2 && m.result) {
-        const tid = (m.result as { thread?: { id?: string } })?.thread?.id
-        return tid ? done({ ok: true, threadId: tid }) : done({ ok: false, error: `thread/start returned no thread id: ${JSON.stringify(m.result).slice(0, 200)}` })
+        const data = (m.result as { data?: unknown }).data
+        const ids = Array.isArray(data) ? data.filter((x): x is string => typeof x === 'string') : []
+        return ids.length ? done({ ok: true, threadId: ids[0] }) : done({ ok: false, error: 'no loaded thread on the app-server socket yet (TUI still booting?)' })
       }
     }
     conn.on('data', (chunk: Buffer) => {
@@ -341,7 +342,7 @@ export function codexStartThread(sock: string, cwd?: string): Promise<{ ok: true
         fs.buf = fs.buf.slice(i + 4)
         send(wsInitialize)
       }
-      if (drainWsFrames(fs, conn, handle)) done({ ok: false, error: 'codex app-server sent a WebSocket close before thread/start was confirmed' })
+      if (drainWsFrames(fs, conn, handle)) done({ ok: false, error: 'codex app-server sent a WebSocket close before thread/loaded/list was confirmed' })
     })
   })
 }

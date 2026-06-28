@@ -453,6 +453,14 @@ if (cmd === 'serve') {
   } else {
     console.error('spex session: new|list|reopen|review|done|park|ask|idle|merge|exit|close|send|capture|prompt'); process.exit(2)
   }
+} else if (cmd === 'codex-thread') {
+  // Read the deterministic thread id from a PER-SESSION codex app-server socket (thread/loaded/list → the one
+  // loaded thread). Replaces the rollout-cwd scan; used by capture/liveness to learn the session's thread id.
+  const { codexThreadId } = await import('./harness.js')
+  const sock = process.argv[3]
+  if (!sock) { console.error('usage: spex codex-thread <sock>'); process.exit(2) }
+  const r = await codexThreadId(sock)
+  if (r.ok) { console.log(r.threadId) } else { console.error(r.error); process.exit(1) }
 } else {
   console.error(`spex: unknown command '${cmd}' (try: spex help)`)
   process.exit(2)

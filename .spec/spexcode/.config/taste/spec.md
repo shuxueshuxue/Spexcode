@@ -1,8 +1,9 @@
 ---
 title: taste
 status: active
+surface: skill
 hue: 50
-desc: SpexCode's own development principles — the "taste" that guides how this self-referential project is built. Raw human guidance is preserved verbatim-in-spirit below so it is never lost; the right rules graduate into .config surface:system (e.g. [[memory-hygiene]]) or source.
+desc: SpexCode's engineering taste — load when making a design/architecture decision, weighing whether a change is worth its complexity, or sanity-checking work against the project's principles (harness-agnostic zero-friction adoption, spend-complexity-only-to-buy-it-back, one unified mechanism over special-cases, self-launch-is-the-main-body).
 ---
 
 # taste

@@ -38,6 +38,10 @@ not a daemon. It writes, idempotently and scoped per project:
   the user's own content in those files is **never touched**. This replaces the launch-time `--append-system-prompt`
   for self-launch (it lands at user-message level — the harness ceiling for a discovered file, not system-prompt level);
 - **the thin shims** `.claude/settings.json` + `.codex/hooks.json`: one line per harness event → the dispatcher;
+- **the skills** — each `surface: skill` body as `<skillDir>/<name>/SKILL.md` (claude `.claude/skills/`, codex
+  `.codex/skills/` — both ship the same agentskills.io `SKILL.md` primitive), discovered and loaded **on demand**
+  by the node's `description`, NOT always-on like the contract. The dir is the adapter's `skillDir(proj)`; a
+  harness with no skill primitive returns null and gets none. Gitignored like the shims (generated, no user prose);
 - **the Codex trust** — a directory-trust + per-hook `trusted_hash` written ADDITIVELY into the user's GLOBAL
   `~/.codex/config.toml`, scoped to this project path. The hash is computed deterministically (the codex-rs
   algorithm, reverse-engineered + pinned), so a user-self-launched codex skips its trust prompts entirely.

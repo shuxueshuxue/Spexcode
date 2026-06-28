@@ -31,18 +31,18 @@ command is the wrapper/shell — **not** a liveness signal ([[state]] reads the 
 command alone carries `CLAUDE_BG_BACKEND=daemon` and a `CLAUDE_BG_RENDEZVOUS_SOCK` path **derived from the
 session id** as an env prefix (never global, never a plugin), so [[dispatch]] addresses only our sockets.
 
-**`CLAUDE.md` isolation:** before claude starts, the worktree's `CLAUDE.md` is *renamed* to
-`CLAUDE.spexhidden.md` (still on disk, only hidden from auto-discovery) and pinned `--assume-unchanged`, so
-it can never be staged or merged. A rename, never a delete; overridable (`SPEXCODE_HIDE_CLAUDE_MD=0`).
-
-**Non-truncating delivery:** a dispatched agent gets only the human's terse prompt, so every launch and
-resume appends a **system prompt** (`--append-system-prompt`) gathered **entirely** from `surface: system`
-config nodes — **no baked-in core**. Each active node's body (name order) is concatenated (the
-spec-discipline contract lives in the `core` node, rules like `voice-before-ask` alongside it), so editing
-any always-on contract is a spec edit, not a code change. The whole invocation is written to the **launch
-script file**, so neither contract nor prompt hits the ~2KB tmux send-keys limit. Every path that file and
-its hooks reference resolves from the CLI package's **own** on-disk location, never a hardcoded
-`<repoRoot>/spec-cli`, so relocating it can't break launch.
+**Materialized delivery, not injection:** the spec-discipline contract is NOT pushed on the command line.
+Before the agent starts, the worktree is `materialize`d ([[harness-delivery]]), rendering the `surface: system`
+bodies (name order — the `core` node + rules like `voice-before-ask` alongside it) into the `<spexcode>`
+managed block of the worktree's `CLAUDE.md`/`AGENTS.md`, plus the dispatch shims. The agent then launches
+**plainly** and **auto-discovers** them — the SAME path a user-self-launched agent takes — so editing any
+always-on contract is a spec edit, not a code change. There is **no `--append-system-prompt` and no `--settings`**.
+`CLAUDE.md` is **no longer hidden** (the old rename-to-`CLAUDE.spexhidden.md` isolation is gone): hiding it
+also suppressed the agent's own MEMORY load, so with the contract delivered by discovery the agent loads its
+`CLAUDE.md` + memory normally. Only the launch line itself (rendezvous env + harness command + the human
+prompt + spec pointer) is written to the **launch script file** in the global store, so a long prompt never
+hits the ~2KB tmux send-keys limit. Every path that file and its hooks reference resolves from the CLI
+package's **own** on-disk location, never a hardcoded `<repoRoot>/spec-cli`, so relocating it can't break launch.
 
 **The backend is the single launch owner.** `spex new` / `spex session new` **POST to the running backend**,
 so the launch always runs where the launch env and cap live. The caller can be **another agent** whose env

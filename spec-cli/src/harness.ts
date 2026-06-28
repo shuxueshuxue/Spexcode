@@ -6,6 +6,7 @@ import { createConnection, type Socket } from 'node:net'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { claudeSlashCommands, codexSlashCommands, type SlashCommand } from './slash-commands.js'
+import { sessionStoreDir } from './layout.js'
 
 // @@@ harness-adapter - the ONE seam between SpexCode and the coding-agent harness (Claude Code, Codex, …).
 // Every harness-specific fact lives behind THIS interface with one implementation per harness; product code
@@ -434,10 +435,17 @@ function sendCodexAppServerTurn(sock: string, threadId: string, text: string, cw
 const pexec = promisify(execFile)
 const TMUX_SOCK = process.env.SPEXCODE_TMUX || 'spexcode'
 async function deliverViaCodexAppServer(rec: HarnessDeliveryRecord, text: string): Promise<DispatchResult> {
-  const threadId = rec.harnessSessionId
-  if (!threadId) return { ok: false, error: `no captured Codex thread id for session ${rec.session} — prompt NOT delivered` }
-  const sock = codexAppServerSock(rec.runtimeDir)
+  // the socket is PER-SESSION (its store dir), so the app-server holds exactly this session's thread.
+  const sock = codexAppServerSock(sessionStoreDir(rec.session))
   if (!existsSync(sock)) return { ok: false, error: `no Codex app-server socket for session ${rec.session} — prompt NOT delivered` }
+  // prefer the captured thread id; if the hook hasn't stored it yet, read it LIVE off the one loaded thread
+  // (deterministic on a per-session socket) — so delivery never depends on capture-timing.
+  let threadId = rec.harnessSessionId
+  if (!threadId) {
+    const r = await codexThreadId(sock)
+    if (!r.ok) return { ok: false, error: `${r.error} — prompt NOT delivered` }
+    threadId = r.threadId
+  }
   return sendCodexAppServerTurn(sock, threadId, text, rec.worktreePath)
 }
 
@@ -539,7 +547,7 @@ export const codexHarness: Harness = {
   id: 'codex',
   events: CODEX_EVENTS,
   ownsRendezvous: false,                             // no reclaude daemon — liveness + prompts through the project app-server socket
-  launchCmd: (id, runtimeDir) => codexLaunchCommand(id, undefined, undefined, runtimeDir),
+  launchCmd: (id) => codexLaunchCommand(id, undefined, undefined, sessionStoreDir(id)),
   sessionIdArg: () => '',                            // codex assigns its own id (resumed by a captured id)
   sessionEnvVar: 'CODEX_THREAD_ID',
   shimFile: (proj) => join(proj, '.codex', 'hooks.json'),
@@ -548,7 +556,7 @@ export const codexHarness: Harness = {
   shim: (dispatch, spex) => buildShim('codex', CODEX_EVENTS, dispatch, spex),
   writeTrust: (proj, cmdFor) => writeCodexTrust(proj, CODEX_EVENTS, cmdFor),
   slashCommands: codexSlashCommands,
-  liveness: (rec, tmuxAlive, runtimeDir) => (tmuxAlive && !!rec.harnessSessionId && existsSync(codexAppServerSock(runtimeDir)) ? 'online' : 'offline'),
+  liveness: (rec, tmuxAlive) => (tmuxAlive && existsSync(codexAppServerSock(sessionStoreDir(rec.session))) ? 'online' : 'offline'),
   deliver: (rec, text) => deliverViaCodexAppServer(rec, text),
   resumeArg: (rec) => (rec.harnessSessionId ? `resume ${rec.harnessSessionId}` : ''),   // captured thread id → codex `resume <id>` (SAME conversation); none → relaunch FRESH
 }

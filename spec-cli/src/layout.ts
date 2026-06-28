@@ -66,7 +66,7 @@ export function mainBranch(): string {
 
 // @@@ global per-session store - Fork A: NO SpexCode files live in the worktree any more, so the worktree's
 // spec/code tree is pristine (zero per-session pollution). Every per-session runtime artifact — the
-// structured record (session.json) AND the launcher products (prompt, launch.sh, hooks.json, claude.md) AND
+// structured record (session.json) AND the launcher products (prompt, launch, launch.sh) AND the recorded comms AND
 // the spec-discipline sentinels — lives in a per-USER GLOBAL store, keyed by the harness `session_id` so two
 // agents in one folder never clobber, and grouped PER PROJECT (mirroring Claude's ~/.claude/projects/<enc>/)
 // so the board enumerates ONE directory. This is the single seam that knows where the store sits; sessions.ts

@@ -104,7 +104,7 @@ export type Session = {
 }
 
 // ensure a session's GLOBAL store dir exists, returning its path. Idempotent (recursive mkdir) — every
-// writer that drops an artifact (record/prompt/launch/hooks.json/claude.md) calls this first so order never matters.
+// writer that drops an artifact (record/prompt/launch/launch.sh/comms) calls this first so order never matters.
 function storeDir(id: string): string { const d = sessionStoreDir(id); mkdirSync(d, { recursive: true }); return d }
 
 // @@@ originating prompt - what the session was ASKED to do, captured at launch so a manager (human or
@@ -1009,8 +1009,10 @@ export function markIdle(sessionId?: string): boolean {
 // done / propose merge. The dogfood ritual lands every change as a COMMIT on the node branch first, so two
 // states block a declaration: (1) any uncommitted working-tree change, or (2) 0 commits ahead of main
 // (nothing committed to merge). Since the global-store refactor, SpexCode writes NO per-session files into
-// the worktree (the runtime lives in ~/.spexcode, and the isolated CLAUDE.md is `--assume-unchanged`), so the
-// worktree is pristine and EVERY dirty path is genuine spec/code work — no runtime-file filtering needed.
+// the worktree (the runtime lives in ~/.spexcode), and the only in-tree SpexCode artifacts are gitignored
+// (the materialize shims/skills) or tracked-and-committed (the contract block in CLAUDE.md/AGENTS.md), so
+// neither shows as an uncommitted change — the worktree is pristine and EVERY dirty path is genuine spec/code
+// work, no runtime-file filtering needed.
 // Runs from cwd = the session worktree; ALL git goes through git() so the hook's exported GIT_DIR/GIT_INDEX_FILE
 // can't misdirect repo discovery to the cwd (the same trap git.ts documents). `main` resolves via the shared
 // refs, so `main..HEAD` works from any linked worktree regardless of where main is checked out.

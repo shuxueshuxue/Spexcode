@@ -45,6 +45,25 @@ scenarios:
       - spec-dashboard/src/SessionInterface.jsx
       - spec-dashboard/src/session.js
       - spec-dashboard/src/styles.css
+  - name: codex-headline-is-task-not-folder
+    description: >-
+      Launch a CODEX session into a worktree whose folder name differs from the task (e.g. branch
+      `node/codex-naming` → worktree folder `codex-naming`, task "Implement codex session naming"). Codex sets
+      its tmux pane title to a spinner glyph + the cwd BASENAME (`⠙ codex-naming`), not a task summary. Open
+      the dashboard and read that session's Row-1 headline (and the Enter console big-title). It must be the
+      TASK — the launch-prompt preview — NOT the worktree folder name `codex-naming`. Contrast a CLAUDE
+      session in the same view: its headline IS its live pane-title self-summary, unchanged. Screenshot both
+      rows and file with `spex yatsu eval session-activity --image <png> --pass`.
+    expected: >-
+      The codex row's headline is its launch-prompt task, never the worktree folder name its pane title
+      carries — because codex's pane title is NOT a self-summary (the harness declares
+      `paneTitleIsSelfSummary: false`), so `activity` is suppressed and the headline falls through to the
+      prompt preview. The claude row is unaffected: its headline is still its own live tmux self-summary. One
+      harness capability decides which side of the fork a session lands on; neither harness shows a folder name
+      as a headline.
+    code:
+      - spec-cli/src/sessions.ts
+      - spec-cli/src/harness.ts
 ---
 # yatsu.md — session-activity
 

@@ -21,11 +21,18 @@ terminal tab renames itself to fit the work.
 
 ## expanded spec
 
-**Capture (free, one call).** Claude Code sets its terminal title via an OSC escape; tmux records it as
-the **pane title** (never the window name — OSC titles don't touch it). Our worker runs one pane per
+**Capture (free, one call).** A self-narrating agent sets its terminal title via an OSC escape; tmux records
+it as the **pane title** (never the window name — OSC titles don't touch it). Our worker runs one pane per
 session named with the session id, so `listSessions` reads every pane title in a single `list-panes`
-snapshot (`paneTitles`) — same shape and cost as the liveness snapshot — and hangs a cleaned summary on
-`Session.activity`. A genuine Claude Code self-summary always **leads with a status glyph** (`✳` idle, a
+snapshot (`paneTitles`) — same shape and cost as the liveness snapshot — and, **only when this session's
+harness declares its pane title to BE a self-summary**, hangs a cleaned summary (`paneActivity`) on
+`Session.activity`. Whether a pane title is a self-summary is a **harness capability**
+(`paneTitleIsSelfSummary`, on the harness adapter — the one branch, data not a scattered `if`): Claude Code
+continuously writes its task summary into the title, so it qualifies; **Codex does not** — it sets the pane
+title to a spinner glyph + the **cwd basename** (the worktree FOLDER name), so deriving a headline from it
+would name the folder, not the task. For a non-self-summarizing harness `activity` stays `null` and the
+headline falls through to the launch-prompt preview (below) — its task, never its folder. A genuine Claude
+Code self-summary always **leads with a status glyph** (`✳` idle, a
 braille spinner frame while working); that glyph is the **proof** the title is the agent's own OSC summary
 and not tmux's default — which, from pane birth until the agent first speaks, is the **host name** (e.g.
 `ser581555022561`), and the app may flash a bare splash before its first task. So the glyph is **required**:

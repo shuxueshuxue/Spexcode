@@ -250,7 +250,7 @@ export default {
     opsTitle: 'nodes this session is changing — double-click the tab to lock + focus them',
     dragHandle: 'drag to reorder',
     newSession: 'New Session',
-    newSessionTitle: 'New Session (⌘/⌥/⌃+N)',
+    newSessionTitle: 'New Session (⌥+N)',
     relationshipTitle: 'View Session Relationship — the live monitor graph (→ from an empty New Session, ← back)',
     ask: 'What would you like to do?',
     inputPlaceholder: 'describe the work · @ spec · / command · ⏎ to launch · ⇧⏎ newline',

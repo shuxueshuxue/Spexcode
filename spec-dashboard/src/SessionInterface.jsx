@@ -638,11 +638,15 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       if ((e.altKey || e.metaKey) && isI && active !== 'new' && active !== 'graph') {
         e.preventDefault(); e.stopPropagation(); setNavMode((v) => !v); return
       }
-      // ⌘/⌥/⌃+N snaps to New Session; ⌘/⌥/⌃+↑/↓ walk the session list. Both kept ABOVE the graph branch and
-      // the nav-mode passthrough so they fire from the graph and even while raw-key mode forwards to a pane —
-      // and the modifier frees ↑/↓ from any caret/typing conflict, so the switch fires whatever input holds focus.
+      // ⌥+N snaps to New Session; ⌘/⌥/⌃+↑/↓ walk the session list. Kept ABOVE the graph branch and the
+      // nav-mode passthrough so they fire from the graph and even while raw-key mode forwards to a pane — and
+      // the modifier frees ↑/↓ from any caret/typing conflict, so the switch fires whatever input holds focus.
+      // N is matched by e.code (the physical N key), not e.key: ⌥N on a mac emits a dead-key glyph (˜) for e.key,
+      // not 'n' — the same reason ⌥I above keys off e.code. ⌘N (mac) / ⌃N (win/linux) are the browser's
+      // hard-reserved new-window accelerator whose keydown never reaches the page to be cancelled, so ⌥N is the
+      // one modifier+N chord the app can actually own (the e.metaKey/ctrlKey arms below stay best-effort).
       if (e.metaKey || e.altKey || e.ctrlKey) {
-        if (e.key === 'n' || e.key === 'N') { e.preventDefault(); e.stopPropagation(); setSel('new'); return }
+        if (e.code === 'KeyN' || e.key === 'n' || e.key === 'N') { e.preventDefault(); e.stopPropagation(); setSel('new'); return }
         if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
           e.preventDefault(); e.stopPropagation()
           let i = order.indexOf(active); if (i < 0) i = 0   // off-list (graph) → enter the list from New

@@ -51,29 +51,32 @@ surface:
 - **payload accessors** — read `session_id`, the edited-file path (Claude `tool_input.file_path` vs Codex
   `apply_patch` command — Codex has NO `file_path`), and notification type, from a hook's stdin.
 - **launch / sessionId** — the launch command and id model: Claude `claude --session-id <uuid> [--worktree]`
-  (caller chooses the id); Codex `codex` with `--yolo`/approval+sandbox (id is codex-assigned, resumed by a
-  captured id). The agent-typed CLI resolves its own id via the harness's env (`CLAUDE_CODE_SESSION_ID` / …).
+  (caller chooses the id); Codex `codex` with `--yolo`/approval+sandbox (id is codex-assigned — the backend
+  owns it via `thread/start` at launch and resumes by it). The agent-typed CLI resolves its own id via the
+  harness's env (`CLAUDE_CODE_SESSION_ID` / …).
 - **worktree** — Claude has a native `--worktree` + `WorktreeCreate`/`WorktreeRemove` hooks; Codex has none
   (SpexCode manages the worktree itself). The adapter exposes whether the harness owns worktrees.
 - **runtime: liveness + delivery** — the RUNTIME transport, lifted onto the adapter so product code honours
-  `ownsRendezvous` instead of hard-wiring the claude rendezvous socket. `liveness(rec, tmuxAlive)` answers "is
+  `ownsRendezvous` instead of hard-wiring the claude rendezvous socket. `liveness(rec, tmuxAlive, runtimeDir)` answers "is
   this session's agent ready?": **claude** = the tmux window is up AND its reclaude rendezvous socket exists
   (the socket is the truth claude is alive — the pane command is the wrapper/shell while claude runs as its
-  child); **codex** = the tmux window is up AND this session's **per-session** Codex app-server Unix socket
-  exists (one app-server per session, keyed on the session store dir, so the socket's existence proves this
-  pane's transport is up). That app-server holds exactly ONE thread — the visible TUI's own — so the session's
-  native thread id is read DETERMINISTICALLY off `thread/loaded/list` (the [[harness-session-id]] hook captures it
-  via `spex codex-thread`; no rollout-file scan, no cwd guess, no "which of N threads"). The
+  child); **codex** = the tmux window is up AND the **per-PROJECT** Codex app-server Unix socket exists (ONE
+  app-server per project, keyed on `runtimeRoot()` — the per-project runtime dir, NOT the session store —
+  shared by every worktree's thread; the per-session window presence is the session signal, the socket is a
+  project control plane). The session's thread id is NOT discovered at all — the BACKEND OWNS it: at launch it
+  `thread/start { cwd: <this worktree> }`s on the shared server (codex resolves that worktree's config/hooks/
+  AGENTS.md from the thread cwd, so one project-scoped server behaves analogously to a per-worktree claude
+  launch) and stores the returned `thread.id` on the governed record as `harness_session_id` — no capture hook,
+  no rollout-file scan, no cwd guess. The
   app-server `--listen unix://<sock>` endpoint is a WebSocket at path `/rpc` (the same upgrade the `--remote`
   TUI performs); delivery speaks WebSocket JSON-RPC over that Unix socket directly — NOT `codex app-server
   proxy` (a dumb byte relay that performs no HTTP upgrade, which the server rejects).
   `deliver(rec, text)` sends a
   follow-up prompt and reports whether it landed: **claude** through the rendezvous socket (inject + submit +
   CONFIRM accepted — loud failure on a missing/dead socket, no silent fallback); **codex** through the same
-  Codex app-server JSON-RPC control plane the visible TUI uses — the visible TUI's thread is ALREADY loaded in
-  that server (launched `--remote`), so we do NOT `thread/resume` it (that re-loads a thread the live pane owns).
-  The handshake is `initialize → initialized → thread/loaded/list` (PROVE the captured thread is the one the
-  pane shows) `→ thread/read{includeTurns}`. That read decides the inject: if a turn is **in progress** (the
+  per-PROJECT Codex app-server JSON-RPC control plane the visible TUI uses, addressing the **owned** thread id
+  (the one stored at launch). The handshake is `initialize → initialized → thread/loaded/list` (PROVE our
+  thread is loaded) `→ thread/read{includeTurns}`. That read decides the inject: if a turn is **in progress** (the
   thread has an `inProgress` turn), `turn/steer` injects the message INTO that live turn — the model reacts
   mid-turn ("inserted right after the running tool call completes"), it is NOT queued for after the turn ends;
   if the thread is **idle**, `turn/start` opens a new turn. `turn/steer` REQUIRES the active turn id as its
@@ -82,8 +85,9 @@ surface:
   the app-server response confirms it landed. There is NO tmux prompt typing fallback for Codex: typed keys can
   truncate and can only prove tmux accepted input, not that Codex accepted a
   turn. `resumeArg(rec)` is the relaunch tail `reopen()` hands `launch()`: **claude** `--resume <id>` (the SAME
-  conversation, the id we pinned); **codex** `resume <thread-id>` (codex's own `resume` subcommand) once the
-  real thread id has been captured, resuming the SAME conversation, else a fresh TUI on the same worktree/record. sessions.ts's `liveness()`/`isOccupying()`/`sendKeys()`/
+  conversation, the id we pinned); **codex** `resume <thread-id>` (codex's own `resume` subcommand) on the
+  owned thread id — its rollout persists on disk — resuming the SAME conversation, else a fresh TUI on the same
+  worktree/record. sessions.ts's `liveness()`/`isOccupying()`/`sendKeys()`/
   `reopen()`/`waitForReady()` all route through these adapter methods — there is no socket hard-wire and no
   `if (codex)` left in the runtime path; the rendezvous-socket path + its `replyViaSocket` round-trip MOVED into
   `harness.ts` as the claude adapter's `deliver`/`liveness` implementation, while Codex's app-server launch and
@@ -109,12 +113,12 @@ edit), so `hp_code_path` emits ALL touched paths — one per line — and every 
 `hp_field` reads a top-level JSON string value as a real JSON string: the close quote is the first UNESCAPED `"`,
 so a `command` carrying a quoted literal (`sed -n "1,5p" f.ts`) is captured whole, not truncated at the inner
 quote. `hp_is_ask` maps Codex's `request_user_input` (and Claude's `AskUserQuestion`) onto the question capture.
-So [[spec-first]], [[spec-of-file]], and mark-active fire on Codex, not just Claude. The session-id + global-store
-resolution every handler repeated is folded into the same helper (`hp_session_id`, `hp_store_dir`). Codex's
-native thread id is captured WITHOUT sniffing it from the payload (it isn't there) or scanning rollout files: the
-[[harness-session-id]] hook computes this session's own per-session app-server socket (`hp_store_dir`, the shell
-mirror of `sessionStoreDir`) and reads its single loaded thread via `spex codex-thread` — Claude needs none of
-this (its pinned id already is the record id), and no dispatcher or lifecycle hook branches on Codex.
+So [[spec-first]], [[spec-of-file]], and mark-active fire on Codex, not just Claude — these shared hooks load
+per-thread-cwd, so they fire per-worktree even though the app-server is project-scoped. The session-id +
+global-store resolution every handler repeated is folded into the same helper (`hp_session_id`, `hp_store_dir`).
+There is NO codex thread-id capture hook: the backend OWNS the thread id (it `thread/start`s the thread at
+launch and stores the id — see above), so no dispatcher or lifecycle hook branches on Codex and Claude needs
+nothing here either (its pinned id already is the record id).
 
 ## verified codex facts (live round-trip, real codex 0.142.3)
 
@@ -140,14 +144,18 @@ The Codex impl of the adapter must encode these (measured against a real self-la
   every hook resolves THAT first (`hp_session_id`), falling back to the payload id only when unset (self-launch).
   One resolver, both harnesses — claude's exported id equals its payload id, so it's a no-op there.
 - **no rendezvous** (`ownsRendezvous:false`): codex has no reclaude control socket, so SpexCode uses Codex's
-  own app-server. Each SpexCode project has one project-scoped `codex app-server --listen unix://<project sock>`
-  under the same global project runtime dir as the hook manifest, and every dashboard-launched Codex TUI starts
-  as `codex --remote unix://<project sock> ...`; follow-up delivery opens a WebSocket to the same socket's
-  `/rpc` endpoint and sends JSON-RPC. The app-server is a shared control plane, not a session identity; session
-  routing is solely the Codex thread id. That thread id is still Codex-minted and unpinnable at launch, so the
-  governed record keeps SpexCode's id as `session_id` and stores the real Codex id in `harness_session_id`,
-  captured from the Codex rollout `session_meta`. If `harness_session_id` is missing, delivery fails loud
-  instead of guessing from `thread/loaded/list`, because one app-server can host several sessions and several
-  `spexcode serve` processes must never cross-send. Explicit `--remote` is the default because it deterministically binds the
-  pane and backend control to the project app-server; Codex's implicit default-socket reuse is a useful future
-  supervisor mechanism but too conditional and too global to be this launch contract.
+  own app-server. Each SpexCode project has ONE project-scoped `codex app-server --listen unix://<project sock>`
+  (flock-guarded, started once, reused) under the same global project runtime dir as the hook manifest. Each
+  worktree session = ONE thread on that server, created by the BACKEND: the launch script runs `spex
+  codex-launch <sock> <worktree-cwd> <prompt>`, which `thread/start { cwd }`s (codex loads that worktree's
+  config/hooks/AGENTS.md from the thread cwd — VERIFIED, so a per-project server behaves like a per-worktree
+  launch), stores the returned `thread.id` on the governed record (`harness_session_id`, keyed by
+  `SPEXCODE_SESSION_ID`), then fires the prompt as the FIRST turn — materializing the thread's rollout on disk,
+  which the visible `codex --remote unix://<sock> resume <tid>` TUI then renders natively (VERIFIED: the TUI
+  resumes a backend-created thread once it has ≥1 turn, and a later `turn/steer`/`turn/start` also renders live
+  in the pane). Follow-up delivery opens a WebSocket to the same socket's `/rpc` and `turn/steer`/`turn/start`s
+  the OWNED thread id. The app-server is a shared control plane, not a session identity; session routing is
+  solely the owned Codex thread id, so several `spexcode serve` processes never cross-send. Delivery falls back
+  to reading the one loaded thread (`thread/loaded/list`) only for a pre-existing session whose id was never
+  stored. Explicit `--remote` is the default because it deterministically binds the pane and backend control to
+  the project app-server.

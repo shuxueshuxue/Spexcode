@@ -25,7 +25,9 @@ export type HarnessLivenessRecord = { session: string; harnessSessionId?: string
 export interface Harness {
   readonly id: HarnessId
   // the lifecycle events this harness fires (drives the shim + the trust hashes). Claude binds the full set;
-  // Codex lacks StopFailure + Notification, so it never sees those.
+  // Codex's canonical hook event set (its `HookEventName` enum, codex 0.142.3) has no failed-stop and no
+  // idle/attention event, so Codex has NO equivalent of StopFailure / Notification — a real harness difference,
+  // not a TODO. It binds only the five it actually fires (see CODEX_EVENTS).
   readonly events: readonly string[]
   // whether the harness's agent opens a reclaude rendezvous control socket. Claude does; Codex has no such
   // daemon and uses its app-server JSON-RPC control plane instead.
@@ -70,13 +72,17 @@ export interface Harness {
   liveness(rec: HarnessLivenessRecord, tmuxAlive: boolean, runtimeDir?: string): 'online' | 'offline'
   // deliver a follow-up prompt to a LIVE session and report whether it landed. claude: through the rendezvous
   // control socket, which injects + submits the prompt and CONFIRMS the daemon accepted it (loud failure on a
-  // missing/dead socket — never a silent degradation). codex: JSON-RPC `turn/start` on the same app-server
-  // socket the visible TUI uses. Returns ok=false with a reason that propagates to the API.
+  // missing/dead socket — never a silent degradation). codex: JSON-RPC on the same app-server WebSocket the
+  // visible TUI uses — it reads the thread live and either `turn/steer`s the message INTO an in-progress turn
+  // (mid-turn, not queued for after the agent stops) or `turn/start`s a fresh turn when the thread is idle.
+  // Returns ok=false with a reason that propagates to the API.
   deliver(rec: HarnessDeliveryRecord, text: string): Promise<DispatchResult>
   // the relaunch tail reopen() hands launch() to bring the SAME work back up. claude resumes the same
-  // conversation (`--resume <id>`, the id we pinned at launch). codex's own thread id is un-pinnable and the
-  // spexcode id is NOT a codex flag, so the MVP relaunches FRESH (empty tail → a new codex turn in the same
-  // worktree/record); once codex's real thread id is captured this becomes `resume <thread-id>`.
+  // conversation (`--resume <id>`, the id we pinned at launch). codex's own thread id is un-pinnable at launch,
+  // but the rollout capture gives us the real thread id afterwards, so reopen resumes the SAME conversation via
+  // codex's own `resume <thread-id>` subcommand (the captured harness_session_id). Only a session whose thread
+  // id was never captured (e.g. it died before SessionStart) relaunches FRESH (empty tail) in the same
+  // worktree/record — there is nothing to resume.
   resumeArg(rec: { session: string; harnessSessionId?: string | null }): string
 }
 
@@ -165,11 +171,13 @@ function deliverViaRendezvous(id: string, text: string): Promise<DispatchResult>
 type JsonRpc = { id?: number; method?: string; params?: unknown; result?: unknown; error?: { code?: number; message?: string } }
 
 // The JSON-RPC the delivery handshake speaks, in send order. Method names + param shapes are pinned to codex
-// 0.142.3 (`codex app-server generate-ts`): the visible TUI is launched with `codex --remote unix://<sock>`, so
-// its thread is ALREADY loaded in this server — we must NOT `thread/resume` it (that re-loads a thread the live
-// TUI already owns). Instead we `thread/loaded/list` to PROVE the captured thread is the one the pane is showing,
-// then `turn/start` to inject the user message into that live thread (the model processes it as a real turn).
-export function codexAppServerTurnMessages(threadId: string, text: string, cwd?: string): JsonRpc[] {
+// 0.142.3 (`codex app-server generate-ts` → ClientRequest.ts / v2/*Params.ts): the visible TUI is launched with
+// `codex --remote unix://<sock>`, so its thread is ALREADY loaded in this server — we must NOT `thread/resume`
+// it (that re-loads a thread the live TUI already owns). Instead `thread/loaded/list` PROVES the captured thread
+// is the one the pane is showing, then `thread/read{includeTurns}` reveals whether a turn is in progress (and
+// its id). The 4th, injecting message is CHOSEN from that read — see codexInjectMessage.
+const codexTextInput = (text: string) => [{ type: 'text', text, text_elements: [] }]
+export function codexHandshakeMessages(threadId: string): JsonRpc[] {
   return [
     {
       id: 1,
@@ -181,16 +189,31 @@ export function codexAppServerTurnMessages(threadId: string, text: string, cwd?:
     },
     { method: 'initialized', params: {} },
     { id: 2, method: 'thread/loaded/list', params: {} },
-    {
-      id: 3,
-      method: 'turn/start',
-      params: {
-        threadId,
-        input: [{ type: 'text', text, text_elements: [] }],
-        ...(cwd ? { cwd } : {}),
-      },
-    },
+    { id: 3, method: 'thread/read', params: { threadId, includeTurns: true } },
   ]
+}
+
+// the message that injects `text`. STEER (turn/steer) when an active turn id is known — codex processes it
+// WITHOUT waiting for the current turn to end (the human's "工具调用完就插入": injected the moment the running
+// tool call returns), so a busy agent reacts mid-turn instead of queuing the message for after it stops.
+// `TurnSteerParams` REQUIRES the live turn id as `expectedTurnId` (the server rejects a stale one) — so this is
+// only sent with a turnId read live from the thread, never from SpexCode's session status. When the thread is
+// idle (no active turn id), START a fresh turn (turn/start). `id` is parameterized so a steer that loses the
+// expectedTurnId race (turn ended in the read→steer window) can retry as a turn/start with id 5.
+export function codexInjectMessage(threadId: string, text: string, cwd: string | undefined, activeTurnId: string | null, id = 4): JsonRpc {
+  if (activeTurnId)
+    return { id, method: 'turn/steer', params: { threadId, input: codexTextInput(text), expectedTurnId: activeTurnId } }
+  return { id, method: 'turn/start', params: { threadId, input: codexTextInput(text), ...(cwd ? { cwd } : {}) } }
+}
+
+// the in-progress turn id from a `thread/read{includeTurns}` result, or null when the thread is idle. With
+// includeTurns the Thread carries its turns, each with a TurnStatus ("completed"|"interrupted"|"failed"|
+// "inProgress"); the live turn is the `inProgress` one and its id is exactly what turn/steer's precondition needs.
+export function activeTurnIdFromThread(readResult: unknown): string | null {
+  const thread = (readResult as { thread?: { turns?: Array<{ id?: string; status?: string }> } })?.thread
+  const turns = Array.isArray(thread?.turns) ? thread.turns : []
+  const active = turns.find((t) => t?.status === 'inProgress')
+  return active?.id ?? null
 }
 
 export function codexLaunchCommand(_id: string, codexCmd = process.env.SPEXCODE_CODEX_CMD || 'codex --yolo', serverCmd = process.env.SPEXCODE_CODEX_SERVER_CMD || 'codex', dir = process.env.SPEXCODE_CODEX_SOCKET_DIR || tmpdir()): string {
@@ -251,9 +274,10 @@ const wsText = (s: string) => encodeWsFrame(0x1, Buffer.from(s, 'utf8'))
 function sendCodexAppServerTurn(sock: string, threadId: string, text: string, cwd?: string): Promise<DispatchResult> {
   return new Promise((resolve) => {
     const conn: Socket = createConnection(sock)
-    const msgs = codexAppServerTurnMessages(threadId, text, cwd)   // [initialize(1), initialized, thread/loaded/list(2), turn/start(3)]
+    const hs = codexHandshakeMessages(threadId)   // [initialize(1), initialized, thread/loaded/list(2), thread/read(3)]
     let buf = Buffer.alloc(0), upgraded = false, settled = false
     let fragOp = 0, fragBuf = Buffer.alloc(0)
+    let steering = false   // the id-4 message we sent was a steer → an expectedTurnId race may retry as start(5)
     const done = (r: DispatchResult) => {
       if (settled) return
       settled = true
@@ -261,9 +285,9 @@ function sendCodexAppServerTurn(sock: string, threadId: string, text: string, cw
       try { conn.destroy() } catch { /* */ }
       resolve(r)
     }
-    const timer = setTimeout(() => done({ ok: false, error: 'codex app-server did not confirm turn/start within 5000ms' }), 5000)
+    const timer = setTimeout(() => done({ ok: false, error: 'codex app-server did not confirm the turn within 5000ms' }), 5000)
     conn.on('error', (e) => done({ ok: false, error: `codex app-server connection failed: ${rpcError(e)}` }))
-    conn.on('close', () => done({ ok: false, error: 'codex app-server closed the connection before turn/start was confirmed' }))
+    conn.on('close', () => done({ ok: false, error: 'codex app-server closed the connection before the turn was confirmed' }))
     const send = (m: JsonRpc) => conn.write(wsText(JSON.stringify(m)))
     conn.on('connect', () => {
       const key = randomBytes(16).toString('base64')
@@ -272,15 +296,24 @@ function sendCodexAppServerTurn(sock: string, threadId: string, text: string, cw
     const handle = (json: string) => {
       let m: JsonRpc
       try { m = JSON.parse(json) } catch { return }
-      if (m.error) return done({ ok: false, error: `codex app-server ${m.id ? `request ${m.id}` : 'notification'} failed: ${m.error.message || JSON.stringify(m.error)}` })
-      if (m.id === 1 && m.result) return send(msgs[2])                       // initialize ack → ask which threads are loaded
-      if (m.id === 2 && m.result) {                                         // loaded-thread list → confirm OUR thread is live, then inject
+      if (m.error) {
+        if (m.id === 4 && steering)                                         // active turn ended in the read→steer window → just start a fresh turn
+          return send(codexInjectMessage(threadId, text, cwd, null, 5))
+        return done({ ok: false, error: `codex app-server ${m.id ? `request ${m.id}` : 'notification'} failed: ${m.error.message || JSON.stringify(m.error)}` })
+      }
+      if (m.id === 1 && m.result) return send(hs[2])                       // initialize ack → ask which threads are loaded
+      if (m.id === 2 && m.result) {                                         // loaded-thread list → confirm OUR thread is live, then read it
         const loaded = (m.result as { data?: unknown })?.data
         if (Array.isArray(loaded) && !loaded.includes(threadId))
           return done({ ok: false, error: `Codex thread ${threadId} is not loaded in the app-server (loaded: ${loaded.join(', ') || 'none'}) — prompt NOT delivered` })
-        return send(msgs[3])                                                // thread is live → start the turn
+        return send(hs[3])                                                 // thread is live → read it to decide steer-vs-start
       }
-      if (m.id === 3 && m.result) return done({ ok: true })                 // turn/start accepted → the model is processing the message
+      if (m.id === 3 && m.result) {                                        // thread read → in-progress turn? steer into it; else start a new one
+        const turnId = activeTurnIdFromThread(m.result)
+        steering = !!turnId
+        return send(codexInjectMessage(threadId, text, cwd, turnId))      // id 4: turn/steer the live turn, or turn/start
+      }
+      if ((m.id === 4 || m.id === 5) && m.result) return done({ ok: true }) // steer/start accepted → the model has the message
     }
     const drainFrames = () => {
       for (;;) {
@@ -311,7 +344,7 @@ function sendCodexAppServerTurn(sock: string, threadId: string, text: string, cw
         if (!/^HTTP\/1\.1 101/.test(head)) return done({ ok: false, error: `codex app-server refused the WebSocket upgrade: ${head.split('\r\n')[0]}` })
         upgraded = true
         buf = buf.slice(i + 4)
-        send(msgs[0]); send(msgs[1])   // initialize + the initialized notification; resume/turn follow on the ack
+        send(hs[0]); send(hs[1])   // initialize + the initialized notification; loaded/list → read → inject follow on the acks
       }
       drainFrames()
     })
@@ -319,9 +352,9 @@ function sendCodexAppServerTurn(sock: string, threadId: string, text: string, cw
 }
 
 // codex's deliver: use the Codex app-server JSON-RPC channel that also powers rich clients, never TUI typing.
-// The visible TUI is launched against the same project app-server Unix socket, so this starts a real turn
-// in the same thread the pane is showing. A missing captured thread id or socket is a loud failure; there is no
-// tmux send-keys fallback because that reports "typed", not "accepted".
+// The visible TUI is launched against the same project app-server Unix socket, so this injects into the same
+// thread the pane is showing — steering an in-progress turn or starting one if idle. A missing captured thread
+// id or socket is a loud failure; there is no tmux send-keys fallback because that reports "typed", not "accepted".
 const pexec = promisify(execFile)
 const TMUX_SOCK = process.env.SPEXCODE_TMUX || 'spexcode'
 async function deliverViaCodexAppServer(rec: HarnessDeliveryRecord, text: string): Promise<DispatchResult> {
@@ -441,7 +474,7 @@ export const codexHarness: Harness = {
   slashCommands: codexSlashCommands,
   liveness: (rec, tmuxAlive, runtimeDir) => (tmuxAlive && !!rec.harnessSessionId && existsSync(codexAppServerSock(runtimeDir)) ? 'online' : 'offline'),
   deliver: (rec, text) => deliverViaCodexAppServer(rec, text),
-  resumeArg: (rec) => (rec.harnessSessionId ? `resume ${rec.harnessSessionId}` : ''),   // captured id → resume; else relaunch FRESH
+  resumeArg: (rec) => (rec.harnessSessionId ? `resume ${rec.harnessSessionId}` : ''),   // captured thread id → codex `resume <id>` (SAME conversation); none → relaunch FRESH
 }
 
 // every adapter — materialize iterates this to render each harness's artifacts in one pass.

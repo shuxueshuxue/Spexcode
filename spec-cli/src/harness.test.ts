@@ -3,22 +3,42 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { codexAppServerSock, codexAppServerTurnMessages, codexHarness, codexLaunchCommand } from './harness.js'
+import { activeTurnIdFromThread, codexAppServerSock, codexHandshakeMessages, codexInjectMessage, codexHarness, codexLaunchCommand } from './harness.js'
 
-test('codex app-server turn messages confirm the loaded thread then start a text turn', () => {
-  const msgs = codexAppServerTurnMessages('thr_1', 'hello', '/repo')
+test('codex handshake initializes, confirms the loaded thread, then reads it to decide steer-vs-start', () => {
+  const msgs = codexHandshakeMessages('thr_1')
   assert.equal(msgs[0].method, 'initialize')
   assert.deepEqual(msgs[1], { method: 'initialized', params: {} })
   assert.deepEqual(msgs[2], { id: 2, method: 'thread/loaded/list', params: {} })
-  assert.deepEqual(msgs[3], {
-    id: 3,
+  assert.deepEqual(msgs[3], { id: 3, method: 'thread/read', params: { threadId: 'thr_1', includeTurns: true } })
+})
+
+test('codex inject STARTS a fresh turn when the thread is idle (no active turn id)', () => {
+  assert.deepEqual(codexInjectMessage('thr_1', 'hello', '/repo', null), {
+    id: 4,
     method: 'turn/start',
-    params: {
-      threadId: 'thr_1',
-      input: [{ type: 'text', text: 'hello', text_elements: [] }],
-      cwd: '/repo',
-    },
+    params: { threadId: 'thr_1', input: [{ type: 'text', text: 'hello', text_elements: [] }], cwd: '/repo' },
   })
+})
+
+test('codex inject STEERS the live turn mid-turn when one is in progress', () => {
+  assert.deepEqual(codexInjectMessage('thr_1', 'hello', '/repo', 'turn_9'), {
+    id: 4,
+    method: 'turn/steer',
+    params: { threadId: 'thr_1', input: [{ type: 'text', text: 'hello', text_elements: [] }], expectedTurnId: 'turn_9' },
+  })
+})
+
+test('codex inject can retry a lost steer as a turn/start with id 5', () => {
+  assert.equal(codexInjectMessage('thr_1', 'hi', undefined, null, 5).id, 5)
+  assert.equal(codexInjectMessage('thr_1', 'hi', undefined, null, 5).method, 'turn/start')
+})
+
+test('activeTurnIdFromThread finds the inProgress turn, else null', () => {
+  assert.equal(activeTurnIdFromThread({ thread: { turns: [{ id: 't1', status: 'completed' }, { id: 't2', status: 'inProgress' }] } }), 't2')
+  assert.equal(activeTurnIdFromThread({ thread: { turns: [{ id: 't1', status: 'completed' }] } }), null)
+  assert.equal(activeTurnIdFromThread({ thread: { turns: [] } }), null)
+  assert.equal(activeTurnIdFromThread({}), null)
 })
 
 test('codex launch command starts app-server and remote TUI on same socket', () => {

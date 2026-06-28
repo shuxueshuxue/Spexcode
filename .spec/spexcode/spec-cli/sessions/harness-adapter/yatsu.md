@@ -15,6 +15,24 @@ scenarios:
       tool/envelope is not mapped, spec-of-file and edit-first spec-first go SILENTLY INERT on codex while Bash
       reads still work, so a synthetic Bash-only test passes green and the regression hides — it must be measured
       through the real apply_patch round-trip.
+    code: spec-cli/hooks/harness.sh
+  - name: codex-delivery-steers-midturn-and-resumes
+    description: >-
+      Through a REAL codex session on the project app-server, exercise the adapter's deliver + resume. (a) While
+      the agent is MID-TURN (an `inProgress` turn — a long-running tool call), `spex session send` a message and
+      watch the codex pane: the model must react WITHIN the same running turn, not after it stops. (b) While the
+      agent is IDLE, send again — it must still land. (c) Kill the tmux window and `reopen`: the relaunched TUI
+      must show the SAME prior conversation (unchanged captured thread id), not a blank new thread.
+    expected: >-
+      deliver reads the live thread (`thread/read{includeTurns}`) and chooses `turn/steer` when a turn is
+      `inProgress` — the injected message lands mid-turn (the agent acknowledges it while its background command
+      is still running, reporting a step SHORT of the final one) and the turn continues — and `turn/start` when
+      idle (the message still lands). The failure this locks: always `turn/start` QUEUES a busy agent's message
+      until the current turn ends, so a human's mid-turn steer is silently delayed instead of injected "right
+      after the running tool call completes". `reopen` relaunches `codex resume <captured-thread-id>` so the
+      prior conversation is present and `harness_session_id` is unchanged — the SAME conversation, matching
+      claude's `--resume`, not a fresh thread.
+    code: spec-cli/src/harness.ts
 ---
 # yatsu.md — harness-adapter
 
@@ -25,3 +43,10 @@ patch envelope — which a synthetic Bash-only payload does not exercise (the fi
 Bash and was inert on real apply_patch edits). So this is measured the YATU way: through a real codex session that
 actually edits via apply_patch, comparing the spec-of-file ledger + spec-first sentinel to the Claude baseline. The
 trust / zero-prompt-launch half of the adapter is measured by [[harness-delivery]]'s `self-launch-zero-friction-codex`.
+
+The adapter's OTHER user-observable behaviour is **prompt delivery**: the dashboard input must reach a live codex
+session the way a human expects — injected INTO the running turn when the agent is busy (steer), not parked behind it.
+That is a separate code slice (`harness.ts`'s app-server JSON-RPC), so it carries its own scenario and stales
+independently of the shell-mirror payload parse. It too is measured the YATU way — a real codex session driven busy,
+steered mid-turn through the real `spex session send` surface, then killed and `reopen`ed to prove the conversation
+resumes — never a synthetic socket stub, which would prove only that bytes were written, not that codex acted.

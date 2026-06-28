@@ -1,9 +1,9 @@
 import { writeFileSync, readFileSync, existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir, tmpdir } from 'node:os'
-import { createHash } from 'node:crypto'
-import { createConnection } from 'node:net'
-import { execFile, spawn } from 'node:child_process'
+import { createHash, randomBytes } from 'node:crypto'
+import { createConnection, type Socket } from 'node:net'
+import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { claudeSlashCommands, codexSlashCommands, type SlashCommand } from './slash-commands.js'
 
@@ -164,6 +164,11 @@ function deliverViaRendezvous(id: string, text: string): Promise<DispatchResult>
 
 type JsonRpc = { id?: number; method?: string; params?: unknown; result?: unknown; error?: { code?: number; message?: string } }
 
+// The JSON-RPC the delivery handshake speaks, in send order. Method names + param shapes are pinned to codex
+// 0.142.3 (`codex app-server generate-ts`): the visible TUI is launched with `codex --remote unix://<sock>`, so
+// its thread is ALREADY loaded in this server — we must NOT `thread/resume` it (that re-loads a thread the live
+// TUI already owns). Instead we `thread/loaded/list` to PROVE the captured thread is the one the pane is showing,
+// then `turn/start` to inject the user message into that live thread (the model processes it as a real turn).
 export function codexAppServerTurnMessages(threadId: string, text: string, cwd?: string): JsonRpc[] {
   return [
     {
@@ -171,11 +176,11 @@ export function codexAppServerTurnMessages(threadId: string, text: string, cwd?:
       method: 'initialize',
       params: {
         clientInfo: { name: 'spexcode', title: 'SpexCode', version: '0.0.0' },
-        capabilities: { experimentalApi: true },
+        capabilities: { experimentalApi: true, requestAttestation: false },
       },
     },
     { method: 'initialized', params: {} },
-    { id: 2, method: 'thread/resume', params: { threadId, ...(cwd ? { cwd } : {}) } },
+    { id: 2, method: 'thread/loaded/list', params: {} },
     {
       id: 3,
       method: 'turn/start',
@@ -218,47 +223,93 @@ function rpcError(e: unknown): string {
   return String((e as Error)?.message || e)
 }
 
+// --- minimal RFC6455 client framing ------------------------------------------------------------------------
+// The codex app-server `--listen unix://<sock>` transport is a WebSocket endpoint at path `/rpc` (the visible
+// `codex --remote` TUI upgrades the very same way). So we speak WebSocket over the Unix socket — NOT a raw byte
+// stream, and NOT `codex app-server proxy` (a dumb byte relay that performs no HTTP upgrade, so the server
+// rejects its bytes as an invalid upgrade and closes — the old 502). One JSON-RPC message = one masked text
+// frame; the server's frames come back unmasked. We only ever exchange small frames, so this is deliberately
+// small: text + the control frames (ping→pong, close) we must honor, plus continuation reassembly for safety.
+function encodeWsFrame(opcode: number, payload: Buffer): Buffer {
+  const len = payload.length
+  const mask = randomBytes(4)
+  let header: Buffer
+  if (len < 126) header = Buffer.from([0x80 | opcode, 0x80 | len])
+  else if (len < 65536) header = Buffer.from([0x80 | opcode, 0x80 | 126, (len >> 8) & 0xff, len & 0xff])
+  else { header = Buffer.alloc(10); header[0] = 0x80 | opcode; header[1] = 0x80 | 127; header.writeBigUInt64BE(BigInt(len), 2) }
+  const masked = Buffer.alloc(len)
+  for (let i = 0; i < len; i++) masked[i] = payload[i] ^ mask[i % 4]
+  return Buffer.concat([header, mask, masked])
+}
+const wsText = (s: string) => encodeWsFrame(0x1, Buffer.from(s, 'utf8'))
+
 function sendCodexAppServerTurn(sock: string, threadId: string, text: string, cwd?: string): Promise<DispatchResult> {
   return new Promise((resolve) => {
-    const proc = spawn('codex', ['app-server', 'proxy', '--sock', sock], { stdio: ['pipe', 'pipe', 'pipe'] })
-    let buf = '', stderr = '', settled = false
-    const activeThreadId = threadId
-    const expectedTurnResponseId = 3
+    const conn: Socket = createConnection(sock)
+    const msgs = codexAppServerTurnMessages(threadId, text, cwd)   // [initialize(1), initialized, thread/loaded/list(2), turn/start(3)]
+    let buf = Buffer.alloc(0), upgraded = false, settled = false
+    let fragOp = 0, fragBuf = Buffer.alloc(0)
     const done = (r: DispatchResult) => {
       if (settled) return
       settled = true
       clearTimeout(timer)
-      try { proc.kill() } catch { /* */ }
+      try { conn.destroy() } catch { /* */ }
       resolve(r)
     }
     const timer = setTimeout(() => done({ ok: false, error: 'codex app-server did not confirm turn/start within 5000ms' }), 5000)
-    proc.on('error', (e) => done({ ok: false, error: `failed to start codex app-server proxy: ${rpcError(e)}` }))
-    proc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString('utf8') })
-    proc.on('close', (code) => done({ ok: false, error: `codex app-server proxy exited before turn/start confirmation (${code ?? 'signal'}): ${stderr.trim()}` }))
-    const sendTurn = (tid: string, resumeId: number, turnId: number) => {
-      proc.stdin.write(JSON.stringify({ id: resumeId, method: 'thread/resume', params: { threadId: tid, ...(cwd ? { cwd } : {}) } }) + '\n')
-      proc.stdin.write(JSON.stringify({
-        id: turnId,
-        method: 'turn/start',
-        params: { threadId: tid, input: [{ type: 'text', text, text_elements: [] }], ...(cwd ? { cwd } : {}) },
-      }) + '\n')
-    }
-    proc.stdout.on('data', (chunk: Buffer) => {
-      buf += chunk.toString('utf8')
-      let i: number
-      while ((i = buf.indexOf('\n')) >= 0) {
-        const line = buf.slice(0, i); buf = buf.slice(i + 1)
-        if (!line.trim()) continue
-        let msg: JsonRpc
-        try { msg = JSON.parse(line) } catch { continue }
-        if (msg.error) return done({ ok: false, error: `codex app-server ${msg.id ? `request ${msg.id}` : 'notification'} failed: ${msg.error.message || JSON.stringify(msg.error)}` })
-        if (msg.id === expectedTurnResponseId) return done({ ok: true })
-      }
+    conn.on('error', (e) => done({ ok: false, error: `codex app-server connection failed: ${rpcError(e)}` }))
+    conn.on('close', () => done({ ok: false, error: 'codex app-server closed the connection before turn/start was confirmed' }))
+    const send = (m: JsonRpc) => conn.write(wsText(JSON.stringify(m)))
+    conn.on('connect', () => {
+      const key = randomBytes(16).toString('base64')
+      conn.write(`GET /rpc HTTP/1.1\r\nHost: localhost\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: ${key}\r\n\r\n`)
     })
-    const init = codexAppServerTurnMessages('__placeholder__', text, cwd)[0]
-    proc.stdin.write(JSON.stringify(init) + '\n')
-    proc.stdin.write(JSON.stringify({ method: 'initialized', params: {} }) + '\n')
-    sendTurn(activeThreadId, 2, 3)
+    const handle = (json: string) => {
+      let m: JsonRpc
+      try { m = JSON.parse(json) } catch { return }
+      if (m.error) return done({ ok: false, error: `codex app-server ${m.id ? `request ${m.id}` : 'notification'} failed: ${m.error.message || JSON.stringify(m.error)}` })
+      if (m.id === 1 && m.result) return send(msgs[2])                       // initialize ack → ask which threads are loaded
+      if (m.id === 2 && m.result) {                                         // loaded-thread list → confirm OUR thread is live, then inject
+        const loaded = (m.result as { data?: unknown })?.data
+        if (Array.isArray(loaded) && !loaded.includes(threadId))
+          return done({ ok: false, error: `Codex thread ${threadId} is not loaded in the app-server (loaded: ${loaded.join(', ') || 'none'}) — prompt NOT delivered` })
+        return send(msgs[3])                                                // thread is live → start the turn
+      }
+      if (m.id === 3 && m.result) return done({ ok: true })                 // turn/start accepted → the model is processing the message
+    }
+    const drainFrames = () => {
+      for (;;) {
+        if (buf.length < 2) return
+        const b0 = buf[0], b1 = buf[1], op = b0 & 0x0f, fin = (b0 & 0x80) !== 0, masked = (b1 & 0x80) !== 0
+        let len = b1 & 0x7f, off = 2
+        if (len === 126) { if (buf.length < 4) return; len = buf.readUInt16BE(2); off = 4 }
+        else if (len === 127) { if (buf.length < 10) return; len = Number(buf.readBigUInt64BE(2)); off = 10 }
+        const dataStart = off + (masked ? 4 : 0)
+        if (buf.length < dataStart + len) return
+        let payload = buf.slice(dataStart, dataStart + len)
+        if (masked) { const mk = buf.slice(off, off + 4); const u = Buffer.alloc(len); for (let i = 0; i < len; i++) u[i] = payload[i] ^ mk[i % 4]; payload = u }
+        buf = buf.slice(dataStart + len)
+        if (op === 0x8) return done({ ok: false, error: 'codex app-server sent a WebSocket close before turn/start was confirmed' })
+        if (op === 0x9) { conn.write(encodeWsFrame(0xa, payload)); continue }   // ping → pong
+        if (op === 0xa) continue                                                // pong
+        if (op === 0x0) fragBuf = Buffer.concat([fragBuf, payload])             // continuation
+        else { fragOp = op; fragBuf = payload }
+        if (fin) { if (fragOp === 0x1) handle(fragBuf.toString('utf8')); fragBuf = Buffer.alloc(0); fragOp = 0 }
+      }
+    }
+    conn.on('data', (chunk: Buffer) => {
+      buf = Buffer.concat([buf, chunk])
+      if (!upgraded) {
+        const i = buf.indexOf('\r\n\r\n')
+        if (i < 0) return
+        const head = buf.slice(0, i).toString('utf8')
+        if (!/^HTTP\/1\.1 101/.test(head)) return done({ ok: false, error: `codex app-server refused the WebSocket upgrade: ${head.split('\r\n')[0]}` })
+        upgraded = true
+        buf = buf.slice(i + 4)
+        send(msgs[0]); send(msgs[1])   // initialize + the initialized notification; resume/turn follow on the ack
+      }
+      drainFrames()
+    })
   })
 }
 

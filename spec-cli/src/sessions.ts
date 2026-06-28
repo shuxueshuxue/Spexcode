@@ -214,10 +214,19 @@ function promptPreview(prompt: string, n = 60): string {
   return first.length > n ? first.slice(0, n - 1) + '…' : first
 }
 
-// the human label for a session row: a user-chosen NAME (the rename override) wins over everything; else
-// the spec node it references, else a prompt-derived title (node-agnostic sessions), else the branch, else
-// the id. Used everywhere a session is named for a human. The frontend mirrors this precedence (session.js).
+// the STABLE human label for a session row: a user-chosen NAME (the rename override) wins over everything;
+// else the spec node it references, else a prompt-derived title (node-agnostic sessions), else the branch,
+// else the id. Stable across turns — used for tables/selectors. The frontend mirrors this (session.js
+// sessionName).
 export const sessionLabel = (s: Session): string => s.name || s.node || s.title || s.branch || s.id
+
+// @@@ sessionHeadline - the cross-surface HEADLINE: the SAME chain the board card shows (frontend session.js
+// `sessionHeadline`). A user-chosen NAME wins, else the worker's LIVE self-summary (`activity`, the Claude
+// Code pane title — see [[session-activity]]), else a fuller prompt preview, else node/title/branch/id. Use
+// it wherever a session is NAMED FOR A HUMAN in CROSS-SESSION comms (the reply-channel footer, the watch
+// greeting), so an agent recognises a peer the way it reads the board — NOT the bare 7-word prompt
+// truncation `title` that `sessionLabel` stops at. `sessionLabel` stays the stable name for tables/selectors.
+export const sessionHeadline = (s: Session): string => s.name || s.activity || s.promptPreview || s.node || s.title || s.branch || s.id
 
 async function tmux(args: string[]): Promise<string> {
   const { stdout } = await pexec('tmux', ['-L', TMUX_SOCK, ...args], { encoding: 'utf8' })
@@ -335,18 +344,25 @@ async function paneTitles(): Promise<Map<string, string>> {
   try { out = await tmux(['list-panes', '-a', '-F', '#{session_name}\t#{pane_title}']) } catch { return m }
   for (const line of out.split('\n')) {
     const tab = line.indexOf('\t'); if (tab < 0) continue
-    const id = line.slice(0, tab), title = cleanActivity(line.slice(tab + 1))
+    const id = line.slice(0, tab), title = selfSummary(line.slice(tab + 1))
     if (id && title) m.set(id, title)
   }
   return m
 }
 
-// strip Claude Code's leading status glyph (✳ when idle, a braille spinner frame while working) plus the
-// space after it: the dashboard draws its own status dot, and a frozen spinner frame is just noise — keep
-// only the summary text. Empty after stripping → null (no subtitle).
-function cleanActivity(raw: string): string | null {
-  const t = raw.replace(/^[\s✳✶✻✽✢·⠀-⣿]+/u, '').trim()
-  return t || null
+// @@@ selfSummary - the agent's OWN live one-line description, parsed from its tmux pane title — the SINGLE
+// place the "is this the agent speaking?" rule lives, exported so it is unit-auditable. Claude Code sets that
+// title via an OSC escape and ALWAYS leads it with a status glyph: ✳ (and its ✶✻✽✢ blink frames) when idle, a
+// braille spinner frame (U+2800–U+28FF) while working. That leading glyph is the only reliable proof the
+// title is the agent and not tmux's default — which, from pane birth until the first turn, is the HOST NAME
+// (e.g. `ser581555022561`) or a bare `Claude Code` splash. So the glyph is REQUIRED: no leading glyph → null,
+// and the caller keeps showing the launch-prompt placeholder instead of flickering through the host name and
+// splash. The leading glyph run (with the spaces/`·` between and after) is stripped — the dashboard draws its
+// own status dot, a frozen spinner frame is just noise — leaving only the summary text (null if it is empty).
+// ONE regex is the single source of the glyph rule: it gates (requires ≥1 glyph) and strips in one match.
+export function selfSummary(paneTitle: string): string | null {
+  const m = /^[\s·]*(?:[✳✶✻✽✢⠀-⣿][\s·]*)+(.*)$/u.exec(paneTitle)
+  return m ? (m[1].trim() || null) : null
 }
 
 // @@@ launchedAt - when we last started a tmux window for an id (set in launch()). claude needs ~15-20s
@@ -612,13 +628,17 @@ export function ownSessionId(): string | null {
 // recipient; this stamps WHO sent it and HOW to reply as a one-line insert appended to the delivered
 // message, so the recipient agent CAN reply (or ignore) and the reply rides the SAME send back into the
 // sender's prompt — a reply channel, no workflow enforcement, just a prompt insert. The sender is the
-// SENDING agent's OWN session (id from [[dispatch]]'s send-command process via ownSessionId, label its
-// board row); its FULL id is stamped so the reply addresses exactly one session, never a prefix. A human
-// running `send` from a plain shell has no session id (sender=null) → the bare message, no hint, no loop.
+// SENDING agent's OWN session (id from [[dispatch]]'s send-command process via ownSessionId, `label` its
+// board HEADLINE — sessionHeadline, the same title the recipient reads on the board); its FULL id is stamped
+// so the reply addresses exactly one session, never a prefix. A human running `send` from a plain shell has
+// no session id (sender=null) → the bare message, no hint, no loop.
+// @@@ delimited as a SESSION TITLE - the headline is wrapped `session "<headline>" (<id>)` so the recipient
+// reads it AS a session title, not as prose bleeding into the message (an un-delimited prompt-derived title
+// was unrecognisable as a name). A bare-id label (no better name in the chain) needs no quotes.
 export type MsgSender = { id: string; label: string | null }
 export function withSenderHint(text: string, sender: MsgSender | null): string {
   if (!sender) return text
-  const who = sender.label ? `${sender.label} (${sender.id})` : sender.id
+  const who = sender.label && sender.label !== sender.id ? `session "${sender.label}" (${sender.id})` : `session ${sender.id}`
   return `${text}\n\n— from ${who}. To reply: spex session send ${sender.id} "<your reply>"`
 }
 async function postJSON(path: string, body: unknown): Promise<void> {

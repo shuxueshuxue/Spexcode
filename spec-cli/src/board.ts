@@ -2,7 +2,7 @@ import { basename } from 'path'
 import { loadSpecs, deriveStatus } from './specs.js'
 import { resolveLayout, readConfig } from './layout.js'
 import { listSessions } from './sessions.js'
-import { repoRoot, driftIndex } from './git.js'
+import { repoRoot, driftIndex, historyIndex } from './git.js'
 import { residentForgeView } from '../../spec-forge/src/resident.js'
 import { evalContext, evalTimeline } from '../../spec-yatsu/src/evaltab.js'
 
@@ -30,9 +30,11 @@ export async function buildBoard() {
   // OVERLAY), and listSessions takes its liveness from ONE batched tmux snapshot. Nothing here re-walks git.
   const root = repoRoot()
   const [layout, sessions, specs] = await Promise.all([resolveLayout(), listSessions(), loadSpecs()])
-  // the eval fold's freshness axis: a WARM hit here — loadSpecs already computed this HEAD's driftIndex, so
-  // this is the same cached walk, fetched once and reused for every yatsu node (never re-run per node).
+  // the eval fold's freshness axes: WARM hits — loadSpecs already computed this HEAD's drift + history
+  // indices, so these are the same cached walks, fetched once and reused for every yatsu node (the history
+  // index drives the rename-safe scenario axis, mirroring a spec node's own freshness).
   const idx = await driftIndex(root)
+  const hidx = await historyIndex(root)
   const worktrees = layout.worktrees.filter((w) => !w.isMain)
   // resolveLayout already zeroed ops for unmanaged worktrees, so this is just "has pending changes".
   const opWts = worktrees.filter((w) => w.ops && w.ops.length)
@@ -127,7 +129,7 @@ export async function buildBoard() {
   // its presence IS the eval tab's hasYatsu signal — absent = no scenarios, an empty array = no reading yet.
   // `scenarios` is the DECLARED set folded alongside, so the tile/focus-panel can count "X of Y satisfied"
   // (and name the unmeasured ones), not just score the readings that happen to exist (see [[yatsu-score-badge]]).
-  const ectx = evalContext(root, specs, idx)
+  const ectx = evalContext(root, specs, idx, hidx)
   await Promise.all(nodes.map(async (n) => {
     const tl = await evalTimeline(n.id, ectx)
     if (tl.hasYatsu) { n.evals = tl.readings; n.scenarios = tl.scenarios }

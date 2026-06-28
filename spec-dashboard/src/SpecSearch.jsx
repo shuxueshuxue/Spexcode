@@ -3,6 +3,7 @@ import { STATUS } from './SpecNode.jsx'
 import { scenarioStates } from './score.jsx'
 import { STATUS_COLOR, sessionName } from './session.js'
 import { useT } from './i18n/index.jsx'
+import { rankDocs } from '../../spec-cli/src/ranker.ts'
 
 // @@@ SpecSearch - the `/` palette. It searches the board's FOUR planes at once — spec nodes, live
 // sessions, the issues bound to nodes, and those nodes' scenarios — through ONE uniform pipeline: every
@@ -24,11 +25,10 @@ const specPath = (p) => (p || '').replace(/^\.spec\//, '').replace(/\/spec\.md$/
 // query reads as an ordered jump-list rather than an interleaved jumble.
 const KIND_ORDER = { spec: 0, session: 1, issue: 2, scenario: 3 }
 
-// @@@ buildEntries - fold the three planes into one flat list of uniform entries. Each carries the tiers
-// rank() scores (primary = the human name, secondary = the stable id/number, tertiary = the path/context)
-// plus what a row needs to render (kind, dot colour, title, sub) and the `target` App acts on. Issues are
-// flattened OFF their host node (board folds `node.issues` on); each remembers its node so picking it
-// focuses where the issue lives — an issue DOES against a node, so jumping to the node is the right landing.
+// @@@ buildEntries - fold the FOUR planes into one flat list of uniform entries. Each carries what a row
+// renders (kind, dot colour, title, sub) and the `target` App acts on, PLUS the three fields the shared scorer
+// reads — name / desc / body — mapped per plane. Issues and scenarios are flattened OFF their host node (board
+// folds `node.issues`/`node.scenarios` on); each remembers its node so picking it focuses where it lives.
 function buildEntries(specs, sessions) {
   const entries = []
   for (const s of specs) {
@@ -37,7 +37,11 @@ function buildEntries(specs, sessions) {
       kind: 'spec', key: `spec:${s.id}`, target: s.id,
       color: (STATUS[s.status] || STATUS.pending).color,
       title: s.title || s.id, sub: path,
-      primary: s.title || s.id, secondary: s.id, tertiary: path,
+      // the shared ranker's three fields, the SAME map the floor uses for a node: name = title+id, desc = the
+      // one-line summary, body = the spec prose. So the palette ranks a node by the maths `spex search` runs —
+      // prose reached via BM25, not the old whole-query substring. (Path is shown in `sub` but, like the floor,
+      // no longer a search field — its segments are the node names/prose already in name+body.)
+      name: `${s.title || s.id} ${s.id}`, desc: s.desc || '', body: s.body || '',
     })
     for (const i of s.issues || []) {
       const open = (i.state || '').toLowerCase() === 'open'
@@ -45,17 +49,15 @@ function buildEntries(specs, sessions) {
         kind: 'issue', key: `issue:${s.id}:${i.number}`, target: s.id,
         color: open ? 'var(--green)' : 'var(--muted)',
         title: i.title, sub: `#${i.number} · ${path}`,
-        primary: i.title || '', secondary: `#${i.number}`, tertiary: path,
+        name: i.title || '', desc: `#${i.number}`, body: '',
       })
     }
-    // scenarios DO against a node like issues; flattened OFF it (board folds `node.scenarios`/`node.evals`),
-    // each matching on its name (primary) and its `expected` prose (tertiary), and landing on its host node.
     for (const sc of scenarioStates(s.scenarios, s.evals)) {
       entries.push({
         kind: 'scenario', key: `scenario:${s.id}:${sc.name}`, target: s.id,
         color: SCEN_COLOR[sc.state] || 'var(--cyan)',
         title: sc.name, sub: path,
-        primary: sc.name || '', secondary: '', tertiary: `${sc.expected || ''} ${path}`,
+        name: sc.name || '', desc: '', body: sc.expected || '',
       })
     }
   }
@@ -66,38 +68,38 @@ function buildEntries(specs, sessions) {
       kind: 'session', key: `session:${s.id}`, target: s.id,
       color: STATUS_COLOR[s.status] || STATUS_COLOR.offline,
       title: name, sub,
-      primary: name || '', secondary: s.id, tertiary: sub,
+      name: name || '', desc: s.status || '', body: s.promptPreview || s.note || '',
     })
   }
   return entries
 }
 
-// rank entries for the query: a hit in the human name (primary) outranks the id/number (secondary), and a
-// prefix beats a mid-string hit within each; the path/context (tertiary) is the lowest match. Empty query
-// lists everything (a plain jump-list). Ties group by plane, then by shorter name (most specific floats up).
+// rank entries via the SHARED scorer (spec-cli/src/ranker.ts) — the same maths `spex search` runs server-side,
+// so the palette no longer ranks node prose more crudely than the agent. An empty query is the plain
+// jump-list (plane, then shorter name).
+//
+// Cross-plane: rank EACH plane separately, then INTERLEAVE by plane (a node, a session, an issue, a scenario,
+// repeat). NOT one rankDocs over all four — nodes carry far richer text than sparse sessions/issues, so a
+// single relevance list buries the non-node planes (a node-heavy query like "session" returns only nodes,
+// verified in-browser). Per-plane ranking keeps the shared scorer's quality WITHIN a plane; the interleave
+// keeps every matching plane visible — the palette's whole point. (The floor has only nodes, so it needs none
+// of this; this cross-plane assembly is the one thing the palette adds on top of the shared core.)
+const PLANES = ['spec', 'session', 'issue', 'scenario']
 function rank(entries, query) {
-  const q = query.trim().toLowerCase()
-  const scored = []
-  for (const e of entries) {
-    const p = e.primary.toLowerCase()
-    const s = e.secondary.toLowerCase()
-    const t = e.tertiary.toLowerCase()
-    let score
-    if (!q) score = 5
-    else if (p.startsWith(q)) score = 0
-    else if (s.startsWith(q)) score = 1
-    else if (p.includes(q)) score = 2
-    else if (s.includes(q)) score = 3
-    else if (t.includes(q)) score = 4
-    else continue
-    scored.push({ e, score })
+  const jump = (a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || a.name.length - b.name.length || a.key.localeCompare(b.key)
+  if (!query.trim()) return entries.slice().sort(jump).slice(0, 15)
+  const ranked = {}
+  for (const k of PLANES) {
+    const docs = entries.filter((e) => e.kind === k).sort((a, b) => a.name.length - b.name.length || a.key.localeCompare(b.key))
+    ranked[k] = rankDocs(query, docs.map((e) => ({ ref: e, name: e.name, desc: e.desc, body: e.body })), { limit: 15 }).map((r) => r.ref)
   }
-  scored.sort((a, b) =>
-    a.score - b.score ||
-    KIND_ORDER[a.e.kind] - KIND_ORDER[b.e.kind] ||
-    a.e.primary.length - b.e.primary.length ||
-    a.e.key.localeCompare(b.e.key))
-  return scored.slice(0, 15).map((x) => x.e)
+  const out = []
+  for (let i = 0; out.length < 15; i++) {
+    let added = false
+    for (const k of PLANES) if (ranked[k][i] && out.length < 15) { out.push(ranked[k][i]); added = true }
+    if (!added) break
+  }
+  return out
 }
 
 export default function SpecSearch({ specs, sessions, onPick, onClose }) {

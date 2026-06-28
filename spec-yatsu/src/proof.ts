@@ -1,5 +1,5 @@
 import { dirname } from 'node:path'
-import { git, gitA, repoRoot, driftIndex, type ReviewDiffFile } from '../../spec-cli/src/git.js'
+import { git, gitA, repoRoot, driftIndex, historyIndex, type ReviewDiffFile } from '../../spec-cli/src/git.js'
 import { loadSpecs } from '../../spec-cli/src/specs.js'
 import { mainBranch } from '../../spec-cli/src/layout.js'
 import { reviewPayload } from '../../spec-cli/src/sessions.js'
@@ -98,7 +98,7 @@ export async function buildProofModel(id: string): Promise<ProofModel | null> {
   // the backend (the node paths/titles/hues are branch-shared); only the readings + drift are per-worktree.
   const wtPath = worktreePathForBranch(payload.branch)
   const ctxRoot = wtPath ?? repoRoot()
-  const ctx = evalContext(ctxRoot, specs, await driftIndex(ctxRoot))
+  const ctx = evalContext(ctxRoot, specs, await driftIndex(ctxRoot), await historyIndex(ctxRoot))
 
   // enrich each changed file with its unified diff + full before/after content (derived from the session
   // worktree at the merge-base ↔ HEAD), so the proof can drill summary → diff → whole-file comparison with no
@@ -332,7 +332,7 @@ function renderReading(r: ProofReading): string {
     : ev.kind === 'transcript' ? `<pre class="transcript">${esc(ev.text)}</pre>`
     : ev.kind === 'miss' ? `<div class="noev">⌀ miss original file — the evidence bytes were pruned</div>`
     : `<div class="noev">attested without a capture</div>`
-  const stale = r.fresh ? '' : `<span class="stale" title="${esc(r.staleAxes.join(', '))} moved since the reading">stale</span>`
+  const stale = r.fresh ? '' : `<span class="stale" title="${esc(r.staleAxes.join(', '))} changed since the reading">stale</span>`
   const note = r.verdict?.status === 'note' && r.verdict.note ? `<div class="rnote"><b>note</b> ${esc(r.verdict.note)}</div>` : ''
   return `<div class="reading">
     <div class="rhead">

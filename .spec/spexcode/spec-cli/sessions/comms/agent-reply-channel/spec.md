@@ -25,12 +25,20 @@ the bare message with no hint — the loop closes only between two agents.
 ## expanded spec
 
 **The wrap is `withSenderHint`, a pure prompt insert** ([[dispatch]]'s `sessions.ts`). Given the message
-text and a sender `{ id, label }`, it returns the message with one line appended:
-`— from <label> (<id>). To reply: spex session send <id> "<your reply>"`. The reply command is a
+text and a sender `{ id, label }`, it appends one line:
+`— from session "<label>" (<id>). To reply: spex session send <id> "<your reply>"`. The reply command is a
 **runnable** `spex session send` at the sender's **FULL id** — the recipient pastes intent into it and the
-reply travels the identical path back. When the sender has no label its id alone names it (no empty
-parens). When there is **no sender at all** the message passes through **unchanged** — no hint, no
-half-built reply loop.
+reply travels the identical path back.
+
+**The sender label is the board HEADLINE, not the bare prompt title.** The name comes from `sessionHeadline`
+(the unified cross-surface title — the SAME chain the board card shows: a chosen name ▸ the live Claude-Code
+self-summary `activity` ▸ a fuller prompt preview ▸ node/title/branch/id), NOT the stable `sessionLabel`
+which stops at the 7-word prompt-truncation `title`. So the recipient recognises the sender the way it reads
+the board — a concise "what they're doing", not a slice of their raw launch prompt. And the label is
+**delimited** as `session "<headline>"` so it reads AS a session title, not as prose bleeding into the
+message. A sender with no richer name than its id is stamped `session <id>` (no empty quotes/parens); with
+**no sender at all** the message passes through **unchanged** — no hint, no half-built reply loop. The watch
+handshake greeting ([[comms-edge]]) names the watcher by the same `sessionHeadline`, delimited the same way.
 
 **The sender is resolved in the send command's OWN process, because only it knows who's sending.** The
 injection itself happens in the backend (the rendezvous socket — [[dispatch]]), a *different* process that

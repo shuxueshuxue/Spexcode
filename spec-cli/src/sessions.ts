@@ -332,11 +332,12 @@ const BOOT_GRACE_MS = 25000   // > waitForReady's 15s timeout, covering the obse
 // window; only past it (socket still gone) is it genuinely 'offline'.
 function liveness(rec: SessRec, live: Set<string>): Liveness {
   if (!rec.session) return 'offline'
-  // ask the ADAPTER ([[harness-adapter]]): claude = tmux up AND its rendezvous socket present; codex = tmux up
-  // (the codex process holds the pane). The 'starting' grace stays here (a launcher concern): a just-launched
-  // agent whose online-signal hasn't appeared yet reads 'starting' for the boot window, only past it 'offline'.
+  // ask the ADAPTER ([[harness-adapter]]): claude = tmux up AND its rendezvous socket present; codex = tmux up,
+  // app-server up, AND native thread id captured. The 'starting' grace stays here (a launcher concern): a
+  // just-launched agent whose online-signal hasn't appeared yet reads 'starting' for the boot window, only past
+  // it 'offline'.
   const h = harnessById(rec.harness || defaultHarness.id)
-  if (h.liveness(rec.session, live.has(rec.session), runtimeRoot()) === 'online') return 'online'
+  if (h.liveness(rec, live.has(rec.session), runtimeRoot()) === 'online') return 'online'
   const at = launchedAt.get(rec.session)
   return at && Date.now() - at < BOOT_GRACE_MS ? 'starting' : 'offline'
 }
@@ -744,7 +745,9 @@ function deleteNodePrompt(nodeId: string, relPath: string | null, rest: string):
 const OCCUPIES_SLOT = new Set<DisplayStatus>(['working', 'parked', 'starting'])  // starting's boot window is also held via `launching`
 function isOccupying(s: Session, live: Set<string>): boolean {
   if (!OCCUPIES_SLOT.has(s.status)) return false                          // waiting-on-human / proposed / queued / dead → free
-  return harnessById(s.harness || defaultHarness.id).liveness(s.id, live.has(s.id), runtimeRoot()) === 'online'  // and only while the agent is genuinely live (its adapter's channel)
+  const rec = readRecord(s.id)
+  if (!rec) return false
+  return harnessById(rec.harness || defaultHarness.id).liveness(rec, live.has(rec.session), runtimeRoot()) === 'online'  // and only while the agent is genuinely live (its adapter's channel)
 }
 // sessions we've JUST launched whose agent hasn't come online yet. During that boot window reconcile reads them
 // `offline` (the adapter's online-signal not up yet) and isOccupying would miss them, so the drainer would
@@ -907,8 +910,9 @@ export async function newSession(node: string | null, prompt: string, harness: s
 // the start line via send-keys and returns immediately, so the agent's online-signal does not exist yet on
 // return. Poll the ADAPTER's liveness ([[harness-adapter]]) at a small interval up to a bounded timeout so the
 // agent counts as "ready" only once it is genuinely online — claude: its rendezvous socket up; codex: its
-// process holding the tmux pane — then a follow-on dispatch (merge / send) lands in a LIVE agent instead of
-// racing the boot and failing loud on a session that is actually recovering. BOUNDED + fail-loud preserved: a
+// project app-server socket up AND native thread id captured — then a follow-on dispatch (merge / send) lands
+// in a LIVE agent instead of racing the boot and failing loud on a session that is actually recovering.
+// BOUNDED + fail-loud preserved: a
 // genuinely dead/unrecoverable agent never goes online, so after the timeout we return and the caller's own
 // deliver() fails loud exactly as before — this only closes the startup race, it adds no fallback.
 const SOCKET_READY_TIMEOUT_MS = 15000
@@ -916,7 +920,8 @@ const SOCKET_POLL_MS = 200
 async function waitForReady(id: string, harness: Harness, timeoutMs = SOCKET_READY_TIMEOUT_MS): Promise<boolean> {
   const deadline = Date.now() + timeoutMs
   for (;;) {
-    if (harness.liveness(id, await alive(id), runtimeRoot()) === 'online') return true
+    const rec = readRecord(id)
+    if (rec && harness.liveness(rec, await alive(id), runtimeRoot()) === 'online') return true
     if (Date.now() >= deadline) return false
     await new Promise((r) => setTimeout(r, SOCKET_POLL_MS))
   }
@@ -925,9 +930,10 @@ async function waitForReady(id: string, harness: Harness, timeoutMs = SOCKET_REA
 // @@@ reopen - "back to working": clear any proposal → active, then ONE relaunch path. The agent needs
 // (re)starting iff it isn't running for this id — the SAME deterministic liveness the adapter computes
 // ([[harness-adapter]]): claude offline = no tmux OR no rendezvous socket (claude exited, even though the
-// wrapper/shell may still hold the pane); codex offline = no tmux. When it IS offline we drop any stale pane
-// and launch a fresh window through the adapter's resumeArg — claude `--resume <id>` (the SAME conversation),
-// codex a FRESH turn in the same worktree (its thread id is un-pinnable until captured). Then we WAIT for the
+// wrapper/shell may still hold the pane); codex offline = no tmux, no project app-server, or no captured native
+// thread id. When it IS offline we drop any stale pane and launch a fresh window through the adapter's resumeArg
+// — claude `--resume <id>` (the SAME conversation), codex `resume <thread-id>` once captured, else a fresh TUI
+// in the same worktree/record. Then we WAIT for the
 // agent to come online (waitForReady) before returning, so a caller that dispatches immediately after reopen
 // (e.g. mergeSession) addresses a LIVE agent rather than racing the boot. If it's still live we only cleared
 // the proposal — no wait. Also serves the plain "relaunch" of an offline (already-active) one. Fail-loud is
@@ -937,7 +943,7 @@ export async function reopen(id: string): Promise<boolean> {
   if (!wt) return false
   const h = harnessById(wt.rec.harness || defaultHarness.id)
   writeRecord({ ...wt.rec, status: 'active', proposal: null })
-  if (h.liveness(id, await alive(id), runtimeRoot()) !== 'online') {
+  if (h.liveness(wt.rec, await alive(id), runtimeRoot()) !== 'online') {
     await tmuxOk(['kill-session', '-t', id])   // drop a dead/offline pane if any (no-op when none)
     await launch(id, wt.path, h.resumeArg(wt.rec).trim(), h)
     await waitForReady(id, h)   // a relaunched agent is "ready" only once the adapter reads it online

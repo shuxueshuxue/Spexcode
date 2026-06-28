@@ -20,6 +20,7 @@ import { claudeSlashCommands, codexSlashCommands, type SlashCommand } from './sl
 // or ALL adapters at once (materialize renders every harness's artifacts).
 
 export type HarnessId = 'claude' | 'codex'
+export type HarnessLivenessRecord = { session: string; harnessSessionId?: string | null }
 
 export interface Harness {
   readonly id: HarnessId
@@ -64,8 +65,9 @@ export interface Harness {
   // (one tmux snapshot for the whole list — see sessions.ts liveTmux), and the adapter adds ONLY its own
   // channel check. claude: online iff the tmux window is up AND its reclaude rendezvous socket exists (the
   // socket is the truth claude is alive — the pane command is the wrapper/shell while claude runs as a child).
-  // codex: online iff the tmux window is up AND its project-scoped app-server socket exists.
-  liveness(id: string, tmuxAlive: boolean, runtimeDir?: string): 'online' | 'offline'
+  // codex: online iff the tmux window is up, its project-scoped app-server socket exists, AND its native
+  // thread id has been captured; the socket is a project control plane, not session identity.
+  liveness(rec: HarnessLivenessRecord, tmuxAlive: boolean, runtimeDir?: string): 'online' | 'offline'
   // deliver a follow-up prompt to a LIVE session and report whether it landed. claude: through the rendezvous
   // control socket, which injects + submits the prompt and CONFIRMS the daemon accepted it (loud failure on a
   // missing/dead socket — never a silent degradation). codex: JSON-RPC `turn/start` on the same app-server
@@ -363,7 +365,7 @@ export const claudeHarness: Harness = {
   shim: (dispatch, spex) => buildShim('claude', CLAUDE_EVENTS, dispatch, spex),
   writeTrust: () => { /* Claude relies on folder-trust — nothing to write */ },
   slashCommands: claudeSlashCommands,
-  liveness: (id, tmuxAlive) => (tmuxAlive && existsSync(rvSock(id)) ? 'online' : 'offline'),
+  liveness: (rec, tmuxAlive) => (tmuxAlive && existsSync(rvSock(rec.session)) ? 'online' : 'offline'),
   deliver: (rec, text) => deliverViaRendezvous(rec.session, text),
   resumeArg: (rec) => `--resume ${rec.session}`,
 }
@@ -381,7 +383,7 @@ export const codexHarness: Harness = {
   shim: (dispatch, spex) => buildShim('codex', CODEX_EVENTS, dispatch, spex),
   writeTrust: (proj, cmdFor) => writeCodexTrust(proj, CODEX_EVENTS, cmdFor),
   slashCommands: codexSlashCommands,
-  liveness: (_id, tmuxAlive, runtimeDir) => (tmuxAlive && existsSync(codexAppServerSock(runtimeDir)) ? 'online' : 'offline'),
+  liveness: (rec, tmuxAlive, runtimeDir) => (tmuxAlive && !!rec.harnessSessionId && existsSync(codexAppServerSock(runtimeDir)) ? 'online' : 'offline'),
   deliver: (rec, text) => deliverViaCodexAppServer(rec, text),
   resumeArg: (rec) => (rec.harnessSessionId ? `resume ${rec.harnessSessionId}` : ''),   // captured id → resume; else relaunch FRESH
 }

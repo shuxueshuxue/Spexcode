@@ -58,11 +58,13 @@ independent facts, computed independently:
 
 - **lifecycle** — *what the work needs*, **authored by the agent** (`active`/`idle`/`awaiting`/`parked`/
   `error`/`asking`/`queued`), never inferred — the `.session/state` value above.
-- **liveness** — *whether the agent process is up*, **derived by the runtime for every session regardless
-  of lifecycle**: `offline` (no tmux window for the id, or its rendezvous socket never opened — genuinely
-  dead), transient `starting` (window up, socket still booting — see [[launch]]), else `online`. Read from
-  the **rendezvous socket, never the pane's foreground command**: claude holds the socket open while it
-  lives; the pane command is the wrapper/shell.
+- **liveness** — *whether the agent process is up and addressable*, **derived by the runtime for every
+  session regardless of lifecycle**: `offline` (no tmux window for the id, or the harness adapter's online
+  signal never became session-addressable — genuinely dead), transient `starting` (window up, adapter signal
+  still booting — see [[launch]]), else `online`. Read from the **adapter's runtime signal, never the pane's
+  foreground command**: Claude uses its rendezvous socket; Codex uses the shared app-server socket only after
+  the governed record has captured the Codex thread id, because a project socket alone is not a session
+  address.
 
 The surfaces compose the two without precedence: the badge shows lifecycle, while **liveness `offline`
 shows the relaunch panel whatever the lifecycle** — a dead `asking` agent still needs you, now resumable —

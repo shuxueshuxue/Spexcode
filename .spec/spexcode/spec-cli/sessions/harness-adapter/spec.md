@@ -52,10 +52,13 @@ surface:
 - **worktree** — Claude has a native `--worktree` + `WorktreeCreate`/`WorktreeRemove` hooks; Codex has none
   (SpexCode manages the worktree itself). The adapter exposes whether the harness owns worktrees.
 - **runtime: liveness + delivery** — the RUNTIME transport, lifted onto the adapter so product code honours
-  `ownsRendezvous` instead of hard-wiring the claude rendezvous socket. `liveness(id, tmuxAlive)` answers "is
-  this agent up?": **claude** = the tmux window is up AND its reclaude rendezvous socket exists (the socket is
-  the truth claude is alive — the pane command is the wrapper/shell while claude runs as its child); **codex** =
-  the tmux window is up AND the project-scoped Codex app-server Unix socket exists. `deliver(rec, text)` sends a
+  `ownsRendezvous` instead of hard-wiring the claude rendezvous socket. `liveness(rec, tmuxAlive)` answers "is
+  this session's agent ready?": **claude** = the tmux window is up AND its reclaude rendezvous socket exists
+  (the socket is the truth claude is alive — the pane command is the wrapper/shell while claude runs as its
+  child); **codex** = the tmux window is up, the project-scoped Codex app-server Unix socket exists, AND this
+  record has a captured `harness_session_id`. The app-server socket is a project control plane shared by many
+  Codex sessions, so it proves transport availability but not which thread a follow-up would address.
+  `deliver(rec, text)` sends a
   follow-up prompt and reports whether it landed: **claude** through the rendezvous socket (inject + submit +
   CONFIRM accepted — loud failure on a missing/dead socket, no silent fallback); **codex** through the same
   Codex app-server JSON-RPC control plane the visible TUI uses — `thread/resume <harness_session_id>` followed

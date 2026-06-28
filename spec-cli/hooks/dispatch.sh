@@ -59,6 +59,15 @@ while IFS=$'\t' read -r ev order block script; do
   [ -n "$out" ] && printf '%s' "$out"
   if [ "$block" = "true" ] && { [ "$code" = "2" ] || printf '%s' "$out" | grep -q '"decision"[[:space:]]*:[[:space:]]*"block"'; }; then
     cat "$err" >&2
+    # codex reads a Stop block's continuation prompt from STDERR (+ exit 2), NOT the claude-style
+    # decision:block JSON a handler writes to stdout. So when we block on the JSON path under codex and the
+    # handler left stderr empty, extract its "reason" and forward it to stderr — else codex sees exit 2 with
+    # no stderr ("Stop hook exited with code 2 but did not write a continuation prompt"). Claude is unchanged
+    # (it keeps reading the stdout JSON). The reason is the JSON's last field, so capture to the final `"}`.
+    if [ "$SPEXCODE_HARNESS" = codex ] && [ ! -s "$err" ]; then
+      printf '%s' "$out" | sed -n 's/.*"reason"[[:space:]]*:[[:space:]]*"\(.*\)"[[:space:]]*}[[:space:]]*$/\1/p' \
+        | sed 's/\\"/"/g; s/\\\\/\\/g' >&2
+    fi
     rc=2
   fi
 done < "$manifest"

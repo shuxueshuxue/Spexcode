@@ -57,7 +57,7 @@ while IFS=$'\t' read -r ev order block script; do
   [ "$ev" = "$event" ] || continue
   out="$(printf '%s' "$input" | bash "$proj/$script" 2>"$err")"; code=$?
   [ -n "$out" ] && printf '%s' "$out"
-  if [ "$block" = "true" ] && [ "$code" = "2" ]; then
+  if [ "$block" = "true" ] && { [ "$code" = "2" ] || printf '%s' "$out" | grep -q '"decision"[[:space:]]*:[[:space:]]*"block"'; }; then
     cat "$err" >&2
     rc=2
   fi

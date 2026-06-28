@@ -126,8 +126,17 @@ the main checkout, but its commands run `dispatch.sh` with the thread cwd as `pr
 against its own tree even though one project-scoped server (and one shared shim) drives them all. The session-id +
 global-store resolution every handler repeated is folded into the same helper (`hp_session_id`, `hp_store_dir`).
 There is NO codex thread-id capture hook: the backend OWNS the thread id (it `thread/start`s the thread at
-launch and stores the id — see above), so no dispatcher or lifecycle hook branches on Codex and Claude needs
-nothing here either (its pinned id already is the record id).
+launch and stores the id as `harness_session_id` — see above), so no dispatcher or lifecycle hook branches on
+Codex and Claude needs nothing here either (its pinned id already is the record id). But design C's hooks fire
+from the SHARED per-project app-server process, whose env carries NO `SPEXCODE_SESSION_ID` — so a governed codex
+hook's `hp_session_id` resolves to the payload `session_id`, which is the codex THREAD id, not the SpexCode
+record id the store is keyed by. So id→record resolution carries an ALIAS step: when no record sits at the id
+directly, find the one record that captured this id as `harness_session_id` (a `grep` over the few session.json
+files on the shell hot path — no jq; the typed TS read mirrors it in `readAliasedRawRecord`). This is what lets
+the pure-shell `mark-active` re-flip and the ask-capture, plus every shell-to-`spex` lifecycle write, reach the
+right record from a thread id alone. The alias needs no cleanup artifact — it lives in the record's own
+`harness_session_id`, swept with the record on close. Claude is unaffected: its exported id equals both its
+payload id and the record key, so the direct hit always wins and the alias step never runs.
 
 ## verified codex facts (live round-trip, real codex 0.142.3)
 
@@ -149,9 +158,12 @@ The Codex impl of the adapter must encode these (measured against a real self-la
   `ThreadId::new`) — there is NO flag/env to pin a NEW session's id (`CODEX_THREAD_ID` is an OUTPUT codex
   injects, not an input; resume takes an existing rollout id). So a dashboard-launched codex session can't have
   its governed record keyed by the harness id the way claude's `--session-id` allows. The adapter's resolution:
-  the launcher keys the record by a SpexCode id and exports it as `SPEXCODE_SESSION_ID` into the launch env, and
-  every hook resolves THAT first (`hp_session_id`), falling back to the payload id only when unset (self-launch).
-  One resolver, both harnesses — claude's exported id equals its payload id, so it's a no-op there.
+  the launcher keys the record by a SpexCode id, stores the codex thread id on it as `harness_session_id`, and a
+  hook resolves the effective id as `SPEXCODE_SESSION_ID` first (`hp_session_id`) else the payload id. The catch:
+  design C's hooks fire from the SHARED app-server, which has NO `SPEXCODE_SESSION_ID`, so a governed codex hook
+  lands on the payload THREAD id — NOT a self-launch, just an env-less process — and id→record resolution then
+  ALIASES that thread id onto the record carrying it as `harness_session_id`. Claude needs neither step: its
+  exported id equals its payload id equals the record key, so the direct hit always wins.
 - **no rendezvous** (`ownsRendezvous:false`): codex has no reclaude control socket, so SpexCode uses Codex's
   own app-server. Each SpexCode project has ONE project-scoped `codex app-server --listen unix://<project sock>`
   (flock-guarded, started once, reused) under the same global project runtime dir as the hook manifest. Each

@@ -143,6 +143,20 @@ export function readRawRecord(id: string): RawRecord | null {
     return raw && typeof raw === 'object' && raw.session_id ? raw as RawRecord : null
   } catch { return null }
 }
+// resolve a possibly-ALIASED session id to its raw record. A codex hook fires from the shared per-project
+// app-server (no SPEXCODE_SESSION_ID in its env), so the id it carries is the codex THREAD id — the payload
+// session_id — not the SpexCode record id the store is keyed by. Direct id wins; else the one record that
+// captured this id as `harness_session_id` (the backend stored it at thread/start, before any tool turn).
+// Null when neither resolves. Mirrors the shell `hp_store_dir` alias grep — one resolution rule, both layers.
+export function readAliasedRawRecord(id: string): RawRecord | null {
+  const direct = readRawRecord(id)
+  if (direct) return direct
+  for (const sid of listSessionIds()) {
+    const r = readRawRecord(sid)
+    if (r && r.harness_session_id && r.harness_session_id === id) return r
+  }
+  return null
+}
 // every session_id this project has a record for (the board's enumeration source — replaces `git worktree
 // list`). A MISSING store dir means no session ever launched → []. But any OTHER readdir failure THROWS
 // (preserving the fail-loud-enumeration invariant `git worktree list` had): a transient FS error must never

@@ -2,6 +2,9 @@
 node_modules
 dist/
 .vite/
+# the prebuilt dashboard bundled INTO the published `spexcode` package by prepublishOnly — a build
+# artifact (publish-time only), never committed to the repo (see .spec/.../spec-cli/packaging).
+spec-cli/dashboard-dist/
 
 # SpexCode worktrees live here — they are separate checkouts, never committed
 .worktrees/

@@ -10,6 +10,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join, normalize, extname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { homedir } from 'node:os'
 import { loginPage } from './login-page.js'
 
@@ -105,7 +106,18 @@ function isAuthed(req: http.IncomingMessage, token: string): boolean {
 
 const MIME: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.map': 'application/json' }
 
-export type GatewayOpts = { publicPort: number; upstreamPort: number; password: string; tls: { cert: string; key: string } | null; distDir: string }
+// @@@ resolveDistDir - where the built dashboard lives, bundled-or-monorepo. In an INSTALLED `spexcode`
+// package the dist rides inside it (prepublish copies spec-dashboard's build to <pkg>/dashboard-dist);
+// in the dogfood monorepo there is no bundled copy, so it falls back to the sibling spec-dashboard/dist.
+// This is the one seam that lets the same gateway code serve from either layout (see [[packaging]]).
+export function resolveDistDir(): string {
+  const pkgRoot = fileURLToPath(new URL('..', import.meta.url)) // gateway.ts is in src/ → .. = package root
+  const bundled = join(pkgRoot, 'dashboard-dist')
+  if (existsSync(join(bundled, 'index.html'))) return bundled
+  return join(pkgRoot, '..', 'spec-dashboard', 'dist')
+}
+
+export type GatewayOpts = { publicPort: number; upstreamPort: number; password: string; tls: { cert: string; key: string } | null; distDir: string; host?: string; label?: string }
 
 export function startGateway(opts: GatewayOpts): void {
   // gated ONLY when a password is set; otherwise the login layer doesn't exist and the dashboard is served open.
@@ -146,10 +158,14 @@ export function startGateway(opts: GatewayOpts): void {
     socket.on('error', bail); up.on('error', bail)
   })
 
-  server.listen(opts.publicPort, () => {
+  const host = opts.host ?? '0.0.0.0'
+  const isLocal = host !== '0.0.0.0'   // `spex dashboard` binds loopback; `--public` faces the internet
+  server.listen(opts.publicPort, host, () => {
     const scheme = secure ? 'https' : 'http'
-    console.log(`[gateway] public mode on ${scheme}://0.0.0.0:${opts.publicPort} — ${gated ? 'password-gated' : 'OPEN (no password)'}, proxying to loopback :${opts.upstreamPort}`)
-    if (!secure) console.log('[gateway] (TLS off — --http)')
+    const label = opts.label ?? 'public mode'
+    const gate = isLocal ? '' : ` — ${gated ? 'password-gated' : 'OPEN (no password)'}`   // ungated loopback is normal, not a warning
+    console.log(`[gateway] ${label} on ${scheme}://${isLocal ? 'localhost' : '0.0.0.0'}:${opts.publicPort}${gate}, proxying /api to :${opts.upstreamPort}`)
+    if (!secure && !isLocal) console.log('[gateway] (TLS off — --http)')
   })
 }
 
@@ -207,4 +223,16 @@ export function ensureDashboardBuilt(repoRoot: string, distDir: string): void {
     console.error('[gateway] dashboard build failed. Build it manually: (cd spec-dashboard && npm run build), then retry.')
     process.exit(1)
   }
+}
+
+// @@@ serveDashboardLocal - the engine behind `spex dashboard`: the SAME gateway as public mode, bound to
+// loopback with no TLS and no password. It serves the bundled dist and proxies /api + the terminal socket
+// to a separately-run `spex serve`. This is the post-install replacement for the dogfood-only `npm run web`
+// (a vite dev server an installed user has no source tree for). See [[packaging]].
+export function serveDashboardLocal(opts: { port: number; apiPort: number }): void {
+  const pkgRoot = fileURLToPath(new URL('..', import.meta.url))
+  const distDir = resolveDistDir()
+  ensureDashboardBuilt(join(pkgRoot, '..'), distDir) // bundled dist already has index.html → returns at once
+  console.log(`[dashboard] serving ${distDir.endsWith('dashboard-dist') ? 'bundled' : 'monorepo'} build, /api → backend :${opts.apiPort}`)
+  startGateway({ host: '127.0.0.1', publicPort: opts.port, upstreamPort: opts.apiPort, password: '', tls: null, distDir, label: 'dashboard' })
 }

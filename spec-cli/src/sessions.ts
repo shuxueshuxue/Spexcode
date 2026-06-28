@@ -8,7 +8,7 @@ import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, type Review
 import { loadSpecs } from './specs.js'
 import { defaultHarness, harnessById, rvSock, type Harness, type DispatchResult } from './harness.js'
 import { materialize } from './materialize.js'
-import { mainBranch, gitCommonDir, readConfig, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, readRawRecord, envSessionId, type RawRecord } from './layout.js'
+import { mainBranch, gitCommonDir, readConfig, runtimeRoot, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, readRawRecord, envSessionId, type RawRecord } from './layout.js'
 
 // @@@ sessions - the WORKTREE is the durable unit; tmux is a disposable runtime handle. Each session
 // worktree carries an untracked `.session` file (the source of truth) that survives a kill / reboot /
@@ -82,7 +82,7 @@ const rvEnv = (id: string, harness = HARNESS) => {
 }
 
 // the prompt-dispatch outcome type + its claude/codex delivery implementations live in the [[harness-adapter]]
-// (each harness OWNS its input channel — claude the rendezvous socket, codex tmux send-keys). Re-exported here
+// (each harness OWNS its input channel — claude the rendezvous socket, codex app-server JSON-RPC). Re-exported here
 // for the existing importers (client.ts) that read it off the sessions module.
 export type { DispatchResult }
 
@@ -189,7 +189,7 @@ type SessRec = {
   session: string; governed: boolean; worktreePath: string; branch: string | null
   node: string | null; title: string | null; name: string | null
   status: Lifecycle; proposal: Proposal | null; merges: number; note: string | null
-  sortKey: number | null; createdAt: number; harness: string
+  sortKey: number | null; createdAt: number; harness: string; harnessSessionId: string | null
 }
 const LIFECYCLES = new Set<Lifecycle>(['active', 'idle', 'awaiting', 'parked', 'error', 'asking', 'queued'])
 const PROPOSALS = new Set<Proposal>(['merge', 'nothing', 'close'])
@@ -212,6 +212,7 @@ function fromRaw(raw: RawRecord): SessRec {
     node: raw.node || null, title: raw.title || null, name: raw.name || null,
     status, proposal, merges: Number(raw.merges) || 0, note: raw.note || null, sortKey, createdAt: Number(raw.createdAt) || 0,
     harness: raw.harness || 'claude',   // records written before the harness field default to claude
+    harnessSessionId: raw.harness_session_id || null,
   }
 }
 // @@@ session.json format - written one-field-per-line (JSON.stringify(_, null, 2)) with EVERY key ALWAYS
@@ -234,6 +235,7 @@ function writeRecord(rec: SessRec): void {
     sortkey: rec.sortKey ?? '',
     createdAt: rec.createdAt,
     harness: rec.harness || 'claude',
+    harness_session_id: rec.harnessSessionId ?? '',
   }
   mkdirSync(sessionStoreDir(rec.session), { recursive: true })
   writeFileSync(sessionRecordPath(rec.session), JSON.stringify(obj, null, 2) + '\n')
@@ -330,11 +332,12 @@ const BOOT_GRACE_MS = 25000   // > waitForReady's 15s timeout, covering the obse
 // window; only past it (socket still gone) is it genuinely 'offline'.
 function liveness(rec: SessRec, live: Set<string>): Liveness {
   if (!rec.session) return 'offline'
-  // ask the ADAPTER ([[harness-adapter]]): claude = tmux up AND its rendezvous socket present; codex = tmux up
-  // (the codex process holds the pane). The 'starting' grace stays here (a launcher concern): a just-launched
-  // agent whose online-signal hasn't appeared yet reads 'starting' for the boot window, only past it 'offline'.
+  // ask the ADAPTER ([[harness-adapter]]): claude = tmux up AND its rendezvous socket present; codex = tmux up,
+  // app-server up, AND native thread id captured. The 'starting' grace stays here (a launcher concern): a
+  // just-launched agent whose online-signal hasn't appeared yet reads 'starting' for the boot window, only past
+  // it 'offline'.
   const h = harnessById(rec.harness || defaultHarness.id)
-  if (h.liveness(rec.session, live.has(rec.session)) === 'online') return 'online'
+  if (h.liveness(rec, live.has(rec.session), runtimeRoot()) === 'online') return 'online'
   const at = launchedAt.get(rec.session)
   return at && Date.now() - at < BOOT_GRACE_MS ? 'starting' : 'offline'
 }
@@ -623,7 +626,7 @@ function launchScript(id: string, tail: string, harness: Harness = HARNESS): str
   // NO --append-system-prompt / --settings: the contract + hooks are materialized into the worktree at
   // createSession ([[harness-delivery]]) and the agent auto-discovers them — the SAME path as a self-launched
   // agent. The launch line is just the rendezvous env + the harness command + the session-id/spec-pointer/prompt tail.
-  writeFileSync(file, `${rvEnv(id, harness)} ${harness.launchCmd()} ${tail}\n`)
+  writeFileSync(file, `${rvEnv(id, harness)} ${harness.launchCmd(id, runtimeRoot())} ${tail}\n`)
   return file
 }
 async function launch(id: string, path: string, tail: string, harness: Harness = HARNESS): Promise<void> {
@@ -742,7 +745,9 @@ function deleteNodePrompt(nodeId: string, relPath: string | null, rest: string):
 const OCCUPIES_SLOT = new Set<DisplayStatus>(['working', 'parked', 'starting'])  // starting's boot window is also held via `launching`
 function isOccupying(s: Session, live: Set<string>): boolean {
   if (!OCCUPIES_SLOT.has(s.status)) return false                          // waiting-on-human / proposed / queued / dead → free
-  return harnessById(s.harness || defaultHarness.id).liveness(s.id, live.has(s.id)) === 'online'  // and only while the agent is genuinely live (its adapter's channel)
+  const rec = readRecord(s.id)
+  if (!rec) return false
+  return harnessById(rec.harness || defaultHarness.id).liveness(rec, live.has(rec.session), runtimeRoot()) === 'online'  // and only while the agent is genuinely live (its adapter's channel)
 }
 // sessions we've JUST launched whose agent hasn't come online yet. During that boot window reconcile reads them
 // `offline` (the adapter's online-signal not up yet) and isOccupying would miss them, so the drainer would
@@ -864,7 +869,7 @@ export async function newSession(node: string | null, prompt: string, harness: s
   const rec: SessRec = {
     session: id, governed: true, worktreePath: path, branch,
     node: ref || null, title, name: null, status: 'queued', proposal: null, merges: 0, note: null, sortKey: null, createdAt: Date.now(),
-    harness: h.id,
+    harness: h.id, harnessSessionId: null,
   }
   writeRecord(rec)
   writePromptFile(id, prompt)   // capture the ORIGINATING prompt (the human/manager's ask) as store metadata (best-effort)
@@ -905,8 +910,9 @@ export async function newSession(node: string | null, prompt: string, harness: s
 // the start line via send-keys and returns immediately, so the agent's online-signal does not exist yet on
 // return. Poll the ADAPTER's liveness ([[harness-adapter]]) at a small interval up to a bounded timeout so the
 // agent counts as "ready" only once it is genuinely online — claude: its rendezvous socket up; codex: its
-// process holding the tmux pane — then a follow-on dispatch (merge / send) lands in a LIVE agent instead of
-// racing the boot and failing loud on a session that is actually recovering. BOUNDED + fail-loud preserved: a
+// project app-server socket up AND native thread id captured — then a follow-on dispatch (merge / send) lands
+// in a LIVE agent instead of racing the boot and failing loud on a session that is actually recovering.
+// BOUNDED + fail-loud preserved: a
 // genuinely dead/unrecoverable agent never goes online, so after the timeout we return and the caller's own
 // deliver() fails loud exactly as before — this only closes the startup race, it adds no fallback.
 const SOCKET_READY_TIMEOUT_MS = 15000
@@ -914,7 +920,8 @@ const SOCKET_POLL_MS = 200
 async function waitForReady(id: string, harness: Harness, timeoutMs = SOCKET_READY_TIMEOUT_MS): Promise<boolean> {
   const deadline = Date.now() + timeoutMs
   for (;;) {
-    if (harness.liveness(id, await alive(id)) === 'online') return true
+    const rec = readRecord(id)
+    if (rec && harness.liveness(rec, await alive(id), runtimeRoot()) === 'online') return true
     if (Date.now() >= deadline) return false
     await new Promise((r) => setTimeout(r, SOCKET_POLL_MS))
   }
@@ -923,9 +930,10 @@ async function waitForReady(id: string, harness: Harness, timeoutMs = SOCKET_REA
 // @@@ reopen - "back to working": clear any proposal → active, then ONE relaunch path. The agent needs
 // (re)starting iff it isn't running for this id — the SAME deterministic liveness the adapter computes
 // ([[harness-adapter]]): claude offline = no tmux OR no rendezvous socket (claude exited, even though the
-// wrapper/shell may still hold the pane); codex offline = no tmux. When it IS offline we drop any stale pane
-// and launch a fresh window through the adapter's resumeArg — claude `--resume <id>` (the SAME conversation),
-// codex a FRESH turn in the same worktree (its thread id is un-pinnable until captured). Then we WAIT for the
+// wrapper/shell may still hold the pane); codex offline = no tmux, no project app-server, or no captured native
+// thread id. When it IS offline we drop any stale pane and launch a fresh window through the adapter's resumeArg
+// — claude `--resume <id>` (the SAME conversation), codex `resume <thread-id>` once captured, else a fresh TUI
+// in the same worktree/record. Then we WAIT for the
 // agent to come online (waitForReady) before returning, so a caller that dispatches immediately after reopen
 // (e.g. mergeSession) addresses a LIVE agent rather than racing the boot. If it's still live we only cleared
 // the proposal — no wait. Also serves the plain "relaunch" of an offline (already-active) one. Fail-loud is
@@ -935,7 +943,7 @@ export async function reopen(id: string): Promise<boolean> {
   if (!wt) return false
   const h = harnessById(wt.rec.harness || defaultHarness.id)
   writeRecord({ ...wt.rec, status: 'active', proposal: null })
-  if (h.liveness(id, await alive(id)) !== 'online') {
+  if (h.liveness(wt.rec, await alive(id), runtimeRoot()) !== 'online') {
     await tmuxOk(['kill-session', '-t', id])   // drop a dead/offline pane if any (no-op when none)
     await launch(id, wt.path, h.resumeArg(wt.rec).trim(), h)
     await waitForReady(id, h)   // a relaunched agent is "ready" only once the adapter reads it online
@@ -970,6 +978,14 @@ export function markState(status: Lifecycle, opts: { proposal?: Proposal; note?:
 }
 export const markDone = (proposal: Proposal = 'nothing', sessionId?: string) => markState('awaiting', { proposal, sessionId })
 export const markError = (sessionId?: string) => markState('error', { sessionId })
+export function markHarnessSessionId(sessionId: string | undefined, harnessSessionId: string | undefined): boolean {
+  const id = sessionId || ownSessionId()
+  if (!id || !harnessSessionId) return false
+  const rec = readRecord(id)
+  if (!rec) return false
+  writeRecord({ ...rec, harnessSessionId })
+  return true
+}
 // @@@ markIdle - the ONE INFERRED state, so (unlike the agent-authored writers above) it carries a strict
 // active-only guard: the Notification(idle_prompt) hook fires it when claude is waiting at its prompt, and it
 // may ONLY overwrite `active` → `idle`. A deliberate declaration (awaiting / asking / parked / error) must
@@ -1365,16 +1381,17 @@ export async function watchSessions(emit: (line: string) => void, opts: WatchOpt
 
 // @@@ sendKeys - PROMPT control for a session, delivered through the session's HARNESS ADAPTER
 // ([[harness-adapter]]) — claude the rendezvous control socket (inject + submit + confirm accepted), codex
-// `tmux send-keys` into the pane it holds. Either way there is NO silent fallback: a prompt that can't be
-// delivered — no socket / dead agent (claude), a tmux send failure / gone pane (codex) — FAILS LOUD, returning
+// app-server JSON-RPC into the visible TUI's thread. Either way there is NO silent fallback: a prompt that can't be
+// delivered — no socket / dead agent (claude), no app-server/thread (codex) — FAILS LOUD, returning
 // ok:false with a reason that propagates to the caller (API non-2xx, `spex session send`, the merge dispatch),
-// instead of reporting a false success. The harness is resolved from the record; an unknown id resolves to no
-// record → the default adapter, whose deliver still fails loud for a non-existent session. (The separate RAW
-// nav-key channel keeps its own `tmux send-keys` path — see rawKey.)
+// instead of reporting a false success. The harness is resolved from the record; an unknown id fails before any
+// harness transport is addressed. (The separate RAW nav-key channel keeps its own `tmux send-keys` path — see rawKey.)
 export async function sendKeys(id: string, text: string, from?: string): Promise<DispatchResult> {
   if (!text) return { ok: false, error: 'empty prompt — nothing to dispatch' }
-  const h = harnessById(readRecord(id)?.harness || defaultHarness.id)
-  const r = await h.deliver(id, text)
+  const rec = readRecord(id)
+  if (!rec) return { ok: false, error: `no session record for ${id} — prompt NOT delivered` }
+  const h = harnessById(rec.harness || defaultHarness.id)
+  const r = await h.deliver({ ...rec, runtimeDir: runtimeRoot() }, text)
   // record the delivered agent-to-agent message ([[comms-edge]]): only when it carries a sender (an agent
   // send, not a raw human dispatch) and actually landed. Fire-and-forget — never gates the send result.
   if (r.ok && from) void recordComms(id, from)

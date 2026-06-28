@@ -2,7 +2,7 @@
 title: launch
 status: active
 hue: 280
-desc: Bring a worker up — reclaude wrapper, per-session rendezvous socket, non-truncating prompt, concurrency cap.
+desc: Bring a worker up — adapter launch, bounded prompt delivery, concurrency cap.
 related:
   - spec-cli/src/sessions.ts
 ---
@@ -19,17 +19,23 @@ launching has a **single owner**: the running backend process, never whichever s
 
 ## expanded spec
 
-`newSession` mints the session `<uuid>`, adds the `node/<slug>` worktree (off the base branch), then writes
+`newSession` mints the governed SpexCode session `<uuid>`, adds the `node/<slug>` worktree (off the base branch), then writes
 the session's `governed:true` record `session.json` (+ best-effort the `prompt` artifact, and at launch the
 hooks.json/launch.sh scripts) into the GLOBAL per-session store ([[runtime]]) — NOT the worktree, which stays
 pristine — isolates `CLAUDE.md` (moved into the store too), and **queues the worktree for launch** on a private
-`tmux -L` socket (`spex new "<prompt>" [--node X]`). `claude` launches with `--session-id <uuid>` — the SAME id
-the record is keyed by, the tmux window name, the rendezvous socket, and the commit attribution, so the
-conversation `--resume`s after death, the board maps it to its worktree, and a spec node links to it. Workers run through the **`reclaude` wrapper**
+`tmux -L` socket (`spex new "<prompt>" [--node X]`). The selected [[harness-adapter]] owns the actual agent
+command. Claude launches with `--session-id <uuid>` — the SAME id the record is keyed by, the tmux window name,
+the rendezvous socket, and the commit attribution, so the conversation `--resume`s after death, the board maps
+it to its worktree, and a spec node links to it. Codex launches a visible TUI attached to the project's shared
+`codex app-server --listen unix://<runtimeRoot>/codex-app-server.sock`; its Codex thread id is captured later
+into `harness_session_id` because Codex does not let the launcher pin a new thread id. Workers run through the **`reclaude` wrapper**
 (`SPEXCODE_CLAUDE_CMD`), which runs claude as a **child** rather than exec'ing it, so the pane's foreground
 command is the wrapper/shell — **not** a liveness signal ([[state]] reads the socket instead). The spawned
 command alone carries `CLAUDE_BG_BACKEND=daemon` and a `CLAUDE_BG_RENDEZVOUS_SOCK` path **derived from the
 session id** as an env prefix (never global, never a plugin), so [[dispatch]] addresses only our sockets.
+Codex's app-server launch is project-idempotent: simultaneous `spexcode serve` processes in the same project
+share the runtime socket and take a per-project launch lock before starting the server, so they do not fan out
+one app-server per session or cross into another project's socket.
 
 **Materialized delivery, not injection:** the spec-discipline contract is NOT pushed on the command line.
 Before the agent starts, the worktree is `materialize`d ([[harness-delivery]]), rendering the `surface: system`

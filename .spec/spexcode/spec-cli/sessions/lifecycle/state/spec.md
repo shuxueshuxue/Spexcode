@@ -22,9 +22,12 @@ reversible, and nothing auto-disappears.
 ## expanded spec
 
 The session **state** is the source of truth (never an in-memory map). It lives NOT in the worktree but in a
-per-user GLOBAL store, keyed by the **harness `session_id`** every hook payload carries (Claude + Codex). The
-layout mirrors Claude's own `~/.claude/projects/<enc>/`: `<SPEXCODE_HOME or ~/.spexcode>/projects/<enc>/sessions/
-<session_id>/`, where `<enc>` encodes the **project root** (path separators → `-`). The project root is the MAIN
+per-user GLOBAL store, keyed by the governed **SpexCode session id**. For Claude this is also the harness
+`session_id`; for Codex, whose thread id is minted internally and cannot be pinned, the governed record keeps
+SpexCode's id as `session_id` and stores the real Codex thread id separately as `harness_session_id` once
+SessionStart reports it. The layout mirrors Claude's own `~/.claude/projects/<enc>/`: `<SPEXCODE_HOME or
+~/.spexcode>/projects/<enc>/sessions/<session_id>/`, where `<enc>` encodes the **project root** (path separators
+→ `-`). The project root is the MAIN
 checkout (`dirname` of the shared git **common** dir), which resolves identically from main or any linked
 worktree — so the board (running at main) and a hook (running in a worktree) compute the **same** dir; resolving
 it from `git rev-parse --show-toplevel` would not (in a worktree that is the worktree). The record itself is
@@ -55,11 +58,13 @@ independent facts, computed independently:
 
 - **lifecycle** — *what the work needs*, **authored by the agent** (`active`/`idle`/`awaiting`/`parked`/
   `error`/`asking`/`queued`), never inferred — the `.session/state` value above.
-- **liveness** — *whether the agent process is up*, **derived by the runtime for every session regardless
-  of lifecycle**: `offline` (no tmux window for the id, or its rendezvous socket never opened — genuinely
-  dead), transient `starting` (window up, socket still booting — see [[launch]]), else `online`. Read from
-  the **rendezvous socket, never the pane's foreground command**: claude holds the socket open while it
-  lives; the pane command is the wrapper/shell.
+- **liveness** — *whether the agent process is up and addressable*, **derived by the runtime for every
+  session regardless of lifecycle**: `offline` (no tmux window for the id, or the harness adapter's online
+  signal never became session-addressable — genuinely dead), transient `starting` (window up, adapter signal
+  still booting — see [[launch]]), else `online`. Read from the **adapter's runtime signal, never the pane's
+  foreground command**: Claude uses its rendezvous socket; Codex uses the shared app-server socket only after
+  the governed record has captured the Codex thread id, because a project socket alone is not a session
+  address.
 
 The surfaces compose the two without precedence: the badge shows lifecycle, while **liveness `offline`
 shows the relaunch panel whatever the lifecycle** — a dead `asking` agent still needs you, now resumable —
@@ -81,8 +86,11 @@ composing both axes** for one-glyph surfaces — a convenience, never a third so
 
 ### Hooks (delivered via the [[hook-dispatch]] dispatcher, gated by `governed`)
 
-Every hook reads the **`session_id`** from its own payload and resolves the global record the same way
-sessions.ts does (project key from the git common dir → `<store>/projects/<enc>/sessions/<id>/session.json`).
+Every hook reads the **effective session id** the same way sessions.ts does: `SPEXCODE_SESSION_ID` from a
+governed launcher wins, otherwise the harness payload's own `session_id` is used. Codex SessionStart also
+copies the payload `session_id` into the governed record's `harness_session_id`, because that is the app-server
+thread id later used for JSON-RPC delivery. The global record path is project key from the git common dir →
+`<store>/projects/<enc>/sessions/<id>/session.json`.
 The hooks split on the `governed` flag. The **board-lifecycle** hooks below (mark-active, the Stop gate,
 StopFailure→error, idle) act ONLY when that record reads `governed: true`; on a non-governed (user-self-launched)
 record — or none at all — they no-op (the Stop gate exits 0 SILENTLY), because a self-launched agent has no board

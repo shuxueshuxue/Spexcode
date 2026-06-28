@@ -254,7 +254,7 @@ export default {
     menuSpecNodes: '规格节点',
     menuHint: '↑↓ 选择 · ⏎ 插入',
     hint: { before: '输入 ', mid: ' 以引用规格 · ', after: ' 以套用配置预设' },
-    harnessLabel: '运行框架',
+    harnessLabel: '启动智能体',
     navBtn: '导航',
     navTitle: '导航模式——转发原始按键（含 ⌃/⌥/⌘ 组合键）以驱动智能体的终端（⌥/⌘+I）',
     relaunch: '重新启动',

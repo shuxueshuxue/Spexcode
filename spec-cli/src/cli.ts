@@ -15,7 +15,7 @@ function flag(name: string): string | undefined {
 }
 const has = (name: string) => process.argv.includes(`--${name}`)
 // bare positionals after argv index `from`, skipping flags and their values (selectors for ls/watch).
-const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--timeout', '--reason', '--out', '--password', '--tls-cert', '--tls-key', '--harness'])
+const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--timeout', '--reason', '--out', '--password', '--tls-cert', '--tls-key', '--harness', '--harness-session'])
 function positionals(from: number): string[] {
   const out: string[] = []
   for (let i = from; i < process.argv.length; i++) {
@@ -369,6 +369,10 @@ if (cmd === 'serve') {
   } else if (sub === 'fail') {
     // the StopFailure hook marks its session (--session from the payload) as error (turn died on an API error)
     console.log(s.markError(sess) ? 'marked error' : 'no session record')
+  } else if (sub === 'harness-id') {
+    // Codex mints its own thread id; SessionStart captures it into the governed SpexCode record so the
+    // app-server control path can address the same thread the visible TUI is showing.
+    console.log(s.markHarnessSessionId(sess, flag('harness-session') ?? id) ? 'marked harness session id' : 'no session record')
   } else if (sub === 'ask') {
     // the agent DELIBERATELY declares it is pausing to ask the human a question (like `done`/`park`, an
     // authored state — NOT guarded active-only). The --note carries the question. Distinct from `park`

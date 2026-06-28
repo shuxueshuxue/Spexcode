@@ -5,6 +5,7 @@ hue: 280
 desc: The harness-agnostic hook delivery layer — discover surface:hook nodes, compile them into a PERSISTENT flat manifest, and run them deterministically through one pure-shell dispatcher whose cheap content-hash gate re-renders only when the editable .config moves.
 code:
   - spec-cli/src/hooks.ts
+  - spec-cli/src/hook-dispatch.test.ts
   - spec-cli/hooks/dispatch.sh
 ---
 
@@ -30,9 +31,10 @@ a tool-payload path would miss them.
 The dispatcher reproduces the native multi-hook contract — which on BOTH harnesses runs matching hooks in
 parallel with no ordering guarantee — but **deterministically**: it feeds each handler the original hook
 stdin, runs them all in manifest order so every side effect is preserved, concatenates their stdout
-(additionalContext) through, and exits 2 with a handler's stderr only when that handler declared
-`block: true` and itself exited 2 — the one signal the harness propagates back to the model. A handler
-that did not declare blocking can never block its event; a missing manifest dispatches nothing.
+(block decisions / additionalContext) through, and exits 2 when a handler declared `block: true` and either
+exited 2 OR emitted a `{"decision":"block", ...}` JSON decision. That exit code is the signal both harnesses
+propagate back to the model; the stdout JSON is the reason/additionalContext payload. A handler that did not
+declare blocking can never block its event; a missing manifest dispatches nothing.
 
 This is the substrate the spec-aware injections ([[spec-first]], [[spec-of-file]]) and the lifecycle gates
 ride on. Which nodes plug in is a [[surface]] field decision, not a code change here; adding or retiring a

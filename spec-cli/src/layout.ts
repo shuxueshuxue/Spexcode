@@ -112,7 +112,7 @@ export type RawRecord = {
   session_id: string; governed: boolean; worktree_path: string; branch: string | null
   node: string | null; title: string | null; name: string | null
   status: string; proposal: string | null; merges: number; note: string | null
-  sortkey: number | null; createdAt: number; harness?: string
+  sortkey: number | null; createdAt: number; harness?: string; harness_session_id?: string
 }
 // the agent's OWN session id from the environment — the only locator now that the record left the worktree.
 // SPEXCODE_SESSION_ID (the GOVERNED record id the launcher bakes in) wins, EXACTLY mirroring the shell hooks'

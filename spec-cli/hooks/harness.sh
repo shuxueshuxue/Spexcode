@@ -62,6 +62,20 @@ hp_field() {
 # env → falls back to the payload session_id (its own non-governed record). One resolver, both harnesses.
 hp_session_id() { printf '%s' "${SPEXCODE_SESSION_ID:-$(hp_field "$1" session_id)}"; }
 
+# the harness-native conversation/thread id when it differs from SpexCode's governed record id. Claude's
+# pinned id is the record id already, so it contributes nothing. Codex mints an unpinnable thread id and reports
+# it as payload session_id; SpexCode stores that as harness_session_id for app-server delivery.
+hp_harness_session_id() {
+  case "$SPEXCODE_HARNESS" in
+    codex)
+      local hid sid
+      hid=$(hp_field "$1" session_id)
+      sid=$(hp_session_id "$1")
+      [ -n "$hid" ] && [ "$hid" != "$sid" ] && printf '%s' "$hid"
+      ;;
+  esac
+}
+
 # the per-PROJECT GLOBAL runtime dir (mirrors spec-cli/src/layout.ts `runtimeRoot`): <store>/projects/<enc>,
 # keyed by the project (dirname of the ABSOLUTE git-common-dir, so the answer is identical from main or any
 # worktree). This is where the materialized hook manifest + content-hash + gate lock live — NOT the worktree.

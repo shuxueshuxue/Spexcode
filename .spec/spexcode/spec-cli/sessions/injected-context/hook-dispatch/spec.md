@@ -33,7 +33,10 @@ parallel with no ordering guarantee — but **deterministically**: it feeds each
 stdin, runs them all in manifest order so every side effect is preserved, concatenates their stdout
 (block decisions / additionalContext) through, and exits 2 when a handler declared `block: true` and either
 exited 2 OR emitted a `{"decision":"block", ...}` JSON decision. That exit code is the signal both harnesses
-propagate back to the model; the stdout JSON is the reason/additionalContext payload. A handler that did not
+propagate back to the model; the stdout JSON is the reason/additionalContext payload Claude reads. Codex,
+however, reads a Stop block's continuation prompt from STDERR — so on the JSON-decision path under codex,
+when the handler wrote its `decision:block` to stdout and left stderr empty, the dispatcher extracts the
+`reason` and forwards it to stderr; else codex would see exit 2 with no continuation. A handler that did not
 declare blocking can never block its event; a missing manifest dispatches nothing.
 
 This is the substrate the spec-aware injections ([[spec-first]], [[spec-of-file]]) and the lifecycle gates

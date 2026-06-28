@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { homedir, tmpdir } from 'node:os'
 import { createHash } from 'node:crypto'
 import { createConnection } from 'node:net'
-import { execFile } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
 import { claudeSlashCommands, codexSlashCommands, type SlashCommand } from './slash-commands.js'
 
@@ -20,20 +20,21 @@ import { claudeSlashCommands, codexSlashCommands, type SlashCommand } from './sl
 // or ALL adapters at once (materialize renders every harness's artifacts).
 
 export type HarnessId = 'claude' | 'codex'
+export type HarnessLivenessRecord = { session: string; harnessSessionId?: string | null }
 
 export interface Harness {
   readonly id: HarnessId
   // the lifecycle events this harness fires (drives the shim + the trust hashes). Claude binds the full set;
   // Codex lacks StopFailure + Notification, so it never sees those.
   readonly events: readonly string[]
-  // whether the harness's agent opens a reclaude rendezvous control socket — the deterministic prompt-delivery
-  // + liveness path. Claude (via reclaude) does; Codex has no such daemon, so its liveness reads from tmux and
-  // follow-up prompts go through the harness's own resume, not the socket.
+  // whether the harness's agent opens a reclaude rendezvous control socket. Claude does; Codex has no such
+  // daemon and uses its app-server JSON-RPC control plane instead.
   readonly ownsRendezvous: boolean
 
   // --- launch / sessionId ---
-  // the base agent command (env-overridable for tests). Claude: `claude …`; Codex: `codex --yolo`.
-  launchCmd(): string
+  // the base agent command (env-overridable for tests). Claude: `claude …`; Codex starts a project-scoped
+  // app-server and launches the visible TUI with `--remote` pointed at it.
+  launchCmd(id: string, runtimeDir?: string): string
   // the flag that pins the session id at launch. Claude lets the caller choose (`--session-id <id>`); Codex
   // assigns its own, so there is nothing to pass (the id is captured/resumed afterwards).
   sessionIdArg(id: string): string
@@ -64,27 +65,27 @@ export interface Harness {
   // (one tmux snapshot for the whole list — see sessions.ts liveTmux), and the adapter adds ONLY its own
   // channel check. claude: online iff the tmux window is up AND its reclaude rendezvous socket exists (the
   // socket is the truth claude is alive — the pane command is the wrapper/shell while claude runs as a child).
-  // codex: online iff the tmux window is up — the codex process itself holds the pane, so tmux presence IS
-  // liveness (codex opens no control socket). Product code asks the ADAPTER instead of hard-wiring the socket.
-  liveness(id: string, tmuxAlive: boolean): 'online' | 'offline'
+  // codex: online iff the tmux window is up, its project-scoped app-server socket exists, AND its native
+  // thread id has been captured; the socket is a project control plane, not session identity.
+  liveness(rec: HarnessLivenessRecord, tmuxAlive: boolean, runtimeDir?: string): 'online' | 'offline'
   // deliver a follow-up prompt to a LIVE session and report whether it landed. claude: through the rendezvous
   // control socket, which injects + submits the prompt and CONFIRMS the daemon accepted it (loud failure on a
-  // missing/dead socket — never a silent degradation). codex: `tmux send-keys` typed into the pane it holds,
-  // then Enter to submit (no daemon ack — best-effort typed delivery; short follow-ups only, see the ~2KB
-  // send-keys truncation caveat in tmuxSendKeys). Returns ok=false with a reason that propagates to the API.
-  deliver(id: string, text: string): Promise<DispatchResult>
+  // missing/dead socket — never a silent degradation). codex: JSON-RPC `turn/start` on the same app-server
+  // socket the visible TUI uses. Returns ok=false with a reason that propagates to the API.
+  deliver(rec: HarnessDeliveryRecord, text: string): Promise<DispatchResult>
   // the relaunch tail reopen() hands launch() to bring the SAME work back up. claude resumes the same
   // conversation (`--resume <id>`, the id we pinned at launch). codex's own thread id is un-pinnable and the
   // spexcode id is NOT a codex flag, so the MVP relaunches FRESH (empty tail → a new codex turn in the same
   // worktree/record); once codex's real thread id is captured this becomes `resume <thread-id>`.
-  resumeArg(rec: { session: string; harnessSessionId?: string }): string
+  resumeArg(rec: { session: string; harnessSessionId?: string | null }): string
 }
 
 // a prompt-dispatch outcome. ok=true ONLY when delivery is CONFIRMED (claude: the daemon ACCEPTED the prompt;
-// codex: the keys were typed into a live pane). `error` carries a human-readable reason that propagates to the
+// codex: app-server accepted `turn/start`). `error` carries a human-readable reason that propagates to the
 // API route (non-2xx) and the CLI/dashboard. Defined here because it is the harness DELIVERY contract; sessions.ts
 // re-exports it for its existing importers.
 export type DispatchResult = { ok: boolean; error?: string }
+export type HarnessDeliveryRecord = { session: string; worktreePath?: string; harnessSessionId?: string | null; runtimeDir?: string }
 
 // @@@ rendezvous control socket - claude's DETERMINISTIC, ONLY input path for PROMPTS to sessions WE launch.
 // sessions.ts starts `claude` with CLAUDE_BG_BACKEND=daemon + CLAUDE_BG_RENDEZVOUS_SOCK=<this path> set ONLY on
@@ -96,6 +97,12 @@ export type DispatchResult = { ok: boolean; error?: string }
 // claude is alive, gone once it exits); deliver writes to it. Exported because sessions.ts builds the launch env
 // var from it and best-effort sweeps it on close — but the liveness/delivery USE is the adapter's, below.
 export const rvSock = (id: string) => join(tmpdir(), `spexcode-rv-${id}.sock`)
+export const codexAppServerSock = (dir = process.env.SPEXCODE_CODEX_SOCKET_DIR || tmpdir()) => join(dir, 'codex-app-server.sock')
+export const codexAppServerPid = (dir = process.env.SPEXCODE_CODEX_SOCKET_DIR || tmpdir()) => join(dir, 'codex-app-server.pid')
+
+function shQuote(s: string): string {
+  return `'${s.replace(/'/g, `'\\''`)}'`
+}
 
 const ACCEPT_TIMEOUT_MS = 2500
 // @@@ replyViaSocket - inject `text` as a prompt AND confirm the daemon ACCEPTED it (not mere write-success,
@@ -155,20 +162,118 @@ function deliverViaRendezvous(id: string, text: string): Promise<DispatchResult>
   return replyViaSocket(sock, text)
 }
 
-// codex's deliver: TYPE the prompt into the pane the codex process holds, then Enter to submit — codex has no
-// control daemon, so this IS its input channel. NB tmux send-keys truncates a very large buffer (~2KB, the same
-// launch-prompt-limit trap launchScript avoids by running a file); codex follow-ups are short prompts, so this is
-// fine — a giant follow-up would need the file path. Best-effort: tmux reports only the send, not codex acceptance.
+type JsonRpc = { id?: number; method?: string; params?: unknown; result?: unknown; error?: { code?: number; message?: string } }
+
+export function codexAppServerTurnMessages(threadId: string, text: string, cwd?: string): JsonRpc[] {
+  return [
+    {
+      id: 1,
+      method: 'initialize',
+      params: {
+        clientInfo: { name: 'spexcode', title: 'SpexCode', version: '0.0.0' },
+        capabilities: { experimentalApi: true },
+      },
+    },
+    { method: 'initialized', params: {} },
+    { id: 2, method: 'thread/resume', params: { threadId, ...(cwd ? { cwd } : {}) } },
+    {
+      id: 3,
+      method: 'turn/start',
+      params: {
+        threadId,
+        input: [{ type: 'text', text, text_elements: [] }],
+        ...(cwd ? { cwd } : {}),
+      },
+    },
+  ]
+}
+
+export function codexLaunchCommand(_id: string, codexCmd = process.env.SPEXCODE_CODEX_CMD || 'codex --yolo', serverCmd = process.env.SPEXCODE_CODEX_SERVER_CMD || 'codex', dir = process.env.SPEXCODE_CODEX_SOCKET_DIR || tmpdir()): string {
+  const sock = codexAppServerSock(dir)
+  const pid = codexAppServerPid(dir)
+  const log = join(dir, 'codex-app-server.log')
+  const lock = join(dir, 'codex-app-server.lock')
+  const script = [
+    `dir=${shQuote(dir)}`,
+    `sock=${shQuote(sock)}`,
+    `pid=${shQuote(pid)}`,
+    `log=${shQuote(log)}`,
+    `lock=${shQuote(lock)}`,
+    'mkdir -p "$dir"',
+    '(',
+    '  flock 9',
+    '  if [ -S "$sock" ] && [ -s "$pid" ] && ! kill -0 "$(cat "$pid")" 2>/dev/null; then rm -f "$sock"; fi',
+    '  if [ ! -S "$sock" ]; then',
+    `    ${serverCmd} app-server --listen unix://"$sock" >"$log" 2>&1 &`,
+    '    echo $! > "$pid"',
+    '    for i in $(seq 1 100); do [ -S "$sock" ] && break; sleep 0.05; done',
+    '  fi',
+    ') 9>"$lock"',
+    `exec ${codexCmd} --remote unix://"$sock" "$@"`,
+  ].join('\n')
+  return `bash -lc ${shQuote(script)} spexcode-codex`
+}
+
+function rpcError(e: unknown): string {
+  return String((e as Error)?.message || e)
+}
+
+function sendCodexAppServerTurn(sock: string, threadId: string, text: string, cwd?: string): Promise<DispatchResult> {
+  return new Promise((resolve) => {
+    const proc = spawn('codex', ['app-server', 'proxy', '--sock', sock], { stdio: ['pipe', 'pipe', 'pipe'] })
+    let buf = '', stderr = '', settled = false
+    const activeThreadId = threadId
+    const expectedTurnResponseId = 3
+    const done = (r: DispatchResult) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      try { proc.kill() } catch { /* */ }
+      resolve(r)
+    }
+    const timer = setTimeout(() => done({ ok: false, error: 'codex app-server did not confirm turn/start within 5000ms' }), 5000)
+    proc.on('error', (e) => done({ ok: false, error: `failed to start codex app-server proxy: ${rpcError(e)}` }))
+    proc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString('utf8') })
+    proc.on('close', (code) => done({ ok: false, error: `codex app-server proxy exited before turn/start confirmation (${code ?? 'signal'}): ${stderr.trim()}` }))
+    const sendTurn = (tid: string, resumeId: number, turnId: number) => {
+      proc.stdin.write(JSON.stringify({ id: resumeId, method: 'thread/resume', params: { threadId: tid, ...(cwd ? { cwd } : {}) } }) + '\n')
+      proc.stdin.write(JSON.stringify({
+        id: turnId,
+        method: 'turn/start',
+        params: { threadId: tid, input: [{ type: 'text', text, text_elements: [] }], ...(cwd ? { cwd } : {}) },
+      }) + '\n')
+    }
+    proc.stdout.on('data', (chunk: Buffer) => {
+      buf += chunk.toString('utf8')
+      let i: number
+      while ((i = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, i); buf = buf.slice(i + 1)
+        if (!line.trim()) continue
+        let msg: JsonRpc
+        try { msg = JSON.parse(line) } catch { continue }
+        if (msg.error) return done({ ok: false, error: `codex app-server ${msg.id ? `request ${msg.id}` : 'notification'} failed: ${msg.error.message || JSON.stringify(msg.error)}` })
+        if (msg.id === expectedTurnResponseId) return done({ ok: true })
+      }
+    })
+    const init = codexAppServerTurnMessages('__placeholder__', text, cwd)[0]
+    proc.stdin.write(JSON.stringify(init) + '\n')
+    proc.stdin.write(JSON.stringify({ method: 'initialized', params: {} }) + '\n')
+    sendTurn(activeThreadId, 2, 3)
+  })
+}
+
+// codex's deliver: use the Codex app-server JSON-RPC channel that also powers rich clients, never TUI typing.
+// The visible TUI is launched against the same project app-server Unix socket, so this starts a real turn
+// in the same thread the pane is showing. A missing captured thread id or socket is a loud failure; there is no
+// tmux send-keys fallback because that reports "typed", not "accepted".
 const pexec = promisify(execFile)
 const TMUX_SOCK = process.env.SPEXCODE_TMUX || 'spexcode'
-async function deliverViaSendKeys(id: string, text: string): Promise<DispatchResult> {
-  try {
-    await pexec('tmux', ['-L', TMUX_SOCK, 'send-keys', '-t', id, '-l', '--', text])   // literal text, no key interpretation
-    await pexec('tmux', ['-L', TMUX_SOCK, 'send-keys', '-t', id, 'Enter'])            // submit
-    return { ok: true }
-  } catch (e) {
-    return { ok: false, error: `tmux send-keys to codex pane ${id} failed (pane gone / agent offline?): ${String((e as Error)?.message || e)}` }
-  }
+async function deliverViaCodexAppServer(rec: HarnessDeliveryRecord, text: string): Promise<DispatchResult> {
+  const threadId = rec.harnessSessionId
+  if (!threadId) return { ok: false, error: `no captured Codex thread id for session ${rec.session} — prompt NOT delivered` }
+  const sock = codexAppServerSock(rec.runtimeDir)
+  if (!existsSync(sock)) return { ok: false, error: `no Codex app-server socket for session ${rec.session} — prompt NOT delivered` }
+  return sendCodexAppServerTurn(sock, threadId, text, rec.worktreePath)
 }
 
 // idempotent replace of the content between sentinels; the user's own content above/below is preserved. The
@@ -260,16 +365,16 @@ export const claudeHarness: Harness = {
   shim: (dispatch, spex) => buildShim('claude', CLAUDE_EVENTS, dispatch, spex),
   writeTrust: () => { /* Claude relies on folder-trust — nothing to write */ },
   slashCommands: claudeSlashCommands,
-  liveness: (id, tmuxAlive) => (tmuxAlive && existsSync(rvSock(id)) ? 'online' : 'offline'),
-  deliver: (id, text) => deliverViaRendezvous(id, text),
+  liveness: (rec, tmuxAlive) => (tmuxAlive && existsSync(rvSock(rec.session)) ? 'online' : 'offline'),
+  deliver: (rec, text) => deliverViaRendezvous(rec.session, text),
   resumeArg: (rec) => `--resume ${rec.session}`,
 }
 
 export const codexHarness: Harness = {
   id: 'codex',
   events: CODEX_EVENTS,
-  ownsRendezvous: false,                             // no reclaude daemon — liveness from tmux, prompts via `codex resume`
-  launchCmd: () => process.env.SPEXCODE_CODEX_CMD || 'codex --yolo',
+  ownsRendezvous: false,                             // no reclaude daemon — liveness + prompts through the project app-server socket
+  launchCmd: (id, runtimeDir) => codexLaunchCommand(id, undefined, undefined, runtimeDir),
   sessionIdArg: () => '',                            // codex assigns its own id (resumed by a captured id)
   sessionEnvVar: 'CODEX_THREAD_ID',
   shimFile: (proj) => join(proj, '.codex', 'hooks.json'),
@@ -278,8 +383,8 @@ export const codexHarness: Harness = {
   shim: (dispatch, spex) => buildShim('codex', CODEX_EVENTS, dispatch, spex),
   writeTrust: (proj, cmdFor) => writeCodexTrust(proj, CODEX_EVENTS, cmdFor),
   slashCommands: codexSlashCommands,
-  liveness: (_id, tmuxAlive) => (tmuxAlive ? 'online' : 'offline'),   // the codex process holds the pane — tmux presence IS liveness
-  deliver: (id, text) => deliverViaSendKeys(id, text),
+  liveness: (rec, tmuxAlive, runtimeDir) => (tmuxAlive && !!rec.harnessSessionId && existsSync(codexAppServerSock(runtimeDir)) ? 'online' : 'offline'),
+  deliver: (rec, text) => deliverViaCodexAppServer(rec, text),
   resumeArg: (rec) => (rec.harnessSessionId ? `resume ${rec.harnessSessionId}` : ''),   // captured id → resume; else relaunch FRESH
 }
 

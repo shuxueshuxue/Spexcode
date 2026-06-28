@@ -5,6 +5,7 @@ hue: 280
 desc: One seam between SpexCode and the coding-agent harness (Claude Code, Codex, …). Every harness-specific fact lives behind a single Adapter interface with one impl per harness; product code never branches on which harness it is.
 code:
   - spec-cli/src/harness.ts
+  - spec-cli/src/harness.test.ts
   - spec-cli/hooks/harness.sh
 related:
   - spec-cli/src/slash-commands.ts
@@ -51,20 +52,25 @@ surface:
 - **worktree** — Claude has a native `--worktree` + `WorktreeCreate`/`WorktreeRemove` hooks; Codex has none
   (SpexCode manages the worktree itself). The adapter exposes whether the harness owns worktrees.
 - **runtime: liveness + delivery** — the RUNTIME transport, lifted onto the adapter so product code honours
-  `ownsRendezvous` instead of hard-wiring the claude rendezvous socket. `liveness(id, tmuxAlive)` answers "is
-  this agent up?": **claude** = the tmux window is up AND its reclaude rendezvous socket exists (the socket is
-  the truth claude is alive — the pane command is the wrapper/shell while claude runs as its child); **codex** =
-  the tmux window is up — the **codex process itself holds the pane**, so tmux presence IS liveness (codex opens
-  no control socket). `deliver(id, text)` sends a follow-up prompt and reports whether it landed: **claude**
-  through the rendezvous socket (inject + submit + CONFIRM accepted — loud failure on a missing/dead socket, no
-  silent fallback); **codex** via `tmux send-keys` typed into the pane it holds, then Enter to submit (no daemon
-  ack — best-effort typed delivery; short follow-ups only, ~2KB send-keys truncation caveat). `resumeArg(rec)`
-  is the relaunch tail `reopen()` hands `launch()`: **claude** `--resume <id>` (the SAME conversation, the id we
-  pinned); **codex** relaunches FRESH (empty tail → a new turn in the same worktree/record) until its real
-  thread id is captured (then `resume <thread-id>`). sessions.ts's `liveness()`/`isOccupying()`/`sendKeys()`/
+  `ownsRendezvous` instead of hard-wiring the claude rendezvous socket. `liveness(rec, tmuxAlive)` answers "is
+  this session's agent ready?": **claude** = the tmux window is up AND its reclaude rendezvous socket exists
+  (the socket is the truth claude is alive — the pane command is the wrapper/shell while claude runs as its
+  child); **codex** = the tmux window is up, the project-scoped Codex app-server Unix socket exists, AND this
+  record has a captured `harness_session_id`. The app-server socket is a project control plane shared by many
+  Codex sessions, so it proves transport availability but not which thread a follow-up would address.
+  `deliver(rec, text)` sends a
+  follow-up prompt and reports whether it landed: **claude** through the rendezvous socket (inject + submit +
+  CONFIRM accepted — loud failure on a missing/dead socket, no silent fallback); **codex** through the same
+  Codex app-server JSON-RPC control plane the visible TUI uses — `thread/resume <harness_session_id>` followed
+  by `turn/start`, confirmed by the app-server response. There is NO tmux prompt typing fallback for Codex:
+  typed keys can truncate and can only prove tmux accepted input, not that Codex accepted a
+  turn. `resumeArg(rec)` is the relaunch tail `reopen()` hands `launch()`: **claude** `--resume <id>` (the SAME
+  conversation, the id we pinned); **codex** `resume <thread-id>` once the real thread id has been captured,
+  else a fresh TUI on the same worktree/record. sessions.ts's `liveness()`/`isOccupying()`/`sendKeys()`/
   `reopen()`/`waitForReady()` all route through these adapter methods — there is no socket hard-wire and no
   `if (codex)` left in the runtime path; the rendezvous-socket path + its `replyViaSocket` round-trip MOVED into
-  `harness.ts` as the claude adapter's `deliver`/`liveness` implementation.
+  `harness.ts` as the claude adapter's `deliver`/`liveness` implementation, while Codex's app-server launch and
+  JSON-RPC turn delivery live in the Codex adapter.
 
 Most of this was **consolidation**: the event/snake maps, the Codex trust writer, and the shim writers were
 scattered in [[harness-delivery]]'s materialize; `CLAUDE_CMD` in [[sessions-core]]; the Claude `/` menu in
@@ -87,7 +93,11 @@ edit), so `hp_code_path` emits ALL touched paths — one per line — and every 
 so a `command` carrying a quoted literal (`sed -n "1,5p" f.ts`) is captured whole, not truncated at the inner
 quote. `hp_is_ask` maps Codex's `request_user_input` (and Claude's `AskUserQuestion`) onto the question capture.
 So [[spec-first]], [[spec-of-file]], and mark-active fire on Codex, not just Claude. The session-id + global-store
-resolution every handler repeated is folded into the same helper.
+resolution every handler repeated is folded into the same helper. The same mirror exposes
+`hp_harness_session_id`: Claude returns nothing because its pinned id already is the governed record id; Codex
+returns the payload `session_id` when `SPEXCODE_SESSION_ID` points at the governed SpexCode record, letting the
+generic `harness-session-id` hook store Codex's real app-server thread id without the dispatcher or lifecycle
+hooks branching on Codex.
 
 ## verified codex facts (live round-trip, real codex 0.142.3)
 
@@ -112,12 +122,15 @@ The Codex impl of the adapter must encode these (measured against a real self-la
   the launcher keys the record by a SpexCode id and exports it as `SPEXCODE_SESSION_ID` into the launch env, and
   every hook resolves THAT first (`hp_session_id`), falling back to the payload id only when unset (self-launch).
   One resolver, both harnesses — claude's exported id equals its payload id, so it's a no-op there.
-- **no rendezvous** (`ownsRendezvous:false`): codex has no reclaude control socket, so the adapter's
-  `liveness(id, tmuxAlive)` reads codex ONLINE iff its tmux pane is alive (the codex process holds the pane —
-  there is no offline-forever socket check to fail), and `deliver()` types the follow-up into the pane with
-  `tmux send-keys` + Enter rather than the socket round-trip. The launch model is an INTERACTIVE TUI in tmux
-  (the same shape as a user self-launching `codex`, plus `SPEXCODE_SESSION_ID`) — NOT the app-server JSON-RPC
-  path (correct but experimental/large, out of scope). `reopen()` relaunches FRESH for codex (its thread id is
-  un-pinnable, and the spexcode id is not a codex flag) until that real thread id is captured from the
-  SessionStart payload / the `$CODEX_HOME/sessions/**/rollout-*-<uuid>.jsonl` filename — deferred; the MVP
-  leaves liveness + initial launch + follow-up delivery working without it.
+- **no rendezvous** (`ownsRendezvous:false`): codex has no reclaude control socket, so SpexCode uses Codex's
+  own app-server. Each SpexCode project has one project-scoped `codex app-server --listen unix://<project sock>`
+  under the same global project runtime dir as the hook manifest, and every dashboard-launched Codex TUI starts
+  as `codex --remote unix://<project sock> ...`; follow-up delivery opens `codex app-server proxy --sock <that
+  sock>` and sends JSON-RPC. The app-server is a shared control plane, not a session identity; session routing
+  is solely the Codex thread id. That thread id is still Codex-minted and unpinnable at launch, so the governed
+  record keeps SpexCode's id as `session_id` and stores the real Codex id in `harness_session_id`, captured from
+  the Codex SessionStart payload. If `harness_session_id` is missing, delivery fails loud instead of guessing
+  from `thread/loaded/list`, because one app-server can host several sessions and several `spexcode serve`
+  processes must never cross-send. Explicit `--remote` is the default because it deterministically binds the
+  pane and backend control to the project app-server; Codex's implicit default-socket reuse is a useful future
+  supervisor mechanism but too conditional and too global to be this launch contract.

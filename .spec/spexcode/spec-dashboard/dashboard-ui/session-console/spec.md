@@ -35,10 +35,11 @@ first `@<id>`). Both menus only insert text; the New prompt has **no** `/` slash
 appears in the list below (the next board poll surfaces it) — so you can fire off several in a row. The old
 auto-jump-to-the-new-session is gone; only a tab's *removal* (below) ever moves your selection for you.
 
-Beneath the box a **harness selector** (a bare segmented radio control in the panel's design language, no
-glyph) picks **which agent the launch boots** — Claude Code (the default) or Codex — from the set the backend
-can start ([[harness-adapter]]). The choice rides along in the launch `POST /api/sessions` body and is
-**remembered** (per-browser) so a user who lives in one harness never re-picks; it never assumes a node and
+Beneath the box an **agent picker** (icon-only radio pills using the vendors' marks — Anthropic for Claude
+Code, OpenAI for Codex) picks **which agent the launch boots** from the set the backend can start
+([[harness-adapter]]). There is no visible "harness" label or text inside the buttons; the readable names live
+in `aria-label`/tooltips. The choice rides along in the launch `POST /api/sessions` body and is
+**remembered** (per-browser) so a user who lives in one agent never re-picks; it never assumes a node and
 composes orthogonally with the `/<preset> @<node>… text` grammar above.
 
 **View Session Relationship** fills the pane with the live monitor graph ([[session-graph]]) — its home now,

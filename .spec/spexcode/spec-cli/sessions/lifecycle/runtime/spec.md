@@ -17,8 +17,10 @@ prompt, a queued session's launch prompt, the generated hook settings, the launc
 project `CLAUDE.md`. None of it is the agent's spec/code work, and putting any of it in the worktree was the
 root of two problems: it polluted the tree the agent commits, and it forced a 1:1 worktree↔session identity
 (a path key), so two agents in one folder would clobber. So the runtime lives OUTSIDE the worktree entirely,
-in a per-user GLOBAL store keyed by the harness **`session_id`** — the worktree is left pristine (zero
-SpexCode files), and each agent gets its own record even when several share a folder.
+in a per-user GLOBAL store keyed by SpexCode's governed **`session_id`** — the worktree is left pristine
+(zero SpexCode files), and each agent gets its own record even when several share a folder. Claude Code's
+harness id equals that governed id; Codex mints its own thread id, so the record stores that separately as
+`harness_session_id` once the Codex SessionStart hook reports it.
 
 ## expanded spec
 
@@ -35,7 +37,7 @@ a file in that dir:
 
 | file | written by |
 |---|---|
-| `session.json` | `readRecord` / `writeRecord` — the structured lifecycle record ([[state]]): state, governed, worktree_path, node, branch, createdAt, … |
+| `session.json` | `readRecord` / `writeRecord` — the structured lifecycle record ([[state]]): state, governed, worktree_path, node, branch, createdAt, harness_session_id, … |
 | `prompt` | the originating human ask ([[launch]]) |
 | `launch` | the deferred launch prompt of a still-queued session ([[launch]]) |
 | `hooks.json` | the per-session Claude Code hooks (`writeSettings`, referenced by `--settings`) |
@@ -50,7 +52,8 @@ override → `~/.spexcode`), `encodeProject()` / `projectKey()`, `runtimeRoot()`
 `sessionRecordPath(id)`, `sessionArtifactPath(id, name)`, plus `readRawRecord` / `listSessionIds` for the board.
 The store has TWO tiers under one per-project dir: the per-session dirs above, AND the per-project runtime that
 [[hook-dispatch]] / [[harness-delivery]] render — the hook manifest, the gate's content-hash marker, the
-materialize lock — which now live in `runtimeRoot()` too, NOT the worktree. So the worktree holds ZERO
+materialize lock — plus the Codex app-server socket/pid/log/lock when Codex is launched through SpexCode.
+Those project-level artifacts live in `runtimeRoot()` too, NOT the worktree. So the worktree holds ZERO
 SpexCode-rendered runtime; the only in-tree artifacts are the harness-discovered contract files (CLAUDE.md/
 AGENTS.md block) + shims, which MUST sit in-tree for the harness to find them. `sessions.ts` writes through `storeDir(id)` (mkdir-and-return) and the full typed
 `readRecord` / `writeRecord`; the shell hooks reimplement the SAME path scheme in bash (the one cross-language
@@ -58,9 +61,12 @@ mirror — a change to the seam must update both, noted at the layout.ts helpers
 the worktree any more, the Stop-gate's dirty count needs no runtime filtering, and `session.json` is written
 one-field-per-line with every key present so the hot-path hook edits it with sed, not jq ([[state]]).
 
-`session.json` writes are by `session_id` (the agent/hook resolves its own id from the harness env var or the
-payload), so they never depend on cwd beyond the project key. `close` removes the worktree AND sweeps the whole
-store dir; `exit` keeps both, so an offline session is still on the board and `--resume`-able.
+`session.json` writes are by governed `session_id` (the agent/hook resolves `SPEXCODE_SESSION_ID` first, then
+falls back to the harness env var or payload for self-launched agents), so they never depend on cwd beyond the
+project key. `close` removes the worktree AND sweeps the whole per-session store dir; `exit` keeps both, so an
+offline session is still on the board and `--resume`-able. Codex's project app-server is not swept by closing
+one session because several Codex sessions and several `spexcode serve` processes in the same project may be
+using the same control plane; routing is by `harness_session_id`, not by socket ownership.
 
 This is a CLEAN cut from the old per-worktree `.session/` layout — there is no compat shim. An in-flight session
 launched under the old backend keeps its worktree `.session/` until it drains; the new backend simply doesn't

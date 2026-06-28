@@ -125,13 +125,30 @@ export type RawRecord = {
   sortkey: number | null; createdAt: number; harness?: string; harness_session_id?: string
 }
 // the agent's OWN session id from the environment — the only locator now that the record left the worktree.
-// SPEXCODE_SESSION_ID (the GOVERNED record id the launcher bakes in) wins, EXACTLY mirroring the shell hooks'
-// `hp_session_id` — this matters for codex, whose own CODEX_THREAD_ID is its un-pinnable minted id and does NOT
-// equal the governed record id, so resolving the harness var first would point a governed codex agent's own
-// `spex session …` at the wrong/nonexistent record. Else each adapter's env var (Claude CLAUDE_CODE_SESSION_ID
-// — already == the record id; Codex CODEX_THREAD_ID for a self-launched, non-governed agent). No worktree
-// fallback. (sessions.ts's `ownSessionId` delegates here; spec-yatsu reads it to resolve the current node.)
+// Three tiers, in order:
+//   (1) a harness's per-thread env var (`sessionEnvVar`) RESOLVED VIA THE ALIAS — when it lands on a governed
+//       record (directly, or through that record's `harness_session_id`), that record's SpexCode id is the
+//       answer. This MUST win: codex's design-C runs ONE shared per-project app-server whose env carries the
+//       FIRST launched session's `SPEXCODE_SESSION_ID`, and the agent's shell tool (its `spex session
+//       done/park/ask`) runs INSIDE that app-server process, so `SPEXCODE_SESSION_ID` is contaminated with the
+//       wrong session. But codex injects the ACTING thread's id into every spawned command's env as
+//       CODEX_THREAD_ID (== codex's `sessionEnvVar`), so the per-thread var aliases to the RIGHT record while
+//       the shared `SPEXCODE_SESSION_ID` does not.
+//   (2) else `SPEXCODE_SESSION_ID` (the GOVERNED record id the launcher bakes in) — the claude path and the
+//       non-shared baseline, mirroring the shell hooks' `hp_session_id`.
+//   (3) else a harness's env var RAW — a self-launched, non-governed agent's own minted id, which has no
+//       governed record to alias to (codex CODEX_THREAD_ID / claude CLAUDE_CODE_SESSION_ID). The RAW form must
+//       stay BELOW (2): an un-aliased codex thread id is not a record key, so it must never beat a real
+//       `SPEXCODE_SESSION_ID`.
+// Claude is UNCHANGED: its `sessionEnvVar` (CLAUDE_CODE_SESSION_ID) already EQUALS its record id, so tier (1)
+// resolves to that very id — the same value `SPEXCODE_SESSION_ID` would have returned; there is no shared
+// app-server to contaminate it. No worktree fallback. (sessions.ts's `ownSessionId` delegates here; spec-yatsu
+// reads it to resolve the current node.)
 export function envSessionId(): string | null {
+  for (const h of HARNESSES) {
+    const v = process.env[h.sessionEnvVar]
+    if (v && v.trim()) { const r = readAliasedRawRecord(v.trim()); if (r) return r.session_id }
+  }
   const o = process.env.SPEXCODE_SESSION_ID
   if (o && o.trim()) return o.trim()
   for (const h of HARNESSES) { const v = process.env[h.sessionEnvVar]; if (v && v.trim()) return v.trim() }

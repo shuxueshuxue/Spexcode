@@ -82,7 +82,12 @@ export function headSha(root: string): string {
       if (sp > 0 && line.slice(sp + 1).trim() === name) return line.slice(0, sp).trim()
     }
   }
-  throw new Error(`headSha: cannot resolve ${name}`)
+  // an UNBORN HEAD — a fresh `git init` with no commits — points at a branch ref that doesn't exist yet.
+  // That is a valid EMPTY-HISTORY state, not a failure: the board renders fine from the working tree. Return
+  // a stable, truthy sentinel so historyIndex/driftIndex/safeHead MEMOIZE it (the head value is only ever a
+  // cache key, never a git ref) instead of re-forking git on every read; headOrEmpty's warning is then
+  // reserved for a genuinely unreadable HEAD and never fires for this routine first-run state.
+  return `unborn:${name}`
 }
 
 // fingerprint of a worktree's `.spec` working tree by path + mtimeMs + size (no git); the overlay-cache

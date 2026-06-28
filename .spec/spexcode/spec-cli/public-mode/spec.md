@@ -56,3 +56,8 @@ not a requirement.
 never the committable `spexcode.json`; config holds cert file *paths*, the key file lives outside git.
 `--public` with no password serves open with a loud warning (never a silent exposure); a cert file that does
 not exist is a named error pointing at the repair, never a silent fallback to insecure serving.
+
+**The same gateway also powers local serve.** [[packaging]]'s `spex dashboard` is this gateway on loopback,
+ungated, no TLS; the internet face here is the other configuration of one engine. And the dist it serves is
+a resolved location, never hardcoded: an installed `spexcode` serves its bundled `dashboard-dist`, the
+dogfood monorepo falls back to the sibling `spec-dashboard/dist`.

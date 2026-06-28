@@ -7,7 +7,7 @@ import { statSync, readdirSync, type Dirent } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { installProcessGuards } from './resilience.js'
-import { resolvePublicConfig, startGateway, ensureDashboardBuilt } from './gateway.js'
+import { resolvePublicConfig, startGateway, ensureDashboardBuilt, resolveDistDir } from './gateway.js'
 
 // the supervisor OWNS the public port, so it must outlive any transient throw: an uncaught error here is
 // logged and survived, never an exit that closes the port (and the tmux session) and takes the frontend down.
@@ -123,7 +123,7 @@ if (!first) { console.error('[supervisor] initial backend failed to start'); pro
 current = first
 if (publicCfg) {
   // public mode: the raw proxy stays on loopback; the password-gated gateway owns the public port.
-  const distDir = join(repoRoot, 'spec-dashboard', 'dist')
+  const distDir = resolveDistDir() // bundled <pkg>/dashboard-dist when installed, else monorepo spec-dashboard/dist
   ensureDashboardBuilt(repoRoot, distDir)
   proxy.listen(proxyPort, '127.0.0.1', () => console.log(`spec-cli supervisor on loopback :${proxyPort} (zero-downtime reloads, backend :${first.port})`))
   startGateway({ publicPort, upstreamPort: proxyPort, password: publicCfg.password, tls: publicCfg.tls, distDir })

@@ -13,8 +13,8 @@ related:
 ## raw source
 
 A session has runtime bookkeeping the harness scribbles for it — the lifecycle record, the originating
-prompt, a queued session's launch prompt, the generated hook settings, the launch script, the isolated
-project `CLAUDE.md`. None of it is the agent's spec/code work, and putting any of it in the worktree was the
+prompt, a queued session's launch prompt, the launch script, the recorded inter-agent comms. None of it is
+the agent's spec/code work, and putting any of it in the worktree was the
 root of two problems: it polluted the tree the agent commits, and it forced a 1:1 worktree↔session identity
 (a path key), so two agents in one folder would clobber. So the runtime lives OUTSIDE the worktree entirely,
 in a per-user GLOBAL store keyed by SpexCode's governed **`session_id`** — the worktree is left pristine
@@ -40,9 +40,7 @@ a file in that dir:
 | `session.json` | `readRecord` / `writeRecord` — the structured lifecycle record ([[state]]): state, governed, worktree_path, node, branch, createdAt, harness_session_id, … |
 | `prompt` | the originating human ask ([[launch]]) |
 | `launch` | the deferred launch prompt of a still-queued session ([[launch]]) |
-| `hooks.json` | the per-session Claude Code hooks (`writeSettings`, referenced by `--settings`) |
 | `launch.sh` | the whole launch invocation (`launchScript`, run via `bash <abs path>`) |
-| `claude.md` | the moved project `CLAUDE.md` ([[launch]]'s isolation — out of the worktree, so auto-discovery never sees it) |
 | `spec-checked` / `spec-of-file-seen` | the [[spec-first]] / [[spec-of-file]] once-per-session sentinel + ledger |
 | `comms.ndjson` | recorded inter-agent talk ([[comms-edge]]) |
 
@@ -57,9 +55,11 @@ Those project-level artifacts live in `runtimeRoot()` too, NOT the worktree. So 
 SpexCode-rendered runtime; the only in-tree artifacts are the harness-discovered contract files (CLAUDE.md/
 AGENTS.md block) + shims, which MUST sit in-tree for the harness to find them. `sessions.ts` writes through `storeDir(id)` (mkdir-and-return) and the full typed
 `readRecord` / `writeRecord`; the shell hooks reimplement the SAME path scheme in bash (the one cross-language
-mirror — a change to the seam must update both, noted at the layout.ts helpers). Because no SpexCode file is in
-the worktree any more, the Stop-gate's dirty count needs no runtime filtering, and `session.json` is written
-one-field-per-line with every key present so the hot-path hook edits it with sed, not jq ([[state]]).
+mirror — a change to the seam must update both, noted at the layout.ts helpers). Because the only in-tree
+SpexCode artifacts are gitignored (the materialize shims/skills) or tracked-and-committed (the contract block
+in CLAUDE.md/AGENTS.md), none shows as an uncommitted change, so the Stop-gate's dirty count needs no runtime
+filtering, and `session.json` is written one-field-per-line with every key present so the hot-path hook edits
+it with sed, not jq ([[state]]).
 
 `session.json` writes are by governed `session_id` (the agent/hook resolves `SPEXCODE_SESSION_ID` first, then
 falls back to the harness env var or payload for self-launched agents), so they never depend on cwd beyond the

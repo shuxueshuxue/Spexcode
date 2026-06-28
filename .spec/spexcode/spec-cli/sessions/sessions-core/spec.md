@@ -2,7 +2,7 @@
 title: sessions-core
 status: active
 hue: 280
-desc: The shared session module every session feature builds on — the .session record I/O, worktree/branch/node resolution, and the launch/state/dispatch/poll plumbing the lifecycle and comms nodes each specialize.
+desc: The shared session module every session feature builds on — the global per-session record I/O, worktree/branch/node resolution, and the launch/state/dispatch/poll plumbing the lifecycle and comms nodes each specialize.
 code:
   - spec-cli/src/sessions.ts
 ---
@@ -18,8 +18,10 @@ foundation owner: the features govern their own surfaces and REFERENCE this modu
 ## expanded spec
 
 sessions-core owns `sessions.ts` — the common session layer: the global per-session record read/write
-(`session.json` keyed by session_id, [[runtime]]), session↔worktree↔node resolution, the launch/`--settings`
-assembly, and the poll loop the watch/wait subscriptions share. Each session feature ([[state]], [[launch]], [[dispatch]], [[comms-edge]], [[graph]],
+(`session.json` keyed by session_id, [[runtime]]), session↔worktree↔node resolution, the launch-script
+assembly (the rendezvous env + the harness's own command + the spec-pointer/prompt tail — carrying NO
+`--append-system-prompt`/`--settings` flag, since the contract and hooks reach the agent by worktree
+auto-discovery, see [[harness-delivery]]), and the poll loop the watch/wait subscriptions share. Each session feature ([[state]], [[launch]], [[dispatch]], [[comms-edge]], [[graph]],
 [[session-selectors]], [[agent-reply-channel]], [[spec-pointer]]) specializes a slice of it and lists it
 under `related:`, so a change here attributes its drift/yatsu to this one owner instead of all of them
 (see [[governed-related]]). That several features hold no code of their own is the honest signal that

@@ -10,17 +10,20 @@ import { defaultHarness, harnessById, rvSock, type Harness, type DispatchResult 
 import { materialize } from './materialize.js'
 import { mainBranch, gitCommonDir, readConfig, runtimeRoot, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, readRawRecord, envSessionId, type RawRecord } from './layout.js'
 
-// @@@ sessions - the WORKTREE is the durable unit; tmux is a disposable runtime handle. Each session
-// worktree carries an untracked `.session` file (the source of truth) that survives a kill / reboot /
-// moving the folder. We launch claude with `--session-id <id>` (id we choose) so the SAME conversation
-// can be `--resume`d into a fresh tmux. NO in-memory map: listSessions() reads worktrees every time.
+// @@@ sessions - the WORKTREE is the durable unit; tmux is a disposable runtime handle. The per-session
+// SOURCE OF TRUTH is an untracked record (`session.json`) in a per-user GLOBAL store keyed by the harness
+// session_id (NOT a worktree file — the worktree stays pristine), surviving a kill / reboot / moving the
+// folder. We launch claude with `--session-id <id>` (id we choose) so the SAME conversation can be
+// `--resume`d into a fresh tmux. NO in-memory map: listSessions() ENUMERATES that store every time.
 //
-// STATE MACHINE (only two real states; merge is an action, not a state):
-//   active   → liveness: working | idle | offline. working/offline are read LIVE (is the tmux alive and
-//              still running claude?); idle is PERSISTED (status: idle) by the Notification(idle_prompt)
-//              hook when claude sits waiting at its prompt — the ONE inferred state, guarded active-only so
-//              it never clobbers a declaration; the mark-active hook flips it back to active on real work.
-//              (offline = no tmux for the recorded id, or claude's rendezvous socket is gone — see reconcile)
+// STATE MACHINE — two ORTHOGONAL axes (see [[state]]): an agent-authored LIFECYCLE and a runtime-derived
+// LIVENESS, neither overriding the other.
+//   lifecycle (authored): active | idle | awaiting | parked | error | asking | queued. `idle` is the ONE
+//              inferred one (the Notification(idle_prompt) hook, guarded active-only so it never clobbers a
+//              declaration; mark-active flips it back to active on real work).
+//   liveness (derived for EVERY session): online | starting | offline. offline = no tmux for the id, or the
+//              harness online-signal (claude's rendezvous socket) is gone past the boot grace; starting =
+//              the boot window. reconcile composes the two into the compact DisplayStatus for one-glyph surfaces.
 //   awaiting → the agent's PROPOSAL, awaiting a human:
 //                proposal=merge   → shown "review"        ("ready, merge me")
 //                proposal=nothing → shown "done"          ("finished, your call")
@@ -30,7 +33,8 @@ import { mainBranch, gitCommonDir, readConfig, runtimeRoot, sessionStoreDir, ses
 //                tool (question → note), and the agent may also declare it via `spex session ask --note
 //                <question>`. Not inferred. Distinct from `parked` (which waits on a background task/
 //                schedule and self-resumes); an asking agent resumes only when a human sends it a prompt.
-//   (closed = the worktree is removed; not a stored status)
+//   queued → a prepared worktree held below the concurrency cap; the drainer launches it as a slot frees.
+//   (closed = the worktree AND the global record are removed; not a stored status)
 // The agent only ever PROPOSES (awaiting); merge/close are human-only. Every proposal is reversible
 // via reopen() → active. `merges` is METADATA (how many times merged), shown as a badge, not a state.
 //

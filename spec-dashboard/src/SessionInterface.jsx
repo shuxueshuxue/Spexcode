@@ -638,11 +638,17 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       if ((e.altKey || e.metaKey) && isI && active !== 'new' && active !== 'graph') {
         e.preventDefault(); e.stopPropagation(); setNavMode((v) => !v); return
       }
-      // ⌃/⌘+N (also ⌃/⌘+↑/Home): kept ABOVE the graph branch and the nav-mode passthrough so the snap fires
-      // from the graph and even while raw-key mode forwards to a pane.
-      if (((e.ctrlKey || e.metaKey) && (e.key === 'n' || e.key === 'N')) ||
-          ((e.ctrlKey || e.metaKey) && (e.key === 'ArrowUp' || e.key === 'Home'))) {
-        e.preventDefault(); e.stopPropagation(); setSel('new'); return
+      // ⌘/⌥/⌃+N snaps to New Session; ⌘/⌥/⌃+↑/↓ walk the session list. Both kept ABOVE the graph branch and
+      // the nav-mode passthrough so they fire from the graph and even while raw-key mode forwards to a pane —
+      // and the modifier frees ↑/↓ from any caret/typing conflict, so the switch fires whatever input holds focus.
+      if (e.metaKey || e.altKey || e.ctrlKey) {
+        if (e.key === 'n' || e.key === 'N') { e.preventDefault(); e.stopPropagation(); setSel('new'); return }
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+          e.preventDefault(); e.stopPropagation()
+          let i = order.indexOf(active); if (i < 0) i = 0   // off-list (graph) → enter the list from New
+          const ni = Math.max(0, Math.min(order.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))
+          setSel(order[ni]); return
+        }
       }
       // graph tab: hjkl/⏎/? pass through to the graph's own listener; ← returns to New Session; the other
       // arrows are swallowed (so they neither scroll nor fall through to tab nav). Esc closes the `?` legend

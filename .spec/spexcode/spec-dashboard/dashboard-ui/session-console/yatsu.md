@@ -187,6 +187,26 @@ scenarios:
       appear (overflow-y flips to `auto`), and scrolling reaches the last line. The same holds for the docked
       `❯` inbox against its half-terminal cap. On the MAIN baseline a scrollbar can show below the cap (a
       transient flash during the grow transition, or a persistent bar from scrollHeight sub-pixel rounding).
+  - name: inbox-mention-dropdown-and-resolution
+    description: >
+      Through the running dashboard in a real browser, open the session interface (Enter) on a LIVE
+      (non-offline) session and put focus in its docked `❯` inbox (NOT the New Session prompt). Type `@`
+      followed by a partial node id (e.g. `@term`). Watch for the spec-node completion dropdown to open
+      ABOVE the box (`.si-bottom .mention-menu.up`), ranked the same as New's `@` menu (focused node first,
+      then prefix matches). Arrow/Enter to accept the top row and confirm the token is INSERTED into the
+      inbox draft (not sent, terminal unchanged, menu closes). Then confirm the send-time resolution
+      WITHOUT disturbing a real worker: against the live spec index, the message `look at @term-input` must
+      transform to `look at @term-input (<path-to-term-input/spec.md>)`; an unknown id passes through. Compare
+      against the MAIN baseline, where the inbox has NO `@` menu and `@id` is sent verbatim.
+    expected: |
+      The exact same `@` dropdown the New Session prompt offers also opens in a running session's `❯` inbox —
+      one shared menu, not a second implementation — opening upward, ranked focused-node-first. Accepting a
+      row inserts `@<id> ` into the inbox draft only (never dispatched on pick, terminal shows no new line),
+      and the menu closes. On send, each `@<id>` resolves in place to `@<id> (<spec.md path>)` — the live
+      pointer the driven agent opens, mirroring spec-pointer's launch pointer — while an unknown id and the
+      surrounding prose are sent verbatim. On the MAIN baseline none of this exists: the inbox has no `@`
+      menu and forwards `@id` literally.
+    related: spec-dashboard/src/SessionInterface.jsx
 ---
 
 # session-console — yatsu

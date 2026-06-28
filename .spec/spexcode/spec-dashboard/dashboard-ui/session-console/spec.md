@@ -80,8 +80,10 @@ confirm** — typing the exact command is itself the deliberate act, where the r
 easy-to-mis-aim right-click. The box **holds
 focus persistently** — clicking
 chrome never blurs it, the panel **suppresses the native context menu** and **restores** focus after a
-right-click. It **auto-grows upward**, **capped at half** the terminal height, with New's `/` **completion**
-([[term-input]]). The second channel is **nav mode** — entered by the `/nav` board command, the header
+right-click. It **auto-grows upward**, **capped at half** the terminal height, and carries the same **completion** menus
+the New prompt does ([[term-input]]): the inbox `/` lists the board+CC commands, and `@` opens the spec-node
+dropdown — one menu shared with New, not a second copy. An `@<node>` here **resolves at send**, expanding to
+a pointer at the node's live `spec.md` so the running agent is aimed at that contract. The second channel is **nav mode** — entered by the `/nav` board command, the header
 button, or the reserved `⌥/⌘+I`: the `❯` box disables and **every keystroke — `⌃`/`⌥`/`⌘` combos included —
 forwards raw** to the pane, so a human drives the agent's terminal, not just its arrows. Those **reserved
 `⌥/⌘+I`** keys toggle nav mode and are **never forwarded to tmux nor overridable by the app**; entry is

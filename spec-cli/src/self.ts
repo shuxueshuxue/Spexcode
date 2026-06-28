@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 import { homedir } from 'node:os'
 import { loadSystemConfig } from './specs.js'
-import { runtimeRoot } from './layout.js'
+import { runtimeRoot, envSessionId, readAliasedRawRecord } from './layout.js'
 
 // this file lives at <pkgRoot>/src/self.ts, so `..` is the package root — the same derivation init.ts/
 // materialize.ts use (never a hardcoded repo path), so the git-hook template lookup survives a relocated install.
@@ -89,9 +89,13 @@ async function backendReachable(): Promise<{ base: string; up: boolean }> {
 async function doctor(): Promise<number> {
   const cwd = process.cwd()
   const root = repoRoot(cwd)
-  const base = root ?? cwd   // .claude/.codex/CLAUDE.md/.session live at the worktree ROOT — anchor every probe here
+  const base = root ?? cwd   // the contract files (CLAUDE.md/AGENTS.md) + hook shims live at the worktree ROOT — anchor every probe here
   const adopted = existsSync(join(base, '.spec')) && existsSync(join(base, 'spexcode.json'))
-  const managed = existsSync(join(base, '.session'))
+  // managed = THIS agent's own session is a GOVERNED record in the global store (the dashboard launcher set
+  // governed:true). That governed flag is the source of truth the old worktree `.session` presence only implied
+  // (see [[state]]); resolve the agent's id from its env and read the record — a self-launched BYOA agent has none.
+  const ownId = envSessionId()
+  const managed = !!(ownId && readAliasedRawRecord(ownId)?.governed)
   const hooksDir = commonHooksDir(cwd)
   const { names, body } = contractText()
 

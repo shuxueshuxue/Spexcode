@@ -16,6 +16,8 @@
   --magenta:#d33682;
   --cyan:  #2aa198;
   --term-bg: #002b36; /* solarized base03 — the embedded terminal is DARK (the Claude TUI is dark-designed) */
+  --sg-comms: #93a1a1;                  /* base1 muted — session-graph comms edge line + message count */
+  --sg-comms-bg: rgba(238,232,213,0.9); /* base2 cream chip behind the count — legible on the light board, not a dark blob */
   --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 }
 

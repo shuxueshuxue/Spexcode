@@ -16,6 +16,8 @@ type Config = {
   }
   sessions?: {
     maxActive?: number             // concurrency cap: max agents AUTONOMOUSLY PROGRESSING at once (default 6; see sessions.ts maxActive)
+    claudeCmd?: string             // worker launcher for Claude (default 'claude --dangerously-skip-permissions'); env SPEXCODE_CLAUDE_CMD overrides. A host-specific ABS path belongs in the gitignored spexcode.local.json, not here.
+    codexCmd?: string              // worker launcher for Codex (default 'codex --yolo'); env SPEXCODE_CODEX_CMD overrides. Same host-path rule.
   }
   serve?: {
     // public-exposure config for `spex serve --public` (resolved gateway-side; see [[public-mode]] / gateway.ts).
@@ -39,10 +41,23 @@ export type Worktree = {
 }
 export type Layout = { main: string; convention: Convention; worktrees: Worktree[] }
 
-export function readConfig(root: string): Config {
-  const p = join(root, 'spexcode.json')
+function readJsonOr(p: string): any {
   if (!existsSync(p)) return {}
   try { return JSON.parse(readFileSync(p, 'utf8')) } catch { return {} }
+}
+// committed `spexcode.json` with an OPTIONAL machine-local `spexcode.local.json` layered on top (gitignored).
+// The local layer is the durable home for HOST-SPECIFIC values that must never be committed — e.g. an
+// absolute worker-launcher path (the host-path leak the repo otherwise warns against). Precedence per field:
+// local over committed; an env var (e.g. SPEXCODE_CLAUDE_CMD) still overrides both at its read site.
+export function readConfig(root: string): Config {
+  const committed = readJsonOr(join(root, 'spexcode.json'))
+  const local = readJsonOr(join(root, 'spexcode.local.json'))
+  const out: any = { ...committed }
+  for (const k of Object.keys(local)) {
+    const b = committed[k], o = local[k]
+    out[k] = (b && o && typeof b === 'object' && typeof o === 'object' && !Array.isArray(o)) ? { ...b, ...o } : o
+  }
+  return out
 }
 
 // the shared git common dir (env-stripped git() so a hook's exported GIT_DIR can't misdirect it). Memoized:

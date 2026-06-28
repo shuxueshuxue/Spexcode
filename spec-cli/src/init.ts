@@ -45,6 +45,19 @@ function resolveHooksDir(dir: string): string | null {
 
 export async function specInit(targetArg: string | undefined): Promise<void> {
   const targetDir = resolve(targetArg ?? process.cwd())
+
+  // SpexCode is git-backed: git IS the version database and the hooks live in `.git`. A non-git target
+  // would leave a HALF-STATE — specs on disk but no version history, no hooks, no harness shims, no
+  // sessions. So fail LOUD before writing anything, rather than seeding debris and warning past it. We do
+  // NOT `git init` for them: creating a repo is a side effect beyond init's remit (a subdir, a dir not
+  // meant as a repo root), and `git init` is one deliberate command.
+  try {
+    execFileSync('git', ['-C', targetDir, 'rev-parse', '--is-inside-work-tree'], { stdio: ['ignore', 'ignore', 'ignore'] })
+  } catch {
+    console.error(`spex init: ${targetDir} is not a git repository. SpexCode is git-backed (git is the version database; the hooks live in .git). Run \`git init\` there first, then \`spex init\`.`)
+    process.exit(1)
+  }
+
   if (!existsSync(targetDir)) mkdirSync(targetDir, { recursive: true })
   console.log(`spex init → ${targetDir}`)
 

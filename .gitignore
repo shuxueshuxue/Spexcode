@@ -40,6 +40,10 @@ spec-cli/bin/claude
 harness-report.html
 harness-report-serve
 
+# machine-local config overlay (host-specific values that must NOT be committed — e.g. an absolute
+# worker-launcher path); readConfig() layers it over the committed spexcode.json. See portable-layout.
+spexcode.local.json
+
 # os / editor
 .DS_Store
 *.log

@@ -25,8 +25,9 @@ What rides inside the tarball is an explicit `files` allowlist, not whatever hap
 `bin/` (the `spex` launcher), and `dashboard-dist/` — the dashboard compiled once **at publish time** by
 `prepublishOnly`, never on the user's machine. The dist is built from the sibling `spec-dashboard`
 package, which sits outside the tarball, so the prepublish step copies the fresh build in; the published
-package is then self-contained. The private monorepo root is not the published unit — it keeps its name
-out of the registry so the one public name belongs to the tool a user installs.
+package is then self-contained. The same step copies the repo-root `README.md` into the package, so the
+npm page renders the same docs as GitHub from one source. The private monorepo root is not the published
+unit — it keeps its name out of the registry so the one public name belongs to the tool a user installs.
 
 The natural way to run the installed tool is **two commands on two ports, deliberately kept apart** —
 starting the backend never drags the UI along:

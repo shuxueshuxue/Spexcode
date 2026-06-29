@@ -502,7 +502,7 @@ export default function NodeView({ node, pane, setPane, onClose }) {
   // (e.g. 'edit' is selected, then a node with no overlay opens) — so a tab is always shown, never blank.
   const active = panes.some((p) => p.key === pane) ? pane : panes[0].key
   return (
-    <div className="ov-backdrop" onMouseDown={onClose}>
+    <div className="ov-backdrop" data-focus-overlay onMouseDown={onClose}>
       <div className="ov-panel" onMouseDown={(e) => e.stopPropagation()}>
         <div className="ov-head">
           <span className="ov-title">{node.title}</span>

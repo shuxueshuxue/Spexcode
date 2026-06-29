@@ -2,7 +2,7 @@
 // Backdrop click closes; the inner panel stops propagation so a click inside doesn't.
 export default function Modal({ title, closeLabel, onClose, className, children }) {
   return (
-    <div className="legend-backdrop" onClick={onClose}>
+    <div className="legend-backdrop" data-focus-overlay onClick={onClose}>
       <div
         className={className ? `legend ${className}` : 'legend'}
         role="dialog"

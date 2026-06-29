@@ -128,7 +128,7 @@ export default function SpecSearch({ specs, sessions, onPick, onClose, boost = n
   }
 
   return (
-    <div className="search-backdrop" onClick={onClose}>
+    <div className="search-backdrop" data-focus-overlay onClick={onClose}>
       <div className="search-panel" role="dialog" aria-modal="true" aria-label={t('search.title')} onClick={(e) => e.stopPropagation()}>
         <div className="search-bar">
           <span className="search-icon">⌕</span>

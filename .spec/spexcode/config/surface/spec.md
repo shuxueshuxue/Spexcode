@@ -2,12 +2,12 @@
 title: surface
 status: active
 hue: 260
-desc: A config node's surface is a frontmatter FIELD — surface: system|command|hook|skill — not its location; discovered recursively under a config root.
+desc: A config node's surface is a frontmatter FIELD — surface: system|command|hook|skill|agent — not its location; discovered recursively under a config root.
 code:
 ---
 # surface
 
-A config node's **surface** — where it plugs in — is a `surface` **frontmatter field**, one of four values:
+A config node's **surface** — where it plugs in — is a `surface` **frontmatter field**, one of five values:
 
 - `surface: command` — a **command** preset, offered in the new-session `/` dropdown.
 - `surface: system` — a **system** contract: its body is materialized (in name order) into the
@@ -23,6 +23,13 @@ A config node's **surface** — where it plugs in — is a `surface` **frontmatt
   **only when the task matches its `description`** (the node's `desc:`) — never folded into the always-on
   contract. Both harnesses ship the same agentskills.io `SKILL.md` primitive, so this is one format, two dirs:
   the divergence is a single [[harness-adapter]] `skillDir` line, nothing scattered.
+- `surface: agent` — an **on-demand sub-agent**: its body is rendered to a `<name>.md` definition under each
+  harness's agent dir (claude `.claude/agents/`) that the harness auto-discovers as a spawnable Agent-tool
+  sub-agent, loaded **only when a session needs it** (matched on the node's `desc:` trigger) — like a skill,
+  never folded into the always-on contract. Its `tools:` field is the spawned agent's read/write tool
+  allowlist. Same render shape as `skill`, one definition per harness: the divergence is a single
+  [[harness-adapter]] `agentDir` line, and a harness with NO agent primitive (e.g. Codex today) gets none —
+  exactly as a harness with no skill primitive gets no `SKILL.md`. The canonical example is [[spec-scout]].
 
 The surface is a FIELD, not a path: a plugin carrying it is a real graph node and is discovered
 **recursively** under a config root — so a grouping plugin may itself be a plugin whose children carry a
@@ -36,6 +43,8 @@ reaches no surface at all.
 In [[source-of-truth]]'s `specs.ts`, `loadSurface(s)` walks each root recursively and keeps the nodes whose
 `surface` field equals `s`: `loadConfig` gathers command ([[spec-cli]]'s `/api/config`, the
 [[session-console]] `/` palette), `loadSystemConfig` gathers system ([[sessions]]'s launcher), and
-`loadHookConfig` gathers hook (compiled into the dispatch manifest), and `loadSkillConfig` gathers skill
-(rendered to a per-harness `SKILL.md` by [[harness-delivery]]'s materialize). Only **built/active** plugins gather —
-a `status: pending` node is declared intent, so it renders on the board but reaches no surface.
+`loadHookConfig` gathers hook (compiled into the dispatch manifest), `loadSkillConfig` gathers skill
+(rendered to a per-harness `SKILL.md` by [[harness-delivery]]'s materialize), and `loadAgentConfig` gathers
+agent (rendered to a per-harness `<name>.md` sub-agent definition by that same materialize). Only
+**built/active** plugins gather — a `status: pending` node is declared intent, so it renders on the board but
+reaches no surface.

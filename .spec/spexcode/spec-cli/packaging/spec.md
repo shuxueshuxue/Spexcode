@@ -5,7 +5,7 @@ hue: 280
 desc: SpexCode installs as one npm package (`npm i -g spexcode` → `spex`); the tarball is the monorepo's runtime subset with the layout preserved, and the natural post-install startup is two commands on two ports.
 code:
   - package.json
-  - scripts/prepublish.mjs
+  - scripts/prepack.mjs
   - spec-cli/package.json
   - spec-cli/bin/spex.mjs
   - spec-cli/src/tsx-bin.ts
@@ -22,8 +22,12 @@ the TypeScript directly through tsx (a real dependency, not a dev-only tool), th
 
 The published unit is the **monorepo root**, shipping the runtime subset with the **layout preserved**: an
 explicit `files` allowlist of `spec-cli/{src,bin,templates,hooks}`, the siblings `spec-yatsu/src` and
-`spec-forge/src`, and `spec-dashboard/dist` (built once at publish time by `prepublishOnly`, never on the
-user's machine). Preserving the layout is the whole point: spec-cli, spec-yatsu, and spec-forge import each
+`spec-forge/src`, and `spec-dashboard/dist`. The dist is the one shipped artifact not in git, so it is built
+by the **`prepack`** lifecycle hook — the point npm runs *whenever it builds a tarball*, on both `npm pack`
+and `npm publish` (but never on a plain `npm install`). That makes tarball-completeness the contract of
+*producing a tarball at all*, not a publish-only afterthought: pack and publish emit the identical complete
+package, and `npm pack` self-corrects a stale or missing dist instead of silently shipping one. Preserving
+the layout is the whole point: spec-cli, spec-yatsu, and spec-forge import each
 other by filesystem-relative `../../spec-*` paths (a cycle), so shipping them flat under one package —
 `spexcode/spec-cli/…`, `spexcode/spec-yatsu/…` — makes every such import resolve **in-package, zero import
 rewriting**. The bin and all entry source stay under `spec-cli/src`, so each module's `pkgRoot` still lands

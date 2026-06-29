@@ -9,5 +9,8 @@
   },
   "sessions": {
     "maxActive": 6
+  },
+  "dashboard": {
+    "icon": "lucide:terminal"
   }
 }

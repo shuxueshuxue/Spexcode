@@ -52,6 +52,11 @@ surface:
   not unimplemented.
 - **contract file(s)** — where the `surface: system` block is materialized ([[harness-delivery]]): Claude
   `./CLAUDE.md` or `./.claude/CLAUDE.md`; Codex ONLY the repo-root `./AGENTS.md`.
+- **render dirs** — the auto-discovered dirs the on-demand surfaces materialize into, or null when the harness
+  lacks that primitive: `skillDir` for `surface: skill` (`SKILL.md`s — claude `.claude/skills/`, codex
+  `.codex/skills/`) and `agentDir` for `surface: agent` (sub-agent `<name>.md`s — claude `.claude/agents/`;
+  Codex has no file-discovered agent-definition primitive → null, so materialize skips it). Each is ONE
+  adapter line; a null dir is the whole "this harness can't" branch, never an `if (codex)` in materialize.
 - **trust** — make a user-self-launched agent run the hooks with zero prompts: Codex writes the
   deterministic `trusted_hash` into the global `~/.codex/config.toml`; Claude relies on folder-trust (often
   nothing). The codex-rs hash algorithm is reverse-engineered + pinned.

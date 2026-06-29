@@ -41,9 +41,13 @@ Adopt it in your project — `spex init` is **additive**, it never restructures 
 
 ```sh
 cd ~/my-app
-spex init              # seed .spec/, a starter spexcode.json, and git hooks — nothing destructive
-# 1. edit .spec/project/spec.md to describe your project
-# 2. point spexcode.json's  lint.governedRoots  at your real source dir(s)
+spex init              # seeds .spec/, a starter spexcode.json, and git hooks — nothing destructive
+```
+
+Then make it yours: edit `.spec/project/spec.md` to describe the project, and point `spexcode.json`'s
+`lint.governedRoots` at your real source dir(s). Now check the graph:
+
+```sh
 spex lint              # the "coverage" warnings are your adoption TODO list
 ```
 

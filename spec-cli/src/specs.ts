@@ -236,15 +236,15 @@ export async function specDiffAt(id: string, hash: string) {
 // `events`/`order`/`block` are populated only for the `hook` surface (empty/0/false otherwise): which
 // harness lifecycle events the node binds, its deterministic intra-event order, and whether it intends to
 // block (honored only on block-capable events). See loadHookConfig + the hook compiler/dispatcher.
-export type ConfigPreset = { name: string; title: string; desc: string; kind: string; dir: string; files: string[]; body: string; events: string[]; order: number; block: boolean }
+export type ConfigPreset = { name: string; title: string; desc: string; kind: string; dir: string; files: string[]; body: string; events: string[]; order: number; block: boolean; tools: string[] }
 // field-driven surface - a config plugin is a FLAT direct child of a config root (`<root>/<name>/spec.md`)
-// that carries a `surface: system|command|hook|skill` frontmatter field naming where it plugs in. There are no
-// `command/`/`system/`/`hook/`/`skill/` bucket dirs (those were graph-invisible grouping dirs with no spec.md, so
+// that carries a `surface: system|command|hook|skill|agent` frontmatter field naming where it plugs in. There are no
+// `command/`/`system/`/`hook/`/`skill/`/`agent/` bucket dirs (those were graph-invisible grouping dirs with no spec.md, so
 // the spec graph skipped them — path != graph); the surface is a FIELD on the node, so the plugin is a real
 // graph child of its root. BOTH config roots participate: `.config` (the instance — DIY dev-flow plugins) and
 // `config` (the project system spec). loadConfig gathers the `command` surface, loadSystemConfig the `system`
-// surface, loadHookConfig the `hook` surface, loadSkillConfig the `skill` surface; each scans the children under
-// every root and filters by the field. The plugins also show on the board as ordinary spec nodes (via loadSpecs).
+// surface, loadHookConfig the `hook` surface, loadSkillConfig the `skill` surface, loadAgentConfig the `agent`
+// surface (sub-agent definitions); each scans the children under every root and filters by the field. The plugins also show on the board as ordinary spec nodes (via loadSpecs).
 // root node - the spec tree's single top-level node: the one directory directly under .spec/ that
 // holds a spec.md. The dogfood repo names it 'spexcode'; a repo scaffolded by `spex init` names it
 // 'project' (or whatever the adopter renames it to). Detected DYNAMICALLY so the config loaders resolve
@@ -286,7 +286,7 @@ function bundleFiles(dir: string): string[] {
 // `system`/`command` the result is identical to the old one-level scan on the current tree — every existing
 // such node is a flat direct child and no nested node declares those surfaces — so the gather set (hence
 // the appended system prompt and the command dropdown) is byte-for-byte unchanged.
-function loadSurface(surface: 'command' | 'system' | 'hook' | 'skill'): ConfigPreset[] {
+function loadSurface(surface: 'command' | 'system' | 'hook' | 'skill' | 'agent'): ConfigPreset[] {
   const out: ConfigPreset[] = []
   const visit = (nodeDir: string, name: string) => {
     if (existsSync(join(nodeDir, 'spec.md'))) {
@@ -306,6 +306,7 @@ function loadSurface(surface: 'command' | 'system' | 'hook' | 'skill'): ConfigPr
           events: list(fm.events),
           order: Number(str(fm.order, '0')) || 0,
           block: str(fm.block) === 'true',
+          tools: list(fm.tools),
         })
       }
     }
@@ -329,3 +330,7 @@ export function loadHookConfig(): ConfigPreset[] { return loadSurface('hook') }
 // the skill bundles (rendered into each harness's auto-discovered SKILL.md dir). Each node's `desc` is the
 // load-trigger and its `body` is the on-demand instructions; loadSurface passes the folder basename as `name`.
 export function loadSkillConfig(): ConfigPreset[] { return loadSurface('skill') }
+// the sub-agent definitions (rendered into each harness's auto-discovered agent dir, e.g. claude's
+// .claude/agents/<name>.md). Like a skill, the node's `desc` is the on-demand load-trigger and its `body` is the
+// agent's system prompt; additionally its `tools` field is the harness tool allowlist for the spawned agent.
+export function loadAgentConfig(): ConfigPreset[] { return loadSurface('agent') }

@@ -1,7 +1,7 @@
 # Contributing to SpexCode
 
 Thanks for wanting to work on SpexCode. This file is the **human** entry point. The full mechanics —
-the spec-node model, the lint rules, the reflexive config system — live in [`CLAUDE.md`](../CLAUDE.md)
+the spec-node model, the lint rules, the reflexive config system — live in [`AGENT_GUIDE.md`](./AGENT_GUIDE.md)
 and in `spex guide`; this page gets you from a clone to your first merged change without reading all of
 that first.
 
@@ -71,7 +71,7 @@ npm run web            # the dashboard via Vite (HMR), proxying /api → :8787
   node's commit is the smell.
 - **Fail loudly.** Don't hide errors behind silent fallbacks.
 
-The deeper engineering taste of the project (`spex guide`, the `taste` config node, `CLAUDE.md`) is
+The deeper engineering taste of the project (`spex guide`, the `taste` config node, `AGENT_GUIDE.md`) is
 worth reading once you've landed a first change.
 
 ## Reporting bugs & proposing features

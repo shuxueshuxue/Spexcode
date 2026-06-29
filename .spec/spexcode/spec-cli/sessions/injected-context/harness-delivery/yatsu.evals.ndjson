@@ -14,3 +14,4 @@
 {"scenario":"codex-trust-is-scoped-and-additive","codeSha":"b5f78b1e9ab0957862109cacb8e4b8df0d3ecb4b","blob":null,"evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-27T20:47:34.047Z"}
 {"scenario":"managed-block-preserves-user-content","codeSha":"b5f78b1e9ab0957862109cacb8e4b8df0d3ecb4b","blob":null,"evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-27T20:47:35.242Z"}
 {"scenario":"self-launch-zero-friction-codex","codeSha":"b5f78b1e9ab0957862109cacb8e4b8df0d3ecb4b","blob":null,"evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-27T20:47:36.452Z"}
+{"scenario":"contract-files-are-gitignored-artifacts","codeSha":"d4efb13e6c2da01b0300796f035d25cc1570fcb2","blob":null,"evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-29T13:03:50.519Z"}

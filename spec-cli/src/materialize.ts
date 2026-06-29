@@ -1,4 +1,4 @@
-import { writeFileSync, mkdirSync } from 'node:fs'
+import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs'
 import { join, dirname, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
@@ -12,11 +12,14 @@ import { tsxBin } from './tsx-bin.js'
 // .config content-hash moved. It renders the spec tree's surface nodes into the flat artifacts each
 // consumer reads cheaply, so a USER-self-launched claude/codex (no SpexCode process in the launch) gets the
 // whole system via harness-auto-discovered files: (1) the hook MANIFEST (our dispatcher reads it),
-// (2) the CONTRACT as a managed <spexcode> block in each harness's contract file(s) — user content
-// preserved, (3) the thin SHIMS (every event → dispatch.sh), (4) the per-harness TRUST (Codex's deterministic
-// trusted_hash; Claude none) so the self-launch is zero-prompt. EVERY harness-specific fact is owned by the
-// [[harness-adapter]] (harness.ts) — this file just loops over HARNESSES, so adding a harness adds an adapter,
-// not a branch here. All writes are idempotent + scoped. The content-hash marker is stamped last.
+// (2) the CONTRACT — the tracked docs guide (docs/AGENT_GUIDE.md) FOLLOWED BY the surface:system bodies —
+// written WHOLE into each harness's contract file(s), which are GENERATED, gitignored artifacts (like the
+// shims + skills): regenerated per clone/launch, never committed, so a self-launched agent still discovers
+// guide + contract while the repo tracks only the guide source, (3) the thin SHIMS (every event → dispatch.sh),
+// (4) the per-harness TRUST (Codex's deterministic trusted_hash; Claude none) so the self-launch is zero-prompt.
+// EVERY harness-specific fact is owned by the [[harness-adapter]] (harness.ts) — this file just loops over
+// HARNESSES, so adding a harness adds an adapter, not a branch here. All writes are idempotent + scoped. The
+// content-hash marker is stamped last.
 
 const PKG = fileURLToPath(new URL('..', import.meta.url))                 // installed spec-cli root
 const DISPATCH = join(PKG, 'hooks', 'dispatch.sh')
@@ -41,9 +44,15 @@ export function materialize(proj = process.cwd()): string {
   mkdirSync(rt, { recursive: true })
   // (1) hook manifest (persistent — the dispatcher reads it; regenerated only here, on change).
   writeFileSync(join(rt, 'hooks-manifest'), compileManifest())
-  // (2) the contract = the surface:system bodies, in name order, written into EACH harness's contract file(s)
-  //     + (3) each harness's thin shim → dispatch.sh + (4) its trust. All owned by the adapter.
-  const contract = loadSystemConfig().map((c) => c.body.trim()).filter(Boolean).join('\n\n')
+  // (2) the contract = the tracked docs guide (the hand-written agent/contributor notes — the ONE piece of
+  //     in-tree prose) FOLLOWED BY the surface:system bodies (in name order), written WHOLE into EACH harness's
+  //     contract file(s) + (3) each harness's thin shim → dispatch.sh + (4) its trust. All owned by the adapter.
+  //     The contract files are generated artifacts (gitignored below), so the guide is the single source a
+  //     self-launched agent reads from — assembling it in keeps guide + contract reaching the agent together.
+  const guidePath = join(proj, 'docs', 'AGENT_GUIDE.md')
+  const guide = existsSync(guidePath) ? readFileSync(guidePath, 'utf8').trim() : ''
+  const systemBodies = loadSystemConfig().map((c) => c.body.trim()).filter(Boolean)
+  const contract = [guide, ...systemBodies].filter(Boolean).join('\n\n')
   // a skill node → the agentskills.io SKILL.md primitive: `name`+`description` frontmatter (the load-trigger)
   // over the body instructions. One pure render shared by every harness — divergence is only its skillDir.
   const renderSkill = (sk: { name: string; desc: string; body: string }) =>
@@ -55,7 +64,7 @@ export function materialize(proj = process.cwd()): string {
     `---\nname: ${ag.name}\ndescription: ${ag.desc}\ntools: ${ag.tools.join(', ')}\n---\n\n${ag.body}\n`
   const shimPaths: string[] = []
   for (const h of HARNESSES) {
-    if (contract) for (const f of h.contractFiles(proj)) writeManagedBlock(f, contract)
+    if (contract) for (const f of h.contractFiles(proj)) { writeManagedBlock(f, contract); shimPaths.push(relative(proj, f)) }
     const shimFile = h.shimFile(proj)
     mkdirSync(dirname(shimFile), { recursive: true })
     const shim = h.shim(DISPATCH, SPEX)
@@ -88,10 +97,12 @@ export function materialize(proj = process.cwd()): string {
       shimPaths.push(relative(proj, f))   // reuse the same managed .gitignore block
     }
   }
-  // (4b) the shims are machine-specific generated wiring (they bake this machine's absolute install path), so
-  // gitignore them — regenerated per-machine by this same gate. Derived from the adapters' shimFile(), not
-  // hardcoded; written as a managed `#` block so the user's own .gitignore is preserved. Keeps the worktree
-  // free of tracked machine-specific files (the contract md files stay tracked — they carry the user's prose).
+  // (4b) every artifact this render writes IN-TREE is generated wiring, so gitignore it — regenerated per
+  // clone/launch by this same gate, never committed. That now includes the CONTRACT files (CLAUDE.md/AGENTS.md):
+  // their whole content is the generated guide+system block, so they are artifacts exactly like the shims +
+  // skills + sub-agents — the only tracked prose is the guide SOURCE (docs/AGENT_GUIDE.md), which this render
+  // reads. Derived from the adapters' own contractFiles()/shimFile()/skillDir/agentDir, not hardcoded; written
+  // as a managed `#` block so the user's own .gitignore is preserved.
   // only ignore paths that live INSIDE proj. The codex hooks shim now materializes at the MAIN checkout (codex
   // reads a linked worktree's hooks from the root checkout — see harness.ts); from a linked worktree that path
   // escapes proj (`../…`) and is gitignored by the main checkout's OWN materialize, not the worktree's.

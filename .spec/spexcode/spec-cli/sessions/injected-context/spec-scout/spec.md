@@ -4,7 +4,7 @@ status: active
 hue: 280
 desc: An on-demand spec-consult sub-agent (the spec analog of Explore) — ask it a behaviour/topic question and it surfaces the governing spec node(s), the user-story they encode, and the code to read, so reaching the spec is as cheap as grepping the code.
 code:
-  - .claude/agents/spec-scout.md
+  - .spec/spexcode/.config/spec-scout/spec.md
 ---
 
 # spec-scout
@@ -55,9 +55,11 @@ shape: agents ALREADY hand-roll spec search (`grep .spec` + `spex board`), so no
   spec intent; it does not review code, nor replace [[spec-first]]'s grounding gate (the Stop gate stays the
   enforcer).
 
-Built as `.claude/agents/spec-scout.md` — a Claude Code Agent-tool agent type, so it is **on-demand** (spawned
-when a session needs it), NOT folded into every prompt: it turns the floor + body-reading into a first-class
-"find my contract" reflex *without* adding a sixth `surface:system` injection (it sidesteps the prompt-dilution it would
-otherwise cause). Its read-only tools (Bash/Read/Grep/Glob — no edit) enforce the "surfaces, never reviews or
-edits code" boundary. It is the fourth, **active** member of [[injected-context]]'s grounding set — the only
+Built as a `surface: agent` config node (the `.config` sibling: agent prompt + `desc:` trigger + read-only
+`tools:`) that [[harness-delivery]]'s materialize renders into each harness's agent dir (Claude
+`.claude/agents/`; a harness lacking the primitive gets none — the [[harness-adapter]] `agentDir`, the
+`skillDir` analog) as a generated, gitignored artifact, not a committed file. **On-demand** (spawned when a
+session needs it), NOT folded into every prompt: it makes the floor + body-reading a first-class "find my
+contract" reflex *without* a sixth `surface:system` injection (sidestepping that prompt-dilution). Its
+read-only tools (Bash/Read/Grep/Glob — no edit) enforce the "surfaces, never reviews or edits code" boundary. It is the fourth, **active** member of [[injected-context]]'s grounding set — the only
 on-demand one beside the three passive prompt injections.

@@ -20,10 +20,12 @@ threat model follows from that. Two properties matter:
 
 ### 1. The session layer runs an agent that can execute arbitrary commands
 
-SpexCode's self-developing feature dispatches AI workers that drive a coding agent. By default that
-agent is launched as `claude --dangerously-skip-permissions` (overridable via `SPEXCODE_CLAUDE_CMD`):
-it can **read, write, and execute** in its git worktree without per-action prompts. The board's live
-"Sessions" console is a **real terminal** over a WebSocket — i.e. shell access to the host.
+SpexCode's self-developing feature dispatches AI workers that drive a coding-agent harness — **Claude
+Code or Codex**. By default the agent runs with permission prompts disabled (Claude
+`--dangerously-skip-permissions`, Codex `--yolo`; the Claude launcher is overridable via
+`SPEXCODE_CLAUDE_CMD`): it can **read, write, and execute** in its git worktree without per-action
+prompts. The board's live "Sessions" console is a **real terminal** over a WebSocket — i.e. shell access
+to the host.
 
 This is intended for an interactive, single-operator setup. It also means:
 
@@ -34,17 +36,25 @@ This is intended for an interactive, single-operator setup. It also means:
   read-only views, the git-as-database reader) does **not** launch an agent and does not carry this
   risk. You can adopt and use that layer without ever enabling the session layer.
 
-### 2. The backend and dashboard are not hardened for hostile networks
+### 2. Remote exposure is opt-in and password-gated
 
-`spex serve` (the API + session backend) and `spex dashboard` bind to **localhost** by default. They
-have **no authentication layer** — they assume the only client is you, on the same host.
+`spex serve` (the API + session backend) and `spex dashboard` bind to **localhost** by default and are
+**unauthenticated there** — loopback is the trust boundary, on the assumption the only client is you, on
+the same host.
 
-- **Do not expose the backend or dashboard to an untrusted network.** Because the session socket is a
-  live terminal, exposing the port is equivalent to exposing an unauthenticated shell. If you need
-  remote access, put it behind your own authenticated tunnel (SSH, a VPN like Tailscale, or an
-  authenticating reverse proxy) — never a bare public port.
-- Served over plain HTTP, the dashboard loses browser secure-context APIs (e.g. clipboard); that's a
-  functional limitation, not a security boundary — see "known limitations" in [`README.md`](./README.md).
+To reach SpexCode from another machine, use the built-in gateway rather than exposing the loopback ports
+directly: **`spex serve --public --password <pw>`** raises a TLS gateway on the public port that gates
+every request — including the terminal WebSocket — behind a styled login and a signed `httpOnly` cookie,
+while the backend itself stays bound to loopback.
+
+- **Never expose the raw loopback ports to an untrusted network.** Use `--public --password`, or put your
+  own authenticated tunnel in front (SSH, a VPN like Tailscale, or an authenticating reverse proxy) —
+  never a bare unauthenticated port. Because the session socket is a live terminal, an open port is
+  equivalent to an unauthenticated shell — so `--public` with **no** password serves open and is
+  loud-warned, never a silent exposure.
+- Served over plain HTTP (`--http`), the dashboard loses browser secure-context APIs (e.g. clipboard) and
+  any password crosses the network in clear; that's a functional/operational limitation, not the security
+  boundary — see "known limitations" in [`README.md`](./README.md).
 
 ## Supported versions
 

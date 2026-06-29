@@ -42,7 +42,8 @@ npm run web            # the dashboard via Vite (HMR), proxying /api → :8787
 ```
 
 > Note: the live, multi-agent *session* features (dispatching workers, the board's live terminals) shell
-> out to the **Claude Code** CLI and **tmux** — see the prerequisites in [`README.md`](./README.md). You
+> out to a coding-agent harness — **Claude Code or Codex** — and **tmux**; see the prerequisites in
+> [`README.md`](./README.md). You
 > do **not** need either to work on the governance layer (`spex lint`, the spec tree, the dashboard, the
 > git-as-database reader). Most contributions never touch the session layer.
 

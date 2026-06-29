@@ -12,16 +12,27 @@ code:
 
 ## raw source
 
-The model says `main` is the source of truth that every session branches from. The directory layout
-doesn't protect it — `cd` to the root and you can still author on `main`, breaking the invariant.
-**Protection is a hook, not a folder structure.** Make "no direct commits on main" real instead of
+The model says the **trunk** is the source of truth that every session branches from. The directory
+layout doesn't protect it — `cd` to the root and you can still author on it, breaking the invariant.
+**Protection is a hook, not a folder structure.** Make "no direct commits on the trunk" real instead of
 aspirational — the cheap mechanism the [[portable-layout]] convention was relying on.
 
 ## expanded spec
 
-A `pre-commit` hook rejects a direct commit while `HEAD` is `main`. Merges must pass (the `--no-ff`
-gate onto main sets `MERGE_HEAD`), so the worktree → merge flow is unaffected, and node-branch commits
-pass because they aren't on `main`. Escape hatch for seeding / eager topology: `SPEXCODE_ALLOW_MAIN=1`.
+A `pre-commit` hook rejects a direct commit while `HEAD` is the **trunk**. Merges must pass (the
+`--no-ff` gate onto the trunk sets `MERGE_HEAD`), so the worktree → merge flow is unaffected, and
+node-branch commits pass because they aren't on the trunk. Escape hatch for seeding / eager topology:
+`SPEXCODE_ALLOW_MAIN=1`.
+
+The guard's real question is "am I committing directly onto the trunk?", not "is this branch literally
+named `main`?". It resolves the trunk through the SAME single source of truth the rest of SpexCode
+uses — [[portable-layout]]'s `mainBranch()` (config override → the main checkout's current branch →
+`main`), surfaced to the shell as `spex trunk` — so a repo whose trunk is `master` or any non-`main`
+base is protected, not silently exempt. A hardcoded `main` compare would disagree with the layout side
+and leave a `master`-default repo wide open. When the CLI isn't resolvable (advisory mode, no
+`@spexcode/spec-cli` installed) the hook falls back to a pure-git auto-detect of the main checkout's
+current branch, then `main` — still naming the real trunk in the common case, never enumerating a second
+hardcoded branch.
 
 Hooks live in the **common** git dir, so one install covers every worktree at once. There is **one
 canonical hook source** — the `spec-cli/templates/hooks/` shipped with the package — and **both** install

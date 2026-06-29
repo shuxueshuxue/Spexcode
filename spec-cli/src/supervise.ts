@@ -7,6 +7,7 @@ import { statSync, readdirSync, type Dirent } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { installProcessGuards } from './resilience.js'
+import { listenOrExit } from './listen.js'
 import { resolvePublicConfig, startGateway, ensureDashboardBuilt, resolveDistDir } from './gateway.js'
 import { tsxBin } from './tsx-bin.js'
 
@@ -122,14 +123,19 @@ process.on('SIGTERM', shutdown)
 const first = await boot()
 if (!first) { console.error('[supervisor] initial backend failed to start'); process.exit(1) }
 current = first
+// reap the booted child if a port bind fails, so a "can't own my port → exit" never leaves a zombie child.
+// SIGTERM (not SIGKILL): the child is a `tsx` wrapper around the real node server — SIGKILL kills the wrapper
+// instantly and ORPHANS the server still bound to its port, whereas tsx FORWARDS SIGTERM to it (the same
+// signal the reload drain uses). Sent synchronously here, before the process.exit that follows.
+const reapChild = () => { try { current?.child.kill('SIGTERM') } catch { /* already gone */ } }
 if (publicCfg) {
   // public mode: the raw proxy stays on loopback; the password-gated gateway owns the public port.
   const distDir = resolveDistDir() // bundled <pkg>/dashboard-dist when installed, else monorepo spec-dashboard/dist
   ensureDashboardBuilt(repoRoot, distDir)
-  proxy.listen(proxyPort, '127.0.0.1', () => console.log(`spec-cli supervisor on loopback :${proxyPort} (zero-downtime reloads, backend :${first.port})`))
-  startGateway({ publicPort, upstreamPort: proxyPort, password: publicCfg.password, tls: publicCfg.tls, distDir })
+  listenOrExit(proxy, proxyPort, { host: '127.0.0.1', label: 'supervisor (loopback proxy)', cleanup: reapChild, onListen: () => console.log(`spec-cli supervisor on loopback :${proxyPort} (zero-downtime reloads, backend :${first.port})`) })
+  startGateway({ publicPort, upstreamPort: proxyPort, password: publicCfg.password, tls: publicCfg.tls, distDir, onBindFail: reapChild })
 } else {
-  proxy.listen(publicPort, () => console.log(`spec-cli supervisor serving on http://localhost:${publicPort} (zero-downtime reloads, backend :${first.port})`))
+  listenOrExit(proxy, publicPort, { label: 'supervisor', cleanup: reapChild, onListen: () => console.log(`spec-cli supervisor serving on http://localhost:${publicPort} (zero-downtime reloads, backend :${first.port})`) })
 }
 
 // watch every imported source tree; debounce a burst of writes (a merge touching several files across

@@ -7,6 +7,7 @@ desc: The server + CLI — reads .spec and git, serves the API, and houses the s
 code:
   - spec-cli/src/index.ts
   - spec-cli/src/supervise.ts
+  - spec-cli/src/listen.ts
   - spec-cli/src/slash-commands.ts
   - spec-cli/src/cli.ts
 ---
@@ -53,6 +54,14 @@ retries a transient failure with bounded backoff, so a poll landing on the flip 
 child binds a **private** port that changes on every reload, the supervisor hands it a fixed
 `SPEXCODE_API_URL` at the **public** port; every session the child launches inherits it, so a launched
 agent's own `spex` calls reach the stable public endpoint instead of chasing a retired child's port.
+
+**Owning the public port is the contract: if I cannot bind it, I have failed.** Keeping-serving is for
+*transient* throws once the port is held — never for *failing to acquire* it. So a bind failure (port in
+use, or permission denied) is the one throw the supervisor must not swallow: a **hard, loud, non-zero exit**
+naming the busy port and the repair, never a portless process kept "alive" on a random child port. The same
+rule is **shared** with [[public-mode]]'s gateway behind `spex dashboard`, so a busy port fails identically
+on both surfaces — not a silent zombie under `serve` and a crash under `dashboard`. One shared bind helper
+both call (not a branch inside the keep-alive guard) reaps the booted child first, so no zombie survives.
 
 **Last-resort resilience:** both supervisor and child install process guards at startup — an unforeseen
 async throw (a worktree vanishing mid-read during a worker self-merge, say) is logged and the process

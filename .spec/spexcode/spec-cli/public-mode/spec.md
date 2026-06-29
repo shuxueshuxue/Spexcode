@@ -62,3 +62,8 @@ not exist is a named error pointing at the repair, never a silent fallback to in
 ungated, no TLS; the internet face here is the other configuration of one engine. And the dist it serves is
 a resolved location, never hardcoded: an installed `spexcode` serves its bundled `dashboard-dist`, the
 dogfood monorepo falls back to the sibling `spec-dashboard/dist`.
+
+**A busy port fails loudly, the same way the supervisor's does.** Binding a public port, the gateway obeys
+[[spec-cli]]'s port-ownership contract: a port already in use (or permission-denied) is a non-zero exit
+naming the port and the repair, never a silent or half-up serve. Both surfaces route `listen` through one
+shared bind helper, so `spex serve` and `spex dashboard` answer the identical busy-port condition identically.

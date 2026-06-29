@@ -1276,7 +1276,13 @@ const ANSI: Record<DisplayStatus, string> = {
 // resolution can never drift between "which sessions ls/watch/wait/graph show" and "which session
 // review/merge/send/close act on".
 export function matchesSelector(s: Session, q: string): boolean {
-  return s.id === q || s.id.startsWith(q) || s.node === q || s.branch === q
+  // a selector may be a comma-separated list (the same convention as `--status a,b`): it matches iff ANY part
+  // names the session, so `watch a,b` and `watch a b` are equivalent. A single name is the one-part case. This
+  // is what stops a comma-joined selector from silently matching nothing — an id/node/branch never holds a
+  // comma, so without the split `a,b` would be one literal selector that matches no session and streams in
+  // silence forever.
+  return q.split(',').map((p) => p.trim()).filter(Boolean)
+    .some((p) => s.id === p || s.id.startsWith(p) || s.node === p || s.branch === p)
 }
 
 // no selectors (or '@all') = everything. Optional status filter on top. This IS the ls/watch subscription.

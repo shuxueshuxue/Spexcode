@@ -62,6 +62,23 @@ test('matchesSelector: matches id, id-prefix, node, branch — and only those', 
   assert.ok(!matchesSelector(a, 'graph'))
 })
 
+test('matchesSelector: a comma list matches iff ANY part names the session', () => {
+  // the bug this guards: `watch a,b` was one literal selector that matched nothing (an id/node/branch never
+  // holds a comma) → a comma-joined watch streamed zero events in silence. Comma now ORs the parts.
+  assert.ok(matchesSelector(a, 'sessions,graph'))      // first part hits
+  assert.ok(matchesSelector(b, 'sessions,graph'))      // second part hits
+  assert.ok(matchesSelector(c, 'bbbb3333,nope'))       // id-prefix part hits
+  assert.ok(!matchesSelector(c, 'sessions,graph'))     // neither part names c
+  assert.ok(matchesSelector(a, 'sessions, graph'))     // whitespace around a part is trimmed
+})
+
+test('selectSessions: a single comma-joined selector selects the union (watch a,b == watch a b)', () => {
+  const comma = selectSessions(board, ['sessions,graph']).map((s) => s.id)
+  const space = selectSessions(board, ['sessions', 'graph']).map((s) => s.id)
+  assert.deepEqual(comma, [a.id, b.id])
+  assert.deepEqual(comma, space)
+})
+
 // ---- the invariant: list-filter and single-resolve never diverge ----
 
 test('selectSessions and resolveSession agree on the shared predicate', () => {

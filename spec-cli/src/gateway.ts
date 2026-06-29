@@ -13,6 +13,7 @@ import { join, normalize, extname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { homedir } from 'node:os'
 import { loginPage } from './login-page.js'
+import { listenOrExit } from './listen.js'
 
 // @@@ resolvePublicConfig - the cert/gate is a RESOLVED value, never hardcoded. Reads the same precedence
 // chain the spec promises: flag > env > spexcode.json > self-signed default. Returns null when public mode
@@ -117,7 +118,7 @@ export function resolveDistDir(): string {
   return join(pkgRoot, '..', 'spec-dashboard', 'dist')
 }
 
-export type GatewayOpts = { publicPort: number; upstreamPort: number; password: string; tls: { cert: string; key: string } | null; distDir: string; host?: string; label?: string }
+export type GatewayOpts = { publicPort: number; upstreamPort: number; password: string; tls: { cert: string; key: string } | null; distDir: string; host?: string; label?: string; onBindFail?: () => void }
 
 export function startGateway(opts: GatewayOpts): void {
   // gated ONLY when a password is set; otherwise the login layer doesn't exist and the dashboard is served open.
@@ -173,8 +174,9 @@ export function startGateway(opts: GatewayOpts): void {
     console.log(`[gateway] ${label} on ${scheme}://${isLocal ? 'localhost' : '0.0.0.0'}:${opts.publicPort}${gate}, proxying /api to :${opts.upstreamPort}`)
     if (!secure && !isLocal) console.log('[gateway] (TLS off — --http)')
   }
-  if (opts.host) server.listen(opts.publicPort, opts.host, onListen)
-  else server.listen(opts.publicPort, onListen)
+  // a busy public port is a hard, loud, non-zero exit — the SAME contract as the supervisor's proxy
+  // (see [[spec-cli]] / listen.ts), so `spex serve` and `spex dashboard` fail a port clash identically.
+  listenOrExit(server, opts.publicPort, { host: opts.host, label: opts.label ?? 'gateway', cleanup: opts.onBindFail, onListen })
 }
 
 function rawHeaders(req: http.IncomingMessage): string {

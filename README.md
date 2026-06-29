@@ -1,8 +1,8 @@
 <img src="docs/sdd-tuxedo-pooh.png" alt="Writing code vs. authoring a living, executable specification artifact" width="420">
 
-> Spec-driven development gets wrecked by spec drift and spec bloat. SpexCode's bet
-> is to keep the spec the cheap, honest twin of the code — rewritten in place, never
-> a tuxedo of stale ceremony.
+> Spec-driven development fails two ways: the spec drifts out of sync with the code, or it
+> bloats into stale ceremony. SpexCode keeps each spec short and current — rewritten in place,
+> versioned by git, never an accumulating changelog.
 
 **SpexCode** is a spec-driven, self-developing dev tool. Every part of a project becomes a versioned
 *spec node* — a `.spec/**/spec.md` whose body states the part's *present* intent — and **git is the

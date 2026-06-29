@@ -68,7 +68,10 @@ async throw (a worktree vanishing mid-read during a worker self-merge, say) is l
 KEEPS SERVING rather than exiting and dropping the public port (and the tmux session) with it.
 
 Read routes: `/api/board` (the assembled board — merged tree + per-worktree overlay + session list, the
-dashboard's single source, identical to `spex board`), `/api/specs` (live via `loadSpecs`),
+dashboard's single source, identical to `spex board`). The dashboard polls it on a short interval, so the
+route is a **conditional-request** endpoint: it `ETag`s the body so a poll that finds nothing changed costs a
+bodyless `304`, not the whole transfer — a standard HTTP capability, not a special case (the board is still
+rebuilt each request; the cost saved is the wire, not the git read). `/api/specs` (live via `loadSpecs`),
 `/api/specs/:id/history` + `/api/specs/:id/diff/:hash` (a node's timeline and any version's spec.md
 line-diff), `/api/edit` (a node's in-flight working-tree delta vs its fork point, reviewable from the
 board — incl. a **brand-new, still-untracked node** as an all-additions diff, so a just-created uncommitted

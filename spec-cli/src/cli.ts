@@ -279,6 +279,13 @@ if (cmd === 'serve') {
 } else if (cmd === 'board') {
   const { buildBoard } = await import('./board.js')
   console.log(JSON.stringify(await buildBoard(), null, 2))
+} else if (cmd === 'trunk') {
+  // @@@ trunk - print the resolved source-of-truth branch (layout.ts mainBranch(): config override →
+  // the main checkout's current branch → 'main'). The pre-commit main-guard reads this so it blocks
+  // direct commits on whatever the repo's trunk is actually named, never a hardcoded 'main'. One value,
+  // one line, for the hook to capture; GET /api/layout exposes the same resolution.
+  const { mainBranch } = await import('./layout.js')
+  console.log(mainBranch())
 } else if (cmd === 'search') {
   const { searchSpecs } = await import('./search.js')
   const query = positionals(3).join(' ')

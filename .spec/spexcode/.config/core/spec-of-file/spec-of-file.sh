@@ -16,17 +16,40 @@ S="${SPEX:-spex}"
 payload=$(cat 2>/dev/null)
 sid=$(hp_session_id "$payload"); [ -n "$sid" ] || exit 0
 sdir=$(hp_store_dir "$sid") || exit 0
+repo=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+repo=$(cd "$repo" 2>/dev/null && pwd -P) || exit 0
+
+hp_actionable_repo_path() {
+  local raw="$1" target dir base abs rel
+  case "$raw" in
+    /*) target="$raw" ;;
+    *)  target="$PWD/$raw" ;;
+  esac
+  dir=${target%/*}; base=${target##*/}
+  [ "$dir" = "$target" ] && dir=.
+  abs=$(cd "$dir" 2>/dev/null && printf '%s/%s' "$(pwd -P)" "$base") || return 1
+  case "$abs" in
+    "$repo"/*) rel=${abs#"$repo"/} ;;
+    *) return 1 ;;
+  esac
+  [ -n "$rel" ] || return 1
+  # editing the spec itself is not a governed-code edit -> nothing to annotate.
+  case "$rel" in .spec/*|*/.spec/*|*/spec.md|spec.md|.git/*) return 1 ;; esac
+  # Speak only for files Git would care about: tracked files, or untracked files that are not ignored.
+  git -C "$repo" ls-files --error-unmatch -- "$rel" >/dev/null 2>&1 && { printf '%s' "$rel"; return 0; }
+  git -C "$repo" check-ignore -q -- "$rel" && return 1
+  printf '%s' "$rel"
+}
 
 # the code file just MUTATED (empty when this tool didn't mutate a file, e.g. a pure read).
 path=$(hp_code_path "$payload" mutate)
 [ -n "$path" ] || exit 0
-# editing the spec itself is not a governed-code edit → nothing to annotate.
-case "$path" in */.spec/*|.spec/*|*/spec.md|spec.md) exit 0 ;; esac
+path=$(hp_actionable_repo_path "$path") || exit 0
 # dedupe: once per session per file. The ledger lists already-annotated paths.
 led="$sdir/spec-of-file-seen"
 [ -f "$led" ] && grep -qxF -- "$path" "$led" && exit 0
 mkdir -p "$sdir"; echo "$path" >> "$led"
-msg=$($S owner "$path" --actionable 2>/dev/null)   # --actionable: silent on a sanely-owned file; speaks only for an OVER-owned / uncovered file
+msg=$(cd "$repo" && $S owner "$path" --actionable 2>/dev/null)   # --actionable: silent on a sanely-owned file; speaks only for an OVER-owned / uncovered file
 [ -n "$msg" ] || exit 0
 esc=$(printf '%s' "$msg" | sed 's/\\/\\\\/g; s/"/\\"/g')
 printf '{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"%s"}}\n' "$esc"

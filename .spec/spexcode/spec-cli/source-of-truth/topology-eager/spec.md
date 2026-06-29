@@ -4,8 +4,6 @@ status: merged
 session: sess-design
 hue: 175
 desc: Topology changes commit to main eagerly; node content lives long in worktrees.
-code:
-  - scripts/seed-spec-history.sh
 ---
 # topology-eager
 
@@ -24,7 +22,8 @@ exists on main, so topology can't wait in a long-lived diff — it commits to ma
 commits). Content is the spec body; it carries the session's in-flight intent and is fine to sit as a
 worktree diff until reviewed and merged, which is the normal dogfood ritual.
 
-The clearest expression of "topology committed eagerly to main" is `scripts/seed-spec-history.sh`: it
-replays the project's real design conversation as the git history of the `.spec` tree, one commit per
-spec change (subject = the reason, `Session:` trailer = attribution), so each node's version history is
-just `git log` of its `spec.md`. It is one-shot — it refuses to run if the tree already exists.
+The project's own `.spec` history was bootstrapped on this principle: a one-shot seeding replayed the
+real design conversation as one eager `main` commit per spec change (subject = the reason, `Session:`
+trailer = attribution), so each node's version history is just `git log` of its `spec.md`. That seeding
+was inherently single-use — it refused to run once the tree existed — and has been retired now that the
+history is in place; the eager-topology cadence it demonstrated is the durable rule.

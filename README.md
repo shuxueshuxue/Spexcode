@@ -24,13 +24,15 @@ SpexCode is **two layers**, and you can stop after the first:
 - **The governance layer** — `spex init`, `spex lint`, the spec tree, and the read-only dashboard. This
   is pure spec-and-git tooling: **no AI, no extra services.** Node and git are all it needs.
 - **The self-developing session layer** — dispatching AI workers onto nodes, with the board's live
-  terminals. This shells out to the **[Claude Code](https://www.anthropic.com/claude-code) CLI**
-  (launched as `claude --dangerously-skip-permissions`, overridable via `SPEXCODE_CLAUDE_CMD`) and
-  **tmux**. If you create a session without those installed and authenticated, it will fail.
+  terminals. This shells out to a coding-agent harness — **[Claude Code](https://www.anthropic.com/claude-code)**
+  or **Codex**, both first-class behind one adapter seam (Claude launches as
+  `claude --dangerously-skip-permissions`, overridable via `SPEXCODE_CLAUDE_CMD`) — plus **tmux**. If you
+  create a session without a harness and tmux installed and authenticated, it will fail.
 
 > **Requirements.** Governance layer: **Node ≥ 22** and **git**. Session layer additionally needs
-> **tmux** and an authenticated **Claude Code** CLI on your PATH. Sessions also run an agent that can
-> execute commands on your machine — read [`SECURITY.md`](./SECURITY.md) before exposing the backend.
+> **tmux** and an authenticated coding-agent harness on your PATH — **Claude Code or Codex**. Sessions
+> also run an agent that can execute commands on your machine — read [`SECURITY.md`](./SECURITY.md)
+> before exposing the backend.
 
 You don't clone this repo to *use* SpexCode. Install the published CLI once, then point it at any project.
 
@@ -108,13 +110,16 @@ The human-facing version of all that — setup, the ritual, what "good" looks li
 SpexCode is **pre-1.0 and dogfooded daily**, not yet battle-tested across many outside projects. Being
 honest about the edges so you can decide if it fits:
 
-- **Vendor-coupled at the session layer.** The self-developing features assume the
-  [Claude Code](https://www.anthropic.com/claude-code) CLI. The launcher is swappable
-  (`SPEXCODE_CLAUDE_CMD`), but there's no first-class adapter for other agents yet. The **governance
-  layer is fully usable without any of this** — that's the part to try first.
-- **Single-operator, localhost-first.** The backend and dashboard have **no auth layer** and the
-  session console is a live terminal. Don't put either on an untrusted network without your own
-  authenticated tunnel — see [`SECURITY.md`](./SECURITY.md).
+- **Harness-coupled, not vendor-locked.** The self-developing layer drives a coding-agent harness behind
+  one adapter seam; **Claude Code and Codex are both first-class** today (the launcher picks one;
+  `SPEXCODE_CLAUDE_CMD` overrides it). A harness with no adapter yet would need one written — that's the
+  only coupling. The **governance layer is fully usable with no harness at all** — that's the part to try
+  first.
+- **Localhost-first; remote access is opt-in and password-gated.** By default the backend and dashboard
+  bind to loopback with **no gate** — loopback is the trust boundary. To reach them from another machine,
+  `spex serve --public --password <pw>` raises a password-gated TLS gateway (a styled login + signed
+  cookie, the terminal socket included), or put your own authenticated tunnel in front. The session
+  console is a live terminal, so never expose a bare unauthenticated port — see [`SECURITY.md`](./SECURITY.md).
 - **The git hook is advisory, not a hard gate.** It's per-clone (re-run `npm run hooks` after a fresh
   clone) and bypassable. The intended enforcement is CI running `spex lint`; wiring that into your own
   repo is on you for now.

@@ -32,11 +32,13 @@ other by filesystem-relative `../../spec-*` paths (a cycle), so shipping them fl
 `spexcode/spec-cli/…`, `spexcode/spec-yatsu/…` — makes every such import resolve **in-package, zero import
 rewriting**. The bin and all entry source stay under `spec-cli/src`, so each module's `pkgRoot` still lands
 at `spec-cli/` and its asset lookups (templates, hooks, dist) are unchanged. The one thing that moves is
-tsx: spec-cli is now a subdir, so the dep installs at the *package root's* `node_modules` — `tsxBin`
-resolves it against both spots (dev `spec-cli/node_modules`, published the package root), and the same is
-true for the supervisor's child spawn and the baked launch/hook commands. The repo-root `README.md` ships
-too, so the npm page reads the same as GitHub. The internal `spec-cli` package stays private — the one
-public name belongs to the tool a user installs.
+tsx: spec-cli is now a subdir, and a real npm install may hoist the dependency outside the `spexcode`
+package into the consuming project's `node_modules`. So the launcher and every baked `tsx + cli.ts`
+callback resolve it by one shared rule: try the dev/package-local `.bin/tsx` candidates first, then use
+Node's own package resolver from `spec-cli` to find `tsx/package.json` and run its CLI. That covers the dev
+monorepo, a global install, and a project-local install without hardcoded consumer paths. The repo-root
+`README.md` ships too, so the npm page reads the same as GitHub. The internal `spec-cli` package stays
+private — the one public name belongs to the tool a user installs.
 
 The natural way to run the installed tool is **two commands on two ports, deliberately kept apart** —
 starting the backend never drags the UI along:
@@ -55,3 +57,8 @@ silently collides two projects.
 same gateway on loopback with no TLS and no password. The dogfood monorepo is unaffected: its root keeps
 the `npm run api`/`npm run web` dev loop, and the dist resolver falls back to the sibling
 `spec-dashboard/dist` whenever no bundled copy is present.
+
+The packaging contract is verified as the user would meet it, not by inspecting files: CI builds the tarball,
+installs that tarball into a clean consumer project, runs `npx spex --help`, then runs `spex init` inside a
+fresh git repo and checks that the seed `.spec` tree and `spexcode.json` landed. A tarball that contains the
+right files but cannot start from an npm install is a packaging failure.

@@ -13,9 +13,26 @@ scenarios:
       application/json when `spex serve` is up, 502 when it is not. The listener is on 127.0.0.1 only.
     code: spec-cli/src/gateway.ts
     related: spec-cli/src/cli.ts
+  - name: clean-install-cli-starts
+    description: >
+      Build the npm tarball with `npm pack`, install that tarball into a clean consumer project, then use the
+      installed package the way a new user would: run `npx spex --help`, create a fresh git repo, and run the
+      installed `spex init` inside it.
+    expected: |
+      The tarball builds the bundled dashboard during prepack and installs into the clean consumer project.
+      `npx spex --help` starts the CLI without looking for a missing nested `spec-cli/node_modules/.bin/tsx`.
+      Inside a fresh git repo, `spex init` exits 0 and plants `.spec/project/spec.md` plus `spexcode.json`.
+    code:
+      - package.json
+      - spec-cli/bin/spex.mjs
+      - spec-cli/src/tsx-bin.ts
+    related:
+      - spec-cli/src/init.ts
+      - scripts/prepack.mjs
 ---
 # packaging loss
 
 YATU through the real product surface: drive the actual `spex dashboard` listener over HTTP with curl, as an
 installed user's browser would — never assert the serve from an internal helper. The dist under test is the
-PREBUILT bundle (`dashboard-dist`, what the published package ships), not a vite dev server.
+PREBUILT bundle (`dashboard-dist`, what the published package ships), not a vite dev server. The install
+scenario is likewise measured from a clean npm consumer project, not by running source-tree helpers.

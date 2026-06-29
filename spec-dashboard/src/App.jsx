@@ -16,6 +16,7 @@ import { loadBoard, layout, X_GAP, Y_GAP, projectTitle, projectIcon, faviconHref
 import { createMomentumScroll } from './scroll.js'
 import { cycleNext } from './cycle.js'
 import { firesKey } from './bindings.js'
+import { returnFocus } from './focus.js'
 import { labelColor } from './color.js'
 import { sessionHeadline } from './session.js'
 import { useT } from './i18n/index.jsx'
@@ -236,6 +237,17 @@ function Dashboard({ specs, sessions, reload }) {
     if (!followedRef.current) { followedRef.current = true; return }
     centerRef.current(focusRef.current)
   }, [focusId])
+
+  // focus-return boundary ([[focus-return]]): a transient overlay (search / help / settings / node popup)
+  // takes focus when it opens; when the LAST one closes, hand focus back to whoever held it — else the
+  // docked sink. Never <body>. The session interface is a surface with its own focus discipline (it hosts
+  // the sink), not a transient overlay, so it stays out of this set.
+  const anyOverlay = overlay || legend || settings || !!search
+  const hadOverlay = useRef(anyOverlay)
+  useEffect(() => {
+    if (hadOverlay.current && !anyOverlay) returnFocus()
+    hadOverlay.current = anyOverlay
+  }, [anyOverlay])
 
   // capture phase so we beat react-flow; while a modal is open it owns the keys (guards below)
   useEffect(() => {

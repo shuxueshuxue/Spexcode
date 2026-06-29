@@ -840,6 +840,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 <textarea
                   ref={taRef}
                   className="si-input"
+                  data-focus-sink
                   rows={1}
                   value={prompt}
                   onChange={(e) => { setPrompt(e.target.value); syncMenu(e.target) }}
@@ -950,6 +951,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   <textarea
                     ref={msgRef}
                     className="si-input"
+                    data-focus-sink
                     rows={1}
                     value={msg}
                     onChange={(e) => { setMsg(e.target.value); if (sendErr) setSendErr(false); syncMenu(e.target) }}

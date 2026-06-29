@@ -1,8 +1,8 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { randomUUID } from 'node:crypto'
-import { readFileSync, writeFileSync, appendFileSync, existsSync, renameSync, mkdirSync, rmSync, readdirSync } from 'node:fs'
-import { join, dirname, relative } from 'node:path'
+import { readFileSync, writeFileSync, appendFileSync, existsSync, renameSync, mkdirSync, rmSync, readdirSync, realpathSync } from 'node:fs'
+import { join, dirname, relative, isAbsolute } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, type ReviewDiffFile } from './git.js'
 import { loadSpecs } from './specs.js'
@@ -840,6 +840,32 @@ export function superviseQueue(intervalMs = 3000): void {
   void tick()
 }
 
+// @@@ assertProjectMatch - the launch is PROJECT-BOUND, but routing is by URL. `spex new`'s intent is "create a
+// session for the project my cwd is in", yet `apiBase()` is SPEXCODE_API_URL||PORT||8787 — a pure URL carrying
+// no project identity. The backend it answers builds the worktree under ITS OWN mainRoot, so a stale inherited
+// SPEXCODE_API_URL (e.g. pointing at another repo's backend) silently lands the session in the WRONG repo. Read/
+// control verbs deliberately point anywhere (viewer-points-anywhere, see remote-client); only the mutating
+// launch is bound to the caller's project. So before launching, compare the caller's repo root to the backend's
+// served root and FAIL LOUD on a provable, same-host mismatch — never a silent misroute. The guard fires only on
+// a positive mismatch: no local repo, an unreachable backend, or a backend root that isn't a resolvable local
+// path (a genuinely remote backend) all fall through to allow, so legit remote dispatch is untouched.
+async function assertProjectMatch(): Promise<void> {
+  let localMain: string
+  try { localMain = realpathSync(mainRoot()) } catch { return }   // caller not in a repo → can't prove a mismatch
+  let served: string | null = null
+  try {
+    const r = await fetch(`${apiBase()}/api/layout`)
+    if (r.ok) served = (await r.json() as { main?: string }).main ?? null
+  } catch { return }                                              // backend unreachable → the POST surfaces it (fail-loud there)
+  if (!served || !isAbsolute(served)) return                      // unknown / config-aliased root → don't risk a false refusal
+  let backendMain: string
+  try { backendMain = realpathSync(served) } catch { return }     // backend root not a local path → a remote backend, allow
+  if (backendMain !== localMain)
+    throw new Error(
+      `spex new: refusing — cwd is in ${localMain} but the backend at ${apiBase()} serves ${backendMain}.\n` +
+      `Start this project's backend:  cd ${localMain} && spex serve   (or point SPEXCODE_API_URL at it)`)
+}
+
 // @@@ createSession (dispatch via backend) - `spex new` / `spex session new` must launch the worker in the
 // BACKEND's process, not the caller's. The backend owns the launch env (notably SPEXCODE_CLAUDE_CMD, which
 // reclaude strips from agent envs) AND the concurrency cap. An agent that runs `spex new` (e.g. a supervisor)
@@ -848,6 +874,7 @@ export function superviseQueue(intervalMs = 3000): void {
 // launching. Only when NO backend is reachable do we fall back to launching in this process (with a stderr
 // warning) — the backend's own POST handler calls newSession directly, so it never re-enters this path.
 export async function createSession(node: string | null, prompt: string, harness: string = defaultHarness.id): Promise<Session> {
+  await assertProjectMatch()
   let res: Response
   try {
     res = await fetch(`${apiBase()}/api/sessions`, {

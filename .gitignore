@@ -54,5 +54,7 @@ firecoder-scout.md
 .claude/settings.json
 .claude/skills/taste/SKILL.md
 .codex/skills/taste/SKILL.md
+AGENTS.md
+CLAUDE.md
 spexcode.local.json
 # spexcode:end

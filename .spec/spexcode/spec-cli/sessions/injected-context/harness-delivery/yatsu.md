@@ -8,16 +8,20 @@ scenarios:
     expected: >-
       Codex starts straight into the session with ZERO prompts — no directory-trust prompt and no
       hooks-review prompt (the deterministic trusted_hash materialize wrote into the scoped global config is
-      accepted). The materialized AGENTS.md <spexcode> block (the surface:system contract) is present in
-      codex's model-visible prompt-input. The user performed no step after `spex init`.
-  - name: managed-block-preserves-user-content
+      accepted). The materialized AGENTS.md <spexcode> block is present in codex's model-visible prompt-input
+      and carries BOTH the docs/AGENT_GUIDE.md guide AND the surface:system contract bodies (guide first). The
+      user performed no step after `spex init`.
+  - name: contract-files-are-gitignored-artifacts
     description: >-
-      In a project whose AGENTS.md (and CLAUDE.md) already contains the user's own text above and below where
-      the block will go, run `spex materialize` once, then edit a surface:system node and run it again.
+      In a fresh git project carrying a docs/AGENT_GUIDE.md, run `spex materialize`. Inspect the generated
+      AGENTS.md/CLAUDE.md, `git check-ignore` them and the managed `.gitignore` block, then edit a
+      surface:system node and run materialize again.
     expected: >-
-      Only the content between the `<!-- spexcode:start -->` / `<!-- spexcode:end -->` markers is written/
-      updated; every byte of the user's own surrounding text is preserved across both runs. The block content
-      equals the current surface:system bodies in name order.
+      AGENTS.md and CLAUDE.md are written and BOTH are git-ignored (their relative paths sit in the managed
+      `# spexcode` .gitignore block alongside the shims + skills), so a clone never carries a committed copy —
+      only docs/AGENT_GUIDE.md is tracked. Each file's `<!-- spexcode:start -->…<!-- spexcode:end -->` block
+      equals the AGENT_GUIDE.md guide followed by the surface:system bodies in name order; the second run
+      reflects the edited body. The writeManagedBlock primitive still preserves any bytes outside the markers.
   - name: codex-trust-is-scoped-and-additive
     description: >-
       Pre-seed the global ~/.codex/config.toml with unrelated user keys + another project's trust, then run
@@ -39,7 +43,9 @@ scenarios:
 # yatsu.md — harness-delivery
 
 Loss is measured through the REAL self-launch surface (YATU): a user-launched codex/claude on a clean,
-isolated home must get the full SpexCode system (contract + hooks + zero-prompt trust) with no step after
-`spex init`, and must never clobber the user's own AGENTS.md/CLAUDE.md content. Verify the contract reaches
-the model via `codex debug prompt-input` (no model call needed); verify trust via a real TUI launch (zero
-prompts). Always use isolated SPEXCODE_HOME/CODEX_HOME — never the real user config.
+isolated home must get the full SpexCode system (the assembled guide + contract + hooks + zero-prompt trust)
+with no step after `spex init`. The contract files (AGENTS.md/CLAUDE.md) are SpexCode-owned GENERATED
+artifacts — gitignored, regenerated per clone/launch — so the only tracked contract prose is the
+docs/AGENT_GUIDE.md source the render folds in. Verify the contract reaches the model via `codex debug
+prompt-input` (no model call needed); verify trust via a real TUI launch (zero prompts). Always use isolated
+SPEXCODE_HOME/CODEX_HOME — never the real user config.

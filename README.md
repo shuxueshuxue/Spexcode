@@ -19,20 +19,17 @@ Pick the path that fits — most people want the first:
 
 ## Using SpexCode
 
-SpexCode is **two layers**, and you can stop after the first:
+You install the `spex` CLI and point it at your own repo. At its core that's plain tooling: **spec files
+versioned by git**, checked by `spex lint` and shown on a read-only dashboard — no AI, and nothing to run
+but Node and git.
 
-- **The governance layer** — `spex init`, `spex lint`, the spec tree, and the read-only dashboard. This
-  is pure spec-and-git tooling: **no AI, no extra services.** Node and git are all it needs.
-- **The self-developing session layer** — dispatching AI workers onto nodes, with the board's live
-  terminals. This shells out to a coding-agent harness — **[Claude Code](https://www.anthropic.com/claude-code)**
-  or **Codex**, both first-class behind one adapter seam (Claude launches as
-  `claude --dangerously-skip-permissions`, overridable via `SPEXCODE_CLAUDE_CMD`) — plus **tmux**. If you
-  create a session without a harness and tmux installed and authenticated, it will fail.
+Optionally, SpexCode can dispatch AI coding agents (**[Claude Code](https://www.anthropic.com/claude-code)**
+or **Codex**) onto your spec nodes and stream their live terminals on the board — that part also needs
+**tmux** and the agent CLI on your PATH.
 
-> **Requirements.** Governance layer: **Node ≥ 22** and **git**. Session layer additionally needs
-> **tmux** and an authenticated coding-agent harness on your PATH — **Claude Code or Codex**. Sessions
-> also run an agent that can execute commands on your machine — read [`SECURITY.md`](./SECURITY.md)
-> before exposing the backend.
+> **Requirements.** Core: **Node ≥ 22** and **git**. Dispatching AI agents also needs **tmux** and an
+> authenticated **Claude Code or Codex** on your PATH — and those agents run commands on your machine, so
+> read [`SECURITY.md`](./SECURITY.md) before exposing the backend.
 
 You don't clone this repo to *use* SpexCode. Install the published CLI once, then point it at any project.
 

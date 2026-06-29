@@ -51,16 +51,20 @@ Then make it yours: edit `.spec/project/spec.md` to describe the project, and po
 spex lint              # the "coverage" warnings are your adoption TODO list
 ```
 
-Run it. The backend and the dashboard are **two commands on two ports**, so several projects can run
-side by side on one host (the cwd picks which project is served):
+Run it — start the backend and the dashboard, then open the board:
 
 ```sh
-spex serve --port 8788                       # the backend (API + sessions) for THIS repo
-spex dashboard --port 5174 --api-port 8788   # the board UI, pointed at that backend
+spex serve          # the backend (API + sessions), on :8787
+spex dashboard      # the board UI on :5173, proxying /api to the backend
 ```
 
-Then open <http://localhost:5174>. With no flags, `spex serve` defaults to `:8787` and `spex dashboard`
-to `:5173`.
+Open <http://localhost:5173>.
+
+Both ports are flags (`spex serve --port 8788`, `spex dashboard --port 5174 --api-port 8788`), so you can
+run several projects' boards side by side — the working directory picks which project each serves. Give
+each tab its own identity in that project's `spexcode.json`: `dashboard.title` names it and
+`dashboard.icon` sets the favicon — an emoji (`"🔭"`), an Iconify name (`"mdi:rocket-launch"`), or a URL,
+nothing to download.
 
 Day to day:
 

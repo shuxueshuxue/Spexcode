@@ -38,7 +38,7 @@ function Dashboard({ specs, sessions, reload }) {
   const [sessionUI, setSessionUI] = useState(false) // session interface (opened by Enter)
   const [legend, setLegend] = useState(false)     // centered help modal: keymap + visual vocabulary (`?`)
   const [settings, setSettings] = useState(false) // centered settings modal: language picker etc. (`,`)
-  const [search, setSearch] = useState(false)     // jump-to-node search palette (Alt+F)
+  const [search, setSearch] = useState(null)      // search palette mode: null | 'board' (`/`, nodes lead) | 'sessions' (⌘/Ctrl+/, sessions lead)
   const [sessionSel, setSessionSel] = useState('new') // persisted across open/close: last tab/session
   const [highlightId, setHighlightId] = useState(null) // session whose overlays are emphasised
   const [seed, setSeed] = useState(null)          // one-shot text a board chord pre-fills the New Session input with
@@ -97,9 +97,12 @@ function Dashboard({ specs, sessions, reload }) {
   const openEval = useCallback(() => { setPane('eval'); setOverlay(true) }, [])
   const openSession = useCallback((id) => { setSessionSel(id); setSessionUI(true) }, [])
   const startNew = useCallback((text) => { setSessionSel('new'); setSeed(text); setSessionUI(true) }, [])
+  // one routing for BOTH palettes (board `/` and session-board ⌘/Ctrl+/): a session opens/switches to its
+  // tab; a non-session closes the session view (a no-op when already on the board) and jumps to the node on
+  // the graph. The select-target branch is shared, not forked — only the lead weight differs by entry point.
   const onSearchPick = useCallback((e) => {
     if (e.kind === 'session') openSession(e.target)
-    else setFocusId(e.target)
+    else { setSessionUI(false); setFocusId(e.target) }
   }, [openSession])
 
   const children = useMemo(() => specs2.filter((s) => s.parent === focus.id), [specs2, focus])
@@ -246,12 +249,18 @@ function Dashboard({ specs, sessions, reload }) {
     const bumpScroll = (delta) => popupScroll(
       document.querySelector('.ov-body .pane-doc, .ov-body .pane-hist, .ov-body .pane-issues, .ov-body .pane-eval, .ov-body .pane-edit'), delta)
     const onKey = (e) => {
-      if (sessionUI) return // the session interface owns ALL its keys (arrows / Enter / typing / Esc / the graph)
-      // search palette owns its keys (in SpecSearch); App still catches Esc so it closes even if the input blurred
+      // The search palette is a modal: while open it owns its keys over ANY surface — the board OR the session
+      // interface (the session interface yields via its searchOpen guard). The SpecSearch input owns ↑/↓/Enter/
+      // typing; App only catches Esc here so it closes even if the input blurred. This guard sits ABOVE the
+      // sessionUI return so it holds when the palette is opened over the session board.
       if (search) {
-        if (e.key === 'Escape') { e.preventDefault(); setSearch(false) }
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setSearch(null) }
         return
       }
+      // ⌘/Ctrl+/ opens the SAME palette with SESSIONS boosted — the session board's search escape-hatch,
+      // reachable even while the session interface owns its keys. Plain `/` on the board stays nodes-first (below).
+      if ((e.metaKey || e.ctrlKey) && e.key === '/') { e.preventDefault(); e.stopPropagation(); setSearch('sessions'); return }
+      if (sessionUI) return // the session interface owns ALL its keys (arrows / Enter / typing / Esc / the graph)
       if (overlay) {
         if (e.key === 'Escape') { e.preventDefault(); setOverlay(false); return }
         if (e.key === 'Tab') { e.preventDefault(); e.stopPropagation(); cyclePane(e.shiftKey ? -1 : 1); return }
@@ -289,7 +298,7 @@ function Dashboard({ specs, sessions, reload }) {
       }
       if (e.key === 'Escape' && highlightId) { e.preventDefault(); e.stopPropagation(); setHighlightId(null); return }
       if (firesKey('board.settings', e.key)) { e.preventDefault(); setSettings(true); return }
-      if (firesKey('board.search', e.key)) { e.preventDefault(); e.stopPropagation(); setSearch(true); return }
+      if (firesKey('board.search', e.key)) { e.preventDefault(); e.stopPropagation(); setSearch('board'); return }
       // chord buffer: a leader (n/d) holds, the next letter fires (CHORDS); a non-match or a 700ms lull clears it and falls through
       if (!e.metaKey && !e.ctrlKey && !e.altKey && /^[a-zA-Z]$/.test(e.key)) {
         const cur = chordRef.current
@@ -426,7 +435,7 @@ function Dashboard({ specs, sessions, reload }) {
 
         {legend && <Legend onClose={() => setLegend(false)} />}
         {settings && <Settings onClose={() => setSettings(false)} />}
-        {search && <SpecSearch specs={specs} sessions={sessions} onPick={onSearchPick} onClose={() => setSearch(false)} />}
+        {search && <SpecSearch specs={specs} sessions={sessions} onPick={onSearchPick} onClose={() => setSearch(null)} boost={search === 'sessions' ? 'session' : null} />}
       </div>
 
       <FocusPanel node={focus} onOpenEval={openEval} />
@@ -437,6 +446,7 @@ function Dashboard({ specs, sessions, reload }) {
         specs={specs}
         focusNode={focus}
         open={sessionUI}
+        searchOpen={!!search}
         sel={sessionSel}
         setSel={setSessionSel}
         seed={seed}

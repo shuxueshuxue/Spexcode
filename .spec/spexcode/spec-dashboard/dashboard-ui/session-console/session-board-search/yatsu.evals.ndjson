@@ -1,0 +1,2 @@
+{"scenario":"cmd-slash-opens-sessions-first","codeSha":"d084fc58c5c9d0702feeede6bf57f717dee77f3f","blob":"19420f47b5ac8bb9ab7a839fa2b2bd74e4cf4d140211b413552525d0fc0e8868","blobKind":"image","evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-28T19:35:52.712Z"}
+{"scenario":"pick-routes-session-vs-node","codeSha":"d084fc58c5c9d0702feeede6bf57f717dee77f3f","blob":"01b7f8fcb52d7640fc5f3b8cbfebca203e741c8175c059799479e5231f9e9479","blobKind":"image","evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-06-28T19:35:53.649Z"}

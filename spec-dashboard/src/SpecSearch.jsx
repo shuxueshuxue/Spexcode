@@ -13,9 +13,12 @@ const SCEN_COLOR = { pass: 'var(--green)', fail: 'var(--red)', stalePass: 'var(-
 // so a row reads like the tree path it is. Mirrors SessionInterface's @-mention path.
 const specPath = (p) => (p || '').replace(/^\.spec\//, '').replace(/\/spec\.md$/, '')
 
-// equal-score ties group by plane (nodes, then sessions, then issues, then scenarios) so an empty/loose
-// query reads as an ordered jump-list rather than an interleaved jumble.
-const KIND_ORDER = { spec: 0, session: 1, issue: 2, scenario: 3 }
+// the four planes in default lead order (nodes first); equal-score ties group by plane so an empty/loose
+// query reads as an ordered jump-list rather than an interleaved jumble. `boost` lifts ONE plane to the
+// front — the SAME palette leads with whatever surface opened it (the session board boosts 'session'). This
+// is the ONLY knob a caller turns: matcher, interleave, and keys are identical; only the lead order differs.
+const BASE_PLANES = ['spec', 'session', 'issue', 'scenario']
+const planeOrder = (boost) => (boost ? [boost, ...BASE_PLANES.filter((p) => p !== boost)] : BASE_PLANES)
 
 // fold the four planes into one flat list of uniform entries; each carries the row's display fields, the
 // `target` App acts on, and the scorer's name/desc/body fields mapped per plane (issues/scenarios keep their host node).
@@ -74,32 +77,33 @@ function buildEntries(specs, sessions) {
 // verified in-browser). Per-plane ranking keeps the shared scorer's quality WITHIN a plane; the interleave
 // keeps every matching plane visible — the palette's whole point. (The floor has only nodes, so it needs none
 // of this; this cross-plane assembly is the one thing the palette adds on top of the shared core.)
-const PLANES = ['spec', 'session', 'issue', 'scenario']
-function rank(entries, query) {
-  const jump = (a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || a.name.length - b.name.length || a.key.localeCompare(b.key)
+function rank(entries, query, planes) {
+  const order = Object.fromEntries(planes.map((k, i) => [k, i]))
+  const jump = (a, b) => order[a.kind] - order[b.kind] || a.name.length - b.name.length || a.key.localeCompare(b.key)
   if (!query.trim()) return entries.slice().sort(jump).slice(0, 15)
   const ranked = {}
-  for (const k of PLANES) {
+  for (const k of planes) {
     const docs = entries.filter((e) => e.kind === k).sort((a, b) => a.name.length - b.name.length || a.key.localeCompare(b.key))
     ranked[k] = rankDocs(query, docs.map((e) => ({ ref: e, name: e.name, desc: e.desc, body: e.body })), { limit: 15 }).map((r) => r.ref)
   }
   const out = []
   for (let i = 0; out.length < 15; i++) {
     let added = false
-    for (const k of PLANES) if (ranked[k][i] && out.length < 15) { out.push(ranked[k][i]); added = true }
+    for (const k of planes) if (ranked[k][i] && out.length < 15) { out.push(ranked[k][i]); added = true }
     if (!added) break
   }
   return out
 }
 
-export default function SpecSearch({ specs, sessions, onPick, onClose }) {
+export default function SpecSearch({ specs, sessions, onPick, onClose, boost = null }) {
   const t = useT()
   const [q, setQ] = useState('')
   const [sel, setSel] = useState(0)
   const inputRef = useRef(null)
   const listRef = useRef(null)
+  const planes = useMemo(() => planeOrder(boost), [boost])
   const entries = useMemo(() => buildEntries(specs, sessions), [specs, sessions])
-  const results = useMemo(() => rank(entries, q), [entries, q])
+  const results = useMemo(() => rank(entries, q, planes), [entries, q, planes])
 
   useEffect(() => { inputRef.current?.focus() }, [])
   useEffect(() => { setSel(0) }, [q])  // a fresh query always re-aims the highlight at the top result

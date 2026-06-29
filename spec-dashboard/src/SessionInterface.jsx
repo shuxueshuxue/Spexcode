@@ -161,7 +161,7 @@ function highlight(text, q) {
   return <>{text.slice(0, i)}<b className="mention-hit">{text.slice(i, i + q.length)}</b>{text.slice(i + q.length)}</>
 }
 
-export default function SessionInterface({ sessions, specs = [], focusNode, open, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, reload }) {
+export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, reload }) {
   const t = useT()
   const [prompt, setPrompt] = useState('')    // the New Session tab's own draft (its boarding-switch cache)
   const [menu, setMenu] = useState(null)      // completion dropdown: { kind:'mention'|'config'|'slash', items, index, start, end, query }
@@ -652,11 +652,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const boardCmds = boardCommandsFor(selSession?.status, runners)
   // window-level key router: ↑/↓ walk the list regardless of focus; Enter on New launches.
   const stateRef = useRef({})
-  stateRef.current = { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, navMode, setNavMode, sendRawKey, graphLegend, setGraphLegend }
+  stateRef.current = { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, searchOpen, navMode, setNavMode, sendRawKey, graphLegend, setGraphLegend }
   useEffect(() => {
     const onKey = (e) => {
-      const { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, navMode, setNavMode, sendRawKey, graphLegend, setGraphLegend } = stateRef.current
-      if (!open) return   // panel hidden (board not the active surface): nothing here listens
+      const { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, searchOpen, navMode, setNavMode, sendRawKey, graphLegend, setGraphLegend } = stateRef.current
+      if (!open || searchOpen) return   // panel hidden, OR the search palette modal is open above us and owns the keys: nothing here listens
       // reserved ⌥/⌘+I toggles nav mode: handled before everything else, never forwarded to tmux. Matched by
       // e.code (the physical I key) because ⌥I on a mac prints a dead-key glyph, not 'i'.
       const isI = e.code === 'KeyI' || e.key === 'i' || e.key === 'I'

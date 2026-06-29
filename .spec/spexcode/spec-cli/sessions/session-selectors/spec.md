@@ -26,6 +26,12 @@ ids. One grammar, one matcher, no per-command matching logic anywhere.
 session's full id, an id-PREFIX, its node, or its branch. Nothing re-derives it — both shapes below call it,
 so the grammar can never drift between "which sessions does `ls` show" and "which session does `merge` act on".
 
+**A selector may be a comma list.** `q` is split on commas and matches iff ANY part names the session — the
+same `a,b` convention as `--status`, so `spex watch a,b` and `spex watch a b` are equivalent. A single name
+is just the one-part case. This closes a silent failure: before, `watch a,b` was one literal selector that
+matched no session at all (an id/node/branch never contains a comma), so a comma-joined watch streamed
+**zero events forever** with no error — exactly the trap a `--status`-trained user falls into.
+
 **Two shapes over the one predicate.** `selectSessions` is the MANY shape — the list / stream / graph filter
 ([[graph]], `spex ls`): empty selectors (or `@all`) means everything, with an optional status filter on top.
 `resolveSession` is the ONE shape — the single-target lookup the control verbs need. Its result is

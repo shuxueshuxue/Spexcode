@@ -31,7 +31,7 @@ or **Codex**) onto your spec nodes and stream their live terminals on the board 
 > authenticated **Claude Code or Codex** on your PATH — and those agents run commands on your machine, so
 > read [`SECURITY.md`](./SECURITY.md) before exposing the backend.
 
-You don't clone this repo to *use* SpexCode. Install the published CLI once, then point it at any project.
+Install the published CLI once, then point it at any project:
 
 ```sh
 npm i -g spexcode      # installs the `spex` command (needs Node ≥ 22)

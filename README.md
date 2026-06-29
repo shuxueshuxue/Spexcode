@@ -19,6 +19,19 @@ There are two ways to meet SpexCode, and they are kept separate on purpose:
 
 ## Using SpexCode
 
+SpexCode is **two layers**, and you can stop after the first:
+
+- **The governance layer** — `spex init`, `spex lint`, the spec tree, and the read-only dashboard. This
+  is pure spec-and-git tooling: **no AI, no extra services.** Node and git are all it needs.
+- **The self-developing session layer** — dispatching AI workers onto nodes, with the board's live
+  terminals. This shells out to the **[Claude Code](https://www.anthropic.com/claude-code) CLI**
+  (launched as `claude --dangerously-skip-permissions`, overridable via `SPEXCODE_CLAUDE_CMD`) and
+  **tmux**. If you create a session without those installed and authenticated, it will fail.
+
+> **Requirements.** Governance layer: **Node ≥ 22** and **git**. Session layer additionally needs
+> **tmux** and an authenticated **Claude Code** CLI on your PATH. Sessions also run an agent that can
+> execute commands on your machine — read [`SECURITY.md`](./SECURITY.md) before exposing the backend.
+
 You don't clone this repo to *use* SpexCode. Install the published CLI once, then point it at any project.
 
 ```sh
@@ -84,3 +97,38 @@ The contribution ritual in one breath: branch `node/<id>` off `main`, make the c
 `spec.md` *together*, commit, then `spex session done --propose merge` — a human performs the `--no-ff`
 merge. That ritual, the spec-node model, the lint rules, and the reflexive config system are all spelled
 out in **[`CLAUDE.md`](./CLAUDE.md)** — read it before your first change.
+
+The human-facing version of all that — setup, the ritual, what "good" looks like — is in
+**[`CONTRIBUTING.md`](./CONTRIBUTING.md)**.
+
+---
+
+## Project status & known limitations
+
+SpexCode is **pre-1.0 and dogfooded daily**, not yet battle-tested across many outside projects. Being
+honest about the edges so you can decide if it fits:
+
+- **Vendor-coupled at the session layer.** The self-developing features assume the
+  [Claude Code](https://www.anthropic.com/claude-code) CLI. The launcher is swappable
+  (`SPEXCODE_CLAUDE_CMD`), but there's no first-class adapter for other agents yet. The **governance
+  layer is fully usable without any of this** — that's the part to try first.
+- **Single-operator, localhost-first.** The backend and dashboard have **no auth layer** and the
+  session console is a live terminal. Don't put either on an untrusted network without your own
+  authenticated tunnel — see [`SECURITY.md`](./SECURITY.md).
+- **The git hook is advisory, not a hard gate.** It's per-clone (re-run `npm run hooks` after a fresh
+  clone) and bypassable. The intended enforcement is CI running `spex lint`; wiring that into your own
+  repo is on you for now.
+- **Sessions need tmux**, so the session layer is Unix-oriented (macOS / Linux). The governance layer
+  is cross-platform.
+- **Packaging is young.** Early `spexcode` releases shipped install bugs that only a clean-room install
+  catches; if `spex` misbehaves right after `npm i -g`, please file an issue with your Node version and
+  OS.
+
+If a limitation here blocks you, an [issue](https://github.com/shuxueshuxue/spexcode/issues) is the
+fastest way to tell us which one matters.
+
+---
+
+## License
+
+[MIT](./LICENSE).

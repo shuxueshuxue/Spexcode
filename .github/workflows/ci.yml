@@ -21,8 +21,36 @@ jobs:
       - name: Install spec-cli
         working-directory: spec-cli
         run: npm ci
+      - name: Install dashboard
+        working-directory: spec-dashboard
+        run: npm ci
       - name: spec-lint (blocks on errors; coverage/drift are advisory warnings)
         run: npm run lint
       - name: typecheck
         working-directory: spec-cli
         run: npx tsc --noEmit
+      - name: Pack/install smoke
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          npm pack --pack-destination "$tmp" >/dev/null
+          tarball="$(find "$tmp" -maxdepth 1 -name 'spexcode-*.tgz' -print -quit)"
+
+          mkdir "$tmp/consumer"
+          cd "$tmp/consumer"
+          npm init -y --silent >/dev/null
+          npm install "$tarball" --silent
+          npx spex --help >/dev/null
+
+          mkdir project
+          cd project
+          git init --quiet
+          git config user.email smoke@example.invalid
+          git config user.name "Spex Smoke"
+          printf 'hello\n' > README.md
+          git add README.md
+          git commit -m 'seed' --quiet
+          ../node_modules/.bin/spex init >/dev/null
+          test -f .spec/project/spec.md
+          test -f spexcode.json

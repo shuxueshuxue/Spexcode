@@ -5,6 +5,7 @@ hue: 280
 desc: A per-edit PostToolUse annotation that fires only when ACTIONABLE — the first edit of an over-owned (> maxOwners) or uncovered file flags it at the edit; a sanely-owned file is left silent.
 code:
   - .spec/spexcode/.config/core/spec-of-file/spec-of-file.sh
+  - spec-cli/templates/spec/project/.config/core/spec-of-file/spec-of-file.sh
 ---
 
 # spec-of-file
@@ -23,8 +24,16 @@ A PostToolUse hook (`spec-of-file.sh`), wired on PostToolUse via `settingsJson`.
 NOT gated on `governed` — spec-awareness serves any agent. On the first `Edit` / `Write` / `NotebookEdit` of a
 given file it emits **non-blocking** `additionalContext` naming the file's governing spec; a ledger dedupes so
 each file is annotated **once per session**. That ledger is a sibling file in the session's GLOBAL store dir
-(resolved from the payload's `session_id`, [[runtime]]) — the worktree holds no SpexCode state any more. Spec
-files are skipped — not governed code.
+(resolved from the payload's `session_id`, [[runtime]]) — the worktree holds no SpexCode state any more. The
+ledger key is the repo-relative path after normalization, so an absolute path and a relative path to the same
+file do not double-speak. Spec files are skipped — not governed code.
+
+The hook only speaks for **Git-relevant files inside the current repo**. A path outside the repo (for example a
+tool's `/tmp/...` transcript), `.git`, `.spec`, and ignored untracked files are silent. A tracked file is always
+eligible, and a new untracked-but-not-ignored repo file is eligible so a brand-new source module can still be
+told to get a spec home before it drifts. This keeps the annotation from treating shell scratch paths,
+node_modules, build output, or other ignored artifacts as product files while preserving the uncovered-source
+warning that matters.
 
 The file→spec resolve is **`spex owner <path> --actionable`** (a thin verb in cli.ts, resolver `specOwners`
 in specs.ts), a light read of frontmatter `code:` only — no git walk. `--actionable` is the discipline: it
@@ -40,3 +49,7 @@ speaks ONLY when there is something to act on, so the annotation stays rare inst
 
 Non-blocking and once-per-file by design: a pervasive signal earns its keep only by staying rare and
 precise, or it becomes the noise it was meant to cure. The enforcer is still the Stop gate; this annotates.
+
+This node owns both copies of the hook body: the dogfood `.config` source that governs SpexCode itself and
+the `spex init` template that fresh adopters receive. They must move together so the behavior a user installs
+matches the behavior SpexCode uses on itself.

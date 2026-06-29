@@ -100,42 +100,11 @@ npm run api            # backend on :8787, hot-reloads on spec-cli/src changes
 npm run web            # the dashboard via Vite (HMR), proxying /api → :8787
 ```
 
-The contribution ritual in one breath: branch `node/<id>` off `main`, make the code change **and** its
-`spec.md` *together*, commit, then `spex session done --propose merge` — a human performs the `--no-ff`
-merge. That ritual, the spec-node model, the lint rules, and the reflexive config system are all spelled
-out in **[`CLAUDE.md`](./CLAUDE.md)** — read it before your first change.
-
-The human-facing version of all that — setup, the ritual, what "good" looks like — is in
-**[`CONTRIBUTING.md`](./CONTRIBUTING.md)**.
-
----
-
-## Project status & known limitations
-
-SpexCode is **pre-1.0 and dogfooded daily**, not yet battle-tested across many outside projects. Being
-honest about the edges so you can decide if it fits:
-
-- **Harness-coupled, not vendor-locked.** The self-developing layer drives a coding-agent harness behind
-  one adapter seam; **Claude Code and Codex are both first-class** today (the launcher picks one;
-  `SPEXCODE_CLAUDE_CMD` overrides it). A harness with no adapter yet would need one written — that's the
-  only coupling. The **governance layer is fully usable with no harness at all** — that's the part to try
-  first.
-- **Localhost-first; remote access is opt-in and password-gated.** By default the backend and dashboard
-  bind to loopback with **no gate** — loopback is the trust boundary. To reach them from another machine,
-  `spex serve --public --password <pw>` raises a password-gated TLS gateway (a styled login + signed
-  cookie, the terminal socket included), or put your own authenticated tunnel in front. The session
-  console is a live terminal, so never expose a bare unauthenticated port — see [`SECURITY.md`](./SECURITY.md).
-- **The git hook is advisory, not a hard gate.** It's per-clone (re-run `npm run hooks` after a fresh
-  clone) and bypassable. The intended enforcement is CI running `spex lint`; wiring that into your own
-  repo is on you for now.
-- **Sessions need tmux**, so the session layer is Unix-oriented (macOS / Linux). The governance layer
-  is cross-platform.
-- **Packaging is young.** Early `spexcode` releases shipped install bugs that only a clean-room install
-  catches; if `spex` misbehaves right after `npm i -g`, please file an issue with your Node version and
-  OS.
-
-If a limitation here blocks you, an [issue](https://github.com/shuxueshuxue/spexcode/issues) is the
-fastest way to tell us which one matters.
+The contribution ritual: branch `node/<id>` off `main`, make the code change **and** its `spec.md`
+*together*, commit, then `spex session done --propose merge` — a human performs the `--no-ff` merge. The
+full contract — that ritual, the spec-node model, the lint rules, the reflexive config system — is in
+**[`CLAUDE.md`](./CLAUDE.md)** (read it before your first change); **[`CONTRIBUTING.md`](./CONTRIBUTING.md)**
+is the human-oriented walkthrough.
 
 ---
 

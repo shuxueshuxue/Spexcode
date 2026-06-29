@@ -54,7 +54,7 @@ while the backend itself stays bound to loopback.
   loud-warned, never a silent exposure.
 - Served over plain HTTP (`--http`), the dashboard loses browser secure-context APIs (e.g. clipboard) and
   any password crosses the network in clear; that's a functional/operational limitation, not the security
-  boundary — see "known limitations" in [`README.md`](./README.md).
+  boundary.
 
 ## Supported versions
 

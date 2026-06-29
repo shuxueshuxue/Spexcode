@@ -10,10 +10,10 @@ database**: a node's version is its count of content commits, and "drift" is gov
 ahead of its spec. A `spex` CLI plus a live dashboard read all of it straight from git; there is no
 separate store.
 
-There are two ways to meet SpexCode, and they are kept separate on purpose:
+Pick the path that fits — most people want the first:
 
 - **[Using SpexCode](#using-spexcode)** — install the `spex` CLI from npm and govern *your own* project.
-- **[Contributing to SpexCode](#contributing-to-spexcode)** — develop the tool itself, in this repo.
+- **[Contributing to SpexCode](#contributing-to-spexcode)** — hack on the tool itself, in this repo.
 
 ---
 

@@ -59,6 +59,20 @@ was stripped of `SPEXCODE_CLAUDE_CMD`, so an in-process launch there spawns bare
 **401 at boot**. The CLI falls back to in-process **only when no backend answers** (warning that it then
 carries the caller's env, no cap).
 
+**The launch is project-bound; the route is not — so the launch guards its project.** A launch builds the
+worktree under the backend's OWN `mainRoot`, but the route to a backend is a bare URL (`SPEXCODE_API_URL`,
+else the local-port default) carrying no project identity. So a **stale inherited `SPEXCODE_API_URL`** pointing
+at another repo's backend would silently land the session in the WRONG repo — the exact decoupling the
+[[remote-client]] *read/control* verbs exploit on purpose (point anywhere to monitor any machine) becomes a
+correctness hole the moment the verb *mutates*. The fix lives at the client launch seam: before POSTing,
+`spex new` compares the **caller's cwd repo root** to the backend's **served root** (`GET /api/layout` `.main`)
+and **refuses, loud**, on a provable same-host mismatch — `cwd is in <A> but the backend serves <B>`, with the
+repair (`cd <A> && spex serve`, or point the env at it). It fires only on a positive mismatch: no local repo,
+an unreachable backend, or a served root that isn't a resolvable local path (a genuinely remote backend) all
+fall through to allow, so legit cross-machine dispatch and the viewer-points-anywhere model stay intact. This
+is the same FAIL-LOUD-never-silent-fallback rule [[remote-client]] states, applied to launch: a mutating verb
+must never silently act on the wrong project.
+
 ### Concurrency cap (bounded working set)
 
 At most **N** agents run **autonomously progressing** at once — **N configured per project in `spexcode.json`

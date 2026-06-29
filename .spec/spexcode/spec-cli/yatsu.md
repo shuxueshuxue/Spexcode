@@ -29,6 +29,19 @@ scenarios:
       crash under dashboard.
     code: [spec-cli/src/listen.ts, spec-cli/src/supervise.ts]
     related: spec-cli/src/gateway.ts
+  - name: board-conditional-request
+    description: >-
+      Drive the board's conditional-request contract through the real backend. GET `/api/board`
+      once and capture the response status, the `ETag` header, and the body size. Then GET it
+      again sending `If-None-Match: <that ETag>`, and once more sending a deliberately stale
+      `If-None-Match` value. File the transcript with
+      `spex yatsu eval spec-cli --scenario board-conditional-request --result <txt> --pass`.
+    expected: >-
+      The first GET is `200` with an `ETag` header over the serialized body. The matching
+      `If-None-Match` request returns `304 Not Modified` with NO body (the saved transfer), still
+      echoing the same `ETag`. A stale `If-None-Match` returns the full `200` body — so the
+      endpoint speaks standard conditional-request HTTP, with no special-casing of the poll path.
+    code: spec-cli/src/index.ts
 ---
 # yatsu.md — spec-cli
 

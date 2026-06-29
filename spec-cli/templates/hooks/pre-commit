@@ -1,51 +1,71 @@
 #!/usr/bin/env bash
-# @@@ main-guard - the worktree model: never author directly on main; main only RECEIVES merges.
-# Reject a direct commit while HEAD is main. Merges pass (MERGE_HEAD present).
+# @@@ shared spex runner - resolve the `spex` CLI ONCE, into spex_cli(), so BOTH the main-guard trunk
+# lookup and the spec-lint shim shim through the same mechanism (no duplicated, drift-prone resolution).
+# This must work for BOTH ways this hook ships: a real project that installed @spexcode/spec-cli, and the
+# SpexCode monorepo dogfooding itself from source. cwd stays the committing worktree either way. main_root
+# is the parent of the shared git *common* dir (= layout.ts mainCheckout()); a fresh session worktree has
+# no node_modules of its own, so the dogfood tsx path reaches the main checkout's. First that exists wins:
+#   1. `spex` on PATH                  - installed globally / on the shell PATH.
+#   2. <repo>/node_modules/.bin/spex   - a project that did `npm i @spexcode/spec-cli` (the dep's bin).
+#   3. monorepo tsx + cli.ts by path   - dogfood: run the CLI from source.
+main_root=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)")
+repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
+spex_kind=
+if command -v spex >/dev/null 2>&1; then
+  spex_kind=path
+elif [ -x "$repo_root/node_modules/.bin/spex" ]; then
+  spex_kind=local
+elif [ -x "$main_root/spec-cli/node_modules/.bin/tsx" ] && [ -f "$main_root/spec-cli/src/cli.ts" ]; then
+  spex_kind=tsx
+fi
+spex_cli() {
+  case "$spex_kind" in
+    path)  spex "$@" ;;
+    local) "$repo_root/node_modules/.bin/spex" "$@" ;;
+    tsx)   "$main_root/spec-cli/node_modules/.bin/tsx" "$main_root/spec-cli/src/cli.ts" "$@" ;;
+    *)     return 127 ;;
+  esac
+}
+
+# @@@ main-guard - the worktree model: never author directly on the trunk; the trunk only RECEIVES merges.
+# Reject a direct commit while HEAD is the trunk. Merges pass (MERGE_HEAD present).
 # Escape hatch for seeding / eager topology: SPEXCODE_ALLOW_MAIN=1 git commit …
+#
+# The trunk is resolved the SAME way the rest of SpexCode resolves it — `spex trunk` = layout.ts
+# mainBranch() (config override → the main checkout's current branch → 'main') — so the guard protects
+# whatever the repo's trunk is actually named, NOT a hardcoded 'main' (which gave a `master`/non-`main`
+# trunk zero protection). When the CLI isn't resolvable (advisory mode), fall back to a pure-git
+# auto-detect of the main checkout's current branch, then 'main' — still protecting a non-`main` trunk.
 branch=$(git symbolic-ref --short HEAD 2>/dev/null || echo)
 git_dir=$(git rev-parse --git-dir 2>/dev/null)
-if [ "$branch" = "main" ] && [ ! -f "$git_dir/MERGE_HEAD" ] && [ -z "${SPEXCODE_ALLOW_MAIN:-}" ]; then
-  echo "✗ SpexCode: direct commits on main are blocked." >&2
+trunk=$(spex_cli trunk 2>/dev/null | head -1)
+# Fallback auto-detect: the main checkout's current branch. Strip the hook's exported GIT_DIR/
+# GIT_INDEX_FILE first — otherwise they pin discovery to the COMMITTING worktree and `-C "$main_root"`
+# is ignored, so it would read THIS branch and think every node branch is the trunk. (`spex trunk`
+# above is immune: layout.ts mainBranch() resolves through git.ts's env-stripping git().)
+[ -n "$trunk" ] || trunk=$(env -u GIT_DIR -u GIT_INDEX_FILE git -C "$main_root" symbolic-ref --short HEAD 2>/dev/null)
+[ -n "$trunk" ] || trunk=main
+if [ "$branch" = "$trunk" ] && [ ! -f "$git_dir/MERGE_HEAD" ] && [ -z "${SPEXCODE_ALLOW_MAIN:-}" ]; then
+  echo "✗ SpexCode: direct commits on $trunk (the trunk) are blocked." >&2
   echo "  Work in a worktree (.worktrees/<node>, branch node/<id>) and merge back." >&2
   echo "  Merges pass automatically; for seeding/topology: SPEXCODE_ALLOW_MAIN=1 git commit …" >&2
   exit 1
 fi
 
 # @@@ spec-lint - the hook is just a thin shim over `spex lint`. It blocks on errors only (broken
-# spec↔code links); coverage/drift are warnings. Bypass with SPEXCODE_SKIP_LINT=1.
-#
-# Resolving the `spex` CLI must work for BOTH ways this hook ships: a real project that installed
-# @spexcode/spec-cli, and the SpexCode monorepo dogfooding itself from source. cwd stays the committing
-# worktree either way, so lint validates THIS worktree's `.spec` (repoRoot() discovers the cwd's toplevel
-# via git.ts, which strips the hook's GIT_DIR). First resolution that exists wins:
-#   1. `spex` on PATH                  - installed globally / on the shell PATH.
-#   2. <repo>/node_modules/.bin/spex   - a project that did `npm i @spexcode/spec-cli` (the dep's bin).
-#   3. monorepo tsx + cli.ts by path   - dogfood: run the CLI from source. main is the parent of the shared
-#      git *common* dir (a fresh session worktree has no node_modules of its own, so we reach the main one).
+# spec↔code links); coverage/drift are warnings. Bypass with SPEXCODE_SKIP_LINT=1. It shims through the
+# shared spex_cli() resolved above (repoRoot() discovers the cwd's toplevel via git.ts, which strips the
+# hook's GIT_DIR, so lint validates THIS worktree's `.spec`).
 if [ -z "${SPEXCODE_SKIP_LINT:-}" ]; then
-  main_root=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)")
-  repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
-  # @@@ one resolved runner - resolve `spex` ONCE into spex_run(), so every spec-cli pre-commit check
-  # (lint, the yatsu stray-blob backstop) shims through the same mechanism instead of re-resolving.
-  spex_found=1
-  if command -v spex >/dev/null 2>&1; then
-    spex_run() { spex "$@" >&2; }
-  elif [ -x "$repo_root/node_modules/.bin/spex" ]; then
-    spex_run() { "$repo_root/node_modules/.bin/spex" "$@" >&2; }
-  elif [ -x "$main_root/spec-cli/node_modules/.bin/tsx" ] && [ -f "$main_root/spec-cli/src/cli.ts" ]; then
-    spex_run() { "$main_root/spec-cli/node_modules/.bin/tsx" "$main_root/spec-cli/src/cli.ts" "$@" >&2; }
-  else
-    spex_found=0
-  fi
-  if [ "$spex_found" = 1 ]; then
-    if ! spex_run lint; then
+  if [ -n "$spex_kind" ]; then
+    if ! spex_cli lint >&2; then
       echo "✗ SpexCode: spec-lint failed — fix the spec↔code links or bypass with SPEXCODE_SKIP_LINT=1." >&2
       exit 1
     fi
     # @@@ yatsu backstop - reject a staged yatsu offender: a stray pixel blob copied into the tree (blobs
     # belong in the shared git common dir, never committed) OR a malformed yatsu.md (a scenario schema
     # violation). Logic lives in spec-yatsu; this is the lint-shim's twin. (this node's contract)
-    if ! spex_run yatsu check-staged; then
+    if ! spex_cli yatsu check-staged >&2; then
       echo "✗ SpexCode: yatsu check-staged failed (see above) — fix it or bypass with SPEXCODE_SKIP_LINT=1." >&2
       exit 1
     fi

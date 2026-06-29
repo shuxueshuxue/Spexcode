@@ -29,7 +29,7 @@ or **Codex**) onto your spec nodes and stream their live terminals on the board 
 
 > **Requirements.** Core: **Node ≥ 22** and **git**. Dispatching AI agents also needs **tmux** and an
 > authenticated **Claude Code or Codex** on your PATH — and those agents run commands on your machine, so
-> read [`SECURITY.md`](./SECURITY.md) before exposing the backend.
+> read [`SECURITY.md`](./docs/SECURITY.md) before exposing the backend.
 
 Install the published CLI once, then point it at any project:
 
@@ -103,7 +103,7 @@ npm run web            # the dashboard via Vite (HMR), proxying /api → :8787
 The contribution ritual: branch `node/<id>` off `main`, make the code change **and** its `spec.md`
 *together*, commit, then `spex session done --propose merge` — a human performs the `--no-ff` merge. The
 full contract — that ritual, the spec-node model, the lint rules, the reflexive config system — is in
-**[`CLAUDE.md`](./CLAUDE.md)** (read it before your first change); **[`CONTRIBUTING.md`](./CONTRIBUTING.md)**
+**[`CLAUDE.md`](./CLAUDE.md)** (read it before your first change); **[`CONTRIBUTING.md`](./docs/CONTRIBUTING.md)**
 is the human-oriented walkthrough.
 
 ---

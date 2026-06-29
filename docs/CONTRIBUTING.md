@@ -1,7 +1,7 @@
 # Contributing to SpexCode
 
 Thanks for wanting to work on SpexCode. This file is the **human** entry point. The full mechanics —
-the spec-node model, the lint rules, the reflexive config system — live in [`CLAUDE.md`](./CLAUDE.md)
+the spec-node model, the lint rules, the reflexive config system — live in [`CLAUDE.md`](../CLAUDE.md)
 and in `spex guide`; this page gets you from a clone to your first merged change without reading all of
 that first.
 
@@ -43,7 +43,7 @@ npm run web            # the dashboard via Vite (HMR), proxying /api → :8787
 
 > Note: the live, multi-agent *session* features (dispatching workers, the board's live terminals) shell
 > out to a coding-agent harness — **Claude Code or Codex** — and **tmux**; see the prerequisites in
-> [`README.md`](./README.md). You
+> [`README.md`](../README.md). You
 > do **not** need either to work on the governance layer (`spex lint`, the spec tree, the dashboard, the
 > git-as-database reader). Most contributions never touch the session layer.
 
@@ -82,5 +82,5 @@ worth reading once you've landed a first change.
 
 ## License
 
-SpexCode is MIT-licensed ([`LICENSE`](./LICENSE)). By contributing, you agree your contributions are
+SpexCode is MIT-licensed ([`LICENSE`](../LICENSE)). By contributing, you agree your contributions are
 licensed under the same terms.

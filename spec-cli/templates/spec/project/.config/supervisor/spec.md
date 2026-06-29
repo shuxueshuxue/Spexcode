@@ -1,6 +1,6 @@
 ---
 title: supervisor
-surface: slash
+surface: command
 status: active
 hue: 280
 desc: Launch a supervisor agent that manages other agents from the main checkout to drive a goal to completion.

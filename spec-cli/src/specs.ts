@@ -238,11 +238,11 @@ export async function specDiffAt(id: string, hash: string) {
 // block (honored only on block-capable events). See loadHookConfig + the hook compiler/dispatcher.
 export type ConfigPreset = { name: string; title: string; desc: string; kind: string; dir: string; files: string[]; body: string; events: string[]; order: number; block: boolean }
 // field-driven surface - a config plugin is a FLAT direct child of a config root (`<root>/<name>/spec.md`)
-// that carries a `surface: system|slash|hook|skill` frontmatter field naming where it plugs in. There are no
-// `slash/`/`system/`/`hook/`/`skill/` bucket dirs (those were graph-invisible grouping dirs with no spec.md, so
+// that carries a `surface: system|command|hook|skill` frontmatter field naming where it plugs in. There are no
+// `command/`/`system/`/`hook/`/`skill/` bucket dirs (those were graph-invisible grouping dirs with no spec.md, so
 // the spec graph skipped them — path != graph); the surface is a FIELD on the node, so the plugin is a real
 // graph child of its root. BOTH config roots participate: `.config` (the instance — DIY dev-flow plugins) and
-// `config` (the project system spec). loadConfig gathers the `slash` surface, loadSystemConfig the `system`
+// `config` (the project system spec). loadConfig gathers the `command` surface, loadSystemConfig the `system`
 // surface, loadHookConfig the `hook` surface, loadSkillConfig the `skill` surface; each scans the children under
 // every root and filters by the field. The plugins also show on the board as ordinary spec nodes (via loadSpecs).
 // root node - the spec tree's single top-level node: the one directory directly under .spec/ that
@@ -283,16 +283,16 @@ function bundleFiles(dir: string): string[] {
 // grouping parent may itself be a plugin (e.g. `.config/core` is a `surface: system` contract whose CHILDREN
 // are `surface: hook` nodes). The field filter keeps it safe: a node only gathers if it declares THIS
 // surface, so descending past a matched node never double-counts (children carry a different surface). For
-// `system`/`slash` the result is identical to the old one-level scan on the current tree — every existing
+// `system`/`command` the result is identical to the old one-level scan on the current tree — every existing
 // such node is a flat direct child and no nested node declares those surfaces — so the gather set (hence
-// the appended system prompt and the slash dropdown) is byte-for-byte unchanged.
-function loadSurface(surface: 'slash' | 'system' | 'hook' | 'skill'): ConfigPreset[] {
+// the appended system prompt and the command dropdown) is byte-for-byte unchanged.
+function loadSurface(surface: 'command' | 'system' | 'hook' | 'skill'): ConfigPreset[] {
   const out: ConfigPreset[] = []
   const visit = (nodeDir: string, name: string) => {
     if (existsSync(join(nodeDir, 'spec.md'))) {
       const { fm, body } = parseFrontmatter(readFileSync(join(nodeDir, 'spec.md'), 'utf8'))
       // @@@ skip pending - a `status: pending` plugin is DECLARED INTENT, not yet active. It renders on the
-      // board (via loadSpecs) but must NOT gather: neither a slash preset, nor folded into a system prompt,
+      // board (via loadSpecs) but must NOT gather: neither a command preset, nor folded into a system prompt,
       // nor a live hook. Only built/active plugins surface here, so pending stubs stay inert.
       if (str(fm.surface) === surface && str(fm.status) !== 'pending') {
         out.push({
@@ -321,7 +321,7 @@ function loadSurface(surface: 'slash' | 'system' | 'hook' | 'skill'): ConfigPres
   }
   return out.sort((a, b) => a.name.localeCompare(b.name))
 }
-export function loadConfig(): ConfigPreset[] { return loadSurface('slash') }
+export function loadConfig(): ConfigPreset[] { return loadSurface('command') }
 export function loadSystemConfig(): ConfigPreset[] { return loadSurface('system') }
 // the hook handlers (compiled into the per-session hook manifest the dispatcher reads). Each carries its
 // `events`/`order`/`block` binding + co-located script `files`.

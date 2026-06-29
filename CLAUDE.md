@@ -102,11 +102,11 @@ each. There is no discovery phase.
 - **The config system is reflexive** — SpexCode's own dev-flow behavior is itself spec nodes, managed
   by the same dogfood ritual. Two roots sit under `spexcode`: **`.config`** holds the concrete
   *instance* plugins (`core` + `forge-link` + `voice-before-ask` are `surface: system`; `health` +
-  `supervisor` + `tidy` are `surface: slash`); **`config`** holds the *spec of
+  `supervisor` + `tidy` are `surface: command`); **`config`** holds the *spec of
   the config system* itself (`surface`). Each plugin is a **flat** child carrying a `surface`
   frontmatter **field** — `surface: system` folds its body verbatim into every launched agent's
-  `--append-system-prompt`; `surface: slash` exposes it as a `/`-dropdown preset for new sessions.
-  There are no `system/`/`slash/` bucket dirs and no path-driven surface — the surface *is* the field,
+  `--append-system-prompt`; `surface: command` exposes it as a `/`-dropdown preset for new sessions.
+  There are no `system/`/`command/` bucket dirs and no path-driven surface — the surface *is* the field,
   so every plugin is a real graph child. `spec-cli`'s `loadSystemConfig`/`loadConfig` gather the two
   surfaces; only built/active plugins gather (a `pending` plugin renders on the board but reaches no
   surface).

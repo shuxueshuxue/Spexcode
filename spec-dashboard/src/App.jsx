@@ -17,7 +17,7 @@ import { createMomentumScroll } from './scroll.js'
 import { cycleNext } from './cycle.js'
 import { firesKey } from './bindings.js'
 import { labelColor } from './color.js'
-import { sessionName } from './session.js'
+import { sessionHeadline } from './session.js'
 import { useT } from './i18n/index.jsx'
 
 const nodeTypes = { spec: SpecNode }
@@ -419,7 +419,7 @@ function Dashboard({ specs, sessions, reload }) {
 
         {lockedSession && (
           <div className="lock-hint" style={{ '--ov': labelColor(lockedSession.id) }}>
-            <span className="lock-hint-lead"><LockGlyph /> {sessionName(lockedSession)}</span>
+            <span className="lock-hint-lead"><LockGlyph /> {sessionHeadline(lockedSession)}</span>
             {lockedNodes.length ? (
               <span className="lock-hint-body">
                 {t('lockHint.cycleBefore')}<kbd>o</kbd><kbd>O</kbd>{t('lockHint.cycleAfter', { n: lockedNodes.length })}

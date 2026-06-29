@@ -64,6 +64,25 @@ scenarios:
     code:
       - spec-cli/src/sessions.ts
       - spec-cli/src/harness.ts
+  - name: search-and-lock-hint-match-the-board-headline
+    description: >-
+      Through the running dashboard in a real browser, read the session names the human sees on the SESSION
+      BOARD — the top-left window rows (`.sess-id`), where a live worker shows its self-summary headline, NOT
+      its raw node/branch/id. Then open the search palette (⌘/Ctrl+/ over the session board, or `/` on the
+      board) and read the SESSION rows' titles. Compare them to the board headlines. Also lock a session
+      (single-click its window row) and read the lock-hint banner's name. Finally, type a stable-handle
+      fragment (a session's node/branch/id) into the palette and confirm that session still matches.
+      Screenshot the board window beside the open palette.
+    expected: >-
+      Every session reads as ONE name across surfaces: each board-window headline appears verbatim as that
+      session's title in the search palette, and the lock-hint banner shows the same headline — the palette
+      and lock banner no longer show the raw stable handle (node/branch/id) while the board shows the live
+      self-summary. A human rename still wins everywhere. Search still MATCHES the stable handle even though
+      it no longer displays it, so typing a session's node/branch/id still finds it (the handle rides in the
+      row's match body). The place a session is searched from and the place it is found never disagree.
+    code:
+      - spec-dashboard/src/SpecSearch.jsx
+      - spec-dashboard/src/App.jsx
 ---
 # yatsu.md — session-activity
 

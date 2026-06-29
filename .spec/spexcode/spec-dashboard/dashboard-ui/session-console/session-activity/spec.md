@@ -7,6 +7,8 @@ related:
   - spec-cli/src/sessions.ts
   - spec-dashboard/src/SessionWindow.jsx
   - spec-dashboard/src/SessionInterface.jsx
+  - spec-dashboard/src/SpecSearch.jsx
+  - spec-dashboard/src/App.jsx
   - spec-dashboard/src/styles.css
 ---
 
@@ -68,8 +70,16 @@ so the agent's live self-summary that renarrates the rows renarrates the header 
 over the terminal never disagrees with the row that opened it. The data source and the content are one
 shared line across both surfaces; the **only** difference is room: the header is a wide bar, so it gives the
 headline `flex:1` of that width and ellipsises far **later** than the compact rows — less truncation where
-there is space for more. The stable `sessionName` is not the displayed title here; it stays the fixed handle
-behind tooltips, the lock hint, and search, which must not move turn-to-turn.
+there is space for more.
+
+**One name, every surface.** The `sessionHeadline` is a session's display name *everywhere a human reads
+which session this is* — rows, window, Enter tabs, console header, and now **the search palette and the
+lock-hint banner** show the identical line, so where a session is searched from and where it is found never
+disagree. (Pinning those two to the stable `sessionName` bought nothing — the avatar is the fixed anchor and
+a rename already wins — and cost a palette that named a session differently from its own board.) The stable
+`sessionName` survives ONLY as a fixed-identity *reveal*, never a title: the avatar/hover **tooltips** and
+the **rename prompt** (editing the `name` override). Search still *matches* the handle even when it no longer
+*shows* it, so finding a session by node/branch/id keeps working.
 
 This node's slice of the shared `styles.css` is the Row-2 status line (`.sess-meta`, the full-width dimmer
 wrap), the Row-1 headline ellipsis, and the console header big-title's room-to-expand (`.si-th-name`'s

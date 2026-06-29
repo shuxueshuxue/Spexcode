@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { STATUS } from './SpecNode.jsx'
 import { scenarioStates } from './score.jsx'
-import { STATUS_COLOR, sessionName } from './session.js'
+import { STATUS_COLOR, sessionName, sessionHeadline } from './session.js'
 import { useT } from './i18n/index.jsx'
 import { rankDocs } from '../../spec-cli/src/ranker.ts'
 
@@ -55,13 +55,18 @@ function buildEntries(specs, sessions) {
     }
   }
   for (const s of sessions) {
-    const name = sessionName(s)
-    const sub = s.promptPreview || s.note || s.status || ''
+    // a session reads as ONE name everywhere: the shared sessionHeadline ([[session-activity]]) the board rows,
+    // window, tabs, and console header all show — NOT the raw stable handle, which left the palette naming a
+    // session differently from the board it was searched from. The stable handle still rides in `body` so
+    // search-by-node/branch/id keeps working even when the live self-summary has replaced it on screen.
+    const headline = sessionHeadline(s)
+    const handle = sessionName(s)
+    const sub = s.status || s.promptPreview || s.note || ''
     entries.push({
       kind: 'session', key: `session:${s.id}`, target: s.id,
       color: STATUS_COLOR[s.status] || STATUS_COLOR.offline,
-      title: name, sub,
-      name: name || '', desc: s.status || '', body: s.promptPreview || s.note || '',
+      title: headline, sub,
+      name: headline || '', desc: s.status || '', body: `${s.promptPreview || s.note || ''} ${handle}`.trim(),
     })
   }
   return entries

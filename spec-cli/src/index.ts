@@ -1,6 +1,7 @@
 import { serve } from '@hono/node-server'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
+import { etag } from 'hono/etag'
 import { createNodeWebSocket } from '@hono/node-ws'
 import { loadSpecs, specHistory, specDiffAt, loadConfig } from './specs.js'
 import { resolveLayout, mainBranch } from './layout.js'
@@ -27,8 +28,10 @@ app.get('/', (c) => c.text('spec-cli — GET /api/board · /api/specs · /api/sp
 // instant Hono is listening. Not under /api/* — loopback-only (supervisor→child), no CORS needed.
 app.get('/health', (c) => c.text('ok'))
 // the assembled board (merged tree + overlay + sessions) — the dashboard's single source. Same data
-// as `spex board`; the frontend only adds x/y pixels on top.
-app.get('/api/board', async (c) => c.json(await buildBoard()))
+// as `spex board`; the frontend only adds x/y pixels on top. The board is polled on a short interval, so
+// the route is a conditional-request endpoint: `etag()` hashes the serialized body, and a poll whose
+// `If-None-Match` matches gets a bodyless 304 instead of the full ~328 KB transfer.
+app.get('/api/board', etag(), async (c) => c.json(await buildBoard()))
 app.get('/api/specs', async (c) => c.json(await loadSpecs()))
 app.get('/api/specs/:id/history', async (c) => c.json(await specHistory(c.req.param('id'))))
 // the spec.md line diff one version introduced — the history tab's per-version proof-of-change, fetched

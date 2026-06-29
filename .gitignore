@@ -25,10 +25,10 @@ spec-cli/dashboard-dist/
 .spex-launch.sh
 CLAUDE.spexhidden.md
 
-# harness state (local settings, transcripts) — but TRACK project agent definitions:
-# .claude/agents/*.md are shareable, version-controlled artifacts (e.g. the spec-scout sub-agent).
+# harness state (local settings, transcripts) AND generated sub-agent definitions: .claude/agents/*.md is now
+# MATERIALIZED from `surface: agent` source nodes (e.g. spec-scout), per-machine, never committed — so the
+# whole dir is ignored, exactly like the skill SKILL.md and the shims (the managed block below lists each).
 .claude/*
-!.claude/agents/
 
 # machine-local claude binary symlink (points into a per-machine install); the session
 # launcher resolves `claude` from PATH (SPEXCODE_CLAUDE_CMD), so this is never vendored
@@ -51,6 +51,7 @@ HARNESS-REFACTOR-REPORT.md
 firecoder-scout.md
 
 # spexcode:start
+.claude/agents/spec-scout.md
 .claude/settings.json
 .claude/skills/taste/SKILL.md
 .codex/skills/taste/SKILL.md

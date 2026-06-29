@@ -60,6 +60,10 @@ export interface Harness {
   contractFiles(proj: string): string[]
   // the dir this harness auto-discovers skills from, or null if it has no skill primitive — the ONLY place skill-surface divergence lives.
   skillDir(proj: string): string | null
+  // the dir this harness auto-discovers sub-agent definitions from, or null if it has no agent primitive — the
+  // ONLY place agent-surface divergence lives (the skillDir analog). Claude reads .claude/agents/<name>.md;
+  // Codex has no file-discovered agent-definition primitive, so it returns null and materialize skips it.
+  agentDir(proj: string): string | null
   // the shim payload: the settings/hooks JSON binding every event → the dispatcher (harness id baked in), and
   // the per-event command string (shared with the trust writer so they hash identically).
   shim(dispatch: string, spex: string): { json: string; cmd: (e: string) => string }
@@ -623,6 +627,7 @@ export const claudeHarness: Harness = {
   shimFile: (proj) => join(proj, '.claude', 'settings.json'),
   contractFiles: (proj) => [join(proj, 'CLAUDE.md')],
   skillDir: (proj) => join(proj, '.claude', 'skills'),
+  agentDir: (proj) => join(proj, '.claude', 'agents'),
   shim: (dispatch, spex) => buildShim('claude', CLAUDE_EVENTS, dispatch, spex),
   writeTrust: () => { /* Claude relies on folder-trust — nothing to write */ },
   slashCommands: claudeSlashCommands,
@@ -649,6 +654,7 @@ export const codexHarness: Harness = {
   shimFile: (proj) => join(mainCheckout(proj), '.codex', 'hooks.json'),
   contractFiles: (proj) => [join(proj, 'AGENTS.md')],
   skillDir: (proj) => join(proj, '.codex', 'skills'),
+  agentDir: () => null,                              // codex has no file-discovered agent-definition primitive — materialize skips it
   shim: (dispatch, spex) => buildShim('codex', CODEX_EVENTS, dispatch, spex),
   writeTrust: (proj, cmdFor) => writeCodexTrust(mainCheckout(proj), CODEX_EVENTS, cmdFor),
   slashCommands: codexSlashCommands,

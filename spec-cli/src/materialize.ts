@@ -2,7 +2,7 @@ import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs'
 import { join, dirname, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
-import { loadSystemConfig, loadSkillConfig } from './specs.js'
+import { loadSystemConfig, loadSkillConfig, loadAgentConfig } from './specs.js'
 import { compileManifest } from './hooks.js'
 import { HARNESSES, writeManagedBlock } from './harness.js'
 import { runtimeRoot } from './layout.js'
@@ -57,6 +57,11 @@ export function materialize(proj = process.cwd()): string {
   // over the body instructions. One pure render shared by every harness — divergence is only its skillDir.
   const renderSkill = (sk: { name: string; desc: string; body: string }) =>
     `---\nname: ${sk.name}\ndescription: ${JSON.stringify(sk.desc)}\n---\n\n${sk.body}\n`
+  // an agent node → a coding-agent sub-agent definition (the same primitive .claude/agents/*.md ships): the
+  // node's `desc` is the on-demand load-trigger, its `tools` the harness tool allowlist, its body the agent's
+  // system prompt. One pure render shared by every harness — divergence is only its agentDir.
+  const renderAgent = (ag: { name: string; desc: string; tools: string[]; body: string }) =>
+    `---\nname: ${ag.name}\ndescription: ${ag.desc}\ntools: ${ag.tools.join(', ')}\n---\n\n${ag.body}\n`
   const shimPaths: string[] = []
   for (const h of HARNESSES) {
     if (contract) for (const f of h.contractFiles(proj)) { writeManagedBlock(f, contract); shimPaths.push(relative(proj, f)) }
@@ -79,12 +84,25 @@ export function materialize(proj = process.cwd()): string {
       shimPaths.push(relative(proj, f))   // reuse the same managed .gitignore block
     }
   }
+  // (7) sub-agents - each `surface: agent` node → a <name>.md the harness auto-discovers, written into every
+  //     harness's own agentDir (Claude .claude/agents). The SAME pattern as skills: generated wiring, so the
+  //     paths join the same managed .gitignore block below. A harness with no agent primitive (agentDir null,
+  //     e.g. Codex) is skipped — no `if (codex)`, the divergence is the adapter's agentDir line.
+  for (const ag of loadAgentConfig()) {
+    for (const h of HARNESSES) {
+      const dir = h.agentDir(proj); if (!dir) continue
+      const f = join(dir, `${ag.name}.md`)
+      mkdirSync(dirname(f), { recursive: true })
+      writeFileSync(f, renderAgent(ag))
+      shimPaths.push(relative(proj, f))   // reuse the same managed .gitignore block
+    }
+  }
   // (4b) every artifact this render writes IN-TREE is generated wiring, so gitignore it — regenerated per
   // clone/launch by this same gate, never committed. That now includes the CONTRACT files (CLAUDE.md/AGENTS.md):
   // their whole content is the generated guide+system block, so they are artifacts exactly like the shims +
-  // skills — the only tracked prose is the guide SOURCE (docs/AGENT_GUIDE.md), which this render reads. Derived
-  // from the adapters' own contractFiles()/shimFile(), not hardcoded; written as a managed `#` block so the
-  // user's own .gitignore is preserved.
+  // skills + sub-agents — the only tracked prose is the guide SOURCE (docs/AGENT_GUIDE.md), which this render
+  // reads. Derived from the adapters' own contractFiles()/shimFile()/skillDir/agentDir, not hardcoded; written
+  // as a managed `#` block so the user's own .gitignore is preserved.
   // only ignore paths that live INSIDE proj. The codex hooks shim now materializes at the MAIN checkout (codex
   // reads a linked worktree's hooks from the root checkout — see harness.ts); from a linked worktree that path
   // escapes proj (`../…`) and is gitignored by the main checkout's OWN materialize, not the worktree's.

@@ -707,11 +707,13 @@ body {
 }
 .set-reset:hover { border-color: var(--red); color: var(--red); }
 
-/* @@@ search palette (Alt+F) - a command-palette over the spec tree: an input + ranked result rows.
-   Top-aligned (not centred like .legend) so the list grows downward without the panel jumping as
-   results change. Shares the dimmed/blurred .legend-backdrop look but anchors the panel near the top. */
+/* @@@ search palette (`/` on the board, ⌘/Ctrl+/ over the session board) - a command-palette over the spec
+   tree + sessions: an input + ranked result rows. Top-aligned (not centred like .legend) so the list grows
+   downward without the panel jumping as results change. Shares the dimmed/blurred .legend-backdrop look but
+   anchors the panel near the top. z-index 60 floats it ABOVE every surface — including the session board
+   (.si-backdrop, 50), which is where ⌘/Ctrl+/ opens it — so the palette never renders behind its surface. */
 .search-backdrop {
-  position: fixed; inset: 0; z-index: 30;
+  position: fixed; inset: 0; z-index: 60;
   background: rgba(101,123,131,.25); backdrop-filter: blur(2px);
   display: flex; align-items: flex-start; justify-content: center; padding-top: 12vh;
 }

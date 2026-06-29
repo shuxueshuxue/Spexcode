@@ -42,6 +42,12 @@ not a daemon. It writes, idempotently and scoped per project:
   `.codex/skills/` — both ship the same `SKILL.md` primitive), loaded **on demand** by the node's
   `description`, not always-on like the contract. The dir is the adapter's `skillDir(proj)`; a harness with no
   skill primitive gets none. Gitignored like the shims (generated, no user prose);
+- **the sub-agents** — each `surface: agent` body as `<agentDir>/<name>.md` (claude `.claude/agents/`), a
+  harness-auto-discovered Agent-tool definition carrying the node's `desc:` load-trigger and `tools:`
+  allowlist, spawned **on demand**, not always-on. Same shape as skills, one definition per harness: the dir
+  is the adapter's `agentDir(proj)`; a harness with NO agent primitive (e.g. Codex today) gets none, exactly
+  as `skillDir` null skips skills. Gitignored like the shims + skills (generated, no user prose) — so the
+  formerly-committed `.claude/agents/spec-scout.md` becomes a generated artifact joining the same managed block;
 - **the Codex trust** — a directory-trust + per-hook `trusted_hash` written ADDITIVELY into the user's GLOBAL
   `~/.codex/config.toml`, scoped to this project path. The hash is computed deterministically (the pinned
   codex-rs algorithm), so a user-self-launched codex skips its trust prompts entirely.

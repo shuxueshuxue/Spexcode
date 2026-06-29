@@ -339,7 +339,10 @@ export function selfSummary(paneTitle: string): string | null {
 // instead of 'offline' for BOOT_GRACE_MS after launch — so 'offline' only ever means genuinely dead. In-
 // memory in the single server process (lost on restart, which is fine: a restart has nothing in flight).
 const launchedAt = new Map<string, number>()
-const BOOT_GRACE_MS = 25000   // > waitForReady's 15s timeout, covering the observed ~15-20s agent boot window
+const BOOT_GRACE_MS = 45000   // > SOCKET_READY_TIMEOUT_MS, and spans launchScript's bounded fast-fail retry
+                              // window (~3 attempts) so a relaunching session reads 'starting', not 'offline'
+const LAUNCH_FAST_FAIL_S = 12 // launchScript retries the agent command when it exits faster than this — the
+                              // launcher daemon-not-ready race fails in ~8s; a real session runs far longer
 
 // @@@ liveness - the orthogonal axis ([[state]]): is the agent process up, for ANY session regardless of
 // lifecycle, from a prebuilt tmux set (no per-call spawn — see liveTmux) + the rendezvous socket. offline
@@ -647,7 +650,26 @@ function launchScript(id: string, tail: string, harness: Harness = HARNESS): str
   // NO --append-system-prompt / --settings: the contract + hooks are materialized into the worktree at
   // createSession ([[harness-delivery]]) and the agent auto-discovers them — the SAME path as a self-launched
   // agent. The launch line is just the rendezvous env + the harness command + the session-id/spec-pointer/prompt tail.
-  writeFileSync(file, `${rvEnv(id, harness)} ${harness.launchCmd(id, runtimeRoot())} ${tail}\n`)
+  const invocation = `${rvEnv(id, harness)} ${harness.launchCmd(id, runtimeRoot())} ${tail}`
+  // Bounded relaunch on a FAST exit: the agent launcher (e.g. the reclaude daemon) can lose a startup
+  // race ("daemon did not become ready") and exit within seconds before the rendezvous socket ever
+  // appears — a fast exit is the race, not real work, so retry a few times. Once the agent has run past
+  // LAUNCH_FAST_FAIL_S it has genuinely started; its eventual (much later) exit is a normal session end
+  // and is NEVER retried — the loop exits. BOOT_GRACE_MS and SOCKET_READY_TIMEOUT_MS both span this retry
+  // window, so liveness stays 'starting' and waitForReady keeps holding the slot across retries. This only
+  // closes the startup race — it adds no fallback and never masks a genuinely dead agent (3 attempts, then give up).
+  writeFileSync(file, [
+    `for __spex_try in 1 2 3; do`,
+    `  __spex_t0=$SECONDS`,
+    `  ${invocation}`,
+    `  __spex_rc=$?`,
+    `  [ $(( SECONDS - __spex_t0 )) -ge ${LAUNCH_FAST_FAIL_S} ] && exit $__spex_rc`,
+    `  printf '[spex launch] attempt %s exited in %ss (rc=%s) — likely a launcher daemon race; retrying\\n' "$__spex_try" "$(( SECONDS - __spex_t0 ))" "$__spex_rc" >&2`,
+    `  sleep 2`,
+    `done`,
+    `exit $__spex_rc`,
+    ``,
+  ].join('\n'))
   return file
 }
 async function launch(id: string, path: string, tail: string, harness: Harness = HARNESS): Promise<void> {
@@ -963,7 +985,9 @@ export async function newSession(node: string | null, prompt: string, harness: s
 // BOUNDED + fail-loud preserved: a
 // genuinely dead/unrecoverable agent never goes online, so after the timeout we return and the caller's own
 // deliver() fails loud exactly as before — this only closes the startup race, it adds no fallback.
-const SOCKET_READY_TIMEOUT_MS = 15000
+const SOCKET_READY_TIMEOUT_MS = 30000   // spans launchScript's bounded fast-fail relaunch window, so
+                                        // waitForReady (slot-hold + reopen) waits through a daemon-race retry
+                                        // instead of returning before a recovering socket
 const SOCKET_POLL_MS = 200
 async function waitForReady(id: string, harness: Harness, timeoutMs = SOCKET_READY_TIMEOUT_MS): Promise<boolean> {
   const deadline = Date.now() + timeoutMs

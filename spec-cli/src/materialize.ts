@@ -2,11 +2,12 @@ import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs'
 import { join, dirname, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
-import { loadSystemConfig, loadSkillConfig, loadAgentConfig } from './specs.js'
+import { loadSystemConfig, loadSkillConfig, loadAgentConfig, loadConfig } from './specs.js'
 import { compileManifest } from './hooks.js'
 import { writeManagedBlock, type HarnessArtifacts } from './harness.js'
 import { runtimeRoot, mainCheckout, readConfig } from './layout.js'
 import { resolveHarnessTargets, partitionHarnesses } from './harness-select.js'
+import { emitPlugin, cleanPlugin, pluginBundleDir, pluginVersion } from './plugin-harness.js'
 import { tsxBin } from './tsx-bin.js'
 
 // @@@ materialize - the "pay-per-change" node step (≈0.85s) the cheap shell gate invokes ONLY when the
@@ -59,9 +60,10 @@ export function materialize(proj = process.cwd()): string {
   // selected harnesses are write()n below; unselected ones are clean()ed (pruned) after — so dropping a harness
   // from the config removes its products on the next re-materialize. The plugin EMITTER is a later node.
   const targets = resolveHarnessTargets(readConfig(mainCheckout(proj)).harnesses)
-  const { selected, unselected } = partitionHarnesses(targets)
+  const { selected, unselected, plugins } = partitionHarnesses(targets)
   const skillNodes = loadSkillConfig()
   const agentNodes = loadAgentConfig()
+  const commandNodes = loadConfig()
   // a skill node → the agentskills.io SKILL.md primitive: `name`+`description` frontmatter (the load-trigger)
   // over the body instructions. One pure render shared by every harness — divergence is only its skillDir.
   const renderSkill = (sk: { name: string; desc: string; body: string }) =>
@@ -71,6 +73,11 @@ export function materialize(proj = process.cwd()): string {
   // system prompt. One pure render shared by every harness — divergence is only its agentDir.
   const renderAgent = (ag: { name: string; desc: string; tools: string[]; body: string }) =>
     `---\nname: ${ag.name}\ndescription: ${ag.desc}\ntools: ${ag.tools.join(', ')}\n---\n\n${ag.body}\n`
+  // a command node → a host `/`-menu command file: the node's `desc` as the dropdown description over its body
+  // (the preset prompt). Only the PLUGIN bundle ships these as files; the native path serves command presets via
+  // the dashboard /api/slash-commands instead, so this render is plugin-only.
+  const renderCommand = (cm: { desc: string; body: string }) =>
+    (cm.desc ? `---\ndescription: ${JSON.stringify(cm.desc)}\n---\n\n` : '') + `${cm.body}\n`
   const shimPaths: string[] = []
   for (const h of selected) {
     if (contract) for (const f of h.contractFiles(proj)) { writeManagedBlock(f, contract); shimPaths.push(relative(proj, f)) }
@@ -113,6 +120,29 @@ export function materialize(proj = process.cwd()): string {
   //     which on-demand artifacts were its to remove ([[harness-select]] / [[harness-adapter]]).
   const arts: HarnessArtifacts = { skills: skillNodes.map((s) => s.name), agents: agentNodes.map((a) => a.name) }
   for (const h of unselected) h.clean(proj, arts)
+  // (8b) the PLUGIN target ([[plugin-harness]]): render the whole system into one self-contained Claude-plugin
+  //      bundle per selected folder. A plugin is EXCLUSIVE (so `selected` is already empty — every native was
+  //      pruned above). Pruning a DESELECTED plugin folder (plugin→native, or folder A→B) needs the PREVIOUS
+  //      folder set, which the live config no longer names — so a tiny ledger in the global store records the
+  //      folders emitted last run; any prev folder absent from the current set is clean()ed (the bundle's
+  //      inverse), then the current folders are emitted and the ledger rewritten. Bounded + surgical: cleanPlugin
+  //      is identity-gated on the bundle's own plugin.json.
+  const ledger = join(rt, 'plugin-folders')
+  const prevFolders = existsSync(ledger) ? readFileSync(ledger, 'utf8').split('\n').map((l) => l.trim()).filter(Boolean) : []
+  const curFolders = plugins.map((p) => p.folder)
+  for (const f of prevFolders) if (!curFolders.includes(f)) cleanPlugin(proj, f)
+  if (plugins.length) {
+    const render = {
+      contract,
+      skills: skillNodes.map((s) => ({ name: s.name, content: renderSkill(s) })),
+      agents: agentNodes.map((a) => ({ name: a.name, content: renderAgent(a) })),
+      commands: commandNodes.map((c) => ({ name: c.name, content: renderCommand(c) })),
+      spex: SPEX,
+      version: pluginVersion(),
+    }
+    for (const p of plugins) emitPlugin(proj, p.folder, render)
+  }
+  writeFileSync(ledger, curFolders.join('\n'))
   // (4b) every artifact this render writes IN-TREE is generated wiring, so gitignore it — regenerated per
   // clone/launch by this same gate, never committed. That now includes the CONTRACT files (CLAUDE.md/AGENTS.md):
   // their whole content is the generated guide+system block, so they are artifacts exactly like the shims +
@@ -126,7 +156,10 @@ export function materialize(proj = process.cwd()): string {
   // launcher path; see portable-layout) — joins the SAME block on the same rationale: machine-specific, must
   // never be committed. Without it an adopter who follows our own guidance to put a host path there would
   // `git add -A` and leak it — the exact thing the overlay exists to prevent.
-  const ignorable = [...shimPaths.filter((p) => !p.startsWith('..')), 'spexcode.local.json']
+  // each emitted plugin bundle is a generated, machine-local artifact too (its hooks.json bakes THIS install's
+  // SPEX path), so its relative dir joins the same managed block — regenerated per clone/launch, never committed.
+  const bundlePaths = curFolders.map((f) => relative(proj, pluginBundleDir(proj, f))).filter((p) => !p.startsWith('..'))
+  const ignorable = [...shimPaths.filter((p) => !p.startsWith('..')), ...bundlePaths, 'spexcode.local.json']
   if (ignorable.length) writeManagedBlock(join(proj, '.gitignore'), ignorable.sort().join('\n'), ['# ', ''])
   // (5) stamp the content-hash marker LAST (so a crash mid-render leaves it stale → re-renders next gate).
   const h = contentHash(proj)

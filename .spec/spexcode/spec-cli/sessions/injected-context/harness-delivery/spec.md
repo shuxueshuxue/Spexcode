@@ -65,8 +65,10 @@ After writing every selected harness, materialize **prunes every UNSELECTED one*
 [[harness-adapter]]'s surgical inverse of the write above) strips that harness's managed contract block, deletes
 its generated shim, removes its trust block, and removes its named skill/agent files. So dropping a harness from
 [[harness-select]]'s `harnesses` set removes its products on the next re-materialize, the user's own prose and
-`.spec` data untouched. A plugin target is exclusive, so selecting one prunes EVERY native harness (its bundle
-emitter is a later node — for now the plugin target writes nothing).
+`.spec` data untouched. A plugin target is exclusive, so selecting one prunes EVERY native harness, then
+[[plugin-harness]] emits the whole system as one self-contained Claude-plugin bundle into the named folder
+(materialize keeps a small ledger of the last-emitted plugin folders so a DESELECTED folder's bundle is pruned
+on the next re-materialize, the same back-edge the natives have).
 
 Placement is harness-fact, not preference (verified): Codex auto-discovers ONLY the repo-root `./AGENTS.md`
 (never `.codex/AGENTS.md`); Claude discovers `./CLAUDE.md` or `./.claude/CLAUDE.md`. Every in-tree artifact this

@@ -15,7 +15,7 @@ function flag(name: string): string | undefined {
 }
 const has = (name: string) => process.argv.includes(`--${name}`)
 // bare positionals after argv index `from`, skipping flags and their values (selectors for ls/watch).
-const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--timeout', '--reason', '--out', '--password', '--tls-cert', '--tls-key', '--harness', '--harness-session', '--port', '--api-port'])
+const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--timeout', '--reason', '--out', '--password', '--tls-cert', '--tls-key', '--harness', '--harness-session', '--port', '--api-port', '--preset'])
 function positionals(from: number): string[] {
   const out: string[] = []
   for (let i = from; i < process.argv.length; i++) {
@@ -84,6 +84,7 @@ Usage: spex <command> [args]
 Specs / graph
   guide [spec|yatsu]    no topic: the setup workflow; spec/yatsu: the file-format manual for authoring nodes
   init [dir]            scaffold a repo to adopt SpexCode (seed .spec + install git hooks; default: cwd)
+    --preset <name>          which .config plugin tier to seed (cumulative: default ⊂ careful; default 'default')
   uninstall [dir]      surgical inverse of init: remove SpexCode's generated artifacts (shims·contract·trust·
                         gitignore block·global store·plugin bundle), keep .spec/.config. [--hooks] also removes the hooks
   lint                  check the spec↔code graph (integrity·living·coverage·drift); when committing, gates on heavy commit-local drift
@@ -202,7 +203,7 @@ if (cmd === 'serve') {
   // scaffold a repo to adopt SpexCode: copy the shipped DATA templates (seed spec tree + git hooks)
   // into <targetDir> (default cwd). spex init [targetDir]
   const { specInit } = await import('./init.js')
-  await specInit(positionals(3)[0])
+  await specInit(positionals(3)[0], flag('preset'))
 } else if (cmd === 'uninstall') {
   // the surgical inverse of init: remove every SpexCode-generated artifact (harness shims/contract/trust, the
   // .gitignore block, the global store, any plugin bundle) — NEVER the user's .spec/.config data or their own

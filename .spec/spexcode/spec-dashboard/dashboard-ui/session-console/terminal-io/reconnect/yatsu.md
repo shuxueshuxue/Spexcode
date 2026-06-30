@@ -1,6 +1,7 @@
 ---
 scenarios:
   - name: reopen-backoff-reset-and-intentional-close
+    tags: [frontend-e2e, desktop]
     description: >-
       Drive the real `createResilientSocket` HEADLESSLY (the spec's own promise: the state machine is
       verifiable with no browser and no network), wiring in a fake WebSocket impl and fake setTimeout/

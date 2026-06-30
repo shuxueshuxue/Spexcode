@@ -8,6 +8,7 @@ export type Scenario = {
   name: string
   description: string
   expected: string
+  tags?: string[]
   test?: string
   code?: string[]
   related?: string[]
@@ -21,9 +22,9 @@ export type YatsuNode = {
   scenarios: Scenario[]
 }
 
-const SCENARIO_KEYS = ['name', 'description', 'expected', 'test', 'code', 'related'] as const
+const SCENARIO_KEYS = ['name', 'description', 'expected', 'tags', 'test', 'code', 'related'] as const
 type ScenarioKey = (typeof SCENARIO_KEYS)[number]
-const LIST_KEYS: readonly ScenarioKey[] = ['code', 'related']
+const LIST_KEYS: readonly ScenarioKey[] = ['tags', 'code', 'related']
 
 // a raw scenario item straight off the frontmatter walk: the known fields it set, plus any UNKNOWN keys it
 // carried — kept (not dropped) so the validator can name a typo'd field instead of silently swallowing it.
@@ -123,12 +124,14 @@ function parseCodeList(raw: string): string[] {
 export function parseScenarios(src: string): Scenario[] {
   return walkScenarios(src).items
     .map((it): Scenario => {
+      const tags = it.fields.tags ? parseCodeList(it.fields.tags) : []
       const code = it.fields.code ? parseCodeList(it.fields.code) : []
       const related = it.fields.related ? parseCodeList(it.fields.related) : []
       return {
         name: it.fields.name ?? '',
         description: it.fields.description ?? '',
         expected: it.fields.expected ?? '',
+        ...(tags.length ? { tags } : {}),
         ...(it.fields.test ? { test: it.fields.test } : {}),
         ...(code.length ? { code } : {}),
         ...(related.length ? { related } : {}),
@@ -137,17 +140,30 @@ export function parseScenarios(src: string): Scenario[] {
     .filter((s) => s.name)   // a scenario with no name is malformed — drop it (validateScenarios reports it)
 }
 
-export function validateScenarios(src: string): string[] {
+// `tagLibrary` is the closed vocabulary a scenario's `tags:` must draw from (config's `lint.scenarioTags`).
+// Every scenario needs ≥1 tag; each tag must be IN the library — an out-of-library tag is rejected LOUD with
+// the repair the user owns: pick an existing tag, or extend the library. An empty library (none configured)
+// disables only the membership check, never the ≥1-tag requirement.
+export function validateScenarios(src: string, tagLibrary: string[] = []): string[] {
   const { hasFrontmatter, hasKey, items } = walkScenarios(src)
   if (!hasFrontmatter) return ['no frontmatter block — a yatsu.md must declare a `scenarios:` list']
   if (!hasKey) return ['frontmatter has no `scenarios:` key — declare at least one scenario']
   if (!items.length) return ['`scenarios:` declares no scenarios — add one (name + description + expected)']
   const errs: string[] = []
   const counts = new Map<string, number>()
+  const lib = tagLibrary.length ? ` (library: ${tagLibrary.join(', ')})` : ''
   items.forEach((it, idx) => {
     const label = it.fields.name ? `scenario '${it.fields.name}'` : `scenario #${idx + 1}`
     for (const k of ['name', 'description', 'expected'] as const) {
       if (!it.fields[k]?.trim()) errs.push(`${label}: missing required field \`${k}\``)
+    }
+    const tags = it.fields.tags ? parseCodeList(it.fields.tags) : []
+    if (!tags.length) {
+      errs.push(`${label}: missing required field \`tags\` — every scenario needs ≥1 tag from the library${lib}; pick one, or add a new tag to lint.scenarioTags in spexcode.json to create it`)
+    } else if (tagLibrary.length) {
+      for (const t of tags) if (!tagLibrary.includes(t)) {
+        errs.push(`${label}: tag \`${t}\` is not in the configured tag library${lib} — use an existing tag, or add \`${t}\` to lint.scenarioTags in spexcode.json to create it`)
+      }
     }
     for (const u of it.unknownKeys) errs.push(`${label}: unknown field \`${u}\` (allowed: ${SCENARIO_KEYS.join(', ')})`)
     if (it.fields.name) counts.set(it.fields.name, (counts.get(it.fields.name) ?? 0) + 1)

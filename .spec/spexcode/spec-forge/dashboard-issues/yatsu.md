@@ -1,6 +1,7 @@
 ---
 scenarios:
   - name: open-count-badge-on-tile
+    tags: [frontend-e2e, desktop]
     description: >-
       Open the dashboard and look at a node the forge linked an open issue to (e.g. spec-cli). Its
       tile carries a magenta ◆N open-issue count badge, distinct from the status dot and the drift

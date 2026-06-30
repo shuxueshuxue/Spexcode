@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { STATUS } from './SpecNode.jsx'
-import { scenarioStates } from './score.jsx'
+import { scenarioStates, TagChips } from './score.jsx'
 import { STATUS_COLOR, sessionName, sessionHeadline } from './session.js'
 import { useT } from './i18n/index.jsx'
 import { rankDocs } from '../../spec-cli/src/ranker.ts'
@@ -49,7 +49,7 @@ function buildEntries(specs, sessions) {
       entries.push({
         kind: 'scenario', key: `scenario:${s.id}:${sc.name}`, target: s.id,
         color: SCEN_COLOR[sc.state] || 'var(--cyan)',
-        title: sc.name, sub: path,
+        title: sc.name, sub: path, tags: sc.tags,
         name: sc.name || '', desc: '', body: sc.expected || '',
       })
     }
@@ -153,6 +153,7 @@ export default function SpecSearch({ specs, sessions, onPick, onClose, boost = n
               <span className="node-dot" style={{ background: e.color }} />
               <span className={`search-kind k-${e.kind}`}>{t(`search.kind.${e.kind}`)}</span>
               <span className="search-title">{e.title || e.target}</span>
+              <TagChips tags={e.tags} />
               <span className="search-path">{e.sub}</span>
             </li>
           ))}

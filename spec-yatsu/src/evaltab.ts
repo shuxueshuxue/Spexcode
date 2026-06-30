@@ -20,7 +20,7 @@ export type EvalEntry = {
   blobState: 'present' | 'miss' | 'none'
 }
 
-export type ScenarioInfo = { name: string; expected: string; code?: string[] }
+export type ScenarioInfo = { name: string; expected: string; tags?: string[]; code?: string[] }
 
 // `hasYatsu` distinguishes a node that declares no scenarios (no yatsu.md) from one that declares some but
 // has no readings yet — the tab says different things for each. `scenarios` is the declared set; `readings`
@@ -62,7 +62,8 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
   const hidx = ctx?.hidx ?? await historyIndex(root)
   const byName = new Map(ynode.scenarios.map((s) => [s.name, s]))   // join each reading to its scenario's expected + code
   const scenarios: ScenarioInfo[] = ynode.scenarios.map((s) => ({
-    name: s.name, expected: s.expected, ...(s.code?.length ? { code: s.code } : {}),
+    name: s.name, expected: s.expected,
+    ...(s.tags?.length ? { tags: s.tags } : {}), ...(s.code?.length ? { code: s.code } : {}),
   }))
   const readings: EvalEntry[] = readReadings(ynode.sidecarPath).map((r) => {
     // a scenario's own `code` is its freshness code axis when it declares one; else the whole node's list.

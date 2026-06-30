@@ -1,6 +1,7 @@
 ---
 scenarios:
   - name: panel-shows-issues-and-scenarios
+    tags: [frontend-e2e, desktop]
     description: >-
       Open the dashboard and focus a node that carries both an open issue and a scenario (e.g.
       spec-cli). Look at the RIGHT focus panel: it names the focused node, then a SCENARIOS section

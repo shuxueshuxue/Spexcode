@@ -1,6 +1,7 @@
 ---
 scenarios:
   - name: relationship-tab-renders
+    tags: [frontend-e2e, desktop]
     description: >-
       Open the dashboard, press Enter to open the session console, then select the "View Session
       Relationship" tab — the network-glyph button paired with ＋ New Session, or press → from an
@@ -15,6 +16,7 @@ scenarios:
       the two avatars, not crushed border-to-border. The filed reading carries the screenshot as image
       evidence and a pass verdict.
   - name: node-gestures
+    tags: [frontend-e2e, desktop]
     description: >-
       In the relationship graph, exercise the pointer gestures. (1) DOUBLE-click a session node — the
       console switches to that session's tab (single-clicking does NOT open it). (2) Single LEFT-click

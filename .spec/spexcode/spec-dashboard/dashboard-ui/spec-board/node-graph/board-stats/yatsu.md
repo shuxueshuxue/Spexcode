@@ -1,6 +1,7 @@
 ---
 scenarios:
   - name: stats-strip-renders
+    tags: [frontend-e2e, desktop]
     description: >-
       Open the dashboard at http://localhost:5173 and let the spec-graph settle. Look at the
       bottom-left: a board-stats strip should read the whole-tree counts — a leading node total,
@@ -21,6 +22,7 @@ scenarios:
       score shows the greyed verdict mark inside the ring (no ⊘ or other invented glyph). The filed
       reading carries the screenshot as image evidence and a pass verdict.
   - name: stat-click-jumps
+    tags: [frontend-e2e, desktop]
     description: >-
       With the dashboard open, click a non-zero stat chip whose ring has more than one node (e.g.
       the ⚠ drift chip) REPEATEDLY. Each click should step focus to the NEXT node that chip counts —

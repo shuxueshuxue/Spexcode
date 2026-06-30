@@ -1,6 +1,7 @@
 ---
 scenarios:
   - name: warm-bridge-pre-sized-no-reflow
+    tags: [backend-api]
     description: >-
       Measure the on-attach reflow through the real bridge surface. Seed two live sessions on a tmux
       socket at the cold default (120x40). Start the supervisor and let it pre-warm both, then have ONE

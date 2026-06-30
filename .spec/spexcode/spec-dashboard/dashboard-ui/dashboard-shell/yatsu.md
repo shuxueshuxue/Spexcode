@@ -1,6 +1,7 @@
 ---
 scenarios:
   - name: shell-mounts-both-views
+    tags: [frontend-e2e, desktop]
     description: >
       Open the dashboard in a browser pointed at a live backend. Confirm the root shell mounts: the
       spec-graph view renders the project's node tree as tiles with the HUD/brand strip visible, and

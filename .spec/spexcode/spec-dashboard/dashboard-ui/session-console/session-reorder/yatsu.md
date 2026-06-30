@@ -1,6 +1,7 @@
 ---
 scenarios:
   - name: handle-drag-reorders
+    tags: [frontend-e2e, desktop]
     description: >
       Through the running dashboard in a real browser, open the session console (Enter) with at least three
       live sessions in birth order — read top→bottom as A (oldest), B, C (newest). Each row shows a small
@@ -13,6 +14,7 @@ scenarios:
       The drag handle appears only in the console's interactive list, not the read-only top-left window glance,
       and the manual order shows on every surface (window + console agree), all sorting by `sortKey ?? created`.
   - name: handle-leaves-row-gestures-intact
+    tags: [frontend-e2e, desktop]
     description: >
       Through the running dashboard in a real browser, open the console with several sessions (at least one
       carrying pending ops so double-click has a node to focus). Without touching the handle, exercise the

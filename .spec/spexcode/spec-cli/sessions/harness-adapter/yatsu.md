@@ -1,6 +1,7 @@
 ---
 scenarios:
   - name: codex-apply-patch-triggers-spec-hooks
+    tags: [backend-api]
     description: >-
       Through a REAL codex session (live exec/TUI, not a synthetic payload), make the agent (a) READ a code file
       via a shell command and (b) EDIT a code file via apply_patch. Codex sends the edit as its OWN tool
@@ -28,6 +29,7 @@ scenarios:
       through a real codex round-trip, not a synthetic Bash-only payload.
     code: spec-cli/hooks/harness.sh
   - name: codex-delivery-steers-midturn-and-resumes
+    tags: [backend-api]
     description: >-
       Through a REAL codex session on the project app-server, exercise the adapter's deliver + resume. (a) While
       the agent is MID-TURN (an `inProgress` turn — a long-running tool call), `spex session send` a message and

@@ -1,6 +1,7 @@
 ---
 scenarios:
   - name: sessions-tab-status-colour
+    tags: [frontend-e2e, mobile]
     description: >
       On a PHONE viewport (≤ 640px, where useIsMobile flips App to render MobileApp), tap the bottom
       Sessions tab. The list reuses the shared SessionRow face, so each row shows the session's status

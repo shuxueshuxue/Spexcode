@@ -1,6 +1,7 @@
 ---
 scenarios:
   - name: self-launch-zero-friction-codex
+    tags: [backend-api]
     description: >-
       The whole ideal path on a CLEAN machine state (isolated SPEXCODE_HOME + CODEX_HOME): run `spex init`
       in a fresh project, then launch a REAL codex TUI in that project as a user would (no SpexCode process
@@ -12,6 +13,7 @@ scenarios:
       and carries BOTH the docs/AGENT_GUIDE.md guide AND the surface:system contract bodies (guide first). The
       user performed no step after `spex init`.
   - name: contract-files-are-gitignored-artifacts
+    tags: [backend-api]
     description: >-
       In a fresh git project carrying a docs/AGENT_GUIDE.md, run `spex materialize`. Inspect the generated
       AGENTS.md/CLAUDE.md, `git check-ignore` them and the managed `.gitignore` block, then edit a
@@ -23,6 +25,7 @@ scenarios:
       equals the AGENT_GUIDE.md guide followed by the surface:system bodies in name order; the second run
       reflects the edited body. The writeManagedBlock primitive still preserves any bytes outside the markers.
   - name: codex-trust-is-scoped-and-additive
+    tags: [backend-api]
     description: >-
       Pre-seed the global ~/.codex/config.toml with unrelated user keys + another project's trust, then run
       `spex materialize` for THIS project. Inspect the config.
@@ -31,6 +34,7 @@ scenarios:
       sentinels) is added/replaced; the user's other keys and the other project's trust are untouched. The
       trusted_hash values match codex's own computation (codex accepts them with no re-prompt).
   - name: pay-per-change-render
+    tags: [backend-api]
     description: >-
       With artifacts already materialized and the content-hash marker current, fire a tool event (the
       dispatcher gate runs), then EDIT a surface:system node's body by any means (bash echo / editor) and

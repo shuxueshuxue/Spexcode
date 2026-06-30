@@ -1,6 +1,7 @@
 ---
 scenarios:
   - name: edit-shows-uncommitted-node
+    tags: [backend-api]
     description: >-
       Through the real backend, in a worktree create a brand-new spec node whose spec.md is
       written but NOT committed (untracked), then GET `/api/edit?source=<worktree>&path=<spec.md>`
@@ -14,6 +15,7 @@ scenarios:
       the tracked-edited path returns its real working-tree diff.
     code: spec-cli/src/index.ts
   - name: port-bind-failure
+    tags: [backend-api]
     description: >-
       Drive the shared port-ownership contract through the real CLI. Start `spex serve --port P`,
       wait until P serves, then run a SECOND `spex serve --port P` on the same port; capture its
@@ -30,6 +32,7 @@ scenarios:
     code: [spec-cli/src/listen.ts, spec-cli/src/supervise.ts]
     related: spec-cli/src/gateway.ts
   - name: board-conditional-request
+    tags: [backend-api]
     description: >-
       Drive the board's conditional-request contract through the real backend. GET `/api/board`
       once and capture the response status, the `ETag` header, and the body size. Then GET it

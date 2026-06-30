@@ -92,6 +92,11 @@ FRONTMATTER: a \`scenarios:\` list (a YAML block sequence of mappings). Each sce
   name         REQUIRED. Unique within the file — it keys the sidecar and \`--scenario <name>\`.
   description  REQUIRED. What to check / how to measure it through the running product.
   expected     REQUIRED. What ZERO loss looks like — the target the measurement is compared against.
+  tags         REQUIRED. ≥1 classification tag (a comma list / flow list \`[a, b]\`), each drawn from the
+               configured library (\`lint.scenarioTags\` in spexcode.json; ships
+               \`frontend-e2e, backend-api, cli, desktop, mobile\`). A tag outside the library is rejected —
+               use an existing one, or add it to the library to mint it. Tags classify a scenario (surface,
+               device) so it can be filtered and, later, routed to the right driver.
   test         optional. A repo path to a co-located runnable file (a playwright.spec.ts, a script)
                the agent MAY run by hand. Not a driver — yatsu never executes it.
   code         optional. The file THIS scenario GOVERNS, ideally one (a comma list / flow list \`[a, b]\` is
@@ -103,9 +108,10 @@ FRONTMATTER: a \`scenarios:\` list (a YAML block sequence of mappings). Each sce
 Multi-line prose uses YAML block scalars: \`|\` keeps newlines, \`>\` folds wrapped lines to spaces.
 A yatsu.md OWNS nothing — only its scenarios govern and relate (see governed-related).
 
-THE SCHEMA IS ENFORCED (closed field set, three required fields, unique names). A missing required field,
-an unknown key (a typo like \`descripton:\`), a duplicate name, or no scenarios at all is rejected LOUD:
-\`spex yatsu scan\` reports it as \`yatsu-schema\`, and the pre-commit \`yatsu check-staged\` BLOCKS the commit.
+THE SCHEMA IS ENFORCED (closed field set, four required fields, unique names, tags within the library). A
+missing required field, an unknown key (a typo like \`descripton:\`), a duplicate name, an out-of-library
+tag, or no scenarios at all is rejected LOUD: \`spex yatsu scan\` reports it as \`yatsu-schema\`, and the
+pre-commit \`yatsu check-staged\` BLOCKS the commit.
 
 BODY (after the frontmatter): prose naming the measurement method — YATU ("You As The User"): the agent
 looks at / calls the real product surface, not an internal helper chosen to make the proof easy.

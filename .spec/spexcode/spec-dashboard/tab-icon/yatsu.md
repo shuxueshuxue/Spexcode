@@ -1,6 +1,7 @@
 ---
 scenarios:
   - name: configured-and-default
+    tags: [frontend-e2e, desktop]
     description: >
       Load the dashboard with no dashboard.icon set and screenshot the browser tab / inspect the
       <link rel="icon"> href; then set dashboard.icon to an emoji and to an Iconify name, reload, and

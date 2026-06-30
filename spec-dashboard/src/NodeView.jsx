@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ScoreBadge, readingScore, ScenarioCount, scenarioStates } from './score.jsx'
+import { ScoreBadge, readingScore, ScenarioCount, scenarioStates, TagChips } from './score.jsx'
 import { useT } from './i18n/index.jsx'
 
 export const PANES = [
@@ -441,6 +441,7 @@ function DeclaredScenario({ s }) {
       <span className="eval-top">
         <ScoreBadge state="empty" title={t('score.missing')} />
         <span className="eval-scenario">{s.name}</span>
+        <TagChips tags={s.tags} />
         {s.code?.length > 0 && <code className="eval-tracks">{s.code.join(', ')}</code>}
       </span>
       {s.expected && <div className="eval-expected"><span className="eval-expected-label">{t('nodeView.eval.expected')}</span> {s.expected}</div>}

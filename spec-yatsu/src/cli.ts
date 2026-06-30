@@ -72,6 +72,7 @@ export function nodeChanged(dirRel: string, codeFiles: string[], changed: Set<st
 
 async function scan(args: string[] = []): Promise<number> {
   const root = repoRoot()
+  const cfg = loadConfig(root)
   const changedOnly = has(args, 'changed')
   const changed = changedOnly ? changedSinceBase(root) : null
   const idx = await driftIndex(root)
@@ -91,7 +92,7 @@ async function scan(args: string[] = []): Promise<number> {
     if (y) {
       // schema first: a malformed yatsu.md is the loudest gap — report each violation, then still scan its
       // (leniently-parsed) scenarios for stale/missing so a typo doesn't mask a real freshness gap.
-      for (const e of validateScenarios(readFileSync(join(y.dir, YATSU_FILE), 'utf8'))) {
+      for (const e of validateScenarios(readFileSync(join(y.dir, YATSU_FILE), 'utf8'), cfg.scenarioTags)) {
         malformed++
         findings.push(`  • yatsu-schema: '${s.id}' ${e} — fix ${y.yatsuPath}`)
       }
@@ -131,7 +132,7 @@ async function scan(args: string[] = []): Promise<number> {
   // whole-repo only (never --changed): a structural fact, not a per-branch freshness gap. Counts only explicit scenario `code:`.
   let overOwned = 0
   if (!changedOnly) {
-    const maxOwners = loadConfig(root).maxOwners
+    const maxOwners = cfg.maxOwners
     const govCount = new Map<string, number>()
     for (const n of yByDir.values()) for (const sc of n.scenarios) for (const f of sc.code ?? []) govCount.set(f, (govCount.get(f) ?? 0) + 1)
     const over = [...govCount].filter(([, c]) => c > maxOwners).sort((a, b) => b[1] - a[1])
@@ -226,6 +227,7 @@ async function clean(args: string[]): Promise<number> {
 
 function checkStaged(): number {
   const root = repoRoot()
+  const tagLibrary = loadConfig(root).scenarioTags
   const staged = stagedFiles(root)
   let bad = false
 
@@ -240,7 +242,7 @@ function checkStaged(): number {
   for (const rel of staged.filter((p) => p === YATSU_FILE || p.endsWith('/' + YATSU_FILE))) {
     const abs = join(root, rel)
     if (!existsSync(abs)) continue   // staged deletion — nothing to validate
-    const errs = validateScenarios(readFileSync(abs, 'utf8'))
+    const errs = validateScenarios(readFileSync(abs, 'utf8'), tagLibrary)
     if (!errs.length) continue
     bad = true
     console.error(`✗ SpexCode yatsu: ${rel} — invalid scenario schema:`)

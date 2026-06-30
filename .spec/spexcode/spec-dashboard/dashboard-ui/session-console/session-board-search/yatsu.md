@@ -1,6 +1,7 @@
 ---
 scenarios:
   - name: cmd-slash-opens-sessions-first
+    tags: [frontend-e2e, desktop]
     description: >
       Through the running dashboard in a real browser, open the session console (Enter) so the session board
       is the active surface. Press ⌘+/ (mac) or Ctrl+/ (win/linux). The SAME search palette the board's `/`
@@ -17,6 +18,7 @@ scenarios:
       - spec-dashboard/src/SpecSearch.jsx
       - spec-dashboard/src/App.jsx
   - name: pick-routes-session-vs-node
+    tags: [frontend-e2e, desktop]
     description: >
       With the ⌘/Ctrl+/ palette open over the session board, first pick a SESSION result (click or Enter on a
       highlighted session row) and watch where you land. Reopen the palette and this time pick a NON-session

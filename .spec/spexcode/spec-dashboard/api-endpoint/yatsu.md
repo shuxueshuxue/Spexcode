@@ -1,6 +1,7 @@
 ---
 scenarios:
   - name: proxy-target-precedence
+    tags: [backend-api]
     description: >-
       Through the REAL Vite dev server (the product surface: it reads vite.config.js and proxies `/api` to
       the resolved backend), confirm the three-source precedence by starting the dev server three ways and

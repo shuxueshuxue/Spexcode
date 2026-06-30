@@ -92,7 +92,25 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
     // the WebGL addon is loaded/disposed by the active-driven effect below (one context for the visible pane only), not here.
 
     const proto = location.protocol === 'https:' ? 'wss' : 'ws'
-    const url = `${proto}://${location.host}/api/sessions/${sessionId}/socket`
+    const base = `${proto}://${location.host}/api/sessions/${sessionId}/socket`
+    // size-first handshake: carry the pane's real dimensions on the connect URL so the server draws its
+    // first frame at THAT size — no guessed-size full frame to scramble the still-default xterm and need a
+    // corrective second frame. Recomputed on every (re)connect (resilientSocket re-resolves it), so a
+    // reconnect after a resize hands over the live size. Unmeasurable (host not laid out / mid entrance
+    // animation) → no query, and the server falls back to its prewarm size. Same degenerate-measurement
+    // guards as fitAndSync, so the two never disagree on the size.
+    const socketUrl = () => {
+      try {
+        const host = hostRef.current
+        if (host && host.clientWidth >= 40 && host.clientHeight >= 40) {
+          const d = fit.proposeDimensions()
+          if (d && d.cols > 0 && d.rows > 0 && !(d.cols < 20 && host.clientWidth > 200)) {
+            return `${base}?cols=${d.cols}&rows=${d.rows}`
+          }
+        }
+      } catch { /* can't measure yet → no query; the server paints at its prewarm size and a later fit corrects */ }
+      return base
+    }
     let sock = null   // the resilient socket; assigned below, once the frame machinery its callbacks use exists.
 
     // fit xterm to the panel, then tell tmux to match — only when the size actually changed and the
@@ -132,7 +150,7 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
     }
     // on (re)open: reset xterm and DROP frames queued from a prior socket (they belong to the old screen) before re-sending the fitted size.
     sock = createResilientSocket({
-      url,
+      url: socketUrl,
       onState: setConn,
       onOpen: () => { pending = []; if (flushRaf) { cancelAnimationFrame(flushRaf); flushRaf = 0 } ; term.reset(); lastSizeRef.current = { cols: 0, rows: 0 }; fitAndSync() },
       onMessage: (e) => {

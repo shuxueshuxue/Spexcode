@@ -1,6 +1,7 @@
 ---
 scenarios:
   - name: no-node-fallback-finds-the-governing-node
+    tags: [backend-api]
     description: >-
       The full grounding closed loop, through the real hook + CLI (YATU). For a session whose global
       record carries NO `node:` line (a session not bound to one node), run spec-first.sh on a

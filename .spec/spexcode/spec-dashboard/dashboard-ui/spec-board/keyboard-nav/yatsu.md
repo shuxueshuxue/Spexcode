@@ -1,6 +1,7 @@
 ---
 scenarios:
   - name: slash-search-spans-four-planes
+    tags: [frontend-e2e, desktop]
     description: >-
       Open the dashboard, press `/` to open the search palette, and type a fragment that matches across
       planes (e.g. "renders"). The results list rows each tagged by plane — node / session / issue /
@@ -14,6 +15,7 @@ scenarios:
     code:
       - spec-dashboard/src/SpecSearch.jsx
   - name: slash-search-reaches-node-prose
+    tags: [frontend-e2e, desktop]
     description: >-
       Open the dashboard, press `/`, and type a distinctive word that lives ONLY in some node's spec
       prose — not in any title, id, or path (e.g. "hatch", which sits in keyboard-nav's own body
@@ -28,6 +30,7 @@ scenarios:
     code:
       - spec-dashboard/src/SpecSearch.jsx
   - name: manual-scroll-wins-over-keyboard-glide
+    tags: [frontend-e2e, desktop]
     description: >-
       Open a long scrollable surface (the help/keymap modal or a node-info popup with overflow). Press
       `J` (or down) a few times to start the momentum glide scrolling the body downward, then — while the

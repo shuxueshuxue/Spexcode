@@ -1,6 +1,7 @@
 ---
 scenarios:
   - name: worktree-has-zero-session
+    tags: [backend-api]
     description: >-
       Launch a GOVERNED session (the dashboard path) into a worktree. After it has written state at least
       once (submit a prompt), inspect the worktree directory tree and the global store.
@@ -10,6 +11,7 @@ scenarios:
       (prompt, launch.sh, hooks.json, claude.md) + state live under
       ${SPEXCODE_HOME}/projects/<enc-main-root>/sessions/<session_id>/.
   - name: multi-agent-one-folder-no-clobber
+    tags: [backend-api]
     description: >-
       In ONE folder, run two agents with distinct harness session_ids concurrently (e.g. two self-launched
       codex/claude, or simulate two payloads with different session_id through the hooks). Have each flip its
@@ -19,6 +21,7 @@ scenarios:
       own record; neither clobbers the other. (A worktree-path key would have collided — this is why the key
       is session_id.)
   - name: stop-gate-no-misfire-for-self-launch
+    tags: [backend-api]
     description: >-
       Fire the Stop hook for a NON-governed session (a self-launched agent — its global record has
       governed:false, or no governed flag). Then fire Stop for a GOVERNED session that is undeclared and has
@@ -28,6 +31,7 @@ scenarios:
       state" demand). Governed undeclared/uncommitted Stop → the gate blocks exactly as today (commit gate +
       declare gate, with the loop-break). The governance flag is the only thing that flips this.
   - name: spec-discipline-runs-for-non-governed
+    tags: [backend-api]
     description: >-
       A NON-governed (self-launched) agent's FIRST code access (read or edit a non-spec file) without having
       opened its node's spec, then a second code access.
@@ -36,6 +40,7 @@ scenarios:
       then the second access passes — i.e. spec-discipline fires for self-launched agents too, NOT gated on
       governed. spec-of-file likewise annotates the first edit of a file for a non-governed agent.
   - name: dashboard-equivalence-governed
+    tags: [backend-api]
     description: >-
       Run a GOVERNED (dashboard-launched) session end to end: submit a prompt, ask a question, do work,
       propose done. Compare board/lifecycle behavior to the pre-refactor baseline.
@@ -45,6 +50,7 @@ scenarios:
       board with the same status/liveness composition. Only the STORAGE moved (worktree .session → global
       record) — observable behavior is unchanged.
   - name: board-enumerates-global-store
+    tags: [backend-api]
     description: >-
       With several governed sessions and at least one non-governed (self-launched) record present, run
       `spex ls` and open the dashboard board.

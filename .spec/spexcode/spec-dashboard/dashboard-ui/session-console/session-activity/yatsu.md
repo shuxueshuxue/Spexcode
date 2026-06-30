@@ -1,6 +1,7 @@
 ---
 scenarios:
   - name: headline-is-self-summary
+    tags: [frontend-e2e, desktop]
     description: >-
       Open the dashboard with at least one live WORKING session (its tmux pane title set) and look at the
       top-left session window. Each row is two lines. Read Row 1: it is the avatar + the session's HEADLINE —
@@ -26,6 +27,7 @@ scenarios:
       - spec-cli/src/sessions.ts
       - spec-dashboard/src/SessionWindow.jsx
   - name: console-header-matches-headline
+    tags: [frontend-e2e, desktop]
     description: >-
       Through the running dashboard in a real browser, open the session interface (Enter) on a LIVE WORKING
       session whose tmux pane title (self-summary) is set, so its row headline is the agent's own live line —
@@ -46,6 +48,7 @@ scenarios:
       - spec-dashboard/src/session.js
       - spec-dashboard/src/styles.css
   - name: codex-headline-is-task-not-folder
+    tags: [frontend-e2e, desktop]
     description: >-
       Launch a CODEX session into a worktree whose folder name differs from the task (e.g. branch
       `node/codex-naming` → worktree folder `codex-naming`, task "Implement codex session naming"). Codex sets
@@ -65,6 +68,7 @@ scenarios:
       - spec-cli/src/sessions.ts
       - spec-cli/src/harness.ts
   - name: search-and-lock-hint-match-the-board-headline
+    tags: [frontend-e2e, desktop]
     description: >-
       Through the running dashboard in a real browser, read the session names the human sees on the SESSION
       BOARD — the top-left window rows (`.sess-id`), where a live worker shows its self-summary headline, NOT

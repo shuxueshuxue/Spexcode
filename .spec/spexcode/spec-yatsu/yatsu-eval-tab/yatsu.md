@@ -1,6 +1,7 @@
 ---
 scenarios:
   - name: declared-scenarios-visible-without-readings
+    tags: [frontend-e2e, desktop]
     description: >-
       Open the dashboard, focus a node that declares scenarios but has none measured yet (a yatsu.md
       with no readings — or use a route fixture that sets a node's `evals` to []), and open its eval

@@ -1,6 +1,7 @@
 ---
 scenarios:
   - name: count-renders
+    tags: [frontend-e2e, desktop]
     description: >-
       Open the node-graph and look at the tiles. A node with scenarios shows a per-scenario COUNT
       pill — ✓ satisfied/total (e.g. ✓1/1, ✓0/2) — beside its version, coloured by the worst-first

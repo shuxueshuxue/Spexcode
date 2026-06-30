@@ -1,6 +1,7 @@
 ---
 scenarios:
   - name: edit-tab-no-reload-flash
+    tags: [frontend-e2e, desktop]
     description: >-
       Open the dashboard and jump (the `/` search) to a node that is mid-change — one with an edit
       overlay, e.g. session-graph — then press `i` to open its info popup. Click the leading "edit"
@@ -14,6 +15,7 @@ scenarios:
       away shows that diff immediately with no loading-flash — the same instant feel as the history,
       issues and eval tabs. The filed reading carries the screenshot and a pass verdict.
   - name: spec-body-renders-tables
+    tags: [frontend-e2e, desktop]
     description: >-
       Open the dashboard and drill to a node whose spec body contains a GFM markdown table — e.g.
       `runtime` (spec-cli ▸ sessions ▸ lifecycle ▸ runtime), whose body has the global-store files
@@ -26,6 +28,7 @@ scenarios:
       each cell's inline `code` and [[links]] preserved — never the mangled single-paragraph the
       pipe-blind tokenizer used to emit. The filed reading carries the screenshot and a pass verdict.
   - name: info-board-signals
+    tags: [frontend-e2e, desktop]
     description: >-
       Open the dashboard, jump (the `/` search) to a node with rich state — e.g. node-graph, a drift
       node that has a yatsu score and governs several files — and press `i`, then the `spec` tab. Read

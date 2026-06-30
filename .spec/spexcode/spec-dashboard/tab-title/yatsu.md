@@ -1,6 +1,7 @@
 ---
 scenarios:
   - name: tab-and-board-header-name-the-backend
+    tags: [frontend-e2e, desktop]
     description: >-
       Through the running dashboard (a real browser pointed at a backend), read `document.title` and the
       session-board left-list header after the first `/api/board` poll lands. Do it twice: once for a

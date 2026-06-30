@@ -1,6 +1,7 @@
 ---
 scenarios:
   - name: confirm-peels-before-panel
+    tags: [frontend-e2e, desktop]
     description: >
       Open the session console, right-click a session row, and click Close to raise the close-confirm
       modal over the open panel. Press Escape ONCE, then a SECOND time. Measure what each press closes
@@ -12,6 +13,7 @@ scenarios:
     related:
       - spec-dashboard/src/SessionContextMenu.jsx
   - name: layering-survives-hot-reload
+    tags: [frontend-e2e, desktop]
     description: >
       With the close-confirm gesture working, trigger a Vite HMR update to escStack.js (or its importers)
       while the dashboard tab stays open — no page reload — then open the close-confirm again and press Escape.
@@ -20,6 +22,7 @@ scenarios:
       Escape still peels ONLY the confirm; the panel stays. The hot-swap does not strip the layering — the
       listener and its stack stay one source of truth across the re-eval, never a live listener on a dead copy.
   - name: proof-peels-before-board
+    tags: [frontend-e2e, desktop]
     description: >
       For a session in the review state, open its proof overlay (the cyan proof button or typed /proof) over
       the session console, then press Escape once.

@@ -1,6 +1,7 @@
 ---
 scenarios:
   - name: retrieval-benchmark
+    tags: [cli]
     test: spec-cli/src/search.bench.mjs
     description: >-
       A held-out question→node benchmark MEASURING the lexical floor's robustness (NOT a target to game).
@@ -40,6 +41,7 @@ scenarios:
       `api-endpoint`, `yatsu-core`) are canonical-vs-sibling ties the spec-scout `--deep` LLM layer is meant to
       break, and being inside the top 3 is the floor doing its job.
   - name: search-compute-budget
+    tags: [cli]
     test: spec-cli/src/search.bench.mjs
     description: >-
       Track the floor's PURE search-compute time. The floor has NO index or cache — every call re-reads and

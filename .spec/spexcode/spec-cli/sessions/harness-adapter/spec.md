@@ -60,6 +60,14 @@ surface:
 - **trust** — make a user-self-launched agent run the hooks with zero prompts: Codex writes the
   deterministic `trusted_hash` into the global `~/.codex/config.toml`; Claude relies on folder-trust (often
   nothing). The codex-rs hash algorithm is reverse-engineered + pinned.
+- **clean / removeTrust** — the materialize INVERSE: `clean(proj, arts)` surgically removes ONLY this harness's
+  own artifacts — the managed contract block (sentinels), the generated shim, the trust block (`removeTrust`,
+  the inverse of trust above), and the `arts`-named skill/agent files. Every step is gated on a SpexCode
+  identity stamp (the managed-block sentinels, the shim's own `dispatch.sh` command line, the trust sentinels,
+  the name-scoped on-demand paths), so it never touches a user's CLAUDE.md/AGENTS.md prose, a hand-made
+  settings.json, a sibling skill the user added, or any `.spec` data. [[harness-delivery]] calls it for every
+  harness [[harness-select]] did NOT select, so dropping a harness from `harnesses` prunes its products. Adding
+  a harness adds an adapter (with its `clean`), never a prune branch in materialize.
 - **payload accessors** — read `session_id`, the edited-file path (Claude `tool_input.file_path` vs Codex
   `apply_patch` command — Codex has NO `file_path`), and notification type, from a hook's stdin.
 - **launch / sessionId** — the launch command and id model: Claude `claude --session-id <uuid> [--worktree]`

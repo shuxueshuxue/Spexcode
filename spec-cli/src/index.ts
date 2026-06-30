@@ -159,11 +159,15 @@ app.post('/api/sessions/:id/merge', async (c) => {
 // client, so scrollback is tmux's own and the first paint is one coherent repaint.
 app.get('/api/sessions/:id/socket', upgradeWebSocket((c) => {
   const id = c.req.param('id') as string
+  // the size-first handshake: a client that already knows its pane size carries it as ?cols=&rows= so the
+  // first frame is drawn at the true size. Absent/garbage → undefined, and the bridge falls back to prewarm.
+  const qc = Number(c.req.query('cols')), qr = Number(c.req.query('rows'))
+  const initialSize = qc > 0 && qr > 0 ? { cols: qc, rows: qr } : undefined
   let viewer: Viewer | null = null
   return {
     onOpen(_evt, ws) {
       viewer = { send: (buf) => { try { ws.send(Uint8Array.from(buf)) } catch { /* viewer gone */ } } }
-      if (!attachViewer(id, viewer)) { try { ws.close() } catch { /* already closed */ } }
+      if (!attachViewer(id, viewer, initialSize)) { try { ws.close() } catch { /* already closed */ } }
     },
     onMessage(evt) {
       if (!viewer) return

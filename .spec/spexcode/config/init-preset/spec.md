@@ -2,46 +2,35 @@
 title: init-preset
 status: active
 hue: 100
-desc: The policy of what `spex init` seeds — which active .config plugins ship to a new project and which are held back as spexcode-only.
+desc: The preset system — default preset = the live .config instance set; non-default presets (careful) are cumulative template packages selection stacks on at `spex init`; selection only matters at seed time.
+code:
+  - spec-cli/templates/presets
+  - spec-cli/templates/spec/project/.config
 ---
 # init-preset
 
-The init preset is the **policy** half of adoption — *which* [[.config]] plugins a fresh
-project inherits. The *mechanism* (the CLI scaffold that copies template files into a target
-tree) belongs to [[spex-init]]; this node owns only the set, and states nothing about how the
-copy happens.
+The init preset is the **policy** half of adoption — *which* plugins a project ends up with. The
+*mechanism* (the CLI scaffold that copies template files into a target tree) belongs to [[spex-init]];
+this node describes only the preset **system**.
 
-**The rule, in one line:** every **active** `.config` plugin ships EXCEPT the spexcode-only
-ones. The preset is therefore *derived* from `.config`, not a hand-kept list — so a new dev-flow
-plugin is shipped by default and only a spexcode-only one is held back.
+**Default preset = the instance.** The lean default preset *is* the [[.config]] instance set — the
+dev-flow plugins SpexCode actually runs (the contract, the commands, the scout). It is also the seed a
+plain `spex init` plants, shipped as the `spec-cli/templates/spec/project/.config` mirror of that live
+tree. The dotted [[.config]] (the instance) and the un-dotted [[config]] (this spec of the config
+system) stay strictly distinct: a **non-default** preset NEVER lives in `.config`.
 
-### 1. Seeding — the template IS the preset, materialized
-`spex init` plants the CLI's `templates/spec/project/.config` tree as the new project's
-`.spec/<proj>/.config`. That directory is not an abstraction over the preset — it *is* the
-preset frozen as files, each plugin a verbatim copy of the dogfood `.config` node. Editing the
-preset means editing those template files (adoption is data, not code — [[spex-init]]). It is
-kept in lockstep by hand today, so the durable fix is to regenerate it from "active `.config`
-minus the spexcode-only nodes".
+**Non-default presets are template packages.** A more cautious tier — `careful` — is a separate
+**source package** under `spec-cli/templates/presets/<name>/`, mirroring the default template layout (a
+`.config/<plugin>` subtree). It is shippable CLI code, *not* a spec node in this repo and never part of
+the live `.config` the launcher walks. Its first member is `clarify-before-code` — surface a misread as
+a stated assumption in the proposal, blocking the human only on a load-bearing ambiguity.
 
-### 2. The shipped command workflows
-Seeded as `surface: command` new-session presets — the dev-flow commands every adopter gets:
-- `extract`
-- `regroup`
-- `scenario`
-- `supervisor`
-- `tidy`
+**Cumulative.** The tiers form a chain, lean → cautious: `careful` is a strict superset of `default`.
+Selecting `careful` seeds the default `.config` set AND stacks the careful package on top of it.
 
-### 3. The shipped core contract — hooks + system prompts
-Seeded as `surface: system`, folded verbatim into every launched agent's
-`--append-system-prompt`:
-- `core` — and with it the materialized hooks it co-locates: the spec-first dispatch and the
-  stop-gate, plus the session-lifecycle scripts the contract carries.
-- `forge-link`
-- `memory-hygiene`
-
-### 4. What is NOT a preset — the spexcode-only holdbacks
-Held back because they bind to *this* repo's own setup and must never reach an adopter:
-- `taste` (`surface: skill`) — SpexCode's own engineering principles; an adopter authors their
-  own taste, so this never ships.
-- `voice-before-ask` (`surface: system`) — needs this repo's local voice MCP, absent in an
-  adopter's environment.
+**Selection matters only at seed time.** A project picks its tier with `spex init --preset <name>`
+(or an existing `spexcode.json` `preset` field); the named package is copied in on top of the default.
+There is **no** per-plugin `preset:` field — membership is *which package directory a plugin lives in*,
+not a frontmatter flag — and **no** launcher-side preset gate: once seeded, the running repo simply
+gathers whatever ended up in its `.config`, so the whole notion of a preset is spent at `spex init` and
+invisible thereafter.

@@ -6,12 +6,12 @@
 // AND codex are covered with no hardcoded paths). It catches the SILENT failure: a shim whose handler is
 // missing, a PATH that can't resolve `spex`, a contract that never landed. Read-only today: `doctor`,
 // `contract` (print the surface:system text any agent reads), `env`. install/uninstall are STAGED (noteStaged).
-import { existsSync, readFileSync, accessSync, constants } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, readFileSync, readdirSync, accessSync, constants } from 'node:fs'
+import { join, dirname, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 import { homedir } from 'node:os'
-import { loadSystemConfig } from './specs.js'
+import { loadSystemConfig, loadSkillConfig } from './specs.js'
 import { runtimeRoot, envSessionId, readAliasedRawRecord } from './layout.js'
 
 // this file lives at <pkgRoot>/src/self.ts, so `..` is the package root — the same derivation init.ts/
@@ -72,6 +72,110 @@ function manifestScripts(text: string): string[] {
     if (f.length >= 4 && f[3]) out.add(f[3])
   }
   return [...out]
+}
+
+// @@@ double-delivery - the SILENT conflict on the OTHER axis from under-delivery: not "did the contract
+// land?" but "did it land TWICE?". A self-launched agent can be reached by BOTH the loose native delivery
+// materialize() writes into the worktree AND a `spexcode` plugin bundle the user installed independently
+// (Claude marketplace) or a stale leftover — doubling every hook (dispatch.sh fires per copy), shadowing
+// skills, confusing the `/` menu. We never sniff payload: every count is by IDENTITY STAMP — a shim's
+// `dispatch.sh` command line (the hook-routing stamp, the same one cleanHarness keys on), a plugin.json
+// `name:"spexcode"` (the bundle stamp), and our own materialized skill NAMES. Per harness we count, on three
+// channels, how many spexcode-stamped copies reach the agent; any channel >1 is a double-delivery conflict.
+
+// a plugin bundle dir found under a harness's plugins root, carrying a spexcode stamp.
+type Bundle = { dir: string; name: string; scope: string; hooksToDispatch: boolean; skillsDir: string }
+
+// the bundle's declared name, from plugin.json (root or the .claude-plugin/ convention), or null when none.
+function pluginName(dir: string): string | null {
+  for (const p of [join(dir, 'plugin.json'), join(dir, '.claude-plugin', 'plugin.json')]) {
+    if (!existsSync(p)) continue
+    try { const n = (JSON.parse(readFileSync(p, 'utf8')) as { name?: unknown }).name; if (typeof n === 'string') return n } catch { /* malformed → treat as nameless */ }
+  }
+  return null
+}
+// does this bundle wire a hooks shim that routes to OUR dispatch.sh? (hooks/hooks.json or a root hooks.json)
+function bundleHooksToDispatch(dir: string): boolean {
+  return [join(dir, 'hooks', 'hooks.json'), join(dir, 'hooks.json')].some((p) => /dispatch\.sh/.test(read(p)))
+}
+// scan one plugins root's immediate children for SpexCode-stamped bundles (name=="spexcode", a dispatch.sh
+// shim, or one of our own skill names) — three stamps, any one suffices. A non-dir / missing root → [].
+function scanBundles(root: string, scope: string, ourSkills: string[]): Bundle[] {
+  let names: string[] = []
+  try { names = readdirSync(root, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name) } catch { return [] }
+  const out: Bundle[] = []
+  for (const n of names) {
+    const dir = join(root, n)
+    const skillsDir = join(dir, 'skills')
+    const pname = pluginName(dir)
+    const hooksToDispatch = bundleHooksToDispatch(dir)
+    const hasOurSkill = ourSkills.some((s) => existsSync(join(skillsDir, s, 'SKILL.md')) || existsSync(join(skillsDir, s)))
+    if (pname === 'spexcode' || hooksToDispatch || hasOurSkill) out.push({ dir, name: pname ?? n, scope, hooksToDispatch, skillsDir })
+  }
+  return out
+}
+
+// per-harness double-delivery report. For each harness it derives the plugins roots FROM THE ADAPTER's own
+// shim path (`<cfgdir>/plugins` in-tree + `~/<cfgdir>/plugins` global — no hardcoded `.claude`, so a new
+// harness scans for free), finds the spexcode bundles, then counts three channels against the loose native
+// delivery. Returns the printable lines + whether ANY channel >1 (a live double-delivery).
+async function doubleDeliveryReport(base: string): Promise<{ lines: string[]; conflict: boolean }> {
+  const { HARNESSES } = await import('./harness.js')
+  const ourSkills = (() => { try { return loadSkillConfig().map((c) => c.name) } catch { return [] as string[] } })()
+  const L: string[] = []
+  const line = (k: string, v: string) => L.push(`  ${k.padEnd(16)}: ${v}`)
+  let conflict = false
+  const rel = (f: string) => f.startsWith(base + '/') ? f.slice(base.length + 1) : f
+
+  for (const h of HARNESSES) {
+    const shimFile = h.shimFile(base)
+    const looseDispatch = /dispatch\.sh/.test(read(shimFile))
+    const looseSkillDir = h.skillDir(base)
+    const looseContract = h.contractFiles(base).some((f) => /<!--\s*spexcode:start\s*-->/.test(read(f)))
+    const looseSkill = (s: string) => !!looseSkillDir && existsSync(join(looseSkillDir, s, 'SKILL.md'))
+    const looseDelivery = looseDispatch || looseContract || ourSkills.some(looseSkill)
+
+    const cfgDir = dirname(shimFile)   // <proj>/.claude (codex: <main>/.codex)
+    const roots: [string, string][] = [[join(cfgDir, 'plugins'), 'workspace'], [join(homedir(), basename(cfgDir), 'plugins'), 'global']]
+    const bundles = roots.flatMap(([r, scope]) => scanBundles(r, scope, ourSkills))
+
+    // channel 1 — hooks → dispatch.sh (loose shim + any bundle hooks shim)
+    const hookSrc = [
+      ...(looseDispatch ? [`loose ${rel(shimFile)}`] : []),
+      ...bundles.filter((b) => b.hooksToDispatch).map((b) => `plugin "${b.name}" (${b.scope})`),
+    ]
+    // channel 2 — same-named skill in loose skillDir AND a bundle's skills dir
+    const skillHits: string[] = []
+    for (const s of ourSkills) {
+      let c = looseSkill(s) ? 1 : 0
+      c += bundles.filter((b) => existsSync(join(b.skillsDir, s, 'SKILL.md')) || existsSync(join(b.skillsDir, s))).length
+      if (c > 1) skillHits.push(`${s} ×${c}`)
+    }
+    // channel 3 — total delivery sources reaching this harness (loose + each spexcode bundle)
+    const sources = (looseDelivery ? 1 : 0) + bundles.length
+
+    const hConflict = hookSrc.length > 1 || skillHits.length > 0 || sources > 1
+    if (hConflict) conflict = true
+
+    L.push(`${h.id}${hConflict ? '  — DOUBLE-DELIVERY CONFLICT' : ''}`)
+    line('delivery srcs', `${sources}${sources > 1 ? '  (>1 → CONFLICT)' : sources === 1 ? '  (single — ok)' : '  (none)'}`)
+    line('  loose', looseDelivery ? `present (${[looseDispatch && 'shim→dispatch', looseContract && 'contract', ourSkills.some(looseSkill) && 'skills'].filter(Boolean).join('+')})` : 'absent')
+    for (const b of bundles) line('  plugin', `"${b.name}" (${b.scope}) — ${b.dir}`)
+    line('hooks→dispatch', `${hookSrc.length}${hookSrc.length > 1 ? '  (>1 → CONFLICT): ' + hookSrc.join(', ') : hookSrc.length === 1 ? '  (single — ok)' : '  (none wired)'}`)
+    line('skill shadowing', skillHits.length ? `CONFLICT: ${skillHits.join(', ')}` : 'none')
+    L.push('')
+  }
+
+  if (conflict) {
+    L.push('Repair — SpexCode is reaching this agent through MORE THAN ONE discovery channel. Keep exactly one:')
+    L.push('  • remove the independently-installed plugin bundle (delete its dir, or `claude plugin uninstall spexcode`); or')
+    L.push('  • if you WANT the plugin, stop the native delivery: set spexcode.json "harnesses" to a plugin target')
+    L.push('    (e.g. ["plugin",{"plugin":".claude"}] → {"plugin":".claude"}) so `spex materialize` prunes the loose shim/contract/skills; or')
+    L.push('  • remove the loose copy directly (`spex self uninstall` [staged] / `spex uninstall`).')
+  } else {
+    L.push('No double-delivery: each harness is reached by at most one spexcode-stamped channel.')
+  }
+  return { lines: L, conflict }
 }
 
 // ping the backend (apiBase) with a short timeout so doctor never hangs on a dead/wrong SPEXCODE_API_URL.
@@ -170,6 +274,11 @@ async function doctor(): Promise<number> {
   L.push('\nLayer 4 — session orchestration (backend-only: dispatch · queue · comms)')
   line('backend', up ? `reachable at ${backendBase}` : `not reachable at ${backendBase}`)
 
+  // --- double-delivery: the same agent reached through two discovery channels (loose + a plugin bundle) ---
+  const dd = await doubleDeliveryReport(base)
+  L.push('\nLayer 5 — double-delivery (one harness, two discovery channels)')
+  L.push(...dd.lines)
+
   // --- verdict ---
   L.push('\nCoverage verdict')
   line('preconditions', resolveOnPath('spex') ? 'spex resolves' : 'BLOCKED — spex not on PATH (fix first)')
@@ -177,6 +286,7 @@ async function doctor(): Promise<number> {
   line('layer 2', body.length === 0 ? 'ABSENT (no contract)' : 'see per-harness above')
   line('layer 3', manifestText ? 'see handler-existence above' : 'ABSENT (no manifest — agent ungoverned)')
   line('layer 4', up ? 'present' : managed ? 'EXPECTED but backend down' : 'absent (normal for bring-your-own-agent)')
+  line('layer 5', dd.conflict ? 'CONFLICT (double-delivery — see Layer 5; `spex self conflicts`)' : 'clean (single channel)')
 
   // --- footprint: every artifact Spex wrote here, + any slot held by something not ours ---
   L.push('\nFootprint (what Spex wrote into this environment)')
@@ -203,6 +313,16 @@ function contract(): number {
   if (!body) { console.error('spex self: no surface:system nodes in this .spec tree — the contract is empty.'); return 0 }
   console.log(body)
   return 0
+}
+
+// the focused double-delivery check: JUST Layer 5, exit non-zero when a conflict is live so it gates a script
+// / yatsu. Anchors at the repo root like doctor (the shims + contract + skills live there).
+async function conflicts(): Promise<number> {
+  const cwd = process.cwd()
+  const base = repoRoot(cwd) ?? cwd
+  const { lines, conflict } = await doubleDeliveryReport(base)
+  console.log(['spex self conflicts — does SpexCode reach this agent through more than one discovery channel?\n', ...lines].join('\n'))
+  return conflict ? 1 : 0
 }
 
 // raw environment facts doctor reasons over — for debugging the diagnosis itself.
@@ -237,6 +357,7 @@ function usage(): number {
   console.error(`spex self — diagnose how the SpexCode workflow reaches your agent
   doctor       per-layer report: preconditions · git-hook floor · contract · hooks(+handlers) · backend · footprint  (default)
   contract     print the surface:system contract text (hand it to any agent)
+  conflicts    detect double-delivery — the same agent reached via loose native delivery AND a plugin bundle (exits non-zero on conflict)
   env          raw environment facts the diagnosis reads
   install      [staged] wire the materialized contract + hooks into your agent  (--agent claude, --minimal)
   uninstall    [staged] reverse exactly what install wrote`)
@@ -247,6 +368,7 @@ export async function runSelf(args: string[]): Promise<number> {
   switch (args[0] ?? 'doctor') {
     case 'doctor': return await doctor()
     case 'contract': return contract()
+    case 'conflicts': return await conflicts()
     case 'env': return env()
     case 'install': return noteStaged('install')
     case 'uninstall': return noteStaged('uninstall')

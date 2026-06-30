@@ -53,6 +53,14 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
   const lastSizeRef = useRef({ cols: 0, rows: 0 })
   // the latest fitAndSync, exposed so the active-driven renderer effect can re-measure after a swap.
   const fitRef = useRef(null)
+  // first-visible bookkeeping. connectedWithSizeRef: did this socket connect with a measurable size (the
+  // pane was visible → server painted at once via the connect-query) or hidden (no size → server DEFERRED
+  // its first frame, and a ~250ms safety fallback may have painted a guessed-size frame into the still-hidden
+  // buffer)? firstFrameCleanedRef: have we already cleaned the first visible frame? Together they let the
+  // active-driven effect wipe-and-resend exactly once, only for a hidden-connected pane, the moment it first
+  // becomes visible — so the first frame the user sees is drawn clean at the true size (no undersized→snap).
+  const connectedWithSizeRef = useRef(false)
+  const firstFrameCleanedRef = useRef(false)
   // brief "copied ✓" confirmation flashed by the copy chord; drives only the corner caption, not the term.
   const [copied, setCopied] = useState(false)
   // socket health for the corner caption: 'connecting' | 'open' | 'reconnecting' (drives the loud "reconnecting…").
@@ -62,6 +70,10 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
   onMenuRef.current = onMenu
 
   useEffect(() => {
+    // fresh socket for this session id → it hasn't connected or been shown yet (reset even on a prop-swap
+    // reuse of this instance, so a new session doesn't inherit the previous one's first-visible state).
+    connectedWithSizeRef.current = false
+    firstFrameCleanedRef.current = false
     const term = new Terminal({
       fontSize: 11, fontFamily: 'Menlo, monospace',
       cursorBlink: false, disableStdin: true, scrollback: 5000,  // read-only view; xterm owns scrollback
@@ -105,10 +117,12 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
         if (host && host.clientWidth >= 40 && host.clientHeight >= 40) {
           const d = fit.proposeDimensions()
           if (d && d.cols > 0 && d.rows > 0 && !(d.cols < 20 && host.clientWidth > 200)) {
+            connectedWithSizeRef.current = true   // visible connect → server paints this frame at once; no first-visible cleanup needed
             return `${base}?cols=${d.cols}&rows=${d.rows}`
           }
         }
-      } catch { /* can't measure yet → no query; the server paints at its prewarm size and a later fit corrects */ }
+      } catch { /* can't measure yet → no query; the server DEFERS its first frame until our first resize (a later fit) */ }
+      connectedWithSizeRef.current = false   // hidden connect → first frame is deferred; clean it on first-visible
       return base
     }
     let sock = null   // the resilient socket; assigned below, once the frame machinery its callbacks use exists.
@@ -227,31 +241,47 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
     }
   }, [sessionId])
 
-  // attach WebGL only while this pane is visible and dispose it when it hides — WebGL contexts are a capped per-page resource the browser force-loses past the cap.
+  // active-driven: runs each time this pane crosses the visibility line. Two independent jobs when it
+  // becomes visible — (A) hold the GPU renderer for the on-screen pane only, (B) send the real size NOW so
+  // the server's deferred first frame lands at the true visible size instead of waiting on the slow
+  // animationend/timer refit chain.
   useEffect(() => {
     const term = termRef.current
     if (!term) return
     if (active) {
-      if (webglRef.current) return  // already GPU-accelerated
-      try {
-        const webgl = new WebglAddon()
-        // a GENUINE runtime loss (GPU reset, or the browser still evicting us): drop to the DOM renderer and
-        // force a clean re-measure + FULL repaint, so we never strand a half-painted grid. Resetting the size
-        // guard is essential — otherwise fitAndSync sees "same cols/rows" and suppresses the corrective fit.
-        webgl.onContextLoss(() => {
-          try { webgl.dispose() } catch { /* */ }
-          webglRef.current = null
-          lastSizeRef.current = { cols: 0, rows: 0 }
-          requestAnimationFrame(() => { fitRef.current?.(); try { term.refresh(0, term.rows - 1) } catch { /* */ } })
-        })
-        term.loadAddon(webgl)
-        webglRef.current = webgl
-        // newly visible: re-measure against the now-laid-out host and force a full repaint so the fresh GL
-        // canvas paints the WHOLE grid rather than inheriting a partial frame from the DOM renderer.
-        requestAnimationFrame(() => { fitRef.current?.(); try { term.refresh(0, term.rows - 1) } catch { /* */ } })
-      } catch {
-        webglRef.current = null  // no GL context available — DOM renderer stays, which renders fine
+      // (A) attach WebGL while visible (contexts are a capped per-page resource the browser force-loses past
+      // the cap). Guarded so a missing/lost GL context never blocks the size send below.
+      if (!webglRef.current) {
+        try {
+          const webgl = new WebglAddon()
+          // a GENUINE runtime loss (GPU reset, or the browser still evicting us): drop to the DOM renderer and
+          // force a clean re-measure + FULL repaint, so we never strand a half-painted grid. Resetting the size
+          // guard is essential — otherwise fitAndSync sees "same cols/rows" and suppresses the corrective fit.
+          webgl.onContextLoss(() => {
+            try { webgl.dispose() } catch { /* */ }
+            webglRef.current = null
+            lastSizeRef.current = { cols: 0, rows: 0 }
+            requestAnimationFrame(() => { fitRef.current?.(); try { term.refresh(0, term.rows - 1) } catch { /* */ } })
+          })
+          term.loadAddon(webgl)
+          webglRef.current = webgl
+        } catch {
+          webglRef.current = null  // no GL context available — DOM renderer stays, which renders fine
+        }
       }
+      // (B) first time a HIDDEN-connected pane is shown: wipe the buffer and force the next fit through the
+      // size-unchanged gate. The pane connected at 0×0 so the server deferred its first frame, and a ~250ms
+      // safety fallback may have painted a guessed-size frame into the still-hidden buffer — clearing
+      // guarantees the first frame the user sees is drawn clean at the real size (no undersized→snap). A pane
+      // that connected visible already holds its correct frame (connect-query) — don't wipe it. Re-showing an
+      // already-shown pane keeps its live buffer (instant) — only refit.
+      if (!firstFrameCleanedRef.current) {
+        firstFrameCleanedRef.current = true
+        if (!connectedWithSizeRef.current) { term.reset(); lastSizeRef.current = { cols: 0, rows: 0 } }
+      }
+      // re-measure against the now-laid-out host and force a full repaint (the entrance animation is pure
+      // transform/opacity, so the host is already at its final height here and proposeDimensions reads true).
+      requestAnimationFrame(() => { fitRef.current?.(); try { term.refresh(0, term.rows - 1) } catch { /* */ } })
     } else if (webglRef.current) {
       // leaving view: RELEASE the context so it can never accumulate across opened sessions.
       try { webglRef.current.dispose() } catch { /* */ }

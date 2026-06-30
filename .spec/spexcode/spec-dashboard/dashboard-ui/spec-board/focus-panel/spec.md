@@ -62,4 +62,4 @@ that feature, not this node's drift.
 
 Out of scope: the node-info popup's own Issues/Eval tabs ([[yatsu-eval-tab]]) stay as the deep timeline view
 this panel **drills into** (the always-on glance, not a replacement for it). Editing or creating scenarios is
-a workflow, not a view — that is the `/scenario` config flow, a separate node.
+a workflow, not a view — that lives in the `/extract` config flow, not here.

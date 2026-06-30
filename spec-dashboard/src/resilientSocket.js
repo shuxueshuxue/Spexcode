@@ -20,12 +20,16 @@ export function createResilientSocket({
   let reopenTimer = 0
   let stableTimer = 0
 
+  // url may be a function, re-resolved on every (re)connect — so a handshake query (e.g. the live pane size)
+  // reflects the moment of THIS connect, not a value frozen at first open.
+  const resolveUrl = typeof url === 'function' ? url : () => url
+
   const clearStable = () => { if (stableTimer) { clearTimeoutImpl(stableTimer); stableTimer = 0 } }
 
   const connect = () => {
     onState(attempt === 0 ? 'connecting' : 'reconnecting')
     let sock
-    try { sock = new WebSocketImpl(url) } catch { scheduleReopen(); return }
+    try { sock = new WebSocketImpl(resolveUrl()) } catch { scheduleReopen(); return }
     ws = sock
     try { sock.binaryType = binaryType } catch { /* some impls fix binaryType at construction */ }
     sock.onopen = () => {

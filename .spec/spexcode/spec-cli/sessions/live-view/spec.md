@@ -21,18 +21,27 @@ supervisor keeps a **warm** client for every *detached* live session, so opening
 and deliberately **skips** any session a human is already attached to in their own terminal.
 
 The warm client is held at the **last-known viewer size** — the most recent size any dashboard pane fitted
-to (per session, with a global fallback; only a session no viewer has *ever* sized falls back to a fixed
-default). The supervisor does not merely spawn a fresh bridge at that size — it **keeps existing warm
-bridges at it**, resizing a stale one off-screen while no one is watching. So when a viewer attaches, the
-pane is *already* its size: the open-time fit matches, tmux re-wraps nothing, and the human sees one clean
-repaint — never a visible cols/rows reflow settling in after the fact. The on-attach resize is the reflow;
-pre-sizing the warm client is what removes it. Only the first open of a never-sized session pays it once.
+to (per session, with a global fallback; a never-sized session falls back to a fixed default). The supervisor
+keeps existing warm bridges at it, resizing a stale one off-screen, so a warm pane is *already* roughly the
+dashboard's size before anyone looks — the server's best guess, which the handshake below then makes exact.
 
-The client is forced to **UTF-8** (`tmux -u` plus a UTF-8 `LANG`), independent of the host's locale. Without
-that, a backend launched with an empty/non-UTF-8 environment (e.g. a macOS LaunchAgent, where `LANG=""`)
-makes tmux substitute `_` for every wide character — CJK, `▸`, `★`, … — in the bytes it streams to the
-browser, even though the pane itself stores them correctly. Forcing it here keeps the live terminal
-glyph-faithful wherever the backend runs.
+## the size-first handshake
+
+The authority on a viewer's size is the viewer, and it knows that size **before** the first frame is drawn —
+so it carries it **on the connection itself**: the browser hands its real size to the socket and the server
+draws that very first frame at it, never the guessed-size full frame. So the first frame can no longer land
+garbled on a still-default xterm and need a second, post-fit frame to clean it up — that scramble-then-recover
+is gone. The handshake is **carry-if-known, never block**: a client that cannot yet measure its pane (mid
+entrance-animation) omits the size and the server falls back to one repaint at the warm size — the old
+behaviour, never a blank pane. The size is re-resolved on **every (re)connect**, so a reconnect after a
+resize still hands over the live size. The client's own fit-retry stays the **corrective** path that
+converges a size measured slightly wrong mid-animation: the handshake removes the *guaranteed* first
+scramble, the retry covers the residual.
+
+The client is forced to **UTF-8** (`tmux -u` plus a UTF-8 `LANG`), independent of the host's locale —
+otherwise a backend launched with an empty/non-UTF-8 environment (e.g. a macOS LaunchAgent) makes tmux
+substitute `_` for every wide character in the stream, even though the pane stores it correctly. Forcing it
+here keeps the live terminal glyph-faithful wherever the backend runs.
 
 ## the durable-subscription invariant
 
@@ -56,7 +65,8 @@ endpoint, and lives with the client, not here.
 
 ## coherence
 
-Every (re)attach paints through a single tmux `refresh-client` at the settled pane size — one coherent
-full frame down the same pty the live bytes flow on. We never splice a `capture-pane` snapshot into the
-mid-flight stream; that out-of-band join was the historical screen-scramble, and the durable-subscription
-path never reintroduces it.
+Every (re)attach paints through a single tmux `refresh-client` — one coherent full frame down the same pty
+the live bytes flow on — at the size the client handed over on connect (or, absent a handshake, the warm
+size). We never splice a `capture-pane` snapshot into the mid-flight stream; that out-of-band join was one
+historical screen-scramble, and a first frame drawn at a guessed size onto a still-default xterm was the
+other — the size-first handshake closes the second the way the durable-subscription path closes the first.

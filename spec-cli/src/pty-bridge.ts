@@ -84,15 +84,22 @@ function killBridge(id: string): void {
   try { b.pty.kill() } catch { /* already gone */ }
 }
 
-// a browser viewer connects: subscribe it to the (warm or fresh) bridge, then settleAndRepaint for one
-// coherent frame (a refresh-client down the same pty, never a spliced capture-pane snapshot).
-export function attachViewer(id: string, v: Viewer): boolean {
+// a browser viewer connects: subscribe it to the (warm or fresh) bridge, then paint one coherent frame
+// (a refresh-client down the same pty, never a spliced capture-pane snapshot). If the client carried its
+// real pane size on the connect (the size-first handshake), size the bridge to it FIRST so that very frame
+// is drawn at the correct size — no guessed-size full frame to scramble a still-default xterm. Without a
+// handshake size, fall back to repainting at the prewarm size (never to a blank pane).
+export function attachViewer(id: string, v: Viewer, initialSize?: { cols: number; rows: number }): boolean {
   let s = subscribers.get(id)
   if (!s) subscribers.set(id, s = new Set())
   s.add(v)
   const b = ensureBridge(id)
   if (!b) return false   // spawn failed → caller closes the socket → detachViewer prunes this subscriber
-  void settleAndRepaint(b)
+  if (initialSize && initialSize.cols > 0 && initialSize.rows > 0) {
+    applySize(b, initialSize.cols, initialSize.rows)   // resize-then-repaint at the client's true size
+  } else {
+    void settleAndRepaint(b)
+  }
   return true
 }
 // our attach client's tty, matched by pid (b.pty.pid === client_pid) and cached. refresh-client must

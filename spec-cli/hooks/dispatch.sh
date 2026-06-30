@@ -17,10 +17,12 @@
 #       the harness propagates. Pure bash, no node boot on the hot path (node runs only inside the gate, only
 #       on actual change). cwd = the project/worktree. $SPEX (abs tsx+cli) is inherited from the shim env.
 set -u
-# args: `<harness> <Event>`. A harness id as $1 (claude|codex) is consumed; otherwise we keep $1 as the event
-# and default the harness to claude — so a stale shim still rendered as `dispatch.sh <Event>` keeps working.
+# args: `<harness> <Event>`. A harness id as $1 (claude|codex|plugin) is consumed; otherwise we keep $1 as the
+# event and default the harness to claude — so a stale shim still rendered as `dispatch.sh <Event>` keeps working.
+# `plugin` is the bundle form ([[plugin-harness]]): it parses payloads as the claude family in harness.sh (z-code/
+# Claude share Claude's tool names + file_path), so it joins the claude branch there via the default case.
 harness=claude
-case "${1:-}" in claude|codex) harness="$1"; shift ;; esac
+case "${1:-}" in claude|codex|plugin) harness="$1"; shift ;; esac
 event="${1:?usage: dispatch.sh <harness> <Event>}"
 export SPEXCODE_HARNESS="$harness"
 # the harness.sh path (the adapter's shell mirror) — sibling of this script; hook handlers source it, and we

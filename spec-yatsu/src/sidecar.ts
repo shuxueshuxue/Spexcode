@@ -1,6 +1,9 @@
 import { readFileSync, appendFileSync, existsSync } from 'node:fs'
 
-export type Verdict = { status: 'pass' | 'fail' | 'note'; note?: string }
+// the verdict is pass | fail; `note` is an OPTIONAL one-line annotation on either (why it failed, how far
+// a pass is from ideal) — not a third status. (Legacy readings filed when `note` was its own status survive
+// on disk with status:'note'; render stays tolerant of them, the CLI no longer mints them.)
+export type Verdict = { status: 'pass' | 'fail'; note?: string }
 
 // blobKind absent on a legacy reading → rendered as an image (every legacy capture was one)
 export type Reading = {

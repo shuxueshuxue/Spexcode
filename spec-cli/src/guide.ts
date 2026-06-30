@@ -118,7 +118,10 @@ looks at / calls the real product surface, not an internal helper chosen to make
 
 MEASURING AND FILING: the agent runs the scenario however it likes (a browser screenshot, an API
 transcript, a by-hand pass), compares the result to \`expected\`, and files it:
-  spex yatsu eval <node> --scenario <name> (--pass | --fail | --note <text>) [--image <png> | --result <txt>|-]
+  spex yatsu eval <node> --scenario <name> (--pass | --fail) [--note <text>] [--image <png> | --result <txt>|-]
+The verdict is \`--pass\` or \`--fail\` (a measurement must commit to one — an unmeasured scenario is \`missing\`,
+not a hedged fail). \`--note <text>\` is an OPTIONAL one-line annotation on either (why it failed, how far a
+pass sits from ideal); it does NOT replace evidence — the image/transcript is the captured actual behaviour.
 Frontend → \`--image <png>\` (visual evidence); backend → \`--result <txt>\` (a transcript; \`-\` reads stdin).
 
 THE SCOREBOARD: readings live in yatsu.evals.ndjson beside the yatsu.md — one JSON line per measurement

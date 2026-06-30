@@ -155,7 +155,7 @@ export default {
       note: '≈ 备注',
       legacy: '旧版',
       expected: '预期：',
-      noteLabel: '偏差：',
+      noteLabel: '备注：',
       loadingTranscript: '正在加载文本记录…',
       miss: '原始文件缺失 —— 证据已从缓存中清除。',
       noImage: '无证据 —— 代理未捕获即作出判定。',

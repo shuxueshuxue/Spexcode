@@ -169,7 +169,7 @@ async function evalCmd(args: string[]): Promise<number> {
 
   // the verdict the agent reached (required — a measurement without one is the legacy shape, not a filing).
   const verdict = parseVerdict(args)
-  if (!verdict) { console.error('spex yatsu eval: a verdict is required — one of --pass | --fail | --note <text>'); return 2 }
+  if (!verdict) { console.error('spex yatsu eval: a verdict is required — --pass or --fail (either may add --note <text>)'); return 2 }
 
   // the evidence the agent captured (optional; --image XOR --result). The bytes go to the content-addressed
   // cache exactly the same whether image or transcript; only `blobKind` records which they are.
@@ -197,12 +197,13 @@ async function evalCmd(args: string[]): Promise<number> {
   return 0
 }
 
-// the verdict from the flags: exactly one of --pass / --fail / --note <text> (precedence pass > fail > note).
+// the verdict from the flags: --pass or --fail sets the status (pass wins if both given); --note <text> is an
+// OPTIONAL annotation attached to either. No status flag → null (a measurement must commit to pass or fail).
 function parseVerdict(args: string[]): Verdict | null {
-  if (has(args, 'pass')) return { status: 'pass' }
-  if (has(args, 'fail')) return { status: 'fail' }
   const note = flag(args, 'note')
-  if (note !== undefined) return { status: 'note', note }
+  const ann = note !== undefined ? { note } : {}
+  if (has(args, 'pass')) return { status: 'pass', ...ann }
+  if (has(args, 'fail')) return { status: 'fail', ...ann }
   return null
 }
 
@@ -263,13 +264,13 @@ async function show(args: string[]): Promise<number> {
   return 0
 }
 
-// the verdict as a short tag for the terminal: ✓ pass / ✗ fail / ≈ note: <text>, or `legacy` for a reading
-// taken before verdicts existed.
+// the verdict as a short tag for the terminal: ✓ pass / ✗ fail, with ` — <note>` appended when annotated;
+// `legacy` for a reading taken before verdicts existed, `≈ <note>` for a legacy note-only reading.
 function verdictText(v: Verdict | undefined): string {
   if (!v) return 'legacy'
-  if (v.status === 'pass') return '✓ pass'
-  if (v.status === 'fail') return '✗ fail'
-  return `≈ note: ${v.note ?? ''}`
+  if (v.status === 'pass') return v.note ? `✓ pass — ${v.note}` : '✓ pass'
+  if (v.status === 'fail') return v.note ? `✗ fail — ${v.note}` : '✗ fail'
+  return v.note ? `≈ ${v.note}` : 'legacy'   // legacy note-only reading
 }
 
 export function formatTimeline(tl: EvalTimeline): string {
@@ -293,6 +294,6 @@ export async function runYatsu(args: string[]): Promise<number> {
   if (sub === 'clean') return clean(args.slice(1))
   if (sub === 'show') return show(args.slice(1))
   if (sub === 'check-staged') return checkStaged()
-  console.error('spex yatsu: scan [--changed] | eval [.|<node>] [--scenario <name>] (--pass|--fail|--note <text>) [--image <path>|--result <path|->] | show [.|<node>] [--json] | clean [--keep-latest|--all]')
+  console.error('spex yatsu: scan [--changed] | eval [.|<node>] [--scenario <name>] (--pass|--fail) [--note <text>] [--image <path>|--result <path|->] | show [.|<node>] [--json] | clean [--keep-latest|--all]')
   return 2
 }

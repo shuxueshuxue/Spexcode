@@ -84,6 +84,8 @@ Usage: spex <command> [args]
 Specs / graph
   guide [spec|yatsu]    no topic: the setup workflow; spec/yatsu: the file-format manual for authoring nodes
   init [dir]            scaffold a repo to adopt SpexCode (seed .spec + install git hooks; default: cwd)
+  uninstall [dir]      surgical inverse of init: remove SpexCode's generated artifacts (shims·contract·trust·
+                        gitignore block·global store·plugin bundle), keep .spec/.config. [--hooks] also removes the hooks
   lint                  check the spec↔code graph (integrity·living·coverage·drift); when committing, gates on heavy commit-local drift
   ack <node>… --reason  stamp Spec-OK on HEAD for one or more nodes (this change keeps their specs valid); --reason required, not stored
   serve                 run the API server (default :8787). [--port N] sets the listen port (mirrors
@@ -201,6 +203,12 @@ if (cmd === 'serve') {
   // into <targetDir> (default cwd). spex init [targetDir]
   const { specInit } = await import('./init.js')
   await specInit(positionals(3)[0])
+} else if (cmd === 'uninstall') {
+  // the surgical inverse of init: remove every SpexCode-generated artifact (harness shims/contract/trust, the
+  // .gitignore block, the global store, any plugin bundle) — NEVER the user's .spec/.config data or their own
+  // prose. Git hooks preserved unless --hooks. spex uninstall [targetDir] [--hooks]
+  const { uninstall } = await import('./uninstall.js')
+  uninstall(positionals(3)[0], { hooks: has('hooks') })
 } else if (cmd === 'review' && positionals(3)[0] === 'proof') {
   const sel = positionals(3)[1]
   if (!sel) { console.error('usage: spex review proof <selector> [--open | --out <path> | --json]'); process.exit(2) }

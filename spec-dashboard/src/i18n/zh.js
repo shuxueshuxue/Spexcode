@@ -194,7 +194,6 @@ export default {
   // 左侧聚焦面板 —— 把当前聚焦节点的 Issue 与 Scenario（及其满足状态）放在一处，让这两种有状态的工作
   // 共用同一界面，而非在节点上弹窗。
   focusPanel: {
-    focus: '聚焦',
     scenarios: '场景',
     issues: 'issue',
     noScenarios: '无场景 —— 该节点没有用于测量的 yatsu.md。',

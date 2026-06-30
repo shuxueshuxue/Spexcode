@@ -199,7 +199,6 @@ export default {
   // the left FOCUS PANEL — the focused node's Issues and Scenarios in one place (their satisfaction status),
   // so the two stateful kinds of bound work share one surface instead of an on-node popup.
   focusPanel: {
-    focus: 'focus',
     scenarios: 'scenarios',
     issues: 'issues',
     noScenarios: 'no scenarios — this node declares no yatsu.md to measure.',

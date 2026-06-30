@@ -250,7 +250,7 @@ scenarios:
 test('sidecar: append + read round-trips readings exactly (incl. verdict + blobKind)', () => {
   const f = join(tmp(), 'yatsu.evals.ndjson')
   const a: Reading = { scenario: 's1', codeSha: 'abc123', blob: 'deadbeef', blobKind: 'image', evaluator: 'manual@1', verdict: { status: 'pass' }, ts: '2026-01-01T00:00:00.000Z' }
-  const b: Reading = { scenario: 's2', codeSha: 'def456', blob: 'feed', blobKind: 'transcript', evaluator: 'manual@1', verdict: { status: 'note', note: 'off by a pixel' }, ts: '2026-01-02T00:00:00.000Z' }
+  const b: Reading = { scenario: 's2', codeSha: 'def456', blob: 'feed', blobKind: 'transcript', evaluator: 'manual@1', verdict: { status: 'fail', note: 'off by a pixel' }, ts: '2026-01-02T00:00:00.000Z' }
   appendReading(f, a)
   appendReading(f, b)
   assert.deepEqual(readReadings(f), [a, b])

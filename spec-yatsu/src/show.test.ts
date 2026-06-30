@@ -42,11 +42,13 @@ test('formatTimeline: a stale reading names the moved axes', () => {
   assert.match(out, /⚠ stale \(code, scenario\)/)
 })
 
-test('formatTimeline: the verdict renders — pass / fail / note / legacy', () => {
+test('formatTimeline: the verdict renders — pass / fail / fail+note / legacy', () => {
   assert.match(formatTimeline(timeline([reading({ verdict: { status: 'pass' } })])), /✓ pass/)
   assert.match(formatTimeline(timeline([reading({ verdict: { status: 'fail' } })])), /✗ fail/)
-  assert.match(formatTimeline(timeline([reading({ verdict: { status: 'note', note: 'off by a row' } })])), /≈ note: off by a row/)
+  assert.match(formatTimeline(timeline([reading({ verdict: { status: 'fail', note: 'off by a row' } })])), /✗ fail — off by a row/)
   assert.match(formatTimeline(timeline([reading({})])), /legacy/)   // no verdict → legacy
+  // a legacy note-only reading (status:'note' predates the annotation model) still shows its note
+  assert.match(formatTimeline(timeline([reading({ verdict: { status: 'note', note: 'off by a row' } as any })])), /≈ off by a row/)
 })
 
 test('formatTimeline: the scenario expected shows on its own indented line', () => {

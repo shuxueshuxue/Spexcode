@@ -32,14 +32,15 @@ Manager (the human reviewer, after reviewing the proposal):
    work's intent and can resolve conflicts); the server never touches `main`'s tree.
 6. Delete the node branch; retire the worktree.
 
-**Why a dispatched worker is never told the ritual.** This file (`CLAUDE.md`) is auto-loaded only by
-the *managing* session; a dispatched worker runs with it **hidden** (`hideClaudeMd`) and gets a
-**task-only** prompt. The ritual still reaches the worker through product *mechanism*, not prose: the
+**Why you don't restate the ritual when dispatching.** A dispatched worker gets a **task-focused**
+launch prompt. The ritual still reaches the worker through product *mechanism*, not prose: the
 backend creates the `node/<id>` branch, the `prepare-commit-msg` hook stamps the `Session:` trailer,
-the commit-before-declare contract is the **`.config/core`** node folded into the worker's
-`--append-system-prompt` (there is no baked `CORE_CONTRACT` constant — the contract is *data*, a
-config node), and the `--no-ff` merge style is stated at merge time by the merge prompt. So don't
-restate the flow when dispatching — the system enforces it.
+the commit-before-declare contract is the **`.config/core`** node — materialized (with this guide)
+into the worktree's `CLAUDE.md`/`AGENTS.md` contract block that the harness **auto-discovers**, the
+SAME path for a dispatched and a self-launched agent, not a launch-time `--append-system-prompt`
+(there is no baked `CORE_CONTRACT` constant — the contract is *data*, a config node) — and the
+`--no-ff` merge style is stated at merge time by the merge prompt. So don't restate the flow when
+dispatching — the system enforces it.
 
 `main-guard` (a pre-commit hook) **blocks direct commits on `main`**; merges pass because `MERGE_HEAD`
 is set, and node-branch commits pass because they aren't on `main`. Escape hatch for seeding/topology
@@ -104,8 +105,10 @@ each. There is no discovery phase.
   *instance* plugins (`core` + `forge-link` + `voice-before-ask` are `surface: system`; `health` +
   `supervisor` + `tidy` are `surface: command`); **`config`** holds the *spec of
   the config system* itself (`surface`). Each plugin is a **flat** child carrying a `surface`
-  frontmatter **field** — `surface: system` folds its body verbatim into every launched agent's
-  `--append-system-prompt`; `surface: command` exposes it as a `/`-dropdown preset for new sessions.
+  frontmatter **field** — `surface: system` materializes its body (in name order) into the
+  `<!-- spexcode -->` managed block of the worktree's `CLAUDE.md`/`AGENTS.md`, where the harness
+  **auto-discovers** it as always-on context (not a launch-time `--append-system-prompt`); `surface:
+  command` exposes it as a `/`-dropdown preset for new sessions.
   There are no `system/`/`command/` bucket dirs and no path-driven surface — the surface *is* the field,
   so every plugin is a real graph child. `spec-cli`'s `loadSystemConfig`/`loadConfig` gather the two
   surfaces; only built/active plugins gather (a `pending` plugin renders on the board but reaches no

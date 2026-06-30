@@ -46,8 +46,9 @@ The **eval tab** ([[spec-dashboard]]) is a fourth face on the node popup beside 
 same `panesFor` registry. Because the readings arrive on the board prop, the tab is **instant and consistent**
 — never the previous node's readings on a switch. It is a **thin consumer of the chronological-timeline
 scaffold the history tab uses** (see [[work-pane]]): newest expanded, older reveal on the down gesture. Each
-row's header names its scenario, the **verdict badge** (✓ pass / ✗ fail / ≈ note; *legacy* for a pre-verdict
-reading), and the per-reading **score circle** ([[yatsu-score-badge]]), then its evaluator, codeSha, and time.
+row's header names its scenario, the **verdict badge** (✓ pass / ✗ fail, with its optional **note** annotation
+shown beside; *legacy* for a pre-verdict or legacy note-only reading), and the per-reading **score circle**
+([[yatsu-score-badge]]), then its evaluator, codeSha, and time.
 Its evidence is the scenario's **expected** over the captured proof (screenshot or transcript), or *miss
 original file* when the blob was pruned.
 

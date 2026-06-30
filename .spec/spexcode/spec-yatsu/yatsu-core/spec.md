@@ -49,9 +49,12 @@ is the `yatsu-owners` smell (split it). Measurements live apart in a flat
 **verdict**, ts) — the second git-as-database axis: a reading commit is a *measurement event*, not a spec
 version, so history and attribution apply unchanged.
 
-The **verdict** is the loss against `expected`: `pass`, `fail`, or a `note` (free-text how-far-off). The
-**evidence** is an `image` or `transcript`, content-addressed, distinguished by `blobKind`; one filed before
-verdicts existed renders as *legacy*.
+The **verdict** is the loss against `expected`: `pass` or `fail`. Either may carry an optional **note** — a
+one-line annotation (why it failed, how far a pass sits from ideal). A note is an annotation *on* the verdict,
+not a third status: a measurement must commit to pass or fail, and a scenario you haven't actually measured is
+`yatsu-missing`, never a hedged note-as-verdict. The **evidence** is an `image` or `transcript` (the captured
+actual behaviour — the *why* lives there, the note only summarises it), content-addressed, distinguished by
+`blobKind`; one filed before verdicts existed — or a legacy note-only reading — renders as *legacy*.
 
 **Freshness is derived live from git, never stored.** A reading goes stale on three axes since its codeSha —
 a governed `code:` file changed, its scenario's *content* changed, or the evaluator version moved. A bare

@@ -97,7 +97,7 @@ Specs / graph
                         \`spex serve\`. [--port N] [--api-port N=8787]. The installed replacement for \`npm run web\`.
   board                 dump the dashboard board state as JSON
   forge <sub>           trace a forge's issues/PRs onto spec nodes (read-only): links | eval-pending [--host github] [--node <id>] [--json]
-  yatsu <sub>           measure a node's scenarios and keep score: scan | eval [.|<node>] [--scenario N] (--pass|--fail|--note T) [--image P|--result P|-] | show [.|<node>] [--json] | clean [--keep-latest|--all]
+  yatsu <sub>           measure a node's scenarios and keep score: scan | eval [.|<node>] [--scenario N] (--pass|--fail) [--note T] [--image P|--result P|-] | show [.|<node>] [--json] | clean [--keep-latest|--all]
   hooks <sub>           harness-agnostic hook system: compile [--out <file>] (flatten surface:hook nodes into the per-session manifest the dispatcher reads)
   self <sub>            diagnose how the workflow reaches THIS self-launched agent: doctor (default) | contract | env
   review <SEL>          manager cockpit: review a session (ahead·merge-base diff·gates·proposal)  [--json]

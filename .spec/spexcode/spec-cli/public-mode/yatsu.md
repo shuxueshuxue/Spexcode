@@ -1,6 +1,7 @@
 ---
 scenarios:
   - name: auth-boundary
+    tags: [backend-api]
     description: >
       Through the running gateway (`spex serve --public --password X` on a throwaway port), exercise the
       password boundary over HTTPS with curl + a raw WebSocket upgrade: an unauthenticated request to a
@@ -16,6 +17,7 @@ scenarios:
       stay on loopback.
     code: spec-cli/src/gateway.ts
   - name: login-page
+    tags: [frontend-e2e, desktop]
     description: Load the gateway's /login in a browser, screenshot it, then submit a wrong password and screenshot the error state.
     expected: |
       A styled dark login card centred on a subtle gradient — the SpexCode wordmark with a lock glyph, a
@@ -25,6 +27,7 @@ scenarios:
       native Basic-auth dialog.
     code: spec-cli/src/login-page.ts
   - name: open-no-password
+    tags: [backend-api]
     description: >
       Run `spex serve --public` with NO password (no --password / SPEXCODE_PASSWORD) and drive the public
       endpoint: the startup line, an unauthenticated GET /, GET /api/board, and whether any /login gate exists.

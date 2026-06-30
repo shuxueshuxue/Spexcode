@@ -1,6 +1,7 @@
 ---
 scenarios:
   - name: scan-eval-clean-loop
+    tags: [cli]
     description: >-
       Drive the whole loop through the real `spex yatsu` CLI on this node: file a reading with
       `spex yatsu eval yatsu-core --pass`, confirm `spex yatsu scan` does not flag it, move a
@@ -12,6 +13,7 @@ scenarios:
       the cache while the records still resolve (their blobs render as the miss-original-file
       sentinel).
   - name: schema-gate-rejects-malformed
+    tags: [cli]
     description: >-
       Through the real `spex` surface, write a yatsu.md with a typo'd field key and a missing
       `expected` into a node dir, then (a) run `spex yatsu scan` and (b) stage it and run

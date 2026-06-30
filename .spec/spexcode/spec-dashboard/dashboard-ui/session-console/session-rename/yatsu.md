@@ -1,6 +1,7 @@
 ---
 scenarios:
   - name: rename-overrides-and-clears
+    tags: [frontend-e2e, desktop]
     description: >
       Through the running dashboard in a real browser, open the session console (Enter), right-click a
       session row, and pick "rename" — a centred prompt opens prefilled with the current override (blank if
@@ -14,6 +15,7 @@ scenarios:
       name is a RESET, not an error: it clears the override and the row falls back to its derived label
       (node/title/branch/id). The rename never edits the live terminal — a session in any state is renamable.
   - name: close-confirm-titles-by-headline
+    tags: [frontend-e2e, desktop]
     description: >
       Open the console, right-click a session row whose label comes from its live activity (no human rename),
       and pick "close" to raise the confirm. Read the confirm's title and compare it to that row's card
@@ -22,6 +24,7 @@ scenarios:
       The confirm's title shows the SAME headline the card and console header show (the session's activity/
       description, not its node/branch handle), so the human reads the very words they right-clicked.
   - name: close-confirm-removes-row
+    tags: [frontend-e2e, desktop]
     description: >
       Through the running dashboard in a real browser, open the console (Enter), right-click a session row,
       and pick "close". A confirm prompt (the shared modal, its commit button styled as the destructive

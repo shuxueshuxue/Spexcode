@@ -1,6 +1,7 @@
 ---
 scenarios:
   - name: drill-down-tree-renders
+    tags: [frontend-e2e, desktop]
     description: >-
       Open the dashboard on the spec-node graph. Look at the tree: depth flows left→right, the root
       layer is a short readable column, and only the focused node's ancestor spine is expanded while

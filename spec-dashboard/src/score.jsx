@@ -49,6 +49,18 @@ export function ScenarioCount({ scenarios, evals }) {
   return <span className={`scenario-count ${state}`} title={label} aria-label={label}>✓{satisfied}/{total}</span>
 }
 
+// the scenario's classification tags as a compact, wrapping row of chips — the ONE element used everywhere a
+// scenario surfaces (focus panel, search palette, eval tab), so a tag looks identical wherever it appears.
+// Empty/absent → nothing rendered; the tag values are the configured library (lint.scenarioTags).
+export function TagChips({ tags }) {
+  if (!tags?.length) return null
+  return (
+    <span className="tag-chips">
+      {tags.map((tag) => <span key={tag} className="tag-chip">{tag}</span>)}
+    </span>
+  )
+}
+
 // `title` overrides the default hover copy (the eval tab passes the moved-axis detail for a stale reading).
 export function ScoreBadge({ state, title }) {
   const t = useT()

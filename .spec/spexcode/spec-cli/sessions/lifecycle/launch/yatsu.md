@@ -1,6 +1,7 @@
 ---
 scenarios:
   - name: cap-counts-only-the-working-set
+    tags: [backend-api]
     description: >
       Measure the concurrency cap through the REAL backend board (`/api/board`, i.e. `spex board`) — the
       same status truth the dashboard renders. With the cap N = `spexcode.json` `sessions.maxActive`, look at
@@ -16,6 +17,7 @@ scenarios:
       waiting behind the 4 asking. The cap throttles concurrent COMPUTE, not live processes.
     code: spec-cli/src/sessions.ts
   - name: cap-value-comes-from-spexcode-json
+    tags: [backend-api]
     description: >
       Confirm the cap is configured in JSON, not hardcoded. Read `spexcode.json` `sessions.maxActive` and the
       live board's occupied/queued counts. Then EDIT `sessions.maxActive` (raise or lower it) and, without

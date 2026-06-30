@@ -1,6 +1,7 @@
 ---
 scenarios:
   - name: esc-from-search-returns-to-input
+    tags: [frontend-e2e, desktop]
     description: >
       On the session board with the session interface open and the docked ❯/New-prompt box focused, open the
       search palette (Ctrl/⌘+/), type a query, then press Esc. Read document.activeElement after the palette

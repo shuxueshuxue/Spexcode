@@ -25,12 +25,20 @@ prune the evidence — works end to end through the real `spex` surface, with no
 ## expanded spec
 
 A node declares its scenarios in a **yatsu.md** beside its spec.md (a frontmatter `scenarios:` list, each a
-**name** + **description** + **expected** zero-loss result, plus OPTIONAL **test** (a co-located
+**name** + **description** + **expected** zero-loss result + **tags**, plus OPTIONAL **test** (a co-located
 runnable file), **code** (the file this scenario GOVERNS, ideally one) and **related** (files it
 references but does not own — they never stale it). A yatsu.md owns nothing; only its scenarios govern and
 relate — the [[governed-related]] model on the scenario axis. A scenario is a *target the agent measures
-however it likes*, not a script yatsu runs. The first three are required and the key set closed; a **strict
+however it likes*, not a script yatsu runs. The first four are required and the key set closed; a **strict
 validator** rejects a malformed yatsu.md LOUD — at `scan` and the pre-commit gate, never silently reshaped.
+
+**Tags classify a scenario** so it can be filtered now and routed to the right driver later (a surface like
+`frontend-e2e`/`backend-api`/`cli`, a device like `desktop`/`mobile`). Each scenario carries **≥1 tag**, every
+tag drawn from a **closed vocabulary** — the library configured in `lint.scenarioTags` (spexcode.json). A tag
+outside the library is rejected with the repair the author owns: pick an existing tag, or **extend the
+library** to mint a new one. The library is data, not a fixed enum baked in code, so the project grows its
+own classification deliberately; the tags ride into `/api/board` so every surface that shows a scenario
+([[focus-panel]], the search palette, [[yatsu-eval-tab]]) renders them as a uniform chip.
 
 A scenario is the unit of measurement, so its **freshness is its own**: its optional `code` subset is its
 code freshness axis (a `code`/`related` path that doesn't exist is flagged, never silently immortal); absent,
@@ -53,7 +61,7 @@ not a reading.
 
 The surface mirrors the code-drift report:
 - **scan [--changed]** — the loss signal's blind spots: a malformed yatsu.md (`yatsu-schema` — missing field,
-  unknown key, dup name, ghost `code`/`related` path), a stale reading (`yatsu-drift`), a scenario never
+  unknown key, dup name, ghost `code`/`related` path, out-of-library tag), a stale reading (`yatsu-drift`), a scenario never
   measured (`yatsu-missing`), a **frontend surface** with **no yatsu.md** (`yatsu-uncovered`), and a whole-repo
   summary — a file governed by > `maxOwners` scenarios (`yatsu-owners`, split it). `--changed` scopes the
   per-node classes to the nodes the branch touched ([[yatsu-proactive]]); plain scan covers the repo.

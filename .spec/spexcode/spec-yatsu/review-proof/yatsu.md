@@ -1,6 +1,7 @@
 ---
 scenarios:
   - name: proof-renders
+    tags: [frontend-e2e, desktop]
     description: >
       With a session in the review state, open its proof — via the dashboard proof action
       (the overlay) or by loading GET /api/sessions/:id/proof in a browser, or the file

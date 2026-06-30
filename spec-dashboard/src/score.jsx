@@ -1,7 +1,8 @@
 import { useT } from './i18n/index.jsx'
 
-// the pass/fail MARK a reading scores, or null when there is no pass/fail to show — a `note` (an observation,
-// not a verdict) or a legacy pre-verdict reading. Those carry no ✓/✗, so they read as the empty ring.
+// the pass/fail MARK a reading scores, or null when there is no pass/fail to show — a legacy pre-verdict
+// reading, or a legacy note-only one (status:'note', before `note` became an annotation on pass/fail). Those
+// carry no ✓/✗, so they read as the empty ring. A modern note rides on a pass/fail, so it still scores.
 function mark(r) {
   return r?.verdict?.status === 'pass' ? 'check' : r?.verdict?.status === 'fail' ? 'cross' : null
 }

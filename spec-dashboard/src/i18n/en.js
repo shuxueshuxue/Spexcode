@@ -158,7 +158,7 @@ export default {
       note: '≈ note',
       legacy: 'legacy',
       expected: 'expected:',
-      noteLabel: 'how far off:',
+      noteLabel: 'note:',
       loadingTranscript: 'loading transcript…',
       miss: 'miss original file — the evidence was pruned from the cache.',
       noImage: 'no evidence — the agent attested without a capture.',

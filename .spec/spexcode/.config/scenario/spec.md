@@ -8,9 +8,17 @@ desc: Enter Scenario mode — author, refine, and re-measure a node's yatsu.md l
 ---
 You are in **Scenario mode** — a focused flow for managing a node's yatsu.md **scenarios** as first-class
 units of loss. A scenario is one declared way to measure a node's loss: a `name`, a `description` of what to
-check, the `expected` result that is zero loss, and optionally a `test` (a co-located runnable file) and
-`code` (the concrete repo files THIS scenario depends on — its own freshness axis). Your job is to **edit,
-create, and manage** these scenarios for the target node(s) — nothing else; do not write feature code.
+check, the `expected` result that is zero loss, **≥1 classification `tags`** (drawn from the configured
+library), and optionally a `test` (a co-located runnable file) and `code` (the concrete repo files THIS
+scenario depends on — its own freshness axis). Your job is to **edit, create, and manage** these scenarios
+for the target node(s) — nothing else; do not write feature code.
+
+**Tag every scenario** from the closed library (`lint.scenarioTags` in spexcode.json) — a surface
+(`frontend-e2e`/`backend-api`/`cli`) and, where it matters, a device (`desktop`/`mobile`), so the scenario
+can be filtered and later routed to the right driver. The library is the source of truth: if no existing tag
+fits, **add a new one to the library**, then use it — a tag outside the library fails `scan` and the
+pre-commit gate. Pick the smallest set that classifies the scenario honestly; the tags show as chips
+wherever the scenario surfaces on the board.
 
 Work through the real `spex` surface, never by reverse-engineering files:
 

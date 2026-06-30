@@ -36,6 +36,11 @@ convention:
 { "main": "/elsewhere", "mainBranch": "staging", "branchPrefix": "node/" }
 ```
 
+The same `spexcode.json` (read through `readConfig`) is also where adjacent project policy is DECLARED rather
+than baked in — including the `harnesses` delivery-target set [[harness-select]] owns (which harnesses `spex
+materialize` renders into; default = every native harness). Layout resolution doesn't consume it, but it rides
+the same committed-config-with-a-`spexcode.local.json`-overlay seam: persistent, re-read on every materialize.
+
 The **source-of-truth branch** — what worktrees fork from, merges land on, and reviews diff against — is
 detected by `mainBranch()`, never the baked-in name `main`: the `mainBranch` override above wins, else the
 branch the main checkout is currently on (so an adopted repo whose default is `staging`/`feat-x` just works

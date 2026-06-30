@@ -35,6 +35,13 @@ when the package is installed outside the dogfood repo — never a hardcoded rep
   but only git-**tracked** source (so node_modules/build/nested worktrees never count) minus tests, so a
   fresh repo just works and a mature one can still curate explicit roots.
 
+**An illegal harness-target set fails loud, up front.** Before rendering, `init` validates the project's
+[[harness-select]] `harnesses` set (from the just-planted/existing `spexcode.json`) and aborts with a stated
+reason on an illegal one — a plugin paired with a native harness, or a plugin with no landing folder — rather
+than letting the later materialize swallow it as a soft "skipped" warning. A fresh starter `spexcode.json`
+omits the field (defaulting to every native harness), so this only bites a hand-edited or re-init'd config —
+exactly where a clear error belongs.
+
 **A git work tree is a precondition, checked first.** SpexCode is git-backed — git is the version
 database and the hooks live in `.git` — so a non-git target would leave a *half-state*: specs on disk but
 no history, no hooks, no sessions. `init` therefore rejects a non-git target **before writing anything**,

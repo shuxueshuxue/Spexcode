@@ -464,10 +464,10 @@ body {
    in-between slab, no double hairline), which also turns the row :hover (panel2) into a real delta. */
 .focus-panel { overflow: auto; background: var(--paper);
   display: flex; flex-direction: column; gap: 18px; padding: 16px 14px; }
-/* the head is the panel's title band: identity (eyebrow · title · clamped desc), closed by one hairline. */
-.fp-head { display: flex; flex-direction: column; gap: 3px;
-  padding-bottom: 12px; border-bottom: 1px solid var(--line); }
-.fp-eyebrow { font-size: 9px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
+/* the head is the panel's title band: the focused node's title, then a clamped desc preview. No eyebrow
+   kicker and no closing hairline — the section heads below carry their own underlines, so a head rule would
+   just double the line; the inter-section gap is the only separator the head needs. */
+.fp-head { display: flex; flex-direction: column; gap: 3px; }
 .fp-title { font-size: 15px; font-weight: 700; color: var(--ink2); word-break: break-word; line-height: 1.25; }
 /* the focused node's desc one-liner — clamped so a long description never blows out the head; full text on hover. */
 .fp-desc { color: var(--ink); font-size: 11px; line-height: 1.4; margin-top: 3px;

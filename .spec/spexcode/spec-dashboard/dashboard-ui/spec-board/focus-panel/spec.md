@@ -28,9 +28,10 @@ card that pops on hover/focus of the node itself.
 
 ## expanded spec
 
-**The head.** It leads with the focused node's identity: the `focus` eyebrow, the node **title**, and a
-**clamped preview of its `desc`** (the frontmatter one-liner), so the column says *what this node is* before
-it lists what it owes. The desc is line-clamped (full text on hover) and absent when the node declares none.
+**The head.** It shows the focused node's identity: the node **title** and a **clamped preview of its
+`desc`** (the frontmatter one-liner), so the column says *what this node is* before it lists what it owes —
+just the title, with no `focus` kicker or head hairline above it. The desc is line-clamped (full text on
+hover) and absent when the node declares none.
 
 **One surface, two stateful kinds.** The panel is the answer to "what does this node still owe?" — and a
 node owes on two axes that used to live apart: **issues** (external forge work, open/closed — [[dashboard-issues]])

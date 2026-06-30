@@ -727,7 +727,9 @@ body {
   display: flex; align-items: flex-start; justify-content: center; padding-top: 12vh;
 }
 .search-panel {
-  width: min(560px, 92vw); max-height: 70vh; display: flex; flex-direction: column; overflow: hidden;
+  /* adaptive: scales with the viewport (≈half-width), floored for medium screens and capped so lines
+     stay scannable on a very large display; 92vw guards small screens. */
+  width: min(92vw, clamp(640px, 50vw, 1100px)); max-height: 72vh; display: flex; flex-direction: column; overflow: hidden;
   background: var(--paper); border: 1px solid var(--blue); border-radius: 6px;
   box-shadow: 0 14px 44px rgba(101,123,131,.28); font-size: 12px;
 }
@@ -738,7 +740,7 @@ body {
   color: var(--ink2); font-family: var(--mono); font-size: 14px; line-height: 1.4;
 }
 .search-input::placeholder { color: var(--muted); }
-.search-results { margin: 0; padding: 4px; list-style: none; overflow-y: auto; }
+.search-results { margin: 0; padding: 4px; list-style: none; overflow-y: auto; overflow-x: hidden; }
 .search-empty { padding: 8px 10px; color: var(--muted); }
 .search-item {
   display: flex; align-items: baseline; gap: 8px; padding: 5px 8px; border-radius: 3px;
@@ -756,8 +758,10 @@ body {
 .search-kind.k-session { color: var(--orange); border-color: color-mix(in srgb, var(--orange) 40%, var(--line)); }
 .search-kind.k-issue   { color: var(--green); border-color: color-mix(in srgb, var(--green) 40%, var(--line)); }
 .search-kind.k-scenario{ color: var(--cyan); border-color: color-mix(in srgb, var(--cyan) 40%, var(--line)); }
-.search-title { color: var(--ink2); font-weight: 600; flex: none; }
-.search-path { color: var(--muted); font-size: 11px; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* title and path both shrink-with-ellipsis so a long row truncates instead of forcing a horizontal
+   scrollbar; chips + kind stay fixed. */
+.search-title { color: var(--ink2); font-weight: 600; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.search-path { color: var(--muted); font-size: 11px; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .search-foot { padding: 6px 12px; border-top: 1px solid var(--line); background: var(--panel); color: var(--muted); font-size: 11px; }
 
 /* ---- session interface (Enter): two panes, right content morphs ---- */

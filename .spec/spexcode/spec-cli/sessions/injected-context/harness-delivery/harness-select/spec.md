@@ -29,8 +29,9 @@ never a silent or partial delivery:
   custom), because every host agent scans a different plugins dir. A bare `"plugin"` with no folder is rejected.
 
 This node owns ONLY the vocabulary + validation (`resolveHarnessTargets`) and the select-vs-prune split
-(`partitionHarnesses`). It does NOT emit plugin bundles — that adapter is a later node, so a plugin target
-validates but produces no artifact yet (and, being exclusive, leaves every native harness UNSELECTED → pruned).
+(`partitionHarnesses`, which hands the resolved plugin folders to its `plugins` result). It does NOT emit plugin
+bundles — that is [[plugin-harness]], which materialize drives off `partitionHarnesses`'s `plugins`; here a
+plugin target only validates (and, being exclusive, leaves every native harness UNSELECTED → pruned).
 
 Selection has a back-edge. `materialize` write()s the SELECTED harnesses and clean()s the UNSELECTED ones (the
 [[harness-adapter]]'s clean primitive), so NARROWING `harnesses` prunes the dropped harness's products on the

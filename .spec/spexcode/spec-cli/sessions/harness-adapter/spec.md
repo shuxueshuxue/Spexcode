@@ -29,7 +29,11 @@ that branching belongs to the harness detector and the adapter only.
 The harness is resolved ONCE into the matching adapter; everything downstream calls the adapter. DETECTION is
 not payload-sniffing: each adapter OWNS its shim, and the shim bakes the harness id as the dispatcher's first
 argument (`dispatch.sh <id> <Event>`), so `dispatch.sh` exports `SPEXCODE_HARNESS` and a hook subprocess learns
-its harness from the shim that wired it — deterministically, never by guessing the payload shape. On the TS
+its harness from the shim that wired it — deterministically, never by guessing the payload shape. There is a
+third baked id beyond the native two: `plugin`, written by the [[plugin-harness]] bundle's `hooks.json`. It has
+no `Harness` adapter of its own (it is a DELIVERY form, not a runtime) — `dispatch.sh` accepts it and `harness.sh`
+routes it through the **claude family** (a plugin host like z-code/Claude shares Claude's payload shape) via the
+default case, so the shell side needs no separate `plugin)` arm. On the TS
 side the harness is the launcher's choice (the dashboard launches `defaultHarness`) or ALL adapters at once
 (materialize renders every harness's artifacts). The Adapter owns exactly these divergence points — its whole
 surface:

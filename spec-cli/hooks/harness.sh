@@ -6,6 +6,9 @@
 # HERE; the hook scripts stay harness-agnostic and just call hp_* (the one place Claude's tool names appear in
 # shell, plus codex's Bash-command mapping). The session-id + global-store resolution is harness-agnostic and
 # lives here too, so the six hooks no longer each repeat the git-common-dir → project-key dance.
+# SPEXCODE_HARNESS is claude|codex|plugin: `plugin` is the bundle form ([[plugin-harness]]) and its host (z-code/
+# Claude) shares Claude's payload shape, so every `case "$SPEXCODE_HARNESS"` below routes it through the claude
+# branch via the default case — there is no separate `plugin)` arm to maintain.
 
 # the string value of a top-level JSON string field (first match). Harness-agnostic — both harnesses' payloads
 # carry session_id / tool_name as plain string fields. $1 = payload, $2 = field name. The value is scanned as a

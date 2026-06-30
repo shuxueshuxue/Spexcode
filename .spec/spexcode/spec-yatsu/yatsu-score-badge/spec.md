@@ -2,7 +2,7 @@
 title: yatsu-score-badge
 status: active
 hue: 160
-desc: The yatsu score at a glance — a per-scenario COUNT (✓ satisfied / total) on each node tile, and a ringed circle on every eval-tab row, so a board sweep reads how many of a node's scenarios are satisfied and which are blind spots.
+desc: The at-a-glance scenario vocabulary on score.jsx — a per-scenario COUNT (✓ satisfied / total) on each node tile, a ringed circle on every eval-tab row, and each scenario's classification TAG CHIPS, so a board sweep reads how many of a node's scenarios are satisfied, which are blind spots, and what each one is.
 code:
   - spec-dashboard/src/score.jsx
 related:
@@ -37,6 +37,16 @@ folds those per-scenario states to one worst-first colour; `nodeScore` is that a
 renders the tile/stat-bar count; `ScoreBadge` draws the per-reading ring. The node tile ([[node-graph]]) and
 the node-info stat bar render `ScenarioCount`; the [[focus-panel]] renders the same per-scenario states as a
 list; the eval tab ([[yatsu-eval-tab]]) renders the per-reading circle.
+
+**Tags are the second at-a-glance adornment.** Beside the satisfaction count, a scenario carries
+classification [[yatsu-core]] tags; `score.jsx` exports the one shared **`TagChips`** element that renders
+them as a compact wrapping row of chips. It is the SAME element wherever a scenario surfaces — the
+[[focus-panel]] row, the search palette ([[session-board-search]]), the eval tab's declared-scenario row —
+so a tag looks identical everywhere and reads off the same `.tag-chip` vocabulary the other chips use.
+`scenarioStates` already threads each scenario's `tags` through (it spreads the scenario), so the consumers
+need no extra wiring. This node owns `TagChips` + its `.tag-chip` style slice; it does NOT own the tag
+*vocabulary* or its validation — that is [[yatsu-core]]'s schema. Count says *how satisfied*, tags say *what
+kind* — two orthogonal glances on one scenario.
 
 **The aggregate is a worst-first fold** over the per-scenario states: any **fresh fail** makes it red ✗ (the
 loudest current signal); else any **stale** scenario makes it grey (fail-flavoured if any stale scenario

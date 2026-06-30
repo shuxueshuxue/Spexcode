@@ -45,6 +45,23 @@ scenarios:
       stale target.
     code:
       - spec-dashboard/src/scroll.js
+  - name: palette-fits-screen-and-truncates-rows
+    tags: [frontend-e2e, desktop]
+    description: >-
+      Open the `/` palette on a LARGE screen and type a query whose rows have long titles/paths (e.g.
+      "session"). The panel is sized to the viewport (≈half-width, capped), markedly wider than a fixed
+      560px. Then narrow the window (or test a smaller viewport) so rows would overflow: each row
+      ELLIPSIS-truncates its title/path instead of widening the panel, and there is NO horizontal
+      scrollbar along the bottom of the results. Screenshot the narrowed palette showing truncated rows
+      and file with `spex yatsu eval keyboard-nav --image <png> --pass`.
+    expected: >-
+      The palette width scales with the viewport (adaptive, not a fixed 560px) and caps on a very large
+      screen so lines stay scannable. A row too long for the panel truncates its title and path with an
+      ellipsis (…); the results never produce a horizontal scrollbar. Tag chips and the plane tag stay
+      intact, never squeezed out.
+    code:
+      - spec-dashboard/src/styles.css
+      - spec-dashboard/src/SpecSearch.jsx
 ---
 # yatsu.md — keyboard-nav
 

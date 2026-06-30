@@ -34,8 +34,10 @@ scenarios:
     expected: |
       Picking "close" opens a confirm prompt rather than closing immediately (a right-click is easy to
       mis-aim and the worktree removal is destructive). Cancelling does nothing — the row stays. Confirming
-      POSTs the human-only worktree removal and asks the board to reload, so the closed row drops off every
-      surface at once. This is the same removal the (now-absent) header close once did, behind a guard.
+      **dismisses the confirm dialog instantly** — it never sits open, frozen and disabled, while the
+      removal runs — and fires the human-only worktree removal in the background; the board reload when it
+      lands drops the closed row off every surface. This is the same removal the (now-absent) header close
+      once did, behind a guard.
 ---
 
 # session-rename — yatsu

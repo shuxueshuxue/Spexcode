@@ -53,13 +53,16 @@ export default function SessionContextMenu({ menu, onClose, onChanged }) {
     onClose()
   }
 
-  // confirmed close: POST the human-only worktree removal, then reload so the row drops off every surface.
-  const confirmClose = async () => {
-    if (busy) return
-    setBusy(true)
-    try { await apiFetch(`/api/sessions/${closing.id}/close`, { method: 'POST' }) }
-    catch { /* the next board poll reconciles */ }
-    finally { setBusy(false); setClosing(null); onChanged?.() }
+  // confirmed close: dismiss the confirm AT ONCE and fire the worktree removal in the BACKGROUND — it's
+  // seconds of real work (git worktree remove + killing the agent/tmux), and (like New Session's launch)
+  // the human must never watch a frozen, disabled dialog wait it out. The board reload when it lands drops
+  // the row off every surface; the next poll reconciles a failure. No busy-guard: the prompt is already gone.
+  const confirmClose = () => {
+    const { id } = closing
+    setClosing(null)
+    apiFetch(`/api/sessions/${id}/close`, { method: 'POST' })
+      .catch(() => { /* the next board poll reconciles */ })
+      .finally(() => onChanged?.())
   }
 
   const submit = async (e) => {
@@ -118,7 +121,7 @@ export default function SessionContextMenu({ menu, onClose, onChanged }) {
             <p className="sess-confirm-msg">{t('sessionWindow.closeConfirm')}</p>
             <div className="sess-rename-actions">
               <button type="button" className="sess-rename-btn" onClick={() => setClosing(null)}>{t('common.cancel')}</button>
-              <button type="button" className="sess-rename-btn danger" onClick={confirmClose} disabled={busy}>{t('sessionWindow.close')}</button>
+              <button type="button" className="sess-rename-btn danger" onClick={confirmClose}>{t('sessionWindow.close')}</button>
             </div>
           </div>
         </Modal>

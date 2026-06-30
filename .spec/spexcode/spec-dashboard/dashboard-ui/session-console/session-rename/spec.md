@@ -57,8 +57,12 @@ but behind a **confirm prompt** — a right-click is easy to mis-aim and the rem
 the typed command (whose deliberate keystrokes ARE the confirmation) it asks first (the confirm is the shared
 modal, its commit button styled as the destructive verb). The confirm **titles itself with the session's
 headline** — the same label its card shows ([[session-activity]]), not the stable rename handle — so the
-human reads the very words they right-clicked and never has to map a different name onto the row. Confirming POSTs the close and asks the board to
-reload, so the closed row drops off every surface at once; cancelling does nothing. The menu carries only the
+human reads the very words they right-clicked and never has to map a different name onto the row. Confirming
+**dismisses the prompt at once** and fires the close in the **background**: worktree + branch removal is
+seconds of real work (a `git worktree remove` plus killing the agent + tmux), and the human must never sit
+watching a frozen, disabled dialog wait it out — the same fire-and-forget the New Session launch already uses
+([[session-console]]). The board reload when the removal lands drops the closed row off every surface;
+cancelling does nothing. The menu carries only the
 decisive **close**, never the soft `/exit` stop — stopping-to-resume is a typed command on a live session.
 
 Because both the pop-over and its prompt are opened **from** the board, each must render **above** it:

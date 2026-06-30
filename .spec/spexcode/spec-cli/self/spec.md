@@ -15,9 +15,11 @@ to reach that agent through files the harness auto-discovers: the artifacts [[ma
 the question "is this agent actually governed, or silently running free?" has a concrete answer, and
 `spex self` is the command that gives it. It DIAGNOSES the materialized contract for the current agent —
 and, behind an explicit gate, will REPAIR it — keeping every footprint visible and reversible, so Spex
-never silently pollutes an environment it does not own. The failure it exists to catch is the SILENT one:
-a hook shim present but its handler missing, a PATH that can't resolve `spex`, a contract that never
-landed — each of which leaves the agent ungoverned while looking fine.
+never silently pollutes an environment it does not own. It catches the SILENT failure on TWO axes:
+UNDER-delivery (a shim present but its handler missing, a PATH that can't resolve `spex`, a contract that
+never landed — the agent ungoverned while looking fine) and DOUBLE-delivery (the SAME agent reached
+through two auto-discovery channels at once — the loose native delivery in the worktree AND a `spexcode`
+plugin bundle the user installed independently or left behind, doubling every hook, shadowing skills).
 
 ## expanded spec
 
@@ -37,6 +39,15 @@ are both covered with no hardcoded paths and a new harness is diagnosed for free
 - **trust** — codex's `trusted_hash` block is in `~/.codex/config.toml` (claude relies on folder-trust).
 - **git-hook floor** — pre-commit / prepare-commit-msg, enforcing for ANY agent regardless of harness.
 - **backend** — orchestration reachability; absent is NORMAL for a bring-your-own-agent.
+- **double-delivery** — did the contract land TWICE? The [[harness-select]] plugin-exclusivity invariant
+  stops US emitting both a native and a plugin delivery, but cannot see a `spexcode` plugin bundle a user added
+  out-of-band — so `self` catches THAT. By IDENTITY STAMP, never payload: a shim's `dispatch.sh` command line,
+  a `plugin.json` `name:"spexcode"`, and our own materialized skill names. Per harness it counts three channels
+  — `dispatch.sh` shims, same-named skills across the loose skillDir + plugin skills dirs, and total delivery
+  sources (loose + each `spexcode` bundle under `<cfgdir>/plugins` + `~/<cfgdir>/plugins`, derived from the
+  adapter's shim path so a new harness scans for free); ANY channel >1 is a conflict. `spex self conflicts`
+  runs JUST this check, exits non-zero on a live double-delivery, and prints the repair (remove one bundle, OR
+  switch `harnesses` to a plugin target so materialize prunes the loose copy, OR uninstall the loose copy).
 
 Each layer gets a verdict (enforced / advisory-only / absent / conflict) plus a footprint audit of every
 materialized artifact and any slot held by something not ours. `spex self install [--agent claude]

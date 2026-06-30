@@ -9,7 +9,10 @@ type Config = {
   main?: string                    // path to the source-of-truth checkout (default: the `main` worktree)
   mainBranch?: string              // source-of-truth BRANCH worktrees fork from (default: auto-detected — see mainBranch())
   branchPrefix?: string            // how a branch names its node (default: "node/")
-  preset?: string                  // the SELECTED init preset — caps which .config plugins gather locally AND seed (default 'default'; see specs.ts selectedPreset / [[init-preset]])
+  preset?: string                  // the SELECTED init preset — which cumulative .config tier `spex init` seeds (default 'default'; seed-time only, no launcher gate; read by init.ts; see [[init-preset]])
+  // which harness targets `spex materialize` delivers into — native ids ('claude'|'codex') or a {plugin:"<folder>"}
+  // bundle; resolved + validated by [[harness-select]] (harness-select.ts). Default (omitted): all native harnesses.
+  harnesses?: (string | { plugin?: string })[]
   dashboard?: {
     apiUrl?: string                // the per-project backend the board proxies to (read frontend-side; see api-endpoint)
     title?: string                 // override for the browser-tab name (default: the repo-root basename; see tab-title)
@@ -31,10 +34,10 @@ type Config = {
   }
 }
 // the resolved LAYOUT convention — main/mainBranch/branchPrefix filled to defaults. `dashboard`, `sessions`,
-// `serve`, and `preset` are frontend/runtime/policy concerns (read separately via readConfig — preset via
-// specs.ts selectedPreset; see api-endpoint / sessions.ts maxActive / gateway.ts), NOT layout fields, so they
-// stay out of the convention rather than forcing a default.
-type Convention = Required<Omit<Config, 'dashboard' | 'sessions' | 'serve' | 'preset'>>
+// `serve`, `harnesses`, and `preset` are frontend/runtime/policy concerns (read separately via readConfig —
+// preset by init.ts at seed time, harnesses by [[harness-select]]; see api-endpoint / sessions.ts maxActive /
+// gateway.ts), NOT layout fields, so they stay out of the convention rather than forcing a default.
+type Convention = Required<Omit<Config, 'dashboard' | 'sessions' | 'serve' | 'harnesses' | 'preset'>>
 
 export type Worktree = {
   path: string; branch: string | null; node: string | null

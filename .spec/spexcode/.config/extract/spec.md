@@ -3,12 +3,14 @@ title: extract
 surface: command
 status: active
 hue: 30
-desc: Reverse-engineer a faithful spec tree out of existing code — responsibility nodes at contract altitude, intent never fabricated.
+desc: Reverse-engineer — or re-run to reconcile — a faithful spec tree out of existing code: responsibility nodes at contract altitude, intent never fabricated, every frontend node carrying a loss signal.
 kind: mutating
 ---
-Reverse-engineer a spec tree for the target source area(s) below — code that has no specs yet. Aim for a
-tree where every governed file is claimed and `spex lint` is clean, with bodies at contract altitude and in
-the codebase's own primary language (a predominantly-Chinese repo → Chinese specs).
+Reverse-engineer a spec tree for the target source area(s) below — or **re-run to reconcile** an
+already-extracted area, the same pass that closes the gaps code growth opens (an unclaimed governed file, a
+frontend node missing its loss signal, a thin scenario). Extraction is not a one-shot. Aim for a tree where
+every governed file is claimed and `spex lint` is clean, bodies at contract altitude and in the codebase's
+own primary language (a predominantly-Chinese repo → Chinese specs).
 
 {{targets}}
 
@@ -24,11 +26,11 @@ Then grow nodes under that spine:
   claiming them all. Every governed file is claimed by at least one node; nest into subtrees where warranted.
 - **Group wide layers; don't mirror the file tree — at every level, the root included.** One-node-per-folder
   is a smell. If a node would have more than ~7 direct children you're under-grouping: add intermediate
-  **sub-domain** nodes that cluster siblings serving one concern (e.g. model-config + selection + auth +
-  provider-compat → a *model* domain), and recurse until every level reads as a handful of siblings, not a
-  flat wall. Fold cross-cutting substrate (design system, dialogs, i18n, utilities, platform glue) under one
-  *foundation* node. A sub-domain node claims the cluster's barrel/wiring files (so it isn't pure-prose);
-  equally, split a fat folder holding several distinct jobs. Group by responsibility, never to hit a number.
+  **sub-domain** nodes that cluster siblings serving one concern (model-config + selection + auth → a *model*
+  domain), and recurse until every level reads as a handful of siblings, not a flat wall. Fold cross-cutting
+  substrate (design system, i18n, platform glue) under one *foundation* node that claims the cluster's
+  barrel/wiring files (so it isn't pure-prose); split a fat folder holding several distinct jobs. Group by
+  responsibility, never to hit a number.
 - **Stay at contract altitude.** State each node's intent, invariants, and outward behavior — what it
   guarantees and why — not how the code does it.
 - **Never fabricate intent.** Code shows *what it does*, rarely *why*. Read any README/design docs for real
@@ -47,14 +49,16 @@ extract it: a **real user-path** scenario — a goal and the steps to reach it t
 bare render-check), covering a failure/empty/edge state — with a **description** of those steps and the
 **expected** zero-loss result. Frontend scenarios are measured by looking (YATU) — a screenshot filed with
 `spex yatsu eval <node> --image <png> --pass`. Backend nodes don't need one yet; run `spex yatsu scan` to
-list the frontend nodes still uncovered.
+list the frontend nodes still uncovered. On a **re-run** this is also where you sharpen — give an uncovered
+node its first scenario, tighten a thin one (a bare render-check, or a stale `expected`); `spex guide yatsu`
+has the schema.
 
 **Extract incrementally — don't plan the whole tree before writing.** For a large area (hundreds of files),
-don't enumerate the whole partition up front or script a generator to emit it at once — that burns context
-before a node lands and loses everything to one interruption. Fix the top-level cut and commit it, then take
-ONE subtree at a time (write the leaf, list its files, lint, COMMIT) before the next — never holding more than
-one subtree uncommitted, so progress survives context limits.
+enumerating the whole partition up front or scripting a generator to emit it at once burns context before a
+node lands and loses everything to one interruption. Fix the top-level cut and commit it, then take ONE
+subtree at a time (write the leaf, list its files, lint, COMMIT) before the next — never more than one
+subtree uncommitted, so progress survives context limits.
 
 Confirm `spexcode.json`'s `governedRoots` points at the real source dirs first — lint reads silently empty
-otherwise. Commit one node per commit (`spec: <id> — extract from <area>`) with a `Session:` trailer, and
-run `spex lint` after each: it must reach 0 errors, 0 coverage warnings, 0 altitude warnings.
+otherwise. Commit one node per commit (`spec: <id> — extract from <area>`) and run `spex lint` after each:
+0 errors, 0 coverage/altitude warnings.

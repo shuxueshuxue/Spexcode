@@ -2,6 +2,8 @@ import { existsSync, mkdirSync, copyFileSync, readdirSync, statSync, chmodSync }
 import { join, resolve, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
+import { readConfig } from './layout.js'
+import { resolveHarnessTargets } from './harness-select.js'
 
 // this file lives at <pkgRoot>/src/init.ts, so `..` is the package root — the same derivation the
 // launch paths use, never a hardcoded repo path (so a relocated/installed package still finds its data).
@@ -77,6 +79,17 @@ export async function specInit(targetArg: string | undefined): Promise<void> {
   } else {
     copyFileSync(join(TEMPLATES, 'spexcode.json'), cfgDest)
     console.log(`✓ planted spexcode.json — set lint.governedRoots to YOUR source dirs (starter: ["src"])`)
+  }
+
+  // validate the harness DELIVERY TARGET set ([[harness-select]]) up front: a bad `harnesses` set (plugin +
+  // native, or a plugin with no folder) must fail LOUD here, not be silently swallowed by the materialize
+  // try/catch below. A fresh starter spexcode.json omits the field (defaults to all natives), so this only
+  // bites a hand-edited or re-init'd config — exactly where a clear error belongs.
+  try {
+    resolveHarnessTargets(readConfig(targetDir).harnesses)
+  } catch (e) {
+    console.error(`spex init: ${(e as Error).message}`)
+    process.exit(1)
   }
 
   // 2. install the git hooks: templates/hooks/* -> <repo>/<common-git-dir>/hooks/* (skip any that exist).

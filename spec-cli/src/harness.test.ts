@@ -1,9 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { activeTurnIdFromThread, codexAppServerSock, codexHandshakeMessages, codexInjectMessage, codexHarness, codexLaunchCommand } from './harness.js'
+import { activeTurnIdFromThread, codexAppServerSock, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, codexLaunchCommand, removeManagedBlock } from './harness.js'
 
 test('codex handshake initializes, confirms the loaded thread, then reads it to decide steer-vs-start', () => {
   const msgs = codexHandshakeMessages('thr_1')
@@ -64,6 +64,59 @@ test('codex resumeArg is a --resume marker for the owned thread, empty when none
   // which the launch script would feed to codex-launch as a literal first-turn prompt.
   assert.equal(codexHarness.resumeArg({ session: 's1', harnessSessionId: 'th_abc' }), '--resume th_abc')
   assert.equal(codexHarness.resumeArg({ session: 's1', harnessSessionId: null }), '')
+})
+
+test('removeManagedBlock strips ONLY the sentinel block, preserving the user bytes', () => {
+  const proj = mkdtempSync(join(tmpdir(), 'spex-mb-'))
+  const f = join(proj, 'CLAUDE.md')
+  writeFileSync(f, 'my own notes\n\n<!-- spexcode:start -->\nGENERATED CONTRACT\n<!-- spexcode:end -->\n\nmore of my notes\n')
+  removeManagedBlock(f, ['<!-- ', ' -->'], true)
+  const out = readFileSync(f, 'utf8')
+  assert.ok(out.includes('my own notes') && out.includes('more of my notes'))
+  assert.ok(!out.includes('spexcode:start') && !out.includes('GENERATED CONTRACT'))
+  // a file that carried ONLY the block is deleted when deleteIfEmpty (it was wholly ours).
+  const g = join(proj, 'AGENTS.md')
+  writeFileSync(g, '<!-- spexcode:start -->\nx\n<!-- spexcode:end -->\n')
+  removeManagedBlock(g, ['<!-- ', ' -->'], true)
+  assert.ok(!existsSync(g))
+})
+
+test('claude clean SURGICALLY removes only spexcode artifacts, sparing user prose + sibling files', () => {
+  const proj = mkdtempSync(join(tmpdir(), 'spex-clean-'))
+  // contract file: user prose + our managed block
+  const claudeMd = join(proj, 'CLAUDE.md')
+  writeFileSync(claudeMd, 'USER PROSE\n\n<!-- spexcode:start -->\ncontract\n<!-- spexcode:end -->\n')
+  // our generated shim (carries the dispatch.sh marker) and a user's UNRELATED settings file elsewhere
+  mkdirSync(join(proj, '.claude'), { recursive: true })
+  const shim = join(proj, '.claude', 'settings.json')
+  writeFileSync(shim, JSON.stringify({ hooks: { Stop: [{ hooks: [{ command: 'bash /pkg/hooks/dispatch.sh claude Stop' }] }] } }))
+  // a spexcode skill + a USER skill in the same dir; a spexcode agent + a USER agent
+  mkdirSync(join(proj, '.claude', 'skills', 'spec-scout'), { recursive: true })
+  writeFileSync(join(proj, '.claude', 'skills', 'spec-scout', 'SKILL.md'), 'generated')
+  mkdirSync(join(proj, '.claude', 'skills', 'my-skill'), { recursive: true })
+  writeFileSync(join(proj, '.claude', 'skills', 'my-skill', 'SKILL.md'), 'mine')
+  mkdirSync(join(proj, '.claude', 'agents'), { recursive: true })
+  writeFileSync(join(proj, '.claude', 'agents', 'spec-scout.md'), 'generated')
+  writeFileSync(join(proj, '.claude', 'agents', 'mine.md'), 'mine')
+
+  claudeHarness.clean(proj, { skills: ['spec-scout'], agents: ['spec-scout'] })
+
+  const md = readFileSync(claudeMd, 'utf8')
+  assert.ok(md.includes('USER PROSE') && !md.includes('spexcode:start'))         // prose kept, block gone
+  assert.ok(!existsSync(shim))                                                   // our shim deleted
+  assert.ok(!existsSync(join(proj, '.claude', 'skills', 'spec-scout')))          // our skill pruned
+  assert.ok(existsSync(join(proj, '.claude', 'skills', 'my-skill')))             // user skill spared
+  assert.ok(!existsSync(join(proj, '.claude', 'agents', 'spec-scout.md')))       // our agent pruned
+  assert.ok(existsSync(join(proj, '.claude', 'agents', 'mine.md')))              // user agent spared
+})
+
+test('clean leaves a foreign (non-spexcode) shim file untouched', () => {
+  const proj = mkdtempSync(join(tmpdir(), 'spex-clean2-'))
+  mkdirSync(join(proj, '.claude'), { recursive: true })
+  const shim = join(proj, '.claude', 'settings.json')
+  writeFileSync(shim, JSON.stringify({ permissions: { allow: ['Bash'] } }))     // user's own, no dispatch marker
+  claudeHarness.clean(proj, { skills: [], agents: [] })
+  assert.ok(existsSync(shim))
 })
 
 test('codex liveness tracks the per-project app-server socket + tmux, not the thread id', () => {

@@ -1,4 +1,4 @@
-import { writeFileSync, readFileSync, existsSync, mkdirSync } from 'node:fs'
+import { writeFileSync, readFileSync, existsSync, mkdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir, tmpdir } from 'node:os'
 import { createHash, randomBytes } from 'node:crypto'
@@ -92,6 +92,17 @@ export interface Harness {
   // (mid-turn, not queued for after the agent stops) or `turn/start`s a fresh turn when the thread is idle.
   // Returns ok=false with a reason that propagates to the API.
   deliver(rec: HarnessDeliveryRecord, text: string): Promise<DispatchResult>
+  // --- materialize: clean (the inverse of write — [[harness-select]] prunes a deselected harness) ---
+  // clean is the EXACT inverse of materialize's per-harness write: SURGICALLY remove ONLY SpexCode's own
+  // artifacts — the managed contract block (sentinels), the generated shim file, the trust block, and the
+  // skill/agent files named in `arts` — never the user's surrounding prose, their other settings, or any .spec
+  // data. materialize calls it for every UNSELECTED harness, so dropping a harness from spexcode.json's
+  // `harnesses` prunes that harness's products on the next re-materialize.
+  clean(proj: string, arts: HarnessArtifacts): void
+  // the inverse of writeTrust: strip THIS project's spexcode trust block from the harness's global config.
+  // Codex removes its `~/.codex/config.toml` block; Claude is a no-op (it wrote none).
+  removeTrust(proj: string): void
+
   // the relaunch tail reopen() hands launch() to bring the SAME work back up. claude resumes the same
   // conversation (`--resume <id>`, the id we pinned at launch). codex's own thread id is un-pinnable on the
   // launch flag, so the BACKEND owns it: it `thread/start`s the thread and stores the id at launch, so reopen
@@ -107,6 +118,10 @@ export interface Harness {
 // re-exports it for its existing importers.
 export type DispatchResult = { ok: boolean; error?: string }
 export type HarnessDeliveryRecord = { session: string; worktreePath?: string; harnessSessionId?: string | null; runtimeDir?: string }
+// the on-demand surface artifacts a materialize render wrote, by node NAME — so clean() knows EXACTLY which
+// skill subdirs / agent files are SpexCode's to remove (name-scoped, never a blind wipe of a dir the user may
+// also populate). materialize passes the live skill/agent node names; clean reconstructs the same paths.
+export type HarnessArtifacts = { skills: readonly string[]; agents: readonly string[] }
 
 // @@@ rendezvous control socket - claude's DETERMINISTIC, ONLY input path for PROMPTS to sessions WE launch.
 // sessions.ts starts `claude` with CLAUDE_BG_BACKEND=daemon + CLAUDE_BG_RENDEZVOUS_SOCK=<this path> set ONLY on
@@ -556,6 +571,24 @@ export function writeManagedBlock(file: string, body: string, comment: readonly 
   writeFileSync(file, cur)
 }
 
+// the INVERSE of writeManagedBlock: strip the spexcode sentinel block (with the blank space around it),
+// leaving every other byte of the user's file intact. When deleteIfEmpty and nothing but whitespace remains,
+// remove the file — it was WHOLLY ours (e.g. a CLAUDE.md that carried only the generated contract block). Same
+// comment-style parameter so ONE primitive un-writes every managed file. No-op when the file/block is absent.
+export function removeManagedBlock(file: string, comment: readonly [string, string] = ['<!-- ', ' -->'], deleteIfEmpty = false): void {
+  if (!existsSync(file)) return
+  const [open, close] = comment
+  const START = `${open}spexcode:start${close}`
+  const END = `${open}spexcode:end${close}`
+  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const re = new RegExp(`\\n*${esc(START)}[\\s\\S]*?${esc(END)}\\n*`)
+  const cur = existsSync(file) ? readFileSync(file, 'utf8') : ''
+  if (!re.test(cur)) return
+  const out = cur.replace(re, '\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n')
+  if (deleteIfEmpty && !out.trim()) { rmSync(file, { force: true }); return }
+  writeFileSync(file, out)
+}
+
 // the shim for one harness: every event → `SPEX='…' bash <dispatch> <harnessId> <Event>`. The harness id is
 // baked in so dispatch.sh can export SPEXCODE_HARNESS (the detector for the shell side). SPEX is inherited by
 // the cli-needing handlers + the gate's `spex materialize`.
@@ -610,6 +643,38 @@ function writeCodexTrust(proj: string, events: readonly string[], cmdFor: (e: st
   writeFileSync(file, cur)
 }
 
+// the inverse of writeCodexTrust: strip THIS project's spexcode trust block from the GLOBAL config.toml,
+// keyed by the SAME project path the block was written under. Leaves the user's other keys + other projects'
+// trust untouched. No-op when the file/block is absent. CODEX_HOME respected for testability.
+function removeCodexTrust(proj: string): void {
+  const home = process.env.CODEX_HOME || join(homedir(), '.codex')
+  const file = join(home, 'config.toml')
+  if (!existsSync(file)) return
+  const esc = proj.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const re = new RegExp(`\\n*# spexcode:trust:${esc} \\(managed[\\s\\S]*?# spexcode:trust:end:${esc}\\n*`)
+  const cur = readFileSync(file, 'utf8')
+  if (!re.test(cur)) return
+  writeFileSync(file, cur.replace(re, '\n').replace(/^\n+/, ''))
+}
+
+// @@@ cleanHarness - the shared clean: the inverse of materialize's per-harness write, expressed PURELY
+// through the adapter's own path methods so it can never drift from what write put there. Each step is
+// surgical, gated on a SpexCode identity stamp: the contract files carry the managed-block sentinels; the shim
+// is a generated file whose command line names our `dispatch.sh`; the trust is a sentinel-delimited config
+// block; the skill/agent files sit at name-scoped paths reconstructed from `arts`. So it removes ONLY our own
+// blocks and our own named products — never a user's CLAUDE.md/AGENTS.md prose, a hand-made settings.json, or
+// a sibling skill/agent the user added, and NEVER any .spec data.
+function cleanHarness(h: Harness, proj: string, arts: HarnessArtifacts): void {
+  for (const f of h.contractFiles(proj)) removeManagedBlock(f, ['<!-- ', ' -->'], true)
+  const shim = h.shimFile(proj)
+  if (existsSync(shim) && readFileSync(shim, 'utf8').includes('dispatch.sh')) rmSync(shim, { force: true })
+  h.removeTrust(proj)
+  const sd = h.skillDir(proj)
+  if (sd) for (const n of arts.skills) rmSync(join(sd, n), { recursive: true, force: true })
+  const ad = h.agentDir(proj)
+  if (ad) for (const n of arts.agents) rmSync(join(ad, `${n}.md`), { force: true })
+}
+
 // ---------------------------------------------------------------------------------------------------------
 // the two implementations.
 
@@ -630,6 +695,8 @@ export const claudeHarness: Harness = {
   agentDir: (proj) => join(proj, '.claude', 'agents'),
   shim: (dispatch, spex) => buildShim('claude', CLAUDE_EVENTS, dispatch, spex),
   writeTrust: () => { /* Claude relies on folder-trust — nothing to write */ },
+  removeTrust: () => { /* Claude wrote no trust — nothing to strip */ },
+  clean(proj, arts) { cleanHarness(this, proj, arts) },
   slashCommands: claudeSlashCommands,
   liveness: (rec, tmuxAlive) => (tmuxAlive && existsSync(rvSock(rec.session)) ? 'online' : 'offline'),
   deliver: (rec, text) => deliverViaRendezvous(rec.session, text),
@@ -657,6 +724,9 @@ export const codexHarness: Harness = {
   agentDir: () => null,                              // codex has no file-discovered agent-definition primitive — materialize skips it
   shim: (dispatch, spex) => buildShim('codex', CODEX_EVENTS, dispatch, spex),
   writeTrust: (proj, cmdFor) => writeCodexTrust(mainCheckout(proj), CODEX_EVENTS, cmdFor),
+  // trust is keyed by the MAIN checkout (where the codex shim materializes) — strip it at the same key.
+  removeTrust: (proj) => removeCodexTrust(mainCheckout(proj)),
+  clean(proj, arts) { cleanHarness(this, proj, arts) },
   slashCommands: codexSlashCommands,
   liveness: (rec, tmuxAlive, runtimeDir) => (tmuxAlive && existsSync(codexAppServerSock(runtimeDir)) ? 'online' : 'offline'),
   deliver: (rec, text) => deliverViaCodexAppServer(rec, text),

@@ -29,7 +29,8 @@ loads its CLAUDE.md + memory normally ([[sessions-core]] launch).
 `spex materialize` is the **pay-per-change render**: a pure function of the spec tree's [[surface]] nodes
 into the flat artifacts each consumer reads cheaply. It is invoked by `spex init` once and thereafter ONLY
 when the config content actually moved — the cheap content-hash gate lives in the dispatcher ([[hook-dispatch]]),
-not a daemon. It writes, idempotently and scoped per project:
+not a daemon. It renders into the harness targets [[harness-select]] resolves from `spexcode.json` (default:
+every native harness), writing, idempotently and scoped per project, for each SELECTED harness:
 
 - **the hook manifest** (persistent; the [[hook-dispatch]] dispatcher reads it) — in the GLOBAL per-project
   store ([[runtime]]'s `runtimeRoot`), NOT the worktree;
@@ -59,6 +60,13 @@ not a daemon. It writes, idempotently and scoped per project:
   Trust is global-only by codex's security design (a repo cannot declare itself trusted) — the one
   necessary scoped global write; everything else is project-local.
 - **the content-hash marker** (same global store), stamped LAST so a crash mid-render re-renders next gate.
+
+After writing every selected harness, materialize **prunes every UNSELECTED one** — `h.clean()` (the
+[[harness-adapter]]'s surgical inverse of the write above) strips that harness's managed contract block, deletes
+its generated shim, removes its trust block, and removes its named skill/agent files. So dropping a harness from
+[[harness-select]]'s `harnesses` set removes its products on the next re-materialize, the user's own prose and
+`.spec` data untouched. A plugin target is exclusive, so selecting one prunes EVERY native harness (its bundle
+emitter is a later node — for now the plugin target writes nothing).
 
 Placement is harness-fact, not preference (verified): Codex auto-discovers ONLY the repo-root `./AGENTS.md`
 (never `.codex/AGENTS.md`); Claude discovers `./CLAUDE.md` or `./.claude/CLAUDE.md`. Every in-tree artifact this

@@ -92,15 +92,18 @@ scenarios:
     description: >-
       Through the running dashboard in a real browser, open the session console (Enter) and look at the left
       session list, which is deliberately NARROW so it doesn't steal width from the terminal beside it — so
-      long headlines ellipse at rest. Confirm every row is a dense single line. Now move the pointer onto a
-      row whose headline is truncated, then click it to select it. Screenshot the list showing a
-      hovered/selected row beside its still-truncated neighbours.
+      long headlines ellipse at rest. Confirm every row is a dense single line. Now HOVER a truncated row and
+      confirm it does NOT expand (only its background tints) — hover must leave the list geometry stable. Then
+      CLICK a row whose headline is truncated to select it, and confirm it un-truncates. Read its marker (the
+      status glyph + op tally) and the wrapped headline. Screenshot the list showing the selected, expanded
+      row beside its still-single-line neighbours.
     expected: >-
-      At rest each row is one line with an ellipsis (a dense index). The row you POINT AT or have SELECTED
-      un-truncates: its headline wraps to the FULL text and the row grows downward, the status glyph staying
-      aligned beside it, while every other row stays single-line — so any title is completely readable on
-      demand without a hover-tooltip delay and without the whole list being widened. The pointed-at row keeps
-      its top edge (only rows below shift down), so reading a title never slides it out from under the cursor.
+      At rest each row is one line with an ellipsis (a dense index). Hovering does NOT expand a row — reveal is
+      tied to SELECTION, so the list stays a stable click surface and rows never shift under the cursor. The
+      row you SELECT un-truncates: its headline wraps to the FULL text in place while every other row stays
+      single-line, so any title is completely readable without widening the list. On the wrapped row the small
+      markers (status glyph + op tally) sit pinned to the headline's FIRST line (top-right), not down a column,
+      so the wrapped lines below them run the full row width.
     code:
       - spec-dashboard/src/styles.css
 ---

@@ -7,6 +7,7 @@ code:
   - spec-dashboard/src/App.jsx
   - spec-dashboard/src/data.js
   - spec-dashboard/src/styles.css
+  - spec-dashboard/src/theme.js
 ---
 # dashboard-shell
 
@@ -25,6 +26,23 @@ reads), and `styles.css` (the global stylesheet). A feature node lists whichever
 `related:`, so editing the shell or the stylesheet attributes its drift/yatsu here rather than to every
 feature (see [[governed-related]]). This is the dashboard twin of [[sessions-core]]: one owner for the
 substrate, references everywhere else.
+
+**One palette, two themes.** The whole app — the spec-node board, the react-flow canvas, AND the
+session console — draws its colours from one set of CSS custom properties (`--paper --panel --panel2
+--line --ink --ink2 --muted`, the accents `--blue/--green/--red/--yellow/--orange/--magenta/--cyan`,
+`--term-bg`, the `--sg-comms*` session-graph tokens). Because every rule reads through those vars, a
+theme is nothing but a second definition of them: `styles.css` keeps the solarized-light set as bare
+`:root`, and redefines the full set under `:root[data-theme=dark]` as a modern GitHub-Dark neutral
+near-black palette — so flipping the one `data-theme` attribute on `<html>` re-skins board and console
+together, with no per-component theme logic. The embedded terminal stays dark in both themes (the
+Claude TUI is dark-designed), so `--term-bg` is a neutral near-black in light *and* dark.
+
+`theme.js` owns the pick: `getTheme()` returns an explicit saved choice (`localStorage
+spexcode.theme`) else the system preference (`prefers-color-scheme`), and `applyTheme(t)` sets the
+`data-theme` attribute and persists — the same detect-then-defer-to-the-human shape as [[settings]]'s
+language pick. To avoid a light-flash before the module boots, `index.html` runs a tiny inline script
+in `<head>` that applies the same choice to `<html data-theme>` before first paint. The [[settings]]
+popup carries the live toggle.
 
 **Polled board — freshest-issued wins.** The shell re-fetches `/api/board` every 4s AND on demand (a
 session close/rename calls `reload()` so every surface reflects the change at once), so several `loadBoard()`

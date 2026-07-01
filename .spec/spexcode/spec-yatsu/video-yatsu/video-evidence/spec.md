@@ -1,6 +1,6 @@
 ---
 title: video-evidence
-status: pending
+status: active
 hue: 140
 desc: A recorded video is a third yatsu blobKind — evidence with a time axis. The eval CLI, content-addressed cache, lazy blob route, and eval-tab rendering carry it unchanged; only the enum and one render arm grow.
 related:

@@ -462,7 +462,9 @@ function EvalEvidence({ r }) {
       {r.blobState === 'present'
         ? (r.blobKind === 'transcript'
             ? <TranscriptEvidence hash={r.blob} />
-            : <img src={`/api/yatsu/blob/${r.blob}`} alt={t('nodeView.eval.shotAlt', { scenario: r.scenario })} loading="lazy" />)
+            : r.blobKind === 'video'
+              ? <video className="eval-video" src={`/api/yatsu/blob/${r.blob}`} controls preload="metadata" />
+              : <img src={`/api/yatsu/blob/${r.blob}`} alt={t('nodeView.eval.shotAlt', { scenario: r.scenario })} loading="lazy" />)
         : <figcaption className="eval-noimg">{r.blobState === 'miss' ? t('nodeView.eval.miss') : t('nodeView.eval.noImage')}</figcaption>}
     </>
   )

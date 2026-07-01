@@ -635,9 +635,9 @@ body {
    the depth indent; `.sess-fold` is the disclosure triangle (or an aligned placeholder for a leaf child) whose
    COLOUR is the subtree rollup, painted inline. A fixed-width slot keeps every headline aligned regardless of
    depth or whether the row has a triangle. */
-.sess-lead { flex: none; display: inline-flex; align-items: center; margin-right: 6px; }
+.sess-lead { flex: none; display: inline-flex; align-items: center; }
 .sess-fold {
-  flex: none; width: 17px; text-align: center; font-size: 13px; line-height: 1; cursor: pointer;
+  flex: none; width: 13px; text-align: center; font-size: 12px; line-height: 1; cursor: pointer;
   color: var(--muted); transition: color .12s;
 }
 .sess-fold.placeholder { cursor: default; }

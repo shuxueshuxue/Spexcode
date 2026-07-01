@@ -7,6 +7,16 @@ export const STATUS_COLOR = {
   'close-pending': 'var(--muted)', offline: 'var(--muted)',
 }
 
+// compact one-line surfaces (the console's terminal-styled sidebar) render the status as a SINGLE glyph
+// instead of the word — STATUS_COLOR still paints it, and the exact word stays in the title/aria for hover +
+// a11y. One terminal-ish mark per lifecycle; same four-hue traffic-light meaning as the word it replaces.
+export const STATUS_GLYPH = {
+  working: '●', parked: '‖',
+  asking: '?', review: '◑', done: '✓',
+  error: '✕',
+  idle: '·', starting: '◌', queued: '⋯', 'close-pending': '⊘', offline: '○',
+}
+
 // the STABLE identity of a session: a user-chosen rename (`name`) wins over everything; else its node,
 // else title/branch, else the raw id. Mirrors the backend's sessionLabel precedence (spec-cli sessions.ts).
 // Used where a session needs a fixed handle that doesn't move turn-to-turn — tooltips, the lock hint, search.

@@ -1,7 +1,7 @@
 import { Avatar } from './avatar.jsx'
 import { labelColor } from './color.js'
 import { GLYPH } from './SpecNode.jsx'
-import { sessionName, sessionHeadline, STATUS_COLOR } from './session.js'
+import { sessionName, sessionHeadline, STATUS_COLOR, STATUS_GLYPH } from './session.js'
 import { useT } from './i18n/index.jsx'
 
 // the "locked / claimed by another session" indicator — a monochrome inline-SVG padlock in the dashboard's
@@ -21,17 +21,24 @@ export function opSummary(ops) {
 
 // `handle` is an optional trailing node at the far right of row 2: the console passes the drag-reorder
 // handle here ([[session-reorder]]), the read-only window passes nothing.
-export function SessionRow({ s, locked, handle }) {
+// `showAvatar` gates the leading identity face: the map-side surfaces (SessionWindow beside the spec-node
+// graph, the relationship-graph nodes) KEEP it so a session cross-references its node avatars; only the
+// console's own terminal-styled sidebar hides it (redundant next to the headline). `compact` is the
+// one-line face: the status collapses from the word to a single STATUS_GLYPH mark (word kept in the title).
+export function SessionRow({ s, locked, handle, showAvatar = true, compact = false }) {
   const t = useT()
   const ops = opSummary(s.ops)
   const headline = sessionHeadline(s)
+  const statusWord = t(`status.${s.status}`)
   return (
     <>
-      <Avatar seed={s.id} status={s.status} title={`${sessionName(s)} · ${t(`status.${s.status}`)} — ${s.id.slice(0, 8)}`} />
+      {showAvatar && <Avatar seed={s.id} status={s.status} title={`${sessionName(s)} · ${statusWord} — ${s.id.slice(0, 8)}`} />}
       <span className="sess-id" title={headline}>{headline}</span>
       {locked && <span className="sess-lock" title={t('sessionWindow.lockedTitle')}><LockGlyph /></span>}
       <span className="sess-meta">
-        <span className="sess-status" style={{ color: STATUS_COLOR[s.status] }}>{t(`status.${s.status}`)}</span>
+        {compact
+          ? <span className="sess-glyph" style={{ color: STATUS_COLOR[s.status] }} title={statusWord} aria-label={statusWord}>{STATUS_GLYPH[s.status]}</span>
+          : <span className="sess-status" style={{ color: STATUS_COLOR[s.status] }}>{statusWord}</span>}
         {ops && <span className="sess-ops">{ops}</span>}
         {handle}
       </span>

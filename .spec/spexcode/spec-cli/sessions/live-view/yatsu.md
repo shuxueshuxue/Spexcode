@@ -15,6 +15,26 @@ scenarios:
       WITHOUT any viewer ever attaching to it; a viewer opening it afterward finds the pane already at its
       size — the open-time fit is a no-op, so there is no visible cols/rows reflow. A watched session stays
       put across ticks (no thrash), since its pre-size equals its own recorded fit.
+  - name: set-size-to-first-frame-is-event-driven
+    tags: [backend-api]
+    description: >-
+      Measure the "visible → full screen" gap: how long from setting a size to the viewer receiving the
+      coherent full frame, and whether it converges on the asked size. On a tmux socket, warm a bridge
+      through the real API (attachViewer at a first size), then — with the bridge already up (the warm
+      case, which is the real path when a hidden pane becomes visible) — call resizeBridge to a new size
+      (e.g. 100×30) and time it to the viewer's next frame. Confirm (1) that latency is event-level (a few
+      ms, well under the ~320ms the old pty-resize + geometry-poll path cost), (2) tmux's window converged
+      to exactly the asked size (the frame is drawn on the settled geometry, no half-frame), and (3) no
+      polling is involved — the frame is driven by tmux's %layout-change + capture-pane reply, not a
+      geometry read loop. File with `spex yatsu eval live-view --scenario
+      set-size-to-first-frame-is-event-driven --result <txt>`.
+    expected: >-
+      A warm resize produces the full frame in ~5–20ms (event-driven: refresh-client -C sets the size,
+      %layout-change confirms convergence, a bounded capture-pane seeds the frame), an order of magnitude
+      under the ~320ms polling path it replaces. tmux's window equals the asked size when the frame lands,
+      so the screen is coherent at the converged geometry — never a mid-flight half-frame. The frame is one
+      clear+home + the real pane rows (with escapes/UTF-8 intact), and live pane output continues to arrive
+      as %output events after it.
   - name: hidden-connect-defers-undersized-first-paint
     tags: [backend-api]
     description: >-
@@ -38,7 +58,7 @@ scenarios:
 
 The live terminal's product surface is measured through the **real bridge API** the dashboard drives
 (`attachViewer` / `resizeBridge` over the per-session WebSocket) plus tmux's own reported window size —
-not an internal probe. Two losses, both about a pane looking wrong the moment a human opens it:
+not an internal probe. Three losses, all about a pane looking wrong the moment a human opens it:
 
 - **on-attach reflow** — the pane re-wrapping from a stale size to the browser size. Zero loss is the
   supervisor holding every warm bridge at the last-known viewer size, so the pane is already correct
@@ -47,3 +67,7 @@ not an internal probe. Two losses, both about a pane looking wrong the moment a 
   frame would land short and then snap to full when the human looks. Zero loss is the server **deferring**
   that first paint to the client's first resize (drawn at the real visible size), with a bounded fallback
   so a viewer that never resizes is still never blank.
+- **visible → full-screen latency** — the gap from a pane becoming visible (its size set) to its coherent
+  full frame. The control-mode boundary makes this **event-driven** — `refresh-client -C` sets the size,
+  `%layout-change` confirms convergence, a bounded `capture-pane` seeds the frame — so zero loss is a few
+  ms on the converged geometry, an order of magnitude under the ~320ms the old resize-then-poll path cost.

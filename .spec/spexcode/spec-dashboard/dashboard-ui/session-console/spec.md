@@ -61,8 +61,10 @@ frees. The header bar above it (`si-th-name`) titles the
 terminal with the **shared session headline** ([[session-activity]]), not the stable `sessionName` — same
 source and content as the session rows, only with more room before it truncates — so the title over the
 terminal never disagrees with the row that opened it. Read-only governs input, not extraction: text selects, the
-wheel scrolls real history, a drag selects even under mouse-reporting, and `⌘/Ctrl+C` copies to the clipboard
-**over HTTPS, localhost, or plain HTTP** (past the secure-context-only Clipboard API).
+wheel scrolls the terminal's **own scrollback** (the control-mode `%output` stream feeds xterm's buffer, so
+its native scroll *is* the history — see [[live-view]]), a drag selects even under mouse-reporting, and
+`⌘/Ctrl+C` copies to the clipboard **over HTTPS, localhost, or plain HTTP** (past the secure-context-only
+Clipboard API).
 
 Input has **two channels**. The **`❯` box** is the prompt channel: submitting dispatches through the **control
 socket** (never typed into the pane), so it lands even in copy-mode. The exception is the **board commands** —

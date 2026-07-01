@@ -1089,11 +1089,14 @@ body {
 @keyframes st-recon-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
 /* DARK terminal background (matches SessionTerm's xterm theme) so the dark-designed Claude TUI renders as
    intended — no light gutter/flash around the pane while xterm paints. */
-.st-host .xterm, .st-host .xterm-screen {
+.st-host .xterm {
   width: 100% !important; height: 100% !important; background: var(--term-bg) !important;
 }
+.st-host .xterm-screen {
+  background: var(--term-bg) !important;
+}
 .st-host .xterm-viewport {
-  width: 100% !important; height: 100% !important; overflow-y: auto !important; overflow-x: hidden !important;
+  overflow-y: auto !important; overflow-x: hidden !important;
   background: var(--term-bg) !important;
 }
 .si-bottom .si-input { color: var(--ink2); }

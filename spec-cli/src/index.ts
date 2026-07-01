@@ -145,7 +145,7 @@ app.get('/api/sessions/:id/prompt', async (c) => {
   return p == null ? c.text('no prompt recorded', 404) : c.text(p)
 })
 // lifecycle transitions (thin callers of the session state machine)
-app.post('/api/sessions/:id/resume', async (c) => c.json({ ok: await reopen(c.req.param('id')) }))   // back-to-working / relaunch
+app.post('/api/sessions/:id/resume', async (c) => c.json({ ok: await reopen(c.req.param('id')) }))   // relaunch if offline; demotes working→idle, keeps any declaration
 app.post('/api/sessions/:id/review', async (c) => c.json({ ok: await propose(c.req.param('id'), 'merge') }))
 // a dispatch to the session's own agent (it runs the merge), never a server merge — the server never touches
 // main's tree. 200 {dispatched:true} once the prompt is accepted, 409 {dispatched:false} if the agent is unreachable.

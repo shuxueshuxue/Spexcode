@@ -58,6 +58,28 @@ scenarios:
       The board lists exactly the GOVERNED sessions, read from ${SPEXCODE_HOME}/projects/<enc>/sessions/*,
       ordered by createdAt; node id / branch / title / liveness come from the record. Non-governed
       self-launched records are NOT listed. Removing a session cleans up its global record.
+  - name: resume-offline-session-rests-idle
+    tags: [backend-api]
+    description: >-
+      Take a governed session offline (`exit`, or let its agent die) so the dashboard shows the relaunch
+      panel, then hit resume (the frontend relaunch button → `POST /api/sessions/:id/resume`, i.e. reopen)
+      WITHOUT sending any prompt afterwards. Read the session's status once the agent is back online.
+    expected: >-
+      The resumed session rests at `idle` (displayed idle, not `working`) — the agent is `--resume`d into the
+      same conversation but sitting at its prompt with nothing to do, so it never shows a phantom `working`
+      before the human says anything. Only the next real prompt (via mark-active) flips it to active. reopen
+      demotes a working `active` to idle under the same active-only guard `idle` uses.
+  - name: resume-preserves-standing-proposal
+    tags: [backend-api]
+    description: >-
+      Put a session into review (lifecycle awaiting, proposal=merge) and resume it (reopen) WITHOUT the agent
+      resuming work — isolate reopen's write via the online path (POST /review then POST /resume on a live,
+      paused agent, so there is no relaunch and no mark-active). Read the record.
+    expected: >-
+      reopen preserves the standing proposal: the record stays `awaiting` with proposal `merge` intact (board
+      shows review), NOT silently withdrawn to idle. reopen never touches the `proposal` field. A proposal is
+      reversed only when the agent actually WORKS again (its mark-active hook) or by the merge dispatch's
+      delivered prompt — never as a hidden side-effect of the relaunch itself.
 ---
 # yatsu.md — state
 

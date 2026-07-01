@@ -35,8 +35,9 @@ import { mainBranch, gitCommonDir, readConfig, runtimeRoot, sessionStoreDir, ses
 //                schedule and self-resumes); an asking agent resumes only when a human sends it a prompt.
 //   queued → a prepared worktree held below the concurrency cap; the drainer launches it as a slot frees.
 //   (closed = the worktree AND the global record are removed; not a stored status)
-// The agent only ever PROPOSES (awaiting); merge/close are human-only. Every proposal is reversible
-// via reopen() → active. `merges` is METADATA (how many times merged), shown as a badge, not a state.
+// The agent only ever PROPOSES (awaiting); merge/close are human-only. Every proposal is reversible — nothing
+// auto-disappears; to withdraw one you MESSAGE the session (mark-active clears it), and a relaunch (reopen)
+// deliberately does NOT touch it. `merges` is METADATA (how many times merged), shown as a badge, not a state.
 //
 // Launch rules (CLAUDE.md / memory): private `tmux -L <label>` socket + `--dangerously-skip-permissions`.
 // SPEXCODE_TMUX / SPEXCODE_CLAUDE_CMD override both for tests.
@@ -999,22 +1000,28 @@ async function waitForReady(id: string, harness: Harness, timeoutMs = SOCKET_REA
   }
 }
 
-// @@@ reopen - "back to working": clear any proposal → active, then ONE relaunch path. The agent needs
-// (re)starting iff it isn't running for this id — the SAME deterministic liveness the adapter computes
-// ([[harness-adapter]]): claude offline = no tmux OR no rendezvous socket (claude exited, even though the
-// wrapper/shell may still hold the pane); codex offline = no tmux, no project app-server, or no captured native
-// thread id. When it IS offline we drop any stale pane and launch a fresh window through the adapter's resumeArg
-// — claude `--resume <id>` (the SAME conversation), codex `resume <thread-id>` once captured, else a fresh TUI
-// in the same worktree/record. Then we WAIT for the
-// agent to come online (waitForReady) before returning, so a caller that dispatches immediately after reopen
-// (e.g. mergeSession) addresses a LIVE agent rather than racing the boot. If it's still live we only cleared
-// the proposal — no wait. Also serves the plain "relaunch" of an offline (already-active) one. Fail-loud is
-// unchanged: if the agent never comes online, the later deliver() fails loud.
+// @@@ reopen - bring the agent back up (relaunch iff offline) and settle its RESTING lifecycle. Two rules, both
+// narrow:
+//   • liveness: relaunch only when the agent isn't running for this id — the SAME deterministic liveness the
+//     adapter computes ([[harness-adapter]]): claude offline = no tmux OR no rendezvous socket (claude exited,
+//     even though the wrapper/shell may still hold the pane); codex offline = no tmux, no project app-server, or
+//     no captured native thread id. When offline we drop any stale pane and launch a fresh window through the
+//     adapter's resumeArg — claude `--resume <id>` (the SAME conversation), codex `resume <thread-id>` once
+//     captured, else a fresh TUI in the same worktree/record — then WAIT (waitForReady) so a caller that
+//     dispatches immediately after (e.g. mergeSession's merge) addresses a LIVE agent, not a racing boot.
+//   • lifecycle: the SAME active-only guard markIdle uses — a resumed agent that was WORKING (`active`) is now
+//     just sitting at its prompt → `idle`; EVERY deliberate declaration survives untouched (`awaiting` + its
+//     proposal, `asking`, `parked`, `error`, `queued`). reopen does NOT touch the `proposal` — resuming a
+//     session that is proposing a merge must NOT silently withdraw it (proposals are reversible by MESSAGING
+//     the session — mark-active clears them — never as a hidden side-effect of a relaunch). This is the inverse
+//     symmetry of `exit`, which leaves the last-authored lifecycle untouched: exit preserves it, reopen
+//     preserves it too, demoting only a now-false "working" claim.
+// Fail-loud is unchanged: if the agent never comes online, the later deliver() fails loud.
 export async function reopen(id: string): Promise<boolean> {
   const wt = await findWorktree(id)
   if (!wt) return false
   const h = harnessById(wt.rec.harness || defaultHarness.id)
-  writeRecord({ ...wt.rec, status: 'active', proposal: null })
+  writeRecord({ ...wt.rec, status: wt.rec.status === 'active' ? 'idle' : wt.rec.status })
   if (h.liveness(wt.rec, await alive(id), runtimeRoot()) !== 'online') {
     await tmuxOk(['kill-session', '-t', id])   // drop a dead/offline pane if any (no-op when none)
     await launch(id, wt.path, h.resumeArg(wt.rec).trim(), h)
@@ -1201,8 +1208,9 @@ function mergePrompt(mainPath: string, branch: string, reason: string): string {
 
 // @@@ mergeSession - the cockpit's ACT verb, the sequel to review — but a DISPATCH, not a server script: the
 // SESSION'S OWN agent lands the merge, never the server (it carries no `git merge` logic and never touches
-// main's tree). It reopens the session (clears the proposal → active, `--resume`s via reopen if tmux died —
+// main's tree). It reopens the session (clears the proposal, `--resume`s via reopen if tmux died —
 // which waits for the rendezvous socket, closing the just-relaunched-no-socket race) and dispatches mergePrompt
+// — that delivered prompt flips the lifecycle to active regardless of reopen's resting state
 // through sendKeys. The reason = the node branch's latest commit subject minus a leading `spec: ` (visible from
 // the main checkout, no worktree path needed). Async + fail-loud: returns {dispatched:true} once the prompt is
 // CONFIRMED accepted, else {dispatched:false, reason} (the loud DispatchResult error). The server no longer
@@ -1368,9 +1376,9 @@ export function formatTable(sessions: Session[], color = true): string {
 
 const WATCH_ACTIONABLE = new Set<DisplayStatus>(['review', 'done', 'close-pending', 'offline', 'error', 'asking'])
 const NEXT: Record<string, string> = {
-  review: 'merge | reopen(back-to-working) | close',
-  done: 'merge | reopen | close',
-  'close-pending': 'close | reopen',
+  review: 'merge | close',
+  done: 'merge | close',
+  'close-pending': 'close',
   offline: 'reopen (relaunch & resume)',
   error: 'reopen (relaunch & retry) | capture | close',
   asking: 'send "<msg>" | capture',

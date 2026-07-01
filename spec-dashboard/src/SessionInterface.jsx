@@ -821,7 +821,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, session: s }) }}
               title={s.ops?.length ? t('session.opsTitle') : undefined}
             >
-              <SessionRow s={s} locked={false} handle={dragHandle(s)} />
+              <SessionRow s={s} locked={false} handle={dragHandle(s)} showAvatar={false} compact />
             </button>
           ))}
         </aside>

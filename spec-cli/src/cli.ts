@@ -101,7 +101,8 @@ Specs / graph
   hooks <sub>           harness-agnostic hook system: compile [--out <file>] (flatten surface:hook nodes into the per-session manifest the dispatcher reads)
   self <sub>            diagnose how the workflow reaches THIS self-launched agent: doctor (default) | contract | env
   propose "<concern>"   file a taste proposal in the async forum (off-mainline smells welcome)  [--node <id>…] [--body -|<text>]  | reply|sign|resolve <id> …
-  proposals             read the proposal forum (the drain view)  [--node <id>] [--all] [--json]  | on|off|status (feature switch)
+  note "<annotation>"   leave a durable node annotation / heads-up in the forum (no change-intent)  [--node <id>…] [--body -|<text>]
+  proposals             read the forum — proposals + notes (the drain view)  [--node <id>] [--kind proposal|note] [--all] [--json]  | on|off|status
   review <SEL>          manager cockpit: review a session (ahead·merge-base diff·gates·proposal)  [--json]
   review proof <SEL>    render the session's proof of work — self-contained HTML, fully derived (diff·measured yatsu loss·gates)  [--open|--out P|--json]
   merge <SEL>           manager cockpit: gated atomic merge into main (re-checks gates, then closes)  [--keep]
@@ -276,9 +277,15 @@ if (cmd === 'serve') {
   // resolve) lives in proposals.ts. `spex propose "<concern>" [--node id…] [--body -|text]`.
   const { runPropose } = await import('./proposals.js')
   process.exit(await runPropose(process.argv.slice(3)))
+} else if (cmd === 'note') {
+  // @@@ note - open a `kind: note` forum thread ([[proposals]]): a durable annotation / heads-up / Q&A on a
+  // node, no change-intent. Same store + reply/sign/resolve as a proposal; the verb is the kind. Thin route.
+  const { runNote } = await import('./proposals.js')
+  process.exit(await runNote(process.argv.slice(3)))
 } else if (cmd === 'proposals') {
-  // @@@ proposals - the forum READ (a supervisor's / human's drain view): proposals + their reply threads +
-  // signers, straight from the trunk's .spec/.proposal. `spex proposals [--node id] [--all] [--json]`.
+  // @@@ proposals - the forum READ (a supervisor's / human's drain view): threads (proposals + notes) with
+  // their reply threads + signers, straight from the trunk's .spec/.forum. `spex proposals [--node id]
+  // [--kind proposal|note] [--all] [--json]`.
   const { runProposals } = await import('./proposals.js')
   process.exit(await runProposals(process.argv.slice(3)))
 } else if (cmd === 'hooks') {

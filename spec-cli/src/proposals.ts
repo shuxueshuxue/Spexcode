@@ -1,18 +1,18 @@
-// @@@ proposals - the agent TASTE forum ([[proposals]]). When a session's work MERGES, whatever felt "off"
-// to the agent this turn — even off-mainline — is recorded here so its taste doesn't evaporate; others
-// sign/reply/discuss it like an async chatroom; a supervisor later drains it into real work. The forum is
-// git-tracked DATA, not a spec node: each proposal is a PLAIN markdown file at <main>/.spec/.proposal/<id>.md.
-// Because it is NOT named spec.md, the spec walk never nodes it and isSpecMd ignores it — so it is invisible
-// to lint / drift / deriveStatus / board with ZERO special-case exemption. The forum lives on the TRUNK, not
+// @@@ forum - the git-native discussion/annotation layer over the spec graph ([[proposals]] / [[mentions]]).
+// A thread is one PLAIN markdown file at <main>/.spec/.forum/<id>.md, carrying a `kind`: a `proposal` (taste
+// that wants change — recorded when work merges, so it doesn't evaporate) or a `note` (a durable annotation /
+// heads-up / Q&A on a node, no change-intent). Others sign/reply/discuss like an async chatroom; a supervisor
+// drains it. Because a thread file is NOT named spec.md, the spec walk never nodes it and isSpecMd ignores it
+// — invisible to lint / drift / deriveStatus / board with ZERO exemption. The forum lives on the TRUNK, not
 // per-branch: reads and writes target the main checkout and commit STRAIGHT to it (main-guard admits a
-// forum-only commit), so a post-merge proposal lands durably even though the author's own branch already
+// forum-only commit), so a post-merge thread lands durably even though the author's own branch already
 // merged, and every thread is always present to read and reply to — no cross-worktree union to reconcile.
 import { readdirSync, existsSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { git } from './git.js'
 import { mainCheckout, envSessionId, readConfig } from './layout.js'
 
-const FORUM_REL = '.spec/.proposal'
+const FORUM_REL = '.spec/.forum'
 
 // @@@ the on/off switch - the forum is an OPT-OUTABLE feature (default ON). The single source of truth is
 // `spexcode.json`'s `proposals.enabled` (the same settings file that carries every other toggle), read via
@@ -31,8 +31,10 @@ function setEnabled(on: boolean): void {
 }
 
 export type Reply = { by: string; at: string; body: string }
+export type Kind = 'proposal' | 'note'
 export type Proposal = {
   id: string
+  kind: Kind
   concern: string
   by: string
   status: string
@@ -79,6 +81,7 @@ function parse(id: string, text: string): Proposal {
   }
   return {
     id,
+    kind: fm.kind === 'note' ? 'note' : 'proposal',
     concern: fm.concern || id,
     by: fm.by || 'unknown',
     status: fm.status || 'open',
@@ -92,6 +95,7 @@ function parse(id: string, text: string): Proposal {
 
 function serialize(p: Proposal): string {
   const fm = [
+    `kind: ${p.kind}`,
     `concern: ${p.concern}`,
     `by: ${p.by}`,
     `status: ${p.status}`,
@@ -115,7 +119,7 @@ export function loadProposals(): Proposal[] {
 
 function loadOne(id: string): Proposal {
   const f = join(forumDir(), `${id}.md`)
-  if (!existsSync(f)) throw new Error(`no proposal '${id}' in the forum (see \`spex proposals --all\`)`)
+  if (!existsSync(f)) throw new Error(`no forum thread '${id}' (see \`spex proposals --all\`)`)
   return parse(id, readFileSync(f, 'utf8'))
 }
 
@@ -129,7 +133,7 @@ function uniqueId(concern: string): string {
 }
 
 // write + commit a single forum file STRAIGHT to the trunk. main-guard admits a commit touching ONLY
-// .spec/.proposal/** (the forum is data, not contract), and prepare-commit-msg stamps the Session: trailer.
+// .spec/.forum/** (the forum is data, not contract), and prepare-commit-msg stamps the Session: trailer.
 // Scoped add/commit so no unrelated work rides along. Retry on an index-lock race — many agents may append
 // forum posts to the shared trunk during their merge turns; a lost lock is transient, not a real failure.
 function writeAndCommit(p: Proposal, message: string) {
@@ -144,9 +148,11 @@ function writeAndCommit(p: Proposal, message: string) {
   }
 }
 
-export function propose(concern: string, opts: { nodes?: string[]; body?: string } = {}): Proposal {
+export function propose(concern: string, opts: { nodes?: string[]; body?: string; kind?: Kind } = {}): Proposal {
+  const kind: Kind = opts.kind === 'note' ? 'note' : 'proposal'
   const p: Proposal = {
     id: uniqueId(concern),
+    kind,
     concern,
     by: currentSession(),
     status: 'open',
@@ -156,7 +162,7 @@ export function propose(concern: string, opts: { nodes?: string[]; body?: string
     body: (opts.body || `(no detail given — ${concern})`).trim(),
     replies: [],
   }
-  writeAndCommit(p, `proposal: ${concern}`)
+  writeAndCommit(p, `${kind}: ${concern}`)
   return p
 }
 
@@ -210,7 +216,7 @@ const fl = (args: string[], name: string): string | undefined => {
   return i >= 0 ? args[i + 1] : undefined
 }
 const hasFlag = (args: string[], name: string) => args.includes(`--${name}`)
-const VALUE_FLAGS = new Set(['--node', '--body', '--as'])
+const VALUE_FLAGS = new Set(['--node', '--body', '--as', '--kind'])
 // bare positionals, skipping flags + their values.
 function bare(args: string[]): string[] {
   const out: string[] = []
@@ -275,6 +281,23 @@ export async function runPropose(args: string[]): Promise<number> {
   }
 }
 
+// `spex note "<annotation>" [--node id…] [--body -|text]` — open a `kind: note` thread: a durable annotation /
+// heads-up / Q&A on a node, no change-intent. Same store + reply/sign/resolve verbs as a proposal (those are
+// id-based and kind-agnostic); only the creation verb differs, so the verb IS the kind.
+export async function runNote(args: string[]): Promise<number> {
+  const concern = bare(args).join(' ').trim()
+  if (!concern) { console.error('usage: spex note "<annotation>" [--node <id>…] [--body -|<text>]'); return 2 }
+  const nodes = args.flatMap((a, i) => (a === '--node' ? [args[i + 1]] : [])).filter(Boolean) as string[]
+  try {
+    const p = propose(concern, { nodes, body: readBody(args), kind: 'note' })
+    console.log(`noted '${p.id}'${p.nodes.length ? ` (on ${p.nodes.join(', ')})` : ''} — committed to the forum; read it with \`spex proposals\``)
+    return 0
+  } catch (e) {
+    console.error(`spex note: ${e instanceof Error ? e.message : e}`)
+    return 1
+  }
+}
+
 // `spex proposals [--node id] [--all] [--json]` — read the forum (a supervisor's / human's DRAIN view). It
 // lists concerns as raw data with their recurrence signals (signers, replies); it deliberately imposes NO
 // salience ranking — recurrence is a signal the drain WEIGHS by judgment, never an automatic priority order.
@@ -289,15 +312,17 @@ export async function runProposals(args: string[]): Promise<number> {
     return 0
   }
   if (verb === 'status') { console.log(`proposal forum is ${proposalsEnabled() ? 'ON' : 'OFF'}`); return 0 }
-  let proposals = loadProposals()
+  let threads = loadProposals()
   const node = fl(args, 'node')
-  if (node) proposals = proposals.filter((p) => p.nodes.includes(node))
-  if (!hasFlag(args, 'all')) proposals = proposals.filter((p) => p.status === 'open')
-  if (hasFlag(args, 'json')) { console.log(JSON.stringify(proposals, null, 2)); return 0 }
-  if (!proposals.length) { console.log(node ? `no proposals for node '${node}'` : 'the proposal forum is empty'); return 0 }
-  console.log(`proposal forum — ${proposals.length} ${hasFlag(args, 'all') ? 'total' : 'open'}${node ? ` for '${node}'` : ''}\n`)
-  for (const p of proposals) {
-    const tags = [p.status !== 'open' ? `[${p.status}]` : '', p.nodes.length ? `re: ${p.nodes.join(', ')}` : '', `by ${p.by}`].filter(Boolean).join('  ·  ')
+  const kind = fl(args, 'kind')          // proposal | note — default: all kinds (it is the whole forum)
+  if (node) threads = threads.filter((p) => p.nodes.includes(node))
+  if (kind) threads = threads.filter((p) => p.kind === kind)
+  if (!hasFlag(args, 'all')) threads = threads.filter((p) => p.status === 'open')
+  if (hasFlag(args, 'json')) { console.log(JSON.stringify(threads, null, 2)); return 0 }
+  if (!threads.length) { console.log(node ? `no forum threads for node '${node}'` : 'the forum is empty'); return 0 }
+  console.log(`forum — ${threads.length} ${hasFlag(args, 'all') ? 'total' : 'open'}${kind ? ` ${kind}(s)` : ''}${node ? ` for '${node}'` : ''}\n`)
+  for (const p of threads) {
+    const tags = [`${p.kind}`, p.status !== 'open' ? `[${p.status}]` : '', p.nodes.length ? `re: ${p.nodes.join(', ')}` : '', `by ${p.by}`].filter(Boolean).join('  ·  ')
     console.log(`• ${p.concern}  [${p.id}]`)
     console.log(`    ${tags}`)
     if (p.signers.length) console.log(`    +${p.signers.length} signed: ${p.signers.join(', ')}`)

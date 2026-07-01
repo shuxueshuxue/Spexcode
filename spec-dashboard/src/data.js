@@ -83,6 +83,18 @@ export async function loadBoard() {
   return res.json()
 }
 
+// subscribe to the board's push channel ([[board-stream]]): the server emits `board-changed` on any
+// session-store write, so the dashboard reloads the instant status moves instead of on a tight timer.
+// EventSource auto-reconnects on drop (a backend hot-reload flip), so a lost stream self-heals; if SSE never
+// connects (an old backend, a proxy that strips it), the caller's slow fallback poll still keeps the board
+// fresh. Returns an unsubscribe. `onChange` fires only on real changes, never on the keep-alive ping.
+export function subscribeBoard(onChange) {
+  let es
+  try { es = new EventSource('/api/board/stream') } catch { return () => {} }
+  es.addEventListener('board-changed', () => onChange())
+  return () => { try { es.close() } catch { /* already closed */ } }
+}
+
 // the project's self-identifying name ([[tab-title]]), resolved backend-side as board.project.
 export const projectTitle = (board) => board?.project || ''
 

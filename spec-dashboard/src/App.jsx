@@ -12,7 +12,7 @@ import SpecSearch from './SpecSearch.jsx'
 import BoardStats from './BoardStats.jsx'
 import MobileApp from './MobileApp.jsx'
 import { useIsMobile } from './useIsMobile.js'
-import { loadBoard, layout, X_GAP, Y_GAP, projectTitle, projectIcon, faviconHref } from './data.js'
+import { loadBoard, subscribeBoard, layout, X_GAP, Y_GAP, projectTitle, projectIcon, faviconHref } from './data.js'
 import { createMomentumScroll } from './scroll.js'
 import { cycleNext } from './cycle.js'
 import { firesKey } from './bindings.js'
@@ -483,10 +483,15 @@ export default function App() {
     const mine = ++reqSeq.current
     return loadBoard().then((b) => { if (mine === reqSeq.current) setBoard(b) }).catch(() => {})
   }, [])
+  // push-first freshness ([[board-stream]]): reload the instant the server signals a session-store change, so
+  // status/grouping flip without waiting on a timer. The interval retreats to a slow COLD-PATH fallback — it
+  // catches changes the push channel doesn't watch (a spec edit/merge, a forge issue) and covers an SSE that
+  // never connected (old backend / a proxy stripping it). All three paths funnel through the seq-guarded reload.
   useEffect(() => {
     reload()
-    const id = setInterval(reload, 4000)
-    return () => clearInterval(id)
+    const unsub = subscribeBoard(reload)
+    const id = setInterval(reload, 15000)
+    return () => { unsub(); clearInterval(id) }
   }, [reload])
   useEffect(() => {
     const name = projectTitle(board)

@@ -228,13 +228,18 @@ function Dashboard({ specs, sessions, reload }) {
     return () => cancelAnimationFrame(id)
   }, [centerOn, focus])
 
-  // re-plot moves the focused node; pan to recenter. Fires on focusId alone (not the poll); reads latest
-  // focus/centerOn via refs and skips the first paint (initial-framing owns it).
+  // The camera follows the KEYBOARD, not the mouse ([[keyboard-nav]]): a keyboard or programmatic focus move
+  // pans to recenter the new focus; a mouse click expands in place and the board STAYS. Node positions are a
+  // fixed structural embedding — a node's x/y depends only on tree shape, never on which node is focused — so a
+  // click's expand shifts nothing already on screen; only the camera would move, and that's the keyboard's alone.
+  // Fires on focusId alone (not the poll); reads latest focus/centerOn via refs; skips the first paint.
   const focusRef = useRef(focus); focusRef.current = focus
   const centerRef = useRef(centerOn); centerRef.current = centerOn
   const followedRef = useRef(false)
+  const skipCenterRef = useRef(false)   // a mouse click sets this so the follow effect leaves the board where it is
   useEffect(() => {
     if (!followedRef.current) { followedRef.current = true; return }
+    if (skipCenterRef.current) { skipCenterRef.current = false; return }   // mouse-click focus move: no pan
     centerRef.current(focusRef.current)
   }, [focusId])
 
@@ -366,14 +371,20 @@ function Dashboard({ specs, sessions, reload }) {
     return () => window.removeEventListener('mousemove', onMove, true)
   }, [])
 
-  // clicking a node focuses it; the follow-focus effect then re-plots the tree around it and pans the
-  // camera to keep it in place (a click drills the same way the arrows do). It does NOT open a session —
-  // Enter is the deliberate cross into one.
-  const onNodeClick = useCallback((_e, n) => setFocusId(n.id), [])
+  // clicking a node focuses it — drilling it open the same way the arrows do — but the board STAYS put: the
+  // camera follows the keyboard, not the mouse ([[keyboard-nav]]). We flag the follow effect to skip its
+  // recenter so the click expands in place with no pan. It does NOT open a session — Enter crosses into one.
+  const onNodeClick = useCallback((_e, n) => {
+    if (n.id !== focusRef.current.id) skipCenterRef.current = true
+    setFocusId(n.id)
+  }, [])
 
-  // double-click is the mouse parallel to the `i` key: focus the node AND open its info popup.
-  // (single click still only focuses without panning; the camera follows the keyboard alone.)
-  const onNodeDoubleClick = useCallback((_e, n) => { setFocusId(n.id); setOverlay(true) }, [])
+  // double-click is the mouse parallel to the `i` key: focus the node AND open its info popup — still no pan
+  // (mouse never moves the camera; only the keyboard does).
+  const onNodeDoubleClick = useCallback((_e, n) => {
+    if (n.id !== focusRef.current.id) skipCenterRef.current = true
+    setFocusId(n.id); setOverlay(true)
+  }, [])
 
   // clicking a session in the top-right window toggles the lock on its worktree's overlays (matched by
   // source = worktree path). Locking ON jumps to the first node it's changing, in TREE order so the

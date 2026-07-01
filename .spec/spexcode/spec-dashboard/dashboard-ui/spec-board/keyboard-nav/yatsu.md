@@ -1,5 +1,21 @@
 ---
 scenarios:
+  - name: click-does-not-pan-keyboard-does
+    tags: [frontend-e2e, desktop]
+    description: >-
+      Open the dashboard and read the React Flow viewport transform (the `.react-flow__viewport`
+      translate). CLICK a node other than the focused one: it becomes focused and drills open, but the
+      viewport transform is UNCHANGED — the board does not pan. Then press an arrow key (or h/j/k/l) to
+      move focus by one step: now the viewport transform DOES change, flat-panning to recentre the new
+      focus. Screenshot the board after the click (still framed as before) and file with
+      `spex yatsu eval keyboard-nav --image <png> --pass`.
+    expected: >-
+      A mouse click re-focuses and expands the clicked node but the camera stays put (viewport transform
+      unchanged) — nothing already on screen moves, because node positions are a fixed structural
+      embedding. A keyboard focus move (arrow/vim) DOES pan the camera to recentre the new focus. The
+      camera follows the keyboard, not the mouse.
+    code:
+      - spec-dashboard/src/App.jsx
   - name: slash-search-spans-four-planes
     tags: [frontend-e2e, desktop]
     description: >-

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ReactFlow, Background, MarkerType, useReactFlow } from '@xyflow/react'
+import { ReactFlow, MarkerType, useReactFlow } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import SpecNode from './SpecNode.jsx'
 import NodeView, { panesFor } from './NodeView.jsx'
@@ -420,9 +420,7 @@ function Dashboard({ specs, sessions, reload }) {
           minZoom={0.4}
           maxZoom={1.6}
           proOptions={{ hideAttribution: true }}
-        >
-          <Background variant="dots" color="#cdc6ad" gap={20} size={1} />
-        </ReactFlow>
+        />
         {/* HUD: brand + a discreet `?` that opens the keymap/legend modal */}
         <div className="hud">
           <span className="brand">$ spec-dashboard</span>

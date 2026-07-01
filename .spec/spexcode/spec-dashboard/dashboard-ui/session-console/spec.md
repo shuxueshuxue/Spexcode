@@ -59,7 +59,12 @@ label**: a session whose process is gone reads `offline` whatever its authored l
 conversation (the transcript and the session's global record survive — see [[runtime]]). `queued` is the one exception: it
 has intentionally not launched, so it shows neither a terminal nor a relaunch, and self-starts as a slot
 frees. The terminal pane is **flat**: it fills the right area directly — no inner bordered box, no title bar,
-no nested levels — the dark terminal edge-to-edge with the `❯` input docked over its bottom. In place of the
+no nested levels — the dark terminal edge-to-edge above a **fixed input strip reserved at the pane's bottom**.
+At rest the single-line `❯` box occupies that strip and the terminal **ends above it** (the resting input
+reserves real layout height, so the terminal does not stretch under it) — the terminal's own bottom status
+line is therefore never hidden. Only when the box grows multi-line does it **overlay** the terminal, expanding
+**upward** over its lower edge; growth never pushes the terminal's content up (only the resting single line
+reserves space — growth overlays). In place of the
 old title bar a **slim action strip** rides the terminal's top edge, carrying the **shared session headline**
 (`si-th-name`, [[session-activity]]) — same source and content as the session rows, only with more room before
 it truncates, so it never disagrees with the row that opened it — on the left, and the state's lifecycle

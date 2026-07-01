@@ -2,15 +2,17 @@ import { streamSSE } from 'hono/streaming'
 import type { Context } from 'hono'
 import { watch, mkdirSync, type FSWatcher } from 'node:fs'
 import { sessionsRoot } from './layout.js'
+import { sessionSignature } from './sessions.js'
 
 // @@@ board-stream — the board's freshness is PUSHED, not polled. A dashboard subscribes here ONCE and
-// reloads /api/board only when something actually changed, instead of re-fetching the whole ~328 KB board
-// every few seconds. ONE event source feeds ALL subscribers: an fs.watch on the per-user session store, where
-// every status transition lands (the harness hooks write `sessions/<id>/session.json`), so a record write IS
-// the "board changed" signal for the hot path (session status/grouping — the thing that felt laggy under the
-// poll). Cold-path changes (a spec edit/merge, a forge issue) are NOT watched here; they ride the dashboard's
-// slow fallback poll. The event carries no board payload — it is a bare signal, and the client refetches
-// /api/board (reusing that route's ETag/304 path), so this stream stays tiny and buildBoard stays on-demand.
+// reloads /api/board only when something actually changed, instead of re-fetching the whole board every few
+// seconds. TWO event sources feed ALL subscribers, both firing the SAME bare `board-changed` signal (the
+// client then refetches /api/board — reusing its ETag/304 path — so this stream stays tiny and buildBoard
+// stays on-demand): (1) an fs.watch on the per-user session store, where every lifecycle status transition
+// lands as a `sessions/<id>/session.json` write; (2) a subscriber-gated poll of the CHEAP session signature
+// ([[sessions]]) for the two signals that are tmux-derived, NOT file writes — LIVENESS (a crash/offline) and
+// ACTIVITY (a worker's live self-summary title) — which the fs-watch can't see. Only the truly-cold path (a
+// spec edit/merge, a forge issue) rides the dashboard's slow fallback poll now.
 
 type Notify = () => void
 const subscribers = new Set<Notify>()
@@ -36,6 +38,22 @@ function ensureWatcher(): void {
   try { watcher = watch(root, { recursive: true }, () => fireChanged()) } catch { watcher = null }
 }
 
+// event source #2: poll the cheap tmux-derived session signature (liveness + activity) while anyone is
+// subscribed, firing board-changed the moment it moves — so a crash/offline or a live headline reflects in
+// ~2s, not on the slow fallback. Two tmux calls per tick, NO git; gated on subscribers so a closed dashboard
+// costs nothing. The fs-watch stays the instant path for status writes; this only catches what a file can't.
+let poller: ReturnType<typeof setInterval> | null = null
+let lastSig = ''
+function ensureLivePoll(): void {
+  if (poller) return
+  poller = setInterval(() => {
+    void sessionSignature().then((sig) => { if (sig !== lastSig) { lastSig = sig; fireChanged() } }).catch(() => {})
+  }, 2000)
+}
+function stopLivePollIfIdle(): void {
+  if (poller && subscribers.size === 0) { clearInterval(poller); poller = null; lastSig = '' }
+}
+
 // GET /api/board/stream — one SSE per dashboard tab. Server→client only (no request body, no client frames):
 // emits `board-changed` on any session-store change, plus a periodic `ping` so an idle-proxy never times the
 // connection out. On a backend hot-reload the stream drops and EventSource auto-reconnects to the fresh child,
@@ -46,7 +64,8 @@ export function boardStream(c: Context) {
     let aborted = false
     const notify: Notify = () => { void stream.writeSSE({ event: 'board-changed', data: 'x' }).catch(() => {}) }
     subscribers.add(notify)
-    stream.onAbort(() => { aborted = true; subscribers.delete(notify) })
+    ensureLivePoll()
+    stream.onAbort(() => { aborted = true; subscribers.delete(notify); stopLivePollIfIdle() })
     try {
       await stream.writeSSE({ event: 'ready', data: 'x' })
       while (!aborted) {
@@ -56,6 +75,7 @@ export function boardStream(c: Context) {
       }
     } finally {
       subscribers.delete(notify)
+      stopLivePollIfIdle()
     }
   })
 }

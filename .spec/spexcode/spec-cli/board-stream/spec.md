@@ -24,19 +24,23 @@ dashboard opens once. It is server→client only — no request body, no client 
 payload. It emits a bare `board-changed` signal; the client refetches `/api/board` on it, reusing that
 route's conditional-request (ETag/304) path. The board stays rebuilt on demand and this stream stays tiny.
 
-**One event source, all subscribers.** A single `fs.watch` on the per-user session store
-([[runtime]]) is the whole event source: every status transition lands as a write to
-`sessions/<id>/session.json` (the harness hooks author it), so a record write *is* the board-changed signal
-for the hot path — the session status and grouping the poll made feel slow. The watch is recursive (a new
-session is a new subdir) and lazily started on the first subscriber; a burst of writes (a merge or launch
-touches several records) is debounced into one signal fanned out to every open stream.
+**Two event sources, all subscribers.** The session-side of the board has two kinds of change, and only one
+lands as a file, so the channel watches both. (1) A recursive `fs.watch` on the per-user session store
+([[runtime]]): every lifecycle status transition lands as a write to `sessions/<id>/session.json` (the harness
+hooks author it), so a record write *is* the board-changed signal for status/grouping. (2) A subscriber-gated
+poll (~2s) of the CHEAP session signature ([[sessions]]) — two tmux calls, no git — for the signals that are
+tmux-derived, not file writes: **liveness** (a worker crashing / going offline) and **activity** (a worker's
+live self-summary headline). Neither writes a session file, so the fs-watch is blind to them; before this poll
+they only reached the board on the slow fallback, which is why a finished-but-crashed worker or a moving
+headline lagged. Both sources fire the same debounced `board-changed`, fanned to every open stream; the poll
+runs only while someone is subscribed (a closed dashboard costs nothing) and stops when the last stream drops.
 
-**Hot path pushed, cold path polled.** Only session-store changes are watched. Changes this watcher does not
-see — a spec edit or merge that reshapes the tree, a forge issue update — are the *cold path*: they ride the
-dashboard's slow fallback poll ([[dashboard-shell]]), not a second watcher. That split is deliberate: the
-laggy-feeling thing (session status) gets the instant push; the rare, already-visible-to-its-author things
-stay on a relaxed timer. The stream also sends a periodic keep-alive `ping` so an idle proxy never times the
-connection out, and it never throws: if the watch can't start, subscribers simply fall back to the poll.
+**Only the cold path polls now.** What neither source sees — a spec edit or merge that reshapes the tree, a
+forge issue update — is the genuinely *cold path*: it rides the dashboard's slow fallback poll
+([[dashboard-shell]]). The session signals (status, liveness, activity) are all push; the rare,
+already-visible-to-its-author tree changes stay on a relaxed timer. The stream also sends a periodic keep-alive
+`ping` so an idle proxy never times the connection out, and it never throws: if a source can't start,
+subscribers simply fall back to the poll.
 
 **Reconnect is free.** A backend hot-reload replaces the child and drops the stream; `EventSource`
 auto-reconnects to the fresh child — the same drop-and-reconnect the live pty bridges already do ([[spec-cli]]),

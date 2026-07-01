@@ -309,6 +309,16 @@ async function paneTitles(): Promise<Map<string, string>> {
   return m
 }
 
+// @@@ sessionSignature - a CHEAP fingerprint of the two live board signals the session-store fs-watch can't
+// see, because they are tmux-derived, not file writes: LIVENESS (which sessions exist — a crash/offline) and
+// ACTIVITY (each pane's self-summary title). Two tmux calls, NO git and NO store walk, so [[board-stream]] can
+// poll this to push a `board-changed` the instant a worker dies or updates its headline, instead of the
+// dashboard waiting for its slow cold-path fallback. Sorted so it only moves on a real change.
+export async function sessionSignature(): Promise<string> {
+  const [live, titles] = await Promise.all([liveTmux(), paneTitles()])
+  return [...live].sort().join(',') + '|' + [...titles].sort().map(([k, v]) => `${k}=${v}`).join(',')
+}
+
 // @@@ paneActivity - the harness-aware live self-summary: the SINGLE place a raw pane title becomes (or does
 // NOT become) a session's headline activity. The board headline derives from the pane title ONLY for a
 // harness whose pane title is its own task self-summary (`paneTitleIsSelfSummary`, an adapter capability —

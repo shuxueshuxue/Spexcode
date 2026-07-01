@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { randomUUID } from 'node:crypto'
-import { readFileSync, writeFileSync, appendFileSync, existsSync, renameSync, mkdirSync, rmSync, readdirSync, realpathSync } from 'node:fs'
+import { readFileSync, writeFileSync, appendFileSync, existsSync, renameSync, mkdirSync, rmSync, readdirSync, realpathSync, statSync } from 'node:fs'
 import { join, dirname, relative, isAbsolute } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, type ReviewDiffFile } from './git.js'
@@ -1169,20 +1169,32 @@ function typecheckPkg(): Promise<{ ok: boolean; errorCount: number }> {
 // @@@ locationGates - the two LOCATION gates (typecheck + lint) are functions of the backend checkout's tree
 // ALONE, not of which session is reviewed, yet `tsc --noEmit` alone costs ~20s. Re-running them on every
 // reviewPayload — i.e. on every [[review-proof]] Proof-tab open, and once per session — is the dominant
-// latency. Memoize them on a whole-repo fingerprint (`rev-parse HEAD` + `status --porcelain`, so it also
-// covers the sibling src trees tsc pulls in): identical fingerprint reuses the last (in-flight) result, so a
-// re-open or a second session's proof is instant. A commit — every merge into the backend's own checkout is
-// one — or a file going dirty/clean changes the fingerprint and recomputes; the gates are thus current for
-// the surface that matters (a clean deployment checkout, which only moves on merge). A rejected run is not
-// cached. The two cheap git reads that build the fingerprint replace a 20s typecheck on the hot path.
+// latency. Memoize them on a whole-repo fingerprint — `rev-parse HEAD` + `status --porcelain` + the mtimes of
+// the changed paths (covers committed state, the dirty SET, and dirty-file CONTENT, across every src tree tsc
+// pulls in) — so an identical fingerprint reuses the last (in-flight) result and a re-open or a second
+// session's proof is instant, while any commit or working-tree edit moves the fingerprint and recomputes.
+// A rejected run is not cached. The cheap git reads + stats that build the fingerprint replace a 20s typecheck
+// on the hot path. Fingerprint limits are spelled out at the read below; the gates are advisory (re-verified
+// at merge), so we harden the common holes and accept the rare ones rather than serialize/content-hash.
 let gateCache: { fp: string; p: Promise<{ typecheck: ReviewGates['typecheck']; lint: ReviewGates['lint'] }> } | null = null
 async function locationGates(): Promise<{ typecheck: ReviewGates['typecheck']; lint: ReviewGates['lint'] }> {
   const root = repoRoot()
   const [head, status] = await Promise.all([
     gitA(['-C', root, 'rev-parse', 'HEAD']),
-    gitA(['-C', root, 'status', '--porcelain']),
+    gitA(['-C', root, 'status', '--porcelain', '--untracked-files=all']),
   ])
-  const fp = head.trim() + '\n' + status
+  // `status --porcelain` gives the SET of changed paths + status letters but is CONTENT-BLIND: re-editing an
+  // already-listed (dirty or untracked) file leaves the string byte-identical, so HEAD+status alone would
+  // freeze the gates after a file first goes dirty. `--untracked-files=all` first stops an untracked dir from
+  // collapsing to one line (which hides a newly-added broken file); then fold each listed path's mtime in, so
+  // a content edit to a dirty file also moves the fingerprint. HEAD covers committed state, this covers the
+  // working tree. (Residual, accepted: gitignored compiler bytes under node_modules aren't in the key — a tsc
+  // or @types swap that doesn't touch the tracked lockfile won't invalidate; and the fingerprint is snapshot
+  // just before the ~20s compute, so a change landing mid-compute is labelled with the pre-change fp. Both are
+  // rare and the gates are advisory — the agent re-verifies at merge — so we don't pay to close them here.)
+  const mtimes = status.split('\n').filter(Boolean).map(porcelainPath)
+    .map((p) => { try { return statSync(join(root, p)).mtimeMs } catch { return 0 } }).join(',')
+  const fp = head.trim() + '\n' + status + '\n' + mtimes
   if (gateCache?.fp === fp) return gateCache.p
   const p = (async () => {
     const { specLint } = await import('./lint.js')

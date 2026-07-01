@@ -77,7 +77,6 @@ export default function Settings({ onClose }) {
             </button>
           ))}
         </div>
-        <div className="legend-desc set-hint">{t('settings.languageHint')}</div>
       </section>
       <section className="legend-sec">
         <div className="legend-h">{t('settings.secTheme')}</div>
@@ -93,7 +92,6 @@ export default function Settings({ onClose }) {
             </button>
           ))}
         </div>
-        <div className="legend-desc set-hint">{t('settings.themeHint')}</div>
       </section>
       <Shortcuts t={t} />
     </Modal>

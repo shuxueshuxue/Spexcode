@@ -156,13 +156,17 @@ scenarios:
       confirm the reserved-toggle contract. Intercept `/rawkey` so no keystroke can reach a real agent,
       recording only WHICH keys attempt a forward. With nav mode OFF, press ⌥+I (Option+I — note ⌥I emits a
       dead-key glyph on a mac, so this also proves the e.code match) then ⌘+I; then enter nav mode and
-      press an ordinary key (`x`); then ⌥+I again. Watch the bottom-bar nav indicator and the recorded
-      forwards.
+      press an ordinary key (`x`); then ⌥+I again. Then, with nav mode OFF, press ⌥+⌘+I (all three keys
+      held together — the browser's own devtools chord) and confirm the app does NOT toggle nav mode and
+      does NOT preventDefault it. Watch the bottom-bar nav indicator and the recorded forwards.
     expected: |
-      ⌥+I and ⌘+I toggle nav mode on and off every time (the bottom-bar nav indicator appears/disappears)
-      and forward NOTHING — no `/rawkey` attempt is recorded for either. An ordinary key pressed while nav
-      mode is ON DOES forward (recorded), so the carve-out is exactly the two reserved chords, not a blanket
-      block. The browser/app takes no other action on ⌥/⌘+I.
+      ⌥+I and ⌘+I (a SINGLE modifier + I) toggle nav mode on and off every time (the bottom-bar nav
+      indicator appears/disappears) and forward NOTHING — no `/rawkey` attempt is recorded for either. An
+      ordinary key pressed while nav mode is ON DOES forward (recorded), so the carve-out is exactly the two
+      reserved chords, not a blanket block. ⌥+⌘+I held TOGETHER is left alone: the nav indicator does not
+      change and the app does not cancel the event, so the browser's devtools accelerator opens normally
+      (the two-modifier chord is the browser's, not the app's). The browser/app takes no other action on
+      ⌥/⌘+I.
   - name: modifier-arrow-switches-regardless-of-focus
     tags: [frontend-e2e, desktop]
     description: >

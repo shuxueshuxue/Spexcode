@@ -97,7 +97,10 @@ button, or the reserved `⌥/⌘+I`: the `❯` box disables and **every keystrok
 forwards raw** to the pane, so a human drives the agent's terminal, not just its arrows. Those **reserved
 `⌥/⌘+I`** keys toggle nav mode and are **never forwarded to tmux nor overridable by the app**; entry is
 otherwise **manual**, and leaving the tab or going offline exits — as does a **second `Esc` within 600 ms**
-(the first `Esc` still forwards to the pane to cancel the agent's own menu). A best-effort pane sniff — a
+(the first `Esc` still forwards to the pane to cancel the agent's own menu). The reserved chord is a **single**
+modifier + I — `⌥+I` *or* `⌘+I`, never both: **`⌥⌘I` held together is the browser's own devtools accelerator**,
+so the app lets that three-key combo pass straight through to open the console rather than swallowing it as a
+nav-mode toggle. A best-effort pane sniff — a
 select-caret line beside an `Esc`/Enter hint line — only ever **suggests** nav mode by pulsing the nav
 button, a non-authoritative nudge that never seizes keys.
 

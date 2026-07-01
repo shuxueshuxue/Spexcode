@@ -35,6 +35,24 @@ scenarios:
       so the screen is coherent at the converged geometry — never a mid-flight half-frame. The frame is one
       clear+home + the real pane rows (with escapes/UTF-8 intact), and live pane output continues to arrive
       as %output events after it.
+  - name: attach-seed-carries-pre-attach-history
+    tags: [backend-api]
+    description: >-
+      Measure that the wheel can reach output from BEFORE the client attached (the "wheel scrolls real
+      history" contract, in control mode). On a tmux socket, print far more lines than the visible screen
+      holds (e.g. 1200 lines into a 24-row pane) so most scroll into tmux history BEFORE any bridge exists.
+      Then attach a viewer through the real API (attachViewer with a size) and inspect its first frame: it
+      must carry deep pre-attach history, not just the visible screen. Then call resizeBridge to a new size
+      and confirm the resize frame re-seeds ONLY the visible screen (no thousands-of-lines re-flush). Finally
+      detach fully and re-attach (a fresh bridge) and confirm history is seeded again. File with `spex yatsu
+      eval live-view --scenario attach-seed-carries-pre-attach-history --result <txt>`.
+    expected: >-
+      The first frame of a (re)attach contains hundreds/thousands of the pre-attach lines (a bounded
+      capture-pane -S over tmux's recent scrollback), reaching back to the earliest history and ending at the
+      current visible tail — so those lines write into the browser terminal and the wheel scrolls genuine
+      pre-attach output. A subsequent resize re-seeds only the visible screen (≤ the row count, no history
+      re-flush), and the clear is viewport-only so it never wipes the seeded scrollback. A fresh bridge on
+      re-attach re-seeds history.
   - name: hidden-connect-defers-undersized-first-paint
     tags: [backend-api]
     description: >-
@@ -58,7 +76,7 @@ scenarios:
 
 The live terminal's product surface is measured through the **real bridge API** the dashboard drives
 (`attachViewer` / `resizeBridge` over the per-session WebSocket) plus tmux's own reported window size —
-not an internal probe. Three losses, all about a pane looking wrong the moment a human opens it:
+not an internal probe. The losses, about a pane behaving wrong the moment a human opens it:
 
 - **on-attach reflow** — the pane re-wrapping from a stale size to the browser size. Zero loss is the
   supervisor holding every warm bridge at the last-known viewer size, so the pane is already correct
@@ -71,3 +89,7 @@ not an internal probe. Three losses, all about a pane looking wrong the moment a
   full frame. The control-mode boundary makes this **event-driven** — `refresh-client -C` sets the size,
   `%layout-change` confirms convergence, a bounded `capture-pane` seeds the frame — so zero loss is a few
   ms on the converged geometry, an order of magnitude under the ~320ms the old resize-then-poll path cost.
+- **history reach** — with control mode streaming only post-attach `%output`, the wheel would reach nothing
+  from before the client attached. Zero loss is the first frame seeding tmux's recent scrollback (a bounded
+  `capture-pane -S`) into the terminal's own buffer, so the native wheel scrolls genuine pre-attach history,
+  while a resize re-seeds only the visible screen (no re-flush).

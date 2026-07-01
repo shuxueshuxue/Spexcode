@@ -467,6 +467,7 @@ function Dashboard({ specs, sessions, reload, project }) {
         onSeedConsumed={() => setSeed(null)}
         onClose={() => setSessionUI(false)}
         onPickSession={onPickSession}
+        onFocusNode={(id) => { setFocusId(id); setSessionUI(false) }}
         reload={reload}
       />
     </div>

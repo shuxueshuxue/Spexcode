@@ -116,4 +116,11 @@ export async function loadConfig() {
   return res.json()
 }
 
+// the forum (proposals + notes) the backend serves at /api/forum: `{ enabled, threads }`, verbatim — the
+// info page renders what the CLI drain view reads, computing nothing over it (no re-sort, no salience order).
+export async function loadForum() {
+  const res = await apiFetch('/api/forum')
+  return res.json()
+}
+
 export const SESSION_LOG = log

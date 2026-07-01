@@ -96,10 +96,13 @@ composing both axes** for one-glyph surfaces — a convenience, never a third so
 
 ### Hooks (delivered via the [[hook-dispatch]] dispatcher, gated by `governed`)
 
-Every hook reads the **effective session id** the same way sessions.ts does: `SPEXCODE_SESSION_ID` from a
-governed launcher wins, otherwise the harness payload's own `session_id` is used. Codex SessionStart also
-copies the payload `session_id` into the governed record's `harness_session_id`, because that is the app-server
-thread id later used for JSON-RPC delivery. The global record path is project key from the git common dir →
+Every hook reads the **effective session id** through the harness resolver. Claude can trust
+`SPEXCODE_SESSION_ID` from the governed launcher because its payload id is the same record id. Codex cannot:
+hooks run inside the shared per-project app-server, whose env can carry another session's
+`SPEXCODE_SESSION_ID`, so Codex hook state starts from the payload `session_id` (the acting thread id) and aliases
+that through `harness_session_id` to the governed SpexCode record. Codex SessionStart also copies the payload
+`session_id` into the governed record's `harness_session_id`, because that is the app-server thread id later used
+for JSON-RPC delivery. The global record path is project key from the git common dir →
 `<store>/projects/<enc>/sessions/<id>/session.json`.
 The hooks split on the `governed` flag. The **board-lifecycle** hooks below (mark-active, the Stop gate,
 StopFailure→error, idle) act ONLY when that record reads `governed: true`; on a non-governed (user-self-launched)

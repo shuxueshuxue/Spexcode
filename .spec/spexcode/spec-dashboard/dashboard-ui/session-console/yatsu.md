@@ -173,8 +173,8 @@ scenarios:
       Through the running dashboard in a real browser, open the session interface (Enter) with at least
       three live sessions so the tab list has several rows. Exercise the modifier switch from the states
       where a PLAIN arrow would NOT switch the tab: (1) caret parked in the middle of a multi-line draft in
-      the New Session prompt; (2) on a live session with the `❯` inbox focused mid-text; (3) on the
-      relationship graph tab; (4) in nav mode (so plain keys forward raw to the pane). From each, press ⌘+↓
+      the New Session prompt; (2) on a live session with the `❯` inbox focused mid-text; (3) in nav mode (so
+      plain keys forward raw to the pane). From each, press ⌘+↓
       (or ⌥+↓) then ⌘+↑ (or ⌥+↑) and read which tab is selected after each. Separately, from any tab press
       ⌥+N (Option+N — note ⌥N emits a dead-key `˜` glyph on a mac, so this also proves the e.code match) and
       read the selection. Finally, test the input box's stability against PLAIN arrows: with the New prompt (or
@@ -182,10 +182,10 @@ scenarios:
       press a plain ↓, and read whether the selected tab moved. Screenshot the tab list before and after each press.
     expected: |
       ⌘/⌥/⌃+↑/↓ ALWAYS step the selected tab one row up/down the session list, no matter which input holds
-      focus — mid-word in a textarea, on the graph tab, or while nav mode forwards raw keys — and the
+      focus — mid-word in a textarea or while nav mode forwards raw keys — and the
       modifier never moves the textarea caret nor reaches the agent's pane instead. ⌥/⌘+↑ no longer jumps to
-      New Session; it simply steps up the list (from the graph it enters the list). ⌥+N snaps the selection to
-      New Session from any tab, the graph and nav mode included — ⌘+N (mac) / ⌃+N (win/linux) are the browser's
+      New Session; it simply steps up the list. ⌥+N snaps the selection to
+      New Session from any tab, nav mode included — ⌘+N (mac) / ⌃+N (win/linux) are the browser's
       reserved new-window chord a web page can't cancel, so they are not claimed. A plain ↑/↓ pressed inside a
       text input NEVER switches tabs — at the first line a plain ↑ and at the last line a plain ↓ both stay in
       the box (caret keys only), so typing never jerks the selection; plain ↑/↓ walk the list only when focus is

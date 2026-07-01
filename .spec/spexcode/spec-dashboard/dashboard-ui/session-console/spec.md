@@ -23,13 +23,13 @@ driving the same sessions through the CLI see identical state.
 ## expanded spec
 
 The interface is a **full-screen board** — edge-to-edge over the dimmed app, with **no reserved inset** so no
-screen space is wasted (still a lifted modal with a scale-in pop, not a route). The whole console wears the
-**dark solarized terminal theme** — the frame around the terminal included, not just the sidebar — so the
-left list, the right frame and the embedded terminal read as **one dark surface** rather than a bright gutter
-around a dark pane (a palette remap scoped to the console, while the board behind stays warm paper). Two panes: a left session list and a
-right area that **morphs** by what's focused. The
-list's **top button row** pairs `＋` New Session and the relationship-graph icon above the session rows (so
-neither blocks the `↑/↓` path); New ⇄ graph is horizontal — `→` from an *empty* New enters, `←` returns.
+screen space is wasted (still a lifted modal with a scale-in pop, not a route). The console **follows the app
+theme**: its chrome — the session list, the right frame, the docked input — uses the same palette tokens as
+the rest of the dashboard, so re-theming the app re-themes the console with it (no console-scoped palette
+remap). The one surface that stays dark on its own is the **embedded terminal** (`--term-bg`) — legitimately a
+dark terminal, whatever the app theme. Two panes: a left session list and a right area that **morphs** by
+what's focused. The list's **top button row** is a single `＋` New Session button above the session rows, so
+it never blocks the `↑/↓` path down to a session.
 
 **New Session** is a centred avatar + auto-growing input. Nothing is prefilled; the focused node is the first
 **@-mention** suggestion, so the human opts in with `@`. A leading **`/`** opens the config-preset palette;
@@ -50,9 +50,6 @@ in `aria-label`/tooltips. The choice rides along in the launch `POST /api/sessio
 **remembered** (per-browser) so a user who lives in one agent never re-picks; it never assumes a node and
 composes orthogonally with the `/<preset> @<node>… text` grammar above.
 
-**View Session Relationship** fills the pane with the live monitor graph ([[session-graph]]) — its home now,
-not a `t` overlay; the board's `t`/network button open onto it, and clicking a node switches to that session's tab.
-
 An existing session shows its **live tmux terminal** (SessionTerm) with the docked **`❯` input** below — a
 **real tmux client but a read-only scrollable view** — but only when its **liveness** ([[state]]) is live
 (`online`/`starting`). The terminal mount and the relaunch panel key on **liveness, never the lifecycle
@@ -61,10 +58,12 @@ label**: a session whose process is gone reads `offline` whatever its authored l
 "no sessions" into the pane) — it shows the **relaunch panel** instead, offering to resume the same
 conversation (the transcript and the session's global record survive — see [[runtime]]). `queued` is the one exception: it
 has intentionally not launched, so it shows neither a terminal nor a relaunch, and self-starts as a slot
-frees. The header bar above it (`si-th-name`) titles the
-terminal with the **shared session headline** ([[session-activity]]), not the stable `sessionName` — same
-source and content as the session rows, only with more room before it truncates — so the title over the
-terminal never disagrees with the row that opened it. Read-only governs *keyboard* input, not extraction or navigation: text selects, and the
+frees. The terminal pane is **flat**: it fills the right area directly — no inner bordered box, no title bar,
+no nested levels — the dark terminal edge-to-edge with the `❯` input docked over its bottom. In place of the
+old title bar a **slim action strip** rides the terminal's top edge, carrying the **shared session headline**
+(`si-th-name`, [[session-activity]]) — same source and content as the session rows, only with more room before
+it truncates, so it never disagrees with the row that opened it — on the left, and the state's lifecycle
+actions on the right (below). Read-only governs *keyboard* input, not extraction or navigation: text selects, and the
 wheel scrolls **real history** — for a normal-screen pane into xterm's own seeded scrollback, for a
 full-screen TUI by forwarding the wheel so the app scrolls itself ([[live-view]] owns which path) — a drag
 selects even under mouse-reporting, and `⌘/Ctrl+C` copies to the clipboard **over HTTPS, localhost,
@@ -106,9 +105,8 @@ button, a non-authoritative nudge that never seizes keys.
 
 A **right-click on a session row** opens its context menu — rename or close ([[session-rename]]) — coexisting
 with the context-menu suppression; the shared `sessionName` puts that rename first in the label precedence.
-A small **drag handle** at the far right of each row's second line reorders the list ([[session-reorder]]) —
-only the handle drags, so click/double-click/`↑↓`/focus on the row are untouched.
-Either input also accepts an **attached file** (paste, drop, or the paperclip picker — a monochrome inline-SVG
+The row order is **automatic** — the two-zone grouping below, newest-first within a zone — with no manual
+drag-to-reorder gesture. Either input also accepts an **attached file** (paste, drop, or the paperclip picker — a monochrome inline-SVG
 glyph in the dashboard's own icon vocabulary, swapping to a spinning ring while uploading, **never a colour
 emoji**), uploaded to the backend (= worker) `/tmp` with its path spliced in — see [[file-attach]].
 
@@ -123,16 +121,17 @@ stays stable; the old visual-edge fall-through to the list is gone). Plain ↑/�
 focus is **outside** any text input. To switch tabs while typing, use the modifier combos:
 **⌘/⌥/⌃+↑/↓** are an **unconditional** switch — they step the selection up/down the list from anywhere, no
 matter which input has focus or what mode you're in (the guaranteed up/down switch a chat app gives you), even
-from the graph or while nav mode forwards raw keys. **⌥+N** (Option/Alt+N) snaps the selection to New Session
+while nav mode forwards raw keys. **⌥+N** (Option/Alt+N) snaps the selection to New Session
 the same way, from anywhere — matched by the **physical N key (`e.code`)**, not `e.key`, so the mac Option
 dead-key (⌥N emits a `˜` glyph, not `'n'`, exactly as ⌥I does) still counts. The reason the chord is ⌥+N and
 not ⌘+N is a hard browser limit, not a choice: **⌘+N (mac) and ⌃+N (win/linux) are the browser's reserved
 new-window accelerator** — their keydown never reaches the page to be cancelled (no `preventDefault` can
-suppress it in a normal tab), so ⌥+N is the one modifier+N chord the app can actually own. The **header action row**
-is the same board-command registry, narrowed to the current state: **nav** whenever live, **proof** + **merge**
-at review/done — each a small **text** button (no glyphs) in its identity colour; an `offline` liveness
-(any lifecycle) swaps them for a relaunch panel, and review is **agent-proposed** at the stop-gate. There is
-**no header close/exit button** (neither has a button twin — a header "close" misreads as "close the panel"
+suppress it in a normal tab), so ⌥+N is the one modifier+N chord the app can actually own. The **slim action
+strip** over the terminal's top edge holds the same board-command registry, narrowed to the current state:
+**nav** whenever live, **proof** + **merge** at review/done — each a small **text** button (no glyphs) in its
+identity colour; an `offline` liveness (any lifecycle) swaps them for a relaunch button, and review is
+**agent-proposed** at the stop-gate. There is
+**no close/exit button** here (neither has a button twin — a strip "close" misreads as "close the panel"
 while it discards the worktree): the destructive **close** (worktree removal) lives only on the row's
 right-click menu, behind a confirm ([[session-rename]]); both verbs are otherwise reachable as the typed
 `/exit`·`/close` commands above.
@@ -142,7 +141,7 @@ fallback covers a session that ends or is closed elsewhere, so the selection nev
 board no longer has.
 
 **SessionWindow** is the read-only glance, built from the shared **`SessionRow`** face
-([[session-activity]]) in the SAME **compact one-line, two-zone grouped** layout as the console list — but
+([[session-activity]]) in the SAME **compact one-line, zone-grouped** layout as the console list — but
 KEEPING the **avatar** (its cross-referencing job) and the board's warm paper: the avatar + the session
 **headline** (the worker's live tmux self-summary once it exists, else a launch-prompt placeholder; a rename
 always wins) + a single colour-coded status **glyph** + pending-op count, on one line, with a **monochrome
@@ -153,20 +152,22 @@ always stopping short of the bottom **stats strip**), and a long session list **
 than extending down over the board's stats bar. A single click **locks** the board onto
 that session (overlays light, rest grey, focus jumps to its first changed node, see [[keyboard-nav]]); a
 no-overlay session still locks un-greyed; a second click releases; **double-click opens** its board (mouse-side `⏎`). The **interface's own tabs** render the same `SessionRow` with those gestures **inverted**:
-single click switches tab, double-click locks — but in its **compact, avatar-less, terminal-styled** variant
-(`showAvatar={false} compact`): the console's own left list is a dark, dense TERMINAL pane (matching the right
-terminal, set apart from the board's warm paper), one line per session, the status a single colour glyph not
-a word. The avatar is dropped ONLY here — its cross-referencing job (matching a session to the avatars on the
-nodes it edits) belongs to the map-side SessionWindow and the relationship-graph, which both keep it. The
-list itself **groups into two triage zones** — *needs you* (asking / review / done / close-pending / error)
-over *self-running* (working / parked / queued …), a dim header leading each — and within a zone the
-**newest** session sits on top ([[session-reorder]]). The selected row is marked by the **highlight wash
-alone**, no caret. Both list surfaces share this grouping + compact one-line layout; only the avatar (and the
-map-side window's warm-paper theme vs the console's dark solarized one) differ.
+single click switches tab, double-click locks — but in its **compact, avatar-less** variant
+(`showAvatar={false} compact`): the console's own left list is a dense one-line-per-session list, the status a
+single colour glyph not a word. The avatar is dropped ONLY here — its cross-referencing job (matching a
+session to the avatars on the nodes it edits) belongs to the map-side SessionWindow, which keeps it. The
+list itself **groups into three triage zones** — *needs you* (asking / review / done / close-pending / error)
+over *running* (working / parked / starting / queued …) over **offline** (dormant, at the bottom), a dim
+header leading each — and within a zone the **newest** session sits on top. The **offline** zone is keyed on
+**liveness, not the authored lifecycle**: a session whose process died while it was `asking`/`review`/`error`
+keeps that pre-death lifecycle, yet it cannot act until relaunched, so it sorts to **offline** rather than
+wrongly sitting under *needs you*; a merely booting session (`starting`/`queued`) stays under *running*. The
+selected row is marked by the **highlight wash alone**, no caret. Both list surfaces share this grouping +
+compact one-line layout; only the avatar differs (the map-side window keeps it, the console list drops it).
 
 All surfaces share name and status from `session.js`, whose single **`STATUS_COLOR`** map paints the
 liveness dot, the status word, **and** the compact sidebar's status **glyph** (`STATUS_GLYPH`) the SAME hue
-everywhere they appear (window row, console tab + header, @-mention and search rows, the relationship graph,
+everywhere they appear (window row, console tab + header, @-mention and search rows,
 the mobile card). Deliberately just **four hues — a traffic
 light plus grey**: green = on track, no action from you (`working`, or `parked` — paused to self-resume), yellow
 = waiting on YOU (`asking`/`review`/`done`), red = `error`, grey = stopped/dormant

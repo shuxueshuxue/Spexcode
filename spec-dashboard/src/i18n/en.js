@@ -35,11 +35,11 @@ export default {
   sessionZone: {
     need: 'needs you',
     run: 'running',
+    offline: 'offline',
   },
 
   hud: {
     helpTitle: 'help — keymap & legend (?)',
-    graphTitle: 'session relationships — open the live monitor graph in the session board',
     loading: 'loading specs from git…',
   },
 
@@ -107,7 +107,6 @@ export default {
     emptyBefore: 'no live worktrees — press ',
     emptyAfter: ' to start one',
     rename: 'rename',
-    resetOrder: 'reset order',
     close: 'close',
     closeTitle: 'close “{name}”?',
     closeConfirm: 'This closes the session and removes its worktree. Any uncommitted changes are lost.',
@@ -228,35 +227,10 @@ export default {
     expandable: ({ n }) => `${n} child${n === 1 ? '' : 'ren'} — focus to drill in`,
   },
 
-  sessionGraph: {
-    helpTitle: 'keymap & legend (?)',
-    asked: ({ a, b }) => `asked ${a} to monitor ${b}`,
-    picked: 'right-click another node for this one to monitor',
-    needSource: 'left-click a node first, then right-click another to monitor it',
-    monitorPrompt: ({ label, id }) => `Please monitor session ${label} (${id}): run \`spex watch ${id}\` in the background and keep it running so its transitions surface to me.`,
-    legend: {
-      title: 'session relationships',
-      close: 'close (esc or ?)',
-      secKeys: 'keys',
-      move: 'move the cursor to the nearest session',
-      open: 'open the focused session',
-      leave: 'back to New Session',
-      secMouse: 'mouse',
-      gDblClick: 'double-click',
-      gClickRight: 'click → right-click',
-      openMouse: 'double-click a session to open it',
-      monitor: 'left-click a node, then right-click another to ask the first to monitor it',
-      secEdges: 'edges',
-      edgesDesc: 'each arrow A→B is a live monitor — agent A is running `spex watch B` right now.',
-    },
-  },
-
   session: {
     opsTitle: 'nodes this session is changing — double-click the tab to lock + focus them',
-    dragHandle: 'drag to reorder',
     newSession: 'New Session',
     newSessionTitle: 'New Session (⌥+N)',
-    relationshipTitle: 'View Session Relationship — the live monitor graph (→ from an empty New Session, ← back)',
     ask: 'What would you like to do?',
     inputPlaceholder: 'describe the work · @ spec · / command · ⏎ to launch · ⇧⏎ newline',
     menuCommands: 'commands',

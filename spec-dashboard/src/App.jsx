@@ -415,13 +415,6 @@ function Dashboard({ specs, sessions, reload }) {
         {/* HUD: brand + a discreet `?` that opens the keymap/legend modal */}
         <div className="hud">
           <span className="brand">$ spec-dashboard</span>
-          {/* floating button — opens the session console on its relationship-graph tab */}
-          <button className="hud-graph" onClick={() => { setSessionSel('graph'); setSessionUI(true) }} title={t('hud.graphTitle')}>
-            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
-              <circle cx="3.5" cy="4" r="1.8" /><circle cx="12.5" cy="4" r="1.8" /><circle cx="8" cy="12.5" r="1.8" />
-              <path d="M4.9 5.1 L7 11 M11.1 5.1 L9 11 M5 4 H11" />
-            </svg>
-          </button>
           <button className="hud-help" onClick={() => setLegend((v) => !v)} title={t('hud.helpTitle')}>?</button>
         </div>
 

@@ -33,7 +33,10 @@ that needs to say *which* project shares one source rather than re-deriving it. 
 board**'s left-hand list header reuses it: the translated `// {sessions}` header ([[settings]])
 gains the project name as `// <project> {sessions}`, self-identifying the board the way the tab
 self-identifies the window — the same payoff when several project boards sit open at once. With no
-name resolved it falls back to the plain translated header.
+name resolved it falls back to the plain translated header. The **graph HUD brand** — the shell-prompt
+line pinned top-left over the node graph — reuses it too, reading `$ <project>` from the same helper so
+the on-canvas identity matches the tab and board rather than a hardcoded package name; before the first
+board loads it falls back to the plain `spec-dashboard` label.
 
 `index.html` ships a plain `SpexCode` `<title>` as the pre-load fallback — what the tab
 reads before the first board arrives, and if the backend is unreachable.

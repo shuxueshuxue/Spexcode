@@ -142,11 +142,16 @@ always stopping short of the bottom **stats strip**), and a long session list **
 than extending down over the board's stats bar. A single click **locks** the board onto
 that session (overlays light, rest grey, focus jumps to its first changed node, see [[keyboard-nav]]); a
 no-overlay session still locks un-greyed; a second click releases; **double-click opens** its board (mouse-side `⏎`). The **interface's own tabs** render the same `SessionRow` with those gestures **inverted**:
-single click switches tab, double-click locks.
+single click switches tab, double-click locks — but in its **compact, avatar-less, terminal-styled** variant
+(`showAvatar={false} compact`): the console's own left list is a dark, dense TERMINAL pane (matching the right
+terminal, set apart from the board's warm paper), one line per session, the status a single colour glyph not
+a word. The avatar is dropped ONLY here — its cross-referencing job (matching a session to the avatars on the
+nodes it edits) belongs to the map-side SessionWindow and the relationship-graph, which both keep it.
 
-All surfaces share name and status from `session.js`, whose single **`STATUS_COLOR`** map paints **both** the
-liveness dot **and** the status word the SAME hue everywhere they appear (window row, console tab + header,
-@-mention and search rows, the relationship graph, the mobile card). Deliberately just **four hues — a traffic
+All surfaces share name and status from `session.js`, whose single **`STATUS_COLOR`** map paints the
+liveness dot, the status word, **and** the compact sidebar's status **glyph** (`STATUS_GLYPH`) the SAME hue
+everywhere they appear (window row, console tab + header, @-mention and search rows, the relationship graph,
+the mobile card). Deliberately just **four hues — a traffic
 light plus grey**: green = on track, no action from you (`working`, or `parked` — paused to self-resume), yellow
 = waiting on YOU (`asking`/`review`/`done`), red = `error`, grey = stopped/dormant
 (`idle`/`starting`/`queued`/`close-pending`/`offline`). The colour

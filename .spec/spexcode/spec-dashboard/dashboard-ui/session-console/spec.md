@@ -22,7 +22,11 @@ driving the same sessions through the CLI see identical state.
 
 ## expanded spec
 
-The interface is a **near-fullscreen popup modal** over the dimmed board. Two panes: a left session list and a
+The interface is a **full-screen board** — edge-to-edge over the dimmed app, with **no reserved inset** so no
+screen space is wasted (still a lifted modal with a scale-in pop, not a route). The whole console wears the
+**dark solarized terminal theme** — the frame around the terminal included, not just the sidebar — so the
+left list, the right frame and the embedded terminal read as **one dark surface** rather than a bright gutter
+around a dark pane (a palette remap scoped to the console, while the board behind stays warm paper). Two panes: a left session list and a
 right area that **morphs** by what's focused. The
 list's **top button row** pairs `＋` New Session and the relationship-graph icon above the session rows (so
 neither blocks the `↑/↓` path); New ⇄ graph is horizontal — `→` from an *empty* New enters, `←` returns.
@@ -60,9 +64,11 @@ has intentionally not launched, so it shows neither a terminal nor a relaunch, a
 frees. The header bar above it (`si-th-name`) titles the
 terminal with the **shared session headline** ([[session-activity]]), not the stable `sessionName` — same
 source and content as the session rows, only with more room before it truncates — so the title over the
-terminal never disagrees with the row that opened it. Read-only governs input, not extraction: text selects, the
-wheel scrolls real history, a drag selects even under mouse-reporting, and `⌘/Ctrl+C` copies to the clipboard
-**over HTTPS, localhost, or plain HTTP** (past the secure-context-only Clipboard API).
+terminal never disagrees with the row that opened it. Read-only governs *keyboard* input, not extraction or navigation: text selects, and the
+wheel scrolls **real history** — for a normal-screen pane into xterm's own seeded scrollback, for a
+full-screen TUI by forwarding the wheel so the app scrolls itself ([[live-view]] owns which path) — a drag
+selects even under mouse-reporting, and `⌘/Ctrl+C` copies to the clipboard **over HTTPS, localhost,
+or plain HTTP** (past the secure-context-only Clipboard API).
 
 Input has **two channels**. The **`❯` box** is the prompt channel: submitting dispatches through the **control
 socket** (never typed into the pane), so it lands even in copy-mode. The exception is the **board commands** —
@@ -75,7 +81,10 @@ goes `offline` and offers **relaunch** (the same resumable stop a crash produces
 removes it (`act('close')`, **red**) — worktree + branch gone, the work discarded, the row's right-click Close's
 twin. `/merge` merges (green), `/nav` toggles nav mode (yellow), `/proof` opens the proof (cyan). In the inbox
 `/` menu they **lead** the list, coloured, tagged `[board]`, apart from CC's blue command rows; accepting one
-**runs** it (the one row that acts, not inserts — see [[term-input]]). Typed `/exit` and `/close` carry **no
+**runs** it (the one row that acts, not inserts — see [[term-input]]). A board command **overrides** a
+same-named CC command (CC ships its own `/exit`), so that name shows **once** — as the board's, never a
+duplicate row: one command, one identity. Row descriptions render as sentences (first letter capitalised).
+Typed `/exit` and `/close` carry **no
 confirm** — typing the exact command is itself the deliberate act, where the row-menu's Close guards an
 easy-to-mis-aim right-click. The box **holds
 focus persistently** — clicking
@@ -129,21 +138,33 @@ land. Still on the closed tab → New Session; already moved to another valid ta
 fallback covers a session that ends or is closed elsewhere, so the selection never points at a session the
 board no longer has.
 
-**SessionWindow** is the read-only glance, built from the shared **`SessionRow`** face — a two-row block
-([[session-activity]]): Row 1 is the avatar (no status dot) + the session **headline** (the worker's live
-tmux self-summary once it exists, else a launch-prompt placeholder; a rename always wins), with a **monochrome
-inline-SVG padlock** (the dashboard's own glyph vocabulary, not a colour emoji) at its end when the row is
-locked; Row 2 is the **colour-coded status word** + pending-op count. It stays a
+**SessionWindow** is the read-only glance, built from the shared **`SessionRow`** face
+([[session-activity]]) in the SAME **compact one-line, two-zone grouped** layout as the console list — but
+KEEPING the **avatar** (its cross-referencing job) and the board's warm paper: the avatar + the session
+**headline** (the worker's live tmux self-summary once it exists, else a launch-prompt placeholder; a rename
+always wins) + a single colour-coded status **glyph** + pending-op count, on one line, with a **monochrome
+inline-SVG padlock** (the dashboard's own glyph vocabulary, not a colour emoji) at the headline's end when the
+row is locked. It stays a
 **bounded** glance: the window never grows into a curtain — its height is capped (~80% of the viewport, and
 always stopping short of the bottom **stats strip**), and a long session list **scrolls** inside it rather
 than extending down over the board's stats bar. A single click **locks** the board onto
 that session (overlays light, rest grey, focus jumps to its first changed node, see [[keyboard-nav]]); a
 no-overlay session still locks un-greyed; a second click releases; **double-click opens** its board (mouse-side `⏎`). The **interface's own tabs** render the same `SessionRow` with those gestures **inverted**:
-single click switches tab, double-click locks.
+single click switches tab, double-click locks — but in its **compact, avatar-less, terminal-styled** variant
+(`showAvatar={false} compact`): the console's own left list is a dark, dense TERMINAL pane (matching the right
+terminal, set apart from the board's warm paper), one line per session, the status a single colour glyph not
+a word. The avatar is dropped ONLY here — its cross-referencing job (matching a session to the avatars on the
+nodes it edits) belongs to the map-side SessionWindow and the relationship-graph, which both keep it. The
+list itself **groups into two triage zones** — *needs you* (asking / review / done / close-pending / error)
+over *self-running* (working / parked / queued …), a dim header leading each — and within a zone the
+**newest** session sits on top ([[session-reorder]]). The selected row is marked by the **highlight wash
+alone**, no caret. Both list surfaces share this grouping + compact one-line layout; only the avatar (and the
+map-side window's warm-paper theme vs the console's dark solarized one) differ.
 
-All surfaces share name and status from `session.js`, whose single **`STATUS_COLOR`** map paints **both** the
-liveness dot **and** the status word the SAME hue everywhere they appear (window row, console tab + header,
-@-mention and search rows, the relationship graph, the mobile card). Deliberately just **four hues — a traffic
+All surfaces share name and status from `session.js`, whose single **`STATUS_COLOR`** map paints the
+liveness dot, the status word, **and** the compact sidebar's status **glyph** (`STATUS_GLYPH`) the SAME hue
+everywhere they appear (window row, console tab + header, @-mention and search rows, the relationship graph,
+the mobile card). Deliberately just **four hues — a traffic
 light plus grey**: green = on track, no action from you (`working`, or `parked` — paused to self-resume), yellow
 = waiting on YOU (`asking`/`review`/`done`), red = `error`, grey = stopped/dormant
 (`idle`/`starting`/`queued`/`close-pending`/`offline`). The colour

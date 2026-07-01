@@ -30,6 +30,12 @@ export default {
     pending: '待定',
   },
 
+  // 会话列表按此分成两个区（[[session-console]]）——「轮到谁」。
+  sessionZone: {
+    need: '待你处理',
+    run: '自运行',
+  },
+
   hud: {
     helpTitle: '帮助 — 按键与图例（?）',
     graphTitle: '会话关系 — 在会话面板中打开实时监视图',
@@ -155,7 +161,7 @@ export default {
       note: '≈ 备注',
       legacy: '旧版',
       expected: '预期：',
-      noteLabel: '偏差：',
+      noteLabel: '备注：',
       loadingTranscript: '正在加载文本记录…',
       miss: '原始文件缺失 —— 证据已从缓存中清除。',
       noImage: '无证据 —— 代理未捕获即作出判定。',
@@ -194,7 +200,6 @@ export default {
   // 左侧聚焦面板 —— 把当前聚焦节点的 Issue 与 Scenario（及其满足状态）放在一处，让这两种有状态的工作
   // 共用同一界面，而非在节点上弹窗。
   focusPanel: {
-    focus: '聚焦',
     scenarios: '场景',
     issues: 'issue',
     noScenarios: '无场景 —— 该节点没有用于测量的 yatsu.md。',

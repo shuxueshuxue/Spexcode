@@ -1,7 +1,8 @@
 import { useT } from './i18n/index.jsx'
 
-// the pass/fail MARK a reading scores, or null when there is no pass/fail to show — a `note` (an observation,
-// not a verdict) or a legacy pre-verdict reading. Those carry no ✓/✗, so they read as the empty ring.
+// the pass/fail MARK a reading scores, or null when there is no pass/fail to show — a legacy pre-verdict
+// reading, or a legacy note-only one (status:'note', before `note` became an annotation on pass/fail). Those
+// carry no ✓/✗, so they read as the empty ring. A modern note rides on a pass/fail, so it still scores.
 function mark(r) {
   return r?.verdict?.status === 'pass' ? 'check' : r?.verdict?.status === 'fail' ? 'cross' : null
 }
@@ -47,6 +48,18 @@ export function ScenarioCount({ scenarios, evals }) {
   const total = states.length
   const label = t('score.count', { satisfied, total, outstanding: total - satisfied })
   return <span className={`scenario-count ${state}`} title={label} aria-label={label}>✓{satisfied}/{total}</span>
+}
+
+// the scenario's classification tags as a compact, wrapping row of chips — the ONE element used everywhere a
+// scenario surfaces (focus panel, search palette, eval tab), so a tag looks identical wherever it appears.
+// Empty/absent → nothing rendered; the tag values are the configured library (lint.scenarioTags).
+export function TagChips({ tags }) {
+  if (!tags?.length) return null
+  return (
+    <span className="tag-chips">
+      {tags.map((tag) => <span key={tag} className="tag-chip">{tag}</span>)}
+    </span>
+  )
 }
 
 // `title` overrides the default hover copy (the eval tab passes the moved-axis detail for a stale reading).

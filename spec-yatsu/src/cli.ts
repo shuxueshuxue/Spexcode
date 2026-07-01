@@ -72,6 +72,7 @@ export function nodeChanged(dirRel: string, codeFiles: string[], changed: Set<st
 
 async function scan(args: string[] = []): Promise<number> {
   const root = repoRoot()
+  const cfg = loadConfig(root)
   const changedOnly = has(args, 'changed')
   const changed = changedOnly ? changedSinceBase(root) : null
   const idx = await driftIndex(root)
@@ -91,7 +92,7 @@ async function scan(args: string[] = []): Promise<number> {
     if (y) {
       // schema first: a malformed yatsu.md is the loudest gap — report each violation, then still scan its
       // (leniently-parsed) scenarios for stale/missing so a typo doesn't mask a real freshness gap.
-      for (const e of validateScenarios(readFileSync(join(y.dir, YATSU_FILE), 'utf8'))) {
+      for (const e of validateScenarios(readFileSync(join(y.dir, YATSU_FILE), 'utf8'), cfg.scenarioTags)) {
         malformed++
         findings.push(`  • yatsu-schema: '${s.id}' ${e} — fix ${y.yatsuPath}`)
       }
@@ -131,7 +132,7 @@ async function scan(args: string[] = []): Promise<number> {
   // whole-repo only (never --changed): a structural fact, not a per-branch freshness gap. Counts only explicit scenario `code:`.
   let overOwned = 0
   if (!changedOnly) {
-    const maxOwners = loadConfig(root).maxOwners
+    const maxOwners = cfg.maxOwners
     const govCount = new Map<string, number>()
     for (const n of yByDir.values()) for (const sc of n.scenarios) for (const f of sc.code ?? []) govCount.set(f, (govCount.get(f) ?? 0) + 1)
     const over = [...govCount].filter(([, c]) => c > maxOwners).sort((a, b) => b[1] - a[1])
@@ -168,7 +169,7 @@ async function evalCmd(args: string[]): Promise<number> {
 
   // the verdict the agent reached (required — a measurement without one is the legacy shape, not a filing).
   const verdict = parseVerdict(args)
-  if (!verdict) { console.error('spex yatsu eval: a verdict is required — one of --pass | --fail | --note <text>'); return 2 }
+  if (!verdict) { console.error('spex yatsu eval: a verdict is required — --pass or --fail (either may add --note <text>)'); return 2 }
 
   // the evidence the agent captured (optional; --image XOR --result). The bytes go to the content-addressed
   // cache exactly the same whether image or transcript; only `blobKind` records which they are.
@@ -196,12 +197,13 @@ async function evalCmd(args: string[]): Promise<number> {
   return 0
 }
 
-// the verdict from the flags: exactly one of --pass / --fail / --note <text> (precedence pass > fail > note).
+// the verdict from the flags: --pass or --fail sets the status (pass wins if both given); --note <text> is an
+// OPTIONAL annotation attached to either. No status flag → null (a measurement must commit to pass or fail).
 function parseVerdict(args: string[]): Verdict | null {
-  if (has(args, 'pass')) return { status: 'pass' }
-  if (has(args, 'fail')) return { status: 'fail' }
   const note = flag(args, 'note')
-  if (note !== undefined) return { status: 'note', note }
+  const ann = note !== undefined ? { note } : {}
+  if (has(args, 'pass')) return { status: 'pass', ...ann }
+  if (has(args, 'fail')) return { status: 'fail', ...ann }
   return null
 }
 
@@ -226,6 +228,7 @@ async function clean(args: string[]): Promise<number> {
 
 function checkStaged(): number {
   const root = repoRoot()
+  const tagLibrary = loadConfig(root).scenarioTags
   const staged = stagedFiles(root)
   let bad = false
 
@@ -240,7 +243,7 @@ function checkStaged(): number {
   for (const rel of staged.filter((p) => p === YATSU_FILE || p.endsWith('/' + YATSU_FILE))) {
     const abs = join(root, rel)
     if (!existsSync(abs)) continue   // staged deletion — nothing to validate
-    const errs = validateScenarios(readFileSync(abs, 'utf8'))
+    const errs = validateScenarios(readFileSync(abs, 'utf8'), tagLibrary)
     if (!errs.length) continue
     bad = true
     console.error(`✗ SpexCode yatsu: ${rel} — invalid scenario schema:`)
@@ -261,13 +264,13 @@ async function show(args: string[]): Promise<number> {
   return 0
 }
 
-// the verdict as a short tag for the terminal: ✓ pass / ✗ fail / ≈ note: <text>, or `legacy` for a reading
-// taken before verdicts existed.
+// the verdict as a short tag for the terminal: ✓ pass / ✗ fail, with ` — <note>` appended when annotated;
+// `legacy` for a reading taken before verdicts existed, `≈ <note>` for a legacy note-only reading.
 function verdictText(v: Verdict | undefined): string {
   if (!v) return 'legacy'
-  if (v.status === 'pass') return '✓ pass'
-  if (v.status === 'fail') return '✗ fail'
-  return `≈ note: ${v.note ?? ''}`
+  if (v.status === 'pass') return v.note ? `✓ pass — ${v.note}` : '✓ pass'
+  if (v.status === 'fail') return v.note ? `✗ fail — ${v.note}` : '✗ fail'
+  return v.note ? `≈ ${v.note}` : 'legacy'   // legacy note-only reading
 }
 
 export function formatTimeline(tl: EvalTimeline): string {
@@ -291,6 +294,6 @@ export async function runYatsu(args: string[]): Promise<number> {
   if (sub === 'clean') return clean(args.slice(1))
   if (sub === 'show') return show(args.slice(1))
   if (sub === 'check-staged') return checkStaged()
-  console.error('spex yatsu: scan [--changed] | eval [.|<node>] [--scenario <name>] (--pass|--fail|--note <text>) [--image <path>|--result <path|->] | show [.|<node>] [--json] | clean [--keep-latest|--all]')
+  console.error('spex yatsu: scan [--changed] | eval [.|<node>] [--scenario <name>] (--pass|--fail) [--note <text>] [--image <path>|--result <path|->] | show [.|<node>] [--json] | clean [--keep-latest|--all]')
   return 2
 }

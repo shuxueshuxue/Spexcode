@@ -31,6 +31,12 @@ export default {
     pending: 'pending',
   },
 
+  // the two triage zones the session list groups into ([[session-console]]) — "whose turn is it".
+  sessionZone: {
+    need: 'needs you',
+    run: 'running',
+  },
+
   hud: {
     helpTitle: 'help — keymap & legend (?)',
     graphTitle: 'session relationships — open the live monitor graph in the session board',
@@ -158,7 +164,7 @@ export default {
       note: '≈ note',
       legacy: 'legacy',
       expected: 'expected:',
-      noteLabel: 'how far off:',
+      noteLabel: 'note:',
       loadingTranscript: 'loading transcript…',
       miss: 'miss original file — the evidence was pruned from the cache.',
       noImage: 'no evidence — the agent attested without a capture.',
@@ -199,7 +205,6 @@ export default {
   // the left FOCUS PANEL — the focused node's Issues and Scenarios in one place (their satisfaction status),
   // so the two stateful kinds of bound work share one surface instead of an on-node popup.
   focusPanel: {
-    focus: 'focus',
     scenarios: 'scenarios',
     issues: 'issues',
     noScenarios: 'no scenarios — this node declares no yatsu.md to measure.',

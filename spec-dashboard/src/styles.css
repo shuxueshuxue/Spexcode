@@ -457,44 +457,56 @@ body {
 .scenario-count.stalePass, .scenario-count.staleFail { color: var(--muted); }
 .scenario-count.empty { color: var(--muted); opacity: .7; }
 
-/* @@@ focus panel - the left column ([[focus-panel]]): the FOCUSED node's Issues + Scenarios, the two
+/* @@@ focus panel - the RIGHT column ([[focus-panel]]): the FOCUSED node's Issues + Scenarios, the two
    stateful kinds of bound work, in ONE place with their satisfaction status — replacing the on-node issue
    popover so neither kind is privileged. Scrolls its own content; reuses the .issue-card vocabulary below. */
-/* the RIGHT column now; the graph's own border-right draws the separator on its (left-of-panel) edge. */
-.focus-panel { overflow: auto; background: var(--panel);
-  display: flex; flex-direction: column; gap: 16px; padding: 14px 12px; }
-.fp-head { display: flex; flex-direction: column; gap: 2px; }
-.fp-eyebrow { font-size: 9px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
-.fp-title { font-size: 14px; font-weight: 700; color: var(--ink2); word-break: break-word; line-height: 1.25; }
+/* sits on the SAME paper as the board — the graph's own border-right is the single clean seam (no muddy
+   in-between slab, no double hairline), which also turns the row :hover (panel2) into a real delta. */
+.focus-panel { overflow: auto; background: var(--paper);
+  display: flex; flex-direction: column; gap: 18px; padding: 16px 14px; }
+/* the head is the panel's title band: the focused node's title, then a clamped desc preview. No eyebrow
+   kicker and no closing hairline — the section heads below carry their own underlines, so a head rule would
+   just double the line; the inter-section gap is the only separator the head needs. */
+.fp-head { display: flex; flex-direction: column; gap: 3px; }
+.fp-title { font-size: 15px; font-weight: 700; color: var(--ink2); word-break: break-word; line-height: 1.25; }
 /* the focused node's desc one-liner — clamped so a long description never blows out the head; full text on hover. */
-.fp-desc { color: var(--muted); font-size: 11px; line-height: 1.35; margin-top: 2px;
-  display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
-.fp-sec { display: flex; flex-direction: column; gap: 6px; }
+.fp-desc { color: var(--ink); font-size: 11px; line-height: 1.4; margin-top: 3px;
+  display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.fp-sec { display: flex; flex-direction: column; gap: 5px; }
 .fp-sec-head { display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted);
-  border-bottom: 1px solid var(--line); padding-bottom: 4px; }
-.fp-count { font-family: var(--mono); }
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+  border-bottom: 1px solid var(--line); padding-bottom: 5px; }
+.fp-count { font-family: var(--mono); font-size: 10px; }
 .fp-count.pass { color: var(--green); } .fp-count.fail { color: var(--red); }
 .fp-count.stalePass, .fp-count.staleFail, .fp-count.empty { color: var(--muted); }
-.fp-empty { color: var(--muted); font-size: 11px; padding: 2px; }
+.fp-empty { color: var(--muted); font-size: 11px; font-style: italic; padding: 3px 2px; }
 /* a scenario row is a BUTTON (drills into the eval tab); reset the native button chrome to read as a row. */
-.fp-scenario { display: flex; gap: 7px; align-items: flex-start; width: 100%; padding: 4px 4px; text-align: left;
-  background: none; border: none; border-radius: 4px; font: inherit; color: inherit; cursor: pointer; }
+.fp-scenario { display: flex; gap: 8px; align-items: flex-start; width: 100%; padding: 6px 6px; text-align: left;
+  background: none; border: none; border-radius: 5px; font: inherit; color: inherit; cursor: pointer; }
 .fp-scenario:hover { background: var(--panel2); }
-.fp-sc-mark { flex: none; font-weight: 900; line-height: 1.5; }
+.fp-sc-mark { flex: none; width: 12px; text-align: center; font-weight: 900; font-size: 11px; line-height: 1.5; }
 .fp-scenario.pass .fp-sc-mark { color: var(--green); }
 .fp-scenario.fail .fp-sc-mark { color: var(--red); }
 .fp-scenario.stalePass .fp-sc-mark, .fp-scenario.staleFail .fp-sc-mark { color: var(--muted); }
 .fp-scenario.empty .fp-sc-mark, .fp-scenario.missing .fp-sc-mark { color: var(--muted); opacity: .55; }
-.fp-sc-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.fp-sc-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .fp-sc-name { font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--ink2); }
 /* a clamped preview — the full `expected` prose lives one click away in the eval tab. */
-.fp-sc-expected { color: var(--ink); font-size: 11px; line-height: 1.35;
+.fp-sc-expected { color: var(--ink); font-size: 11px; line-height: 1.4;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .fp-sc-code { color: var(--muted); font-family: var(--mono); font-size: 9px; opacity: .85; }
+
+/* @@@ tag chips — the ONE element (score.jsx TagChips) for a scenario's classification tags, used wherever a
+   scenario surfaces (focus panel, search palette, eval tab). Paper chip + mono, the SAME minimal vocabulary as
+   .stat-chip, so a tag reads identically everywhere; flex-wrap keeps a multi-tag cloud from overflowing. */
+.tag-chips { display: inline-flex; flex-wrap: wrap; gap: 3px; min-width: 0; }
+.tag-chip { font-family: var(--mono); font-size: 9px; line-height: 1.5; color: var(--ink2);
+  background: var(--paper); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; white-space: nowrap; }
+/* in the search row the chips sit between title and path — keep them from being squeezed out. */
+.search-item .tag-chips { flex: none; }
 .fp-issue-counts { display: flex; gap: 6px; font-size: 9px; }
-.focus-panel .issue-group-head { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 6px 2px 2px; }
-.focus-panel .issue-card { padding: 5px 4px; }
+.focus-panel .issue-group-head { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 8px 2px 3px; }
+.focus-panel .issue-card { padding: 6px 6px; border-radius: 5px; }
 
 .issue-card { display: block; padding: 5px 6px; border-radius: 5px; text-decoration: none; }
 .issue-card + .issue-card { margin-top: 2px; }
@@ -581,6 +593,22 @@ body {
 }
 .sess-status { color: var(--muted); flex: none; }   /* colour overridden inline by STATUS_COLOR */
 .sess-ops { color: var(--ov, var(--blue)); font-weight: 700; flex: none; }
+/* compact one-line face: the status word collapses to a single glyph (STATUS_GLYPH), painted by STATUS_COLOR
+   inline; the exact word stays on the title/aria for hover + a11y. */
+.sess-glyph { flex: none; width: 12px; text-align: center; font-size: 11px; line-height: 1; }
+/* the board glance (.sesswin) reuses the SAME two-zone grouping + compact one-line face as the console
+   ([[session-console]]) — the one difference is it KEEPS the avatar and stays on the board's warm paper. */
+.sesswin .sess-row { flex-wrap: nowrap; }
+.sesswin .sess-meta { flex: none; width: auto; min-width: 0; margin-top: 0; margin-left: auto; }
+.sesswin-zone {
+  --zh: var(--muted);
+  display: flex; align-items: center; gap: 7px; padding: 8px 9px 2px;
+  font-size: 9.5px; font-weight: 800; letter-spacing: .9px; text-transform: uppercase; user-select: none;
+  color: transparent; -webkit-text-fill-color: transparent; -webkit-text-stroke: .6px var(--zh);
+}
+.sesswin-zone::after { content: ''; flex: 1; height: 1px; background: var(--zh); opacity: .3; }
+.sesswin-zone-need { --zh: var(--yellow); }
+.sesswin-zone-run  { --zh: var(--green); }
 
 /* ---- session right-click menu + rename prompt (SessionContextMenu.jsx) ---- */
 /* a small pop-over anchored at the cursor (fixed to viewport coords). z-index 60 floats it ABOVE every
@@ -718,7 +746,9 @@ body {
   display: flex; align-items: flex-start; justify-content: center; padding-top: 12vh;
 }
 .search-panel {
-  width: min(560px, 92vw); max-height: 70vh; display: flex; flex-direction: column; overflow: hidden;
+  /* adaptive: scales with the viewport (≈half-width), floored for medium screens and capped so lines
+     stay scannable on a very large display; 92vw guards small screens. */
+  width: min(92vw, clamp(640px, 50vw, 1100px)); max-height: 72vh; display: flex; flex-direction: column; overflow: hidden;
   background: var(--paper); border: 1px solid var(--blue); border-radius: 6px;
   box-shadow: 0 14px 44px rgba(101,123,131,.28); font-size: 12px;
 }
@@ -729,7 +759,7 @@ body {
   color: var(--ink2); font-family: var(--mono); font-size: 14px; line-height: 1.4;
 }
 .search-input::placeholder { color: var(--muted); }
-.search-results { margin: 0; padding: 4px; list-style: none; overflow-y: auto; }
+.search-results { margin: 0; padding: 4px; list-style: none; overflow-y: auto; overflow-x: hidden; }
 .search-empty { padding: 8px 10px; color: var(--muted); }
 .search-item {
   display: flex; align-items: baseline; gap: 8px; padding: 5px 8px; border-radius: 3px;
@@ -747,8 +777,10 @@ body {
 .search-kind.k-session { color: var(--orange); border-color: color-mix(in srgb, var(--orange) 40%, var(--line)); }
 .search-kind.k-issue   { color: var(--green); border-color: color-mix(in srgb, var(--green) 40%, var(--line)); }
 .search-kind.k-scenario{ color: var(--cyan); border-color: color-mix(in srgb, var(--cyan) 40%, var(--line)); }
-.search-title { color: var(--ink2); font-weight: 600; flex: none; }
-.search-path { color: var(--muted); font-size: 11px; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* title and path both shrink-with-ellipsis so a long row truncates instead of forcing a horizontal
+   scrollbar; chips + kind stay fixed. */
+.search-title { color: var(--ink2); font-weight: 600; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.search-path { color: var(--muted); font-size: 11px; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .search-foot { padding: 6px 12px; border-top: 1px solid var(--line); background: var(--panel); color: var(--muted); font-size: 11px; }
 
 /* ---- session interface (Enter): two panes, right content morphs ---- */
@@ -759,12 +791,23 @@ body {
   background: rgba(101,123,131,.4); backdrop-filter: blur(5px);
   display: flex; align-items: center; justify-content: center;
 }
-/* @@@ near-fullscreen, still a popup - the board fills the viewport but keeps a thin inset so the dimmed,
-   blurred app frames it (you can see it's floating over something), plus rounded corners, a deep float
-   shadow, and a scale-in "pop" — all of which keep the modal mental model rather than reading as a route. */
+/* @@@ TRUE fullscreen - the session board fills the entire viewport edge-to-edge (no reserved inset/margin,
+   no rounded corners) so no screen space is wasted; it keeps the scale-in "pop" and lifts above the board. */
 .si-panel {
-  width: 96vw; height: 94vh;
-  background: var(--paper); border: 1px solid var(--blue); border-radius: 12px;
+  /* @@@ dark console theme — the whole console is remapped to solarized DARK (the app is solarized LIGHT),
+     so the frame AROUND the terminal matches the terminal (--term-bg) instead of clashing bright paper.
+     Scoped here: every child using var(--paper/--panel/--ink/--line…) flips to dark automatically, one
+     switch instead of per-rule edits; the accent hues (blue/green/red/…) work on both grounds, left as-is. */
+  --paper: #002b36;   /* base03 — console ground = the terminal bg */
+  --panel: #073642;   /* base02 */
+  --panel2:#08404e;   /* a touch above base02 for raised chrome */
+  --line:  #0a4657;   /* dark hairline */
+  --ink:   #93a1a1;   /* base1 body text */
+  --ink2:  #eee8d5;   /* base2 headings/bright */
+  --muted: #657b83;   /* base00 muted */
+  --sg-comms-bg: rgba(7, 54, 66, .9);   /* dark chip behind the graph's comms count (was cream) */
+  width: 100vw; height: 100vh;
+  background: var(--paper); border: none; border-radius: 0;
   overflow: hidden; display: flex;
   box-shadow: 0 30px 90px rgba(7, 54, 66, .45);
   animation: si-pop .2s cubic-bezier(.2, .8, .2, 1);
@@ -799,6 +842,37 @@ body {
    edge, same blue as the selected wash, no layout shift. */
 .si-item.drop-before { box-shadow: inset 0 2px 0 0 var(--blue); }
 .si-item.drop-after { box-shadow: inset 0 -2px 0 0 var(--blue); }
+/* @@@ terminal-aesthetic sidebar ([[session-console]]) — the console's OWN session list reads as the SAME
+   dark solarized TERMINAL as the right pane (background = --term-bg, solarized base03), so left and right feel
+   like one terminal instead of clashing. Scoped to `.si-list` so the map-side SessionWindow (.sesswin) keeps
+   the board's warm paper AND its avatars. Rows are COMPACT one-line: no avatar, headline + a single
+   colour-coded status GLYPH (no word) + op tally + drag handle on ONE row (nowrap). */
+.si-list { background: var(--term-bg); color: #93a1a1; }
+.si-list .si-toprow { border-bottom-color: #073642; }
+.si-list .si-pill { border-color: #0a4657; color: #839496; background: #073642; }
+.si-list .si-pill:hover { border-color: #157488; color: #93a1a1; }
+.si-item { flex-wrap: nowrap; padding: 5px 12px; border-bottom-color: #073642; color: #93a1a1; font-size: 11.5px; }
+.si-item:hover { background: #073642; }
+.si-item.on { background: color-mix(in srgb, var(--blue) 26%, #002b36); color: #eee8d5; }
+.si-item.on:hover { background: color-mix(in srgb, var(--blue) 34%, #002b36); }
+.si-item.on::before { content: none; }   /* selected caret removed — the highlight wash is enough (per request) */
+.si-item.on .sess-id { color: #fdf6e3; }
+/* meta collapses inline (no full-width row-2 wrap) so the whole face stays on one line */
+.si-item .sess-meta { flex: none; width: auto; min-width: 0; margin-top: 0; margin-left: auto; opacity: 1; overflow: visible; }
+.si-item .si-drag-handle { color: #657b83; }
+.si-item:hover .si-drag-handle { color: #93a1a1; }
+.si-item .sess-lock { color: #657b83; }
+/* zone divider — a HOLLOW (outlined) uppercase title with a hairline rule trailing it, so each zone is
+   separated by an openwork divider rather than a solid label. `--zh` is the zone hue (stroke + line). */
+.si-zone {
+  --zh: #586e75;
+  display: flex; align-items: center; gap: 8px; padding: 10px 12px 4px;
+  font-size: 10px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; user-select: none;
+  color: transparent; -webkit-text-fill-color: transparent; -webkit-text-stroke: .6px var(--zh);
+}
+.si-zone::after { content: ''; flex: 1; height: 1px; background: var(--zh); opacity: .3; }
+.si-zone-need { --zh: #b58900; }   /* solarized yellow — waiting on you */
+.si-zone-run  { --zh: #859900; }   /* solarized green — self-running */
 /* @@@ top button row - New Session (＋, blue) and the relationship graph (network glyph, magenta) as two
    COMPACT side-by-side buttons, not full-width rows — so neither sits in the ↑/↓ path to a session. Selected
    one gets a hue wash + ring (its own colour), mirroring the session rows' selected wash. */
@@ -1289,3 +1363,14 @@ body {
 .proof-x:hover { border-color: var(--orange); color: var(--orange); }
 .proof-iframe { flex: 1; width: 100%; border: 0; background: #0b0e14; }
 /* the `proof` button's cyan now comes from the shared `.si-act.board.sc-cyan` rule (see board commands). */
+
+/* @@@ console dark frame — EXPLICIT overrides ([[session-console]]). The `.si-panel` palette remap already
+   makes these dark via var(--paper/--panel2/--line), but as NEW rules with the solarized-dark values spelled
+   out they also (a) win by source order and (b) apply cleanly over HMR without depending on a var-value
+   re-cascade — so the frame AROUND the terminal, the terminal box, its head bar and the docked input read as
+   one dark surface, no warm hairlines left. */
+.si-content { background: #002b36; }
+.si-term { border-color: #0a4657; }
+.si-term-head { background: #073642; border-bottom-color: #0a4657; color: #eee8d5; }
+.si-bottom { background: #073642; border-color: #0a4657; }
+.si-inputwrap { border-color: #0a4657; }

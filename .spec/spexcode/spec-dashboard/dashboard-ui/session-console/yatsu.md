@@ -1,6 +1,7 @@
 ---
 scenarios:
   - name: close-tab-fallback
+    tags: [frontend-e2e, desktop]
     description: >
       Through the running dashboard in a real browser, open the session interface (Enter) with at least
       two live sessions, A and B. Closing is reached ONLY by right-clicking a session row → "Close" →
@@ -18,6 +19,7 @@ scenarios:
       on B — the close never yanks you back to New Session. In neither case is the selected tab left
       pointing at a session the board no longer lists.
   - name: create-stays-on-new
+    tags: [frontend-e2e, desktop]
     description: >
       Through the running dashboard in a real browser, open the session interface (Enter) and land on the
       New Session tab. Type a short launch prompt (e.g. `@<some-node> quick smoke test`) and press Enter to
@@ -39,6 +41,7 @@ scenarios:
       close-tab-fallback scenarios — note `/exit` does NOT remove a tab, it only stops the session), never a
       creation.
   - name: exit-command-stops-keeps-worktree
+    tags: [frontend-e2e, desktop]
     description: >
       Through the running dashboard in a real browser, open the session interface (Enter) on a LIVE
       (non-offline) session whose `❯` box is enabled. Type exactly `/exit` into the box (dismiss the `/`
@@ -55,6 +58,7 @@ scenarios:
       read-only pane shows no new `/exit` line). Any other text, including `/exit` with trailing words,
       dispatches normally to the agent.
   - name: close-command-removes
+    tags: [frontend-e2e, desktop]
     description: >
       Through the running dashboard in a real browser, open the session interface (Enter) on a LIVE
       (non-offline) session whose `❯` box is enabled. Type exactly `/close` into the box (dismiss the `/`
@@ -67,6 +71,7 @@ scenarios:
       literal text `/close` is never dispatched into the terminal/agent (the read-only pane shows no new
       `/close` line). Any other text, including `/close` with trailing words, dispatches normally to the agent.
   - name: window-bounded-scroll
+    tags: [frontend-e2e, desktop]
     description: >
       Through the running dashboard in a real browser, with MORE live/queued sessions than fit the
       viewport at once (a dozen or more), look at the top-left SessionWindow glance together with the
@@ -83,13 +88,17 @@ scenarios:
       and scrolling reaches the final row. On the MAIN baseline the same long list extends straight down
       past 80% of the viewport and overlaps/covers the stats strip, with no scrollbar.
   - name: board-command-parity
+    tags: [frontend-e2e, desktop]
     description: >
       Through the running dashboard in a real browser, open the session interface (Enter) on a session in the
       REVIEW state (so nav + proof + merge all apply). (1) Read the header action row: confirm three small
       TEXT buttons — nav, proof, merge — with NO leading glyph/emoji (no ⌨ keyboard, no ◆ diamond), each
       rendered in a distinct colour. (2) In the `❯` inbox type `/` and read the completion menu: the board's
       own commands (`/nav`, `/proof`, `/merge`, `/exit`, `/close`) lead the list, each `/name` and its
-      `[board]` tag painted its identity colour, visibly apart from Claude Code's blue command rows.
+      `[board]` tag painted its identity colour, visibly apart from Claude Code's blue command rows. Now
+      narrow the query — type `/exit`, a name Claude Code ALSO ships: confirm the menu shows `/exit` exactly
+      ONCE (the board's coloured row), not a duplicate pair, and that each row's description reads as a
+      sentence (first letter capitalised, e.g. "Exit — stop the agent…", not "exit — …").
       (3) Type `/proof` and Enter: the proof overlay opens — identical to clicking the proof button; close it,
       then click the proof button and confirm the SAME overlay opens. (4) Type `/nav` and Enter: nav mode
       engages (the `❯` box becomes the nav indicator AND the nav button shows its active `.on` state); click
@@ -101,11 +110,14 @@ scenarios:
       SAME hue as its button where it has one (nav yellow, proof cyan, merge green); the two button-less
       terminal verbs split by destructiveness — exit muted grey (var --muted = rgb(147,161,161), the dormant/
       offline hue it sends the session to) and close red (var --red = rgb(220,50,47), the worktree removal) —
-      while CC's commands stay blue (rgb(38,139,210)); one element, one colour in both places. Typing `/proof` opens the
+      while CC's commands stay blue (rgb(38,139,210)); one element, one colour in both places. A name the
+      board owns that Claude Code also ships (`/exit`) appears exactly ONCE — the board's row overrides CC's
+      twin, never a duplicate pair — and every row's description reads as a capitalised sentence. Typing `/proof` opens the
       very overlay the proof button opens (one shared open-state); typing `/nav` toggles nav mode exactly as
       the nav button does, and the button reflects that same state. A board command is never dispatched to the
       agent — its line is intercepted and the draft cleared — so no `/proof`/`/nav` text reaches the pane.
   - name: status-word-colour
+    tags: [frontend-e2e, desktop]
     description: >
       Through the running dashboard in a real browser, with several live sessions in DIFFERENT states (at
       minimum a `working`, an `asking`, and a `close-pending`), look at the top-left SessionWindow glance.
@@ -121,6 +133,7 @@ scenarios:
       session's liveness-dot colour on the surfaces that draw a dot (same source), and `working` green
       matches the avatar's liveness ring — dot, word, and ring never disagree.
   - name: nav-mode-modifier-combos-reach-the-terminal
+    tags: [frontend-e2e, desktop]
     description: >
       Measure nav mode's raw-key channel end to end. Stand up a live tmux pane running a key-echo program
       that renders control bytes visibly (`cat -v`), then exercise the REAL product path the dashboard
@@ -137,6 +150,7 @@ scenarios:
       Code's modifier bindings, not just arrows.
     code: spec-cli/src/sessions.ts, spec-cli/src/index.ts
   - name: nav-mode-alt-i-and-cmd-i-stay-reserved
+    tags: [frontend-e2e, desktop]
     description: >
       Through the running dashboard in a real browser, open the session interface on a LIVE session and
       confirm the reserved-toggle contract. Intercept `/rawkey` so no keystroke can reach a real agent,
@@ -150,6 +164,7 @@ scenarios:
       mode is ON DOES forward (recorded), so the carve-out is exactly the two reserved chords, not a blanket
       block. The browser/app takes no other action on ⌥/⌘+I.
   - name: modifier-arrow-switches-regardless-of-focus
+    tags: [frontend-e2e, desktop]
     description: >
       Through the running dashboard in a real browser, open the session interface (Enter) with at least
       three live sessions so the tab list has several rows. Exercise the modifier switch from the states
@@ -172,6 +187,7 @@ scenarios:
       the box (caret keys only), so typing never jerks the selection; plain ↑/↓ walk the list only when focus is
       outside any text input.
   - name: input-grows-no-premature-scrollbar
+    tags: [frontend-e2e, desktop]
     description: >
       Through the running dashboard in a real browser, on the New Session prompt (the `.si-input` textarea),
       type and grow the box line by line: paste/enter ONE line, then TWO, then keep adding newlines well past
@@ -188,6 +204,7 @@ scenarios:
       `❯` inbox against its half-terminal cap. On the MAIN baseline a scrollbar can show below the cap (a
       transient flash during the grow transition, or a persistent bar from scrollHeight sub-pixel rounding).
   - name: inbox-mention-dropdown-and-resolution
+    tags: [frontend-e2e, desktop]
     description: >
       Through the running dashboard in a real browser, open the session interface (Enter) on a LIVE
       (non-offline) session and put focus in its docked `❯` inbox (NOT the New Session prompt). Type `@`

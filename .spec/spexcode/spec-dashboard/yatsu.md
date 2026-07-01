@@ -1,6 +1,7 @@
 ---
 scenarios:
   - name: board-renders
+    tags: [frontend-e2e, desktop]
     description: >-
       Open the dashboard at http://localhost:5173, let the spec-graph settle, and look: the
       spexcode root and its package children render as node cards, each with its version and

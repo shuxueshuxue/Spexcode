@@ -1,6 +1,7 @@
 ---
 scenarios:
   - name: embedded-pane-io-and-esc-exit
+    tags: [frontend-e2e, desktop]
     description: >-
       Through the running dashboard (a real browser), open a live session's embedded terminal pane
       (TermPane): confirm it renders the tmux pane content (read via `capture-pane -p -e`), that typing in

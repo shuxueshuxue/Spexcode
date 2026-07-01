@@ -1,6 +1,7 @@
 ---
 scenarios:
   - name: dashboard-serves-bundled
+    tags: [cli]
     description: >
       Against a built bundle, run `spex dashboard --port P --api-port 8787` and drive it as a browser would
       with curl: the dashboard index, a hashed bundled asset, an unknown SPA route, and an /api hit that must
@@ -14,6 +15,7 @@ scenarios:
     code: spec-cli/src/gateway.ts
     related: spec-cli/src/cli.ts
   - name: clean-install-cli-starts
+    tags: [cli]
     description: >
       Build the npm tarball with `npm pack`, install that tarball into a clean consumer project, then use the
       installed package the way a new user would: run `npx spex --help`, create a fresh git repo, and run the

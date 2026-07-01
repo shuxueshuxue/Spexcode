@@ -119,6 +119,7 @@ scenarios:
   - name: s
     description: a
     expected: b
+    tags: cli
     code: src/x.ts
 ---`), [])
 })
@@ -131,12 +132,64 @@ scenarios:
   - name: login-works
     description: log in with valid creds
     expected: lands on the dashboard
+    tags: [frontend-e2e, desktop]
     test: tests/login.spec.ts
   - name: logout-redirects
     description: log out
     expected: back on /login
+    tags: frontend-e2e
 ---
-body`), [])
+body`, ['frontend-e2e', 'backend-api', 'cli', 'desktop', 'mobile']), [])
+})
+
+test('validateScenarios: tags are required (≥1) and must be drawn from the library', () => {
+  const lib = ['frontend-e2e', 'backend-api', 'cli']
+  // no tags → required-field error naming `tags`
+  const missing = validateScenarios(`---
+scenarios:
+  - name: untagged
+    description: a
+    expected: b
+---`, lib)
+  assert.ok(missing.some((e) => /scenario 'untagged': missing required field `tags`/.test(e)), missing.join(' | '))
+  // a tag outside the library → rejected, with the repair (use existing / add to library)
+  const outside = validateScenarios(`---
+scenarios:
+  - name: typo
+    description: a
+    expected: b
+    tags: [frontend-e2e, fronend-e2e]
+---`, lib)
+  assert.ok(outside.some((e) => /tag `fronend-e2e` is not in the configured tag library/.test(e)), outside.join(' | '))
+  assert.ok(outside.some((e) => /add `fronend-e2e` to lint\.scenarioTags/.test(e)), outside.join(' | '))
+  // every tag in-library → no error
+  assert.deepEqual(validateScenarios(`---
+scenarios:
+  - name: ok
+    description: a
+    expected: b
+    tags: backend-api, cli
+---`, lib), [])
+})
+
+test('parseScenarios: tags — flow list, comma form, and a single tag', () => {
+  const sc = parseScenarios(`---
+scenarios:
+  - name: flow
+    description: a
+    expected: b
+    tags: [frontend-e2e, desktop]
+  - name: one
+    description: a
+    expected: b
+    tags: backend-api
+  - name: none
+    description: a
+    expected: b
+---`)
+  assert.deepEqual(sc[0].tags, ['frontend-e2e', 'desktop'])
+  assert.deepEqual(sc[1].tags, ['backend-api'])
+  assert.equal(sc[2].tags, undefined)   // absent → no tags key (validateScenarios flags it required)
 })
 
 test('validateScenarios: no frontmatter / no scenarios key / empty list each fail loud', () => {
@@ -197,7 +250,7 @@ scenarios:
 test('sidecar: append + read round-trips readings exactly (incl. verdict + blobKind)', () => {
   const f = join(tmp(), 'yatsu.evals.ndjson')
   const a: Reading = { scenario: 's1', codeSha: 'abc123', blob: 'deadbeef', blobKind: 'image', evaluator: 'manual@1', verdict: { status: 'pass' }, ts: '2026-01-01T00:00:00.000Z' }
-  const b: Reading = { scenario: 's2', codeSha: 'def456', blob: 'feed', blobKind: 'transcript', evaluator: 'manual@1', verdict: { status: 'note', note: 'off by a pixel' }, ts: '2026-01-02T00:00:00.000Z' }
+  const b: Reading = { scenario: 's2', codeSha: 'def456', blob: 'feed', blobKind: 'transcript', evaluator: 'manual@1', verdict: { status: 'fail', note: 'off by a pixel' }, ts: '2026-01-02T00:00:00.000Z' }
   appendReading(f, a)
   appendReading(f, b)
   assert.deepEqual(readReadings(f), [a, b])

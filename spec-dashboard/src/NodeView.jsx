@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ScoreBadge, readingScore, ScenarioCount, scenarioStates } from './score.jsx'
+import { ScoreBadge, readingScore, ScenarioCount, scenarioStates, TagChips } from './score.jsx'
 import { useT } from './i18n/index.jsx'
 
 export const PANES = [
@@ -401,6 +401,7 @@ function VerdictBadge({ verdict }) {
   if (!verdict) return <span className="eval-verdict legacy">{t('nodeView.eval.legacy')}</span>
   if (verdict.status === 'pass') return <span className="eval-verdict pass">{t('nodeView.eval.pass')}</span>
   if (verdict.status === 'fail') return <span className="eval-verdict fail">{t('nodeView.eval.fail')}</span>
+  // legacy note-only reading (status:'note' predates the annotation model); new readings are always pass/fail
   return <span className="eval-verdict note" title={verdict.note}>{t('nodeView.eval.note')}</span>
 }
 
@@ -424,7 +425,7 @@ function EvalEvidence({ r }) {
   return (
     <>
       {r.expected && <div className="eval-expected"><span className="eval-expected-label">{t('nodeView.eval.expected')}</span> {r.expected}</div>}
-      {r.verdict?.status === 'note' && r.verdict.note && <div className="eval-note"><span className="eval-expected-label">{t('nodeView.eval.noteLabel')}</span> {r.verdict.note}</div>}
+      {r.verdict?.note && <div className="eval-note"><span className="eval-expected-label">{t('nodeView.eval.noteLabel')}</span> {r.verdict.note}</div>}
       {r.blobState === 'present'
         ? (r.blobKind === 'transcript'
             ? <TranscriptEvidence hash={r.blob} />
@@ -441,6 +442,7 @@ function DeclaredScenario({ s }) {
       <span className="eval-top">
         <ScoreBadge state="empty" title={t('score.missing')} />
         <span className="eval-scenario">{s.name}</span>
+        <TagChips tags={s.tags} />
         {s.code?.length > 0 && <code className="eval-tracks">{s.code.join(', ')}</code>}
       </span>
       {s.expected && <div className="eval-expected"><span className="eval-expected-label">{t('nodeView.eval.expected')}</span> {s.expected}</div>}

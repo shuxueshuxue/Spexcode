@@ -310,7 +310,7 @@ function renderReading(r: ProofReading): string {
     : ev.kind === 'miss' ? `<div class="noev">⌀ miss original file — the evidence bytes were pruned</div>`
     : `<div class="noev">attested without a capture</div>`
   const stale = r.fresh ? '' : `<span class="stale" title="${esc(r.staleAxes.join(', '))} changed since the reading">stale</span>`
-  const note = r.verdict?.status === 'note' && r.verdict.note ? `<div class="rnote"><b>note</b> ${esc(r.verdict.note)}</div>` : ''
+  const note = r.verdict?.note ? `<div class="rnote"><b>note</b> ${esc(r.verdict.note)}</div>` : ''
   return `<div class="reading">
     <div class="rhead">
       ${scoreBadge(r.score, r.fresh ? undefined : `stale: ${r.staleAxes.join(', ')}`)}

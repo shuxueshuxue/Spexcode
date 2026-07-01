@@ -14,6 +14,7 @@ export type LintConfig = {
   maxChildren: number        // breadth budget: warn at >= this many direct children
   driftErrorThreshold: number// commit-local gate HARD-BLOCKS a commit touching a node >= this many commits behind
   maxOwners: number          // warn when a file is governed (code:) by > this many nodes
+  scenarioTags: string[]     // the closed vocabulary a yatsu scenario's `tags:` must draw from; extend it to mint a new tag
 }
 const DEFAULT_CONFIG: LintConfig = {
   governedRoots: ['spec-dashboard/src', 'spec-cli/src'],
@@ -24,6 +25,7 @@ const DEFAULT_CONFIG: LintConfig = {
   maxChildren: 8,
   driftErrorThreshold: 3,
   maxOwners: 3,
+  scenarioTags: ['frontend-e2e', 'backend-api', 'cli', 'desktop', 'mobile'],
 }
 export function loadConfig(root: string): LintConfig {
   try {

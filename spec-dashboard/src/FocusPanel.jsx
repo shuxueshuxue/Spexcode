@@ -1,4 +1,4 @@
-import { scenarioStates, aggregateState } from './score.jsx'
+import { scenarioStates, aggregateState, TagChips } from './score.jsx'
 import { useT } from './i18n/index.jsx'
 
 // the state mark a scenario row leads with — the score vocabulary as a glyph (✓ pass · ✗ fail · ○ blind
@@ -14,6 +14,7 @@ function ScenarioRow({ s, t, onOpenEval }) {
       <span className="fp-sc-mark" title={t(`score.${s.state}`)}>{MARK[s.state]}</span>
       <span className="fp-sc-body">
         <span className="fp-sc-name">{s.name}</span>
+        <TagChips tags={s.tags} />
         {s.expected && <span className="fp-sc-expected">{s.expected}</span>}
         {s.code?.length > 0 && <span className="fp-sc-code">{t('focusPanel.tracks', { files: s.code.join(', ') })}</span>}
       </span>
@@ -44,7 +45,6 @@ export default function FocusPanel({ node, onOpenEval }) {
   return (
     <aside className="focus-panel">
       <div className="fp-head">
-        <span className="fp-eyebrow">{t('focusPanel.focus')}</span>
         <span className="fp-title">{node ? node.title : t('focusPanel.noFocus')}</span>
         {node?.desc && <span className="fp-desc" title={node.desc}>{node.desc}</span>}
       </div>

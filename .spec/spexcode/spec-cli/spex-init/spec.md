@@ -17,12 +17,13 @@ What it plants, both resolved from the CLI package's OWN location via `import.me
 when the package is installed outside the dogfood repo — never a hardcoded repo path):
 
 - **The seed spec tree** — `templates/spec/*` copied into `<dir>/.spec/`: a root `project` node plus a
-  default `.config` of dev-flow plugins. The plugins are flat child nodes, each tagged with a `surface`
-  field: `core` + `forge-link` (`surface: system`, the contract) plus the `surface: command` presets
-  (`extract`, `memory-hygiene`, `regroup`, `scenario`, `supervisor`, `tidy`), each a verbatim copy of the
-  dogfood `.config` node — kept in lockstep per [[init-preset]] so a fresh adopt ships the
-  *current* plugin set, not a drifted one. The spexcode-only `taste` and `voice-before-ask` are
-  deliberately NOT seeded.
+  default `.config` of dev-flow plugins, each a flat child carrying a `surface` field (the `system`
+  contract `core` + `forge-link`, and the `command` presets), a verbatim copy of the dogfood `.config`
+  node so a fresh adopt ships the *current* set. That default `.config` is the **default preset**; with
+  `--preset <name>` the named non-default package under `templates/presets/<name>/` is copied in **on top**
+  — cumulative, so `careful` stacks its plugins over the default set. The spexcode-only plugins live only
+  in the dogfood `.config`, never in the template, so they are never seeded. [[init-preset]] owns which
+  sets exist; this command owns the copy.
 - **The git hooks** — `templates/hooks/*` (the main-guard pre-commit and session-stamp
   prepare-commit-msg) copied into the target's resolved common hooks dir. This is the **one canonical
   hook source**: `scripts/install-hooks.sh` (the monorepo's `npm run hooks`) installs the very same
@@ -34,6 +35,13 @@ when the package is installed outside the dogfood repo — never a hardcoded rep
   starter ships `governedRoots: ["."]` — the zero-config safe default: `.` governs the *whole* project,
   but only git-**tracked** source (so node_modules/build/nested worktrees never count) minus tests, so a
   fresh repo just works and a mature one can still curate explicit roots.
+
+**An illegal harness-target set fails loud, up front.** Before rendering, `init` validates the project's
+[[harness-select]] `harnesses` set (from the just-planted/existing `spexcode.json`) and aborts with a stated
+reason on an illegal one — a plugin paired with a native harness, or a plugin with no landing folder — rather
+than letting the later materialize swallow it as a soft "skipped" warning. A fresh starter `spexcode.json`
+omits the field (defaulting to every native harness), so this only bites a hand-edited or re-init'd config —
+exactly where a clear error belongs.
 
 **A git work tree is a precondition, checked first.** SpexCode is git-backed — git is the version
 database and the hooks live in `.git` — so a non-git target would leave a *half-state*: specs on disk but

@@ -1,6 +1,7 @@
 ---
 scenarios:
   - name: finds-governing-node-by-user-story
+    tags: [cli]
     description: >-
       SPAWN the spec-scout agent (the Agent tool, agentType spec-scout) with a behaviour question and check
       its conclusion. Use the canonical case that began the whole initiative: "does /exit clear a session's

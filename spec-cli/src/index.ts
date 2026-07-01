@@ -12,7 +12,7 @@ import { defaultHarness, HARNESSES } from './harness.js'
 import { evalTimeline, readBlobByHash } from '../../spec-yatsu/src/evaltab.js'
 import { buildProofModel, renderProofHtml } from '../../spec-yatsu/src/proof.js'
 import { saveUpload, MAX_UPLOAD_BYTES } from './uploads.js'
-import { attachViewer, detachViewer, writeViewer, resizeBridge, superviseBridges, type Viewer } from './pty-bridge.js'
+import { attachViewer, detachViewer, resizeBridge, forwardWheel, superviseBridges, type Viewer } from './pty-bridge.js'
 import { installProcessGuards } from './resilience.js'
 
 // last-resort net: an unforeseen async throw (e.g. a worktree vanishing mid-read during a worker
@@ -145,7 +145,7 @@ app.get('/api/sessions/:id/prompt', async (c) => {
   return p == null ? c.text('no prompt recorded', 404) : c.text(p)
 })
 // lifecycle transitions (thin callers of the session state machine)
-app.post('/api/sessions/:id/resume', async (c) => c.json({ ok: await reopen(c.req.param('id')) }))   // back-to-working / relaunch
+app.post('/api/sessions/:id/resume', async (c) => c.json({ ok: await reopen(c.req.param('id')) }))   // relaunch if offline; demotes working→idle, keeps any declaration
 app.post('/api/sessions/:id/review', async (c) => c.json({ ok: await propose(c.req.param('id'), 'merge') }))
 // a dispatch to the session's own agent (it runs the merge), never a server merge — the server never touches
 // main's tree. 200 {dispatched:true} once the prompt is accepted, 409 {dispatched:false} if the agent is unreachable.
@@ -154,27 +154,34 @@ app.post('/api/sessions/:id/merge', async (c) => {
   return c.json(r, r.dispatched ? 200 : 409)
 })
 
-// one bidirectional WS over a shared tmux client (pty-bridge): server→client = raw pane bytes (binary);
-// client→server = raw terminal input (binary) + a text control frame {t:'resize',cols,rows}. A real tmux
-// client, so scrollback is tmux's own and the first paint is one coherent repaint.
+// one WS over a shared tmux control-mode client (pty-bridge): server→client = raw pane bytes (binary); the
+// view takes no keyboard input, so client→server is only a text control frame — {t:'resize',cols,rows} or, when
+// a full-screen TUI owns the mouse, {t:'wheel',…} which forwards the wheel to the pane so the app scrolls its
+// own history. A real tmux client, so the first paint is one coherent frame and live bytes arrive as events.
 app.get('/api/sessions/:id/socket', upgradeWebSocket((c) => {
   const id = c.req.param('id') as string
+  // the size-first handshake: a client that already knows its pane size carries it as ?cols=&rows= so the
+  // first frame is drawn at the true size. Absent/garbage → undefined, and the bridge falls back to prewarm.
+  const qc = Number(c.req.query('cols')), qr = Number(c.req.query('rows'))
+  const initialSize = qc > 0 && qr > 0 ? { cols: qc, rows: qr } : undefined
   let viewer: Viewer | null = null
   return {
     onOpen(_evt, ws) {
       viewer = { send: (buf) => { try { ws.send(Uint8Array.from(buf)) } catch { /* viewer gone */ } } }
-      if (!attachViewer(id, viewer)) { try { ws.close() } catch { /* already closed */ } }
+      if (!attachViewer(id, viewer, initialSize)) { try { ws.close() } catch { /* already closed */ } }
     },
     onMessage(evt) {
       if (!viewer) return
       const data = evt.data
+      // no keyboard input: the only client→server messages are the resize frame and the wheel frame (the
+      // latter forwarded to the pane as an SGR mouse report so a full-screen TUI scrolls its own history —
+      // the browser sends it only when its xterm is in mouse-tracking mode). Binary is ignored.
       if (typeof data === 'string') {
-        // text frame = control. Only resize today.
-        try { const m = JSON.parse(data); if (m?.t === 'resize') resizeBridge(id, Number(m.cols), Number(m.rows)) } catch { /* ignore */ }
-      } else if (data instanceof ArrayBuffer) {
-        writeViewer(id, Buffer.from(data))                              // binary: raw terminal input
-      } else if (ArrayBuffer.isView(data)) {
-        writeViewer(id, Buffer.from(data.buffer, data.byteOffset, data.byteLength))  // (keystrokes / mouse)
+        try {
+          const m = JSON.parse(data)
+          if (m?.t === 'resize') resizeBridge(id, Number(m.cols), Number(m.rows), !!m.full)
+          else if (m?.t === 'wheel') forwardWheel(id, !!m.up, Number(m.col), Number(m.row), Number(m.ticks))
+        } catch { /* ignore */ }
       }
     },
     onClose() { if (viewer) detachViewer(id, viewer) },
@@ -190,11 +197,14 @@ app.post('/api/sessions/:id/keys', async (c) => {
   const r = await sendKeys(c.req.param('id'), typeof body?.text === 'string' ? body.text : '', typeof body?.from === 'string' ? body.from : undefined)
   return c.json(r, r.ok ? 200 : 502)
 })
-// the preserved tmux send-keys path (distinct from the ❯ prompt socket): one key per keydown so a human can
-// drive the agent's interactive TUI menus in real time. Forwards keystrokes only.
+// the preserved tmux send-keys path (distinct from the ❯ prompt socket): the human drives the agent's
+// interactive TUI menus in real time. Accepts an ORDERED BATCH (`keys`, the client coalesces fast typing) or a
+// single `key`; rawKey delivers them in array order so tap order is preserved ([[nav-mode-key-ordering]]).
 app.post('/api/sessions/:id/rawkey', async (c) => {
   const body = await c.req.json().catch(() => ({}))
-  const ok = await rawKey(c.req.param('id'), typeof body?.key === 'string' ? body.key : '')
+  const keys = Array.isArray(body?.keys) ? body.keys.filter((k: unknown) => typeof k === 'string')
+    : typeof body?.key === 'string' ? [body.key] : []
+  const ok = await rawKey(c.req.param('id'), keys)
   return c.json({ ok }, ok ? 200 : 404)
 })
 // soft stop: kill the agent's tmux + socket but KEEP the worktree (relaunchable). Distinct from close, which

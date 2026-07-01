@@ -2,10 +2,12 @@ import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs'
 import { join, dirname, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
-import { loadSystemConfig, loadSkillConfig, loadAgentConfig } from './specs.js'
+import { loadSystemConfig, loadSkillConfig, loadAgentConfig, loadConfig } from './specs.js'
 import { compileManifest } from './hooks.js'
-import { HARNESSES, writeManagedBlock } from './harness.js'
-import { runtimeRoot } from './layout.js'
+import { writeManagedBlock, type HarnessArtifacts } from './harness.js'
+import { runtimeRoot, mainCheckout, readConfig } from './layout.js'
+import { resolveHarnessTargets, partitionHarnesses } from './harness-select.js'
+import { emitPlugin, cleanPlugin, pluginBundleDir, pluginVersion } from './plugin-harness.js'
 import { tsxBin } from './tsx-bin.js'
 
 // @@@ materialize - the "pay-per-change" node step (≈0.85s) the cheap shell gate invokes ONLY when the
@@ -53,6 +55,15 @@ export function materialize(proj = process.cwd()): string {
   const guide = existsSync(guidePath) ? readFileSync(guidePath, 'utf8').trim() : ''
   const systemBodies = loadSystemConfig().map((c) => c.body.trim()).filter(Boolean)
   const contract = [guide, ...systemBodies].filter(Boolean).join('\n\n')
+  // WHICH harnesses to deliver into ([[harness-select]]): the spexcode.json `harnesses` set (default = every
+  // native harness). resolveHarnessTargets FAILS LOUD on an illegal set (plugin+native, plugin w/o folder).
+  // selected harnesses are write()n below; unselected ones are clean()ed (pruned) after — so dropping a harness
+  // from the config removes its products on the next re-materialize. The plugin EMITTER is a later node.
+  const targets = resolveHarnessTargets(readConfig(mainCheckout(proj)).harnesses)
+  const { selected, unselected, plugins } = partitionHarnesses(targets)
+  const skillNodes = loadSkillConfig()
+  const agentNodes = loadAgentConfig()
+  const commandNodes = loadConfig()
   // a skill node → the agentskills.io SKILL.md primitive: `name`+`description` frontmatter (the load-trigger)
   // over the body instructions. One pure render shared by every harness — divergence is only its skillDir.
   const renderSkill = (sk: { name: string; desc: string; body: string }) =>
@@ -62,8 +73,13 @@ export function materialize(proj = process.cwd()): string {
   // system prompt. One pure render shared by every harness — divergence is only its agentDir.
   const renderAgent = (ag: { name: string; desc: string; tools: string[]; body: string }) =>
     `---\nname: ${ag.name}\ndescription: ${ag.desc}\ntools: ${ag.tools.join(', ')}\n---\n\n${ag.body}\n`
+  // a command node → a host `/`-menu command file: the node's `desc` as the dropdown description over its body
+  // (the preset prompt). Only the PLUGIN bundle ships these as files; the native path serves command presets via
+  // the dashboard /api/slash-commands instead, so this render is plugin-only.
+  const renderCommand = (cm: { desc: string; body: string }) =>
+    (cm.desc ? `---\ndescription: ${JSON.stringify(cm.desc)}\n---\n\n` : '') + `${cm.body}\n`
   const shimPaths: string[] = []
-  for (const h of HARNESSES) {
+  for (const h of selected) {
     if (contract) for (const f of h.contractFiles(proj)) { writeManagedBlock(f, contract); shimPaths.push(relative(proj, f)) }
     const shimFile = h.shimFile(proj)
     mkdirSync(dirname(shimFile), { recursive: true })
@@ -75,8 +91,8 @@ export function materialize(proj = process.cwd()): string {
   // (6) skills - each `surface: skill` node → a SKILL.md the harness auto-discovers, written into every
   //     harness's own skillDir (Claude .claude/skills, Codex .codex/skills). Generated wiring, so the paths
   //     join the same managed .gitignore block below. A harness with no skill primitive (skillDir null) is skipped.
-  for (const sk of loadSkillConfig()) {
-    for (const h of HARNESSES) {
+  for (const sk of skillNodes) {
+    for (const h of selected) {
       const dir = h.skillDir(proj); if (!dir) continue
       const f = join(dir, sk.name, 'SKILL.md')
       mkdirSync(dirname(f), { recursive: true })
@@ -88,8 +104,8 @@ export function materialize(proj = process.cwd()): string {
   //     harness's own agentDir (Claude .claude/agents). The SAME pattern as skills: generated wiring, so the
   //     paths join the same managed .gitignore block below. A harness with no agent primitive (agentDir null,
   //     e.g. Codex) is skipped — no `if (codex)`, the divergence is the adapter's agentDir line.
-  for (const ag of loadAgentConfig()) {
-    for (const h of HARNESSES) {
+  for (const ag of agentNodes) {
+    for (const h of selected) {
       const dir = h.agentDir(proj); if (!dir) continue
       const f = join(dir, `${ag.name}.md`)
       mkdirSync(dirname(f), { recursive: true })
@@ -97,6 +113,36 @@ export function materialize(proj = process.cwd()): string {
       shimPaths.push(relative(proj, f))   // reuse the same managed .gitignore block
     }
   }
+  // (8) PRUNE every UNSELECTED harness — clean() is the surgical inverse of the write above, removing ONLY this
+  //     harness's own managed block + generated shim + trust + named skill/agent files. So narrowing the
+  //     spexcode.json `harnesses` set (or switching to a plugin, which excludes all natives) removes the
+  //     dropped harness's products here, the user's own prose/data untouched. The names tell clean exactly
+  //     which on-demand artifacts were its to remove ([[harness-select]] / [[harness-adapter]]).
+  const arts: HarnessArtifacts = { skills: skillNodes.map((s) => s.name), agents: agentNodes.map((a) => a.name) }
+  for (const h of unselected) h.clean(proj, arts)
+  // (8b) the PLUGIN target ([[plugin-harness]]): render the whole system into one self-contained Claude-plugin
+  //      bundle per selected folder. A plugin is EXCLUSIVE (so `selected` is already empty — every native was
+  //      pruned above). Pruning a DESELECTED plugin folder (plugin→native, or folder A→B) needs the PREVIOUS
+  //      folder set, which the live config no longer names — so a tiny ledger in the global store records the
+  //      folders emitted last run; any prev folder absent from the current set is clean()ed (the bundle's
+  //      inverse), then the current folders are emitted and the ledger rewritten. Bounded + surgical: cleanPlugin
+  //      is identity-gated on the bundle's own plugin.json.
+  const ledger = join(rt, 'plugin-folders')
+  const prevFolders = existsSync(ledger) ? readFileSync(ledger, 'utf8').split('\n').map((l) => l.trim()).filter(Boolean) : []
+  const curFolders = plugins.map((p) => p.folder)
+  for (const f of prevFolders) if (!curFolders.includes(f)) cleanPlugin(proj, f)
+  if (plugins.length) {
+    const render = {
+      contract,
+      skills: skillNodes.map((s) => ({ name: s.name, content: renderSkill(s) })),
+      agents: agentNodes.map((a) => ({ name: a.name, content: renderAgent(a) })),
+      commands: commandNodes.map((c) => ({ name: c.name, content: renderCommand(c) })),
+      spex: SPEX,
+      version: pluginVersion(),
+    }
+    for (const p of plugins) emitPlugin(proj, p.folder, render)
+  }
+  writeFileSync(ledger, curFolders.join('\n'))
   // (4b) every artifact this render writes IN-TREE is generated wiring, so gitignore it — regenerated per
   // clone/launch by this same gate, never committed. That now includes the CONTRACT files (CLAUDE.md/AGENTS.md):
   // their whole content is the generated guide+system block, so they are artifacts exactly like the shims +
@@ -110,7 +156,10 @@ export function materialize(proj = process.cwd()): string {
   // launcher path; see portable-layout) — joins the SAME block on the same rationale: machine-specific, must
   // never be committed. Without it an adopter who follows our own guidance to put a host path there would
   // `git add -A` and leak it — the exact thing the overlay exists to prevent.
-  const ignorable = [...shimPaths.filter((p) => !p.startsWith('..')), 'spexcode.local.json']
+  // each emitted plugin bundle is a generated, machine-local artifact too (its hooks.json bakes THIS install's
+  // SPEX path), so its relative dir joins the same managed block — regenerated per clone/launch, never committed.
+  const bundlePaths = curFolders.map((f) => relative(proj, pluginBundleDir(proj, f))).filter((p) => !p.startsWith('..'))
+  const ignorable = [...shimPaths.filter((p) => !p.startsWith('..')), ...bundlePaths, 'spexcode.local.json']
   if (ignorable.length) writeManagedBlock(join(proj, '.gitignore'), ignorable.sort().join('\n'), ['# ', ''])
   // (5) stamp the content-hash marker LAST (so a crash mid-render leaves it stale → re-renders next gate).
   const h = contentHash(proj)

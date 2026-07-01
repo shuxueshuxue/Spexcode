@@ -2,11 +2,21 @@ import { existsSync, mkdirSync, copyFileSync, readdirSync, statSync, chmodSync }
 import { join, resolve, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
+import { readConfig } from './layout.js'
+import { resolveHarnessTargets } from './harness-select.js'
 
 // this file lives at <pkgRoot>/src/init.ts, so `..` is the package root — the same derivation the
 // launch paths use, never a hardcoded repo path (so a relocated/installed package still finds its data).
 const pkgRoot = fileURLToPath(new URL('..', import.meta.url))
 const TEMPLATES = join(pkgRoot, 'templates')
+
+// the cumulative preset chain, lean → cautious (see [[init-preset]]). `default` is the live `.config`
+// instance set (planted from templates/spec); every higher tier is a SEPARATE package under
+// templates/presets/<tier>/ that seeding stacks ON TOP — a superset, so selecting `careful` seeds the
+// default set PLUS the careful package. Selection matters ONLY here at seed time; the running repo just
+// walks whatever `.config` ended up planted, so there is no launcher-side preset gate.
+const PRESET_TIERS = ['default', 'careful'] as const
+const presetRank = (name: string): number => (PRESET_TIERS as readonly string[]).indexOf(name)
 
 // recursively copy srcDir -> destDir, NEVER overwriting an existing file. Returns the repo-relative
 // paths of files actually written (so the caller can report exactly what was planted vs already there).
@@ -43,8 +53,17 @@ function resolveHooksDir(dir: string): string | null {
   }
 }
 
-export async function specInit(targetArg: string | undefined): Promise<void> {
+export async function specInit(targetArg: string | undefined, presetArg?: string): Promise<void> {
   const targetDir = resolve(targetArg ?? process.cwd())
+
+  // the preset the NEW adopter gets — `--preset <name>` wins, else an existing target spexcode.json's
+  // `preset` field, else the lean `default`. Validated loudly against the chain (an unknown name would
+  // otherwise seed silently). A non-default tier stacks its template package on top of the default set below.
+  const selected = (presetArg ?? '').trim() || (readConfig(targetDir).preset ?? '').trim() || 'default'
+  if (!(PRESET_TIERS as readonly string[]).includes(selected)) {
+    console.error(`spex init: unknown preset '${selected}'. Valid presets (cumulative, lean→cautious): ${PRESET_TIERS.join(', ')}.`)
+    process.exit(1)
+  }
 
   // SpexCode is git-backed: git IS the version database and the hooks live in `.git`. A non-git target
   // would leave a HALF-STATE — specs on disk but no version history, no hooks, no harness shims, no
@@ -68,6 +87,16 @@ export async function specInit(targetArg: string | undefined): Promise<void> {
   } else {
     const planted = copyTreeNoClobber(join(TEMPLATES, 'spec'), specDest, targetDir)
     console.log(`✓ seeded ${planted.length} spec file(s) under .spec/ (root 'project' node + default .config)`)
+    // 1a. stack the selected preset's package(s) ON TOP of the default set — cumulative, so every tier from
+    // just above `default` up to the selection is planted. Each lives under templates/presets/<tier>/ mirroring
+    // the default layout (its `.config/<plugin>` lands in the seeded project node's `.config`). See [[init-preset]].
+    for (let r = 1; r <= presetRank(selected); r++) {
+      const tier = PRESET_TIERS[r]
+      const pkg = join(TEMPLATES, 'presets', tier)
+      if (!existsSync(pkg)) { console.warn(`• preset '${tier}' has no package at ${pkg} — skipped.`); continue }
+      const added = copyTreeNoClobber(pkg, join(specDest, 'project'), targetDir)
+      console.log(`✓ seeded preset '${tier}' (${added.length} file(s)) into .config`)
+    }
   }
 
   // 1b. plant a starter spexcode.json (the lint/layout knob), pointing governedRoots at `src/`.
@@ -77,6 +106,17 @@ export async function specInit(targetArg: string | undefined): Promise<void> {
   } else {
     copyFileSync(join(TEMPLATES, 'spexcode.json'), cfgDest)
     console.log(`✓ planted spexcode.json — set lint.governedRoots to YOUR source dirs (starter: ["src"])`)
+  }
+
+  // validate the harness DELIVERY TARGET set ([[harness-select]]) up front: a bad `harnesses` set (plugin +
+  // native, or a plugin with no folder) must fail LOUD here, not be silently swallowed by the materialize
+  // try/catch below. A fresh starter spexcode.json omits the field (defaults to all natives), so this only
+  // bites a hand-edited or re-init'd config — exactly where a clear error belongs.
+  try {
+    resolveHarnessTargets(readConfig(targetDir).harnesses)
+  } catch (e) {
+    console.error(`spex init: ${(e as Error).message}`)
+    process.exit(1)
   }
 
   // 2. install the git hooks: templates/hooks/* -> <repo>/<common-git-dir>/hooks/* (skip any that exist).

@@ -15,7 +15,7 @@ function flag(name: string): string | undefined {
 }
 const has = (name: string) => process.argv.includes(`--${name}`)
 // bare positionals after argv index `from`, skipping flags and their values (selectors for ls/watch).
-const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--timeout', '--reason', '--out', '--password', '--tls-cert', '--tls-key', '--harness', '--harness-session', '--port', '--api-port'])
+const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--timeout', '--reason', '--out', '--password', '--tls-cert', '--tls-key', '--harness', '--harness-session', '--port', '--api-port', '--preset'])
 function positionals(from: number): string[] {
   const out: string[] = []
   for (let i = from; i < process.argv.length; i++) {
@@ -84,6 +84,9 @@ Usage: spex <command> [args]
 Specs / graph
   guide [spec|yatsu]    no topic: the setup workflow; spec/yatsu: the file-format manual for authoring nodes
   init [dir]            scaffold a repo to adopt SpexCode (seed .spec + install git hooks; default: cwd)
+    --preset <name>          which .config plugin tier to seed (cumulative: default ⊂ careful; default 'default')
+  uninstall [dir]      surgical inverse of init: remove SpexCode's generated artifacts (shims·contract·trust·
+                        gitignore block·global store·plugin bundle), keep .spec/.config. [--hooks] also removes the hooks
   lint                  check the spec↔code graph (integrity·living·coverage·drift); when committing, gates on heavy commit-local drift
   ack <node>… --reason  stamp Spec-OK on HEAD for one or more nodes (this change keeps their specs valid); --reason required, not stored
   serve                 run the API server (default :8787). [--port N] sets the listen port (mirrors
@@ -94,7 +97,7 @@ Specs / graph
                         \`spex serve\`. [--port N] [--api-port N=8787]. The installed replacement for \`npm run web\`.
   board                 dump the dashboard board state as JSON
   forge <sub>           trace a forge's issues/PRs onto spec nodes (read-only): links | eval-pending [--host github] [--node <id>] [--json]
-  yatsu <sub>           measure a node's scenarios and keep score: scan | eval [.|<node>] [--scenario N] (--pass|--fail|--note T) [--image P|--result P|-] | show [.|<node>] [--json] | clean [--keep-latest|--all]
+  yatsu <sub>           measure a node's scenarios and keep score: scan | eval [.|<node>] [--scenario N] (--pass|--fail) [--note T] [--image P|--result P|-] | show [.|<node>] [--json] | clean [--keep-latest|--all]
   hooks <sub>           harness-agnostic hook system: compile [--out <file>] (flatten surface:hook nodes into the per-session manifest the dispatcher reads)
   self <sub>            diagnose how the workflow reaches THIS self-launched agent: doctor (default) | contract | env
   review <SEL>          manager cockpit: review a session (ahead·merge-base diff·gates·proposal)  [--json]
@@ -200,7 +203,13 @@ if (cmd === 'serve') {
   // scaffold a repo to adopt SpexCode: copy the shipped DATA templates (seed spec tree + git hooks)
   // into <targetDir> (default cwd). spex init [targetDir]
   const { specInit } = await import('./init.js')
-  await specInit(positionals(3)[0])
+  await specInit(positionals(3)[0], flag('preset'))
+} else if (cmd === 'uninstall') {
+  // the surgical inverse of init: remove every SpexCode-generated artifact (harness shims/contract/trust, the
+  // .gitignore block, the global store, any plugin bundle) — NEVER the user's .spec/.config data or their own
+  // prose. Git hooks preserved unless --hooks. spex uninstall [targetDir] [--hooks]
+  const { uninstall } = await import('./uninstall.js')
+  uninstall(positionals(3)[0], { hooks: has('hooks') })
 } else if (cmd === 'review' && positionals(3)[0] === 'proof') {
   const sel = positionals(3)[1]
   if (!sel) { console.error('usage: spex review proof <selector> [--open | --out <path> | --json]'); process.exit(2) }
@@ -369,9 +378,10 @@ if (cmd === 'serve') {
   } else if (sub === 'list') {
     console.log(JSON.stringify(await c.clientListSessions(), null, 2))
   } else if (sub === 'reopen' || sub === 'resume') {
-    // "back to working": clear proposal -> active, relaunch if offline (the backend owns the relaunch)
+    // bring the agent back up (relaunch if offline, the backend owns it); demotes a working `active` to idle but
+    // leaves a standing declaration/proposal untouched (see sessions.ts reopen()). A following prompt is what works.
     const full = await resolveSelectorOrExit(id)
-    console.log(await c.clientReopen(full) ? `${full} -> working` : `no such session ${full}`)
+    console.log(await c.clientReopen(full) ? `${full} -> reopened` : `no such session ${full}`)
   } else if (sub === 'review') {
     console.log(await s.propose(id, 'merge') ? `${id} -> review` : `no such session ${id}`)
   } else if (sub === 'state') {

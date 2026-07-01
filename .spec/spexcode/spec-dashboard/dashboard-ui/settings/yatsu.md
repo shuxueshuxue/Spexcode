@@ -1,6 +1,7 @@
 ---
 scenarios:
   - name: language-switch-retranslates
+    tags: [frontend-e2e, desktop]
     description: >
       Through the running dashboard in a real browser, press `,` to open the settings popup. It lists the
       available languages (from i18n LANGUAGES) with the active one marked. Click a DIFFERENT language and

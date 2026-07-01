@@ -84,9 +84,10 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
       // stops a held ⌥ mid-drag from flipping into column/block select, so an accidental Option keeps a linewise grab.
       macOptionClickForcesSelection: true,
       // GitHub-Dark NEUTRAL palette, paired with the #0d1117 background so the terminal matches the app's
-      // modern dark theme. Readable dim tones (brightBlack) keep Claude Code's pinned-prompt line — which it
-      // renders in a dim ansi tone — legible; the old solarized ansi, tuned for a #002b36 bg, went muddy on
-      // the neutral background (dark-on-dark). selection is a GitHub blue; selectionInactive matches it.
+      // modern dark theme (the old solarized ansi, tuned for a #002b36 bg, looked off on the neutral ground).
+      // NOTE: this does NOT fix Claude's pinned previous-message bar — that bar uses 256-colour greys in an
+      // alt-screen overlay, which the xterm theme (16 ansi + fg/bg only) can't reach; deferred as issue #25.
+      // selection is a GitHub blue; selectionInactive matches it.
       theme: {
         background: '#0d1117', foreground: '#c9d1d9', cursor: '#c9d1d9',
         selectionBackground: '#264f78', selectionForeground: '#f0f6fc', selectionInactiveBackground: '#264f78',

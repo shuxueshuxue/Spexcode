@@ -381,6 +381,9 @@ body {
 /* the rendered spec.md: lead intent, then each `## vN` revision as a separated, labeled section */
 .doc-body { border-top: 1px solid var(--line); padding-top: 14px; font-size: 13px; line-height: 1.65; color: var(--ink); }
 .doc-body p { margin: 0 0 10px; }
+/* the lazy spec-body loading spinner ([[board-lean]]): a thin ring in the palette, centred where the body will land */
+.pane-loading { display: flex; align-items: center; justify-content: center; padding: 48px 0; }
+.spinner { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--ink2); animation: si-attach-spin .7s linear infinite; }
 .doc-body ul { margin: 0 0 10px; padding-left: 18px; }
 .doc-body li { margin: 2px 0; }
 .doc-body code { font-size: 12px; background: var(--panel2); color: var(--ink2); padding: 0 4px; border-radius: 3px; }

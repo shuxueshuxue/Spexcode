@@ -74,7 +74,13 @@ Offline is reachable on purpose, not only by a crash. **`exit`** is the human-on
 of `reopen`: it kills the agent's tmux + rendezvous socket but **leaves the worktree, branch, transcript, and
 the global record**, so the session simply reads `offline` and the relaunch panel offers to `--resume` the same
 conversation. Because it touches no `session.json`, the lifecycle the agent last authored survives the stop
-untouched — whereas `close` removes the worktree AND sweeps the global record dir.
+untouched — whereas `close` removes the worktree AND sweeps the global record dir. **`reopen`** is the inverse:
+it clears any proposal and brings the agent back up. A plain **resume** of an offline session (the frontend
+relaunch panel, `spex session resume`) restarts the agent `--resume`d into the same conversation but sitting at
+its prompt with nothing to do, so it rests at **`idle`** — never a phantom `working` before the human has said
+anything; only clearing a still-**live** proposal ("back to working") returns it to `active`. The resting state
+stays honest either way, because a following prompt (e.g. the merge dispatch) flips it back to `active` through
+mark-active.
 Contrast **`close`**, the other human-only terminal verb: it *removes* the worktree, discarding the work. Both
 are human-only and direct (not agent proposals); exit is fully reversible (relaunch), close is not. An exited
 session occupies no working-set slot ([[launch]]) — offline never does — so the freed capacity drains a queued

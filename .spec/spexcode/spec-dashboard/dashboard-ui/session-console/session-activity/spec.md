@@ -57,12 +57,12 @@ moment it arrives, so the human's initial wording disappears once the agent has 
 Two things flex by surface, through the face's `compact` and `showAvatar` props. Both **desktop list
 surfaces** are the **compact one-line** face (`compact`): the headline followed by a single colour-coded
 status **glyph** (`STATUS_GLYPH`, painted by `STATUS_COLOR`) rather than the word — the exact word kept on
-the hover title for a11y — grouped into the two triage zones ([[session-console]]). They differ only in the
-**avatar**: the **map-side** board window (SessionWindow) and the relationship-graph nodes **keep** it, the
+the hover title for a11y — grouped into the three triage zones ([[session-console]]). They differ only in the
+**avatar**: the **map-side** board window (SessionWindow) **keeps** it, the
 fixed spatial anchor that lets a session be **cross-referenced against the avatars on the very nodes it
 edits**; the **console's own sidebar drops it** (`showAvatar={false}`, redundant beside the headline in its
-dense terminal list). Where the avatar is gone the fixed anchor is simply the row's **slot** in the ordered
-list ([[session-reorder]]), so the headline still renarrates each turn without the row losing its place. The
+dense list). Where the avatar is gone the fixed anchor is simply the row's **slot** in the ordered
+list, so the headline still renarrates each turn without the row losing its place. The
 **mobile list** alone keeps the older **two-row** face, its status on a second line, described next.
 
 The two-row variant's **status line** is the small state badges moved off the headline: the colour-coded
@@ -73,16 +73,16 @@ this row is the **locked** selection a 🔒 sits at the end of Row 1, and the st
 (locking no longer hides it). This two-row face is now the **mobile** list's; both desktop lists fold the
 same status onto their single compact row as its glyph.
 
-**The console header reads the same headline.** The Enter interface's **big-title bar** above the live
-terminal ([[session-console]]'s `si-th-name`) renders the SAME `sessionHeadline`, not the stable node name —
-so the agent's live self-summary that renarrates the rows renarrates the header in lock-step, and the title
-over the terminal never disagrees with the row that opened it. The data source and the content are one
-shared line across both surfaces; the **only** difference is room: the header is a wide bar, so it gives the
+**The console action strip reads the same headline.** The Enter interface's **slim action strip** over the
+terminal's top edge ([[session-console]]'s `si-th-name`) renders the SAME `sessionHeadline`, not the stable
+node name — so the agent's live self-summary that renarrates the rows renarrates it in lock-step, and the
+headline over the terminal never disagrees with the row that opened it. The data source and the content are one
+shared line across both surfaces; the **only** difference is room: the strip is a wide bar, so it gives the
 headline `flex:1` of that width and ellipsises far **later** than the compact rows — less truncation where
 there is space for more.
 
 **One name, every surface.** The `sessionHeadline` is a session's display name *everywhere a human reads
-which session this is* — rows, window, Enter tabs, console header, and now **the search palette and the
+which session this is* — rows, window, Enter tabs, console action strip, and now **the search palette and the
 lock-hint banner** show the identical line, so where a session is searched from and where it is found never
 disagree. (Pinning those two to the stable `sessionName` bought nothing — the ordered slot, and the avatar
 where it's shown, are the fixed anchor and a rename already wins — and cost a palette that named a session differently from its own board.) The stable
@@ -92,8 +92,8 @@ the **rename prompt** (editing the `name` override). Search still *matches* the 
 
 This node's slice of the shared `styles.css` is the status line (`.sess-meta`, the full-width dimmer wrap)
 and its compact-variant collapse (the `.si-item` one-line overrides that fold `.sess-meta` inline and drop
-the status word for the `.sess-glyph` mark), the Row-1 headline ellipsis, and the console header big-title's
-room-to-expand (`.si-th-name`'s `flex:1` + ellipsis — the same headline, more width); classes other surfaces
-add there — like the yatsu eval tab's `.eval-*` verdict/transcript rules from the measure-and-score reframe,
-or the console sidebar's terminal-pane palette ([[session-console]]) — are those features' churn, not
-session-activity's drift.
+the status word for the `.sess-glyph` mark), the Row-1 headline ellipsis, and the console action strip's
+headline room-to-expand (`.si-th-name`'s `flex:1` + ellipsis — the same headline, more width); classes other
+surfaces add there — like the yatsu eval tab's `.eval-*` verdict/transcript rules from the measure-and-score
+reframe, or the console list's own compact-face overrides ([[session-console]]) — are those features' churn,
+not session-activity's drift.

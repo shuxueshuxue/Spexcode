@@ -34,11 +34,11 @@ export default {
   sessionZone: {
     need: '待你处理',
     run: '自运行',
+    offline: '离线',
   },
 
   hud: {
     helpTitle: '帮助 — 按键与图例（?）',
-    graphTitle: '会话关系 — 在会话面板中打开实时监视图',
     loading: '正在从 git 加载规格…',
   },
 
@@ -106,7 +106,6 @@ export default {
     emptyBefore: '没有活动的工作树——按 ',
     emptyAfter: ' 开始一个',
     rename: '重命名',
-    resetOrder: '恢复默认顺序',
     close: '关闭',
     closeTitle: '关闭“{name}”？',
     closeConfirm: '这将关闭会话并删除其工作树。任何未提交的更改都会丢失。',
@@ -223,35 +222,10 @@ export default {
     expandable: ({ n }) => `${n} 个子节点——聚焦展开`,
   },
 
-  sessionGraph: {
-    helpTitle: '快捷键与图例（?）',
-    asked: ({ a, b }) => `已请求 ${a} 监视 ${b}`,
-    picked: '右键点击另一个节点，让此节点监视它',
-    needSource: '请先左键选中一个节点，再右键另一个建立监视',
-    monitorPrompt: ({ label, id }) => `请监视会话 ${label}（${id}）：在后台运行 \`spex watch ${id}\` 并保持运行，让其状态变化反馈给我。`,
-    legend: {
-      title: '会话关系',
-      close: '关闭（esc 或 ?）',
-      secKeys: '快捷键',
-      move: '将光标移到最近的会话',
-      open: '打开聚焦的会话',
-      leave: '返回新建会话',
-      secMouse: '鼠标',
-      gDblClick: '双击',
-      gClickRight: '左键 → 右键',
-      openMouse: '双击会话即可打开',
-      monitor: '左键选中一个节点，再右键另一个，让前者监视后者',
-      secEdges: '连线',
-      edgesDesc: '每条箭头 A→B 都是一个实时监视——智能体 A 正在运行 `spex watch B`。',
-    },
-  },
-
   session: {
     opsTitle: '此会话正在改动的节点 —— 双击标签锁定并聚焦它们',
-    dragHandle: '拖动以排序',
     newSession: '新建会话',
     newSessionTitle: '新建会话（⌥+N）',
-    relationshipTitle: '查看会话关系 — 实时监视图（在空的新建会话框按 → 进入，← 返回）',
     ask: '你想做点什么？',
     inputPlaceholder: '描述工作 · @ 规格 · / 命令 · ⏎ 启动 · ⇧⏎ 换行',
     menuCommands: '命令',

@@ -83,14 +83,6 @@ export async function loadBoard() {
   return res.json()
 }
 
-// persist a session's drag-reorder pseudo-time ([[session-reorder]]); null clears the override.
-export async function setSessionSort(id, key) {
-  return apiFetch(`/api/sessions/${id}/sort`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ key }),
-  })
-}
-
 // the project's self-identifying name ([[tab-title]]), resolved backend-side as board.project.
 export const projectTitle = (board) => board?.project || ''
 

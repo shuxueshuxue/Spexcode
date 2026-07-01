@@ -17,19 +17,25 @@ export const STATUS_GLYPH = {
   idle: '·', starting: '◌', queued: '⋯', 'close-pending': '⊘', offline: '○',
 }
 
-// the two triage zones the session list groups into — "whose turn is it?". `need` = the ball is with the
-// HUMAN (asking / review / done / close-pending / error → answer, review, close, fix); `run` = self-driving,
-// the agent's turn (working / parked / starting / queued / idle / offline). Closed sessions aren't on the
-// board at all, so there is no archive zone here. Same partition drives every session-list surface.
+// the three triage zones the session list groups into — "whose turn is it?". `offline` = the process is
+// DEAD/dormant (can't act until relaunched) — checked FIRST, because a session whose process died while
+// asking/review/error keeps that pre-death lifecycle, yet it belongs at the bottom, not under Needs You.
+// `need` = the ball is with the HUMAN (asking / review / done / close-pending / error → answer, review,
+// close, fix); `run` = self-driving, the agent's turn (working / parked / starting / queued / idle — booting
+// counts as running, not dead). Closed sessions aren't on the board at all. Same partition drives every
+// session-list surface.
 const NEED_STATUS = new Set(['asking', 'review', 'done', 'close-pending', 'error'])
-export const sessionZone = (s) => (NEED_STATUS.has(s?.status) ? 'need' : 'run')
-export const ZONE_ORDER = ['need', 'run']
-// zone-partition the list: needs-you zone first, self-running below; and WITHIN each zone the NEWEST session
-// on top (descending effective time = sortKey ?? created) — the fresh, recently-touched work you actually
-// reach for, not the oldest. Drag-reorder ([[session-reorder]]) still pins within a zone on this same axis.
+export const sessionZone = (s) => {
+  if (s?.liveness === 'offline' || s?.status === 'offline') return 'offline'
+  return NEED_STATUS.has(s?.status) ? 'need' : 'run'
+}
+export const ZONE_ORDER = ['need', 'run', 'offline']
+// zone-partition the list: needs-you first, self-running next, offline (dormant) at the bottom; and WITHIN
+// each zone the NEWEST session on top (descending effective time) — the fresh, recently-touched work you
+// actually reach for, not the oldest.
 const effOf = (s) => (s?.sortKey != null ? s.sortKey : (s?.created ?? 0))
 export const zoneSort = (sessions) => {
-  const rank = { need: 0, run: 1 }
+  const rank = { need: 0, run: 1, offline: 2 }
   return [...sessions].sort((a, b) => rank[sessionZone(a)] - rank[sessionZone(b)] || effOf(b) - effOf(a))
 }
 

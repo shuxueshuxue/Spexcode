@@ -67,14 +67,15 @@ function navKeyToken(e) {
 // the menu's spec path, minus the `.spec/` shell and `/spec.md` leaf, so a row reads like a breadcrumb.
 const specPath = (p) => (p || '').replace(/^\.spec\//, '').replace(/\/spec\.md$/, '')
 
-// an `@<id>` mention token at a word boundary. Optional leading dot so `@.config` resolves (a node id is
-// its dir basename — see [[spec-pointer]]). Group 1 = the boundary (BOL or whitespace), 2 = the id. Used
-// for both the New Session launch grammar and the running-session send-time resolution — one pattern.
-const MENTION_RE = /(^|\s)@(\.?[A-Za-z0-9_-]+)/g
+// a `[[<id>]]` (Obsidian double-bracket) node-mention token. Optional leading dot so `[[.config]]` resolves
+// (a node id is its dir basename — see [[spec-pointer]]). Group 1 = the id. Used for both the New Session
+// launch grammar and the running-session send-time resolution — one pattern. `@` is left free for future
+// session mentions; only the node ref moves to `[[]]`.
+const MENTION_RE = /\[\[(\.?[A-Za-z0-9_-]+)\]\]/g
 
-// rank spec nodes for a partial @query. The focused node always floats to the very top (so just typing
-// `@` lists it first — the convenient default target). Otherwise id beats path; a prefix beats a mid-match;
-// shorter ids win ties so the most specific node floats up. Empty query (just typed `@`) lists everything.
+// rank spec nodes for a partial `[[query`. The focused node always floats to the very top (so just typing
+// `[[` lists it first — the convenient default target). Otherwise id beats path; a prefix beats a mid-match;
+// shorter ids win ties so the most specific node floats up. Empty query (just typed `[[`) lists everything.
 function matchSpecs(specs, query, focusId) {
   const q = query.toLowerCase()
   const scored = []
@@ -333,35 +334,35 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     fitTextarea(ta, maxH)
   }, [msg, active, open])
 
-  // assemble the `/<preset> @<node>… <free text>` launch grammar into one prompt: the preset body with its
-  // {{targets}} placeholder filled from the @-mentions (the server later derives the node from the first
-  // @<id>), free text appended. A `/` naming no known preset, or a plain/@-only prompt, passes through.
+  // assemble the `/<preset> [[<node>]]… <free text>` launch grammar into one prompt: the preset body with its
+  // {{targets}} placeholder filled from the mentions (the server later derives the node from the first
+  // `[[<id>]]`), free text appended. A `/` naming no known preset, or a plain/mention-only prompt, passes through.
   const composeLaunch = (raw) => {
     const m = raw.match(/^\/(\S+)\s*([\s\S]*)$/)
     if (!m) return raw
     const preset = commandPresets.find((p) => p.name === m[1])
     if (!preset) return raw
     const ids = []
-    const free = m[2].replace(MENTION_RE, (_, sp, id) => { ids.push(id); return sp }).trim()
+    const free = m[2].replace(MENTION_RE, (_, id) => { ids.push(id); return '' }).trim()
     const targets = ids.length
       ? ids.map((id) => {
           const s = specs.find((x) => x.id === id)
-          return s ? `- @${s.id} — ${specPath(s.path)}` : `- @${id}`
+          return s ? `- [[${s.id}]] — ${specPath(s.path)}` : `- [[${id}]]`
         }).join('\n')
-      : '(No target was @-mentioned. If the prompt names the scope, use it; otherwise ask the human to define the scope before proceeding — unless this task needs no scope, in which case proceed.)'
+      : '(No target was mentioned. If the prompt names the scope, use it; otherwise ask the human to define the scope before proceeding — unless this task needs no scope, in which case proceed.)'
     const body = preset.body.includes('{{targets}}')
       ? preset.body.replace('{{targets}}', targets)
       : `${preset.body}\n\n${targets}`
     return free ? `${body}\n\n${free}` : body
   }
 
-  // the running-session twin of composeLaunch's @-resolution: expand each `@<id>` in a keyed message to an
-  // inline pointer at the node's live spec.md (`@<id> (<path>)`), so the driven agent is aimed at that
+  // the running-session twin of composeLaunch's mention resolution: expand each `[[<id>]]` in a keyed message
+  // to an inline pointer at the node's live spec.md (`[[<id>]] (<path>)`), so the driven agent is aimed at that
   // contract and reads the file itself — never a pasted body (see [[spec-pointer]]). Unknown ids pass through.
   const expandMentions = (text) =>
-    text.replace(MENTION_RE, (m, sp, id) => {
+    text.replace(MENTION_RE, (m, id) => {
       const s = specs.find((x) => x.id === id)
-      return s ? `${sp}@${s.id} (${s.path})` : m
+      return s ? `[[${s.id}]] (${s.path})` : m
     })
 
   // launch a session, then stay on the New tab — it appears in the list below on the next reload/poll.
@@ -383,21 +384,23 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       .catch(() => {})
   }
 
-  // the @-mention dropdown — shared by the New prompt and a running session's ❯ inbox (one menu, not two).
-  // The trigger is purely positional: scan back from the caret over non-space chars to an `@` at a word
-  // boundary. Returns the menu descriptor, or null when the caret isn't inside a mention token.
+  // the node-mention dropdown — shared by the New prompt and a running session's ❯ inbox (one menu, not two).
+  // The trigger is positional (Obsidian `[[`): scan back from the caret over id-chars; if the two chars just
+  // before that run are `[[`, the caret sits inside an UNCLOSED `[[query` token — the query is the text between
+  // the `[[` and the caret. Returns the menu descriptor, or null when the caret isn't inside a mention token.
   const mentionMenu = (value, caret) => {
     let i = caret - 1
-    while (i >= 0 && value[i] !== '@' && !/\s/.test(value[i])) i--
-    if (i >= 0 && value[i] === '@' && (i === 0 || /\s/.test(value[i - 1]))) {
+    while (i >= 0 && /[A-Za-z0-9_.\-]/.test(value[i])) i--
+    // i now points just left of the id run; the id starts at i+1. `[[` must occupy value[i-1] and value[i].
+    if (i >= 1 && value[i - 1] === '[' && value[i] === '[') {
       const query = value.slice(i + 1, caret)
       const items = matchSpecs(specs, query, focusId)
       if (!items.length) return null
-      return { kind: 'mention', items, index: 0, start: i, end: caret, query }
+      return { kind: 'mention', items, index: 0, start: i - 1, end: caret, query }
     }
     return null
   }
-  // build the completion dropdown for the active surface: @-mention (spec nodes) works on BOTH; the New
+  // build the completion dropdown for the active surface: `[[`-mention (spec nodes) works on BOTH; the New
   // prompt adds the config-preset (`/`) palette, a session's ❯ inbox adds the slash-command menu.
   const buildMenu = (value, caret) => {
     const mm = mentionMenu(value, caret)
@@ -429,7 +432,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const navMenu = (dir) => setMenu((m) => (m ? { ...m, index: (m.index + dir + m.items.length) % m.items.length } : m))
   // replace the menu's span under the caret with the picked item's token, then drop the caret after it.
   // Each kind writes its OWN surface: slash → the active session's ❯ draft (msgRef), insert-only and never
-  // executed; mention → the New Session prompt (taRef). `@<id> ` / `/<name> ` both leave a trailing space.
+  // executed; mention → the New Session prompt (taRef). `[[<id>]] ` / `/<name> ` both leave a trailing space.
   const accept = (item) => {
     if (!item || !menu) return
     if (menu.kind === 'slash') {
@@ -445,7 +448,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     }
     // config preset → the New prompt (composed at launch); a mention → whichever box is active: the New
     // prompt (resolved at launch) or a running session's ❯ inbox (resolved at send, see expandMentions).
-    const insert = menu.kind === 'config' ? `/${item.name} ` : `@${item.id} `
+    const insert = menu.kind === 'config' ? `/${item.name} ` : `[[${item.id}]] `
     const onMsg = menu.kind === 'mention' && active !== 'new'
     const ref = onMsg ? msgRef : taRef
     const cur = onMsg ? msg : prompt
@@ -484,11 +487,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     </ul>
   )
 
-  // ONE render for the @-mention menu, on either surface — downward under the centered New box, or `up`
+  // ONE render for the node-mention menu, on either surface — downward under the centered New box, or `up`
   // above the docked ❯ inbox. Same rows, same data; only the open direction differs (like slashMenu).
   const mentionMenuEl = (up) => (
     <ul className={up ? 'mention-menu up' : 'mention-menu'} role="listbox">
-      <li className="mention-head">// {menu.query ? `@${menu.query}` : t('session.menuSpecNodes')} — {t('session.menuHint')}</li>
+      <li className="mention-head">// {menu.query ? `[[${menu.query}]]` : t('session.menuSpecNodes')} — {t('session.menuHint')}</li>
       {menu.items.map((it, i) => (
         <li
           key={it.id}
@@ -499,7 +502,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           onMouseEnter={() => setMenu((m) => (m ? { ...m, index: i } : m))}
         >
           <span className="mention-dot" style={{ background: STATUS_COLOR[it.status] || STATUS_COLOR.offline }} />
-          <span className="mention-id">@{highlight(it.id, menu.query)}</span>
+          <span className="mention-id">{highlight(it.id, menu.query)}</span>
           <span className="mention-path">{specPath(it.path)}</span>
         </li>
       ))}
@@ -514,7 +517,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     // completion's trailing space and a stray newline.
     const cmd = boardCmds.find((c) => raw.trim() === `/${c.name}`)
     if (cmd) { setMsg(''); setMenu(null); cmd.run(); return }
-    // resolve any `@<node>` to a live spec.md pointer before it reaches the agent (the running-session twin
+    // resolve any `[[<node>]]` to a live spec.md pointer before it reaches the agent (the running-session twin
     // of the New Session launch composition — see [[term-input]]).
     const text = expandMentions(raw)
     setMsg('')
@@ -653,7 +656,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         return
       }
       // a completion menu owns navigation/commit/dismiss while it's open — on the New Session prompt
-      // (@-mention) OR a session's ❯ inbox (slash). The capture-phase listener claims Enter before the
+      // (`[[`-mention) OR a session's ❯ inbox (slash). The capture-phase listener claims Enter before the
       // inbox textarea's own onKeyDown, so picking a command never also dispatches the line.
       if (menu) {
         if (e.key === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); navMenu(1); return }
@@ -840,7 +843,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 })}
               </div>
               <div className="si-hint">
-                {t('session.hint.before')}<code>@</code>{t('session.hint.mid')}<code>/</code>{t('session.hint.after')}
+                {t('session.hint.before')}<code>[[</code>{t('session.hint.mid')}<code>/</code>{t('session.hint.after')}
               </div>
             </div>
           )}
@@ -936,7 +939,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   >{uploading && attachAt === 'msg' ? <BusyGlyph /> : <AttachGlyph />}</button>
                   {uploadErr && attachAt === 'msg' && <span className="si-attach-err" role="alert">{t('session.attachError')}</span>}
                   {sendErr && <span className="si-send-err" role="alert">{t('session.msgError')}</span>}
-                  {/* slash-command + @-mention menus — docked at the bottom, so they open UPWARD above the ❯ box. */}
+                  {/* slash-command + `[[`-mention menus — docked at the bottom, so they open UPWARD above the ❯ box. */}
                   {menu && menu.kind === 'slash' && slashMenu(true, menu.query ? `/${menu.query}` : t('session.menuCommands'))}
                   {menu && menu.kind === 'mention' && mentionMenuEl(true)}
                 </div>

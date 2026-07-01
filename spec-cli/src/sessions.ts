@@ -626,11 +626,11 @@ const slugify = (s: string | null) => (s || 'session').replace(/[^a-zA-Z0-9_-]/g
 // @@@ node + title from the prompt - the spec node a session works on is whatever it @-mentions, NOT a UI
 // "focused node": the dashboard prefills `@<focused> ` as a deletable convenience, so the node the user
 // actually left in the prompt (changed it, or deleted it for a node-agnostic prompt) is the truth. We read
-// the FIRST `@<id>` that begins a word (same positional rule the dashboard's mention menu uses). When there
-// is none, the session is node-agnostic and we label it by the first few words of the prompt instead.
+// the FIRST `[[<id>]]` topic reference ([[mentions]]: `[[node]]` is a topic, `@` is now an actor/session).
+// When there is none, the session is node-agnostic and we label it by the first few words of the prompt.
 // The OPTIONAL leading dot is load-bearing: a node id is its dir basename, so a dot-prefixed config root
-// (`.config`) keeps the dot — without `\.?` here `@.config` captures nothing and never resolves to a node.
-const MENTION = /(?:^|\s)@(\.?[A-Za-z0-9_-]+)/
+// (`.config`) keeps the dot — without `\.?` here `[[.config]]` captures nothing and never resolves to a node.
+const MENTION = /\[\[(\.?[A-Za-z0-9_-]+)\]\]/
 const mentionedNode = (prompt: string): string | null => prompt.match(MENTION)?.[1] ?? null
 function titleFromPrompt(prompt: string): string | null {
   const first = (prompt || '').trim().split('\n')[0].trim()
@@ -689,11 +689,13 @@ async function launch(id: string, path: string, tail: string, harness: Harness =
 // @<target>, so it's unambiguous and wins over the plain first-@ mention. `rest` is the human's own text
 // after it (what they want the new node to be, or why the node is going away). No directive → the prompt
 // is an ordinary session prompt and nothing is mutated.
-//   @new under @<parentId>: <describe the node>   → create a placeholder child, agent names+specs+codes it
-//   @delete @<nodeId>: <why / guidance>            → remove the node's dir, agent refactors per git history
+//   @new under [[parentId]]: <describe the node>   → create a placeholder child, agent names+specs+codes it
+//   @delete [[nodeId]]: <why / guidance>           → remove the node's dir, agent refactors per git history
+// `@new`/`@delete` are reserved DIRECTIVE verbs; the node they act on is a `[[id]]` topic ref ([[mentions]]),
+// the same grammar as everywhere else, now that `@<id>` is freed for actor/session mentions.
 type Directive = { kind: 'new'; targetId: string; rest: string } | { kind: 'delete'; targetId: string; rest: string }
-const NEW_OP = /^\s*@new\b[^\n@]*@([A-Za-z0-9_-]+)\s*:?\s*/i
-const DEL_OP = /^\s*@delete\b[^\n@]*@([A-Za-z0-9_-]+)\s*:?\s*/i
+const NEW_OP = /^\s*@new\b[^\n]*?\[\[([A-Za-z0-9_-]+)\]\]\s*:?\s*/i
+const DEL_OP = /^\s*@delete\b[^\n]*?\[\[([A-Za-z0-9_-]+)\]\]\s*:?\s*/i
 function parseDirective(prompt: string): Directive | null {
   let m = prompt.match(NEW_OP); if (m) return { kind: 'new', targetId: m[1], rest: prompt.slice(m[0].length).trim() }
   m = prompt.match(DEL_OP); if (m) return { kind: 'delete', targetId: m[1], rest: prompt.slice(m[0].length).trim() }

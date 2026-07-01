@@ -26,10 +26,12 @@ grammar is uniform, the logic is tiny.
   you can do to it*: watch it, or send it a prompt. **`@new`** is the special actor — dispatch a **fresh
   worker** (on the surface's node / the thread's node), optionally with a preset. So an `@` in text is a
   contact you hand to a reader; what happens next is a **dispatch**, never a new datastore.
-- **The two never collide** because topic is `[[]]` and actor is `@` — no weighting, no third symbol. Freeing
-  `@` for actors is exactly why the legacy `@<node>` usages (composer, board fresh-session key, the
-  `@new/@delete` directive grammar) migrate to `[[node]]` — a broad UX change owned by [[keyboard-nav]] /
-  [[session-console]] and the launch grammar, sequenced LAST so the risky part lands on its own.
+- **The two never collide** because topic is `[[]]` and actor is `@` — no weighting, no third symbol. This is
+  why every legacy `@<node>` usage was **migrated to `[[node]]`**: the composer autocomplete + the board
+  fresh-session key ([[session-console]] / [[term-input]]), the server's node-derivation (`MENTION`), and the
+  node ref *inside* the reserved `@new`/`@delete` directive verbs (`@new under [[parent]]`, `@delete
+  [[node]]`). `@new`/`@delete` stay reserved directive verbs; only the node they name became a `[[…]]` ref, so
+  `@` is now free for actor mentions.
 - **Uniform in any input box, CLI-first.** The parse + resolve + dispatch live in spec-cli (a `mentions`
   module), so a forum reply, the composer, and an agent's own CLI prompt all run the SAME resolver; the
   dashboard is a thin autocomplete over it. An agent `@`-ing another agent under a forum post is the identical

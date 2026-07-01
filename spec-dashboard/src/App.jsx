@@ -28,7 +28,7 @@ const NW = 220, NH = 46
 const clamp = (z) => Math.max(0.4, Math.min(1.6, z))
 
 // nn = new child under focus, dd = delete focus; leaders n/d are unbound on the board so single-key nav isn't shadowed
-const CHORDS = { nn: (id) => `@new under @${id}: `, dd: (id) => `@delete @${id}: ` }
+const CHORDS = { nn: (id) => `@new under [[${id}]]: `, dd: (id) => `@delete [[${id}]]: ` }
 const CHORD_KEYS = Object.keys(CHORDS)
 const CHORD_LEADERS = new Set(CHORD_KEYS.map((c) => c[0]))
 
@@ -352,8 +352,8 @@ function Dashboard({ specs, sessions, reload, project }) {
       }
       // Enter opens the session board at the remembered tab (boarding switch — see openBoard).
       else if (firesKey('board.enter', e.key)) { e.preventDefault(); openBoard() }
-      // @-key: jump to a FRESH New Session on the focus (@<id> pre-seeded), unconditional — never enters an existing session
-      else if (firesKey('board.fresh', e.key)) { e.preventDefault(); startNew(`@${focus.id} `) }
+      // @-key: jump to a FRESH New Session on the focus ([[<id>]] pre-seeded), unconditional — never enters an existing session
+      else if (firesKey('board.fresh', e.key)) { e.preventDefault(); startNew(`[[${focus.id}]] `) }
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)

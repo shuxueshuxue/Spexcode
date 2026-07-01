@@ -5,7 +5,7 @@ import { labelColor } from './color.js'
 import { STATUS_COLOR, sessionHeadline, sessionForest } from './session.js'
 import { SessionRow, RowLead, useFold } from './SessionWindow.jsx'
 import SessionContextMenu from './SessionContextMenu.jsx'
-import { ProofOverlay } from './ReviewProof.jsx'
+import { ProofPane } from './ReviewProof.jsx'
 import { boardCommandsFor } from './sessionCommands.js'
 import { useT } from './i18n/index.jsx'
 
@@ -180,7 +180,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [sendErr, setSendErr] = useState(false)   // last /keys dispatch failed — surfaced under the ❯ box
   const [navMode, setNavMode] = useState(false)
   const [menuById, setMenuById] = useState({})   // per-pane menu-sniff flag from each SessionTerm; drives the nav button's `.suggest` pulse
-  const [proofOpen, setProofOpen] = useState(false)
+  // which of the right pane's two tabs is showing: the live terminal (default) or the always-available proof.
+  const [rightTab, setRightTab] = useState('terminal')
   const [uploading, setUploading] = useState(false)
   const [uploadErr, setUploadErr] = useState(false)
   const [dragTarget, setDragTarget] = useState(null)
@@ -236,7 +237,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
 
   // nav mode binds to ONE live session's menu — leaving the tab (or it going offline) exits it, so raw
   // keystrokes can never leak into the wrong pane.
-  useEffect(() => { setNavMode(false); setSendErr(false); setMenu(null); setProofOpen(false) }, [active])
+  useEffect(() => { setNavMode(false); setSendErr(false); setMenu(null); setRightTab('terminal') }, [active])
   useEffect(() => { if (selSession?.liveness === 'offline') setNavMode(false) }, [selSession?.liveness])
   // leaving nav mode hands focus back to the ❯ box. Guarded to the on→off edge for a live tab — a tab
   // switch or going offline exits nav too, but the tab-focus effect owns focus there.
@@ -591,7 +592,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // button's onClick fires; `boardCmds` narrows the registry to the current session state. See [[term-input]].
   const runners = {
     nav: () => setNavMode((v) => !v),
-    proof: () => setProofOpen(true),
+    proof: () => setRightTab('proof'),
     merge: () => act('merge'),
     exit: () => act('exit'),     // soft stop: kill tmux + socket, KEEP the worktree → session goes offline + relaunch panel
     close: () => act('close'),   // removal: kill + remove the worktree + branch (the row right-click Close's twin)
@@ -824,15 +825,22 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             </div>
           )}
           {/* the session pane stays MOUNTED even on the New tab (just display:none) so the terminals'
-              WebSockets + scroll survive the tab switch. The terminal fills this pane directly — no inner
-              box or title bar; a slim action strip floats the headline + lifecycle actions over its top edge. */}
+              WebSockets + scroll survive the tab switch. A horizontal TAB BAR (Terminal | Proof) sits above
+              the pane content — it replaces the old floating title/action strip, is visibly set apart from the
+              dark terminal below (panel background + separator, both themes), and carries the lifecycle actions
+              on its right. */}
           <div
             className="si-session-wrap"
             style={{ display: active === 'new' ? 'none' : 'flex', flexDirection: 'column', flex: 1, minWidth: 0, minHeight: 0, position: 'relative' }}
           >
-              {/* slim action strip in place of the old title bar: the shared headline ([[session-activity]]) on
-                  the left, the state-narrowed lifecycle actions on the right — flat on the console ground, no box. */}
-              <div className="si-term-bar">
+              <div className="si-tabbar">
+                {/* two tabs on the left: the live terminal (default) and the always-available proof of work. */}
+                <div className="si-tabs" role="tablist">
+                  <button role="tab" aria-selected={rightTab === 'terminal'} className={rightTab === 'terminal' ? 'si-tab on' : 'si-tab'} onClick={() => setRightTab('terminal')}>{t('session.tabTerminal')}</button>
+                  <button role="tab" aria-selected={rightTab === 'proof'} className={rightTab === 'proof' ? 'si-tab on' : 'si-tab'} onClick={() => setRightTab('proof')}>{t('session.tabProof')}</button>
+                </div>
+                {/* the shared session headline ([[session-activity]]'s `si-th-name`) rides compactly between the
+                    tabs and the actions — same source/content as the row that opened it, ellipsing when tight. */}
                 <span className="si-th-name" title={selSession ? sessionHeadline(selSession) : active}>{(selSession && sessionHeadline(selSession)) || active}</span>
                 <div className="si-actions">
                   {showRelaunch
@@ -852,7 +860,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                       })}
                 </div>
               </div>
-              <div className="si-term-body" ref={termRef} style={{ position: 'relative' }}>
+              {/* Terminal tab — the live pane stays MOUNTED across tab switches (warm-terminals contract); the
+                  Proof tab merely hides it with display:none, never unmounts it, so socket + scroll survive. */}
+              <div className="si-term-body" ref={termRef} style={{ position: 'relative', display: rightTab === 'terminal' ? undefined : 'none' }}>
                 {/* every opened session's terminal stays mounted; only the active one is shown */}
                 {[...opened].map((id) => (
                   <div key={id} className="si-term-layer" style={{ position: 'absolute', inset: 0, display: id === active ? 'block' : 'none' }}>
@@ -868,7 +878,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   </div>
                 )}
               </div>
-              {navMode ? (
+              {/* the docked ❯ input belongs to the Terminal tab only (the Proof tab has nothing to type at). */}
+              {rightTab === 'terminal' && (navMode ? (
                 // nav mode replaces the prompt box: keys go straight to the pane (handled at the window level).
                 <div className="si-bottom nav" onClick={() => setNavMode(false)} title={t('session.navExit')}>
                   <span className="si-nav-ind">{t('session.navInd')}</span>
@@ -910,14 +921,15 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   {menu && menu.kind === 'slash' && slashMenu(true, menu.query ? `/${menu.query}` : t('session.menuCommands'))}
                   {menu && menu.kind === 'mention' && mentionMenuEl(true)}
                 </div>
-              )}
+              ))}
+              {/* Proof tab — the review proof rendered INLINE (always available, not review-gated). Mounts on
+                  each visit so it reflects the live derived diff/loss/gates ([[review-proof]]). */}
+              {rightTab === 'proof' && <ProofPane sessionId={active} />}
           </div>
         </section>
       </div>
     </div>
     <SessionContextMenu menu={ctxMenu} onClose={() => setCtxMenu(null)} onChanged={reload} />
-    {/* the review-proof overlay ([[review-proof]]) — one instance driven by the lifted `proofOpen`. */}
-    {proofOpen && active !== 'new' && <ProofOverlay sessionId={active} onClose={() => setProofOpen(false)} />}
     </>
   )
 }

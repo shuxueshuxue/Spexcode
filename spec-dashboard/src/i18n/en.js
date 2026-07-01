@@ -239,6 +239,8 @@ export default {
     menuHint: '↑↓ pick · ⏎ insert',
     hint: { before: 'type ', mid: ' to reference a spec · ', after: ' to apply a config preset' },
     harnessLabel: 'agent launcher',
+    tabTerminal: 'terminal',
+    tabProof: 'proof',
     navBtn: 'nav',
     navTitle: "nav mode — forward raw keystrokes incl. ⌃/⌥/⌘ combos to drive the agent's terminal (⌥/⌘+I)",
     relaunch: 'relaunch',
@@ -274,9 +276,12 @@ export default {
   proof: {
     btn: 'proof',
     btnTitle: "open this session's proof of work — the measured yatsu evidence, the diff, and the merge gates",
-    title: 'review proof',
+    title: 'proof of work',
     newTab: 'open in new tab',
     close: 'close (esc)',
+    loading: 'building proof…',
+    emptyMsg: 'no proof yet',
+    emptySub: "this session hasn't produced any work to prove. the proof — its yatsu evidence, the diff, and the merge gates — appears here once it does.",
   },
 
   settings: {

@@ -234,6 +234,8 @@ export default {
     menuHint: '↑↓ 选择 · ⏎ 插入',
     hint: { before: '输入 ', mid: ' 以引用规格 · ', after: ' 以套用配置预设' },
     harnessLabel: '启动智能体',
+    tabTerminal: '终端',
+    tabProof: '证明',
     navBtn: '导航',
     navTitle: '导航模式——转发原始按键（含 ⌃/⌥/⌘ 组合键）以驱动智能体的终端（⌥/⌘+I）',
     relaunch: '重新启动',
@@ -269,9 +271,12 @@ export default {
   proof: {
     btn: '证明',
     btnTitle: '打开此会话的工作证明 —— 测得的 yatsu 证据、改动与合并门禁',
-    title: '评审证明',
+    title: '工作证明',
     newTab: '在新标签页打开',
     close: '关闭（esc）',
+    loading: '正在生成证明…',
+    emptyMsg: '暂无证明',
+    emptySub: '此会话尚未产生可供证明的工作。一旦产生，其工作证明 —— yatsu 证据、改动与合并门禁 —— 将显示在这里。',
   },
 
   settings: {

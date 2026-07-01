@@ -988,9 +988,20 @@ body {
    bottom offset + the ~38px box + a hair of gap). The terminal ends ABOVE this strip; the box's upward
    multi-line growth overlays past it (see .si-term-body's margin-bottom and .si-bottom below). */
 .si-content.is-session { --si-dock-h: 54px; }
-/* slim action strip in place of the old title bar: flat on the console ground (no panel/border box), the
-   headline on the left and the state-narrowed lifecycle actions on the right. */
-.si-term-bar { flex: none; display: flex; align-items: center; gap: 8px; padding: 8px 12px 6px; font-size: 12px; color: var(--ink); }
+/* horizontal TAB BAR in place of the old title/action strip: the two tabs (Terminal | Proof) on the left,
+   the state-narrowed lifecycle actions on the right. It wears the app-chrome `--panel` background + a bottom
+   separator so it reads VISIBLY APART from the dark terminal below it, in both light and dark themes (the old
+   flat strip blended into the terminal). */
+.si-tabbar { flex: none; display: flex; align-items: stretch; gap: 8px; padding: 0 10px; background: var(--panel); border-bottom: 1px solid var(--line); }
+.si-tabs { flex: none; display: flex; gap: 2px; }
+/* each tab: a flat text button; the active one is inked and underlined in blue (its bottom border overlaps the
+   bar's separator via the -1px margin, so the selected tab visually connects to its pane). */
+.si-tab { appearance: none; background: transparent; border: none; cursor: pointer; padding: 8px 14px; font-family: var(--mono); font-size: 12px; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.si-tab:hover { color: var(--ink2); }
+.si-tab.on { color: var(--ink2); border-bottom-color: var(--blue); }
+/* the shared session headline sits between the tabs and the actions, growing to fill and ellipsing when tight
+   (session-activity leans on this `flex:1` + ellipsis — same headline, more width). */
+.si-th-name { flex: 1; min-width: 0; align-self: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: 12px; color: var(--ink2); }
 /* the terminal body fills the rest of the pane, edge-to-edge, but ENDS ABOVE the docked ❯ box: its
    margin-bottom reserves the resting input strip (--si-dock-h) as REAL layout height, so the terminal —
    fitted to this box — never renders under the resting input and its bottom status line stays visible.
@@ -1076,8 +1087,7 @@ body {
 /* the action strip's headline ([[session-activity]]): the SAME sessionHeadline the rows show, dim, taking the
    free width (flex:1) and only ellipsising when it overflows this wide strip — far more room than the compact
    `.sess-id` rows, the one display difference between the two surfaces. */
-.si-th-name { font-weight: 700; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink2); }
-.si-actions { margin-left: auto; display: flex; gap: 6px; }
+.si-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }
 .si-act { background: var(--paper); border: 1px solid var(--line); color: var(--ink2); border-radius: 4px; padding: 1px 9px; cursor: pointer; font-family: var(--mono); font-size: 11px; }
 .si-act:hover { border-color: var(--blue); color: var(--blue); }
 .si-act.go { border-color: var(--blue); color: var(--blue); }
@@ -1347,34 +1357,22 @@ body {
 .eval-transcript { font-family: var(--mono); font-size: 11px; color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px; margin: 0; max-height: 360px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
 .eval-transcript.loading { color: var(--muted); }
 
-/* ---- review proof overlay ([[review-proof]]'s slice of the shared stylesheet) ----
-   A thin frame around the backend-rendered proof of work (an iframe over /api/sessions/:id/proof). Floats
-   ABOVE the session board (.si-backdrop, 50) it opens from, so the modal never renders behind its surface.
-   The proof document is self-contained + dark; only this chrome wears the dashboard's light theme. */
-.proof-overlay {
-  position: fixed; inset: 0; z-index: 70;
-  background: rgba(7, 54, 66, .5); backdrop-filter: blur(6px);
-  display: flex; align-items: center; justify-content: center;
-}
-.proof-frame {
-  width: 92vw; height: 92vh; max-width: 1080px;
-  background: var(--paper); border: 1px solid var(--blue); border-radius: 12px;
-  overflow: hidden; display: flex; flex-direction: column;
-  box-shadow: 0 30px 90px rgba(7, 54, 66, .5);
-  animation: si-pop .2s cubic-bezier(.2, .8, .2, 1);
-}
+/* ---- review proof pane ([[review-proof]]'s slice of the shared stylesheet) ----
+   The backend-rendered proof of work (self-contained HTML over /api/sessions/:id/proof) rendered INLINE as the
+   console's Proof TAB — always available for any selected session, no longer a review-only floating overlay.
+   It fills the right pane below the tab bar: a slim label row over the self-contained (dark) proof iframe. */
+.proof-pane { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--paper); }
 .proof-bar {
-  display: flex; align-items: center; gap: 12px;
+  flex: none; display: flex; align-items: center; gap: 12px;
   padding: 8px 12px; border-bottom: 1px solid var(--line);
   font-family: var(--mono); font-size: 12px; color: var(--ink2);
 }
 .proof-title { font-weight: 700; letter-spacing: .04em; }
 .proof-newtab { margin-left: auto; color: var(--blue); text-decoration: none; font-size: 11px; }
 .proof-newtab:hover { text-decoration: underline; }
-.proof-x {
-  background: var(--paper); border: 1px solid var(--line); color: var(--ink);
-  border-radius: 4px; padding: 1px 9px; cursor: pointer; font-family: var(--mono); font-size: 12px;
-}
-.proof-x:hover { border-color: var(--orange); color: var(--orange); }
 .proof-iframe { flex: 1; width: 100%; border: 0; background: #0b0e14; }
+/* the empty/loading placeholder — a clean centred note when a session has no proof to show yet. */
+.proof-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center; padding: 24px; color: var(--muted); font-family: var(--mono); font-size: 12px; }
+.proof-empty-msg { font-size: 15px; color: var(--ink2); }
+.proof-empty-sub { max-width: 460px; line-height: 1.6; }
 /* the `proof` button's cyan now comes from the shared `.si-act.board.sc-cyan` rule (see board commands). */

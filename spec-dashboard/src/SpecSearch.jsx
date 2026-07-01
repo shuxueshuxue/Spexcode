@@ -103,15 +103,15 @@ function rank(entries, query, planes) {
 }
 
 // the body corpus for node-prose ranking ([[board-lean]]): the board omits `body`, so the palette fetches
-// {id→body} from `/api/specs/lite` the first time it opens and reuses it (module cache) on every later open —
-// once per session, off the board's hot poll. Until it lands, node ranking falls back to title+desc.
+// {id→body} from `/api/specs/lite`. Stale-while-revalidate — the last corpus seeds instantly (module cache)
+// so ranking is never cold, AND it refetches on every OPEN (this hook mounts when the palette opens) so an
+// edited body can't rank stale forever. The fetch is user-initiated (a palette open), off the board's hot poll.
 let bodyCorpus = null
 function useBodyCorpus() {
   const [corpus, setCorpus] = useState(bodyCorpus)
   useEffect(() => {
-    if (bodyCorpus) return
     let on = true
-    fetch('/api/specs/lite').then((r) => r.json())
+    fetch('/api/specs/lite').then((r) => (r.ok ? r.json() : []))
       .then((rows) => { bodyCorpus = Object.fromEntries((rows || []).map((r) => [r.id, r.body || ''])); if (on) setCorpus(bodyCorpus) })
       .catch(() => {})
     return () => { on = false }

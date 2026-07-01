@@ -134,52 +134,31 @@ function TwoPart({ parts }) {
   )
 }
 
-// parts is derived from `body`, NOT shipped on the board ([[board-lean]]): it is pure redundancy on the wire,
-// so the detail view reconstructs it here. MIRROR of the backend `parseParts` (spec-cli/src/specs.ts) — same
-// grammar: split at the `## raw source` / `## expanded spec` H2 headings, fence-aware (a `## …` inside a code
-// fence is content, not a heading). null when neither heading is present (a legacy whole-body node).
-const PART_ALIASES = { 'raw source': 'rawSource', 'expanded spec': 'expandedSpec' }
-function parseParts(body) {
-  if (!body) return null
-  const acc = { rawSource: [], expandedSpec: [] }
-  let cur = null, inFence = false, any = false
-  for (const line of body.split('\n')) {
-    const fence = /^\s*```/.test(line)
-    if (!inFence && !fence) {
-      const h2 = line.match(/^##\s+(.+?)\s*$/)
-      if (h2) {
-        const key = PART_ALIASES[h2[1].trim().toLowerCase()]
-        if (key) { cur = key; any = true; continue }
-      }
-    }
-    if (fence) inFence = !inFence
-    if (cur) acc[cur].push(line)
-  }
-  if (!any) return null
-  const t = (a) => a.join('\n').trim()
-  return { rawSource: t(acc.rawSource), expandedSpec: t(acc.expandedSpec) }
-}
-
-// body + parts are NOT on the board ([[board-lean]]); fetch them when a node opens, cached per id across opens
-// so re-opening the same node is instant (a node's committed body only changes on a new version).
+// body + parts are NOT on the board ([[board-lean]]); fetch them when a node opens. `/api/specs/:id/content`
+// returns both (the backend does the parse), so there is no client-side parser to keep in sync. Cached per
+// (id, version) so re-opening is instant, but a NEW version (the board carries the live version) misses the
+// stale entry and refetches — the detail prose can never lag the version badge above it. A non-OK response is
+// shown but never cached, so a transient 404 during a backend reload can't poison the node until a reload.
 const contentCache = new Map()
-function useSpecContent(id) {
-  const [content, setContent] = useState(() => contentCache.get(id) ?? null)
+function useSpecContent(id, version) {
+  const key = `${id}@${version ?? ''}`
+  const [content, setContent] = useState(() => contentCache.get(key) ?? null)
   useEffect(() => {
-    const hit = contentCache.get(id)
+    const hit = contentCache.get(key)
     if (hit) { setContent(hit); return }
+    setContent(null)                                  // drop the previous node/version's prose while the new one loads
     let on = true
-    fetch(`/api/specs/${id}/content`).then((r) => r.json())
-      .then((d) => { contentCache.set(id, d); if (on) setContent(d) })
-      .catch(() => on && setContent({ body: '', parts: null }))
+    fetch(`/api/specs/${id}/content`).then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((d) => { contentCache.set(key, d); if (on) setContent(d) })
+      .catch(() => { if (on) setContent({ body: '', parts: null }) })
     return () => { on = false }
-  }, [id])
+  }, [id, version, key])
   return content
 }
 
 export function SpecPane({ node }) {
   const t = useT()
-  const content = useSpecContent(node.id)
+  const content = useSpecContent(node.id, node.version)
   const driftTitle = (node.driftFiles || []).map((d) => `${d.file}: ${t('specNode.driftAhead', { n: d.behind })}`).join('\n')
   return (
     <div className="pane-doc">
@@ -204,9 +183,10 @@ export function SpecPane({ node }) {
       )}
       {(() => {
         // body/parts are lazy-loaded ([[board-lean]]); `node.* ??` keeps a fixture (or a fuller payload) working.
-        // While the fetch is in flight both are null → an empty doc that fills the instant content lands.
+        // While the fetch is in flight both are null → an empty doc that fills the instant content lands. parts
+        // come from the backend (`/content`); null → a legacy one-blob body renders whole.
         const body = node.body ?? content?.body ?? ''
-        const parts = node.parts ?? content?.parts ?? parseParts(body)
+        const parts = node.parts ?? content?.parts ?? null
         return parts ? <TwoPart parts={parts} /> : <SpecBody body={body} />
       })()}
     </div>

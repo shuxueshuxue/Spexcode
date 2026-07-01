@@ -35,10 +35,14 @@ branch (`mainBranch()`, auto-detected — never a hardcoded `main`). The payload
   [[source-of-truth]]'s `git.ts`): per-file status + added/deleted line counts. A two-dot `base..HEAD` diff
   would show the base's post-fork commits as phantom edits, so the fork point is the only honest base.
 - **gates** — `conflictsWithMain` (a dry-run merge computed in the object store via `git merge-tree
-  --write-tree` — no checkout, nothing to abort, the SAFE form of "would this conflict"); `typecheck`
-  (`tsc --noEmit` on the CLI package at its own location); `lint` (the [[spec-lint]] module's error /
-  warning counts). conflict/ahead/dirty/diff are session-specific; the typecheck/lint gates reflect the CLI
-  package's own tree, where the command runs.
+  --write-tree` — no checkout, nothing to abort, the SAFE form of "would this conflict"); `lint` (the
+  [[spec-lint]] module's error / warning counts). conflict/ahead/dirty are session-specific; the lint gate
+  reflects the CLI package's own tree, where the command runs, so it is memoized on that tree's fingerprint
+  (an unchanged tree skips the re-lint on repeated reviews / [[review-proof]] opens). There is deliberately
+  NO build/typecheck/test gate here: whether a change is SOUND is proven by the node's yatsu, measured
+  through the real product ([[review-proof]] shows that evidence) — not by a language-specific automated
+  checker baked into the cockpit. So the gates stay language-agnostic (git + the spec↔code graph), correct
+  for any governed project, TS or Python or otherwise, rather than a `tsc` that only ever spoke TypeScript.
 - **proposal** — the session's standing proposal kind + note, read from its global record.
 
 `mergeSession(id)` is the ACT verb, served at `POST /api/sessions/:id/merge` and run by `spex merge <id>` —

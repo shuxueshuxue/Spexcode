@@ -1133,13 +1133,15 @@ function porcelainPath(line: string): string {
 // @@@ MANAGER COCKPIT - the review payload (the cockpit's first verb; see the manager-cockpit spec node).
 // One server-side bundle that lets a manager (human or agent) decide whether to merge a session WITHOUT
 // hand-running git: how far ahead it is, its REAL changes (merge-base diff, never a phantom main..HEAD one),
-// whether uncommitted non-runtime work remains, the merge/typecheck/lint gates, and the agent's standing
-// proposal. ahead/dirty/diff/conflicts are computed against the SESSION's worktree (per id); typecheck and
-// lint reflect the CLI package's OWN location (where this runs) — the spec-cli that's actually live. null
-// when no session has that id.
+// whether uncommitted non-runtime work remains, the merge/lint gates, and the agent's standing proposal.
+// ahead/dirty/diff/conflicts are computed against the SESSION's worktree (per id); lint reflects the CLI
+// package's OWN location (where this runs) — the spec-cli that's actually live. There is deliberately NO
+// build/typecheck/test gate: whether a change is SOUND is proven by the node's yatsu (measured through the
+// real product), not by a language-specific automated checker — so the gates stay language-agnostic (git +
+// the spec↔code graph, which every governed project has, TS or Python or otherwise). null when no session
+// has that id.
 export type ReviewGates = {
   conflictsWithMain: boolean                       // a dry-run merge into main would conflict (in-memory, safe)
-  typecheck: { ok: boolean; errorCount: number }   // `tsc --noEmit` on the CLI package
   lint: { errorCount: number; warningCount: number } // the spec↔code graph lint
 }
 export type ReviewPayload = {
@@ -1151,33 +1153,15 @@ export type ReviewPayload = {
   proposal: { kind: Proposal | null; note: string | null }   // the session's standing proposal + its note
 }
 
-// @@@ typecheckPkg - `tsc --noEmit` on the CLI package at its OWN location (pkgRoot — never a hardcoded
-// path), using the tsc binary from that package's node_modules. errorCount counts `error TSxxxx` lines; ok
-// is the exit status. If tsc can't be spawned at all (no node_modules) it resolves ok:false / 0 errors — a
-// loud "couldn't typecheck" rather than a false green.
-function typecheckPkg(): Promise<{ ok: boolean; errorCount: number }> {
-  const root = pkgRoot()
-  const tsc = join(root, 'node_modules', '.bin', 'tsc')
-  return new Promise((resolve) => {
-    execFile(tsc, ['--noEmit'], { cwd: root, encoding: 'utf8', maxBuffer: 1 << 24 }, (err, stdout) => {
-      const out = (stdout || '') + (err && (err as unknown as { stdout?: string }).stdout || '')
-      resolve({ ok: !err, errorCount: (out.match(/error TS\d+/g) || []).length })
-    })
-  })
-}
-
-// @@@ locationGates - the two LOCATION gates (typecheck + lint) are functions of the backend checkout's tree
-// ALONE, not of which session is reviewed, yet `tsc --noEmit` alone costs ~20s. Re-running them on every
-// reviewPayload — i.e. on every [[review-proof]] Proof-tab open, and once per session — is the dominant
-// latency. Memoize them on a whole-repo fingerprint — `rev-parse HEAD` + `status --porcelain` + the mtimes of
-// the changed paths (covers committed state, the dirty SET, and dirty-file CONTENT, across every src tree tsc
-// pulls in) — so an identical fingerprint reuses the last (in-flight) result and a re-open or a second
-// session's proof is instant, while any commit or working-tree edit moves the fingerprint and recomputes.
-// A rejected run is not cached. The cheap git reads + stats that build the fingerprint replace a 20s typecheck
-// on the hot path. Fingerprint limits are spelled out at the read below; the gates are advisory (re-verified
-// at merge), so we harden the common holes and accept the rare ones rather than serialize/content-hash.
-let gateCache: { fp: string; p: Promise<{ typecheck: ReviewGates['typecheck']; lint: ReviewGates['lint'] }> } | null = null
-async function locationGates(): Promise<{ typecheck: ReviewGates['typecheck']; lint: ReviewGates['lint'] }> {
+// @@@ lintGate - the spec↔code graph lint is a LOCATION gate: a function of the backend checkout's tree ALONE
+// (its .spec graph + governed files), not of which session is reviewed, and it costs a few seconds. Re-running
+// it on every reviewPayload — i.e. on every [[review-proof]] Proof-tab open, and once per session — is
+// wasteful, so memoize it on a whole-repo fingerprint: `rev-parse HEAD` + `status --porcelain` + the mtimes of
+// the changed paths (covers committed state, the dirty SET, and dirty-file CONTENT). An identical fingerprint
+// reuses the last (in-flight) result — a re-open or a second session's proof is instant — while any commit or
+// working-tree edit moves the fingerprint and recomputes. A rejected run is not cached.
+let gateCache: { fp: string; p: Promise<ReviewGates['lint']> } | null = null
+async function lintGate(): Promise<ReviewGates['lint']> {
   const root = repoRoot()
   const [head, status] = await Promise.all([
     gitA(['-C', root, 'rev-parse', 'HEAD']),
@@ -1185,26 +1169,21 @@ async function locationGates(): Promise<{ typecheck: ReviewGates['typecheck']; l
   ])
   // `status --porcelain` gives the SET of changed paths + status letters but is CONTENT-BLIND: re-editing an
   // already-listed (dirty or untracked) file leaves the string byte-identical, so HEAD+status alone would
-  // freeze the gates after a file first goes dirty. `--untracked-files=all` first stops an untracked dir from
-  // collapsing to one line (which hides a newly-added broken file); then fold each listed path's mtime in, so
-  // a content edit to a dirty file also moves the fingerprint. HEAD covers committed state, this covers the
-  // working tree. (Residual, accepted: gitignored compiler bytes under node_modules aren't in the key — a tsc
-  // or @types swap that doesn't touch the tracked lockfile won't invalidate; and the fingerprint is snapshot
-  // just before the ~20s compute, so a change landing mid-compute is labelled with the pre-change fp. Both are
-  // rare and the gates are advisory — the agent re-verifies at merge — so we don't pay to close them here.)
+  // freeze the gate after a file first goes dirty. `--untracked-files=all` stops an untracked dir from
+  // collapsing to one line (which hides a newly-added file); then fold each listed path's mtime in, so a
+  // content edit to a dirty file also moves the fingerprint. HEAD covers committed state, this covers the
+  // working tree. (Residual, accepted: the fingerprint is snapshot just before the compute, so a change
+  // landing mid-compute is labelled with the pre-change fp — rare, and the gate is advisory, re-verified at merge.)
   const mtimes = status.split('\n').filter(Boolean).map(porcelainPath)
     .map((p) => { try { return statSync(join(root, p)).mtimeMs } catch { return 0 } }).join(',')
   const fp = head.trim() + '\n' + status + '\n' + mtimes
   if (gateCache?.fp === fp) return gateCache.p
   const p = (async () => {
     const { specLint } = await import('./lint.js')
-    const [typecheck, findings] = await Promise.all([typecheckPkg(), specLint()])
+    const findings = await specLint()
     return {
-      typecheck,
-      lint: {
-        errorCount: findings.filter((f) => f.level === 'error').length,
-        warningCount: findings.filter((f) => f.level === 'warn').length,
-      },
+      errorCount: findings.filter((f) => f.level === 'error').length,
+      warningCount: findings.filter((f) => f.level === 'warn').length,
     }
   })()
   p.catch(() => { if (gateCache?.p === p) gateCache = null })   // don't pin a failed run
@@ -1213,20 +1192,20 @@ async function locationGates(): Promise<{ typecheck: ReviewGates['typecheck']; l
 }
 
 // @@@ reviewPayload - assemble the cockpit review for one session. The four session-specific reads
-// (ahead / dirty / diff / conflict gate) plus the two location gates (typecheck / lint) are all
-// independent, so they run in parallel. The location gates go through locationGates(), which memoizes them
-// on the checkout's tree fingerprint — so an unchanged tree doesn't re-pay the ~20s typecheck on each
-// review / Proof-tab open, while any commit or edit invalidates and recomputes.
+// (ahead / dirty / diff / conflict gate) plus the one location gate (lint) are all independent, so they run
+// in parallel. The lint gate goes through lintGate(), which memoizes it on the checkout's tree fingerprint —
+// so an unchanged tree doesn't re-run the lint on each review / Proof-tab open, while any commit or edit
+// invalidates and recomputes.
 export async function reviewPayload(id: string): Promise<ReviewPayload | null> {
   const wt = await findWorktree(id)
   if (!wt) return null
   const base = mainBranch()
-  const [aheadOut, statusOut, diff, conflictsWithMain, gates] = await Promise.all([
+  const [aheadOut, statusOut, diff, conflictsWithMain, lint] = await Promise.all([
     gitA(['-C', wt.path, 'rev-list', '--count', `${base}..HEAD`]),
     gitA(['-C', wt.path, 'status', '--porcelain', '--untracked-files=all']),
     mergeBaseDiff(wt.path, base),
     mergeConflicts(wt.path, base),
-    locationGates(),   // typecheck + lint — memoized on the checkout fingerprint, not re-run per session/open
+    lintGate(),   // lint — memoized on the checkout fingerprint, not re-run per session/open
   ])
   // the worktree carries no SpexCode runtime files any more (the store lives in ~/.spexcode), so every dirty
   // path is genuine work — this is just the total uncommitted count.
@@ -1235,7 +1214,7 @@ export async function reviewPayload(id: string): Promise<ReviewPayload | null> {
     id, node: wt.rec.node, branch: wt.branch,
     ahead: Number(aheadOut.trim()) || 0,
     dirtyNonRuntime, diff,
-    gates: { conflictsWithMain, typecheck: gates.typecheck, lint: gates.lint },
+    gates: { conflictsWithMain, lint },
     proposal: { kind: wt.rec.proposal, note: wt.rec.note },
   }
 }

@@ -62,8 +62,17 @@ the hover title for a11y — grouped into the three triage zones ([[session-cons
 fixed spatial anchor that lets a session be **cross-referenced against the avatars on the very nodes it
 edits**; the **console's own sidebar drops it** (`showAvatar={false}`, redundant beside the headline in its
 dense list). Where the avatar is gone the fixed anchor is simply the row's **slot** in the ordered
-list, so the headline still renarrates each turn without the row losing its place. The
-**mobile list** alone keeps the older **two-row** face, its status on a second line, described next.
+list, so the headline still renarrates each turn without the row losing its place.
+
+The compact single line is a **resting** state, not a hard clip. Widening the whole sidebar to fit long
+headlines is the wrong lever — it buys a few more characters for every row at the cost of the terminal
+beside it, and still ellipses the long ones. So the width stays **narrow** (the list is a dense index,
+not the place a title lives) and full length is bought **on demand, per row**: in the console's own sidebar
+the row you **point at or have selected** un-truncates — its headline wraps to the full text and the row
+grows downward — so any title is completely readable without a hover-tooltip delay and without stealing a
+pixel from the pane beside it. The row you are pointed at keeps its top edge, so reading a title never
+shifts it out from under the cursor. The **mobile list** alone keeps the older **two-row** face, its status
+on a second line, described next.
 
 The two-row variant's **status line** is the small state badges moved off the headline: the colour-coded
 status **word** and the op tally (how many spec nodes this session is changing, e.g. `~2`), in a smaller,

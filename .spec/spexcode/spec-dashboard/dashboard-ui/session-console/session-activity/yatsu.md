@@ -87,6 +87,22 @@ scenarios:
     code:
       - spec-dashboard/src/SpecSearch.jsx
       - spec-dashboard/src/App.jsx
+  - name: headline-reveals-on-demand
+    tags: [frontend-e2e, desktop]
+    description: >-
+      Through the running dashboard in a real browser, open the session console (Enter) and look at the left
+      session list, which is deliberately NARROW so it doesn't steal width from the terminal beside it — so
+      long headlines ellipse at rest. Confirm every row is a dense single line. Now move the pointer onto a
+      row whose headline is truncated, then click it to select it. Screenshot the list showing a
+      hovered/selected row beside its still-truncated neighbours.
+    expected: >-
+      At rest each row is one line with an ellipsis (a dense index). The row you POINT AT or have SELECTED
+      un-truncates: its headline wraps to the FULL text and the row grows downward, the status glyph staying
+      aligned beside it, while every other row stays single-line — so any title is completely readable on
+      demand without a hover-tooltip delay and without the whole list being widened. The pointed-at row keeps
+      its top edge (only rows below shift down), so reading a title never slides it out from under the cursor.
+    code:
+      - spec-dashboard/src/styles.css
 ---
 # yatsu.md — session-activity
 

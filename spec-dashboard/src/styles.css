@@ -15,10 +15,35 @@
   --yellow:#b58900;
   --magenta:#d33682;
   --cyan:  #2aa198;
-  --term-bg: #002b36; /* solarized base03 — the embedded terminal is DARK (the Claude TUI is dark-designed) */
+  --term-bg: #0d1117; /* neutral near-black — the embedded terminal is DARK in BOTH app themes (the Claude TUI is dark-designed) */
   --sg-comms: #93a1a1;                  /* base1 muted — session-graph comms edge line + message count */
   --sg-comms-bg: rgba(238,232,213,0.9); /* base2 cream chip behind the count — legible on the light board, not a dark blob */
   --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+}
+
+/* @@@ DARK theme — a modern GitHub-Dark neutral near-black palette. The whole app (spec-node board,
+   react-flow, AND the session console) is built on these vars, so redefining them under the
+   [data-theme=dark] attribute themes everything at once. Only the palette changes; every layout /
+   component rule reads through the vars unchanged. theme.js sets/persists the attribute (see the
+   [[dashboard-shell]] spec); index.html applies it before first paint so there's no flash. */
+:root[data-theme=dark] {
+  --paper: #0d1117;
+  --panel: #161b22;
+  --panel2:#21262d;
+  --line:  #30363d;
+  --ink:   #c9d1d9;
+  --ink2:  #f0f6fc;
+  --muted: #8b949e;
+  --blue:  #58a6ff;
+  --green: #3fb950;
+  --orange:#f0883e;
+  --red:   #f85149;
+  --yellow:#d29922;
+  --magenta:#bc8cff;
+  --cyan:  #39c5cf;
+  --term-bg: #0d1117;
+  --sg-comms: #8b949e;
+  --sg-comms-bg: rgba(22,27,34,.92);
 }
 
 * { box-sizing: border-box; }

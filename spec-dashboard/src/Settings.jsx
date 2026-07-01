@@ -3,6 +3,7 @@ import Modal from './Modal.jsx'
 import { useI18n, LANGUAGES } from './i18n/index.jsx'
 import { ACT, keyCap } from './keymap.js'
 import { keysOf, isCustom, setBinding, resetBindings } from './bindings.js'
+import { THEMES, getTheme, applyTheme } from './theme.js'
 
 // @@@ Settings - the centered settings popup (`,`), rendered in the shared Modal so it matches the help
 // modal. It accretes sections (see the `settings` spec): today LANGUAGE and SHORTCUTS. The shortcuts
@@ -58,6 +59,8 @@ function Shortcuts({ t }) {
 
 export default function Settings({ onClose }) {
   const { t, lang, setLang } = useI18n()
+  const [theme, setThemeState] = useState(getTheme)   // the live-picked theme, echoed in the picker
+  const pickTheme = (code) => { applyTheme(code); setThemeState(code) }
   return (
     <Modal title={t('settings.title')} closeLabel={t('settings.close')} className="settings" onClose={onClose}>
       <section className="legend-sec">
@@ -75,6 +78,22 @@ export default function Settings({ onClose }) {
           ))}
         </div>
         <div className="legend-desc set-hint">{t('settings.languageHint')}</div>
+      </section>
+      <section className="legend-sec">
+        <div className="legend-h">{t('settings.secTheme')}</div>
+        <div className="set-langs">
+          {THEMES.map((th) => (
+            <button
+              key={th.code}
+              className={th.code === theme ? 'set-lang on' : 'set-lang'}
+              onClick={() => pickTheme(th.code)}
+              aria-pressed={th.code === theme}
+            >
+              {t(th.label)}
+            </button>
+          ))}
+        </div>
+        <div className="legend-desc set-hint">{t('settings.themeHint')}</div>
       </section>
       <Shortcuts t={t} />
     </Modal>

@@ -600,9 +600,15 @@ body {
    ([[session-console]]) — the one difference is it KEEPS the avatar and stays on the board's warm paper. */
 .sesswin .sess-row { flex-wrap: nowrap; }
 .sesswin .sess-meta { flex: none; width: auto; min-width: 0; margin-top: 0; margin-left: auto; }
-.sesswin-zone { padding: 7px 9px 2px; font-size: 9px; font-weight: 700; letter-spacing: .7px; text-transform: uppercase; color: var(--muted); user-select: none; }
-.sesswin-zone-need { color: var(--yellow); }
-.sesswin-zone-run  { color: var(--green); }
+.sesswin-zone {
+  --zh: var(--muted);
+  display: flex; align-items: center; gap: 7px; padding: 8px 9px 2px;
+  font-size: 9.5px; font-weight: 800; letter-spacing: .9px; text-transform: uppercase; user-select: none;
+  color: transparent; -webkit-text-fill-color: transparent; -webkit-text-stroke: .6px var(--zh);
+}
+.sesswin-zone::after { content: ''; flex: 1; height: 1px; background: var(--zh); opacity: .3; }
+.sesswin-zone-need { --zh: var(--yellow); }
+.sesswin-zone-run  { --zh: var(--green); }
 
 /* ---- session right-click menu + rename prompt (SessionContextMenu.jsx) ---- */
 /* a small pop-over anchored at the cursor (fixed to viewport coords). z-index 60 floats it ABOVE every
@@ -788,6 +794,18 @@ body {
 /* @@@ TRUE fullscreen - the session board fills the entire viewport edge-to-edge (no reserved inset/margin,
    no rounded corners) so no screen space is wasted; it keeps the scale-in "pop" and lifts above the board. */
 .si-panel {
+  /* @@@ dark console theme — the whole console is remapped to solarized DARK (the app is solarized LIGHT),
+     so the frame AROUND the terminal matches the terminal (--term-bg) instead of clashing bright paper.
+     Scoped here: every child using var(--paper/--panel/--ink/--line…) flips to dark automatically, one
+     switch instead of per-rule edits; the accent hues (blue/green/red/…) work on both grounds, left as-is. */
+  --paper: #002b36;   /* base03 — console ground = the terminal bg */
+  --panel: #073642;   /* base02 */
+  --panel2:#08404e;   /* a touch above base02 for raised chrome */
+  --line:  #0a4657;   /* dark hairline */
+  --ink:   #93a1a1;   /* base1 body text */
+  --ink2:  #eee8d5;   /* base2 headings/bright */
+  --muted: #657b83;   /* base00 muted */
+  --sg-comms-bg: rgba(7, 54, 66, .9);   /* dark chip behind the graph's comms count (was cream) */
   width: 100vw; height: 100vh;
   background: var(--paper); border: none; border-radius: 0;
   overflow: hidden; display: flex;
@@ -844,10 +862,17 @@ body {
 .si-item .si-drag-handle { color: #657b83; }
 .si-item:hover .si-drag-handle { color: #93a1a1; }
 .si-item .sess-lock { color: #657b83; }
-/* zone divider — a dim small uppercase header leading each triage zone (needs-you over running) */
-.si-zone { padding: 9px 12px 3px; font-size: 9.5px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: #586e75; user-select: none; }
-.si-zone-need { color: #b58900; }   /* solarized yellow — waiting on you */
-.si-zone-run  { color: #859900; }   /* solarized green — self-running */
+/* zone divider — a HOLLOW (outlined) uppercase title with a hairline rule trailing it, so each zone is
+   separated by an openwork divider rather than a solid label. `--zh` is the zone hue (stroke + line). */
+.si-zone {
+  --zh: #586e75;
+  display: flex; align-items: center; gap: 8px; padding: 10px 12px 4px;
+  font-size: 10px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; user-select: none;
+  color: transparent; -webkit-text-fill-color: transparent; -webkit-text-stroke: .6px var(--zh);
+}
+.si-zone::after { content: ''; flex: 1; height: 1px; background: var(--zh); opacity: .3; }
+.si-zone-need { --zh: #b58900; }   /* solarized yellow — waiting on you */
+.si-zone-run  { --zh: #859900; }   /* solarized green — self-running */
 /* @@@ top button row - New Session (＋, blue) and the relationship graph (network glyph, magenta) as two
    COMPACT side-by-side buttons, not full-width rows — so neither sits in the ↑/↓ path to a session. Selected
    one gets a hue wash + ring (its own colour), mirroring the session rows' selected wash. */

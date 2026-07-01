@@ -1076,7 +1076,7 @@ body {
 /* the action strip's headline ([[session-activity]]): the SAME sessionHeadline the rows show, dim, taking the
    free width (flex:1) and only ellipsising when it overflows this wide strip — far more room than the compact
    `.sess-id` rows, the one display difference between the two surfaces. */
-.si-th-name { font-weight: 700; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.si-th-name { font-weight: 700; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink2); }
 .si-actions { margin-left: auto; display: flex; gap: 6px; }
 .si-act { background: var(--paper); border: 1px solid var(--line); color: var(--ink2); border-radius: 4px; padding: 1px 9px; cursor: pointer; font-family: var(--mono); font-size: 11px; }
 .si-act:hover { border-color: var(--blue); color: var(--blue); }

@@ -42,6 +42,18 @@ scenarios:
     expected: >-
       The node merge prints the proposal-forum nudge in the merge command's own output, naming the merged
       node id; the unrelated merge stays silent (the hook is guarded to `merge node/*`).
+  - name: feature-toggle
+    tags: [cli]
+    code: spec-cli/src/proposals.ts
+    related: [spec-cli/templates/hooks/post-merge, spec-cli/src/layout.ts]
+    description: >-
+      Read `spex proposals status` with no config (default). Then `spex proposals off`, inspect spexcode.json,
+      merge a node branch. Then `spex proposals on` and merge another node branch.
+    expected: >-
+      Default status is ON with no config needed. `off` writes `proposals.enabled: false` to spexcode.json and
+      `status` reports OFF; the next node merge prints NO nudge (and `spex propose nudge <node>` is empty). `on`
+      restores the nudge on the following merge — the git hook honors the switch through the CLI, with
+      spexcode.json the single source of truth.
 ---
 
 # measuring proposals

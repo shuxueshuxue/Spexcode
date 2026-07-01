@@ -50,6 +50,13 @@ system already nests there.
   it reaches a self-launched agent too and costs no harness block-cap.
 - **Surface:** `spex propose "<concern>" [--node <id>…] [--body -|<text>]`; `propose reply|sign|resolve <id>`;
   `spex proposals [--node] [--all] [--json]` is the drain view.
+- **Opt-outable, default ON.** The whole forum is a feature you can switch off: `spex proposals on|off`
+  flips `spexcode.json`'s `proposals.enabled` (the shared settings file every other toggle lives in),
+  effective immediately with no commit (config is read from the working tree). OFF silences the post-merge
+  nudge and hides the dashboard forum view; the raw `propose`/`proposals` commands stay usable, since running
+  one is explicit consent. The nudge text and the toggle both live in the CLI (`spex propose nudge <node>`
+  prints nothing when OFF), so the post-merge hook is a thin caller and the **dashboard's Settings toggle is
+  a thin wrapper over this same switch** — one source of truth, three consumers (CLI, hook, dashboard).
 - **Dedup is the drain's job, not the write's.** Duplicate proposals are a **signal** (recurrence), folded
   into one thread by a supervisor's judgment ([[supervisor]]) — never a write-time similarity match. And
   recurrence is weighed as **salience, not importance**: a sharp singleton outranks a popular gripe, so the

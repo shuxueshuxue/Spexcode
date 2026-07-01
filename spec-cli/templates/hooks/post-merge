@@ -4,21 +4,24 @@
 # (see [[dispatch]]), so this hook runs in that live merge turn and its stdout reaches the agent as the merge
 # command's own output — a git-native nudge that costs no harness block-cap and reaches a self-launched agent
 # too. GUARDED to the `merge node/<id>:` commit, so an ordinary `git pull`/unrelated merge never nags.
+#
+# The nudge TEXT and the on/off toggle both live in the CLI (`spex propose nudge <node>` prints nothing when
+# the feature is OFF in spexcode.json), so this hook is a THIN resolver + caller: resolve `spex` the same
+# three ways the pre-commit hook does, pass the merged node, echo whatever it prints. No CLI resolvable → no
+# nudge (safe degradation, same as the lint shim's advisory mode).
 subj=$(git log -1 --format=%s 2>/dev/null)
 case "$subj" in
-  "merge node/"*)
-    node=$(printf '%s' "$subj" | sed -n 's#^merge \(node/[^:]*\):.*#\1#p')
-    echo ""
-    echo "── proposal forum ─────────────────────────────────────────────────"
-    echo "Your work (${node:-this node}) just landed. Before you close: did anything feel"
-    echo "OFF this session — a smell, an awkward boundary, a wish — even unrelated to your"
-    echo "task? Record it so your taste reaches the codebase instead of evaporating:"
-    echo "  spex proposals                          # read the forum first (it is non-blind)"
-    echo "  spex propose sign <id>                  # +1 if your concern is already raised"
-    echo "  spex propose reply <id> --body -        # add your angle to an existing thread"
-    echo "  spex propose \"<concern>\" [--node <id>]   # else open a new one"
-    echo "A supervisor drains the forum into real work later. (Advisory — skip if nothing nagged.)"
-    echo "───────────────────────────────────────────────────────────────────"
-    ;;
+  "merge node/"*) ;;
+  *) exit 0 ;;
 esac
+node=$(printf '%s' "$subj" | sed -n 's#^merge \(node/[^:]*\):.*#\1#p')
+main_root=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)")
+repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
+if command -v spex >/dev/null 2>&1; then
+  spex propose nudge "$node"
+elif [ -x "$repo_root/node_modules/.bin/spex" ]; then
+  "$repo_root/node_modules/.bin/spex" propose nudge "$node"
+elif [ -x "$main_root/spec-cli/node_modules/.bin/tsx" ] && [ -f "$main_root/spec-cli/src/cli.ts" ]; then
+  "$main_root/spec-cli/node_modules/.bin/tsx" "$main_root/spec-cli/src/cli.ts" propose nudge "$node"
+fi
 exit 0

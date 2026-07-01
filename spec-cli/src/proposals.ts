@@ -10,9 +10,25 @@
 import { readdirSync, existsSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { git } from './git.js'
-import { mainCheckout, envSessionId } from './layout.js'
+import { mainCheckout, envSessionId, readConfig } from './layout.js'
 
 const FORUM_REL = '.spec/.proposal'
+
+// @@@ the on/off switch - the forum is an OPT-OUTABLE feature (default ON). The single source of truth is
+// `spexcode.json`'s `proposals.enabled` (the same settings file that carries every other toggle), read via
+// readConfig so a machine-local `spexcode.local.json` can override it. OFF silences the post-merge nudge (and,
+// in the dashboard, hides the forum view); the raw `spex propose`/`proposals` commands stay usable, since
+// running one is explicit consent. `spex proposals on|off` flips the flag on disk — effective immediately,
+// no commit needed, because readConfig reads the working tree. The dashboard toggle is a thin wrapper over
+// this same switch.
+export const proposalsEnabled = (): boolean => readConfig(mainCheckout()).proposals?.enabled ?? true
+
+function setEnabled(on: boolean): void {
+  const f = join(mainCheckout(), 'spexcode.json')
+  const cfg = existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : {}
+  cfg.proposals = { ...(cfg.proposals || {}), enabled: on }
+  writeFileSync(f, JSON.stringify(cfg, null, 2) + '\n')
+}
 
 export type Reply = { by: string; at: string; body: string }
 export type Proposal = {
@@ -169,6 +185,25 @@ export function resolve(id: string, as: string): string {
   return as
 }
 
+// the post-merge nudge TEXT ([[proposals]]) — produced HERE so the toggle and the wording live in one place;
+// the post-merge git hook is a thin caller that just echoes this. Returns '' when the feature is OFF, so the
+// hook prints nothing.
+export function nudge(node: string): string {
+  if (!proposalsEnabled()) return ''
+  return [
+    '── proposal forum ─────────────────────────────────────────────────',
+    `Your work (${node || 'this node'}) just landed. Before you close: did anything feel`,
+    'OFF this session — a smell, an awkward boundary, a wish — even unrelated to your',
+    'task? Record it so your taste reaches the codebase instead of evaporating:',
+    '  spex proposals                          # read the forum first (it is non-blind)',
+    '  spex propose sign <id>                  # +1 if your concern is already raised',
+    '  spex propose reply <id> --body -        # add your angle to an existing thread',
+    '  spex propose "<concern>" [--node <id>]   # else open a new one',
+    'A supervisor drains the forum into real work later. (Advisory — skip if nothing nagged.)',
+    '───────────────────────────────────────────────────────────────────',
+  ].join('\n')
+}
+
 // ───────────────────────── CLI ─────────────────────────
 const fl = (args: string[], name: string): string | undefined => {
   const i = args.indexOf(`--${name}`)
@@ -218,6 +253,12 @@ export async function runPropose(args: string[]): Promise<number> {
       console.log(`resolved '${id}' → ${resolve(id, as)}`)
       return 0
     }
+    if (sub === 'nudge') {
+      // internal: the post-merge hook calls this to print the (toggle-aware) forum nudge for a merged node.
+      const text = nudge(bare(args.slice(1))[0] || '')
+      if (text) console.log(text)
+      return 0
+    }
     // default: open a new proposal. The concern is the bare positional(s).
     const concern = bare(args).join(' ').trim()
     if (!concern) {
@@ -238,6 +279,16 @@ export async function runPropose(args: string[]): Promise<number> {
 // lists concerns as raw data with their recurrence signals (signers, replies); it deliberately imposes NO
 // salience ranking — recurrence is a signal the drain WEIGHS by judgment, never an automatic priority order.
 export async function runProposals(args: string[]): Promise<number> {
+  // the on/off switch (default ON) — `spex proposals on|off` flips spexcode.json's proposals.enabled, `status`
+  // reports it. Handled before the read view, and never gated by the flag itself.
+  const verb = args[0]
+  if (verb === 'on' || verb === 'off' || verb === 'enable' || verb === 'disable') {
+    const on = verb === 'on' || verb === 'enable'
+    setEnabled(on)
+    console.log(`proposal forum ${on ? 'ON' : 'OFF'} — spexcode.json proposals.enabled = ${on}${on ? '' : ' (post-merge nudge silenced; dashboard view hidden)'}`)
+    return 0
+  }
+  if (verb === 'status') { console.log(`proposal forum is ${proposalsEnabled() ? 'ON' : 'OFF'}`); return 0 }
   let proposals = loadProposals()
   const node = fl(args, 'node')
   if (node) proposals = proposals.filter((p) => p.nodes.includes(node))

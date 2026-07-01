@@ -101,7 +101,7 @@ Specs / graph
   hooks <sub>           harness-agnostic hook system: compile [--out <file>] (flatten surface:hook nodes into the per-session manifest the dispatcher reads)
   self <sub>            diagnose how the workflow reaches THIS self-launched agent: doctor (default) | contract | env
   propose "<concern>"   file a taste proposal in the async forum (off-mainline smells welcome)  [--node <id>…] [--body -|<text>]  | reply|sign|resolve <id> …
-  proposals             read the proposal forum (the drain view)  [--node <id>] [--all] [--json]
+  proposals             read the proposal forum (the drain view)  [--node <id>] [--all] [--json]  | on|off|status (feature switch)
   review <SEL>          manager cockpit: review a session (ahead·merge-base diff·gates·proposal)  [--json]
   review proof <SEL>    render the session's proof of work — self-contained HTML, fully derived (diff·measured yatsu loss·gates)  [--open|--out P|--json]
   merge <SEL>           manager cockpit: gated atomic merge into main (re-checks gates, then closes)  [--keep]

@@ -75,12 +75,12 @@ of `reopen`: it kills the agent's tmux + rendezvous socket but **leaves the work
 the global record**, so the session simply reads `offline` and the relaunch panel offers to `--resume` the same
 conversation. Because it touches no `session.json`, the lifecycle the agent last authored survives the stop
 untouched — whereas `close` removes the worktree AND sweeps the global record dir. **`reopen`** is the inverse:
-it clears any proposal and brings the agent back up. A plain **resume** of an offline session (the frontend
-relaunch panel, `spex session resume`) restarts the agent `--resume`d into the same conversation but sitting at
-its prompt with nothing to do, so it rests at **`idle`** — never a phantom `working` before the human has said
-anything; only clearing a still-**live** proposal ("back to working") returns it to `active`. The resting state
-stays honest either way, because a following prompt (e.g. the merge dispatch) flips it back to `active` through
-mark-active.
+it clears any proposal and brings the agent back **always resting at `idle`** — it never itself makes the agent
+work, it just resumes it sitting at its prompt with nothing to do (the frontend exposes this only as the
+offline relaunch panel; there is no "reopen a live session back to working" surface). Whatever needs `working`
+delivers a prompt right after (e.g. the merge dispatch), and that prompt is what flips `idle` → `active` through
+mark-active — so reopen never has to branch its resting state on liveness. When the session is genuinely offline
+it also `--resume`s the agent into the same conversation before returning.
 Contrast **`close`**, the other human-only terminal verb: it *removes* the worktree, discarding the work. Both
 are human-only and direct (not agent proposals); exit is fully reversible (relaunch), close is not. An exited
 session occupies no working-set slot ([[launch]]) — offline never does — so the freed capacity drains a queued

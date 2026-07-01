@@ -36,8 +36,8 @@ import { mainBranch, gitCommonDir, readConfig, runtimeRoot, sessionStoreDir, ses
 //   queued → a prepared worktree held below the concurrency cap; the drainer launches it as a slot frees.
 //   (closed = the worktree AND the global record are removed; not a stored status)
 // The agent only ever PROPOSES (awaiting); merge/close are human-only. Every proposal is reversible via
-// reopen() (clearing a LIVE proposal → active; a plain resume of an offline session → idle, see reopen).
-// `merges` is METADATA (how many times merged), shown as a badge, not a state.
+// reopen(), which clears it and rests the session at idle (see reopen). `merges` is METADATA (how many
+// times merged), shown as a badge, not a state.
 //
 // Launch rules (CLAUDE.md / memory): private `tmux -L <label>` socket + `--dangerously-skip-permissions`.
 // SPEXCODE_TMUX / SPEXCODE_CLAUDE_CMD override both for tests.
@@ -1000,28 +1000,27 @@ async function waitForReady(id: string, harness: Harness, timeoutMs = SOCKET_REA
   }
 }
 
-// @@@ reopen - clear any proposal, then ONE relaunch path. The agent needs
-// (re)starting iff it isn't running for this id — the SAME deterministic liveness the adapter computes
+// @@@ reopen - clear any proposal and bring the agent back → always resting at **idle**. reopen never itself
+// makes the agent WORK: it just resumes it sitting at its prompt with nothing to do. Whatever needs "working"
+// delivers a prompt right after (e.g. mergeSession's merge dispatch), which flips idle → active via
+// mark-active — so there is no "back to working → active" resting state to model here, and no reason to branch
+// the status on liveness. (The stale `spex watch` "reopen(back-to-working)" hint had no product surface at
+// all — the dashboard offers resume ONLY on an offline session's relaunch panel.)
+// Relaunch only when the agent isn't running for this id — the SAME deterministic liveness the adapter computes
 // ([[harness-adapter]]): claude offline = no tmux OR no rendezvous socket (claude exited, even though the
 // wrapper/shell may still hold the pane); codex offline = no tmux, no project app-server, or no captured native
 // thread id. When it IS offline we drop any stale pane and launch a fresh window through the adapter's resumeArg
 // — claude `--resume <id>` (the SAME conversation), codex `resume <thread-id>` once captured, else a fresh TUI
-// in the same worktree/record. Then we WAIT for the
-// agent to come online (waitForReady) before returning, so a caller that dispatches immediately after reopen
-// (e.g. mergeSession) addresses a LIVE agent rather than racing the boot.
-// The resulting lifecycle depends on WHY we reopened: a plain RESUME of an offline session (the frontend
-// relaunch panel / `spex session resume`) just brings the agent back up sitting at its prompt with nothing to
-// do → **idle**, not a phantom "working"; only clearing a LIVE proposal ("back to working") keeps **active**.
-// Either way the resting state is honest — a following prompt (e.g. mergeSession's dispatch) flips it back to
-// active via mark-active. If it's still live we only cleared the proposal — no wait. Fail-loud is
-// unchanged: if the agent never comes online, the later deliver() fails loud.
+// in the same worktree/record. Then we WAIT for the agent to come online (waitForReady) before returning, so a
+// caller that dispatches immediately after reopen (e.g. mergeSession) addresses a LIVE agent rather than racing
+// the boot. If it's still live we only cleared the proposal — no wait. Fail-loud is unchanged: if the agent
+// never comes online, the later deliver() fails loud.
 export async function reopen(id: string): Promise<boolean> {
   const wt = await findWorktree(id)
   if (!wt) return false
   const h = harnessById(wt.rec.harness || defaultHarness.id)
-  const offline = h.liveness(wt.rec, await alive(id), runtimeRoot()) !== 'online'
-  writeRecord({ ...wt.rec, status: offline ? 'idle' : 'active', proposal: null })
-  if (offline) {
+  writeRecord({ ...wt.rec, status: 'idle', proposal: null })
+  if (h.liveness(wt.rec, await alive(id), runtimeRoot()) !== 'online') {
     await tmuxOk(['kill-session', '-t', id])   // drop a dead/offline pane if any (no-op when none)
     await launch(id, wt.path, h.resumeArg(wt.rec).trim(), h)
     await waitForReady(id, h)   // a relaunched agent is "ready" only once the adapter reads it online
@@ -1375,7 +1374,7 @@ export function formatTable(sessions: Session[], color = true): string {
 
 const WATCH_ACTIONABLE = new Set<DisplayStatus>(['review', 'done', 'close-pending', 'offline', 'error', 'asking'])
 const NEXT: Record<string, string> = {
-  review: 'merge | reopen(back-to-working) | close',
+  review: 'merge | reopen(cancel proposal) | close',
   done: 'merge | reopen | close',
   'close-pending': 'close | reopen',
   offline: 'reopen (relaunch & resume)',

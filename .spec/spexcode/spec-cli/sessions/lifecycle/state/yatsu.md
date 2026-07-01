@@ -67,8 +67,8 @@ scenarios:
     expected: >-
       The resumed session rests at `idle` (displayed idle, not `working`) — the agent is `--resume`d into the
       same conversation but sitting at its prompt with nothing to do, so it never shows a phantom `working`
-      before the human says anything. Only the next real prompt (via mark-active) flips it to active. Clearing
-      a still-LIVE proposal ("back to working") still returns to `active`.
+      before the human says anything. Only the next real prompt (via mark-active) flips it to active. reopen
+      always rests at idle (there is no "reopen a live session back to working" surface).
 ---
 # yatsu.md — state
 

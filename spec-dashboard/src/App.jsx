@@ -454,7 +454,9 @@ function Dashboard({ specs, sessions, reload, project }) {
 
       <FocusPanel node={focus} onOpenEval={openEval} />
 
-      {overlay && <NodeView node={focus} pane={pane} setPane={setPane} onClose={() => setOverlay(false)} />}
+      {/* key on focus.id: remount when the open overlay switches nodes, so the lazily-fetched body ([[board-lean]])
+          never renders one node's prose under another's header while the new fetch is in flight. */}
+      {overlay && <NodeView key={focus.id} node={focus} pane={pane} setPane={setPane} onClose={() => setOverlay(false)} />}
       <SessionInterface
         sessions={sessions}
         specs={specs}

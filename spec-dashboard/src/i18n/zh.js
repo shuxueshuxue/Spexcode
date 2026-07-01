@@ -30,6 +30,12 @@ export default {
     pending: '待定',
   },
 
+  // 会话列表按此分成两个区（[[session-console]]）——「轮到谁」。
+  sessionZone: {
+    need: '待你处理',
+    run: '自运行',
+  },
+
   hud: {
     helpTitle: '帮助 — 按键与图例（?）',
     graphTitle: '会话关系 — 在会话面板中打开实时监视图',

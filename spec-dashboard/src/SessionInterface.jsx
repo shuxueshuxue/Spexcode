@@ -5,7 +5,7 @@ import { loadConfig, setSessionSort } from './data.js'
 import { reorderPlan } from './sessionReorder.js'
 import { Avatar } from './avatar.jsx'
 import { labelColor } from './color.js'
-import { STATUS_COLOR, sessionHeadline } from './session.js'
+import { STATUS_COLOR, sessionHeadline, sessionZone, zoneSort } from './session.js'
 import { SessionRow } from './SessionWindow.jsx'
 import SessionContextMenu from './SessionContextMenu.jsx'
 import { ProofOverlay } from './ReviewProof.jsx'
@@ -230,6 +230,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     catch { /* the next board poll reconciles */ }
     reload?.()
   }
+  // the session list is grouped into two triage zones (needs-you over self-running, [[session-console]]); `zoned`
+  // is that display order, and ALSO the order drag-reorder and ↑/↓ nav walk, so the three never disagree.
+  const zoned = useMemo(() => zoneSort(sessions), [sessions])
   // start a drag from a row's handle. Do NOT stopPropagation: keepFocus then still runs and preventDefaults the
   // mousedown, so the docked ❯ input never loses focus — and preventDefault does not stop the window
   // mousemove/mouseup this drag rides on. The whole gesture lives on `window`, so it survives the re-render
@@ -237,7 +240,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const onHandleDown = (e, s) => {
     if (e.button !== 0) return
     const startY = e.clientY
-    const list = sessions               // snapshot for this gesture (a drag is far shorter than the 4s poll)
+    const list = zoned                  // snapshot for this gesture — the ZONED display order, so drop math matches what's on screen
     let dragging = false, hint = null
     const onMove = (ev) => {
       if (!dragging) { if (Math.abs(ev.clientY - startY) < 4) return; dragging = true }
@@ -259,7 +262,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       if (hint?.end) beforeId = null
       else if (hint) beforeId = hint.place === 'before' ? hint.id : (list[list.findIndex((x) => x.id === hint.id) + 1]?.id ?? null)
       else return
-      applyReorder(reorderPlan(list, s.id, beforeId))
+      applyReorder(reorderPlan(list, s.id, beforeId, true))   // desc: the zoned list is newest-first within each zone
     }
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)
@@ -273,7 +276,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     >⠿</span>
   )
 
-  const order = useMemo(() => ['new', ...sessions.map((s) => s.id)], [sessions])
+  const order = useMemo(() => ['new', ...zoned.map((s) => s.id)], [zoned])
   const active = sel === 'graph' || order.includes(sel) ? sel : 'new'
   // a removed session (closed here, ended on its own, or closed elsewhere) leaves the tab unresolved: land
   // on New only if you're still on the now-gone tab. Mirrors `active`'s validity test.
@@ -808,22 +811,31 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               </svg>
             </button>
           </div>
-          {sessions.map((s) => (
+          {zoned.reduce((acc, s, i) => {
+            // group the list into two triage zones ([[session-console]]): a small dim header leads each zone,
+            // emitted when the zone changes. Within a zone the newest session is on top ([[session-reorder]]).
+            const z = sessionZone(s)
+            if (i === 0 || z !== sessionZone(zoned[i - 1])) {
+              acc.push(<div className={`si-zone si-zone-${z}`} key={`zone-${z}`}>{t(`sessionZone.${z}`)}</div>)
+            }
             // single click switches tab; double-click locks the session (needs an overlay to focus, else a
-            // no-op beyond the switch). The face is the shared SessionRow.
-            <button
-              key={s.id}
-              data-sid={s.id}
-              className={`si-item${active === s.id ? ' on' : ''}${dropHint?.id === s.id ? ` drop-${dropHint.place}` : ''}`}
-              style={{ '--ov': labelColor(s.id) }}
-              onClick={() => setSel(s.id)}
-              onDoubleClick={() => { if (s.ops?.length && onPickSession) { onPickSession(s, false); onClose() } }}
-              onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, session: s }) }}
-              title={s.ops?.length ? t('session.opsTitle') : undefined}
-            >
-              <SessionRow s={s} locked={false} handle={dragHandle(s)} showAvatar={false} compact />
-            </button>
-          ))}
+            // no-op beyond the switch). The face is the shared SessionRow, compact + avatar-less here.
+            acc.push(
+              <button
+                key={s.id}
+                data-sid={s.id}
+                className={`si-item${active === s.id ? ' on' : ''}${dropHint?.id === s.id ? ` drop-${dropHint.place}` : ''}`}
+                style={{ '--ov': labelColor(s.id) }}
+                onClick={() => setSel(s.id)}
+                onDoubleClick={() => { if (s.ops?.length && onPickSession) { onPickSession(s, false); onClose() } }}
+                onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, session: s }) }}
+                title={s.ops?.length ? t('session.opsTitle') : undefined}
+              >
+                <SessionRow s={s} locked={false} handle={dragHandle(s)} showAvatar={false} compact />
+              </button>
+            )
+            return acc
+          }, [])}
         </aside>
 
         <section className={active === 'new' ? 'si-content is-new' : active === 'graph' ? 'si-content is-graph' : 'si-content is-session'}>

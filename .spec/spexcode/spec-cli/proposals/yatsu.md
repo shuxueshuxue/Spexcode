@@ -16,10 +16,10 @@ scenarios:
     code: spec-cli/src/proposals.ts
     related: [spec-cli/src/specs.ts, spec-cli/src/git.ts]
     description: >-
-      After proposals exist under `.spec/.proposal/`, run `spex lint` and inspect the board/spec set. The
+      After threads exist under `.spec/.forum/`, run `spex lint` and inspect the board/spec set. The
       forum file is a plain `<id>.md`, not `spec.md`.
     expected: >-
-      `spex lint` stays 0-error; no `.proposal` entry appears as a spec node (the walk never nodes it) and no
+      `spex lint` stays 0-error; no `.forum` entry appears as a spec node (the walk never nodes it) and no
       ghost node appears on the board overlay (`isSpecMd` ignores a non-`spec.md` path) — the forum is
       structurally invisible to lint/drift/deriveStatus with NO special-case exemption.
   - name: forum-only-commit-on-trunk

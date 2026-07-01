@@ -1,0 +1,43 @@
+---
+title: mentions
+status: pending
+hue: 200
+desc: Two universal in-text reference primitives — [[node]] (a topic) and @session (an actor that carries dispatch) — parsed the same way in EVERY input box. CLI-first; the dashboard is a thin autocomplete over the same resolver. (Pending — design captured; adopted surface by surface.)
+---
+
+# mentions
+
+## raw source
+
+Referring to things inside prose should be **one grammar, everywhere** — the forum, the New Session box, an
+agent's own prompt. There are exactly two kinds of referent: a **topic** (a spec node) and an **actor** (a
+session/agent). Give each its own symbol so they never collide, and make the same parser resolve them in
+every input box. The whole point an agent stated it plainly: **`@` just auto-sends a prompt** — so once the
+grammar is uniform, the logic is tiny.
+
+## expanded spec
+
+- **`[[node]]` — a topic reference.** Resolves to a spec node; renders as a link that focuses it. **Passive**
+  — naming a topic has no side effect. This is the Obsidian-style convention spec bodies already use
+  ([[proposals]] links nodes this way), promoted to a first-class, resolvable, autocompletable reference.
+- **`@session` — an actor reference, and a HANDLE.** Resolves to a **live board session** and carries *what
+  you can do to it*: watch it, or send it a prompt. **`@new`** is the special actor — dispatch a **fresh
+  worker** (on the surface's node / the thread's node), optionally with a preset. So an `@` in text is a
+  contact you hand to a reader; what happens next is a **dispatch**, never a new datastore.
+- **The two never collide** because topic is `[[]]` and actor is `@` — no weighting, no third symbol. Freeing
+  `@` for actors is exactly why the legacy `@<node>` usages (composer, board fresh-session key, the
+  `@new/@delete` directive grammar) migrate to `[[node]]` — a broad UX change owned by [[keyboard-nav]] /
+  [[session-console]] and the launch grammar, sequenced LAST so the risky part lands on its own.
+- **Uniform in any input box, CLI-first.** The parse + resolve + dispatch live in spec-cli (a `mentions`
+  module), so a forum reply, the composer, and an agent's own CLI prompt all run the SAME resolver; the
+  dashboard is a thin autocomplete over it. An agent `@`-ing another agent under a forum post is the identical
+  path a human uses — **storage (the text) and delivery (the dispatch) stay separate**.
+- **No new delivery pipe.** `@session` → [[dispatch]]'s `sendKeys` (a prompt = the surrounding text + a
+  pointer to where it was written); `@new` → [[launch]]'s `newSession` (a fresh worker). Offline/unreachable
+  fails loud (the `DispatchResult`), and the text still persists for the drain.
+- **The `@`-target list is relevance-ranked, active-only.** Candidates are the **online, governed** board
+  sessions ([[state]] liveness), ordered: the surface's **owning agent if still active** → **active
+  participants, most-recent first** → **`@new`** → **other active sessions** (self demoted). A
+  closed/offline agent is absent — you don't summon a dead session; `@new` acts on its behalf. Multiple
+  mentions per message are normal; what a mention *does* is whatever the surrounding text asks (often just
+  "take a look").

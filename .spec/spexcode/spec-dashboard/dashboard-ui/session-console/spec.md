@@ -60,9 +60,11 @@ has intentionally not launched, so it shows neither a terminal nor a relaunch, a
 frees. The header bar above it (`si-th-name`) titles the
 terminal with the **shared session headline** ([[session-activity]]), not the stable `sessionName` — same
 source and content as the session rows, only with more room before it truncates — so the title over the
-terminal never disagrees with the row that opened it. Read-only governs input, not extraction: text selects, the
-wheel scrolls real history, a drag selects even under mouse-reporting, and `⌘/Ctrl+C` copies to the clipboard
-**over HTTPS, localhost, or plain HTTP** (past the secure-context-only Clipboard API).
+terminal never disagrees with the row that opened it. Read-only governs *keyboard* input, not extraction or navigation: text selects, and the
+wheel scrolls **real history** — for a normal-screen pane into xterm's own seeded scrollback, for a
+full-screen TUI by forwarding the wheel so the app scrolls itself ([[live-view]] owns which path) — a drag
+selects even under mouse-reporting, and `⌘/Ctrl+C` copies to the clipboard **over HTTPS, localhost,
+or plain HTTP** (past the secure-context-only Clipboard API).
 
 Input has **two channels**. The **`❯` box** is the prompt channel: submitting dispatches through the **control
 socket** (never typed into the pane), so it lands even in copy-mode. The exception is the **board commands** —

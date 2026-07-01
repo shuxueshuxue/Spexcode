@@ -61,6 +61,10 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
   // becomes visible — so the first frame the user sees is drawn clean at the true size (no undersized→snap).
   const connectedWithSizeRef = useRef(false)
   const firstFrameCleanedRef = useRef(false)
+  // set whenever we've just reset xterm (a fresh socket, or the first-visible wipe): its next resize must ask
+  // the server for a FULL frame — the mode prelude (alt-screen / mouse) + history seed — since a plain resize
+  // re-seeds only the visible screen and a reset xterm would otherwise never re-enter the pane's real modes.
+  const needsFullRef = useRef(true)
   // brief "copied ✓" confirmation flashed by the copy chord; drives only the corner caption, not the term.
   const [copied, setCopied] = useState(false)
   // socket health for the corner caption: 'connecting' | 'open' | 'reconnecting' (drives the loud "reconnecting…").
@@ -143,11 +147,14 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
       const lastSize = lastSizeRef.current
       if (cols === lastSize.cols && rows === lastSize.rows) return
       lastSizeRef.current = { cols, rows }
-      if (sock?.isOpen()) sock.send(JSON.stringify({ t: 'resize', cols, rows }))
+      // a resize right after a reset carries `full` so the server re-seeds the mode prelude + history, not just
+      // the visible screen — otherwise a just-reset xterm never re-enters the pane's alt-screen / mouse modes.
+      const full = needsFullRef.current
+      needsFullRef.current = false
+      if (sock?.isOpen()) sock.send(JSON.stringify({ t: 'resize', cols, rows, full }))
     }
     fitRef.current = fitAndSync
 
-    const enc = new TextEncoder()
     // coalesce pane frames landing in the same tick into one term.write per animation frame, in arrival order.
     let pending = []
     let flushRaf = 0
@@ -166,7 +173,7 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
     sock = createResilientSocket({
       url: socketUrl,
       onState: setConn,
-      onOpen: () => { pending = []; if (flushRaf) { cancelAnimationFrame(flushRaf); flushRaf = 0 } ; term.reset(); lastSizeRef.current = { cols: 0, rows: 0 }; fitAndSync() },
+      onOpen: () => { pending = []; if (flushRaf) { cancelAnimationFrame(flushRaf); flushRaf = 0 } ; term.reset(); needsFullRef.current = true; lastSizeRef.current = { cols: 0, rows: 0 }; fitAndSync() },
       onMessage: (e) => {
         if (!(e.data instanceof ArrayBuffer)) return
         pending.push(new Uint8Array(e.data))
@@ -174,21 +181,29 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
       },
     })
 
-    const send = (data) => sock.send(enc.encode(data))   // false (a no-op) while mid-reconnect; the wheel just skips
-
-    // forward the wheel as SGR mouse reports (64/65 = up/down at the 1-based cell under the pointer) so tmux scrolls its real pane history.
+    // wheel routing mirrors the pane's real terminal. The bridge seeds xterm into the pane's mouse-tracking
+    // mode on each (re)attach, so this handler can trust term.modes:
+    //   - mouse-tracking ON (a full-screen TUI like Claude Code owns the mouse) → the app scrolls ITS OWN
+    //     history, not xterm's empty alternate-screen buffer, so FORWARD the wheel as an SGR mouse report and
+    //     let the app scroll (return false — don't also scroll xterm). This is the control-mode analogue of the
+    //     old raw-attach wheel forwarding; the socket carries a {t:'wheel'} frame, the bridge send-keys it in.
+    //   - mouse-tracking OFF (a normal-screen pane) → xterm's own scrollback holds the seeded real history, so
+    //     let xterm scroll natively (return true).
     term.attachCustomWheelEventHandler((ev) => {
-      const host = hostRef.current
-      if (!host || !term.cols || !term.rows) return false
-      const rect = host.getBoundingClientRect()
-      const clamp = (v, max) => Math.min(max, Math.max(1, v))
-      const col = clamp(Math.floor((ev.clientX - rect.left) / (rect.width / term.cols)) + 1, term.cols)
-      const row = clamp(Math.floor((ev.clientY - rect.top) / (rect.height / term.rows)) + 1, term.rows)
-      const btn = ev.deltaY < 0 ? 64 : 65  // wheel up / down
-      const ticks = Math.min(5, Math.max(1, Math.round(Math.abs(ev.deltaY) / 40)))
-      for (let i = 0; i < ticks; i++) send(`\x1b[<${btn};${col};${row}M`)
-      ev.preventDefault()
-      return false  // never let xterm's empty viewport (or the page) scroll instead
+      if (term.modes?.mouseTrackingMode && term.modes.mouseTrackingMode !== 'none') {
+        const host = hostRef.current
+        if (host && term.cols && term.rows) {
+          const rect = host.getBoundingClientRect()
+          const clamp = (v, max) => Math.min(max, Math.max(1, v))
+          const col = clamp(Math.floor((ev.clientX - rect.left) / (rect.width / term.cols)) + 1, term.cols)
+          const row = clamp(Math.floor((ev.clientY - rect.top) / (rect.height / term.rows)) + 1, term.rows)
+          const ticks = Math.min(5, Math.max(1, Math.round(Math.abs(ev.deltaY) / 40)))
+          if (sock?.isOpen()) sock.send(JSON.stringify({ t: 'wheel', up: ev.deltaY < 0, col, row, ticks }))
+        }
+        ev.preventDefault()
+        return false   // the app scrolls; never let xterm's empty alt-buffer (or the page) scroll instead
+      }
+      return true      // normal-screen pane → xterm scrolls its own seeded scrollback
     })
 
     // ⌘/Ctrl+C copies the xterm selection: listen on `document` (the pane isn't focused), gated to the visible pane and standing down when a focused field has its own selection.
@@ -277,7 +292,7 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
       // already-shown pane keeps its live buffer (instant) — only refit.
       if (!firstFrameCleanedRef.current) {
         firstFrameCleanedRef.current = true
-        if (!connectedWithSizeRef.current) { term.reset(); lastSizeRef.current = { cols: 0, rows: 0 } }
+        if (!connectedWithSizeRef.current) { term.reset(); needsFullRef.current = true; lastSizeRef.current = { cols: 0, rows: 0 } }
       }
       // re-measure against the now-laid-out host and force a full repaint (the entrance animation is pure
       // transform/opacity, so the host is already at its final height here and proposeDimensions reads true).

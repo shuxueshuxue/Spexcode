@@ -6,8 +6,8 @@ scenarios:
       Through the running dashboard in a real browser, open the session interface (Enter) with at least
       two live sessions, A and B. Closing is reached ONLY by right-clicking a session row → "Close" →
       confirming the prompt (there is no header close button). First confirm the header carries no close
-      control: with A selected, the action row shows only the state-driven buttons (nav, proof, relaunch/
-      merge), never a "close"/kill button. Then two passes. PASS 1 — select A's tab, right-click A's row,
+      control: with A selected, the tab bar's action row shows only the state-driven buttons (nav, relaunch/
+      merge — proof is a TAB, not a button), never a "close"/kill button. Then two passes. PASS 1 — select A's tab, right-click A's row,
       pick Close, confirm, and watch where the view lands. PASS 2 — select A's tab, right-click A's row,
       pick Close, confirm, then immediately switch to B's tab while the close request is still in flight,
       and watch whether the view stays put. Measure by screenshotting the tab list + active pane before
@@ -91,31 +91,35 @@ scenarios:
     tags: [frontend-e2e, desktop]
     description: >
       Through the running dashboard in a real browser, open the session interface (Enter) on a session in the
-      REVIEW state (so nav + proof + merge all apply). (1) Read the header action row: confirm three small
-      TEXT buttons — nav, proof, merge — with NO leading glyph/emoji (no ⌨ keyboard, no ◆ diamond), each
-      rendered in a distinct colour. (2) In the `❯` inbox type `/` and read the completion menu: the board's
-      own commands (`/nav`, `/proof`, `/merge`, `/exit`, `/close`) lead the list, each `/name` and its
-      `[board]` tag painted its identity colour, visibly apart from Claude Code's blue command rows. Now
-      narrow the query — type `/exit`, a name Claude Code ALSO ships: confirm the menu shows `/exit` exactly
-      ONCE (the board's coloured row), not a duplicate pair, and that each row's description reads as a
-      sentence (first letter capitalised, e.g. "Exit — stop the agent…", not "exit — …").
-      (3) Type `/proof` and Enter: the proof overlay opens — identical to clicking the proof button; close it,
-      then click the proof button and confirm the SAME overlay opens. (4) Type `/nav` and Enter: nav mode
-      engages (the `❯` box becomes the nav indicator AND the nav button shows its active `.on` state); click
-      the nav button to toggle it back off. Screenshot the action row and the `/` menu.
+      REVIEW state (so nav + merge apply). (1) Read the tab bar: on the LEFT two tabs — Terminal (default) and
+      Proof; on the RIGHT the action row shows two small TEXT buttons — nav, merge — with NO leading glyph/emoji
+      (no ⌨ keyboard, no ◆ diamond), each in a distinct colour, and NO "proof" button (proof is a TAB now, not an
+      action). (2) On the Terminal tab, in the `❯` inbox type `/` and read the completion menu: the board's own
+      commands (`/nav`, `/proof`, `/merge`, `/exit`, `/close`) lead the list, each `/name` and its `[board]` tag
+      painted its identity colour, visibly apart from Claude Code's blue command rows. Now narrow the query —
+      type `/exit`, a name Claude Code ALSO ships: confirm the menu shows `/exit` exactly ONCE (the board's
+      coloured row), not a duplicate pair, and that each row's description reads as a sentence (first letter
+      capitalised, e.g. "Exit — stop the agent…", not "exit — …").
+      (3) Type `/proof` and Enter: the view switches to the Proof tab and the proof renders inline — identical
+      to clicking the Proof tab; switch back to Terminal and click the Proof tab to confirm the SAME inline
+      proof. (4) Type `/nav` and Enter: nav mode engages (the `❯` box becomes the nav indicator AND the nav
+      button shows its active `.on` state); click the nav button to toggle it back off. Screenshot the tab bar
+      and the `/` menu.
     expected: |
       The action-row buttons are text-only (no glyphs/emoji) and colour-coded — nav yellow (var --yellow =
-      rgb(181,137,0)), proof cyan (var --cyan = rgb(42,161,152)), merge green (var --green = rgb(133,153,0)).
+      rgb(181,137,0)) and merge green (var --green = rgb(133,153,0)); there is NO proof button — Proof is a
+      permanent TAB (blue underline when active), always available, not a review-gated action.
       In the `/` menu the five board commands lead, each name + `[board]` tag in its identity colour — the
-      SAME hue as its button where it has one (nav yellow, proof cyan, merge green); the two button-less
-      terminal verbs split by destructiveness — exit muted grey (var --muted = rgb(147,161,161), the dormant/
-      offline hue it sends the session to) and close red (var --red = rgb(220,50,47), the worktree removal) —
-      while CC's commands stay blue (rgb(38,139,210)); one element, one colour in both places. A name the
-      board owns that Claude Code also ships (`/exit`) appears exactly ONCE — the board's row overrides CC's
-      twin, never a duplicate pair — and every row's description reads as a capitalised sentence. Typing `/proof` opens the
-      very overlay the proof button opens (one shared open-state); typing `/nav` toggles nav mode exactly as
-      the nav button does, and the button reflects that same state. A board command is never dispatched to the
-      agent — its line is intercepted and the draft cleared — so no `/proof`/`/nav` text reaches the pane.
+      SAME hue as its button where it has one (nav yellow, merge green), with `/proof` still cyan (var --cyan =
+      rgb(42,161,152)) even though it now drives a TAB, not a button; the two button-less terminal verbs split
+      by destructiveness — exit muted grey (var --muted = rgb(147,161,161), the dormant/offline hue it sends the
+      session to) and close red (var --red = rgb(220,50,47), the worktree removal) — while CC's commands stay
+      blue (rgb(38,139,210)); one element, one colour in both places. A name the board owns that Claude Code
+      also ships (`/exit`) appears exactly ONCE — the board's row overrides CC's twin, never a duplicate pair —
+      and every row's description reads as a capitalised sentence. Typing `/proof` switches to the Proof tab and
+      shows the same inline proof the tab click does (one shared tab-state); typing `/nav` toggles nav mode
+      exactly as the nav button does, and the button reflects that same state. A board command is never
+      dispatched to the agent — its line is intercepted and the draft cleared — so no `/proof`/`/nav` text reaches the pane.
   - name: status-word-colour
     tags: [frontend-e2e, desktop]
     description: >
@@ -249,6 +253,30 @@ scenarios:
       surrounding prose are sent verbatim. On the MAIN baseline none of this exists: the inbox has no `@`
       menu and forwards `@id` literally.
     related: spec-dashboard/src/SessionInterface.jsx
+  - name: terminal-proof-tabs
+    tags: [frontend-e2e, desktop]
+    description: >
+      Through the running dashboard in a real browser, open the session interface (Enter) on a LIVE session.
+      The right pane is a two-tab view: a horizontal tab bar (Terminal | Proof) above the pane content. Confirm
+      the DEFAULT tab is Terminal — the live terminal shows and the docked `❯` input is present below it. Read
+      the tab bar's computed background against the terminal's (`.si-tabbar` vs `.si-term-body`) to confirm they
+      differ (a distinct panel + a bottom separator), and repeat in BOTH light and dark themes. Then click the
+      Proof tab: confirm the terminal is hidden (display:none) but NOT unmounted (the `.si-term-body` node stays
+      in the DOM so its socket/scroll survive), the `❯` input dock is gone (input belongs to Terminal only), and
+      the review proof renders INLINE in a `.proof-pane` (an `<iframe>` for a session with work, else a clean
+      empty/loading placeholder) — never a floating overlay. Switch back to Terminal and confirm the live pane
+      is intact. Screenshot the tab bar + pane on each tab.
+    expected: |
+      The right pane opens on the Terminal tab by default: the live terminal is visible with the docked `❯`
+      input below it. The tab bar is a clear horizontal row set VISIBLY APART from the dark terminal — a lighter
+      app-chrome panel (var --panel) with a bottom separator (var --line), distinct from the terminal's var
+      --term-bg in BOTH light (#f4eeda vs #0d1117) and dark (#161b22 vs #0d1117) themes. Clicking Proof hides the
+      terminal (display:none) without unmounting it — `.si-term-body` and its terminal layers stay in the DOM so
+      the socket and scrollback survive a round-trip — drops the `❯` input dock, and renders the proof INLINE as
+      a `.proof-pane` (the self-contained proof `<iframe>`, or the empty/loading placeholder when there is
+      nothing to prove yet), not a modal overlay. Returning to Terminal restores the live pane unchanged. The
+      proof is always available on this tab for any selected session, not only one in review.
+    related: spec-dashboard/src/ReviewProof.jsx
 ---
 
 # session-console — yatsu

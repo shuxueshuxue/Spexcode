@@ -134,6 +134,32 @@ function TwoPart({ parts }) {
   )
 }
 
+// parts is derived from `body`, NOT shipped on the board ([[board-lean]]): it is pure redundancy on the wire,
+// so the detail view reconstructs it here. MIRROR of the backend `parseParts` (spec-cli/src/specs.ts) — same
+// grammar: split at the `## raw source` / `## expanded spec` H2 headings, fence-aware (a `## …` inside a code
+// fence is content, not a heading). null when neither heading is present (a legacy whole-body node).
+const PART_ALIASES = { 'raw source': 'rawSource', 'expanded spec': 'expandedSpec' }
+function parseParts(body) {
+  if (!body) return null
+  const acc = { rawSource: [], expandedSpec: [] }
+  let cur = null, inFence = false, any = false
+  for (const line of body.split('\n')) {
+    const fence = /^\s*```/.test(line)
+    if (!inFence && !fence) {
+      const h2 = line.match(/^##\s+(.+?)\s*$/)
+      if (h2) {
+        const key = PART_ALIASES[h2[1].trim().toLowerCase()]
+        if (key) { cur = key; any = true; continue }
+      }
+    }
+    if (fence) inFence = !inFence
+    if (cur) acc[cur].push(line)
+  }
+  if (!any) return null
+  const t = (a) => a.join('\n').trim()
+  return { rawSource: t(acc.rawSource), expandedSpec: t(acc.expandedSpec) }
+}
+
 export function SpecPane({ node }) {
   const t = useT()
   const driftTitle = (node.driftFiles || []).map((d) => `${d.file}: ${t('specNode.driftAhead', { n: d.behind })}`).join('\n')
@@ -158,7 +184,12 @@ export function SpecPane({ node }) {
       ) : (
         <div className="doc-gov prose"><span className="doc-gov-h">{t('nodeView.proseNode')}</span></div>
       )}
-      {node.parts ? <TwoPart parts={node.parts} /> : <SpecBody body={node.body} />}
+      {(() => {
+        // parts no longer rides the board ([[board-lean]]); derive it from `body`. `node.parts ??` keeps a
+        // board that still sends it (or a test fixture) working unchanged.
+        const parts = node.parts ?? parseParts(node.body)
+        return parts ? <TwoPart parts={parts} /> : <SpecBody body={node.body} />
+      })()}
     </div>
   )
 }

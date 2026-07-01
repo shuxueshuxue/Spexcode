@@ -77,7 +77,10 @@ export async function buildBoard() {
   const nodes = [
     ...specs.map((n: any) => {
       const overlays = overlaysByNode[n.id] || []
-      return { ...n, overlays, status: deriveStatus({ version: n.version, drift: n.drift, hasOverlay: overlays.length > 0, hasCode: (n.code?.length ?? 0) > 0, fmStatus: n.fmStatus ?? undefined }) }
+      // parts is DROPPED from the board payload ([[board-lean]]): it is parseParts(body) — a pure derivation of
+      // `body`, which the board still carries — so shipping it is ~21% of pure redundancy. The detail view
+      // reconstructs it client-side from `body`. `parts: undefined` makes JSON.stringify omit the key.
+      return { ...n, parts: undefined, overlays, status: deriveStatus({ version: n.version, drift: n.drift, hasOverlay: overlays.length > 0, hasCode: (n.code?.length ?? 0) > 0, fmStatus: n.fmStatus ?? undefined }) }
     }),
     ...Object.values(ghostById),
   ]

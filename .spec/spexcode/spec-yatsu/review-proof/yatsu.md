@@ -3,9 +3,9 @@ scenarios:
   - name: proof-renders
     tags: [frontend-e2e, desktop]
     description: >
-      With a session in the review state, open its proof — via the dashboard proof action
-      (the overlay) or by loading GET /api/sessions/:id/proof in a browser, or the file
-      `spex review proof --out` writes. Check the self-contained, fully-derived HTML renders:
+      Open a session's proof — via the dashboard's **Proof tab** (rendered inline in the console's
+      right pane, always available for any selected session) or by loading GET /api/sessions/:id/proof
+      in a browser, or the file `spex review proof --out` writes. Check the self-contained, fully-derived HTML renders:
       a masthead headline derived from the node/branch, the gates checklist, and per changed
       node its yatsu evidence (verdict badge + the inlined screenshot/transcript), with a
       frontend node lacking a yatsu.md shown as an honest blind spot. Then DRILL a changed
@@ -21,7 +21,7 @@ scenarios:
 ---
 # review-proof yatsu
 
-YATU: measure through the real product surface — load the rendered proof in a browser (the dashboard
-overlay, the `/api/sessions/:id/proof` route directly, or the file `spex review proof --out` writes) and
-look at it. The reading's evidence is a screenshot of that rendered page; the verdict compares it to the
+YATU: measure through the real product surface — load the rendered proof in a browser (the dashboard's
+inline Proof tab, the `/api/sessions/:id/proof` route directly, or the file `spex review proof --out` writes)
+and look at it. The reading's evidence is a screenshot of that rendered page; the verdict compares it to the
 `expected` whole-document shape above.

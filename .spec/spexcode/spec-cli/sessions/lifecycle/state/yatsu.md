@@ -68,7 +68,19 @@ scenarios:
       The resumed session rests at `idle` (displayed idle, not `working`) — the agent is `--resume`d into the
       same conversation but sitting at its prompt with nothing to do, so it never shows a phantom `working`
       before the human says anything. Only the next real prompt (via mark-active) flips it to active. reopen
-      always rests at idle (there is no "reopen a live session back to working" surface).
+      demotes a working `active` to idle under the same active-only guard `idle` uses.
+  - name: resume-preserves-standing-proposal
+    tags: [backend-api]
+    description: >-
+      Take a session that is PROPOSING a merge (lifecycle awaiting, proposal=merge, i.e. DisplayStatus review)
+      offline (`exit`), then resume it (the relaunch panel → reopen) WITHOUT dispatching a merge. Read the
+      record + board.
+    expected: >-
+      The resumed session comes back STILL in review — record status stays `awaiting` with proposal `merge`
+      intact (board shows review, now online), NOT silently withdrawn to idle. reopen never touches the
+      proposal; a proposal is reversed only by messaging the session (mark-active), never as a hidden
+      side-effect of a relaunch. (The merge dispatch is the one path that clears it — via the delivered prompt,
+      not via reopen.)
 ---
 # yatsu.md — state
 

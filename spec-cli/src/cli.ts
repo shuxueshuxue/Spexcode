@@ -378,10 +378,10 @@ if (cmd === 'serve') {
   } else if (sub === 'list') {
     console.log(JSON.stringify(await c.clientListSessions(), null, 2))
   } else if (sub === 'reopen' || sub === 'resume') {
-    // clear any proposal and bring the agent back at rest (-> idle); relaunch if offline (the backend owns it).
-    // reopen never makes it "work" — a following prompt does; see sessions.ts reopen().
+    // bring the agent back up (relaunch if offline, the backend owns it); demotes a working `active` to idle but
+    // leaves a standing declaration/proposal untouched (see sessions.ts reopen()). A following prompt is what works.
     const full = await resolveSelectorOrExit(id)
-    console.log(await c.clientReopen(full) ? `${full} -> idle` : `no such session ${full}`)
+    console.log(await c.clientReopen(full) ? `${full} -> reopened` : `no such session ${full}`)
   } else if (sub === 'review') {
     console.log(await s.propose(id, 'merge') ? `${id} -> review` : `no such session ${id}`)
   } else if (sub === 'state') {

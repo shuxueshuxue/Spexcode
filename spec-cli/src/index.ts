@@ -6,6 +6,7 @@ import { createNodeWebSocket } from '@hono/node-ws'
 import { loadSpecs, specHistory, specDiffAt, loadConfig } from './specs.js'
 import { resolveLayout, mainBranch } from './layout.js'
 import { buildBoard } from './board.js'
+import { boardStream } from './boardStream.js'
 import { gitA, gitTry } from './git.js'
 import { newSession, listSessions, sendKeys, rawKey, exitSession, closeSession, reopen, propose, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, superviseQueue } from './sessions.js'
 import { defaultHarness, HARNESSES } from './harness.js'
@@ -28,10 +29,16 @@ app.get('/', (c) => c.text('spec-cli — GET /api/board · /api/specs · /api/sp
 // instant Hono is listening. Not under /api/* — loopback-only (supervisor→child), no CORS needed.
 app.get('/health', (c) => c.text('ok'))
 // the assembled board (merged tree + overlay + sessions) — the dashboard's single source. Same data
-// as `spex board`; the frontend only adds x/y pixels on top. The board is polled on a short interval, so
-// the route is a conditional-request endpoint: `etag()` hashes the serialized body, and a poll whose
-// `If-None-Match` matches gets a bodyless 304 instead of the full ~328 KB transfer.
+// as `spex board`; the frontend only adds x/y pixels on top. Freshness is PUSH-first ([[board-stream]]): the
+// dashboard reloads on a `/api/board/stream` event, not a tight poll, so the route is a conditional-request
+// endpoint: `etag()` hashes the serialized body, and a reload whose `If-None-Match` matches gets a bodyless 304
+// instead of the full transfer (~1 MB on the dogfood board — it scales with the node count). The 304 saves the
+// WIRE only: buildBoard still runs its git read on every request, so cutting poll frequency (the push channel
+// does) is what saves the server work.
 app.get('/api/board', etag(), async (c) => c.json(await buildBoard()))
+// the board's push channel: an SSE that fires `board-changed` on any session-store write, so the dashboard
+// reloads the instant status moves instead of waiting for its slow fallback poll ([[board-stream]]).
+app.get('/api/board/stream', (c) => boardStream(c))
 app.get('/api/specs', async (c) => c.json(await loadSpecs()))
 app.get('/api/specs/:id/history', async (c) => c.json(await specHistory(c.req.param('id'))))
 // the spec.md line diff one version introduced — the history tab's per-version proof-of-change, fetched

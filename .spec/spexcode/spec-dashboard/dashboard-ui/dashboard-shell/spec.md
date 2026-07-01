@@ -48,11 +48,15 @@ language pick. To avoid a light-flash before the module boots, `index.html` runs
 in `<head>` that applies the same choice to `<html data-theme>` before first paint. The [[settings]]
 popup carries the live toggle.
 
-**Polled board — freshest-issued wins.** The shell re-fetches `/api/board` every 4s AND on demand (a
-session close/rename calls `reload()` so every surface reflects the change at once), so several `loadBoard()`
-requests can be in flight together. Because they resolve out of order and an older request carries an older
-backend snapshot, the shell stamps each call with a monotonic sequence and applies only the latest-issued
-response — a superseded one is dropped, never painted. Without that guard a just-closed session resurrects:
-the post-close reload paints the row gone, then a poll that was already in flight (snapshotted *before* the
-worktree removal) lands late and flickers it back until the next poll. The guard makes a removal stick the
-moment its own reload lands.
+**Push-first board — freshest-issued wins.** The shell keeps the board fresh through three paths that all
+funnel into one `reload()` (`/api/board`): a **push** subscription ([[board-stream]]) that reloads the instant
+the backend signals a session-store change, so status and grouping flip without waiting on a timer; an
+**on-demand** reload (a session close/rename calls it so every surface reflects the change at once); and a
+**slow fallback poll** that catches the cold path the push channel doesn't watch (a spec edit/merge, a forge
+issue) and covers an environment where SSE never connects. The tight 4s poll is gone — an untouched board now
+fetches nothing instead of a full snapshot every few seconds. Because several `loadBoard()` requests can be in
+flight together and resolve out of order (an older one carrying an older backend snapshot), the shell stamps
+each call with a monotonic sequence and applies only the latest-issued response — a superseded one is dropped,
+never painted. Without that guard a just-closed session resurrects: the post-close reload paints the row gone,
+then a reload already in flight (snapshotted *before* the worktree removal) lands late and flickers it back.
+The guard makes a removal stick the moment its own reload lands.

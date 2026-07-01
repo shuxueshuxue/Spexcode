@@ -621,6 +621,17 @@ body {
 /* compact one-line face: the status word collapses to a single glyph (STATUS_GLYPH), painted by STATUS_COLOR
    inline; the exact word stays on the title/aria for hover + a11y. */
 .sess-glyph { flex: none; width: 12px; text-align: center; font-size: 11px; line-height: 1; }
+/* @@@ nesting fold ([[session-nesting]]) — the leading gutter on a nested session row. `.sess-lead` carries
+   the depth indent; `.sess-fold` is the disclosure triangle (or an aligned placeholder for a leaf child) whose
+   COLOUR is the subtree rollup, painted inline. A fixed-width slot keeps every headline aligned regardless of
+   depth or whether the row has a triangle. */
+.sess-lead { flex: none; display: inline-flex; align-items: center; }
+.sess-fold {
+  flex: none; width: 12px; text-align: center; font-size: 9px; line-height: 1; cursor: pointer;
+  color: var(--muted); transition: color .12s;
+}
+.sess-fold.placeholder { cursor: default; }
+.sess-fold:not(.placeholder):hover { filter: brightness(1.25); }
 /* the board glance (.sesswin) reuses the SAME two-zone grouping + compact one-line face as the console
    ([[session-console]]) — the one difference is it KEEPS the avatar and stays on the board's warm paper. */
 .sesswin .sess-row { flex-wrap: nowrap; }

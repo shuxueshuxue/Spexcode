@@ -5,8 +5,8 @@ import { loadConfig, setSessionSort } from './data.js'
 import { reorderPlan } from './sessionReorder.js'
 import { Avatar } from './avatar.jsx'
 import { labelColor } from './color.js'
-import { STATUS_COLOR, sessionHeadline, sessionZone, zoneSort } from './session.js'
-import { SessionRow } from './SessionWindow.jsx'
+import { STATUS_COLOR, sessionHeadline, sessionForest } from './session.js'
+import { SessionRow, RowLead, useFold } from './SessionWindow.jsx'
 import SessionContextMenu from './SessionContextMenu.jsx'
 import { ProofOverlay } from './ReviewProof.jsx'
 import { boardCommandsFor } from './sessionCommands.js'
@@ -230,9 +230,14 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     catch { /* the next board poll reconciles */ }
     reload?.()
   }
-  // the session list is grouped into two triage zones (needs-you over self-running, [[session-console]]); `zoned`
-  // is that display order, and ALSO the order drag-reorder and ↑/↓ nav walk, so the three never disagree.
-  const zoned = useMemo(() => zoneSort(sessions), [sessions])
+  // the session list is grouped into two triage zones (needs-you over self-running, [[session-console]]) AND
+  // nested — a session folds under its spawner ([[session-nesting]]). `forest` is that display structure (zone
+  // headers + rows, children present only while their parent is expanded); `visible` is its flat row order,
+  // which drag-reorder and ↑/↓ nav both walk, so display, nav, and drop math never disagree (a collapsed child
+  // is off-screen AND out of the nav order, never a hidden target).
+  const { expanded, toggle: toggleFold } = useFold()
+  const forest = useMemo(() => sessionForest(sessions, (id) => expanded.has(id)), [sessions, expanded])
+  const visible = useMemo(() => forest.filter((it) => it.type === 'row').map((it) => it.s), [forest])
   // start a drag from a row's handle. Do NOT stopPropagation: keepFocus then still runs and preventDefaults the
   // mousedown, so the docked ❯ input never loses focus — and preventDefault does not stop the window
   // mousemove/mouseup this drag rides on. The whole gesture lives on `window`, so it survives the re-render
@@ -240,7 +245,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const onHandleDown = (e, s) => {
     if (e.button !== 0) return
     const startY = e.clientY
-    const list = zoned                  // snapshot for this gesture — the ZONED display order, so drop math matches what's on screen
+    const list = visible                // snapshot for this gesture — the VISIBLE (zoned + folded) row order, so drop math matches what's on screen
     let dragging = false, hint = null
     const onMove = (ev) => {
       if (!dragging) { if (Math.abs(ev.clientY - startY) < 4) return; dragging = true }
@@ -262,7 +267,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       if (hint?.end) beforeId = null
       else if (hint) beforeId = hint.place === 'before' ? hint.id : (list[list.findIndex((x) => x.id === hint.id) + 1]?.id ?? null)
       else return
-      applyReorder(reorderPlan(list, s.id, beforeId, true))   // desc: the zoned list is newest-first within each zone
+      applyReorder(reorderPlan(list, s.id, beforeId, true))   // desc: the visible list is newest-first within each zone
     }
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)
@@ -276,7 +281,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     >⠿</span>
   )
 
-  const order = useMemo(() => ['new', ...zoned.map((s) => s.id)], [zoned])
+  const order = useMemo(() => ['new', ...visible.map((s) => s.id)], [visible])
   const active = sel === 'graph' || order.includes(sel) ? sel : 'new'
   // a removed session (closed here, ended on its own, or closed elsewhere) leaves the tab unresolved: land
   // on New only if you're still on the now-gone tab. Mirrors `active`'s validity test.
@@ -828,16 +833,18 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               </svg>
             </button>
           </div>
-          {zoned.reduce((acc, s, i) => {
-            // group the list into two triage zones ([[session-console]]): a small dim header leads each zone,
-            // emitted when the zone changes. Within a zone the newest session is on top ([[session-reorder]]).
-            const z = sessionZone(s)
-            if (i === 0 || z !== sessionZone(zoned[i - 1])) {
-              acc.push(<div className={`si-zone si-zone-${z}`} key={`zone-${z}`}>{t(`sessionZone.${z}`)}</div>)
-            }
+          {forest.map((it) => {
+            // group into two triage zones ([[session-console]], a dim header per zone) AND fold nested sessions
+            // under their spawner ([[session-nesting]]): the forest emits zone headers and rows (children present
+            // only while their parent is expanded); within a zone the newest session is on top ([[session-reorder]]).
+            if (it.type === 'zone') return <div className={`si-zone si-zone-${it.zone}`} key={`zone-${it.zone}`}>{t(`sessionZone.${it.zone}`)}</div>
+            const s = it.s
+            const lead = (it.expandable || it.depth)
+              ? <RowLead depth={it.depth} expandable={it.expandable} expanded={it.expanded} rollup={it.rollup} onToggle={() => toggleFold(s.id)} />
+              : null
             // single click switches tab; double-click locks the session (needs an overlay to focus, else a
             // no-op beyond the switch). The face is the shared SessionRow, compact + avatar-less here.
-            acc.push(
+            return (
               <button
                 key={s.id}
                 data-sid={s.id}
@@ -848,11 +855,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, session: s }) }}
                 title={s.ops?.length ? t('session.opsTitle') : undefined}
               >
-                <SessionRow s={s} locked={false} handle={dragHandle(s)} showAvatar={false} compact />
+                <SessionRow s={s} locked={false} handle={dragHandle(s)} showAvatar={false} compact lead={lead} />
               </button>
             )
-            return acc
-          }, [])}
+          })}
         </aside>
 
         <section className={active === 'new' ? 'si-content is-new' : active === 'graph' ? 'si-content is-graph' : 'si-content is-session'}>

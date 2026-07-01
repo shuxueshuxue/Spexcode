@@ -596,6 +596,13 @@ body {
 /* compact one-line face: the status word collapses to a single glyph (STATUS_GLYPH), painted by STATUS_COLOR
    inline; the exact word stays on the title/aria for hover + a11y. */
 .sess-glyph { flex: none; width: 12px; text-align: center; font-size: 11px; line-height: 1; }
+/* the board glance (.sesswin) reuses the SAME two-zone grouping + compact one-line face as the console
+   ([[session-console]]) — the one difference is it KEEPS the avatar and stays on the board's warm paper. */
+.sesswin .sess-row { flex-wrap: nowrap; }
+.sesswin .sess-meta { flex: none; width: auto; min-width: 0; margin-top: 0; margin-left: auto; }
+.sesswin-zone { padding: 7px 9px 2px; font-size: 9px; font-weight: 700; letter-spacing: .7px; text-transform: uppercase; color: var(--muted); user-select: none; }
+.sesswin-zone-need { color: var(--yellow); }
+.sesswin-zone-run  { color: var(--green); }
 
 /* ---- session right-click menu + rename prompt (SessionContextMenu.jsx) ---- */
 /* a small pop-over anchored at the cursor (fixed to viewport coords). z-index 60 floats it ABOVE every
@@ -778,12 +785,11 @@ body {
   background: rgba(101,123,131,.4); backdrop-filter: blur(5px);
   display: flex; align-items: center; justify-content: center;
 }
-/* @@@ near-fullscreen, still a popup - the board fills the viewport but keeps a thin inset so the dimmed,
-   blurred app frames it (you can see it's floating over something), plus rounded corners, a deep float
-   shadow, and a scale-in "pop" — all of which keep the modal mental model rather than reading as a route. */
+/* @@@ TRUE fullscreen - the session board fills the entire viewport edge-to-edge (no reserved inset/margin,
+   no rounded corners) so no screen space is wasted; it keeps the scale-in "pop" and lifts above the board. */
 .si-panel {
-  width: 96vw; height: 94vh;
-  background: var(--paper); border: 1px solid var(--blue); border-radius: 12px;
+  width: 100vw; height: 100vh;
+  background: var(--paper); border: none; border-radius: 0;
   overflow: hidden; display: flex;
   box-shadow: 0 30px 90px rgba(7, 54, 66, .45);
   animation: si-pop .2s cubic-bezier(.2, .8, .2, 1);
@@ -818,25 +824,30 @@ body {
    edge, same blue as the selected wash, no layout shift. */
 .si-item.drop-before { box-shadow: inset 0 2px 0 0 var(--blue); }
 .si-item.drop-after { box-shadow: inset 0 -2px 0 0 var(--blue); }
-/* @@@ terminal-aesthetic sidebar ([[session-console]]) — the console's OWN session list reads as a dark
-   TERMINAL pane (the right pane already is one), set apart from the board's warm paper. Scoped to `.si-list`
-   so the map-side SessionWindow (.sesswin) keeps the board theme AND its avatars. Rows are COMPACT one-line:
-   no avatar, headline + a single colour-coded status GLYPH (no word) + op tally + drag handle on ONE row
-   (nowrap), vs the two-row word face the board window keeps. */
-.si-list { background: #0b0f15; color: #c4cdd6; }
-.si-list .si-toprow { border-bottom-color: #1a2129; }
-.si-list .si-pill { border-color: #262f39; color: #8b98a5; background: #0e141b; }
-.si-list .si-pill:hover { border-color: #38434f; color: #c4cdd6; }
-.si-item { flex-wrap: nowrap; padding: 5px 12px; border-bottom-color: #141a21; color: #b4bec9; font-size: 11.5px; }
-.si-item:hover { background: #12181f; }
-.si-item.on { background: color-mix(in srgb, var(--blue) 20%, #10161d); color: #eaf0f6; }
-.si-item.on:hover { background: color-mix(in srgb, var(--blue) 28%, #10161d); }
-.si-item.on .sess-id { color: #eef3f8; }
+/* @@@ terminal-aesthetic sidebar ([[session-console]]) — the console's OWN session list reads as the SAME
+   dark solarized TERMINAL as the right pane (background = --term-bg, solarized base03), so left and right feel
+   like one terminal instead of clashing. Scoped to `.si-list` so the map-side SessionWindow (.sesswin) keeps
+   the board's warm paper AND its avatars. Rows are COMPACT one-line: no avatar, headline + a single
+   colour-coded status GLYPH (no word) + op tally + drag handle on ONE row (nowrap). */
+.si-list { background: var(--term-bg); color: #93a1a1; }
+.si-list .si-toprow { border-bottom-color: #073642; }
+.si-list .si-pill { border-color: #0a4657; color: #839496; background: #073642; }
+.si-list .si-pill:hover { border-color: #157488; color: #93a1a1; }
+.si-item { flex-wrap: nowrap; padding: 5px 12px; border-bottom-color: #073642; color: #93a1a1; font-size: 11.5px; }
+.si-item:hover { background: #073642; }
+.si-item.on { background: color-mix(in srgb, var(--blue) 26%, #002b36); color: #eee8d5; }
+.si-item.on:hover { background: color-mix(in srgb, var(--blue) 34%, #002b36); }
+.si-item.on::before { content: none; }   /* selected caret removed — the highlight wash is enough (per request) */
+.si-item.on .sess-id { color: #fdf6e3; }
 /* meta collapses inline (no full-width row-2 wrap) so the whole face stays on one line */
 .si-item .sess-meta { flex: none; width: auto; min-width: 0; margin-top: 0; margin-left: auto; opacity: 1; overflow: visible; }
-.si-item .si-drag-handle { color: #8b98a5; }
-.si-item:hover .si-drag-handle { color: #c4cdd6; }
-.si-item .sess-lock { color: #8b98a5; }
+.si-item .si-drag-handle { color: #657b83; }
+.si-item:hover .si-drag-handle { color: #93a1a1; }
+.si-item .sess-lock { color: #657b83; }
+/* zone divider — a dim small uppercase header leading each triage zone (needs-you over running) */
+.si-zone { padding: 9px 12px 3px; font-size: 9.5px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: #586e75; user-select: none; }
+.si-zone-need { color: #b58900; }   /* solarized yellow — waiting on you */
+.si-zone-run  { color: #859900; }   /* solarized green — self-running */
 /* @@@ top button row - New Session (＋, blue) and the relationship graph (network glyph, magenta) as two
    COMPACT side-by-side buttons, not full-width rows — so neither sits in the ↑/↓ path to a session. Selected
    one gets a hue wash + ring (its own colour), mirroring the session rows' selected wash. */

@@ -3,12 +3,16 @@ export const REORDER_GAP = 1000   // headroom (ms) when a row is dropped past ei
 
 // repeated midpoint bisection eventually exhausts double precision; when a midpoint can't fall strictly
 // between two neighbours, re-space the whole list on an even grid anchored at the earliest effective time.
-function renormalise(order) {
+// `desc` = the list is shown NEWEST-FIRST (descending effTime), so the TOP row must get the LARGEST key.
+function renormalise(order, desc) {
   const base = Math.min(...order.map(effTime))
-  return order.map((s, i) => ({ id: s.id, key: base + (i + 1) * REORDER_GAP }))
+  const n = order.length
+  return order.map((s, i) => ({ id: s.id, key: base + (desc ? (n - i) : (i + 1)) * REORDER_GAP }))
 }
 
-export function reorderPlan(order, draggedId, beforeId) {
+// `desc` flips the one-sided (dropped past an end) and renormalise directions for a newest-first list; the
+// two-sided midpoint is direction-agnostic. Default ascending leaves any oldest-first caller unchanged.
+export function reorderPlan(order, draggedId, beforeId, desc = false) {
   if (draggedId === beforeId) return null
   const from = order.findIndex((s) => s.id === draggedId)
   if (from < 0) return null
@@ -22,9 +26,11 @@ export function reorderPlan(order, draggedId, beforeId) {
   const left = newOrder[at - 1], right = newOrder[at + 1]
   let key
   if (left && right) key = (effTime(left) + effTime(right)) / 2
-  else if (left) key = effTime(left) + REORDER_GAP
-  else if (right) key = effTime(right) - REORDER_GAP
+  else if (left) key = effTime(left) + (desc ? -REORDER_GAP : REORDER_GAP)
+  else if (right) key = effTime(right) + (desc ? REORDER_GAP : -REORDER_GAP)
   else return null
-  const tight = left && right && !(key > effTime(left) && key < effTime(right))
-  return { order: newOrder, updates: tight ? renormalise(newOrder) : [{ id: draggedId, key }] }
+  const lo = left && right ? Math.min(effTime(left), effTime(right)) : -Infinity
+  const hi = left && right ? Math.max(effTime(left), effTime(right)) : Infinity
+  const tight = left && right && !(key > lo && key < hi)
+  return { order: newOrder, updates: tight ? renormalise(newOrder, desc) : [{ id: draggedId, key }] }
 }

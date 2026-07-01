@@ -22,7 +22,8 @@ driving the same sessions through the CLI see identical state.
 
 ## expanded spec
 
-The interface is a **near-fullscreen popup modal** over the dimmed board. Two panes: a left session list and a
+The interface is a **full-screen board** — edge-to-edge over the dimmed app, with **no reserved inset** so no
+screen space is wasted (still a lifted modal with a scale-in pop, not a route). Two panes: a left session list and a
 right area that **morphs** by what's focused. The
 list's **top button row** pairs `＋` New Session and the relationship-graph icon above the session rows (so
 neither blocks the `↑/↓` path); New ⇄ graph is horizontal — `→` from an *empty* New enters, `←` returns.
@@ -132,11 +133,13 @@ land. Still on the closed tab → New Session; already moved to another valid ta
 fallback covers a session that ends or is closed elsewhere, so the selection never points at a session the
 board no longer has.
 
-**SessionWindow** is the read-only glance, built from the shared **`SessionRow`** face — a two-row block
-([[session-activity]]): Row 1 is the avatar (no status dot) + the session **headline** (the worker's live
-tmux self-summary once it exists, else a launch-prompt placeholder; a rename always wins), with a **monochrome
-inline-SVG padlock** (the dashboard's own glyph vocabulary, not a colour emoji) at its end when the row is
-locked; Row 2 is the **colour-coded status word** + pending-op count. It stays a
+**SessionWindow** is the read-only glance, built from the shared **`SessionRow`** face
+([[session-activity]]) in the SAME **compact one-line, two-zone grouped** layout as the console list — but
+KEEPING the **avatar** (its cross-referencing job) and the board's warm paper: the avatar + the session
+**headline** (the worker's live tmux self-summary once it exists, else a launch-prompt placeholder; a rename
+always wins) + a single colour-coded status **glyph** + pending-op count, on one line, with a **monochrome
+inline-SVG padlock** (the dashboard's own glyph vocabulary, not a colour emoji) at the headline's end when the
+row is locked. It stays a
 **bounded** glance: the window never grows into a curtain — its height is capped (~80% of the viewport, and
 always stopping short of the bottom **stats strip**), and a long session list **scrolls** inside it rather
 than extending down over the board's stats bar. A single click **locks** the board onto
@@ -146,7 +149,12 @@ single click switches tab, double-click locks — but in its **compact, avatar-l
 (`showAvatar={false} compact`): the console's own left list is a dark, dense TERMINAL pane (matching the right
 terminal, set apart from the board's warm paper), one line per session, the status a single colour glyph not
 a word. The avatar is dropped ONLY here — its cross-referencing job (matching a session to the avatars on the
-nodes it edits) belongs to the map-side SessionWindow and the relationship-graph, which both keep it.
+nodes it edits) belongs to the map-side SessionWindow and the relationship-graph, which both keep it. The
+list itself **groups into two triage zones** — *needs you* (asking / review / done / close-pending / error)
+over *self-running* (working / parked / queued …), a dim header leading each — and within a zone the
+**newest** session sits on top ([[session-reorder]]). The selected row is marked by the **highlight wash
+alone**, no caret. Both list surfaces share this grouping + compact one-line layout; only the avatar (and the
+map-side window's warm-paper theme vs the console's dark solarized one) differ.
 
 All surfaces share name and status from `session.js`, whose single **`STATUS_COLOR`** map paints the
 liveness dot, the status word, **and** the compact sidebar's status **glyph** (`STATUS_GLYPH`) the SAME hue

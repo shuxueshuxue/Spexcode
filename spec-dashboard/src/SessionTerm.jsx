@@ -83,15 +83,17 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
       cursorBlink: false, disableStdin: true, scrollback: 5000,  // read-only view; xterm owns scrollback
       // stops a held ⌥ mid-drag from flipping into column/block select, so an accidental Option keeps a linewise grab.
       macOptionClickForcesSelection: true,
-      // solarized-dark on purpose — the Claude Code TUI inside is built for a dark terminal; the bright* grays are its dim-text tones.
-      // selection is a bright blue; selectionInactiveBackground matches it so the highlight doesn't grey out when focus sits in the ❯ box.
+      // GitHub-Dark NEUTRAL palette, paired with the #0d1117 background so the terminal matches the app's
+      // modern dark theme. Readable dim tones (brightBlack) keep Claude Code's pinned-prompt line — which it
+      // renders in a dim ansi tone — legible; the old solarized ansi, tuned for a #002b36 bg, went muddy on
+      // the neutral background (dark-on-dark). selection is a GitHub blue; selectionInactive matches it.
       theme: {
-        background: '#0d1117', foreground: '#93a1a1', cursor: '#93a1a1',
-        selectionBackground: '#268bd2', selectionForeground: '#fdf6e3', selectionInactiveBackground: '#268bd2',
-        black: '#073642', red: '#dc322f', green: '#859900', yellow: '#b58900',
-        blue: '#268bd2', magenta: '#d33682', cyan: '#2aa198', white: '#eee8d5',
-        brightBlack: '#586e75', brightRed: '#cb4b16', brightGreen: '#586e75', brightYellow: '#657b83',
-        brightBlue: '#839496', brightMagenta: '#6c71c4', brightCyan: '#93a1a1', brightWhite: '#fdf6e3',
+        background: '#0d1117', foreground: '#c9d1d9', cursor: '#c9d1d9',
+        selectionBackground: '#264f78', selectionForeground: '#f0f6fc', selectionInactiveBackground: '#264f78',
+        black: '#484f58', red: '#ff7b72', green: '#3fb950', yellow: '#d29922',
+        blue: '#58a6ff', magenta: '#bc8cff', cyan: '#39c5cf', white: '#b1bac4',
+        brightBlack: '#6e7681', brightRed: '#ffa198', brightGreen: '#56d364', brightYellow: '#e3b341',
+        brightBlue: '#79c0ff', brightMagenta: '#d2a8ff', brightCyan: '#56d4dd', brightWhite: '#f0f6fc',
       },
     })
     termRef.current = term

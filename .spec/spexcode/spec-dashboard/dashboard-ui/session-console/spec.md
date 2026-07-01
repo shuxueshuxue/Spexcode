@@ -61,8 +61,10 @@ frees. The header bar above it (`si-th-name`) titles the
 terminal with the **shared session headline** ([[session-activity]]), not the stable `sessionName` — same
 source and content as the session rows, only with more room before it truncates — so the title over the
 terminal never disagrees with the row that opened it. Read-only governs input, not extraction: text selects, the
-wheel scrolls real history, a drag selects even under mouse-reporting, and `⌘/Ctrl+C` copies to the clipboard
-**over HTTPS, localhost, or plain HTTP** (past the secure-context-only Clipboard API).
+wheel scrolls **real history** — each (re)attach seeds tmux's recent scrollback into xterm and `%output`
+writes the live tail, so the terminal's own scroll reaches output from before it attached ([[live-view]]) —
+a drag selects even under mouse-reporting, and `⌘/Ctrl+C` copies to the clipboard **over HTTPS, localhost,
+or plain HTTP** (past the secure-context-only Clipboard API).
 
 Input has **two channels**. The **`❯` box** is the prompt channel: submitting dispatches through the **control
 socket** (never typed into the pane), so it lands even in copy-mode. The exception is the **board commands** —

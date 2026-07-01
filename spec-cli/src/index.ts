@@ -12,7 +12,7 @@ import { defaultHarness, HARNESSES } from './harness.js'
 import { evalTimeline, readBlobByHash } from '../../spec-yatsu/src/evaltab.js'
 import { buildProofModel, renderProofHtml } from '../../spec-yatsu/src/proof.js'
 import { saveUpload, MAX_UPLOAD_BYTES } from './uploads.js'
-import { attachViewer, detachViewer, writeViewer, resizeBridge, superviseBridges, type Viewer } from './pty-bridge.js'
+import { attachViewer, detachViewer, resizeBridge, superviseBridges, type Viewer } from './pty-bridge.js'
 import { installProcessGuards } from './resilience.js'
 
 // last-resort net: an unforeseen async throw (e.g. a worktree vanishing mid-read during a worker
@@ -154,9 +154,9 @@ app.post('/api/sessions/:id/merge', async (c) => {
   return c.json(r, r.dispatched ? 200 : 409)
 })
 
-// one bidirectional WS over a shared tmux client (pty-bridge): server→client = raw pane bytes (binary);
-// client→server = raw terminal input (binary) + a text control frame {t:'resize',cols,rows}. A real tmux
-// client, so scrollback is tmux's own and the first paint is one coherent repaint.
+// one WS over a shared tmux control-mode client (pty-bridge): server→client = raw pane bytes (binary); the
+// view is read-only, so client→server is only a text control frame {t:'resize',cols,rows}. A real tmux
+// client, so the first paint is one coherent frame at the converged size and live bytes arrive as events.
 app.get('/api/sessions/:id/socket', upgradeWebSocket((c) => {
   const id = c.req.param('id') as string
   // the size-first handshake: a client that already knows its pane size carries it as ?cols=&rows= so the
@@ -172,13 +172,10 @@ app.get('/api/sessions/:id/socket', upgradeWebSocket((c) => {
     onMessage(evt) {
       if (!viewer) return
       const data = evt.data
+      // read-only view: the only client→server message is the resize control frame. A control-mode client
+      // takes commands (not raw terminal bytes), so binary input is ignored — the wheel scrolls xterm locally.
       if (typeof data === 'string') {
-        // text frame = control. Only resize today.
         try { const m = JSON.parse(data); if (m?.t === 'resize') resizeBridge(id, Number(m.cols), Number(m.rows)) } catch { /* ignore */ }
-      } else if (data instanceof ArrayBuffer) {
-        writeViewer(id, Buffer.from(data))                              // binary: raw terminal input
-      } else if (ArrayBuffer.isView(data)) {
-        writeViewer(id, Buffer.from(data.buffer, data.byteOffset, data.byteLength))  // (keystrokes / mouse)
       }
     },
     onClose() { if (viewer) detachViewer(id, viewer) },

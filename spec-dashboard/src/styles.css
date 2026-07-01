@@ -516,16 +516,19 @@ body {
 .fp-count.stalePass, .fp-count.staleFail, .fp-count.empty { color: var(--muted); }
 .fp-empty { color: var(--muted); font-size: 11px; font-style: italic; padding: 3px 2px; }
 /* a scenario row is a BUTTON (drills into the eval tab); reset the native button chrome to read as a row. */
-.fp-scenario { display: flex; gap: 8px; align-items: flex-start; width: 100%; padding: 6px 6px; text-align: left;
+.fp-scenario { position: relative; display: block; width: 100%; padding: 6px 6px; text-align: left;
   background: none; border: none; border-radius: 5px; font: inherit; color: inherit; cursor: pointer; }
 .fp-scenario:hover { background: var(--panel2); }
-.fp-sc-mark { flex: none; width: 12px; text-align: center; font-weight: 900; font-size: 11px; line-height: 1.5; }
+/* the mark HANGS on the first line (absolute) so the body fills full width and lines 2+ (tags/expected/code)
+   sit flush-left against the column, not indented under the mark. */
+.fp-sc-mark { position: absolute; left: 6px; top: 6px; width: 12px; text-align: center; font-weight: 900; font-size: 11px; line-height: 1.5; }
 .fp-scenario.pass .fp-sc-mark { color: var(--green); }
 .fp-scenario.fail .fp-sc-mark { color: var(--red); }
 .fp-scenario.stalePass .fp-sc-mark, .fp-scenario.staleFail .fp-sc-mark { color: var(--muted); }
 .fp-scenario.empty .fp-sc-mark, .fp-scenario.missing .fp-sc-mark { color: var(--muted); opacity: .55; }
 .fp-sc-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.fp-sc-name { font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--ink2); }
+/* only the name line clears the hanging mark (12px + 8px gap); tags/expected/code stay flush-left. */
+.fp-sc-name { padding-left: 20px; font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--ink2); }
 /* a clamped preview — the full `expected` prose lives one click away in the eval tab. */
 .fp-sc-expected { color: var(--ink); font-size: 11px; line-height: 1.4;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }

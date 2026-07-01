@@ -1363,3 +1363,14 @@ body {
 .proof-x:hover { border-color: var(--orange); color: var(--orange); }
 .proof-iframe { flex: 1; width: 100%; border: 0; background: #0b0e14; }
 /* the `proof` button's cyan now comes from the shared `.si-act.board.sc-cyan` rule (see board commands). */
+
+/* @@@ console dark frame — EXPLICIT overrides ([[session-console]]). The `.si-panel` palette remap already
+   makes these dark via var(--paper/--panel2/--line), but as NEW rules with the solarized-dark values spelled
+   out they also (a) win by source order and (b) apply cleanly over HMR without depending on a var-value
+   re-cascade — so the frame AROUND the terminal, the terminal box, its head bar and the docked input read as
+   one dark surface, no warm hairlines left. */
+.si-content { background: #002b36; }
+.si-term { border-color: #0a4657; }
+.si-term-head { background: #073642; border-bottom-color: #0a4657; color: #eee8d5; }
+.si-bottom { background: #073642; border-color: #0a4657; }
+.si-inputwrap { border-color: #0a4657; }

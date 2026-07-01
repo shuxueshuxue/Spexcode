@@ -22,7 +22,7 @@ const planeOrder = (boost) => (boost ? [boost, ...BASE_PLANES.filter((p) => p !=
 
 // fold the four planes into one flat list of uniform entries; each carries the row's display fields, the
 // `target` App acts on, and the scorer's name/desc/body fields mapped per plane (issues/scenarios keep their host node).
-function buildEntries(specs, sessions) {
+function buildEntries(specs, sessions, bodies) {
   const entries = []
   for (const s of specs) {
     const path = specPath(s.path)
@@ -34,7 +34,9 @@ function buildEntries(specs, sessions) {
       // one-line summary, body = the spec prose. So the palette ranks a node by the maths `spex search` runs —
       // prose reached via BM25, not the old whole-query substring. (Path is shown in `sub` but, like the floor,
       // no longer a search field — its segments are the node names/prose already in name+body.)
-      name: `${s.title || s.id} ${s.id}`, desc: s.desc || '', body: s.body || '',
+      // body is no longer on the board ([[board-lean]]) — it comes from the lazily-fetched corpus (`bodies`),
+      // falling back to any body still on the node (a fixture, or before the corpus lands).
+      name: `${s.title || s.id} ${s.id}`, desc: s.desc || '', body: bodies?.[s.id] ?? s.body ?? '',
     })
     for (const i of s.issues || []) {
       const open = (i.state || '').toLowerCase() === 'open'
@@ -100,14 +102,32 @@ function rank(entries, query, planes) {
   return out
 }
 
+// the body corpus for node-prose ranking ([[board-lean]]): the board omits `body`, so the palette fetches
+// {id→body} from `/api/specs/lite` the first time it opens and reuses it (module cache) on every later open —
+// once per session, off the board's hot poll. Until it lands, node ranking falls back to title+desc.
+let bodyCorpus = null
+function useBodyCorpus() {
+  const [corpus, setCorpus] = useState(bodyCorpus)
+  useEffect(() => {
+    if (bodyCorpus) return
+    let on = true
+    fetch('/api/specs/lite').then((r) => r.json())
+      .then((rows) => { bodyCorpus = Object.fromEntries((rows || []).map((r) => [r.id, r.body || ''])); if (on) setCorpus(bodyCorpus) })
+      .catch(() => {})
+    return () => { on = false }
+  }, [])
+  return corpus
+}
+
 export default function SpecSearch({ specs, sessions, onPick, onClose, boost = null }) {
   const t = useT()
+  const bodies = useBodyCorpus()
   const [q, setQ] = useState('')
   const [sel, setSel] = useState(0)
   const inputRef = useRef(null)
   const listRef = useRef(null)
   const planes = useMemo(() => planeOrder(boost), [boost])
-  const entries = useMemo(() => buildEntries(specs, sessions), [specs, sessions])
+  const entries = useMemo(() => buildEntries(specs, sessions, bodies), [specs, sessions, bodies])
   const results = useMemo(() => rank(entries, q, planes), [entries, q, planes])
 
   useEffect(() => { inputRef.current?.focus() }, [])

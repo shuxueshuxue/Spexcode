@@ -1,1 +1,2 @@
 {"scenario":"lean-board-still-renders-parts","codeSha":"4d9454b9c22ec6db84e80cc1ac74abc1c3a8ed50","blob":"7b238f03aad2c4caa6d6ebf295deabb1f28ca555b69e3a41deeb77f4b44319da","blobKind":"image","evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-07-01T12:07:23.017Z"}
+{"scenario":"lean-board-detail-and-search-intact","codeSha":"f37e59e8d843f4b834a9c30a5460eb0b967ad3f9","blob":"c3f38611dbea9794135db5eaa511836e9bfcf653141f43697889c199565da3c9","blobKind":"image","evaluator":"manual@1","verdict":{"status":"pass"},"ts":"2026-07-01T12:25:45.078Z"}

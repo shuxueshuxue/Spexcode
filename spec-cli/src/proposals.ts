@@ -11,6 +11,7 @@ import { readdirSync, existsSync, mkdirSync, writeFileSync, readFileSync } from 
 import { join } from 'node:path'
 import { git } from './git.js'
 import { mainCheckout, envSessionId, readConfig } from './layout.js'
+import { dispatchMentions, summarize } from './mentions.js'
 
 const FORUM_REL = '.spec/.forum'
 
@@ -244,6 +245,8 @@ export async function runPropose(args: string[]): Promise<number> {
       if (!id || !body) { console.error('usage: spex propose reply <proposal-id> --body -|<text>'); return 2 }
       const p = reply(id, body)
       console.log(`replied to '${id}' — ${p.replies.length} post(s) in thread`)
+      const s = summarize(await dispatchMentions(body, { threadId: id, node: p.nodes[0] || null, author: currentSession() }))
+      if (s) console.log(`  ${s}`)
       return 0
     }
     if (sub === 'sign') {
@@ -272,8 +275,11 @@ export async function runPropose(args: string[]): Promise<number> {
       return 2
     }
     const nodes = args.flatMap((a, i) => (a === '--node' ? [args[i + 1]] : [])).filter(Boolean) as string[]
-    const p = propose(concern, { nodes, body: readBody(args) })
+    const body = readBody(args)
+    const p = propose(concern, { nodes, body })
     console.log(`proposed '${p.id}'${p.nodes.length ? ` (re: ${p.nodes.join(', ')})` : ''} — committed to the forum; read it with \`spex proposals\``)
+    const s = summarize(await dispatchMentions(body || concern, { threadId: p.id, node: p.nodes[0] || null, author: p.by }))
+    if (s) console.log(`  ${s}`)
     return 0
   } catch (e) {
     console.error(`spex propose: ${e instanceof Error ? e.message : e}`)
@@ -289,8 +295,11 @@ export async function runNote(args: string[]): Promise<number> {
   if (!concern) { console.error('usage: spex note "<annotation>" [--node <id>…] [--body -|<text>]'); return 2 }
   const nodes = args.flatMap((a, i) => (a === '--node' ? [args[i + 1]] : [])).filter(Boolean) as string[]
   try {
-    const p = propose(concern, { nodes, body: readBody(args), kind: 'note' })
+    const body = readBody(args)
+    const p = propose(concern, { nodes, body, kind: 'note' })
     console.log(`noted '${p.id}'${p.nodes.length ? ` (on ${p.nodes.join(', ')})` : ''} — committed to the forum; read it with \`spex proposals\``)
+    const s = summarize(await dispatchMentions(body || concern, { threadId: p.id, node: p.nodes[0] || null, author: p.by }))
+    if (s) console.log(`  ${s}`)
     return 0
   } catch (e) {
     console.error(`spex note: ${e instanceof Error ? e.message : e}`)

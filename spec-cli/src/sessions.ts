@@ -1506,8 +1506,9 @@ const TMUX_KEY: Record<string, string> = {
 // literal text "S-Enter" etc. (and shift is a no-op there anyway), so a stray S- is dropped. Shift+Tab is
 // the named exception: tmux spells it `BTab` (back-tab → ESC[Z, what Claude Code's mode-cycle reads).
 const SHIFTABLE = new Set(['Up', 'Down', 'Left', 'Right', 'Home', 'End', 'DC'])
-export async function rawKey(id: string, key: string): Promise<boolean> {
-  if (!key || !(await alive(id))) return false
+// resolve ONE frontend token to the `tmux send-keys` args for it, or null if it isn't a known base after its
+// prefixes (defends the send-keys arg). Pure — the batch loop below sequences the actual sends.
+function rawKeyArgs(id: string, key: string): string[] | null {
   // peel the optional C-/M-/S- modifier prefixes (each at most once, in any order) off the front; the
   // remainder is the BASE key. The frontend only ever sends {C-,M-,S-} prefixes + a named key or one char.
   let rest = key, prefix = ''
@@ -1522,13 +1523,29 @@ export async function rawKey(id: string, key: string): Promise<boolean> {
     if (prefix.includes('S-') && named === 'Tab') token = noShift + 'BTab'              // Shift+Tab → back-tab
     else if (prefix.includes('S-') && !SHIFTABLE.has(named)) token = noShift + named     // tmux can't carry S- here
     else token = prefix + named
-    await tmux(['send-keys', '-t', id, token]); return true
+    return ['send-keys', '-t', id, token]
   }
   if ([...rest].length === 1) {
     // a single printable char: bare → literal (`-l`, so tmux never reinterprets it as a key name);
     // modified → hand tmux the `C-`/`M-`/`S-` combo to parse (e.g. `C-a`), which `-l` would defeat.
-    if (prefix) { await tmux(['send-keys', '-t', id, prefix + rest]); return true }
-    await tmux(['send-keys', '-t', id, '-l', '--', rest]); return true
+    if (prefix) return ['send-keys', '-t', id, prefix + rest]
+    return ['send-keys', '-t', id, '-l', '--', rest]
   }
-  return false
+  return null
+}
+// One call carries a BATCH of tokens (or one) — the client coalesces fast typing into an ordered array. Order
+// is the whole point ([[nav-mode-key-ordering]]): the keys are sent by ONE awaited `send-keys` each, IN ARRAY
+// ORDER, so they reach the pane in exactly the order they were struck. Concurrent per-key POSTs used to race
+// (browser + server + send-keys all parallel) and scramble the sequence; a single serialised batch cannot.
+// An unknown token is skipped without dropping the rest; false only if the tmux session is gone or nothing sent.
+export async function rawKey(id: string, key: string | string[]): Promise<boolean> {
+  const list = (Array.isArray(key) ? key : [key]).filter((k) => typeof k === 'string' && k.length > 0)
+  if (list.length === 0 || !(await alive(id))) return false
+  let sent = false
+  for (const k of list) {
+    const args = rawKeyArgs(id, k)
+    if (!args) continue
+    await tmux(args); sent = true
+  }
+  return sent
 }

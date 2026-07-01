@@ -317,11 +317,26 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     if (wasNavRef.current && !navMode && active !== 'new' && selSession?.liveness !== 'offline') msgRef.current?.focus()
     wasNavRef.current = navMode
   }, [navMode])
-  // forward one raw key to the active session's pane (fire-and-forget; the backend tmux send-keys it).
+  // forward raw keys to the active session's pane IN TAP ORDER ([[nav-mode-key-ordering]]). Naive per-key
+  // fire-and-forget POSTs raced (browser + server + send-keys all parallel), scrambling fast typing. So per
+  // session keep ONE request in flight and COALESCE: the first key flushes at once (typing stays跟手), keys
+  // struck during that round-trip queue and go out together as one ordered batch when it returns — strict
+  // order, and typing stays snappy: no per-key latency stack-up on a remote link.
+  const rawKeyQ = useRef(new Map())
+  const flushRawKeys = (id) => {
+    const q = rawKeyQ.current.get(id)
+    if (!q || q.busy || q.keys.length === 0) return
+    const keys = q.keys; q.keys = []; q.busy = true
+    fetch(`/api/sessions/${id}/rawkey`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ keys }),
+    }).catch(() => {}).finally(() => { q.busy = false; flushRawKeys(id) })
+  }
   const sendRawKey = (key) => {
-    fetch(`/api/sessions/${active}/rawkey`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key }),
-    }).catch(() => {})
+    const id = active
+    let q = rawKeyQ.current.get(id)
+    if (!q) { q = { keys: [], busy: false }; rawKeyQ.current.set(id, q) }
+    q.keys.push(key)
+    flushRawKeys(id)
   }
   // each SessionTerm reports whether its pane currently looks like a select menu (best-effort hint).
   const reportMenu = (id, likely) => setMenuById((m) => (m[id] === likely ? m : { ...m, [id]: likely }))

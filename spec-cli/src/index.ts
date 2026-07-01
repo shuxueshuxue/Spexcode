@@ -197,11 +197,14 @@ app.post('/api/sessions/:id/keys', async (c) => {
   const r = await sendKeys(c.req.param('id'), typeof body?.text === 'string' ? body.text : '', typeof body?.from === 'string' ? body.from : undefined)
   return c.json(r, r.ok ? 200 : 502)
 })
-// the preserved tmux send-keys path (distinct from the ❯ prompt socket): one key per keydown so a human can
-// drive the agent's interactive TUI menus in real time. Forwards keystrokes only.
+// the preserved tmux send-keys path (distinct from the ❯ prompt socket): the human drives the agent's
+// interactive TUI menus in real time. Accepts an ORDERED BATCH (`keys`, the client coalesces fast typing) or a
+// single `key`; rawKey delivers them in array order so tap order is preserved ([[nav-mode-key-ordering]]).
 app.post('/api/sessions/:id/rawkey', async (c) => {
   const body = await c.req.json().catch(() => ({}))
-  const ok = await rawKey(c.req.param('id'), typeof body?.key === 'string' ? body.key : '')
+  const keys = Array.isArray(body?.keys) ? body.keys.filter((k: unknown) => typeof k === 'string')
+    : typeof body?.key === 'string' ? [body.key] : []
+  const ok = await rawKey(c.req.param('id'), keys)
   return c.json({ ok }, ok ? 200 : 404)
 })
 // soft stop: kill the agent's tmux + socket but KEEP the worktree (relaunchable). Distinct from close, which

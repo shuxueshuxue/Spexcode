@@ -112,8 +112,11 @@ app.post('/api/sessions', async (c) => {
   const prompt = typeof body?.prompt === 'string' ? body.prompt : ''
   if (!prompt.trim()) return c.json({ error: 'empty prompt' }, 400)
   const harness = typeof body?.harness === 'string' ? body.harness : undefined
+  // parent = the spawning session's id, resolved by the CALLER (createSession) in its own process and passed
+  // through here ([[session-nesting]]); the browser's New Session omits it → a top-level session.
+  const parent = typeof body?.parent === 'string' && body.parent.trim() ? body.parent.trim() : null
   try {
-    return c.json(await newSession(typeof body?.node === 'string' ? body.node : null, prompt, harness), 201)
+    return c.json(await newSession(typeof body?.node === 'string' ? body.node : null, prompt, harness, parent), 201)
   } catch (e) { return c.json({ error: String((e as Error).message || e) }, 400) }   // unknown harness id → 400, not a 500
 })
 // one server-side merge bundle (ahead/dirty/diff(merge-base)/gates/proposal) for the manager cockpit;

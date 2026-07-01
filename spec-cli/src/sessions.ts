@@ -102,6 +102,7 @@ const PROPOSAL_STATUS: Record<Proposal, DisplayStatus> = { merge: 'review', noth
 
 export type Session = {
   id: string; node: string | null; title: string | null; name: string | null; branch: string | null; path: string
+  parent: string | null   // the SPAWNING session's id ([[session-nesting]]) — set once at creation when `spex new` ran inside another session, else null; the frontend folds a child under it at read time
   harness: string   // which harness (claude|codex) runs this session — carried so liveness/occupancy route through its adapter
   lifecycle: Lifecycle; proposal: Proposal | null; merges: number; status: DisplayStatus; liveness: Liveness; note: string | null
   prompt: string | null; promptPreview: string | null; created: number; activity: string | null
@@ -193,6 +194,7 @@ function pkgRoot(): string {
 type SessRec = {
   session: string; governed: boolean; worktreePath: string; branch: string | null
   node: string | null; title: string | null; name: string | null
+  parent: string | null   // the spawning session's id ([[session-nesting]]); null for a top-level launch
   status: Lifecycle; proposal: Proposal | null; merges: number; note: string | null
   sortKey: number | null; createdAt: number; harness: string; harnessSessionId: string | null
 }
@@ -215,7 +217,7 @@ function fromRaw(raw: RawRecord): SessRec {
   const sortKey = typeof sk === 'number' && Number.isFinite(sk) ? sk : null
   return {
     session: raw.session_id, governed: !!raw.governed, worktreePath: raw.worktree_path || '', branch: raw.branch || null,
-    node: raw.node || null, title: raw.title || null, name: raw.name || null,
+    node: raw.node || null, title: raw.title || null, name: raw.name || null, parent: raw.parent || null,
     status, proposal, merges: Number(raw.merges) || 0, note: raw.note || null, sortKey, createdAt: Number(raw.createdAt) || 0,
     harness: raw.harness || 'claude',   // records written before the harness field default to claude
     harnessSessionId: raw.harness_session_id || null,
@@ -234,6 +236,7 @@ function writeRecord(rec: SessRec): void {
     node: rec.node ?? '',
     title: rec.title ?? '',
     name: rec.name ?? '',
+    parent: rec.parent ?? '',
     status: rec.status,
     proposal: rec.proposal ?? '',
     merges: rec.merges,
@@ -392,7 +395,7 @@ function toSession(rec: SessRec, status: DisplayStatus, lv: Liveness, activity: 
   // activity is the LIVE pane title; it only means anything while the worker is genuinely up — a
   // dead/booting session would show a stale or absent title, so it's suppressed unless liveness is online.
   const showActivity = lv === 'online'
-  return { id: rec.session, node: rec.node, title: rec.title, name: rec.name, branch: rec.branch, path: rec.worktreePath, harness: rec.harness, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, prompt, promptPreview: prompt ? promptPreview(prompt) : null, created: rec.createdAt, activity: showActivity ? activity : null, sortKey: rec.sortKey }
+  return { id: rec.session, node: rec.node, title: rec.title, name: rec.name, branch: rec.branch, path: rec.worktreePath, parent: rec.parent, harness: rec.harness, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, prompt, promptPreview: prompt ? promptPreview(prompt) : null, created: rec.createdAt, activity: showActivity ? activity : null, sortKey: rec.sortKey }
 }
 
 // @@@ renameSession - set (or clear) a session's human display NAME: the user-chosen override that wins
@@ -898,16 +901,21 @@ async function assertProjectMatch(): Promise<void> {
 // warning) — the backend's own POST handler calls newSession directly, so it never re-enters this path.
 export async function createSession(node: string | null, prompt: string, harness: string = defaultHarness.id): Promise<Session> {
   await assertProjectMatch()
+  // @@@ parent = the CALLER's own session ([[session-nesting]]). Resolve it HERE, in the caller's process,
+  // via the SAME ownSessionId env read [[agent-reply-channel]] uses for its sender hint — NOT inside the
+  // backend, whose process env carries no acting session id. An agent that runs `spex new` stamps its own id;
+  // a human in a plain shell has none → null → the new session is top-level (no phantom nesting).
+  const parent = ownSessionId()
   let res: Response
   try {
     res = await fetch(`${apiBase()}/api/sessions`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ node, prompt, harness }),
+      body: JSON.stringify({ node, prompt, harness, parent }),
     })
   } catch {
     console.error('spex: no backend reachable — launching in-process (caller env owns auth, no concurrency cap)')
-    return newSession(node, prompt, harness)
+    return newSession(node, prompt, harness, parent)
   }
   if (!res.ok) throw new Error(`backend rejected session (${res.status}): ${await res.text().catch(() => '')}`)
   return await res.json() as Session
@@ -918,7 +926,7 @@ export async function createSession(node: string | null, prompt: string, harness
 // immediately if we're under the concurrency cap, else it waits its turn. Backs both the dashboard POST and
 // `spex session new`. A board directive (nn/dd) additionally mutates the worktree's spec tree up front and
 // hands the agent a finish-the-op prompt.
-export async function newSession(node: string | null, prompt: string, harness: string = defaultHarness.id): Promise<Session> {
+export async function newSession(node: string | null, prompt: string, harness: string = defaultHarness.id, parent: string | null = null): Promise<Session> {
   const id = randomUUID()
   const h = harnessById(harness)   // throws on an unknown id — fail loud, never silently launch the wrong harness
   const directive = parseDirective(prompt)
@@ -939,7 +947,10 @@ export async function newSession(node: string | null, prompt: string, harness: s
   // the worktree, is the board's enumeration source now).
   const rec: SessRec = {
     session: id, governed: true, worktreePath: path, branch,
-    node: ref || null, title, name: null, status: 'queued', proposal: null, merges: 0, note: null, sortKey: null, createdAt: Date.now(),
+    // parent = the SPAWNING session's id, captured ONCE here ([[session-nesting]]): a durable pointer, never
+    // mutated after. A self-parent (a resolver quirk) is dropped so a session can't nest under itself.
+    node: ref || null, title, name: null, parent: parent && parent !== id ? parent : null,
+    status: 'queued', proposal: null, merges: 0, note: null, sortKey: null, createdAt: Date.now(),
     harness: h.id, harnessSessionId: null,
   }
   writeRecord(rec)

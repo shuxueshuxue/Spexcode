@@ -125,6 +125,9 @@ function matchSlash(cmds, query) {
   return scored.slice(0, 10).map((x) => x.c)
 }
 
+// dropdown descriptions read as sentences — capitalise the first letter (idempotent; CC's already are).
+const capDesc = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s)
+
 // the New Session `/` palette over config presets — same prefix-rank shape as matchSlash.
 function matchConfig(presets, query) {
   const q = query.toLowerCase()
@@ -461,7 +464,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       // the board's own commands (coloured, run HERE) lead the menu; CC's commands follow. matchSlash is a
       // stable prefix rank, so the board set keeps its lead within each score band.
       const board = boardCmds.map((c) => ({ name: c.name, description: t(c.descKey), board: true, color: c.color }))
-      const items = matchSlash([...board, ...slashCmds], sm[1])
+      // a board command OVERRIDES a same-named CC command (CC's own `/exit`) — one identity, one row, never a duplicate.
+      const owned = new Set(board.map((c) => c.name))
+      const items = matchSlash([...board, ...slashCmds.filter((c) => !owned.has(c.name))], sm[1])
       if (!items.length) return null
       return { kind: 'slash', items, index: 0, start: 0, end: value.length, query: sm[1] }
     }
@@ -519,7 +524,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             onMouseEnter={() => setMenu((m) => (m ? { ...m, index: i } : m))}
           >
             <span className={it.board ? 'slash-name board' : 'slash-name'}>/{highlight(it.name, menu.query)}</span>
-            <span className="slash-desc">{it.description ?? it.desc}</span>
+            <span className="slash-desc">{capDesc(it.description ?? it.desc)}</span>
             <span className={`slash-src src-${tag}`}>{SRC_TAG[tag] || tag}</span>
           </li>
         )

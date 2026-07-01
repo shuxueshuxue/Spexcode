@@ -5,6 +5,7 @@ hue: 280
 desc: The dashboard's live terminal — one tmux control-mode client per session, event-driven (timer-free deterministic resize, pushed UTF-8 bytes, zero polling), with viewer subscriptions that outlive the client so a pane never freezes.
 code:
   - spec-cli/src/pty-bridge.ts
+  - spec-cli/src/pty-bridge.stress.ts
 related:
   - spec-dashboard/src/SessionTerm.jsx
 ---
@@ -24,11 +25,15 @@ authoritative pane size and never a size-fight. That client is a **control-mode 
 (`tmux -CC attach-session`): it speaks tmux's line protocol, so the pty↔tmux boundary is an **event stream,
 not a poll loop** — bytes are *pushed* as `%output` events and a resize is announced by a `%layout-change`.
 
-**Bytes are UTF-8, decoded honestly.** `%output` escapes only the C0 control bytes and backslash as octal
-`\NNN`; every high byte tmux passes through **raw**, so a wide character (CJK, box-drawing, emoji) is already a
-real character in the pushed line. The bridge un-escapes the `\NNN` back to their single bytes and re-encodes
-the whole line as **UTF-8** — the wide characters round-trip intact. (Decoding as latin1 instead truncates
-every wide character to one wrong byte; that shatters all non-ASCII output and is the trap this closes.)
+**The whole control stream is parsed as bytes — never a string round-trip.** node-pty hands the bridge **raw
+Buffers**; it splits lines on the newline **byte**, un-escapes `%output` at the byte level, and broadcasts the
+pane's **raw UTF-8 bytes** verbatim (the `capture-pane` seed is joined and framed at the byte level too). This
+is the whole fix for intermittent `�` corruption: node-pty's own UTF-8 decode chops the stream on OS-read
+boundaries, so a wide character (CJK, box-drawing, emoji) straddling two reads becomes a U+FFFD **before the
+bridge ever sees it**, unrecoverable. Byte-splitting is safe because tmux escapes only the C0 controls and
+backslash as octal `\NNN` (all `< 0x80`) and passes high bytes through **raw**, and a newline never falls
+inside a multi-byte character — so each wide char stays whole in one line, and un-escaping (each `\NNN` → its
+one byte, all else untouched) yields the pane's exact UTF-8 with no decode/encode cycle to shatter it.
 
 **Resize is deterministic and timer-free.** `refresh-client -C WxH` is guaranteed to emit exactly one
 `%layout-change` carrying the converged `WxH` — even a same-size no-op emits one — so the bridge sets the size,

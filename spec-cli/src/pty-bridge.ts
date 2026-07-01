@@ -20,17 +20,17 @@ const HISTORY_SEED_LINES = 4000
 // a viewer: anything we can push pane bytes to (a WebSocket, wrapped).
 export type Viewer = { send: (data: Buffer) => void }
 
-// resolver for one control-mode command's %begin..%end reply lines.
-type Pending = (lines: string[]) => void
+// resolver for one control-mode command's %begin..%end reply lines (raw bytes — a capture-pane body is UTF-8).
+type Pending = (lines: Buffer[]) => void
 type Bridge = {
   id: string; pty: IPty; cols: number; rows: number; prewarmed: boolean
   repaintToken: number
   firstPaintTimer?: ReturnType<typeof setTimeout>
-  // control-mode parser state: an incomplete-line buffer, the in-flight command block (%begin..%end) with
+  // control-mode parser state: an incomplete-line BYTE buffer, the in-flight command block (%begin..%end) with
   // its command number, a FIFO of one resolver per command sent (tmux answers in order), and the last
   // %layout-change size so a repaint knows the pane already converged and needn't wait for the event.
-  buf: string
-  block: string[] | null
+  buf: Buffer
+  block: Buffer[] | null
   blockNum: string
   cmdQ: Pending[]
   lastLayout?: string
@@ -59,15 +59,37 @@ function broadcast(id: string, buf: Buffer): void {
   for (const v of subscribers.get(id) ?? []) { try { v.send(buf) } catch { /* drop a wedged viewer */ } }
 }
 
+const isOct = (c: number) => c >= 0x30 && c <= 0x37   // ASCII '0'..'7'
+
 // %output escaping (MEASURED against tmux 3.4, not assumed): tmux octal-escapes ONLY the C0 control bytes and
-// backslash (`\015` `\012` `\033` `\134`, all < 0x80) — every high byte is passed THROUGH RAW, so node-pty's
-// utf8 decode already turned a `我` / `┌` / `😀` in the stream into that real JS character. So un-escape the
-// `\NNN` back to their (ASCII, single-byte) chars, then re-encode the WHOLE string as **utf8** — the raw wide
-// chars round-trip to their original multi-byte form and the un-escaped controls to their one byte. (The old
-// `latin1` truncated every wide char to a single wrong byte — the bug that shattered all non-ASCII output.)
-function unescapeOutput(data: string): Buffer {
-  const raw = data.replace(/\\([0-7]{3})/g, (_, o) => String.fromCharCode(parseInt(o, 8)))
-  return Buffer.from(raw, 'utf8')
+// backslash (`\015` `\012` `\033` `\134`, all < 0x80) — every high byte is passed THROUGH RAW. We parse the
+// whole control stream as BYTES (never a string), because node-pty's own utf8 decode splits a multi-byte
+// character straddling two OS reads into a U+FFFD before we could see it — the corruption this closes. So work
+// on the raw `%output` byte segment: a `\NNN` (backslash 0x5C + three octal-digit bytes) becomes that one
+// byte, every other byte passes through UNTOUCHED. The result is already the pane's exact UTF-8 byte stream —
+// broadcast it verbatim, with NO string round-trip to shatter a wide character (`我` / `┌` / `😀`).
+function unescapeOutput(data: Buffer): Buffer {
+  const out = Buffer.allocUnsafe(data.length)
+  let j = 0
+  for (let i = 0; i < data.length; i++) {
+    const c = data[i]
+    if (c === 0x5C && i + 3 < data.length && isOct(data[i + 1]) && isOct(data[i + 2]) && isOct(data[i + 3])) {
+      out[j++] = ((data[i + 1] - 0x30) << 6) | ((data[i + 2] - 0x30) << 3) | (data[i + 3] - 0x30)
+      i += 3
+    } else {
+      out[j++] = c
+    }
+  }
+  return out.subarray(0, j)
+}
+
+// join capture-pane reply lines (each already raw UTF-8 bytes) with CRLF at the byte level — no string round-trip.
+const CRLF = Buffer.from('\r\n')
+function joinLines(lines: Buffer[]): Buffer {
+  if (lines.length === 0) return Buffer.alloc(0)
+  const parts: Buffer[] = []
+  for (let i = 0; i < lines.length; i++) { if (i) parts.push(CRLF); parts.push(lines[i]) }
+  return Buffer.concat(parts)
 }
 
 async function tmuxRaw(args: string[]): Promise<void> {
@@ -100,49 +122,66 @@ async function ensureTmuxOpts(): Promise<void> {
 
 // send one control-mode command; resolve with its %begin..%end reply lines. tmux answers in order, so a FIFO
 // of resolvers matches each block to its command.
-function command(b: Bridge, cmd: string): Promise<string[]> {
+function command(b: Bridge, cmd: string): Promise<Buffer[]> {
   return new Promise((resolve) => {
     b.cmdQ.push(resolve)
     try { b.pty.write(cmd + '\n') } catch { b.cmdQ = b.cmdQ.filter((r) => r !== resolve); resolve([]) }
   })
 }
 
-// parse the control stream line by line (an incomplete tail is held in b.buf until its newline arrives).
-function feed(b: Bridge, chunk: string): void {
-  b.buf += chunk
+// parse the control stream line by line AT THE BYTE LEVEL (an incomplete tail is held in b.buf until its 0x0A
+// arrives). Splitting on the newline byte — never on a decoded string — is what keeps a multi-byte UTF-8
+// character intact when it straddles two OS reads: node-pty hands us raw Buffers (encoding:null), so no read
+// boundary can shatter a wide char into a U+FFFD before we reassemble the line.
+function feed(b: Bridge, chunk: Buffer): void {
+  b.buf = b.buf.length ? Buffer.concat([b.buf, chunk]) : chunk
   let i: number
-  while ((i = b.buf.indexOf('\n')) >= 0) {
-    const line = b.buf.slice(0, i).replace(/\r$/, '')
-    b.buf = b.buf.slice(i + 1)
+  while ((i = b.buf.indexOf(0x0A)) >= 0) {
+    let line = b.buf.subarray(0, i)
+    if (line.length && line[line.length - 1] === 0x0D) line = line.subarray(0, line.length - 1)
+    b.buf = b.buf.subarray(i + 1)
     onLine(b, line)
   }
 }
 
-function onLine(b: Bridge, line: string): void {
-  // control mode wraps the stream in a DCS (`\x1bP1000p` on enter, `\x1b\\` on exit) that prefixes the very
-  // first notification; strip it so that %begin parses cleanly.
-  line = line.replace(/^\x1bP\d+p/, '').replace(/\x1b\\$/, '')
+// strip the control-mode DCS wrapper (`\x1bP<n>p` on enter, `\x1b\\` on exit) at the byte level — its bytes are
+// all ASCII and it only ever brackets the first/last notification, never %output data or capture content.
+function stripDcs(line: Buffer): Buffer {
+  if (line.length >= 2 && line[0] === 0x1b && line[1] === 0x50) {   // ESC P … p
+    const p = line.indexOf(0x70, 2)
+    if (p >= 0) line = line.subarray(p + 1)
+  }
+  if (line.length >= 2 && line[line.length - 2] === 0x1b && line[line.length - 1] === 0x5c) line = line.subarray(0, line.length - 2)   // ESC backslash
+  return line
+}
+
+function onLine(b: Bridge, lineBuf: Buffer): void {
+  const line = stripDcs(lineBuf)
+  // The control PROTOCOL (%begin/%end/%error/%output/%layout-change prefixes, command numbers, layout tokens)
+  // is pure ASCII, so decode as latin1 for classification only — a total 1-byte↔1-char map, so a byte index
+  // in `head` is the same byte index in `line`; the DATA is taken from the raw Buffer, never from `head`.
+  const head = line.toString('latin1')
   if (b.block) {
     // Inside a command reply everything is verbatim content until %end/%error — but only one whose command
     // number matches this %begin's closes it, so a pane row that merely starts with "%end" can't false-close.
-    const m = line.match(/^%(?:end|error) \S+ (\d+)/)
+    const m = head.match(/^%(?:end|error) \S+ (\d+)/)
     if (m && m[1] === b.blockNum) {
       const lines = b.block; b.block = null
       const resolve = b.cmdQ.shift(); if (resolve) resolve(lines)
     } else {
-      b.block.push(line)
+      b.block.push(line)   // raw bytes — a capture-pane body line is UTF-8, not to be string-mangled
     }
     return
   }
-  if (line.startsWith('%output ')) {
-    const sp = line.indexOf(' ', 8)   // skip "%output %<pane> " to the raw (escaped) data
-    if (sp > 0) broadcast(b.id, unescapeOutput(line.slice(sp + 1)))
+  if (head.startsWith('%output ')) {
+    const sp = head.indexOf(' ', 8)   // skip "%output %<pane> " to the raw (escaped) data
+    if (sp > 0) broadcast(b.id, unescapeOutput(line.subarray(sp + 1)))
     return
   }
-  const beg = line.match(/^%begin \S+ (\d+)/)
+  const beg = head.match(/^%begin \S+ (\d+)/)
   if (beg) { b.block = []; b.blockNum = beg[1]; return }
-  if (line.startsWith('%layout-change ')) {
-    const m = line.match(/,(\d+x\d+),/)   // layout token = checksum,WIDTHxHEIGHT,x,y,… — the window size
+  if (head.startsWith('%layout-change ')) {
+    const m = head.match(/,(\d+x\d+),/)   // layout token = checksum,WIDTHxHEIGHT,x,y,… — the window size
     onLayout(b, m ? m[1] : undefined)
     return
   }
@@ -178,16 +217,17 @@ function ensureBridge(id: string, prewarm = false): Bridge | null {
   let p: IPty
   try {
     // -CC = control mode (event stream); -u + a UTF-8 LANG force UTF-8 output even when the host locale is
-    // empty (a LaunchAgent gives LANG="" → tmux would substitute `_` for every wide char).
+    // empty (a LaunchAgent gives LANG="" → tmux would substitute `_` for every wide char). encoding:null makes
+    // onData deliver raw Buffers so a wide char split across two reads can't be pre-decoded into a U+FFFD.
     p = pty.spawn('tmux', ['-u', '-CC', '-L', TMUX_SOCK, 'attach-session', '-t', id], {
-      name: 'xterm-256color', cols, rows,
+      name: 'xterm-256color', cols, rows, encoding: null,
       env: { ...process.env, LANG: process.env.LANG || 'en_US.UTF-8' } as Record<string, string>,
     })
   } catch { return null }
-  b = { id, pty: p, cols, rows, prewarmed: prewarm, repaintToken: 0, buf: '', block: null, blockNum: '', cmdQ: [], needsFull: true }
+  b = { id, pty: p, cols, rows, prewarmed: prewarm, repaintToken: 0, buf: Buffer.alloc(0), block: null, blockNum: '', cmdQ: [], needsFull: true }
   bridges.set(id, b)
   const bx = b
-  p.onData((d) => feed(bx, d))
+  p.onData((d) => feed(bx, d as unknown as Buffer))   // encoding:null → d is a Buffer (typings say string)
   // attach-session exited (session died or we detached): drop the bridge, unblock any awaiting command AND any
   // %layout-change waiter (no timer backs it now, so a bridge that dies mid-convergence MUST resolve its
   // waiter or the awaiting repaint hangs), and if viewers remain kick a reconcile to re-bind fast.
@@ -303,7 +343,8 @@ async function repaint(b: Bridge): Promise<void> {
     if (full) b.needsFull = false   // cleared only once the full frame actually reaches a viewer
     // capture-pane reply lines are RAW bytes (real escapes + UTF-8, not octal-escaped); replay them under the
     // mode prelude + a clear+home so the frame is one coherent screen (plus, on a full frame, seeded history).
-    broadcast(b.id, Buffer.from(prelude + '\x1b[H\x1b[2J' + lines.join('\r\n'), 'utf8'))
+    // The prelude+clear is ASCII; the body is joined at the BYTE level so a wide char is never string-mangled.
+    broadcast(b.id, Buffer.concat([Buffer.from(prelude + '\x1b[H\x1b[2J', 'utf8'), joinLines(lines)]))
   })
   const cap = full ? `capture-pane -e -p -S -${HISTORY_SEED_LINES} -t ${b.id}` : `capture-pane -e -p -t ${b.id}`
   try { b.pty.write(cap + '\n') } catch { b.cmdQ.pop() }

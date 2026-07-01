@@ -59,15 +59,18 @@ scenarios:
     tags: [backend-api]
     description: >-
       Measure that wide characters survive the live %output byte path (the regression that shattered the
-      display). On a tmux socket, attach a control-mode bridge through the real API; after attach, emit a
-      line of CJK + box-drawing + emoji (e.g. `我 ┌─┐ 😀`) into the pane as NEW output and capture the exact
-      bytes the bridge broadcasts to a viewer. Compare them to the UTF-8 encoding of the source line. File
-      with `spex yatsu eval live-view --scenario output-preserves-utf8-wide-chars --result <txt>`.
+      display). On a tmux socket, attach a control-mode bridge through the real API, then flood the pane with
+      MANY lines of CJK + box-drawing + emoji (e.g. `星★号😀笑脸└─┘中文🀄🎉αβγ` ×thousands) — enough bytes that
+      the multi-byte characters straddle node-pty's read boundaries, the exact condition that used to corrupt
+      them. Capture the bytes the bridge broadcasts to a viewer, decode as UTF-8, and count U+FFFD + check the
+      payload survived. File with `spex yatsu eval live-view --scenario output-preserves-utf8-wide-chars
+      --result <txt>`.
     expected: >-
-      The broadcast bytes contain the source line's exact UTF-8 bytes (each 3-byte CJK / box char and 4-byte
-      emoji intact) — because %output escapes only control bytes + backslash as octal and passes high bytes
-      raw, and the bridge un-escapes then re-encodes as UTF-8. A latin1 decode instead truncates every wide
-      char to one wrong byte; that path must be absent.
+      The broadcast bytes decode to ZERO U+FFFD and every flooded payload copy is intact — because the bridge
+      parses the stream as BYTES end-to-end (node-pty gives raw Buffers, lines split on the newline byte,
+      %output un-escaped at the byte level and forwarded raw, no string round-trip). A path that decodes
+      node-pty chunks to a string first shatters any wide char split across two reads into a U+FFFD; that path
+      must be absent.
   - name: hidden-connect-defers-undersized-first-paint
     tags: [backend-api]
     description: >-

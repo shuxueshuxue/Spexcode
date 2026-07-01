@@ -14,6 +14,18 @@ scenarios:
       id` precedence), because every surface reads that one shared precedence after the board reload. A blank
       name is a RESET, not an error: it clears the override and the row falls back to its derived label
       (node/title/branch/id). The rename never edits the live terminal — a session in any state is renamable.
+  - name: rename-prompt-titles-by-headline
+    tags: [frontend-e2e, desktop]
+    description: >
+      Open the console, right-click a session row whose label comes from its live activity (no human rename,
+      so its headline differs from its node/branch handle), and pick "rename" to raise the prompt. Read the
+      prompt's title and compare it to that row's card headline and the console header (si-th-name). Cancel —
+      never submit.
+    expected: >
+      The rename prompt's title shows the SAME headline the card and console header show (the session's
+      activity/description, not its node/branch handle), so the human reads the very words they right-clicked
+      and never renames what looks like a different session. The input still prefills with the raw `name`
+      override (blank when none is set), not the headline.
   - name: close-confirm-titles-by-headline
     tags: [frontend-e2e, desktop]
     description: >

@@ -41,8 +41,10 @@ The gesture is a **right-click** on a session row **in the session board's left-
 ([[session-console]]) — the interactive surface where a human manages sessions, not the read-only
 top-right glance ([[session-graph]]), which deliberately carries NO menu: a mutation belongs on the
 board, never on the at-a-glance summary. It opens a cursor-anchored pop-over (its own surface). Picking
-**rename** swaps the menu for a centred prompt (the shared modal chrome) prefilled with the current
-override and ready to type over. Submitting hands the new name to the backend and asks the board to
+**rename** swaps the menu for a centred prompt (the shared modal chrome) that **titles itself with the
+session's headline** — the same words its row shows ([[session-activity]]), not the stable rename handle,
+so the human reads the very label they right-clicked and never renames what looks like a different
+session — and is prefilled with the current override and ready to type over. Submitting hands the new name to the backend and asks the board to
 reload, so the new label appears on every surface at once rather than only where it was triggered. A
 **blank** name is a **reset**, not an error: it clears the override and the session falls back to its
 derived label. Renaming an unknown session fails loudly — the endpoint answers 404 — never a silent
@@ -55,9 +57,9 @@ contract; it rides in this pop-over because the same right-click is where a huma
 The menu's second item, **close**, runs the same human-only worktree removal as the typed `/close` command,
 but behind a **confirm prompt** — a right-click is easy to mis-aim and the removal is destructive, so unlike
 the typed command (whose deliberate keystrokes ARE the confirmation) it asks first (the confirm is the shared
-modal, its commit button styled as the destructive verb). The confirm **titles itself with the session's
-headline** — the same label its card shows ([[session-activity]]), not the stable rename handle — so the
-human reads the very words they right-clicked and never has to map a different name onto the row. Confirming
+modal, its commit button styled as the destructive verb). Like the rename prompt, the confirm **titles itself
+with the session's headline** — the same label its card shows ([[session-activity]]), not the stable rename
+handle — so the human reads the very words they right-clicked and never has to map a different name onto the row. Confirming
 **dismisses the prompt at once** and fires the close in the **background**: worktree + branch removal is
 seconds of real work (a `git worktree remove` plus killing the agent + tmux), and the human must never sit
 watching a frozen, disabled dialog wait it out — the same fire-and-forget the New Session launch already uses

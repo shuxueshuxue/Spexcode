@@ -86,8 +86,10 @@ which session this is* — rows, window, Enter tabs, console action strip, and n
 lock-hint banner** show the identical line, so where a session is searched from and where it is found never
 disagree. (Pinning those two to the stable `sessionName` bought nothing — the ordered slot, and the avatar
 where it's shown, are the fixed anchor and a rename already wins — and cost a palette that named a session differently from its own board.) The stable
-`sessionName` survives ONLY as a fixed-identity *reveal*, never a title: the avatar/hover **tooltips** and
-the **rename prompt** (editing the `name` override). Search still *matches* the handle even when it no longer
+`sessionName` survives ONLY as a fixed-identity *reveal*, never a title: the avatar/hover **tooltips**. Even
+the [[session-rename]] prompt — where you edit the `name` override — titles itself with the headline the row
+shows, not this handle, so it never names the session differently from the row it was opened from; its input
+still prefills with the raw `name` override. Search still *matches* the handle even when it no longer
 *shows* it, so finding a session by node/branch/id keeps working.
 
 This node's slice of the shared `styles.css` is the status line (`.sess-meta`, the full-width dimmer wrap)

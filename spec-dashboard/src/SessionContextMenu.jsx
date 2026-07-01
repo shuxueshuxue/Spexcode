@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Modal from './Modal.jsx'
 import { apiFetch } from './data.js'
-import { sessionName, sessionHeadline } from './session.js'
+import { sessionHeadline } from './session.js'
 import { useEscLayer } from './escStack.js'
 import { useT } from './i18n/index.jsx'
 
@@ -81,7 +81,7 @@ export default function SessionContextMenu({ menu, onClose, onChanged }) {
       )}
       {renaming && (
         <Modal
-          title={t('sessionWindow.renameTitle', { name: sessionName(renaming) })}
+          title={t('sessionWindow.renameTitle', { name: sessionHeadline(renaming) })}
           closeLabel={t('common.close')}
           className="sess-rename-modal"
           onClose={() => setRenaming(null)}

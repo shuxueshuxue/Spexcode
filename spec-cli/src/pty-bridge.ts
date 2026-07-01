@@ -14,6 +14,9 @@ const FIRST_PAINT_FALLBACK_MS = 250
 // a size-changing `refresh-client -C` is confirmed by a %layout-change carrying the converged WxH (~2-10ms);
 // a no-op resize (size unchanged) emits none, so cap the wait and paint at the already-known size anyway.
 const LAYOUT_SETTLE_MS = 120
+// the FIRST frame of a bridge's life seeds this much of tmux's recent scrollback into the browser terminal
+// (commensurate with xterm's own scrollback), so the wheel reaches output from before the client attached.
+const HISTORY_SEED_LINES = 4000
 
 // a viewer: anything we can push pane bytes to (a WebSocket, wrapped).
 export type Viewer = { send: (data: Buffer) => void }
@@ -33,6 +36,8 @@ type Bridge = {
   cmdQ: Pending[]
   lastLayout?: string
   layoutWaiter?: { want: string; done: () => void; timer: ReturnType<typeof setTimeout> }
+  // set once this bridge has flushed history into a viewer; later resizes re-seed only the visible screen.
+  seededHistory?: boolean
 }
 const bridges = new Map<string, Bridge>()
 // viewers keyed by session id (not the Bridge), so a subscription outlives any bridge death/respawn.
@@ -233,6 +238,12 @@ function scheduleFirstPaintFallback(b: Bridge): void {
 // frame from a bounded capture-pane at that size. A per-bridge token supersedes a stale run at every await.
 // The capture frame broadcasts synchronously at its block-end, so any %output that follows in the stream
 // lands AFTER the frame and is never overwritten by it — the frame is the attach seed, %output the live tail.
+//
+// The FIRST frame of a bridge's life (attach / re-bind) captures tmux's recent scrollback (`-S`), so those
+// history lines write into the browser terminal and scroll into ITS scrollback — the wheel then reaches
+// output from before the client attached (the "wheel scrolls real history" contract). Later resizes re-seed
+// only the visible screen: re-flushing thousands of lines on every resize would be costly and flicker, and
+// the clear is `\x1b[H\x1b[2J` (viewport only, never `\x1b[3J`), so it never wipes the seeded scrollback.
 async function repaint(b: Bridge): Promise<void> {
   if (b.firstPaintTimer) { clearTimeout(b.firstPaintTimer); b.firstPaintTimer = undefined }   // a real repaint supersedes the deferred-first-paint fallback
   const token = ++b.repaintToken
@@ -241,13 +252,16 @@ async function repaint(b: Bridge): Promise<void> {
   if (token !== b.repaintToken) return
   await awaitConverged(b, want)
   if (token !== b.repaintToken) return
+  const withHistory = !b.seededHistory
   b.cmdQ.push((lines) => {
     if (token !== b.repaintToken) return
+    if (withHistory) b.seededHistory = true   // set only once the history frame actually reaches a viewer
     // capture-pane reply lines are RAW bytes (real escapes + UTF-8, not octal-escaped); replay them under a
-    // clear+home so the frame is one coherent screen at the converged size.
+    // clear+home so the frame is one coherent screen (plus, on the first frame, the seeded history above it).
     broadcast(b.id, Buffer.from('\x1b[H\x1b[2J' + lines.join('\r\n'), 'utf8'))
   })
-  try { b.pty.write(`capture-pane -e -p -t ${b.id}\n`) } catch { b.cmdQ.pop() }
+  const cap = withHistory ? `capture-pane -e -p -S -${HISTORY_SEED_LINES} -t ${b.id}` : `capture-pane -e -p -t ${b.id}`
+  try { b.pty.write(cap + '\n') } catch { b.cmdQ.pop() }
 }
 
 export function detachViewer(id: string, v: Viewer): void {

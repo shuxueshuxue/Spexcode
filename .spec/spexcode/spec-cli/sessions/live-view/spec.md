@@ -68,8 +68,9 @@ intentional socket close is the human closing the pane (the board flipping a ses
 ## coherence
 
 Control mode never replays a screen on its own — a bare attach and a plain refresh both emit nothing — so
-every (re)attach **seeds** its one coherent frame from a **bounded pane capture at the converged size**, then
-lets the live output stream be the tail. The two stay coherent because tmux serializes commands and
+every (re)attach **seeds** its one coherent frame from a **bounded pane capture at the converged size** (a
+bridge's *first* frame also reaching back over recent scrollback — see read-only below), then lets the live
+output stream be the tail. The two stay coherent because tmux serializes commands and
 notifications on one stream: the capture reflects the pane at capture time, broadcast at its command
 boundary, so any live output that follows lands *after* it and is never overwritten. This is **not** the
 banned move — splicing a guessed-size snapshot into an already-flowing mid-flight stream; a capture at the
@@ -78,6 +79,8 @@ converged attach boundary is the deterministic seed, not a splice.
 ## read-only, xterm-owned scrollback
 
 The view takes no keyboard input (a control-mode client accepts *commands*, not raw terminal bytes), so the
-socket carries only a resize frame client→server. Scrollback is **xterm's own**: the live output stream
-fills the browser terminal's buffer, so its native wheel-scroll *is* the history — no mouse-wheel forwarding
-into tmux (a raw-attach artifact this replaces).
+socket carries only a resize frame client→server. Scrollback is **xterm's own, holding real history**: the
+first frame of each (re)attach seeds tmux's recent scrollback into the browser terminal (the bounded history
+capture in **coherence** above), and `%output` writes the live tail after it — so the wheel
+scrolls genuine **pre-attach** output, no mouse-wheel forwarding into tmux (a raw-attach artifact this
+replaces). Later resizes re-seed only the visible screen, so a resize never re-floods or wipes that history.

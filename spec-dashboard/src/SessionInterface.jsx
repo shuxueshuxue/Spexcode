@@ -681,9 +681,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       const { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, searchOpen, navMode, setNavMode, sendRawKey, graphLegend, setGraphLegend } = stateRef.current
       if (!open || searchOpen) return   // panel hidden, OR the search palette modal is open above us and owns the keys: nothing here listens
       // reserved ⌥/⌘+I toggles nav mode: handled before everything else, never forwarded to tmux. Matched by
-      // e.code (the physical I key) because ⌥I on a mac prints a dead-key glyph, not 'i'.
+      // e.code (the physical I key) because ⌥I on a mac prints a dead-key glyph, not 'i'. The chord is a
+      // SINGLE modifier + I: ⌥+I XOR ⌘+I. Both held together (⌥⌘I) is the browser's own devtools accelerator —
+      // let it through so the console opens rather than toggling nav mode.
       const isI = e.code === 'KeyI' || e.key === 'i' || e.key === 'I'
-      if ((e.altKey || e.metaKey) && isI && active !== 'new' && active !== 'graph') {
+      if ((e.altKey !== e.metaKey) && isI && active !== 'new' && active !== 'graph') {
         e.preventDefault(); e.stopPropagation(); setNavMode((v) => !v); return
       }
       // ⌥+N snaps to New Session; ⌘/⌥/⌃+↑/↓ walk the session list. Kept ABOVE the graph branch and the

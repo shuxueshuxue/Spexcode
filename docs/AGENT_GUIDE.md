@@ -204,6 +204,18 @@ together — that is a project choice, not a git requirement.
   `spex lint` and (later) the LLM judge anchor to.
 - Toolchain: **npm, not pnpm**; Node is pinned via `.nvmrc` (22).
 
+### Measuring a frontend node's yatsu — drive a real browser
+
+A frontend scenario (a favicon, a rendered view, a tab title) is measured through the **actual running
+product**, never by reasoning about the code — and you never file a `spex yatsu eval --pass` off anything
+weaker than the browser's real reading. The loop: run the worktree dashboard (`npm run dev` in
+`spec-dashboard`; a worktree has no `node_modules`, so symlink the main checkout's first), start a `spex
+serve` when the scenario needs a backend/config case (poll `/api/board` until it reflects your config — the
+serve supervisor spawns a child that takes a few seconds to warm), then drive a headless browser to read the
+real DOM (`document.querySelector("link[rel~='icon']").href`, `document.title`) and screenshot it, and file
+with `spex yatsu eval <node> --scenario <name> --pass --image <png>`. A headless Chromium is available on the
+box; where its binary and the driver package live is a machine fact kept in local notes, not here.
+
 ### Worker auth — dispatched sessions use `SPEXCODE_CLAUDE_CMD`
 
 The backend launches every dispatched worker via `process.env.SPEXCODE_CLAUDE_CMD` (default

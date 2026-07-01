@@ -56,7 +56,7 @@ test('paneActivity: a missing pane title → null for either harness', () => {
 // pane title. Proof the fix lands: codex's headline is its TASK, not its folder.
 test('sessionHeadline: codex headline is the TASK (prompt), not the worktree folder; claude is its live summary', () => {
   const base: Session = {
-    id: 'sess-x', node: null, title: null, name: null, branch: null, path: '', harness: 'codex',
+    id: 'sess-x', node: null, title: null, name: null, branch: null, path: '', parent: null, harness: 'codex',
     lifecycle: 'active', proposal: null, merges: 0, note: null, status: 'working', liveness: 'online',
     prompt: 'Implement codex session naming so the headline is the task',
     promptPreview: 'Implement codex session naming so the headline is the task',

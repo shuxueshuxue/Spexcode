@@ -7,7 +7,7 @@ import { resolveSession, matchesSelector, selectSessions, type Session } from '.
 // resolver sees realistic rows without dragging in tmux/git state.
 function mk(id: string, node: string | null, branch: string | null): Session {
   return {
-    id, node, title: null, name: null, branch, path: `/wt/${id}`, harness: 'claude',
+    id, node, title: null, name: null, branch, path: `/wt/${id}`, parent: null, harness: 'claude',
     lifecycle: 'active', proposal: null, merges: 0, status: 'working', liveness: 'online', note: null,
     prompt: null, promptPreview: null, created: 0, activity: null, sortKey: null,
   }

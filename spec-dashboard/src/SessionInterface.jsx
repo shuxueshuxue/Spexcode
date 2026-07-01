@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import SessionTerm from './SessionTerm.jsx'
 import { loadConfig } from './data.js'
 import { labelColor } from './color.js'
-import { STATUS_COLOR, sessionHeadline, sessionZone, zoneSort } from './session.js'
-import { SessionRow } from './SessionWindow.jsx'
+import { STATUS_COLOR, sessionHeadline, sessionForest } from './session.js'
+import { SessionRow, RowLead, useFold } from './SessionWindow.jsx'
 import SessionContextMenu from './SessionContextMenu.jsx'
 import { ProofOverlay } from './ReviewProof.jsx'
 import { boardCommandsFor } from './sessionCommands.js'
@@ -193,12 +193,15 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const fileRef = useRef(null)         // the one hidden <input type=file>; the attach buttons trigger it
   const fileTargetRef = useRef('new')  // which surface the pending pick inserts into ('new' | 'msg')
 
-  // the session list is grouped into two triage zones (needs-you over self-running, [[session-console]]); `zoned`
-  // is that display order, and ALSO the order ↑/↓ nav walks, so the two never disagree. Within a zone the
-  // newest session sits on top (automatic ordering — no manual reorder).
-  const zoned = useMemo(() => zoneSort(sessions), [sessions])
-
-  const order = useMemo(() => ['new', ...zoned.map((s) => s.id)], [zoned])
+  // the session list is grouped into two triage zones (needs-you over self-running, [[session-console]]) AND
+  // nested — a session folds under its spawner ([[session-nesting]]). `forest` is that display structure (zone
+  // headers + rows, children present only while their parent is expanded); `visible` is its flat row order,
+  // which ↑/↓ nav walks, so display and nav never disagree (a collapsed child is off-screen AND out of the nav
+  // order, never a hidden target). Within a zone the newest session sits on top (automatic ordering).
+  const { expanded, toggle: toggleFold } = useFold()
+  const forest = useMemo(() => sessionForest(sessions, (id) => expanded.has(id)), [sessions, expanded])
+  const visible = useMemo(() => forest.filter((it) => it.type === 'row').map((it) => it.s), [forest])
+  const order = useMemo(() => ['new', ...visible.map((s) => s.id)], [visible])
   const active = order.includes(sel) ? sel : 'new'
   // a removed session (closed here, ended on its own, or closed elsewhere) leaves the tab unresolved: land
   // on New only if you're still on the now-gone tab. Mirrors `active`'s validity test.
@@ -722,16 +725,18 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               <span className="si-pill-glyph">＋</span>
             </button>
           </div>
-          {zoned.reduce((acc, s, i) => {
-            // group the list into two triage zones ([[session-console]]): a small dim header leads each zone,
-            // emitted when the zone changes. Within a zone the newest session is on top (automatic ordering).
-            const z = sessionZone(s)
-            if (i === 0 || z !== sessionZone(zoned[i - 1])) {
-              acc.push(<div className={`si-zone si-zone-${z}`} key={`zone-${z}`}>{t(`sessionZone.${z}`)}</div>)
-            }
+          {forest.map((it) => {
+            // group into two triage zones ([[session-console]], a dim header per zone) AND fold nested sessions
+            // under their spawner ([[session-nesting]]): the forest emits zone headers and rows (children present
+            // only while their parent is expanded); within a zone the newest session is on top (automatic ordering).
+            if (it.type === 'zone') return <div className={`si-zone si-zone-${it.zone}`} key={`zone-${it.zone}`}>{t(`sessionZone.${it.zone}`)}</div>
+            const s = it.s
+            const lead = (it.expandable || it.depth)
+              ? <RowLead depth={it.depth} expandable={it.expandable} expanded={it.expanded} rollup={it.rollup} onToggle={() => toggleFold(s.id)} />
+              : null
             // single click switches tab; double-click locks the session (needs an overlay to focus, else a
             // no-op beyond the switch). The face is the shared SessionRow, compact + avatar-less here.
-            acc.push(
+            return (
               <button
                 key={s.id}
                 data-sid={s.id}
@@ -742,11 +747,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, session: s }) }}
                 title={s.ops?.length ? t('session.opsTitle') : undefined}
               >
-                <SessionRow s={s} locked={false} showAvatar={false} compact />
+                <SessionRow s={s} locked={false} showAvatar={false} compact lead={lead} />
               </button>
             )
-            return acc
-          }, [])}
+          })}
         </aside>
 
         <section className={active === 'new' ? 'si-content is-new' : 'si-content is-session'}>

@@ -882,12 +882,19 @@ body {
 /* meta collapses inline (no full-width row-2 wrap) so the whole face stays on one line */
 .si-item .sess-meta { flex: none; width: auto; min-width: 0; margin-top: 0; margin-left: auto; opacity: 1; overflow: visible; }
 .si-item .sess-lock { color: var(--muted); }
-/* headline reveal — the one-line ellipsis ([[session-activity]]) is a RESTING state, not a hard clip: the
-   row you point at or have selected un-truncates its headline (wraps to full text, growing downward), so any
-   title reads in full on demand without widening the whole list. align-items:center keeps the glyph centred
-   beside the taller headline, and the row grows down from a fixed top so hovering never shifts it. */
-.si-item:hover .sess-id,
+/* headline reveal ([[session-activity]]) — the one-line ellipsis is a RESTING state, not a hard clip: the
+   SELECTED row un-truncates its headline (wraps to full text in place) so any title reads in full without
+   widening the list. Reveal is tied to SELECTION, not :hover — a hover-expand would grow the row under the
+   cursor and shove the rows below it down, making every click a moving target; only the row you have already
+   committed to opens, so the list stays a stable click surface.
+   When it wraps, the status MARKER (glyph + op tally) leaves the row's flow to the first line's top-right
+   (absolute), and a one-line-tall right float reserves its slot on line 1 only — so line 1's text stops short
+   of the marker while every wrapped line beneath it runs the FULL row width, instead of the marker reserving
+   a narrow column down the whole row. */
+.si-item.on { position: relative; }
 .si-item.on .sess-id { white-space: normal; overflow: visible; }
+.si-item.on .sess-id::before { content: ''; float: right; width: 3em; height: 1.25em; }
+.si-item.on .sess-meta { position: absolute; top: 5px; right: 12px; margin: 0; }
 /* zone divider — a clean SOLID small dim uppercase label with a subtle hairline rule trailing it. `--zh` is
    the zone hue: yellow = needs you, green = running, muted = offline (dormant). */
 .si-zone {

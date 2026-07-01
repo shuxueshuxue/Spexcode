@@ -147,7 +147,6 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
     }
     fitRef.current = fitAndSync
 
-    const enc = new TextEncoder()
     // coalesce pane frames landing in the same tick into one term.write per animation frame, in arrival order.
     let pending = []
     let flushRaf = 0
@@ -174,22 +173,9 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
       },
     })
 
-    const send = (data) => sock.send(enc.encode(data))   // false (a no-op) while mid-reconnect; the wheel just skips
-
-    // forward the wheel as SGR mouse reports (64/65 = up/down at the 1-based cell under the pointer) so tmux scrolls its real pane history.
-    term.attachCustomWheelEventHandler((ev) => {
-      const host = hostRef.current
-      if (!host || !term.cols || !term.rows) return false
-      const rect = host.getBoundingClientRect()
-      const clamp = (v, max) => Math.min(max, Math.max(1, v))
-      const col = clamp(Math.floor((ev.clientX - rect.left) / (rect.width / term.cols)) + 1, term.cols)
-      const row = clamp(Math.floor((ev.clientY - rect.top) / (rect.height / term.rows)) + 1, term.rows)
-      const btn = ev.deltaY < 0 ? 64 : 65  // wheel up / down
-      const ticks = Math.min(5, Math.max(1, Math.round(Math.abs(ev.deltaY) / 40)))
-      for (let i = 0; i < ticks; i++) send(`\x1b[<${btn};${col};${row}M`)
-      ev.preventDefault()
-      return false  // never let xterm's empty viewport (or the page) scroll instead
-    })
+    // the wheel scrolls xterm's own scrollback: a control-mode client takes commands (not mouse bytes), and
+    // %output streams the pane's real output verbatim into xterm's buffer, so its native scrollback IS the
+    // history — no SGR-mouse forwarding to tmux (that only worked for a raw full-screen attach).
 
     // ⌘/Ctrl+C copies the xterm selection: listen on `document` (the pane isn't focused), gated to the visible pane and standing down when a focused field has its own selection.
     let copiedTimer

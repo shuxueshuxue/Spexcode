@@ -183,8 +183,11 @@ export function SpecPane({ node }) {
       )}
       {(() => {
         // body/parts are lazy-loaded ([[board-lean]]); `node.* ??` keeps a fixture (or a fuller payload) working.
-        // While the fetch is in flight both are null → an empty doc that fills the instant content lands. parts
-        // come from the backend (`/content`); null → a legacy one-blob body renders whole.
+        // While the fetch is in flight (content still null, nothing on the node) show a spinner rather than an
+        // empty pane, so a slow/remote /content read reads as loading, not as a bodyless node. A FAILED fetch
+        // resolves content to `{body:'',parts:null}` (not null), so it lands on the empty body, never a spinner
+        // that never stops. parts come from the backend (`/content`); null → a legacy one-blob body renders whole.
+        if (content === null && node.body == null) return <div className="pane-loading"><span className="spinner" aria-label={t('common.loading')} /></div>
         const body = node.body ?? content?.body ?? ''
         const parts = node.parts ?? content?.parts ?? null
         return parts ? <TwoPart parts={parts} /> : <SpecBody body={body} />

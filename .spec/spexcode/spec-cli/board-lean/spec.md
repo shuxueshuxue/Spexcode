@@ -33,8 +33,10 @@ opens; the **search palette** ([[spec-search]]) fetches the body corpus from `/a
 ranks nodes over their full prose. `body` is genuinely load-bearing for search, so it could not be naively
 stripped — the corpus is what keeps ranking whole. Both endpoints are filesystem-only reads (no git), and
 `loadSpecs`/`/api/specs` still expose `body`+`parts` verbatim, so [[three-part-body]]'s contract is untouched.
-Where a payload is in flight the detail view shows an empty doc that fills the instant it lands; the graph
-overview never rendered these fields, so it does not change at all.
+Where a payload is in flight the detail view shows a **loading spinner** (not an empty pane) that the body
+replaces the instant it lands, so a slow or remote `/content` read reads as loading rather than as a bodyless
+node; a failed fetch resolves to an empty body, never a spinner that never stops. The graph overview never
+rendered these fields, so it does not change at all.
 
 **Freshness is preserved, not traded for the saving.** On the old board `body` refreshed with every poll, so
 the lazy reads must not go stale. The detail cache is keyed by `(id, version)` — the board carries the live

@@ -33,12 +33,13 @@ opens; the **search palette** ([[spec-search]]) fetches the body corpus from `/a
 ranks nodes over their full prose. `body` is genuinely load-bearing for search, so it could not be naively
 stripped — the corpus is what keeps ranking whole. Both endpoints are filesystem-only reads (no git), and
 `loadSpecs`/`/api/specs` still expose `body`+`parts` verbatim, so [[three-part-body]]'s contract is untouched.
-Where a payload is in flight the detail view shows a **loading spinner** (not an empty pane), so a slow or
-remote `/content` read reads as loading rather than as a bodyless node; a failed fetch resolves to an empty
-body, never a spinner that never stops. Because `/content` is a ~20ms filesystem read, the spinner is held a
-**minimum ~300ms beat** on a node's FIRST open so it reads as a smooth load instead of flickering too fast to
-see; a cached re-open serves synchronously and shows no spinner at all. The graph overview never rendered
-these fields, so it does not change at all.
+Where a payload is in flight the detail view shows a **loading spinner** (not an empty pane), so a slow, cold,
+or remote `/content` read reads as loading rather than as a bodyless node; a failed fetch resolves to an empty
+body, never a spinner that never stops. There is **no minimum display time** — the body lands the instant it
+arrives, so a fast (~20ms local) read shows the spinner only for that instant (imperceptibly) and a genuine
+wait shows it as long as it takes. Manufacturing a visible spinner by delaying a fast load would spend the
+user's time to show a decoration, against the whole point of the lean board — so we don't. The graph overview
+never rendered these fields, so it does not change at all.
 
 **Freshness is preserved, not traded for the saving.** On the old board `body` refreshed with every poll, so
 the lazy reads must not go stale. The detail cache is keyed by `(id, version)` — the board carries the live

@@ -207,6 +207,27 @@ scenarios:
       appear (overflow-y flips to `auto`), and scrolling reaches the last line. The same holds for the docked
       `❯` inbox against its half-terminal cap. On the MAIN baseline a scrollbar can show below the cap (a
       transient flash during the grow transition, or a persistent bar from scrollHeight sub-pixel rounding).
+  - name: input-dock-reserves-bottom-strip
+    tags: [frontend-e2e, desktop]
+    description: >
+      Through the running dashboard in a real browser, open the session interface (Enter) on a LIVE session
+      whose tmux pane paints a bottom status line (a running agent's own status bar, or a full-screen TUI
+      like `htop`/`vim` whose last row is a status line). At the RESTING single-line `❯` box, read the
+      geometry: the bounding rects of the terminal region (`.si-term-body`) and the docked input
+      (`.si-bottom`), and check whether the terminal's bottom edge sits AT OR ABOVE the input's top edge
+      (no overlap). Screenshot to confirm the pane's bottom status line is fully visible, not covered by the
+      input. Then grow the box multi-line (paste several newlines, staying below the half-terminal cap) and
+      RE-READ `.si-term-body`'s bounding rect + screenshot. Compare against the pre-change MAIN baseline where
+      the input floats over the terminal's bottom.
+    expected: |
+      At rest the terminal ENDS ABOVE the input: `.si-term-body`'s bottom edge is at or above `.si-bottom`'s
+      top edge (they abut, never overlap), so the pane's own bottom status line stays fully visible — the
+      resting input never covers it. Growing the box multi-line does NOT move the terminal: `.si-term-body`'s
+      bounding rect is unchanged between the resting and grown states (terminal content is not pushed up); the
+      taller input instead OVERLAYS the terminal's lower edge, its opaque panel occluding those lines while
+      they scroll behind it. On the MAIN baseline the resting input floats over the terminal and hides its
+      bottom status line.
+    related: spec-dashboard/src/styles.css
   - name: inbox-mention-dropdown-and-resolution
     tags: [frontend-e2e, desktop]
     description: >

@@ -28,7 +28,7 @@ and NO dashboard logic; the board fold stays the only other caller, so the two f
 parse. The default is a readable, NEWEST-FIRST print, one row per reading: its scenario, the **verdict**
 (✓ pass / ✗ fail / ≈ note: <text>, or *legacy* for a pre-verdict reading — the loss the agent measured),
 the freshness badge in the board's vocabulary (✓ current / ⚠ stale, naming which axes moved), the evaluator,
-the short codeSha, the evidence state (image / transcript / miss original file / no evidence), and the
+the short codeSha, the evidence state (image / transcript / video / miss original file / no evidence), and the
 timestamp; the scenario's **expected** on a second indented line. The two empty states stay distinct the way
 the tab keeps them — a node with no yatsu.md ("declares no scenarios") versus one with scenarios but no
 reading yet.

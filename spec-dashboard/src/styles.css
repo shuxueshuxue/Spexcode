@@ -1364,7 +1364,7 @@ body {
    captured proof — a screenshot, a transcript, or — no capture — a muted note. The figure's own
    left-indent/margin position all of them, so the inner blocks carry no padding of their own. */
 .eval-shot { margin: 8px 0 2px; padding-left: 19px; }
-.eval-shot img { display: block; max-width: 100%; background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; }
+.eval-shot img, .eval-shot .eval-video { display: block; max-width: 100%; background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; }
 .eval-noimg { font-size: 11px; color: var(--muted); }
 .eval-expected, .eval-note { font-size: 12px; color: var(--ink2); margin: 0 0 6px; }
 .eval-expected-label { color: var(--muted); font-weight: 600; }

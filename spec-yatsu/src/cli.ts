@@ -171,15 +171,18 @@ async function evalCmd(args: string[]): Promise<number> {
   const verdict = parseVerdict(args)
   if (!verdict) { console.error('spex yatsu eval: a verdict is required — --pass or --fail (either may add --note <text>)'); return 2 }
 
-  // the evidence the agent captured (optional; --image XOR --result). The bytes go to the content-addressed
-  // cache exactly the same whether image or transcript; only `blobKind` records which they are.
+  // the evidence the agent captured (optional; at most one of --image / --result / --video). The bytes go to
+  // the content-addressed cache exactly the same whichever kind; only `blobKind` records which they are. A
+  // --video clip is the default evidence for a UI-surface scenario — a recording of the loop, not a still.
   const image = flag(args, 'image')
   const result = flag(args, 'result')
-  if (image !== undefined && result !== undefined) { console.error('spex yatsu eval: pass at most one of --image / --result'); return 2 }
+  const video = flag(args, 'video')
+  if ([image, result, video].filter((v) => v !== undefined).length > 1) { console.error('spex yatsu eval: pass at most one of --image / --result / --video'); return 2 }
   let blob: string | null = null
-  let blobKind: 'image' | 'transcript' | undefined
+  let blobKind: 'image' | 'transcript' | 'video' | undefined
   if (image !== undefined) { blob = putBlob(readFileSync(image)); blobKind = 'image' }
   else if (result !== undefined) { blob = putBlob(readFileSync(result === '-' ? 0 : result)); blobKind = 'transcript' }
+  else if (video !== undefined) { blob = putBlob(readFileSync(video)); blobKind = 'video' }
 
   const reading: Reading = {
     scenario: scenario.name,
@@ -191,7 +194,7 @@ async function evalCmd(args: string[]): Promise<number> {
     ts: new Date().toISOString(),
   }
   appendReading(node.sidecarPath, reading)
-  const ev = blobKind === 'transcript' ? `transcript ${blob!.slice(0, 12)}…` : blobKind === 'image' ? `image ${blob!.slice(0, 12)}…` : 'no evidence'
+  const ev = blob ? `${blobKind} ${blob.slice(0, 12)}…` : 'no evidence'
   console.log(`  ✓ '${id}' scenario '${scenario.name}' → ${verdictText(verdict)} @ ${reading.codeSha.slice(0, 7)} [${reading.evaluator}] (${ev})`)
   console.log(`spex yatsu eval: 1 measurement filed`)
   return 0
@@ -279,7 +282,7 @@ export function formatTimeline(tl: EvalTimeline): string {
   const w = Math.max(...tl.readings.map((r) => r.scenario.length))
   const lines = tl.readings.flatMap((r) => {
     const badge = r.fresh ? '✓ current' : `⚠ stale (${r.staleAxes.join(', ')})`
-    const ev = r.blobState === 'present' ? `${r.blobKind === 'transcript' ? 'transcript' : 'image'} ${(r.blob ?? '').slice(0, 12)}…`
+    const ev = r.blobState === 'present' ? `${r.blobKind ?? 'image'} ${(r.blob ?? '').slice(0, 12)}…`
       : r.blobState === 'miss' ? 'miss original file' : 'no evidence'
     const head = `  ${r.scenario.padEnd(w)}  ${verdictText(r.verdict)}  ${badge}  ${r.evaluator}  ${r.codeSha.slice(0, 7)}  ${ev}  ${r.ts}`
     return r.expected ? [head, `  ${' '.repeat(w)}  expected: ${r.expected}`] : [head]
@@ -294,6 +297,6 @@ export async function runYatsu(args: string[]): Promise<number> {
   if (sub === 'clean') return clean(args.slice(1))
   if (sub === 'show') return show(args.slice(1))
   if (sub === 'check-staged') return checkStaged()
-  console.error('spex yatsu: scan [--changed] | eval [.|<node>] [--scenario <name>] (--pass|--fail) [--note <text>] [--image <path>|--result <path|->] | show [.|<node>] [--json] | clean [--keep-latest|--all]')
+  console.error('spex yatsu: scan [--changed] | eval [.|<node>] [--scenario <name>] (--pass|--fail) [--note <text>] [--image <path>|--result <path|->|--video <path>] | show [.|<node>] [--json] | clean [--keep-latest|--all]')
   return 2
 }

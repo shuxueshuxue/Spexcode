@@ -59,6 +59,7 @@ test('formatTimeline: the scenario expected shows on its own indented line', () 
 test('formatTimeline: evidence state renders image / transcript / miss / no evidence', () => {
   assert.match(formatTimeline(timeline([reading({ blobState: 'present', blobKind: 'image', blob: 'deadbeefcafebabe00' })])), /image deadbeefcafe…/)
   assert.match(formatTimeline(timeline([reading({ blobState: 'present', blobKind: 'transcript', blob: 'feedface00112233' })])), /transcript feedface0011…/)
+  assert.match(formatTimeline(timeline([reading({ blobState: 'present', blobKind: 'video', blob: '0badc0ffee001122' })])), /video 0badc0ffee00…/)
   assert.match(formatTimeline(timeline([reading({ blobState: 'miss', blob: 'a'.repeat(64) })])), /miss original file/)
   assert.match(formatTimeline(timeline([reading({ blobState: 'none', blob: null })])), /no evidence/)
 })

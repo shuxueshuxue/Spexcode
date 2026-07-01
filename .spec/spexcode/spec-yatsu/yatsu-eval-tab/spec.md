@@ -2,7 +2,7 @@
 title: yatsu-eval-tab
 status: active
 hue: 140
-desc: The dashboard eval tab — a node's measurement timeline (verdict + expected + live freshness) with evidence (image or transcript) on expand, plus the spec-cli read API behind it.
+desc: The dashboard eval tab — a node's measurement timeline (verdict + expected + live freshness) with evidence (image, transcript, or video) on expand, plus the spec-cli read API behind it.
 code:
   - spec-yatsu/src/evaltab.ts
 related:
@@ -17,8 +17,8 @@ related:
 The eval/loss engine ([[spec-yatsu]], built by [[yatsu-core]]) records readings; this is the surface that
 reads them back. Realize the founding **"Evidence — one timeline, two sources"** contract's first source: a
 node's **eval tab** lists its measurements chronologically, each carrying its verdict, the scenario's
-expected, and the freshness signal `spex yatsu scan` reports, with the captured evidence (an image or a
-transcript) expanding inline. LOCAL readings only for now — the forge issue-events source is a later
+expected, and the freshness signal `spex yatsu scan` reports, with the captured evidence (an image, a
+transcript, or a **video** clip that plays inline) expanding inline. LOCAL readings only for now — the forge issue-events source is a later
 sibling; leave a clean seam for it.
 
 ## expanded spec
@@ -49,7 +49,7 @@ scaffold the history tab uses** (see [[work-pane]]): newest expanded, older reve
 row's header names its scenario, the **verdict badge** (✓ pass / ✗ fail, with its optional **note** annotation
 shown beside; *legacy* for a pre-verdict or legacy note-only reading), and the per-reading **score circle**
 ([[yatsu-score-badge]]), then its evaluator, codeSha, and time.
-Its evidence is the scenario's **expected** over the captured proof (screenshot or transcript), or *miss
+Its evidence is the scenario's **expected** over the captured proof (screenshot, transcript, or video clip), or *miss
 original file* when the blob was pruned.
 
 The tab surfaces the **whole declared set** in **one list**, not only the readings. A **declared scenario

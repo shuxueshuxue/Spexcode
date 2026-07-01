@@ -8,9 +8,6 @@ const pexec = promisify(execFile)
 const TMUX_SOCK = process.env.SPEXCODE_TMUX || 'spexcode'
 // cold fallback size for a session no viewer has ever sized (see lastFit).
 const DEFAULT_COLS = 120, DEFAULT_ROWS = 40
-// a viewer that connects without a measurable size (a still-hidden warm pane) defers its first paint to its
-// first resize; this bounds the wait so a viewer that NEVER resizes still gets a frame and is never blank.
-const FIRST_PAINT_FALLBACK_MS = 250
 // a full (re)attach frame seeds this much of tmux's recent scrollback into the browser terminal (commensurate
 // with xterm's own scrollback), so the wheel reaches output from before the client attached — for a
 // NORMAL-screen pane, whose history lives in tmux's scrollback. A full-screen (alternate-screen) TUI keeps no
@@ -25,7 +22,6 @@ type Pending = (lines: Buffer[]) => void
 type Bridge = {
   id: string; pty: IPty; cols: number; rows: number; prewarmed: boolean
   repaintToken: number
-  firstPaintTimer?: ReturnType<typeof setTimeout>
   // control-mode parser state: an incomplete-line BYTE buffer, the in-flight command block (%begin..%end) with
   // its command number, a FIFO of one resolver per command sent (tmux answers in order), and the last
   // %layout-change size so a repaint knows the pane already converged and needn't wait for the event.
@@ -232,7 +228,6 @@ function ensureBridge(id: string, prewarm = false): Bridge | null {
   // %layout-change waiter (no timer backs it now, so a bridge that dies mid-convergence MUST resolve its
   // waiter or the awaiting repaint hangs), and if viewers remain kick a reconcile to re-bind fast.
   p.onExit(() => {
-    if (bx.firstPaintTimer) { clearTimeout(bx.firstPaintTimer); bx.firstPaintTimer = undefined }
     if (bx.layoutWaiter) { const w = bx.layoutWaiter; bx.layoutWaiter = undefined; w.resolve() }
     const q = bx.cmdQ; bx.cmdQ = []; for (const r of q) r([])
     if (bridges.get(id) === bx) bridges.delete(id)
@@ -244,7 +239,6 @@ function ensureBridge(id: string, prewarm = false): Bridge | null {
 function killBridge(id: string): void {
   const b = bridges.get(id)
   if (!b) return
-  if (b.firstPaintTimer) { clearTimeout(b.firstPaintTimer); b.firstPaintTimer = undefined }
   if (b.layoutWaiter) { const w = b.layoutWaiter; b.layoutWaiter = undefined; w.resolve() }
   bridges.delete(id)
   try { b.pty.kill() } catch { /* already gone */ }
@@ -257,9 +251,10 @@ function killBridge(id: string): void {
 //   - HIDDEN connect — a warm pane is still 0×0, so the client carries no size. DON'T paint a guessed
 //     prewarm frame now: it'd be undersized and, landing in a still-hidden buffer, would only have to be
 //     covered the instant the pane becomes visible (the old two-stage scramble). Defer the one first-frame
-//     paint to the client's first resize — which fires the moment the pane becomes visible and the client
-//     measures its real size — so the first frame is drawn at the true visible size. A bounded fallback
-//     covers a viewer that never resizes, so a pane is never left blank.
+//     paint — purely — to the client's first resize, which fires the moment the pane becomes visible and the
+//     client measures its real size, so the first frame is drawn at the true visible size. NO timer fallback:
+//     a pane that never resizes is a pane no one ever looks at (a viewer sends its real size the instant it
+//     becomes visible), so it needs no frame — the first paint is a pure resize event, zero timer.
 export function attachViewer(id: string, v: Viewer, initialSize?: { cols: number; rows: number }): boolean {
   let s = subscribers.get(id)
   if (!s) subscribers.set(id, s = new Set())
@@ -269,18 +264,10 @@ export function attachViewer(id: string, v: Viewer, initialSize?: { cols: number
   b.needsFull = true     // a (re)connecting viewer's xterm is blank / just reset → its first frame must be FULL
   if (initialSize && initialSize.cols > 0 && initialSize.rows > 0) {
     applySize(b, initialSize.cols, initialSize.rows)   // resize-then-repaint at the client's true size
-  } else {
-    scheduleFirstPaintFallback(b)   // hidden connect → defer the first paint to the first resize; bound it
   }
+  // else HIDDEN connect (0×0, no size): paint nothing now — the first frame is driven purely by the client's
+  // first resize (fires when the pane becomes visible at its true size). No timer, never a guessed frame.
   return true
-}
-// fail-loud bound on the deferred first paint: if the client's first resize never arrives (a non-dashboard
-// viewer that never fits), paint once at the prewarm size after FIRST_PAINT_FALLBACK_MS so the pane is
-// never permanently blank. A real repaint (the first resize, a re-bind) supersedes this by clearing the
-// timer in repaint — so on the dashboard path it's a safety net that normally never fires visibly.
-function scheduleFirstPaintFallback(b: Bridge): void {
-  if (b.firstPaintTimer) return   // one timer per bridge — a second hidden viewer doesn't stack another
-  b.firstPaintTimer = setTimeout(() => { b.firstPaintTimer = undefined; void repaint(b) }, FIRST_PAINT_FALLBACK_MS)
 }
 
 // a control-mode bare attach REPLAYS NOTHING (unlike a raw attach, where tmux resends the pane's whole terminal
@@ -328,7 +315,6 @@ export function forwardWheel(id: string, up: boolean, col: number, row: number, 
 // re-seeds only the visible screen: re-flushing thousands of lines on every resize would be costly and flicker,
 // and the clear is `\x1b[H\x1b[2J` (viewport only, never `\x1b[3J`), so it never wipes the seeded scrollback.
 async function repaint(b: Bridge): Promise<void> {
-  if (b.firstPaintTimer) { clearTimeout(b.firstPaintTimer); b.firstPaintTimer = undefined }   // a real repaint supersedes the deferred-first-paint fallback
   const token = ++b.repaintToken
   const want = `${b.cols}x${b.rows}`
   const full = !!b.needsFull   // consumed only when the frame lands (below), so a superseding repaint still sees it

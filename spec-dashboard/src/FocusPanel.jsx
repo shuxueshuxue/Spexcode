@@ -14,8 +14,8 @@ function ScenarioRow({ s, t, onOpenEval }) {
       <span className="fp-sc-mark" title={t(`score.${s.state}`)}>{MARK[s.state]}</span>
       <span className="fp-sc-body">
         <span className="fp-sc-name">{s.name}</span>
-        {s.expected && <span className="fp-sc-expected">{s.expected}</span>}
         <TagChips tags={s.tags} />
+        {s.expected && <span className="fp-sc-expected">{s.expected}</span>}
         {s.code?.length > 0 && <span className="fp-sc-code">{t('focusPanel.tracks', { files: s.code.join(', ') })}</span>}
       </span>
     </button>

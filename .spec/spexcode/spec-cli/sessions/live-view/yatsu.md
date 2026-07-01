@@ -15,6 +15,59 @@ scenarios:
       WITHOUT any viewer ever attaching to it; a viewer opening it afterward finds the pane already at its
       size — the open-time fit is a no-op, so there is no visible cols/rows reflow. A watched session stays
       put across ticks (no thrash), since its pre-size equals its own recorded fit.
+  - name: set-size-to-first-frame-is-event-driven
+    tags: [backend-api]
+    description: >-
+      Measure the "visible → full screen" gap: how long from setting a size to the viewer receiving the
+      coherent full frame, and whether it converges on the asked size. On a tmux socket, warm a bridge
+      through the real API (attachViewer at a first size), then — with the bridge already up (the warm
+      case, which is the real path when a hidden pane becomes visible) — call resizeBridge to a new size
+      (e.g. 100×30) and time it to the viewer's next frame. Confirm (1) that latency is event-level (a few
+      ms, well under the ~320ms the old pty-resize + geometry-poll path cost), (2) tmux's window converged
+      to exactly the asked size (the frame is drawn on the settled geometry, no half-frame), and (3) no
+      polling is involved — the frame is driven by tmux's %layout-change + capture-pane reply, not a
+      geometry read loop. File with `spex yatsu eval live-view --scenario
+      set-size-to-first-frame-is-event-driven --result <txt>`.
+    expected: >-
+      A warm resize produces the full frame in ~5–20ms (event-driven: refresh-client -C sets the size,
+      %layout-change confirms convergence, a bounded capture-pane seeds the frame), an order of magnitude
+      under the ~320ms polling path it replaces. tmux's window equals the asked size when the frame lands,
+      so the screen is coherent at the converged geometry — never a mid-flight half-frame. The frame is one
+      clear+home + the real pane rows (with escapes/UTF-8 intact), and live pane output continues to arrive
+      as %output events after it.
+  - name: attach-seed-carries-pre-attach-history
+    tags: [backend-api]
+    description: >-
+      Measure that the wheel can reach output from BEFORE the client attached (the "wheel scrolls real
+      history" contract, in control mode). On a tmux socket, print far more lines than the visible screen
+      holds (e.g. 1200 lines into a 24-row pane) so most scroll into tmux history BEFORE any bridge exists.
+      Then attach a viewer through the real API (attachViewer with a size) and inspect its first frame: it
+      must carry deep pre-attach history, not just the visible screen. Then call resizeBridge to a new size
+      and confirm the resize frame re-seeds ONLY the visible screen (no thousands-of-lines re-flush). Finally
+      detach fully and re-attach (a fresh bridge) and confirm history is seeded again. File with `spex yatsu
+      eval live-view --scenario attach-seed-carries-pre-attach-history --result <txt>`.
+    expected: >-
+      The first frame of a (re)attach contains hundreds/thousands of the pre-attach lines (a bounded
+      capture-pane -S over tmux's recent scrollback), reaching back to the earliest history and ending at the
+      current visible tail — so on a NORMAL-screen pane those lines write into the browser terminal and the
+      native wheel scrolls genuine pre-attach output. (A full-screen alternate-screen TUI keeps no such
+      scrollback, so its wheel is forwarded to the app instead — see output-preserves-utf8-wide-chars's
+      sibling behaviour.) A subsequent resize re-seeds only the visible screen (≤ the row count, no history
+      re-flush), and the clear is viewport-only so it never wipes the seeded scrollback. A fresh bridge on
+      re-attach re-seeds history.
+  - name: output-preserves-utf8-wide-chars
+    tags: [backend-api]
+    description: >-
+      Measure that wide characters survive the live %output byte path (the regression that shattered the
+      display). On a tmux socket, attach a control-mode bridge through the real API; after attach, emit a
+      line of CJK + box-drawing + emoji (e.g. `我 ┌─┐ 😀`) into the pane as NEW output and capture the exact
+      bytes the bridge broadcasts to a viewer. Compare them to the UTF-8 encoding of the source line. File
+      with `spex yatsu eval live-view --scenario output-preserves-utf8-wide-chars --result <txt>`.
+    expected: >-
+      The broadcast bytes contain the source line's exact UTF-8 bytes (each 3-byte CJK / box char and 4-byte
+      emoji intact) — because %output escapes only control bytes + backslash as octal and passes high bytes
+      raw, and the bridge un-escapes then re-encodes as UTF-8. A latin1 decode instead truncates every wide
+      char to one wrong byte; that path must be absent.
   - name: hidden-connect-defers-undersized-first-paint
     tags: [backend-api]
     description: >-
@@ -38,7 +91,7 @@ scenarios:
 
 The live terminal's product surface is measured through the **real bridge API** the dashboard drives
 (`attachViewer` / `resizeBridge` over the per-session WebSocket) plus tmux's own reported window size —
-not an internal probe. Two losses, both about a pane looking wrong the moment a human opens it:
+not an internal probe. The losses, about a pane behaving wrong the moment a human opens it:
 
 - **on-attach reflow** — the pane re-wrapping from a stale size to the browser size. Zero loss is the
   supervisor holding every warm bridge at the last-known viewer size, so the pane is already correct
@@ -47,3 +100,15 @@ not an internal probe. Two losses, both about a pane looking wrong the moment a 
   frame would land short and then snap to full when the human looks. Zero loss is the server **deferring**
   that first paint to the client's first resize (drawn at the real visible size), with a bounded fallback
   so a viewer that never resizes is still never blank.
+- **visible → full-screen latency** — the gap from a pane becoming visible (its size set) to its coherent
+  full frame. The control-mode boundary makes this **event-driven and timer-free** — `refresh-client -C` sets
+  the size, the guaranteed `%layout-change` confirms convergence, a bounded `capture-pane` seeds the frame — so
+  zero loss is a few ms on the converged geometry, an order of magnitude under the ~320ms the old poll cost.
+- **wide-character integrity** — `%output` passes high bytes through raw, so decoding them as anything but
+  UTF-8 truncates every CJK / box-drawing / emoji character to one wrong byte (the regression that shattered
+  the display). Zero loss is a wide-character line round-tripping through the real bridge byte-for-byte.
+- **history reach** — with control mode streaming only post-attach `%output`, the wheel would reach nothing
+  from before the client attached. Zero loss is the pane's real history reachable by whichever path the pane
+  owns: a normal-screen pane's tmux scrollback seeded (bounded `capture-pane -S`) into xterm's own buffer for
+  the native wheel; a full-screen TUI (which keeps no such scrollback) scrolled by forwarding the wheel to the
+  app. A resize re-seeds only the visible screen (no re-flush).

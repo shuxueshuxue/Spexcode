@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import SessionTerm from './SessionTerm.jsx'
 import { loadConfig } from './data.js'
 import { labelColor } from './color.js'
-import { STATUS_COLOR, sessionHeadline, sessionForest } from './session.js'
+import { STATUS_COLOR, sessionForest } from './session.js'
 import { SessionRow, RowLead, useFold } from './SessionWindow.jsx'
 import SessionContextMenu from './SessionContextMenu.jsx'
 import { ProofPane } from './ReviewProof.jsx'
@@ -238,6 +238,13 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // nav mode binds to ONE live session's menu — leaving the tab (or it going offline) exits it, so raw
   // keystrokes can never leak into the wrong pane.
   useEffect(() => { setNavMode(false); setSendErr(false); setMenu(null); setRightTab('terminal') }, [active])
+  // returning to the Terminal tab re-focuses the ❯ input — switching to Proof and back must not strand the
+  // caret. Only when live and not in nav mode; rAF waits for the input to (re)mount under the Terminal tab.
+  useEffect(() => {
+    if (rightTab === 'terminal' && active !== 'new' && !navMode && selSession && selSession.liveness !== 'offline') {
+      requestAnimationFrame(() => msgRef.current?.focus())
+    }
+  }, [rightTab])
   useEffect(() => { if (selSession?.liveness === 'offline') setNavMode(false) }, [selSession?.liveness])
   // leaving nav mode hands focus back to the ❯ box. Guarded to the on→off edge for a live tab — a tab
   // switch or going offline exits nav too, but the tab-focus effect owns focus there.
@@ -839,9 +846,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   <button role="tab" aria-selected={rightTab === 'terminal'} className={rightTab === 'terminal' ? 'si-tab on' : 'si-tab'} onClick={() => setRightTab('terminal')}>{t('session.tabTerminal')}</button>
                   <button role="tab" aria-selected={rightTab === 'proof'} className={rightTab === 'proof' ? 'si-tab on' : 'si-tab'} onClick={() => setRightTab('proof')}>{t('session.tabProof')}</button>
                 </div>
-                {/* the shared session headline ([[session-activity]]'s `si-th-name`) rides compactly between the
-                    tabs and the actions — same source/content as the row that opened it, ellipsing when tight. */}
-                <span className="si-th-name" title={selSession ? sessionHeadline(selSession) : active}>{(selSession && sessionHeadline(selSession)) || active}</span>
+                {/* no headline here: the left sidebar already identifies the session; the tab bar is just the
+                    Terminal|Proof tabs (left) + lifecycle actions (right). */}
                 <div className="si-actions">
                   {showRelaunch
                     ? <button className="si-act go" onClick={() => act('resume')}>{t('session.relaunch')}</button>

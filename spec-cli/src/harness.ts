@@ -86,8 +86,9 @@ export interface Harness {
   // socket is a project control plane, not session identity.
   liveness(rec: HarnessLivenessRecord, tmuxAlive: boolean, runtimeDir?: string): 'online' | 'offline'
   // deliver a follow-up prompt to a LIVE session and report whether it landed. claude: through the rendezvous
-  // control socket, which injects + submits the prompt and CONFIRMS the daemon accepted it (loud failure on a
-  // missing/dead socket — never a silent degradation). codex: JSON-RPC on the same app-server WebSocket the
+  // control socket — OPTIMISTIC-after-liveness (loud failure when the socket is missing/dead or the write can't
+  // flush; once the reply line flushes to a live socket it returns ok, without waiting for an application ack —
+  // see replyViaSocket). codex: JSON-RPC on the same app-server WebSocket the
   // visible TUI uses — it reads the thread live and either `turn/steer`s the message INTO an in-progress turn
   // (mid-turn, not queued for after the agent stops) or `turn/start`s a fresh turn when the thread is idle.
   // Returns ok=false with a reason that propagates to the API.
@@ -112,10 +113,12 @@ export interface Harness {
   resumeArg(rec: { session: string; harnessSessionId?: string | null }): string
 }
 
-// a prompt-dispatch outcome. ok=true ONLY when delivery is CONFIRMED (claude: the daemon ACCEPTED the prompt;
-// codex: app-server accepted `turn/start`). `error` carries a human-readable reason that propagates to the
-// API route (non-2xx) and the CLI/dashboard. Defined here because it is the harness DELIVERY contract; sessions.ts
-// re-exports it for its existing importers.
+// a prompt-dispatch outcome. ok=true means delivery is confirmed at the layer that harness proves it: claude at
+// the TRANSPORT/liveness layer (the reply line flushed to a live rendezvous socket — see replyViaSocket for why
+// it is OPTIMISTIC-after-liveness, not a round-trip ack); codex at the application layer (the app-server accepted
+// `turn/steer`/`turn/start`). `error` carries a human-readable reason that propagates to the API route (non-2xx)
+// and the CLI/dashboard. Defined here because it is the harness DELIVERY contract; sessions.ts re-exports it for
+// its existing importers.
 export type DispatchResult = { ok: boolean; error?: string }
 export type HarnessDeliveryRecord = { session: string; worktreePath?: string; harnessSessionId?: string | null; runtimeDir?: string }
 // the on-demand surface artifacts a materialize render wrote, by node NAME — so clean() knows EXACTLY which
@@ -146,31 +149,30 @@ function shQuote(s: string): string {
 const PKG = fileURLToPath(new URL('..', import.meta.url))
 const SPEX = `${tsxBin(PKG)} ${join(PKG, 'src', 'cli.ts')}`
 
-const ACCEPT_TIMEOUT_MS = 2500
-// @@@ replyViaSocket - inject `text` as a prompt AND confirm the daemon ACCEPTED it (not mere write-success,
-// which is what silently masked dead dispatches before). The CLAUDE_BG_BACKEND=daemon rendezvous server sends
-// NO ack for an accepted reply, so we confirm via an IN-ORDER round-trip: we write `{type:reply}\n{type:repaint}\n`.
-// The daemon dispatches socket lines strictly in order and ENQUEUES the reply BEFORE it handles the repaint and
-// answers `{type:repaint-done}` — so a `repaint-done` with NO preceding `reply-rejected` proves the reply was
-// processed. `repaint` is auth-exempt and always answers, so it's a reliable probe even against a future daemon
-// that gates `reply` behind auth (a gated reply emits `reply-rejected` FIRST). `reply-rejected`/`shutting-down`,
-// a connect/socket error, an early close, or no confirmation within ACCEPT_TIMEOUT_MS ALL resolve to a loud
-// failure with a specific reason. The forced repaint is a harmless redraw of the agent's OWN TUI. Never throws.
+// @@@ replyViaSocket - OPTIMISTIC-after-liveness delivery: connect to the LIVE rendezvous socket and WRITE the
+// `{type:reply}\n` line; once that line FLUSHES to the socket with no immediate transport error, the reply is on
+// the wire and claude submits it the moment it yields the event loop — so we return ok:true right there. We do
+// NOT wait for an application-level acceptance ack. The old code wrote a `{type:repaint}` probe after the reply
+// and waited up to 2500ms for a `{type:repaint-done}` to CONFIRM the reply was processed; the ordering barrier is
+// sound one-way (repaint-done ⟹ delivered) but its ABSENCE is NOT proof of non-delivery — a mid-turn/BUSY claude
+// can't answer the probe within the wall, so a message that actually landed reported a COMMON, misleading false
+// failure. The delivery confirmation therefore lives at the TRANSPORT/liveness layer, not the application layer:
+// deliverViaRendezvous already gates on the socket's existence (liveness), and here the FREE, INSTANT transport
+// signals — a connect that throws, a socket 'error' (ECONNREFUSED / EPIPE), or a 'close' BEFORE the write flushes —
+// are still reported as real failures (they cost no waiting). What we knowingly give up is detection of the narrow
+// alive-but-wedged / reply-rejected / shutting-down cases: a rare silent drop, recoverable because the supervisor
+// sees the worker never transition. That tradeoff is the deliberate contract now — see [[harness-adapter]].
+// Never throws.
 function replyViaSocket(sock: string, text: string): Promise<DispatchResult> {
   return new Promise((resolve) => {
-    let settled = false, buf = ''
+    let settled = false
     let c: ReturnType<typeof createConnection>
     const done = (r: DispatchResult) => {
       if (settled) return
       settled = true
-      clearTimeout(timer)
       try { c?.destroy() } catch { /* */ }
       resolve(r)
     }
-    const timer = setTimeout(
-      () => done({ ok: false, error: `rendezvous socket gave no acceptance confirmation within ${ACCEPT_TIMEOUT_MS}ms` }),
-      ACCEPT_TIMEOUT_MS,
-    )
     try {
       c = createConnection({ path: sock })
     } catch (e) {
@@ -178,26 +180,15 @@ function replyViaSocket(sock: string, text: string): Promise<DispatchResult> {
       return
     }
     c.on('error', (e: NodeJS.ErrnoException) => done({ ok: false, error: `rendezvous socket connect failed: ${e?.code || String(e)}` }))
-    c.on('close', () => done({ ok: false, error: 'rendezvous connection closed before the prompt was confirmed accepted' }))
-    c.on('connect', () => c.write(JSON.stringify({ type: 'reply', text }) + '\n' + JSON.stringify({ type: 'repaint' }) + '\n'))
-    c.on('data', (chunk: Buffer) => {
-      buf += chunk.toString('utf8')
-      let i: number
-      while ((i = buf.indexOf('\n')) >= 0) {
-        const line = buf.slice(0, i); buf = buf.slice(i + 1)
-        if (!line) continue
-        let type: string | undefined
-        try { type = JSON.parse(line)?.type } catch { continue }   // ignore any non-JSON noise on the wire
-        if (type === 'reply-rejected') return done({ ok: false, error: 'agent REJECTED the prompt (rendezvous reply-rejected — auth-gated daemon?)' })
-        if (type === 'shutting-down') return done({ ok: false, error: 'agent is shutting down — prompt not accepted' })
-        if (type === 'repaint-done') return done({ ok: true })   // reply was enqueued in-order before this
-        // heartbeat / state / other frames → keep waiting for the decisive repaint-done or a rejection.
-      }
-    })
+    c.on('close', () => done({ ok: false, error: 'rendezvous connection closed before the prompt was written' }))
+    // write the reply line; the write callback fires once it flushes to the live socket → optimistic ok. An
+    // immediate transport 'error'/'close' beats the callback and reports the real failure (done is idempotent).
+    c.on('connect', () => c.write(JSON.stringify({ type: 'reply', text }) + '\n', () => done({ ok: true })))
   })
 }
-// claude's deliver: fail loud BEFORE attempting the socket if it isn't there (a clearer message than a raw
-// connect error), exactly as the old sendKeys did, then inject + confirm via the rendezvous round-trip.
+// claude's deliver: the pre-write LIVENESS gate — fail loud BEFORE attempting the socket if it isn't there (a
+// clearer message than a raw connect error, and the delivery's confirmation layer: socket present = agent alive).
+// Then inject the reply optimistically via replyViaSocket (no round-trip ack).
 function deliverViaRendezvous(id: string, text: string): Promise<DispatchResult> {
   const sock = rvSock(id)
   if (!existsSync(sock)) return Promise.resolve({ ok: false, error: `no rendezvous control socket for session ${id} (socketless/old session, or the agent is offline) — prompt NOT delivered` })

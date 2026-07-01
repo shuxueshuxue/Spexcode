@@ -1479,9 +1479,9 @@ export async function watchSessions(emit: (line: string) => void, opts: WatchOpt
 }
 
 // @@@ sendKeys - PROMPT control for a session, delivered through the session's HARNESS ADAPTER
-// ([[harness-adapter]]) — claude the rendezvous control socket (inject + submit + confirm accepted), codex
-// app-server JSON-RPC into the visible TUI's thread. Either way there is NO silent fallback: a prompt that can't be
-// delivered — no socket / dead agent (claude), no app-server/thread (codex) — FAILS LOUD, returning
+// ([[harness-adapter]]) — claude the rendezvous control socket (optimistic-after-liveness: the reply line flushes
+// to a live socket), codex app-server JSON-RPC into the visible TUI's thread. Either way there is NO silent
+// fallback: a prompt that can't be delivered — no socket / dead agent (claude), no app-server/thread (codex) — FAILS LOUD, returning
 // ok:false with a reason that propagates to the caller (API non-2xx, `spex session send`, the merge dispatch),
 // instead of reporting a false success. The harness is resolved from the record; an unknown id fails before any
 // harness transport is addressed. (The separate RAW nav-key channel keeps its own `tmux send-keys` path — see rawKey.)

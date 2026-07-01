@@ -1,8 +1,10 @@
 ---
 title: mentions
-status: pending
+status: active
 hue: 200
-desc: Two universal in-text reference primitives — [[node]] (a topic) and @session (an actor that carries dispatch) — parsed the same way in EVERY input box. CLI-first; the dashboard is a thin autocomplete over the same resolver. (Pending — design captured; adopted surface by surface.)
+desc: Two universal in-text reference primitives — [[node]] (a topic) and @session (an actor that carries dispatch) — parsed the same way in EVERY input box. CLI-first; the dashboard is a thin autocomplete over the same resolver. First consumer is the forum; adopted on more surfaces incrementally.
+code:
+  - spec-cli/src/mentions.ts
 ---
 
 # mentions

@@ -86,7 +86,7 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
       // solarized-dark on purpose — the Claude Code TUI inside is built for a dark terminal; the bright* grays are its dim-text tones.
       // selection is a bright blue; selectionInactiveBackground matches it so the highlight doesn't grey out when focus sits in the ❯ box.
       theme: {
-        background: '#002b36', foreground: '#93a1a1', cursor: '#93a1a1',
+        background: '#0d1117', foreground: '#93a1a1', cursor: '#93a1a1',
         selectionBackground: '#268bd2', selectionForeground: '#fdf6e3', selectionInactiveBackground: '#268bd2',
         black: '#073642', red: '#dc322f', green: '#859900', yellow: '#b58900',
         blue: '#268bd2', magenta: '#d33682', cyan: '#2aa198', white: '#eee8d5',

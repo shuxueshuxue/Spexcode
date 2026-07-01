@@ -33,6 +33,11 @@ keypress as that action's new binding, saved per-user and reset to defaults on d
 different entry points. (Game-controller mapping is **not** here — it lives outside the browser as the
 [[game-controller]] extension; see [[keyboard-nav]].)
 
+Its third accreted section is **Theme**: a Light/Dark picker mirroring the language section, following
+the same detect-then-defer shape (system `prefers-color-scheme` default, explicit pick overrides and
+persists) — it flips the whole app live. Only the picker lives here; the palette-swap mechanism it
+drives belongs to [[dashboard-shell]].
+
 ## expanded spec
 
 ### the contract
@@ -58,7 +63,7 @@ different entry points. (Game-controller mapping is **not** here — it lives ou
 - **The settings popup** opens on a hotkey that collides with no existing binding, renders in the shared
   `Modal` chrome (the same centered backdrop / titled header / `×` / `Esc`-close component the
   help/legend uses — see [[node-graph]]), owns the keys while open, and is the single home for future
-  settings. Today it owns the language picker.
+  settings. Today it owns the language picker, the shortcuts editor, and the light/dark theme picker.
 
 ### the hotkey
 

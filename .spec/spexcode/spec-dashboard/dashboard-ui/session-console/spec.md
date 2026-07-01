@@ -23,7 +23,10 @@ driving the same sessions through the CLI see identical state.
 ## expanded spec
 
 The interface is a **full-screen board** — edge-to-edge over the dimmed app, with **no reserved inset** so no
-screen space is wasted (still a lifted modal with a scale-in pop, not a route). Two panes: a left session list and a
+screen space is wasted (still a lifted modal with a scale-in pop, not a route). The whole console wears the
+**dark solarized terminal theme** — the frame around the terminal included, not just the sidebar — so the
+left list, the right frame and the embedded terminal read as **one dark surface** rather than a bright gutter
+around a dark pane (a palette remap scoped to the console, while the board behind stays warm paper). Two panes: a left session list and a
 right area that **morphs** by what's focused. The
 list's **top button row** pairs `＋` New Session and the relationship-graph icon above the session rows (so
 neither blocks the `↑/↓` path); New ⇄ graph is horizontal — `→` from an *empty* New enters, `←` returns.

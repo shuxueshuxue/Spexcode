@@ -54,23 +54,24 @@ first words of the launch prompt (`promptPreview`) as a **placeholder** that the
 moment it arrives, so the human's initial wording disappears once the agent has named its own task. A human
 **rename (`name`) still wins** over both — the [[session-rename]] override stays authoritative everywhere.
 
-Two things flex by surface, through the face's `showAvatar` and `compact` props. A **leading avatar**
-(seeded by id) fronts the headline on the **map-side** surfaces — the board's SessionWindow and the
-relationship-graph nodes — where it is the fixed spatial anchor that lets a session be **cross-referenced
-against the avatars on the very nodes it edits**; there the face is **two rows** (headline over a status
-line). The **console's own sidebar drops the avatar** (`showAvatar={false}`): redundant beside the headline,
-and it wants a dense terminal list — so its row is **one line** and the status shows as a single
-colour-coded **glyph** (`STATUS_GLYPH`, painted by `STATUS_COLOR`) rather than the word, the exact word kept
-on the hover title for a11y. With no avatar the fixed anchor is simply the row's **slot** in the ordered
-list ([[session-reorder]]), so the headline still renarrates each turn without the row losing its place.
+Two things flex by surface, through the face's `compact` and `showAvatar` props. Both **desktop list
+surfaces** are the **compact one-line** face (`compact`): the headline followed by a single colour-coded
+status **glyph** (`STATUS_GLYPH`, painted by `STATUS_COLOR`) rather than the word — the exact word kept on
+the hover title for a11y — grouped into the two triage zones ([[session-console]]). They differ only in the
+**avatar**: the **map-side** board window (SessionWindow) and the relationship-graph nodes **keep** it, the
+fixed spatial anchor that lets a session be **cross-referenced against the avatars on the very nodes it
+edits**; the **console's own sidebar drops it** (`showAvatar={false}`, redundant beside the headline in its
+dense terminal list). Where the avatar is gone the fixed anchor is simply the row's **slot** in the ordered
+list ([[session-reorder]]), so the headline still renarrates each turn without the row losing its place. The
+**mobile list** alone keeps the older **two-row** face, its status on a second line, described next.
 
 The two-row variant's **status line** is the small state badges moved off the headline: the colour-coded
 status **word** and the op tally (how many spec nodes this session is changing, e.g. `~2`), in a smaller,
 dimmer font spanning the **whole row width** (the flex row wraps and the line takes a full-width basis, so it
 drops below the avatar too). It is the parking spot for any further at-a-glance metadata we add later. When
 this row is the **locked** selection a 🔒 sits at the end of Row 1, and the status word **stays** below
-(locking no longer hides it). So the board window and the mobile list show this identical two-row headline +
-status line; the console's compact sidebar folds the same status onto the single row as its glyph.
+(locking no longer hides it). This two-row face is now the **mobile** list's; both desktop lists fold the
+same status onto their single compact row as its glyph.
 
 **The console header reads the same headline.** The Enter interface's **big-title bar** above the live
 terminal ([[session-console]]'s `si-th-name`) renders the SAME `sessionHeadline`, not the stable node name —

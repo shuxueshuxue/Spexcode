@@ -1,7 +1,7 @@
 import { Avatar } from './avatar.jsx'
 import { labelColor } from './color.js'
 import { GLYPH } from './SpecNode.jsx'
-import { sessionName, sessionHeadline, STATUS_COLOR, STATUS_GLYPH } from './session.js'
+import { sessionName, sessionHeadline, STATUS_COLOR, STATUS_GLYPH, sessionZone, zoneSort } from './session.js'
 import { useT } from './i18n/index.jsx'
 
 // the "locked / claimed by another session" indicator — a monochrome inline-SVG padlock in the dashboard's
@@ -53,11 +53,17 @@ export default function SessionWindow({ sessions, activeId, onPick, onOpenSessio
       {sessions.length === 0 ? (
         <div className="sesswin-empty">{t('sessionWindow.emptyBefore')}<kbd>⏎</kbd>{t('sessionWindow.emptyAfter')}</div>
       ) : (
-        sessions.map((s) => {
+        // same two-zone grouping + newest-first + compact one-line face as the console list ([[session-console]]);
+        // the ONE difference is this map-side glance KEEPS the avatar (cross-references the node avatars).
+        zoneSort(sessions).reduce((acc, s, i, arr) => {
+          const z = sessionZone(s)
+          if (i === 0 || z !== sessionZone(arr[i - 1])) {
+            acc.push(<div className={`sesswin-zone sesswin-zone-${z}`} key={`zone-${z}`}>{t(`sessionZone.${z}`)}</div>)
+          }
           // activeId is the locked session's worktree path (board highlight matches overlays by source),
           // so the row locks off s.source — NOT s.id (id keys the board tab; source keys the graph lock).
           const locked = s.source === activeId
-          return (
+          acc.push(
             <button
               key={s.id}
               className={locked ? 'sess-row locked' : 'sess-row'}
@@ -66,10 +72,11 @@ export default function SessionWindow({ sessions, activeId, onPick, onOpenSessio
               onDoubleClick={() => onOpenSession(s.id)}
               title={t('sessionWindow.rowTitle')}
             >
-              <SessionRow s={s} locked={locked} />
+              <SessionRow s={s} locked={locked} compact />
             </button>
           )
-        })
+          return acc
+        }, [])
       )}
     </div>
   )

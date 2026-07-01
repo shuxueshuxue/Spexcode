@@ -32,7 +32,7 @@ const CHORDS = { nn: (id) => `@new under @${id}: `, dd: (id) => `@delete @${id}:
 const CHORD_KEYS = Object.keys(CHORDS)
 const CHORD_LEADERS = new Set(CHORD_KEYS.map((c) => c[0]))
 
-function Dashboard({ specs, sessions, reload }) {
+function Dashboard({ specs, sessions, reload, project }) {
   const [focusId, setFocusId] = useState(() => specs.find((s) => !s.parent)?.id)
   const [overlay, setOverlay] = useState(false)   // node-info popup (opened by `i`)
   const [pane, setPane] = useState('spec')
@@ -423,7 +423,7 @@ function Dashboard({ specs, sessions, reload }) {
         />
         {/* HUD: brand + a discreet `?` that opens the keymap/legend modal */}
         <div className="hud">
-          <span className="brand">$ spec-dashboard</span>
+          <span className="brand">$ {project || 'spec-dashboard'}</span>
           <button className="hud-help" onClick={() => setLegend((v) => !v)} title={t('hud.helpTitle')}>?</button>
         </div>
 
@@ -502,5 +502,5 @@ export default function App() {
   }, [board?.projectIcon])
   if (!board) return <div className="loading">{t('hud.loading')}</div>
   if (isMobile) return <MobileApp specs={board.nodes} sessions={board.sessions} project={projectTitle(board)} />
-  return <Dashboard specs={board.nodes} sessions={board.sessions} reload={reload} />
+  return <Dashboard specs={board.nodes} sessions={board.sessions} reload={reload} project={projectTitle(board)} />
 }

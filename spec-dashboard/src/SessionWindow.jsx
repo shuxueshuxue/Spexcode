@@ -64,14 +64,17 @@ export function SessionRow({ s, locked, showAvatar = true, compact = false, lead
     <>
       {lead}
       {showAvatar && <Avatar seed={s.id} status={s.status} title={`${sessionName(s)} · ${statusWord} — ${s.id.slice(0, 8)}`} />}
-      <span className="sess-id" title={headline}>{headline}</span>
-      {locked && <span className="sess-lock" title={t('sessionWindow.lockedTitle')}><LockGlyph /></span>}
+      {/* meta is rendered BEFORE the headline in source (CSS `order` keeps it visually last in the resting
+          flex row) so that, when a selected row wraps ([[session-activity]] reveal), it can FLOAT onto the
+          headline's first line and the wrapped lines below run full-width beneath it. */}
       <span className="sess-meta">
         {compact
           ? <span className="sess-glyph" style={{ color: STATUS_COLOR[s.status] }} title={statusWord} aria-label={statusWord}>{STATUS_GLYPH[s.status]}</span>
           : <span className="sess-status" style={{ color: STATUS_COLOR[s.status] }}>{statusWord}</span>}
         {ops && <span className="sess-ops">{ops}</span>}
       </span>
+      <span className="sess-id" title={headline}>{headline}</span>
+      {locked && <span className="sess-lock" title={t('sessionWindow.lockedTitle')}><LockGlyph /></span>}
     </>
   )
 }

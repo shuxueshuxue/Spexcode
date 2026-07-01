@@ -625,6 +625,9 @@ body {
    right by design — more glance-info (ahead-count, age, …) can join it later. The same rule serves the
    .si-item tab face. */
 .sess-meta {
+  /* rendered before the headline in source (SessionRow) but kept visually LAST by order:1 in every flex
+     face — so on a selected console row it can float onto the headline's first line ([[session-activity]]). */
+  order: 1;
   flex: 0 0 100%; width: 100%; min-width: 0; margin-top: 1px;
   display: flex; align-items: center; column-gap: 7px;
   font-size: 10px; line-height: 1.3; opacity: .9; overflow: hidden;
@@ -887,14 +890,14 @@ body {
    widening the list. Reveal is tied to SELECTION, not :hover — a hover-expand would grow the row under the
    cursor and shove the rows below it down, making every click a moving target; only the row you have already
    committed to opens, so the list stays a stable click surface.
-   When it wraps, the status MARKER (glyph + op tally) leaves the row's flow to the first line's top-right
-   (absolute), and a one-line-tall right float reserves its slot on line 1 only — so line 1's text stops short
-   of the marker while every wrapped line beneath it runs the FULL row width, instead of the marker reserving
-   a narrow column down the whole row. */
-.si-item.on { position: relative; }
+   When it wraps, the row becomes block flow and the status MARKER (glyph + op tally) FLOATS to the first
+   line's right. Because the marker is rendered before the headline in source, the float lands on line 1 and
+   the headline wraps around it — reserving space on line 1 ONLY (self-sized to the marker's real width, so a
+   wide `~3 +2` tally fits), while every wrapped line beneath runs the FULL row width instead of the marker
+   pinching a column down the whole row. */
+.si-item.on { display: block; }
+.si-item.on .sess-meta { float: right; margin: 0 0 0 8px; }
 .si-item.on .sess-id { white-space: normal; overflow: visible; }
-.si-item.on .sess-id::before { content: ''; float: right; width: 3em; height: 1.25em; }
-.si-item.on .sess-meta { position: absolute; top: 5px; right: 12px; margin: 0; }
 /* zone divider — a clean SOLID small dim uppercase label with a subtle hairline rule trailing it. `--zh` is
    the zone hue: yellow = needs you, green = running, muted = offline (dormant). */
 .si-zone {

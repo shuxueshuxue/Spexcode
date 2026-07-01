@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# @@@ proposal nudge (post-merge) - the taste forum ([[proposals]]) fires AFTER the work lands, not while the
+# agent is finishing it: the agent's own task comes first. Merge is dispatched to the session's OWN agent
+# (see [[dispatch]]), so this hook runs in that live merge turn and its stdout reaches the agent as the merge
+# command's own output — a git-native nudge that costs no harness block-cap and reaches a self-launched agent
+# too. GUARDED to the `merge node/<id>:` commit, so an ordinary `git pull`/unrelated merge never nags.
+subj=$(git log -1 --format=%s 2>/dev/null)
+case "$subj" in
+  "merge node/"*)
+    node=$(printf '%s' "$subj" | sed -n 's#^merge \(node/[^:]*\):.*#\1#p')
+    echo ""
+    echo "── proposal forum ─────────────────────────────────────────────────"
+    echo "Your work (${node:-this node}) just landed. Before you close: did anything feel"
+    echo "OFF this session — a smell, an awkward boundary, a wish — even unrelated to your"
+    echo "task? Record it so your taste reaches the codebase instead of evaporating:"
+    echo "  spex proposals                          # read the forum first (it is non-blind)"
+    echo "  spex propose sign <id>                  # +1 if your concern is already raised"
+    echo "  spex propose reply <id> --body -        # add your angle to an existing thread"
+    echo "  spex propose \"<concern>\" [--node <id>]   # else open a new one"
+    echo "A supervisor drains the forum into real work later. (Advisory — skip if nothing nagged.)"
+    echo "───────────────────────────────────────────────────────────────────"
+    ;;
+esac
+exit 0

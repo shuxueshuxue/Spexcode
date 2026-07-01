@@ -1,8 +1,11 @@
 ---
 title: proposals
-status: pending
+status: active
 hue: 200
-desc: An async taste FORUM — a session records whatever felt off (even off-mainline) as a spec-shaped proposal others sign/discuss; a supervisor drains it into real work. Data, not contract, so the product graph never sees it. (Pending — design captured, implementation deferred to an issue.)
+desc: An async taste FORUM — a finished session records whatever felt off as a plain git-tracked document under .spec/.proposal (NOT a spec node); others sign/reply; a supervisor drains it. Nudged post-merge, once the agent's own work has safely landed.
+code:
+  - spec-cli/src/proposals.ts
+  - spec-cli/templates/hooks/post-merge
 ---
 
 # proposals
@@ -13,30 +16,43 @@ An agent finishing a task notices things that feel off — a smell, an awkward b
 unrelated to its mainline. That judgment is **taste**, and it must not evaporate when the session ends. So a
 finished session records such concerns into one shared, durable **forum**; other sessions sign and discuss
 them like an async chatroom; a supervisor later drains the forum into real work. This keeps **global** taste
-flowing into the codebase's shape, instead of every agent owning only its own slice and losing the whole.
+flowing into the codebase's shape, instead of every agent owning only its own slice.
 
 ## expanded spec
 
-The forum is a **spec-SHAPED tree** at `<root>/.proposal` (parallel to `.config`): each proposal is a node
-(`spec.md`: a one-line concern + the body), each signed reply a **child "post" node**, deeper children
-in-thread replies. But the forum is **DATA, not contract** — so the product graph must never treat it as
-nodes: the spec walk must skip `.proposal`, and `isSpecMd` must exclude it (so the board overlay shows no
-ghost), so **lint / drift / deriveStatus never see the forum**. It carries its own loader, its own status,
-its own surface.
+The forum is **git-tracked data, not a spec node.** A proposal reuses almost nothing of the spec-node
+contract — no title/hue/desc/code frontmatter, no parent-ancestor nesting, no lint, no drift, no
+version-from-`spec.md`-log, no graph render — so forcing it into a `spec.md` would only earn it a pair of
+graph-exemptions to blind it again. Instead each proposal is a **plain markdown file** at
+`<root>/.spec/.proposal/<id>.md`. Because that file is **not named `spec.md`**, the spec walk descends past
+it without making a node and `isSpecMd` ignores it: the forum is invisible to lint / drift / deriveStatus /
+overlay **structurally**, with no special-case exemption. It lives **inside `.spec`** (not a second
+top-level folder) so adopting SpexCode still adds one directory — matching how the reflexive `.config`
+system already nests there.
 
-- **Own lifecycle status**, forum-authored never git-derived: `open` → `accepted | rejected | landed`. A
-  proposal may name the product `nodes:` it concerns, linking back into the graph (`[[…]]`).
-- **Write in the author's own worktree, self-commit on its node branch** — so the commit-gate's clean-tree
-  check still holds and the proposal rides that session's merge. **Read unions `.proposal` across the main
-  checkout + every live worktree** (the board's read-from-worktrees model), so a proposal surfaces the
-  moment it is committed, before its branch merges.
+- **One file per thread.** The file is a one-line `concern` plus a prose body plus appended signed replies;
+  its frontmatter carries `by` (author session), `status`, optional `nodes:` (the product nodes it concerns,
+  linked `[[…]]`), and `signers`. One-file-per-thread keeps concurrent worktrees conflict-free: a new
+  proposal is a new file (never conflicts); a reply touches one file.
+- **Own lifecycle status**, forum-authored never git-derived: `open` → `accepted | rejected | landed`.
+- **The forum lives on the trunk, not per-branch.** A write reads and commits **straight to the main
+  checkout's `.spec/.proposal/`** — [[main-guard]] admits a commit touching only forum files, because the
+  forum is data, not contract, and needs no review ritual. So there is no per-branch copy and no
+  cross-worktree union to reconcile: every thread is always present to read, sign, and reply to. This is
+  also what lets a **post-merge** proposal land durably — the author's own branch has already merged, so a
+  proposal written then could never ride it; committed to the trunk directly, it simply persists.
+- **Nudged AFTER the work lands, not during it.** The agent's own task is what matters most, so the forum is
+  never raised while it is still finishing — it is raised the moment the work **merges**. A **`post-merge`
+  git hook** (harness-side gates live in [[state]]; this one is git-side) fires in the doer's dispatched
+  merge turn — merge is dispatched to the session's own agent (see [[dispatch]]) — guarded to the
+  `merge node/<id>:` commit so an ordinary pull never nags; its nudge lands in the agent's own command
+  output: read the forum, sign/reply if the concern is already raised, else open a new one. Git-native, so
+  it reaches a self-launched agent too and costs no harness block-cap.
 - **Surface:** `spex propose "<concern>" [--node <id>…] [--body -|<text>]`; `propose reply|sign|resolve <id>`;
-  `spex proposals [--node] [--all] [--json]` is the drain view. A finished session is nudged toward the forum
-  by a **non-blocking Stop-hook advisory** ([[state]]'s clean-done path) — the forum is **non-blind**: read
-  it, sign/reply if your concern is already raised, else open a new one.
+  `spex proposals [--node] [--all] [--json]` is the drain view.
 - **Dedup is the drain's job, not the write's.** Duplicate proposals are a **signal** (recurrence), folded
   into one thread by a supervisor's judgment ([[supervisor]]) — never a write-time similarity match. And
   recurrence is weighed as **salience, not importance**: a sharp singleton outranks a popular gripe, so the
   count never becomes the priority ranking.
 
-Out of scope (sibling nodes): a dashboard forum view; an automated drainer (the supervisor drains by hand).
+Out of scope (a sibling node, later): a dashboard forum view — read-only over this same union read.

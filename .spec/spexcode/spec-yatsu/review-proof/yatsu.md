@@ -13,8 +13,8 @@ scenarios:
       toggle shows the full original ↔ new content side by side.
     expected: >
       One coherent dark proof document with no agent-authored content: a masthead with the
-      derived node/branch headline + session/commits, a gate row (typecheck · lint · conflict
-      · ahead), and an evidence section grouping the diff by node, each measured scenario
+      derived node/branch headline + session/commits, a gate row (lint · conflict · ahead ·
+      committed), and an evidence section grouping the diff by node, each measured scenario
       showing its verdict and inlined evidence. Each changed file expands to its unified diff
       (additions green, deletions red) and further to the full before/after comparison. Assets
       are data-URIs so no image is broken; layout is whole, not empty or garbled.

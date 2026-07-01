@@ -72,15 +72,14 @@ scenarios:
   - name: resume-preserves-standing-proposal
     tags: [backend-api]
     description: >-
-      Take a session that is PROPOSING a merge (lifecycle awaiting, proposal=merge, i.e. DisplayStatus review)
-      offline (`exit`), then resume it (the relaunch panel → reopen) WITHOUT dispatching a merge. Read the
-      record + board.
+      Put a session into review (lifecycle awaiting, proposal=merge) and resume it (reopen) WITHOUT the agent
+      resuming work — isolate reopen's write via the online path (POST /review then POST /resume on a live,
+      paused agent, so there is no relaunch and no mark-active). Read the record.
     expected: >-
-      The resumed session comes back STILL in review — record status stays `awaiting` with proposal `merge`
-      intact (board shows review, now online), NOT silently withdrawn to idle. reopen never touches the
-      proposal; a proposal is reversed only by messaging the session (mark-active), never as a hidden
-      side-effect of a relaunch. (The merge dispatch is the one path that clears it — via the delivered prompt,
-      not via reopen.)
+      reopen preserves the standing proposal: the record stays `awaiting` with proposal `merge` intact (board
+      shows review), NOT silently withdrawn to idle. reopen never touches the `proposal` field. A proposal is
+      reversed only when the agent actually WORKS again (its mark-active hook) or by the merge dispatch's
+      delivered prompt — never as a hidden side-effect of the relaunch itself.
 ---
 # yatsu.md — state
 

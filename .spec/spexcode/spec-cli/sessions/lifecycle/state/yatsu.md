@@ -58,6 +58,17 @@ scenarios:
       The board lists exactly the GOVERNED sessions, read from ${SPEXCODE_HOME}/projects/<enc>/sessions/*,
       ordered by createdAt; node id / branch / title / liveness come from the record. Non-governed
       self-launched records are NOT listed. Removing a session cleans up its global record.
+  - name: resume-offline-session-rests-idle
+    tags: [backend-api]
+    description: >-
+      Take a governed session offline (`exit`, or let its agent die) so the dashboard shows the relaunch
+      panel, then hit resume (the frontend relaunch button → `POST /api/sessions/:id/resume`, i.e. reopen)
+      WITHOUT sending any prompt afterwards. Read the session's status once the agent is back online.
+    expected: >-
+      The resumed session rests at `idle` (displayed idle, not `working`) — the agent is `--resume`d into the
+      same conversation but sitting at its prompt with nothing to do, so it never shows a phantom `working`
+      before the human says anything. Only the next real prompt (via mark-active) flips it to active. Clearing
+      a still-LIVE proposal ("back to working") still returns to `active`.
 ---
 # yatsu.md — state
 

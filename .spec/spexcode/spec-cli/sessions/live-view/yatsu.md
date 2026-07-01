@@ -77,18 +77,19 @@ scenarios:
       Measure the undersized first frame a hidden (0×0) connect used to receive. On a tmux socket, warm a
       bridge through the real API (attachViewer spawns the shared client, resizeBridge sets a "prewarm"
       size). Then attach a SECOND viewer with NO initial size — the warm-and-hidden dashboard connect — via
-      attachViewer, and count the pane bytes it receives. Probe three things: (1) over ~150ms BEFORE any
-      resize it must receive ZERO frames; (2) send the client's first resize (resizeBridge to the real
+      attachViewer, and count the pane bytes it receives. Probe three things: (1) over ~300ms BEFORE any
+      resize it must receive ZERO frames — the first paint is driven PURELY by the first resize, with no timer
+      fallback that would paint on its own; (2) send the client's first resize (resizeBridge to the real
       visible size, e.g. 214×57) and confirm it now receives the deferred first frame and tmux's window
-      converges to that size; (3) a SEPARATE viewer that never resizes still receives a frame within the
-      bounded fallback. File with `spex yatsu eval live-view --scenario
-      hidden-connect-defers-undersized-first-paint --result <txt>`.
+      converges to that size; (3) a SEPARATE viewer that never resizes receives NOTHING — fail-loud, no timer,
+      because a pane no one makes visible is a pane no one looks at and so needs no frame. File with `spex
+      yatsu eval live-view --scenario hidden-connect-defers-undersized-first-paint --result <txt>`.
     expected: >-
       The hidden, no-size viewer receives NO pane bytes until its first resize — the server draws no
-      undersized prewarm frame into a still-hidden buffer (first-visible, not first-connect). Its first
-      resize draws the one first frame at the real visible size (the window converges to it; the viewer
-      receives bytes). A viewer that never resizes still receives one fallback frame, so a non-dashboard
-      pane is never left blank.
+      undersized prewarm frame into a still-hidden buffer (first-visible, not first-connect), and no timer
+      ever paints one either. Its first resize draws the one first frame at the real visible size (the window
+      converges to it; the viewer receives bytes). A viewer that never resizes stays blank forever — the
+      first-paint path holds zero timers, so a frame arrives only as the pure consequence of a resize event.
 ---
 # yatsu.md — live-view
 
@@ -101,8 +102,9 @@ not an internal probe. The losses, about a pane behaving wrong the moment a huma
   before they look.
 - **undersized first frame** — a warm pane connects while still hidden (0×0), so a guessed-size first
   frame would land short and then snap to full when the human looks. Zero loss is the server **deferring**
-  that first paint to the client's first resize (drawn at the real visible size), with a bounded fallback
-  so a viewer that never resizes is still never blank.
+  that first paint **purely** to the client's first resize (drawn at the real visible size), with **no timer
+  fallback** — a pane that never resizes is one no one makes visible, so it needs no frame, keeping the
+  first-paint path event-driven and zero-timer just like the resize convergence.
 - **visible → full-screen latency** — the gap from a pane becoming visible (its size set) to its coherent
   full frame. The control-mode boundary makes this **event-driven and timer-free** — `refresh-client -C` sets
   the size, the guaranteed `%layout-change` confirms convergence, a bounded `capture-pane` seeds the frame — so

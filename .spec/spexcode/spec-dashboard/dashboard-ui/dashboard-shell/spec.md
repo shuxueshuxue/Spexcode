@@ -35,7 +35,11 @@ theme is nothing but a second definition of them: `styles.css` keeps the solariz
 `:root`, and redefines the full set under `:root[data-theme=dark]` as a modern GitHub-Dark neutral
 near-black palette — so flipping the one `data-theme` attribute on `<html>` re-skins board and console
 together, with no per-component theme logic. The embedded terminal stays dark in both themes (the
-Claude TUI is dark-designed), so `--term-bg` is a neutral near-black in light *and* dark.
+Claude TUI is dark-designed), so `--term-bg` is a neutral near-black in light *and* dark. Even the
+**scrollbars** read through the palette: `styles.css` themes them globally (a thin, rounded thumb —
+`--line` at rest, `--muted` on hover, over a transparent track) via `::-webkit-scrollbar*` for Blink/WebKit
+and `scrollbar-color`/`scrollbar-width` for Firefox, so every scrollable pane matches the app in both
+themes with no per-surface rule and no raw-OS default breaking the skin.
 
 `theme.js` owns the pick: `getTheme()` returns an explicit saved choice (`localStorage
 spexcode.theme`) else the system preference (`prefers-color-scheme`), and `applyTheme(t)` sets the

@@ -56,6 +56,16 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* @@@ themed scrollbars - the scrollbars follow the [data-theme] palette in both light and dark instead of
+   the raw OS default. Thin, rounded thumb (--line at rest, --muted on hover), track transparent onto the
+   --panel surface. Firefox reads scrollbar-color/-width; WebKit/Blink the ::-webkit-scrollbar rules. */
+* { scrollbar-color: var(--line) transparent; scrollbar-width: thin; }
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--line); border-radius: 6px; border: 2px solid var(--panel); }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+::-webkit-scrollbar-corner { background: transparent; }
+
 .app { display: grid; grid-template-columns: 1fr var(--fp-w, 250px); height: 100vh; }
 /* @@@ keyboard mode - while the KEYBOARD is driving the board (App.jsx kbdMode, set by nav keys, cleared by
    a real mouse move) the mouse gets out of the way: the cursor hides everywhere and the board takes no

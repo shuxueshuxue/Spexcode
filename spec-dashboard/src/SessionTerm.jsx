@@ -80,7 +80,7 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
     firstFrameCleanedRef.current = false
     const term = new Terminal({
       fontSize: 11, fontFamily: 'Menlo, monospace',
-      cursorBlink: false, disableStdin: true, scrollback: 5000,  // read-only view; xterm owns scrollback
+      cursorBlink: false, disableStdin: true, scrollback: 5000,  // render cache; wheel navigation is tmux-owned
       // stops a held ⌥ mid-drag from flipping into column/block select, so an accidental Option keeps a linewise grab.
       macOptionClickForcesSelection: true,
       // GitHub-Dark NEUTRAL palette, paired with the #0d1117 background so the terminal matches the app's
@@ -184,29 +184,22 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
       },
     })
 
-    // wheel routing mirrors the pane's real terminal. The bridge seeds xterm into the pane's mouse-tracking
-    // mode on each (re)attach, so this handler can trust term.modes:
-    //   - mouse-tracking ON (a full-screen TUI like Claude Code owns the mouse) → the app scrolls ITS OWN
-    //     history, not xterm's empty alternate-screen buffer, so FORWARD the wheel as an SGR mouse report and
-    //     let the app scroll (return false — don't also scroll xterm). This is the control-mode analogue of the
-    //     old raw-attach wheel forwarding; the socket carries a {t:'wheel'} frame, the bridge send-keys it in.
-    //   - mouse-tracking OFF (a normal-screen pane) → xterm's own scrollback holds the seeded real history, so
-    //     let xterm scroll natively (return true).
+    // All wheel navigation belongs to the tmux bridge, not to xterm's browser scrollback. The backend decides
+    // from the pane's real tmux state whether to inject mouse reports into a mouse-owning TUI or to scroll
+    // tmux copy-mode for a normal pane. xterm remains the renderer for the tmux view.
     term.attachCustomWheelEventHandler((ev) => {
-      if (term.modes?.mouseTrackingMode && term.modes.mouseTrackingMode !== 'none') {
-        const host = hostRef.current
-        if (host && term.cols && term.rows) {
-          const rect = host.getBoundingClientRect()
-          const clamp = (v, max) => Math.min(max, Math.max(1, v))
-          const col = clamp(Math.floor((ev.clientX - rect.left) / (rect.width / term.cols)) + 1, term.cols)
-          const row = clamp(Math.floor((ev.clientY - rect.top) / (rect.height / term.rows)) + 1, term.rows)
-          const ticks = Math.min(5, Math.max(1, Math.round(Math.abs(ev.deltaY) / 40)))
-          if (sock?.isOpen()) sock.send(JSON.stringify({ t: 'wheel', up: ev.deltaY < 0, col, row, ticks }))
-        }
-        ev.preventDefault()
-        return false   // the app scrolls; never let xterm's empty alt-buffer (or the page) scroll instead
+      const host = hostRef.current
+      if (host && term.cols && term.rows) {
+        const rect = host.getBoundingClientRect()
+        const clamp = (v, max) => Math.min(max, Math.max(1, v))
+        const col = clamp(Math.floor((ev.clientX - rect.left) / (rect.width / term.cols)) + 1, term.cols)
+        const row = clamp(Math.floor((ev.clientY - rect.top) / (rect.height / term.rows)) + 1, term.rows)
+        const ticks = Math.min(5, Math.max(1, Math.round(Math.abs(ev.deltaY) / 40)))
+        try { term.scrollToBottom() } catch { /* keep xterm's native viewport out of the navigation path */ }
+        if (sock?.isOpen()) sock.send(JSON.stringify({ t: 'wheel', up: ev.deltaY < 0, col, row, ticks }))
       }
-      return true      // normal-screen pane → xterm scrolls its own seeded scrollback
+      ev.preventDefault()
+      return false
     })
 
     // ⌘/Ctrl+C copies the xterm selection: listen on `document` (the pane isn't focused), gated to the visible pane and standing down when a focused field has its own selection.

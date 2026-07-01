@@ -91,6 +91,12 @@ function joinLines(lines: Buffer[]): Buffer {
 async function tmuxRaw(args: string[]): Promise<void> {
   try { await pexec('tmux', ['-L', TMUX_SOCK, ...args]) } catch { /* best-effort */ }
 }
+async function tmuxOut(args: string[]): Promise<string> {
+  try {
+    const { stdout } = await pexec('tmux', ['-L', TMUX_SOCK, ...args])
+    return stdout.trim()
+  } catch { return '' }
+}
 // how many clients are attached — pre-warm skips a session a human is already in (avoids a size-fight). Read
 // once at reconcile time (before our own control client attaches), so it counts only foreign/human clients.
 async function attachedCount(id: string): Promise<number> {
@@ -274,8 +280,8 @@ export function attachViewer(id: string, v: Viewer, initialSize?: { cols: number
 // state — alt-screen switch, mouse-tracking modes, …). So a FULL (re)attach frame must RECONSTRUCT that state:
 // read the pane's live mode flags and emit the matching DEC private-mode prelude, so the browser xterm faithfully
 // mirrors the pane — on the ALTERNATE screen for a full-screen TUI (else its redraws would pollute the normal
-// scrollback and mis-render) and in the app's mouse-tracking mode (so the wheel routes correctly — see
-// SessionTerm). MEASURED, one exec (not a poll) per full frame; live mode changes flow through %output naturally.
+// scrollback and mis-render) and in the app's mouse-tracking mode. MEASURED, one exec (not a poll) per full
+// frame; live mode changes flow through %output naturally.
 async function paneModePrelude(id: string): Promise<string> {
   try {
     const { stdout } = await pexec('tmux', ['-L', TMUX_SOCK, 'display-message', '-p', '-t', id, '-F',
@@ -289,17 +295,30 @@ async function paneModePrelude(id: string): Promise<string> {
   } catch { return '' }
 }
 
-// forward a wheel tick to the pane as an SGR mouse report so a full-screen TUI (which owns the mouse) scrolls
-// its OWN real history — the control-mode analogue of the raw-attach wheel forwarding this rewrite dropped.
-// `send-keys -l` injects the bytes straight into the pane's input (bypassing tmux's own mouse handling), so
-// the app receives them (PROVEN). The browser only forwards the wheel when its xterm is in mouse-tracking mode
-// (the prelude above put it there), so a normal-screen shell never gets mouse bytes littered into its prompt.
+// A wheel always enters at the tmux adapter boundary. If the pane is in copy-mode, or is a normal pane with
+// tmux history, tmux scrolls its own copy-mode view and we repaint that view. If the pane is a mouse-owning
+// TUI, inject the SGR wheel report so the application scrolls itself. No harness-specific branch exists here.
 export function forwardWheel(id: string, up: boolean, col: number, row: number, ticks: number): void {
-  if (!bridges.has(id)) return
+  const b = bridges.get(id)
+  if (!b) return
   const c = Math.max(1, Math.floor(col) || 1), r = Math.max(1, Math.floor(row) || 1)
   const n = Math.max(1, Math.min(10, Math.floor(ticks) || 1))
-  const seq = `\x1b[<${up ? 64 : 65};${c};${r}M`.repeat(n)
-  void tmuxRaw(['send-keys', '-t', id, '-l', '--', seq])
+  void (async () => {
+    const raw = await tmuxOut(['display-message', '-p', '-t', id, '-F',
+      '#{pane_in_mode},#{alternate_on},#{mouse_standard_flag},#{mouse_button_flag},#{mouse_any_flag},#{mouse_sgr_flag}'])
+    const [inMode, _alt, ms, mb, ma, sgr] = raw.split(',')
+    const mouseOwnsWheel = [ms, mb, ma, sgr].some((v) => v === '1')
+    if (inMode === '1' || !mouseOwnsWheel) {
+      if (up && inMode !== '1') await tmuxRaw(['copy-mode', '-e', '-t', id])
+      if (up || inMode === '1') {
+        await tmuxRaw(['send-keys', '-t', id, '-X', '-N', String(n * 5), up ? 'scroll-up' : 'scroll-down'])
+        await repaint(b)
+      }
+      return
+    }
+    const seq = `\x1b[<${up ? 64 : 65};${c};${r}M`.repeat(n)
+    await tmuxRaw(['send-keys', '-t', id, '-l', '--', seq])
+  })()
 }
 
 // every (re)attach and resize routes here. Deterministic, event-driven, zero polling: set the size with

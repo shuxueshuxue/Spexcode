@@ -1057,10 +1057,9 @@ body {
    the final/any fit measures the true full width. SessionTerm also re-fits on animationend to be sure. */
 @keyframes si-expand { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
-/* live tmux terminal inside the session view — xterm is FITTED to this box (see SessionTerm). The host
-   and its wrapper clip (no horizontal scrollbar), but the xterm VIEWPORT scrolls vertically so the
-   accumulated scrollback is reachable — that one viewport scrollbar is the only one (no double bar).
-   overflow:hidden clips the host; the box is shortened above the docked ❯ box by margin-bottom (set above). */
+/* live tmux terminal inside the session view — xterm is FITTED to this box (see SessionTerm). The host and
+   wrapper clip the terminal chrome; wheel navigation is sent to the tmux bridge so normal panes and TUIs use
+   the same pane-owned path. The box is shortened above the docked ❯ box by margin-bottom (set above). */
 /* the terminal is a read-only VIEW. */
 .st-wrap { position: relative; width: 100%; height: 100%; }
 .st-host { width: 100%; height: 100%; overflow: hidden; }

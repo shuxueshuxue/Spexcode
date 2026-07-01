@@ -175,9 +175,10 @@ app.post('/api/sessions/:id/merge', async (c) => {
 })
 
 // one WS over a shared tmux control-mode client (pty-bridge): server→client = raw pane bytes (binary); the
-// view takes no keyboard input, so client→server is only a text control frame — {t:'resize',cols,rows} or, when
-// a full-screen TUI owns the mouse, {t:'wheel',…} which forwards the wheel to the pane so the app scrolls its
-// own history. A real tmux client, so the first paint is one coherent frame and live bytes arrive as events.
+// view takes no keyboard input, so client→server is only a text control frame — {t:'resize',cols,rows} or
+// {t:'wheel',…}. The bridge resolves the wheel against tmux pane state: copy-mode repaint for normal panes,
+// SGR mouse injection for mouse-owning TUIs. A real tmux client, so the first paint is one coherent frame and
+// live bytes arrive as events.
 app.get('/api/sessions/:id/socket', upgradeWebSocket((c) => {
   const id = c.req.param('id') as string
   // the size-first handshake: a client that already knows its pane size carries it as ?cols=&rows= so the
@@ -193,9 +194,8 @@ app.get('/api/sessions/:id/socket', upgradeWebSocket((c) => {
     onMessage(evt) {
       if (!viewer) return
       const data = evt.data
-      // no keyboard input: the only client→server messages are the resize frame and the wheel frame (the
-      // latter forwarded to the pane as an SGR mouse report so a full-screen TUI scrolls its own history —
-      // the browser sends it only when its xterm is in mouse-tracking mode). Binary is ignored.
+      // no keyboard input: the only client→server messages are the resize frame and the wheel frame. Binary
+      // is ignored; pane navigation stays inside the tmux bridge instead of becoming browser scroll state.
       if (typeof data === 'string') {
         try {
           const m = JSON.parse(data)

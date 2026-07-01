@@ -1,9 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import SessionTerm from './SessionTerm.jsx'
-import SessionGraph from './SessionGraph.jsx'
-import { loadConfig, setSessionSort } from './data.js'
-import { reorderPlan } from './sessionReorder.js'
-import { Avatar } from './avatar.jsx'
+import { loadConfig } from './data.js'
 import { labelColor } from './color.js'
 import { STATUS_COLOR, sessionHeadline, sessionZone, zoneSort } from './session.js'
 import { SessionRow } from './SessionWindow.jsx'
@@ -184,30 +181,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [navMode, setNavMode] = useState(false)
   const [menuById, setMenuById] = useState({})   // per-pane menu-sniff flag from each SessionTerm; drives the nav button's `.suggest` pulse
   const [proofOpen, setProofOpen] = useState(false)
-  // the graph's `?` legend, lifted here so the console's Esc handler can close it before the console
-  // (Esc precedence — see the key router below).
-  const [graphLegend, setGraphLegend] = useState(false)
-  // the graph's edges, polled HERE in the always-mounted console (not inside SessionGraph, which remounts on
-  // every reselect): owning them one level up frames the FINAL clustered web on reselect with no cold fetch
-  // or edgeless-then-jump, and keeps the web live in the background. `graphEdgesLoaded` holds the graph's
-  // first reveal until the real edges land.
-  const [graphEdges, setGraphEdges] = useState([])
-  const [graphEdgesLoaded, setGraphEdgesLoaded] = useState(false)
-  useEffect(() => {
-    if (!open) return                                  // only while the console is open (the graph's only home)
-    let live = true
-    const pull = async () => {
-      try {
-        const res = await fetch('/api/sessions/graph')
-        const g = await res.json()
-        if (live) setGraphEdges(Array.isArray(g.edges) ? g.edges : [])
-      } catch { /* transient; keep the last good edges */ }
-      finally { if (live) setGraphEdgesLoaded(true) }
-    }
-    pull()
-    const id = setInterval(pull, 4000)
-    return () => { live = false; clearInterval(id) }
-  }, [open])
   const [uploading, setUploading] = useState(false)
   const [uploadErr, setUploadErr] = useState(false)
   const [dragTarget, setDragTarget] = useState(null)
@@ -220,68 +193,17 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const fileRef = useRef(null)         // the one hidden <input type=file>; the attach buttons trigger it
   const fileTargetRef = useRef('new')  // which surface the pending pick inserts into ('new' | 'msg')
 
-  // [[session-reorder]] drag: a POINTER drag from the per-row handle, not native HTML5 DnD. keepFocus
-  // preventDefaults the row mousedown to keep the ❯ box focused, which would block native DnD; a pointer
-  // drag rides window mousemove/mouseup, immune to that preventDefault. dropHint lights the insertion line.
-  const [dropHint, setDropHint] = useState(null)
-  const applyReorder = async (plan) => {
-    if (!plan) return
-    try { await Promise.all(plan.updates.map((u) => setSessionSort(u.id, u.key))) }
-    catch { /* the next board poll reconciles */ }
-    reload?.()
-  }
   // the session list is grouped into two triage zones (needs-you over self-running, [[session-console]]); `zoned`
-  // is that display order, and ALSO the order drag-reorder and ↑/↓ nav walk, so the three never disagree.
+  // is that display order, and ALSO the order ↑/↓ nav walks, so the two never disagree. Within a zone the
+  // newest session sits on top (automatic ordering — no manual reorder).
   const zoned = useMemo(() => zoneSort(sessions), [sessions])
-  // start a drag from a row's handle. Do NOT stopPropagation: keepFocus then still runs and preventDefaults the
-  // mousedown, so the docked ❯ input never loses focus — and preventDefault does not stop the window
-  // mousemove/mouseup this drag rides on. The whole gesture lives on `window`, so it survives the re-render
-  // applyReorder triggers and works even if the cursor leaves the list.
-  const onHandleDown = (e, s) => {
-    if (e.button !== 0) return
-    const startY = e.clientY
-    const list = zoned                  // snapshot for this gesture — the ZONED display order, so drop math matches what's on screen
-    let dragging = false, hint = null
-    const onMove = (ev) => {
-      if (!dragging) { if (Math.abs(ev.clientY - startY) < 4) return; dragging = true }
-      ev.preventDefault()
-      const rows = [...(panelRef.current?.querySelectorAll('.si-item') || [])]
-      hint = null
-      for (const el of rows) {
-        const r = el.getBoundingClientRect()
-        if (ev.clientY >= r.top && ev.clientY <= r.bottom) { hint = { id: el.dataset.sid, place: ev.clientY < r.top + r.height / 2 ? 'before' : 'after' }; break }
-      }
-      if (!hint && rows.length && ev.clientY > rows[rows.length - 1].getBoundingClientRect().bottom) hint = { end: true }
-      setDropHint(hint && !hint.end ? hint : null)
-    }
-    const onUp = () => {
-      window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp)
-      setDropHint(null)
-      if (!dragging) return
-      let beforeId
-      if (hint?.end) beforeId = null
-      else if (hint) beforeId = hint.place === 'before' ? hint.id : (list[list.findIndex((x) => x.id === hint.id) + 1]?.id ?? null)
-      else return
-      applyReorder(reorderPlan(list, s.id, beforeId, true))   // desc: the zoned list is newest-first within each zone
-    }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
-  }
-  const dragHandle = (s) => (
-    <span
-      className="si-drag-handle"
-      title={t('session.dragHandle')}
-      onMouseDown={(e) => onHandleDown(e, s)}
-      onClick={(e) => e.stopPropagation()}
-    >⠿</span>
-  )
 
   const order = useMemo(() => ['new', ...zoned.map((s) => s.id)], [zoned])
-  const active = sel === 'graph' || order.includes(sel) ? sel : 'new'
+  const active = order.includes(sel) ? sel : 'new'
   // a removed session (closed here, ended on its own, or closed elsewhere) leaves the tab unresolved: land
   // on New only if you're still on the now-gone tab. Mirrors `active`'s validity test.
   useEffect(() => {
-    if (sel !== 'graph' && !order.includes(sel)) setSel('new')
+    if (!order.includes(sel)) setSel('new')
   }, [order, sel, setSel])
   const focusId = focusNode?.id || null
   const selSession = sessions.find((s) => s.id === active)
@@ -375,7 +297,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     if (!open) return
     const id = setTimeout(() => {
       if (active === 'new') taRef.current?.focus()
-      // the graph tab has no docked input — it owns the keyboard itself (hjkl/⏎/?), so focus nothing.
       else if (selSession && selSession.liveness !== 'offline') msgRef.current?.focus()
     }, 0)
     return () => clearTimeout(id)
@@ -675,22 +596,22 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const boardCmds = boardCommandsFor(selSession?.status, runners)
   // window-level key router: ↑/↓ walk the list regardless of focus; Enter on New launches.
   const stateRef = useRef({})
-  stateRef.current = { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, searchOpen, navMode, setNavMode, sendRawKey, graphLegend, setGraphLegend }
+  stateRef.current = { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, searchOpen, navMode, setNavMode, sendRawKey }
   useEffect(() => {
     const onKey = (e) => {
-      const { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, searchOpen, navMode, setNavMode, sendRawKey, graphLegend, setGraphLegend } = stateRef.current
+      const { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, searchOpen, navMode, setNavMode, sendRawKey } = stateRef.current
       if (!open || searchOpen) return   // panel hidden, OR the search palette modal is open above us and owns the keys: nothing here listens
       // reserved ⌥/⌘+I toggles nav mode: handled before everything else, never forwarded to tmux. Matched by
       // e.code (the physical I key) because ⌥I on a mac prints a dead-key glyph, not 'i'. The chord is a
       // SINGLE modifier + I: ⌥+I XOR ⌘+I. Both held together (⌥⌘I) is the browser's own devtools accelerator —
       // let it through so the console opens rather than toggling nav mode.
       const isI = e.code === 'KeyI' || e.key === 'i' || e.key === 'I'
-      if ((e.altKey !== e.metaKey) && isI && active !== 'new' && active !== 'graph') {
+      if ((e.altKey !== e.metaKey) && isI && active !== 'new') {
         e.preventDefault(); e.stopPropagation(); setNavMode((v) => !v); return
       }
-      // ⌥+N snaps to New Session; ⌘/⌥/⌃+↑/↓ walk the session list. Kept ABOVE the graph branch and the
-      // nav-mode passthrough so they fire from the graph and even while raw-key mode forwards to a pane — and
-      // the modifier frees ↑/↓ from any caret/typing conflict, so the switch fires whatever input holds focus.
+      // ⌥+N snaps to New Session; ⌘/⌥/⌃+↑/↓ walk the session list. Kept ABOVE the nav-mode passthrough so they
+      // fire even while raw-key mode forwards to a pane — and the modifier frees ↑/↓ from any caret/typing
+      // conflict, so the switch fires whatever input holds focus.
       // N is matched by e.code (the physical N key), not e.key: ⌥N on a mac emits a dead-key glyph (˜) for e.key,
       // not 'n' — the same reason ⌥I above keys off e.code. ⌘N (mac) / ⌃N (win/linux) are the browser's
       // hard-reserved new-window accelerator whose keydown never reaches the page to be cancelled, so ⌥N is the
@@ -699,24 +620,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         if (e.code === 'KeyN' || e.key === 'n' || e.key === 'N') { e.preventDefault(); e.stopPropagation(); setSel('new'); return }
         if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
           e.preventDefault(); e.stopPropagation()
-          let i = order.indexOf(active); if (i < 0) i = 0   // off-list (graph) → enter the list from New
+          let i = order.indexOf(active); if (i < 0) i = 0
           const ni = Math.max(0, Math.min(order.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))
           setSel(order[ni]); return
         }
-      }
-      // graph tab: hjkl/⏎/? pass through to the graph's own listener; ← returns to New Session; the other
-      // arrows are swallowed (so they neither scroll nor fall through to tab nav). Esc closes the `?` legend
-      // first, else the console.
-      if (active === 'graph') {
-        if (e.key === 'Escape') {
-          e.preventDefault(); e.stopPropagation()
-          if (graphLegend) setGraphLegend(false); else onClose()
-          return
-        }
-        if (graphLegend) { if (e.key.startsWith('Arrow')) { e.preventDefault(); e.stopPropagation() } return }
-        if (e.key === 'ArrowLeft') { e.preventDefault(); e.stopPropagation(); setSel('new'); return }
-        if (e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); return }
-        return
       }
       // nav mode: forward EVERY key raw to the pane (⌃/⌥/⌘ combos encoded by navKeyToken), nothing else fires.
       if (navMode && active !== 'new') {
@@ -741,14 +648,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); e.stopPropagation(); accept(menu.items[menu.index]); return }
         if (e.key === 'Escape')    { e.preventDefault(); e.stopPropagation(); setMenu(null); return }
       }
-      // Esc closes the whole interface (App delegates it here so the menu can claim it first, above). The
-      // relationship tab's Esc is owned by its branch up top (legend-then-console); this is the other tabs'.
+      // Esc closes the whole interface (App delegates it here so the menu can claim it first, above).
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onClose(); return }
-      // from New, → crosses into the graph, but ONLY when the prompt is empty (a non-empty draft moves the
-      // caret normally). The graph's ← crosses back.
-      if (active === 'new' && e.key === 'ArrowRight' && (taRef.current?.value ?? '') === '') {
-        e.preventDefault(); e.stopPropagation(); setSel('graph'); return
-      }
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         // a text input keeps plain ↑/↓ ENTIRELY — they're its own caret keys and never switch tabs, even at
         // the first/last line, so typing in the box never jerks you onto another session. Tab switching while
@@ -783,9 +684,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     if (e.button !== 0) return
     const t = e.target
     if (isTextField(t)) return
-    // the terminal owns its own text selection; the relationship graph owns its own mousedown (ReactFlow's
-    // pan / drag-to-monitor / node click) — preventing default on either would break those gestures.
-    if (t.closest && (t.closest('.si-term-body') || t.closest('.session-graph'))) return
+    // the terminal owns its own text selection — preventing default on it would break the drag-select.
+    if (t.closest && t.closest('.si-term-body')) return
     e.preventDefault()
   }
 
@@ -821,16 +721,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             <button className={active === 'new' ? 'si-pill new on' : 'si-pill new'} title={t('session.newSessionTitle')} onClick={() => setSel('new')}>
               <span className="si-pill-glyph">＋</span>
             </button>
-            <button className={active === 'graph' ? 'si-pill graph on' : 'si-pill graph'} title={t('session.relationshipTitle')} onClick={() => setSel('graph')}>
-              <svg className="si-pill-glyph" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
-                <circle cx="3.5" cy="4" r="1.8" /><circle cx="12.5" cy="4" r="1.8" /><circle cx="8" cy="12.5" r="1.8" />
-                <path d="M4.9 5.1 L7 11 M11.1 5.1 L9 11 M5 4 H11" />
-              </svg>
-            </button>
           </div>
           {zoned.reduce((acc, s, i) => {
             // group the list into two triage zones ([[session-console]]): a small dim header leads each zone,
-            // emitted when the zone changes. Within a zone the newest session is on top ([[session-reorder]]).
+            // emitted when the zone changes. Within a zone the newest session is on top (automatic ordering).
             const z = sessionZone(s)
             if (i === 0 || z !== sessionZone(zoned[i - 1])) {
               acc.push(<div className={`si-zone si-zone-${z}`} key={`zone-${z}`}>{t(`sessionZone.${z}`)}</div>)
@@ -841,26 +735,21 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               <button
                 key={s.id}
                 data-sid={s.id}
-                className={`si-item${active === s.id ? ' on' : ''}${dropHint?.id === s.id ? ` drop-${dropHint.place}` : ''}`}
+                className={`si-item${active === s.id ? ' on' : ''}`}
                 style={{ '--ov': labelColor(s.id) }}
                 onClick={() => setSel(s.id)}
                 onDoubleClick={() => { if (s.ops?.length && onPickSession) { onPickSession(s, false); onClose() } }}
                 onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, session: s }) }}
                 title={s.ops?.length ? t('session.opsTitle') : undefined}
               >
-                <SessionRow s={s} locked={false} handle={dragHandle(s)} showAvatar={false} compact />
+                <SessionRow s={s} locked={false} showAvatar={false} compact />
               </button>
             )
             return acc
           }, [])}
         </aside>
 
-        <section className={active === 'new' ? 'si-content is-new' : active === 'graph' ? 'si-content is-graph' : 'si-content is-session'}>
-          {/* nodes (preloaded `sessions`) and edges (polled in this console) are handed straight in, so a
-              reselect frames the final web with no cold fetch; onOpen is a tab switch, not a cross-surface jump. */}
-          {open && active === 'graph' && (
-            <SessionGraph sessions={sessions} onOpen={(id) => setSel(id)} active legend={graphLegend} setLegend={setGraphLegend} edges={graphEdges} edgesLoaded={graphEdgesLoaded} />
-          )}
+        <section className={active === 'new' ? 'si-content is-new' : 'si-content is-session'}>
           {active === 'new' && (
             <div className="si-new-center">
               <div className="si-avatar" aria-hidden="true">
@@ -930,54 +819,50 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               </div>
             </div>
           )}
-          {/* the session pane stays MOUNTED even on the new/graph tabs (just display:none) so the terminals'
-              WebSockets + scroll survive the tab switch. */}
+          {/* the session pane stays MOUNTED even on the New tab (just display:none) so the terminals'
+              WebSockets + scroll survive the tab switch. The terminal fills this pane directly — no inner
+              box or title bar; a slim action strip floats the headline + lifecycle actions over its top edge. */}
           <div
             className="si-session-wrap"
-            style={{ display: (active === 'new' || active === 'graph') ? 'none' : 'flex', flexDirection: 'column', flex: 1, minWidth: 0, minHeight: 0, position: 'relative' }}
+            style={{ display: active === 'new' ? 'none' : 'flex', flexDirection: 'column', flex: 1, minWidth: 0, minHeight: 0, position: 'relative' }}
           >
-              <div className="si-term" ref={termRef}>
-                <div className="si-term-head">
-                  <span className="si-dot" style={{ background: STATUS_COLOR[selSession?.status] || STATUS_COLOR.offline }} />
-                  {/* the title reads the shared sessionHeadline ([[session-activity]]) — same source/content
-                      as the session rows, so it never disagrees with the row that opened it. */}
-                  <span className="si-th-name" title={selSession ? sessionHeadline(selSession) : active}>{(selSession && sessionHeadline(selSession)) || active}</span>
-                  <span className="si-th-st" style={{ color: STATUS_COLOR[selSession?.status] }}>{selSession?.status ? t(`status.${selSession.status}`) : ''}</span>
-                  {selSession?.merges > 0 && <span className="si-merges" title={t('session.mergesTitle')}>{t('session.merges', { n: selSession.merges })}</span>}
-                  <div className="si-actions">
-                    {showRelaunch
-                      ? <button className="si-act go" onClick={() => act('resume')}>{t('session.relaunch')}</button>
-                      : boardCmds.filter((c) => c.button).map((c) => {
-                          // nav alone carries extra state: `.on` while active, `.suggest` while the pane sniff
-                          // thinks a select menu is up (the pulse that invites nav mode).
-                          const state = c.name === 'nav' ? (navMode ? ' on' : (menuById[active] ? ' suggest' : '')) : ''
-                          return (
-                            <button
-                              key={c.name}
-                              className={`si-act board sc-${c.color} ${c.name}${state}`}
-                              title={t(c.titleKey)}
-                              onClick={c.run}
-                            >{t(c.labelKey)}</button>
-                          )
-                        })}
+              {/* slim action strip in place of the old title bar: the shared headline ([[session-activity]]) on
+                  the left, the state-narrowed lifecycle actions on the right — flat on the console ground, no box. */}
+              <div className="si-term-bar">
+                <span className="si-th-name" title={selSession ? sessionHeadline(selSession) : active}>{(selSession && sessionHeadline(selSession)) || active}</span>
+                <div className="si-actions">
+                  {showRelaunch
+                    ? <button className="si-act go" onClick={() => act('resume')}>{t('session.relaunch')}</button>
+                    : boardCmds.filter((c) => c.button).map((c) => {
+                        // nav alone carries extra state: `.on` while active, `.suggest` while the pane sniff
+                        // thinks a select menu is up (the pulse that invites nav mode).
+                        const state = c.name === 'nav' ? (navMode ? ' on' : (menuById[active] ? ' suggest' : '')) : ''
+                        return (
+                          <button
+                            key={c.name}
+                            className={`si-act board sc-${c.color} ${c.name}${state}`}
+                            title={t(c.titleKey)}
+                            onClick={c.run}
+                          >{t(c.labelKey)}</button>
+                        )
+                      })}
+                </div>
+              </div>
+              <div className="si-term-body" ref={termRef} style={{ position: 'relative' }}>
+                {/* every opened session's terminal stays mounted; only the active one is shown */}
+                {[...opened].map((id) => (
+                  <div key={id} className="si-term-layer" style={{ position: 'absolute', inset: 0, display: id === active ? 'block' : 'none' }}>
+                    {/* active → this pane is the only one that holds a WebGL context (see SessionTerm). */}
+                    <SessionTerm sessionId={id} active={id === active} onMenu={reportMenu} />
                   </div>
-                </div>
-                <div className="si-term-body" style={{ position: 'relative' }}>
-                  {/* every opened session's terminal stays mounted; only the active one is shown */}
-                  {[...opened].map((id) => (
-                    <div key={id} className="si-term-layer" style={{ position: 'absolute', inset: 0, display: id === active ? 'block' : 'none' }}>
-                      {/* active → this pane is the only one that holds a WebGL context (see SessionTerm). */}
-                      <SessionTerm sessionId={id} active={id === active} onMenu={reportMenu} />
-                    </div>
-                  ))}
-                  {showRelaunch && (
-                    <div className="si-offline">
-                      <div className="si-offline-msg">{t('session.offlineMsg')}</div>
-                      <div className="si-offline-sub">{t('session.offlineSubBefore')}<code>{active.slice(0, 8)}…</code>{t('session.offlineSubAfter')}</div>
-                      <button className="si-act go big" onClick={() => act('resume')}>{t('session.relaunchResume')}</button>
-                    </div>
-                  )}
-                </div>
+                ))}
+                {showRelaunch && (
+                  <div className="si-offline">
+                    <div className="si-offline-msg">{t('session.offlineMsg')}</div>
+                    <div className="si-offline-sub">{t('session.offlineSubBefore')}<code>{active.slice(0, 8)}…</code>{t('session.offlineSubAfter')}</div>
+                    <button className="si-act go big" onClick={() => act('resume')}>{t('session.relaunchResume')}</button>
+                  </div>
+                )}
               </div>
               {navMode ? (
                 // nav mode replaces the prompt box: keys go straight to the pane (handled at the window level).
@@ -1028,7 +913,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     </div>
     <SessionContextMenu menu={ctxMenu} onClose={() => setCtxMenu(null)} onChanged={reload} />
     {/* the review-proof overlay ([[review-proof]]) — one instance driven by the lifted `proofOpen`. */}
-    {proofOpen && active !== 'new' && active !== 'graph' && <ProofOverlay sessionId={active} onClose={() => setProofOpen(false)} />}
+    {proofOpen && active !== 'new' && <ProofOverlay sessionId={active} onClose={() => setProofOpen(false)} />}
     </>
   )
 }

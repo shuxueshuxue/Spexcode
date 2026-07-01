@@ -19,13 +19,11 @@ export function opSummary(ops) {
   return Object.entries(by).map(([op, n]) => `${GLYPH[op]}${n}`).join(' ')
 }
 
-// `handle` is an optional trailing node at the far right of row 2: the console passes the drag-reorder
-// handle here ([[session-reorder]]), the read-only window passes nothing.
-// `showAvatar` gates the leading identity face: the map-side surfaces (SessionWindow beside the spec-node
-// graph, the relationship-graph nodes) KEEP it so a session cross-references its node avatars; only the
-// console's own terminal-styled sidebar hides it (redundant next to the headline). `compact` is the
-// one-line face: the status collapses from the word to a single STATUS_GLYPH mark (word kept in the title).
-export function SessionRow({ s, locked, handle, showAvatar = true, compact = false }) {
+// `showAvatar` gates the leading identity face: the map-side SessionWindow (beside the spec-node graph)
+// KEEPS it so a session cross-references its node avatars; only the console's own terminal-styled sidebar
+// hides it (redundant next to the headline). `compact` is the one-line face: the status collapses from the
+// word to a single STATUS_GLYPH mark (word kept in the title).
+export function SessionRow({ s, locked, showAvatar = true, compact = false }) {
   const t = useT()
   const ops = opSummary(s.ops)
   const headline = sessionHeadline(s)
@@ -40,7 +38,6 @@ export function SessionRow({ s, locked, handle, showAvatar = true, compact = fal
           ? <span className="sess-glyph" style={{ color: STATUS_COLOR[s.status] }} title={statusWord} aria-label={statusWord}>{STATUS_GLYPH[s.status]}</span>
           : <span className="sess-status" style={{ color: STATUS_COLOR[s.status] }}>{statusWord}</span>}
         {ops && <span className="sess-ops">{ops}</span>}
-        {handle}
       </span>
     </>
   )

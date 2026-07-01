@@ -8,7 +8,6 @@ related:
   - spec-cli/src/index.ts
   - spec-cli/src/client.ts
   - spec-cli/src/cli.ts
-  - spec-dashboard/src/SessionGraph.jsx
 ---
 # comms-edge
 

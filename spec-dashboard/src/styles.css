@@ -628,12 +628,13 @@ body {
 .sesswin-zone {
   --zh: var(--muted);
   display: flex; align-items: center; gap: 7px; padding: 8px 9px 2px;
-  font-size: 9.5px; font-weight: 800; letter-spacing: .9px; text-transform: uppercase; user-select: none;
-  color: transparent; -webkit-text-fill-color: transparent; -webkit-text-stroke: .6px var(--zh);
+  font-size: 9.5px; font-weight: 700; letter-spacing: .9px; text-transform: uppercase; user-select: none;
+  color: var(--zh);
 }
-.sesswin-zone::after { content: ''; flex: 1; height: 1px; background: var(--zh); opacity: .3; }
-.sesswin-zone-need { --zh: var(--yellow); }
-.sesswin-zone-run  { --zh: var(--green); }
+.sesswin-zone::after { content: ''; flex: 1; height: 1px; background: var(--zh); opacity: .25; }
+.sesswin-zone-need    { --zh: var(--yellow); }
+.sesswin-zone-run     { --zh: var(--green); }
+.sesswin-zone-offline { --zh: var(--muted); }
 
 /* ---- session right-click menu + rename prompt (SessionContextMenu.jsx) ---- */
 /* a small pop-over anchored at the cursor (fixed to viewport coords). z-index 60 floats it ABOVE every
@@ -809,8 +810,7 @@ body {
 .search-foot { padding: 6px 12px; border-top: 1px solid var(--line); background: var(--panel); color: var(--muted); font-size: 11px; }
 
 /* ---- session interface (Enter): two panes, right content morphs ---- */
-/* z-index 50 lifts the whole console above the spec board behind it. The relationship graph is no longer a
-   separate overlay — it's a tab INSIDE this console (the right pane, see .si-content.is-graph). */
+/* z-index 50 lifts the whole console above the spec board behind it. */
 .si-backdrop {
   position: fixed; inset: 0; z-index: 50;
   background: rgba(101,123,131,.4); backdrop-filter: blur(5px);
@@ -819,22 +819,13 @@ body {
 /* @@@ TRUE fullscreen - the session board fills the entire viewport edge-to-edge (no reserved inset/margin,
    no rounded corners) so no screen space is wasted; it keeps the scale-in "pop" and lifts above the board. */
 .si-panel {
-  /* @@@ dark console theme — the whole console is remapped to solarized DARK (the app is solarized LIGHT),
-     so the frame AROUND the terminal matches the terminal (--term-bg) instead of clashing bright paper.
-     Scoped here: every child using var(--paper/--panel/--ink/--line…) flips to dark automatically, one
-     switch instead of per-rule edits; the accent hues (blue/green/red/…) work on both grounds, left as-is. */
-  --paper: #002b36;   /* base03 — console ground = the terminal bg */
-  --panel: #073642;   /* base02 */
-  --panel2:#08404e;   /* a touch above base02 for raised chrome */
-  --line:  #0a4657;   /* dark hairline */
-  --ink:   #93a1a1;   /* base1 body text */
-  --ink2:  #eee8d5;   /* base2 headings/bright */
-  --muted: #657b83;   /* base00 muted */
-  --sg-comms-bg: rgba(7, 54, 66, .9);   /* dark chip behind the graph's comms count (was cream) */
+  /* the console follows the app theme — it uses the same :root tokens (var(--paper/--panel/--ink/--line…))
+     as the rest of the dashboard, so re-theming the app re-themes the console with it. The embedded terminal
+     stays dark on its own (--term-bg), the one surface that is legitimately a dark terminal. */
   width: 100vw; height: 100vh;
   background: var(--paper); border: none; border-radius: 0;
   overflow: hidden; display: flex;
-  box-shadow: 0 30px 90px rgba(7, 54, 66, .45);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .28);
   animation: si-pop .2s cubic-bezier(.2, .8, .2, 1);
 }
 .si-list {
@@ -856,51 +847,29 @@ body {
 .si-item.on { background: color-mix(in srgb, var(--blue) 15%, var(--panel2)); color: var(--ink2); font-weight: 600; border-left-width: 3px; }
 .si-item.on:hover { background: color-mix(in srgb, var(--blue) 24%, var(--panel2)); }
 .si-item.on::before { content: '❯'; flex: none; color: var(--green); font-weight: 700; }
-/* @@@ drag handle ([[session-reorder]]) - a small grip at the far right of row 2 (pushed right by margin
-   auto). The ONE draggable thing in the row; the soft --ink slate (not the near-invisible --muted) keeps it
-   legible against the cream row, yet still understated at rest, deepening as you hover to invite the drag. */
-.si-drag-handle { margin-left: auto; flex: none; cursor: grab; color: var(--ink); opacity: .5; padding: 0 1px; line-height: 1; font-size: 12px; user-select: none; }
-.si-item:hover .si-drag-handle { opacity: .8; }
-.si-drag-handle:hover { opacity: 1; }
-.si-drag-handle:active { cursor: grabbing; }
-/* the insertion line a dragged row will drop onto — inset box-shadow on the top (before) / bottom (after)
-   edge, same blue as the selected wash, no layout shift. */
-.si-item.drop-before { box-shadow: inset 0 2px 0 0 var(--blue); }
-.si-item.drop-after { box-shadow: inset 0 -2px 0 0 var(--blue); }
-/* @@@ terminal-aesthetic sidebar ([[session-console]]) — the console's OWN session list reads as the SAME
-   dark solarized TERMINAL as the right pane (background = --term-bg, solarized base03), so left and right feel
-   like one terminal instead of clashing. Scoped to `.si-list` so the map-side SessionWindow (.sesswin) keeps
-   the board's warm paper AND its avatars. Rows are COMPACT one-line: no avatar, headline + a single
-   colour-coded status GLYPH (no word) + op tally + drag handle on ONE row (nowrap). */
-.si-list { background: var(--term-bg); color: #93a1a1; }
-.si-list .si-toprow { border-bottom-color: #073642; }
-.si-list .si-pill { border-color: #0a4657; color: #839496; background: #073642; }
-.si-list .si-pill:hover { border-color: #157488; color: #93a1a1; }
-.si-item { flex-wrap: nowrap; padding: 5px 12px; border-bottom-color: #073642; color: #93a1a1; font-size: 11.5px; }
-.si-item:hover { background: #073642; }
-.si-item.on { background: color-mix(in srgb, var(--blue) 26%, #002b36); color: #eee8d5; }
-.si-item.on:hover { background: color-mix(in srgb, var(--blue) 34%, #002b36); }
+/* compact one-line face ([[session-console]]) — the console's own list is a dense, terminal-styled sidebar:
+   no avatar, headline + a single colour-coded status GLYPH (no word) + op tally on ONE row (nowrap). It uses
+   the shared app-theme tokens (var(--panel/--ink2/--blue…)) like every other console surface, so re-theming
+   the app re-themes it too. */
+.si-item { flex-wrap: nowrap; padding: 5px 12px; font-size: 11.5px; }
 .si-item.on::before { content: none; }   /* selected caret removed — the highlight wash is enough (per request) */
-.si-item.on .sess-id { color: #fdf6e3; }
 /* meta collapses inline (no full-width row-2 wrap) so the whole face stays on one line */
 .si-item .sess-meta { flex: none; width: auto; min-width: 0; margin-top: 0; margin-left: auto; opacity: 1; overflow: visible; }
-.si-item .si-drag-handle { color: #657b83; }
-.si-item:hover .si-drag-handle { color: #93a1a1; }
-.si-item .sess-lock { color: #657b83; }
-/* zone divider — a HOLLOW (outlined) uppercase title with a hairline rule trailing it, so each zone is
-   separated by an openwork divider rather than a solid label. `--zh` is the zone hue (stroke + line). */
+.si-item .sess-lock { color: var(--muted); }
+/* zone divider — a clean SOLID small dim uppercase label with a subtle hairline rule trailing it. `--zh` is
+   the zone hue: yellow = needs you, green = running, muted = offline (dormant). */
 .si-zone {
-  --zh: #586e75;
+  --zh: var(--muted);
   display: flex; align-items: center; gap: 8px; padding: 10px 12px 4px;
-  font-size: 10px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; user-select: none;
-  color: transparent; -webkit-text-fill-color: transparent; -webkit-text-stroke: .6px var(--zh);
+  font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; user-select: none;
+  color: var(--zh);
 }
-.si-zone::after { content: ''; flex: 1; height: 1px; background: var(--zh); opacity: .3; }
-.si-zone-need { --zh: #b58900; }   /* solarized yellow — waiting on you */
-.si-zone-run  { --zh: #859900; }   /* solarized green — self-running */
-/* @@@ top button row - New Session (＋, blue) and the relationship graph (network glyph, magenta) as two
-   COMPACT side-by-side buttons, not full-width rows — so neither sits in the ↑/↓ path to a session. Selected
-   one gets a hue wash + ring (its own colour), mirroring the session rows' selected wash. */
+.si-zone::after { content: ''; flex: 1; height: 1px; background: var(--zh); opacity: .25; }
+.si-zone-need    { --zh: var(--yellow); }
+.si-zone-run     { --zh: var(--green); }
+.si-zone-offline { --zh: var(--muted); }
+/* @@@ top button row - just New Session (＋, blue) now, a compact button (not a full-width row) so it doesn't
+   sit in the ↑/↓ path to a session. Selected gets a hue wash + ring, mirroring the session rows' wash. */
 .si-toprow { display: flex; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
 .si-pill {
   flex: 1; display: flex; align-items: center; justify-content: center;
@@ -909,21 +878,13 @@ body {
 }
 .si-pill-glyph { font-size: 15px; display: flex; }
 .si-pill.new { color: var(--blue); }
-.si-pill.graph { color: var(--magenta); }
 .si-pill:hover { background: var(--panel2); border-color: currentColor; }
 .si-pill.new.on { background: color-mix(in srgb, var(--blue) 16%, var(--panel2)); border-color: var(--blue); }
-.si-pill.graph.on { background: color-mix(in srgb, var(--magenta) 16%, var(--panel2)); border-color: var(--magenta); }
-.si-dot { width: 7px; height: 7px; border-radius: 2px; flex: none; }
-.si-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.si-st { color: var(--muted); font-size: 10px; flex: none; }
-.si-ops { color: var(--ov, var(--blue)); font-size: 10px; font-weight: 700; flex: none; }
 
 .si-content { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--paper); }
 
 /* New Session: input + avatar centred, terminal vibe. */
 .si-content.is-new { align-items: center; justify-content: center; }
-/* the relationship graph fills the pane via an absolute child (.session-graph inset:0), so anchor it. */
-.si-content.is-graph { position: relative; }
 .si-new-center { width: min(560px, 86%); display: flex; flex-direction: column; align-items: center; gap: 12px; margin-bottom: 12vh; animation: si-rise .18s ease; }
 .si-avatar { font-size: 30px; color: var(--blue); letter-spacing: 2px; }
 .si-ask { font-size: 15px; color: var(--ink2); }
@@ -999,14 +960,16 @@ body {
 .si-agent-opt:disabled { opacity: .5; cursor: default; }
 .si-agent-glyph { width: 16px; height: 16px; display: block; fill: currentColor; }
 
-/* Active session: terminal fills the area (expands from centre out), input docked at the bottom. */
-.si-content.is-session .si-term { animation: si-expand .22s ease; }
-/* margin-bottom reserves the RESTING (one-line) ❯ box footprint — ~38px box + 12px bottom offset + 12px
-   gap — so the terminal keeps its exact size/position and isn't covered at rest. The input grows UPWARD as
-   an overlay (below) into the terminal only while it's actually multi-line. */
-.si-term { flex: 1; min-height: 0; display: flex; flex-direction: column; margin: 12px 12px 62px; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
-.si-term-head { padding: 7px 10px; background: var(--panel2); border-bottom: 1px solid var(--line); color: var(--ink2); display: flex; align-items: center; gap: 7px; font-size: 12px; }
-.si-term-body { flex: 1; min-height: 0; overflow: auto; padding: 10px 12px; background: var(--term-bg); }
+/* Active session: FLAT — the terminal fills the pane directly (no inner box, no title bar). A slim action
+   strip sits above it, and the ❯ input docks at the bottom as an upward-growing overlay. */
+.si-content.is-session .si-term-body { animation: si-expand .22s ease; }
+/* slim action strip in place of the old title bar: flat on the console ground (no panel/border box), the
+   headline on the left and the state-narrowed lifecycle actions on the right. */
+.si-term-bar { flex: none; display: flex; align-items: center; gap: 8px; padding: 8px 12px 6px; font-size: 12px; color: var(--ink); }
+/* the terminal body fills the rest of the pane, edge-to-edge. It stays a DARK terminal (--term-bg) whatever
+   the app theme is. padding-bottom reserves the RESTING ❯ box footprint so the docked input (an overlay,
+   below) never hides the terminal's bottom lines at rest. */
+.si-term-body { flex: 1; min-height: 0; overflow: auto; padding: 6px 10px 58px; background: var(--term-bg); }
 .si-line { font-size: 12px; line-height: 1.6; color: var(--ink2); white-space: pre-wrap; word-break: break-word; }
 .si-line.muted { color: var(--muted); }
 .si-op { color: var(--blue); font-weight: 700; }
@@ -1042,8 +1005,9 @@ body {
 
 /* live tmux terminal inside the session view — xterm is FITTED to this box (see SessionTerm). The host
    and its wrapper clip (no horizontal scrollbar), but the xterm VIEWPORT scrolls vertically so the
-   accumulated scrollback is reachable — that one viewport scrollbar is the only one (no double bar). */
-.si-term-body { padding: 8px 10px; overflow: hidden; }
+   accumulated scrollback is reachable — that one viewport scrollbar is the only one (no double bar).
+   overflow:hidden clips the host; the padding (incl. the bottom reserve for the docked ❯ box) is set above. */
+.si-term-body { overflow: hidden; }
 /* the terminal is a read-only VIEW. */
 .st-wrap { position: relative; width: 100%; height: 100%; }
 .st-host { width: 100%; height: 100%; overflow: hidden; }
@@ -1081,12 +1045,10 @@ body {
 }
 .si-bottom .si-input { color: var(--ink2); }
 
-/* session header: headline + status + lifecycle actions. The headline takes the row's free width
-   (flex:1) and only ellipsises when it overflows the wide header bar — so it expands FAR more than
-   the compact `.sess-id` rows before truncating, the one display difference between the two surfaces. */
-.si-th-name { font-weight: 700; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.si-th-st { color: var(--muted); font-size: 11px; }
-.si-merges { font-size: 10px; color: var(--green); border: 1px solid var(--line); border-radius: 3px; padding: 0 5px; }
+/* the action strip's headline ([[session-activity]]): the SAME sessionHeadline the rows show, dim, taking the
+   free width (flex:1) and only ellipsising when it overflows this wide strip — far more room than the compact
+   `.sess-id` rows, the one display difference between the two surfaces. */
+.si-th-name { font-weight: 700; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
 .si-actions { margin-left: auto; display: flex; gap: 6px; }
 .si-act { background: var(--paper); border: 1px solid var(--line); color: var(--ink2); border-radius: 4px; padding: 1px 9px; cursor: pointer; font-family: var(--mono); font-size: 11px; }
 .si-act:hover { border-color: var(--blue); color: var(--blue); }
@@ -1388,14 +1350,3 @@ body {
 .proof-x:hover { border-color: var(--orange); color: var(--orange); }
 .proof-iframe { flex: 1; width: 100%; border: 0; background: #0b0e14; }
 /* the `proof` button's cyan now comes from the shared `.si-act.board.sc-cyan` rule (see board commands). */
-
-/* @@@ console dark frame — EXPLICIT overrides ([[session-console]]). The `.si-panel` palette remap already
-   makes these dark via var(--paper/--panel2/--line), but as NEW rules with the solarized-dark values spelled
-   out they also (a) win by source order and (b) apply cleanly over HMR without depending on a var-value
-   re-cascade — so the frame AROUND the terminal, the terminal box, its head bar and the docked input read as
-   one dark surface, no warm hairlines left. */
-.si-content { background: #002b36; }
-.si-term { border-color: #0a4657; }
-.si-term-head { background: #073642; border-bottom-color: #0a4657; color: #eee8d5; }
-.si-bottom { background: #073642; border-color: #0a4657; }
-.si-inputwrap { border-color: #0a4657; }

@@ -31,17 +31,17 @@ scenarios:
     description: >-
       Through the running dashboard in a real browser, open the session interface (Enter) on a LIVE WORKING
       session whose tmux pane title (self-summary) is set, so its row headline is the agent's own live line —
-      visibly NOT the bare node name. Read the **big-title bar** at the top of the session interface (the
-      `si-th-name` header above the live terminal) and compare its text to that session's row headline in the
+      visibly NOT the bare node name. Read the **slim action strip** over the terminal's top edge (the
+      `si-th-name` headline) and compare its text to that session's row headline in the
       left list / top-left window. Then pick a session whose headline is long enough to truncate in the
-      narrow rows and check how much of it the wide header shows. Screenshot the header bar next to a session
+      narrow rows and check how much of it the wide strip shows. Screenshot the action strip next to a session
       row and file with `spex yatsu eval session-activity --image <png> --pass`.
     expected: >-
-      The header big-title shows the SAME line as the row headline — the worker's live tmux self-summary
+      The action strip headline shows the SAME line as the row headline — the worker's live tmux self-summary
       (its pane title), a launch-prompt placeholder only before the agent is up, a human rename always
-      winning — never the stable node/branch name the header used to show. The two surfaces read one shared
+      winning — never the stable node/branch name it used to show. The two surfaces read one shared
       content; the only difference is room: a headline that ellipsises early in the compact row shows far
-      more of itself in the wide header before truncating. A turn that retitles the row retitles the header
+      more of itself in the wide strip before truncating. A turn that retitles the row retitles the strip
       in lock-step.
     code:
       - spec-dashboard/src/SessionInterface.jsx
@@ -53,7 +53,7 @@ scenarios:
       Launch a CODEX session into a worktree whose folder name differs from the task (e.g. branch
       `node/codex-naming` → worktree folder `codex-naming`, task "Implement codex session naming"). Codex sets
       its tmux pane title to a spinner glyph + the cwd BASENAME (`⠙ codex-naming`), not a task summary. Open
-      the dashboard and read that session's Row-1 headline (and the Enter console big-title). It must be the
+      the dashboard and read that session's Row-1 headline (and the Enter console action strip). It must be the
       TASK — the launch-prompt preview — NOT the worktree folder name `codex-naming`. Contrast a CLAUDE
       session in the same view: its headline IS its live pane-title self-summary, unchanged. Screenshot both
       rows and file with `spex yatsu eval session-activity --image <png> --pass`.

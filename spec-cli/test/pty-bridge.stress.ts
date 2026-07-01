@@ -3,11 +3,11 @@
 // to straddle node-pty read boundaries — the condition that used to shatter them into U+FFFD. Assert the bytes
 // the bridge broadcasts, decoded as UTF-8, contain ZERO U+FFFD and the payload survives intact.
 //
-// Run: SPEXCODE_TMUX=stress-<pid> npx tsx src/pty-bridge.stress.ts
+// Run (from spec-cli/): SPEXCODE_TMUX=stress-<pid> npx tsx test/pty-bridge.stress.ts
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { writeFileSync } from 'node:fs'
-import { attachViewer, detachViewer, type Viewer } from './pty-bridge.js'
+import { attachViewer, detachViewer, type Viewer } from '../src/pty-bridge.js'
 
 const pexec = promisify(execFile)
 const SOCK = process.env.SPEXCODE_TMUX || 'spexcode'

@@ -2,10 +2,10 @@
 title: live-view
 status: active
 hue: 280
-desc: The dashboard's live terminal — one tmux control-mode client per session, event-driven (timer-free deterministic resize, pushed UTF-8 bytes, zero polling), with viewer subscriptions that outlive the client so a pane never freezes.
+desc: The dashboard's live terminal — one tmux control-mode client per session, event-driven (timer-free deterministic resize AND first paint, pushed UTF-8 bytes, zero polling), with viewer subscriptions that outlive the client so a pane never freezes.
 code:
   - spec-cli/src/pty-bridge.ts
-  - spec-cli/src/pty-bridge.stress.ts
+  - spec-cli/test/pty-bridge.stress.ts
 related:
   - spec-dashboard/src/SessionTerm.jsx
 ---
@@ -57,14 +57,16 @@ looks at it**, not at connect time. Two connect shapes:
   it too hands over the live one. This is the only path the connect-query serves.
 - **Hidden connect** — 0×0, no size rides along. The server does **not** paint a guessed prewarm frame:
   undersized, and landing in a hidden buffer it would only be overpainted the instant the pane became
-  visible — the old two-stage scramble. It **defers** the one first-frame paint to the client's **first
-  resize**, which fires the moment the pane becomes visible at its true size. A **bounded fallback** covers a
-  viewer that never resizes: absent any resize, paint once at the prewarm size after a short delay, never blank.
+  visible — the old two-stage scramble. It **defers** the one first-frame paint — **purely** — to the client's
+  **first resize**, which fires the moment the pane becomes visible at its true size. There is **no timer
+  fallback**: a pane that never resizes is a pane no one ever looks at (the client sends its real size the
+  instant the pane becomes visible), so it needs no frame. This is **fail-loud** — no size, no paint until the
+  resize arrives — and it makes the whole first-paint path **event-driven and zero-timer**, matching the
+  timer-free convergence above: the bridge holds not one time-based heuristic on either path.
 
 The client mirrors this: the instant a hidden pane becomes visible it **fits and sends its real size at
-once** — since that resize *is* what triggers the deferred first frame — and **wipes any guessed fallback
-frame** so the paint lands clean. The fit-retry stays the **corrective** path for a size measured slightly
-wrong mid-animation.
+once** — since that resize *is* what triggers the deferred first frame. The fit-retry stays the **corrective**
+path for a size measured slightly wrong mid-animation.
 
 The client is forced to **UTF-8** (`tmux -u` plus a UTF-8 `LANG`), independent of the host locale — else a
 backend with an empty/non-UTF-8 environment (e.g. a macOS LaunchAgent) makes tmux substitute `_` for every

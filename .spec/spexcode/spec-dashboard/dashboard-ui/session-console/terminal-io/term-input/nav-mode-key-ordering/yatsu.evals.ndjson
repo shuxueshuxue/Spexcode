@@ -1,0 +1,1 @@
+{"scenario":"rawkey-batch-preserves-strike-order","codeSha":"05742817c4a0a54d0ec361e1972b5cc7aa9cbf73","blob":"504af353fed7493a719d4485e47d21ded8a8606a439ba94f8ac4286b616cd01c","blobKind":"transcript","evaluator":"manual@1","verdict":{"status":"pass","note":"26 alphabetic + 21 scrambled keys via real /rawkey route both readback byte-exact"},"ts":"2026-07-01T08:28:19.933Z"}

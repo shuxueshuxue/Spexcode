@@ -42,19 +42,18 @@ scenarios:
       history" contract, in control mode). On a tmux socket, print far more lines than the visible screen
       holds (e.g. 1200 lines into a 24-row pane) so most scroll into tmux history BEFORE any bridge exists.
       Then attach a viewer through the real API (attachViewer with a size) and inspect its first frame: it
-      must carry deep pre-attach history, not just the visible screen. Then call resizeBridge to a new size
-      and confirm the resize frame re-seeds ONLY the visible screen (no thousands-of-lines re-flush). Finally
-      detach fully and re-attach (a fresh bridge) and confirm history is seeded again. File with `spex yatsu
+      must carry the visible tail. Send wheel-up frames through the same WebSocket/API path the dashboard uses
+      and confirm tmux enters copy-mode, `#{scroll_position}` increases, and the viewer receives repainted
+      older rows from tmux's current view. Then send wheel-down frames and confirm the copy-mode view moves
+      back toward the bottom. Finally detach fully and re-attach (a fresh bridge) and confirm history is still
+      reachable through the same tmux-owned wheel path. File with `spex yatsu
       eval live-view --scenario attach-seed-carries-pre-attach-history --result <txt>`.
     expected: >-
-      The first frame of a (re)attach contains hundreds/thousands of the pre-attach lines (a bounded
-      capture-pane -S over tmux's recent scrollback), reaching back to the earliest history and ending at the
-      current visible tail — so on a NORMAL-screen pane those lines write into the browser terminal and the
-      native wheel scrolls genuine pre-attach output. (A full-screen alternate-screen TUI keeps no such
-      scrollback, so its wheel is forwarded to the app instead — see output-preserves-utf8-wide-chars's
-      sibling behaviour.) A subsequent resize re-seeds only the visible screen (≤ the row count, no history
-      re-flush), and the clear is viewport-only so it never wipes the seeded scrollback. A fresh bridge on
-      re-attach re-seeds history.
+      Wheel-up on a NORMAL-screen pane enters tmux copy-mode and increases `#{scroll_position}` while the
+      viewer receives a coherent repaint of older tmux history; wheel-down moves that same tmux view back
+      toward the bottom. The browser does not scroll an independent xterm buffer, and no mouse bytes are
+      littered into the shell prompt. A full-screen alternate-screen TUI still gets forwarded SGR wheel reports
+      so the app scrolls itself.
   - name: output-preserves-utf8-wide-chars
     tags: [backend-api]
     description: >-
@@ -113,7 +112,6 @@ not an internal probe. The losses, about a pane behaving wrong the moment a huma
   UTF-8 truncates every CJK / box-drawing / emoji character to one wrong byte (the regression that shattered
   the display). Zero loss is a wide-character line round-tripping through the real bridge byte-for-byte.
 - **history reach** — with control mode streaming only post-attach `%output`, the wheel would reach nothing
-  from before the client attached. Zero loss is the pane's real history reachable by whichever path the pane
-  owns: a normal-screen pane's tmux scrollback seeded (bounded `capture-pane -S`) into xterm's own buffer for
-  the native wheel; a full-screen TUI (which keeps no such scrollback) scrolled by forwarding the wheel to the
-  app. A resize re-seeds only the visible screen (no re-flush).
+  from before the client attached. Zero loss is the pane's real history reachable through tmux itself:
+  a normal-screen pane scrolls tmux copy-mode and repaints that view; a full-screen TUI receives forwarded
+  wheel mouse reports so the app scrolls itself.

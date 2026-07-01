@@ -6,9 +6,10 @@ desc: The Enter surface — two-pane session interface with a live tmux terminal
 code:
   - spec-dashboard/src/SessionInterface.jsx
   - spec-dashboard/src/SessionWindow.jsx
-  - spec-dashboard/src/SessionTerm.jsx
   - spec-dashboard/src/session.js
   - spec-dashboard/src/sessionCommands.js
+related:
+  - spec-dashboard/src/SessionTerm.jsx
 ---
 
 # session-console
@@ -73,9 +74,8 @@ into that dark edge — the complaint this replaces). Between the tabs and the a
 **shared session headline** (`si-th-name`, [[session-activity]]) — same source and content as the session
 rows, ellipsing when tight, so it never disagrees with the row that opened it — and the state's lifecycle
 **actions on the right** (below). Read-only governs *keyboard* input, not extraction or navigation: text selects, and the
-wheel scrolls **real history** — for a normal-screen pane into xterm's own seeded scrollback, for a
-full-screen TUI by forwarding the wheel so the app scrolls itself ([[live-view]] owns which path) — a drag
-selects even under mouse-reporting, and `⌘/Ctrl+C` copies to the clipboard **over HTTPS, localhost,
+wheel scrolls **the tmux pane's real history** — normal output through tmux copy-mode, mouse-owning TUIs by
+forwarding the wheel to the app ([[live-view]] owns the adapter decision) — a drag selects even under mouse-reporting, and `⌘/Ctrl+C` copies to the clipboard **over HTTPS, localhost,
 or plain HTTP** (past the secure-context-only Clipboard API).
 
 Input has **two channels**. The **`❯` box** is the prompt channel: submitting dispatches through the **control

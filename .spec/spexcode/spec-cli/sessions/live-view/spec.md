@@ -5,9 +5,8 @@ hue: 280
 desc: The dashboard's live terminal — one tmux control-mode client per session, event-driven (timer-free deterministic resize AND first paint, pushed UTF-8 bytes, zero polling), with viewer subscriptions that outlive the client so a pane never freezes.
 code:
   - spec-cli/src/pty-bridge.ts
-  - spec-cli/test/pty-bridge.stress.ts
-related:
   - spec-dashboard/src/SessionTerm.jsx
+  - spec-cli/test/pty-bridge.stress.ts
 ---
 
 # live-view
@@ -98,22 +97,21 @@ A **full** frame — every fresh (re)attach / re-bind, and the resize a viewer s
 xterm — leads the seed with a **DEC-mode prelude reconstructed from the pane's live flags** (`alternate_on`,
 the mouse-tracking flags): so the browser xterm faithfully mirrors the pane — on the **alternate screen** for a
 full-screen TUI (else its redraws pollute the normal scrollback and mis-render) and in the app's **mouse-tracking
-mode** (so the wheel routes correctly, below). A plain resize re-seeds only the visible screen, under a
-viewport-only clear (`\x1b[H\x1b[2J`, never `\x1b[3J`), so it never re-floods or wipes the seeded history.
+mode**. A plain resize re-seeds only the visible screen, under a viewport-only clear (`\x1b[H\x1b[2J`, never
+`\x1b[3J`), so it never re-floods or wipes the seeded history.
 
-## scrolling — the pane's real history, by whichever path the pane owns
+## scrolling — the pane's real history, through tmux
 
-The wheel reaches **genuine pre-attach history**, and *which* history depends on the pane, decided by the mode
-the prelude put xterm in:
+The browser never decides which scroll mechanism owns the pane. It sends the wheel to the bridge, and the
+bridge decides from tmux's live pane flags:
 
-- **Normal-screen pane** (a shell, a log): its history lives in tmux's scrollback, which the full frame's
-  bounded capture (`capture-pane -S`) seeds into **xterm's own scrollback**. The wheel scrolls xterm natively —
-  reaching output from before the client attached.
+- **Normal-screen pane** (a shell, a log): its history lives in tmux's scrollback. Wheel-up enters tmux
+  copy-mode and scrolls that tmux view; wheel-down continues in copy-mode until the bottom. Each move repaints
+  the browser from tmux's current view, so the dashboard feels like a real tmux client rather than a page
+  scrolling an xterm buffer.
 - **Full-screen TUI** (alternate screen, owns the mouse — e.g. Claude Code): it keeps **no** scrollback in
-  xterm to scroll, and scrolls *itself* on mouse input. So the wheel is **forwarded** — the browser, seeing its
-  xterm in mouse-tracking mode, sends a `{wheel}` frame and the bridge injects the matching SGR mouse report
-  into the pane (`send-keys`), so the **app scrolls its own real history**. This is the control-mode analogue
-  of the raw-attach wheel forwarding; a read-only-scrollback view would leave such a pane unable to scroll at all.
+  xterm to scroll, and scrolls *itself* on mouse input. So the bridge injects the matching SGR mouse report
+  into the pane (`send-keys`), so the **app scrolls its own real history**.
 
-The socket still carries no keyboard input — the wheel is the one navigation exception, and only for a
-mouse-owning pane, so a normal shell never gets mouse bytes littered into its prompt.
+The socket still carries no keyboard input — the wheel is the one navigation exception — and neither path is
+harness-specific. Claude Code and Codex differ only in the tmux flags their panes expose.

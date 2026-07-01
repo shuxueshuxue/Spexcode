@@ -103,8 +103,22 @@ surface:
   TUI performs); delivery speaks WebSocket JSON-RPC over that Unix socket directly — NOT `codex app-server
   proxy` (a dumb byte relay that performs no HTTP upgrade, which the server rejects).
   `deliver(rec, text)` sends a
-  follow-up prompt and reports whether it landed: **claude** through the rendezvous socket (inject + submit +
-  CONFIRM accepted — loud failure on a missing/dead socket, no silent fallback); **codex** through the same
+  follow-up prompt and reports whether it landed, but the two harnesses confirm delivery at DIFFERENT layers.
+  **claude** is **OPTIMISTIC-after-liveness**: the socket's presence IS the liveness gate (deliver fails loud
+  before writing when the rendezvous socket is absent — a missing/dead socket, never tmux, is the not-alive
+  signal), then it connects and WRITES the `{type:reply}` line; once that line flushes to the live socket with no
+  immediate transport error (a connect throw, a socket `error` like ECONNREFUSED/EPIPE, or a `close` before the
+  write flushes — all FREE, INSTANT, and reported), the reply is on the wire and claude submits it the moment it
+  yields, so deliver returns ok THERE. It does **not** wait for an application-level acceptance ack. This is a
+  deliberate reversal of the earlier design, which wrote a `{type:repaint}` probe after the reply and waited up to
+  a 2500ms wall for a `{type:repaint-done}` to prove the reply was processed: that ordering barrier is sound
+  ONE-WAY (`repaint-done` ⟹ delivered) but its ABSENCE within the wall does NOT mean not-delivered — a mid-turn
+  **BUSY** claude cannot answer the probe promptly, so a message that actually landed reported a COMMON, misleading
+  FALSE FAILURE (`rendezvous socket gave no acceptance confirmation within 2500ms`). The confirmation therefore
+  moves to the **transport/liveness** layer, not the application layer. The knowingly-accepted cost: we no longer
+  detect the narrow **alive-but-wedged / reply-rejected / shutting-down** cases — a rare SILENT drop, recoverable
+  because the supervisor sees the worker never transition — in exchange for killing the frequent false-failure on a
+  live-but-busy worker. **codex** confirms at the application layer through the same
   per-PROJECT Codex app-server JSON-RPC control plane the visible TUI uses, addressing the **owned** thread id
   (the one stored at launch). The handshake is `initialize → initialized → thread/loaded/list` (PROVE our
   thread is loaded) `→ thread/read{includeTurns}`. That read decides the inject: if a turn is **in progress** (the
@@ -128,7 +142,7 @@ surface:
   fed to `codex-launch` (which would mint a NEW thread whose first message is the marker text).
   sessions.ts's `liveness()`/`isOccupying()`/`sendKeys()`/
   `reopen()`/`waitForReady()` all route through these adapter methods — there is no socket hard-wire and no
-  `if (codex)` left in the runtime path; the rendezvous-socket path + its `replyViaSocket` round-trip MOVED into
+  `if (codex)` left in the runtime path; the rendezvous-socket path + its `replyViaSocket` optimistic write MOVED into
   `harness.ts` as the claude adapter's `deliver`/`liveness` implementation, while Codex's app-server launch and
   JSON-RPC turn delivery live in the Codex adapter.
 

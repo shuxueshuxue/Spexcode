@@ -50,7 +50,12 @@ not only one in review and not a floating overlay. When a session has no proof t
 diff, so the route 404s — the tab shows a clean **empty placeholder** in place of the artifact. The typed
 **`/proof`** board command (cyan) and clicking the tab both switch to it; the tab-state lives in the console,
 this node owns only the inline rendering. Because the proof is DERIVED, the tab **rebuilds it on each visit**,
-so it always reflects the live diff/loss/gates.
+so it always reflects the live diff/loss/gates — yet opening it is cheap: the two invariant merge gates
+(typecheck, lint) depend only on the backend checkout, not the session, so they are memoized on that
+checkout's tree fingerprint ([[manager-cockpit]]) and reused across opens until the tree changes. A full
+typecheck (the dominant cost) never re-runs against an unchanged tree, while any commit — or any edit, down
+to re-touching an already-dirty file (the fingerprint folds in the working tree's content, not just its
+committed state) — invalidates and recomputes, so the rebuild is never stale.
 
 Out of scope: the measurement engine and freshness ([[yatsu-core]]); the per-node eval tab
 ([[yatsu-eval-tab]]); the merge dispatch ([[manager-cockpit]]). This node only marshals what they already

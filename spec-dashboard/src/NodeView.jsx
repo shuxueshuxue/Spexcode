@@ -145,11 +145,19 @@ function useSpecContent(id, version) {
   const [content, setContent] = useState(() => contentCache.get(key) ?? null)
   useEffect(() => {
     const hit = contentCache.get(key)
-    if (hit) { setContent(hit); return }
+    if (hit) { setContent(hit); return }             // cached (re-open) → instant, no spinner
     setContent(null)                                  // drop the previous node/version's prose while the new one loads
     let on = true
+    const started = Date.now()
     fetch(`/api/specs/${id}/content`).then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
-      .then((d) => { contentCache.set(key, d); if (on) setContent(d) })
+      .then((d) => {
+        contentCache.set(key, d)
+        // hold the spinner a minimum ~300ms beat: `/content` is a ~20ms filesystem read, so without this the
+        // spinner would flicker too fast to see; the delay is only on a node's FIRST open (cached re-opens are
+        // instant above), so it reads as a smooth load rather than an artificial wait on every open.
+        const wait = Math.max(0, 300 - (Date.now() - started))
+        setTimeout(() => { if (on) setContent(d) }, wait)
+      })
       .catch(() => { if (on) setContent({ body: '', parts: null }) })
     return () => { on = false }
   }, [id, version, key])

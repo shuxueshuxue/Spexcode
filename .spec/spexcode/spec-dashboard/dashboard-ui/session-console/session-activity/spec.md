@@ -67,12 +67,15 @@ list, so the headline still renarrates each turn without the row losing its plac
 The compact single line is a **resting** state, not a hard clip. Widening the whole sidebar to fit long
 headlines is the wrong lever — it buys a few more characters for every row at the cost of the terminal
 beside it, and still ellipses the long ones. So the width stays **narrow** (the list is a dense index,
-not the place a title lives) and full length is bought **on demand, per row**: in the console's own sidebar
-the row you **point at or have selected** un-truncates — its headline wraps to the full text and the row
-grows downward — so any title is completely readable without a hover-tooltip delay and without stealing a
-pixel from the pane beside it. The row you are pointed at keeps its top edge, so reading a title never
-shifts it out from under the cursor. The **mobile list** alone keeps the older **two-row** face, its status
-on a second line, described next.
+not the place a title lives) and full length is bought **on demand, on the row you SELECT**: clicking a
+session un-truncates its headline — it wraps to the full text in place — so any title is completely readable
+without widening the list. Reveal is tied to **selection, not hover**: a hover-expand would grow the row
+under the cursor and shove the rows below it down, turning every click into a moving target; only the row you
+have already committed to opens, so the list stays a **stable click surface**. When the headline wraps, the
+small **markers** (the status glyph, the op tally) stay pinned to its **first line's top-right** — they leave
+the row's flow rather than reserving a column down every line, so the wrapped lines beneath run the **full
+width**. The **mobile list** alone keeps the older **two-row** face, its status on a second line, described
+next.
 
 The two-row variant's **status line** is the small state badges moved off the headline: the colour-coded
 status **word** and the op tally (how many spec nodes this session is changing, e.g. `~2`), in a smaller,

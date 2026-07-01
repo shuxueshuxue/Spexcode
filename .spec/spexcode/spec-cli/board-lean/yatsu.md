@@ -16,6 +16,17 @@ scenarios:
       the `/api/specs/lite` and `/api/specs/:id/content` requests return 200; the console is clean. Zero loss =
       the board shrinks with the graph overview, the two-part detail view, and body-ranked search all unchanged.
     code: [spec-cli/src/board.ts, spec-dashboard/src/NodeView.jsx, spec-dashboard/src/SpecSearch.jsx]
+  - name: detail-shows-spinner-while-body-loads
+    tags: [frontend-e2e, desktop]
+    description: >
+      Open a node's detail against a backend whose `/api/specs/:id/content` is slowed (throttled) so the lazy
+      body fetch is observable. While the fetch is in flight the body area must show a loading spinner (not an
+      empty pane); once the content lands the spinner is replaced by the rendered body/parts. Watch the console.
+    expected: >
+      During the in-flight `/content` fetch the pane shows a centred spinner; after it resolves the spinner is
+      gone and the two-part (or whole) body renders; the console is clean. A failed fetch would resolve to an
+      empty body, never a spinner that never stops.
+    code: [spec-dashboard/src/NodeView.jsx, spec-dashboard/src/styles.css]
 ---
 # board-lean — measurement
 

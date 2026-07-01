@@ -95,7 +95,10 @@ scenarios:
       TEXT buttons — nav, proof, merge — with NO leading glyph/emoji (no ⌨ keyboard, no ◆ diamond), each
       rendered in a distinct colour. (2) In the `❯` inbox type `/` and read the completion menu: the board's
       own commands (`/nav`, `/proof`, `/merge`, `/exit`, `/close`) lead the list, each `/name` and its
-      `[board]` tag painted its identity colour, visibly apart from Claude Code's blue command rows.
+      `[board]` tag painted its identity colour, visibly apart from Claude Code's blue command rows. Now
+      narrow the query — type `/exit`, a name Claude Code ALSO ships: confirm the menu shows `/exit` exactly
+      ONCE (the board's coloured row), not a duplicate pair, and that each row's description reads as a
+      sentence (first letter capitalised, e.g. "Exit — stop the agent…", not "exit — …").
       (3) Type `/proof` and Enter: the proof overlay opens — identical to clicking the proof button; close it,
       then click the proof button and confirm the SAME overlay opens. (4) Type `/nav` and Enter: nav mode
       engages (the `❯` box becomes the nav indicator AND the nav button shows its active `.on` state); click
@@ -107,7 +110,9 @@ scenarios:
       SAME hue as its button where it has one (nav yellow, proof cyan, merge green); the two button-less
       terminal verbs split by destructiveness — exit muted grey (var --muted = rgb(147,161,161), the dormant/
       offline hue it sends the session to) and close red (var --red = rgb(220,50,47), the worktree removal) —
-      while CC's commands stay blue (rgb(38,139,210)); one element, one colour in both places. Typing `/proof` opens the
+      while CC's commands stay blue (rgb(38,139,210)); one element, one colour in both places. A name the
+      board owns that Claude Code also ships (`/exit`) appears exactly ONCE — the board's row overrides CC's
+      twin, never a duplicate pair — and every row's description reads as a capitalised sentence. Typing `/proof` opens the
       very overlay the proof button opens (one shared open-state); typing `/nav` toggles nav mode exactly as
       the nav button does, and the button reflects that same state. A board command is never dispatched to the
       agent — its line is intercepted and the draft cleared — so no `/proof`/`/nav` text reaches the pane.

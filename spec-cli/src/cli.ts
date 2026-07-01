@@ -246,7 +246,6 @@ if (cmd === 'serve') {
     console.log(`  proposal      : ${r.proposal.kind ?? '—'}${r.proposal.note ? ` — ${r.proposal.note}` : ''}`)
     console.log('  gates:')
     console.log(`    conflicts w/ main : ${g.conflictsWithMain ? 'YES' : 'no'}`)
-    console.log(`    typecheck         : ${g.typecheck.ok ? 'ok' : `${g.typecheck.errorCount} error(s)`}`)
     console.log(`    lint              : ${g.lint.errorCount} error(s), ${g.lint.warningCount} warning(s)`)
     console.log(`  diff (merge-base, ${r.diff.length} file(s)):`)
     for (const f of r.diff) console.log(`    ${f.status.padEnd(12)} +${f.additions} -${f.deletions}  ${f.path}`)

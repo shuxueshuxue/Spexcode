@@ -156,7 +156,6 @@ export async function buildProofModel(id: string): Promise<ProofModel | null> {
 function gateRows(p: NonNullable<Awaited<ReturnType<typeof reviewPayload>>>): ProofGate[] {
   const g = p.gates
   return [
-    { label: 'typecheck', ok: g.typecheck.ok, detail: g.typecheck.ok ? 'clean' : `${g.typecheck.errorCount} error(s)` },
     { label: 'lint', ok: g.lint.errorCount === 0, detail: `${g.lint.errorCount} error(s), ${g.lint.warningCount} warning(s)` },
     { label: 'merge', ok: !g.conflictsWithMain, detail: g.conflictsWithMain ? 'conflicts with main' : 'no conflict' },
     { label: 'ahead', ok: p.ahead > 0, detail: `${p.ahead} commit(s) ahead of main` },

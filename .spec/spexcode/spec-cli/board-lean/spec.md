@@ -6,6 +6,7 @@ desc: The board payload is a lean summary — per-node detail that the graph ove
 code:
   - spec-cli/src/board.ts
   - spec-dashboard/src/NodeView.jsx
+  - spec-dashboard/src/SpecSearch.jsx
 ---
 
 # board-lean
@@ -25,17 +26,18 @@ view or a distinct surface consumes, and that surface reconstructs it locally or
 trims the hot path without changing a single pixel of the overview, and is applied one field at a time so
 each cut is verifiable in isolation.
 
-First cut — **`parts` is dropped** (~21% of the payload). `parts` is pure redundancy on the wire: it is
-`parseParts(body)` ([[three-part-body]]), a deterministic split of `body` at the `## raw source` / `## expanded
-spec` headings, and `body` is still on the board. So `buildBoard` omits it and `NodeView` reconstructs it
-client-side with a parser that mirrors the backend's exactly (same grammar, fence-aware) — the two-part
-detail view is byte-identical, no round-trip, no new endpoint. `loadSpecs`/`/api/specs` still expose `parts`
-verbatim, so [[three-part-body]]'s own contract is untouched; only the board's copy goes.
+**`body` and `parts` are both dropped** (~56% of the payload together). `parts` is pure redundancy — it is
+`parseParts(body)` ([[three-part-body]]), and neither rides the board now. Detail reaches its two viewers off
+the hot poll: the **detail view** fetches one node's `{body, parts}` from `/api/specs/:id/content` when it
+opens (cached per id — a committed body only changes on a new version); the **search palette** ([[spec-search]])
+fetches the body corpus from `/api/specs/lite` the first time it opens (cached for the session) so it still
+ranks nodes over their full prose. `body` is genuinely load-bearing for search, so it could not be naively
+stripped — the corpus is what keeps ranking whole. Both endpoints are filesystem-only reads (no git), and
+`loadSpecs`/`/api/specs` still expose `body`+`parts` verbatim, so [[three-part-body]]'s contract is untouched.
+Where a payload is in flight the detail view shows an empty doc that fills the instant it lands; the graph
+overview never rendered these fields, so it does not change at all.
 
-Not every heavy field can be dropped this cheaply, which is why the field-at-a-time discipline matters. `body`
-itself (~35%) is **load-bearing for [[spec-search]]** — the palette ranks nodes over their full prose — so it
-cannot be naively stripped; removing it from the board needs a lazy body-corpus the search palette fetches
-once on open and the detail view fetches per node. `evals` (~32%) is only distilled by the overview to a
-per-scenario latest-state, so the board can carry that compact summary and lazy-load the full readings for the
-eval tab. Those are the next cuts, each its own step; this node holds the contract they extend, alongside the
-freshness-side companion [[board-stream]].
+The remaining cut is **`evals`** (~32%): the overview distills it to a per-scenario latest-state, so the board
+can carry that compact summary and lazy-load the full readings for the eval tab — its own next step. This node
+holds the lean-payload contract those cuts extend, alongside the freshness-side companion [[board-stream]];
+together they take the board from ~1.2 MB toward a small, mostly-static summary.

@@ -158,6 +158,13 @@ export function loadSpecsLite(): SpecLite[] {
   }))
 }
 
+// one node's body + parsed parts, filesystem-only (no git). The board omits both to stay lean
+// ([[board-lean]]); the detail view fetches them here when a node opens. null when the id isn't a node.
+export function specContent(id: string): { body: string; parts: ReturnType<typeof parseParts> } | null {
+  const r = raws().find((x) => x.id === id)
+  return r ? { body: r.body.trim(), parts: parseParts(r.body) } : null
+}
+
 export async function loadSpecs() {
   // both indexes are one cached git walk each and independent — fetch them in parallel (async git, off
   // the event loop). Every node below is then a pure lookup.

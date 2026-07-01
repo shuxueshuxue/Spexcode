@@ -3,7 +3,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { etag } from 'hono/etag'
 import { createNodeWebSocket } from '@hono/node-ws'
-import { loadSpecs, specHistory, specDiffAt, loadConfig } from './specs.js'
+import { loadSpecs, loadSpecsLite, specContent, specHistory, specDiffAt, loadConfig } from './specs.js'
 import { resolveLayout, mainBranch } from './layout.js'
 import { buildBoard } from './board.js'
 import { boardStream } from './boardStream.js'
@@ -40,6 +40,16 @@ app.get('/api/board', etag(), async (c) => c.json(await buildBoard()))
 // reloads the instant status moves instead of waiting for its slow fallback poll ([[board-stream]]).
 app.get('/api/board/stream', (c) => boardStream(c))
 app.get('/api/specs', async (c) => c.json(await loadSpecs()))
+// the search corpus ([[board-lean]]): a filesystem-only {id,title,path,desc,body} for every node, NO git. The
+// board omits `body` to stay lean, so the search palette fetches this ONCE when it opens (cached client-side)
+// to rank nodes over their prose — off the board's hot poll. A literal segment, before the `:id` routes.
+app.get('/api/specs/lite', (c) => c.json(loadSpecsLite()))
+// one node's body + parsed parts ([[board-lean]]): the board no longer ships either, so the detail view
+// fetches this when a node opens. 404 for an unknown id.
+app.get('/api/specs/:id/content', (c) => {
+  const x = specContent(c.req.param('id'))
+  return x ? c.json(x) : c.json({ body: '', parts: null }, 404)
+})
 app.get('/api/specs/:id/history', async (c) => c.json(await specHistory(c.req.param('id'))))
 // the spec.md line diff one version introduced — the history tab's per-version proof-of-change, fetched
 // lazily when an older version's item expands (the latest version's diff ships with the board as node.lastDiff).

@@ -74,7 +74,9 @@ instead of a tight poll. `/api/board` stays a **conditional-request** endpoint: 
 reload that finds nothing changed costs a bodyless `304`, not the whole transfer — a standard HTTP capability,
 not a special case (the board is still rebuilt each request; the cost saved is the wire, not the git read). `/api/specs` (live via `loadSpecs`),
 `/api/specs/:id/history` + `/api/specs/:id/diff/:hash` (a node's timeline and any version's spec.md
-line-diff), `/api/edit` (a node's in-flight working-tree delta vs its fork point, reviewable from the
+line-diff), `/api/specs/lite` + `/api/specs/:id/content` (filesystem-only body reads the lean board
+([[board-lean]]) offloads: the whole search corpus, and one node's `{body, parts}` on open), `/api/edit`
+(a node's in-flight working-tree delta vs its fork point, reviewable from the
 board — incl. a **brand-new, still-untracked node** as an all-additions diff, so a just-created uncommitted
 node shows its body not nothing), `/api/layout` (the resolved
 [[portable-layout]]), and `/api/config` + `/api/slash-commands` (the

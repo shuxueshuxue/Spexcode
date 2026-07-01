@@ -160,8 +160,26 @@ function parseParts(body) {
   return { rawSource: t(acc.rawSource), expandedSpec: t(acc.expandedSpec) }
 }
 
+// body + parts are NOT on the board ([[board-lean]]); fetch them when a node opens, cached per id across opens
+// so re-opening the same node is instant (a node's committed body only changes on a new version).
+const contentCache = new Map()
+function useSpecContent(id) {
+  const [content, setContent] = useState(() => contentCache.get(id) ?? null)
+  useEffect(() => {
+    const hit = contentCache.get(id)
+    if (hit) { setContent(hit); return }
+    let on = true
+    fetch(`/api/specs/${id}/content`).then((r) => r.json())
+      .then((d) => { contentCache.set(id, d); if (on) setContent(d) })
+      .catch(() => on && setContent({ body: '', parts: null }))
+    return () => { on = false }
+  }, [id])
+  return content
+}
+
 export function SpecPane({ node }) {
   const t = useT()
+  const content = useSpecContent(node.id)
   const driftTitle = (node.driftFiles || []).map((d) => `${d.file}: ${t('specNode.driftAhead', { n: d.behind })}`).join('\n')
   return (
     <div className="pane-doc">
@@ -185,10 +203,11 @@ export function SpecPane({ node }) {
         <div className="doc-gov prose"><span className="doc-gov-h">{t('nodeView.proseNode')}</span></div>
       )}
       {(() => {
-        // parts no longer rides the board ([[board-lean]]); derive it from `body`. `node.parts ??` keeps a
-        // board that still sends it (or a test fixture) working unchanged.
-        const parts = node.parts ?? parseParts(node.body)
-        return parts ? <TwoPart parts={parts} /> : <SpecBody body={node.body} />
+        // body/parts are lazy-loaded ([[board-lean]]); `node.* ??` keeps a fixture (or a fuller payload) working.
+        // While the fetch is in flight both are null → an empty doc that fills the instant content lands.
+        const body = node.body ?? content?.body ?? ''
+        const parts = node.parts ?? content?.parts ?? parseParts(body)
+        return parts ? <TwoPart parts={parts} /> : <SpecBody body={body} />
       })()}
     </div>
   )

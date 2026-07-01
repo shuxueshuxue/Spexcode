@@ -19,9 +19,10 @@ desc: Drag a session row by an explicit handle to reorder the list — a local p
 
 ## raw source
 
-The session list is ordered by **birth time** (oldest first, a new session appends) — a stable spatial
-map a human learns by muscle memory ([[sessions-core]]). That default is right until a human wants a
-particular session somewhere it wasn't born. They should be able to **drag a row** to where they want it,
+The session list groups into two **triage zones** — *needs you* over *self-running* ([[session-console]]) —
+and **within each zone the newest session sits on top** (descending effective time): the fresh, recently
+touched work a human actually reaches for, not the oldest ([[sessions-core]]). That default is right until a
+human wants a particular session pinned somewhere it wouldn't otherwise sort. They should be able to **drag a row** to where they want it,
 but dragging must **never cost the row's other gestures**: a single click still switches to that tab, a
 double-click still locks the board onto the session and jumps to its node, and clicking a row must keep
 the **`❯` input focused**. The first attempt made the whole row draggable and stole all three — so the
@@ -35,9 +36,13 @@ the manual order and the default order live on the **same axis**. A drag rewrite
 to the **midpoint** of its two new neighbours (`(left + right) / 2`), or a step past the end one when
 dropped at the very top or bottom; its neighbours keep their real birth time, so a later-born session
 still slots in by `created`, flowing **around** the dragged row. Drag one row and exactly one row deviates;
-reset it and the list is purely default again. The lone exception is the **precision repair**: when a
-midpoint can no longer fall strictly between two neighbours the whole list is **renormalised** onto an
-evenly spaced grid — a rare automatic backstop, not the normal path.
+reset it and the list is purely default again. A drag **pins within a zone** — the zone is derived from live
+status, so dropping a row into another zone's band just snaps it back. Because the list is shown
+**newest-first** within a zone, the write is **direction-aware**: the two-neighbour midpoint is
+direction-agnostic, but dropping past an end (and the precision repair below) flip so the **top** row takes
+the **largest** key. The lone exception is that **precision repair**: when a midpoint can no longer fall
+strictly between two neighbours the whole list is **renormalised** onto an evenly spaced grid — a rare
+automatic backstop, not the normal path.
 
 The gesture is an **explicit drag handle** — a small grip at the **far right of the row's second line**
 (the status/op line, `.sess-meta`), shown **only** in the console's interactive list ([[session-console]]),
@@ -54,8 +59,8 @@ drag, the rest of the row is **completely untouched** — single click switches 
 
 The `sortKey` lives where the rest of a session's record lives — the session's record in the per-user global
 store, written by the one backend that owns it ([[sessions-core]]) — so a reorder **persists** across a backend restart and is
-read back like any other field. Every surface sorts by the same `sortKey ?? created`, so the manual order
-shows up **everywhere at once**: the [[session-console]] tabs and list, the top-left window, the relationship
+read back like any other field. Every surface sorts on the same `sortKey ?? created` axis — zone-partitioned
+and newest-first — so the manual order shows up **everywhere at once**: the [[session-console]] tabs and list, the top-left window, the relationship
 [[session-graph]], and the CLI's `spex` listings all agree. It is **global state**, not a per-browser view.
 Persisting follows the rename pattern — POST the new key, then ask the board to reload — **not** an optimistic
 local shuffle, so the list always shows exactly what the backend reports.

@@ -31,6 +31,12 @@ export default {
     pending: 'pending',
   },
 
+  // the two triage zones the session list groups into ([[session-console]]) — "whose turn is it".
+  sessionZone: {
+    need: 'needs you',
+    run: 'running',
+  },
+
   hud: {
     helpTitle: 'help — keymap & legend (?)',
     graphTitle: 'session relationships — open the live monitor graph in the session board',

@@ -80,6 +80,17 @@ scenarios:
       shows review), NOT silently withdrawn to idle. reopen never touches the `proposal` field. A proposal is
       reversed only when the agent actually WORKS again (its mark-active hook) or by the merge dispatch's
       delivered prompt — never as a hidden side-effect of the relaunch itself.
+  - name: propose-close-echoes-cleanup-reminder
+    tags: [backend-api]
+    description: >-
+      Declare a close proposal for a governed session (`spex session done --propose close`) and read the
+      command's confirmation output; then declare a merge (or nothing) proposal and read that output too.
+    expected: >-
+      The propose-close confirmation carries the plain, advisory cleanup reminder — reclaim the ephemeral
+      things you started to test this change (a stray process, a dev/preview server, a bound port, a scratch
+      session), keyed on whether a resource should outlive the task and never on who started it, stated as a
+      nudge and not a gate. The merge/nothing confirmations do NOT carry it. The reminder is project-agnostic
+      (no repo-specific paths), so it reads the same in any adopted project.
 ---
 # yatsu.md — state
 

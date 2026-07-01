@@ -4,6 +4,7 @@ import { cors } from 'hono/cors'
 import { etag } from 'hono/etag'
 import { createNodeWebSocket } from '@hono/node-ws'
 import { loadSpecs, specHistory, specDiffAt, loadConfig } from './specs.js'
+import { loadProposals, proposalsEnabled } from './proposals.js'
 import { resolveLayout, mainBranch } from './layout.js'
 import { buildBoard } from './board.js'
 import { boardStream } from './boardStream.js'
@@ -75,6 +76,10 @@ app.get('/api/layout', async (c) => c.json(await resolveLayout()))
 // its prompt `body` ({{targets}} placeholder), `kind`, and folder `dir` + co-located `files`. surface is a
 // frontmatter field, not a dir (specs.ts loadSurface); `surface: system` siblings are gathered elsewhere.
 app.get('/api/config', (c) => c.json(loadConfig()))
+// the forum ([[proposals]]) read surface for the dashboard's info page — the SAME loadProposals() the CLI
+// drain view reads, verbatim (the dashboard computes nothing over it: no re-sort, no salience ranking). The
+// `enabled` flag mirrors the on/off switch so the frontend hides the view when the feature is OFF.
+app.get('/api/forum', (c) => c.json({ enabled: proposalsEnabled(), threads: loadProposals() }))
 // the dashboard input's `/` dropdown — computed by the launcher's HARNESS adapter the same way that harness
 // computes its own `/` menu ([[harness-adapter]]). The client passes `?harness=<id>` for the ACTIVE session,
 // so a codex tab gets CODEX's menu, not the default's; unknown/absent → default. Insert-only on the client.

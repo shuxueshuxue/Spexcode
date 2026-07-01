@@ -6,6 +6,7 @@ import { STATUS_COLOR, sessionForest } from './session.js'
 import { SessionRow, RowLead, useFold } from './SessionWindow.jsx'
 import SessionContextMenu from './SessionContextMenu.jsx'
 import { ProofPane } from './ReviewProof.jsx'
+import ForumView from './ForumView.jsx'
 import { boardCommandsFor } from './sessionCommands.js'
 import { useT } from './i18n/index.jsx'
 
@@ -161,7 +162,7 @@ function highlight(text, q) {
   return <>{text.slice(0, i)}<b className="mention-hit">{text.slice(i, i + q.length)}</b>{text.slice(i + q.length)}</>
 }
 
-export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, reload }) {
+export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, onFocusNode, reload }) {
   const t = useT()
   const [prompt, setPrompt] = useState('')    // the New Session tab's own draft (its boarding-switch cache)
   const [menu, setMenu] = useState(null)      // completion dropdown: { kind:'mention'|'config'|'slash', items, index, start, end, query }
@@ -203,11 +204,12 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const forest = useMemo(() => sessionForest(sessions, (id) => expanded.has(id)), [sessions, expanded])
   const visible = useMemo(() => forest.filter((it) => it.type === 'row').map((it) => it.s), [forest])
   const order = useMemo(() => ['new', ...visible.map((s) => s.id)], [visible])
-  const active = order.includes(sel) ? sel : 'new'
+  // 'forum' is a third content mode beside 'new' and a session id — the read-only forum info page ([[forum-view]]).
+  const active = (sel === 'forum' || order.includes(sel)) ? sel : 'new'
   // a removed session (closed here, ended on its own, or closed elsewhere) leaves the tab unresolved: land
   // on New only if you're still on the now-gone tab. Mirrors `active`'s validity test.
   useEffect(() => {
-    if (!order.includes(sel)) setSel('new')
+    if (sel !== 'forum' && !order.includes(sel)) setSel('new')
   }, [order, sel, setSel])
   const focusId = focusNode?.id || null
   const selSession = sessions.find((s) => s.id === active)
@@ -732,6 +734,16 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             <button className={active === 'new' ? 'si-pill new on' : 'si-pill new'} title={t('session.newSessionTitle')} onClick={() => setSel('new')}>
               <span className="si-pill-glyph">＋</span>
             </button>
+            {/* second pill: the read-only forum info page ([[forum-view]]) — a monochrome inline-SVG speech
+                bubble in the dashboard's own glyph vocabulary (currentColor stroke), never a colour emoji. */}
+            <button className={active === 'forum' ? 'si-pill forum on' : 'si-pill forum'} title={t('session.forumTitle')} onClick={() => setSel('forum')}>
+              <span className="si-pill-glyph">
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M2.5 3.5 h11 v7 h-6 l-3 2.5 v-2.5 h-2 z" />
+                  <path d="M5 6.2 h6 M5 8.3 h4" />
+                </svg>
+              </span>
+            </button>
           </div>
           {forest.map((it) => {
             // group into two triage zones ([[session-console]], a dim header per zone) AND fold nested sessions
@@ -761,7 +773,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           })}
         </aside>
 
-        <section className={active === 'new' ? 'si-content is-new' : 'si-content is-session'}>
+        <section className={active === 'forum' ? 'si-content is-forum' : (active === 'new' ? 'si-content is-new' : 'si-content is-session')}>
+          {active === 'forum' && <ForumView onFocusNode={onFocusNode} />}
           {active === 'new' && (
             <div className="si-new-center">
               <div className="si-avatar" aria-hidden="true">
@@ -838,7 +851,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               on its right. */}
           <div
             className="si-session-wrap"
-            style={{ display: active === 'new' ? 'none' : 'flex', flexDirection: 'column', flex: 1, minWidth: 0, minHeight: 0, position: 'relative' }}
+            style={{ display: (active === 'new' || active === 'forum') ? 'none' : 'flex', flexDirection: 'column', flex: 1, minWidth: 0, minHeight: 0, position: 'relative' }}
           >
               <div className="si-tabbar">
                 {/* two tabs on the left: the live terminal (default) and the always-available proof of work. */}

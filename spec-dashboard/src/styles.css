@@ -901,6 +901,58 @@ body {
 .si-pill.new { color: var(--blue); }
 .si-pill:hover { background: var(--panel2); border-color: currentColor; }
 .si-pill.new.on { background: color-mix(in srgb, var(--blue) 16%, var(--panel2)); border-color: var(--blue); }
+/* the Forum pill reads as a secondary top action beside New: muted at rest, inking blue on hover/select so
+   New stays the primary blue action. Its glyph is a monochrome inline SVG (currentColor), never an emoji. */
+.si-pill.forum { color: var(--ink2); }
+.si-pill.forum:hover { color: var(--blue); }
+.si-pill.forum.on { color: var(--blue); background: color-mix(in srgb, var(--blue) 16%, var(--panel2)); border-color: var(--blue); }
+
+/* ── the read-only forum info page ([[forum-view]]) — a thin window over /api/forum, one design language with
+   the console (var(--mono), the app-theme tokens). Threads render in API order; counts are raw data. ── */
+.si-content.is-forum { align-items: stretch; justify-content: flex-start; overflow-y: auto; }
+.fv-note { margin: auto; padding: 24px; color: var(--muted); font-family: var(--mono); font-size: 12.5px; text-align: center; }
+.fv-list { width: 100%; display: flex; flex-direction: column; }
+.fv-thread { border-bottom: 1px solid var(--line); }
+.fv-head {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+  padding: 10px 16px; cursor: pointer; font-family: var(--mono); font-size: 12px; color: var(--ink2);
+}
+.fv-head:hover { background: var(--panel2); }
+.fv-thread.open > .fv-head { background: color-mix(in srgb, var(--blue) 10%, var(--panel2)); }
+/* the kind tag — a small uppercase pill; proposal leans blue, note stays muted. */
+.fv-kind {
+  flex: none; font-size: 9.5px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+  padding: 2px 6px; border-radius: 3px; border: 1px solid var(--line); color: var(--muted);
+}
+.fv-kind-proposal { color: var(--blue); border-color: color-mix(in srgb, var(--blue) 40%, var(--line)); }
+.fv-concern { flex: 1 1 auto; min-width: 120px; color: var(--ink); font-weight: 600; }
+/* status badge — open=blue, accepted/landed=green, rejected=red; anything else falls back to muted. */
+.fv-status {
+  flex: none; font-size: 10px; padding: 1px 7px; border-radius: 10px;
+  border: 1px solid var(--line); color: var(--muted); text-transform: lowercase;
+}
+.fv-st-open     { color: var(--blue);  border-color: color-mix(in srgb, var(--blue) 40%, var(--line)); }
+.fv-st-accepted { color: var(--green); border-color: color-mix(in srgb, var(--green) 40%, var(--line)); }
+.fv-st-landed   { color: var(--green); border-color: color-mix(in srgb, var(--green) 40%, var(--line)); }
+.fv-st-rejected { color: var(--red);   border-color: color-mix(in srgb, var(--red) 40%, var(--line)); }
+.fv-by { flex: none; color: var(--muted); font-size: 11px; }
+.fv-chips { flex: none; display: flex; flex-wrap: wrap; gap: 5px; }
+/* node chips — the doc-link blue vocabulary, but clickable buttons that focus the node on the board. */
+.fv-chip {
+  font-family: var(--mono); font-size: 10.5px; color: var(--blue);
+  background: var(--panel2); border: 1px solid color-mix(in srgb, var(--blue) 22%, var(--line));
+  padding: 1px 7px; border-radius: 3px; cursor: pointer; line-height: 1.5;
+}
+.fv-chip:hover { background: var(--blue); color: var(--paper); border-color: var(--blue); }
+.fv-counts { flex: none; display: flex; gap: 10px; margin-left: auto; }
+.fv-count { color: var(--muted); font-size: 10.5px; }
+/* the in-place expansion: the thread body + its signed replies, indented under the header. */
+.fv-body { padding: 4px 16px 14px 16px; border-top: 1px dashed var(--line); background: var(--paper); }
+.fv-text { font-family: var(--mono); font-size: 12px; line-height: 1.6; color: var(--ink2); white-space: pre-wrap; }
+.fv-reply { margin-top: 10px; padding-left: 12px; border-left: 2px solid var(--line); }
+.fv-reply-meta { display: flex; gap: 8px; margin-bottom: 3px; font-family: var(--mono); font-size: 10.5px; }
+.fv-reply-by { color: var(--blue); font-weight: 600; }
+.fv-reply-at { color: var(--muted); }
 
 .si-content { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--paper); }
 

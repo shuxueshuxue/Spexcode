@@ -39,7 +39,8 @@ Claude TUI is dark-designed), so `--term-bg` is a neutral near-black in light *a
 **scrollbars** read through the palette: `styles.css` themes them globally (a thin, rounded thumb —
 `--line` at rest, `--muted` on hover, over a transparent track) via `::-webkit-scrollbar*` for Blink/WebKit
 and `scrollbar-color`/`scrollbar-width` for Firefox, so every scrollable pane matches the app in both
-themes with no per-surface rule and no raw-OS default breaking the skin.
+themes with no per-surface rule and no raw-OS default. The terminal is styled only at its edge; xterm keeps
+its viewport geometry so scrollback and TUI wheel paths stay truthful.
 
 `theme.js` owns the pick: `getTheme()` returns an explicit saved choice (`localStorage
 spexcode.theme`) else the system preference (`prefers-color-scheme`), and `applyTheme(t)` sets the

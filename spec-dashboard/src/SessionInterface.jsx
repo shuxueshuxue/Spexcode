@@ -824,7 +824,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             if (it.type === 'zone') return <div className={`si-zone si-zone-${it.zone}`} key={`zone-${it.zone}`}>{t(`sessionZone.${it.zone}`)}</div>
             const s = it.s
             const lead = (it.expandable || it.depth)
-              ? <RowLead depth={it.depth} expandable={it.expandable} expanded={it.expanded} rollup={it.rollup} onToggle={() => toggleFold(s.id)} />
+              ? <RowLead depth={it.depth} expandable={it.expandable} expanded={it.expanded} rollup={it.rollup} kin={it.kin} onToggle={() => toggleFold(s.id)} />
               : null
             // single click switches tab; double-click locks the session (needs an overlay to focus, else a
             // no-op beyond the switch). The face is the shared SessionRow, compact + avatar-less here.

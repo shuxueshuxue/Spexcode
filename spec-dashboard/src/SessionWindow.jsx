@@ -21,20 +21,22 @@ export function opSummary(ops) {
 }
 
 // @@@ RowLead ([[session-nesting]]) — the leading fold gutter on a nested session row: a `depth`-indent plus
-// either a disclosure triangle (a parent) or an aligned placeholder (a leaf child). The triangle's COLOUR is
-// the subtree rollup (STATUS_COLOR hues), a purely-informational hint; clicking it toggles fold WITHOUT
-// selecting/opening the row (stopPropagation). Rendered only when nesting is in play (parent or depth>0), so a
-// flat list with no children looks exactly as before.
-export function RowLead({ depth, expandable, expanded, rollup, onToggle }) {
+// either the fold POD (a parent) or an aligned placeholder (a leaf child). The pod shows the SUBTREE COUNT
+// (how much fleet hides here) on the subtree-rollup COLOUR (STATUS_COLOR hues, the same purely-informational
+// hint the old triangle tinted): FILLED while collapsed (content hidden behind it), OUTLINE once expanded.
+// Clicking toggles fold WITHOUT selecting/opening the row (stopPropagation). Rendered only when nesting is
+// in play (parent or depth>0), so a flat list with no children looks exactly as before.
+export function RowLead({ depth, expandable, expanded, rollup, kin = 0, onToggle }) {
   return (
     <span className="sess-lead" style={{ paddingLeft: depth ? depth * 14 : 0 }}>
       {expandable ? (
         <span
-          className="sess-fold" role="button" tabIndex={-1} style={{ color: rollup }}
-          title={expanded ? 'Collapse children' : 'Expand children'}
+          className={`sess-fold pod${expanded ? ' open' : ''}`} role="button" tabIndex={-1}
+          style={expanded ? { color: rollup, borderColor: rollup } : { background: rollup, borderColor: rollup }}
+          title={`${kin} nested session${kin === 1 ? '' : 's'} — click to ${expanded ? 'collapse' : 'expand'}`}
           onClick={(e) => { e.stopPropagation(); onToggle?.() }}
           onMouseDown={(e) => e.stopPropagation()}
-        >{expanded ? '▾' : '▸'}</span>
+        >{kin}</span>
       ) : (
         <span className="sess-fold placeholder" aria-hidden="true" />
       )}
@@ -99,7 +101,7 @@ export default function SessionWindow({ sessions, activeId, onPick, onOpenSessio
           // so the row locks off s.source — NOT s.id (id keys the board tab; source keys the graph lock).
           const locked = s.source === activeId
           const lead = (it.expandable || it.depth)
-            ? <RowLead depth={it.depth} expandable={it.expandable} expanded={it.expanded} rollup={it.rollup} onToggle={() => toggle(s.id)} />
+            ? <RowLead depth={it.depth} expandable={it.expandable} expanded={it.expanded} rollup={it.rollup} kin={it.kin} onToggle={() => toggle(s.id)} />
             : null
           return (
             <button

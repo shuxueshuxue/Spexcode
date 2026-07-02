@@ -116,4 +116,28 @@ export async function loadConfig() {
   return res.json()
 }
 
+// the forum (proposals + notes) the backend serves at /api/forum: `{ enabled, threads }`, verbatim — the
+// info page renders what the CLI drain view reads, computing nothing over it (no re-sort, no salience order).
+export async function loadForum() {
+  const res = await apiFetch('/api/forum')
+  return res.json()
+}
+
+// human writes to the forum ([[forum-view]] / [[proposals]]) — POST straight through the SAME reply/propose
+// the CLI uses (git-committed to the trunk, author 'human'); an @-mention in the text dispatches a worker.
+// Both return the parsed json ({ ok, …, outcomes }); `outcomes` is the one-line @-dispatch summary to echo.
+export async function postForumReply(id, body) {
+  const res = await apiFetch(`/api/forum/${encodeURIComponent(id)}/reply`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ body }),
+  })
+  return res.json()
+}
+export async function postForumThread({ concern, kind, nodes, body }) {
+  const res = await apiFetch('/api/forum', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ concern, kind, nodes, body }),
+  })
+  return res.json()
+}
+
 export const SESSION_LOG = log

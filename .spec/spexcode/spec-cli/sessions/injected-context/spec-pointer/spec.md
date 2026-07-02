@@ -31,9 +31,9 @@ directory basename, so a dot-prefixed config root keeps the dot (`.config`), and
 
 Only the **pointer** is appended — never the spec **body**. The agent opens the live file, so it always sees
 the current contract, and the launch prompt stays small (well under the shell-arg truncation limit [[launch]]
-guards against). This is the plain-node companion to [[dispatch]]'s directive prompts: those rewrite the
-launch prompt for `@new` / `@delete` ops, while this only **augments** an existing-node dispatch.
+guards against). It only **augments** a dispatch that names an existing node — the sole prompt rewrite
+`newSession` does, now that node create/delete is prompt-driven agent work and the server builds no directive
+prompts (see [[dispatch]]).
 
-It is **fail-quiet by absence**: a `@new` placeholder (no committed id yet) and an unknown id resolve to
-nothing, so no pointer is appended and the agent launches with the human's prompt unchanged. The directive
-branches keep their own rewrites untouched — the pointer is added only on the otherwise-plain node dispatch.
+It is **fail-quiet by absence**: a prompt with no `[[id]]` and an unknown id both resolve to nothing, so no
+pointer is appended and the agent launches with the human's prompt unchanged.

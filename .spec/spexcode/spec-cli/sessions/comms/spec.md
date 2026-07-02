@@ -19,7 +19,7 @@ show **both** kinds of tie — who **watches** whom and who **talks** to whom �
 
 The mesh divides into the delivery path and the relationships drawn over it:
 
-- **[[dispatch]]** — the one delivery: a prompt (message, continue, merge intent, directive) handed to a
+- **[[dispatch]]** — the one delivery: a prompt (message, continue, merge intent) handed to a
   live agent over its rendezvous socket — socket-only, fail-loud, never PTY keystrokes. Merge is itself a
   dispatched prompt, not a server-run git script.
 - **[[agent-reply-channel]]** — making a send bidirectional: stamp the sender + a runnable reply hint into

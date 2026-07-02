@@ -638,11 +638,11 @@ const slugify = (s: string | null) => (s || 'session').replace(/[^a-zA-Z0-9_-]/g
 // @@@ node + title from the prompt - the spec node a session works on is whatever it @-mentions, NOT a UI
 // "focused node": the dashboard prefills `@<focused> ` as a deletable convenience, so the node the user
 // actually left in the prompt (changed it, or deleted it for a node-agnostic prompt) is the truth. We read
-// the FIRST `@<id>` that begins a word (same positional rule the dashboard's mention menu uses). When there
-// is none, the session is node-agnostic and we label it by the first few words of the prompt instead.
+// the FIRST `[[<id>]]` topic reference ([[mentions]]: `[[node]]` is a topic, `@` is now an actor/session).
+// When there is none, the session is node-agnostic and we label it by the first few words of the prompt.
 // The OPTIONAL leading dot is load-bearing: a node id is its dir basename, so a dot-prefixed config root
-// (`.config`) keeps the dot — without `\.?` here `@.config` captures nothing and never resolves to a node.
-const MENTION = /(?:^|\s)@(\.?[A-Za-z0-9_-]+)/
+// (`.config`) keeps the dot — without `\.?` here `[[.config]]` captures nothing and never resolves to a node.
+const MENTION = /\[\[(\.?[A-Za-z0-9_-]+)\]\]/
 const mentionedNode = (prompt: string): string | null => prompt.match(MENTION)?.[1] ?? null
 function titleFromPrompt(prompt: string): string | null {
   const first = (prompt || '').trim().split('\n')[0].trim()
@@ -695,102 +695,6 @@ async function launch(id: string, path: string, tail: string, harness: Harness =
   launchedAt.set(id, Date.now())   // stamp the boot window so reconcile reads 'starting', not 'offline', until the socket is up
 }
 
-// @@@ node directives - a dashboard board chord (nn / dd) prefixes the New Session prompt with a
-// structured op the server PERFORMS in the fresh worktree before the agent starts, then hands the agent
-// a prompt to finish it intelligently. The directive is anchored at the prompt start and carries an
-// @<target>, so it's unambiguous and wins over the plain first-@ mention. `rest` is the human's own text
-// after it (what they want the new node to be, or why the node is going away). No directive → the prompt
-// is an ordinary session prompt and nothing is mutated.
-//   @new under @<parentId>: <describe the node>   → create a placeholder child, agent names+specs+codes it
-//   @delete @<nodeId>: <why / guidance>            → remove the node's dir, agent refactors per git history
-type Directive = { kind: 'new'; targetId: string; rest: string } | { kind: 'delete'; targetId: string; rest: string }
-const NEW_OP = /^\s*@new\b[^\n@]*@([A-Za-z0-9_-]+)\s*:?\s*/i
-const DEL_OP = /^\s*@delete\b[^\n@]*@([A-Za-z0-9_-]+)\s*:?\s*/i
-function parseDirective(prompt: string): Directive | null {
-  let m = prompt.match(NEW_OP); if (m) return { kind: 'new', targetId: m[1], rest: prompt.slice(m[0].length).trim() }
-  m = prompt.match(DEL_OP); if (m) return { kind: 'delete', targetId: m[1], rest: prompt.slice(m[0].length).trim() }
-  return null
-}
-
-// find a spec node's directory inside a worktree's .spec tree (id = dir basename, the node-identity rule).
-function findNodeDir(specRoot: string, nodeId: string): string | null {
-  if (!existsSync(specRoot)) return null
-  const stack = [specRoot]
-  while (stack.length) {
-    const dir = stack.pop()!
-    for (const e of readdirSync(dir, { withFileTypes: true })) {
-      if (!e.isDirectory()) continue
-      const child = join(dir, e.name)
-      if (e.name === nodeId && existsSync(join(child, 'spec.md'))) return child
-      stack.push(child)
-    }
-  }
-  return null
-}
-
-// a lint-clean placeholder spec.md: minimal valid frontmatter + a two-part body, NO `code:` list (an
-// empty governed-files list keeps `spex lint` integrity at 0 errors). The agent replaces it wholesale.
-function placeholderSpec(id: string, sessionId: string): string {
-  return [
-    '---', `title: ${id}`, 'status: pending', 'hue: 210',
-    'desc: placeholder — to be named and specified by the dispatched session.',
-    `session: ${sessionId}`, '---', `# ${id}`, '',
-    '## raw source', '',
-    'Placeholder node. The dispatched session replaces this with the real human intent, renames the',
-    'directory to a proper id, and writes the matching spec and code.', '',
-    '## expanded spec', '',
-    'Pending — authored by the dispatched session.', '',
-  ].join('\n')
-}
-// create the placeholder child under <parentId> (or the .spec root if the parent isn't in this worktree).
-// returns the new spec.md path relative to the worktree, for the agent prompt.
-function createPlaceholder(wtPath: string, parentId: string, placeholderId: string, sessionId: string): string {
-  const specRoot = join(wtPath, '.spec')
-  const parentDir = findNodeDir(specRoot, parentId) || specRoot
-  const dir = join(parentDir, placeholderId)
-  mkdirSync(dir, { recursive: true })
-  writeFileSync(join(dir, 'spec.md'), placeholderSpec(placeholderId, sessionId))
-  return relative(wtPath, join(dir, 'spec.md'))
-}
-// remove a node's whole directory (its subtree). Returns the deleted spec.md's worktree-relative path
-// (so the agent can `git log --follow` it), or null when the node isn't present in this worktree.
-function removeNode(wtPath: string, nodeId: string): string | null {
-  const dir = findNodeDir(join(wtPath, '.spec'), nodeId)
-  if (!dir) return null
-  const rel = relative(wtPath, join(dir, 'spec.md'))
-  rmSync(dir, { recursive: true, force: true })
-  return rel
-}
-
-// @@@ directive prompts - the INTENT handed to the dispatched agent. The server did the mechanical
-// spec-tree mutation; the agent does the intelligent rest (name + spec + code, or history-driven
-// refactor). Like mergePrompt, the op is a DISPATCH: the server never authors specs or refactors code.
-// These state only the TASK — they deliberately do NOT restate the git flow's mechanics (commit format, the
-// Session: trailer, the node-branch flow, the merge style). Those are carried by product MECHANISM, not a
-// dispatch string: newSession makes the branch, the prepare-commit-msg hook stamps the trailer, the
-// `core/spec` system contract (gathered into appendSysArg) demands commit-before-declare, and mergePrompt
-// states the merge style at merge time. The only handoff detail kept here is "propose merge, don't merge
-// yourself" (the human triggers
-// the merge later, see mergePrompt).
-function newNodePrompt(placeholderId: string, parentId: string, relPath: string, rest: string): string {
-  return `A placeholder spec node \`${placeholderId}\` was created under parent \`${parentId}\` at ${relPath} in this worktree. ` +
-    `Turn it into a real node and build it, per this request:\n\n${rest || '(no extra description — infer the intent from the parent and the codebase)'}\n\n` +
-    `1. Choose a good kebab-case id reflecting the intent (node id = its directory basename) and \`git mv\` the directory \`${dirname(relPath)}\` to it, keeping it under \`${parentId}\`. ` +
-    `2. Rewrite spec.md at contract altitude: real title/desc, the two-part body (raw source = human intent · expanded spec = behavioral contract), and a \`code:\` list of the files it will govern. ` +
-    `3. Implement the code the spec describes. 4. Keep \`spex lint\` at 0 errors and the build green. ` +
-    `When it's ready, propose merge for the human to review — do NOT merge it yourself.`
-}
-function deleteNodePrompt(nodeId: string, relPath: string | null, rest: string): string {
-  const recover = relPath
-    ? `Recover what it was: \`git log --follow -- ${relPath}\` then \`git show\` the relevant commits to read its old spec and the \`code:\` files it governed.`
-    : `The node's spec.md wasn't found in the tree; recover what \`${nodeId}\` was from git history (\`git log\` / \`git show\`).`
-  return `The spec node \`${nodeId}\` has been intentionally DELETED (its directory removed) in this worktree. ` +
-    `Make the codebase consistent without it, per this request:\n\n${rest || '(no extra guidance — use your judgement)'}\n\n` +
-    `1. ${recover} ` +
-    `2. Decide what happens to that governed code now the spec is gone — remove it, fold it into another node's responsibility, or re-point references — and fix any specs that linked \`[[${nodeId}]]\`. ` +
-    `3. Apply the refactor; keep \`spex lint\` at 0 errors and the build green. ` +
-    `When it's ready, propose merge for the human to review — do NOT merge it yourself.`
-}
 
 // @@@ concurrency cap + queue - keep at most maxActive() agents AUTONOMOUSLY PROGRESSING at once. A slot is
 // COMPUTE pressure, so only an agent actually consuming it holds one: genuinely live (tmux window + rendezvous
@@ -936,19 +840,18 @@ export async function createSession(node: string | null, prompt: string, harness
 // @@@ newSession - durable worktree (branch node/<slug> off main) + .session label. The agent does NOT
 // launch inline any more: the worktree is prepared and parked as `queued`, then drainQueue() launches it
 // immediately if we're under the concurrency cap, else it waits its turn. Backs both the dashboard POST and
-// `spex session new`. A board directive (nn/dd) additionally mutates the worktree's spec tree up front and
-// hands the agent a finish-the-op prompt.
+// `spex session new`. Creating or deleting a spec node is NOT a server op — it is prompt-driven work the
+// launched agent does itself (the composer's nn/dd chords just prefill a plain instruction). So the server
+// only ever launches a session; it never mutates the spec tree ([[mentions]]: the forum is the sole
+// programmatic surface, every other surface is prompt only).
 export async function newSession(node: string | null, prompt: string, harness: string = defaultHarness.id, parent: string | null = null): Promise<Session> {
   const id = randomUUID()
   const h = harnessById(harness)   // throws on an unknown id — fail loud, never silently launch the wrong harness
-  const directive = parseDirective(prompt)
-  // node identity + label: a delete targets an existing node (link it); a new op has no id yet so it's
-  // labeled by the human's text; otherwise explicit --node wins, else the prompt's first @-mention.
-  const ref = directive?.kind === 'delete' ? directive.targetId
-    : directive?.kind === 'new' ? null
-    : (node || mentionedNode(prompt))
-  const title = ref ? null : titleFromPrompt(directive?.rest ?? prompt)
-  const slug = `${slugify(ref || title || (directive ? `${directive.kind}-node` : null))}-${id.slice(0, 4)}`
+  // node identity + label: explicit --node wins, else the prompt's first `[[id]]` topic ref; a prompt with
+  // none is node-agnostic and labeled by its first few words.
+  const ref = node || mentionedNode(prompt)
+  const title = ref ? null : titleFromPrompt(prompt)
+  const slug = `${slugify(ref || title)}-${id.slice(0, 4)}`
   const branch = `node/${slug}`
   const path = join(mainRoot(), '.worktrees', slug)
   await gitA(['-C', mainRoot(), 'worktree', 'add', '-b', branch, path, mainBranch()])
@@ -973,18 +876,9 @@ export async function newSession(node: string | null, prompt: string, harness: s
   // --append-system-prompt / --settings, and why we no longer hide CLAUDE.md: hiding it suppressed the agent's
   // own memory load too. One delivery path for both launch modes ([[harness-delivery]]).
   try { materialize(path) } catch { /* best-effort; the dispatch.sh gate re-renders on the first event anyway */ }
-  // perform the directive's spec-tree mutation in the worktree, then PARK the finish-the-op prompt for launch.
-  // the mutation is uncommitted, so the board's overlay shows it instantly (added ghost / deleted mark) even
-  // while the session only sits queued.
   let launchPrompt = prompt
-  if (directive?.kind === 'new') {
-    const placeholderId = `untitled-${id.slice(0, 4)}`
-    const relPath = createPlaceholder(path, directive.targetId, placeholderId, id)
-    launchPrompt = newNodePrompt(placeholderId, directive.targetId, relPath, directive.rest)
-  } else if (directive?.kind === 'delete') {
-    launchPrompt = deleteNodePrompt(directive.targetId, removeNode(path, directive.targetId), directive.rest)
-  } else if (ref) {
-    // @@@ spec pointer - the ref (explicit --node, else the prompt's first @mention) named an EXISTING node.
+  if (ref) {
+    // @@@ spec pointer - the ref (explicit --node, else the prompt's first [[id]] ref) named an EXISTING node.
     // Append ONE line pointing the agent at that node's spec.md as an ABSOLUTE path INSIDE its own worktree, so
     // it reads the LIVE file (never a stale snapshot we'd inject). relPath already carries the .spec/ prefix and
     // is identical in this freshly-branched worktree, so the absolute path is just join(worktree, relPath). Only

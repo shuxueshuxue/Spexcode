@@ -32,10 +32,12 @@ dark terminal, whatever the app theme. Two panes: a left session list and a righ
 what's focused. The list's **top button row** is a single `＋` New Session button above the session rows, so
 it never blocks the `↑/↓` path down to a session.
 
-**New Session** is a centred avatar + auto-growing input. Nothing is prefilled; the focused node is the first
-**@-mention** suggestion, so the human opts in with `@`. A leading **`/`** opens the config-preset palette;
-the two compose the launch grammar `/<preset> @<node>… <free text>`, from which the server derives the node (the
-first `@<id>`). Both menus only insert text; the New prompt has **no** `/` slash-command menu (presets only). A preset launched with **no `@`-target** never assumes a node — the agent takes scope from the prompt, else asks first.
+**New Session** is a centred avatar + auto-growing input. Nothing is prefilled; typing **`[[`** opens the
+node dropdown (the focused node leads it) — a topic reference ([[mentions]]). A leading **`/`** opens the
+config-preset palette; the two compose the launch grammar `/<preset> [[node]]… <free text>`, from which the
+server derives the node (the first `[[<id>]]`). Both menus only insert text; the New prompt has **no** `/`
+slash-command menu (presets only). A preset launched with **no node target** never assumes a node — the agent
+takes scope from the prompt, else asks first.
 **Submitting launches but never switches tabs**: the prompt clears **immediately** and **focus stays in the box** —
 the box **never disables or blurs**; the launch fires in the **background**, so the box is type-ready at once and you
 can fire off several in a row **without waiting** for each launch's worktree+agent setup (seconds of real work) to
@@ -49,7 +51,7 @@ Code, OpenAI for Codex) picks **which agent the launch boots** from the set the 
 ([[harness-adapter]]). There is no visible "harness" label or text inside the buttons; the readable names live
 in `aria-label`/tooltips. The choice rides along in the launch `POST /api/sessions` body and is
 **remembered** (per-browser) so a user who lives in one agent never re-picks; it never assumes a node and
-composes orthogonally with the `/<preset> @<node>… text` grammar above.
+composes orthogonally with the `/<preset> [[node]]… text` grammar above.
 
 An existing session shows its **live tmux terminal** (SessionTerm) with the docked **`❯` input** below — a
 **real tmux client but a read-only scrollable view** — but only when its **liveness** ([[state]]) is live
@@ -99,8 +101,8 @@ easy-to-mis-aim right-click. The box **holds
 focus persistently** — clicking
 chrome never blurs it, the panel **suppresses the native context menu** and **restores** focus after a
 right-click. It **auto-grows upward**, **capped at half** the terminal height, and carries the same **completion** menus
-the New prompt does ([[term-input]]): the inbox `/` lists the board+CC commands, and `@` opens the spec-node
-dropdown — one menu shared with New, not a second copy. An `@<node>` here **resolves at send**, expanding to
+the New prompt does ([[term-input]]): the inbox `/` lists the board+CC commands, and `[[` opens the spec-node
+dropdown — one menu shared with New, not a second copy. A `[[node]]` here **resolves at send**, expanding to
 a pointer at the node's live `spec.md` so the running agent is aimed at that contract. The second channel is **nav mode** — entered by the `/nav` board command, the header
 button, or the reserved `⌥/⌘+I`: the `❯` box disables and **every keystroke — `⌃`/`⌥`/`⌘` combos included —
 forwards raw** to the pane, so a human drives the agent's terminal, not just its arrows. Those **reserved

@@ -45,7 +45,13 @@ trunk=$(spex_cli trunk 2>/dev/null | head -1)
 # above is immune: layout.ts mainBranch() resolves through git.ts's env-stripping git().)
 [ -n "$trunk" ] || trunk=$(env -u GIT_DIR -u GIT_INDEX_FILE git -C "$main_root" symbolic-ref --short HEAD 2>/dev/null)
 [ -n "$trunk" ] || trunk=main
-if [ "$branch" = "$trunk" ] && [ ! -f "$git_dir/MERGE_HEAD" ] && [ -z "${SPEXCODE_ALLOW_MAIN:-}" ]; then
+# @@@ forum-data exception - the forum ([[proposals]]) is DATA, not contract: a commit touching ONLY
+# .spec/.forum/** is a forum post appended straight to the trunk (the forum's write path), needing no
+# review ritual, so it is admitted even on the trunk. Any other staged path re-arms the guard.
+forum_only=
+_staged=$(git diff --cached --name-only 2>/dev/null)
+if [ -n "$_staged" ] && ! printf '%s\n' "$_staged" | grep -qv '^\.spec/\.forum/'; then forum_only=1; fi
+if [ "$branch" = "$trunk" ] && [ ! -f "$git_dir/MERGE_HEAD" ] && [ -z "${SPEXCODE_ALLOW_MAIN:-}" ] && [ -z "$forum_only" ]; then
   echo "✗ SpexCode: direct commits on $trunk (the trunk) are blocked." >&2
   echo "  Work in a worktree (.worktrees/<node>, branch node/<id>) and merge back." >&2
   echo "  Merges pass automatically; for seeding/topology: SPEXCODE_ALLOW_MAIN=1 git commit …" >&2

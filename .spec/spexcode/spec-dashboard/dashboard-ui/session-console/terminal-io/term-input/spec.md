@@ -33,15 +33,20 @@ realised wherever a live terminal sits beside spec navigation.
 
 ## completion menus answer different questions
 
-A leading character opens a dropdown. For **authoring** rows — `@` nodes, config presets, Claude Code's
+A leading token opens a dropdown. For **authoring** rows — `[[` nodes, config presets, Claude Code's
 own commands — a row **only ever inserts its token text** and **never runs anything**; they are authoring
 aids, not a second control plane. The **one exception** is a **board command** (below): its row is the
 typed twin of a header button, so accepting it **runs the action** — it *is* the board's control plane,
 not a hint toward one.
 
-- **`@` — spec nodes, on every prompt.** Which node does this target? The focused node is the first
-  suggestion, so just typing `@` opts into it. It is the **same** dropdown on the New Session prompt and on
-  a running session's `❯` inbox — one menu, not two.
+- **`[[` — spec nodes (a topic), on every prompt.** Which node does this target? Typing `[[` opens the
+  node dropdown (the focused node leads it, the convenient default); accepting inserts `[[<id>]]`. It is the
+  **same** dropdown on the New Session prompt and on a running session's `❯` inbox — one menu, not two.
+- **`@` — sessions (an actor), on every prompt.** Typing `@` opens a parallel dropdown of the **live** board
+  sessions plus **`@new`** (spawn a fresh worker), ranked by relevance; accepting inserts `@<id>`. This is
+  the [[mentions]] grammar: `[[node]]` names a topic, `@session` names an actor — the two never collide. In
+  the composer/inbox the token expands to prompt text (the agent reads it); only in the forum does `@` also
+  programmatically dispatch.
 - **`/` on the New Session prompt — the config presets** (our own bespoke preset set), *not* Claude
   Code's palette.
 - **`/` on a running session's `❯` inbox — the board commands, then Claude Code's own `/` menu.** The
@@ -52,20 +57,20 @@ not a hint toward one.
 ## the New Session `/` composes at launch
 
 The dropdown stays decoupled: picking a preset only inserts `/<name> `. The body is woven in only at
-**Enter**. The grammar `/<preset> @<node>… <free text>` assembles **one** prompt — the preset's body
-with its targets placeholder filled by the `@`-resolved nodes, then the free text appended. No `@`
+**Enter**. The grammar `/<preset> [[node]]… <free text>` assembles **one** prompt — the preset's body
+with its targets placeholder filled by the `[[…]]`-resolved nodes, then the free text appended. No node ref
 leaves a "current/focused node" note for the body to handle. A leading `/` naming no known preset, and
-any plain or `@`-only prompt, launch verbatim — the existing paths are untouched.
+any plain or node-only prompt, launch verbatim — the existing paths are untouched.
 
-## the running session's `@` resolves at send
+## the running session's `[[node]]` resolves at send
 
-The same authoring aid, mirrored into the live conversation. An `@<node>` typed into a running session's
+The same authoring aid, mirrored into the live conversation. A `[[node]]` typed into a running session's
 `❯` inbox is **resolved at send-time** — each token expands in place to its node id plus a pointer to that
 node's live `spec.md` path, so the driven agent is aimed at the node's current contract and reads the file
 itself, never a pasted body. This is the in-conversation twin of [[spec-pointer]]'s launch pointer: New
-Session resolves `@` at Enter into the launch prompt; a running session resolves it at send into the keyed
-message. An unknown id passes through untouched, and the rest of the line is sent verbatim — the `@` is the
-only thing rewritten.
+Session resolves `[[node]]` at Enter into the launch prompt; a running session resolves it at send into the
+keyed message. An unknown id passes through untouched, and the rest of the line is sent verbatim — the node
+ref is the only thing rewritten.
 
 ## no source of its own
 

@@ -6,6 +6,7 @@ import { STATUS_COLOR, sessionForest } from './session.js'
 import { SessionRow, RowLead, useFold } from './SessionWindow.jsx'
 import SessionContextMenu from './SessionContextMenu.jsx'
 import { ProofPane } from './ReviewProof.jsx'
+import ForumView from './ForumView.jsx'
 import { boardCommandsFor } from './sessionCommands.js'
 import { useT } from './i18n/index.jsx'
 
@@ -66,14 +67,15 @@ function navKeyToken(e) {
 // the menu's spec path, minus the `.spec/` shell and `/spec.md` leaf, so a row reads like a breadcrumb.
 const specPath = (p) => (p || '').replace(/^\.spec\//, '').replace(/\/spec\.md$/, '')
 
-// an `@<id>` mention token at a word boundary. Optional leading dot so `@.config` resolves (a node id is
-// its dir basename — see [[spec-pointer]]). Group 1 = the boundary (BOL or whitespace), 2 = the id. Used
-// for both the New Session launch grammar and the running-session send-time resolution — one pattern.
-const MENTION_RE = /(^|\s)@(\.?[A-Za-z0-9_-]+)/g
+// a `[[<id>]]` (Obsidian double-bracket) node-mention token. Optional leading dot so `[[.config]]` resolves
+// (a node id is its dir basename — see [[spec-pointer]]). Group 1 = the id. Used for both the New Session
+// launch grammar and the running-session send-time resolution — one pattern. `@` is left free for future
+// session mentions; only the node ref moves to `[[]]`.
+const MENTION_RE = /\[\[(\.?[A-Za-z0-9_-]+)\]\]/g
 
-// rank spec nodes for a partial @query. The focused node always floats to the very top (so just typing
-// `@` lists it first — the convenient default target). Otherwise id beats path; a prefix beats a mid-match;
-// shorter ids win ties so the most specific node floats up. Empty query (just typed `@`) lists everything.
+// rank spec nodes for a partial `[[query`. The focused node always floats to the very top (so just typing
+// `[[` lists it first — the convenient default target). Otherwise id beats path; a prefix beats a mid-match;
+// shorter ids win ties so the most specific node floats up. Empty query (just typed `[[`) lists everything.
 function matchSpecs(specs, query, focusId) {
   const q = query.toLowerCase()
   const scored = []
@@ -91,6 +93,33 @@ function matchSpecs(specs, query, focusId) {
   }
   scored.sort((a, b) => a.score - b.score || a.s.id.length - b.s.id.length || a.s.id.localeCompare(b.s.id))
   return scored.slice(0, 8).map((x) => x.s)
+}
+
+// the actor twin of matchSpecs: rank ONLINE board sessions for a partial `@query`, plus the synthetic
+// `@new` (spawn a fresh worker), which is ALWAYS present near the top (after any exact matches). A row's
+// handle is its title/name/short-id; `sub` is a hint (its node or status). Exact/prefix on id-or-handle
+// leads, then most-recent (`created` desc) within a band. Returns up to 8 `{id, label, sub}` items.
+function matchSessions(sessions, query) {
+  const q = query.toLowerCase()
+  const handle = (s) => s.title || s.name || (s.id || '').slice(0, 8)
+  const scored = []
+  for (const s of sessions || []) {
+    if (s.liveness !== 'online') continue
+    const id = (s.id || '').toLowerCase()
+    const h = handle(s).toLowerCase()
+    let score
+    if (!q) score = 3
+    else if (id === q || h === q) score = 0
+    else if (id.startsWith(q) || h.startsWith(q)) score = 1
+    else if (id.includes(q) || h.includes(q)) score = 2
+    else continue
+    scored.push({ s, score })
+  }
+  scored.sort((a, b) => a.score - b.score || (b.s.created || 0) - (a.s.created || 0))
+  const items = scored.map((x) => ({ id: x.s.id, label: handle(x.s), sub: x.s.node || x.s.status }))
+  const exactCount = scored.filter((x) => x.score === 0).length
+  items.splice(exactCount, 0, { id: 'new', label: 'new', sub: 'spawn a fresh worker' })
+  return items.slice(0, 8)
 }
 
 // the shared auto-grow routine: reset to `auto` (so it can shrink), then height = scrollHeight clamped at
@@ -161,7 +190,7 @@ function highlight(text, q) {
   return <>{text.slice(0, i)}<b className="mention-hit">{text.slice(i, i + q.length)}</b>{text.slice(i + q.length)}</>
 }
 
-export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, reload }) {
+export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, onFocusNode, reload }) {
   const t = useT()
   const [prompt, setPrompt] = useState('')    // the New Session tab's own draft (its boarding-switch cache)
   const [menu, setMenu] = useState(null)      // completion dropdown: { kind:'mention'|'config'|'slash', items, index, start, end, query }
@@ -203,11 +232,12 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const forest = useMemo(() => sessionForest(sessions, (id) => expanded.has(id)), [sessions, expanded])
   const visible = useMemo(() => forest.filter((it) => it.type === 'row').map((it) => it.s), [forest])
   const order = useMemo(() => ['new', ...visible.map((s) => s.id)], [visible])
-  const active = order.includes(sel) ? sel : 'new'
+  // 'forum' is a third content mode beside 'new' and a session id — the read-only forum info page ([[forum-view]]).
+  const active = (sel === 'forum' || order.includes(sel)) ? sel : 'new'
   // a removed session (closed here, ended on its own, or closed elsewhere) leaves the tab unresolved: land
   // on New only if you're still on the now-gone tab. Mirrors `active`'s validity test.
   useEffect(() => {
-    if (!order.includes(sel)) setSel('new')
+    if (sel !== 'forum' && !order.includes(sel)) setSel('new')
   }, [order, sel, setSel])
   const focusId = focusNode?.id || null
   const selSession = sessions.find((s) => s.id === active)
@@ -331,35 +361,35 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     fitTextarea(ta, maxH)
   }, [msg, active, open])
 
-  // assemble the `/<preset> @<node>… <free text>` launch grammar into one prompt: the preset body with its
-  // {{targets}} placeholder filled from the @-mentions (the server later derives the node from the first
-  // @<id>), free text appended. A `/` naming no known preset, or a plain/@-only prompt, passes through.
+  // assemble the `/<preset> [[<node>]]… <free text>` launch grammar into one prompt: the preset body with its
+  // {{targets}} placeholder filled from the mentions (the server later derives the node from the first
+  // `[[<id>]]`), free text appended. A `/` naming no known preset, or a plain/mention-only prompt, passes through.
   const composeLaunch = (raw) => {
     const m = raw.match(/^\/(\S+)\s*([\s\S]*)$/)
     if (!m) return raw
     const preset = commandPresets.find((p) => p.name === m[1])
     if (!preset) return raw
     const ids = []
-    const free = m[2].replace(MENTION_RE, (_, sp, id) => { ids.push(id); return sp }).trim()
+    const free = m[2].replace(MENTION_RE, (_, id) => { ids.push(id); return '' }).trim()
     const targets = ids.length
       ? ids.map((id) => {
           const s = specs.find((x) => x.id === id)
-          return s ? `- @${s.id} — ${specPath(s.path)}` : `- @${id}`
+          return s ? `- [[${s.id}]] — ${specPath(s.path)}` : `- [[${id}]]`
         }).join('\n')
-      : '(No target was @-mentioned. If the prompt names the scope, use it; otherwise ask the human to define the scope before proceeding — unless this task needs no scope, in which case proceed.)'
+      : '(No target was mentioned. If the prompt names the scope, use it; otherwise ask the human to define the scope before proceeding — unless this task needs no scope, in which case proceed.)'
     const body = preset.body.includes('{{targets}}')
       ? preset.body.replace('{{targets}}', targets)
       : `${preset.body}\n\n${targets}`
     return free ? `${body}\n\n${free}` : body
   }
 
-  // the running-session twin of composeLaunch's @-resolution: expand each `@<id>` in a keyed message to an
-  // inline pointer at the node's live spec.md (`@<id> (<path>)`), so the driven agent is aimed at that
+  // the running-session twin of composeLaunch's mention resolution: expand each `[[<id>]]` in a keyed message
+  // to an inline pointer at the node's live spec.md (`[[<id>]] (<path>)`), so the driven agent is aimed at that
   // contract and reads the file itself — never a pasted body (see [[spec-pointer]]). Unknown ids pass through.
   const expandMentions = (text) =>
-    text.replace(MENTION_RE, (m, sp, id) => {
+    text.replace(MENTION_RE, (m, id) => {
       const s = specs.find((x) => x.id === id)
-      return s ? `${sp}@${s.id} (${s.path})` : m
+      return s ? `[[${s.id}]] (${s.path})` : m
     })
 
   // launch a session, then stay on the New tab — it appears in the list below on the next reload/poll.
@@ -381,25 +411,45 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       .catch(() => {})
   }
 
-  // the @-mention dropdown — shared by the New prompt and a running session's ❯ inbox (one menu, not two).
-  // The trigger is purely positional: scan back from the caret over non-space chars to an `@` at a word
-  // boundary. Returns the menu descriptor, or null when the caret isn't inside a mention token.
+  // the node-mention dropdown — shared by the New prompt and a running session's ❯ inbox (one menu, not two).
+  // The trigger is positional (Obsidian `[[`): scan back from the caret over id-chars; if the two chars just
+  // before that run are `[[`, the caret sits inside an UNCLOSED `[[query` token — the query is the text between
+  // the `[[` and the caret. Returns the menu descriptor, or null when the caret isn't inside a mention token.
   const mentionMenu = (value, caret) => {
     let i = caret - 1
-    while (i >= 0 && value[i] !== '@' && !/\s/.test(value[i])) i--
-    if (i >= 0 && value[i] === '@' && (i === 0 || /\s/.test(value[i - 1]))) {
+    while (i >= 0 && /[A-Za-z0-9_.\-]/.test(value[i])) i--
+    // i now points just left of the id run; the id starts at i+1. `[[` must occupy value[i-1] and value[i].
+    if (i >= 1 && value[i - 1] === '[' && value[i] === '[') {
       const query = value.slice(i + 1, caret)
       const items = matchSpecs(specs, query, focusId)
       if (!items.length) return null
-      return { kind: 'mention', items, index: 0, start: i, end: caret, query }
+      return { kind: 'mention', items, index: 0, start: i - 1, end: caret, query }
     }
     return null
   }
-  // build the completion dropdown for the active surface: @-mention (spec nodes) works on BOTH; the New
-  // prompt adds the config-preset (`/`) palette, a session's ❯ inbox adds the slash-command menu.
+  // the actor-mention dropdown — the `@` twin of mentionMenu, shared by both surfaces. Positional like `[[`:
+  // scan back from the caret over handle-chars; if that run is preceded by an `@` at a WORD BOUNDARY (start
+  // of line or after whitespace), the caret sits inside an `@query` actor token. `[[`=topic, `@`=actor — the
+  // two triggers never collide (a bare `@` mid-word, e.g. an email, is not a boundary and stays inert).
+  const actorMenu = (value, caret) => {
+    let i = caret - 1
+    while (i >= 0 && /[A-Za-z0-9_.\-]/.test(value[i])) i--
+    // i now points at the char just left of the handle run — the `@` sigil for an actor token.
+    if (i >= 0 && value[i] === '@' && (i === 0 || /\s/.test(value[i - 1]))) {
+      const query = value.slice(i + 1, caret)
+      const items = matchSessions(sessions, query)
+      if (!items.length) return null
+      return { kind: 'actor', items, index: 0, start: i, end: caret, query }
+    }
+    return null
+  }
+  // build the completion dropdown for the active surface: `[[`-mention (spec nodes) and `@`-actor (sessions)
+  // work on BOTH; the New prompt adds the config-preset (`/`) palette, a session's ❯ inbox adds the slash menu.
   const buildMenu = (value, caret) => {
     const mm = mentionMenu(value, caret)
     if (mm) return mm
+    const am = actorMenu(value, caret)
+    if (am) return am
     if (active === 'new') {
       const cm = value.match(/^\/(\S*)$/)   // leading `/preset` (no space yet) → config-preset palette
       if (cm) {
@@ -427,7 +477,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const navMenu = (dir) => setMenu((m) => (m ? { ...m, index: (m.index + dir + m.items.length) % m.items.length } : m))
   // replace the menu's span under the caret with the picked item's token, then drop the caret after it.
   // Each kind writes its OWN surface: slash → the active session's ❯ draft (msgRef), insert-only and never
-  // executed; mention → the New Session prompt (taRef). `@<id> ` / `/<name> ` both leave a trailing space.
+  // executed; mention → the New Session prompt (taRef). `[[<id>]] ` / `/<name> ` both leave a trailing space.
   const accept = (item) => {
     if (!item || !menu) return
     if (menu.kind === 'slash') {
@@ -441,10 +491,13 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       requestAnimationFrame(() => { const el = msgRef.current; if (el) { el.focus(); el.setSelectionRange(caret, caret) } })
       return
     }
-    // config preset → the New prompt (composed at launch); a mention → whichever box is active: the New
-    // prompt (resolved at launch) or a running session's ❯ inbox (resolved at send, see expandMentions).
-    const insert = menu.kind === 'config' ? `/${item.name} ` : `@${item.id} `
-    const onMsg = menu.kind === 'mention' && active !== 'new'
+    // config preset → the New prompt (composed at launch); a `[[`-mention/`@`-actor → whichever box is
+    // active: the New prompt (resolved at launch) or a running session's ❯ inbox (resolved at send). An
+    // actor inserts `@<id> ` (the id, so the server/CLI resolver matches) — text expansion only, no dispatch.
+    const insert = menu.kind === 'config' ? `/${item.name} `
+      : menu.kind === 'actor' ? `@${item.id} `
+      : `[[${item.id}]] `
+    const onMsg = (menu.kind === 'mention' || menu.kind === 'actor') && active !== 'new'
     const ref = onMsg ? msgRef : taRef
     const cur = onMsg ? msg : prompt
     const setCur = onMsg ? setMsg : setPrompt
@@ -482,11 +535,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     </ul>
   )
 
-  // ONE render for the @-mention menu, on either surface — downward under the centered New box, or `up`
+  // ONE render for the node-mention menu, on either surface — downward under the centered New box, or `up`
   // above the docked ❯ inbox. Same rows, same data; only the open direction differs (like slashMenu).
   const mentionMenuEl = (up) => (
     <ul className={up ? 'mention-menu up' : 'mention-menu'} role="listbox">
-      <li className="mention-head">// {menu.query ? `@${menu.query}` : t('session.menuSpecNodes')} — {t('session.menuHint')}</li>
+      <li className="mention-head">// {menu.query ? `[[${menu.query}]]` : t('session.menuSpecNodes')} — {t('session.menuHint')}</li>
       {menu.items.map((it, i) => (
         <li
           key={it.id}
@@ -497,10 +550,34 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           onMouseEnter={() => setMenu((m) => (m ? { ...m, index: i } : m))}
         >
           <span className="mention-dot" style={{ background: STATUS_COLOR[it.status] || STATUS_COLOR.offline }} />
-          <span className="mention-id">@{highlight(it.id, menu.query)}</span>
+          <span className="mention-id">{highlight(it.id, menu.query)}</span>
           <span className="mention-path">{specPath(it.path)}</span>
         </li>
       ))}
+    </ul>
+  )
+
+  // the `@`-actor menu — the session twin of mentionMenuEl (same open-direction logic). Rows read `@<handle>`
+  // + a hint; the synthetic `@new` row wears a subtle distinct style (`mention-item new`). No emoji.
+  const actorMenuEl = (up) => (
+    <ul className={up ? 'mention-menu up' : 'mention-menu'} role="listbox">
+      <li className="mention-head">// {menu.query ? `@${menu.query}` : t('session.menuSessions')} — {t('session.menuHint')}</li>
+      {menu.items.map((it, i) => {
+        const isNew = it.id === 'new'
+        return (
+          <li
+            key={it.id}
+            role="option"
+            aria-selected={i === menu.index}
+            className={`${i === menu.index ? 'mention-item on' : 'mention-item'}${isNew ? ' new' : ''}`}
+            onMouseDown={(e) => { e.preventDefault(); accept(it) }}
+            onMouseEnter={() => setMenu((m) => (m ? { ...m, index: i } : m))}
+          >
+            <span className="mention-id">@{highlight(it.label, menu.query)}</span>
+            <span className="mention-path">{it.sub}</span>
+          </li>
+        )
+      })}
     </ul>
   )
 
@@ -512,7 +589,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     // completion's trailing space and a stray newline.
     const cmd = boardCmds.find((c) => raw.trim() === `/${c.name}`)
     if (cmd) { setMsg(''); setMenu(null); cmd.run(); return }
-    // resolve any `@<node>` to a live spec.md pointer before it reaches the agent (the running-session twin
+    // resolve any `[[<node>]]` to a live spec.md pointer before it reaches the agent (the running-session twin
     // of the New Session launch composition — see [[term-input]]).
     const text = expandMentions(raw)
     setMsg('')
@@ -651,7 +728,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         return
       }
       // a completion menu owns navigation/commit/dismiss while it's open — on the New Session prompt
-      // (@-mention) OR a session's ❯ inbox (slash). The capture-phase listener claims Enter before the
+      // (`[[`-mention) OR a session's ❯ inbox (slash). The capture-phase listener claims Enter before the
       // inbox textarea's own onKeyDown, so picking a command never also dispatches the line.
       if (menu) {
         if (e.key === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); navMenu(1); return }
@@ -732,6 +809,16 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             <button className={active === 'new' ? 'si-pill new on' : 'si-pill new'} title={t('session.newSessionTitle')} onClick={() => setSel('new')}>
               <span className="si-pill-glyph">＋</span>
             </button>
+            {/* second pill: the read-only forum info page ([[forum-view]]) — a monochrome inline-SVG speech
+                bubble in the dashboard's own glyph vocabulary (currentColor stroke), never a colour emoji. */}
+            <button className={active === 'forum' ? 'si-pill forum on' : 'si-pill forum'} title={t('session.forumTitle')} onClick={() => setSel('forum')}>
+              <span className="si-pill-glyph">
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M2.5 3.5 h11 v7 h-6 l-3 2.5 v-2.5 h-2 z" />
+                  <path d="M5 6.2 h6 M5 8.3 h4" />
+                </svg>
+              </span>
+            </button>
           </div>
           {forest.map((it) => {
             // group into two triage zones ([[session-console]], a dim header per zone) AND fold nested sessions
@@ -761,7 +848,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           })}
         </aside>
 
-        <section className={active === 'new' ? 'si-content is-new' : 'si-content is-session'}>
+        <section className={active === 'forum' ? 'si-content is-forum' : (active === 'new' ? 'si-content is-new' : 'si-content is-session')}>
+          {active === 'forum' && <ForumView onFocusNode={onFocusNode} />}
           {active === 'new' && (
             <div className="si-new-center">
               <div className="si-avatar" aria-hidden="true">
@@ -805,6 +893,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 >{uploading && attachAt === 'new' ? <BusyGlyph /> : <AttachGlyph />}</button>
                 {uploadErr && attachAt === 'new' && <span className="si-attach-err" role="alert">{t('session.attachError')}</span>}
                 {menu && menu.kind === 'mention' && mentionMenuEl(false)}
+                {menu && menu.kind === 'actor' && actorMenuEl(false)}
                 {/* config-preset palette — same `/` dropdown, opening downward under the centered box. */}
                 {menu && menu.kind === 'config' && slashMenu(false, menu.query ? `/${menu.query}` : t('session.menuPresets'))}
               </div>
@@ -827,7 +916,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 })}
               </div>
               <div className="si-hint">
-                {t('session.hint.before')}<code>@</code>{t('session.hint.mid')}<code>/</code>{t('session.hint.after')}
+                {t('session.hint.before')}<code>[[</code>{t('session.hint.mid')}<code>/</code>{t('session.hint.after')}
               </div>
             </div>
           )}
@@ -838,7 +927,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               on its right. */}
           <div
             className="si-session-wrap"
-            style={{ display: active === 'new' ? 'none' : 'flex', flexDirection: 'column', flex: 1, minWidth: 0, minHeight: 0, position: 'relative' }}
+            style={{ display: (active === 'new' || active === 'forum') ? 'none' : 'flex', flexDirection: 'column', flex: 1, minWidth: 0, minHeight: 0, position: 'relative' }}
           >
               <div className="si-tabbar">
                 {/* two tabs on the left: the live terminal (default) and the always-available proof of work. */}
@@ -923,9 +1012,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   >{uploading && attachAt === 'msg' ? <BusyGlyph /> : <AttachGlyph />}</button>
                   {uploadErr && attachAt === 'msg' && <span className="si-attach-err" role="alert">{t('session.attachError')}</span>}
                   {sendErr && <span className="si-send-err" role="alert">{t('session.msgError')}</span>}
-                  {/* slash-command + @-mention menus — docked at the bottom, so they open UPWARD above the ❯ box. */}
+                  {/* slash-command + `[[`-mention menus — docked at the bottom, so they open UPWARD above the ❯ box. */}
                   {menu && menu.kind === 'slash' && slashMenu(true, menu.query ? `/${menu.query}` : t('session.menuCommands'))}
                   {menu && menu.kind === 'mention' && mentionMenuEl(true)}
+                  {menu && menu.kind === 'actor' && actorMenuEl(true)}
                 </div>
               ))}
               {/* Proof tab — the review proof rendered INLINE (always available, not review-gated). Mounts on

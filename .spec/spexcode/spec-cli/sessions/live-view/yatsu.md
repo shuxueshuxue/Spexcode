@@ -45,13 +45,15 @@ scenarios:
       must carry the visible tmux view without seeding a browser-owned history buffer. Send wheel-up frames
       through the same WebSocket/API path the dashboard uses
       and confirm tmux enters copy-mode, `#{scroll_position}` increases, and the viewer receives repainted
-      older rows from tmux's current view. Then send wheel-down frames and confirm the copy-mode view moves
+      older rows from the copy-mode viewport reconstructed from tmux's own scroll position, not the bottom
+      pane screen that plain `capture-pane` would return. Then send wheel-down frames and confirm the copy-mode view moves
       back toward the bottom. Finally detach fully and re-attach (a fresh bridge) and confirm history is still
       reachable through the same tmux-owned wheel path. File with `spex yatsu
       eval live-view --scenario attach-seed-carries-pre-attach-history --result <txt>`.
     expected: >-
       Wheel-up on a NORMAL-screen pane enters tmux copy-mode and increases `#{scroll_position}` while the
-      viewer receives a coherent repaint of older tmux history; wheel-down moves that same tmux view back
+      viewer receives a coherent repaint of older tmux history from the same scroll window tmux reports;
+      wheel-down moves that same tmux view back
       toward the bottom. The browser does not expose or scroll an independent xterm history buffer, and no
       mouse bytes are littered into the shell prompt. A full-screen alternate-screen TUI with SGR mouse reports
       still gets forwarded wheel reports, so the app scrolls itself.

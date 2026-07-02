@@ -45,9 +45,15 @@ type PaneMode = {
   mouseButton: boolean
   mouseAny: boolean
   mouseSgr: boolean
+  scrollPosition: number
+  historySize: number
 }
-const PANE_MODE_FORMAT = '#{pane_in_mode},#{alternate_on},#{mouse_standard_flag},#{mouse_button_flag},#{mouse_any_flag},#{mouse_sgr_flag}'
+const PANE_MODE_FORMAT = '#{pane_in_mode},#{alternate_on},#{mouse_standard_flag},#{mouse_button_flag},#{mouse_any_flag},#{mouse_sgr_flag},#{scroll_position},#{history_size}'
 const flag = (v?: string) => v === '1'
+function num(v?: string): number {
+  const n = Number(v)
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0
+}
 
 // last size each viewer fitted (per session + a global fallback), so pre-warm spawns at the wanted size.
 const lastFit = new Map<string, { cols: number; rows: number }>()
@@ -284,7 +290,7 @@ export function attachViewer(id: string, v: Viewer, initialSize?: { cols: number
 
 async function readPaneMode(id: string): Promise<PaneMode> {
   const raw = await tmuxOut(['display-message', '-p', '-t', id, '-F', PANE_MODE_FORMAT])
-  const [inMode, alternate, mouseStandard, mouseButton, mouseAny, mouseSgr] = raw.split(',')
+  const [inMode, alternate, mouseStandard, mouseButton, mouseAny, mouseSgr, scrollPosition, historySize] = raw.split(',')
   return {
     inMode: flag(inMode),
     alternate: flag(alternate),
@@ -292,6 +298,8 @@ async function readPaneMode(id: string): Promise<PaneMode> {
     mouseButton: flag(mouseButton),
     mouseAny: flag(mouseAny),
     mouseSgr: flag(mouseSgr),
+    scrollPosition: num(scrollPosition),
+    historySize: num(historySize),
   }
 }
 
@@ -317,6 +325,17 @@ function paneModePrelude(mode: PaneMode): string {
 function wheelMouseReport(up: boolean, col: number, row: number, ticks: number): string {
   const button = up ? 64 : 65
   return `\x1b[<${button};${col};${row}M`.repeat(ticks)
+}
+
+function capturePaneCommand(b: Bridge, mode: PaneMode): string {
+  if (!mode.inMode) return `capture-pane -e -p -t ${b.id}`
+  // tmux capture-pane's default "visible pane" ignores the copy-mode viewport. In copy-mode,
+  // scroll_position is the offset above the bottom visible screen; capture that history window explicitly.
+  const rows = Math.max(1, b.rows)
+  const scroll = Math.min(mode.scrollPosition, mode.historySize)
+  const start = scroll === 0 ? '0' : `-${scroll}`
+  const end = rows - 1 - scroll
+  return `capture-pane -e -p -t ${b.id} -S ${start} -E ${end}`
 }
 
 // A wheel always enters at the tmux adapter boundary. If the pane is in copy-mode, or is a normal pane with
@@ -359,8 +378,8 @@ async function repaint(b: Bridge): Promise<void> {
   if (token !== b.repaintToken) return
   await awaitLayout(b, want)
   if (token !== b.repaintToken) return
-  const mode = full ? await readPaneMode(b.id) : null
-  const prelude = mode ? paneModePrelude(mode) : ''
+  const mode = await readPaneMode(b.id)
+  const prelude = full ? paneModePrelude(mode) : ''
   if (token !== b.repaintToken) return
   b.cmdQ.push((lines) => {
     if (token !== b.repaintToken) return
@@ -370,7 +389,7 @@ async function repaint(b: Bridge): Promise<void> {
     // The prelude+clear is ASCII; the body is joined at the BYTE level so a wide char is never string-mangled.
     broadcast(b.id, Buffer.concat([Buffer.from(prelude + '\x1b[H\x1b[2J', 'utf8'), joinLines(lines)]))
   })
-  const cap = `capture-pane -e -p -t ${b.id}`
+  const cap = capturePaneCommand(b, mode)
   try { b.pty.write(cap + '\n') } catch { b.cmdQ.pop() }
 }
 

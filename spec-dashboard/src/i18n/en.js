@@ -78,7 +78,8 @@ export default {
 
   sessionEval: {
     sessionN: ({ n }) => `✦ this session: ${n}`,
-    export: 'proof ↗',
+    export: 'export ↗',
+    exportTitle: 'export this evaluation as a self-contained HTML report',
     empty: 'nothing measured for this session yet.',
     blindHint: 'declared but never measured — this is the outstanding loss; measure it with spex yatsu eval.',
     unmeasured: 'unmeasured',

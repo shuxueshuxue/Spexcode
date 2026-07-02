@@ -65,7 +65,7 @@ export default function SessionEvalPane({ sessionId }) {
             {t('sessionEval.sessionN', { n: sessionTotal })}
           </button>
         )}
-        <a className="se-export" href={`/api/sessions/${encodeURIComponent(sessionId)}/proof`} target="_blank" rel="noreferrer">
+        <a className="se-export" href={`/api/sessions/${encodeURIComponent(sessionId)}/proof`} target="_blank" rel="noreferrer" title={t('sessionEval.exportTitle')}>
           {t('sessionEval.export')}
         </a>
       </div>

@@ -24,11 +24,10 @@ A `pre-commit` hook rejects a direct commit while `HEAD` is the **trunk**. Merge
 node-branch commits pass because they aren't on the trunk. Escape hatch for seeding / eager topology:
 `SPEXCODE_ALLOW_MAIN=1`.
 
-One narrow exception is admitted on the trunk itself: a commit that touches **only** `.spec/.forum/**`.
-That is the [[proposals]] forum's write path — the forum is **data, not contract** (it is not spec nodes;
-it needs no review ritual), so a forum post appends straight to the trunk while every *contract* change
-still goes through a worktree and a `--no-ff` merge. Any other staged path alongside the forum files
-re-arms the guard, so the exception can't be used to smuggle real work onto the trunk.
+(The [[proposals]] forum also lands its data commits on the trunk, but it does NOT need a guard exception:
+its programmatic writer commits with `--no-verify` — the commit is provably a single `.spec/.forum/` data
+path, so the hook is pure overhead — so it simply never runs this guard. An earlier `.spec/.forum/**`
+exception here was removed as a redundant special-case once the writer moved to `--no-verify`.)
 
 The guard's real question is "am I committing directly onto the trunk?", not "is this branch literally
 named `main`?". It resolves the trunk through the SAME single source of truth the rest of SpexCode

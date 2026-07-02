@@ -43,10 +43,11 @@ system already nests there.
   contains that marker can't spawn a phantom reply or truncate the thread.
 - **Own lifecycle status**, forum-authored never git-derived: `open` → `accepted | rejected | landed`.
 - **The forum lives on the trunk, not per-branch.** A write reads and commits **straight to the main
-  checkout's `.spec/.forum/`** (a forum file is data, not contract; [[main-guard]]'s forum-exception admits a
-  manual forum-only commit, and the programmatic write below is provably forum-only). So there is no
-  per-branch copy and no cross-worktree union to reconcile: every thread is always present to read, sign, and
-  reply to. This is also what lets a **post-merge** proposal land durably — the author's own branch has
+  checkout's `.spec/.forum/`** — a forum file is data, not contract, and the write below commits it with
+  `--no-verify` (provably a single `.spec/.forum/` path), so it lands on the trunk without needing any
+  [[main-guard]] exception. So there is no per-branch copy and no cross-worktree union to reconcile: every
+  thread is always present to read, sign, and reply to. This is also what lets a **post-merge** proposal
+  land durably — the author's own branch has
   already merged, so a proposal written then could never ride it; committed to the trunk directly, it persists.
 - **Writes are serialized + fast, so a burst can't corrupt the forum.** The whole read-mutate-write-commit of
   one thread runs under a single cross-process **forum lock** (an atomic `.git` dir-lock, stale-stolen), so

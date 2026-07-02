@@ -16,9 +16,10 @@ scenarios:
       tool/envelope is not mapped, spec-of-file and edit-first spec-first go SILENTLY INERT on codex while Bash
       reads still work, so a synthetic Bash-only test passes green and the regression hides — it must be measured
       through the real apply_patch round-trip. SECOND, ATTRIBUTION: because design C's hooks fire from the SHARED
-      app-server (env carries NO `SPEXCODE_SESSION_ID`), `hp_session_id` lands on the codex THREAD id, so the
-      sentinel/ledger AND mark-active's re-flip must reach the SpexCode-id GOVERNED record resolved via the
-      thread-id→`harness_session_id` alias (`hp_store_dir`), NOT a phantom `<runtime>/sessions/<thread-id>` dir.
+      app-server (whose env may carry another session's `SPEXCODE_SESSION_ID`), `hp_session_id` must start from
+      the codex payload THREAD id, so the sentinel/ledger AND mark-active's re-flip reach the SpexCode-id
+      GOVERNED record resolved via the thread-id→`harness_session_id` alias (`hp_store_dir`), NOT the stale env
+      session and NOT a phantom `<runtime>/sessions/<thread-id>` dir.
       The failure this locks: without the alias the writes silently target a non-existent dir and the board never
       sees the codex session flip to `active` / `asking`. The agent's explicit `spex session done/park/ask` calls
       run in the SAME shared app-server process (NOT a per-session TUI pane), so they too inherit the baked FIRST

@@ -81,10 +81,11 @@ hp_runtime_dir() {
 
 # the per-session GLOBAL store dir for a session id — <runtime>/sessions/<id> (sibling of the per-project
 # runtime above). Echoes the dir; returns non-zero (echoing nothing) when git can't resolve.
-# ALIAS resolution: a codex hook fires from the shared per-PROJECT app-server process, whose env carries NO
-# SPEXCODE_SESSION_ID, so hp_session_id falls back to the payload session_id = the codex THREAD id — NOT the
-# SpexCode record id the dir is keyed by. So when no record sits at <id> directly, find the one record that
-# captured this id as `harness_session_id` (the backend stored it at thread/start, before the first tool turn).
+# ALIAS resolution: a codex hook fires from the shared per-PROJECT app-server process, whose env may carry a
+# stale SPEXCODE_SESSION_ID from the first launched codex session. hp_session_id therefore returns the acting
+# payload session_id on codex: the codex THREAD id, NOT the SpexCode record id the dir is keyed by. So when no
+# record sits at <id> directly, find the one record that captured this id as `harness_session_id` (the backend
+# stored it at thread/start, before the first tool turn).
 # A grep over the few session.json files — no jq on the hot path; the trailing quote anchors the value so a
 # thread id can't match a longer one as a prefix. Direct hit wins; a miss with no alias echoes the direct path
 # unchanged, so the caller's `[ -e "$rec" ]` still no-ops gracefully. Mirrors layout.ts `readAliasedRawRecord`.

@@ -2,7 +2,7 @@
 title: annotator
 status: active
 hue: 200
-desc: Opening a video eval plays the clip with a clickable step ruler; the human scrubs, circles, comments — and the output files through existing seams only, never a new one.
+desc: The issues page's eval DETAIL pane — a selected reading full-height (a video plays with a clickable step ruler; the human scrubs, circles, comments; images/transcripts render whole) — and the output files through existing seams only, never a new one.
 code:
   - spec-dashboard/src/Annotator.jsx
 related:
@@ -21,7 +21,11 @@ an **already-captured** clip; yatsu still runs nothing, and no new ledger struct
 
 ## expanded spec
 
-Opening a video reading ([[evals-feed]]) plays its clip. When the reading carries a [[step-timeline]]
+The annotator IS the issues page's **detail pane for a selected eval** ([[issues-view]]'s master-detail —
+no modal, no box-in-a-box: the reading gets the pane's full height, and switching selection resets the
+working state to the new reading). Every evidence kind renders here — an image full-width, a transcript as
+text, a missing blob as the honest sentinel — and a **video** reading plays its clip. When the reading
+carries a [[step-timeline]]
 sidecar, a **step ruler** renders under the scrubber — click a step to seek to its `tMs`; an annotation at
 moment T names its step by the last-boundary-≤T lookup, and a step's optional owning-node routes the
 finding to the node it actually belongs to. Without a sidecar the annotator is a plain player with

@@ -968,49 +968,30 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .si-pill.forum:hover { color: var(--blue); }
 .si-pill.forum.on { color: var(--blue); background: color-mix(in srgb, var(--blue) 16%, var(--panel2)); border-color: var(--blue); }
 
-/* ── the read-only forum info page ([[forum-view]]) — a thin window over /api/forum, one design language with
-   the console (var(--mono), the app-theme tokens). Threads render in API order; counts are raw data. ── */
-/* the issues panel's iron rule ([[issues-view]]): the OUTER container never scrolls — each FeedSection
-   body scrolls internally, and a bar-density section stays pinned as its one-line summary. */
-.fv-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
-.fs-section { display: flex; flex-direction: column; min-height: 0; border-top: 1px solid var(--line); }
-.fs-section:first-child { border-top: none; }
-.fs-region { flex: 1; }
-.fs-page { flex: 1; }
-.fs-bar { flex: none; }
-.fs-head {
-  flex: none; display: flex; align-items: baseline; gap: 10px; padding: 6px 16px;
-  font-family: var(--mono); background: var(--panel2); border-bottom: 1px solid var(--line);
-}
-.fs-bar .fs-head { cursor: pointer; border-bottom: none; }
-.fs-bar .fs-head:hover { background: color-mix(in srgb, var(--blue) 8%, var(--panel2)); }
-.fs-title { font-size: 10px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--ink2); }
-.fs-summary { font-size: 10.5px; color: var(--muted); margin-left: auto; }
-.fs-focused .fs-title { color: var(--blue); }
-.fs-body { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
-/* the keyboard-selected row (j/k walk, Enter opens) */
-.fv-thread.kbd-sel > .fv-head { box-shadow: inset 2px 0 0 var(--blue); background: color-mix(in srgb, var(--blue) 6%, var(--paper)); }
+/* ---- issues page: MASTER-DETAIL ([[issues-view]]) — a left list (two groups) + a full-height detail
+   pane. Selection IS detail: no in-place expansion inside a scroll box. ---- */
+.fv-master { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(300px, 380px) 1fr; }
+.fv-list-col { min-height: 0; overflow-y: auto; border-right: 1px solid var(--line); background: var(--paper); }
+.fv-detail { min-height: 0; overflow-y: auto; background: var(--paper); }
+.fv-group { display: flex; flex-direction: column; }
+.fv-group + .fv-group { border-top: 1px solid var(--line); }
+.fv-group-head { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px; background: var(--panel2); border-bottom: 1px solid var(--line); }
+.fv-group-title { font-size: 10px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--ink2); }
+.fv-group-meta { font-size: 10.5px; color: var(--muted); }
+/* one row grammar for BOTH groups: a compact single-line button; `.sel` is the page's one selection. */
+.fv-row, .ef-row { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; font: inherit; color: var(--ink2); background: none; border: 0; border-bottom: 1px solid var(--line); padding: 7px 12px; cursor: pointer; }
+.fv-row:hover, .ef-row:hover { background: var(--panel2); }
+.fv-row.sel, .ef-row.sel { background: color-mix(in srgb, var(--blue) 10%, var(--paper)); box-shadow: inset 2px 0 0 var(--blue); }
+.fv-row .fv-concern { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fv-note { margin: auto; padding: 24px; color: var(--muted); font-family: var(--mono); font-size: 12.5px; text-align: center; }
-.fv-list { width: 100%; display: flex; flex-direction: column; }
-.fv-thread { border-bottom: 1px solid var(--line); }
-.fv-head {
-  display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
-  padding: 10px 16px; cursor: pointer; font-family: var(--mono); font-size: 12px; color: var(--ink2);
-}
-.fv-head:hover { background: var(--panel2); }
-.fv-thread.open > .fv-head { background: color-mix(in srgb, var(--blue) 10%, var(--panel2)); }
-/* the store tag ([[issues]]) — a small uppercase pill naming where the issue lives; local leans blue,
-   a forge host stays muted. The one visible trace of storage. */
 .fv-store {
-  flex: none; font-size: 9.5px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
-  padding: 2px 6px; border-radius: 3px; border: 1px solid var(--line); color: var(--muted);
+  flex: none; font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.8px; text-transform: uppercase;
+  color: var(--muted); border: 1px solid var(--line); border-radius: 3px; padding: 1px 6px;
 }
 .fv-store-local { color: var(--blue); border-color: color-mix(in srgb, var(--blue) 40%, var(--line)); }
-.fv-concern { flex: 1 1 auto; min-width: 120px; color: var(--ink); font-weight: 600; }
-/* status badge — open=blue, accepted/landed=green, rejected=red; anything else falls back to muted. */
+.fv-concern { flex: 1 1 auto; min-width: 80px; color: var(--ink); font-weight: 600; font-size: 12.5px; }
 .fv-status {
-  flex: none; font-size: 10px; padding: 1px 7px; border-radius: 10px;
-  border: 1px solid var(--line); color: var(--muted); text-transform: lowercase;
+  flex: none; font-family: var(--mono); font-size: 10px; border: 1px solid var(--line); border-radius: 3px; padding: 1px 6px; color: var(--muted);
 }
 .fv-st-open     { color: var(--blue);  border-color: color-mix(in srgb, var(--blue) 40%, var(--line)); }
 .fv-st-accepted { color: var(--green); border-color: color-mix(in srgb, var(--green) 40%, var(--line)); }
@@ -1018,6 +999,13 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .fv-st-rejected { color: var(--red);   border-color: color-mix(in srgb, var(--red) 40%, var(--line)); }
 .fv-by { flex: none; color: var(--muted); font-size: 11px; }
 .fv-chips { flex: none; display: flex; flex-wrap: wrap; gap: 5px; }
+/* the detail pane's issue face: header, meta strip, markdown-rendered body (SpecBody's doc vocabulary). */
+.fvd { padding: 16px 22px 24px; max-width: 860px; }
+.fvd-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.fvd-concern { font-size: 16px; font-weight: 700; color: var(--ink); }
+.fvd-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.fvd-body { font-size: 13px; }
+
 /* node chips — the doc-link blue vocabulary, but clickable buttons that focus the node on the board. */
 .fv-chip {
   font-family: var(--mono); font-size: 10.5px; color: var(--blue);
@@ -1025,22 +1013,17 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   padding: 1px 7px; border-radius: 3px; cursor: pointer; line-height: 1.5;
 }
 .fv-chip:hover { background: var(--blue); color: var(--paper); border-color: var(--blue); }
-.fv-counts { flex: none; display: flex; gap: 10px; margin-left: auto; }
 .fv-count { color: var(--muted); font-size: 10.5px; }
 /* a forge issue's permalink — read here, discussed there. */
 .fv-link { color: var(--blue); font-size: 10.5px; text-decoration: none; }
 .fv-link:hover { text-decoration: underline; }
-/* the in-place expansion: the thread body + its signed replies, indented under the header. */
-.fv-body { padding: 4px 16px 14px 16px; border-top: 1px dashed var(--line); background: var(--paper); }
 .fv-text { font-family: var(--mono); font-size: 12px; line-height: 1.6; color: var(--ink2); white-space: pre-wrap; }
 .fv-reply { margin-top: 10px; padding-left: 12px; border-left: 2px solid var(--line); }
 .fv-reply-meta { display: flex; gap: 8px; margin-bottom: 3px; font-family: var(--mono); font-size: 10.5px; }
 .fv-reply-by { color: var(--blue); font-weight: 600; }
 .fv-reply-at { color: var(--muted); }
 
-/* the human write path ([[issues-view]]): a top toolbar (New) + a reply composer per local thread + a New form. */
-.fv-wrap { width: 100%; display: flex; flex-direction: column; }
-.fv-toolbar { display: flex; align-items: center; gap: 12px; padding: 8px 16px; border-bottom: 1px solid var(--line); }
+/* the human write path ([[issues-view]]): the New form in the group head + a reply composer in the detail. */
 .fv-new-btn {
   font-family: var(--mono); font-size: 11px; color: var(--blue); background: var(--panel2);
   border: 1px solid color-mix(in srgb, var(--blue) 30%, var(--line)); padding: 4px 12px; border-radius: 4px; cursor: pointer;
@@ -1543,49 +1526,41 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* the `proof` button's cyan now comes from the shared `.si-act.board.sc-cyan` rule (see board commands). */
 
 /* ---- evals feed ([[evals-feed]]) — the current measured loss as a feed, title-only rows, media lazy ---- */
-.ef-chipbar { display: flex; gap: 4px; padding: 8px 10px 2px; }
+.ef-chipbar { display: flex; gap: 4px; margin-left: auto; }
 .ef-chip { font: inherit; font-size: 11px; color: var(--muted); background: var(--panel2); border: 1px solid var(--line); border-radius: 12px; padding: 1px 10px; cursor: pointer; }
 .ef-chip.on { color: var(--ink); border-color: var(--blue); }
 .ef-stale { margin-left: auto; }
-.ef-list { padding: 2px 10px 12px; }
 .ef-close { font: inherit; color: var(--muted); background: none; border: 0; cursor: pointer; padding: 2px 6px; }
 .ef-empty, .ef-miss { color: var(--muted); font-size: 12px; padding: 18px 8px; }
-.ef-row { border-bottom: 1px solid var(--line); }
-.ef-row:last-child { border-bottom: 0; }
-.ef-row-head { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: none; border: 0; padding: 8px 6px; font: inherit; color: var(--ink2); cursor: pointer; }
-.ef-row-head:hover { background: var(--panel2); }
 .ef-scenario { font-weight: 600; font-size: 13px; }
 .ef-node { font-size: 11px; opacity: .9; }
 .ef-kind { margin-left: auto; font-size: 12px; }
 .ef-time { color: var(--muted); font-size: 11px; min-width: 28px; text-align: right; }
-.ef-detail { padding: 4px 8px 12px 30px; }
-.ef-expected, .ef-note { font-size: 12px; color: var(--ink2); margin: 0 0 6px; }
-.ef-thumb { display: block; max-width: 100%; max-height: 260px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel2); }
-.ef-annotate { font: inherit; font-size: 12px; color: var(--ink); background: var(--panel2); border: 1px solid var(--blue); border-radius: 5px; padding: 4px 12px; cursor: pointer; }
 
 /* ---- annotator ([[annotator]]) — the human's measuring hand on an already-captured clip ---- */
-.an-overlay { position: fixed; inset: 0; z-index: 70; background: rgba(8,10,20,.72); display: flex; align-items: center; justify-content: center; }
-.an-panel { width: min(880px, 94vw); max-height: 92vh; overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 0 0 10px; box-shadow: 0 22px 70px rgba(0,0,0,.6); }
-.an-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.an-detail { padding: 14px 22px 26px; max-width: 900px; }
+.an-head { display: flex; align-items: center; gap: 10px; padding: 0 0 8px; border-bottom: 1px solid var(--line); }
+.an-meta { font-size: 10.5px; color: var(--muted); }
+.an-image { display: block; max-width: 100%; border: 1px solid var(--line); border-radius: 6px; background: var(--panel2); }
+.an-prior-note { color: var(--muted); }
 .an-title { font-weight: 700; font-size: 14px; color: var(--ink); }
 .an-node { font-size: 11px; color: var(--muted); }
-.an-head .ef-close { margin-left: auto; }
-.an-expected { font-size: 12px; color: var(--ink2); padding: 8px 14px 0; }
-.an-stage { position: relative; margin: 10px 14px 0; cursor: crosshair; }
+.an-expected { font-size: 12px; color: var(--ink2); padding: 8px 0 0; }
+.an-stage { position: relative; margin: 12px 0 0; cursor: crosshair; }
 .an-video { display: block; width: 100%; background: #000; border: 1px solid var(--line); border-radius: 6px; }
 .an-rect { position: absolute; border: 2px solid var(--orange); border-radius: 3px; background: rgba(255,150,60,.12); pointer-events: none; }
 .an-rect.live { border-style: dashed; }
-.an-ruler { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 14px 0; }
+.an-ruler { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 0 0; }
 .an-step { font: inherit; font-size: 11px; color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 2px 8px; cursor: pointer; }
 .an-step.on { border-color: var(--green); color: var(--ink); }
-.an-marks { padding: 8px 14px 0; }
+.an-marks { padding: 8px 0 0; }
 .an-hint { color: var(--muted); font-size: 11px; }
 .an-mark { display: flex; align-items: center; gap: 6px; margin: 4px 0; }
 .an-mark-t { font-size: 11px; color: var(--muted); min-width: 90px; }
 .an-mark-node { width: 130px; font: inherit; font-size: 11px; color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 3px 6px; }
 .an-mark-c { flex: 1; font: inherit; font-size: 12px; color: var(--ink); background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 3px 8px; }
 .an-mark-x { font: inherit; color: var(--muted); background: none; border: 0; cursor: pointer; }
-.an-actions { display: flex; align-items: center; gap: 10px; padding: 12px 14px 4px; flex-wrap: wrap; }
+.an-actions { display: flex; align-items: center; gap: 10px; padding: 12px 0 0; flex-wrap: wrap; }
 .an-act { font: inherit; font-size: 12px; color: var(--ink); background: var(--panel2); border: 1px solid var(--blue); border-radius: 5px; padding: 4px 12px; cursor: pointer; }
 .an-act:disabled { opacity: .45; cursor: default; }
 .an-verdict { display: flex; align-items: center; gap: 6px; margin-left: auto; }

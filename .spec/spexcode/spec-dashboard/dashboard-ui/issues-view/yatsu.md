@@ -4,38 +4,38 @@ scenarios:
     tags: [frontend-e2e]
     code: spec-dashboard/src/IssuesView.jsx
     description: >-
-      Run the dashboard against a backend whose local forum holds a thread (with a signer + a reply). Open
-      the session console (Enter), click the Issues pill, and read the rendered DOM; then click the thread
-      to expand it.
+      Run the dashboard against a backend whose issues span both stores (a local thread with a signer +
+      reply, forge issues). Open #/forum and read the rendered DOM: the issue group's rows, then select
+      the local thread and read the detail pane; check for raw markdown syntax in the detail.
     expected: >-
-      The issues page renders the list in the API's order (no re-sort/rank): the local thread shows a
-      `local` store chip, concern, an `open` status badge, author, a clickable node chip, and raw
-      "+N signed" / "N replies" counts — never a salience ordering. Expanding it shows its body, each signed
-      reply (by · at · body), and a reply composer (local issues are writable in place; a forge item would
-      instead carry its permalink and a read-only note). No page errors; the Issues pill sits beside New
-      Session in the top row.
+      The issue group renders the non-concluded rows in the API's order (no re-sort/rank): one compact
+      line each — store chip, concern, status badge, reply count. Concluded issues (closed/rejected/
+      landed) are hidden behind a count chip that reveals them. Selecting the local thread opens it in
+      the RIGHT detail pane: full header (status, author, "+N signed", clickable node chips), the body
+      and replies MARKDOWN-RENDERED (headings/tables/lists — no raw `##` or `|` pipes visible), and a
+      reply composer. A forge selection instead carries its permalink and a read-only note. No page errors.
   - name: panel-skeleton
     tags: [frontend-e2e]
-    code: spec-dashboard/src/FeedSection.jsx
-    related: [spec-dashboard/src/IssuesView.jsx]
+    code: spec-dashboard/src/IssuesView.jsx
     description: >-
-      On the running issues page, read the section furniture: the pinned section head (title + counts
-      summary), the outer container's overflow, and the section body's scroll. Then drive the keys — j/k
-      down and up the rows, Enter on the selected row, j deep past the fold — and finally type 'j' inside
-      the New-form input.
+      On the running issues page, read the master-detail shell: the grid split, which container scrolls,
+      the sticky group heads. Then drive the keys — j repeatedly from the top so the selection crosses
+      from the evals group into the issue group, k back up — and finally type 'j' inside the New-form
+      input.
     expected: >-
-      The head is pinned with live counts; the OUTER container never scrolls (overflow hidden) while the
-      section body scrolls internally. j/k move a visible selection (net j,j,j,k → row 2); Enter expands
-      the selected row in place; deep j keeps the selected row inside the body's viewport (the body
-      scrolled, not the panel). A key typed into an input/textarea reaches the input and never moves the
-      selection. No page errors.
+      The page is a two-column grid: the LEFT column scrolls (both group heads sticky within it), the
+      RIGHT detail pane scrolls independently, the page itself never scrolls. j/k move ONE visible
+      selection across BOTH groups (evals rows first, then issue rows) and the detail pane follows the
+      selection immediately — selection IS detail, nothing expands inside the list. Deep j keeps the
+      selected row inside the left column's viewport. A key typed into an input/textarea reaches the
+      input and never moves the selection. No page errors.
 ---
 
 # measuring issues-view
 
-YATU through the REAL running dashboard, never the code: a `spex serve` backend seeded with a local thread,
-the worktree dashboard pointed at it, and a headless Chromium that opens the console, clicks the Issues
-pill, and reads the live DOM (`.fv-thread`, `.fv-store`, `.fv-concern`, `.fv-chip`, `.fv-count`) +
-screenshots it. The loss is the gap between that reading and the spec: one merged store-tagged list in API
-order, chips that focus the graph, counts as raw data, local-writable / forge-link-out. (This reading style
-is what caught the `t(...)` i18n call-convention crash a build could not.)
+YATU through the REAL running dashboard, never the code: a backend seeded with local + forge issues, the
+worktree dashboard pointed at it, and a headless Chromium that opens #/forum and reads the live DOM
+(`.fv-master`, `.fv-row`, `.fv-store`, `.fvd`, `.doc-body`) + screenshots it. The loss is the gap between
+that reading and the spec: master-detail with evals leading, one merged store-tagged list in API order,
+markdown-rendered detail, local-writable / forge-link-out. (This reading style is what caught the `t(...)`
+i18n call-convention crash a build could not.)

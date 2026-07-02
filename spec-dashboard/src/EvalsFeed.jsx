@@ -39,7 +39,9 @@ const rel = (ts) => {
   return `${Math.floor(s / 86400)}d`
 }
 
-export default function EvalsSection() {
+// `focused` is the panel's Tab focus ([[issues-view]] owns Tab and passes it down) — forwarded to the
+// section frame; this section's own row-nav under that focus is this node's future work.
+export default function EvalsSection({ focused = false }) {
   const t = useT()
   const [nodes, setNodes] = useState(null)        // null = loading; the section reads the same board fold the app polls
   const [kind, setKind] = useState(null)          // null = the default: video, falling back to image
@@ -62,7 +64,7 @@ export default function EvalsSection() {
   const key = (e) => `${e.node}·${e.scenario}`
 
   return (
-    <FeedSection title={t('evalsFeed.title')} summary={t('evalsFeed.summary', { n: rows.length })} density="region">
+    <FeedSection title={t('evalsFeed.title')} summary={t('evalsFeed.summary', { n: rows.length })} density="region" focused={focused}>
       {nodes === null ? <div className="fv-note">{t('common.loading')}</div> : (
         <>
           <div className="ef-chipbar">

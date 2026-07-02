@@ -30,19 +30,13 @@ export function firesKey(id, key) {
   return keysOf(id).includes(key)
 }
 
-// save / clear an override, then notify the live readers (the editor re-renders, the controller rebuilds
-// its button map). The keydown handler needs no notify — it calls keysOf() fresh on every event.
+// save / clear an override. No notify layer: the keydown handler calls keysOf() fresh on every event,
+// and the settings editor re-renders from its own interaction state.
 export function setBinding(id, patch) {
   overrides = { ...overrides, [id]: { ...overrides[id], ...patch } }
   localStorage.setItem(LS_KEY, JSON.stringify(overrides))
-  emit()
 }
 export function resetBindings() {
   overrides = {}
   localStorage.removeItem(LS_KEY)
-  emit()
 }
-
-const subs = new Set()
-export function subscribe(fn) { subs.add(fn); return () => subs.delete(fn) }
-function emit() { subs.forEach((fn) => fn()) }

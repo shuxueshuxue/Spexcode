@@ -1,4 +1,3 @@
-import { writeFileSync } from 'node:fs'
 import { loadHookConfig } from './specs.js'
 
 // @@@ hook manifest - the harness-agnostic hook system has THREE parts: (1) the discovered handlers —
@@ -26,16 +25,3 @@ export function compileManifest(cfgs = loadHookConfig()): string {
   return lines.length ? lines.join('\n') + '\n' : ''
 }
 
-// `spex hooks compile [--out <file>]` — write the manifest (SessionStart) or print it (debug/test).
-export async function runHooks(argv: string[]): Promise<number> {
-  const sub = argv[0]
-  if (sub === 'compile') {
-    const i = argv.indexOf('--out')
-    const manifest = compileManifest()
-    if (i >= 0 && argv[i + 1]) writeFileSync(argv[i + 1], manifest)
-    else process.stdout.write(manifest)
-    return 0
-  }
-  console.error('spex hooks: compile [--out <file>]')
-  return 2
-}

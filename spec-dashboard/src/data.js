@@ -1,53 +1,3 @@
-// LOGS: stand-in mock tmux scrollback for the demo board (the real session log comes from the backend).
-const LOGS = {
-  'sess-meta': [
-    `\x1b[90m$ claude --resume   worktree node/root · this conversation\x1b[0m`,
-    `\x1b[36m● spec:\x1b[0m spec-dashboard  \x1b[90mv5 → v6\x1b[0m`,
-    ``,
-    `\x1b[35m✻\x1b[0m we are designing this board together, right now.`,
-    `\x1b[35m✻\x1b[0m every node below is a real thread from our chat.`,
-    `\x1b[33m⧗ recursion:\x1b[0m the dashboard renders its own making.`,
-    ``,
-    `\x1b[90m  children: source-of-truth · dashboard-ui\x1b[0m`,
-    `\x1b[90m  next: wire the real backend behind src/data.js\x1b[0m`,
-    ``,
-  ],
-  'sess-1c9d': [
-    `\x1b[90m$ claude --resume   worktree node/keyboard-nav\x1b[0m`,
-    `\x1b[36m● spec:\x1b[0m keyboard-nav  \x1b[90mv1 → v2\x1b[0m`,
-    `\x1b[90m  user: "it jumps too high when switching nodes"\x1b[0m`,
-    ``,
-    `\x1b[35m✻\x1b[0m the Van Wijk zoom arc + forced zoom:1.15 cause the hop`,
-    `\x1b[32m● Edit\x1b[0m src/App.jsx  flyTo: setCenter → flat rAF pan \x1b[90m(+18 -3)\x1b[0m`,
-    `\x1b[32m● Bash\x1b[0m npm run build  \x1b[90m… ✓ built in 995ms\x1b[0m`,
-    ``,
-  ],
-  'sess-7f3a': [
-    `\x1b[90m$ claude --resume   worktree node/session-peek\x1b[0m`,
-    `\x1b[36m● spec:\x1b[0m session-peek  \x1b[90mv1 → v2\x1b[0m`,
-    `\x1b[90m  user: "Esc doesn't jump out of the peek"\x1b[0m`,
-    ``,
-    `\x1b[35m✻\x1b[0m xterm grabs focus; window keydown never sees Escape`,
-    `\x1b[32m● Edit\x1b[0m src/PeekPanel.jsx  attachCustomKeyEventHandler \x1b[90m(+6)\x1b[0m`,
-    `\x1b[32m● Bash\x1b[0m npm run build  \x1b[90m… ✓\x1b[0m`,
-    `\x1b[90m  (you just used it to get here — press esc to leave)\x1b[0m`,
-    ``,
-  ],
-}
-
-function log(node) {
-  const lines = LOGS[node.session] || [
-    `\x1b[90m$ claude   worktree node/${node.id}  (branch node/${node.id})\x1b[0m`,
-    `\x1b[36m● spec:\x1b[0m ${node.title}  \x1b[90mv${node.version || 0}\x1b[0m`,
-    ``,
-    `\x1b[35m✻\x1b[0m no live session yet — this spec is the latest ground truth.`,
-    `\x1b[35m✻\x1b[0m structure is fixed; content changes in place.`,
-    `\x1b[35m✻\x1b[0m start typing to let the agent begin working on it.`,
-    ``,
-  ]
-  return [...lines, `\x1b[36mtype here — keystrokes forward via\x1b[0m \x1b[1msend-keys\x1b[0m`, ``]
-}
-
 // drill-down tidy-tree layout ([[node-graph]]); `expanded` is the focused node's ancestor spine.
 export const X_GAP = 280, Y_GAP = 54
 export function layout(nodes, expanded) {
@@ -183,4 +133,3 @@ export async function postIssueThread({ concern, nodes, body }) {
   return res.json()
 }
 
-export const SESSION_LOG = log

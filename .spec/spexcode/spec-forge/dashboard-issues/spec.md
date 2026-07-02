@@ -13,7 +13,7 @@ related:
 
 The dashboard surface [[spec-forge]] deferred as a sibling: it shows, on each node, the **open issues that
 work toward it**. The data path already exists end to end — [[links]] inverts a forge's open work into
-`node → { issues, prs }` and [[freshness]]'s `ForgeCache.view(nodeIds)` keeps that view fresh. **Only
+`node → { issues, prs }` and [[freshness]]'s resident `ForgeCache` keeps that view fresh. **Only
 display is missing**, and this node owns just that, on the two planes' contract: a node *defines*, an
 issue *does*, so the work appears **beside** the node, never *as* node state. A node's status stays
 git-derived; an issue count is execution, and the two authorities never cross.

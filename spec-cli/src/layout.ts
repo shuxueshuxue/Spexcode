@@ -113,13 +113,6 @@ export function spexcodeHome(): string {
 export function encodeProject(root: string): string {
   return root.replace(/[/.]/g, '-')
 }
-// the project a store groups by = the MAIN checkout root (dirname of the shared git common dir). It resolves
-// IDENTICALLY from the main checkout OR any linked worktree, so the board (running at main) and a hook
-// (running in a worktree) agree on the key — unlike `git rev-parse --show-toplevel`, which in a worktree is
-// the worktree path and would scatter a session under a per-worktree key the board never reads.
-export function projectKey(): string {
-  return encodeProject(dirname(gitCommonDir()))
-}
 // this project's per-PROJECT runtime tier — the materialized hook manifest + content-hash marker (and the
 // gate's lock) — living alongside sessions/ under the SAME global per-project dir, so NOTHING SpexCode renders
 // stays in the worktree (not even the manifest; the worktree holds only the harness-discovered CLAUDE.md/

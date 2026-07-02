@@ -955,14 +955,6 @@ export async function reopen(id: string): Promise<boolean> {
   return true
 }
 
-// agent/human PROPOSAL → awaiting (review = propose merge, done = nothing, close-pending = propose close).
-export async function propose(id: string, proposal: Proposal): Promise<boolean> {
-  const wt = await findWorktree(id)
-  if (!wt) return false
-  writeRecord({ ...wt.rec, status: 'awaiting', proposal })
-  void drainQueue()   // a proposal frees this session's slot — start the next queued one if any
-  return true
-}
 // @@@ agent-authored state - the agent (forced by gates at boundaries) writes its OWN state; it is the
 // authority on what a stop MEANS (awaiting human vs parked on a background task). External hooks only know
 // SOMETHING changed, not the transition, so they force a write, never infer. The session it writes is resolved

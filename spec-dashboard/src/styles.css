@@ -16,8 +16,6 @@
   --magenta:#d33682;
   --cyan:  #2aa198;
   --term-bg: #0d1117; /* neutral near-black — the embedded terminal is DARK in BOTH app themes (the Claude TUI is dark-designed) */
-  --sg-comms: #93a1a1;                  /* base1 muted — session-graph comms edge line + message count */
-  --sg-comms-bg: rgba(238,232,213,0.9); /* base2 cream chip behind the count — legible on the light board, not a dark blob */
   --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 }
 
@@ -42,8 +40,6 @@
   --magenta:#bc8cff;
   --cyan:  #39c5cf;
   --term-bg: #0d1117;
-  --sg-comms: #8b949e;
-  --sg-comms-bg: rgba(22,27,34,.92);
 }
 
 * { box-sizing: border-box; }
@@ -136,9 +132,8 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   display: flex; flex-direction: row; align-items: center; gap: 8px; pointer-events: none;
 }
 .brand { color: var(--ink2); font-weight: 700; letter-spacing: .5px; }
-/* the HUD buttons sit on ONE horizontal line beside the brand (align-items centres them against it),
-   overriding the flex-start the base button rules carry for their other (column) home in .sg-hud. */
-.hud .hud-graph, .hud .hud-help { align-self: center; }
+/* the HUD button sits on ONE horizontal line beside the brand (align-items centres it against it). */
+.hud .hud-help { align-self: center; }
 /* discreet `?` affordance — the only HUD hint; opens the full keymap/legend modal. The HUD itself is
    pointer-events:none so the board stays draggable; the button re-enables pointer events for itself. */
 .hud-help {
@@ -148,13 +143,6 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   background: var(--paper); border: 1px solid var(--line); border-radius: 4px;
 }
 .hud-help:hover { border-color: var(--blue); color: var(--orange); }
-/* the session-graph affordance — same chrome as the help button, sits beside it; opens the `t` view. */
-.hud-graph {
-  pointer-events: auto; align-self: flex-start; cursor: pointer;
-  width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
-  color: var(--blue); background: var(--paper); border: 1px solid var(--line); border-radius: 4px;
-}
-.hud-graph:hover { border-color: var(--blue); color: var(--orange); }
 
 /* lock banner — top-center hint shown while a session owns the graph. Sits between the HUD (top-left)
    and the session window (top-right); carries the locked session's colour on its spine via --ov. */
@@ -267,7 +255,6 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
    reads "who is here, and are they live" at a glance. A future kind:'image' provider reuses .av-face. */
 .avatar { display: inline-flex; border-radius: 50%; box-shadow: 0 0 0 1.5px var(--panel); }
 .av-face { display: inline-flex; align-items: center; justify-content: center; line-height: 1; font-weight: 700; overflow: hidden; }
-.av-img { object-fit: cover; }
 .av-circle  { border-radius: 50%; }
 .av-rounded { border-radius: 5px; }
 .av-square  { border-radius: 1px; }
@@ -371,20 +358,6 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
    the body itself never scrolls, so the work pane can't push a horizontal bar onto the window. */
 .ov-body { flex: 1; min-width: 0; overflow: hidden; display: flex; }
 
-/* pane: work — spec (left, reference) + terminal (right, wider work surface).
-   min-width:0 on both columns lets them shrink to the panel width instead of growing to xterm's
-   measured content width (which is what caused the stray horizontal scrollbar). */
-.pane-work { flex: 1; display: flex; min-height: 0; min-width: 0; }
-.pane-work .pane-doc { flex: 0 0 40%; min-width: 0; border-right: 1px solid var(--line); }
-.pane-work .pane-term { flex: 1; min-width: 0; }
-
-/* pane: terminal — read-only xterm display on top, external command line docked below */
-.pane-term { flex: 1; display: flex; flex-direction: column; min-height: 0; min-width: 0; padding: 10px; background: var(--paper); }
-.term-host { flex: 1; min-height: 0; min-width: 0; overflow: hidden; }
-.term-input { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding: 6px 8px; border-top: 1px solid var(--line); }
-.term-prompt { color: var(--blue); font: 13px Menlo, monospace; flex: none; }
-.term-line { flex: 1; min-width: 0; background: transparent; border: none; outline: none; color: var(--ink2); font: 13px Menlo, monospace; }
-.term-line::placeholder { color: var(--muted); }
 
 /* pane: spec doc */
 .pane-doc { flex: 1; padding: 22px 26px; overflow: auto; }
@@ -1286,61 +1259,6 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .si-offline-msg { font-size: 15px; color: var(--ink2); }
 .si-offline-sub { font-size: 12px; color: var(--muted); max-width: 460px; line-height: 1.6; }
 .si-offline-sub code { color: var(--blue); background: var(--panel2); padding: 0 4px; border-radius: 3px; }
-
-/* ---- session-graph (experimental) — the directed subscription network. It FILLS the session console's
-   right content pane (the "View Session Relationship" tab), not a fullscreen overlay. Isolated visual
-   surface; reuses the seed-to-hue colour (color.js) per node. ---- */
-.session-graph {
-  position: absolute; inset: 0; background: var(--paper);
-}
-/* the lone `?` help, top-right of the pane (the brand/back chrome is gone — the tab is the frame). No
-   standing gesture caption lives here: the monitor gesture is hinted reactively (toasts), not by a
-   permanent label over the graph. */
-.sg-hud {
-  position: absolute; top: 12px; right: 14px; z-index: 5;
-  display: flex; gap: 6px; align-items: center; pointer-events: none;
-}
-/* a session node: avatar + label + status, ringed in its own hue (--sg from labelColor(id)). */
-.sg-node {
-  display: flex; flex-direction: column; align-items: center; gap: 3px;
-  padding: 8px 10px; min-width: 96px;
-  background: var(--panel); border: 1.5px solid var(--sg); border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0,0,0,.08);
-}
-/* the keyboard cursor: the node arrows move and ⏎ opens, lifted with a hue-tinted ring + glow. */
-.sg-node--focus { border-width: 2.5px; box-shadow: 0 0 0 3px color-mix(in srgb, var(--sg) 35%, transparent), 0 2px 8px rgba(0,0,0,.14); }
-/* the picked monitor watcher: left-clicked, awaiting a right-click on the node it should watch. A dashed
-   hue outline sets the "mid-gesture" pick apart from the solid keyboard --focus glow. */
-.sg-node--source { outline: 2px dashed var(--sg); outline-offset: 3px; box-shadow: 0 0 0 3px color-mix(in srgb, var(--sg) 28%, transparent); }
-.sg-label { color: var(--ink2); font-size: 11px; font-weight: 700; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sg-status { color: var(--muted); font-size: 10px; }
-/* the node handles are invisible edge ANCHORS only — ReactFlow needs a handle to route an edge to a node,
-   but the monitor gesture is left-click + right-click (not a drag), so they show nothing and take no input. */
-.session-graph .react-flow__handle { opacity: 0; pointer-events: none; }
-/* directed monitor arrows: live = solid; pending = dashed (asked, not yet registered — see sg-pending). */
-.sg-edge .react-flow__edge-path { stroke-linecap: round; }
-.sg-pending .react-flow__edge-path { stroke-dasharray: 5 5; }
-/* held while the first graph loads, so the view never flashes empty before it opens already-framed. */
-.sg-loading {
-  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-  color: var(--muted); font-family: var(--mono); font-size: 13px;
-}
-/* brief reassurance after a drag-to-monitor: "asked A to monitor B", auto-dismissed. */
-.sg-toast {
-  position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 6;
-  padding: 7px 14px; background: var(--panel); color: var(--ink2);
-  border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,.12);
-  font-family: var(--mono); font-size: 12px;
-}
-/* the selection-bound pick hint: shown ONLY while a node is picked as the watcher (off sourceSel), gone the
-   instant the pick clears — not timed like .sg-toast. The dashed border echoes the picked node's dashed
-   --source outline so the hint reads as part of the same mid-gesture state. */
-.sg-pick-hint {
-  position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 6;
-  padding: 7px 14px; background: var(--panel); color: var(--ink2);
-  border: 1px dashed var(--line); border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,.12);
-  font-family: var(--mono); font-size: 12px;
-}
 
 /* ============================================================================
    MOBILE INTERFACE (MobileApp) — the touch-first face. Only mounted on a phone

@@ -12,7 +12,7 @@ import { resolveLayout, mainBranch } from './layout.js'
 import { buildBoard } from './board.js'
 import { boardStream, notifyBoardChanged } from './boardStream.js'
 import { gitA, gitTry, repoRoot } from './git.js'
-import { newSession, listSessions, sendKeys, rawKey, exitSession, closeSession, reopen, propose, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, superviseQueue } from './sessions.js'
+import { newSession, listSessions, sendKeys, rawKey, exitSession, closeSession, reopen, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, superviseQueue } from './sessions.js'
 import { defaultHarness, HARNESSES } from './harness.js'
 import { evalTimeline, readBlobByHash } from '../../spec-yatsu/src/evaltab.js'
 import { yatsuNodes } from '../../spec-yatsu/src/yatsu.js'
@@ -247,7 +247,6 @@ app.get('/api/sessions/:id/prompt', async (c) => {
 })
 // lifecycle transitions (thin callers of the session state machine)
 app.post('/api/sessions/:id/resume', async (c) => c.json({ ok: await reopen(c.req.param('id')) }))   // relaunch if offline; demotes working→idle, keeps any declaration
-app.post('/api/sessions/:id/review', async (c) => c.json({ ok: await propose(c.req.param('id'), 'merge') }))
 // a dispatch to the session's own agent (it runs the merge), never a server merge — the server never touches
 // main's tree. 200 {dispatched:true} once the prompt is accepted, 409 {dispatched:false} if the agent is unreachable.
 app.post('/api/sessions/:id/merge', async (c) => {

@@ -35,8 +35,7 @@ Two principles keep that derivation cheap on a long-running server:
 - **Scale with history, not node count.** Two single git walks back the whole board: one over the `.spec`
   timeline (every node's version + history rows) and one `git log --name-only HEAD` over all files (the drift
   index), each cached on HEAD. Resolving any node — its version and its drift — is then a **pure in-memory
-  lookup**, not a per-node history query, so drift-checking is no exception to this rule. The lone per-file
-  `git log --follow` walk is the on-demand recent/history tab for a single node, off the board's hot path.
+  lookup**, not a per-node history query, so drift-checking is no exception to this rule. The recent/history tab for a single node is served off that same index plus one bounded per-node `git log` over its governed code paths, off the board's hot path.
 - **Key the cache on real change, read from the filesystem.** A warm read spawns no git at all: the
   cache key is the current commit, read straight from `.git`, so it costs a file read, not a subprocess.
   A new commit moves the key and the board reflects the new version and drift at once; an unreadable

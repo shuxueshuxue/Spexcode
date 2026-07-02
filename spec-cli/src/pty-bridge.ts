@@ -205,8 +205,11 @@ function onLine(b: Bridge, lineBuf: Buffer): void {
   }
   // Mode enter/exit emits no pane bytes of its own. Route through repaint only: paneInMode is written solely
   // by repaint under its token, so racing mode flips can't leave a stale read as the last freeze-state write.
+  // ALWAYS repaint — even with a full attach frame pending (needsFull): skipping here left the flip's freeze
+  // state to a repaint that could be superseded and never land, latching %output frozen. The token machinery
+  // already dedups (the newest repaint wins); a spare repaint is cheap, a dropped mode flip mutes the bridge.
   if (head.startsWith('%pane-mode-changed')) {
-    if (!b.needsFull) void repaint(b)
+    void repaint(b)
     return
   }
   // %exit / %client-detached / window close → the client is gone; pty.onExit drives the re-bind.
@@ -214,16 +217,23 @@ function onLine(b: Bridge, lineBuf: Buffer): void {
 
 function onLayout(b: Bridge, size?: string): void {
   if (!size) return
+  const changed = b.lastLayout !== undefined && b.lastLayout !== size
   b.lastLayout = size
   const w = b.layoutWaiter
-  if (w && w.want === size) { b.layoutWaiter = undefined; w.resolve() }
+  if (w) { b.layoutWaiter = undefined; w.resolve() }
+  // an UNSOLICITED geometry change (another control client resized the shared window) with no repaint in
+  // flight: re-seed the viewers at the new size, or they keep painting deltas onto stale geometry (garble).
+  else if (changed) void repaint(b)
 }
 
-// resolve when a %layout-change reports the wanted size — the pane has re-wrapped. DETERMINISTIC, NO TIMER:
-// `refresh-client -C WxH` is measured to ALWAYS emit exactly one %layout-change carrying WxH (even a same-size
-// no-op), so this event is a guaranteed arrival — the mathematical proof of convergence, not a settle-guess.
-// Immediate when the pane is already at `want` (a repaint after it already converged needn't wait). A newer
-// repaint supersedes an older waiter by resolving it — the superseded repaint then falls out on its stale token.
+// resolve when the NEXT %layout-change arrives — the pane has re-wrapped at whatever size tmux CONVERGED to.
+// DETERMINISTIC, NO TIMER: `refresh-client -C WxH` is measured to ALWAYS emit exactly one %layout-change
+// (even a same-size no-op), so the event is a guaranteed arrival. Crucially the waiter accepts ANY announced
+// size, never an exact match on the size we asked for: every viewer/peek/prewarm is its own control client
+// sharing ONE window under `window-size latest`, so the announcement routinely carries a DIFFERENT client's
+// size — an exact-size wait deadlocks the seed frame forever (needsFull latches, %output stays frozen: the
+// mute black terminal). Immediate when already converged at `want`. A newer repaint supersedes an older
+// waiter by resolving it — the superseded repaint then falls out on its stale token.
 function awaitLayout(b: Bridge, want: string): Promise<void> {
   if (b.lastLayout === want) return Promise.resolve()
   return new Promise((resolve) => {

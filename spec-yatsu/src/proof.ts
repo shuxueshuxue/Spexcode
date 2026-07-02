@@ -491,3 +491,76 @@ h2{margin:42px 0 16px;font-size:14px;letter-spacing:.14em;text-transform:upperca
 .glabel{font-weight:600;width:120px;color:#dbe6f2}.gdetail{color:var(--dim);font:12px/1 ui-monospace,monospace}
 footer{margin-top:48px;padding-top:20px;border-top:1px solid var(--line);color:var(--dim);font-size:12px;text-align:center}
 `
+
+// ---- the session EVAL model ([[review-proof]]'s interactive face) ----
+// The lean, TIERED counterpart of buildProofModel: the same worktree-rooted marshaling, but rows only —
+// no diff enrichment, no inlined evidence bytes (the dashboard's Eval tab rides the shared eval
+// components: blobs stream lazily from /api/yatsu/blob on open). Each reading carries `inSession`
+// (its codeSha is one of the branch's own commits) so the tab can lead with what THIS session measured
+// and fold everything earlier behind a count.
+export type SessionEvalNode = {
+  id: string
+  title: string
+  hue: number
+  desc: string
+  hasYatsu: boolean
+  uncoveredFrontend: boolean
+  scenarios: { name: string; expected: string; tags?: string[] }[]
+  evals: (EvalEntry & { inSession: boolean })[]
+}
+export type SessionEvals = {
+  id: string
+  node: string | null
+  branch: string | null
+  title: string
+  ahead: number
+  dirtyNonRuntime: number
+  gates: ProofGate[]
+  nodes: SessionEvalNode[]
+}
+
+export async function buildSessionEvals(id: string): Promise<SessionEvals | null> {
+  const payload = await reviewPayload(id)
+  if (!payload) return null
+  const specs = await loadSpecs()
+  const specById = new Map(specs.map((s) => [s.id, s]))
+  const wtPath = worktreePathForBranch(payload.branch)
+  const ctxRoot = wtPath ?? repoRoot()
+  const ctx = evalContext(ctxRoot, specs, await driftIndex(ctxRoot), await historyIndex(ctxRoot))
+  // this session's own commits — the membership test behind `inSession`
+  const shas = wtPath ? new Set((await gitA(['-C', wtPath, 'rev-list', `${mainBranch()}..HEAD`])).split('\n').filter(Boolean)) : new Set<string>()
+
+  const ids = new Set<string>()
+  for (const f of payload.diff) { const nid = nodeForFile(f.path, specs, payload.node); if (nid) ids.add(nid) }
+  if (payload.node && specById.has(payload.node)) ids.add(payload.node)
+
+  const nodes: SessionEvalNode[] = []
+  for (const nid of ids) {
+    const spec = specById.get(nid)
+    const tl = await evalTimeline(nid, ctx)
+    nodes.push({
+      id: nid,
+      title: spec?.title ?? nid,
+      hue: spec?.hue ?? 210,
+      desc: spec?.desc ?? '',
+      hasYatsu: tl.hasYatsu,
+      uncoveredFrontend: !tl.hasYatsu && (spec?.code ?? []).some(isUiPath),
+      scenarios: tl.scenarios,
+      evals: tl.readings.map((r) => ({ ...r, inSession: shas.has(r.codeSha) })),
+    })
+  }
+  // nodes with in-session measurements lead, then the most-measured — the session's own evidence first.
+  nodes.sort((a, b) => (b.evals.filter((e) => e.inSession).length - a.evals.filter((e) => e.inSession).length) || (b.evals.length - a.evals.length))
+
+  const primary = payload.node && specById.has(payload.node) ? specById.get(payload.node)!.title : null
+  return {
+    id,
+    node: payload.node,
+    branch: payload.branch,
+    title: primary || payload.node || payload.branch || id.slice(0, 8),
+    ahead: payload.ahead,
+    dirtyNonRuntime: payload.dirtyNonRuntime,
+    gates: gateRows(payload),
+    nodes,
+  }
+}

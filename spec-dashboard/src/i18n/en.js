@@ -75,6 +75,16 @@ export default {
     reviewFallback: 'video review',
   },
 
+
+  sessionEval: {
+    sessionN: ({ n }) => `✦ this session: ${n}`,
+    export: 'proof ↗',
+    empty: 'nothing measured for this session yet.',
+    blindHint: 'declared but never measured — this is the outstanding loss; measure it with spex yatsu eval.',
+    unmeasured: 'unmeasured',
+    noYatsu: 'UI code · no yatsu.md',
+  },
+
   time: {
     justNow: 'now',
     minutes: ({ n }) => `${n}m`,
@@ -294,7 +304,7 @@ export default {
     hint: { before: 'type ', mid: ' to reference a spec · ', after: ' to apply a config preset' },
     harnessLabel: 'agent launcher',
     tabTerminal: 'terminal',
-    tabProof: 'proof',
+    tabProof: 'eval',
     navBtn: 'nav',
     navTitle: "nav mode — forward raw keystrokes incl. ⌃/⌥/⌘ combos to drive the agent's terminal (⌥/⌘+I)",
     relaunch: 'relaunch',

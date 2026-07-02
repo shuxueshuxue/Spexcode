@@ -5,7 +5,7 @@ import { labelColor } from './color.js'
 import { STATUS_COLOR, sessionForest, sessionHeadline } from './session.js'
 import { SessionRow, RowLead, useFold } from './SessionWindow.jsx'
 import SessionContextMenu from './SessionContextMenu.jsx'
-import { ProofPane } from './ReviewProof.jsx'
+import SessionEvalPane from './SessionEval.jsx'
 import { useResizable } from './useResizable.js'
 import { boardCommandsFor } from './sessionCommands.js'
 import { useT } from './i18n/index.jsx'
@@ -1019,7 +1019,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               ))}
               {/* Proof tab — the review proof rendered INLINE (always available, not review-gated). Mounts on
                   each visit so it reflects the live derived diff/loss/gates ([[review-proof]]). */}
-              {rightTab === 'proof' && <ProofPane sessionId={active} />}
+              {rightTab === 'proof' && <SessionEvalPane sessionId={active} />}
           </div>
         </section>
       </div>

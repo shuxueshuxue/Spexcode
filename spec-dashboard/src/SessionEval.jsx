@@ -1,0 +1,114 @@
+import { useEffect, useMemo, useState } from 'react'
+import { EvalRow, entryKey } from './EvalsFeed.jsx'
+import Annotator from './Annotator.jsx'
+import { ScoreBadge } from './score.jsx'
+import { useT } from './i18n/index.jsx'
+
+// The session Eval tab ([[review-proof]]'s interactive face): the THIRD scope of the one eval component
+// family — node popup (one node) · forum (project) · here (this session's changed nodes, WORKTREE-rooted
+// readings). Master-detail like the forum: collapsed rows on the left (blind spots lead, then what THIS
+// session measured, newest first; everything earlier folds behind a count chip), the shared Annotator as
+// the full-height detail on the right. Rows are tier-1 JSON; evidence streams lazily on open — nothing is
+// inlined. The self-contained proof HTML remains as the EXPORT artifact behind the ↗ button.
+export default function SessionEvalPane({ sessionId }) {
+  const t = useT()
+  const [model, setModel] = useState(null)     // null loading · false none
+  const [onlySession, setOnlySession] = useState(false)   // focus filter: only what THIS session measured
+  const [sel, setSel] = useState(null)
+
+  useEffect(() => {
+    let on = true
+    setModel(null); setSel(null); setOnlySession(false)
+    fetch(`/api/sessions/${encodeURIComponent(sessionId)}/evals`)
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((m) => { if (on) setModel(m) })
+      .catch(() => { if (on) setModel(false) })
+    return () => { on = false }
+  }, [sessionId])
+
+  // per node: blind-spot rows lead (declared, never measured — outstanding loss), then the latest reading
+  // per scenario, in-session first / newest first; earlier-than-this-session folds behind the count chip.
+  const groups = useMemo(() => {
+    if (!model) return []
+    return model.nodes.map((n) => {
+      const latest = new Map()
+      for (const r of n.evals) if (!latest.has(r.scenario)) latest.set(r.scenario, r)   // newest-first list
+      const measured = new Set(latest.keys())
+      const blind = (n.scenarios ?? []).filter((s) => !measured.has(s.name))
+        .map((s) => ({ blind: true, scenario: s.name, expected: s.expected, tags: s.tags, node: n.id, hue: n.hue, state: 'missing' }))
+      const rows = [...latest.values()].map((r) => ({ ...r, node: n.id, hue: n.hue }))
+        .sort((a, b) => (Number(b.inSession) - Number(a.inSession)) || (a.ts < b.ts ? 1 : -1))
+      return { node: n, blind, rows, sessionN: rows.filter((r) => r.inSession).length }
+    })
+  }, [model])
+  const sessionTotal = groups.reduce((a, g) => a + g.sessionN, 0)
+
+  // the flat visible list drives selection (and the default: the first row — blind spot or freshest).
+  const visible = useMemo(() => groups.flatMap((g) => [
+    ...g.blind.map((b) => ({ kind: 'blind', key: `blind:${b.node}·${b.scenario}`, item: b })),
+    ...g.rows.filter((r) => !onlySession || r.inSession).map((r) => ({ kind: 'eval', key: entryKey(r), item: r })),
+  ]), [groups, onlySession])
+  const effSel = sel && visible.some((v) => v.key === sel) ? sel : visible[0]?.key ?? null
+  const selEntry = visible.find((v) => v.key === effSel)
+
+  if (model === null) return <div className="fv-note">{t('common.loading')}</div>
+  if (model === false) return <div className="fv-note">{t('proof.none')}</div>
+
+  return (
+    <div className="se-pane">
+      <div className="se-gates">
+        {model.gates.map((g) => (
+          <span key={g.label} className={`se-gate ${g.ok ? 'ok' : 'bad'}`} title={g.detail}>{g.ok ? '✓' : '✗'} {g.label}</span>
+        ))}
+        {sessionTotal > 0 && (
+          <button className={`ef-chip ef-stale ${onlySession ? 'on' : ''}`} onClick={() => setOnlySession((v) => !v)}>
+            {t('sessionEval.sessionN', { n: sessionTotal })}
+          </button>
+        )}
+        <a className="se-export" href={`/api/sessions/${encodeURIComponent(sessionId)}/proof`} target="_blank" rel="noreferrer">
+          {t('sessionEval.export')}
+        </a>
+      </div>
+      <div className="se-master">
+        <div className="se-list">
+          {visible.length === 0 && <div className="fv-note">{t('sessionEval.empty')}</div>}
+          {groups.map((g) => {
+            const gRows = visible.filter((v) => v.item.node === g.node.id)
+            if (!gRows.length && !g.node.uncoveredFrontend) return null
+            return (
+              <section className="fv-group" key={g.node.id}>
+                <header className="fv-group-head">
+                  <span className="fv-group-title" style={{ color: `hsl(${g.node.hue} 60% 60%)` }}>{g.node.title}</span>
+                  {g.node.uncoveredFrontend && <span className="se-warn">{t('sessionEval.noYatsu')}</span>}
+                </header>
+                {gRows.map((v) => v.kind === 'blind' ? (
+                  <button key={v.key} className={`ef-row se-blind ${effSel === v.key ? 'sel' : ''}`} onClick={() => setSel(v.key)}>
+                    <ScoreBadge state="missing" />
+                    <span className="ef-scenario">{v.item.scenario}</span>
+                    <span className="ef-time">{t('sessionEval.unmeasured')}</span>
+                  </button>
+                ) : (
+                  <EvalRow key={v.key} e={v.item} selected={effSel === v.key} onClick={() => setSel(v.key)} />
+                ))}
+              </section>
+            )
+          })}
+        </div>
+        <div className="se-detail">
+          {selEntry?.kind === 'eval' && <Annotator entry={selEntry.item} />}
+          {selEntry?.kind === 'blind' && (
+            <div className="an-detail">
+              <header className="an-head">
+                <span className="an-title">{selEntry.item.scenario}</span>
+                <span className="an-node">{selEntry.item.node}</span>
+              </header>
+              {selEntry.item.expected && <div className="an-expected"><b>{t('nodeView.eval.expected')}</b> {selEntry.item.expected}</div>}
+              <div className="an-hint">{t('sessionEval.blindHint')}</div>
+            </div>
+          )}
+          {!selEntry && <div className="fv-note">{t('sessionEval.empty')}</div>}
+        </div>
+      </div>
+    </div>
+  )
+}

@@ -236,6 +236,8 @@ export default {
     issuesOpenOnForge: '在 forge 上打开 ↗',
     issuesForgeReadOnly: 'forge issue 的讨论在 forge 上进行 —— 这里只读。',
     // 人工写入路径（[[issues-view]]）—— 回复输入框 + 新建本地 issue。
+    issuesThreadsTitle: '讨论帖',
+    issuesThreadsSummary: ({ open, total }) => `${open} 开放 · 共 ${total}`,
     issuesNew: '新建',
     issuesCancel: '取消',
     issuesSend: '发送',

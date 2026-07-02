@@ -684,14 +684,21 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
    inline; the exact word stays on the title/aria for hover + a11y. */
 .sess-glyph { flex: none; width: 12px; text-align: center; font-size: 11px; line-height: 1; }
 /* @@@ nesting fold ([[session-nesting]]) — the leading gutter on a nested session row. `.sess-lead` carries
-   the depth indent; `.sess-fold` is the disclosure triangle (or an aligned placeholder for a leaf child) whose
+   the depth indent; `.sess-fold` is the fold POD (or an aligned placeholder for a leaf child) whose
    COLOUR is the subtree rollup, painted inline. A fixed-width slot keeps every headline aligned regardless of
    depth or whether the row has a triangle. */
 .sess-lead { flex: none; display: inline-flex; align-items: center; }
 .sess-fold {
-  flex: none; width: 13px; text-align: center; font-size: 12px; line-height: 1; cursor: pointer;
-  color: var(--muted); transition: color .12s;
+  flex: none; width: 18px; display: inline-flex; align-items: center; justify-content: center;
+  font-size: 9px; cursor: pointer; user-select: none;
 }
+/* the fold pod: the subtree COUNT on the rollup colour — filled = collapsed (sessions hidden behind it),
+   outline = expanded. A bigger, legible target than the old triangle; same informational colour language. */
+.sess-fold.pod {
+  min-width: 16px; width: auto; height: 14px; padding: 0 4px; border-radius: 999px; border: 1px solid;
+  font-size: 9.5px; font-weight: 700; line-height: 1; color: var(--paper);
+}
+.sess-fold.pod.open { background: transparent; }
 .sess-fold.placeholder { cursor: default; }
 .sess-fold:not(.placeholder):hover { filter: brightness(1.25); }
 /* the board glance (.sesswin) reuses the SAME two-zone grouping + compact one-line face as the console

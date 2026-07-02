@@ -11,7 +11,7 @@ export type EvalEntry = {
   expected: string
   codeSha: string
   blob: string | null
-  blobKind?: 'image' | 'transcript'
+  blobKind?: 'image' | 'transcript' | 'video'
   evaluator: string
   verdict?: Verdict
   ts: string
@@ -100,13 +100,18 @@ export function readBlobByHash(hash: string, dir?: string): BlobResult {
   return { ok: true, bytes, mime: sniffBlobMime(bytes) }
 }
 
-// PNG/JPEG/GIF/WebP cover every screenshot (a manual --image); a transcript (--result) is text, so bytes
-// with no NUL and no image header sniff to text/plain; anything else falls back to a generic binary type so
-// it still downloads rather than being mislabeled.
+// PNG/JPEG/GIF/WebP cover every screenshot (a manual --image); MP4/WebM cover a recorded clip (--video), so
+// the blob route serves it with a playable Content-Type; a transcript (--result) is text, so bytes with no
+// NUL and no known header sniff to text/plain; anything else falls back to a generic binary type so it still
+// downloads rather than being mislabeled.
 function sniffBlobMime(b: Buffer): string {
   if (b.length >= 4 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return 'image/png'
   if (b.length >= 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'image/jpeg'
   if (b.length >= 4 && b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) return 'image/gif'
+  // WebM/Matroska begin with the EBML magic 1A 45 DF A3; disambiguate from a RIFF/WEBP image above.
+  if (b.length >= 4 && b[0] === 0x1a && b[1] === 0x45 && b[2] === 0xdf && b[3] === 0xa3) return 'video/webm'
+  // ISO-BMFF (MP4/MOV): a `ftyp` box type at bytes 4..8, after its 4-byte size.
+  if (b.length >= 12 && b.toString('ascii', 4, 8) === 'ftyp') return 'video/mp4'
   if (b.length >= 12 && b.toString('ascii', 0, 4) === 'RIFF' && b.toString('ascii', 8, 12) === 'WEBP') return 'image/webp'
   if (b.length && !b.includes(0)) return 'text/plain; charset=utf-8'
   return 'application/octet-stream'

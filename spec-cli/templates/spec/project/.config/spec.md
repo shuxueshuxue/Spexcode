@@ -11,5 +11,5 @@ that names where it plugs in.
 
 The launcher's system gather and the new-session dropdown read from here. Only **active** plugins
 gather: a `pending` node is declared intent, not yet an active plugin. The seed ships `core`
-(`surface: system` — the spec-discipline contract folded into every agent) plus `tidy` and `health`
-(`surface: command` — prompt presets); add your own by creating a sibling node with a `surface` field.
+(`surface: system` — the spec-discipline contract folded into every agent) plus command presets like
+`tidy`; add your own by creating a sibling node with a `surface` field.

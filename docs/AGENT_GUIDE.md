@@ -102,8 +102,8 @@ each. There is no discovery phase.
   duplicate the id).
 - **The config system is reflexive** — SpexCode's own dev-flow behavior is itself spec nodes, managed
   by the same dogfood ritual. Two roots sit under `spexcode`: **`.config`** holds the concrete
-  *instance* plugins (`core` + `forge-link` + `voice-before-ask` are `surface: system`; `health` +
-  `supervisor` + `tidy` are `surface: command`); **`config`** holds the *spec of
+  *instance* plugins (`core` + `forge-link` + `memory-hygiene` + `voice-before-ask` are `surface:
+  system`; `extract` + `regroup` + `supervisor` + `tidy` are `surface: command`); **`config`** holds the *spec of
   the config system* itself (`surface`). Each plugin is a **flat** child carrying a `surface`
   frontmatter **field** — `surface: system` materializes its body (in name order) into the
   `<!-- spexcode -->` managed block of the worktree's `CLAUDE.md`/`AGENTS.md`, where the harness

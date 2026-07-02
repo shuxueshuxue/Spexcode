@@ -184,6 +184,18 @@ together — that is a project choice, not a git requirement.
     in-place child reload is NOT enough. Tell-tale: the change is merged and on disk, but live behaviour is
     unchanged and the running child still shows the old env (`tr '\0' '\n' < /proc/<child-pid>/environ`).
     (Machine-specific relaunch steps — which tmux socket, the watchdog — live in local notes, not here.)
+  - **A second / throwaway instance (e.g. on a shared box already running the deploy):** the backend binds
+    `$PORT` (default 8787), so `PORT=<free> npm run api` runs one beside the live one — check the port is
+    free first (`ss -tlnH "sport = :<free>"`). **Env footgun:** a dispatched shell already **inherits `PORT`
+    and `SPEXCODE_API_URL`** from the backend that launched it, so a bare `npm run api` silently binds that
+    *stale inherited* `PORT` and points its child at the **live** `SPEXCODE_API_URL` — pin your own `PORT`
+    and `env -u SPEXCODE_API_URL` for a self-contained instance. Liveness probe: `GET /health` → `ok`.
+  - **Stopping it — target the instance, never the signature.** Every backend, live or throwaway, has the
+    **identical** process signature (`tsx src/cli.ts serve`, child `index.ts`), so `pkill -f '…serve'` kills
+    the WRONG one — this has taken the live `:8787` down. Stop by **port** (`ss -tlnp "sport = :<port>"` →
+    kill that pid; the supervisor is on your `PORT`, and killing it reaps its child backend on the random
+    port too) or, on the deploy, by **tmux session name** (`spex-backend`); a downed deploy service is
+    relaunched by the watchdog (`spexcode-ops`'s `spex-ensure.sh`, port-guarded + idempotent).
 - Frontend: `npm run web` → Vite. **Port 5173 by default but not pinned** — it takes the next free
   port (e.g. 5174) and prints `Local: http://localhost:<port>/`; read that line for the real port.
   Vite proxies `/api` → :8787, so the backend must be running too.

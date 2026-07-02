@@ -31,11 +31,13 @@ target [[video-evidence]] points at when a video finding routes to the responsib
 
 **Two stores, one translation rule.** The **local** store is the forum ([[proposals]] owns its whole
 mechanism — venue, file format, lock, trunk commit); a forum thread *is* a local Issue, its `store` implied
-by where it lives, never written into the file. The **forge** store is [[spec-forge]]'s read-only tracer:
+by where it lives, never written into the file. The **forge** store rides [[spec-forge]]'s tracer read:
 a `ForgeIssue` becomes an Issue at this boundary — id `<host>#<number>`, title → concern, state → status,
-and the host's node-naming conventions (`Spec:` body marker, transitive PR links — [[links]]) translated
-into `nodes[]` **here**, so product semantics see only `nodes[]` and never know a marker existed. Platform
-differences live at the adapter boundary; nothing downstream branches on store.
+its comments → `replies[]` (the SAME Reply shape a forum thread carries — both stores' discussions are one
+thread type, so every surface renders one kind of thread), and the host's node-naming conventions (`Spec:`
+body marker, transitive PR links — [[links]]) translated into `nodes[]` **here**, so product semantics see
+only `nodes[]` and never know a marker existed. Platform differences live at the adapter boundary; nothing
+downstream branches on store.
 
 **One read, differently freshened.** `mergedIssues(forgeState, nodeIds)` is a pure merge; each caller
 supplies the forge slice at the freshness its surface warrants — the server ([[dashboard-issues]]'s
@@ -46,8 +48,18 @@ network. The board fold attaches each node's merged issues (`issues` / open subs
 per-node surface — tile badge, focus panel, node-info Issues tab, the [[issues-view]] page — reads the
 same mixed set with no second path.
 
-**Writes stay where they're owned.** Content writes (`spex propose` / `reply` / `sign` / `resolve`,
-and the dashboard's human POSTs) go to the local store only. The one cross-store verb is **promotion** —
+**Writes stay where they're owned — and the reply verb routes by store.** Opening, signing, and resolving
+(`spex propose` / `sign` / `resolve`, and the dashboard's New) stay local-store writes. **Replying is ONE
+verb over both stores** (`replyIssue` — `spex propose reply <id>` and `POST /api/issues/:id/reply` are the
+same routing): a local id goes through the forum's committed write, a forge id (`<host>#<n>`) posts a
+**real comment** through the driver's `createComment` — the [[port]]'s second write verb, the same seam
+discipline as promotion (the driver stays the only network toucher; the tracer stays read-only; a failed
+forge write fails loud, never queues). Either way the reply **text**'s `@`-mentions dispatch afterward
+([[mentions]] fires on the words, store-agnostic) — mentioning `@new`/`@session` in any thread IS the
+"assign this issue to an agent" verb; no separate assign machinery exists. Freshness after a forge write
+stays caller-owned: the server forces its resident slice's read-back before answering (the comment shown
+is the read-back, never a local echo); the CLI's next read is a live pull anyway.
+The one cross-store verb is **promotion** —
 `spex issues promote <id>`: a local concern that outgrows the repo (needs CI or external visibility) moves
 to the forge as one recorded action instead of a lossy hand-copy. It composes the forge issue from the
 thread itself — concern → title; body + the `Spec: <nodes>` marker + the evidence hashes + a provenance

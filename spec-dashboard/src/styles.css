@@ -932,7 +932,27 @@ body {
 
 /* ── the read-only forum info page ([[forum-view]]) — a thin window over /api/forum, one design language with
    the console (var(--mono), the app-theme tokens). Threads render in API order; counts are raw data. ── */
-.si-content.is-forum { align-items: stretch; justify-content: flex-start; overflow-y: auto; }
+/* the issues panel's iron rule ([[issues-view]]): the OUTER container never scrolls — each FeedSection
+   body scrolls internally, and a bar-density section stays pinned as its one-line summary. */
+.si-content.is-forum { align-items: stretch; justify-content: flex-start; overflow: hidden; }
+.fv-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.fs-section { display: flex; flex-direction: column; min-height: 0; border-top: 1px solid var(--line); }
+.fs-section:first-child { border-top: none; }
+.fs-region { flex: 1; }
+.fs-page { flex: 1; }
+.fs-bar { flex: none; }
+.fs-head {
+  flex: none; display: flex; align-items: baseline; gap: 10px; padding: 6px 16px;
+  font-family: var(--mono); background: var(--panel2); border-bottom: 1px solid var(--line);
+}
+.fs-bar .fs-head { cursor: pointer; border-bottom: none; }
+.fs-bar .fs-head:hover { background: color-mix(in srgb, var(--blue) 8%, var(--panel2)); }
+.fs-title { font-size: 10px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--ink2); }
+.fs-summary { font-size: 10.5px; color: var(--muted); margin-left: auto; }
+.fs-focused .fs-title { color: var(--blue); }
+.fs-body { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
+/* the keyboard-selected row (j/k walk, Enter opens) */
+.fv-thread.kbd-sel > .fv-head { box-shadow: inset 2px 0 0 var(--blue); background: color-mix(in srgb, var(--blue) 6%, var(--paper)); }
 .fv-note { margin: auto; padding: 24px; color: var(--muted); font-family: var(--mono); font-size: 12.5px; text-align: center; }
 .fv-list { width: 100%; display: flex; flex-direction: column; }
 .fv-thread { border-bottom: 1px solid var(--line); }

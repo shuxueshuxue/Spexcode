@@ -5,6 +5,7 @@ hue: 200
 desc: The dashboard's ONE issues page — a second button beside New Session opens the merged Issue list ([[issues]]): local forum threads and forge issues mixed, store-tagged, rendered verbatim from /api/issues; node chips focus the graph; a human replies / opens a local thread in place, forge items link out.
 code:
   - spec-dashboard/src/IssuesView.jsx
+  - spec-dashboard/src/FeedSection.jsx
 ---
 
 # issues-view

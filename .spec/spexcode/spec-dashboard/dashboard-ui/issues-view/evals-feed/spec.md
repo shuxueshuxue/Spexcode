@@ -35,9 +35,9 @@ media request of any kind. Expanding a row pulls its thumbnail and the scenario'
 launches the [[annotator]] — a `<video>` element exists only there, never in the feed. The list is
 virtualized; history drills down per scenario (the node's [[yatsu-eval-tab]] scaffold), not inline.
 
-Until [[issues-view]]'s two-region skeleton lands, the feed mounts provisionally from a hud ▶ button as
-its own overlay (Esc closing via the shared stack); it moves into the issues view's upper region — and the
-button hands over to that surface's entries — the moment the skeleton arrives.
+The section lives in [[issues-view]]'s upper region: it wraps itself in the panel's FeedSection (so its
+counts stay internal and density switches preserve its state) and mounts as one line above the threads
+section; the view's own entries (console pill · ⌥F · board `f`) are how it is reached.
 
 Data rides the board's existing evals fold. At scale the fold itself converges to the same semantics —
 latest reading per scenario plus a history count, the full timeline served per node on demand — one

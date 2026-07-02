@@ -41,13 +41,13 @@ export default {
   hud: {
     helpTitle: 'help — keymap & legend (?)',
     loading: 'loading specs from git…',
-    evalsTitle: 'evals — the current measured loss, video first',
   },
 
   evalsFeed: {
     title: 'evals — current loss',
     kind: { video: 'video', image: 'image', all: 'all' },
     staleN: ({ n }) => `${n} stale`,
+    summary: ({ n }) => `${n} current`,
     empty: 'no current readings match — measure a scenario or switch the filter.',
     annotate: 'open & annotate',
   },

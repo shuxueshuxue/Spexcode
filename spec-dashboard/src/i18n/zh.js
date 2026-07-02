@@ -40,13 +40,13 @@ export default {
   hud: {
     helpTitle: '帮助 — 按键与图例（?）',
     loading: '正在从 git 加载规格…',
-    evalsTitle: '评审 — 当前测量的 loss，视频优先',
   },
 
   evalsFeed: {
     title: '评审 — 当前 loss',
     kind: { video: '视频', image: '图片', all: '全部' },
     staleN: ({ n }) => `${n} 条已过期`,
+    summary: ({ n }) => `${n} 条当前`,
     empty: '没有匹配的当前读数 — 先测量一个场景，或切换筛选。',
     annotate: '打开并标注',
   },

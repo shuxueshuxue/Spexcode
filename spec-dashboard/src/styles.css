@@ -1507,17 +1507,12 @@ body {
 /* the `proof` button's cyan now comes from the shared `.si-act.board.sc-cyan` rule (see board commands). */
 
 /* ---- evals feed ([[evals-feed]]) — the current measured loss as a feed, title-only rows, media lazy ---- */
-.hud-evals { margin-left: 6px; }
-.ef-overlay { position: fixed; inset: 0; z-index: 60; background: rgba(10,12,24,.55); display: flex; align-items: center; justify-content: center; }
-.ef-panel { width: min(760px, 92vw); max-height: 84vh; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 18px 60px rgba(0,0,0,.5); }
-.ef-head { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
-.ef-title { font-weight: 700; color: var(--ink); font-size: 14px; }
-.ef-chips { display: flex; gap: 4px; }
+.ef-chipbar { display: flex; gap: 4px; padding: 8px 10px 2px; }
 .ef-chip { font: inherit; font-size: 11px; color: var(--muted); background: var(--panel2); border: 1px solid var(--line); border-radius: 12px; padding: 1px 10px; cursor: pointer; }
 .ef-chip.on { color: var(--ink); border-color: var(--blue); }
 .ef-stale { margin-left: auto; }
+.ef-list { padding: 2px 10px 12px; }
 .ef-close { font: inherit; color: var(--muted); background: none; border: 0; cursor: pointer; padding: 2px 6px; }
-.ef-list { overflow: auto; padding: 6px 10px 12px; }
 .ef-empty, .ef-miss { color: var(--muted); font-size: 12px; padding: 18px 8px; }
 .ef-row { border-bottom: 1px solid var(--line); }
 .ef-row:last-child { border-bottom: 0; }

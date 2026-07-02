@@ -59,7 +59,8 @@ tab shows a clean empty placeholder.
 
 The **self-contained HTML** (`renderProofHtml`: evidence inlined as data-URIs, every changed file's
 diff + before/after drill-down) remains as the **export artifact** — CI attachments, sharing, a bare
-browser — behind the tab's `proof ↗` link, `GET /api/sessions/:id/proof` (`?format=json` = the model), and
+browser — behind the tab's `export ↗` link (labelled as the export it is, tooltip naming the self-contained
+HTML report), `GET /api/sessions/:id/proof` (`?format=json` = the model), and
 `spex review proof <SEL>` (`--out`/`--open`, a backend client that works against a remote backend
 unchanged). Inlining everything is the right shape for a file that must stand alone, and the wrong shape
 for an interactive tab — that is the whole split.

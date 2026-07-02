@@ -281,7 +281,7 @@ scenarios:
       proof is always available on this tab for any selected session, not only one in review. The grown `❯` box
       survives the round-trip: its multi-line draft is still there AND its rendered height matches the pre-switch
       height (re-fit to the persisted draft on remount) — it is never collapsed back to a single row.
-    related: spec-dashboard/src/ReviewProof.jsx
+    related: spec-dashboard/src/SessionEval.jsx
 ---
 
 # session-console — yatsu

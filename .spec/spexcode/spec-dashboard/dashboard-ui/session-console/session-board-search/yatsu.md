@@ -17,6 +17,25 @@ scenarios:
     related:
       - spec-dashboard/src/SpecSearch.jsx
       - spec-dashboard/src/App.jsx
+  - name: search-pill-opens-same-palette
+    tags: [frontend-e2e, desktop]
+    description: >
+      Through the running dashboard in a real browser, open the session console (Enter) and read the session
+      list's top button row: beside the ＋ New Session pill there must be a Search pill whose glyph is a
+      monochrome inline-SVG magnifier (currentColor stroke, never an emoji) and whose tooltip (title
+      attribute) teaches the ⌘+/ chord. Click it and compare what opens against pressing ⌘/Ctrl+/: it must
+      be the SAME palette component (`.search-panel` over its backdrop), sessions leading the ranked rows.
+      Esc closes it back to the console with the selected tab unchanged and the pill wearing no pressed/on
+      state. Screenshot the top row and the open palette.
+    expected: |
+      A Search pill sits beside ＋ in the top row — inline-SVG magnifier, no emoji, title naming ⌘+/.
+      Clicking it opens the one shared search palette exactly as the chord does (same `.search-panel`,
+      session plane boosted to lead), never a second search implementation; the selected session tab does
+      not change, and after Esc the console is back with no persistent .on state on the pill. Button and
+      chord are two triggers of a single open path.
+    related:
+      - spec-dashboard/src/SessionInterface.jsx
+      - spec-dashboard/src/App.jsx
   - name: pick-routes-session-vs-node
     tags: [frontend-e2e, desktop]
     description: >

@@ -1,0 +1,23 @@
+---
+concern: eval comments: discuss under an eval with the SAME Issue mechanism [[issues-view]]
+by: 60b8fd9a-08c5-4d8e-9139-84d75c065a8c
+status: open
+nodes: issues-view
+created: 2026-07-02T17:13:59.674Z
+---
+
+User-ordered(原话:'为啥现在没法在 Eval 下面评论呢?')。诚实前史:评审面契约只 spec 了 annotator 的 verdict 写半(manual reading),讨论层从未被 spec —— 这是漏项不是回归。
+
+DESIGN — no new object, no new store: an eval's comment thread IS a local Issue thread deterministically bound to its (node, scenario) — created lazily on the first comment (concern = 'eval: <node> · <scenario>', nodes:[node]), read/written through the EXISTING propose/reply (author 'human' via the same POST /api/issues routes). The eval detail pane (annotator) renders that thread's replies[] under the media with the SAME reply composer the issue detail uses — one thread UI, three homes (local issue / forge issue / eval). @-mention dispatch comes free (mentions is store-agnostic) — commenting '@new look at this regression' under an eval IS assigning it.
+
+BINDING: deterministic lookup by the concern key (slug is stable for a fixed node+scenario pair); the thread also shows in the issues group like any local issue (it IS one — no hiding, no special-casing; its nodes:[node] chip routes to the graph).
+
+DEPENDENCY: the shared mention-autocomplete lane (fd23fe17) is extracting the composer dropdowns — land after it or coordinate; do NOT fork a second composer.
+
+MEASUREMENT: browser YATU — comment under an eval → thread created + reply renders in place; second comment appends (no dup thread); the same thread visible in the issues group; @new in an eval comment dispatches.
+
+<!-- reply: 1b7b9e38-20a2-4f1c-82cd-49d5f1d517c9 @ 2026-07-02T17:46:50.958Z -->
+Implemented on node/issues-view-1b7b (commit 4316dee), exactly as designed — no new object, no new store. EvalThread (IssuesView.jsx, beside IssueDetail) binds the thread by exact concern match ('eval: <node> · <scenario>') over the RESIDENT issues list — no slug math needed, and the -N collision suffix can never bite. First comment creates via POST /api/issues, later ones reply; the annotator takes the thread as a 'discussion' slot prop (no circular import; the session console's annotator home is untouched and can opt in later). COMPOSER: reused the ONE ReplyComposer via an optional submit override — fd23's uncommitted autocomplete lane keeps ReplyComposer in IssuesView.jsx, so its merge stays small and the eval home inherits the [[node]]/@session dropdown for free when it lands. Measured by browser YATU (new scenario eval-comments, reading filed): create → append (no dup) → thread visible in the issue group with a local chip, 0 page errors. The measurement thread itself is the feature's first real use: eval-evals-feed-feed-current-loss-video-first-ti (resolved landed). @-dispatch not re-measured (comes free from the store-agnostic forum write surface; deliberately not triggered to avoid launching a stray worker).
+
+<!-- reply: 241ab1f7-0670-432a-a813-01337b831390 @ 2026-07-02T18:05:07.168Z -->
+Landed on node/issues-view-241a (7a24403 + readings 0894535). Built exactly per the design — no new object, no new store: the eval detail's comments section is a local Issue lazily bound by the concern key 'eval: <node> · <scenario>', matched by concern TEXT against the page's resident issues list (ids de-collide under uniqueId's suffix, concerns don't — text is the stable key). First comment creates via the existing POST /api/issues (nodes:[node], comment as body); every later one replies; the thread lists in the issues group like any local issue. The thread UI is ONE shared component (Thread.jsx: Replies + a delivery-agnostic onSend composer) serving the issue detail and the eval detail — and per the dependency note, the fd23 mention-autocomplete merged mid-lane, so I merged main and folded useMentionAutocomplete INTO the shared composer (no pluggable seam left): the @/[[ dropdown now opens in eval comments too. Measured per the plan through a real browser on a disposable clone backend (forum writes commit to the trunk — never against the live repo): create in place, second appends (exactly 1 thread, body+1 reply), row visible in the issues group, '@' opens the shared menu, '@new look at this regression' echoed '@ new→ea3f4ec9…' and spawned a worker. One scope note: the session eval tab's Annotator has no resident issues list wired in, so the section renders only on the issues page — a blind post there would mint duplicate threads; spec'd explicitly. Fun proof of the binding: a parallel lane had already hand-made a thread with this exact concern shape for an evals-feed eval, and the pane picked it up and appended to it — cross-writer convergence for free.

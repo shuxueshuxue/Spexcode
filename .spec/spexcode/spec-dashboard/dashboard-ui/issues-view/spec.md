@@ -71,8 +71,12 @@ reply/propose the CLI uses, committed straight to the trunk.
   moves one to the forge). The dashboard adds no store of its own. A `@session`/`@new` in the text
   **dispatches** ([[mentions]]) exactly as a CLI post would, whatever the store — a human summons an
   agent from any thread, and that mention IS the "assign to an agent" verb; the returned one-line
-  dispatch summary is echoed briefly. A plain textarea with a `@session · [[node]]` hint is enough;
-  autocomplete is optional.
+  dispatch summary is echoed briefly. Both composers carry the SAME `@session` / `[[node]]`
+  **autocomplete dropdown** the console's inputs use ([[mentions]]'s shared menu — one implementation,
+  never a page-local fork): typing `@` lists the live sessions, `[[` lists the nodes (the thread's own
+  node leading), a pick inserts the token, and Esc closes the menu without leaving the page. A grammar
+  that dispatches workers earns discoverability — a bare hint line proved not enough (the human typed
+  `@` and got nothing).
 - **Honors the switch.** When the forum workflow is OFF (`enabled: false`, [[proposals]]'s toggle), the
   view shows a muted "off" state instead of the list — the dashboard reflects the one source of truth,
   never forks it.

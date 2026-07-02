@@ -1033,6 +1033,9 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   background: var(--paper); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; resize: vertical;
 }
 .fv-input:focus, .fv-textarea:focus { outline: none; border-color: var(--blue); }
+/* the composer textarea's mention-menu anchor — the shared .mention-menu is absolute to its wrapper. */
+.fv-tawrap { position: relative; }
+.fv-tawrap .fv-textarea { display: block; }
 .fv-actions { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
 .fv-send {
   margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--paper); background: var(--blue);

@@ -32,7 +32,7 @@ function summarize(specs) {
     if (status[n.status]) status[n.status].push(n.id)
     if (n.drift > 0) driftIds.push(n.id)                          // node whose code is ahead of spec
     const open = n.openIssues || []
-    if (open.length) { issueIds.push(n.id); for (const i of open) issueNumbers.add(i.number) }
+    if (open.length) { issueIds.push(n.id); for (const i of open) issueNumbers.add(i.id) }
     const seen = new Set()
     for (const sc of scenarioStates(n.scenarios, n.evals)) {      // [] when no yatsu.md
       const bucket = sc.state === 'missing' ? 'empty' : sc.state

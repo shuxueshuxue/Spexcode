@@ -178,12 +178,12 @@ body {
 .react-flow__controls-button:hover { background: var(--panel); }
 .react-flow__controls-button svg { fill: var(--ink); }
 
-/* ---- node: two stacked rows — row 1 the thin file-tree line (dot · title · version), row 2 the
-   live editors' avatars or "last edited … ago". A touch wider than the single-line era for titles. ---- */
+/* ---- node: two stacked rows — row 1 the thin file-tree line (dot · title, op glyphs OR bare age at
+   the right edge), row 2 the marks (version · badges) and the live editors' avatars. ---- */
 .spec-node {
   position: relative;
   display: flex; flex-direction: column; justify-content: center; gap: 3px;
-  width: 220px; min-height: 46px; padding: 5px 9px;
+  width: 176px; min-height: 46px; padding: 5px 9px;
   background: var(--panel); border: 1px solid var(--line); border-radius: 4px;
   transition: border-color .12s;
 }
@@ -193,12 +193,13 @@ body {
 .spec-node.drift.focused { border-color: var(--yellow); outline-color: var(--yellow); }
 
 .node-row1 { display: flex; align-items: center; gap: 7px; }
-.node-row2 { display: flex; align-items: center; min-height: 18px; }
+.node-row2 { display: flex; align-items: center; gap: 7px; min-height: 18px; }
 
 .node-dot { position: relative; width: 7px; height: 7px; border-radius: 2px; flex: none; } /* square tick */
 .pulse { position: absolute; inset: 0; border-radius: 2px; animation: pulse 1.6s ease-out infinite; }
 @keyframes pulse { 0% { transform: scale(1); opacity: .6; } 100% { transform: scale(2.6); opacity: 0; } }
 .node-title { font-size: 12px; font-weight: 600; color: var(--ink2); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.node-ago { font-size: 10px; color: var(--muted); flex: none; white-space: nowrap; }
 .node-ver { font-size: 10px; color: var(--muted); flex: none; }
 
 /* expandable hint: a small ▸N tab riding the node's RIGHT edge (the direction children open), shown only
@@ -213,10 +214,8 @@ body {
 }
 .spec-node.focused .node-expand { color: var(--blue); border-color: var(--blue); }
 
-/* ---- row 2: editor avatars · or "last edited … ago" ---- */
+/* ---- row 2: marks · editor avatars ---- */
 .node-editors { display: flex; align-items: center; gap: 3px; }
-.node-lastedit { font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.node-lastedit b { font-weight: 600; color: var(--ink2); }
 .av-more { font-size: 9px; font-weight: 700; color: var(--muted); margin-left: 1px; }
 
 /* @@@ avatar - the generated face (avatar.jsx). `av-face` is the coloured tile; shape variants change
@@ -943,12 +942,13 @@ body {
 }
 .fv-head:hover { background: var(--panel2); }
 .fv-thread.open > .fv-head { background: color-mix(in srgb, var(--blue) 10%, var(--panel2)); }
-/* the kind tag — a small uppercase pill; proposal leans blue, note stays muted. */
-.fv-kind {
+/* the store tag ([[issues]]) — a small uppercase pill naming where the issue lives; local leans blue,
+   a forge host stays muted. The one visible trace of storage. */
+.fv-store {
   flex: none; font-size: 9.5px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
   padding: 2px 6px; border-radius: 3px; border: 1px solid var(--line); color: var(--muted);
 }
-.fv-kind-proposal { color: var(--blue); border-color: color-mix(in srgb, var(--blue) 40%, var(--line)); }
+.fv-store-local { color: var(--blue); border-color: color-mix(in srgb, var(--blue) 40%, var(--line)); }
 .fv-concern { flex: 1 1 auto; min-width: 120px; color: var(--ink); font-weight: 600; }
 /* status badge — open=blue, accepted/landed=green, rejected=red; anything else falls back to muted. */
 .fv-status {
@@ -970,6 +970,9 @@ body {
 .fv-chip:hover { background: var(--blue); color: var(--paper); border-color: var(--blue); }
 .fv-counts { flex: none; display: flex; gap: 10px; margin-left: auto; }
 .fv-count { color: var(--muted); font-size: 10.5px; }
+/* a forge issue's permalink — read here, discussed there. */
+.fv-link { color: var(--blue); font-size: 10.5px; text-decoration: none; }
+.fv-link:hover { text-decoration: underline; }
 /* the in-place expansion: the thread body + its signed replies, indented under the header. */
 .fv-body { padding: 4px 16px 14px 16px; border-top: 1px dashed var(--line); background: var(--paper); }
 .fv-text { font-family: var(--mono); font-size: 12px; line-height: 1.6; color: var(--ink2); white-space: pre-wrap; }
@@ -978,7 +981,7 @@ body {
 .fv-reply-by { color: var(--blue); font-weight: 600; }
 .fv-reply-at { color: var(--muted); }
 
-/* the human write path ([[forum-view]]): a top toolbar (New) + a reply composer per thread + a New form. */
+/* the human write path ([[issues-view]]): a top toolbar (New) + a reply composer per local thread + a New form. */
 .fv-wrap { width: 100%; display: flex; flex-direction: column; }
 .fv-toolbar { display: flex; align-items: center; gap: 12px; padding: 8px 16px; border-bottom: 1px solid var(--line); }
 .fv-new-btn {
@@ -1003,12 +1006,6 @@ body {
   border: 1px solid var(--blue); padding: 4px 14px; border-radius: 4px; cursor: pointer;
 }
 .fv-send:disabled { opacity: 0.5; cursor: default; }
-.fv-kindtoggle { display: flex; gap: 6px; }
-.fv-kind-opt {
-  font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
-  padding: 3px 10px; border-radius: 3px; border: 1px solid var(--line); color: var(--muted); background: var(--paper); cursor: pointer;
-}
-.fv-kind-opt.on { color: var(--blue); border-color: var(--blue); background: color-mix(in srgb, var(--blue) 12%, var(--paper)); }
 
 .si-content { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--paper); }
 

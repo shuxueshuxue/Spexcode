@@ -26,7 +26,10 @@ answer.
   still open) or a *remove* (it left the open set — closed, merged, deleted, or its `Spec:` marker
   dropped). `apply` folds one delta in, keyed by number, so it is **idempotent and order-tolerant** — a
   duplicated or out-of-order delta re-sets the same key; a remove of an absent key is a no-op.
-- **View** = `resolveLinks` over the cached set.
+- **View** = `resolveLinks` over the cached set. The cache also exposes the raw set itself (`state()`),
+  because one consumer — the unified Issue port (spec-cli's [[issues]]) — needs *every* cached issue,
+  linked or not, to map onto the one Issue type; resolution stays the only *derived* view, so there is
+  still no second answer to disagree with the full one.
 
 **Reconcile is the source of truth; sources are only hints.** A live source (an ETag-conditional poll, or
 a forge webhook) may drop, duplicate, or re-order deltas, so it is never trusted as a clean stream.

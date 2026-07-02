@@ -15,8 +15,10 @@ drivers** behind it. The name is the seam, never the vendor.
 Unlike a projection, the port **reads the forge**. Its two verbs fetch a host's work objects —
 `listIssues() → ForgeIssue[]` (issues of **all** states, so closed work stays linkable, not just live
 issues) and `listPRs() → ForgePR[]` (open PRs). `ForgeIssue` is the small stable subset an
-issue collapses to on every host (number, title, body, url, state, labels — the body is where the
-`Spec: <id>` marker lives); `ForgePR` adds `headRefName` (the `node/<id>` branch = a free structural link)
+issue collapses to on every host (number, title, body, url, state, labels, author, createdAt — the body is
+where the `Spec: <id>` marker lives; author/createdAt are what lets a forge issue stand beside a forum
+thread as the same object in the unified Issue port, spec-cli's [[issues]], with a `by` and a `created`);
+`ForgePR` adds `headRefName` (the `node/<id>` branch = a free structural link)
 and `closesIssues` (the issue numbers it closes, for transitive linking). These vendor-neutral shapes are
 exactly what lets one port cover GitHub/GitLab/Bitbucket.
 

@@ -35,10 +35,6 @@ export function aggregateState(states) {
   return 'pass'                                     // every declared scenario fresh & passing
 }
 
-export function nodeScore(scenarios, evals) {
-  return aggregateState(scenarioStates(scenarios, evals))
-}
-
 export function ScenarioCount({ scenarios, evals }) {
   const t = useT()
   const states = scenarioStates(scenarios, evals)

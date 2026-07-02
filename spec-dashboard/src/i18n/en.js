@@ -44,11 +44,11 @@ export default {
   },
 
   time: {
-    justNow: 'just now',
-    minutes: ({ n }) => `${n}m ago`,
-    hours: ({ n }) => `${n}h ago`,
-    days: ({ n }) => `${n}d ago`,
-    weeks: ({ n }) => `${n}w ago`,
+    justNow: 'now',
+    minutes: ({ n }) => `${n}m`,
+    hours: ({ n }) => `${n}h`,
+    days: ({ n }) => `${n}d`,
+    weeks: ({ n }) => `${n}w`,
   },
 
   legend: {

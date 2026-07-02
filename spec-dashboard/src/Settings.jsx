@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react'
-import Modal from './Modal.jsx'
 import { useI18n, LANGUAGES } from './i18n/index.jsx'
 import { ACT, keyCap } from './keymap.js'
 import { keysOf, isCustom, setBinding, resetBindings } from './bindings.js'
 import { THEMES, getTheme, applyTheme } from './theme.js'
 
-// @@@ Settings - the centered settings popup (`,`), rendered in the shared Modal so it matches the help
-// modal. It accretes sections (see the `settings` spec): today LANGUAGE and SHORTCUTS. The shortcuts
-// section is the EDITABLE twin of the read-only help legend — both project the one keymap registry
-// (keymap.js). A row's keyboard cell is clicked to capture the next key as that action's new binding
-// (saved via bindings.js to localStorage); structural rows (nav, the n/d chords) are shown but fixed.
+// @@@ Settings - the settings PAGE (`,`, or the sidebar's bottom entry — #/settings, [[side-nav]]): a
+// routed page like every other top-level surface, not a popup. It accretes sections (see the `settings`
+// spec): today LANGUAGE, THEME and SHORTCUTS. The shortcuts section is the EDITABLE twin of the read-only
+// help legend — both project the one keymap registry (keymap.js). A row's keyboard cell is clicked to
+// capture the next key as that action's new binding (saved via bindings.js to localStorage); structural
+// rows (nav, the n/d chords) are shown but fixed.
 // (Game-controller mapping is NOT here — it lives outside the browser as the specs-controller profile.)
 
 // Shortcuts editor — one row per action; a click on a rebindable cell captures the next keypress.
@@ -57,12 +57,14 @@ function Shortcuts({ t }) {
   )
 }
 
-export default function Settings({ onClose }) {
+export default function Settings() {
   const { t, lang, setLang } = useI18n()
   const [theme, setThemeState] = useState(getTheme)   // the live-picked theme, echoed in the picker
   const pickTheme = (code) => { applyTheme(code); setThemeState(code) }
   return (
-    <Modal title={t('settings.title')} closeLabel={t('settings.close')} className="settings" onClose={onClose}>
+    <div className="page-pane page-settings">
+      <div className="settings-body">
+      <h1 className="page-title">{t('settings.title')}</h1>
       <section className="legend-sec">
         <div className="legend-h">{t('settings.secLanguage')}</div>
         <div className="set-langs">
@@ -94,6 +96,7 @@ export default function Settings({ onClose }) {
         </div>
       </section>
       <Shortcuts t={t} />
-    </Modal>
+      </div>
+    </div>
   )
 }

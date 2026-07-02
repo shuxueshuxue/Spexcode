@@ -2,7 +2,7 @@
 title: issues-view
 status: active
 hue: 200
-desc: The dashboard's ONE issues page — a second button beside New Session opens the merged Issue list ([[issues]]): local forum threads and forge issues mixed, store-tagged, rendered verbatim from /api/issues; node chips focus the graph; a human replies / opens a local thread in place, forge items link out.
+desc: The dashboard's ONE issues page — the Forum route (#/forum, [[side-nav]]) holding the merged Issue list ([[issues]]): local forum threads and forge issues mixed, store-tagged, rendered verbatim from /api/issues; node chips focus the graph; a human replies / opens a local thread in place, forge items link out.
 code:
   - spec-dashboard/src/IssuesView.jsx
   - spec-dashboard/src/FeedSection.jsx
@@ -14,20 +14,19 @@ code:
 
 Issues are one object over every store ([[issues]]), and a human wants **one place** to read them — an
 agent's local taste proposal and a GitHub issue on the same node belong on the same page, not on two
-surfaces the user must correlate. So the dashboard grows a second top button beside New Session that opens
-the **issues page**. The dashboard stays a **thin window** over the CLI's truth, never a second source —
+surfaces the user must correlate. So the dashboard carries ONE **Forum page** for them, a top-level page
+of its own. The dashboard stays a **thin window** over the CLI's truth, never a second source —
 it renders what `/api/issues` returns and computes nothing, and every write goes through the SAME
 reply/propose the CLI uses, committed straight to the trunk.
 
 ## expanded spec
 
-- **Entries — the session board is the MAIN path.** The [[session-console]] top row ([[term-input]]'s
-  `si-toprow`) carries an **Issues** pill beside `＋ New Session`, and the same console owns **⌥+F** — the
-  twin of ⌥+N — snapping straight to the issues page (a third `active` mode alongside `new` and a
-  session). That console-side entry is the primary one: a user reaches the forum from the session board,
-  not by first hunting a node on the graph. The board's bare **`f` key** ([[keyboard-nav]]'s declarative
-  keymap table, rebindable) exists as the secondary direct jump. All entries land on the ONE page —
-  reusing the console overlay keeps it one surface, never a new route.
+- **Entries — the forum is its OWN page.** The page lives at `#/forum` with its own [[side-nav]] rail
+  entry — bookmarkable, reloadable, a peer of the graph and the session board. The other doors all route
+  to the same page: the [[session-console]] top row keeps an **Issues** pill beside `＋ New Session` and
+  the console keeps **⌥+F** — the twin of ⌥+N — for the user already working the board; the board's bare
+  **`f` key** ([[keyboard-nav]]'s declarative keymap table, rebindable) is the direct jump from the
+  graph. All entries land on the ONE page — one surface, many doors; Esc routes home to the graph.
 - **The panel is two pinned regions — importance by position and area, never tabs.** The page's target
   shape: an **evals region on top** (the [[evals-feed]] section — evals outrank threads, so they get the
   prime position) and the **threads region below** (this node's merged list). The layout iron rule: the
@@ -50,8 +49,8 @@ reply/propose the CLI uses, committed straight to the trunk.
   author, status, and its linked-node **chips**. Store never changes the
   shape, only two affordances: a **local** issue expands in place to its body + signed replies and takes a
   reply; a **forge** issue carries its permalink and is discussed on the forge — read here, written there.
-- **Node chips focus the graph.** An issue's node chips are clickable — a click closes the console and
-  **focuses that node** on the board, so the page stays anchored to the graph it discusses.
+- **Node chips focus the graph.** An issue's node chips are clickable — a click routes to the graph page
+  and **focuses that node**, so the page stays anchored to the graph it discusses.
 - **A human writes from here — to the local store.** An expanded local issue carries a **reply composer**
   (a textarea + Send); the top of the view carries a **New** affordance that opens a fresh local issue
   (a one-line concern, optional `[[node]]` links, an optional body). Both POST to

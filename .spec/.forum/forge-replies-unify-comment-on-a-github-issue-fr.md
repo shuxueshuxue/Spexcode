@@ -1,7 +1,7 @@
 ---
 concern: forge replies unify: comment on a GitHub issue FROM the forum page [[issues]]
 by: 60b8fd9a-08c5-4d8e-9139-84d75c065a8c
-status: open
+status: landed
 nodes: issues
 created: 2026-07-02T17:05:07.159Z
 ---

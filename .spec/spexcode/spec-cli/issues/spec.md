@@ -46,6 +46,15 @@ network. The board fold attaches each node's merged issues (`issues` / open subs
 per-node surface — tile badge, focus panel, node-info Issues tab, the [[issues-view]] page — reads the
 same mixed set with no second path.
 
-**Writes stay where they're owned.** v1 writes (`spex propose` / `reply` / `sign` / `resolve`,
-and the dashboard's human POSTs) go to the local store only; the forge remains read-only ([[spec-forge]]'s
-non-negotiable). Promoting a local issue to the forge is a future verb on this node, not a hidden branch.
+**Writes stay where they're owned.** Content writes (`spex propose` / `reply` / `sign` / `resolve`,
+and the dashboard's human POSTs) go to the local store only. The one cross-store verb is **promotion** —
+`spex issues promote <id>`: a local concern that outgrows the repo (needs CI or external visibility) moves
+to the forge as one recorded action instead of a lossy hand-copy. It composes the forge issue from the
+thread itself — concern → title; body + the `Spec: <nodes>` marker + the evidence hashes + a provenance
+footer — and creates it through the [[port]]'s driver (the driver stays the only thing that touches the
+network; no second `gh` call-site). The marker is the round-trip: the promoted issue links back to the
+same nodes through the EXISTING tracer read, so promotion adds no linking code. Order makes failure safe:
+the forge issue is created FIRST, and only then is the local thread closed out — resolved `landed` with a
+reply carrying the permalink (its file remains as the recorded trail); an unreachable forge fails loud
+with the local thread untouched, and only an `open` thread promotes. The two-plane contract is untouched
+throughout: a forge issue is execution, never node state.

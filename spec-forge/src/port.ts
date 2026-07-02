@@ -24,4 +24,7 @@ export interface ForgeDriver {
   readonly host: string
   listIssues(): Promise<ForgeIssue[]>
   listPRs(): Promise<ForgePR[]>
+  // the port's ONE write verb — used solely by the unified Issue port's promotion (spec-cli issues.ts),
+  // so the driver stays the only network toucher. The tracer never calls it; node state is never touched.
+  createIssue(input: { title: string; body: string }): Promise<{ number: number; url: string }>
 }

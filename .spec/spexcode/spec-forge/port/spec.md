@@ -37,8 +37,13 @@ driver asks for the field, and **only** on gh's specific "unknown JSON field" re
 (`closesIssues` empty) and warns once. Every other failure (no `gh`, no auth, no repo) is a different error
 and still throws loud — the degrade is the narrow field-version case alone, not a blanket swallow.
 
-The contract holds at the port: it is **read-only**. A driver fetches and returns objects and writes
-nothing — not to the forge, and never to a node's version or status (which stays git-derived).
+The port carries one **write verb**: `createIssue({title, body}) → {number, url}`, existing solely so the
+unified Issue port's *promotion* (spec-cli's [[issues]]: a local thread moving to the forge) goes through
+this same seam — the driver stays the ONLY thing that touches the network, promotion included, rather
+than a second vendor call-site growing in product code. The github driver wraps `gh issue create`. The
+**tracer** (links/freshness/the board fold) remains read-only end to end, and the deeper contract is
+untouched: nothing here ever writes a node's version or status (which stays git-derived) — a created
+issue is execution-plane work, never graph state.
 
 Out of scope here: the link resolution itself ([[links]]), the CLI surface ([[forge-cli]]), and any second
 driver (gitlab/bitbucket wrapping their own CLI later).

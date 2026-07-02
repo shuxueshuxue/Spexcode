@@ -16,14 +16,17 @@ scenarios:
   - name: forum-round-trip
     tags: [cli]
     code: spec-cli/src/proposals.ts
+    related: [spec-cli/src/issues.ts]
     description: >-
-      Through the real CLI, open a proposal (`spex propose "<concern>" --node <id> --body <text>`), then
-      read it (`spex proposals`), then have another session sign it, reply to it, and resolve it
-      (`spex propose sign|reply|resolve <id>`). Read back with `spex proposals --all --json`.
+      Through the real CLI, open a local issue (`spex propose "<concern>" --node <id> --evidence <hash>
+      --body <text>`), then read it (`spex issues` — the one read over every store), then have another
+      session sign it, reply to it, and resolve it (`spex propose sign|reply|resolve <id>`). Read back with
+      `spex issues --all --store local --json`.
     expected: >-
-      propose prints the minted id and commits the thread; `spex proposals` lists the open concern with its
-      author + linked node; sign/reply/resolve each report success; the final `--json` shows the concern with
-      by=author, status=accepted, the signer, and the reply (by/at/body) — every write round-trips faithfully.
+      propose prints the minted id and commits the thread; `spex issues` lists the open concern store-tagged
+      `local` with its author + linked node; sign/reply/resolve each report success; the final `--json` shows
+      the concern with store=local, by=author, status=accepted, the evidence hash, the signer, and the reply
+      (by/at/body) — every write round-trips faithfully through the unified read.
   - name: data-not-contract
     tags: [cli]
     code: spec-cli/src/proposals.ts
@@ -62,8 +65,8 @@ scenarios:
     code: spec-cli/src/proposals.ts
     related: [spec-cli/templates/hooks/post-merge, spec-cli/src/layout.ts]
     description: >-
-      Read `spex proposals status` with no config (default). Then `spex proposals off`, inspect spexcode.json,
-      merge a node branch. Then `spex proposals on` and merge another node branch.
+      Read `spex propose status` with no config (default). Then `spex propose off`, inspect spexcode.json,
+      merge a node branch. Then `spex propose on` and merge another node branch.
     expected: >-
       Default status is ON with no config needed. `off` writes `proposals.enabled: false` to spexcode.json and
       `status` reports OFF; the next node merge prints NO nudge (and `spex propose nudge <node>` is empty). `on`

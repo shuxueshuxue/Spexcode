@@ -37,12 +37,12 @@ function buildEntries(specs, sessions) {
       name: `${s.title || s.id} ${s.id}`, desc: s.desc || '', body: s.body || '',
     })
     for (const i of s.issues || []) {
-      const open = (i.state || '').toLowerCase() === 'open'
+      const open = i.status === 'open'
       entries.push({
-        kind: 'issue', key: `issue:${s.id}:${i.number}`, target: s.id,
+        kind: 'issue', key: `issue:${s.id}:${i.id}`, target: s.id,
         color: open ? 'var(--green)' : 'var(--muted)',
-        title: i.title, sub: `#${i.number} · ${path}`,
-        name: i.title || '', desc: `#${i.number}`, body: '',
+        title: i.concern, sub: `${i.id} · ${path}`,
+        name: i.concern || '', desc: i.id, body: '',
       })
     }
     for (const sc of scenarioStates(s.scenarios, s.evals)) {

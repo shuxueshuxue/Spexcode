@@ -100,9 +100,8 @@ Specs / graph
   yatsu <sub>           measure a node's scenarios and keep score: scan | eval [.|<node>] [--scenario N] (--pass|--fail) [--note T] [--image P|--result P|-] | show [.|<node>] [--json] | clean [--keep-latest|--all]
   hooks <sub>           harness-agnostic hook system: compile [--out <file>] (flatten surface:hook nodes into the per-session manifest the dispatcher reads)
   self <sub>            diagnose how the workflow reaches THIS self-launched agent: doctor (default) | contract | env
-  propose "<concern>"   file a taste proposal in the async forum (off-mainline smells welcome)  [--node <id>…] [--body -|<text>]  | reply|sign|resolve <id> …
-  note "<annotation>"   leave a durable node annotation / heads-up in the forum (no change-intent)  [--node <id>…] [--body -|<text>]
-  proposals             read the forum — proposals + notes (the drain view)  [--node <id>] [--kind proposal|note] [--all] [--json]  | on|off|status
+  issues                THE issue read — local forum threads + forge issues, one merged store-tagged list (the drain view)  [--node <id>] [--store local|github] [--all] [--json]
+  propose "<concern>"   open a local issue in the git forum (taste, annotations, off-mainline smells all welcome)  [--node <id>…] [--evidence <hash>…] [--body -|<text>]  | reply|sign|resolve <id> …  | on|off|status
   review <SEL>          manager cockpit: review a session (ahead·merge-base diff·gates·proposal)  [--json]
   review proof <SEL>    render the session's proof of work — self-contained HTML, fully derived (diff·measured yatsu loss·gates)  [--open|--out P|--json]
   merge <SEL>           manager cockpit: gated atomic merge into main (re-checks gates, then closes)  [--keep]
@@ -272,22 +271,16 @@ if (cmd === 'serve') {
   const { runYatsu } = await import('../../spec-yatsu/src/cli.js')
   process.exit(await runYatsu(process.argv.slice(3)))
 } else if (cmd === 'propose') {
-  // @@@ propose - file a taste proposal into the async forum ([[proposals]]): a thing that felt off this
-  // session, even off-mainline. Thin route; all logic (write + commit straight to the trunk, reply/sign/
-  // resolve) lives in proposals.ts. `spex propose "<concern>" [--node id…] [--body -|text]`.
+  // @@@ propose - open a local issue in the git forum ([[proposals]]): a thing that felt off this session,
+  // even off-mainline. Thin route; all logic (write + commit straight to the trunk, reply/sign/resolve,
+  // the on|off toggle) lives in proposals.ts. `spex propose "<concern>" [--node id…] [--body -|text]`.
   const { runPropose } = await import('./proposals.js')
   process.exit(await runPropose(process.argv.slice(3)))
-} else if (cmd === 'note') {
-  // @@@ note - open a `kind: note` forum thread ([[proposals]]): a durable annotation / heads-up / Q&A on a
-  // node, no change-intent. Same store + reply/sign/resolve as a proposal; the verb is the kind. Thin route.
-  const { runNote } = await import('./proposals.js')
-  process.exit(await runNote(process.argv.slice(3)))
-} else if (cmd === 'proposals') {
-  // @@@ proposals - the forum READ (a supervisor's / human's drain view): threads (proposals + notes) with
-  // their reply threads + signers, straight from the trunk's .spec/.forum. `spex proposals [--node id]
-  // [--kind proposal|note] [--all] [--json]`.
-  const { runProposals } = await import('./proposals.js')
-  process.exit(await runProposals(process.argv.slice(3)))
+} else if (cmd === 'issues') {
+  // @@@ issues - THE issue read ([[issues]]): local forum threads + forge issues as ONE store-tagged list,
+  // the supervisor's/human's drain view. `spex issues [--node id] [--store local|github] [--all] [--json]`.
+  const { runIssues } = await import('./issues.js')
+  process.exit(await runIssues(process.argv.slice(3)))
 } else if (cmd === 'hooks') {
   // @@@ hooks - compile the surface:hook nodes into the per-session manifest the (pure-shell) dispatcher
   // reads. Thin route, like forge/yatsu. `spex hooks compile [--out <file>]`. Logic in hooks.ts.

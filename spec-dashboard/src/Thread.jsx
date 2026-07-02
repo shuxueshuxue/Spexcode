@@ -3,11 +3,13 @@ import { SpecBody } from './NodeView.jsx'
 import { useMentionAutocomplete } from './mentions.jsx'
 import { useT } from './i18n/index.jsx'
 
-// The ONE local-thread UI ([[issues-view]]): the reply list + the reply composer, shared by every home a
-// local Issue thread renders in — the issue detail and the eval detail ([[annotator]]). The composer is
-// delivery-agnostic: the home passes `onSend(text)` (reply to an existing thread, or lazily create one),
-// so the thread's binding stays the caller's concern while the writing surface stays one component — an
-// @-mention dispatches wherever it is typed, because every send lands on the same forum write path.
+// The ONE thread UI ([[issues-view]]): the reply list + the reply composer, shared by every home an
+// Issue thread renders in — the issue detail (BOTH stores: a forge issue's GitHub comments are the same
+// replies[], [[issues]]) and the eval detail ([[annotator]]). The composer is delivery-agnostic: the home
+// passes `onSend(text)` (reply to an existing thread — the server routes it by the issue's store, forum
+// commit or real forge comment — or lazily create one), so the thread's binding stays the caller's
+// concern while the writing surface stays one component — an @-mention dispatches wherever it is typed,
+// because every send lands on the same store-routed write path.
 
 export function Replies({ replies }) {
   return replies.map((r, i) => (
@@ -30,6 +32,7 @@ export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = nul
   const t = useT()
   const [body, setBody] = useState('')
   const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')       // a failed send (a forge can be unreachable) surfaces, never swallows
   const taRef = useRef(null)
   const ac = useMentionAutocomplete({ inputRef: taRef, value: body, setValue: setBody, specs, sessions, focusId, up: true })
   const send = async () => {
@@ -38,7 +41,8 @@ export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = nul
     setBusy(true)
     try {
       const res = await onSend(text)
-      if (res?.ok) { setBody(''); await onDone?.(res.outcomes || '') }
+      if (res?.ok) { setBody(''); setErr(''); await onDone?.(res.outcomes || '') }
+      else setErr(res?.error || 'reply failed')
     } finally { setBusy(false) }
   }
   return (
@@ -51,7 +55,7 @@ export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = nul
         {ac.menuEl}
       </div>
       <div className="fv-actions">
-        <span className="fv-hint">{t('session.issuesMentionHint')}</span>
+        <span className="fv-hint">{err || t('session.issuesMentionHint')}</span>
         <button type="button" className="fv-send" disabled={busy || !body.trim()} onClick={send}>
           {busy ? t('session.issuesSending') : t('session.issuesSend')}
         </button>

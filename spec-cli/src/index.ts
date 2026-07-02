@@ -4,9 +4,9 @@ import { cors } from 'hono/cors'
 import { etag } from 'hono/etag'
 import { createNodeWebSocket } from '@hono/node-ws'
 import { loadSpecs, loadSpecsLite, specContent, specHistory, specDiffAt, loadConfig } from './specs.js'
-import { proposalsEnabled, forumReply, forumPost } from './proposals.js'
-import { mergedIssues } from './issues.js'
-import { residentForgeState } from '../../spec-forge/src/resident.js'
+import { proposalsEnabled, forumPost } from './proposals.js'
+import { mergedIssues, replyIssue } from './issues.js'
+import { residentForgeState, refreshForgeNow } from '../../spec-forge/src/resident.js'
 import { summarize } from './mentions.js'
 import { resolveLayout, mainBranch } from './layout.js'
 import { buildBoard } from './board.js'
@@ -131,20 +131,31 @@ app.get('/api/issues', etag(), (c) =>
     enabled: proposalsEnabled(),
     issues: mergedIssues({ host: 'github', state: residentForgeState() }, loadSpecsLite().map((s) => s.id)),
   }))
-// the WRITE surface ([[proposals]] / [[issues-view]]) — the human write path, LOCAL store only (the forge
-// stays read-only). Both go through the SAME reply/propose the CLI uses (git-committed straight to the
-// trunk, author `'human'`) and dispatch any @-mention in the text (a human summons an agent from the
-// issues page). `outcomes` is the one-line @-dispatch summary the dashboard echoes. Honor the on/off
-// switch: 403 when the feature is OFF. A forge id ('github#N') is simply not a local thread → 404.
+// the WRITE surface ([[proposals]] / [[issues-view]]) — the human reply path, STORE-ROUTED through the one
+// reply verb ([[issues]] replyIssue): a local id git-commits to the trunk forum, a forge id ('github#N')
+// posts a REAL comment through the driver; either way the text's @-mentions dispatch (a human summons an
+// agent from the issues page). `outcomes` is the one-line @-dispatch summary the dashboard echoes. The
+// server owns its freshness: a forge write forces the resident slice's read-back before answering, so the
+// reload that follows shows the comment. Honor the on/off switch: 403 when the feature is OFF; an unknown
+// local thread → 404; a failed forge write → 502 with the driver's own message (fail loud, never queued).
 app.post('/api/issues/:id/reply', async (c) => {
   if (!proposalsEnabled()) return c.json({ error: 'forum workflow is off' }, 403)
   const body = await c.req.json().catch(() => ({}))
   const text = typeof body?.body === 'string' ? body.body : ''
   if (!text.trim()) return c.json({ error: 'empty reply' }, 400)
+  const id = c.req.param('id')
   try {
-    const { thread, outcomes } = await forumReply(c.req.param('id'), text, 'human')
-    return c.json({ ok: true, replies: thread.replies, outcomes: summarize(outcomes) })
-  } catch (e) { return c.json({ error: String((e as Error).message || e) }, 404) }   // unknown thread → 404
+    // the mention prompt's node context, from the same resident merge the GET serves
+    const node = id.includes('#')
+      ? mergedIssues({ host: 'github', state: residentForgeState() }, loadSpecsLite().map((s) => s.id)).find((i) => i.id === id)?.nodes[0] ?? null
+      : null
+    const r = await replyIssue(id, text, { author: 'human', node })
+    if (r.store !== 'local') await refreshForgeNow()
+    return c.json({ ok: true, replies: r.replies, url: r.url, outcomes: summarize(r.outcomes) })
+  } catch (e) {
+    const msg = String((e as Error).message || e)
+    return c.json({ error: msg }, id.includes('#') ? 502 : 404)
+  }
 })
 app.post('/api/issues', async (c) => {
   if (!proposalsEnabled()) return c.json({ error: 'forum workflow is off' }, 403)

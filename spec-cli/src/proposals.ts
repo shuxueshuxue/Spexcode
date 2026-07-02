@@ -291,9 +291,13 @@ export async function runPropose(args: string[]): Promise<number> {
       const id = bare(args.slice(1))[0]
       const body = readBody(args)
       if (!id || !body) { console.error('usage: spex propose reply <issue-id> --body -|<text>'); return 2 }
-      const p = reply(id, body)
-      console.log(`replied to '${id}' — ${p.replies.length} post(s) in thread`)
-      const s = summarize(await dispatchMentions(body, { threadId: id, node: p.nodes[0] || null, author: currentSession() }))
+      // the ONE store-routed reply verb ([[issues]]): a forge id posts a real comment through the driver,
+      // a local id commits to the forum — the same command either way (dynamic import: no static cycle).
+      const r = await (await import('./issues.js')).replyIssue(id, body)
+      console.log(r.store === 'local'
+        ? `replied to '${id}' — ${r.replies?.length} post(s) in thread`
+        : `commented on '${id}' — ${r.url}`)
+      const s = summarize(r.outcomes)
       if (s) console.log(`  ${s}`)
       return 0
     }

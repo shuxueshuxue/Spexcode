@@ -27,6 +27,20 @@ scenarios:
       code). The local thread ends `landed` with a permalink reply as its trail. An unknown id and a
       non-open thread both refuse loudly; a failed create leaves the local thread untouched (create-first
       ordering).
+  - name: forge-reply
+    tags: [cli]
+    code: spec-cli/src/issues.ts
+    related: [spec-forge/src/drivers/github.ts, spec-cli/src/mentions.ts]
+    description: >-
+      Against the REAL forge, reply to a `github#N` issue through the one store-routed verb (`spex propose
+      reply github#N --body …` / `POST /api/issues/:id/reply`), then read the merged list back.
+    expected: >-
+      A REAL comment lands on the GitHub issue (visible via `gh issue view`), and the next merged read
+      carries it in that issue's replies[] in the SAME Reply shape a forum thread has (by = the forge
+      commenter, at, body) — the read-back, never a local echo. An @new/@session in the reply text
+      dispatches exactly as a local reply's would (the mention fires on the words, not the store). An
+      unreachable forge fails loud with nothing queued; the local store is untouched throughout.
+  - name: degrade
     tags: [cli]
     code: spec-cli/src/issues.ts
     description: >-
@@ -42,4 +56,5 @@ scenarios:
 YATU through the real `spex issues` against a real forge (`gh`) and the real trunk forum — never a mocked
 driver. The merged-read is measured in the live repo itself (its GitHub issues + a genuine local concern);
 the degrade leg in a throwaway repo with no forge. The loss is the gap between the one-object claim and
-the reading: same shape both stores, markers invisible downstream, loud local-only degrade.
+the reading: same shape both stores — threads included — markers invisible downstream, a forge reply a
+real round-tripped comment, loud local-only degrade.

@@ -1,7 +1,7 @@
 ---
 title: annotator
 status: pending
-hue: 250
+hue: 200
 desc: Opening a video eval plays the clip with a clickable step ruler; the human scrubs, circles, comments — and the output files through existing seams only, never a new one.
 related:
   - spec-yatsu/src/evaltab.ts

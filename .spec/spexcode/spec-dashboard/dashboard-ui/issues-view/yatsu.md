@@ -23,8 +23,10 @@ scenarios:
       from the evals group into the issue group, k back up — and finally type 'j' inside the New-form
       input.
     expected: >-
-      The page is a two-column grid: the LEFT column scrolls (both group heads sticky within it), the
-      RIGHT detail pane scrolls independently, the page itself never scrolls. j/k move ONE visible
+      The page is a two-column grid: the LEFT column holds TWO bounded regions — the evals group caps at
+      ~half and scrolls itself, the issue group is ALWAYS on screen below it (its head visible without any
+      scrolling, however many evals exist) — the RIGHT detail pane scrolls independently, the page itself
+      never scrolls. The list renders INSTANTLY from app-resident issues (no per-mount fetch). j/k move ONE visible
       selection across BOTH groups (evals rows first, then issue rows) and the detail pane follows the
       selection immediately — selection IS detail, nothing expands inside the list. Deep j keeps the
       selected row inside the left column's viewport. A key typed into an input/textarea reaches the

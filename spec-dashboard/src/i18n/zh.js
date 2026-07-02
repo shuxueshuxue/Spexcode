@@ -44,10 +44,10 @@ export default {
 
   time: {
     justNow: '刚刚',
-    minutes: ({ n }) => `${n} 分钟前`,
-    hours: ({ n }) => `${n} 小时前`,
-    days: ({ n }) => `${n} 天前`,
-    weeks: ({ n }) => `${n} 周前`,
+    minutes: ({ n }) => `${n} 分钟`,
+    hours: ({ n }) => `${n} 小时`,
+    days: ({ n }) => `${n} 天`,
+    weeks: ({ n }) => `${n} 周`,
   },
 
   legend: {
@@ -212,8 +212,6 @@ export default {
   },
 
   specNode: {
-    lastEdited: '最后编辑于',
-    noVersions: '尚无版本',
     liveEditors: ({ n }) => `${n} 个实时编辑者`,
     more: ({ n }) => `还有 ${n} 个`,
     editorTitle: ({ node, status, id }) => `${node} · ${status} — ${id}`,

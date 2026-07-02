@@ -24,9 +24,9 @@
     "node": ">=22"
   },
   "scripts": {
-    "api": "npm --prefix spec-cli run serve",
-    "web": "npm --prefix spec-dashboard run dev",
-    "lint": "npm --prefix spec-cli run -s lint",
+    "api": "cd spec-cli && npm run serve",
+    "web": "cd spec-dashboard && npm run dev",
+    "lint": "cd spec-cli && npm run -s lint",
     "hooks": "bash scripts/install-hooks.sh",
     "prepack": "node scripts/prepack.mjs",
     "postinstall": "node -e \"try{require('fs').readdirSync('node_modules/node-pty/prebuilds').forEach(d=>{try{require('fs').chmodSync('node_modules/node-pty/prebuilds/'+d+'/spawn-helper',0o755)}catch{}})}catch{}\""

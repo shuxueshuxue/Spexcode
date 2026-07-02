@@ -31,6 +31,19 @@ scenarios:
     related:
       - spec-cli/src/init.ts
       - scripts/prepack.mjs
+  - name: dev-loop-launch-no-prefix-leak
+    tags: [cli]
+    description: >
+      Start the dogfood backend the documented way — `npm run api` from the repo root — and read the
+      environment of the spawned `serve` child. Confirms the launch does not hand the backend (and the agents
+      it spawns) a hijacked npm global prefix.
+    expected: |
+      The serve child's environment carries NO `npm_config_prefix` pointing into the repo tree — it is unset,
+      or the real global root (e.g. /opt/node22). A dispatched agent then inherits a clean prefix, so its own
+      `npm i -g` self-update lands in the true global root, not `$repo/spec-cli/lib/node_modules`. A run that
+      exports `npm_config_prefix=$repo/spec-cli` to the child is a failure — the `npm --prefix` footgun.
+    code: package.json
+    related: spec-cli/src/supervise.ts
 ---
 # packaging loss
 

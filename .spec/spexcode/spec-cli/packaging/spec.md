@@ -56,7 +56,11 @@ silently collides two projects.
 `spex dashboard` shares the serve-the-built-dashboard engine with [[public-mode]] — local serve is that
 same gateway on loopback with no TLS and no password. The dogfood monorepo is unaffected: its root keeps
 the `npm run api`/`npm run web` dev loop, and the dist resolver falls back to the sibling
-`spec-dashboard/dist` whenever no bundled copy is present.
+`spec-dashboard/dist` whenever no bundled copy is present. Those root scripts delegate into a sibling
+package with `cd spec-cli && npm run …`, never `npm --prefix spec-cli run …`: npm's `--prefix` is
+overloaded — it also sets the **global install prefix**, which npm exports as `npm_config_prefix` to the
+backend and every agent it launches, silently redirecting those agents' own `npm i -g` self-updates into the
+repo tree instead of the real global root.
 
 The packaging contract is verified as the user would meet it, not by inspecting files: CI builds the tarball,
 installs that tarball into a clean consumer project, runs `npx spex --help`, then runs `spex init` inside a

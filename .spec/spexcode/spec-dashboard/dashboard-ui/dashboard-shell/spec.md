@@ -49,15 +49,18 @@ language pick. To avoid a light-flash before the module boots, `index.html` runs
 in `<head>` that applies the same choice to `<html data-theme>` before first paint. The [[settings]]
 popup carries the live toggle.
 
-**Push-first board — freshest-issued wins.** The shell keeps the board fresh through three paths that all
-funnel into one `reload()` (`/api/board`): a **push** subscription ([[board-stream]]) that reloads the instant
-the backend signals a session-store change, so status and grouping flip without waiting on a timer; an
-**on-demand** reload (a session close/rename calls it so every surface reflects the change at once); and a
-**slow fallback poll** that catches the cold path the push channel doesn't watch (a spec edit/merge, a forge
-issue) and covers an environment where SSE never connects. The tight 4s poll is gone — an untouched board now
-fetches nothing instead of a full snapshot every few seconds. Because several `loadBoard()` requests can be in
-flight together and resolve out of order (an older one carrying an older backend snapshot), the shell stamps
-each call with a monotonic sequence and applies only the latest-issued response — a superseded one is dropped,
-never painted. Without that guard a just-closed session resurrects: the post-close reload paints the row gone,
-then a reload already in flight (snapshotted *before* the worktree removal) lands late and flickers it back.
-The guard makes a removal stick the moment its own reload lands.
+**Push-first board — freshest-issued wins.** The shell keeps the board fresh through three paths. The
+primary is the **delta subscription** ([[board-stream]]/[[board-delta]]): whole boards arrive over the push
+channel — a full on connect, then patches the data layer applies to its unit-map mirror — straight into
+state, no refetch per change; a patch whose chain tag mismatches reopens the stream and re-anchors on the
+fresh full. Second, an **on-demand** `reload()` (`/api/board`): a session close/rename calls it so every
+surface reflects the change at once, and an old backend that only speaks bare `board-changed` downgrades the
+subscription to exactly this refetch path. Third, a **slow fallback poll** that *stands down while push is
+proven alive* (the server cold-ticks the un-watched paths for us then) and stands back up the moment the
+stream errors or downgrades — so an untouched board fetches nothing, yet no environment (SSE-stripping
+proxy, old backend) is ever staler than the poll period. Because pushed boards and in-flight fetches can
+interleave, the shell stamps every application with a monotonic sequence — a pushed board is freshest by
+channel order, so it bumps the sequence and invalidates any older fetch still in flight; a superseded
+response is dropped, never painted. Without that guard a just-closed session resurrects: the post-close
+reload paints the row gone, then a stale in-flight snapshot lands late and flickers it back. The guard makes
+a removal stick the moment its own reload lands.

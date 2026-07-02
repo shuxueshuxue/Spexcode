@@ -30,17 +30,23 @@ reply/propose the CLI uses, committed straight to the trunk.
 - **The page is a MASTER-DETAIL — a full page deserves a full-height detail, never an expansion inside a
   box.** (The earlier pinned-two-region form was conceived for a height-starved overlay; on a routed
   full page it collapsed content into a small scrolling box — the human called it, and the form
-  changed.) The **left column** is ONE scrolling list in two groups — the [[evals-feed]] group leading
-  (evals outrank issues: position expresses it), this node's merged issue group below, each with a
-  sticky group head carrying its own controls (the evals chips; New + the concluded-count chip). The
+  changed.) The **left column** is TWO BOUNDED regions — the [[evals-feed]] group leading (evals outrank
+  issues: position expresses it) sizes to content but CAPS at ~half the column and scrolls itself; the
+  merged issue group takes the rest and is **always on screen** — many evals can never bury it (the
+  pinning law, applied to the list column where it belongs). Each group head is sticky within its own
+  scroller and carries its own controls (the evals chips; New + the concluded-count chip). The
   **right pane** is the full-height DETAIL of the one selection — **selection IS detail** (email-style,
   no Enter, no in-place expansion): an issue renders its markdown body, an eval renders as the
   [[annotator]]. **j/k walk the whole left list across both groups** and the detail follows; a key typed
   into an input is never captured. The section contents are their own nodes (children of this one, owned
   by the video-verification line); this node owns the page shell — the split, the row grammar, the
   selection, and the j/k routing.
-- **One merged list, store-tagged.** The view fetches `GET /api/issues` (`{ enabled, issues }`) — the
-  merged read over every store — and renders each issue **in the order the API returns**: the frontend
+- **One merged list, store-tagged — RESIDENT, never cold-fetched.** The list is app-held state beside the
+  board (one data path): the page renders instantly from it on every visit; freshness inherits the
+  board's own pattern — the push/change signal triggers a throttled refetch, the 15s cold lane backstops
+  (forge-cache updates arrive nowhere else), and `GET /api/issues` answers **304 via ETag** so a no-change
+  refetch costs headers only. A write forces the refetch so it shows up where it lands. The view renders
+  each issue **in the order the API returns**: the frontend
   never re-sorts, and **shows no salience/priority ranking** (recurrence is the drain's judgment, per
   [[proposals]], never an automatic order); signer and reply counts appear as raw data, not a rank.
   **Concluded issues hide by default** — closed / rejected / landed are the archive, not the open work,

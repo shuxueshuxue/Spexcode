@@ -126,7 +126,7 @@ app.get('/api/config', (c) => c.json(loadConfig()))
 // (local forum threads + the resident forge slice), the SAME mergedIssues() the CLI drain reads, verbatim
 // (the dashboard computes nothing over it: no re-sort, no salience ranking). The `enabled` flag mirrors
 // the forum-workflow on/off switch so the frontend hides the view when the feature is OFF.
-app.get('/api/issues', (c) =>
+app.get('/api/issues', etag(), (c) =>
   c.json({
     enabled: proposalsEnabled(),
     issues: mergedIssues({ host: 'github', state: residentForgeState() }, loadSpecsLite().map((s) => s.id)),

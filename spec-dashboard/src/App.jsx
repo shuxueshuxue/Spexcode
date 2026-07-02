@@ -16,7 +16,7 @@ import MobileApp from './MobileApp.jsx'
 import { useRoute, navigate } from './route.js'
 import { useResizable } from './useResizable.js'
 import { useIsMobile } from './useIsMobile.js'
-import { loadBoard, subscribeBoardLive, layout, X_GAP, Y_GAP, projectTitle, projectIcon, faviconHref } from './data.js'
+import { loadBoard, subscribeBoardLive, loadIssues, layout, X_GAP, Y_GAP, projectTitle, projectIcon, faviconHref } from './data.js'
 import { createMomentumScroll } from './scroll.js'
 import { cycleNext } from './cycle.js'
 import { firesKey } from './bindings.js'
@@ -41,7 +41,7 @@ const CHORDS = {
 const CHORD_KEYS = Object.keys(CHORDS)
 const CHORD_LEADERS = new Set(CHORD_KEYS.map((c) => c[0]))
 
-function Dashboard({ specs, sessions, reload, project }) {
+function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues }) {
   // the URL is the page switch ([[side-nav]]): #/graph | #/sessions[/<sel>] | #/forum | #/settings.
   // `page` replaces the old boolean overlay states (sessionUI / settings-modal) — the sidebar, the keyboard,
   // and the address bar all drive the same route.
@@ -535,7 +535,7 @@ function Dashboard({ specs, sessions, reload, project }) {
       {/* the forum page ([[issues-view]]) — its own route; mounts per visit (it fetches on mount) */}
       {page === 'forum' && (
         <div className="page-pane page-forum">
-          <IssuesView specs={specs} onFocusNode={(id) => { setFocusId(id); navigate('graph') }} />
+          <IssuesView specs={specs} issuesData={issuesData} reloadIssues={reloadIssues} onFocusNode={(id) => { setFocusId(id); navigate('graph') }} />
         </div>
       )}
       {/* the settings page ([[settings]]) — same sections as ever, now a routed page instead of a popup */}
@@ -549,6 +549,20 @@ export default function App() {
   const t = useT()
   const isMobile = useIsMobile()
   const [board, setBoard] = useState(null)
+  // the issues list is RESIDENT beside the board (one data path — the forum page renders instantly from
+  // app-held state instead of cold-fetching per mount). Freshness inherits the board's own pattern: a
+  // push/change signal triggers a throttled refetch, the 15s cold lane backstops (forge-cache updates
+  // arrive nowhere else), and the route answers 304 via ETag so a no-change refetch costs headers only.
+  const [issuesData, setIssuesData] = useState(null)
+  const issuesSeq = useRef(0)
+  const issuesLast = useRef(0)
+  const reloadIssues = useCallback((force = false) => {
+    const now = Date.now()
+    if (!force && now - issuesLast.current < 5000) return Promise.resolve()
+    issuesLast.current = now
+    const mine = ++issuesSeq.current
+    return loadIssues().then((d) => { if (mine === issuesSeq.current) setIssuesData(d) }).catch(() => {})
+  }, [])
   // freshest-issued wins: stamp each load with a monotonic seq and apply only the latest, so a stale in-flight poll can't resurrect removed state
   const reqSeq = useRef(0)
   const reload = useCallback(() => {
@@ -563,14 +577,15 @@ export default function App() {
   const pushLive = useRef(false)
   useEffect(() => {
     reload()
+    reloadIssues(true)
     const unsub = subscribeBoardLive({
-      onBoard: (b) => { reqSeq.current++; setBoard(b) },
-      onLegacyChange: reload,
+      onBoard: (b) => { reqSeq.current++; setBoard(b); reloadIssues() },
+      onLegacyChange: () => { reload(); reloadIssues() },
       onLive: (v) => { pushLive.current = v },
     })
-    const id = setInterval(() => { if (!pushLive.current) reload() }, 15000)
+    const id = setInterval(() => { if (!pushLive.current) reload(); reloadIssues() }, 15000)
     return () => { unsub(); clearInterval(id) }
-  }, [reload])
+  }, [reload, reloadIssues])
   useEffect(() => {
     const name = projectTitle(board)
     if (name) document.title = `${name} · SpexCode`
@@ -585,5 +600,5 @@ export default function App() {
   }, [board?.projectIcon])
   if (!board) return <div className="loading">{t('hud.loading')}</div>
   if (isMobile) return <MobileApp specs={board.nodes} sessions={board.sessions} project={projectTitle(board)} />
-  return <Dashboard specs={board.nodes} sessions={board.sessions} reload={reload} project={projectTitle(board)} />
+  return <Dashboard specs={board.nodes} sessions={board.sessions} reload={reload} project={projectTitle(board)} issuesData={issuesData} reloadIssues={reloadIssues} />
 }

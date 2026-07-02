@@ -10,7 +10,7 @@ import { residentForgeState } from '../../spec-forge/src/resident.js'
 import { summarize } from './mentions.js'
 import { resolveLayout, mainBranch } from './layout.js'
 import { buildBoard } from './board.js'
-import { boardStream } from './boardStream.js'
+import { boardStream, notifyBoardChanged } from './boardStream.js'
 import { gitA, gitTry, repoRoot } from './git.js'
 import { newSession, listSessions, sendKeys, rawKey, exitSession, closeSession, reopen, propose, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, superviseQueue } from './sessions.js'
 import { defaultHarness, HARNESSES } from './harness.js'
@@ -313,10 +313,12 @@ app.post('/api/sessions/:id/rawkey', async (c) => {
 app.post('/api/sessions/:id/exit', async (c) => c.json({ ok: await exitSession(c.req.param('id')) }))
 app.post('/api/sessions/:id/close', async (c) => c.json({ ok: await closeSession(c.req.param('id')) }))
 // set (or clear, with a blank) a session's display-name override; persists to the worktree's `.session` so
-// it survives a restart. Unknown id → 404.
+// it survives a restart. Unknown id → 404. The worktree file is OUTSIDE the store the board watchers see,
+// so the route nudges the stream explicitly ([[board-stream]]) — the rename shows in ~150ms, not a cold tick.
 app.post('/api/sessions/:id/rename', async (c) => {
   const body = await c.req.json().catch(() => ({}))
   const ok = await renameSession(c.req.param('id'), typeof body?.name === 'string' ? body.name : '')
+  if (ok) notifyBoardChanged()
   return c.json({ ok }, ok ? 200 : 404)
 })
 

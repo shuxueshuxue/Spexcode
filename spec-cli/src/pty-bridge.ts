@@ -203,14 +203,10 @@ function onLine(b: Bridge, lineBuf: Buffer): void {
     onLayout(b, m ? m[1] : undefined)
     return
   }
+  // Mode enter/exit emits no pane bytes of its own. Route through repaint only: paneInMode is written solely
+  // by repaint under its token, so racing mode flips can't leave a stale read as the last freeze-state write.
   if (head.startsWith('%pane-mode-changed')) {
-    if (!b.needsFull) {
-      void (async () => {
-        const mode = await readPaneMode(b.id)
-        b.paneInMode = mode.inMode
-        if (!mode.inMode) await repaint(b)
-      })()
-    }
+    if (!b.needsFull) void repaint(b)
     return
   }
   // %exit / %client-detached / window close → the client is gone; pty.onExit drives the re-bind.
@@ -365,7 +361,6 @@ export function forwardWheel(id: string, up: boolean, col: number, row: number, 
     if (mode.inMode || !canInjectSgrWheel(mode)) {
       if (up && !mode.inMode) await tmuxRaw(['copy-mode', '-e', '-t', id])
       if (up || mode.inMode) {
-        b.paneInMode = true
         await tmuxRaw(['send-keys', '-t', id, '-X', '-N', String(n * 5), up ? 'scroll-up' : 'scroll-down'])
         await repaint(b)
       }

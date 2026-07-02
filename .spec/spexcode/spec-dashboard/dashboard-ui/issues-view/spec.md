@@ -5,6 +5,7 @@ hue: 200
 desc: The dashboard's ONE issues page — the Forum route (#/forum, [[side-nav]]) as a MASTER-DETAIL — a left list (evals leading, merged issues below) and a full-height detail pane the selection drives; markdown-rendered bodies, node chips focus the graph, local writes in the detail, forge items link out.
 code:
   - spec-dashboard/src/IssuesView.jsx
+  - spec-dashboard/src/Thread.jsx
 ---
 
 # issues-view
@@ -69,6 +70,9 @@ reply/propose the CLI uses, committed straight to the trunk.
   are local-only). A `@session` in the text **dispatches** ([[mentions]]) exactly as a CLI post would — a
   human summons an agent from the issues page — and the returned one-line dispatch summary is echoed
   briefly. A plain textarea with a `@session · [[node]]` hint is enough; autocomplete is optional.
+  The reply list and composer are ONE shared component (`Thread.jsx`), delivery-agnostic (`onSend`): the
+  issue detail replies to its thread, and the eval detail ([[annotator]]) renders the SAME thread UI over
+  its lazily-bound eval comment thread — one thread UI, every home.
 - **Honors the switch.** When the forum workflow is OFF (`enabled: false`, [[proposals]]'s toggle), the
   view shows a muted "off" state instead of the list — the dashboard reflects the one source of truth,
   never forks it.

@@ -55,13 +55,13 @@ export type DispatchOutcome = { token: string; result: 'sent' | 'spawned' | 'off
 function mentionPrompt(threadId: string, node: string | null, author: string, text: string): string {
   const re = node ? ` (re: ${node})` : ''
   return `You were @-mentioned in forum thread "${threadId}"${re} by ${author}:\n\n  ${text.trim()}\n\n` +
-    `Read the thread and act as the comment asks (often just a look): \`spex proposals --all\` lists the forum; ` +
+    `Read the thread and act as the comment asks (often just a look): \`spex issues --all\` lists them; ` +
     `reply with \`spex propose reply ${threadId} --body -\`.`
 }
 function newWorkerPrompt(threadId: string, node: string | null, author: string, text: string): string {
   const on = node ? ` on node ${node}` : ''
   return `Forum thread "${threadId}"${on} @-mentioned @new (by ${author}) for a fresh look:\n\n  ${text.trim()}\n\n` +
-    `Read the thread (\`spex proposals --all\`, find ${threadId}) and act on it${node ? `; the relevant node is ${node}` : ''}.`
+    `Read the thread (\`spex issues --all\`, find ${threadId}) and act on it${node ? `; the relevant node is ${node}` : ''}.`
 }
 
 // Parse a committed forum post's text for `@` actors and deliver to each. Best-effort and LOUD: the thread is

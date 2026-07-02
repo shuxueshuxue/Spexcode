@@ -357,12 +357,14 @@ function Dashboard({ specs, sessions, reload, project }) {
       }
       // Enter opens the session board at the remembered tab (boarding switch — see openBoard).
       else if (firesKey('board.enter', e.key)) { e.preventDefault(); openBoard() }
-      // @-key: jump to a FRESH New Session on the focus ([[<id>]] pre-seeded), unconditional — never enters an existing session
+      // [-key (the [[node]] mention opener): jump to a FRESH New Session on the focus ([[<id>]] pre-seeded), unconditional — never enters an existing session
       else if (firesKey('board.fresh', e.key)) { e.preventDefault(); startNew(`[[${focus.id}]] `) }
+      // f-key: open the issues page ([[issues-view]]) — the board-side entry; the console's pill is the other, one surface
+      else if (firesKey('board.issues', e.key)) { e.preventDefault(); openSession('issues') }
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [overlay, sessionUI, legend, settings, search, highlightId, focus, cycleNodes, upTarget, downTarget, rightTarget, parent, centerOn, getViewport, openBoard, startNew, popupScroll, legendScroll])
+  }, [overlay, sessionUI, legend, settings, search, highlightId, focus, cycleNodes, upTarget, downTarget, rightTarget, parent, centerOn, getViewport, openBoard, openSession, startNew, popupScroll, legendScroll])
 
   // wake only on a real coordinate change — a pan under a still cursor can emit a synthetic mousemove with unchanged x/y
   useEffect(() => {

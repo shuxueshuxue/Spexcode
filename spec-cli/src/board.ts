@@ -3,7 +3,8 @@ import { loadSpecs, deriveStatus } from './specs.js'
 import { resolveLayout, readConfig } from './layout.js'
 import { listSessions } from './sessions.js'
 import { repoRoot, driftIndex, historyIndex } from './git.js'
-import { residentForgeView } from '../../spec-forge/src/resident.js'
+import { residentForgeState } from '../../spec-forge/src/resident.js'
+import { mergedIssues } from './issues.js'
 import { evalContext, evalTimeline } from '../../spec-yatsu/src/evaltab.js'
 
 // a ghost (added) node's parent: the existing node whose directory is the longest prefix of the new one.
@@ -85,21 +86,21 @@ export async function buildBoard() {
     }),
     ...Object.values(ghostById),
   ]
-  // fold spec-forge issues onto each node (full set → issues, open subset → openIssues, attached only when
-  // non-empty), non-blocking: residentForgeView never waits on `gh` and returns [] absent a forge, so a
-  // forge-less board is unchanged. Sorted open-first, newest number first.
-  const isOpen = (i: any) => (i.state || '').toLowerCase() === 'open'
-  const issuesByNode: Record<string, any[]> = {}
-  for (const link of residentForgeView(nodes.map((n) => n.id))) {
-    issuesByNode[link.node] = link.issues
-      .map((i) => ({ number: i.number, state: i.state, title: i.title, url: i.url }))
-      .sort((a, b) => Number(isOpen(b)) - Number(isOpen(a)) || b.number - a.number)
-  }
+  // fold each node's issues onto it through the unified Issue port ([[issues]]): the resident forge slice
+  // AND the local forum's threads, one merged store-tagged list (full set → issues, open subset →
+  // openIssues, attached only when non-empty). Non-blocking: residentForgeState never waits on `gh` and is
+  // empty absent a forge, so the fold then carries the local slice alone. Sorted open-first, newest first.
+  const isOpen = (i: { status: string }) => i.status === 'open'
+  const issuesByNode: Record<string, ReturnType<typeof mergedIssues>> = {}
+  for (const issue of mergedIssues({ host: 'github', state: residentForgeState() }, nodes.map((n) => n.id)))
+    for (const nid of issue.nodes) (issuesByNode[nid] ??= []).push(issue)
   for (const n of nodes) {
     const issues = issuesByNode[n.id]
     if (!issues || !issues.length) continue
     n.issues = issues
-    const open = issues.filter(isOpen)
+      .sort((a, b) => Number(isOpen(b)) - Number(isOpen(a)) || b.created.localeCompare(a.created))
+      .map((i) => ({ id: i.id, store: i.store, status: i.status, concern: i.concern, url: i.url }))
+    const open = n.issues.filter(isOpen)
     if (open.length) n.openIssues = open
   }
 

@@ -5,6 +5,10 @@ export type ForgeIssue = {
   url: string
   state: string
   labels: string[]
+  // who opened it and when — what lets a forge issue stand beside a forum thread as the same
+  // object in the unified Issue port (spec-cli issues.ts) with a `by` and a `created`.
+  author: string
+  createdAt: string
 }
 
 export type ForgePR = {

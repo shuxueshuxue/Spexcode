@@ -54,8 +54,10 @@ function colAlign(cell) {
 }
 
 // fence-aware tokenizer for the spec.md body — ``` code, # headings, - lists, | GFM tables |, paragraphs;
-// drops the leading `# title` line (the header already shows it).
-function SpecBody({ body }) {
+// drops the leading `# title` line (the header already shows it). Exported: the issues page's detail pane
+// ([[issues-view]]) renders issue bodies/replies through this same renderer, so forum markdown and spec
+// markdown read as one dialect.
+export function SpecBody({ body }) {
   if (!body) return null
   const lines = body.replace(/^#\s+[^\n]*\n+/, '').split('\n')
   const out = []

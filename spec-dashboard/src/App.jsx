@@ -535,7 +535,7 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
       {/* the forum page ([[issues-view]]) — its own route; mounts per visit (it fetches on mount) */}
       {page === 'forum' && (
         <div className="page-pane page-forum">
-          <IssuesView specs={specs} issuesData={issuesData} reloadIssues={reloadIssues} onFocusNode={(id) => { setFocusId(id); navigate('graph') }} />
+          <IssuesView specs={specs} sessions={sessions} issuesData={issuesData} reloadIssues={reloadIssues} onFocusNode={(id) => { setFocusId(id); navigate('graph') }} />
         </div>
       )}
       {/* the settings page ([[settings]]) — same sections as ever, now a routed page instead of a popup */}

@@ -14,6 +14,22 @@ scenarios:
       the RIGHT detail pane: full header (status, author, "+N signed", clickable node chips), the body
       and replies MARKDOWN-RENDERED (headings/tables/lists — no raw `##` or `|` pipes visible), and a
       reply composer. A forge selection instead carries its permalink and a read-only note. No page errors.
+  - name: composer-mention-autocomplete
+    tags: [frontend-e2e]
+    code: [spec-dashboard/src/IssuesView.jsx, spec-dashboard/src/mentions.jsx]
+    description: >-
+      On the running forum page, select a LOCAL issue and type into its reply composer, then open the
+      New form and type into its body textarea. In each: type `@`, read the dropdown, pick a row with
+      ↓/Enter and read the inserted text; clear, type `[[` (and a partial id), pick, read the insertion;
+      press Esc with a menu open and read the hash; type plain prose and look for any menu. Then visit
+      the session console and re-check its `@`/`[[` menus still open (the shared-module regression).
+    expected: >-
+      Both composers carry the console's OWN mention dropdowns ([[mentions]] — one shared menu, not a
+      fork): `@` lists the live sessions plus `@new` and a pick inserts `@<id> ` (trailing space); `[[`
+      lists the spec nodes (a partial query filters) and a pick inserts `[[<id>]] `. The reply
+      composer's menu opens UPWARD (visible above the docked textarea), the New form's downward. Esc
+      closes the menu, keeps the draft, and stays on #/forum. Plain text never opens a menu. The
+      console's `@`/`[[` menus are unchanged. No page errors.
   - name: panel-skeleton
     tags: [frontend-e2e]
     code: spec-dashboard/src/IssuesView.jsx

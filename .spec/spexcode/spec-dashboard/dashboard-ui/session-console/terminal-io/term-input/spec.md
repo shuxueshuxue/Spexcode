@@ -76,7 +76,7 @@ ref is the only thing rewritten.
 
 This node is the cross-cutting *contract*, so it governs no files directly; the realisations live where
 other nodes own them — the docked terminal, input, and `/`·`@` menus in `SessionInterface.jsx`
-([[session-console]]); the dormant in-popup original `TermPane.jsx` ([[session-peek]]); the
-capture-phase arrow routing in `App.jsx` ([[keyboard-nav]]); and the CC-command union plus config
-presets in [[spec-cli]]. A change to any of those is that surface's drift, not a phantom warning here.
-The realisation moved surfaces; the principle — input outside xterm so arrows can navigate — did not.
+([[session-console]]); the capture-phase arrow routing in `App.jsx` ([[keyboard-nav]]); and the
+CC-command union plus config presets in [[spec-cli]]. A change to any of those is that surface's
+drift, not a phantom warning here. (The in-popup original of this contract, `TermPane.jsx` under a
+`session-peek` node, was a dormant mock and has been removed — the principle lives on in the console.)

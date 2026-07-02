@@ -13,7 +13,9 @@ scenarios:
       landed) are hidden behind a count chip that reveals them. Selecting the local thread opens it in
       the RIGHT detail pane: full header (status, author, "+N signed", clickable node chips), the body
       and replies MARKDOWN-RENDERED (headings/tables/lists — no raw `##` or `|` pipes visible), and a
-      reply composer. A forge selection instead carries its permalink and a read-only note. No page errors.
+      reply composer. A forge selection renders the SAME way — its GitHub comments as the reply thread,
+      its permalink in the header, and the SAME composer (no read-only note exists) — store never changes
+      the thread's shape. No page errors.
   - name: panel-skeleton
     tags: [frontend-e2e]
     code: spec-dashboard/src/IssuesView.jsx
@@ -39,5 +41,5 @@ YATU through the REAL running dashboard, never the code: a backend seeded with l
 worktree dashboard pointed at it, and a headless Chromium that opens #/forum and reads the live DOM
 (`.fv-master`, `.fv-row`, `.fv-store`, `.fvd`, `.doc-body`) + screenshots it. The loss is the gap between
 that reading and the spec: master-detail with evals leading, one merged store-tagged list in API order,
-markdown-rendered detail, local-writable / forge-link-out. (This reading style is what caught the `t(...)`
-i18n call-convention crash a build could not.)
+markdown-rendered detail, one thread surface and one composer over both stores. (This reading style is
+what caught the `t(...)` i18n call-convention crash a build could not.)

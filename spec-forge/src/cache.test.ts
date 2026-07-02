@@ -4,7 +4,7 @@ import { ForgeCache } from './cache.js'
 import type { ForgeIssue, ForgePR } from './port.js'
 
 const issue = (number: number, over: Partial<ForgeIssue> = {}): ForgeIssue =>
-  ({ number, title: `i${number}`, body: '', url: `u${number}`, state: 'open', labels: [], author: 'a', createdAt: 't', ...over })
+  ({ number, title: `i${number}`, body: '', url: `u${number}`, state: 'open', labels: [], author: 'a', createdAt: 't', comments: [], ...over })
 const pr = (number: number): ForgePR => ({ number, title: `p${number}`, url: `u${number}`, state: 'open', headRefName: `node/x-${number}`, closesIssues: [] })
 
 // the freshness invariant, incremental halves: a delta window merged over the map leaves the cache

@@ -74,18 +74,19 @@ export function nestSessions(sessions) {
 // is actively running (a STATUS_COLOR-green status: working/parked); else neutral (all idle/offline). Reuses
 // the STATUS_COLOR hues so the triangle speaks the same four-hue language as every other status mark.
 export function subtreeRollup(id, childrenOf) {
-  let need = false, run = false
+  let need = false, run = false, count = 0
   const walk = (pid, seen) => {
     for (const c of childrenOf.get(pid) || []) {
       if (seen.has(c.id)) continue
       seen.add(c.id)
+      count++
       if (NEED_STATUS.has(c.status)) need = true
       else if (STATUS_COLOR[c.status] === STATUS_COLOR.working) run = true
       walk(c.id, seen)
     }
   }
   walk(id, new Set([id]))
-  return need ? STATUS_COLOR.asking : run ? STATUS_COLOR.working : STATUS_COLOR.idle
+  return { color: need ? STATUS_COLOR.asking : run ? STATUS_COLOR.working : STATUS_COLOR.idle, count }
 }
 
 // @@@ the ordered render list ([[session-nesting]]) both session-list surfaces share. Roots are zone-sorted by
@@ -100,7 +101,8 @@ export function sessionForest(sessions, isExpanded) {
     const kids = childrenOf.get(s.id) || []
     const expandable = kids.length > 0
     const expanded = expandable && !!isExpanded(s.id)
-    items.push({ type: 'row', s, depth, expandable, expanded, rollup: expandable ? subtreeRollup(s.id, childrenOf) : null })
+    const roll = expandable ? subtreeRollup(s.id, childrenOf) : null
+    items.push({ type: 'row', s, depth, expandable, expanded, rollup: roll?.color ?? null, kin: roll?.count ?? 0 })
     if (expanded) for (const c of zoneSort(kids)) { if (!seen.has(c.id)) { seen.add(c.id); emit(c, depth + 1, seen) } }
   }
   const seen = new Set()

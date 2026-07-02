@@ -2,7 +2,7 @@
 title: session-nesting
 status: active
 hue: 300
-desc: A session launched by `spex new` from INSIDE another session records its spawner as a durable `parent`, so the dashboard folds the child under it — a read-time tree that auto-promotes orphans when a parent closes, with a purely-informational subtree-rollup triangle that never aggregates into the parent's own status or zone.
+desc: A session launched by `spex new` from INSIDE another session records its spawner as a durable `parent`, so the dashboard folds the child under it — a read-time tree that auto-promotes orphans when a parent closes, with a purely-informational fold POD — the subtree count on the rollup colour — that never aggregates into the parent's own status or zone.
 related:
   - spec-cli/src/sessions.ts
   - spec-cli/src/cli.ts
@@ -37,9 +37,11 @@ the next read, auto-promotes them to top-level. No migration, no child rewrite. 
 depth, the whole forest reassembled each render.
 
 **The dashboard folds a child under its spawner.** Both session-list surfaces ([[session-console]]'s console
-tabs and the map-side `SessionWindow` glance) render that forest: a parent row carries a disclosure triangle,
-and expanding it reveals its child rows indented beneath, recursively. The list is collapsed by default, so a
-fleet reads as one row until opened; ↑/↓ nav walks the VISIBLE rows, so a hidden child is never a nav ghost.
+tabs and the map-side `SessionWindow` glance) render that forest: a parent row leads with a **fold pod** — a
+small pill showing the SUBTREE COUNT (how much fleet hides here), filled while collapsed and outline once
+expanded, a far more legible affordance than the old sliver of a triangle — and expanding reveals the child
+rows indented beneath, recursively. The list is collapsed by default, so a fleet reads as one row until
+opened; ↑/↓ nav walks the VISIBLE rows, so a hidden child is never a nav ghost.
 
 **The parent row's own status is the group's status — no aggregation.** The folded parent's status glyph and
 which triage zone it sorts into (needs-you vs self-running) are the PARENT'S OWN, full stop; child statuses

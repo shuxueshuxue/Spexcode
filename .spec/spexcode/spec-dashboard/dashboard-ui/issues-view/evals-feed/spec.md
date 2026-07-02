@@ -37,9 +37,14 @@ virtualized; history drills down per scenario (the node's [[yatsu-eval-tab]] sca
 
 The section lives in [[issues-view]]'s upper region: it wraps itself in the panel's FeedSection (so its
 counts stay internal and density switches preserve its state) and mounts as one line above the threads
-section; the view's own entries (console pill · ⌥F · board `f`) are how it is reached.
+section; the view's own entries (console pill · ⌥F · board `f`) are how it is reached. Under the panel's
+Tab focus (`focused`), j/k walk this section's rows and Enter expands — Enter again on an expanded video
+row opens the annotator — the same row-nav grammar as the threads region.
 
-Data rides the board's existing evals fold. At scale the fold itself converges to the same semantics —
-latest reading per scenario plus a history count, the full timeline served per node on demand — one
-convergence shared by this feed, the node eval tab, and [[board-lean]]; `clean --keep-latest` already
-aligns the evidence bytes with it.
+**One data path, one computation.** The board nodes arrive as a prop from the app's single board
+poll + SSE subscription — the section fetches nothing of its own — and latest-per-scenario is
+`scenarioStates`, the same computation behind the node badge, the focus panel, and the eval tab; the feed
+never re-derives the current score its own way. At scale the board fold itself converges to the same
+semantics — latest reading per scenario plus a history count, the full timeline served per node on
+demand — one convergence shared by this feed, the node eval tab, and [[board-lean]];
+`clean --keep-latest` already aligns the evidence bytes with it.

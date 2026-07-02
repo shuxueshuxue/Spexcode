@@ -6,7 +6,6 @@ desc: One Escape contract — overlays peel topmost-first, a press never closes 
 code:
   - spec-dashboard/src/escStack.js
 related:
-  - spec-dashboard/src/ReviewProof.jsx
   - spec-dashboard/src/SessionContextMenu.jsx
   - spec-dashboard/src/SessionInterface.jsx
 ---

@@ -31,6 +31,21 @@ export function currentEntries(nodes) {
 
 export const entryKey = (e) => `eval:${e.node}·${e.scenario}`
 
+// one eval row — the shared row grammar every eval face uses (the forum's list here; the session Eval
+// tab reuses it verbatim so the two surfaces can never drift apart).
+export function EvalRow({ e, selected, onClick }) {
+  return (
+    <button className={`ef-row ${selected ? 'sel' : ''}`} onClick={onClick}>
+      <ScoreBadge state={e.state} />
+      {e.inSession && <span className="ef-insession" title="measured by this session">✦</span>}
+      <span className="ef-scenario">{e.scenario}</span>
+      <span className="ef-node" style={{ color: `hsl(${e.hue ?? 210} 60% 70%)` }}>{e.node}</span>
+      <span className="ef-kind">{KIND_ICON[kindOf(e)] ?? '📄'}</span>
+      <span className="ef-time">{rel(e.ts)}</span>
+    </button>
+  )
+}
+
 const rel = (ts) => {
   const s = Math.max(0, (Date.now() - new Date(ts).getTime()) / 1000)
   if (s < 3600) return `${Math.max(1, Math.floor(s / 60))}m`
@@ -75,13 +90,7 @@ export default function EvalsGroup({ nodes = [], sel, onSel, onRows }) {
       </header>
       {rows.length === 0 && <div className="ef-empty">{t('evalsFeed.empty')}</div>}
       {rows.map((e) => (
-        <button key={entryKey(e)} className={`ef-row ${sel === entryKey(e) ? 'sel' : ''}`} onClick={() => onSel(entryKey(e), e)}>
-          <ScoreBadge state={e.state} />
-          <span className="ef-scenario">{e.scenario}</span>
-          <span className="ef-node" style={{ color: `hsl(${e.hue ?? 210} 60% 70%)` }}>{e.node}</span>
-          <span className="ef-kind">{KIND_ICON[kindOf(e)] ?? '📄'}</span>
-          <span className="ef-time">{rel(e.ts)}</span>
-        </button>
+        <EvalRow key={entryKey(e)} e={e} selected={sel === entryKey(e)} onClick={() => onSel(entryKey(e), e)} />
       ))}
     </section>
   )

@@ -17,7 +17,7 @@ import { defaultHarness, HARNESSES } from './harness.js'
 import { evalTimeline, readBlobByHash } from '../../spec-yatsu/src/evaltab.js'
 import { yatsuNodes } from '../../spec-yatsu/src/yatsu.js'
 import { fileHumanReading } from '../../spec-yatsu/src/filing.js'
-import { buildProofModel, renderProofHtml } from '../../spec-yatsu/src/proof.js'
+import { buildProofModel, renderProofHtml, buildSessionEvals } from '../../spec-yatsu/src/proof.js'
 import { saveUpload, MAX_UPLOAD_BYTES } from './uploads.js'
 import { attachViewer, detachViewer, resizeBridge, forwardWheel, superviseBridges, type Viewer } from './pty-bridge.js'
 import { installProcessGuards } from './resilience.js'
@@ -215,13 +215,21 @@ app.get('/api/sessions/:id/review', async (c) => {
   const r = await reviewPayload(c.req.param('id'))
   return r ? c.json(r) : c.json({ error: 'no such session' }, 404)
 })
-// the [[review-proof]] HTML: the diff grouped by node, each node's measured yatsu loss with evidence inlined
-// as data-URIs, and the merge gates. `?format=json` returns the model; default = rendered HTML. 404 unknown id.
+// the [[review-proof]] EXPORT artifact: one self-contained HTML (diff + gates + evidence inlined as
+// data-URIs) for CI/share/bare-browser. `?format=json` returns the model; default = rendered HTML. The
+// dashboard's interactive face is the lean route below, never this. 404 unknown id.
 app.get('/api/sessions/:id/proof', async (c) => {
   const m = await buildProofModel(c.req.param('id'))
   if (!m) return c.text('no such session', 404)
   if (c.req.query('format') === 'json') return c.json(m)
   return c.html(renderProofHtml(m))
+})
+// the session EVAL model ([[review-proof]]'s interactive face): worktree-rooted rows only — no diff
+// enrichment, no inlined bytes; evidence streams lazily from /api/yatsu/blob. Each reading carries
+// `inSession` so the tab leads with what THIS session measured.
+app.get('/api/sessions/:id/evals', async (c) => {
+  const m = await buildSessionEvals(c.req.param('id'))
+  return m ? c.json(m) : c.json({ error: 'no such session' }, 404)
 })
 // the session's live pane as text (one-shot snapshot) for a backend client (`spex capture`). Empty and fail
 // stay distinct: an empty pane is 200 with empty body; unknown id → 404, offline (no live pane) → 409, error → 502.

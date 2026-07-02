@@ -72,9 +72,9 @@ reserves real layout height, so the terminal does not stretch under it) — the 
 line is therefore never hidden. Only when the box grows multi-line does it **overlay** the terminal, expanding
 **upward** over its lower edge; growth never pushes the terminal's content up (only the resting single line
 reserves space — growth overlays). Above the pane a **horizontal tab bar** replaces the old title/action
-strip, carrying **two tabs on the left** — **Terminal** (the default) and **Proof**: Terminal shows the live
-pane with the docked `❯` input; Proof shows this session's review proof **inline** (an always-available view,
-below and [[review-proof]]). The bar wears the app-chrome background with a bottom separator, so it reads
+strip, carrying **two tabs on the left** — **Terminal** (the default) and **Eval**: Terminal shows the live
+pane with the docked `❯` input; Eval shows this session's measured evaluation **inline** (an always-available
+view — the shared eval components, session-scoped; below and [[review-proof]]). The bar wears the app-chrome background with a bottom separator, so it reads
 **visibly apart from the dark terminal** below it in both light and dark themes (the old flat strip blended
 into that dark edge — the complaint this replaces). Between the tabs and the actions it still carries the
 **shared session headline** (`si-th-name`, [[session-activity]]) — same source and content as the session
@@ -94,7 +94,7 @@ colour**, never two codepaths. The two terminal verbs split by what they destroy
 session (`act('exit')`, **muted grey**) — it kills the agent + tmux but **keeps the worktree**, so the session
 goes `offline` and offers **relaunch** (the same resumable stop a crash produces, see [[state]]); **`/close`**
 removes it (`act('close')`, **red**) — worktree + branch gone, the work discarded, the row's right-click Close's
-twin. `/merge` merges (green), `/nav` toggles nav mode (yellow), `/proof` jumps to the **Proof tab** (cyan). In the inbox
+twin. `/merge` merges (green), `/nav` toggles nav mode (yellow), `/proof` jumps to the **Eval tab** (cyan). In the inbox
 `/` menu they **lead** the list, coloured, tagged `[board]`, apart from CC's blue command rows; accepting one
 **runs** it (the one row that acts, not inserts — see [[term-input]]). A board command **overrides** a
 same-named CC command (CC ships its own `/exit`), so that name shows **once** — as the board's, never a
@@ -146,9 +146,9 @@ reaches the page to be cancelled — ⌥ is the modifier the app can actually ow
 right side** holds the same board-command registry as action buttons, narrowed to the current state:
 **nav** whenever live and **merge** at review/done — each a small **text** button (no glyphs) in its
 identity colour; an `offline` liveness (any lifecycle) swaps them for a relaunch button, and review is
-**agent-proposed** at the stop-gate. **Proof is no longer one of these buttons** — it is promoted to a
-permanent **tab**, always available for any selected session (see [[review-proof]]), reached by clicking the
-tab or the typed `/proof`. There is
+**agent-proposed** at the stop-gate. **The evaluation is no longer one of these buttons** — it is a
+permanent **Eval tab**, always available for any selected session (see [[review-proof]]), reached by
+clicking the tab or the typed `/proof`. There is
 **no close/exit button** here (neither has a button twin — a strip "close" misreads as "close the panel"
 while it discards the worktree): the destructive **close** (worktree removal) lives only on the row's
 right-click menu, behind a confirm ([[session-rename]]); both verbs are otherwise reachable as the typed

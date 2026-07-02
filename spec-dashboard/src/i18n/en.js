@@ -41,10 +41,10 @@ export default {
   // the left navigation rail ([[side-nav]]) — one label per top-level page
   nav: {
     railLabel: 'main navigation',
-    graph: 'Spec Node Graph',
-    sessions: 'Session Board',
-    forum: 'Forum',
-    settings: 'Settings',
+    graph: 'Spec Node Graph (⌥1)',
+    sessions: 'Session Board (⌥2)',
+    forum: 'Forum (⌥3 / ⌥F)',
+    settings: 'Settings (⌥4)',
   },
 
   hud: {
@@ -263,7 +263,6 @@ export default {
     newSession: 'New Session',
     newSessionTitle: 'New Session (⌥+N)',
     // the merged issues page ([[issues-view]]) — the second top pill beside New Session.
-    issuesTitle: 'Issues — local forum threads & forge issues, one list (⌥+F)',
     issuesOff: 'The forum workflow is off.',
     issuesEmpty: 'No issues yet.',
     issuesLoading: 'loading issues…',

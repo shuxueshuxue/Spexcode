@@ -40,10 +40,10 @@ export default {
   // 左侧导航栏（[[side-nav]]）——每个顶层页面一个标签
   nav: {
     railLabel: '主导航',
-    graph: '规格节点图',
-    sessions: '会话面板',
-    forum: '论坛',
-    settings: '设置',
+    graph: '规格节点图（⌥1）',
+    sessions: '会话面板（⌥2）',
+    forum: '论坛（⌥3 / ⌥F）',
+    settings: '设置（⌥4）',
   },
 
   hud: {
@@ -258,7 +258,6 @@ export default {
     newSession: '新建会话',
     newSessionTitle: '新建会话（⌥+N）',
     // 合并 issues 页（[[issues-view]]）—— 新建会话旁的第二个顶部按钮。
-    issuesTitle: 'Issues —— 本地论坛帖与 forge issue，同一张列表（⌥+F）',
     issuesOff: '论坛工作流已关闭。',
     issuesEmpty: '暂无 issue。',
     issuesLoading: '正在加载 issues……',

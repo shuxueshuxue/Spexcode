@@ -190,7 +190,7 @@ function highlight(text, q) {
   return <>{text.slice(0, i)}<b className="mention-hit">{text.slice(i, i + q.length)}</b>{text.slice(i + q.length)}</>
 }
 
-export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onOpenForum, onPickSession, reload }) {
+export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, reload }) {
   const t = useT()
   const [prompt, setPrompt] = useState('')    // the New Session tab's own draft (its boarding-switch cache)
   const [menu, setMenu] = useState(null)      // completion dropdown: { kind:'mention'|'config'|'slash', items, index, start, end, query }
@@ -687,10 +687,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const boardCmds = boardCommandsFor(selSession?.status, runners)
   // window-level key router: ↑/↓ walk the list regardless of focus; Enter on New launches.
   const stateRef = useRef({})
-  stateRef.current = { order, active, submit, menu, navMenu, accept, setMenu, onClose, onOpenForum, open, searchOpen, navMode, setNavMode, sendRawKey }
+  stateRef.current = { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, searchOpen, navMode, setNavMode, sendRawKey }
   useEffect(() => {
     const onKey = (e) => {
-      const { order, active, submit, menu, navMenu, accept, setMenu, onClose, onOpenForum, open, searchOpen, navMode, setNavMode, sendRawKey } = stateRef.current
+      const { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, searchOpen, navMode, setNavMode, sendRawKey } = stateRef.current
       if (!open || searchOpen) return   // panel hidden, OR the search palette modal is open above us and owns the keys: nothing here listens
       // reserved ⌥/⌘+I toggles nav mode: handled before everything else, never forwarded to tmux. Matched by
       // e.code (the physical I key) because ⌥I on a mac prints a dead-key glyph, not 'i'. The chord is a
@@ -700,21 +700,15 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       if ((e.altKey !== e.metaKey) && isI && active !== 'new') {
         e.preventDefault(); e.stopPropagation(); setNavMode((v) => !v); return
       }
-      // ⌥+N snaps to New Session; ⌘/⌥/⌃+↑/↓ walk the session list. Kept ABOVE the nav-mode passthrough so they
-      // fire even while raw-key mode forwards to a pane — and the modifier frees ↑/↓ from any caret/typing
-      // conflict, so the switch fires whatever input holds focus.
-      // N is matched by e.code (the physical N key), not e.key: ⌥N on a mac emits a dead-key glyph (˜) for e.key,
-      // not 'n' — the same reason ⌥I above keys off e.code. ⌘N (mac) / ⌃N (win/linux) are the browser's
-      // hard-reserved new-window accelerator whose keydown never reaches the page to be cancelled, so ⌥N is the
-      // one modifier+N chord the app can actually own (the e.metaKey/ctrlKey arms below stay best-effort).
-      // ⌥+F jumps to the Forum page — the console-level twin of ⌥+N (the forum is its own route now,
-      // [[side-nav]]; the board's bare `f` and the sidebar entry are the other doors). ⌥ only: ⌘F/⌃F stay
-      // the browser's find.
-      if (e.altKey && !e.metaKey && !e.ctrlKey && (e.code === 'KeyF' || e.key === 'f' || e.key === 'F')) {
-        e.preventDefault(); e.stopPropagation(); onOpenForum?.(); return
-      }
+      // the app's GLOBAL ⌥ command family — ⌥N (New Session composer), ⌥F (forum), ⌥1..⌥4 (pages) — is
+      // reserved over the console too, nav mode included (the same standing as ⌥/⌘+I above): fall through
+      // UNHANDLED so the App-level window listener (registered after this child's, so next in the capture
+      // chain) routes it — never forwarded to tmux. Matched by e.code for the same mac ⌥-dead-key reason as
+      // ⌥I. ⌘/⌃ variants stay with the browser (⌘N/⌃N are its hard-reserved new-window accelerator anyway).
+      if (e.altKey && !e.metaKey && !e.ctrlKey && ['KeyN', 'KeyF', 'Digit1', 'Digit2', 'Digit3', 'Digit4'].includes(e.code)) return
+      // ⌘/⌥/⌃+↑/↓ walk the session list — kept ABOVE the nav-mode passthrough so they fire even while
+      // raw-key mode forwards to a pane, and the modifier frees ↑/↓ from any caret/typing conflict.
       if (e.metaKey || e.altKey || e.ctrlKey) {
-        if (e.code === 'KeyN' || e.key === 'n' || e.key === 'N') { e.preventDefault(); e.stopPropagation(); setSel('new'); return }
         if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
           e.preventDefault(); e.stopPropagation()
           let i = order.indexOf(active); if (i < 0) i = 0
@@ -745,8 +739,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); e.stopPropagation(); accept(menu.items[menu.index]); return }
         if (e.key === 'Escape')    { e.preventDefault(); e.stopPropagation(); setMenu(null); return }
       }
-      // Esc closes the whole interface (App delegates it here so the menu can claim it first, above).
-      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onClose(); return }
+      // (no bottom Esc rung: Esc never leaves a page — [[side-nav]]. Menus/nav-mode claimed theirs above;
+      // leaving the console is navigation: the rail, ⌥1/⌥3/⌥4, or history.)
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         // a text input keeps plain ↑/↓ ENTIRELY — they're its own caret keys and never switch tabs, even at
         // the first/last line, so typing in the box never jerks you onto another session. Tab switching while
@@ -820,16 +814,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           <div className="si-toprow">
             <button className={active === 'new' ? 'si-pill new on' : 'si-pill new'} title={t('session.newSessionTitle')} onClick={() => setSel('new')}>
               <span className="si-pill-glyph">＋</span>
-            </button>
-            {/* second pill: a shortcut to the forum PAGE ([[issues-view]] — now its own route) — a
-                monochrome inline-SVG speech bubble in the dashboard's own glyph vocabulary. */}
-            <button className="si-pill forum" title={t('session.issuesTitle')} onClick={() => onOpenForum?.()}>
-              <span className="si-pill-glyph">
-                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M2.5 3.5 h11 v7 h-6 l-3 2.5 v-2.5 h-2 z" />
-                  <path d="M5 6.2 h6 M5 8.3 h4" />
-                </svg>
-              </span>
             </button>
           </div>
           {forest.map((it) => {

@@ -3,8 +3,10 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { etag } from 'hono/etag'
 import { createNodeWebSocket } from '@hono/node-ws'
-import { loadSpecs, specHistory, specDiffAt, loadConfig } from './specs.js'
-import { loadProposals, proposalsEnabled, forumReply, forumPost } from './proposals.js'
+import { loadSpecs, loadSpecsLite, specHistory, specDiffAt, loadConfig } from './specs.js'
+import { proposalsEnabled, forumReply, forumPost } from './proposals.js'
+import { mergedIssues } from './issues.js'
+import { residentForgeState } from '../../spec-forge/src/resident.js'
 import { summarize } from './mentions.js'
 import { resolveLayout, mainBranch } from './layout.js'
 import { buildBoard } from './board.js'
@@ -77,16 +79,22 @@ app.get('/api/layout', async (c) => c.json(await resolveLayout()))
 // its prompt `body` ({{targets}} placeholder), `kind`, and folder `dir` + co-located `files`. surface is a
 // frontmatter field, not a dir (specs.ts loadSurface); `surface: system` siblings are gathered elsewhere.
 app.get('/api/config', (c) => c.json(loadConfig()))
-// the forum ([[proposals]]) read surface for the dashboard's info page — the SAME loadProposals() the CLI
-// drain view reads, verbatim (the dashboard computes nothing over it: no re-sort, no salience ranking). The
-// `enabled` flag mirrors the on/off switch so the frontend hides the view when the feature is OFF.
-app.get('/api/forum', (c) => c.json({ enabled: proposalsEnabled(), threads: loadProposals() }))
-// the forum WRITE surface ([[proposals]] / [[forum-view]]) — the human write path. Both go through the SAME
-// reply/propose the CLI uses (git-committed straight to the trunk, author `'human'`) and dispatch any
-// @-mention in the text (a human summons an agent from the forum). `outcomes` is the one-line @-dispatch
-// summary the dashboard echoes. Honor the on/off switch: 403 when the feature is OFF.
-app.post('/api/forum/:id/reply', async (c) => {
-  if (!proposalsEnabled()) return c.json({ error: 'forum is off' }, 403)
+// the ISSUES read surface ([[issues]]) for the dashboard's issues page — the merged list over every store
+// (local forum threads + the resident forge slice), the SAME mergedIssues() the CLI drain reads, verbatim
+// (the dashboard computes nothing over it: no re-sort, no salience ranking). The `enabled` flag mirrors
+// the forum-workflow on/off switch so the frontend hides the view when the feature is OFF.
+app.get('/api/issues', (c) =>
+  c.json({
+    enabled: proposalsEnabled(),
+    issues: mergedIssues({ host: 'github', state: residentForgeState() }, loadSpecsLite().map((s) => s.id)),
+  }))
+// the WRITE surface ([[proposals]] / [[issues-view]]) — the human write path, LOCAL store only (the forge
+// stays read-only). Both go through the SAME reply/propose the CLI uses (git-committed straight to the
+// trunk, author `'human'`) and dispatch any @-mention in the text (a human summons an agent from the
+// issues page). `outcomes` is the one-line @-dispatch summary the dashboard echoes. Honor the on/off
+// switch: 403 when the feature is OFF. A forge id ('github#N') is simply not a local thread → 404.
+app.post('/api/issues/:id/reply', async (c) => {
+  if (!proposalsEnabled()) return c.json({ error: 'forum workflow is off' }, 403)
   const body = await c.req.json().catch(() => ({}))
   const text = typeof body?.body === 'string' ? body.body : ''
   if (!text.trim()) return c.json({ error: 'empty reply' }, 400)
@@ -95,15 +103,14 @@ app.post('/api/forum/:id/reply', async (c) => {
     return c.json({ ok: true, replies: thread.replies, outcomes: summarize(outcomes) })
   } catch (e) { return c.json({ error: String((e as Error).message || e) }, 404) }   // unknown thread → 404
 })
-app.post('/api/forum', async (c) => {
-  if (!proposalsEnabled()) return c.json({ error: 'forum is off' }, 403)
+app.post('/api/issues', async (c) => {
+  if (!proposalsEnabled()) return c.json({ error: 'forum workflow is off' }, 403)
   const body = await c.req.json().catch(() => ({}))
   const concern = typeof body?.concern === 'string' ? body.concern.trim() : ''
   if (!concern) return c.json({ error: 'empty concern' }, 400)
-  const kind = body?.kind === 'note' ? 'note' : 'proposal'
   const nodes = Array.isArray(body?.nodes) ? (body.nodes as unknown[]).filter((n): n is string => typeof n === 'string') : []
   const postBody = typeof body?.body === 'string' ? body.body : undefined
-  const { thread, outcomes } = await forumPost(concern, { kind, nodes, body: postBody, author: 'human' })
+  const { thread, outcomes } = await forumPost(concern, { nodes, body: postBody, author: 'human' })
   return c.json({ ok: true, id: thread.id, outcomes: summarize(outcomes) }, 201)
 })
 // the dashboard input's `/` dropdown — computed by the launcher's HARNESS adapter the same way that harness

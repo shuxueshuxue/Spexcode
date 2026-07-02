@@ -1,15 +1,16 @@
 import { useEffect, useState, useCallback } from 'react'
-import { loadForum, postForumReply, postForumThread } from './data.js'
+import { loadIssues, postIssueReply, postIssueThread } from './data.js'
 import { useT } from './i18n/index.jsx'
 
-// The forum info page ([[forum-view]]): a thin window over `GET /api/forum` (`{ enabled, threads }`) that is
-// now also WRITABLE by a human. It renders threads in the EXACT order the API returns — no re-sort, no
-// salience/priority ranking (recurrence is the CLI drain's judgment); signer/reply counts show as raw data.
-// The write path (a reply composer in each expanded thread + a "New" affordance for a fresh proposal/note)
-// POSTs through the SAME reply/propose the CLI uses (git-committed to the trunk, author 'human'); a human
-// @-mention dispatches a worker (the point — humans summon agents from the forum), and the dispatch outcome
-// is echoed. `onFocusNode(id)` closes the console and focuses that node on the board.
-export default function ForumView({ onFocusNode }) {
+// The issues page ([[issues-view]]): ONE merged list over every store ([[issues]]) — local forum threads
+// and forge issues mixed, store-tagged — a thin window over `GET /api/issues` (`{ enabled, issues }`). It
+// renders issues in the EXACT order the API returns — no re-sort, no salience/priority ranking (recurrence
+// is the CLI drain's judgment); signer/reply counts show as raw data. Store never changes the shape, only
+// two affordances: a LOCAL issue expands to its body + replies and takes a human reply (POSTed through the
+// SAME reply/propose the CLI uses, author 'human'; an @-mention dispatches a worker and the outcome is
+// echoed); a FORGE issue carries its permalink — read here, discussed there. `onFocusNode(id)` closes the
+// console and focuses that node on the board.
+export default function IssuesView({ onFocusNode }) {
   const t = useT()
   const [data, setData] = useState(null)          // null = still loading
   const [expanded, setExpanded] = useState(() => new Set())
@@ -17,13 +18,13 @@ export default function ForumView({ onFocusNode }) {
   const [notice, setNotice] = useState('')           // a brief @-dispatch summary after a write
 
   const load = useCallback(async () => {
-    const d = await loadForum().catch(() => null)
-    setData(d && typeof d === 'object' ? d : { enabled: false, threads: [] })
+    const d = await loadIssues().catch(() => null)
+    setData(d && typeof d === 'object' ? d : { enabled: false, issues: [] })
   }, [])
 
   useEffect(() => {
     let alive = true
-    loadForum().then((d) => { if (alive) setData(d && typeof d === 'object' ? d : { enabled: false, threads: [] }) })
+    loadIssues().then((d) => { if (alive) setData(d && typeof d === 'object' ? d : { enabled: false, issues: [] }) })
       .catch(() => { if (alive) setData(null) })
     return () => { alive = false }
   }, [])
@@ -31,10 +32,10 @@ export default function ForumView({ onFocusNode }) {
   // echo the @-dispatch summary briefly (outcomes is '' when nothing was summoned).
   const flash = (outcomes) => { if (outcomes) { setNotice(outcomes); setTimeout(() => setNotice(''), 6000) } }
 
-  if (data == null) return <div className="fv-note">{t('session.forumLoading')}</div>
-  // honors the switch: forum OFF → a muted state, never a forked source of truth.
-  if (!data.enabled) return <div className="fv-note">{t('session.forumOff')}</div>
-  const threads = Array.isArray(data.threads) ? data.threads : []
+  if (data == null) return <div className="fv-note">{t('session.issuesLoading')}</div>
+  // honors the switch: forum workflow OFF → a muted state, never a forked source of truth.
+  if (!data.enabled) return <div className="fv-note">{t('session.issuesOff')}</div>
+  const issues = Array.isArray(data.issues) ? data.issues : []
 
   const toggle = (id) =>
     setExpanded((prev) => {
@@ -48,31 +49,32 @@ export default function ForumView({ onFocusNode }) {
       {notice && <div className="fv-notice">{notice}</div>}
       <div className="fv-toolbar">
         <button type="button" className="fv-new-btn" onClick={() => setComposing((v) => !v)}>
-          {composing ? t('session.forumCancel') : t('session.forumNew')}
+          {composing ? t('session.issuesCancel') : t('session.issuesNew')}
         </button>
-        <span className="fv-hint">{t('session.forumMentionHint')}</span>
+        <span className="fv-hint">{t('session.issuesMentionHint')}</span>
       </div>
       {composing && (
         <NewThreadForm
           onDone={async (outcomes) => { setComposing(false); flash(outcomes); await load() }}
         />
       )}
-      {!threads.length ? (
-        <div className="fv-note">{t('session.forumEmpty')}</div>
+      {!issues.length ? (
+        <div className="fv-note">{t('session.issuesEmpty')}</div>
       ) : (
         <div className="fv-list">
-          {threads.map((th) => {
+          {issues.map((th) => {
+            const local = th.store === 'local'
             const open = expanded.has(th.id)
             const nodes = Array.isArray(th.nodes) ? th.nodes : []
             const signers = Array.isArray(th.signers) ? th.signers : []
             const replies = Array.isArray(th.replies) ? th.replies : []
             return (
               <div key={th.id} className={open ? 'fv-thread open' : 'fv-thread'}>
-                {/* the whole header toggles the in-place expansion; node chips inside stop propagation so a
-                    chip click focuses the graph instead of expanding. */}
+                {/* the whole header toggles the in-place expansion; node chips / the forge permalink inside
+                    stop propagation so their click acts instead of expanding. */}
                 <div className="fv-head" role="button" tabIndex={0} onClick={() => toggle(th.id)}
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(th.id) } }}>
-                  <span className={`fv-kind fv-kind-${th.kind}`}>{t(`session.forumKind.${th.kind}`) || th.kind}</span>
+                  <span className={`fv-store fv-store-${local ? 'local' : 'forge'}`}>{th.store}</span>
                   <span className="fv-concern">{th.concern}</span>
                   {th.status && <span className={`fv-status fv-st-${th.status}`}>{th.status}</span>}
                   {th.by && <span className="fv-by">{th.by}</span>}
@@ -81,13 +83,17 @@ export default function ForumView({ onFocusNode }) {
                       {nodes.map((id) => (
                         <button key={id} type="button" className="fv-chip"
                           onClick={(e) => { e.stopPropagation(); onFocusNode?.(id) }}
-                          title={t('session.forumFocusNode')}>{id}</button>
+                          title={t('session.issuesFocusNode')}>{id}</button>
                       ))}
                     </span>
                   )}
                   <span className="fv-counts">
-                    <span className="fv-count">{t('session.forumSigned', { n: signers.length })}</span>
-                    <span className="fv-count">{t('session.forumReplies', { n: replies.length })}</span>
+                    {local && <span className="fv-count">{t('session.issuesSigned', { n: signers.length })}</span>}
+                    {local && <span className="fv-count">{t('session.issuesReplies', { n: replies.length })}</span>}
+                    {th.url && (
+                      <a className="fv-link" href={th.url} target="_blank" rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}>{t('session.issuesOpenOnForge')}</a>
+                    )}
                   </span>
                 </div>
                 {open && (
@@ -102,7 +108,9 @@ export default function ForumView({ onFocusNode }) {
                         <div className="fv-text">{r.body}</div>
                       </div>
                     ))}
-                    <ReplyComposer id={th.id} onDone={async (outcomes) => { flash(outcomes); await load() }} />
+                    {local
+                      ? <ReplyComposer id={th.id} onDone={async (outcomes) => { flash(outcomes); await load() }} />
+                      : <div className="fv-hint">{t('session.issuesForgeReadOnly')}</div>}
                   </div>
                 )}
               </div>
@@ -114,7 +122,7 @@ export default function ForumView({ onFocusNode }) {
   )
 }
 
-// a small textarea + Send in an expanded thread — posts a reply as 'human' and reloads the forum. An
+// a small textarea + Send in an expanded LOCAL issue — posts a reply as 'human' and reloads. An
 // @-mention in the text summons a worker; the returned outcomes string surfaces via onDone.
 function ReplyComposer({ id, onDone }) {
   const t = useT()
@@ -125,31 +133,30 @@ function ReplyComposer({ id, onDone }) {
     if (!text || busy) return
     setBusy(true)
     try {
-      const res = await postForumReply(id, text)
+      const res = await postIssueReply(id, text)
       if (res?.ok) { setBody(''); await onDone?.(res.outcomes || '') }
     } finally { setBusy(false) }
   }
   return (
     <div className="fv-compose">
-      <textarea className="fv-textarea" rows={2} value={body} placeholder={t('session.forumReplyPlaceholder')}
+      <textarea className="fv-textarea" rows={2} value={body} placeholder={t('session.issuesReplyPlaceholder')}
         disabled={busy} onChange={(e) => setBody(e.target.value)}
         onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); send() } }} />
       <div className="fv-actions">
-        <span className="fv-hint">{t('session.forumMentionHint')}</span>
+        <span className="fv-hint">{t('session.issuesMentionHint')}</span>
         <button type="button" className="fv-send" disabled={busy || !body.trim()} onClick={send}>
-          {busy ? t('session.forumSending') : t('session.forumSend')}
+          {busy ? t('session.issuesSending') : t('session.issuesSend')}
         </button>
       </div>
     </div>
   )
 }
 
-// the "New" affordance — a concern line, a proposal/note kind toggle, an optional node-ids field, and a body.
-// Posts a fresh thread as 'human'; an @-mention in the body dispatches.
+// the "New" affordance — a concern line, an optional node-ids field, and a body. Posts a fresh LOCAL
+// issue as 'human' (v1 writes are local-only — the forge stays read-only); an @-mention in the body dispatches.
 function NewThreadForm({ onDone }) {
   const t = useT()
   const [concern, setConcern] = useState('')
-  const [kind, setKind] = useState('proposal')
   const [nodes, setNodes] = useState('')
   const [body, setBody] = useState('')
   const [busy, setBusy] = useState(false)
@@ -159,28 +166,22 @@ function NewThreadForm({ onDone }) {
     setBusy(true)
     try {
       const nodeList = nodes.split(',').map((s) => s.trim()).filter(Boolean)
-      const res = await postForumThread({ concern: c, kind, nodes: nodeList, body: body.trim() || undefined })
+      const res = await postIssueThread({ concern: c, nodes: nodeList, body: body.trim() || undefined })
       if (res?.ok) { setConcern(''); setNodes(''); setBody(''); await onDone?.(res.outcomes || '') }
     } finally { setBusy(false) }
   }
   return (
     <div className="fv-new-form">
-      <div className="fv-kindtoggle">
-        {['proposal', 'note'].map((k) => (
-          <button key={k} type="button" className={kind === k ? 'fv-kind-opt on' : 'fv-kind-opt'}
-            onClick={() => setKind(k)}>{t(`session.forumKind.${k}`) || k}</button>
-        ))}
-      </div>
-      <input className="fv-input" value={concern} placeholder={t('session.forumConcernPlaceholder')}
+      <input className="fv-input" value={concern} placeholder={t('session.issuesConcernPlaceholder')}
         disabled={busy} onChange={(e) => setConcern(e.target.value)} />
-      <input className="fv-input" value={nodes} placeholder={t('session.forumNodesPlaceholder')}
+      <input className="fv-input" value={nodes} placeholder={t('session.issuesNodesPlaceholder')}
         disabled={busy} onChange={(e) => setNodes(e.target.value)} />
-      <textarea className="fv-textarea" rows={3} value={body} placeholder={t('session.forumBodyPlaceholder')}
+      <textarea className="fv-textarea" rows={3} value={body} placeholder={t('session.issuesBodyPlaceholder')}
         disabled={busy} onChange={(e) => setBody(e.target.value)} />
       <div className="fv-actions">
-        <span className="fv-hint">{t('session.forumMentionHint')}</span>
+        <span className="fv-hint">{t('session.issuesMentionHint')}</span>
         <button type="button" className="fv-send" disabled={busy || !concern.trim()} onClick={submit}>
-          {busy ? t('session.forumSending') : t('session.forumPost')}
+          {busy ? t('session.issuesSending') : t('session.issuesPost')}
         </button>
       </div>
     </div>

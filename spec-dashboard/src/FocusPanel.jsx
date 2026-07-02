@@ -22,17 +22,22 @@ function ScenarioRow({ s, t, onOpenEval }) {
   )
 }
 
-// one issue card, reusing the shared .issue-card vocabulary (num · state · full title), linking to the forge.
+// one issue card, reusing the shared .issue-card vocabulary (id · store · status · full concern) — the
+// unified Issue shape ([[issues]]); a forge issue links out to its permalink, a local one has none.
 function IssueRow({ i }) {
-  return (
-    <a className="issue-card" href={i.url} target="_blank" rel="noreferrer">
+  const inner = (
+    <>
       <span className="issue-card-top">
-        <span className="issue-num">#{i.number}</span>
-        <span className={`issue-state st-${(i.state || '').toLowerCase()}`}>{i.state}</span>
+        <span className="issue-num">{i.id}</span>
+        <span className={`fv-store fv-store-${i.store === 'local' ? 'local' : 'forge'}`}>{i.store}</span>
+        <span className={`issue-state st-${i.status}`}>{i.status}</span>
       </span>
-      <span className="issue-card-title">{i.title}</span>
-    </a>
+      <span className="issue-card-title">{i.concern}</span>
+    </>
   )
+  return i.url
+    ? <a className="issue-card" href={i.url} target="_blank" rel="noreferrer">{inner}</a>
+    : <span className="issue-card">{inner}</span>
 }
 
 export default function FocusPanel({ node, onOpenEval }) {
@@ -40,8 +45,8 @@ export default function FocusPanel({ node, onOpenEval }) {
   const states = scenarioStates(node?.scenarios, node?.evals)
   const satisfied = states.filter((s) => s.state === 'pass').length
   const issues = node?.issues || []
-  const open = issues.filter((i) => (i.state || '').toLowerCase() === 'open')
-  const closed = issues.filter((i) => (i.state || '').toLowerCase() !== 'open')
+  const open = issues.filter((i) => i.status === 'open')
+  const closed = issues.filter((i) => i.status !== 'open')
   return (
     <aside className="focus-panel">
       <div className="fp-head">
@@ -73,9 +78,9 @@ export default function FocusPanel({ node, onOpenEval }) {
         </div>
         {issues.length ? (
           <>
-            {open.map((i) => <IssueRow key={i.number} i={i} />)}
+            {open.map((i) => <IssueRow key={i.id} i={i} />)}
             {closed.length > 0 && <div className="issue-group-head closed">{t('focusPanel.closed', { n: closed.length })}</div>}
-            {closed.map((i) => <IssueRow key={i.number} i={i} />)}
+            {closed.map((i) => <IssueRow key={i.id} i={i} />)}
           </>
         ) : <div className="fp-empty">{t('focusPanel.noIssues')}</div>}
       </section>

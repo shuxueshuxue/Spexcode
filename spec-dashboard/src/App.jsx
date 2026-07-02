@@ -507,7 +507,6 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
         )}
 
         {legend && <Legend onClose={() => setLegend(false)} />}
-        {search && <SpecSearch specs={specs} sessions={sessions} onPick={onSearchPick} onClose={() => setSearch(null)} boost={search === 'sessions' ? 'session' : null} />}
       </div>
 
       {/* the divider the focus panel hangs on — an 8px col-resize hit strip straddling the pane border */}
@@ -530,6 +529,7 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
         onSeedConsumed={() => setSeed(null)}
         onClose={() => navigate('graph')}
         onPickSession={onPickSession}
+        onOpenSearch={() => setSearch('sessions')}
         reload={reload}
       />
       {/* the forum page ([[issues-view]]) — its own route; mounts per visit (it fetches on mount) */}
@@ -540,6 +540,10 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
       )}
       {/* the settings page ([[settings]]) — same sections as ever, now a routed page instead of a popup */}
       {page === 'settings' && <Settings />}
+      {/* the one shared search palette ([[session-board-search]]) — mounted at APP level, not inside a
+          routed page: it must float above whichever page is showing (the graph's `/`, the session board's
+          ⌘+/ and Search pill), and a page's display:none must never swallow it. */}
+      {search && <SpecSearch specs={specs} sessions={sessions} onPick={onSearchPick} onClose={() => setSearch(null)} boost={search === 'sessions' ? 'session' : null} />}
       </div>
     </div>
   )

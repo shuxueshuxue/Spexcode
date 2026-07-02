@@ -8,10 +8,6 @@ const pexec = promisify(execFile)
 const TMUX_SOCK = process.env.SPEXCODE_TMUX || 'spexcode'
 // cold fallback size for a session no viewer has ever sized (see lastFit).
 const DEFAULT_COLS = 120, DEFAULT_ROWS = 40
-// a full (re)attach frame carries this much recent tmux history into the renderer. Wheel navigation still
-// stays pane-owned: normal panes scroll tmux copy-mode over that history; mouse-owning TUIs receive mouse
-// reports and scroll themselves ([[forwardWheel]]).
-const HISTORY_SEED_LINES = 4000
 
 // a viewer: anything we can push pane bytes to (a WebSocket, wrapped).
 export type Viewer = { send: (data: Buffer) => void }
@@ -34,8 +30,8 @@ type Bridge = {
   // the event is a guaranteed arrival, not a hope that needs a settle-timeout ([[deterministic-convergence]]).
   layoutWaiter?: { want: string; resolve: () => void }
   // the next repaint must be a FULL frame — the DEC-mode prelude (so xterm mirrors the pane's alt-screen /
-  // mouse state) plus the recent-scrollback seed — not a resize's visible-only re-seed. Set on every
-  // (re)attach and re-bind, since a (re)connecting viewer's xterm is blank / just reset.
+  // mouse state), not a resize's visible-only re-seed. Set on every (re)attach and re-bind, since a
+  // (re)connecting viewer's xterm is blank / just reset.
   needsFull?: boolean
 }
 const bridges = new Map<string, Bridge>()
@@ -351,10 +347,10 @@ export function forwardWheel(id: string, up: boolean, col: number, row: number, 
 // The capture frame broadcasts synchronously at its block-end, so any %output that follows in the stream
 // lands AFTER the frame and is never overwritten by it — the frame is the attach seed, %output the live tail.
 //
-// A FULL frame (attach / re-bind / reconnect — b.needsFull) leads with the mode prelude and carries recent
-// tmux history (`-S`) so the renderer has the pane's real context. A resize re-seeds only the visible screen:
-// re-flushing thousands of lines on every resize would be costly and flicker, and the clear is
-// `\x1b[H\x1b[2J` (viewport only, never `\x1b[3J`), so it never wipes the seeded context.
+// A FULL frame (attach / re-bind / reconnect — b.needsFull) leads with the mode prelude so the renderer mirrors
+// the pane's terminal modes. History is not copied into xterm's own scrollback: wheel navigation is tmux-owned,
+// so both FULL frames and resizes capture the current tmux view only. The clear is `\x1b[H\x1b[2J` (viewport
+// only, never `\x1b[3J`).
 async function repaint(b: Bridge): Promise<void> {
   const token = ++b.repaintToken
   const want = `${b.cols}x${b.rows}`
@@ -374,7 +370,7 @@ async function repaint(b: Bridge): Promise<void> {
     // The prelude+clear is ASCII; the body is joined at the BYTE level so a wide char is never string-mangled.
     broadcast(b.id, Buffer.concat([Buffer.from(prelude + '\x1b[H\x1b[2J', 'utf8'), joinLines(lines)]))
   })
-  const cap = full ? `capture-pane -e -p -S -${HISTORY_SEED_LINES} -t ${b.id}` : `capture-pane -e -p -t ${b.id}`
+  const cap = `capture-pane -e -p -t ${b.id}`
   try { b.pty.write(cap + '\n') } catch { b.cmdQ.pop() }
 }
 

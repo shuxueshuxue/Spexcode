@@ -1058,8 +1058,8 @@ body {
 @keyframes si-expand { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
 /* live tmux terminal inside the session view — xterm is FITTED to this box (see SessionTerm). The host and
-   wrapper clip the terminal chrome; wheel navigation is sent to the tmux bridge so normal panes and TUIs use
-   the same pane-owned path. The box is shortened above the docked ❯ box by margin-bottom (set above). */
+   wrapper clip the terminal chrome; history and wheel navigation are sent to the tmux bridge so there is no
+   browser-owned terminal scrollbar competing with the pane. The box is shortened above the docked ❯ box. */
 /* the terminal is a read-only VIEW. */
 .st-wrap { position: relative; width: 100%; height: 100%; }
 .st-host { width: 100%; height: 100%; overflow: hidden; }

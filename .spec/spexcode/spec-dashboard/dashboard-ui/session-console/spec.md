@@ -75,7 +75,8 @@ into that dark edge — the complaint this replaces). Between the tabs and the a
 rows, ellipsing when tight, so it never disagrees with the row that opened it — and the state's lifecycle
 **actions on the right** (below). Read-only governs *keyboard* input, not extraction or navigation: text selects, and the
 wheel scrolls **the tmux pane's real history** — normal output through tmux copy-mode, mouse-owning TUIs by
-forwarding the wheel to the app ([[live-view]] owns the adapter decision) — a drag selects even under mouse-reporting, and `⌘/Ctrl+C` copies to the clipboard **over HTTPS, localhost,
+forwarding the wheel to the app ([[live-view]] owns the adapter decision), with no browser-owned terminal
+scrollbar competing with tmux — a drag selects even under mouse-reporting, and `⌘/Ctrl+C` copies to the clipboard **over HTTPS, localhost,
 or plain HTTP** (past the secure-context-only Clipboard API).
 
 Input has **two channels**. The **`❯` box** is the prompt channel: submitting dispatches through the **control

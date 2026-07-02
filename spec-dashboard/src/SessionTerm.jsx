@@ -80,7 +80,7 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
     firstFrameCleanedRef.current = false
     const term = new Terminal({
       fontSize: 11, fontFamily: 'Menlo, monospace',
-      cursorBlink: false, disableStdin: true, scrollback: 5000,  // render cache; wheel navigation is tmux-owned
+      cursorBlink: false, disableStdin: true, scrollback: 0,  // tmux owns history; xterm renders only the pane view
       // stops a held ⌥ mid-drag from flipping into column/block select, so an accidental Option keeps a linewise grab.
       macOptionClickForcesSelection: true,
       // GitHub-Dark NEUTRAL palette, paired with the #0d1117 background so the terminal matches the app's
@@ -195,7 +195,6 @@ export default function SessionTerm({ sessionId, active = true, onMenu }) {
         const col = clamp(Math.floor((ev.clientX - rect.left) / (rect.width / term.cols)) + 1, term.cols)
         const row = clamp(Math.floor((ev.clientY - rect.top) / (rect.height / term.rows)) + 1, term.rows)
         const ticks = Math.min(5, Math.max(1, Math.round(Math.abs(ev.deltaY) / 40)))
-        try { term.scrollToBottom() } catch { /* keep xterm's native viewport out of the navigation path */ }
         if (sock?.isOpen()) sock.send(JSON.stringify({ t: 'wheel', up: ev.deltaY < 0, col, row, ticks }))
       }
       ev.preventDefault()

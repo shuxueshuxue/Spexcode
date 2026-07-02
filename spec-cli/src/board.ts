@@ -103,13 +103,19 @@ export async function buildBoard() {
     if (open.length) n.openIssues = open
   }
 
-  // fold each yatsu node's eval timeline onto it, riding this one board poll: `evals` (readings, newest-first)
-  // and `scenarios` (the declared set) attached only when the node declares scenarios. evalContext reuses the
-  // specs + driftIndex above; evalTimeline short-circuits non-yatsu nodes so the poll stays fast.
+  // fold each yatsu node's eval state onto it — as the LEAN summary ([[board-lean]]): `evals` carries only
+  // the LATEST reading per scenario (newest-first), which is all any overview surface consumes (the score
+  // badge, stats, search all reduce to latest-per-scenario anyway); the full timeline stays off the board
+  // and is lazy-loaded by the eval tab from `/api/specs/:id/evals`. `scenarios` (the declared set) rides
+  // whole. evalContext reuses the specs + driftIndex above; evalTimeline short-circuits non-yatsu nodes.
   const ectx = evalContext(root, specs, idx, hidx)
   await Promise.all(nodes.map(async (n) => {
     const tl = await evalTimeline(n.id, ectx)
-    if (tl.hasYatsu) { n.evals = tl.readings; n.scenarios = tl.scenarios }
+    if (tl.hasYatsu) {
+      const seen = new Set<string>()
+      n.evals = tl.readings.filter((r: any) => !seen.has(r.scenario) && (seen.add(r.scenario), true))
+      n.scenarios = tl.scenarios
+    }
   }))
 
   const opsByPath: Record<string, any[]> = {}

@@ -27,6 +27,20 @@ scenarios:
       gone and the two-part (or whole) body renders; the console is clean. A failed fetch would resolve to an
       empty body, never a spinner that never stops.
     code: [spec-dashboard/src/NodeView.jsx, spec-dashboard/src/styles.css]
+  - name: eval-history-off-the-board
+    tags: [frontend-e2e, backend-api]
+    description: >
+      Confirm `/api/board` carries only the latest reading per scenario (a node's `evals` length equals its
+      scenario count, not its filing count), then open a node with real reading history and switch to its
+      eval tab in a real browser: the tab must lazy-load the FULL timeline from `/api/specs/:id/evals` and
+      render more rows than the board summary shipped, with no stuck spinner and a clean console. Score
+      badges on the graph must render unchanged off the summary.
+    expected: >
+      Board payload roughly halves versus shipping full histories (measured ~576KB → ~270KB on the dogfood
+      board); the eval tab shows the complete reading history (rows > the board's per-scenario summary
+      count); badges/stats/search are pixel-identical since they always reduced to latest-per-scenario; a
+      failed timeline fetch degrades to the summary readings, never an endless spinner.
+    code: [spec-cli/src/board.ts, spec-dashboard/src/NodeView.jsx]
 ---
 # board-lean — measurement
 

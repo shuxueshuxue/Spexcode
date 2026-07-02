@@ -43,10 +43,9 @@ the client renders **is** some true server snapshot — never a blend of two. Th
 **Guaranteed win, literally.** The server ships `min(patch, full)`: a patch that fails to beat the snapshot
 it patches (a mass change, a churn burst like a forge-cache refresh) is replaced by the snapshot itself, so
 a delta subscriber is never worse off than a refetching one — and idle costs nothing. Measured on the
-dogfood board: a session change is ~8.6KB against the ~570KB snapshot, applied with zero `/api/board`
-refetches. What this deliberately does *not* shrink is the full snapshot itself — the first paint and the
-resync path still carry it; slimming that (the eval history) is [[board-lean]]'s next cut, and the two
-compose: leaner fulls, thinner deltas.
+dogfood board: a session change is ~1KB against the full snapshot, applied with zero `/api/board`
+refetches. The full snapshot itself — the first paint and the resync path — is [[board-lean]]'s concern
+(its evals cut took it ~576KB → ~270KB), and the two compose: leaner fulls, thinner deltas.
 
 The transport that carries these frames — event sources, debounce, subscriber gating, the legacy
 `board-changed` mode — stays [[board-stream]]'s contract; the client wiring (apply mirror, fallback

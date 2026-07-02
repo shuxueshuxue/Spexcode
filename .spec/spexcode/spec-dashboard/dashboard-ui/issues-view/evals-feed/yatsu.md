@@ -14,6 +14,18 @@ scenarios:
       elements in the list. Opening the page fires ZERO extra /api/board fetches (the group rides the
       app's one poll via props). Selecting a video row renders it in the RIGHT detail pane as the
       annotator — the only place its <video> exists.
+  - name: blobless-reading-honest-note-kind
+    tags: [frontend-e2e]
+    description: >
+      With blob-less readings on the board (spex yatsu eval … --note only, no --image/--video/--result),
+      open #/forum in a real browser. Cross-check /api/board: readings with no blob vs the rows each kind
+      chip claims. Click the `note` chip, read the rows' kind tags; click `image`, recount; select a
+      note row and read what the detail pane renders.
+    expected: |
+      A blob-less reading's row tag reads `note` — never `img`/`vid`. The `image` chip claims ONLY rows
+      whose reading has a real image blob (blob-less count under it: zero); `note` claims exactly the
+      blob-less rows. Selecting a note row renders its verdict note as TEXT in the detail pane — no
+      <video>/<img> element and no empty media box.
 ---
 # evals-feed loss
 

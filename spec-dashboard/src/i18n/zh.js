@@ -53,7 +53,7 @@ export default {
 
   evalsFeed: {
     title: '评审 — 当前 loss',
-    kind: { video: '视频', image: '图片', all: '全部' },
+    kind: { video: '视频', image: '图片', note: '备注', all: '全部' },
     staleN: ({ n }) => `${n} 条已过期`,
     summary: ({ n }) => `${n} 条当前`,
     empty: '没有匹配的当前读数 — 先测量一个场景，或切换筛选。',

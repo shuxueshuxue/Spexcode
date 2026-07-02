@@ -25,10 +25,15 @@ measurement count. Review attends to what still counts.
 ## expanded spec
 
 Default view: **latest reading per scenario, fresh only, newest first**, evidence-kind filter defaulting
-to `video` and falling back to `image` when no video reading exists; stale readings collapse to a count
-badge, expanded on demand. The chips (video | image | all, the stale toggle) live in this group's sticky
-head and are this group's own state — [[issues-view]] owns the page shell (split, selection, j/k), never
-this group's filters.
+to `video`, falling back to `image` when no video reading exists and to `all` when neither media kind does;
+stale readings collapse to a count badge, expanded on demand. The chips (video | image | note | all, the
+stale toggle) live in this group's sticky head and are this group's own state — [[issues-view]] owns the
+page shell (split, selection, j/k), never this group's filters.
+
+**Kinds are honest.** A reading's kind is its evidence: `video`/`image`/`transcript` when a blob exists
+(a legacy blob with no recorded kind is an image — every legacy capture was one), and **`note`** when no
+blob exists at all (a verdict filed with prose only). A blob-less reading is never claimed by the media
+filters and its row never advertises media it lacks — the `note` chip and tag are its own.
 
 **Rows are title-only, always** — verdict mark · scenario · node · evidence-kind tag · relative time —
 no media request of any kind in the list. Selecting a row opens it in the page's DETAIL pane as the

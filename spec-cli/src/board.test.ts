@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert'
-import { latestPerScenario } from './board.js'
+import { latestPerScenario, slimScenarios } from './board.js'
 
 // Pins the board's eval-summary contract ([[board-lean]]): the fold keeps the latest reading per scenario
 // as the VERBATIM object — a filter, never a projection. Optional per-kind fields (the annotator's
@@ -27,4 +27,15 @@ test('retained readings are verbatim — every field survives, including video-o
   assert.strictEqual(out[0], video)            // same reference: a filter cannot have projected anything
   assert.deepStrictEqual(out[0], video)        // and every field — timelineBlob included — is intact
   assert.strictEqual(out[0].timelineBlob, 'tl-456')
+})
+
+// The scenario fold is the opposite contract: a PROJECTION to {name, tags} — prose (description/expected)
+// and per-scenario code must NOT ride the board; they reach their viewers via /api/specs/lite and
+// /api/specs/:id/evals instead. Empty tags are omitted, not shipped as [].
+test('board scenarios are slim — name and tags only, no prose, no code', () => {
+  const declared = [
+    { name: 'a', description: 'long prose', expected: 'longer prose', tags: ['frontend-e2e'], code: ['x.ts'] },
+    { name: 'b', description: 'd', expected: 'e' },
+  ]
+  assert.deepStrictEqual(slimScenarios(declared), [{ name: 'a', tags: ['frontend-e2e'] }, { name: 'b' }])
 })

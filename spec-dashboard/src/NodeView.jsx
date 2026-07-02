@@ -495,8 +495,11 @@ function DeclaredScenario({ s }) {
 
 // the full reading history is NOT on the board ([[board-lean]]): the board's `evals` is only the latest
 // reading per scenario, so this tab lazy-loads the whole timeline from `/api/specs/:id/evals` when opened.
+// The board's `scenarios` fold is slim too ({name, tags}), so the declared set — with each scenario's
+// expected and tracked files for the blind-spot rows — comes from the SAME fetch, which carries it whole.
 // Cache keyed by the summary's newest ts + count, so a fresh filing misses and refetches; a FAILED fetch
-// falls back to the board's summary readings — truthful, just shallow — never a spinner that never stops.
+// falls back to the board's summary readings + slim scenarios — truthful, just shallow — never a spinner
+// that never stops.
 const evalCache = new Map()
 export function EvalPane({ node }) {
   const t = useT()
@@ -507,14 +510,14 @@ export function EvalPane({ node }) {
     let on = true
     setTimeline(null)
     fetch(`/api/specs/${node.id}/evals`).then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
-      .then((tl) => { evalCache.set(key, tl.readings || []); if (on) setTimeline(tl.readings || []) })
-      .catch(() => { if (on) setTimeline(node.evals || []) })
+      .then((tl) => { const v = { scenarios: tl.scenarios || node.scenarios || [], readings: tl.readings || [] }; evalCache.set(key, v); if (on) setTimeline(v) })
+      .catch(() => { if (on) setTimeline({ scenarios: node.scenarios || [], readings: node.evals || [] }) })
     return () => { on = false }
   }, [key, node.id])
   if (!node.evals) return <div className="pane-eval empty">{t('nodeView.eval.noScenarios')}</div>
   if (timeline === null) return <div className="pane-eval pane-loading"><span className="spinner" aria-label={t('common.loading')} /></div>
-  const readings = timeline
-  const unmeasured = scenarioStates(node.scenarios, readings).filter((s) => !s.reading)
+  const readings = timeline.readings
+  const unmeasured = scenarioStates(timeline.scenarios, readings).filter((s) => !s.reading)
   if (!readings.length) return (
     <div className="pane-eval pane-eval-declared">
       <div className="eval-todo-note">{t('nodeView.eval.noReadings')}</div>

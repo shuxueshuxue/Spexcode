@@ -31,7 +31,7 @@ substrate, references everywhere else.
 **One palette, two themes.** The whole app — the spec-node board, the react-flow canvas, AND the
 session console — draws its colours from one set of CSS custom properties (`--paper --panel --panel2
 --line --ink --ink2 --muted`, the accents `--blue/--green/--red/--yellow/--orange/--magenta/--cyan`,
-`--term-bg`, the `--sg-comms*` session-graph tokens). Because every rule reads through those vars, a
+`--term-bg`). Because every rule reads through those vars, a
 theme is nothing but a second definition of them: `styles.css` keeps the solarized-light set as bare
 `:root`, and redefines the full set under `:root[data-theme=dark]` as a modern GitHub-Dark neutral
 near-black palette — so flipping the one `data-theme` attribute on `<html>` re-skins board and console

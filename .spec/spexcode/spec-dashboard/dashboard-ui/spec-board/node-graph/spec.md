@@ -24,7 +24,7 @@ Each node is a tight **two-row tile** — not a card — so the whole tree fits 
 
 **Row 2 — marks & people:** the denser cluster lives below the title line: the `version`, the badges — drift's commits-ahead `⚠N`, open issues, scenario count — then the node's *live editors*: the sessions whose pending ops currently touch it (the live overlay, never the historical `session` trailer), one **avatar** each (deduped per session) ringed by liveness and capped with `+N`.
 
-**Avatars** are deterministic, generated from the session id (the dashboard has no real accounts). Rendering is a **pluggable provider seam**: a higher-priority provider registered later (e.g. id → real image) swaps every face with no change to the node renderer.
+**Avatars** are deterministic, generated from the session id (the dashboard has no real accounts) — one pure `seed → {glyph, shape, colour}` function, no provider registry (an image-avatar seam existed and was removed unused; reintroduce it only when a real provider exists).
 
 **One colour system.** A session's avatar face and its *labelling colour* — node ring/overlay, the reparent edge, the session-row stripe — derive from the SAME hash of the SAME seed (the session id), so a session's face and every mark that names it share one hue. The backend emits a stable `seed` per worktree (its live session id, else its path); the dashboard derives the colour.
 

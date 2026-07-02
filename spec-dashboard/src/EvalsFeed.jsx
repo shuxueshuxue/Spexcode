@@ -12,7 +12,7 @@ import { useT } from './i18n/index.jsx'
 // and latest-per-scenario is score.jsx's scenarioStates — the same vocabulary the node badge, the focus
 // panel, and the eval tab use.
 
-const KIND_ICON = { video: '🎬', image: '🖼', transcript: '📄' }
+const KIND_TAG = { video: 'vid', image: 'img', transcript: 'txt' }
 export const kindOf = (r) => r.blobKind || 'image'
 
 // flatten board nodes → feed entries via the ONE latest-per-scenario computation (scenarioStates).
@@ -79,7 +79,7 @@ export default function EvalsGroup({ nodes = [], sel, onSel, onRows }) {
           <ScoreBadge state={e.state} />
           <span className="ef-scenario">{e.scenario}</span>
           <span className="ef-node" style={{ color: `hsl(${e.hue ?? 210} 60% 70%)` }}>{e.node}</span>
-          <span className="ef-kind">{KIND_ICON[kindOf(e)] ?? '📄'}</span>
+          <span className="ef-kind">{KIND_TAG[kindOf(e)] ?? 'txt'}</span>
           <span className="ef-time">{rel(e.ts)}</span>
         </button>
       ))}

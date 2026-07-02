@@ -33,7 +33,7 @@ count reuses that same colour vocabulary, so tile and tab still speak ONE langua
 **One vocabulary, two surfaces.** The scoring lives once in `score.jsx`: `readingScore` maps ONE reading to a
 circle state; `scenarioStates` joins the node's DECLARED scenarios (the folded `node.scenarios`) to their
 latest reading so a **never-measured** scenario is still seen — a unit of loss, not an absence; `aggregateState`
-folds those per-scenario states to one worst-first colour; `nodeScore` is that aggregate; `ScenarioCount`
+folds those per-scenario states to one worst-first colour; `ScenarioCount`
 renders the tile/stat-bar count; `ScoreBadge` draws the per-reading ring. The node tile ([[node-graph]]) and
 the node-info stat bar render `ScenarioCount`; the [[focus-panel]] renders the same per-scenario states as a
 list; the eval tab ([[yatsu-eval-tab]]) renders the per-reading circle.

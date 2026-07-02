@@ -356,14 +356,16 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   }, [prompt, active, open])
 
   // the ❯ box auto-grows UPWARD (anchored to the wrap's bottom). Its cap is dynamic — half the terminal
-  // height — so we set max-height in JS, then hand the same value to fitTextarea.
+  // height — so we set max-height in JS, then hand the same value to fitTextarea. The box UNMOUNTS while
+  // the Eval tab or nav mode replaces it and remounts at rows=1, so those flips must re-fit it too — the
+  // draft survives the round-trip and the grown height must survive with it.
   useEffect(() => {
     const ta = msgRef.current
     if (!ta || active === 'new' || !open) return
     const maxH = Math.round((termRef.current?.clientHeight || 360) * 0.5)
     ta.style.maxHeight = `${maxH}px`
     fitTextarea(ta, maxH)
-  }, [msg, active, open])
+  }, [msg, active, open, rightTab, navMode])
 
   // assemble the `/<preset> [[<node>]]… <free text>` launch grammar into one prompt: the preset body with its
   // {{targets}} placeholder filled from the mentions (the server later derives the node from the first

@@ -277,7 +277,7 @@ scenarios:
       a `.proof-pane` (the self-contained proof `<iframe>`, or the empty/loading placeholder when there is
       nothing to prove yet), not a modal overlay. Returning to Terminal restores the live pane unchanged. The
       proof is always available on this tab for any selected session, not only one in review.
-    related: spec-dashboard/src/ReviewProof.jsx
+    related: spec-dashboard/src/SessionEval.jsx
 ---
 
 # session-console — yatsu

@@ -27,6 +27,13 @@ export function latestPerScenario<T extends { scenario: string }>(readings: T[])
   return readings.filter((r) => !seen.has(r.scenario) && (seen.add(r.scenario), true))
 }
 
+// the board's scenario fold ([[board-lean]]): the declared set rides SLIM — {name, tags} is everything an
+// overview surface joins state onto (badge, stats, focus rows, search rows); the prose (description/
+// expected) and per-scenario code stay off the hot poll, carried by `/api/specs/lite` and `/api/specs/:id/evals`.
+export function slimScenarios(scenarios: { name: string; tags?: string[] }[]): { name: string; tags?: string[] }[] {
+  return scenarios.map((s) => ({ name: s.name, ...(s.tags?.length ? { tags: s.tags } : {}) }))
+}
+
 export async function buildBoard() {
   // all three sources are warm-cheap and independent, so the board inherits their speed for free: loadSpecs
   // REUSES the HEAD-keyed spec-history cache (the git-derived node data — see specs.ts/git.ts), resolveLayout
@@ -117,11 +124,14 @@ export async function buildBoard() {
   // the LATEST reading per scenario (newest-first), which is all any overview surface consumes (the score
   // badge, stats, search all reduce to latest-per-scenario anyway); the full timeline stays off the board
   // and is lazy-loaded by the eval tab from `/api/specs/:id/evals`. `scenarios` (the declared set) rides
-  // whole. evalContext reuses the specs + driftIndex above; evalTimeline short-circuits non-yatsu nodes.
+  // SLIM — {name, tags} only, the fields every overview surface joins state onto — with its prose
+  // (description/expected) and per-scenario code off the hot poll: they ride the `/api/specs/lite` corpus
+  // (search palette, focus-panel preview) and the `/api/specs/:id/evals` timeline (eval tab).
+  // evalContext reuses the specs + driftIndex above; evalTimeline short-circuits non-yatsu nodes.
   const ectx = evalContext(root, specs, idx, hidx)
   await Promise.all(nodes.map(async (n) => {
     const tl = await evalTimeline(n.id, ectx)
-    if (tl.hasYatsu) { n.evals = latestPerScenario(tl.readings); n.scenarios = tl.scenarios }
+    if (tl.hasYatsu) { n.evals = latestPerScenario(tl.readings); n.scenarios = slimScenarios(tl.scenarios) }
   }))
 
   const opsByPath: Record<string, any[]> = {}

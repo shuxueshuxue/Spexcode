@@ -1,39 +1,53 @@
 import { useEffect, useRef, useState } from 'react'
-import { useEscLayer } from './escStack.js'
 import { useT } from './i18n/index.jsx'
 
-// The annotator ([[annotator]]): the human's measuring hand on an ALREADY-captured clip. Plays the video
-// reading's blob; when the reading carries a step-timeline sidecar, a step ruler renders under the scrubber
-// (click a step → seek); dragging on the paused frame circles a region and opens a comment at that moment.
-// Output routes through EXISTING seams only: an issue on the responsible node (the forum write path, the
-// clip referenced by hash) or a manual@1 reading (the eval seam's POST half). No new ledger structure.
+// The annotator ([[annotator]]): the human's measuring hand on an ALREADY-captured reading — now the
+// issues page's DETAIL PANE for a selected eval (master-detail, [[issues-view]]), no longer a modal: the
+// selected reading gets the full pane height instead of a box inside a box. A video reading renders the
+// clip with a step ruler (from the step-timeline sidecar: click a step → seek; a drag on the paused frame
+// circles a region whose mark is named by the ≤T step); an image renders full-width; a transcript renders
+// as text. Output routes through EXISTING seams only: an issue on the responsible node (typed evidence[])
+// or a manual@1 reading via the eval seam's POST half. No new ledger structure.
 
-// which step is this moment — the last event at or before T (mirrors spec-yatsu/src/timeline.ts stepAt)
 const stepAt = (events, tMs) => { let hit = null; for (const e of events) { if (e.tMs <= tMs) hit = e; else break } return hit }
 const mmss = (tMs) => { const s = Math.floor(tMs / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` }
 
-export default function Annotator({ entry, onClose }) {
+function Transcript({ hash }) {
   const t = useT()
-  useEscLayer(true, onClose)
+  const [text, setText] = useState(null)
+  useEffect(() => {
+    let on = true
+    fetch(`/api/yatsu/blob/${hash}`).then((r) => (r.ok ? r.text() : Promise.reject())).then((tx) => { if (on) setText(tx) }).catch(() => { if (on) setText('') })
+    return () => { on = false }
+  }, [hash])
+  return <pre className="eval-transcript">{text ?? t('nodeView.eval.loadingTranscript')}</pre>
+}
+
+export default function Annotator({ entry, onFiled }) {
+  const t = useT()
   const vid = useRef(null)
   const box = useRef(null)
   const [events, setEvents] = useState([])
   const [marks, setMarks] = useState([])      // { tMs, step, node, rect{x,y,w,h in %}, comment }
-  const [drag, setDrag] = useState(null)      // live drag rect while the mouse is down
+  const [drag, setDrag] = useState(null)
   const [verdict, setVerdict] = useState(null)
   const [note, setNote] = useState('')
   const [flash, setFlash] = useState('')
+  const kind = entry.blobKind || 'image'
+
+  // a selection change is a new reading under annotation — the working state belongs to the old one.
+  useEffect(() => { setMarks([]); setDrag(null); setVerdict(null); setNote(''); setFlash(''); setEvents([]) }, [entry.blob, entry.scenario, entry.node])
 
   // the step map arrives lazily from the same blob cache the clip streams from; absent → plain player.
   useEffect(() => {
-    if (!entry.timelineBlob) return
+    if (!entry.timelineBlob || kind !== 'video') return
     let on = true
     fetch(`/api/yatsu/blob/${entry.timelineBlob}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => { if (on && Array.isArray(j?.events)) setEvents(j.events) })
       .catch(() => {})
     return () => { on = false }
-  }, [entry.timelineBlob])
+  }, [entry.timelineBlob, kind])
 
   const pct = (ev) => {
     const r = box.current.getBoundingClientRect()
@@ -65,8 +79,7 @@ export default function Annotator({ entry, onClose }) {
   }
   const now = Math.round((vid.current?.currentTime ?? 0) * 1000)
 
-  // save path 1 — an issue on the responsible node(s): the unified Issue port's write seam, the clip and
-  // its step map referenced by TYPED evidence[] (content-addressed hashes), the marks as the prose body.
+  // save path 1 — an issue on the responsible node(s): the unified Issue port, typed evidence[].
   const fileIssue = async () => {
     const nodes = [...new Set(marks.map((m) => m.node).filter(Boolean))]
     const lines = marks.map((m) =>
@@ -80,6 +93,7 @@ export default function Annotator({ entry, onClose }) {
       }),
     }).catch(() => null)
     setFlash(r?.ok ? t('annotator.issueFiled') : t('annotator.failed'))
+    if (r?.ok) onFiled?.()   // the page's issue list refreshes — a filing must show up where it lands
   }
 
   // save path 2 — a manual@1 reading on THIS scenario (the eval seam), the report as transcript evidence.
@@ -94,54 +108,65 @@ export default function Annotator({ entry, onClose }) {
   }
 
   return (
-    <div className="an-overlay" role="dialog" aria-label={t('annotator.title')}>
-      <div className="an-panel">
-        <header className="an-head">
-          <span className="an-title">{entry.scenario}</span>
-          <span className="an-node">{entry.node}</span>
-          <button className="ef-close" onClick={onClose} title={t('common.close')}>✕</button>
-        </header>
-        {entry.expected && <div className="an-expected"><b>{t('nodeView.eval.expected')}</b> {entry.expected}</div>}
-        <div className="an-stage" ref={box} onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp}>
-          <video className="an-video" ref={vid} src={`/api/yatsu/blob/${entry.blob}`} controls preload="metadata" />
-          {marks.map((m, i) => (
-            <div key={i} className="an-rect" style={{ left: `${m.rect.x}%`, top: `${m.rect.y}%`, width: `${m.rect.w}%`, height: `${m.rect.h}%` }} />
-          ))}
-          {liveRect && <div className="an-rect live" style={{ left: `${liveRect.x}%`, top: `${liveRect.y}%`, width: `${liveRect.w}%`, height: `${liveRect.h}%` }} />}
-        </div>
-        {events.length > 0 && (
-          <div className="an-ruler">
-            {events.map((e, i) => (
-              <button key={i} className={`an-step ${stepAt(events, now) === e ? 'on' : ''}`}
-                onClick={() => { if (vid.current) vid.current.currentTime = e.tMs / 1000 }}
-                title={e.node ? `→ ${e.node}` : undefined}>
-                {mmss(e.tMs)} {e.step}
-              </button>
+    <div className="an-detail">
+      <header className="an-head">
+        <span className="an-title">{entry.scenario}</span>
+        <span className="an-node">{entry.node}</span>
+        {entry.evaluator && <span className="an-meta">{entry.evaluator}</span>}
+        <span className="an-meta">{new Date(entry.ts).toLocaleString()}</span>
+      </header>
+      {entry.expected && <div className="an-expected"><b>{t('nodeView.eval.expected')}</b> {entry.expected}</div>}
+      {entry.verdict?.note && <div className="an-expected an-prior-note"><b>{t('nodeView.eval.noteLabel')}</b> {entry.verdict.note}</div>}
+
+      {entry.blobState === 'present' && kind === 'video' && (
+        <>
+          <div className="an-stage" ref={box} onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp}>
+            <video className="an-video" ref={vid} src={`/api/yatsu/blob/${entry.blob}`} controls preload="metadata" />
+            {marks.map((m, i) => (
+              <div key={i} className="an-rect" style={{ left: `${m.rect.x}%`, top: `${m.rect.y}%`, width: `${m.rect.w}%`, height: `${m.rect.h}%` }} />
+            ))}
+            {liveRect && <div className="an-rect live" style={{ left: `${liveRect.x}%`, top: `${liveRect.y}%`, width: `${liveRect.w}%`, height: `${liveRect.h}%` }} />}
+          </div>
+          {events.length > 0 && (
+            <div className="an-ruler">
+              {events.map((e, i) => (
+                <button key={i} className={`an-step ${stepAt(events, now) === e ? 'on' : ''}`}
+                  onClick={() => { if (vid.current) vid.current.currentTime = e.tMs / 1000 }}
+                  title={e.node ? `→ ${e.node}` : undefined}>
+                  {mmss(e.tMs)} {e.step}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="an-marks">
+            {marks.length === 0 && <div className="an-hint">{t('annotator.hint')}</div>}
+            {marks.map((m, i) => (
+              <div key={i} className="an-mark">
+                <span className="an-mark-t">{mmss(m.tMs)}{m.step ? ` · ${m.step}` : ''}</span>
+                <input className="an-mark-node" value={m.node} onChange={(ev) => setMark(i, { node: ev.target.value })} title={t('annotator.nodeTitle')} />
+                <input className="an-mark-c" value={m.comment} placeholder={t('annotator.commentPh')} onChange={(ev) => setMark(i, { comment: ev.target.value })} />
+                <button className="an-mark-x" onClick={() => setMarks((mm) => mm.filter((_, j) => j !== i))}>✕</button>
+              </div>
             ))}
           </div>
-        )}
-        <div className="an-marks">
-          {marks.length === 0 && <div className="an-hint">{t('annotator.hint')}</div>}
-          {marks.map((m, i) => (
-            <div key={i} className="an-mark">
-              <span className="an-mark-t">{mmss(m.tMs)}{m.step ? ` · ${m.step}` : ''}</span>
-              <input className="an-mark-node" value={m.node} onChange={(ev) => setMark(i, { node: ev.target.value })} title={t('annotator.nodeTitle')} />
-              <input className="an-mark-c" value={m.comment} placeholder={t('annotator.commentPh')} onChange={(ev) => setMark(i, { comment: ev.target.value })} />
-              <button className="an-mark-x" onClick={() => setMarks((mm) => mm.filter((_, j) => j !== i))}>✕</button>
-            </div>
-          ))}
-        </div>
-        <footer className="an-actions">
-          <button className="an-act" disabled={!marks.length} onClick={fileIssue}>{t('annotator.fileIssue')}</button>
-          <span className="an-verdict">
-            <button className={`an-v pass ${verdict === 'pass' ? 'on' : ''}`} onClick={() => setVerdict('pass')}>✓ pass</button>
-            <button className={`an-v fail ${verdict === 'fail' ? 'on' : ''}`} onClick={() => setVerdict('fail')}>✗ fail</button>
-            <input className="an-note" value={note} placeholder={t('annotator.notePh')} onChange={(ev) => setNote(ev.target.value)} />
-            <button className="an-act" disabled={!verdict} onClick={fileReading}>{t('annotator.fileReading')}</button>
-          </span>
-          {flash && <span className="an-flash">{flash}</span>}
-        </footer>
-      </div>
+          <footer className="an-actions">
+            <button className="an-act" disabled={!marks.length} onClick={fileIssue}>{t('annotator.fileIssue')}</button>
+            <span className="an-verdict">
+              <button className={`an-v pass ${verdict === 'pass' ? 'on' : ''}`} onClick={() => setVerdict('pass')}>✓ pass</button>
+              <button className={`an-v fail ${verdict === 'fail' ? 'on' : ''}`} onClick={() => setVerdict('fail')}>✗ fail</button>
+              <input className="an-note" value={note} placeholder={t('annotator.notePh')} onChange={(ev) => setNote(ev.target.value)} />
+              <button className="an-act" disabled={!verdict} onClick={fileReading}>{t('annotator.fileReading')}</button>
+            </span>
+            {flash && <span className="an-flash">{flash}</span>}
+          </footer>
+        </>
+      )}
+      {entry.blobState === 'present' && kind === 'image' && (
+        <img className="an-image" src={`/api/yatsu/blob/${entry.blob}`} alt={entry.scenario} />
+      )}
+      {entry.blobState === 'present' && kind === 'transcript' && <Transcript hash={entry.blob} />}
+      {entry.blobState === 'miss' && <div className="an-hint">{t('nodeView.eval.miss')}</div>}
+      {entry.blobState === 'none' && <div className="an-hint">{t('nodeView.eval.noImage')}</div>}
     </div>
   )
 }

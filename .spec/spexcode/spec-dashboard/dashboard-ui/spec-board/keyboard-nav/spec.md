@@ -45,7 +45,7 @@ The board is a drill-down (see [[node-graph]]), so a node in a collapsed subtree
 
 ## focus, sessions & chords
 
-A node does **not** belong to a session; `node.session` is only a last-editor attribution. The live link is the overlay — the session(s) whose pending ops currently touch the node. **Enter** drives the node's agent by how many editors are live: one jumps in, none opens a New Session prefilled with the node mention, several open the interface to pick. The **fresh-session** key is its unconditional counterpart — always a *new* session on the focus. The new-child and delete **chords** are likewise node ops on the focus, never destructive on the live tree, each pre-seeding the New Session input with an `@`-directive to confirm.
+A node does **not** belong to a session; `node.session` is only a last-editor attribution. The live link is the overlay — the session(s) whose pending ops currently touch the node. **Enter** drives the node's agent by how many editors are live: one jumps in, none opens a New Session prefilled with the node mention, several open the interface to pick. The **fresh-session** key is its unconditional counterpart — always a *new* session on the focus. The new-child and delete **chords** are likewise node ops on the focus, never destructive on the live tree, each pre-seeding the New Session input with a plain-prose instruction the human confirms before launch — creating or deleting a node is prompt-driven agent work, never a server op ([[dispatch]]).
 
 ## HUD & governed file
 

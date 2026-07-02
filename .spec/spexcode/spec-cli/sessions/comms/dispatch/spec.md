@@ -11,7 +11,7 @@ related:
 
 ## raw source
 
-Dispatching a **prompt** to a session — a message, a continue, the merge instruction, a node directive —
+Dispatching a **prompt** to a session — a message, a continue, the merge instruction —
 is **control**, separate from the tmux pane, which is **display only**. Control must be **scoped** (only
 sessions this product launched) and **fail-loud** (a dead dispatch is seen, never silently degraded to
 typing into the pane). And **merge is an intent the human expresses, not a server-run git script.** A
@@ -45,16 +45,20 @@ verification, never a server check, and the base is never left half-merged. Asyn
 /api/sessions/:id/merge` returns `{dispatched:true}` once the prompt is **confirmed accepted** (409 if
 unreachable). The server no longer bumps `merges` on a click.
 
-**Prompts state the task; the git flow is mechanism, not duplicated prose.** Every prompt the server builds
-— the merge prompt above and the directive **new-node** / **delete-node** prompts (each a placeholder the
-server set up, handed to the agent to name+spec+code or refactor-away by git history) — states only the
-**task** plus its own safety steps. It deliberately does **not** re-state the git flow's mechanics, because
-each is enforced by a product mechanism, not injected prose: the `node/<id>` branch by [[launch]]'s
+**Prompts state the task; the git flow is mechanism, not duplicated prose.** The merge prompt above states
+only the **task** plus its own safety steps. It deliberately does **not** re-state the git flow's mechanics,
+because each is enforced by a product mechanism, not injected prose: the `node/<id>` branch by [[launch]]'s
 `newSession`, the `Session:` trailer by the prepare-commit-msg hook, commit-before-declare by the `core`
 system config node materialized into the agent's contract (see [[launch]]), and the `--no-ff` / `merge
 node/<id>: <reason>` style by the **merge prompt** at merge time (the one place no other mechanism carries
-it). No standing `ritual` config node is needed — the flow is the product default, not a per-project
-opinion. The one task-level detail the directive prompts keep is "propose merge, don't merge".
+it). No standing `ritual` config node is needed — the flow is the product default, not a per-project opinion.
+
+**Creating or deleting a spec node is NOT a server op.** It is prompt-driven work the launched agent does
+itself — the composer's board chords merely prefill a plain instruction ("create a new node under
+[[parent]]…" / "delete [[node]]…"), and the agent authors or refactors-away the node like any other spec
+work. The server never mutates the spec tree; it only launches. This holds [[mentions]]'s line: outside the
+forum, a reference expands to prompt text, never a programmatic flow — the forum is the sole surface where
+the system itself dispatches.
 
 The **separate raw nav-key channel** (`rawKey`) keeps its own `tmux send-keys` path — the per-keystroke
 channel for driving the agent's TUI menus, carrying named keys, printable chars, and `⌃`/`⌥`/`⌘` modifier

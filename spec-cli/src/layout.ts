@@ -32,12 +32,15 @@ type Config = {
       tls?: { cert?: string; key?: string }   // PATHS to your own cert/key; omit for a cached self-signed default
     }
   }
+  proposals?: {
+    enabled?: boolean                // the [[proposals]] taste forum on/off switch (default ON). OFF silences the post-merge nudge + hides the dashboard view; flip with `spex proposals on|off`.
+  }
 }
 // the resolved LAYOUT convention — main/mainBranch/branchPrefix filled to defaults. `dashboard`, `sessions`,
 // `serve`, `harnesses`, and `preset` are frontend/runtime/policy concerns (read separately via readConfig —
 // preset by init.ts at seed time, harnesses by [[harness-select]]; see api-endpoint / sessions.ts maxActive /
 // gateway.ts), NOT layout fields, so they stay out of the convention rather than forcing a default.
-type Convention = Required<Omit<Config, 'dashboard' | 'sessions' | 'serve' | 'harnesses' | 'preset'>>
+type Convention = Required<Omit<Config, 'dashboard' | 'sessions' | 'serve' | 'harnesses' | 'preset' | 'proposals'>>
 
 export type Worktree = {
   path: string; branch: string | null; node: string | null

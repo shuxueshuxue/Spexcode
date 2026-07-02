@@ -24,6 +24,12 @@ A `pre-commit` hook rejects a direct commit while `HEAD` is the **trunk**. Merge
 node-branch commits pass because they aren't on the trunk. Escape hatch for seeding / eager topology:
 `SPEXCODE_ALLOW_MAIN=1`.
 
+One narrow exception is admitted on the trunk itself: a commit that touches **only** `.spec/.forum/**`.
+That is the [[proposals]] forum's write path — the forum is **data, not contract** (it is not spec nodes;
+it needs no review ritual), so a forum post appends straight to the trunk while every *contract* change
+still goes through a worktree and a `--no-ff` merge. Any other staged path alongside the forum files
+re-arms the guard, so the exception can't be used to smuggle real work onto the trunk.
+
 The guard's real question is "am I committing directly onto the trunk?", not "is this branch literally
 named `main`?". It resolves the trunk through the SAME single source of truth the rest of SpexCode
 uses — [[portable-layout]]'s `mainBranch()` (config override → the main checkout's current branch →
@@ -36,9 +42,10 @@ hardcoded branch.
 
 Hooks live in the **common** git dir, so one install covers every worktree at once. There is **one
 canonical hook source** — the `spec-cli/templates/hooks/` shipped with the package — and **both** install
-paths copy from it: `scripts/install-hooks.sh` (run via `npm run hooks`) for this monorepo dogfooding
-itself, and [[spex-init]] for a project adopting SpexCode. A single source is the point: a second copy
-would let the two paths drift, installing different gates. Because `.git/hooks/` is never committed,
+paths **iterate** it (not a hardcoded file list): `scripts/install-hooks.sh` (run via `npm run hooks`) for
+this monorepo dogfooding itself, and [[spex-init]] for a project adopting SpexCode. Iterating the one source
+is the point: a new hook template installs from both paths automatically, and a second hand-maintained list
+could never drift out of sync because there is none. Because `.git/hooks/` is never committed,
 installing is a per-clone onboarding step, re-run whenever the source changes (the installed copy is a
 snapshot, not a symlink). The hook is advisory and bypassable; the non-bypassable backstop is [[ci-gate]].
 

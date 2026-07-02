@@ -20,7 +20,7 @@ Three thin injections, all deliberately *non-enforcing* (the Stop gate is the en
 
 - **[[spec-pointer]]** — when a dispatch names an existing node, append **one line**: the absolute path to
   that node's live `spec.md` inside the new worktree. Never the body. Fail-quiet by absence — an unknown id
-  or a `@new` placeholder appends nothing.
+  or a node-agnostic prompt (no `[[id]]`) appends nothing.
 - **[[spec-first]]** — a one-shot `PreToolUse` nudge that fires once, at the first code ACCESS (read or
   edit), telling the agent to read its node's spec and its neighbors and reconcile against it. Touching a
   spec first blesses silently; a code access first blocks once, then passes. Reading — not just writing —

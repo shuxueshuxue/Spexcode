@@ -20,6 +20,8 @@ export default function IssuesView({ onFocusNode }) {
   const [notice, setNotice] = useState('')           // a brief @-dispatch summary after a write
   const [selIdx, setSelIdx] = useState(-1)           // the j/k-walked row; -1 = none
   const rowsRef = useRef([])                         // current issue ids, for the key handler
+  const [region, setRegion] = useState('threads')    // Tab-focused region: 'evals' ⇄ 'threads'
+  const regionRef = useRef(region); regionRef.current = region
 
   const load = useCallback(async () => {
     const d = await loadIssues().catch(() => null)
@@ -44,14 +46,21 @@ export default function IssuesView({ onFocusNode }) {
       return next
     }), [])
 
-  // section keys ([[issues-view]]): j/k walk the rows, Enter opens the selected row in place. Capture
-  // phase so a stray console handler never eats them; a key typed into an input/textarea (the composers)
-  // or carrying a modifier is never ours. Tab's region-jump engages when a second section exists
-  // ([[evals-feed]]); with one region it stays the browser's.
+  // panel keys ([[issues-view]]): Tab jumps between the two regions (evals ⇄ threads — focus shown on the
+  // section head); j/k walk the FOCUSED region's rows, Enter opens the selected row. The threads rows are
+  // this component's; the evals region's row-nav is [[evals-feed]]'s own (until it lands, j/k are inert
+  // while evals hold focus). Capture phase so a stray console handler never eats them; a key typed into an
+  // input/textarea (the composers) or carrying a modifier is never ours.
   useEffect(() => {
     const onKey = (e) => {
       const tag = e.target?.tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA' || e.metaKey || e.ctrlKey || e.altKey) return
+      if (e.key === 'Tab') {
+        e.preventDefault(); e.stopPropagation()
+        setRegion((r) => (r === 'threads' ? 'evals' : 'threads'))
+        return
+      }
+      if (regionRef.current !== 'threads') return
       if (e.key === 'j' || e.key === 'k') {
         e.preventDefault(); e.stopPropagation()
         const n = rowsRef.current.length
@@ -89,10 +98,11 @@ export default function IssuesView({ onFocusNode }) {
     <div className="fv-panel">
       {notice && <div className="fv-notice">{notice}</div>}
       {/* the evals region ([[evals-feed]]) leads ABOVE the threads — evals outrank issues here; it wraps
-          itself in its own FeedSection so its counts stay internal. */}
-      <EvalsSection />
+          itself in its own FeedSection so its counts stay internal. Tab moves the panel focus between it
+          and the threads. */}
+      <EvalsSection focused={region === 'evals'} />
       {/* the threads region — one FeedSection instance ([[issues-view]]'s panel furniture). */}
-      <FeedSection title={t('session.issuesThreadsTitle')} summary={t('session.issuesThreadsSummary', { open: openCount, total: issues.length })} density="region" focused>
+      <FeedSection title={t('session.issuesThreadsTitle')} summary={t('session.issuesThreadsSummary', { open: openCount, total: issues.length })} density="region" focused={region === 'threads'}>
       <div className="fv-toolbar">
         <button type="button" className="fv-new-btn" onClick={() => setComposing((v) => !v)}>
           {composing ? t('session.issuesCancel') : t('session.issuesNew')}

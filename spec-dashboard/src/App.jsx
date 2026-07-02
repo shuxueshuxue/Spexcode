@@ -27,8 +27,13 @@ const nodeTypes = { spec: SpecNode }
 const NW = 220, NH = 46
 const clamp = (z) => Math.max(0.4, Math.min(1.6, z))
 
-// nn = new child under focus, dd = delete focus; leaders n/d are unbound on the board so single-key nav isn't shadowed
-const CHORDS = { nn: (id) => `@new under [[${id}]]: `, dd: (id) => `@delete [[${id}]]: ` }
+// nn = new child under focus, dd = delete focus; leaders n/d are unbound on the board so single-key nav isn't shadowed.
+// These only PREFILL a plain instruction the launched agent carries out itself — node create/delete is
+// prompt-driven work, never a server op ([[mentions]]: the forum is the only programmatic surface).
+const CHORDS = {
+  nn: (id) => `Create a new spec node under [[${id}]] — choose a kebab-case id, write its spec.md at contract altitude with a code: list, implement it, then propose merge. What it should be: `,
+  dd: (id) => `Delete the [[${id}]] spec node — remove its dir, repoint or fold its governed code, fix any [[…]] refs, recover its intent from git history, then propose merge. Why: `,
+}
 const CHORD_KEYS = Object.keys(CHORDS)
 const CHORD_LEADERS = new Set(CHORD_KEYS.map((c) => c[0]))
 

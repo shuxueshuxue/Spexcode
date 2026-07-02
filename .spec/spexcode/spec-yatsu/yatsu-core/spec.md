@@ -45,7 +45,8 @@ code freshness axis (a `code`/`related` path that doesn't exist is flagged, neve
 it inherits the node's whole `code:` list. So two scenarios on one node, tracking different files, go stale
 independently — one node's loss is many signals, not one. A file governed by more scenarios than `maxOwners`
 is the `yatsu-owners` smell (split it). Measurements live apart in a flat
-**yatsu.evals.ndjson** sidecar — one JSON line per reading (scenario, codeSha, blob+blobKind, evaluator,
+**yatsu.evals.ndjson** sidecar — one JSON line per reading (scenario, codeSha, blob+blobKind, a video
+reading's optional timelineBlob ([[step-timeline]]), evaluator,
 **verdict**, ts) — the second git-as-database axis: a reading commit is a *measurement event*, not a spec
 version, so history and attribution apply unchanged.
 

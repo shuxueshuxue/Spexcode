@@ -82,6 +82,13 @@ function fireChanged(): void {
   }, 150)
 }
 
+// ---- event source 0: an EXPLICIT server-side nudge ----
+// for the one mutation the watchers structurally cannot see: /rename writes the worktree's `.session`
+// (the name's ONE home, outside the watched store — [[session-rename]]). The route calls this instead of
+// double-writing the name into the store: a notification problem gets a notification solution, never a
+// second data home. Same debounced funnel as every other source.
+export const notifyBoardChanged = (): void => fireChanged()
+
 // ---- event source 1: the session store (lifecycle status writes) ----
 let watcher: FSWatcher | null = null
 function ensureWatcher(): void {

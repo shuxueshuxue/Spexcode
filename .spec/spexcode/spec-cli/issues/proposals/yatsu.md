@@ -16,14 +16,17 @@ scenarios:
   - name: forum-round-trip
     tags: [cli]
     code: spec-cli/src/proposals.ts
+    related: [spec-cli/src/issues.ts]
     description: >-
-      Through the real CLI, open a proposal (`spex propose "<concern>" --node <id> --body <text>`), then
-      read it (`spex proposals`), then have another session sign it, reply to it, and resolve it
-      (`spex propose sign|reply|resolve <id>`). Read back with `spex proposals --all --json`.
+      Through the real CLI, open a local issue (`spex propose "<concern>" --node <id> --evidence <hash>
+      --body <text>`), then read it (`spex issues` — the one read over every store), then have another
+      session sign it, reply to it, and resolve it (`spex propose sign|reply|resolve <id>`). Read back with
+      `spex issues --all --store local --json`.
     expected: >-
-      propose prints the minted id and commits the thread; `spex proposals` lists the open concern with its
-      author + linked node; sign/reply/resolve each report success; the final `--json` shows the concern with
-      by=author, status=accepted, the signer, and the reply (by/at/body) — every write round-trips faithfully.
+      propose prints the minted id and commits the thread; `spex issues` lists the open concern store-tagged
+      `local` with its author + linked node; sign/reply/resolve each report success; the final `--json` shows
+      the concern with store=local, by=author, status=accepted, the evidence hash, the signer, and the reply
+      (by/at/body) — every write round-trips faithfully through the unified read.
   - name: data-not-contract
     tags: [cli]
     code: spec-cli/src/proposals.ts
@@ -40,12 +43,14 @@ scenarios:
     code: spec-cli/src/proposals.ts
     related: [spec-cli/templates/hooks/pre-commit]
     description: >-
-      On the trunk, let `spex propose` commit a forum file directly. Then try a plain `git commit` on the
-      trunk that touches a non-forum path, and one that touches BOTH a forum file and a non-forum path.
+      On the trunk, let `spex propose` commit a forum file directly (the writer uses `git commit
+      --no-verify`). Then try a plain `git commit` (hook active) on the trunk that touches a non-forum path,
+      and one that touches ONLY a forum file.
     expected: >-
-      The forum-only commit is admitted on the trunk (main-guard's forum-data exception). A non-forum commit
-      is still BLOCKED, and a MIXED (forum + non-forum) commit is blocked too — the exception can't smuggle
-      real work onto the trunk.
+      The programmatic forum write lands on the trunk because it commits `--no-verify` — it bypasses the hook
+      entirely, needing no guard exception. A plain non-forum commit is still BLOCKED, and a plain
+      forum-only commit (no `--no-verify`) is now blocked TOO: main-guard carries no `.spec/.forum/`
+      special-case, so the guard stays the single clean question "am I committing directly onto the trunk?".
   - name: post-merge-nudge
     tags: [cli]
     code: spec-cli/templates/hooks/post-merge
@@ -60,8 +65,8 @@ scenarios:
     code: spec-cli/src/proposals.ts
     related: [spec-cli/templates/hooks/post-merge, spec-cli/src/layout.ts]
     description: >-
-      Read `spex proposals status` with no config (default). Then `spex proposals off`, inspect spexcode.json,
-      merge a node branch. Then `spex proposals on` and merge another node branch.
+      Read `spex propose status` with no config (default). Then `spex propose off`, inspect spexcode.json,
+      merge a node branch. Then `spex propose on` and merge another node branch.
     expected: >-
       Default status is ON with no config needed. `off` writes `proposals.enabled: false` to spexcode.json and
       `status` reports OFF; the next node merge prints NO nudge (and `spex propose nudge <node>` is empty). `on`

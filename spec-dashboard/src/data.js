@@ -158,26 +158,27 @@ export async function loadConfig() {
   return res.json()
 }
 
-// the forum (proposals + notes) the backend serves at /api/forum: `{ enabled, threads }`, verbatim — the
-// info page renders what the CLI drain view reads, computing nothing over it (no re-sort, no salience order).
-export async function loadForum() {
-  const res = await apiFetch('/api/forum')
+// the merged issues ([[issues]]) the backend serves at /api/issues: `{ enabled, issues }`, verbatim — the
+// issues page renders what the CLI drain view reads, computing nothing over it (no re-sort, no salience order).
+export async function loadIssues() {
+  const res = await apiFetch('/api/issues')
   return res.json()
 }
 
-// human writes to the forum ([[forum-view]] / [[proposals]]) — POST straight through the SAME reply/propose
-// the CLI uses (git-committed to the trunk, author 'human'); an @-mention in the text dispatches a worker.
-// Both return the parsed json ({ ok, …, outcomes }); `outcomes` is the one-line @-dispatch summary to echo.
-export async function postForumReply(id, body) {
-  const res = await apiFetch(`/api/forum/${encodeURIComponent(id)}/reply`, {
+// human writes — LOCAL store only ([[issues-view]] / [[proposals]]) — POST straight through the SAME
+// reply/propose the CLI uses (git-committed to the trunk, author 'human'); an @-mention in the text
+// dispatches a worker. Both return the parsed json ({ ok, …, outcomes }); `outcomes` is the one-line
+// @-dispatch summary to echo.
+export async function postIssueReply(id, body) {
+  const res = await apiFetch(`/api/issues/${encodeURIComponent(id)}/reply`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ body }),
   })
   return res.json()
 }
-export async function postForumThread({ concern, kind, nodes, body }) {
-  const res = await apiFetch('/api/forum', {
+export async function postIssueThread({ concern, nodes, body }) {
+  const res = await apiFetch('/api/issues', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ concern, kind, nodes, body }),
+    body: JSON.stringify({ concern, nodes, body }),
   })
   return res.json()
 }

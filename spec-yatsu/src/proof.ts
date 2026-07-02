@@ -23,6 +23,7 @@ export type ProofReading = {
   ts: string
   evidence:
     | { kind: 'image'; dataUri: string }
+    | { kind: 'video'; dataUri: string }
     | { kind: 'transcript'; text: string }
     | { kind: 'miss' }
     | { kind: 'none' }
@@ -197,6 +198,7 @@ async function toProofReading(r: EvalEntry): Promise<ProofReading> {
   const blob = readBlobByHash(r.blob)
   if (!blob.ok) return { ...base, evidence: { kind: 'miss' } }
   if (blob.mime.startsWith('image/')) return { ...base, evidence: { kind: 'image', dataUri: `data:${blob.mime};base64,${blob.bytes.toString('base64')}` } }
+  if (blob.mime.startsWith('video/')) return { ...base, evidence: { kind: 'video', dataUri: `data:${blob.mime};base64,${blob.bytes.toString('base64')}` } }
   return { ...base, evidence: { kind: 'transcript', text: blob.bytes.toString('utf8') } }
 }
 
@@ -305,6 +307,7 @@ function renderReading(r: ProofReading): string {
   const ev = r.evidence
   const body =
     ev.kind === 'image' ? `<img class="shot" src="${ev.dataUri}" alt="${esc(r.scenario)}">`
+    : ev.kind === 'video' ? `<video class="shot" src="${ev.dataUri}" controls preload="metadata"></video>`
     : ev.kind === 'transcript' ? `<pre class="transcript">${esc(ev.text)}</pre>`
     : ev.kind === 'miss' ? `<div class="noev">⌀ miss original file — the evidence bytes were pruned</div>`
     : `<div class="noev">attested without a capture</div>`

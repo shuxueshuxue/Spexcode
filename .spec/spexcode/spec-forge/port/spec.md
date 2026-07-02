@@ -15,10 +15,16 @@ drivers** behind it. The name is the seam, never the vendor.
 Unlike a projection, the port **reads the forge**. Its two verbs fetch a host's work objects —
 `listIssues() → ForgeIssue[]` (issues of **all** states, so closed work stays linkable, not just live
 issues) and `listPRs() → ForgePR[]` (open PRs). `ForgeIssue` is the small stable subset an
-issue collapses to on every host (number, title, body, url, state, labels — the body is where the
-`Spec: <id>` marker lives); `ForgePR` adds `headRefName` (the `node/<id>` branch = a free structural link)
+issue collapses to on every host (number, title, body, url, state, labels, author, createdAt — the body is
+where the `Spec: <id>` marker lives; author/createdAt are what lets a forge issue stand beside a forum
+thread as the same object in the unified Issue port, spec-cli's [[issues]], with a `by` and a `created`);
+`ForgePR` adds `headRefName` (the `node/<id>` branch = a free structural link)
 and `closesIssues` (the issue numbers it closes, for transitive linking). These vendor-neutral shapes are
-exactly what lets one port cover GitHub/GitLab/Bitbucket.
+exactly what lets one port cover GitHub/GitLab/Bitbucket. A driver may also offer the **optional
+incremental window** `listIssuesSince(sinceISO)` — only issues updated since that moment — which lets
+[[freshness]]'s resident cache merge small deltas instead of full-listing every cycle; a driver without it
+is simply always full-listed. State casing is normalized to lowercase **at the driver** — platform
+differences (gh's GraphQL `OPEN` vs REST `open`) die at the adapter, never downstream.
 
 A driver is the **only** thing that touches the network/CLI; it does no link resolution (that is
 host-agnostic, in [[links]]). The first real driver is **`github`**, which wraps the **`gh` CLI** — reusing
@@ -35,8 +41,13 @@ driver asks for the field, and **only** on gh's specific "unknown JSON field" re
 (`closesIssues` empty) and warns once. Every other failure (no `gh`, no auth, no repo) is a different error
 and still throws loud — the degrade is the narrow field-version case alone, not a blanket swallow.
 
-The contract holds at the port: it is **read-only**. A driver fetches and returns objects and writes
-nothing — not to the forge, and never to a node's version or status (which stays git-derived).
+The port carries one **write verb**: `createIssue({title, body}) → {number, url}`, existing solely so the
+unified Issue port's *promotion* (spec-cli's [[issues]]: a local thread moving to the forge) goes through
+this same seam — the driver stays the ONLY thing that touches the network, promotion included, rather
+than a second vendor call-site growing in product code. The github driver wraps `gh issue create`. The
+**tracer** (links/freshness/the board fold) remains read-only end to end, and the deeper contract is
+untouched: nothing here ever writes a node's version or status (which stays git-derived) — a created
+issue is execution-plane work, never graph state.
 
 Out of scope here: the link resolution itself ([[links]]), the CLI surface ([[forge-cli]]), and any second
 driver (gitlab/bitbucket wrapping their own CLI later).

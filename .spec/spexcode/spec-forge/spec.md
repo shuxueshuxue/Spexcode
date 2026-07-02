@@ -17,7 +17,9 @@ nodes that work serves.**
 The bridge is a single host-agnostic **[[port]]** (`ForgeDriver`) that *reads* a host's open issues and
 PRs; per-host drivers sit behind it (`github` via `gh` today; gitlab/bitbucket later). The host-agnostic
 **[[links]]** resolver then inverts that raw work into `node → { issues, prs }`. The capstone **[[forge-cli]]**
-exposes it on the real CLI as `spex forge links`.
+exposes it on the real CLI as `spex forge links`. Downstream, this read also feeds the **unified Issue
+port** (spec-cli's [[issues]]), where a forge issue and a local forum thread are the same object behind
+per-issue storage — this package stays that object's read-only remote adapter.
 
 **How a forge object names its node — three sources, no datastore of our own:**
 
@@ -35,6 +37,7 @@ DOWN (a node motivates work); the tracer never writes a node's version or status
 **git-derived** (`deriveStatus`), so the only execution fact that reaches the graph (a merge) arrives
 through git, never through this package.
 
-Out of scope: any write *to* a forge from the tracer, and surfacing links in the dashboard (a sibling
-node — this package is CLI-first because frontend can't be verified here). Reading is live; everything
-else is read-only.
+Out of scope: any write *to* a forge from the **tracer** (the [[port]] does carry one write verb —
+`createIssue`, used solely by the Issue port's promotion in spec-cli's [[issues]] — so the driver stays
+the single network seam; the tracer itself never writes), and surfacing links in the dashboard (a sibling
+node — this package is CLI-first because frontend can't be verified here).

@@ -20,8 +20,9 @@ foundation node; features REFERENCE what they touch via `related:` instead of co
 
 ## expanded spec
 
-dashboard-shell owns the three cross-cutting dashboard files: `App.jsx` (the desktop root — layout and the
-routing between the graph and the session views), `data.js` (the shared polled board data every view
+dashboard-shell owns the three cross-cutting dashboard files: `App.jsx` (the desktop root — it mounts the
+[[side-nav]] rail and swaps the routed page into the main area beside it, keeping the warm pages — the
+graph, the session board — mounted across switches), `data.js` (the shared polled board data every view
 reads), and `styles.css` (the global stylesheet). A feature node lists whichever of these it touches under
 `related:`, so editing the shell or the stylesheet attributes its drift/yatsu here rather than to every
 feature (see [[governed-related]]). This is the dashboard twin of [[sessions-core]]: one owner for the
@@ -47,7 +48,7 @@ spexcode.theme`) else the system preference (`prefers-color-scheme`), and `apply
 `data-theme` attribute and persists — the same detect-then-defer-to-the-human shape as [[settings]]'s
 language pick. To avoid a light-flash before the module boots, `index.html` runs a tiny inline script
 in `<head>` that applies the same choice to `<html data-theme>` before first paint. The [[settings]]
-popup carries the live toggle.
+page carries the live toggle.
 
 **Push-first board — freshest-issued wins.** The shell keeps the board fresh through three paths. The
 primary is the **delta subscription** ([[board-stream]]/[[board-delta]]): whole boards arrive over the push

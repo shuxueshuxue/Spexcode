@@ -4,7 +4,9 @@ import { cors } from 'hono/cors'
 import { etag } from 'hono/etag'
 import { createNodeWebSocket } from '@hono/node-ws'
 import { loadSpecs, loadSpecsLite, specContent, specHistory, specDiffAt, loadConfig } from './specs.js'
-import { loadProposals, proposalsEnabled, forumReply, forumPost } from './proposals.js'
+import { proposalsEnabled, forumReply, forumPost } from './proposals.js'
+import { mergedIssues } from './issues.js'
+import { residentForgeState } from '../../spec-forge/src/resident.js'
 import { summarize } from './mentions.js'
 import { resolveLayout, mainBranch } from './layout.js'
 import { buildBoard } from './board.js'
@@ -13,6 +15,7 @@ import { gitA, gitTry } from './git.js'
 import { newSession, listSessions, sendKeys, rawKey, exitSession, closeSession, reopen, propose, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, superviseQueue } from './sessions.js'
 import { defaultHarness, HARNESSES } from './harness.js'
 import { evalTimeline, readBlobByHash } from '../../spec-yatsu/src/evaltab.js'
+import { fileHumanReading } from '../../spec-yatsu/src/filing.js'
 import { buildProofModel, renderProofHtml } from '../../spec-yatsu/src/proof.js'
 import { saveUpload, MAX_UPLOAD_BYTES } from './uploads.js'
 import { attachViewer, detachViewer, resizeBridge, forwardWheel, superviseBridges, type Viewer } from './pty-bridge.js'
@@ -75,28 +78,54 @@ app.get('/api/edit', async (c) => {
 // a node's eval timeline (read half of `spex yatsu`): yatsu-sidecar readings joined with a live freshness
 // flag, newest-first; `hasYatsu:false` when none declared. Contract belongs to [[spec-yatsu]].
 app.get('/api/specs/:id/evals', async (c) => c.json(await evalTimeline(c.req.param('id'))))
+// the eval seam's WRITE half for the dashboard annotator ([[spec-yatsu]] filing.ts): a human files a
+// manual@1 reading (verdict + an annotation-report transcript) through the SAME append the CLI uses.
+app.post('/api/specs/:id/yatsu/eval', async (c) => {
+  const b = await c.req.json().catch(() => null)
+  if (!b || typeof b.scenario !== 'string') return c.json({ error: 'body needs { scenario, status, note?, transcript? }' }, 400)
+  const r = fileHumanReading(c.req.param('id'), b)
+  return r.ok ? c.json({ ok: true, reading: r.reading }) : c.json({ error: r.error }, 400)
+})
 // serve a reading's evidence blob by content hash (bytes never enter git): bad hash → 400, missing → 404,
 // else the bytes with a sniffed MIME and an immutable cache header (the name IS the content hash).
+// HTTP Range is honored — a <video> can only SEEK when the server answers byte ranges (a browser clamps
+// currentTime to the seekable window, which stays [0,0] without them); one general mechanism at the
+// transport, so every evidence kind streams the same way.
 app.get('/api/yatsu/blob/:hash', (c) => {
   const r = readBlobByHash(c.req.param('hash'))
   if (!r.ok) return c.text(r.message, r.reason === 'invalid' ? 400 : 404)
-  return c.body(new Uint8Array(r.bytes), 200, { 'Content-Type': r.mime, 'Cache-Control': 'public, max-age=31536000, immutable' })
+  const total = r.bytes.length
+  const base = { 'Content-Type': r.mime, 'Cache-Control': 'public, max-age=31536000, immutable', 'Accept-Ranges': 'bytes' }
+  const m = /^bytes=(\d*)-(\d*)$/.exec(c.req.header('range') ?? '')
+  if (m && (m[1] || m[2])) {
+    const start = m[1] ? parseInt(m[1], 10) : total - parseInt(m[2], 10)
+    const end = m[1] && m[2] ? Math.min(parseInt(m[2], 10), total - 1) : total - 1
+    if (!(start >= 0 && start <= end && end < total)) return c.body(null, 416, { 'Content-Range': `bytes */${total}` })
+    return c.body(new Uint8Array(r.bytes.subarray(start, end + 1)), 206, { ...base, 'Content-Range': `bytes ${start}-${end}/${total}` })
+  }
+  return c.body(new Uint8Array(r.bytes), 200, base)
 })
 app.get('/api/layout', async (c) => c.json(await resolveLayout()))
 // the `surface: command` config-root plugins (built/active only) for the new-session `/` dropdown — each with
 // its prompt `body` ({{targets}} placeholder), `kind`, and folder `dir` + co-located `files`. surface is a
 // frontmatter field, not a dir (specs.ts loadSurface); `surface: system` siblings are gathered elsewhere.
 app.get('/api/config', (c) => c.json(loadConfig()))
-// the forum ([[proposals]]) read surface for the dashboard's info page — the SAME loadProposals() the CLI
-// drain view reads, verbatim (the dashboard computes nothing over it: no re-sort, no salience ranking). The
-// `enabled` flag mirrors the on/off switch so the frontend hides the view when the feature is OFF.
-app.get('/api/forum', (c) => c.json({ enabled: proposalsEnabled(), threads: loadProposals() }))
-// the forum WRITE surface ([[proposals]] / [[forum-view]]) — the human write path. Both go through the SAME
-// reply/propose the CLI uses (git-committed straight to the trunk, author `'human'`) and dispatch any
-// @-mention in the text (a human summons an agent from the forum). `outcomes` is the one-line @-dispatch
-// summary the dashboard echoes. Honor the on/off switch: 403 when the feature is OFF.
-app.post('/api/forum/:id/reply', async (c) => {
-  if (!proposalsEnabled()) return c.json({ error: 'forum is off' }, 403)
+// the ISSUES read surface ([[issues]]) for the dashboard's issues page — the merged list over every store
+// (local forum threads + the resident forge slice), the SAME mergedIssues() the CLI drain reads, verbatim
+// (the dashboard computes nothing over it: no re-sort, no salience ranking). The `enabled` flag mirrors
+// the forum-workflow on/off switch so the frontend hides the view when the feature is OFF.
+app.get('/api/issues', (c) =>
+  c.json({
+    enabled: proposalsEnabled(),
+    issues: mergedIssues({ host: 'github', state: residentForgeState() }, loadSpecsLite().map((s) => s.id)),
+  }))
+// the WRITE surface ([[proposals]] / [[issues-view]]) — the human write path, LOCAL store only (the forge
+// stays read-only). Both go through the SAME reply/propose the CLI uses (git-committed straight to the
+// trunk, author `'human'`) and dispatch any @-mention in the text (a human summons an agent from the
+// issues page). `outcomes` is the one-line @-dispatch summary the dashboard echoes. Honor the on/off
+// switch: 403 when the feature is OFF. A forge id ('github#N') is simply not a local thread → 404.
+app.post('/api/issues/:id/reply', async (c) => {
+  if (!proposalsEnabled()) return c.json({ error: 'forum workflow is off' }, 403)
   const body = await c.req.json().catch(() => ({}))
   const text = typeof body?.body === 'string' ? body.body : ''
   if (!text.trim()) return c.json({ error: 'empty reply' }, 400)
@@ -105,15 +134,16 @@ app.post('/api/forum/:id/reply', async (c) => {
     return c.json({ ok: true, replies: thread.replies, outcomes: summarize(outcomes) })
   } catch (e) { return c.json({ error: String((e as Error).message || e) }, 404) }   // unknown thread → 404
 })
-app.post('/api/forum', async (c) => {
-  if (!proposalsEnabled()) return c.json({ error: 'forum is off' }, 403)
+app.post('/api/issues', async (c) => {
+  if (!proposalsEnabled()) return c.json({ error: 'forum workflow is off' }, 403)
   const body = await c.req.json().catch(() => ({}))
   const concern = typeof body?.concern === 'string' ? body.concern.trim() : ''
   if (!concern) return c.json({ error: 'empty concern' }, 400)
-  const kind = body?.kind === 'note' ? 'note' : 'proposal'
   const nodes = Array.isArray(body?.nodes) ? (body.nodes as unknown[]).filter((n): n is string => typeof n === 'string') : []
   const postBody = typeof body?.body === 'string' ? body.body : undefined
-  const { thread, outcomes } = await forumPost(concern, { kind, nodes, body: postBody, author: 'human' })
+  // typed evidence[] — yatsu content-addressed hashes (the annotator's clip reference rides here, not prose)
+  const evidence = Array.isArray(body?.evidence) ? (body.evidence as unknown[]).filter((h): h is string => typeof h === 'string' && /^[0-9a-f]{64}$/.test(h)) : []
+  const { thread, outcomes } = await forumPost(concern, { nodes, body: postBody, evidence, author: 'human' })
   return c.json({ ok: true, id: thread.id, outcomes: summarize(outcomes) }, 201)
 })
 // the dashboard input's `/` dropdown — computed by the launcher's HARNESS adapter the same way that harness

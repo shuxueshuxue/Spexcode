@@ -30,7 +30,7 @@ badge, expanded on demand. The chips (video | image | all, the stale toggle) liv
 head and are this group's own state — [[issues-view]] owns the page shell (split, selection, j/k), never
 this group's filters.
 
-**Rows are title-only, always** — verdict mark · scenario · node · evidence-kind icon · relative time —
+**Rows are title-only, always** — verdict mark · scenario · node · evidence-kind tag · relative time —
 no media request of any kind in the list. Selecting a row opens it in the page's DETAIL pane as the
 [[annotator]] — media loads there, a `<video>` element exists only there. The group reports its visible
 rows upward so the page's j/k walk one flat list across both groups; history drills down per scenario

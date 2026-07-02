@@ -98,21 +98,20 @@ Specs / graph
   board                 dump the dashboard board state as JSON
   forge <sub>           trace a forge's issues/PRs onto spec nodes (read-only): links | eval-pending [--host github] [--node <id>] [--json]
   yatsu <sub>           measure a node's scenarios and keep score: scan | eval [.|<node>] [--scenario N] (--pass|--fail) [--note T] [--image P|--result P|-] | show [.|<node>] [--json] | clean [--keep-latest|--all]
-  hooks <sub>           harness-agnostic hook system: compile [--out <file>] (flatten surface:hook nodes into the per-session manifest the dispatcher reads)
-  self <sub>            diagnose how the workflow reaches THIS self-launched agent: doctor (default) | contract | env
+  self <sub>            diagnose how the workflow reaches THIS self-launched agent: doctor (default) | contract | conflicts
   issues                THE issue read — local forum threads + forge issues, one merged store-tagged list (the drain view)  [--node <id>] [--store local|github] [--all] [--json]
   issues promote <id>   move an OPEN local issue to the forge (one recorded action: forge issue w/ Spec: marker + evidence, local thread landed w/ permalink)
   propose "<concern>"   open a local issue in the git forum (taste, annotations, off-mainline smells all welcome)  [--node <id>…] [--evidence <hash>…] [--body -|<text>]  | reply|sign|resolve <id> …  | on|off|status
   review <SEL>          manager cockpit: review a session (ahead·merge-base diff·gates·proposal)  [--json]
   review proof <SEL>    render the session's proof of work — self-contained HTML, fully derived (diff·measured yatsu loss·gates)  [--open|--out P|--json]
-  merge <SEL>           manager cockpit: gated atomic merge into main (re-checks gates, then closes)  [--keep]
+  merge <SEL>           manager cockpit: gated atomic merge into main (re-checks gates, then closes)
 
 Sessions
   ls [SEL…]             living-sessions table          [--status a,b] [--json]
   watch [SEL…]          stream actionable transitions — NEVER EXITS; run it in the BACKGROUND, don't block a turn on it (poll one-shot with \`wait\`)  [--as NAME] [--status a,b] [--idle] [--interval N]
   wait <SEL>            block until <SEL> is actionable, print it, exit (one-shot — the non-blocking counterpart to watch; draws the graph edge)  [--timeout S=1200] [--interval S]
   new "<prompt>"        start a session (= session new)  [--node X]
-  session <sub>         new | list | reopen | review | done | merge | exit | close | send | capture | prompt
+  session <sub>         new | reopen | done | park | ask | exit | close | send | capture | prompt
   session prompt <SEL>  print the session's originating prompt (what it was asked to do)
 
   SEL = session id (or id-prefix), node, or branch — accepted by every read/control verb (ls·watch·wait·
@@ -281,11 +280,6 @@ if (cmd === 'serve') {
   // the supervisor's/human's drain view. `spex issues [--node id] [--store local|github] [--all] [--json]`.
   const { runIssues } = await import('./issues.js')
   process.exit(await runIssues(process.argv.slice(3)))
-} else if (cmd === 'hooks') {
-  // @@@ hooks - compile the surface:hook nodes into the per-session manifest the (pure-shell) dispatcher
-  // reads. Thin route, like forge/yatsu. `spex hooks compile [--out <file>]`. Logic in hooks.ts.
-  const { runHooks } = await import('./hooks.js')
-  process.exit(await runHooks(process.argv.slice(3)))
 } else if (cmd === 'materialize') {
   // @@@ materialize - the pay-per-change render: surface nodes → manifest + AGENTS.md/CLAUDE.md block +
   // shims + Codex trust, for cwd's project. The cheap shell gate (dispatch.sh) invokes it only on change.
@@ -322,7 +316,7 @@ if (cmd === 'serve') {
     if (r.snippet) console.log(`    ${r.snippet}`)
   })
   process.exit(0)
-} else if (cmd === 'ls' || cmd === 'sessions') {
+} else if (cmd === 'ls') {
   // pretty list of living sessions + states. `spex ls [SEL...] [--status a,b] [--json]`
   // the board comes from the backend (so `spex ls` shows the sessions of whatever SPEXCODE_API_URL points at,
   // incl. a remote machine); selectSessions/formatTable are pure presentation, applied client-side.
@@ -390,15 +384,11 @@ if (cmd === 'serve') {
     // prompt = --prompt OR the first positional (after `session new`), so `session new "<prompt>"` works the
     // SAME as the `spex new "<prompt>"` shorthand — one prompt-resolution rule, not two.
     console.log(JSON.stringify(await s.createSession(flag('node') ?? null, flag('prompt') ?? positionals(4)[0] ?? '', flag('harness') ?? undefined), null, 2))
-  } else if (sub === 'list') {
-    console.log(JSON.stringify(await c.clientListSessions(), null, 2))
-  } else if (sub === 'reopen' || sub === 'resume') {
+  } else if (sub === 'reopen') {
     // bring the agent back up (relaunch if offline, the backend owns it); demotes a working `active` to idle but
     // leaves a standing declaration/proposal untouched (see sessions.ts reopen()). A following prompt is what works.
     const full = await resolveSelectorOrExit(id)
     console.log(await c.clientReopen(full) ? `${full} -> reopened` : `no such session ${full}`)
-  } else if (sub === 'review') {
-    console.log(await s.propose(id, 'merge') ? `${id} -> review` : `no such session ${id}`)
   } else if (sub === 'state') {
     // the agent authors ITS OWN state: active|awaiting|parked|error  [--propose] [--note] [--session]
     const st = process.argv[4] as any
@@ -434,15 +424,6 @@ if (cmd === 'serve') {
     // never clobbering a deliberate awaiting/asking/parked/error declaration. Distinct from `ask`
     // (the agent deliberately asking the human) — idle is the undeclared stop the Stop gate missed.
     console.log(s.markIdle(sess) ? 'idle' : 'noop (no session record, or not active)')
-  } else if (sub === 'merge') {
-    // merge dispatch (same as top-level `spex merge`): reopen the session and hand its OWN agent the merge
-    // prompt — the agent runs the --no-ff merge, resolves conflicts, verifies main advanced, and proposes
-    // close. The SERVER never touches main. Fail-loud: an unreachable agent prints the reason, exits non-zero.
-    const full = await resolveSelectorOrExit(id)
-    const r = await c.clientMerge(full)
-    if (r.dispatched) console.log(`merge dispatched to ${full} — its agent is landing the merge`)
-    else console.error(`merge dispatch failed: ${r.reason}`)
-    process.exit(r.dispatched ? 0 : 1)
   } else if (sub === 'exit') {
     // the SOFT stop: kill the agent's tmux + socket but KEEP the worktree, so the session goes offline and
     // can be resumed (reopen/relaunch). Distinct from `close`, which removes the worktree.
@@ -485,7 +466,7 @@ if (cmd === 'serve') {
     if (!r.ok) { console.error(`no prompt recorded for ${full}`); process.exit(1) }
     process.stdout.write(r.prompt.endsWith('\n') ? r.prompt : r.prompt + '\n')
   } else {
-    console.error('spex session: new|list|reopen|review|done|park|ask|idle|merge|exit|close|send|capture|prompt'); process.exit(2)
+    console.error('spex session: new|reopen|done|park|ask|idle|exit|close|send|capture|prompt'); process.exit(2)
   }
 } else if (cmd === 'codex-launch') {
   // BACKEND-owned codex thread. On the shared per-project app-server: thread/start { cwd = this worktree }

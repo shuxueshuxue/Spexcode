@@ -1,197 +1,167 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { loadIssues, postIssueReply, postIssueThread } from './data.js'
-import FeedSection from './FeedSection.jsx'
-import EvalsSection from './EvalsFeed.jsx'
+import EvalsGroup, { entryKey } from './EvalsFeed.jsx'
+import Annotator from './Annotator.jsx'
+import { SpecBody } from './NodeView.jsx'
 import { useT } from './i18n/index.jsx'
 
-// The issues page ([[issues-view]]): ONE merged list over every store ([[issues]]) — local forum threads
-// and forge issues mixed, store-tagged — a thin window over `GET /api/issues` (`{ enabled, issues }`). It
-// renders issues in the EXACT order the API returns — no re-sort, no salience/priority ranking (recurrence
-// is the CLI drain's judgment); signer/reply counts show as raw data. Store never changes the shape, only
-// two affordances: a LOCAL issue expands to its body + replies and takes a human reply (POSTed through the
-// SAME reply/propose the CLI uses, author 'human'; an @-mention dispatches a worker and the outcome is
-// echoed); a FORGE issue carries its permalink — read here, discussed there. `onFocusNode(id)` routes to
-// the graph page and focuses that node.
+// The issues page ([[issues-view]]): MASTER-DETAIL over one full routed page. The LEFT column is one
+// scrolling list in two groups — the evals feed ([[evals-feed]]) leading, the merged issue list below
+// (local forum + forge, store-tagged, API order, no re-sort/no ranking; CONCLUDED issues hidden behind a
+// count chip). The RIGHT pane is the full-height DETAIL of the selection — selection IS the detail, no
+// in-place expansion in a small box: an issue renders its markdown body (SpecBody — the spec dialect),
+// replies, and the local reply composer; an eval renders as the [[annotator]]. j/k walk the whole left
+// list across both groups, the detail follows; the write paths are unchanged (reply/propose as 'human',
+// forge read-only with a permalink).
 export default function IssuesView({ onFocusNode, specs = [] }) {
   const t = useT()
   const [data, setData] = useState(null)          // null = still loading
-  const [expanded, setExpanded] = useState(() => new Set())
-  const [composing, setComposing] = useState(false)  // the "New" thread form is open
-  const [showConcluded, setShowConcluded] = useState(false) // concluded issues (closed/rejected/landed) hide by default
-  const [notice, setNotice] = useState('')           // a brief @-dispatch summary after a write
-  const [selIdx, setSelIdx] = useState(-1)           // the j/k-walked row; -1 = none
-  const rowsRef = useRef([])                         // current issue ids, for the key handler
-  const [region, setRegion] = useState('threads')    // Tab-focused region: 'evals' ⇄ 'threads'
-  const regionRef = useRef(region); regionRef.current = region
+  const [composing, setComposing] = useState(false)
+  const [showConcluded, setShowConcluded] = useState(false)
+  const [notice, setNotice] = useState('')
+  const [sel, setSel] = useState(null)            // the ONE selection: 'eval:<node>·<scenario>' | 'issue:<id>'
+  const [evalRows, setEvalRows] = useState([])    // the evals group's visible entries (its filters are its own)
+  const rowsRef = useRef([])                      // flat key list across BOTH groups, for j/k
 
   const load = useCallback(async () => {
     const d = await loadIssues().catch(() => null)
     setData(d && typeof d === 'object' ? d : { enabled: false, issues: [] })
   }, [])
+  useEffect(() => { load() }, [load])
 
-  useEffect(() => {
-    let alive = true
-    loadIssues().then((d) => { if (alive) setData(d && typeof d === 'object' ? d : { enabled: false, issues: [] }) })
-      .catch(() => { if (alive) setData(null) })
-    return () => { alive = false }
-  }, [])
-
-  // echo the @-dispatch summary briefly (outcomes is '' when nothing was summoned).
   const flash = (outcomes) => { if (outcomes) { setNotice(outcomes); setTimeout(() => setNotice(''), 6000) } }
 
-  // stable (declared before the key effect below, which closes over it once).
-  const toggle = useCallback((id) =>
-    setExpanded((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id); else next.add(id)
-      return next
-    }), [])
+  const all = Array.isArray(data?.issues) ? data.issues : []
+  // a CONCLUDED issue (forge closed; local rejected/landed) hides by default — the list is the open work,
+  // not the archive. open + accepted stay (accepted is approved-but-not-landed: still live).
+  const concluded = (i) => i.status === 'closed' || i.status === 'rejected' || i.status === 'landed'
+  const issues = showConcluded ? all : all.filter((i) => !concluded(i))
+  const openCount = all.filter((i) => i.status === 'open').length
+  const concludedCount = all.filter(concluded).length
 
-  // panel keys ([[issues-view]]): Tab jumps between the two regions (evals ⇄ threads — focus shown on the
-  // section head); j/k walk the FOCUSED region's rows, Enter opens the selected row. The threads rows are
-  // this component's; the evals region's row-nav is [[evals-feed]]'s own (until it lands, j/k are inert
-  // while evals hold focus). Capture phase so a stray console handler never eats them; a key typed into an
-  // input/textarea (the composers) or carrying a modifier is never ours.
+  const evalByKey = useMemo(() => new Map(evalRows.map((e) => [entryKey(e), e])), [evalRows])
+  const issueByKey = useMemo(() => new Map(issues.map((i) => [`issue:${i.id}`, i])), [issues])
+  rowsRef.current = [...evalRows.map(entryKey), ...issues.map((i) => `issue:${i.id}`)]
+  // default selection: the freshest eval, else the first issue — the detail pane is never idle by default.
+  const effSel = sel && (evalByKey.has(sel) || issueByKey.has(sel)) ? sel : rowsRef.current[0] ?? null
+
+  const onRows = useCallback((rows) => setEvalRows(rows), [])
+
+  // page keys ([[issues-view]]): j/k walk the ONE flat list across both groups; the detail follows the
+  // selection (no Enter needed — selection IS detail). Capture phase; a key typed into an input/textarea
+  // or carrying a modifier is never ours.
+  const stateRef = useRef({})
+  stateRef.current = { effSel }
   useEffect(() => {
     const onKey = (e) => {
       const tag = e.target?.tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA' || e.metaKey || e.ctrlKey || e.altKey) return
-      if (e.key === 'Tab') {
-        e.preventDefault(); e.stopPropagation()
-        setRegion((r) => (r === 'threads' ? 'evals' : 'threads'))
-        return
-      }
-      if (regionRef.current !== 'threads') return
-      if (e.key === 'j' || e.key === 'k') {
-        e.preventDefault(); e.stopPropagation()
-        const n = rowsRef.current.length
-        if (!n) return
-        setSelIdx((i) => {
-          const start = i < 0 ? (e.key === 'j' ? -1 : n) : i
-          return Math.max(0, Math.min(n - 1, start + (e.key === 'j' ? 1 : -1)))
-        })
-      } else if (e.key === 'Enter') {
-        setSelIdx((i) => {
-          const id = rowsRef.current[i]
-          if (id) { e.preventDefault(); e.stopPropagation(); toggle(id) }
-          return i
-        })
-      }
+      if (e.key !== 'j' && e.key !== 'k') return
+      e.preventDefault(); e.stopPropagation()
+      const rows = rowsRef.current
+      if (!rows.length) return
+      const cur = rows.indexOf(stateRef.current.effSel)
+      const next = cur < 0 ? (e.key === 'j' ? 0 : rows.length - 1) : Math.max(0, Math.min(rows.length - 1, cur + (e.key === 'j' ? 1 : -1)))
+      setSel(rows[next])
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
   }, [])
-
-  // keep the selected row in view as j/k walk it (the section body is the scroller, never the panel).
   useEffect(() => {
-    if (selIdx >= 0) document.querySelector('.fv-thread.kbd-sel')?.scrollIntoView({ block: 'nearest' })
-  }, [selIdx])
+    document.querySelector('.fv-list-col .sel')?.scrollIntoView({ block: 'nearest' })
+  }, [effSel])
 
-  if (data == null || !data.enabled) rowsRef.current = []   // no rows on screen → no rows for j/k
   if (data == null) return <div className="fv-note">{t('session.issuesLoading')}</div>
-  // honors the switch: forum workflow OFF → a muted state, never a forked source of truth.
   if (!data.enabled) return <div className="fv-note">{t('session.issuesOff')}</div>
-  const all = Array.isArray(data.issues) ? data.issues : []
-  // a CONCLUDED issue (forge closed; local rejected/landed) hides by default — the list is the open work,
-  // not the archive; a count chip reveals the concluded set on demand. open + accepted stay visible
-  // (accepted is approved-but-not-landed: still live).
-  const concluded = (i) => i.status === 'closed' || i.status === 'rejected' || i.status === 'landed'
-  const issues = showConcluded ? all : all.filter((i) => !concluded(i))
-  rowsRef.current = issues.map((i) => i.id)
-  const openCount = all.filter((i) => i.status === 'open').length
-  const concludedCount = all.filter(concluded).length
+
+  const selEval = effSel ? evalByKey.get(effSel) : null
+  const selIssue = effSel ? issueByKey.get(effSel) : null
 
   return (
-    <div className="fv-panel">
-      {notice && <div className="fv-notice">{notice}</div>}
-      {/* the evals region ([[evals-feed]]) leads ABOVE the threads — evals outrank issues here; it wraps
-          itself in its own FeedSection so its counts stay internal. Tab moves the panel focus between it
-          and the threads. */}
-      <EvalsSection nodes={specs} focused={region === 'evals'} />
-      {/* the threads region — one FeedSection instance ([[issues-view]]'s panel furniture). */}
-      <FeedSection title={t('session.issuesThreadsTitle')} summary={t('session.issuesThreadsSummary', { open: openCount, total: all.length })} density="region" focused={region === 'threads'}>
-      <div className="fv-toolbar">
-        <button type="button" className="fv-new-btn" onClick={() => setComposing((v) => !v)}>
-          {composing ? t('session.issuesCancel') : t('session.issuesNew')}
-        </button>
-        <span className="fv-hint">{t('session.issuesMentionHint')}</span>
-        {concludedCount > 0 && (
-          <button type="button" className={`ef-chip fv-concluded ${showConcluded ? 'on' : ''}`} onClick={() => setShowConcluded((v) => !v)}>
-            {t('nodeView.closedIssues', { n: concludedCount })}
-          </button>
-        )}
-      </div>
-      {composing && (
-        <NewThreadForm
-          onDone={async (outcomes) => { setComposing(false); flash(outcomes); await load() }}
-        />
-      )}
-      {!issues.length ? (
-        <div className="fv-note">{t('session.issuesEmpty')}</div>
-      ) : (
-        <div className="fv-list">
-          {issues.map((th, idx) => {
-            const local = th.store === 'local'
-            const open = expanded.has(th.id)
-            const nodes = Array.isArray(th.nodes) ? th.nodes : []
-            const signers = Array.isArray(th.signers) ? th.signers : []
-            const replies = Array.isArray(th.replies) ? th.replies : []
+    <div className="fv-master">
+      <div className="fv-list-col">
+        {notice && <div className="fv-notice">{notice}</div>}
+        <EvalsGroup nodes={specs} sel={effSel} onSel={(k) => setSel(k)} onRows={onRows} />
+        <section className="fv-group">
+          <header className="fv-group-head">
+            <span className="fv-group-title">{t('session.issuesThreadsTitle')}</span>
+            <span className="fv-group-meta">{t('session.issuesThreadsSummary', { open: openCount, total: all.length })}</span>
+            <span className="ef-chipbar">
+              <button type="button" className="fv-new-btn" onClick={() => setComposing((v) => !v)}>
+                {composing ? t('session.issuesCancel') : t('session.issuesNew')}
+              </button>
+              {concludedCount > 0 && (
+                <button type="button" className={`ef-chip fv-concluded ${showConcluded ? 'on' : ''}`} onClick={() => setShowConcluded((v) => !v)}>
+                  {t('nodeView.closedIssues', { n: concludedCount })}
+                </button>
+              )}
+            </span>
+          </header>
+          {composing && <NewThreadForm onDone={async (outcomes) => { setComposing(false); flash(outcomes); await load() }} />}
+          {!issues.length && <div className="fv-note">{t('session.issuesEmpty')}</div>}
+          {issues.map((th) => {
+            const k = `issue:${th.id}`
             return (
-              <div key={th.id} className={`fv-thread${open ? ' open' : ''}${idx === selIdx ? ' kbd-sel' : ''}`}>
-                {/* the whole header toggles the in-place expansion; node chips / the forge permalink inside
-                    stop propagation so their click acts instead of expanding. */}
-                <div className="fv-head" role="button" tabIndex={0} onClick={() => toggle(th.id)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(th.id) } }}>
-                  <span className={`fv-store fv-store-${local ? 'local' : 'forge'}`}>{th.store}</span>
-                  <span className="fv-concern">{th.concern}</span>
-                  {th.status && <span className={`fv-status fv-st-${th.status}`}>{th.status}</span>}
-                  {th.by && <span className="fv-by">{th.by}</span>}
-                  {nodes.length > 0 && (
-                    <span className="fv-chips">
-                      {nodes.map((id) => (
-                        <button key={id} type="button" className="fv-chip"
-                          onClick={(e) => { e.stopPropagation(); onFocusNode?.(id) }}
-                          title={t('session.issuesFocusNode')}>{id}</button>
-                      ))}
-                    </span>
-                  )}
-                  <span className="fv-counts">
-                    {local && <span className="fv-count">{t('session.issuesSigned', { n: signers.length })}</span>}
-                    {local && <span className="fv-count">{t('session.issuesReplies', { n: replies.length })}</span>}
-                    {th.url && (
-                      <a className="fv-link" href={th.url} target="_blank" rel="noreferrer"
-                        onClick={(e) => e.stopPropagation()}>{t('session.issuesOpenOnForge')}</a>
-                    )}
-                  </span>
-                </div>
-                {open && (
-                  <div className="fv-body">
-                    {th.body && <div className="fv-text">{th.body}</div>}
-                    {replies.map((r, i) => (
-                      <div className="fv-reply" key={i}>
-                        <div className="fv-reply-meta">
-                          <span className="fv-reply-by">{r.by}</span>
-                          {r.at && <span className="fv-reply-at">{r.at}</span>}
-                        </div>
-                        <div className="fv-text">{r.body}</div>
-                      </div>
-                    ))}
-                    {local
-                      ? <ReplyComposer id={th.id} onDone={async (outcomes) => { flash(outcomes); await load() }} />
-                      : <div className="fv-hint">{t('session.issuesForgeReadOnly')}</div>}
-                  </div>
-                )}
-              </div>
+              <button key={th.id} className={`fv-row ${effSel === k ? 'sel' : ''}`} onClick={() => setSel(k)}>
+                <span className={`fv-store fv-store-${th.store === 'local' ? 'local' : 'forge'}`}>{th.store}</span>
+                <span className="fv-concern">{th.concern}</span>
+                {th.status && <span className={`fv-status fv-st-${th.status}`}>{th.status}</span>}
+                {th.store === 'local' && (th.replies?.length ?? 0) > 0 && <span className="fv-count">{t('session.issuesReplies', { n: th.replies.length })}</span>}
+              </button>
             )
           })}
-        </div>
-      )}
-      </FeedSection>
+        </section>
+      </div>
+      <div className="fv-detail">
+        {selEval && <Annotator entry={selEval} onFiled={load} />}
+        {selIssue && <IssueDetail issue={selIssue} onFocusNode={onFocusNode} onWrite={async (outcomes) => { flash(outcomes); await load() }} />}
+        {!selEval && !selIssue && <div className="fv-note">{t('session.issuesEmpty')}</div>}
+      </div>
     </div>
   )
 }
 
-// a small textarea + Send in an expanded LOCAL issue — posts a reply as 'human' and reloads. An
+// the issue detail — full-height: header (store/status/author/node chips/permalink), the markdown-RENDERED
+// body, the reply thread, and the local composer (forge: read here, discussed there).
+function IssueDetail({ issue: th, onFocusNode, onWrite }) {
+  const t = useT()
+  const local = th.store === 'local'
+  const nodes = Array.isArray(th.nodes) ? th.nodes : []
+  const signers = Array.isArray(th.signers) ? th.signers : []
+  const replies = Array.isArray(th.replies) ? th.replies : []
+  return (
+    <div className="fvd">
+      <header className="fvd-head">
+        <span className={`fv-store fv-store-${local ? 'local' : 'forge'}`}>{th.store}</span>
+        <span className="fvd-concern">{th.concern}</span>
+      </header>
+      <div className="fvd-meta">
+        {th.status && <span className={`fv-status fv-st-${th.status}`}>{th.status}</span>}
+        {th.by && <span className="fv-by">{th.by}</span>}
+        {local && <span className="fv-count">{t('session.issuesSigned', { n: signers.length })}</span>}
+        {nodes.map((id) => (
+          <button key={id} type="button" className="fv-chip" onClick={() => onFocusNode?.(id)} title={t('session.issuesFocusNode')}>{id}</button>
+        ))}
+        {th.url && <a className="fv-link" href={th.url} target="_blank" rel="noreferrer">{t('session.issuesOpenOnForge')}</a>}
+      </div>
+      {th.body && <div className="fvd-body"><SpecBody body={th.body} /></div>}
+      {replies.map((r, i) => (
+        <div className="fv-reply" key={i}>
+          <div className="fv-reply-meta">
+            <span className="fv-reply-by">{r.by}</span>
+            {r.at && <span className="fv-reply-at">{r.at}</span>}
+          </div>
+          <div className="fvd-body"><SpecBody body={r.body} /></div>
+        </div>
+      ))}
+      {local
+        ? <ReplyComposer id={th.id} onDone={onWrite} />
+        : <div className="fv-hint">{t('session.issuesForgeReadOnly')}</div>}
+    </div>
+  )
+}
+
+// a small textarea + Send under a LOCAL issue's detail — posts a reply as 'human' and reloads. An
 // @-mention in the text summons a worker; the returned outcomes string surfaces via onDone.
 function ReplyComposer({ id, onDone }) {
   const t = useT()
@@ -246,7 +216,8 @@ function NewThreadForm({ onDone }) {
       <input className="fv-input" value={nodes} placeholder={t('session.issuesNodesPlaceholder')}
         disabled={busy} onChange={(e) => setNodes(e.target.value)} />
       <textarea className="fv-textarea" rows={3} value={body} placeholder={t('session.issuesBodyPlaceholder')}
-        disabled={busy} onChange={(e) => setBody(e.target.value)} />
+        disabled={busy} onChange={(e) => setBody(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit() } }} />
       <div className="fv-actions">
         <span className="fv-hint">{t('session.issuesMentionHint')}</span>
         <button type="button" className="fv-send" disabled={busy || !concern.trim()} onClick={submit}>

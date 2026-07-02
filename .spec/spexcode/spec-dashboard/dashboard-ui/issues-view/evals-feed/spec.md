@@ -26,20 +26,15 @@ measurement count. Review attends to what still counts.
 
 Default view: **latest reading per scenario, fresh only, newest first**, evidence-kind filter defaulting
 to `video` and falling back to `image` when no video reading exists; stale readings collapse to a count
-badge, expanded on demand. Filter chips (video | image | all) and the fresh/stale toggle are section
-state that survives the section's density switches — the section furniture (densities, pinning, keys) is
-[[issues-view]]'s contract, not this node's.
+badge, expanded on demand. The chips (video | image | all, the stale toggle) live in this group's sticky
+head and are this group's own state — [[issues-view]] owns the page shell (split, selection, j/k), never
+this group's filters.
 
-**Rows are title-only at rest** — verdict mark · scenario · node · evidence-kind icon · relative time — no
-media request of any kind. Expanding a row pulls its thumbnail and the scenario's `expected`; opening it
-launches the [[annotator]] — a `<video>` element exists only there, never in the feed. The list is
-virtualized; history drills down per scenario (the node's [[yatsu-eval-tab]] scaffold), not inline.
-
-The section lives in [[issues-view]]'s upper region: it wraps itself in the panel's FeedSection (so its
-counts stay internal and density switches preserve its state) and mounts as one line above the threads
-section; the view's own entries (console pill · ⌥F · board `f`) are how it is reached. Under the panel's
-Tab focus (`focused`), j/k walk this section's rows and Enter expands — Enter again on an expanded video
-row opens the annotator — the same row-nav grammar as the threads region.
+**Rows are title-only, always** — verdict mark · scenario · node · evidence-kind icon · relative time —
+no media request of any kind in the list. Selecting a row opens it in the page's DETAIL pane as the
+[[annotator]] — media loads there, a `<video>` element exists only there. The group reports its visible
+rows upward so the page's j/k walk one flat list across both groups; history drills down per scenario
+(the node's [[yatsu-eval-tab]] scaffold), not in the list.
 
 **One data path, one computation.** The board nodes arrive as a prop from the app's single board
 poll + SSE subscription — the section fetches nothing of its own — and latest-per-scenario is

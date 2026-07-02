@@ -34,6 +34,15 @@ outside traffic meets the gate. Without `--public` nothing changes: dev stays pl
 gate. This is a pure additive switch over [[spec-cli]]'s supervisor; the dashboard needs no change (it
 already calls `/api` same-origin and opens its socket as `wss://` under HTTPS).
 
+**Compression is transport, so it lives at the gateway — once, for every deployment.** Text-ish responses
+ship gzipped when the client accepts it: static dist files memoized per (path, mtime) — a dist file is
+immutable per build, so each compresses once — and proxied `/api` bodies stream-gzipped (measured: the
+board JSON and the dashboard bundle both ride down at under a third). The upstream and product semantics
+never know compression exists, and
+three structural exclusions are load-bearing: an SSE stream never sits in a zlib buffer (event latency),
+an already-encoded response is not re-encoded, and binary media (video/image evidence blobs) gains
+nothing and would fight Range requests.
+
 **When a password is set, the gate is a designed login, not the browser's Basic dialog.** An unauthenticated
 visitor gets a styled SpexCode login page; the posted password is compared in constant time and, on success,
 mints a signed `httpOnly` cookie (derived from the password via HMAC, so it survives a restart and stores no

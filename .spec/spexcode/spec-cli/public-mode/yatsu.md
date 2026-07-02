@@ -37,6 +37,18 @@ scenarios:
       JSON (200), and there is no /login gate — the login layer is absent entirely. The operator chose open
       access and was warned; nothing is silently gated or silently exposed.
     code: spec-cli/src/gateway.ts
+  - name: gzip-transport
+    tags: [backend-api]
+    code: spec-cli/src/gateway.ts
+    description: >-
+      Against a real running gateway (authenticated), fetch /api/board and a dist JS asset twice — with and
+      without `Accept-Encoding: gzip` — and subscribe to /api/board/stream WITH gzip accepted, then trigger
+      a board change and time the event.
+    expected: >-
+      Compressible bodies come back `Content-Encoding: gzip` at a fraction of the plain size (board JSON
+      and the JS bundle both under a third); the SSE stream carries NO content-encoding (the exclusion —
+      an event must never sit in a zlib buffer) and the triggered event still arrives on the debounce
+      scale. The upstream is untouched: only the gateway compresses.
 ---
 # public-mode loss
 

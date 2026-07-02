@@ -8,7 +8,8 @@ import https from 'node:https'
 import net from 'node:net'
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { readFileSync, existsSync, mkdirSync, writeFileSync, statSync } from 'node:fs'
+import { gzipSync, createGzip } from 'node:zlib'
 import { join, normalize, extname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { homedir } from 'node:os'
@@ -145,7 +146,7 @@ export function startGateway(opts: GatewayOpts): void {
       }
     }
     if (url.startsWith('/api')) return proxyHttp(req, res, opts.upstreamPort)
-    return serveStatic(res, opts.distDir, url)
+    return serveStatic(req, res, opts.distDir, url)
   }
 
   const server = secure ? https.createServer({ cert: opts.tls!.cert, key: opts.tls!.key }, handler) : http.createServer(handler)
@@ -196,26 +197,51 @@ function doLogin(req: http.IncomingMessage, res: http.ServerResponse, password: 
   })
 }
 
-// reverse-proxy an /api request to the loopback supervisor (which forwards to the live child).
+// @@@ gzip at the gateway - compression is TRANSPORT, so it lives here, once, for every deployment — the
+// loopback upstream and the product semantics never know it exists. Text-ish payloads only; three
+// structural exclusions, each load-bearing: an SSE stream must not sit in a zlib buffer (event latency),
+// an already-encoded response is not re-encoded, and binary media (video/image evidence) gains nothing
+// and would fight Range requests.
+const COMPRESSIBLE = /^(text\/|application\/(json|javascript|xml)|image\/svg)/
+const wantsGzip = (req: http.IncomingMessage) => /\bgzip\b/.test(String(req.headers['accept-encoding'] || ''))
+
+// reverse-proxy an /api request to the loopback supervisor (which forwards to the live child) —
+// stream-gzipping compressible bodies (measured: the board JSON rides down at under a third).
 function proxyHttp(req: http.IncomingMessage, res: http.ServerResponse, upstreamPort: number) {
   const up = http.request({ host: '127.0.0.1', port: upstreamPort, path: req.url, method: req.method, headers: req.headers }, (upRes) => {
-    res.writeHead(upRes.statusCode || 502, upRes.headers)
-    upRes.pipe(res)
+    const type = String(upRes.headers['content-type'] || '')
+    const skip = !wantsGzip(req) || upRes.headers['content-encoding'] || !COMPRESSIBLE.test(type) || type.startsWith('text/event-stream')
+    if (skip) { res.writeHead(upRes.statusCode || 502, upRes.headers); upRes.pipe(res); return }
+    const headers = { ...upRes.headers, 'content-encoding': 'gzip', vary: 'Accept-Encoding' }
+    delete headers['content-length']   // streamed; the encoded length isn't knowable up front
+    res.writeHead(upRes.statusCode || 502, headers)
+    upRes.pipe(createGzip()).pipe(res)
   })
   up.on('error', () => { if (!res.headersSent) res.writeHead(502); res.end('upstream unreachable') })
   req.pipe(up)
 }
 
 // serve the built dashboard (vite dist). Unknown non-file paths fall back to index.html (SPA). Path
-// traversal is blocked by normalising and confining to distDir.
-function serveStatic(res: http.ServerResponse, distDir: string, urlPath: string) {
+// traversal is blocked by normalising and confining to distDir. Compressible files ship gzipped, memoized
+// per (path, mtime) — a dist file is immutable per build, so each is compressed once, not per request.
+const gzMemo = new Map<string, { mtime: number; gz: Buffer }>()
+function serveStatic(req: http.IncomingMessage, res: http.ServerResponse, distDir: string, urlPath: string) {
   const rel = normalize(decodeURIComponent(urlPath)).replace(/^(\.\.[/\\])+/, '')
   let file = join(distDir, rel)
   if (!file.startsWith(distDir)) file = join(distDir, 'index.html')
   if (urlPath === '/' || !existsSync(file)) file = join(distDir, 'index.html')
   if (!existsSync(file)) { res.writeHead(503); return res.end('dashboard build missing') }
-  res.writeHead(200, { 'Content-Type': MIME[extname(file)] || 'application/octet-stream' })
-  res.end(readFileSync(file))
+  const type = MIME[extname(file)] || 'application/octet-stream'
+  const raw = readFileSync(file)
+  if (wantsGzip(req) && COMPRESSIBLE.test(type)) {
+    const mtime = statSync(file).mtimeMs
+    let hit = gzMemo.get(file)
+    if (!hit || hit.mtime !== mtime) { hit = { mtime, gz: gzipSync(raw) }; gzMemo.set(file, hit) }
+    res.writeHead(200, { 'Content-Type': type, 'Content-Encoding': 'gzip', Vary: 'Accept-Encoding' })
+    return res.end(hit.gz)
+  }
+  res.writeHead(200, { 'Content-Type': type })
+  res.end(raw)
 }
 
 function sendHtml(res: http.ServerResponse, status: number, html: string) {

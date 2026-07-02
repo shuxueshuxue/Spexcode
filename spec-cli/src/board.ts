@@ -17,6 +17,15 @@ function resolveParent(path: string, byDir: Record<string, string>): string | nu
   return null
 }
 
+// the board's eval summary ([[board-lean]]): the LATEST reading per scenario, each kept as the VERBATIM
+// reading object — a filter, never a projection. Consumers hang optional fields off a reading (the
+// annotator's timelineBlob rides only video readings), so dropping a field here is a SILENT downstream
+// degradation no error would surface; the field-preservation unit test pins this contract.
+export function latestPerScenario<T extends { scenario: string }>(readings: T[]): T[] {
+  const seen = new Set<string>()
+  return readings.filter((r) => !seen.has(r.scenario) && (seen.add(r.scenario), true))
+}
+
 export async function buildBoard() {
   // all three sources are warm-cheap and independent, so the board inherits their speed for free: loadSpecs
   // REUSES the HEAD-keyed spec-history cache (the git-derived node data — see specs.ts/git.ts), resolveLayout
@@ -111,11 +120,7 @@ export async function buildBoard() {
   const ectx = evalContext(root, specs, idx, hidx)
   await Promise.all(nodes.map(async (n) => {
     const tl = await evalTimeline(n.id, ectx)
-    if (tl.hasYatsu) {
-      const seen = new Set<string>()
-      n.evals = tl.readings.filter((r: any) => !seen.has(r.scenario) && (seen.add(r.scenario), true))
-      n.scenarios = tl.scenarios
-    }
+    if (tl.hasYatsu) { n.evals = latestPerScenario(tl.readings); n.scenarios = tl.scenarios }
   }))
 
   const opsByPath: Record<string, any[]> = {}

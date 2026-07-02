@@ -18,7 +18,7 @@ The twin of [[keyboard-nav]]'s **a modal owns the keys**: **a modal returns the 
 
 ## the gap this closes
 
-Focus was managed by **acquisition without return**: every input and every overlay grabs focus when it mounts, but giving it back was nobody's job. Each *surface* privately keeps itself focused — the session interface's docked `❯` box re-grabs focus after a click or context menu — but the transient overlays that float **above** every surface (the search palette, the help and settings modals, the node popup) took focus on open and, on close, dropped it to `<body>`. Nothing pulled it back, so the next stray re-render's focus effect — or none — decided where it landed. Escaping search felt like focus was *stolen*; it was simply never *returned*.
+Focus was managed by **acquisition without return**: every input and every overlay grabs focus when it mounts, but giving it back was nobody's job. Each *surface* privately keeps itself focused — the session interface's docked `❯` box re-grabs focus after a click or context menu — but the transient overlays that float **above** every surface (the search palette, the help modal, the node popup) took focus on open and, on close, dropped it to `<body>`. Nothing pulled it back, so the next stray re-render's focus effect — or none — decided where it landed. Escaping search felt like focus was *stolen*; it was simply never *returned*.
 
 ## the boundary
 

@@ -66,7 +66,51 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 ::-webkit-scrollbar-corner { background: transparent; }
 
-.app { display: grid; grid-template-columns: 1fr var(--fp-w, 250px); height: 100vh; }
+/* @@@ app skeleton ([[side-nav]]) - the standard modern-app shell: a slim left icon RAIL (always visible,
+   one entry per top-level page) beside ONE main area the routed page fills. Pages that must stay warm
+   (graph, session board) are display-toggled in place; forum/settings mount per visit. */
+.app { display: flex; height: 100vh; }
+.app-main { flex: 1; min-width: 0; display: flex; position: relative; }
+/* the graph PAGE = the canvas + the focus panel, the old two-column grid one level down. --fp-w is set
+   inline by the resizable divider ([[resizable-panes]]). */
+.page-graph { flex: 1; min-width: 0; display: grid; grid-template-columns: 1fr var(--fp-w, 250px); position: relative; }
+
+/* ---- left navigation rail ---- */
+.side-rail {
+  flex: 0 0 52px; display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 10px 0; background: var(--panel); border-right: 1px solid var(--line);
+}
+.rail-spacer { flex: 1; }
+.rail-btn {
+  width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
+  background: none; border: none; border-radius: 9px; cursor: pointer; color: var(--muted);
+}
+.rail-btn:hover { background: var(--panel2); color: var(--ink2); }
+/* the active page: a soft accent wash + accent ink — a state, not a hover effect */
+.rail-btn.on { background: color-mix(in srgb, var(--blue) 14%, transparent); color: var(--blue); }
+
+/* ---- routed page containers (forum, settings) ---- */
+.page-pane { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--paper); }
+/* forum keeps the issues-view iron rule: the outer page never scrolls, each region scrolls internally */
+.page-forum { overflow: hidden; padding: 10px 14px; }
+.page-settings { overflow: auto; flex-direction: row; justify-content: center; }
+.settings-body { width: min(720px, 94%); padding: 26px 0 60px; }
+.page-title { font-size: 17px; font-weight: 700; color: var(--ink2); margin: 6px 2px 14px; }
+
+/* ---- pane resizers ([[resizable-panes]]) - an invisible col-resize strip straddling a pane border; a
+   center line shows on hover/drag so the affordance appears exactly when reached for. ---- */
+.pane-resizer { cursor: col-resize; z-index: 6; position: relative; }
+.pane-resizer::after {
+  content: ''; position: absolute; top: 0; bottom: 0; left: 50%; width: 3px; margin-left: -1.5px;
+  background: transparent; border-radius: 2px;
+}
+.pane-resizer:hover::after, body.is-resizing .pane-resizer::after { background: color-mix(in srgb, var(--blue) 55%, transparent); }
+/* the graph page's divider rides the focus-panel border (absolute, out of the grid flow) */
+.page-graph > .pane-resizer { position: absolute; top: 0; bottom: 0; width: 9px; right: calc(var(--fp-w, 250px) - 4px); }
+/* the session board's divider sits in the flex row, straddling the list border via negative margins */
+.si-resizer { flex: 0 0 7px; margin: 0 -3.5px; }
+/* while a drag is live the whole app keeps the col-resize cursor and text selection is off */
+body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-select: none !important; }
 /* @@@ keyboard mode - while the KEYBOARD is driving the board (App.jsx kbdMode, set by nav keys, cleared by
    a real mouse move) the mouse gets out of the way: the cursor hides everywhere and the board takes no
    pointer events. With no pointer over it, no :hover reaction fires under the stationary cursor — the issue
@@ -667,8 +711,8 @@ body {
 
 /* ---- session right-click menu + rename prompt (SessionContextMenu.jsx) ---- */
 /* a small pop-over anchored at the cursor (fixed to viewport coords). z-index 60 floats it ABOVE every
-   surface — including the session board (.si-backdrop, 50), which is where the rename gesture now lives;
-   a lower value (it began at 30, sized for the .sesswin glance) renders it BEHIND the board, invisible. */
+   surface — including the session-board page, which is where the rename gesture now lives; a lower value
+   (it began at 30, sized for the .sesswin glance) rendered it behind surfaces it must float over. */
 .sess-menu {
   position: fixed; z-index: 60; min-width: 116px;
   background: var(--paper); border: 1px solid var(--line); border-radius: 5px;
@@ -711,7 +755,7 @@ body {
 /* the SINGLE home for the keymap and node vocabulary. A centered, large, scrollable modal over a
    dimmed backdrop (click-outside closes — see Legend.jsx). The HUD only carries a discreet `?`. */
 /* z-index 60 keeps every Modal (help legend, the session rename prompt) ABOVE all surfaces, including the
-   session board (.si-backdrop, 50) it can be opened from — a modal must never render behind its surface. */
+   session-board page it can be opened from — a modal must never render behind its surface. */
 .legend-backdrop {
   position: fixed; inset: 0; z-index: 60;
   background: rgba(101,123,131,.25); backdrop-filter: blur(2px);
@@ -793,8 +837,8 @@ body {
 /* @@@ search palette (`/` on the board, ⌘/Ctrl+/ over the session board) - a command-palette over the spec
    tree + sessions: an input + ranked result rows. Top-aligned (not centred like .legend) so the list grows
    downward without the panel jumping as results change. Shares the dimmed/blurred .legend-backdrop look but
-   anchors the panel near the top. z-index 60 floats it ABOVE every surface — including the session board
-   (.si-backdrop, 50), which is where ⌘/Ctrl+/ opens it — so the palette never renders behind its surface. */
+   anchors the panel near the top. z-index 60 floats it ABOVE every surface — including the session-board
+   page, which is where ⌘/Ctrl+/ opens it — so the palette never renders behind its surface. */
 .search-backdrop {
   position: fixed; inset: 0; z-index: 60;
   background: rgba(101,123,131,.25); backdrop-filter: blur(2px);
@@ -838,24 +882,18 @@ body {
 .search-path { color: var(--muted); font-size: 11px; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .search-foot { padding: 6px 12px; border-top: 1px solid var(--line); background: var(--panel); color: var(--muted); font-size: 11px; }
 
-/* ---- session interface (Enter): two panes, right content morphs ---- */
-/* z-index 50 lifts the whole console above the spec board behind it. */
-.si-backdrop {
-  position: fixed; inset: 0; z-index: 50;
-  background: rgba(101,123,131,.4); backdrop-filter: blur(5px);
-  display: flex; align-items: center; justify-content: center;
-}
-/* @@@ TRUE fullscreen - the session board fills the entire viewport edge-to-edge (no reserved inset/margin,
-   no rounded corners) so no screen space is wasted; it keeps the scale-in "pop" and lifts above the board. */
+/* ---- session interface (#/sessions): two panes, right content morphs ---- */
+/* @@@ a routed PAGE ([[side-nav]]) - the session board fills the app's main area beside the rail: no
+   backdrop, no lift, no pop — it is a peer page of the graph, not a modal over it. It stays mounted
+   (display:none) while other pages show so the terminals keep their sockets/scroll warm. */
+.si-page { flex: 1; min-width: 0; display: flex; }
 .si-panel {
   /* the console follows the app theme — it uses the same :root tokens (var(--paper/--panel/--ink/--line…))
      as the rest of the dashboard, so re-theming the app re-themes the console with it. The embedded terminal
      stays dark on its own (--term-bg), the one surface that is legitimately a dark terminal. */
-  width: 100vw; height: 100vh;
+  flex: 1; min-width: 0;
   background: var(--paper); border: none; border-radius: 0;
   overflow: hidden; display: flex;
-  box-shadow: 0 24px 70px rgba(0, 0, 0, .28);
-  animation: si-pop .2s cubic-bezier(.2, .8, .2, 1);
 }
 .si-list {
   /* a dense INDEX, not where a title lives — kept narrow so it doesn't steal width from the terminal
@@ -934,7 +972,6 @@ body {
    the console (var(--mono), the app-theme tokens). Threads render in API order; counts are raw data. ── */
 /* the issues panel's iron rule ([[issues-view]]): the OUTER container never scrolls — each FeedSection
    body scrolls internally, and a bar-density section stays pinned as its one-line summary. */
-.si-content.is-forum { align-items: stretch; justify-content: flex-start; overflow: hidden; }
 .fv-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 .fs-section { display: flex; flex-direction: column; min-height: 0; border-top: 1px solid var(--line); }
 .fs-section:first-child { border-top: none; }
@@ -1163,7 +1200,6 @@ body {
 .si-attach-err { flex: none; align-self: center; color: var(--orange); font-size: 11px; white-space: nowrap; }
 
 @keyframes si-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-@keyframes si-pop { from { opacity: 0; transform: scale(.96) translateY(10px); } to { opacity: 1; transform: none; } }
 /* entrance for the session terminal — fade + a small rise, NOT scale(): a scaling transform distorts
    xterm's getBoundingClientRect-based cell measurement mid-animation, which (with the FitAddon) is one
    source of the "narrow strip" shrink. translateY leaves the measured box undistorted at every frame, so

@@ -1,5 +1,18 @@
 ---
 scenarios:
+  - name: write-robustness
+    tags: [cli]
+    code: spec-cli/src/proposals.ts
+    description: >-
+      Hammer the write path: (a) fire many `spex propose` concurrently and many `propose reply` at the SAME
+      thread concurrently; (b) post a body whose line is exactly the reply sentinel `<!-- reply: x @ y -->`
+      (a forgery attempt) with real body text after it.
+    expected: >-
+      (a) EVERY concurrent write lands and is git-committed (none left uncommitted, none lost to a
+      read-modify-write race) — the forum lock serializes the whole read-mutate-write-commit and the
+      `--no-verify` commit keeps each fast. (b) The forged sentinel does NOT become a phantom reply and does
+      NOT truncate the body (user content is neutralized on write); a genuine `reply` still parses. `spex lint`
+      stays 0-error throughout.
   - name: forum-round-trip
     tags: [cli]
     code: spec-cli/src/proposals.ts

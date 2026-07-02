@@ -41,9 +41,12 @@ not a hint toward one.
 
 - **`[[` — spec nodes (a topic), on every prompt.** Which node does this target? Typing `[[` opens the
   node dropdown (the focused node leads it, the convenient default); accepting inserts `[[<id>]]`. It is the
-  **same** dropdown on the New Session prompt and on a running session's `❯` inbox — one menu, not two. This
-  is the [[mentions]] grammar: `[[node]]` is a topic; the `@` sigil is reserved for **actors** (sessions),
-  so the two never collide.
+  **same** dropdown on the New Session prompt and on a running session's `❯` inbox — one menu, not two.
+- **`@` — sessions (an actor), on every prompt.** Typing `@` opens a parallel dropdown of the **live** board
+  sessions plus **`@new`** (spawn a fresh worker), ranked by relevance; accepting inserts `@<id>`. This is
+  the [[mentions]] grammar: `[[node]]` names a topic, `@session` names an actor — the two never collide. In
+  the composer/inbox the token expands to prompt text (the agent reads it); only in the forum does `@` also
+  programmatically dispatch.
 - **`/` on the New Session prompt — the config presets** (our own bespoke preset set), *not* Claude
   Code's palette.
 - **`/` on a running session's `❯` inbox — the board commands, then Claude Code's own `/` menu.** The

@@ -42,3 +42,16 @@ carrying the clip and step-map hashes — [[video-evidence]]'s routing; the mark
 Disagreement with *this* node's verdict → the human files their own `manual@1` reading through the eval
 seam's write half (filing.ts, [[yatsu-core]]), the annotation report as its transcript evidence. The
 annotator invents no verdict states, no timeline tables, no locks.
+
+**Discussion rides the Issue mechanism — an eval's comment thread IS a local Issue.** Under the media the
+pane renders the eval's comment thread: a local issue deterministically bound to this (node, scenario) by
+its concern key — `eval: <node> · <scenario>` — matched by concern TEXT against the page's resident issues
+list (ids de-collide, concerns don't). No thread exists until someone speaks: the first comment lazily
+creates it through the SAME propose the CLI uses (`nodes: [node]`, the comment as the body), every later
+comment replies to it through the SAME reply — one thread per pair, forever, whatever its status. The
+reply list and composer are the SAME shared thread UI the issue detail uses ([[issues-view]]'s
+`Thread.jsx` — one thread UI, three homes: local issue, forge issue, eval), so an `@session`/`@new` typed
+in a comment dispatches ([[mentions]]) — commenting "@new look at this regression" under an eval IS
+assigning it. No new object, no new store, no hiding: the thread lists in the issues group like any local
+issue, and its node chip focuses the graph. Where no resident issues list is wired in (the session eval
+tab), the section does not render — a blind post would mint duplicate threads.

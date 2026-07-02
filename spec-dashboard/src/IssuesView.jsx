@@ -4,6 +4,7 @@ import { useMentionAutocomplete } from './mentions.jsx'
 import EvalsGroup, { entryKey } from './EvalsFeed.jsx'
 import Annotator from './Annotator.jsx'
 import { SpecBody } from './NodeView.jsx'
+import { Replies, ReplyComposer } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
 
 // The issues page ([[issues-view]]): MASTER-DETAIL over one full routed page. The LEFT column is one
@@ -111,7 +112,7 @@ export default function IssuesView({ onFocusNode, specs = [], sessions = [], iss
         </section>
       </div>
       <div className="fv-detail">
-        {selEval && <Annotator entry={selEval} onFiled={load} />}
+        {selEval && <Annotator entry={selEval} issues={all} specs={specs} sessions={sessions} onFiled={load} onWrite={async (outcomes) => { flash(outcomes); await load() }} />}
         {selIssue && <IssueDetail issue={selIssue} specs={specs} sessions={sessions} onFocusNode={onFocusNode} onWrite={async (outcomes) => { flash(outcomes); await load() }} />}
         {!selEval && !selIssue && <div className="fv-note">{t('session.issuesEmpty')}</div>}
       </div>
@@ -143,57 +144,10 @@ function IssueDetail({ issue: th, specs, sessions, onFocusNode, onWrite }) {
         {th.url && <a className="fv-link" href={th.url} target="_blank" rel="noreferrer">{t('session.issuesOpenOnForge')}</a>}
       </div>
       {th.body && <div className="fvd-body"><SpecBody body={th.body} /></div>}
-      {replies.map((r, i) => (
-        <div className="fv-reply" key={i}>
-          <div className="fv-reply-meta">
-            <span className="fv-reply-by">{r.by}</span>
-            {r.at && <span className="fv-reply-at">{r.at}</span>}
-          </div>
-          <div className="fvd-body"><SpecBody body={r.body} /></div>
-        </div>
-      ))}
+      <Replies replies={replies} />
       {local
-        ? <ReplyComposer id={th.id} specs={specs} sessions={sessions} focusId={nodes[0] || null} onDone={onWrite} />
+        ? <ReplyComposer onSend={(text) => postIssueReply(th.id, text)} specs={specs} sessions={sessions} focusId={nodes[0] || null} onDone={onWrite} />
         : <div className="fv-hint">{t('session.issuesForgeReadOnly')}</div>}
-    </div>
-  )
-}
-
-// a small textarea + Send under a LOCAL issue's detail — posts a reply as 'human' and reloads. An
-// @-mention in the text summons a worker; the returned outcomes string surfaces via onDone. The textarea
-// carries the SAME `[[node]]`/`@session` autocomplete as the console ([[mentions]], one shared menu, never
-// a fork); the composer is docked at the detail's bottom, so its menu opens UPWARD. The thread's first
-// node leads the `[[` list — the convenient default topic here.
-function ReplyComposer({ id, specs, sessions, focusId, onDone }) {
-  const t = useT()
-  const [body, setBody] = useState('')
-  const [busy, setBusy] = useState(false)
-  const taRef = useRef(null)
-  const ac = useMentionAutocomplete({ inputRef: taRef, value: body, setValue: setBody, specs, sessions, focusId, up: true })
-  const send = async () => {
-    const text = body.trim()
-    if (!text || busy) return
-    setBusy(true)
-    try {
-      const res = await postIssueReply(id, text)
-      if (res?.ok) { setBody(''); await onDone?.(res.outcomes || '') }
-    } finally { setBusy(false) }
-  }
-  return (
-    <div className="fv-compose">
-      <div className="fv-tawrap">
-        <textarea ref={taRef} className="fv-textarea" rows={2} value={body} placeholder={t('session.issuesReplyPlaceholder')}
-          disabled={busy} onChange={(e) => { setBody(e.target.value); ac.sync(e.target) }}
-          onSelect={(e) => ac.sync(e.target)} onBlur={ac.close}
-          onKeyDown={(e) => { if (ac.onKeyDown(e)) return; if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); send() } }} />
-        {ac.menuEl}
-      </div>
-      <div className="fv-actions">
-        <span className="fv-hint">{t('session.issuesMentionHint')}</span>
-        <button type="button" className="fv-send" disabled={busy || !body.trim()} onClick={send}>
-          {busy ? t('session.issuesSending') : t('session.issuesSend')}
-        </button>
-      </div>
     </div>
   )
 }

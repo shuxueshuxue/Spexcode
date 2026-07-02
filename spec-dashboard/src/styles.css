@@ -178,12 +178,12 @@ body {
 .react-flow__controls-button:hover { background: var(--panel); }
 .react-flow__controls-button svg { fill: var(--ink); }
 
-/* ---- node: two stacked rows — row 1 the thin file-tree line (dot · title · version), row 2 the
-   live editors' avatars or "last edited … ago". A touch wider than the single-line era for titles. ---- */
+/* ---- node: two stacked rows — row 1 the thin file-tree line (dot · title, op glyphs OR bare age at
+   the right edge), row 2 the marks (version · badges) and the live editors' avatars. ---- */
 .spec-node {
   position: relative;
   display: flex; flex-direction: column; justify-content: center; gap: 3px;
-  width: 220px; min-height: 46px; padding: 5px 9px;
+  width: 176px; min-height: 46px; padding: 5px 9px;
   background: var(--panel); border: 1px solid var(--line); border-radius: 4px;
   transition: border-color .12s;
 }
@@ -193,12 +193,13 @@ body {
 .spec-node.drift.focused { border-color: var(--yellow); outline-color: var(--yellow); }
 
 .node-row1 { display: flex; align-items: center; gap: 7px; }
-.node-row2 { display: flex; align-items: center; min-height: 18px; }
+.node-row2 { display: flex; align-items: center; gap: 7px; min-height: 18px; }
 
 .node-dot { position: relative; width: 7px; height: 7px; border-radius: 2px; flex: none; } /* square tick */
 .pulse { position: absolute; inset: 0; border-radius: 2px; animation: pulse 1.6s ease-out infinite; }
 @keyframes pulse { 0% { transform: scale(1); opacity: .6; } 100% { transform: scale(2.6); opacity: 0; } }
 .node-title { font-size: 12px; font-weight: 600; color: var(--ink2); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.node-ago { font-size: 10px; color: var(--muted); flex: none; white-space: nowrap; }
 .node-ver { font-size: 10px; color: var(--muted); flex: none; }
 
 /* expandable hint: a small ▸N tab riding the node's RIGHT edge (the direction children open), shown only
@@ -213,10 +214,8 @@ body {
 }
 .spec-node.focused .node-expand { color: var(--blue); border-color: var(--blue); }
 
-/* ---- row 2: editor avatars · or "last edited … ago" ---- */
+/* ---- row 2: marks · editor avatars ---- */
 .node-editors { display: flex; align-items: center; gap: 3px; }
-.node-lastedit { font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.node-lastedit b { font-weight: 600; color: var(--ink2); }
 .av-more { font-size: 9px; font-weight: 700; color: var(--muted); margin-left: 1px; }
 
 /* @@@ avatar - the generated face (avatar.jsx). `av-face` is the coloured tile; shape variants change

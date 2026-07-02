@@ -26,6 +26,11 @@ heavier bytes, so [[yatsu-core]]'s `clean` is the intended prune.
 
 An optional refinement — anchoring named steps to moments in the clip so an annotation can land on a step —
 is [[step-timeline]], a separate format built only when a real annotation workflow needs it. yatsu still
-runs nothing: it records a clip something else recorded, and the measuring hand stays a metadata tag. A
-human who disagrees with an agent's verdict simply files their own `manual@1` reading — the existing
-supersede-by-a-newer-reading path, not a new lifecycle.
+runs nothing: it records a clip something else recorded, and the measuring hand stays a metadata tag.
+
+A human who disagrees with **this** node's verdict simply files their own `manual@1` reading — the existing
+supersede-by-a-newer-reading path, not a new lifecycle. A finding that is *not* this node's clean fail — a
+cross-cutting problem, or one belonging to **another** node — is instead a **concern raised on the
+responsible node** (a local proposal / forge issue through the emerging unified Issue port), pointing at the
+clip by its evidence hash; not a hedged verdict here. So video keeps yatsu's verdict binary and routes the
+"needs another look" elsewhere it belongs.

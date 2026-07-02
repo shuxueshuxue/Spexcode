@@ -1505,3 +1505,56 @@ body {
 .proof-empty-msg { font-size: 15px; color: var(--ink2); }
 .proof-empty-sub { max-width: 460px; line-height: 1.6; }
 /* the `proof` button's cyan now comes from the shared `.si-act.board.sc-cyan` rule (see board commands). */
+
+/* ---- evals feed ([[evals-feed]]) — the current measured loss as a feed, title-only rows, media lazy ---- */
+.ef-chipbar { display: flex; gap: 4px; padding: 8px 10px 2px; }
+.ef-chip { font: inherit; font-size: 11px; color: var(--muted); background: var(--panel2); border: 1px solid var(--line); border-radius: 12px; padding: 1px 10px; cursor: pointer; }
+.ef-chip.on { color: var(--ink); border-color: var(--blue); }
+.ef-stale { margin-left: auto; }
+.ef-list { padding: 2px 10px 12px; }
+.ef-close { font: inherit; color: var(--muted); background: none; border: 0; cursor: pointer; padding: 2px 6px; }
+.ef-empty, .ef-miss { color: var(--muted); font-size: 12px; padding: 18px 8px; }
+.ef-row { border-bottom: 1px solid var(--line); }
+.ef-row:last-child { border-bottom: 0; }
+.ef-row-head { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: none; border: 0; padding: 8px 6px; font: inherit; color: var(--ink2); cursor: pointer; }
+.ef-row-head:hover { background: var(--panel2); }
+.ef-scenario { font-weight: 600; font-size: 13px; }
+.ef-node { font-size: 11px; opacity: .9; }
+.ef-kind { margin-left: auto; font-size: 12px; }
+.ef-time { color: var(--muted); font-size: 11px; min-width: 28px; text-align: right; }
+.ef-detail { padding: 4px 8px 12px 30px; }
+.ef-expected, .ef-note { font-size: 12px; color: var(--ink2); margin: 0 0 6px; }
+.ef-thumb { display: block; max-width: 100%; max-height: 260px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel2); }
+.ef-annotate { font: inherit; font-size: 12px; color: var(--ink); background: var(--panel2); border: 1px solid var(--blue); border-radius: 5px; padding: 4px 12px; cursor: pointer; }
+
+/* ---- annotator ([[annotator]]) — the human's measuring hand on an already-captured clip ---- */
+.an-overlay { position: fixed; inset: 0; z-index: 70; background: rgba(8,10,20,.72); display: flex; align-items: center; justify-content: center; }
+.an-panel { width: min(880px, 94vw); max-height: 92vh; overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 0 0 10px; box-shadow: 0 22px 70px rgba(0,0,0,.6); }
+.an-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.an-title { font-weight: 700; font-size: 14px; color: var(--ink); }
+.an-node { font-size: 11px; color: var(--muted); }
+.an-head .ef-close { margin-left: auto; }
+.an-expected { font-size: 12px; color: var(--ink2); padding: 8px 14px 0; }
+.an-stage { position: relative; margin: 10px 14px 0; cursor: crosshair; }
+.an-video { display: block; width: 100%; background: #000; border: 1px solid var(--line); border-radius: 6px; }
+.an-rect { position: absolute; border: 2px solid var(--orange); border-radius: 3px; background: rgba(255,150,60,.12); pointer-events: none; }
+.an-rect.live { border-style: dashed; }
+.an-ruler { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 14px 0; }
+.an-step { font: inherit; font-size: 11px; color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 2px 8px; cursor: pointer; }
+.an-step.on { border-color: var(--green); color: var(--ink); }
+.an-marks { padding: 8px 14px 0; }
+.an-hint { color: var(--muted); font-size: 11px; }
+.an-mark { display: flex; align-items: center; gap: 6px; margin: 4px 0; }
+.an-mark-t { font-size: 11px; color: var(--muted); min-width: 90px; }
+.an-mark-node { width: 130px; font: inherit; font-size: 11px; color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 3px 6px; }
+.an-mark-c { flex: 1; font: inherit; font-size: 12px; color: var(--ink); background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 3px 8px; }
+.an-mark-x { font: inherit; color: var(--muted); background: none; border: 0; cursor: pointer; }
+.an-actions { display: flex; align-items: center; gap: 10px; padding: 12px 14px 4px; flex-wrap: wrap; }
+.an-act { font: inherit; font-size: 12px; color: var(--ink); background: var(--panel2); border: 1px solid var(--blue); border-radius: 5px; padding: 4px 12px; cursor: pointer; }
+.an-act:disabled { opacity: .45; cursor: default; }
+.an-verdict { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.an-v { font: inherit; font-size: 11px; font-weight: 700; background: none; border: 1px solid var(--line); border-radius: 4px; padding: 2px 8px; cursor: pointer; color: var(--muted); }
+.an-v.pass.on { color: var(--green); border-color: var(--green); }
+.an-v.fail.on { color: var(--orange); border-color: var(--orange); }
+.an-note { width: 180px; font: inherit; font-size: 11px; color: var(--ink); background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 3px 8px; }
+.an-flash { font-size: 12px; color: var(--green); }

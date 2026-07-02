@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { loadIssues, postIssueReply, postIssueThread } from './data.js'
 import FeedSection from './FeedSection.jsx'
+import EvalsSection from './EvalsFeed.jsx'
 import { useT } from './i18n/index.jsx'
 
 // The issues page ([[issues-view]]): ONE merged list over every store ([[issues]]) — local forum threads
@@ -87,8 +88,10 @@ export default function IssuesView({ onFocusNode }) {
   return (
     <div className="fv-panel">
       {notice && <div className="fv-notice">{notice}</div>}
-      {/* the threads region — one FeedSection instance ([[issues-view]]'s panel furniture). The evals
-          region ([[evals-feed]]) mounts ABOVE this one when it lands; until then threads fill the pane. */}
+      {/* the evals region ([[evals-feed]]) leads ABOVE the threads — evals outrank issues here; it wraps
+          itself in its own FeedSection so its counts stay internal. */}
+      <EvalsSection />
+      {/* the threads region — one FeedSection instance ([[issues-view]]'s panel furniture). */}
       <FeedSection title={t('session.issuesThreadsTitle')} summary={t('session.issuesThreadsSummary', { open: openCount, total: issues.length })} density="region" focused>
       <div className="fv-toolbar">
         <button type="button" className="fv-new-btn" onClick={() => setComposing((v) => !v)}>

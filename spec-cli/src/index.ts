@@ -15,6 +15,7 @@ import { gitA, gitTry } from './git.js'
 import { newSession, listSessions, sendKeys, rawKey, exitSession, closeSession, reopen, propose, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, superviseQueue } from './sessions.js'
 import { defaultHarness, HARNESSES } from './harness.js'
 import { evalTimeline, readBlobByHash } from '../../spec-yatsu/src/evaltab.js'
+import { fileHumanReading } from '../../spec-yatsu/src/filing.js'
 import { buildProofModel, renderProofHtml } from '../../spec-yatsu/src/proof.js'
 import { saveUpload, MAX_UPLOAD_BYTES } from './uploads.js'
 import { attachViewer, detachViewer, resizeBridge, forwardWheel, superviseBridges, type Viewer } from './pty-bridge.js'
@@ -77,12 +78,32 @@ app.get('/api/edit', async (c) => {
 // a node's eval timeline (read half of `spex yatsu`): yatsu-sidecar readings joined with a live freshness
 // flag, newest-first; `hasYatsu:false` when none declared. Contract belongs to [[spec-yatsu]].
 app.get('/api/specs/:id/evals', async (c) => c.json(await evalTimeline(c.req.param('id'))))
+// the eval seam's WRITE half for the dashboard annotator ([[spec-yatsu]] filing.ts): a human files a
+// manual@1 reading (verdict + an annotation-report transcript) through the SAME append the CLI uses.
+app.post('/api/specs/:id/yatsu/eval', async (c) => {
+  const b = await c.req.json().catch(() => null)
+  if (!b || typeof b.scenario !== 'string') return c.json({ error: 'body needs { scenario, status, note?, transcript? }' }, 400)
+  const r = fileHumanReading(c.req.param('id'), b)
+  return r.ok ? c.json({ ok: true, reading: r.reading }) : c.json({ error: r.error }, 400)
+})
 // serve a reading's evidence blob by content hash (bytes never enter git): bad hash → 400, missing → 404,
 // else the bytes with a sniffed MIME and an immutable cache header (the name IS the content hash).
+// HTTP Range is honored — a <video> can only SEEK when the server answers byte ranges (a browser clamps
+// currentTime to the seekable window, which stays [0,0] without them); one general mechanism at the
+// transport, so every evidence kind streams the same way.
 app.get('/api/yatsu/blob/:hash', (c) => {
   const r = readBlobByHash(c.req.param('hash'))
   if (!r.ok) return c.text(r.message, r.reason === 'invalid' ? 400 : 404)
-  return c.body(new Uint8Array(r.bytes), 200, { 'Content-Type': r.mime, 'Cache-Control': 'public, max-age=31536000, immutable' })
+  const total = r.bytes.length
+  const base = { 'Content-Type': r.mime, 'Cache-Control': 'public, max-age=31536000, immutable', 'Accept-Ranges': 'bytes' }
+  const m = /^bytes=(\d*)-(\d*)$/.exec(c.req.header('range') ?? '')
+  if (m && (m[1] || m[2])) {
+    const start = m[1] ? parseInt(m[1], 10) : total - parseInt(m[2], 10)
+    const end = m[1] && m[2] ? Math.min(parseInt(m[2], 10), total - 1) : total - 1
+    if (!(start >= 0 && start <= end && end < total)) return c.body(null, 416, { 'Content-Range': `bytes */${total}` })
+    return c.body(new Uint8Array(r.bytes.subarray(start, end + 1)), 206, { ...base, 'Content-Range': `bytes ${start}-${end}/${total}` })
+  }
+  return c.body(new Uint8Array(r.bytes), 200, base)
 })
 app.get('/api/layout', async (c) => c.json(await resolveLayout()))
 // the `surface: command` config-root plugins (built/active only) for the new-session `/` dropdown — each with
@@ -120,7 +141,9 @@ app.post('/api/issues', async (c) => {
   if (!concern) return c.json({ error: 'empty concern' }, 400)
   const nodes = Array.isArray(body?.nodes) ? (body.nodes as unknown[]).filter((n): n is string => typeof n === 'string') : []
   const postBody = typeof body?.body === 'string' ? body.body : undefined
-  const { thread, outcomes } = await forumPost(concern, { nodes, body: postBody, author: 'human' })
+  // typed evidence[] — yatsu content-addressed hashes (the annotator's clip reference rides here, not prose)
+  const evidence = Array.isArray(body?.evidence) ? (body.evidence as unknown[]).filter((h): h is string => typeof h === 'string' && /^[0-9a-f]{64}$/.test(h)) : []
+  const { thread, outcomes } = await forumPost(concern, { nodes, body: postBody, evidence, author: 'human' })
   return c.json({ ok: true, id: thread.id, outcomes: summarize(outcomes) }, 201)
 })
 // the dashboard input's `/` dropdown — computed by the launcher's HARNESS adapter the same way that harness

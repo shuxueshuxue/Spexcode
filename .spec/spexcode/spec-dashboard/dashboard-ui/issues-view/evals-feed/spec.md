@@ -1,11 +1,14 @@
 ---
 title: evals-feed
-status: pending
+status: active
 hue: 200
 desc: The issues view's evals section — the project's current measured loss as a feed, leading above the issues. Latest reading per scenario, fresh first, video first; title-only rows, media strictly lazy.
+code:
+  - spec-dashboard/src/EvalsFeed.jsx
 related:
   - spec-yatsu/src/evaltab.ts
   - spec-cli/src/board.ts
+  - spec-dashboard/src/App.jsx
 ---
 # evals-feed
 
@@ -31,6 +34,10 @@ state that survives the section's density switches — the section furniture (de
 media request of any kind. Expanding a row pulls its thumbnail and the scenario's `expected`; opening it
 launches the [[annotator]] — a `<video>` element exists only there, never in the feed. The list is
 virtualized; history drills down per scenario (the node's [[yatsu-eval-tab]] scaffold), not inline.
+
+The section lives in [[issues-view]]'s upper region: it wraps itself in the panel's FeedSection (so its
+counts stay internal and density switches preserve its state) and mounts as one line above the threads
+section; the view's own entries (console pill · ⌥F · board `f`) are how it is reached.
 
 Data rides the board's existing evals fold. At scale the fold itself converges to the same semantics —
 latest reading per scenario plus a history count, the full timeline served per node on demand — one

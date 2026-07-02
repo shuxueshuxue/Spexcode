@@ -43,6 +43,29 @@ export default {
     loading: 'loading specs from git…',
   },
 
+  evalsFeed: {
+    title: 'evals — current loss',
+    kind: { video: 'video', image: 'image', all: 'all' },
+    staleN: ({ n }) => `${n} stale`,
+    summary: ({ n }) => `${n} current`,
+    empty: 'no current readings match — measure a scenario or switch the filter.',
+    annotate: 'open & annotate',
+  },
+
+  annotator: {
+    title: 'annotator',
+    hint: 'drag on the paused frame to circle a problem; the moment names its step.',
+    commentPh: 'what is wrong here…',
+    nodeTitle: 'the node this finding belongs to',
+    notePh: 'note on the verdict…',
+    fileIssue: 'file issue on node(s)',
+    fileReading: 'file reading',
+    issueFiled: 'issue filed ✓',
+    readingFiled: 'reading filed ✓',
+    failed: 'failed — is the backend up?',
+    reviewFallback: 'video review',
+  },
+
   time: {
     justNow: 'now',
     minutes: ({ n }) => `${n}m`,

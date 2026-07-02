@@ -9,6 +9,7 @@ import { readReadings, appendReading, latestPerScenario, type Reading, type Verd
 import { staleAxes } from './freshness.js'
 import { evaluatorTag } from './evaluator.js'
 import { putBlob, listBlobs, gc, isStrayBlob } from './cache.js'
+import { validateTimeline } from './timeline.js'
 import { evalTimeline, type EvalTimeline } from './evaltab.js'
 
 function flag(args: string[], name: string): string | undefined {
@@ -184,17 +185,36 @@ async function evalCmd(args: string[]): Promise<number> {
   else if (result !== undefined) { blob = putBlob(readFileSync(result === '-' ? 0 : result)); blobKind = 'transcript' }
   else if (video !== undefined) { blob = putBlob(readFileSync(video)); blobKind = 'video' }
 
+  // --timeline: the clip's step map (timeline.ts) — only meaningful beside --video. Validated LOUD at
+  // filing (a malformed map is rejected, never silently reshaped); stored canonicalized so identical
+  // timelines share one blob.
+  const timeline = flag(args, 'timeline')
+  let timelineBlob: string | undefined
+  if (timeline !== undefined) {
+    if (blobKind !== 'video') { console.error('spex yatsu eval: --timeline accompanies --video (it maps moments in the clip to steps)'); return 2 }
+    let parsed: unknown
+    try { parsed = JSON.parse(readFileSync(timeline, 'utf8')) } catch { console.error(`spex yatsu eval: --timeline ${timeline} is not readable JSON`); return 2 }
+    const terrs = validateTimeline(parsed)
+    if (terrs.length) {
+      console.error('spex yatsu eval: invalid step-timeline:')
+      for (const e of terrs) console.error(`    ${e}`)
+      return 2
+    }
+    timelineBlob = putBlob(Buffer.from(JSON.stringify(parsed)))
+  }
+
   const reading: Reading = {
     scenario: scenario.name,
     codeSha: headSha(root),
     blob,
     ...(blobKind ? { blobKind } : {}),
+    ...(timelineBlob ? { timelineBlob } : {}),
     evaluator: evaluatorTag(),
     verdict,
     ts: new Date().toISOString(),
   }
   appendReading(node.sidecarPath, reading)
-  const ev = blob ? `${blobKind} ${blob.slice(0, 12)}…` : 'no evidence'
+  const ev = blob ? `${blobKind} ${blob.slice(0, 12)}…${timelineBlob ? ' +timeline' : ''}` : 'no evidence'
   console.log(`  ✓ '${id}' scenario '${scenario.name}' → ${verdictText(verdict)} @ ${reading.codeSha.slice(0, 7)} [${reading.evaluator}] (${ev})`)
   console.log(`spex yatsu eval: 1 measurement filed`)
   return 0
@@ -219,7 +239,10 @@ async function clean(args: string[]): Promise<number> {
     for (const n of await gatherNodes(root)) {
       const readings = readReadings(n.sidecarPath)
       const keep = keepLatest ? [...latestPerScenario(readings).values()] : readings
-      for (const r of keep) if (r.blob) referenced.add(r.blob)
+      for (const r of keep) {
+        if (r.blob) referenced.add(r.blob)
+        if (r.timelineBlob) referenced.add(r.timelineBlob)   // a video reading's step map lives in the same cache
+      }
     }
   }
   const before = listBlobs().length
@@ -297,6 +320,6 @@ export async function runYatsu(args: string[]): Promise<number> {
   if (sub === 'clean') return clean(args.slice(1))
   if (sub === 'show') return show(args.slice(1))
   if (sub === 'check-staged') return checkStaged()
-  console.error('spex yatsu: scan [--changed] | eval [.|<node>] [--scenario <name>] (--pass|--fail) [--note <text>] [--image <path>|--result <path|->|--video <path>] | show [.|<node>] [--json] | clean [--keep-latest|--all]')
+  console.error('spex yatsu: scan [--changed] | eval [.|<node>] [--scenario <name>] (--pass|--fail) [--note <text>] [--image <path>|--result <path|->|--video <path> [--timeline <json>]] | show [.|<node>] [--json] | clean [--keep-latest|--all]')
   return 2
 }

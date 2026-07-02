@@ -12,6 +12,7 @@ export type EvalEntry = {
   codeSha: string
   blob: string | null
   blobKind?: 'image' | 'transcript' | 'video'
+  timelineBlob?: string
   evaluator: string
   verdict?: Verdict
   ts: string
@@ -75,6 +76,7 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
       codeSha: r.codeSha,
       blob: r.blob,
       ...(r.blobKind ? { blobKind: r.blobKind } : {}),
+      ...(r.timelineBlob ? { timelineBlob: r.timelineBlob } : {}),
       evaluator: r.evaluator,
       ...(r.verdict ? { verdict: r.verdict } : {}),
       ts: r.ts,

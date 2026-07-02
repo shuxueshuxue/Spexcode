@@ -69,10 +69,14 @@ reply/propose the CLI uses, committed straight to the trunk.
   wrapper: the dashboard adds no store of its own, and it never writes to a forge ([[issues]]: v1 writes
   are local-only). A `@session` in the text **dispatches** ([[mentions]]) exactly as a CLI post would — a
   human summons an agent from the issues page — and the returned one-line dispatch summary is echoed
-  briefly. A plain textarea with a `@session · [[node]]` hint is enough; autocomplete is optional.
-  The reply list and composer are ONE shared component (`Thread.jsx`), delivery-agnostic (`onSend`): the
-  issue detail replies to its thread, and the eval detail ([[annotator]]) renders the SAME thread UI over
-  its lazily-bound eval comment thread — one thread UI, every home.
+  briefly. Both composers carry the SAME `@session` / `[[node]]` **autocomplete dropdown** the console's
+  inputs use ([[mentions]]'s shared menu — one implementation, never a page-local fork): typing `@` lists
+  the live sessions, `[[` lists the nodes (the thread's own node leading), a pick inserts the token, and
+  Esc closes the menu without leaving the page. A grammar that dispatches workers earns discoverability —
+  a bare hint line proved not enough (the human typed `@` and got nothing).
+  The reply list and reply composer are ONE shared component (`Thread.jsx`), delivery-agnostic (`onSend`):
+  the issue detail replies to its thread, and the eval detail ([[annotator]]) renders the SAME thread UI —
+  autocomplete included — over its lazily-bound eval comment thread; one thread UI, every home.
 - **Honors the switch.** When the forum workflow is OFF (`enabled: false`, [[proposals]]'s toggle), the
   view shows a muted "off" state instead of the list — the dashboard reflects the one source of truth,
   never forks it.

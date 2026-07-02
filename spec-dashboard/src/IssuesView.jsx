@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { postIssueReply, postIssueThread } from './data.js'
+import { useMentionAutocomplete } from './mentions.jsx'
 import EvalsGroup, { entryKey } from './EvalsFeed.jsx'
 import Annotator from './Annotator.jsx'
 import { SpecBody } from './NodeView.jsx'
@@ -14,7 +15,7 @@ import { useT } from './i18n/index.jsx'
 // replies, and the local reply composer; an eval renders as the [[annotator]]. j/k walk the whole left
 // list across both groups, the detail follows; the write paths are unchanged (reply/propose as 'human',
 // forge read-only with a permalink).
-export default function IssuesView({ onFocusNode, specs = [], issuesData = null, reloadIssues }) {
+export default function IssuesView({ onFocusNode, specs = [], sessions = [], issuesData = null, reloadIssues }) {
   const t = useT()
   const data = issuesData                          // RESIDENT app state — the page renders instantly, no per-mount fetch
   const [composing, setComposing] = useState(false)
@@ -95,7 +96,7 @@ export default function IssuesView({ onFocusNode, specs = [], issuesData = null,
               )}
             </span>
           </header>
-          {composing && <NewThreadForm onDone={async (outcomes) => { setComposing(false); flash(outcomes); await load() }} />}
+          {composing && <NewThreadForm specs={specs} sessions={sessions} onDone={async (outcomes) => { setComposing(false); flash(outcomes); await load() }} />}
           {!issues.length && <div className="fv-note">{t('session.issuesEmpty')}</div>}
           {issues.map((th) => {
             const k = `issue:${th.id}`
@@ -111,8 +112,8 @@ export default function IssuesView({ onFocusNode, specs = [], issuesData = null,
         </section>
       </div>
       <div className="fv-detail">
-        {selEval && <Annotator entry={selEval} issues={all} onFiled={load} onWrite={async (outcomes) => { flash(outcomes); await load() }} />}
-        {selIssue && <IssueDetail issue={selIssue} onFocusNode={onFocusNode} onWrite={async (outcomes) => { flash(outcomes); await load() }} />}
+        {selEval && <Annotator entry={selEval} issues={all} specs={specs} sessions={sessions} onFiled={load} onWrite={async (outcomes) => { flash(outcomes); await load() }} />}
+        {selIssue && <IssueDetail issue={selIssue} specs={specs} sessions={sessions} onFocusNode={onFocusNode} onWrite={async (outcomes) => { flash(outcomes); await load() }} />}
         {!selEval && !selIssue && <div className="fv-note">{t('session.issuesEmpty')}</div>}
       </div>
     </div>
@@ -121,7 +122,7 @@ export default function IssuesView({ onFocusNode, specs = [], issuesData = null,
 
 // the issue detail — full-height: header (store/status/author/node chips/permalink), the markdown-RENDERED
 // body, the reply thread, and the local composer (forge: read here, discussed there).
-function IssueDetail({ issue: th, onFocusNode, onWrite }) {
+function IssueDetail({ issue: th, specs, sessions, onFocusNode, onWrite }) {
   const t = useT()
   const local = th.store === 'local'
   const nodes = Array.isArray(th.nodes) ? th.nodes : []
@@ -145,7 +146,7 @@ function IssueDetail({ issue: th, onFocusNode, onWrite }) {
       {th.body && <div className="fvd-body"><SpecBody body={th.body} /></div>}
       <Replies replies={replies} />
       {local
-        ? <ReplyComposer onSend={(text) => postIssueReply(th.id, text)} onDone={onWrite} />
+        ? <ReplyComposer onSend={(text) => postIssueReply(th.id, text)} specs={specs} sessions={sessions} focusId={nodes[0] || null} onDone={onWrite} />
         : <div className="fv-hint">{t('session.issuesForgeReadOnly')}</div>}
     </div>
   )
@@ -153,12 +154,16 @@ function IssueDetail({ issue: th, onFocusNode, onWrite }) {
 
 // the "New" affordance — a concern line, an optional node-ids field, and a body. Posts a fresh LOCAL
 // issue as 'human' (v1 writes are local-only — the forge stays read-only); an @-mention in the body dispatches.
-function NewThreadForm({ onDone }) {
+// The body textarea carries the shared `[[node]]`/`@session` autocomplete ([[mentions]]) — the form sits at
+// the top of the list column, so its menu opens downward.
+function NewThreadForm({ specs, sessions, onDone }) {
   const t = useT()
   const [concern, setConcern] = useState('')
   const [nodes, setNodes] = useState('')
   const [body, setBody] = useState('')
   const [busy, setBusy] = useState(false)
+  const taRef = useRef(null)
+  const ac = useMentionAutocomplete({ inputRef: taRef, value: body, setValue: setBody, specs, sessions })
   const submit = async () => {
     const c = concern.trim()
     if (!c || busy) return
@@ -175,9 +180,13 @@ function NewThreadForm({ onDone }) {
         disabled={busy} onChange={(e) => setConcern(e.target.value)} />
       <input className="fv-input" value={nodes} placeholder={t('session.issuesNodesPlaceholder')}
         disabled={busy} onChange={(e) => setNodes(e.target.value)} />
-      <textarea className="fv-textarea" rows={3} value={body} placeholder={t('session.issuesBodyPlaceholder')}
-        disabled={busy} onChange={(e) => setBody(e.target.value)}
-        onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit() } }} />
+      <div className="fv-tawrap">
+        <textarea ref={taRef} className="fv-textarea" rows={3} value={body} placeholder={t('session.issuesBodyPlaceholder')}
+          disabled={busy} onChange={(e) => { setBody(e.target.value); ac.sync(e.target) }}
+          onSelect={(e) => ac.sync(e.target)} onBlur={ac.close}
+          onKeyDown={(e) => { if (ac.onKeyDown(e)) return; if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit() } }} />
+        {ac.menuEl}
+      </div>
       <div className="fv-actions">
         <span className="fv-hint">{t('session.issuesMentionHint')}</span>
         <button type="button" className="fv-send" disabled={busy || !concern.trim()} onClick={submit}>

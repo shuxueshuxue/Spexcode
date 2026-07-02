@@ -103,7 +103,9 @@ export type Liveness = 'online' | 'starting' | 'offline'
 const PROPOSAL_STATUS: Record<Proposal, DisplayStatus> = { merge: 'review', nothing: 'done', close: 'close-pending' }
 
 export type Session = {
-  id: string; node: string | null; title: string | null; name: string | null; branch: string | null; path: string
+  id: string; node: string | null; branch: string | null; path: string
+  label: string; headline: string   // the DERIVED display strings ([[session-label]]) — the only names surfaces read
+  raw: { name: string | null; title: string | null }   // the bare parts, for explicit consumers only (rename prefill)
   parent: string | null   // the SPAWNING session's id ([[session-nesting]]) — set once at creation when `spex new` ran inside another session, else null; the frontend folds a child under it at read time
   harness: string   // which harness (claude|codex) runs this session — carried so liveness/occupancy route through its adapter
   lifecycle: Lifecycle; proposal: Proposal | null; merges: number; status: DisplayStatus; liveness: Liveness; note: string | null
@@ -152,19 +154,22 @@ function promptPreview(prompt: string, n = 60): string {
   return first.length > n ? first.slice(0, n - 1) + '…' : first
 }
 
-// the STABLE human label for a session row: a user-chosen NAME (the rename override) wins over everything;
-// else the spec node it references, else a prompt-derived title (node-agnostic sessions), else the branch,
-// else the id. Stable across turns — used for tables/selectors. The frontend mirrors this (session.js
-// sessionName).
-export const sessionLabel = (s: Session): string => s.name || s.node || s.title || s.branch || s.id
+// @@@ session-label — the ONE place a session's display strings are derived ([[session-label]]). The raw
+// parts (a user rename `name`, the 7-word prompt truncation `title`) never leave this module at the top
+// level: toSession computes `label` (STABLE: name > node > title > branch > id — tables/selectors) and
+// `headline` (LIVE: name > activity > promptPreview > node > title > branch > id — what a human reads,
+// see [[session-activity]]) and the wire carries THOSE; the parts ride only under `raw` for the few
+// explicit consumers (the rename prefill). A surface that wants a session's name reads s.label/s.headline
+// — there is no bare s.title/s.name to reach for, which is the enforcement.
+export const deriveLabel = (r: { name?: string | null; node?: string | null; title?: string | null; branch?: string | null; id: string }): string =>
+  r.name || r.node || r.title || r.branch || r.id
+export const deriveHeadline = (r: { name?: string | null; activity?: string | null; promptPreview?: string | null; node?: string | null; title?: string | null; branch?: string | null; id: string }): string =>
+  r.name || r.activity || r.promptPreview || r.node || r.title || r.branch || r.id
 
-// @@@ sessionHeadline - the cross-surface HEADLINE: the SAME chain the board card shows (frontend session.js
-// `sessionHeadline`). A user-chosen NAME wins, else the worker's LIVE self-summary (`activity`, the Claude
-// Code pane title — see [[session-activity]]), else a fuller prompt preview, else node/title/branch/id. Use
-// it wherever a session is NAMED FOR A HUMAN in CROSS-SESSION comms (the reply-channel footer, the watch
-// greeting), so an agent recognises a peer the way it reads the board — NOT the bare 7-word prompt
-// truncation `title` that `sessionLabel` stops at. `sessionLabel` stays the stable name for tables/selectors.
-export const sessionHeadline = (s: Session): string => s.name || s.activity || s.promptPreview || s.node || s.title || s.branch || s.id
+// accessors kept for the human-naming call sites (watch/notify/reply-channel): trivially the precomputed
+// wire fields, so every surface — CLI, dashboard, comms — reads the same derivation by construction.
+export const sessionLabel = (s: Session): string => s.label
+export const sessionHeadline = (s: Session): string => s.headline
 
 async function tmux(args: string[]): Promise<string> {
   const { stdout } = await pexec('tmux', ['-L', TMUX_SOCK, ...args], { encoding: 'utf8' })
@@ -193,7 +198,7 @@ function pkgRoot(): string {
 // `name` is the rename override (distinct from the prompt-derived `title`); `session` is the harness session_id
 // (the store key). The launcher mints the id (`claude --session-id <id>`) so it equals what every hook payload
 // and CLAUDE_CODE_SESSION_ID carry — one id across the record dir, tmux window, rendezvous socket, and commits.
-type SessRec = {
+export type SessRec = {
   session: string; governed: boolean; worktreePath: string; branch: string | null
   node: string | null; title: string | null; name: string | null
   parent: string | null   // the spawning session's id ([[session-nesting]]); null for a top-level launch
@@ -402,12 +407,15 @@ async function findWorktree(id: string): Promise<{ path: string; branch: string 
   return { path: rec.worktreePath, branch: rec.branch, rec }
 }
 
-function toSession(rec: SessRec, status: DisplayStatus, lv: Liveness, activity: string | null = null): Session {
+export function toSession(rec: SessRec, status: DisplayStatus, lv: Liveness, activity: string | null = null): Session {
   const prompt = readPromptFile(rec.session)   // the originating ask, captured at launch (store artifact; null for old sessions)
   // activity is the LIVE pane title; it only means anything while the worker is genuinely up — a
   // dead/booting session would show a stale or absent title, so it's suppressed unless liveness is online.
   const showActivity = lv === 'online'
-  return { id: rec.session, node: rec.node, title: rec.title, name: rec.name, branch: rec.branch, path: rec.worktreePath, parent: rec.parent, harness: rec.harness, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, prompt, promptPreview: prompt ? promptPreview(prompt) : null, created: rec.createdAt, activity: showActivity ? activity : null, sortKey: rec.sortKey }
+  const act = showActivity ? activity : null
+  const pp = prompt ? promptPreview(prompt) : null
+  const parts = { id: rec.session, name: rec.name, node: rec.node, title: rec.title, branch: rec.branch, activity: act, promptPreview: pp }
+  return { id: rec.session, node: rec.node, branch: rec.branch, label: deriveLabel(parts), headline: deriveHeadline(parts), raw: { name: rec.name, title: rec.title }, path: rec.worktreePath, parent: rec.parent, harness: rec.harness, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, prompt, promptPreview: pp, created: rec.createdAt, activity: act, sortKey: rec.sortKey }
 }
 
 // @@@ renameSession - set (or clear) a session's human display NAME: the user-chosen override that wins

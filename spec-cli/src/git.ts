@@ -113,41 +113,6 @@ export function worktreeSpecSig(wtPath: string): string {
 export type Version = { hash: string; date: string; reason: string; session: string | null }
 export type DiffStat = { additions: number; deletions: number; files: number }
 
-// per-commit numstat for one file, rename-followed; a pure rename is 0/0 so callers tell "moved" from
-// "changed". The per-file path for files outside `.spec` (`.spec` goes through the bulk index below).
-function fileStatsFollow(root: string, relPath: string): Map<string, DiffStat> {
-  const m = new Map<string, DiffStat>()
-  let out = ''
-  try {
-    out = git(['-C', root, 'log', '--follow', '--format=%H', '--numstat', '--', relPath])
-  } catch {
-    return m
-  }
-  let cur = ''
-  for (const line of out.split('\n')) {
-    const t = line.trim()
-    if (/^[0-9a-f]{7,40}$/.test(t)) { cur = t; if (!m.has(cur)) m.set(cur, { additions: 0, deletions: 0, files: 0 }); continue }
-    const n = line.match(/^(\d+|-)\t(\d+|-)\t/)
-    if (n && cur) { const s = m.get(cur)!; s.files++; s.additions += n[1] === '-' ? 0 : +n[1]; s.deletions += n[2] === '-' ? 0 : +n[2] }
-  }
-  return m
-}
-
-function historyFollow(root: string, relPath: string): Version[] {
-  let out = ''
-  try {
-    out = git(['-C', root, 'log', `--format=%H${US}%aI${US}%s${US}%b${RS}`, '--follow', '--', relPath])
-  } catch {
-    return []
-  }
-  const stats = fileStatsFollow(root, relPath)
-  return out.split(RS).map((r) => r.trim()).filter(Boolean).map((rec) => {
-    const [hash, date, reason, body = ''] = rec.split(US)
-    const m = body.match(/Session:\s*(\S+)/)
-    return { hash, date, reason, session: m ? m[1] : null }
-  }).filter((v) => { const s = stats.get(v.hash); return s != null && s.additions + s.deletions > 0 })
-}
-
 // ---- bulk spec history index ----
 
 export type HistoryIndex = {
@@ -232,9 +197,6 @@ async function buildIndex(root: string): Promise<HistoryIndex> {
   return { versions, stats }
 }
 
-// reset the cache when a process knows HEAD will have moved out from under it (tests, hooks).
-export function resetHistoryCache(): void { indexCache = null }
-
 // pure lookups over a prebuilt index (no git). rowsFor drops pure-rename rows (0/0) so a move isn't a version.
 export function rowsFor(idx: HistoryIndex, relPath: string): Version[] {
   const rows = idx.versions.get(relPath) ?? []
@@ -264,18 +226,6 @@ export async function pathsStats(root: string, paths: string[]): Promise<Map<str
     }
   }
   return m
-}
-
-// a file's version timeline: `.spec` from the bulk index, anything else (governed code) via per-file --follow.
-export async function history(root: string, relPath: string): Promise<Version[]> {
-  if (relPath.startsWith('.spec/')) return rowsFor(await historyIndex(root), relPath)
-  return historyFollow(root, relPath)
-}
-
-// per-commit stat for this node's spec.md (rename-followed), summed with governed-code stats by specHistory.
-export async function specStats(root: string, relPath: string): Promise<Map<string, DiffStat>> {
-  if (relPath.startsWith('.spec/')) return statsFor(await historyIndex(root), relPath)
-  return fileStatsFollow(root, relPath)
 }
 
 // the patch a spec.md got in one commit (vs parent); resolve its path AT that commit (reparents move it)

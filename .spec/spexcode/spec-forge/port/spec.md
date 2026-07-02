@@ -20,7 +20,11 @@ where the `Spec: <id>` marker lives; author/createdAt are what lets a forge issu
 thread as the same object in the unified Issue port, spec-cli's [[issues]], with a `by` and a `created`);
 `ForgePR` adds `headRefName` (the `node/<id>` branch = a free structural link)
 and `closesIssues` (the issue numbers it closes, for transitive linking). These vendor-neutral shapes are
-exactly what lets one port cover GitHub/GitLab/Bitbucket.
+exactly what lets one port cover GitHub/GitLab/Bitbucket. A driver may also offer the **optional
+incremental window** `listIssuesSince(sinceISO)` — only issues updated since that moment — which lets
+[[freshness]]'s resident cache merge small deltas instead of full-listing every cycle; a driver without it
+is simply always full-listed. State casing is normalized to lowercase **at the driver** — platform
+differences (gh's GraphQL `OPEN` vs REST `open`) die at the adapter, never downstream.
 
 A driver is the **only** thing that touches the network/CLI; it does no link resolution (that is
 host-agnostic, in [[links]]). The first real driver is **`github`**, which wraps the **`gh` CLI** — reusing

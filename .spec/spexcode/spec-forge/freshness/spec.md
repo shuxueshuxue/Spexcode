@@ -5,6 +5,7 @@ hue: 280
 desc: The deterministic incremental-view-maintenance core — a delta-fed cache that keeps node → { issues, prs } fresh without a cold full pull, with reconcile as the source of truth. Sources (poll, webhook) are interchangeable and deferred.
 code:
   - spec-forge/src/cache.ts
+  - spec-forge/src/cache.test.ts
 ---
 # freshness
 
@@ -47,8 +48,11 @@ full pull. (Verifying this is the job of the test framework — see [[spec-yatsu
 The read-only contract holds unchanged: the cache caches a *read* of the forge; it never writes a node's
 version or status (that stays git-derived — see [[spec-forge]]).
 
-Out of scope (each a future sibling node, by node granularity): the **delta sources** themselves — an
-ETag/`If-None-Match`-conditional poller (free 304s; reads move from `gh issue/pr list` to `gh api` to
-carry the ETag) and a **webhook** receiver (`gh webhook forward` for a local dashboard) pushing the same
-delta shape over SSE. Both plug into this core's `apply`; neither changes it. Wiring the cache into
-`spex forge links` / the dashboard is likewise a separate surface.
+The **first delta source is live**: the *updated-since window* — the [[port]]'s optional incremental read
+(`listIssuesSince`) feeds `applyIssues` (an upsert merge: an issue never leaves the set, a closed one
+updates in place) while the small open-PR list is simply re-set whole. The resident cycle is
+incremental-first: after the seeding reconcile, each TTL tick fetches only that window (normally one page)
+instead of re-listing the world, and a **periodic full reconcile stays the backstop** for what an update
+window cannot see (deleted/transferred issues) — exactly the "sources are hints, reconcile is truth"
+contract above. Still future siblings: an ETag/`If-None-Match` poller (free 304s) and a **webhook**
+receiver pushing the same delta shape; both plug into `apply`, neither changes it.

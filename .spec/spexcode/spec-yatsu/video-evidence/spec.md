@@ -31,6 +31,7 @@ runs nothing: it records a clip something else recorded, and the measuring hand 
 A human who disagrees with **this** node's verdict simply files their own `manual@1` reading — the existing
 supersede-by-a-newer-reading path, not a new lifecycle. A finding that is *not* this node's clean fail — a
 cross-cutting problem, or one belonging to **another** node — is instead a **concern raised on the
-responsible node** (a local proposal / forge issue through the emerging unified Issue port), pointing at the
+responsible node** (a local or forge issue through the unified Issue port — [[proposals]]'s one Issue
+type, whose typed `evidence[]` carries the hash), pointing at the
 clip by its evidence hash; not a hedged verdict here. So video keeps yatsu's verdict binary and routes the
 "needs another look" elsewhere it belongs.

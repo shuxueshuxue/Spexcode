@@ -33,7 +33,7 @@ export default function Annotator({ entry, onFiled }) {
   const [verdict, setVerdict] = useState(null)
   const [note, setNote] = useState('')
   const [flash, setFlash] = useState('')
-  const kind = entry.blobKind || 'image'
+  const kind = entry.blob ? entry.blobKind || 'image' : 'note'   // same honest-kind rule as the feed's kindOf
 
   // a selection change is a new reading under annotation — the working state belongs to the old one.
   useEffect(() => { setMarks([]); setDrag(null); setVerdict(null); setNote(''); setFlash(''); setEvents([]) }, [entry.blob, entry.scenario, entry.node])
@@ -116,7 +116,7 @@ export default function Annotator({ entry, onFiled }) {
         <span className="an-meta">{new Date(entry.ts).toLocaleString()}</span>
       </header>
       {entry.expected && <div className="an-expected"><b>{t('nodeView.eval.expected')}</b> {entry.expected}</div>}
-      {entry.verdict?.note && <div className="an-expected an-prior-note"><b>{t('nodeView.eval.noteLabel')}</b> {entry.verdict.note}</div>}
+      {entry.blob != null && entry.verdict?.note && <div className="an-expected an-prior-note"><b>{t('nodeView.eval.noteLabel')}</b> {entry.verdict.note}</div>}
 
       {entry.blobState === 'present' && kind === 'video' && (
         <>
@@ -166,7 +166,9 @@ export default function Annotator({ entry, onFiled }) {
       )}
       {entry.blobState === 'present' && kind === 'transcript' && <Transcript hash={entry.blob} />}
       {entry.blobState === 'miss' && <div className="an-hint">{t('nodeView.eval.miss')}</div>}
-      {entry.blobState === 'none' && <div className="an-hint">{t('nodeView.eval.noImage')}</div>}
+      {entry.blobState === 'none' && (entry.verdict?.note
+        ? <pre className="eval-transcript">{entry.verdict.note}</pre>
+        : <div className="an-hint">{t('nodeView.eval.noImage')}</div>)}
     </div>
   )
 }

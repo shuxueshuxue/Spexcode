@@ -4,7 +4,7 @@ import { labelColor } from './color.js'
 import { ScenarioCount } from './score.jsx'
 import { useT } from './i18n/index.jsx'
 
-// compact "edited Nm/Nh/Nd ago"; returns null for a missing/unparseable date so the caller can fall back.
+// compact "Nm/Nh/Nd ago"; returns null for a missing/unparseable date so the caller can render nothing.
 function timeAgo(iso, t) {
   if (!iso) return null
   const ms = Date.parse(iso)
@@ -33,26 +33,19 @@ export const STATUS = {
 // the pending-op glyphs an overlay can stamp on a node. Exported alongside STATUS for the Legend.
 export const GLYPH = { added: '+', edited: '~', deleted: '✕', moved: '→' }
 
-function EditorRow({ data }) {
+function Editors({ data }) {
   const t = useT()
   const editors = data.editors || []
-  if (editors.length > 0) {
-    const shown = editors.slice(0, MAX_AVATARS)
-    const extra = editors.length - shown.length
-    return (
-      <span className="node-editors" title={t('specNode.liveEditors', { n: editors.length })}>
-        {shown.map((e) => (
-          <Avatar key={e.id} seed={e.id} status={e.status}
-            title={t('specNode.editorTitle', { node: e.node || t('common.session'), status: t(`status.${e.status}`), id: e.id.slice(0, 8) })} />
-        ))}
-        {extra > 0 && <span className="av-more" title={t('specNode.more', { n: extra })}>+{extra}</span>}
-      </span>
-    )
-  }
-  const ago = timeAgo(data.lastEdited, t)
+  if (editors.length === 0) return null
+  const shown = editors.slice(0, MAX_AVATARS)
+  const extra = editors.length - shown.length
   return (
-    <span className="node-lastedit">
-      {ago ? <>{t('specNode.lastEdited')} <b>{ago}</b></> : t('specNode.noVersions')}
+    <span className="node-editors" title={t('specNode.liveEditors', { n: editors.length })}>
+      {shown.map((e) => (
+        <Avatar key={e.id} seed={e.id} status={e.status}
+          title={t('specNode.editorTitle', { node: e.node || t('common.session'), status: t(`status.${e.status}`), id: e.id.slice(0, 8) })} />
+      ))}
+      {extra > 0 && <span className="av-more" title={t('specNode.more', { n: extra })}>+{extra}</span>}
     </span>
   )
 }
@@ -65,6 +58,7 @@ function IssueBadge({ issues, t }) {
 export default function SpecNode({ data, selected }) {
   const t = useT()
   const s = STATUS[data.status] || STATUS.pending
+  const ago = timeAgo(data.lastEdited, t)
   const overlays = data.overlays || []
   const lead = overlays[0]                                   // primary author -> ring colour
   const deleted = overlays.some((o) => o.op === 'deleted')
@@ -86,6 +80,10 @@ export default function SpecNode({ data, selected }) {
           {data.status === 'active' && <span className="pulse" style={{ background: s.color }} />}
         </span>
         <span className="node-title">{data.title}</span>
+        {ago && <span className="node-ago">{ago}</span>}
+      </div>
+      <div className="node-row2">
+        <span className="node-ver">{data.version ? `v${data.version}` : ''}</span>
         {data.drift > 0 && (
           <span className="drift-badge" title={(data.driftFiles || []).map((d) => `${d.file}: ${t('specNode.driftAhead', { n: d.behind })}`).join('\n')}>
             ⚠{data.drift}
@@ -93,15 +91,12 @@ export default function SpecNode({ data, selected }) {
         )}
         <IssueBadge issues={data.openIssues} t={t} />
         <ScenarioCount scenarios={data.scenarios} evals={data.evals} />
-        <span className="node-ver">{data.version ? `v${data.version}` : ''}</span>
         {ops.length > 0 && (
           <span className="ov-marks" title={overlays.map((o) => t('specNode.opTitle', { op: t(`legend.opRows.${o.op}`), label: o.label, uncommitted: !o.committed })).join('\n')}>
             {ops.map((op) => <span key={op} className={`ov-mark ov-${op}`}>{GLYPH[op]}</span>)}
           </span>
         )}
-      </div>
-      <div className="node-row2">
-        <EditorRow data={data} />
+        <Editors data={data} />
       </div>
       {/* collapsed node gets a ▸N tab naming its hidden child count (App sets data.collapsed/childCount). */}
       {data.collapsed && (

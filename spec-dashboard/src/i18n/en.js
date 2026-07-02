@@ -216,8 +216,6 @@ export default {
   },
 
   specNode: {
-    lastEdited: 'last edited',
-    noVersions: 'no versions yet',
     liveEditors: ({ n }) => `${n} live editor${n === 1 ? '' : 's'}`,
     more: ({ n }) => `${n} more`,
     editorTitle: ({ node, status, id }) => `${node} · ${status} — ${id}`,

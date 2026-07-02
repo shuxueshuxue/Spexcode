@@ -94,18 +94,26 @@ function parse(id: string, text: string): Proposal {
   }
 }
 
+// user body text must never FORGE a reply sentinel: a line matching `<!-- reply: … -->` in a body would be
+// re-read as a thread boundary, splitting the thread and truncating the body. Neutralize the marker in user
+// content (a zero-width space breaks the `<!-- reply:` prefix — invisible on render, idempotent), so only
+// serialize's OWN sentinels parse as boundaries. Frontmatter scalars are single-line-stripped for the same
+// reason (a newline/`---` in a concern can't break the block).
+const safeBody = (t: string): string => t.trim().replace(/<!-- reply:/g, '<!--​reply:')
+const safeScalar = (t: string): string => t.replace(/[\r\n]+/g, ' ').trim()
+
 function serialize(p: Proposal): string {
   const fm = [
     `kind: ${p.kind}`,
-    `concern: ${p.concern}`,
-    `by: ${p.by}`,
-    `status: ${p.status}`,
+    `concern: ${safeScalar(p.concern)}`,
+    `by: ${safeScalar(p.by)}`,
+    `status: ${safeScalar(p.status)}`,
     p.nodes.length ? `nodes: ${p.nodes.join(', ')}` : '',
     p.signers.length ? `signers: ${p.signers.join(', ')}` : '',
     `created: ${p.created}`,
   ].filter(Boolean)
-  let out = `---\n${fm.join('\n')}\n---\n\n${p.body.trim()}\n`
-  for (const r of p.replies) out += `\n<!-- reply: ${r.by} @ ${r.at} -->\n${r.body.trim()}\n`
+  let out = `---\n${fm.join('\n')}\n---\n\n${safeBody(p.body)}\n`
+  for (const r of p.replies) out += `\n<!-- reply: ${safeScalar(r.by)} @ ${safeScalar(r.at)} -->\n${safeBody(r.body)}\n`
   return out
 }
 

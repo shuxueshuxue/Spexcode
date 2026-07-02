@@ -36,10 +36,11 @@ system already nests there.
   which is about what code does). Same store, same file format, same `reply`/`sign`/`resolve` verbs (those
   are id-based and kind-agnostic); only the creation verb carries the kind (`spex propose` vs `spex note`).
   The forum is the git-native **discussion/annotation layer over the graph**; a proposal is one kind of post.
-- **One file per thread.** The file is a one-line `concern` plus a prose body plus appended signed replies;
-  its frontmatter carries `kind`, `by` (author session), `status`, optional `nodes:` (the product nodes it
-  concerns, linked `[[…]]`), and `signers`. One-file-per-thread keeps concurrent worktrees conflict-free: a
-  new thread is a new file (never conflicts); a reply touches one file.
+- **One file per thread.** The file is a one-line `concern` plus a prose body plus appended signed replies —
+  each reply preceded by a `<!-- reply: <by> @ <at> -->` sentinel line. Its frontmatter carries `kind`, `by`
+  (author session), `status`, optional `nodes:` (the product nodes it concerns, linked `[[…]]`), and
+  `signers`. The sentinel is **unforgeable**: user body text is neutralized on write, so a body that itself
+  contains that marker can't spawn a phantom reply or truncate the thread.
 - **Own lifecycle status**, forum-authored never git-derived: `open` → `accepted | rejected | landed`.
 - **The forum lives on the trunk, not per-branch.** A write reads and commits **straight to the main
   checkout's `.spec/.forum/`** (a forum file is data, not contract; [[main-guard]]'s forum-exception admits a

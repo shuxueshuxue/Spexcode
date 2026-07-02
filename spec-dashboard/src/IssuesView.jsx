@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
-import { loadIssues, postIssueReply, postIssueThread } from './data.js'
+import { postIssueReply, postIssueThread } from './data.js'
 import EvalsGroup, { entryKey } from './EvalsFeed.jsx'
 import Annotator from './Annotator.jsx'
 import { SpecBody } from './NodeView.jsx'
@@ -13,9 +13,9 @@ import { useT } from './i18n/index.jsx'
 // replies, and the local reply composer; an eval renders as the [[annotator]]. j/k walk the whole left
 // list across both groups, the detail follows; the write paths are unchanged (reply/propose as 'human',
 // forge read-only with a permalink).
-export default function IssuesView({ onFocusNode, specs = [] }) {
+export default function IssuesView({ onFocusNode, specs = [], issuesData = null, reloadIssues }) {
   const t = useT()
-  const [data, setData] = useState(null)          // null = still loading
+  const data = issuesData                          // RESIDENT app state — the page renders instantly, no per-mount fetch
   const [composing, setComposing] = useState(false)
   const [showConcluded, setShowConcluded] = useState(false)
   const [notice, setNotice] = useState('')
@@ -23,11 +23,8 @@ export default function IssuesView({ onFocusNode, specs = [] }) {
   const [evalRows, setEvalRows] = useState([])    // the evals group's visible entries (its filters are its own)
   const rowsRef = useRef([])                      // flat key list across BOTH groups, for j/k
 
-  const load = useCallback(async () => {
-    const d = await loadIssues().catch(() => null)
-    setData(d && typeof d === 'object' ? d : { enabled: false, issues: [] })
-  }, [])
-  useEffect(() => { load() }, [load])
+  // a write must show up where it lands: force the app-resident list to refetch (ETag makes it cheap).
+  const load = useCallback(() => reloadIssues?.(true), [reloadIssues])
 
   const flash = (outcomes) => { if (outcomes) { setNotice(outcomes); setTimeout(() => setNotice(''), 6000) } }
 

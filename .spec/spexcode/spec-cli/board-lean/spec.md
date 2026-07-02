@@ -49,7 +49,12 @@ corpus revalidates on every palette open, seeded instantly from the last one. An
 fetches per node, the open overlay is keyed on the node id so switching nodes never flashes one node's prose
 under another's header.
 
-The remaining cut is **`evals`** (~32%): the overview distills it to a per-scenario latest-state, so the board
-can carry that compact summary and lazy-load the full readings for the eval tab — its own next step. This node
-holds the lean-payload contract those cuts extend, alongside the freshness-side companion [[board-stream]];
-together they take the board from ~1.2 MB toward a small, mostly-static summary.
+**`evals` is cut the same way** (it had grown to ~70% of the payload): the board carries only the **latest
+reading per scenario** — exactly what every overview surface (the score badge, stats, search) reduces to
+anyway, so they consume the summary unchanged — and the eval tab lazy-loads the full timeline from
+`/api/specs/:id/evals` when opened, cache keyed by the summary's newest reading so a fresh filing refetches.
+A failed timeline fetch falls back to the board's summary readings — truthful, just shallow — never a
+spinner that never stops. Measured: the dogfood board halved again (~576KB → ~270KB). This node holds the
+lean-payload contract those cuts extend, alongside the freshness-side companion [[board-stream]] and the
+change-side [[board-delta]]; what still rides whole is the `scenarios` declarations (their prose feeds the
+declared-scenario rows and the focus panel) — the next candidate if the summary must shrink further.

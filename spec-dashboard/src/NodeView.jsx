@@ -483,10 +483,27 @@ function DeclaredScenario({ s }) {
   )
 }
 
+// the full reading history is NOT on the board ([[board-lean]]): the board's `evals` is only the latest
+// reading per scenario, so this tab lazy-loads the whole timeline from `/api/specs/:id/evals` when opened.
+// Cache keyed by the summary's newest ts + count, so a fresh filing misses and refetches; a FAILED fetch
+// falls back to the board's summary readings — truthful, just shallow — never a spinner that never stops.
+const evalCache = new Map()
 export function EvalPane({ node }) {
   const t = useT()
-  const readings = node.evals
-  if (!readings) return <div className="pane-eval empty">{t('nodeView.eval.noScenarios')}</div>
+  const key = `${node.id}@${node.evals?.[0]?.ts || ''}:${node.evals?.length || 0}`
+  const [timeline, setTimeline] = useState(() => evalCache.get(key) ?? null)
+  useEffect(() => {
+    if (evalCache.has(key)) { setTimeline(evalCache.get(key)); return }
+    let on = true
+    setTimeline(null)
+    fetch(`/api/specs/${node.id}/evals`).then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((tl) => { evalCache.set(key, tl.readings || []); if (on) setTimeline(tl.readings || []) })
+      .catch(() => { if (on) setTimeline(node.evals || []) })
+    return () => { on = false }
+  }, [key, node.id])
+  if (!node.evals) return <div className="pane-eval empty">{t('nodeView.eval.noScenarios')}</div>
+  if (timeline === null) return <div className="pane-eval pane-loading"><span className="spinner" aria-label={t('common.loading')} /></div>
+  const readings = timeline
   const unmeasured = scenarioStates(node.scenarios, readings).filter((s) => !s.reading)
   if (!readings.length) return (
     <div className="pane-eval pane-eval-declared">

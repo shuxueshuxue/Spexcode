@@ -47,6 +47,10 @@ cont=$(printf '%s' "$input" | sed -n 's/.*"stop_hook_active"[[:space:]]*:[[:spac
 # looped 31 turns and tripped the Stop-hook block cap. Called only on ALLOW paths, never alongside a block.
 yatsu_advisory() {
   local out ids n msg esc
+  # Codex Stop hooks reject the Claude-family `hookSpecificOutput.additionalContext` shape on allow paths.
+  # Keep Codex Stop stdout empty unless it is a real block decision; the dispatcher still bridges block
+  # reasons to Codex stderr.
+  [ "${SPEXCODE_HARNESS:-claude}" = codex ] && return 0
   out=$($S yatsu scan --changed 2>&1)
   n=$(printf '%s\n' "$out" | grep -cE 'yatsu-(drift|missing|uncovered):')
   [ "${n:-0}" -gt 0 ] || return 0   # no gap in what you changed (or scan unavailable) -> nothing to nudge

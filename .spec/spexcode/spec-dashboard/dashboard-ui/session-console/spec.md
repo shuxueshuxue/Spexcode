@@ -104,7 +104,10 @@ confirm** — typing the exact command is itself the deliberate act, where the r
 easy-to-mis-aim right-click. The box **holds
 focus persistently** — clicking
 chrome never blurs it, the panel **suppresses the native context menu** and **restores** focus after a
-right-click. It **auto-grows upward**, **capped at half** the terminal height, and carries the same **completion** menus
+right-click. It **auto-grows upward**, **capped at half** the terminal height, and the grown size **survives a
+round-trip away from the Terminal tab** — the box unmounts while Eval or nav mode replaces it, but its height is
+derived from the per-session draft (which persists), so on return it re-fits to that draft instead of collapsing
+back to one line. It carries the same **completion** menus
 the New prompt does ([[term-input]]): the inbox `/` lists the board+CC commands, and `[[` opens the spec-node
 dropdown — one menu shared with New, not a second copy. A `[[node]]` here **resolves at send**, expanding to
 a pointer at the node's live `spec.md` so the running agent is aimed at that contract. The second channel is **nav mode** — entered by the `/nav` board command, the header

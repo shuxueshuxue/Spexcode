@@ -57,6 +57,14 @@ system already nests there.
 - **Surface:** `spex propose "<concern>" [--node <id>…] [--body -|<text>]` and `spex note "<annotation>" …`
   open the two kinds; `propose reply|sign|resolve <id>` act on any thread; `spex proposals [--node]
   [--kind proposal|note] [--all] [--json]` is the drain view over the whole forum.
+- **A human writes too — the forum is the programmatic surface.** The same write verbs carry an optional
+  `author` (default the effective session id, else a caller-passed `'human'`), so a person can post from
+  outside the CLI. `forumReply(id, body, author)` and `forumPost(concern, {kind, nodes, body, author})` are
+  the programmatic entrypoints: each does the git-committed write AND then dispatches any `@`-mention in the
+  text ([[mentions]]), returning `{ thread, outcomes }`. Because the forum is the programmatic surface, a
+  human's `@`-mention in a reply **does** summon the agent — that is the point. The dashboard's write path
+  ([[forum-view]]) is a thin caller: `POST /api/forum/:id/reply` and `POST /api/forum` (author `'human'`),
+  both gated by the same on/off switch (403 when OFF).
 - **Opt-outable, default ON.** The whole forum is a feature you can switch off: `spex proposals on|off`
   flips `spexcode.json`'s `proposals.enabled` (the shared settings file every other toggle lives in),
   effective immediately with no commit (config is read from the working tree). OFF silences the post-merge
@@ -69,4 +77,5 @@ system already nests there.
   recurrence is weighed as **salience, not importance**: a sharp singleton outranks a popular gripe, so the
   count never becomes the priority ranking.
 
-Out of scope (a sibling node, later): a dashboard forum view — read-only over this same union read.
+The dashboard renders and now writes to this same forum through [[forum-view]] — a thin caller over the
+programmatic write surface above, never a second store.

@@ -954,6 +954,38 @@ body {
 .fv-reply-by { color: var(--blue); font-weight: 600; }
 .fv-reply-at { color: var(--muted); }
 
+/* the human write path ([[forum-view]]): a top toolbar (New) + a reply composer per thread + a New form. */
+.fv-wrap { width: 100%; display: flex; flex-direction: column; }
+.fv-toolbar { display: flex; align-items: center; gap: 12px; padding: 8px 16px; border-bottom: 1px solid var(--line); }
+.fv-new-btn {
+  font-family: var(--mono); font-size: 11px; color: var(--blue); background: var(--panel2);
+  border: 1px solid color-mix(in srgb, var(--blue) 30%, var(--line)); padding: 4px 12px; border-radius: 4px; cursor: pointer;
+}
+.fv-new-btn:hover { background: var(--blue); color: var(--paper); border-color: var(--blue); }
+.fv-hint { font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+/* a brief @-dispatch summary echoed after a write. */
+.fv-notice { padding: 6px 16px; font-family: var(--mono); font-size: 11px; color: var(--green); background: color-mix(in srgb, var(--green) 8%, var(--paper)); border-bottom: 1px solid var(--line); }
+/* the compose blocks — a reply composer (in an expanded thread) and the New-thread form. */
+.fv-compose { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.fv-new-form { display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--panel2); }
+.fv-input, .fv-textarea {
+  width: 100%; box-sizing: border-box; font-family: var(--mono); font-size: 12px; color: var(--ink);
+  background: var(--paper); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; resize: vertical;
+}
+.fv-input:focus, .fv-textarea:focus { outline: none; border-color: var(--blue); }
+.fv-actions { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+.fv-send {
+  margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--paper); background: var(--blue);
+  border: 1px solid var(--blue); padding: 4px 14px; border-radius: 4px; cursor: pointer;
+}
+.fv-send:disabled { opacity: 0.5; cursor: default; }
+.fv-kindtoggle { display: flex; gap: 6px; }
+.fv-kind-opt {
+  font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+  padding: 3px 10px; border-radius: 3px; border: 1px solid var(--line); color: var(--muted); background: var(--paper); cursor: pointer;
+}
+.fv-kind-opt.on { color: var(--blue); border-color: var(--blue); background: color-mix(in srgb, var(--blue) 12%, var(--paper)); }
+
 .si-content { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--paper); }
 
 /* New Session: input + avatar centred, terminal vibe. */
@@ -987,6 +1019,8 @@ body {
   cursor: pointer; font-size: 12px; white-space: nowrap;
 }
 .mention-item.on { background: var(--panel2); }
+/* the synthetic `@new` actor row — subtly set apart (spawns a fresh worker, not an existing session). */
+.mention-item.new .mention-id { color: var(--green); font-style: italic; }
 .mention-dot { width: 6px; height: 6px; border-radius: 50%; flex: none; align-self: center; }
 .mention-id { color: var(--blue); flex: none; }
 .mention-id .mention-hit { color: var(--ink2); font-weight: 700; }

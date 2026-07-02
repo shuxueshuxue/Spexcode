@@ -11,7 +11,7 @@ import { readdirSync, existsSync, mkdirSync, writeFileSync, readFileSync } from 
 import { join } from 'node:path'
 import { git } from './git.js'
 import { mainCheckout, envSessionId, readConfig } from './layout.js'
-import { dispatchMentions, summarize } from './mentions.js'
+import { dispatchMentions, summarize, type DispatchOutcome } from './mentions.js'
 
 const FORUM_REL = '.spec/.forum'
 
@@ -149,13 +149,15 @@ function writeAndCommit(p: Proposal, message: string) {
   }
 }
 
-export function propose(concern: string, opts: { nodes?: string[]; body?: string; kind?: Kind } = {}): Proposal {
+// `author` defaults to the effective session id, but a caller (the dashboard's human write path) may pass
+// `'human'` — the write mechanism is identical either way, only the signature differs.
+export function propose(concern: string, opts: { nodes?: string[]; body?: string; kind?: Kind; author?: string } = {}): Proposal {
   const kind: Kind = opts.kind === 'note' ? 'note' : 'proposal'
   const p: Proposal = {
     id: uniqueId(concern),
     kind,
     concern,
-    by: currentSession(),
+    by: opts.author || currentSession(),
     status: 'open',
     nodes: opts.nodes || [],
     signers: [],
@@ -167,12 +169,32 @@ export function propose(concern: string, opts: { nodes?: string[]; body?: string
   return p
 }
 
-export function reply(id: string, body: string): Proposal {
+export function reply(id: string, body: string, author?: string): Proposal {
   const p = loadOne(id)
-  const by = currentSession()
+  const by = author || currentSession()
   p.replies.push({ by, at: new Date().toISOString(), body: body.trim() })
   writeAndCommit(p, `proposal(${id}): reply by ${by}`)
   return p
+}
+
+// @@@ the PROGRAMMATIC forum write surface — the dashboard's human write path calls these (author `'human'`).
+// The forum is git-native data, so a human's write goes through the SAME reply/propose the CLI uses (committed
+// straight to the trunk), and — because the forum is the programmatic surface — a human's @-mention DOES
+// dispatch (a human summons an agent from the forum, per [[mentions]]). Each returns the written thread plus
+// the @-dispatch outcomes so a caller can echo who was notified.
+export async function forumReply(id: string, body: string, author: string): Promise<{ thread: Proposal; outcomes: DispatchOutcome[] }> {
+  const thread = reply(id, body, author)
+  const outcomes = await dispatchMentions(body, { threadId: id, node: thread.nodes[0] || null, author })
+  return { thread, outcomes }
+}
+
+export async function forumPost(
+  concern: string,
+  opts: { kind?: Kind; nodes?: string[]; body?: string; author: string },
+): Promise<{ thread: Proposal; outcomes: DispatchOutcome[] }> {
+  const thread = propose(concern, { kind: opts.kind, nodes: opts.nodes, body: opts.body, author: opts.author })
+  const outcomes = await dispatchMentions(opts.body || concern, { threadId: thread.id, node: thread.nodes[0] || null, author: opts.author })
+  return { thread, outcomes }
 }
 
 export function sign(id: string): string[] {

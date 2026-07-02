@@ -4,7 +4,8 @@ import { cors } from 'hono/cors'
 import { etag } from 'hono/etag'
 import { createNodeWebSocket } from '@hono/node-ws'
 import { loadSpecs, specHistory, specDiffAt, loadConfig } from './specs.js'
-import { loadProposals, proposalsEnabled } from './proposals.js'
+import { loadProposals, proposalsEnabled, forumReply, forumPost } from './proposals.js'
+import { summarize } from './mentions.js'
 import { resolveLayout, mainBranch } from './layout.js'
 import { buildBoard } from './board.js'
 import { boardStream } from './boardStream.js'
@@ -80,6 +81,31 @@ app.get('/api/config', (c) => c.json(loadConfig()))
 // drain view reads, verbatim (the dashboard computes nothing over it: no re-sort, no salience ranking). The
 // `enabled` flag mirrors the on/off switch so the frontend hides the view when the feature is OFF.
 app.get('/api/forum', (c) => c.json({ enabled: proposalsEnabled(), threads: loadProposals() }))
+// the forum WRITE surface ([[proposals]] / [[forum-view]]) — the human write path. Both go through the SAME
+// reply/propose the CLI uses (git-committed straight to the trunk, author `'human'`) and dispatch any
+// @-mention in the text (a human summons an agent from the forum). `outcomes` is the one-line @-dispatch
+// summary the dashboard echoes. Honor the on/off switch: 403 when the feature is OFF.
+app.post('/api/forum/:id/reply', async (c) => {
+  if (!proposalsEnabled()) return c.json({ error: 'forum is off' }, 403)
+  const body = await c.req.json().catch(() => ({}))
+  const text = typeof body?.body === 'string' ? body.body : ''
+  if (!text.trim()) return c.json({ error: 'empty reply' }, 400)
+  try {
+    const { thread, outcomes } = await forumReply(c.req.param('id'), text, 'human')
+    return c.json({ ok: true, replies: thread.replies, outcomes: summarize(outcomes) })
+  } catch (e) { return c.json({ error: String((e as Error).message || e) }, 404) }   // unknown thread → 404
+})
+app.post('/api/forum', async (c) => {
+  if (!proposalsEnabled()) return c.json({ error: 'forum is off' }, 403)
+  const body = await c.req.json().catch(() => ({}))
+  const concern = typeof body?.concern === 'string' ? body.concern.trim() : ''
+  if (!concern) return c.json({ error: 'empty concern' }, 400)
+  const kind = body?.kind === 'note' ? 'note' : 'proposal'
+  const nodes = Array.isArray(body?.nodes) ? (body.nodes as unknown[]).filter((n): n is string => typeof n === 'string') : []
+  const postBody = typeof body?.body === 'string' ? body.body : undefined
+  const { thread, outcomes } = await forumPost(concern, { kind, nodes, body: postBody, author: 'human' })
+  return c.json({ ok: true, id: thread.id, outcomes: summarize(outcomes) }, 201)
+})
 // the dashboard input's `/` dropdown — computed by the launcher's HARNESS adapter the same way that harness
 // computes its own `/` menu ([[harness-adapter]]). The client passes `?harness=<id>` for the ACTIVE session,
 // so a codex tab gets CODEX's menu, not the default's; unknown/absent → default. Insert-only on the client.

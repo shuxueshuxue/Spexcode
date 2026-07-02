@@ -1,6 +1,5 @@
 import { ForgeCache } from './cache.js'
 import { githubDriver } from './drivers/github.js'
-import type { NodeLinks } from './links.js'
 import type { ForgeIssue, ForgePR } from './port.js'
 
 const cache = new ForgeCache()
@@ -29,11 +28,6 @@ function refreshIfStale(now: number): void {
   )
     .catch(() => {})
     .finally(() => { inFlight = null })
-}
-
-export function residentForgeView(nodeIds: string[]): NodeLinks[] {
-  refreshIfStale(Date.now())
-  return cache.view(nodeIds)
 }
 
 // the raw cached forge set, same freshness contract as the view (instant, background reconcile) — the

@@ -111,8 +111,10 @@ bridge decides from tmux's live pane flags:
   copy-mode and scrolls that tmux view; wheel-down continues in copy-mode until the bottom. Each move repaints
   the browser from tmux's current copy-mode window: the bridge reads tmux's `scroll_position` / history depth
   and captures that exact history slice, because tmux's plain `capture-pane` still describes the bottom screen
-  rather than the copy-mode viewport. So the dashboard feels like a real tmux client rather than a page
-  scrolling an xterm buffer. The browser xterm keeps no independent terminal scrollback/scrollbar.
+  rather than the copy-mode viewport. While copy-mode owns the view, live `%output` from the underlying grid is
+  held back from viewers and repaint frames own the screen; exiting copy-mode snaps the browser back to the
+  live bottom view. So the dashboard feels like a real tmux client rather than a page scrolling an xterm
+  buffer. The browser xterm keeps no independent terminal scrollback/scrollbar.
 - **Full-screen TUI** (alternate screen, owns the mouse — e.g. Claude Code): it keeps **no** scrollback in
   xterm to scroll, and scrolls *itself* on mouse input. So when the pane advertises SGR mouse reports, the
   bridge injects the matching wheel report into the pane (`send-keys`), so the **app scrolls its own real

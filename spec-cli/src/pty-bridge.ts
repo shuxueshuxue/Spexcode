@@ -33,6 +33,9 @@ type Bridge = {
   // mouse state), not a resize's visible-only re-seed. Set on every (re)attach and re-bind, since a
   // (re)connecting viewer's xterm is blank / just reset.
   needsFull?: boolean
+  // Copy-mode freezes the pane's view. While that mode owns the screen, raw %output still describes the
+  // underlying live grid; repaint owns what viewers see until mode exit snaps them back to the bottom.
+  paneInMode?: boolean
 }
 const bridges = new Map<string, Bridge>()
 // viewers keyed by session id (not the Bridge), so a subscription outlives any bridge death/respawn.
@@ -46,9 +49,9 @@ type PaneMode = {
   mouseAny: boolean
   mouseSgr: boolean
   scrollPosition: number
-  historySize: number
+  paneHeight: number
 }
-const PANE_MODE_FORMAT = '#{pane_in_mode},#{alternate_on},#{mouse_standard_flag},#{mouse_button_flag},#{mouse_any_flag},#{mouse_sgr_flag},#{scroll_position},#{history_size}'
+const PANE_MODE_FORMAT = '#{pane_in_mode},#{alternate_on},#{mouse_standard_flag},#{mouse_button_flag},#{mouse_any_flag},#{mouse_sgr_flag},#{scroll_position},#{pane_height}'
 const flag = (v?: string) => v === '1'
 function num(v?: string): number {
   const n = Number(v)
@@ -188,6 +191,7 @@ function onLine(b: Bridge, lineBuf: Buffer): void {
     return
   }
   if (head.startsWith('%output ')) {
+    if (b.paneInMode) return
     const sp = head.indexOf(' ', 8)   // skip "%output %<pane> " to the raw (escaped) data
     if (sp > 0) broadcast(b.id, unescapeOutput(line.subarray(sp + 1)))
     return
@@ -197,6 +201,16 @@ function onLine(b: Bridge, lineBuf: Buffer): void {
   if (head.startsWith('%layout-change ')) {
     const m = head.match(/,(\d+x\d+),/)   // layout token = checksum,WIDTHxHEIGHT,x,y,… — the window size
     onLayout(b, m ? m[1] : undefined)
+    return
+  }
+  if (head.startsWith('%pane-mode-changed')) {
+    if (!b.needsFull) {
+      void (async () => {
+        const mode = await readPaneMode(b.id)
+        b.paneInMode = mode.inMode
+        if (!mode.inMode) await repaint(b)
+      })()
+    }
     return
   }
   // %exit / %client-detached / window close → the client is gone; pty.onExit drives the re-bind.
@@ -290,7 +304,7 @@ export function attachViewer(id: string, v: Viewer, initialSize?: { cols: number
 
 async function readPaneMode(id: string): Promise<PaneMode> {
   const raw = await tmuxOut(['display-message', '-p', '-t', id, '-F', PANE_MODE_FORMAT])
-  const [inMode, alternate, mouseStandard, mouseButton, mouseAny, mouseSgr, scrollPosition, historySize] = raw.split(',')
+  const [inMode, alternate, mouseStandard, mouseButton, mouseAny, mouseSgr, scrollPosition, paneHeight] = raw.split(',')
   return {
     inMode: flag(inMode),
     alternate: flag(alternate),
@@ -299,7 +313,7 @@ async function readPaneMode(id: string): Promise<PaneMode> {
     mouseAny: flag(mouseAny),
     mouseSgr: flag(mouseSgr),
     scrollPosition: num(scrollPosition),
-    historySize: num(historySize),
+    paneHeight: num(paneHeight),
   }
 }
 
@@ -331,8 +345,8 @@ function capturePaneCommand(b: Bridge, mode: PaneMode): string {
   if (!mode.inMode) return `capture-pane -e -p -t ${b.id}`
   // tmux capture-pane's default "visible pane" ignores the copy-mode viewport. In copy-mode,
   // scroll_position is the offset above the bottom visible screen; capture that history window explicitly.
-  const rows = Math.max(1, b.rows)
-  const scroll = Math.min(mode.scrollPosition, mode.historySize)
+  const rows = Math.max(1, mode.paneHeight || b.rows)
+  const scroll = mode.scrollPosition
   const start = scroll === 0 ? '0' : `-${scroll}`
   const end = rows - 1 - scroll
   return `capture-pane -e -p -t ${b.id} -S ${start} -E ${end}`
@@ -351,6 +365,7 @@ export function forwardWheel(id: string, up: boolean, col: number, row: number, 
     if (mode.inMode || !canInjectSgrWheel(mode)) {
       if (up && !mode.inMode) await tmuxRaw(['copy-mode', '-e', '-t', id])
       if (up || mode.inMode) {
+        b.paneInMode = true
         await tmuxRaw(['send-keys', '-t', id, '-X', '-N', String(n * 5), up ? 'scroll-up' : 'scroll-down'])
         await repaint(b)
       }
@@ -381,6 +396,7 @@ async function repaint(b: Bridge): Promise<void> {
   const mode = await readPaneMode(b.id)
   const prelude = full ? paneModePrelude(mode) : ''
   if (token !== b.repaintToken) return
+  b.paneInMode = mode.inMode
   b.cmdQ.push((lines) => {
     if (token !== b.repaintToken) return
     if (full) b.needsFull = false   // cleared only once the full frame actually reaches a viewer

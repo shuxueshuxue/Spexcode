@@ -325,23 +325,6 @@ async function conflicts(): Promise<number> {
   return conflict ? 1 : 0
 }
 
-// raw environment facts doctor reasons over — for debugging the diagnosis itself.
-function env(): number {
-  const cwd = process.cwd()
-  const facts: Record<string, string> = {
-    cwd,
-    repoRoot: repoRoot(cwd) ?? '(not a git repo)',
-    branch: git(cwd, ['rev-parse', '--abbrev-ref', 'HEAD']) ?? '—',
-    node: process.version,
-    CLAUDE_CODE_SESSION_ID: process.env.CLAUDE_CODE_SESSION_ID ?? '',
-    CODEX_THREAD_ID: process.env.CODEX_THREAD_ID ?? '',
-    SPEXCODE_API_URL: process.env.SPEXCODE_API_URL ?? '(default :8787)',
-    'PATH spex': resolveOnPath('spex') ?? '(not on PATH)',
-    tmux: process.env.TMUX ? 'inside tmux' : 'no',
-  }
-  for (const [k, v] of Object.entries(facts)) console.log(`${k.padEnd(24)}: ${v}`)
-  return 0
-}
 
 // install/uninstall are STAGED: wiring layer-3 hooks into a standalone repo is only SAFE once the hooks
 // detect a missing managed session and degrade. So the diagnosis ships first; the installer lands behind it.
@@ -358,7 +341,6 @@ function usage(): number {
   doctor       per-layer report: preconditions · git-hook floor · contract · hooks(+handlers) · backend · footprint  (default)
   contract     print the surface:system contract text (hand it to any agent)
   conflicts    detect double-delivery — the same agent reached via loose native delivery AND a plugin bundle (exits non-zero on conflict)
-  env          raw environment facts the diagnosis reads
   install      [staged] wire the materialized contract + hooks into your agent  (--agent claude, --minimal)
   uninstall    [staged] reverse exactly what install wrote`)
   return 0
@@ -369,7 +351,6 @@ export async function runSelf(args: string[]): Promise<number> {
     case 'doctor': return await doctor()
     case 'contract': return contract()
     case 'conflicts': return await conflicts()
-    case 'env': return env()
     case 'install': return noteStaged('install')
     case 'uninstall': return noteStaged('uninstall')
     case 'help': case '--help': case '-h': return usage()

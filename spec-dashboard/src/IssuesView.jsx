@@ -12,11 +12,12 @@ import { useT } from './i18n/index.jsx'
 // SAME reply/propose the CLI uses, author 'human'; an @-mention dispatches a worker and the outcome is
 // echoed); a FORGE issue carries its permalink — read here, discussed there. `onFocusNode(id)` closes the
 // console and focuses that node on the board.
-export default function IssuesView({ onFocusNode }) {
+export default function IssuesView({ onFocusNode, specs = [] }) {
   const t = useT()
   const [data, setData] = useState(null)          // null = still loading
   const [expanded, setExpanded] = useState(() => new Set())
   const [composing, setComposing] = useState(false)  // the "New" thread form is open
+  const [showConcluded, setShowConcluded] = useState(false) // concluded issues (closed/rejected/landed) hide by default
   const [notice, setNotice] = useState('')           // a brief @-dispatch summary after a write
   const [selIdx, setSelIdx] = useState(-1)           // the j/k-walked row; -1 = none
   const rowsRef = useRef([])                         // current issue ids, for the key handler
@@ -90,9 +91,15 @@ export default function IssuesView({ onFocusNode }) {
   if (data == null) return <div className="fv-note">{t('session.issuesLoading')}</div>
   // honors the switch: forum workflow OFF → a muted state, never a forked source of truth.
   if (!data.enabled) return <div className="fv-note">{t('session.issuesOff')}</div>
-  const issues = Array.isArray(data.issues) ? data.issues : []
+  const all = Array.isArray(data.issues) ? data.issues : []
+  // a CONCLUDED issue (forge closed; local rejected/landed) hides by default — the list is the open work,
+  // not the archive; a count chip reveals the concluded set on demand. open + accepted stay visible
+  // (accepted is approved-but-not-landed: still live).
+  const concluded = (i) => i.status === 'closed' || i.status === 'rejected' || i.status === 'landed'
+  const issues = showConcluded ? all : all.filter((i) => !concluded(i))
   rowsRef.current = issues.map((i) => i.id)
-  const openCount = issues.filter((i) => i.status === 'open').length
+  const openCount = all.filter((i) => i.status === 'open').length
+  const concludedCount = all.filter(concluded).length
 
   return (
     <div className="fv-panel">
@@ -100,14 +107,19 @@ export default function IssuesView({ onFocusNode }) {
       {/* the evals region ([[evals-feed]]) leads ABOVE the threads — evals outrank issues here; it wraps
           itself in its own FeedSection so its counts stay internal. Tab moves the panel focus between it
           and the threads. */}
-      <EvalsSection focused={region === 'evals'} />
+      <EvalsSection nodes={specs} focused={region === 'evals'} />
       {/* the threads region — one FeedSection instance ([[issues-view]]'s panel furniture). */}
-      <FeedSection title={t('session.issuesThreadsTitle')} summary={t('session.issuesThreadsSummary', { open: openCount, total: issues.length })} density="region" focused={region === 'threads'}>
+      <FeedSection title={t('session.issuesThreadsTitle')} summary={t('session.issuesThreadsSummary', { open: openCount, total: all.length })} density="region" focused={region === 'threads'}>
       <div className="fv-toolbar">
         <button type="button" className="fv-new-btn" onClick={() => setComposing((v) => !v)}>
           {composing ? t('session.issuesCancel') : t('session.issuesNew')}
         </button>
         <span className="fv-hint">{t('session.issuesMentionHint')}</span>
+        {concludedCount > 0 && (
+          <button type="button" className={`ef-chip fv-concluded ${showConcluded ? 'on' : ''}`} onClick={() => setShowConcluded((v) => !v)}>
+            {t('nodeView.closedIssues', { n: concludedCount })}
+          </button>
+        )}
       </div>
       {composing && (
         <NewThreadForm

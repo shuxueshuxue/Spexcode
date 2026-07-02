@@ -37,6 +37,12 @@ sidebar** naming the pages, and a **URL per page**.
   board's live terminals) stay mounted and display-toggled — a route change may never cost a terminal
   its socket. True transient overlays (help, search, the node popup) remain modals *within* a page and
   close when the page changes.
-- **Keyboard entries keep their doors.** The existing keys route instead of toggling overlay state:
-  `Enter` → the session board, `f`/⌥F → the forum, `,` → settings, Esc from a non-graph page → home to
-  the graph. One navigation vocabulary for mouse (rail), keyboard, and address bar.
+- **One global ⌥ vocabulary; Esc never switches pages.** Page switching is the **⌥ command family**,
+  window-global on every page: `⌥1..⌥4` jump straight to a page in rail order (the rail tooltips carry the
+  hints), `⌥N` to the New Session composer, `⌥F` to the forum — matched by physical key (`e.code`, the mac
+  ⌥-dead-key rule), ⌥-only so ⌘/⌃ chords stay the browser's. The family is reserved even over the console's
+  raw-key nav mode (the same standing as its `⌥/⌘+I` toggle — a TUI never sees `M-1` or `M-f`). Graph-scoped
+  doors stay: `Enter` → the session board, bare `f` → the forum, `,` → settings (and `,` toggles back).
+  **Esc routes nothing** — pages are peers, not layers, so Esc only closes transient overlays *within* a
+  page (search, the node popup, a console menu); leaving a page is navigation: the rail, `⌥digit`, or
+  history. One vocabulary for mouse (rail), keyboard, and address bar.

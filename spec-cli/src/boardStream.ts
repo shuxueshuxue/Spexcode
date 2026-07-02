@@ -1,36 +1,89 @@
 import { streamSSE } from 'hono/streaming'
 import type { Context } from 'hono'
 import { watch, mkdirSync, type FSWatcher } from 'node:fs'
-import { sessionsRoot } from './layout.js'
+import { join } from 'node:path'
+import { sessionsRoot, gitCommonDir } from './layout.js'
 import { sessionSignature } from './sessions.js'
+import { buildBoard } from './board.js'
+import { unitize, tagOf, diffUnits, type Units } from './boardDelta.js'
 
-// @@@ board-stream — the board's freshness is PUSHED, not polled. A dashboard subscribes here ONCE and
-// reloads /api/board only when something actually changed, instead of re-fetching the whole board every few
-// seconds. TWO event sources feed ALL subscribers, both firing the SAME bare `board-changed` signal (the
-// client then refetches /api/board — reusing its ETag/304 path — so this stream stays tiny and buildBoard
-// stays on-demand): (1) an fs.watch on the per-user session store, where every lifecycle status transition
-// lands as a `sessions/<id>/session.json` write; (2) a subscriber-gated poll of the CHEAP session signature
-// ([[sessions]]) for the two signals that are tmux-derived, NOT file writes — LIVENESS (a crash/offline) and
-// ACTIVITY (a worker's live self-summary title) — which the fs-watch can't see. Only the truly-cold path (a
-// spec edit/merge, a forge issue) rides the dashboard's slow fallback poll now.
+// @@@ board-stream — the board's freshness is PUSHED, not polled. A dashboard subscribes here ONCE; in
+// plain mode it gets a bare `board-changed` and refetches /api/board (the legacy protocol, kept verbatim
+// for old clients); in DELTA mode (`?mode=delta`) the server itself rebuilds on change and streams the
+// hash-chained patch ([[board-delta]]): a `board-full {to, board}` on connect, then `board-delta
+// {from, to, set, del}` per change — a few KB against the ~600KB snapshot, with a full-snapshot send
+// whenever the patch wouldn't win (bigger than the board, or the unit decomposition's id-uniqueness
+// precondition failed), so a delta subscriber is NEVER worse off than a full refetch.
+//
+// Event sources, ALL funneled into one debounced pipeline: (1) fs.watch on the per-user session store —
+// every lifecycle transition lands as a sessions/<id>/session.json write; (2) fs.watch on the shared git
+// dir's refs (+ packed-refs/HEAD) — a commit or merge moves a ref, so tree reshapes push instead of
+// waiting out a poll; (3) a subscriber-gated ~2s poll of the CHEAP tmux session signature ([[sessions]])
+// for liveness/activity, which never touch a file; (4) a delta-gated ~15s cold tick that rebuilds and
+// diffs server-side, catching what no watcher sees (uncommitted worktree spec edits, forge issues) — ONE
+// rebuild per tick total, replacing every open dashboard's own 15s full refetch. Plain mode without delta
+// subscribers keeps its zero-build behavior: sources just fan out `board-changed`.
 
 type Notify = () => void
-const subscribers = new Set<Notify>()
-let watcher: FSWatcher | null = null
+type Frame = { event: string; data: string }
+type DeltaSend = (frame: Frame) => void
+const plainSubs = new Set<Notify>()
+const deltaSubs = new Set<DeltaSend>()
 let debounce: ReturnType<typeof setTimeout> | null = null
 
-// a merge/launch/close touches several record files at once; collapse the burst into ONE board-changed signal.
+// ---- the rebuild→diff→broadcast pipeline (runs only while delta subscribers exist) ----
+// last successfully-broadcast snapshot: the delta chain's anchor. `lastFullFrame` is what a fresh
+// subscriber gets instantly; `lastUnits`+`lastTag` are what the next diff chains from. A snapshot that
+// failed the unitize precondition anchors nothing (lastUnits=null) so every following send is a full.
+let lastUnits: Units | null = null
+let lastTag = ''
+let lastFullFrame: Frame | null = null
+let building = false
+let dirty = false
+
+async function rebuildAndBroadcast(): Promise<void> {
+  if (building) { dirty = true; return }
+  building = true
+  try {
+    do {
+      dirty = false
+      let board: unknown
+      try { board = await buildBoard() } catch { for (const n of [...plainSubs]) { try { n() } catch { /* swept on abort */ } }; continue }
+      const boardJson = JSON.stringify(board)
+      const { units, ok } = unitize(board as Record<string, unknown>)
+      const tag = tagOf(units)
+      if (tag === lastTag) continue
+      const fullFrame: Frame = { event: 'board-full', data: `{"to":"${tag}","board":${boardJson}}` }
+      let frame = fullFrame
+      if (lastUnits && ok) {
+        const { set, del } = diffUnits(lastUnits, units)
+        const deltaData = JSON.stringify({ from: lastTag, to: tag, set, del })
+        // guaranteed win: ship the patch only when it actually beats the snapshot
+        if (deltaData.length < fullFrame.data.length) frame = { event: 'board-delta', data: deltaData }
+      }
+      lastUnits = ok ? units : null
+      lastTag = tag
+      lastFullFrame = fullFrame
+      for (const send of [...deltaSubs]) { try { send(frame) } catch { /* swept on abort */ } }
+      for (const n of [...plainSubs]) { try { n() } catch { /* swept on abort */ } }
+    } while (dirty)
+  } finally { building = false }
+}
+
+// a merge/launch/close touches several record files at once; collapse the burst into ONE signal. With
+// delta subscribers the debounced fire rebuilds and broadcasts (plain subs then ride the same tag-moved
+// gate — no spurious refetches); without them it stays the zero-build legacy notify.
 function fireChanged(): void {
   if (debounce) return
   debounce = setTimeout(() => {
     debounce = null
-    for (const notify of [...subscribers]) { try { notify() } catch { /* a dead stream is swept on its own abort */ } }
+    if (deltaSubs.size) void rebuildAndBroadcast()
+    else for (const notify of [...plainSubs]) { try { notify() } catch { /* swept on abort */ } }
   }, 150)
 }
 
-// lazily start the single shared watcher on the first subscriber. recursive: a new session is a new subdir and
-// every status write lands nested in sessions/<id>/session.json. If the watch can't start, clients still work —
-// they just fall back to the slow poll, so this never throws.
+// ---- event source 1: the session store (lifecycle status writes) ----
+let watcher: FSWatcher | null = null
 function ensureWatcher(): void {
   if (watcher) return
   const root = sessionsRoot()
@@ -38,10 +91,21 @@ function ensureWatcher(): void {
   try { watcher = watch(root, { recursive: true }, () => fireChanged()) } catch { watcher = null }
 }
 
-// event source #2: poll the cheap tmux-derived session signature (liveness + activity) while anyone is
-// subscribed, firing board-changed the moment it moves — so a crash/offline or a live headline reflects in
-// ~2s, not on the slow fallback. Two tmux calls per tick, NO git; gated on subscribers so a closed dashboard
-// costs nothing. The fs-watch stays the instant path for status writes; this only catches what a file can't.
+// ---- event source 2: git refs (a commit/merge reshapes the tree the moment the ref moves) ----
+// refs/ recursively for loose refs (heads, worktree branches), plus the common dir itself non-recursively
+// for packed-refs rewrites and HEAD flips. Best-effort like every source: no watch → the cold tick covers.
+let refsWatchers: FSWatcher[] | null = null
+function ensureRefsWatcher(): void {
+  if (refsWatchers) return
+  refsWatchers = []
+  try {
+    const common = gitCommonDir()
+    try { refsWatchers.push(watch(join(common, 'refs'), { recursive: true }, () => fireChanged())) } catch { /* loose refs unwatched */ }
+    try { refsWatchers.push(watch(common, (_e, f) => { if (f === 'packed-refs' || f === 'HEAD') fireChanged() })) } catch { /* packed refs unwatched */ }
+  } catch { /* not a repo? the cold tick still covers */ }
+}
+
+// ---- event source 3: the tmux-derived signature (liveness + activity — never a file write) ----
 let poller: ReturnType<typeof setInterval> | null = null
 let lastSig = ''
 function ensureLivePoll(): void {
@@ -50,32 +114,52 @@ function ensureLivePoll(): void {
     void sessionSignature().then((sig) => { if (sig !== lastSig) { lastSig = sig; fireChanged() } }).catch(() => {})
   }, 2000)
 }
-function stopLivePollIfIdle(): void {
-  if (poller && subscribers.size === 0) { clearInterval(poller); poller = null; lastSig = '' }
+
+// ---- event source 4: the cold tick — the server-side replacement for every client's slow fallback poll.
+// Rebuild+diff on a relaxed timer so what NO watcher sees (an uncommitted worktree spec edit, a forge
+// issue refresh) still lands; an unchanged tag broadcasts nothing. Delta-gated: plain-only clients keep
+// their own client-side fallback, so without delta subscribers this must not burn builds.
+let coldTick: ReturnType<typeof setInterval> | null = null
+function ensureColdTick(): void {
+  if (coldTick) return
+  coldTick = setInterval(() => { if (deltaSubs.size) void rebuildAndBroadcast() }, 15000)
 }
 
-// GET /api/board/stream — one SSE per dashboard tab. Server→client only (no request body, no client frames):
-// emits `board-changed` on any session-store change, plus a periodic `ping` so an idle-proxy never times the
-// connection out. On a backend hot-reload the stream drops and EventSource auto-reconnects to the fresh child,
-// the same drop-and-reconnect the live pty bridges already do.
+function stopSourcesIfIdle(): void {
+  if (plainSubs.size + deltaSubs.size > 0) return
+  if (poller) { clearInterval(poller); poller = null; lastSig = '' }
+  if (coldTick) { clearInterval(coldTick); coldTick = null }
+}
+
+// GET /api/board/stream — one SSE per dashboard tab, server→client only, with a periodic `ping` so an
+// idle proxy never times the connection out. On a backend hot-reload the stream drops and EventSource
+// auto-reconnects to the fresh child; a delta subscriber's reconnect lands a fresh `board-full`, so the
+// chain re-anchors with no client-side repair logic.
 export function boardStream(c: Context) {
+  const delta = c.req.query('mode') === 'delta'
   ensureWatcher()
+  ensureRefsWatcher()
   return streamSSE(c, async (stream) => {
     let aborted = false
+    const send: DeltaSend = (frame) => { void stream.writeSSE(frame).catch(() => {}) }
     const notify: Notify = () => { void stream.writeSSE({ event: 'board-changed', data: 'x' }).catch(() => {}) }
-    subscribers.add(notify)
+    if (delta) { deltaSubs.add(send); ensureColdTick() } else { plainSubs.add(notify) }
     ensureLivePoll()
-    stream.onAbort(() => { aborted = true; subscribers.delete(notify); stopLivePollIfIdle() })
+    const unsub = (): void => { deltaSubs.delete(send); plainSubs.delete(notify); stopSourcesIfIdle() }
+    stream.onAbort(() => { aborted = true; unsub() })
     try {
       await stream.writeSSE({ event: 'ready', data: 'x' })
+      if (delta) {
+        // seed the chain: the cached anchor snapshot immediately (same tag the next delta chains from),
+        // then a fire so a connect during a quiet stretch converges to truly-current within one build.
+        if (lastFullFrame) { await stream.writeSSE(lastFullFrame).catch(() => {}) ; fireChanged() }
+        else void rebuildAndBroadcast()
+      }
       while (!aborted) {
         await stream.sleep(25000)
         if (aborted) break
         await stream.writeSSE({ event: 'ping', data: 'x' })
       }
-    } finally {
-      subscribers.delete(notify)
-      stopLivePollIfIdle()
-    }
+    } finally { unsub() }
   })
 }

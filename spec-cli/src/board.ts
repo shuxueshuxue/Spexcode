@@ -18,6 +18,15 @@ function resolveParent(path: string, byDir: Record<string, string>): string | nu
   return null
 }
 
+// the board's eval summary ([[board-lean]]): the LATEST reading per scenario, each kept as the VERBATIM
+// reading object — a filter, never a projection. Consumers hang optional fields off a reading (the
+// annotator's timelineBlob rides only video readings), so dropping a field here is a SILENT downstream
+// degradation no error would surface; the field-preservation unit test pins this contract.
+export function latestPerScenario<T extends { scenario: string }>(readings: T[]): T[] {
+  const seen = new Set<string>()
+  return readings.filter((r) => !seen.has(r.scenario) && (seen.add(r.scenario), true))
+}
+
 export async function buildBoard() {
   // all three sources are warm-cheap and independent, so the board inherits their speed for free: loadSpecs
   // REUSES the HEAD-keyed spec-history cache (the git-derived node data — see specs.ts/git.ts), resolveLayout
@@ -104,13 +113,15 @@ export async function buildBoard() {
     if (open.length) n.openIssues = open
   }
 
-  // fold each yatsu node's eval timeline onto it, riding this one board poll: `evals` (readings, newest-first)
-  // and `scenarios` (the declared set) attached only when the node declares scenarios. evalContext reuses the
-  // specs + driftIndex above; evalTimeline short-circuits non-yatsu nodes so the poll stays fast.
+  // fold each yatsu node's eval state onto it — as the LEAN summary ([[board-lean]]): `evals` carries only
+  // the LATEST reading per scenario (newest-first), which is all any overview surface consumes (the score
+  // badge, stats, search all reduce to latest-per-scenario anyway); the full timeline stays off the board
+  // and is lazy-loaded by the eval tab from `/api/specs/:id/evals`. `scenarios` (the declared set) rides
+  // whole. evalContext reuses the specs + driftIndex above; evalTimeline short-circuits non-yatsu nodes.
   const ectx = evalContext(root, specs, idx, hidx)
   await Promise.all(nodes.map(async (n) => {
     const tl = await evalTimeline(n.id, ectx)
-    if (tl.hasYatsu) { n.evals = tl.readings; n.scenarios = tl.scenarios }
+    if (tl.hasYatsu) { n.evals = latestPerScenario(tl.readings); n.scenarios = tl.scenarios }
   }))
 
   const opsByPath: Record<string, any[]> = {}

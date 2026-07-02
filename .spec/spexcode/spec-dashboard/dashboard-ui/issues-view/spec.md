@@ -22,11 +22,12 @@ reply/propose the CLI uses, committed straight to the trunk.
 ## expanded spec
 
 - **Entries — the forum is its OWN page.** The page lives at `#/forum` with its own [[side-nav]] rail
-  entry — bookmarkable, reloadable, a peer of the graph and the session board. The other doors all route
-  to the same page: the [[session-console]] top row keeps an **Issues** pill beside `＋ New Session` and
-  the console keeps **⌥+F** — the twin of ⌥+N — for the user already working the board; the board's bare
-  **`f` key** ([[keyboard-nav]]'s declarative keymap table, rebindable) is the direct jump from the
-  graph. All entries land on the ONE page — one surface, many doors; Esc routes home to the graph.
+  entry — bookmarkable, reloadable, a peer of the graph and the session board. The keyboard doors are
+  [[side-nav]]'s global ⌥ vocabulary — **⌥F / ⌥3** reach it from any page, the console included — plus
+  the board's bare **`f` key** ([[keyboard-nav]]'s declarative keymap table, rebindable) as the direct
+  jump from the graph. There is no console pill and no page-local shortcut anymore: one page, the shared
+  doors. Esc never leaves the page ([[side-nav]]) — it stays with the page's own stack (a density pop, a
+  dismissed expansion); going elsewhere is the rail, ⌥digit, or history.
 - **The panel is two pinned regions — importance by position and area, never tabs.** The page's target
   shape: an **evals region on top** (the [[evals-feed]] section — evals outrank threads, so they get the
   prime position) and the **threads region below** (this node's merged list). The layout iron rule: the

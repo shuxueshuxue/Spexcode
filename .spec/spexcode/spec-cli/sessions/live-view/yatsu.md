@@ -42,7 +42,8 @@ scenarios:
       history" contract, in control mode). On a tmux socket, print far more lines than the visible screen
       holds (e.g. 1200 lines into a 24-row pane) so most scroll into tmux history BEFORE any bridge exists.
       Then attach a viewer through the real API (attachViewer with a size) and inspect its first frame: it
-      must carry the visible tail. Send wheel-up frames through the same WebSocket/API path the dashboard uses
+      must carry the visible tmux view without seeding a browser-owned history buffer. Send wheel-up frames
+      through the same WebSocket/API path the dashboard uses
       and confirm tmux enters copy-mode, `#{scroll_position}` increases, and the viewer receives repainted
       older rows from tmux's current view. Then send wheel-down frames and confirm the copy-mode view moves
       back toward the bottom. Finally detach fully and re-attach (a fresh bridge) and confirm history is still
@@ -51,9 +52,9 @@ scenarios:
     expected: >-
       Wheel-up on a NORMAL-screen pane enters tmux copy-mode and increases `#{scroll_position}` while the
       viewer receives a coherent repaint of older tmux history; wheel-down moves that same tmux view back
-      toward the bottom. The browser does not scroll an independent xterm buffer, and no mouse bytes are
-      littered into the shell prompt. A full-screen alternate-screen TUI with SGR mouse reports still gets
-      forwarded wheel reports, so the app scrolls itself.
+      toward the bottom. The browser does not expose or scroll an independent xterm history buffer, and no
+      mouse bytes are littered into the shell prompt. A full-screen alternate-screen TUI with SGR mouse reports
+      still gets forwarded wheel reports, so the app scrolls itself.
   - name: output-preserves-utf8-wide-chars
     tags: [backend-api]
     description: >-

@@ -1,5 +1,6 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { loadIssues, postIssueReply, postIssueThread } from './data.js'
+import FeedSection from './FeedSection.jsx'
 import { useT } from './i18n/index.jsx'
 
 // The issues page ([[issues-view]]): ONE merged list over every store ([[issues]]) — local forum threads
@@ -16,6 +17,8 @@ export default function IssuesView({ onFocusNode }) {
   const [expanded, setExpanded] = useState(() => new Set())
   const [composing, setComposing] = useState(false)  // the "New" thread form is open
   const [notice, setNotice] = useState('')           // a brief @-dispatch summary after a write
+  const [selIdx, setSelIdx] = useState(-1)           // the j/k-walked row; -1 = none
+  const rowsRef = useRef([])                         // current issue ids, for the key handler
 
   const load = useCallback(async () => {
     const d = await loadIssues().catch(() => null)
@@ -32,21 +35,61 @@ export default function IssuesView({ onFocusNode }) {
   // echo the @-dispatch summary briefly (outcomes is '' when nothing was summoned).
   const flash = (outcomes) => { if (outcomes) { setNotice(outcomes); setTimeout(() => setNotice(''), 6000) } }
 
-  if (data == null) return <div className="fv-note">{t('session.issuesLoading')}</div>
-  // honors the switch: forum workflow OFF → a muted state, never a forked source of truth.
-  if (!data.enabled) return <div className="fv-note">{t('session.issuesOff')}</div>
-  const issues = Array.isArray(data.issues) ? data.issues : []
-
-  const toggle = (id) =>
+  // stable (declared before the key effect below, which closes over it once).
+  const toggle = useCallback((id) =>
     setExpanded((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id); else next.add(id)
       return next
-    })
+    }), [])
+
+  // section keys ([[issues-view]]): j/k walk the rows, Enter opens the selected row in place. Capture
+  // phase so a stray console handler never eats them; a key typed into an input/textarea (the composers)
+  // or carrying a modifier is never ours. Tab's region-jump engages when a second section exists
+  // ([[evals-feed]]); with one region it stays the browser's.
+  useEffect(() => {
+    const onKey = (e) => {
+      const tag = e.target?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || e.metaKey || e.ctrlKey || e.altKey) return
+      if (e.key === 'j' || e.key === 'k') {
+        e.preventDefault(); e.stopPropagation()
+        const n = rowsRef.current.length
+        if (!n) return
+        setSelIdx((i) => {
+          const start = i < 0 ? (e.key === 'j' ? -1 : n) : i
+          return Math.max(0, Math.min(n - 1, start + (e.key === 'j' ? 1 : -1)))
+        })
+      } else if (e.key === 'Enter') {
+        setSelIdx((i) => {
+          const id = rowsRef.current[i]
+          if (id) { e.preventDefault(); e.stopPropagation(); toggle(id) }
+          return i
+        })
+      }
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [])
+
+  // keep the selected row in view as j/k walk it (the section body is the scroller, never the panel).
+  useEffect(() => {
+    if (selIdx >= 0) document.querySelector('.fv-thread.kbd-sel')?.scrollIntoView({ block: 'nearest' })
+  }, [selIdx])
+
+  if (data == null || !data.enabled) rowsRef.current = []   // no rows on screen → no rows for j/k
+  if (data == null) return <div className="fv-note">{t('session.issuesLoading')}</div>
+  // honors the switch: forum workflow OFF → a muted state, never a forked source of truth.
+  if (!data.enabled) return <div className="fv-note">{t('session.issuesOff')}</div>
+  const issues = Array.isArray(data.issues) ? data.issues : []
+  rowsRef.current = issues.map((i) => i.id)
+  const openCount = issues.filter((i) => i.status === 'open').length
 
   return (
-    <div className="fv-wrap">
+    <div className="fv-panel">
       {notice && <div className="fv-notice">{notice}</div>}
+      {/* the threads region — one FeedSection instance ([[issues-view]]'s panel furniture). The evals
+          region ([[evals-feed]]) mounts ABOVE this one when it lands; until then threads fill the pane. */}
+      <FeedSection title={t('session.issuesThreadsTitle')} summary={t('session.issuesThreadsSummary', { open: openCount, total: issues.length })} density="region" focused>
       <div className="fv-toolbar">
         <button type="button" className="fv-new-btn" onClick={() => setComposing((v) => !v)}>
           {composing ? t('session.issuesCancel') : t('session.issuesNew')}
@@ -62,14 +105,14 @@ export default function IssuesView({ onFocusNode }) {
         <div className="fv-note">{t('session.issuesEmpty')}</div>
       ) : (
         <div className="fv-list">
-          {issues.map((th) => {
+          {issues.map((th, idx) => {
             const local = th.store === 'local'
             const open = expanded.has(th.id)
             const nodes = Array.isArray(th.nodes) ? th.nodes : []
             const signers = Array.isArray(th.signers) ? th.signers : []
             const replies = Array.isArray(th.replies) ? th.replies : []
             return (
-              <div key={th.id} className={open ? 'fv-thread open' : 'fv-thread'}>
+              <div key={th.id} className={`fv-thread${open ? ' open' : ''}${idx === selIdx ? ' kbd-sel' : ''}`}>
                 {/* the whole header toggles the in-place expansion; node chips / the forge permalink inside
                     stop propagation so their click acts instead of expanding. */}
                 <div className="fv-head" role="button" tabIndex={0} onClick={() => toggle(th.id)}
@@ -118,6 +161,7 @@ export default function IssuesView({ onFocusNode }) {
           })}
         </div>
       )}
+      </FeedSection>
     </div>
   )
 }

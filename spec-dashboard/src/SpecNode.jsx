@@ -35,7 +35,8 @@ export const GLYPH = { added: '+', edited: '~', deleted: '✕', moved: '→' }
 
 function Editors({ data }) {
   const t = useT()
-  const editors = data.editors || []
+  // several pending ops from one session collapse to one face — dedupe by id
+  const editors = [...new Map((data.editors || []).map((e) => [e.id, e])).values()]
   if (editors.length === 0) return null
   const shown = editors.slice(0, MAX_AVATARS)
   const extra = editors.length - shown.length
@@ -80,7 +81,12 @@ export default function SpecNode({ data, selected }) {
           {data.status === 'active' && <span className="pulse" style={{ background: s.color }} />}
         </span>
         <span className="node-title">{data.title}</span>
-        {ago && <span className="node-ago">{ago}</span>}
+        {/* pending ops replace the age — an overlay means the node is being touched NOW */}
+        {ops.length > 0 ? (
+          <span className="ov-marks" title={overlays.map((o) => t('specNode.opTitle', { op: t(`legend.opRows.${o.op}`), label: o.label, uncommitted: !o.committed })).join('\n')}>
+            {ops.map((op) => <span key={op} className={`ov-mark ov-${op}`}>{GLYPH[op]}</span>)}
+          </span>
+        ) : ago ? <span className="node-ago">{ago}</span> : null}
       </div>
       <div className="node-row2">
         <span className="node-ver">{data.version ? `v${data.version}` : ''}</span>
@@ -91,11 +97,6 @@ export default function SpecNode({ data, selected }) {
         )}
         <IssueBadge issues={data.openIssues} t={t} />
         <ScenarioCount scenarios={data.scenarios} evals={data.evals} />
-        {ops.length > 0 && (
-          <span className="ov-marks" title={overlays.map((o) => t('specNode.opTitle', { op: t(`legend.opRows.${o.op}`), label: o.label, uncommitted: !o.committed })).join('\n')}>
-            {ops.map((op) => <span key={op} className={`ov-mark ov-${op}`}>{GLYPH[op]}</span>)}
-          </span>
-        )}
         <Editors data={data} />
       </div>
       {/* collapsed node gets a ▸N tab naming its hidden child count (App sets data.collapsed/childCount). */}

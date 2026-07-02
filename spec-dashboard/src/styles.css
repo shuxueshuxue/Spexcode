@@ -178,13 +178,12 @@ body {
 .react-flow__controls-button:hover { background: var(--panel); }
 .react-flow__controls-button svg { fill: var(--ink); }
 
-/* ---- node: two stacked rows — row 1 the thin file-tree line (dot · title, age at the right edge),
-   row 2 the marks (version · badges · op glyphs) and the live editors' avatars. A touch wider than
-   the single-line era for titles. ---- */
+/* ---- node: two stacked rows — row 1 the thin file-tree line (dot · title, op glyphs OR bare age at
+   the right edge), row 2 the marks (version · badges) and the live editors' avatars. ---- */
 .spec-node {
   position: relative;
   display: flex; flex-direction: column; justify-content: center; gap: 3px;
-  width: 220px; min-height: 46px; padding: 5px 9px;
+  width: 176px; min-height: 46px; padding: 5px 9px;
   background: var(--panel); border: 1px solid var(--line); border-radius: 4px;
   transition: border-color .12s;
 }

@@ -105,7 +105,7 @@ Specs / graph
   propose "<concern>"   open a local issue in the git forum (taste, annotations, off-mainline smells all welcome)  [--node <id>…] [--evidence <hash>…] [--body -|<text>]  | reply|sign|resolve <id> …  | on|off|status
   review <SEL>          manager cockpit: review a session (ahead·merge-base diff·gates·proposal)  [--json]
   review proof <SEL>    render the session's proof of work — self-contained HTML, fully derived (diff·measured yatsu loss·gates)  [--open|--out P|--json]
-  merge <SEL>           manager cockpit: gated atomic merge into main (re-checks gates, then closes)  [--keep]
+  merge <SEL>           manager cockpit: gated atomic merge into main (re-checks gates, then closes)
 
 Sessions
   ls [SEL…]             living-sessions table          [--status a,b] [--json]

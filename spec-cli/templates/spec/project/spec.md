@@ -15,5 +15,5 @@ your own project**, then grow child package/feature nodes beneath it (each its o
 `.config/` holds the dev-flow plugins this instance ships — skill-shaped flat child nodes, each tagged
 with a `surface` field: a `surface: system` node folds into every launched agent's system prompt as
 always-on contract (the seed ships `core`), and a `surface: command` node is a prompt preset the
-new-session dropdown composes over target nodes (the seed ships `tidy` and `health`). Add, edit, or
+new-session dropdown composes over target nodes (the seed ships `tidy`). Add, edit, or
 remove plugins by editing those spec nodes.

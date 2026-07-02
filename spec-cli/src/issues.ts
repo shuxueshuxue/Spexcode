@@ -4,11 +4,13 @@
 // (`store`), not a project mode: a project holds both at once, mixed. This module owns the core type, the
 // forge→Issue translation (the ONLY place a host's node-naming conventions become `nodes[]` — platform
 // differences stay at the adapter boundary), the merged read every surface consumes (CLI `spex issues`,
-// GET /api/issues, the board fold), and the CLI itself. Writes are NOT here: v1 writes go to the local
-// store only (proposals.ts); the forge stays read-only (spec-forge's non-negotiable).
+// GET /api/issues, the board fold), the store-ROUTED reply (local → the forum, forge → a real comment
+// through the driver), and the CLI itself. The local store's own write verbs stay in proposals.ts; the
+// forge's live in the driver — this module only routes.
 import type { ForgeIssue, ForgePR } from '../../spec-forge/src/port.js'
 import { resolveLinks } from '../../spec-forge/src/links.js'
-import { loadProposals, loadOne, reply, resolve, proposalsEnabled } from './proposals.js'
+import { loadProposals, loadOne, reply, resolve, proposalsEnabled, forumReply } from './proposals.js'
+import { dispatchMentions, type DispatchOutcome } from './mentions.js'
 import { envSessionId } from './layout.js'
 import { loadSpecsLite } from './specs.js'
 
@@ -53,7 +55,9 @@ export function fromForge(slice: ForgeSlice, nodeIds: string[]): Issue[] {
     signers: [],
     created: i.createdAt,
     body: i.body,
-    replies: [],
+    // the issue's comment thread, in the SAME Reply shape a forum thread carries — both stores'
+    // threads render identically downstream, no view ever branches on store.
+    replies: (i.comments ?? []).map((c) => ({ by: c.author, at: c.createdAt, body: c.body })),
     evidence: [],
     url: i.url,
   }))
@@ -88,6 +92,30 @@ export async function promote(id: string): Promise<{ url: string; number: number
   reply(id, `promoted to the forge: ${url}`)
   resolve(id, 'landed')
   return { url, number, host: githubDriver.host }
+}
+
+// @@@ reply, routed by store ([[issues]]) — the ONE reply verb every surface calls. A reply is a reply:
+// on a local thread it is the forum's write (unchanged); on a forge issue it posts a REAL comment through
+// the driver's createComment (the port's second write verb — the driver stays the only network toucher)
+// and then folds that issue's fresh thread into the resident cache so the reply shows where it landed.
+// Either way the reply TEXT is dispatched for @-mentions — summoning an agent works identically from
+// both stores, because the mention fires on the text, never the store.
+export async function replyIssue(id: string, body: string, author: string): Promise<{ replies: Reply[]; outcomes: DispatchOutcome[] }> {
+  const m = /^github#(\d+)$/.exec(id)
+  if (!m) {
+    const { thread, outcomes } = await forumReply(id, body, author)
+    return { replies: thread.replies, outcomes }
+  }
+  const number = parseInt(m[1], 10)
+  const { githubDriver } = await import('../../spec-forge/src/drivers/github.js')
+  await githubDriver.createComment({ number, body })   // fails loud — an unreachable forge never fakes a reply
+  const { residentForgeState, refreshIssueComments } = await import('../../spec-forge/src/resident.js')
+  const comments = await refreshIssueComments(number)
+  // mention context: the issue's bound node, read from the same forge→Issue translation every reader uses.
+  const node = fromForge({ host: 'github', state: residentForgeState() }, loadSpecsLite().map((s) => s.id))
+    .find((i) => i.id === id)?.nodes[0] ?? null
+  const outcomes = await dispatchMentions(body, { threadId: id, node, author })
+  return { replies: comments.map((c) => ({ by: c.author, at: c.createdAt, body: c.body })), outcomes }
 }
 
 // ───────────────────────── CLI ─────────────────────────

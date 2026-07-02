@@ -18,7 +18,7 @@ const NODE_IDS = ['sessions', 'dashboard-issues', 'links', 'freshness', 'port', 
 // ---- predicate ----
 
 test('isNeedsYatsuEval: a label or a bare body line flags; a trailing-content line or no mark does not', () => {
-  const base = { number: 0, title: 't', url: 'u', state: 'open', body: '', labels: [] as string[] }
+  const base: ForgeIssue = { number: 0, title: 't', url: 'u', state: 'open', body: '', labels: [], author: 'a', createdAt: 't', comments: [] }
   assert.equal(isNeedsYatsuEval({ ...base, labels: ['bug', NEEDS_YATSU_EVAL] }), true)    // label
   assert.equal(isNeedsYatsuEval({ ...base, labels: ['Needs-Yatsu-Eval'] }), true)          // label, case-insensitive
   assert.equal(isNeedsYatsuEval({ ...base, body: 'context\nneeds-yatsu-eval\n' }), true)   // bare body line

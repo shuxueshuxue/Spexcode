@@ -44,8 +44,11 @@ freshness contract); the merge itself is [[issues]]'s. Closed forge issues link 
 marker (the transitive PR path sees only open PRs). The forge slice is **silent by construction**: with no
 `gh`, no repo, or no auth the reconcile throws, is swallowed, and the cache stays
 empty — the fold then carries the local slice alone, no error; a forge-less repo with no local threads
-reads exactly as before. Read-only throughout: the fold never
-touches a node's git-derived status. This fold is one of several the board carries — the eval timeline
+reads exactly as before. One targeted freshness exception rides beside the TTL: when a reply lands on a
+forge issue through the store-routed write ([[issues]]), that one issue's fresh comment thread is folded
+straight into the cache, so the writer's next read shows the reply without waiting out the TTL.
+Read-only throughout — the resident module itself never writes the forge (the write is the [[port]]
+driver's); the fold never touches a node's git-derived status. This fold is one of several the board carries — the eval timeline
 ([[yatsu-eval-tab]]) rides the same pattern. dashboard-issues owns only its issues slice, so that
 sibling's churn there is that feature, not this node's drift.
 

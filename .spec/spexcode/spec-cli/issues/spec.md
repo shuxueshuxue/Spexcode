@@ -2,7 +2,7 @@
 title: issues
 status: active
 hue: 30
-desc: One Issue object over every store — a concern bound to nodes, with its own lifecycle. Local forum threads and forge issues are the same type behind a per-issue storage adapter; one merged read port serves the CLI, the API, and the board.
+desc: One Issue object over every store — a concern bound to nodes, with its own lifecycle. Local forum threads and forge issues are the same type behind a per-issue storage adapter; one merged read port serves the CLI, the API, and the board, and one reply verb routes each write to the store that holds the thread.
 code:
   - spec-cli/src/issues.ts
 ---
@@ -33,9 +33,11 @@ target [[video-evidence]] points at when a video finding routes to the responsib
 mechanism — venue, file format, lock, trunk commit); a forum thread *is* a local Issue, its `store` implied
 by where it lives, never written into the file. The **forge** store is [[spec-forge]]'s read-only tracer:
 a `ForgeIssue` becomes an Issue at this boundary — id `<host>#<number>`, title → concern, state → status,
-and the host's node-naming conventions (`Spec:` body marker, transitive PR links — [[links]]) translated
-into `nodes[]` **here**, so product semantics see only `nodes[]` and never know a marker existed. Platform
-differences live at the adapter boundary; nothing downstream branches on store.
+the issue's comment thread → `replies[]` (the SAME `{by, at, body}` shape a forum reply has, so both
+stores' threads render through one path), and the host's node-naming conventions (`Spec:` body marker,
+transitive PR links — [[links]]) translated into `nodes[]` **here**, so product semantics see only
+`nodes[]` and never know a marker existed. Platform differences live at the adapter boundary; nothing
+downstream branches on store.
 
 **One read, differently freshened.** `mergedIssues(forgeState, nodeIds)` is a pure merge; each caller
 supplies the forge slice at the freshness its surface warrants — the server ([[dashboard-issues]]'s
@@ -46,8 +48,17 @@ network. The board fold attaches each node's merged issues (`issues` / open subs
 per-node surface — tile badge, focus panel, node-info Issues tab, the [[issues-view]] page — reads the
 same mixed set with no second path.
 
-**Writes stay where they're owned.** Content writes (`spex propose` / `reply` / `sign` / `resolve`,
-and the dashboard's human POSTs) go to the local store only. The one cross-store verb is **promotion** —
+**Writes route to the store that holds the thread.** A reply is one verb over both stores —
+`replyIssue(id, body, author)`, the single path behind `POST /api/issues/:id/reply`: a local id goes
+through the forum's own write ([[proposals]], unchanged); a forge id posts a **real comment** through the
+driver's `createComment` (the [[port]]'s second write verb — the driver stays the only network toucher,
+the tracer stays read-only), then folds that issue's fresh thread into the resident cache so the reply
+shows where it landed without waiting out the TTL. An unreachable forge fails **loud** — the write is
+never faked locally. Either way the reply TEXT is dispatched for @-mentions ([[mentions]] fires on the
+text, never the store), so summoning an agent — `@session`, `@new` — works identically from a forum
+thread and a GitHub issue: the mention IS the assignment, no separate assign machinery. New threads
+(`spex propose`, the dashboard's New) still start local, and `sign` / `resolve` remain local-store verbs —
+a forge issue's lifecycle is authored on the forge. The one cross-store verb is **promotion** —
 `spex issues promote <id>`: a local concern that outgrows the repo (needs CI or external visibility) moves
 to the forge as one recorded action instead of a lossy hand-copy. It composes the forge issue from the
 thread itself — concern → title; body + the `Spec: <nodes>` marker + the evidence hashes + a provenance

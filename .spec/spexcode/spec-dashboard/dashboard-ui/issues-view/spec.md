@@ -55,20 +55,22 @@ reply/propose the CLI uses, committed straight to the trunk.
   issue's ROW is one compact line — store chip, concern, status, reply count; its DETAIL carries the full
   header (status, author, signer count, node chips, permalink) over the **markdown-rendered body and
   replies** — the same SpecBody renderer the spec panes use, so forum markdown and spec markdown read as
-  one dialect (raw `##`/table pipes never show). Store never changes the shape, only two affordances: a
-  **local** issue's detail takes a reply; a **forge** issue carries its permalink and is discussed on the
-  forge — read here, written there.
+  one dialect (raw `##`/table pipes never show). Store never changes the shape: a forge issue's comments
+  arrive as the same `replies[]` a forum thread carries and render through the same path, and BOTH
+  stores' details take a reply — the only store-specific affordance left is the forge permalink.
 - **Node chips focus the graph.** An issue's node chips are clickable — a click routes to the graph page
   and **focuses that node**, so the page stays anchored to the graph it discusses.
-- **A human writes from here — to the local store.** A local issue's detail carries a **reply composer**
-  (a textarea + Send); the issue group's head carries a **New** affordance that opens a fresh local issue
-  (a one-line concern, optional `[[node]]` links, an optional body). Both POST to
-  `/api/issues` ([[proposals]]'s `forumReply`/`forumPost`, author `'human'`) — the SAME reply/propose the
-  CLI uses, committed straight to the trunk — then reload so the new post shows. The write is a thin
-  wrapper: the dashboard adds no store of its own, and it never writes to a forge ([[issues]]: v1 writes
-  are local-only). A `@session` in the text **dispatches** ([[mentions]]) exactly as a CLI post would — a
-  human summons an agent from the issues page — and the returned one-line dispatch summary is echoed
-  briefly. A plain textarea with a `@session · [[node]]` hint is enough; autocomplete is optional.
+- **A human writes from here — the server routes to the thread's store.** EVERY issue's detail carries a
+  **reply composer** (a textarea + Send); the issue group's head carries a **New** affordance that opens
+  a fresh local issue (a one-line concern, optional `[[node]]` links, an optional body). Both POST to
+  `/api/issues` (author `'human'`) — the reply lands where the thread lives ([[issues]]'s store-routed
+  reply: a local thread gets the same forum write the CLI uses, committed straight to the trunk; a forge
+  issue gets a REAL comment on the forge) — then reload so the new post shows. The write is a thin
+  wrapper: the dashboard adds no store of its own and never branches on store — the routing is the
+  server's. A `@session` in the text **dispatches** ([[mentions]]) exactly as a CLI post would, from
+  EITHER store — a human summons an agent from the issues page — and the returned one-line dispatch
+  summary is echoed briefly. A plain textarea with a `@session · [[node]]` hint is enough; autocomplete
+  is optional.
 - **Honors the switch.** When the forum workflow is OFF (`enabled: false`, [[proposals]]'s toggle), the
   view shows a muted "off" state instead of the list — the dashboard reflects the one source of truth,
   never forks it.

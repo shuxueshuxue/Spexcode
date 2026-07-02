@@ -1,6 +1,6 @@
 import { ForgeCache } from './cache.js'
 import { githubDriver } from './drivers/github.js'
-import type { ForgeIssue, ForgePR } from './port.js'
+import type { ForgeComment, ForgeIssue, ForgePR } from './port.js'
 
 const cache = new ForgeCache()
 let inFlight: Promise<void> | null = null
@@ -35,4 +35,15 @@ function refreshIfStale(now: number): void {
 export function residentForgeState(): { issues: ForgeIssue[]; prs: ForgePR[] } {
   refreshIfStale(Date.now())
   return cache.state()
+}
+
+// after a write lands on the forge (a comment posted through the port's createComment), fold that one
+// issue's fresh thread straight into the resident cache — the writer's next read shows it without
+// waiting out the TTL. Returns the fresh comments so the write path can answer with them. An issue the
+// cache hasn't seen yet is left for the normal reconcile; the comments still return.
+export async function refreshIssueComments(number: number): Promise<ForgeComment[]> {
+  const comments = await githubDriver.listComments(number)
+  const cached = cache.state().issues.find((i) => i.number === number)
+  if (cached) cache.applyIssues([{ ...cached, comments }])
+  return comments
 }

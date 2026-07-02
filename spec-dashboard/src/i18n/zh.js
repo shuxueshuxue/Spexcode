@@ -277,8 +277,7 @@ export default {
     issuesSigned: ({ n }) => `+${n} 已签署`,
     issuesReplies: ({ n }) => `${n} 条回复`,
     issuesOpenOnForge: '在 forge 上打开 ↗',
-    issuesForgeReadOnly: 'forge issue 的讨论在 forge 上进行 —— 这里只读。',
-    // 人工写入路径（[[issues-view]]）—— 回复输入框 + 新建本地 issue。
+    // 人工写入路径（[[issues-view]]）—— 回复输入框（两个 store 都可回复，服务器按 store 路由）+ 新建本地 issue。
     issuesThreadsTitle: '讨论帖',
     issuesThreadsSummary: ({ open, total }) => `${open} 开放 · 共 ${total}`,
     issuesNew: '新建',

@@ -9,7 +9,8 @@ scenarios:
       forum thread — run `spex issues` / `spex issues --all --json` through the real CLI.
     expected: >-
       ONE list carries both stores, each issue store-tagged (`local` / the forge host) with the same shape:
-      a forge issue arrives with by=forge author, created=forge timestamp, its permalink url, and its
+      a forge issue arrives with by=forge author, created=forge timestamp, its permalink url, its comment
+      thread as replies[] in the same {by, at, body} shape a forum reply has, and its
       `Spec:` markers already translated into nodes[] (no downstream consumer ever sees a marker); the
       local thread arrives with its signers/replies/evidence. --store and --node filter; default hides
       non-open.
@@ -27,6 +28,22 @@ scenarios:
       code). The local thread ends `landed` with a permalink reply as its trail. An unknown id and a
       non-open thread both refuse loudly; a failed create leaves the local thread untouched (create-first
       ordering).
+  - name: forge-reply
+    tags: [backend-api]
+    code: spec-cli/src/issues.ts
+    related: [spec-forge/src/port.ts, spec-forge/src/drivers/github.ts, spec-forge/src/resident.ts]
+    description: >-
+      Against the REAL forge, POST /api/issues/github#N/reply on a probe issue through the running
+      backend, then read the issue back (GET /api/issues and `spex issues --all --json`). Include an
+      @-mention in one reply's text to check dispatch fires from the forge store.
+    expected: >-
+      A REAL comment lands on the GitHub issue (visible via gh/web, authored by the gh-authenticated
+      user), the response carries the issue's fresh replies[] including the new comment (the resident
+      cache is folded immediately — no TTL wait), and the merged read shows the comment as a normal
+      {by, at, body} reply on the github-store issue. The @-mention in the reply text dispatches exactly
+      as a forum reply's would (outcomes reported in the response). An unreachable forge fails loud
+      (502) with nothing faked locally.
+  - name: degrade
     tags: [cli]
     code: spec-cli/src/issues.ts
     description: >-

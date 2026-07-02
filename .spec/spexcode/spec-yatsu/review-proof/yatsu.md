@@ -3,25 +3,21 @@ scenarios:
   - name: proof-renders
     tags: [frontend-e2e, desktop]
     description: >
-      Open a session's proof — via the dashboard's **Proof tab** (rendered inline in the console's
-      right pane, always available for any selected session) or by loading GET /api/sessions/:id/proof
-      in a browser, or the file `spex review proof --out` writes. Check the self-contained, fully-derived HTML renders:
-      a masthead headline derived from the node/branch, the gates checklist, and per changed
-      node its yatsu evidence (verdict badge + the inlined screenshot/transcript), with a
-      frontend node lacking a yatsu.md shown as an honest blind spot. Then DRILL a changed
-      file (spec.md included): its row expands to the coloured unified diff, and a further
-      toggle shows the full original ↔ new content side by side.
-    expected: >
-      One coherent dark proof document with no agent-authored content: a masthead with the
-      derived node/branch headline + session/commits, a gate row (lint · conflict · ahead ·
-      committed), and an evidence section grouping the diff by node, each measured scenario
-      showing its verdict and inlined evidence. Each changed file expands to its unified diff
-      (additions green, deletions red) and further to the full before/after comparison. Assets
-      are data-URIs so no image is broken; layout is whole, not empty or garbled.
+      Open a session's Eval tab in the console (the right pane's Terminal/Eval pair) in a real browser and
+      read the DOM: the gates strip, the row list (blind spots vs measured, in-session vs earlier), where
+      evidence bytes load, and the export link. Then follow the `proof ↗` link and check the self-contained
+      HTML still renders whole (masthead, gates, evidence inlined, diff drill-down).
+    expected: |
+      The Eval tab shows the gates strip (lint · merge · ahead · committed, the spex-review numbers) and
+      COLLAPSED scenario rows grouped by changed node — blind spots lead with the empty ring, then this
+      session's own readings (codeSha ∈ branch commits) newest-first; earlier readings hide behind a count
+      chip. NO evidence bytes load with the list (rows are tier-1 JSON; the blob request happens only when
+      a row is selected and the shared annotator detail opens). The `proof ↗` link serves the
+      self-contained export HTML: derived masthead, gate row, inlined evidence, per-file diff drill-down —
+      whole, not garbled.
 ---
-# review-proof yatsu
+# review-proof loss
 
-YATU: measure through the real product surface — load the rendered proof in a browser (the dashboard's
-inline Proof tab, the `/api/sessions/:id/proof` route directly, or the file `spex review proof --out` writes)
-and look at it. The reading's evidence is a screenshot of that rendered page; the verdict compares it to the
-`expected` whole-document shape above.
+YATU through the real console: a session with real changes + readings, the Eval tab read from the live
+DOM (rows, gates, request waterfall — the tier check is a NETWORK assertion), and the export artifact
+opened as a plain document. Never asserted from the engine code.

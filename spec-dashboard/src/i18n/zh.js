@@ -74,6 +74,16 @@ export default {
     reviewFallback: '视频评审',
   },
 
+
+  sessionEval: {
+    sessionN: ({ n }) => `✦ 本会话 ${n} 条`,
+    export: 'proof ↗',
+    empty: '该会话尚无测量。',
+    blindHint: '已声明但从未测量 —— 这就是未清的 loss；用 spex yatsu eval 测一次。',
+    unmeasured: '未测量',
+    noYatsu: 'UI 代码 · 无 yatsu.md',
+  },
+
   time: {
     justNow: '刚刚',
     minutes: ({ n }) => `${n} 分钟`,
@@ -289,7 +299,7 @@ export default {
     hint: { before: '输入 ', mid: ' 以引用规格 · ', after: ' 以套用配置预设' },
     harnessLabel: '启动智能体',
     tabTerminal: '终端',
-    tabProof: '证明',
+    tabProof: '评测',
     navBtn: '导航',
     navTitle: '导航模式——转发原始按键（含 ⌃/⌥/⌘ 组合键）以驱动智能体的终端（⌥/⌘+I）',
     relaunch: '重新启动',

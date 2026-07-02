@@ -1,10 +1,10 @@
 ---
 title: review-proof
 hue: 150
-desc: A fully-derived proof of work for any session — its yatsu evidence (measured loss), the diff, and the merge gates, rendered as one self-contained HTML on the fly when viewed. One backend engine; CLI, dashboard (an always-available Proof tab), and a bare browser are thin faces. No agent authoring.
+desc: A session's fully-derived evaluation — the console's Eval tab (the shared eval components, session-scoped, tiered loading) over the same worktree-rooted engine that renders the self-contained proof HTML as an EXPORT artifact. No agent authoring.
 code:
   - spec-yatsu/src/proof.ts
-  - spec-dashboard/src/ReviewProof.jsx
+  - spec-dashboard/src/SessionEval.jsx
 related:
   - spec-cli/src/index.ts
   - spec-cli/src/cli.ts
@@ -40,25 +40,26 @@ Every changed file — `spec.md` included — is a **drill-down**: its row expan
 behind native toggles (capped so a huge changeset can't bloat the page). Nothing is hidden — the whole
 diff and both file versions are there to jump into, no extra fetch.
 
-The faces are thin and all show the identical bytes. The backend serves `GET /api/sessions/:id/proof` (HTML;
-`?format=json` = the model). `spex review proof <SEL>` is a backend CLIENT ([[remote-client]]) that fetches
-that HTML and writes (`--out`) or opens (`--open`) it, so it works against a remote backend unchanged. In the
-dashboard ([[session-console]]) the proof is a **first-class, always-available view**: the console's right
-pane is a **Terminal / Proof** tab pair, and the **Proof tab** renders this HTML **inline** — fetched once and
-mounted via `srcDoc` (the document is self-contained, so no second request), for **any** selected session,
-not only one in review and not a floating overlay. When a session has no proof to show yet — no worktree or
-diff, so the route 404s — the tab shows a clean **empty placeholder** in place of the artifact. The typed
-**`/proof`** board command (cyan) and clicking the tab both switch to it; the tab-state lives in the console,
-this node owns only the inline rendering. Because the proof is DERIVED, the tab **rebuilds it on each visit**,
-so it always reflects the live diff/loss/gates — yet opening it is cheap: the proof's verification is the
-node's measured yatsu (this node's whole point), plus git merge-readiness and the spec-graph `lint` gate —
-there is NO build/typecheck/test gate, because soundness is proven by measuring the real product, not by a
-language-specific checker (a Python project's proof would be lied to by a `tsc`). The one gate that costs
-anything, `lint`, depends only on the backend checkout, not the session, so it is memoized on that checkout's
-tree fingerprint ([[manager-cockpit]]) and reused across opens until the tree changes — any commit, or any
-edit down to re-touching an already-dirty file (the fingerprint folds in the working tree's content, not just
-its committed state), invalidates and recomputes, so the rebuild is never stale.
+**The faces split by purpose — the interactive face is the eval component family, the artifact is the
+export.** The dashboard's face is the console right pane's **Eval tab** (Terminal / Eval; the typed
+`/proof` board command still switches to it): the THIRD scope of the ONE eval component family — the node
+popup reads one node, the forum reads the project, this tab reads *this session* — the same rows, the same
+[[annotator]] detail, master-detail like the forum. It fetches the LEAN model (`GET
+/api/sessions/:id/evals` — rows only, worktree-rooted, no diff enrichment, no inlined bytes) and rides the
+tiered loading every eval face shares: collapsed scenario rows first, evidence streamed from
+`/api/yatsu/blob` only when a row opens. Rows order by attention: **blind spots lead** (declared, never
+measured — the outstanding loss), then the latest reading per scenario — the CURRENT score of what the
+session changed — with the session's own measurements first and ✦-marked (a reading is the session's own
+iff its `codeSha` is one of the branch's commits — derived, never tagged); a count chip narrows the list
+to only those when the reviewer wants the session's evidence alone. A gates strip (the same
+`reviewPayload` numbers `spex review` prints — lint memoized on the checkout fingerprint,
+[[manager-cockpit]]) sits above; there is NO build/typecheck/test gate, because soundness is proven by
+measuring the real product, not by a language-specific checker. When the session has no worktree/diff the
+tab shows a clean empty placeholder.
 
-Out of scope: the measurement engine and freshness ([[yatsu-core]]); the per-node eval tab
-([[yatsu-eval-tab]]); the merge dispatch ([[manager-cockpit]]). This node only marshals what they already
-produce into the review's proof — nothing is authored, only read.
+The **self-contained HTML** (`renderProofHtml`: evidence inlined as data-URIs, every changed file's
+diff + before/after drill-down) remains as the **export artifact** — CI attachments, sharing, a bare
+browser — behind the tab's `proof ↗` link, `GET /api/sessions/:id/proof` (`?format=json` = the model), and
+`spex review proof <SEL>` (`--out`/`--open`, a backend client that works against a remote backend
+unchanged). Inlining everything is the right shape for a file that must stand alone, and the wrong shape
+for an interactive tab — that is the whole split.

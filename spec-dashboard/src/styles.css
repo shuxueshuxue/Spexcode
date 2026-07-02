@@ -1511,21 +1511,10 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
    The backend-rendered proof of work (self-contained HTML over /api/sessions/:id/proof) rendered INLINE as the
    console's Proof TAB — always available for any selected session, no longer a review-only floating overlay.
    It fills the right pane below the tab bar: a slim label row over the self-contained (dark) proof iframe. */
-.proof-pane { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--paper); }
-.proof-bar {
-  flex: none; display: flex; align-items: center; gap: 12px;
-  padding: 8px 12px; border-bottom: 1px solid var(--line);
-  font-family: var(--mono); font-size: 12px; color: var(--ink2);
-}
-.proof-title { font-weight: 700; letter-spacing: .04em; }
 .proof-newtab { margin-left: auto; color: var(--blue); text-decoration: none; font-size: 11px; }
 .proof-newtab:hover { text-decoration: underline; }
 .proof-iframe { flex: 1; width: 100%; border: 0; background: #0b0e14; }
 /* the empty/loading placeholder — a clean centred note when a session has no proof to show yet. */
-.proof-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center; padding: 24px; color: var(--muted); font-family: var(--mono); font-size: 12px; }
-.proof-empty-msg { font-size: 15px; color: var(--ink2); }
-.proof-empty-sub { max-width: 460px; line-height: 1.6; }
-/* the `proof` button's cyan now comes from the shared `.si-act.board.sc-cyan` rule (see board commands). */
 
 /* ---- evals feed ([[evals-feed]]) — the current measured loss as a feed, title-only rows, media lazy ---- */
 .ef-chipbar { display: flex; gap: 4px; margin-left: auto; }
@@ -1571,3 +1560,19 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .an-v.fail.on { color: var(--orange); border-color: var(--orange); }
 .an-note { width: 180px; font: inherit; font-size: 11px; color: var(--ink); background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 3px 8px; }
 .an-flash { font-size: 12px; color: var(--green); }
+
+/* ---- the session Eval tab ([[review-proof]]'s interactive face) — gates strip + the shared eval
+   master-detail, session-scoped. Rows are tier-1; evidence streams on open. ---- */
+.se-pane { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--paper); }
+.se-gates { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--panel2); }
+.se-gate { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--line); border-radius: 3px; padding: 1px 7px; color: var(--muted); }
+.se-gate.ok { color: var(--green); border-color: color-mix(in srgb, var(--green) 40%, var(--line)); }
+.se-gate.bad { color: var(--red); border-color: color-mix(in srgb, var(--red) 40%, var(--line)); }
+.se-export { margin-left: auto; font-family: var(--mono); font-size: 10.5px; color: var(--blue); text-decoration: none; }
+.se-export:hover { text-decoration: underline; }
+.se-master { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(260px, 340px) 1fr; }
+.se-list { min-height: 0; overflow-y: auto; border-right: 1px solid var(--line); }
+.se-detail { min-height: 0; overflow-y: auto; }
+.se-blind .ef-scenario { color: var(--muted); }
+.se-warn { font-family: var(--mono); font-size: 10px; color: var(--orange); }
+.ef-insession { color: var(--blue); font-size: 10px; flex: none; }

@@ -1,7 +1,7 @@
 ---
 concern: promote re-measure probe (yatsu) — safe to close
 by: c3f86a1a-5fb5-437c-95a8-5ef7d5d761e6
-status: open
+status: landed
 nodes: issues
 created: 2026-07-02T18:15:33.898Z
 ---

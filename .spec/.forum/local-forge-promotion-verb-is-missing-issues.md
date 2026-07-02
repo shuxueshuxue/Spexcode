@@ -1,7 +1,7 @@
 ---
 concern: local→forge promotion verb is missing [[issues]]
 by: 60b8fd9a-08c5-4d8e-9139-84d75c065a8c
-status: open
+status: landed
 nodes: issues
 created: 2026-07-02T10:15:42.772Z
 ---

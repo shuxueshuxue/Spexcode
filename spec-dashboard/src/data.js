@@ -83,16 +83,58 @@ export async function loadBoard() {
   return res.json()
 }
 
-// subscribe to the board's push channel ([[board-stream]]): the server emits `board-changed` on any
-// session-store write, so the dashboard reloads the instant status moves instead of on a tight timer.
-// EventSource auto-reconnects on drop (a backend hot-reload flip), so a lost stream self-heals; if SSE never
-// connects (an old backend, a proxy that strips it), the caller's slow fallback poll still keeps the board
-// fresh. Returns an unsubscribe. `onChange` fires only on real changes, never on the keep-alive ping.
-export function subscribeBoard(onChange) {
-  let es
-  try { es = new EventSource('/api/board/stream') } catch { return () => {} }
-  es.addEventListener('board-changed', () => onChange())
-  return () => { try { es.close() } catch { /* already closed */ } }
+// subscribe to the board's push channel in DELTA mode ([[board-stream]]/[[board-delta]]): the server sends a
+// full snapshot on connect (`board-full {to, board}`), then hash-chained patches (`board-delta {from, to,
+// set, del}`) — a few KB per change instead of a full refetch. This is the client mirror of the server's
+// unit decomposition: the board is held as a keyed map (node:<id> / sess:<id> / #order lists / meta), a
+// patch applies only when its `from` tag matches ours (a mismatch reopens the stream, which re-anchors on a
+// fresh board-full — bounded, explicit recovery), and the rendered board is reconstructed from the map after
+// every apply. An OLD backend ignores `?mode=delta` and emits bare `board-changed` — that flips us to legacy
+// mode: `onLegacyChange` fires and the caller refetches, exactly the pre-delta protocol. `onLive` reports
+// whether push is proven alive, so the caller's slow fallback poll can stand down instead of re-downloading
+// the snapshot it already holds. EventSource auto-reconnects on drop (a backend hot-reload); every reconnect
+// gets a fresh board-full, so a lost stream self-heals with no client repair logic. Returns an unsubscribe.
+export function subscribeBoardLive({ onBoard, onLegacyChange, onLive }) {
+  let es = null
+  let closed = false
+  let values = null   // unit-value map, the client's copy of the server's decomposition
+  let tag = ''
+  const unitize = (b) => {
+    const { nodes = [], sessions = [], ...meta } = b
+    const m = new Map([['meta', meta], ['nodes#order', nodes.map((n) => n.id)], ['sess#order', sessions.map((s) => s.id)]])
+    nodes.forEach((n) => m.set('node:' + n.id, n))
+    sessions.forEach((s) => m.set('sess:' + s.id, s))
+    return m
+  }
+  const boardFrom = (m) => {
+    const pick = (prefix, orderKey) => (m.get(orderKey) || []).map((id) => m.get(prefix + id))
+    return { ...(m.get('meta') || {}), nodes: pick('node:', 'nodes#order'), sessions: pick('sess:', 'sess#order') }
+  }
+  const reopen = () => { try { es?.close() } catch { /* already closed */ } ; values = null; tag = ''; open() }
+  const open = () => {
+    if (closed) return
+    try { es = new EventSource('/api/board/stream?mode=delta') } catch { es = null; onLive?.(false); return }
+    es.addEventListener('board-full', (e) => {
+      const { to, board } = JSON.parse(e.data)
+      values = unitize(board)
+      tag = to
+      onLive?.(true)
+      onBoard(board)
+    })
+    es.addEventListener('board-delta', (e) => {
+      const d = JSON.parse(e.data)
+      if (!values || tag !== d.from) { reopen(); return }
+      for (const k of d.del || []) values.delete(k)
+      for (const [k, v] of Object.entries(d.set || {})) values.set(k, v)
+      tag = d.to
+      onLive?.(true)
+      onBoard(boardFrom(values))
+    })
+    es.addEventListener('board-changed', () => { onLive?.(false); onLegacyChange?.() })
+    es.addEventListener('error', () => onLive?.(false))
+  }
+  open()
+  return () => { closed = true; try { es?.close() } catch { /* already closed */ } }
 }
 
 // the project's self-identifying name ([[tab-title]]), resolved backend-side as board.project.

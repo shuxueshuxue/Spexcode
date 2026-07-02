@@ -77,7 +77,8 @@ export default {
 
   sessionEval: {
     sessionN: ({ n }) => `✦ 本会话 ${n} 条`,
-    export: 'proof ↗',
+    export: '导出 ↗',
+    exportTitle: '导出本次评测为自包含的 HTML 报告',
     empty: '该会话尚无测量。',
     blindHint: '已声明但从未测量 —— 这就是未清的 loss；用 spex yatsu eval 测一次。',
     unmeasured: '未测量',

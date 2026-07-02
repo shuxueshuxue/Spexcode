@@ -784,7 +784,9 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .legend-sub { color: var(--muted); font-weight: 400; }
 /* keymap rows: a fixed-width cluster of kbd chips, then the description (aligns with the legend rows). */
 .keymap-keys { flex: none; width: 132px; display: flex; flex-wrap: wrap; gap: 4px; }
-.legend kbd {
+/* the settings PAGE shares these chips: it used to sit inside the .legend modal chrome, and its shortcut
+   cells are <button>s, whose UA color (black) does not inherit — without this scope the kbds go black-on-dark. */
+.legend kbd, .settings-body kbd {
   font-family: var(--mono); font-size: 11px; color: var(--blue); line-height: 1.4;
   border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; background: var(--paper);
 }
@@ -802,7 +804,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .legend-ring.ring-solid { border: 1px solid var(--blue); }
 .legend-ring.ring-ghost { border: 1px dashed var(--line); background: transparent; opacity: .72; }
 
-/* ---- settings popup: reuses the .legend modal chrome; only the language picker is bespoke ---- */
+/* ---- settings page: reuses the legend section vocabulary; only the language picker is bespoke ---- */
 .set-langs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
 .set-lang {
   font-family: var(--mono); font-size: 12px; color: var(--ink); cursor: pointer;

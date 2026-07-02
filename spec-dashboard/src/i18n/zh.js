@@ -40,6 +40,29 @@ export default {
   hud: {
     helpTitle: '帮助 — 按键与图例（?）',
     loading: '正在从 git 加载规格…',
+    evalsTitle: '评审 — 当前测量的 loss，视频优先',
+  },
+
+  evalsFeed: {
+    title: '评审 — 当前 loss',
+    kind: { video: '视频', image: '图片', all: '全部' },
+    staleN: ({ n }) => `${n} 条已过期`,
+    empty: '没有匹配的当前读数 — 先测量一个场景，或切换筛选。',
+    annotate: '打开并标注',
+  },
+
+  annotator: {
+    title: '标注器',
+    hint: '在暂停的画面上拖拽圈出问题；时刻自动定位到步骤。',
+    commentPh: '这里哪里不对…',
+    nodeTitle: '这个发现所属的节点',
+    notePh: '判定备注…',
+    fileIssue: '在节点上开 issue',
+    fileReading: '记一条 reading',
+    issueFiled: 'issue 已提交 ✓',
+    readingFiled: 'reading 已记录 ✓',
+    failed: '失败 — 后端在跑吗？',
+    reviewFallback: '视频评审',
   },
 
   time: {

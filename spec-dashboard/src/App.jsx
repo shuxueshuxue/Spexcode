@@ -8,6 +8,7 @@ import SessionWindow, { LockGlyph } from './SessionWindow.jsx'
 import SessionInterface from './SessionInterface.jsx'
 import Legend from './Legend.jsx'
 import Settings from './Settings.jsx'
+import EvalsFeed from './EvalsFeed.jsx'
 import SpecSearch from './SpecSearch.jsx'
 import BoardStats from './BoardStats.jsx'
 import MobileApp from './MobileApp.jsx'
@@ -44,6 +45,7 @@ function Dashboard({ specs, sessions, reload, project }) {
   const [sessionUI, setSessionUI] = useState(false) // session interface (opened by Enter)
   const [legend, setLegend] = useState(false)     // centered help modal: keymap + visual vocabulary (`?`)
   const [settings, setSettings] = useState(false) // centered settings modal: language picker etc. (`,`)
+  const [evalsFeed, setEvalsFeed] = useState(false) // the evals review feed ([[evals-feed]]) — hud ▶ button; joins issues-view when that surface lands
   const [search, setSearch] = useState(null)      // search palette mode: null | 'board' (`/`, nodes lead) | 'sessions' (⌘/Ctrl+/, sessions lead)
   const [sessionSel, setSessionSel] = useState('new') // persisted across open/close: last tab/session
   const [highlightId, setHighlightId] = useState(null) // session whose overlays are emphasised
@@ -300,6 +302,8 @@ function Dashboard({ specs, sessions, reload, project }) {
         if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); setOverlay(false); openBoard(); return }
         return // anything else does NOT move the board behind the popup
       }
+      // the evals feed overlay owns its keys while open (mouse-first; Esc peels via escStack)
+      if (evalsFeed) return
       // graph mode. The help modal owns its keys while open (only ?/Esc close it)
       if (legend) {
         if (e.key === 'Escape' || e.key === '?') { e.preventDefault(); setLegend(false); return }
@@ -432,7 +436,9 @@ function Dashboard({ specs, sessions, reload, project }) {
         <div className="hud">
           <span className="brand">$ {project || 'spec-dashboard'}</span>
           <button className="hud-help" onClick={() => setLegend((v) => !v)} title={t('hud.helpTitle')}>?</button>
+          <button className="hud-help hud-evals" onClick={() => setEvalsFeed(true)} title={t('hud.evalsTitle')}>▶</button>
         </div>
+        {evalsFeed && <EvalsFeed nodes={specs} onClose={() => setEvalsFeed(false)} />}
 
         <SessionWindow sessions={sessions} activeId={highlightId} onPick={onPickSession} onOpenSession={openSession} />
 

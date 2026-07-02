@@ -1,10 +1,14 @@
 ---
 title: annotator
-status: pending
+status: active
 hue: 200
 desc: Opening a video eval plays the clip with a clickable step ruler; the human scrubs, circles, comments — and the output files through existing seams only, never a new one.
+code:
+  - spec-dashboard/src/Annotator.jsx
 related:
   - spec-yatsu/src/evaltab.ts
+  - spec-yatsu/src/filing.ts
+  - spec-cli/src/index.ts
   - spec-dashboard/src/NodeView.jsx
 ---
 # annotator
@@ -28,8 +32,8 @@ Context (the scenario's `expected`, the node) renders live from the board — no
 management, no metadata files.
 
 **Output routes through existing seams only.** A finding belonging to *another* node → an issue on the
-responsible node ([[proposals]]'s unified Issue type, its typed `evidence[]` carrying the clip's hash —
-[[video-evidence]]'s routing).
-Disagreement with *this* node's verdict → the human files their own `manual@1` reading, superseding by
-chronology. Annotated frames or an exported report are ordinary evidence blobs on that reading. The
+responsible node ([[proposals]]'s unified Issue type via the port's write route, its typed `evidence[]`
+carrying the clip and step-map hashes — [[video-evidence]]'s routing; the marks are the prose body).
+Disagreement with *this* node's verdict → the human files their own `manual@1` reading through the eval
+seam's write half (filing.ts, [[yatsu-core]]), the annotation report as its transcript evidence. The
 annotator invents no verdict states, no timeline tables, no locks.

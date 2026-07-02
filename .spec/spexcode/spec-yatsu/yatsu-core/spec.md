@@ -10,6 +10,7 @@ code:
   - spec-yatsu/src/freshness.ts
   - spec-yatsu/src/cache.ts
   - spec-yatsu/src/evaluator.ts
+  - spec-yatsu/src/filing.ts
 related:
   - spec-cli/src/cli.ts
 ---
@@ -45,7 +46,8 @@ code freshness axis (a `code`/`related` path that doesn't exist is flagged, neve
 it inherits the node's whole `code:` list. So two scenarios on one node, tracking different files, go stale
 independently — one node's loss is many signals, not one. A file governed by more scenarios than `maxOwners`
 is the `yatsu-owners` smell (split it). Measurements live apart in a flat
-**yatsu.evals.ndjson** sidecar — one JSON line per reading (scenario, codeSha, blob+blobKind, evaluator,
+**yatsu.evals.ndjson** sidecar — one JSON line per reading (scenario, codeSha, blob+blobKind, a video
+reading's optional timelineBlob ([[step-timeline]]), evaluator,
 **verdict**, ts) — the second git-as-database axis: a reading commit is a *measurement event*, not a spec
 version, so history and attribution apply unchanged.
 
@@ -68,9 +70,11 @@ The surface mirrors the code-drift report:
   measured (`yatsu-missing`), a **frontend surface** with **no yatsu.md** (`yatsu-uncovered`), and a whole-repo
   summary — a file governed by > `maxOwners` scenarios (`yatsu-owners`, split it). `--changed` scopes the
   per-node classes to the nodes the branch touched ([[yatsu-proactive]]); plain scan covers the repo.
-- **eval [.|<node>] [--scenario N] (--pass|--fail|--note T) [--image P|--result P|-]** — FILE the measurement
-  the agent already took. yatsu runs nothing: it stores the evidence (`--image` / `--result`, `-` for stdin)
-  under one verdict, for one scenario.
+- **eval [.|<node>] [--scenario N] (--pass|--fail|--note T) [--image P|--result P|-|--video P [--timeline P]]** —
+  FILE the measurement the agent already took. yatsu runs nothing: it stores the evidence under one verdict,
+  for one scenario. The seam has a **write half over data** too (filing.ts): the dashboard annotator files a
+  human `manual@1` reading (verdict + annotation-report transcript) through the SAME append — one seam, two
+  faces.
 - **clean [--keep-latest|--all]** — GC the evidence cache (blobs no reading references, by default).
 
 The **evaluator** is metadata only — a tag `<name>@<version>` (e.g. `manual@1`) recording WHO measured, the

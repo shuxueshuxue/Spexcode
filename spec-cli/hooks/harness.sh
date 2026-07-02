@@ -57,13 +57,16 @@ hp_field() {
 }
 
 # the session id from a payload (both harnesses use session_id).
-# the GOVERNED record id the launcher baked into the session env (SPEXCODE_SESSION_ID) wins over the harness's
-# own payload session_id. This is what lets a dashboard-launched CODEX session feed its governed record: codex
-# mints its OWN thread id (un-pinnable), so the record can't be keyed by it — instead the launcher keys the
-# record by a SpexCode id and exports it into the launch, and every hook resolves THAT. Claude's payload id is
-# already the record id, so the env (= same value) is a harmless no-op there. A self-launched agent sets no
-# env → falls back to the payload session_id (its own non-governed record). One resolver, both harnesses.
-hp_session_id() { printf '%s' "${SPEXCODE_SESSION_ID:-$(hp_field "$1" session_id)}"; }
+# Codex hooks run inside ONE shared per-project app-server. That process can inherit the FIRST launched
+# session's SPEXCODE_SESSION_ID, so on codex the payload session_id (the acting thread id) must win and then
+# hp_store_dir aliases it to the governed record. Claude's payload id already equals its governed record id,
+# so preferring SPEXCODE_SESSION_ID there preserves the launcher's pinned id path.
+hp_session_id() {
+  case "$SPEXCODE_HARNESS" in
+    codex) hp_field "$1" session_id ;;
+    *)     printf '%s' "${SPEXCODE_SESSION_ID:-$(hp_field "$1" session_id)}" ;;
+  esac
+}
 
 # the per-PROJECT GLOBAL runtime dir (mirrors spec-cli/src/layout.ts `runtimeRoot`): <store>/projects/<enc>,
 # keyed by the project (dirname of the ABSOLUTE git-common-dir, so the answer is identical from main or any
@@ -78,10 +81,11 @@ hp_runtime_dir() {
 
 # the per-session GLOBAL store dir for a session id — <runtime>/sessions/<id> (sibling of the per-project
 # runtime above). Echoes the dir; returns non-zero (echoing nothing) when git can't resolve.
-# ALIAS resolution: a codex hook fires from the shared per-PROJECT app-server process, whose env carries NO
-# SPEXCODE_SESSION_ID, so hp_session_id falls back to the payload session_id = the codex THREAD id — NOT the
-# SpexCode record id the dir is keyed by. So when no record sits at <id> directly, find the one record that
-# captured this id as `harness_session_id` (the backend stored it at thread/start, before the first tool turn).
+# ALIAS resolution: a codex hook fires from the shared per-PROJECT app-server process, whose env may carry a
+# stale SPEXCODE_SESSION_ID from the first launched codex session. hp_session_id therefore returns the acting
+# payload session_id on codex: the codex THREAD id, NOT the SpexCode record id the dir is keyed by. So when no
+# record sits at <id> directly, find the one record that captured this id as `harness_session_id` (the backend
+# stored it at thread/start, before the first tool turn).
 # A grep over the few session.json files — no jq on the hot path; the trailing quote anchors the value so a
 # thread id can't match a longer one as a prefix. Direct hit wins; a miss with no alias echoes the direct path
 # unchanged, so the caller's `[ -e "$rec" ]` still no-ops gracefully. Mirrors layout.ts `readAliasedRawRecord`.

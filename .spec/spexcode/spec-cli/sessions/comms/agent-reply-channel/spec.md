@@ -44,8 +44,8 @@ handshake greeting ([[comms-edge]]) names the watcher by the same `sessionHeadli
 injection itself happens in the backend (the rendezvous socket — [[dispatch]]), a *different* process that
 has no idea which agent invoked the CLI. So the sender identity must be captured and the message wrapped
 **before** it leaves the CLI: the `session send` verb reads its own `ownSessionId` (the launcher's
-`SPEXCODE_SESSION_ID`, else the harness session env var like Claude Code's `CLAUDE_CODE_SESSION_ID`),
-resolves that id against the live board through the
+alias-resolved harness session env var, then `SPEXCODE_SESSION_ID`, with raw harness env only for an ungoverned
+self-launched sender), resolves that id against the live board through the
 shared [[remote-client]] `resolveClientSession` to get the display label ([[session-selectors]] is reused
 for the **recipient** too), wraps with `withSenderHint`, and only then calls `clientSend`. The transport
 stays dumb — `clientSend` / `POST …/keys` carry the already-wrapped text and learn nothing about senders,

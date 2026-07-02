@@ -14,6 +14,21 @@ scenarios:
       reply (by · at · body), and a reply composer (local issues are writable in place; a forge item would
       instead carry its permalink and a read-only note). No page errors; the Issues pill sits beside New
       Session in the top row.
+  - name: panel-skeleton
+    tags: [frontend-e2e]
+    code: spec-dashboard/src/FeedSection.jsx
+    related: [spec-dashboard/src/IssuesView.jsx]
+    description: >-
+      On the running issues page, read the section furniture: the pinned section head (title + counts
+      summary), the outer container's overflow, and the section body's scroll. Then drive the keys — j/k
+      down and up the rows, Enter on the selected row, j deep past the fold — and finally type 'j' inside
+      the New-form input.
+    expected: >-
+      The head is pinned with live counts; the OUTER container never scrolls (overflow hidden) while the
+      section body scrolls internally. j/k move a visible selection (net j,j,j,k → row 2); Enter expands
+      the selected row in place; deep j keeps the selected row inside the body's viewport (the body
+      scrolled, not the panel). A key typed into an input/textarea reaches the input and never moves the
+      selection. No page errors.
 ---
 
 # measuring issues-view

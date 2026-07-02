@@ -17,7 +17,9 @@ nodes that work serves.**
 The bridge is a single host-agnostic **[[port]]** (`ForgeDriver`) that *reads* a host's open issues and
 PRs; per-host drivers sit behind it (`github` via `gh` today; gitlab/bitbucket later). The host-agnostic
 **[[links]]** resolver then inverts that raw work into `node → { issues, prs }`. The capstone **[[forge-cli]]**
-exposes it on the real CLI as `spex forge links`.
+exposes it on the real CLI as `spex forge links`. Downstream, this read also feeds the **unified Issue
+port** (spec-cli's [[issues]]), where a forge issue and a local forum thread are the same object behind
+per-issue storage — this package stays that object's read-only remote adapter.
 
 **How a forge object names its node — three sources, no datastore of our own:**
 

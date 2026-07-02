@@ -40,12 +40,14 @@ scenarios:
     code: spec-cli/src/proposals.ts
     related: [spec-cli/templates/hooks/pre-commit]
     description: >-
-      On the trunk, let `spex propose` commit a forum file directly. Then try a plain `git commit` on the
-      trunk that touches a non-forum path, and one that touches BOTH a forum file and a non-forum path.
+      On the trunk, let `spex propose` commit a forum file directly (the writer uses `git commit
+      --no-verify`). Then try a plain `git commit` (hook active) on the trunk that touches a non-forum path,
+      and one that touches ONLY a forum file.
     expected: >-
-      The forum-only commit is admitted on the trunk (main-guard's forum-data exception). A non-forum commit
-      is still BLOCKED, and a MIXED (forum + non-forum) commit is blocked too — the exception can't smuggle
-      real work onto the trunk.
+      The programmatic forum write lands on the trunk because it commits `--no-verify` — it bypasses the hook
+      entirely, needing no guard exception. A plain non-forum commit is still BLOCKED, and a plain
+      forum-only commit (no `--no-verify`) is now blocked TOO: main-guard carries no `.spec/.forum/`
+      special-case, so the guard stays the single clean question "am I committing directly onto the trunk?".
   - name: post-merge-nudge
     tags: [cli]
     code: spec-cli/templates/hooks/post-merge

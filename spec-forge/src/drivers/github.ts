@@ -25,10 +25,37 @@ export const githubDriver: ForgeDriver = {
       title: r.title,
       body: r.body ?? '',
       url: r.url,
-      state: r.state,
+      state: (r.state || '').toLowerCase(),   // one canonical casing at the adapter (gh GraphQL says OPEN, REST says open)
       labels: (r.labels ?? []).map((l) => l.name),
       author: r.author?.login ?? '',
       createdAt: r.createdAt ?? '',
+    }))
+  },
+
+  // the INCREMENTAL window: only issues updated since `sinceISO` (GitHub REST honors `since` = updated-at),
+  // paged manually (100/page, stop on a short page — an incremental window is normally one page). PRs ride
+  // the same REST endpoint flagged with `pull_request` and are filtered out — the PR list keeps its own path.
+  async listIssuesSince(sinceISO: string): Promise<ForgeIssue[]> {
+    type ApiRow = {
+      number: number; title: string; body: string | null; html_url: string; state: string
+      labels: ({ name?: string } | string)[]; user: { login: string } | null; created_at: string
+      pull_request?: unknown
+    }
+    const out: ApiRow[] = []
+    for (let page = 1; page <= 20; page++) {
+      const rows = await gh<ApiRow[]>(['api', `repos/{owner}/{repo}/issues?state=all&since=${encodeURIComponent(sinceISO)}&per_page=100&page=${page}`])
+      out.push(...rows)
+      if (rows.length < 100) break
+    }
+    return out.filter((r) => !r.pull_request).map((r) => ({
+      number: r.number,
+      title: r.title,
+      body: r.body ?? '',
+      url: r.html_url,
+      state: (r.state || '').toLowerCase(),
+      labels: (r.labels ?? []).map((l) => (typeof l === 'string' ? l : l.name ?? '')).filter(Boolean),
+      author: r.user?.login ?? '',
+      createdAt: r.created_at ?? '',
     }))
   },
 

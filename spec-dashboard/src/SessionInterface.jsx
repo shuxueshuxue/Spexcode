@@ -854,7 +854,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         </aside>
 
         <section className={active === 'issues' ? 'si-content is-forum' : (active === 'new' ? 'si-content is-new' : 'si-content is-session')}>
-          {active === 'issues' && <IssuesView onFocusNode={onFocusNode} />}
+          {active === 'issues' && <IssuesView onFocusNode={onFocusNode} specs={specs} />}
           {active === 'new' && (
             <div className="si-new-center">
               <div className="si-avatar" aria-hidden="true">

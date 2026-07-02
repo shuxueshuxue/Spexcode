@@ -45,7 +45,10 @@ reply/propose the CLI uses, committed straight to the trunk.
 - **One merged list, store-tagged.** The view fetches `GET /api/issues` (`{ enabled, issues }`) — the
   merged read over every store — and renders each issue **in the order the API returns**: the frontend
   never re-sorts, and **shows no salience/priority ranking** (recurrence is the drain's judgment, per
-  [[proposals]], never an automatic order); signer and reply counts appear as raw data, not a rank. An
+  [[proposals]], never an automatic order); signer and reply counts appear as raw data, not a rank.
+  **Concluded issues hide by default** — closed / rejected / landed are the archive, not the open work,
+  and mixing them in only confuses review; a count chip reveals them on demand (open and accepted stay:
+  accepted is approved-but-not-landed, still live). An
   issue shows its **store** (a `local` / host chip — the one visible trace of where it lives), concern,
   author, status, and its linked-node **chips**. Store never changes the
   shape, only two affordances: a **local** issue expands in place to its body + signed replies and takes a

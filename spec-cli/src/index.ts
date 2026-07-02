@@ -11,10 +11,11 @@ import { summarize } from './mentions.js'
 import { resolveLayout, mainBranch } from './layout.js'
 import { buildBoard } from './board.js'
 import { boardStream } from './boardStream.js'
-import { gitA, gitTry } from './git.js'
+import { gitA, gitTry, repoRoot } from './git.js'
 import { newSession, listSessions, sendKeys, rawKey, exitSession, closeSession, reopen, propose, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, superviseQueue } from './sessions.js'
 import { defaultHarness, HARNESSES } from './harness.js'
 import { evalTimeline, readBlobByHash } from '../../spec-yatsu/src/evaltab.js'
+import { yatsuNodes } from '../../spec-yatsu/src/yatsu.js'
 import { fileHumanReading } from '../../spec-yatsu/src/filing.js'
 import { buildProofModel, renderProofHtml } from '../../spec-yatsu/src/proof.js'
 import { saveUpload, MAX_UPLOAD_BYTES } from './uploads.js'
@@ -48,7 +49,18 @@ app.get('/api/specs', async (c) => c.json(await loadSpecs()))
 // the search corpus ([[board-lean]]): a filesystem-only {id,title,path,desc,body} for every node, NO git. The
 // board omits `body` to stay lean, so the search palette fetches this ONCE when it opens (cached client-side)
 // to rank nodes over their prose — off the board's hot poll. A literal segment, before the `:id` routes.
-app.get('/api/specs/lite', (c) => c.json(loadSpecsLite()))
+// Scenario prose rides the same corpus: the board's `scenarios` fold is slim ({name, tags}), so a yatsu
+// node's row here carries its declared scenarios' description/expected (+ per-scenario code) — one fetch
+// serves both the palette's scenario plane and the focus-panel preview.
+app.get('/api/specs/lite', (c) => {
+  const scByNode = new Map(yatsuNodes(repoRoot()).map((y) => [y.id, y.scenarios]))
+  return c.json(loadSpecsLite().map((row) => {
+    const sc = scByNode.get(row.id)
+    return sc?.length
+      ? { ...row, scenarios: sc.map((s) => ({ name: s.name, description: s.description, expected: s.expected, ...(s.code?.length ? { code: s.code } : {}) })) }
+      : row
+  }))
+})
 // one node's body + parsed parts ([[board-lean]]): the board no longer ships either, so the detail view
 // fetches this when a node opens. 404 for an unknown id.
 app.get('/api/specs/:id/content', (c) => {

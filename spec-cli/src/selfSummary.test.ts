@@ -1,8 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { selfSummary, paneActivity, sessionHeadline } from './sessions.js'
-import type { Session } from './sessions.js'
+import { selfSummary, paneActivity, deriveHeadline } from './sessions.js'
 import { claudeHarness, codexHarness } from './harness.js'
 
 // The headline only shows the agent's OWN self-summary, never tmux's default pane title. The discriminator
@@ -55,18 +54,17 @@ test('paneActivity: a missing pane title → null for either harness', () => {
 // the full headline chain for both harnesses, given the SAME launch prompt and worktree folder name in the
 // pane title. Proof the fix lands: codex's headline is its TASK, not its folder.
 test('sessionHeadline: codex headline is the TASK (prompt), not the worktree folder; claude is its live summary', () => {
-  const base: Session = {
-    id: 'sess-x', node: null, title: null, name: null, branch: null, path: '', parent: null, harness: 'codex',
-    lifecycle: 'active', proposal: null, merges: 0, note: null, status: 'working', liveness: 'online',
-    prompt: 'Implement codex session naming so the headline is the task',
+  // the headline derivation is deriveHeadline ([[session-label]]) — toSession's single computation site;
+  // this test feeds it the same parts toSession would.
+  const base = {
+    id: 'sess-x', name: null, node: null, title: null, branch: null,
     promptPreview: 'Implement codex session naming so the headline is the task',
-    created: 0, activity: null, sortKey: null,
   }
   // codex: pane title is `⠙ codex-naming` (the folder). Gated → activity null → headline is the prompt preview.
   const codexActivity = paneActivity(codexHarness, '⠙ codex-naming')
-  assert.equal(sessionHeadline({ ...base, harness: 'codex', activity: codexActivity }),
+  assert.equal(deriveHeadline({ ...base, activity: codexActivity }),
     'Implement codex session naming so the headline is the task')
   // claude: pane title is its live task summary → that IS the headline, prompt preview is overridden.
   const claudeActivity = paneActivity(claudeHarness, '✳ Reworking the launcher')
-  assert.equal(sessionHeadline({ ...base, harness: 'claude', activity: claudeActivity }), 'Reworking the launcher')
+  assert.equal(deriveHeadline({ ...base, activity: claudeActivity }), 'Reworking the launcher')
 })

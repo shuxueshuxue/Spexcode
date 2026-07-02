@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import SessionTerm from './SessionTerm.jsx'
 import { loadConfig } from './data.js'
 import { labelColor } from './color.js'
-import { STATUS_COLOR, sessionForest } from './session.js'
+import { STATUS_COLOR, sessionForest, sessionHeadline } from './session.js'
 import { SessionRow, RowLead, useFold } from './SessionWindow.jsx'
 import SessionContextMenu from './SessionContextMenu.jsx'
 import { ProofPane } from './ReviewProof.jsx'
@@ -96,12 +96,13 @@ function matchSpecs(specs, query, focusId) {
 }
 
 // the actor twin of matchSpecs: rank ONLINE board sessions for a partial `@query`, plus the synthetic
-// `@new` (spawn a fresh worker), which is ALWAYS present near the top (after any exact matches). A row's
-// handle is its title/name/short-id; `sub` is a hint (its node or status). Exact/prefix on id-or-handle
-// leads, then most-recent (`created` desc) within a band. Returns up to 8 `{id, label, sub}` items.
+// `@new` (spawn a fresh worker), which is ALWAYS present near the top (after any exact matches). A row
+// reads as the SAME headline every other surface shows ([[session-label]] — sessionHeadline, never a bare
+// title/name, which no longer ride the wire); `sub` is a hint (its node or status). Exact/prefix on
+// id-or-handle leads, then most-recent (`created` desc) within a band. Returns up to 8 `{id, label, sub}`.
 function matchSessions(sessions, query) {
   const q = query.toLowerCase()
-  const handle = (s) => s.title || s.name || (s.id || '').slice(0, 8)
+  const handle = (s) => sessionHeadline(s) || (s.id || '').slice(0, 8)
   const scored = []
   for (const s of sessions || []) {
     if (s.liveness !== 'online') continue

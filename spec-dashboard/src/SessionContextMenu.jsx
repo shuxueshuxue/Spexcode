@@ -33,7 +33,7 @@ export default function SessionContextMenu({ menu, onClose, onChanged }) {
 
   const startRename = (e) => {
     e.stopPropagation()
-    setValue(menu.session.name || '')   // prefill the current OVERRIDE (blank if none) — not the derived label
+    setValue((menu.session.raw?.name ?? menu.session.name) || '')   // prefill the current OVERRIDE (blank if none) — the one legit raw consumer ([[session-label]]); never the derived label
     setRenaming(menu.session)
     onClose()
   }

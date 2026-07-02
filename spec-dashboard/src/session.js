@@ -39,13 +39,17 @@ export const zoneSort = (sessions) => {
   return [...sessions].sort((a, b) => rank[sessionZone(a)] - rank[sessionZone(b)] || effOf(b) - effOf(a))
 }
 
-// the STABLE identity of a session: a user-chosen rename (`name`) wins over everything; else its node,
-// else title/branch, else the raw id. Mirrors the backend's sessionLabel precedence (spec-cli sessions.ts).
-// Used where a session needs a fixed handle that doesn't move turn-to-turn — tooltips, the lock hint, search.
-export const sessionName = (s) => s?.name || s?.node || s?.title || s?.branch || s?.id
+// the session's display strings are DERIVED SERVER-SIDE ([[session-label]]): the wire carries `label`
+// (stable handle — tooltips, the lock hint, search) and `headline` (the live line a human reads), computed
+// once in toSession; the bare parts (rename `name`, prompt-truncation `title`) don't ride the wire at the
+// top level, so a surface CANNOT re-derive its own chain — these two accessors are the only doors, and the
+// legacy chain below them exists solely as the old-backend fallback, confined to THIS file. Reach for
+// s.raw.name / s.raw.title only for an explicitly raw consumer (the rename prefill).
+export const sessionName = (s) =>
+  s?.label || s?.name || s?.node || s?.title || s?.branch || s?.id
 
 export const sessionHeadline = (s) =>
-  s?.name || s?.activity || s?.promptPreview || s?.node || s?.title || s?.branch || s?.id
+  s?.headline || s?.name || s?.activity || s?.promptPreview || s?.node || s?.title || s?.branch || s?.id
 
 // @@@ session nesting ([[session-nesting]]) — a session launched by `spex new` from INSIDE another carries
 // that spawner's id as `parent`. Fold it into a forest, DERIVED here at read time (never stored on the child):

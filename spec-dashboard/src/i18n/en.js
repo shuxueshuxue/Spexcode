@@ -54,7 +54,7 @@ export default {
 
   evalsFeed: {
     title: 'evals — current loss',
-    kind: { video: 'video', image: 'image', all: 'all' },
+    kind: { video: 'video', image: 'image', note: 'note', all: 'all' },
     staleN: ({ n }) => `${n} stale`,
     summary: ({ n }) => `${n} current`,
     empty: 'no current readings match — measure a scenario or switch the filter.',

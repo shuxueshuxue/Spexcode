@@ -12,8 +12,10 @@ import { useT } from './i18n/index.jsx'
 // and latest-per-scenario is score.jsx's scenarioStates — the same vocabulary the node badge, the focus
 // panel, and the eval tab use.
 
-const KIND_TAG = { video: 'vid', image: 'img', transcript: 'txt' }
-export const kindOf = (r) => r.blobKind || 'image'
+const KIND_TAG = { video: 'vid', image: 'img', transcript: 'txt', note: 'note' }
+// kind is HONEST evidence: a blob-less reading (verdict filed with prose only) is a 'note', never a
+// media kind; a blob with no recorded blobKind is a legacy capture, i.e. an image.
+export const kindOf = (r) => (r.blob ? r.blobKind || 'image' : 'note')
 
 // flatten board nodes → feed entries via the ONE latest-per-scenario computation (scenarioStates).
 export function currentEntries(nodes) {
@@ -58,13 +60,14 @@ const rel = (ts) => {
 // j/k walks one flat list across both groups — filter state stays this group's own.
 export default function EvalsGroup({ nodes = [], sel, onSel, onRows }) {
   const t = useT()
-  const [kind, setKind] = useState(null)          // null = the default: video, falling back to image
+  const [kind, setKind] = useState(null)          // null = the default: video → image → all, first kind present
   const [showStale, setShowStale] = useState(false)
 
   const all = useMemo(() => currentEntries(nodes), [nodes])
   const fresh = useMemo(() => all.filter((e) => e.fresh), [all])
   const hasVideo = fresh.some((e) => kindOf(e) === 'video')
-  const effKind = kind ?? (hasVideo ? 'video' : 'image')
+  const hasImage = fresh.some((e) => kindOf(e) === 'image')
+  const effKind = kind ?? (hasVideo ? 'video' : hasImage ? 'image' : 'all')
   const pool = showStale ? all : fresh
   const rows = useMemo(() => pool.filter((e) => effKind === 'all' || kindOf(e) === effKind), [pool, effKind])
   const staleN = all.length - fresh.length
@@ -76,7 +79,7 @@ export default function EvalsGroup({ nodes = [], sel, onSel, onRows }) {
       <header className="fv-group-head">
         <span className="fv-group-title">{t('evalsFeed.title')}</span>
         <span className="ef-chipbar">
-          {['video', 'image', 'all'].map((k) => (
+          {['video', 'image', 'note', 'all'].map((k) => (
             <button key={k} className={`ef-chip ${effKind === k ? 'on' : ''}`} onClick={() => setKind(k)}>
               {t(`evalsFeed.kind.${k}`)}
             </button>

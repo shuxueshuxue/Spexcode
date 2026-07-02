@@ -24,7 +24,8 @@ an **already-captured** clip; yatsu still runs nothing, and no new ledger struct
 The annotator IS the issues page's **detail pane for a selected eval** ([[issues-view]]'s master-detail —
 no modal, no box-in-a-box: the reading gets the pane's full height, and switching selection resets the
 working state to the new reading). Every evidence kind renders here — an image full-width, a transcript as
-text, a missing blob as the honest sentinel — and a **video** reading plays its clip. When the reading
+text, a missing blob as the honest sentinel, a blob-less (`note`) reading its verdict note as the text
+body (never an empty media box) — and a **video** reading plays its clip. When the reading
 carries a [[step-timeline]]
 sidecar, a **step ruler** renders under the scrubber — click a step to seek to its `tMs`; an annotation at
 moment T names its step by the last-boundary-≤T lookup, and a step's optional owning-node routes the

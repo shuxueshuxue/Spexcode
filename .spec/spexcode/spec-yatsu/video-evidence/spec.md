@@ -19,7 +19,8 @@ evidence — the author's choice per scenario, routed by its tag, not a forced d
 
 The whole point is that almost nothing is new. `spex yatsu eval --video <clip>` stores the bytes in the same
 shared cache and appends one reading carrying `blobKind: video`; the MIME is sniffed from content (WebM /
-MP4) so `/api/yatsu/blob` streams a playable type; the eval tab ([[yatsu-eval-tab]]) and the session proof
+MP4) so `/api/yatsu/blob` streams a playable type — and answers **byte ranges**, without which a browser
+clamps every seek to 0; the eval tab ([[yatsu-eval-tab]]) and the session proof
 ([[review-proof]]) grow **one** render arm — an inline `<video>` beside the image and transcript, lazy on
 expand, with the same *miss original file* when the blob is pruned; `spex yatsu show` labels it. A clip is
 heavier bytes, so [[yatsu-core]]'s `clean` is the intended prune.

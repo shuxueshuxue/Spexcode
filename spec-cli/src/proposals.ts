@@ -204,9 +204,9 @@ export async function forumReply(id: string, body: string, author: string): Prom
 
 export async function forumPost(
   concern: string,
-  opts: { nodes?: string[]; body?: string; author: string },
+  opts: { nodes?: string[]; body?: string; evidence?: string[]; author: string },
 ): Promise<{ thread: Issue; outcomes: DispatchOutcome[] }> {
-  const thread = propose(concern, { nodes: opts.nodes, body: opts.body, author: opts.author })
+  const thread = propose(concern, { nodes: opts.nodes, body: opts.body, evidence: opts.evidence, author: opts.author })
   const outcomes = await dispatchMentions(opts.body || concern, { threadId: thread.id, node: thread.nodes[0] || null, author: opts.author })
   return { thread, outcomes }
 }

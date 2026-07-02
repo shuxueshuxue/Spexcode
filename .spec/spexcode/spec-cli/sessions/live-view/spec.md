@@ -87,8 +87,8 @@ intentional socket close is the human closing the pane (the board flipping a ses
 
 Control mode never replays a screen on its own — a bare attach and a plain refresh both emit nothing, and
 (unlike a raw attach, where tmux resends the pane's whole terminal state) it never re-emits the alt-screen
-switch or the app's mouse-tracking modes. So every (re)attach **seeds** its one coherent frame from a **bounded
-pane capture at the converged size**, then lets the live output be the tail. The two stay coherent because tmux
+switch or the app's mouse-tracking modes. So every (re)attach **seeds** its one coherent frame from the
+**current tmux view at the converged size**, then lets the live output be the tail. The two stay coherent because tmux
 serializes commands and notifications on one stream: the capture reflects the pane at its command boundary, so
 any live output that follows lands *after* it and is never overwritten — the deterministic seed, not the banned
 splice of a guessed-size snapshot into an already-flowing stream.
@@ -99,7 +99,8 @@ the mouse-tracking flags): so the browser xterm faithfully mirrors the pane — 
 full-screen TUI (else its redraws pollute the normal scrollback and mis-render) and in the app's **mouse-tracking
 mode**. That same pane-mode reading is the source for wheel routing below; attach reconstruction and navigation
 are not two independent interpretations of tmux state. A plain resize re-seeds only the visible screen, under a
-viewport-only clear (`\x1b[H\x1b[2J`, never `\x1b[3J`), so it never re-floods or wipes the seeded history.
+viewport-only clear (`\x1b[H\x1b[2J`, never `\x1b[3J`), so it never re-floods history into a browser-owned
+scrollback.
 
 ## scrolling — the pane's real history, through tmux
 
@@ -109,7 +110,7 @@ bridge decides from tmux's live pane flags:
 - **Normal-screen pane** (a shell, a log): its history lives in tmux's scrollback. Wheel-up enters tmux
   copy-mode and scrolls that tmux view; wheel-down continues in copy-mode until the bottom. Each move repaints
   the browser from tmux's current view, so the dashboard feels like a real tmux client rather than a page
-  scrolling an xterm buffer.
+  scrolling an xterm buffer. The browser xterm keeps no independent terminal scrollback/scrollbar.
 - **Full-screen TUI** (alternate screen, owns the mouse — e.g. Claude Code): it keeps **no** scrollback in
   xterm to scroll, and scrolls *itself* on mouse input. So when the pane advertises SGR mouse reports, the
   bridge injects the matching wheel report into the pane (`send-keys`), so the **app scrolls its own real

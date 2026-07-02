@@ -35,11 +35,13 @@ reply/propose the CLI uses, committed straight to the trunk.
   pinned** — at minimum it folds to a one-line summary bar with counts, it never disappears. Each region
   is one **FeedSection** instance with a container-owned **density prop** (`bar ⇄ region ⇄ page`): the
   SAME instance across densities, so scroll/focus/filter state survives a density change; `page` pushes
-  one level onto the console's esc-stack. Keys: **Tab** jumps between regions, **j/k** walk rows within
-  one, **Enter** opens (an eval → the [[annotator]], a thread → its in-place expansion). The two section
-  contents are their own nodes (children of this one, owned by the video-verification line); this node
-  owns the panel skeleton — the regions, densities, pinning, and keys. Until [[evals-feed]] merges, the
-  threads region fills the pane alone.
+  one level onto the console's esc-stack. Keys: **Tab** jumps the panel focus between the two regions
+  (shown on the section head); **j/k** walk the FOCUSED region's rows, **Enter** opens (an eval → the
+  [[annotator]], a thread → its in-place expansion). Both regions are live: [[evals-feed]] mounts above
+  the threads and takes the panel's `focused` prop; its row-nav under that focus is its own contract,
+  the threads' rows are this node's. The section contents are their own nodes (children of this one,
+  owned by the video-verification line); this node owns the panel skeleton — the regions, densities,
+  pinning, and the Tab/j/k/Enter routing.
 - **One merged list, store-tagged.** The view fetches `GET /api/issues` (`{ enabled, issues }`) — the
   merged read over every store — and renders each issue **in the order the API returns**: the frontend
   never re-sorts, and **shows no salience/priority ranking** (recurrence is the drain's judgment, per

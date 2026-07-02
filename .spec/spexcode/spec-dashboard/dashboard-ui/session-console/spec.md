@@ -24,8 +24,10 @@ driving the same sessions through the CLI see identical state.
 ## expanded spec
 
 The interface is a **routed page** (`#/sessions`, [[side-nav]]) — it fills the app's main area beside the
-navigation rail as a peer of the graph, with no backdrop, no lift, no pop: Enter navigates to it, Esc routes
-home to the graph, and its selected tab echoes into the URL (`#/sessions/<sel>`) so a tab can be deep-linked.
+navigation rail as a peer of the graph, with no backdrop, no lift, no pop: Enter (from the graph) or the
+global ⌥2 navigates to it, leaving it is likewise navigation (the rail, ⌥1/⌥3/⌥4, history — never Esc,
+which stays inside the console's own stack), and its selected tab echoes into the URL (`#/sessions/<sel>`)
+so a tab can be deep-linked.
 Leaving the page never unmounts it — the terminals keep their sockets and scroll warm. The console **follows
 the app theme**: its chrome — the session list, the right frame, the docked input — uses the same palette tokens as
 the rest of the dashboard, so re-theming the app re-themes the console with it (no console-scoped palette
@@ -135,12 +137,12 @@ stays stable; the old visual-edge fall-through to the list is gone). Plain ↑/�
 focus is **outside** any text input. To switch tabs while typing, use the modifier combos:
 **⌘/⌥/⌃+↑/↓** are an **unconditional** switch — they step the selection up/down the list from anywhere, no
 matter which input has focus or what mode you're in (the guaranteed up/down switch a chat app gives you), even
-while nav mode forwards raw keys. **⌥+N** (Option/Alt+N) snaps the selection to New Session
-the same way, from anywhere — matched by the **physical N key (`e.code`)**, not `e.key`, so the mac Option
-dead-key (⌥N emits a `˜` glyph, not `'n'`, exactly as ⌥I does) still counts. The reason the chord is ⌥+N and
-not ⌘+N is a hard browser limit, not a choice: **⌘+N (mac) and ⌃+N (win/linux) are the browser's reserved
-new-window accelerator** — their keydown never reaches the page to be cancelled (no `preventDefault` can
-suppress it in a normal tab), so ⌥+N is the one modifier+N chord the app can actually own. The **tab bar's
+while nav mode forwards raw keys. **⌥+N** reaching the New Session composer is no longer this console's own
+chord — it belongs to [[side-nav]]'s app-global ⌥ command family (⌥N / ⌥F / ⌥1..⌥4), which the console's
+key handling deliberately **falls through unhandled** — nav mode included — so the window-level handler
+routes it and tmux never sees `M-n`/`M-f`/`M-digit`. (The family is ⌥-based for the same hard browser limit
+that shaped the old chord: **⌘+N/⌃+N are the browser's reserved new-window accelerator** whose keydown never
+reaches the page to be cancelled — ⌥ is the modifier the app can actually own.) The **tab bar's
 right side** holds the same board-command registry as action buttons, narrowed to the current state:
 **nav** whenever live and **merge** at review/done — each a small **text** button (no glyphs) in its
 identity colour; an `offline` liveness (any lifecycle) swaps them for a relaunch button, and review is

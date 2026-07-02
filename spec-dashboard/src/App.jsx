@@ -302,6 +302,18 @@ function Dashboard({ specs, sessions, reload, project }) {
     const bumpScroll = (delta) => popupScroll(
       document.querySelector('.ov-body .pane-doc, .ov-body .pane-hist, .ov-body .pane-issues, .ov-body .pane-eval, .ov-body .pane-edit'), delta)
     const onKey = (e) => {
+      // the GLOBAL ⌥ page vocabulary ([[side-nav]]): ⌥1..⌥4 jump straight to a page in rail order, ⌥N to the
+      // New Session composer, ⌥F to the forum — from ANY page, matched by e.code (⌥-digit/letter on a mac
+      // emits dead-key glyphs for e.key). The console's nav mode yields these on purpose (its earlier capture
+      // listener falls through the ⌥ command family instead of forwarding it to tmux). Firing one also
+      // dismisses the search palette — the navigation intent wins over the modal.
+      if (e.altKey && !e.metaKey && !e.ctrlKey) {
+        const pageOf = { Digit1: 'graph', Digit2: 'sessions', Digit3: 'forum', Digit4: 'settings' }
+        const target = pageOf[e.code]
+        if (target) { e.preventDefault(); e.stopPropagation(); setSearch(null); navigate(target); return }
+        if (e.code === 'KeyN') { e.preventDefault(); e.stopPropagation(); setSearch(null); setSessionSel('new'); navigate('sessions', 'new'); return }
+        if (e.code === 'KeyF') { e.preventDefault(); e.stopPropagation(); setSearch(null); navigate('forum'); return }
+      }
       // The search palette is a modal: while open it owns its keys over ANY surface — the board OR the session
       // interface (the session interface yields via its searchOpen guard). The SpecSearch input owns ↑/↓/Enter/
       // typing; App only catches Esc here so it closes even if the input blurred. This guard sits ABOVE the
@@ -314,14 +326,12 @@ function Dashboard({ specs, sessions, reload, project }) {
       // reachable even while the session interface owns its keys. Plain `/` on the board stays nodes-first (below).
       if ((e.metaKey || e.ctrlKey) && e.key === '/') { e.preventDefault(); e.stopPropagation(); setSearch('sessions'); return }
       if (page === 'sessions') return // the session interface owns ALL its keys (arrows / Enter / typing / Esc / the graph)
-      // the forum page: Esc routes home; the rest of its keys (Tab region-jump, j/k/Enter) are IssuesView's own
-      if (page === 'forum') {
-        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); navigate('graph') }
-        return
-      }
-      // the settings page: Esc or `,` routes home; typing inside its shortcut-capture stays its own
+      // the forum page's keys (Tab region-jump, j/k/Enter, its own Esc stack) are IssuesView's own.
+      // Esc does NOT route pages anywhere ([[side-nav]]) — leaving is ⌥1..⌥4, the rail, or history.
+      if (page === 'forum') return
+      // the settings page: `,` toggles back home; typing inside its shortcut-capture stays its own
       if (page === 'settings') {
-        if (e.key === 'Escape' || firesKey('board.settings', e.key)) { e.preventDefault(); e.stopPropagation(); navigate('graph') }
+        if (firesKey('board.settings', e.key)) { e.preventDefault(); e.stopPropagation(); navigate('graph') }
         return
       }
       if (overlay) {
@@ -519,7 +529,6 @@ function Dashboard({ specs, sessions, reload, project }) {
         seed={seed}
         onSeedConsumed={() => setSeed(null)}
         onClose={() => navigate('graph')}
-        onOpenForum={() => navigate('forum')}
         onPickSession={onPickSession}
         reload={reload}
       />

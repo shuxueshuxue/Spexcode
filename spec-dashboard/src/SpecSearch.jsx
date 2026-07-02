@@ -4,6 +4,7 @@ import { scenarioStates, TagChips } from './score.jsx'
 import { STATUS_COLOR, sessionName, sessionHeadline } from './session.js'
 import { useT } from './i18n/index.jsx'
 import { rankDocs } from '../../spec-cli/src/ranker.ts'
+import { useSpecCorpus } from './corpus.js'
 
 // a scenario row's dot reads its satisfaction the way the tile/panel do (score.jsx): green fresh pass · red
 // fresh fail · grey stale / never-measured.
@@ -22,7 +23,8 @@ const planeOrder = (boost) => (boost ? [boost, ...BASE_PLANES.filter((p) => p !=
 
 // fold the four planes into one flat list of uniform entries; each carries the row's display fields, the
 // `target` App acts on, and the scorer's name/desc/body fields mapped per plane (issues/scenarios keep their host node).
-function buildEntries(specs, sessions, bodies) {
+function buildEntries(specs, sessions, corpus) {
+  const bodies = corpus?.bodies
   const entries = []
   for (const s of specs) {
     const path = specPath(s.path)
@@ -48,11 +50,14 @@ function buildEntries(specs, sessions, bodies) {
       })
     }
     for (const sc of scenarioStates(s.scenarios, s.evals)) {
+      // scenario prose is off the board too ([[board-lean]]) — the ranked body joins the scenario's
+      // description+expected from the same corpus fetch, falling back to any prose still on the node.
+      const prose = corpus?.scenarios?.[s.id]?.[sc.name]
       entries.push({
         kind: 'scenario', key: `scenario:${s.id}:${sc.name}`, target: s.id,
         color: SCEN_COLOR[sc.state] || 'var(--cyan)',
         title: sc.name, sub: path, tags: sc.tags,
-        name: sc.name || '', desc: '', body: sc.expected || '',
+        name: sc.name || '', desc: '', body: prose ? `${prose.description || ''} ${prose.expected || ''}`.trim() : sc.expected || '',
       })
     }
   }
@@ -102,32 +107,17 @@ function rank(entries, query, planes) {
   return out
 }
 
-// the body corpus for node-prose ranking ([[board-lean]]): the board omits `body`, so the palette fetches
-// {id→body} from `/api/specs/lite`. Stale-while-revalidate — the last corpus seeds instantly (module cache)
-// so ranking is never cold, AND it refetches on every OPEN (this hook mounts when the palette opens) so an
-// edited body can't rank stale forever. The fetch is user-initiated (a palette open), off the board's hot poll.
-let bodyCorpus = null
-function useBodyCorpus() {
-  const [corpus, setCorpus] = useState(bodyCorpus)
-  useEffect(() => {
-    let on = true
-    fetch('/api/specs/lite').then((r) => (r.ok ? r.json() : []))
-      .then((rows) => { bodyCorpus = Object.fromEntries((rows || []).map((r) => [r.id, r.body || ''])); if (on) setCorpus(bodyCorpus) })
-      .catch(() => {})
-    return () => { on = false }
-  }, [])
-  return corpus
-}
-
 export default function SpecSearch({ specs, sessions, onPick, onClose, boost = null }) {
   const t = useT()
-  const bodies = useBodyCorpus()
+  // the prose corpus ([[board-lean]], corpus.js): node bodies + scenario description/expected, fetched when
+  // the palette opens (a fresh mount revalidates), seeded instantly from the shared module cache.
+  const corpus = useSpecCorpus()
   const [q, setQ] = useState('')
   const [sel, setSel] = useState(0)
   const inputRef = useRef(null)
   const listRef = useRef(null)
   const planes = useMemo(() => planeOrder(boost), [boost])
-  const entries = useMemo(() => buildEntries(specs, sessions, bodies), [specs, sessions, bodies])
+  const entries = useMemo(() => buildEntries(specs, sessions, corpus), [specs, sessions, corpus])
   const results = useMemo(() => rank(entries, q, planes), [entries, q, planes])
 
   useEffect(() => { inputRef.current?.focus() }, [])

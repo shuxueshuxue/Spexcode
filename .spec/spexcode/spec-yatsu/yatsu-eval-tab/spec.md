@@ -28,35 +28,35 @@ read knows. A node's measurement timeline is every reading from its `yatsu.evals
 the read's codeSha, blob + blobKind, evaluator, **verdict**, ts) joined with the scenario's **expected**
 (from the live yatsu.md — what zero loss looks like) and a **freshness flag**, derived live from git by the
 same [[freshness]] machinery scan uses: a reading is *current* until its governed code, its scenario, or the
-evaluator version moved past the sha it was taken at, otherwise *stale* (and which axis moved). Readings
-come back newest-first.
+evaluator version moved past the sha it was taken at, otherwise *stale* (and which axis moved);
+newest-first.
 
-This timeline **rides the board**: `buildBoard` folds each node's `evalTimeline` onto it as the `evals`
-field — the SAME single source as a node's issues / overlays / lastDiff — so the dashboard reads it from the
-one `/api/board` poll, never a per-node fetch. Alongside the readings it folds the node's **declared
-scenarios** (name, `expected`, optional `code`), so a consumer sees the WHOLE set — a never-measured
-scenario has no reading but is still a countable unit of loss ([[yatsu-score-badge]]'s tile count, the
-[[focus-panel]]). To keep the attach cheap it reuses the board's specs + `driftIndex` and one shared yatsu
-walk. The bytes are the one thing NOT
-folded: `/api/yatsu/blob` serves a reading's evidence by content hash from the shared cache, fetched **lazily
-on expand**, with a **miss original file** signal when the bytes are gone and a MIME sniffed from the content.
-(A standalone `/api/specs/:id/evals` route exposes the same engine for one id.)
+The board carries this timeline as a **summary** ([[board-lean]]): `buildBoard` folds the latest reading per
+scenario onto the node's `evals` and the declared set slim (`{name, tags}`), so every overview surface — the
+[[yatsu-score-badge]] tile count, the [[focus-panel]] — counts the WHOLE set off the one `/api/board` poll
+(a never-measured scenario still counts as loss). The FULL timeline — each scenario's
+`expected` and per-scenario `code` included — is served by `/api/specs/:id/evals`, lazy-loaded when the tab
+opens. The board attach stays cheap by reusing the board's specs + `driftIndex` and one shared yatsu walk.
+Bytes are never folded anywhere: `/api/yatsu/blob` serves a reading's evidence by content hash from the
+shared cache, fetched **lazily on expand**, with a **miss original file** signal when the bytes are gone, MIME
+sniffed from the content.
 
 The **eval tab** ([[spec-dashboard]]) is a fourth face on the node popup beside spec/history/issues, on the
-same `panesFor` registry. Because the readings arrive on the board prop, the tab is **instant and consistent**
-— never the previous node's readings on a switch. It is a **thin consumer of the chronological-timeline
+same `panesFor` registry. It fetches its timeline (readings + declared detail) per node on open, cache keyed
+by the summary's newest reading so a fresh filing refetches; a failed fetch degrades to the board's
+summary. It is a **thin consumer of the chronological-timeline
 scaffold the history tab uses** (see [[work-pane]]): newest expanded, older reveal on the down gesture. Each
-row's header names its scenario, the **verdict badge** (✓ pass / ✗ fail, with its optional **note** annotation
-shown beside; *legacy* for a pre-verdict or legacy note-only reading), and the per-reading **score circle**
+row's header names its scenario, the **verdict badge** (✓ pass / ✗ fail, optional **note**
+beside; *legacy* for a pre-verdict or note-only reading), and the per-reading **score circle**
 ([[yatsu-score-badge]]), then its evaluator, codeSha, and time.
-Its evidence is the scenario's **expected** over the captured proof (screenshot, transcript, or video clip), or *miss
-original file* when the blob was pruned.
+Its evidence is the scenario's **expected** over the captured proof (screenshot, transcript, or video), or *miss original
+file* when the blob was pruned.
 
 The tab surfaces the **whole declared set** in **one list**, not only the readings. A **declared scenario
 with no reading** leads that list as a **blind-spot row** — the empty score ring over its name, its
 `expected`, and the files it tracks. The ring is the *only* distinction (no fenced-off band, no second
-scrollbar): an unmeasured scenario is the node's outstanding loss and belongs where the attention is, so a
-node's intent is legible **inside the popup** before a reading lands (the only place it shows once the popup
+scrollbar): an unmeasured scenario is outstanding loss and belongs where the attention is, so a node's
+intent is legible **inside the popup** before a reading lands (the only place it shows once the popup
 covers the [[focus-panel]]). No reading at all → those rows under a hint; some measured, some not → those
 rows lead the timeline. The one presence-distinct empty state survives: a node with **no scenarios**
 (no yatsu.md → no `evals` field) shows nothing.

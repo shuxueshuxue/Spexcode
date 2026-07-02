@@ -14,8 +14,8 @@ related:
 A persistent **right column** that reads the **focused** node and shows, in one place, the two kinds of
 **stateful bound work** pointing at it: its **Issues** (open + closed, from the forge) and its **Scenarios**
 (the yatsu loss targets, with each one's satisfaction status). It makes Issues and Scenarios **equal
-citizens** of a node — both are things that *do*, with their own state, surfaced side by side — rather than
-privileging issues with a popup that opened only on the node.
+citizens** of a node — both *do*, with their own state, side by side — rather than privileging issues
+with a popup that opened only on the node.
 
 ## raw source
 
@@ -29,37 +29,36 @@ card that pops on hover/focus of the node itself.
 ## expanded spec
 
 **The head.** It shows the focused node's identity: the node **title** and a **clamped preview of its
-`desc`** (the frontmatter one-liner), so the column says *what this node is* before it lists what it owes —
-just the title, with no `focus` kicker or head hairline above it. The desc is line-clamped (full text on
-hover) and absent when the node declares none.
+`desc`** (the frontmatter one-liner), so the column says *what this node is* before what it owes — no
+`focus` kicker or head hairline. The desc is line-clamped (full on hover), absent when undeclared.
 
 **One surface, two stateful kinds.** The panel is the answer to "what does this node still owe?" — and a
 node owes on two axes that used to live apart: **issues** (external forge work, open/closed — [[dashboard-issues]])
 and **scenarios** (internal loss targets, satisfied/outstanding — [[yatsu-score-badge]]). Both are *execution*
 that rides beside the git-derived node, never node state; the panel lays them out with the same weight so
-neither is the privileged one. It is **read-only** and does no fetch of its own: it reads the focused board
-node verbatim (`node.scenarios` + `node.evals` + `node.issues`, all folded onto `/api/board`), so it tracks
-focus on every poll and stays in lock-step with the tile.
+neither is the privileged one. It is **read-only**: structure and state come from the focused board node
+verbatim (`node.scenarios` + `node.evals` + `node.issues`, folded onto `/api/board`), in lock-step with the
+tile on every poll. Scenario *prose* is off the board ([[board-lean]]): the `expected` preview and
+tracked-files line join from the shared lite corpus, fetched once on the first focus of a scenario-bearing
+node — never per poll — so a row renders name/state/tags instantly and prose fills in when the corpus lands.
 
 **Scenarios, per-scenario.** It joins the node's declared scenarios to their latest reading (the shared
 `scenarioStates` from [[yatsu-score-badge]]) so a **never-measured** scenario still appears — it is a unit of
-loss, not an absence. Each row leads with a state mark in the score colour vocabulary, then the scenario name,
-a **clamped preview** of its `expected` (the glance stays compact — long prose never blows out the column),
-and — when the scenario scopes its own freshness — the **files it tracks** (the per-scenario `code` from
-[[yatsu-core]]). The whole row is a **button that drills into the focused node's eval tab** (opens the
-node-info popup on its eval pane), so the glance is the entry point to the full reading timeline, not a dead
-end. The section header carries the **✓ satisfied / total** count, the same tally the tile shows, coloured by
-the worst-first aggregate.
+loss, not an absence. Each row leads with a state mark in the score colour vocabulary, then the name, a
+**clamped preview** of its `expected` (long prose never blows out the column), and — when the scenario
+scopes its own freshness — the **files it tracks** (per-scenario `code`, [[yatsu-core]]). The whole row is a
+**button that drills into the focused node's eval tab**, so the glance is the entry point to the full
+reading timeline, not a dead end. The section header carries the **✓ satisfied / total** count, the same
+tally the tile shows, coloured by the worst-first aggregate.
 
 **Issues, open and closed.** The full bound set, grouped open-first then closed, each a card (number · state ·
 title) linking to the forge — the same `.issue-card` vocabulary the node-info Issues tab uses. The on-tile
 **count badge** (◆N) stays as the glance; the LIST now lives here, not in a popover.
 
 **Where it mounts.** It is the board shell's right grid column (`App.jsx`, the shared `.app` layout), beside
-the graph pane — desktop only (the phone keeps its own drill-down, [[mobile-ui]]). It owns its `FocusPanel.jsx`
-plus its `.focus-panel` slice of the shared stylesheet and the one-column-to-two `.app` grid change, on
-[[node-graph]]'s shared-stylesheet/shared-shell contract — so a co-owner's churn in App.jsx or styles.css is
-that feature, not this node's drift.
+the graph pane — desktop only (the phone keeps its own drill-down, [[mobile-ui]]). It owns `FocusPanel.jsx`, its `.focus-panel`
+stylesheet slice, and the one-to-two-column `.app` grid change, on [[node-graph]]'s shared-shell contract —
+a co-owner's churn in App.jsx or styles.css is that feature, not this node's drift.
 
 Out of scope: the node-info popup's own Issues/Eval tabs ([[yatsu-eval-tab]]) stay as the deep timeline view
 this panel **drills into** (the always-on glance, not a replacement for it). Editing or creating scenarios is

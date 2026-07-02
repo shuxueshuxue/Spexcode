@@ -41,6 +41,22 @@ scenarios:
       count); badges/stats/search are pixel-identical since they always reduced to latest-per-scenario; a
       failed timeline fetch degrades to the summary readings, never an endless spinner.
     code: [spec-cli/src/board.ts, spec-dashboard/src/NodeView.jsx]
+  - name: scenario-prose-off-the-board
+    tags: [frontend-e2e, backend-api]
+    description: >
+      Confirm the board's `scenarios` fold is slim — every declared scenario on `/api/board` carries only
+      `name` (+ `tags`), never `description`/`expected`/`code` — and that the prose still reaches its three
+      viewers off the hot poll: `/api/specs/lite` rows for yatsu nodes carry the declared scenarios whole;
+      the `/` palette, after its corpus fetch, surfaces a scenario row by a phrase that exists ONLY in that
+      scenario's `expected`; the focus panel's scenario rows still show the clamped `expected` preview and
+      tracked-files line once the corpus lands. Watch the console for errors.
+    expected: >
+      Board scenario objects are exactly {name, tags?} (fold measured 73KB → 9KB on the dogfood board, frame
+      ~-21%); a palette query for an expected-only phrase (e.g. `pixel-identical`) returns that scenario row;
+      the focus panel previews render with prose from the corpus; the evals feed and score badges are
+      unchanged (they always reduced to name+state); the console is clean. Zero loss = the board sheds the
+      prose while every prose surface still shows it.
+    code: [spec-cli/src/board.ts, spec-cli/src/index.ts, spec-dashboard/src/corpus.js, spec-dashboard/src/SpecSearch.jsx, spec-dashboard/src/FocusPanel.jsx]
 ---
 # board-lean — measurement
 

@@ -36,3 +36,17 @@ export function residentForgeState(): { issues: ForgeIssue[]; prs: ForgePR[] } {
   refreshIfStale(Date.now())
   return cache.state()
 }
+
+// a write must show up where it lands: after the server posts a forge comment, force one refresh past the
+// TTL and await it, so the next read carries the real read-back (never a local echo). Coalesces with an
+// in-flight cycle first — a refresh started BEFORE the write could read the pre-write world. The forced
+// cycle is a FULL re-list, never the incremental window: the REST since-read can lag a just-posted write,
+// and a lagged cycle advances the watermark PAST it — the write would then be invisible until the next
+// full reconcile. The full list reads the same backend the write went to, so the read-back is real.
+export async function refreshForgeNow(): Promise<void> {
+  if (inFlight) await inFlight
+  lastAttempt = 0
+  lastFull = 0
+  refreshIfStale(Date.now())
+  if (inFlight) await inFlight
+}

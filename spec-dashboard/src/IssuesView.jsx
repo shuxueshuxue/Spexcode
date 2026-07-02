@@ -12,9 +12,9 @@ import { useT } from './i18n/index.jsx'
 // (local forum + forge, store-tagged, API order, no re-sort/no ranking; CONCLUDED issues hidden behind a
 // count chip). The RIGHT pane is the full-height DETAIL of the selection — selection IS the detail, no
 // in-place expansion in a small box: an issue renders its markdown body (SpecBody — the spec dialect),
-// replies, and the local reply composer; an eval renders as the [[annotator]]. j/k walk the whole left
-// list across both groups, the detail follows; the write paths are unchanged (reply/propose as 'human',
-// forge read-only with a permalink).
+// its replies, and the reply composer — BOTH stores ([[issues]]: the reply verb routes by store, so a
+// forge issue's thread reads and writes here like a local one); an eval renders as the [[annotator]].
+// j/k walk the whole left list across both groups, the detail follows; writes post as 'human'.
 export default function IssuesView({ onFocusNode, specs = [], sessions = [], issuesData = null, reloadIssues }) {
   const t = useT()
   const data = issuesData                          // RESIDENT app state — the page renders instantly, no per-mount fetch
@@ -105,7 +105,7 @@ export default function IssuesView({ onFocusNode, specs = [], sessions = [], iss
                 <span className={`fv-store fv-store-${th.store === 'local' ? 'local' : 'forge'}`}>{th.store}</span>
                 <span className="fv-concern">{th.concern}</span>
                 {th.status && <span className={`fv-status fv-st-${th.status}`}>{th.status}</span>}
-                {th.store === 'local' && (th.replies?.length ?? 0) > 0 && <span className="fv-count">{t('session.issuesReplies', { n: th.replies.length })}</span>}
+                {(th.replies?.length ?? 0) > 0 && <span className="fv-count">{t('session.issuesReplies', { n: th.replies.length })}</span>}
               </button>
             )
           })}
@@ -121,7 +121,7 @@ export default function IssuesView({ onFocusNode, specs = [], sessions = [], iss
 }
 
 // the issue detail — full-height: header (store/status/author/node chips/permalink), the markdown-RENDERED
-// body, the reply thread, and the local composer (forge: read here, discussed there).
+// body, the reply thread, and the composer — one thread surface for both stores.
 function IssueDetail({ issue: th, specs, sessions, onFocusNode, onWrite }) {
   const t = useT()
   const local = th.store === 'local'
@@ -145,17 +145,15 @@ function IssueDetail({ issue: th, specs, sessions, onFocusNode, onWrite }) {
       </div>
       {th.body && <div className="fvd-body"><SpecBody body={th.body} /></div>}
       <Replies replies={replies} />
-      {local
-        ? <ReplyComposer onSend={(text) => postIssueReply(th.id, text)} specs={specs} sessions={sessions} focusId={nodes[0] || null} onDone={onWrite} />
-        : <div className="fv-hint">{t('session.issuesForgeReadOnly')}</div>}
+      <ReplyComposer onSend={(text) => postIssueReply(th.id, text)} specs={specs} sessions={sessions} focusId={nodes[0] || null} onDone={onWrite} />
     </div>
   )
 }
 
 // the "New" affordance — a concern line, an optional node-ids field, and a body. Posts a fresh LOCAL
-// issue as 'human' (v1 writes are local-only — the forge stays read-only); an @-mention in the body dispatches.
-// The body textarea carries the shared `[[node]]`/`@session` autocomplete ([[mentions]]) — the form sits at
-// the top of the list column, so its menu opens downward.
+// issue as 'human' (a new thread opens local; promotion is what moves one to the forge); an @-mention in
+// the body dispatches. The body textarea carries the shared `[[node]]`/`@session` autocomplete
+// ([[mentions]]) — the form sits at the top of the list column, so its menu opens downward.
 function NewThreadForm({ specs, sessions, onDone }) {
   const t = useT()
   const [concern, setConcern] = useState('')

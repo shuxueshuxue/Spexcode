@@ -2,7 +2,7 @@
 title: issues-view
 status: active
 hue: 200
-desc: The dashboard's ONE issues page — the Forum route (#/forum, [[side-nav]]) as a MASTER-DETAIL — a left list (evals leading, merged issues below) and a full-height detail pane the selection drives; markdown-rendered bodies, node chips focus the graph, local writes in the detail, forge items link out.
+desc: The dashboard's ONE issues page — the Forum route (#/forum, [[side-nav]]) as a MASTER-DETAIL — a left list (evals leading, merged issues below) and a full-height detail pane the selection drives; markdown-rendered bodies and threads for both stores, node chips focus the graph, the detail's reply composer routes by store (forum commit or real forge comment).
 code:
   - spec-dashboard/src/IssuesView.jsx
   - spec-dashboard/src/Thread.jsx
@@ -56,27 +56,32 @@ reply/propose the CLI uses, committed straight to the trunk.
   issue's ROW is one compact line — store chip, concern, status, reply count; its DETAIL carries the full
   header (status, author, signer count, node chips, permalink) over the **markdown-rendered body and
   replies** — the same SpecBody renderer the spec panes use, so forum markdown and spec markdown read as
-  one dialect (raw `##`/table pipes never show). Store never changes the shape, only two affordances: a
-  **local** issue's detail takes a reply; a **forge** issue carries its permalink and is discussed on the
-  forge — read here, written there.
+  one dialect (raw `##`/table pipes never show), and a forge issue's GitHub comments render as the SAME
+  reply thread a forum thread gets ([[issues]] maps them into `replies[]` — one thread type, one
+  renderer). Store never changes the shape; the only store-specific affordances are metadata (a local
+  issue's signer count, a forge issue's permalink) — the thread itself reads and writes identically.
 - **Node chips focus the graph.** An issue's node chips are clickable — a click routes to the graph page
   and **focuses that node**, so the page stays anchored to the graph it discusses.
-- **A human writes from here — to the local store.** A local issue's detail carries a **reply composer**
-  (a textarea + Send); the issue group's head carries a **New** affordance that opens a fresh local issue
-  (a one-line concern, optional `[[node]]` links, an optional body). Both POST to
-  `/api/issues` ([[proposals]]'s `forumReply`/`forumPost`, author `'human'`) — the SAME reply/propose the
-  CLI uses, committed straight to the trunk — then reload so the new post shows. The write is a thin
-  wrapper: the dashboard adds no store of its own, and it never writes to a forge ([[issues]]: v1 writes
-  are local-only). A `@session` in the text **dispatches** ([[mentions]]) exactly as a CLI post would — a
-  human summons an agent from the issues page — and the returned one-line dispatch summary is echoed
-  briefly. Both composers carry the SAME `@session` / `[[node]]` **autocomplete dropdown** the console's
-  inputs use ([[mentions]]'s shared menu — one implementation, never a page-local fork): typing `@` lists
-  the live sessions, `[[` lists the nodes (the thread's own node leading), a pick inserts the token, and
-  Esc closes the menu without leaving the page. A grammar that dispatches workers earns discoverability —
-  a bare hint line proved not enough (the human typed `@` and got nothing).
+- **A human writes from here — to the issue's OWN store.** EVERY issue's detail carries a **reply
+  composer** (a textarea + Send): the POST goes to the one store-routed reply verb ([[issues]]'s
+  `replyIssue`, author `'human'`) — a local issue's reply git-commits to the trunk forum, a forge issue's
+  reply posts a REAL GitHub comment through the driver — then reloads so the post shows where it landed
+  (the forge case shows the server's read-back, and a failed forge write surfaces in the composer, never
+  a silent swallow). The issue group's head carries a **New** affordance that opens a fresh LOCAL issue
+  (a one-line concern, optional `[[node]]` links, an optional body — new threads open local; promotion
+  moves one to the forge). The dashboard adds no store of its own. A `@session`/`@new` in the text
+  **dispatches** ([[mentions]]) exactly as a CLI post would, whatever the store — a human summons an
+  agent from any thread, and that mention IS the "assign to an agent" verb; the returned one-line
+  dispatch summary is echoed briefly. Both composers carry the SAME `@session` / `[[node]]`
+  **autocomplete dropdown** the console's inputs use ([[mentions]]'s shared menu — one implementation,
+  never a page-local fork): typing `@` lists the live sessions, `[[` lists the nodes (the thread's own
+  node leading), a pick inserts the token, and Esc closes the menu without leaving the page. A grammar
+  that dispatches workers earns discoverability — a bare hint line proved not enough (the human typed
+  `@` and got nothing).
   The reply list and reply composer are ONE shared component (`Thread.jsx`), delivery-agnostic (`onSend`):
-  the issue detail replies to its thread, and the eval detail ([[annotator]]) renders the SAME thread UI —
-  autocomplete included — over its lazily-bound eval comment thread; one thread UI, every home.
+  the issue detail replies to its thread — both stores, the server routing the delivery — and the eval
+  detail ([[annotator]]) renders the SAME thread UI — autocomplete included — over its lazily-bound eval
+  comment thread; one thread UI, every home, the store just a fourth delivery behind the same seam.
 - **Honors the switch.** When the forum workflow is OFF (`enabled: false`, [[proposals]]'s toggle), the
   view shows a muted "off" state instead of the list — the dashboard reflects the one source of truth,
   never forks it.

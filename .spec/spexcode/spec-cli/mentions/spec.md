@@ -5,6 +5,7 @@ hue: 200
 desc: Two universal in-text reference primitives — [[node]] (a topic) and @session (an actor that carries dispatch) — parsed the same way in EVERY input box. CLI-first; the dashboard is a thin autocomplete over the same resolver. First consumer is the forum; adopted on more surfaces incrementally.
 code:
   - spec-cli/src/mentions.ts
+  - spec-dashboard/src/mentions.jsx
 ---
 
 # mentions
@@ -34,8 +35,11 @@ grammar is uniform, the logic is tiny.
   spec tree, see [[dispatch]]). So `@` names an actor, `[[]]` names a topic, and nothing else wears a sigil.
 - **Uniform in any input box, CLI-first.** The parse + resolve + dispatch live in spec-cli (a `mentions`
   module), so a forum reply, the composer, and an agent's own CLI prompt all run the SAME resolver; the
-  dashboard is a thin autocomplete over it. An agent `@`-ing another agent under a forum post is the identical
-  path a human uses — **storage (the text) and delivery (the dispatch) stay separate**.
+  dashboard is a thin autocomplete over it — and that autocomplete is itself ONE shared module
+  (`spec-dashboard/src/mentions.jsx`: the `[[`/`@` trigger scanners, the ranking, the dropdown), consumed
+  by every dashboard input that takes the grammar (the console's New prompt and ❯ inbox, the forum's
+  composers), never re-implemented per surface. An agent `@`-ing another agent under a forum post is the
+  identical path a human uses — **storage (the text) and delivery (the dispatch) stay separate**.
 - **No new delivery pipe.** `@session` → [[dispatch]]'s `sendKeys` (a prompt = the surrounding text + a
   pointer to where it was written); `@new` → [[launch]]'s `newSession` (a fresh worker). Offline/unreachable
   fails loud (the `DispatchResult`), and the text still persists for the drain.

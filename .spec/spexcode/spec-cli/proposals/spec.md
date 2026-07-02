@@ -42,11 +42,18 @@ system already nests there.
   new thread is a new file (never conflicts); a reply touches one file.
 - **Own lifecycle status**, forum-authored never git-derived: `open` → `accepted | rejected | landed`.
 - **The forum lives on the trunk, not per-branch.** A write reads and commits **straight to the main
-  checkout's `.spec/.forum/`** — [[main-guard]] admits a commit touching only forum files, because the
-  forum is data, not contract, and needs no review ritual. So there is no per-branch copy and no
-  cross-worktree union to reconcile: every thread is always present to read, sign, and reply to. This is
-  also what lets a **post-merge** proposal land durably — the author's own branch has already merged, so a
-  proposal written then could never ride it; committed to the trunk directly, it simply persists.
+  checkout's `.spec/.forum/`** (a forum file is data, not contract; [[main-guard]]'s forum-exception admits a
+  manual forum-only commit, and the programmatic write below is provably forum-only). So there is no
+  per-branch copy and no cross-worktree union to reconcile: every thread is always present to read, sign, and
+  reply to. This is also what lets a **post-merge** proposal land durably — the author's own branch has
+  already merged, so a proposal written then could never ride it; committed to the trunk directly, it persists.
+- **Writes are serialized + fast, so a burst can't corrupt the forum.** The whole read-mutate-write-commit of
+  one thread runs under a single cross-process **forum lock** (an atomic `.git` dir-lock, stale-stolen), so
+  concurrent writers can neither collide on the repo index nor lose a racing reply (last-writer-wins is
+  impossible — each read is under the lock). The commit itself is **`--no-verify`**: the file is data,
+  structurally invisible to lint, and the commit is provably a single `.spec/.forum/` path, so running the
+  seconds-long pre-commit gate would only pass anyway — pure overhead that would hold the lock. The id is
+  minted under the lock too, so two racing posts can't claim it.
 - **Nudged AFTER the work lands, not during it.** The agent's own task is what matters most, so the forum is
   never raised while it is still finishing — it is raised the moment the work **merges**. A **`post-merge`
   git hook** (harness-side gates live in [[state]]; this one is git-side) fires in the doer's dispatched

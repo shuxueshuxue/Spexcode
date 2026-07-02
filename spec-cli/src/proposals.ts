@@ -7,7 +7,7 @@
 // per-branch: reads and writes target the main checkout and commit STRAIGHT to it (main-guard admits a
 // forum-only commit), so a post-merge thread lands durably even though the author's own branch already
 // merged, and every thread is always present to read and reply to — no cross-worktree union to reconcile.
-import { readdirSync, existsSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs'
+import { readdirSync, existsSync, mkdirSync, writeFileSync, readFileSync, rmdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { git } from './git.js'
 import { mainCheckout, envSessionId, readConfig } from './layout.js'
@@ -133,28 +133,47 @@ function uniqueId(concern: string): string {
   return id
 }
 
-// write + commit a single forum file STRAIGHT to the trunk. main-guard admits a commit touching ONLY
-// .spec/.forum/** (the forum is data, not contract), and prepare-commit-msg stamps the Session: trailer.
-// Scoped add/commit so no unrelated work rides along. Retry on an index-lock race — many agents may append
-// forum posts to the shared trunk during their merge turns; a lost lock is transient, not a real failure.
-function writeAndCommit(p: Proposal, message: string) {
-  const root = mainCheckout()
-  const rel = `${FORUM_REL}/${p.id}.md`
-  mkdirSync(join(root, FORUM_REL), { recursive: true })
-  writeFileSync(join(root, rel), serialize(p))
-  git(['-C', root, 'add', '--', rel])
-  for (let attempt = 0; ; attempt++) {
-    try { git(['-C', root, 'commit', '-m', message, '--', rel]); return }
-    catch (e) { if (attempt >= 4) throw e; sleep(150) }
+// @@@ forum lock - forum writes contend two ways: git commits share the repo index.lock, and a reply's
+// read-modify-write of one thread file loses an update if two race (both read the base, last write wins). A
+// single cross-process lock serializes the WHOLE prepare→write→commit, killing both. It is an atomic
+// `mkdir` (in .git, never committed); a lock whose holder crashed is stolen after it goes stale. Because the
+// commit is `--no-verify` fast (below), serialized forum writes stay quick even under a burst.
+function withForumLock<T>(fn: () => T): T {
+  const lock = join(mainCheckout(), '.git', 'spexcode-forum.lock')
+  for (let i = 0; ; i++) {
+    try { mkdirSync(lock); break }                                   // atomic acquire
+    catch {
+      try { if (Date.now() - statSync(lock).mtimeMs > 20000) rmdirSync(lock) } catch { /* released meanwhile */ }
+      sleep(40 + Math.floor(Math.random() * 80))                     // spin with jitter until free / stolen
+    }
   }
+  try { return fn() } finally { try { rmdirSync(lock) } catch { /* already gone */ } }
+}
+
+// prepare (a FRESH read-modify or a new thread) + write + commit a single forum file STRAIGHT to the trunk,
+// all under the forum lock so the read-modify-write is atomic. The commit is `--no-verify`: the file is DATA,
+// structurally invisible to spec-lint, and the commit is provably forum-only (one .spec/.forum/ path), so the
+// pre-commit gate would only pass anyway — running it just burns seconds (tsx cold-start) holding the lock.
+// prepare() runs INSIDE the lock, so a reply/sign/resolve reads the current thread, never a stale copy.
+function commitForum(message: string, prepare: () => Proposal): Proposal {
+  return withForumLock(() => {
+    const p = prepare()
+    const root = mainCheckout()
+    const rel = `${FORUM_REL}/${p.id}.md`
+    mkdirSync(join(root, FORUM_REL), { recursive: true })
+    writeFileSync(join(root, rel), serialize(p))
+    git(['-C', root, 'add', '--', rel])
+    git(['-C', root, 'commit', '--no-verify', '-m', message, '--', rel])
+    return p
+  })
 }
 
 // `author` defaults to the effective session id, but a caller (the dashboard's human write path) may pass
 // `'human'` — the write mechanism is identical either way, only the signature differs.
 export function propose(concern: string, opts: { nodes?: string[]; body?: string; kind?: Kind; author?: string } = {}): Proposal {
   const kind: Kind = opts.kind === 'note' ? 'note' : 'proposal'
-  const p: Proposal = {
-    id: uniqueId(concern),
+  return commitForum(`${kind}: ${concern}`, () => ({
+    id: uniqueId(concern),   // minted INSIDE the lock, so two racing posts can't pick the same id
     kind,
     concern,
     by: opts.author || currentSession(),
@@ -164,17 +183,16 @@ export function propose(concern: string, opts: { nodes?: string[]; body?: string
     created: new Date().toISOString(),
     body: (opts.body || `(no detail given — ${concern})`).trim(),
     replies: [],
-  }
-  writeAndCommit(p, `${kind}: ${concern}`)
-  return p
+  }))
 }
 
 export function reply(id: string, body: string, author?: string): Proposal {
-  const p = loadOne(id)
   const by = author || currentSession()
-  p.replies.push({ by, at: new Date().toISOString(), body: body.trim() })
-  writeAndCommit(p, `proposal(${id}): reply by ${by}`)
-  return p
+  return commitForum(`proposal(${id}): reply by ${by}`, () => {
+    const p = loadOne(id)   // fresh read under the lock → no lost-update when replies race
+    p.replies.push({ by, at: new Date().toISOString(), body: body.trim() })
+    return p
+  })
 }
 
 // @@@ the PROGRAMMATIC forum write surface — the dashboard's human write path calls these (author `'human'`).
@@ -198,19 +216,22 @@ export async function forumPost(
 }
 
 export function sign(id: string): string[] {
-  const p = loadOne(id)
   const by = currentSession()
-  if (!p.signers.includes(by)) p.signers.push(by)
-  writeAndCommit(p, `proposal(${id}): signed by ${by}`)
-  return p.signers
+  return commitForum(`proposal(${id}): signed by ${by}`, () => {
+    const p = loadOne(id)
+    if (!p.signers.includes(by)) p.signers.push(by)
+    return p
+  }).signers
 }
 
 const RESOLUTIONS = new Set(['accepted', 'rejected', 'landed'])
 export function resolve(id: string, as: string): string {
   if (!RESOLUTIONS.has(as)) throw new Error(`resolution must be one of: ${[...RESOLUTIONS].join(' | ')}`)
-  const p = loadOne(id)
-  p.status = as
-  writeAndCommit(p, `proposal(${id}): resolve ${as}`)
+  commitForum(`proposal(${id}): resolve ${as}`, () => {
+    const p = loadOne(id)
+    p.status = as
+    return p
+  })
   return as
 }
 

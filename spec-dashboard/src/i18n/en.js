@@ -73,6 +73,7 @@ export default {
     readingFiled: 'reading filed ✓',
     failed: 'failed — is the backend up?',
     reviewFallback: 'video review',
+    comments: ({ n }) => (n ? `comments (${n})` : 'comments'),
   },
 
 

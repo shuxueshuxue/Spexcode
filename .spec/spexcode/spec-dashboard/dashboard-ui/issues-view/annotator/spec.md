@@ -27,8 +27,9 @@ Interactions stay lean: scrub, drag-circle a region on the paused frame, write a
 Context (the scenario's `expected`, the node) renders live from the board — no title cards, no run
 management, no metadata files.
 
-**Output routes through existing seams only.** A finding belonging to *another* node → a concern on the
-responsible node (the unified Issue port, evidence-ref = the clip's hash — [[video-evidence]]'s routing).
+**Output routes through existing seams only.** A finding belonging to *another* node → an issue on the
+responsible node ([[proposals]]'s unified Issue type, its typed `evidence[]` carrying the clip's hash —
+[[video-evidence]]'s routing).
 Disagreement with *this* node's verdict → the human files their own `manual@1` reading, superseding by
 chronology. Annotated frames or an exported report are ordinary evidence blobs on that reading. The
 annotator invents no verdict states, no timeline tables, no locks.

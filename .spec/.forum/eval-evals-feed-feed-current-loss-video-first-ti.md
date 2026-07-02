@@ -1,7 +1,7 @@
 ---
 concern: eval: evals-feed · feed-current-loss-video-first-title-only
 by: human
-status: open
+status: landed
 nodes: evals-feed
 created: 2026-07-02T17:42:47.002Z
 ---

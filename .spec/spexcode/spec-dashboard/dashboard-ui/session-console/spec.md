@@ -33,8 +33,9 @@ the app theme**: its chrome — the session list, the right frame, the docked in
 the rest of the dashboard, so re-theming the app re-themes the console with it (no console-scoped palette
 remap). The one surface that stays dark on its own is the **embedded terminal** (`--term-bg`) — legitimately a
 dark terminal, whatever the app theme. Two panes: a left session list (its width user-draggable, [[resizable-panes]]) and a right area that
-**morphs** by what's focused. The list's **top button row** is a single `＋` New Session button above the session rows, so
-it never blocks the `↑/↓` path down to a session.
+**morphs** by what's focused. The list's **top button row** holds two compact pills above the session rows —
+the `＋` New Session button and a **Search** button, the click twin of the ⌘/Ctrl+/ palette
+([[session-board-search]] owns that contract) — kept out of the `↑/↓` path down to a session.
 
 **New Session** is a centred avatar + auto-growing input. Nothing is prefilled; typing **`[[`** opens the
 node dropdown (the focused node leads it) — a topic reference ([[mentions]]). A leading **`/`** opens the

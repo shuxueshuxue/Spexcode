@@ -267,6 +267,7 @@ export default {
     opsTitle: '此会话正在改动的节点 —— 双击标签锁定并聚焦它们',
     newSession: '新建会话',
     newSessionTitle: '新建会话（⌥+N）',
+    searchTitle: '搜索（⌘+/）',
     // 合并 issues 页（[[issues-view]]）—— 新建会话旁的第二个顶部按钮。
     issuesOff: '论坛工作流已关闭。',
     issuesEmpty: '暂无 issue。',

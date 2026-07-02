@@ -191,7 +191,7 @@ function highlight(text, q) {
   return <>{text.slice(0, i)}<b className="mention-hit">{text.slice(i, i + q.length)}</b>{text.slice(i + q.length)}</>
 }
 
-export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, reload }) {
+export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, onOpenSearch, reload }) {
   const t = useT()
   const [prompt, setPrompt] = useState('')    // the New Session tab's own draft (its boarding-switch cache)
   const [menu, setMenu] = useState(null)      // completion dropdown: { kind:'mention'|'config'|'slash', items, index, start, end, query }
@@ -815,6 +815,16 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           <div className="si-toprow">
             <button className={active === 'new' ? 'si-pill new on' : 'si-pill new'} title={t('session.newSessionTitle')} onClick={() => setSel('new')}>
               <span className="si-pill-glyph">＋</span>
+            </button>
+            {/* the click twin of ⌘/Ctrl+/ ([[session-board-search]]) — same palette open, the tooltip
+                teaches the chord. Momentary (no .on state): the palette floats above, no tab switches. */}
+            <button className="si-pill search" title={t('session.searchTitle')} onClick={onOpenSearch}>
+              <span className="si-pill-glyph">
+                <svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="7.6" cy="7.6" r="5.1" />
+                  <path d="M11.4 11.4 L15.6 15.6" />
+                </svg>
+              </span>
             </button>
           </div>
           {forest.map((it) => {

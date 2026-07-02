@@ -272,6 +272,7 @@ export default {
     opsTitle: 'nodes this session is changing — double-click the tab to lock + focus them',
     newSession: 'New Session',
     newSessionTitle: 'New Session (⌥+N)',
+    searchTitle: 'Search (⌘+/)',
     // the merged issues page ([[issues-view]]) — the second top pill beside New Session.
     issuesOff: 'The forum workflow is off.',
     issuesEmpty: 'No issues yet.',

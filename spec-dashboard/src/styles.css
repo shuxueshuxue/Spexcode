@@ -952,7 +952,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .si-zone-need    { --zh: var(--yellow); }
 .si-zone-run     { --zh: var(--green); }
 .si-zone-offline { --zh: var(--muted); }
-/* @@@ top button row - just New Session (＋, blue) now, a compact button (not a full-width row) so it doesn't
+/* @@@ top button row - New Session (＋, blue) + Search, compact buttons (not full-width rows) so they don't
    sit in the ↑/↓ path to a session. Selected gets a hue wash + ring, mirroring the session rows' wash. */
 .si-toprow { display: flex; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
 .si-pill {
@@ -964,6 +964,10 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .si-pill.new { color: var(--blue); }
 .si-pill:hover { background: var(--panel2); border-color: currentColor; }
 .si-pill.new.on { background: color-mix(in srgb, var(--blue) 16%, var(--panel2)); border-color: var(--blue); }
+/* the Search pill is the click twin of ⌘+/ ([[session-board-search]]): a secondary action beside New —
+   muted at rest, inking blue on hover. Momentary (opens the palette), so it never wears an .on state. */
+.si-pill.search { color: var(--ink2); }
+.si-pill.search:hover { color: var(--blue); }
 /* the Forum pill reads as a secondary top action beside New: muted at rest, inking blue on hover/select so
    New stays the primary blue action. Its glyph is a monochrome inline SVG (currentColor), never an emoji. */
 .si-pill.forum { color: var(--ink2); }

@@ -13,6 +13,13 @@ related:
 
 The [[session-console]] is where you live while driving agents — but the jump-to escape hatch was reachable only from the board behind it (the `/` palette, see [[keyboard-nav]]). This node gives the session board its own way in: **⌘+/ (and Ctrl+/) opens the SAME palette**, never a second one. It sits beside the console's other reserved chords (⌥/⌘+I, ⌥+N) as a fixed binding, not a board verb.
 
+A chord alone is invisible, so the entry point is also **clickable**: the session list's top row carries a
+**Search pill** beside `＋` New ([[session-console]] hosts the row) — a monochrome inline-SVG magnifier in the
+dashboard's own glyph vocabulary, its tooltip teaching the ⌘+/ shortcut. The button fires the **same single
+open path** the chord does (the one sessions-boosted palette open threaded down from the app), never a second
+palette or a second search implementation; it is momentary — the palette floats above, no tab switch, no
+pressed state.
+
 **Deliberate reuse, not a fork.** The pop-out IS the one [[shared-ranker]] palette component — same open/close, same keyboard, same four-plane matcher. Exactly two things differ, and each is a single knob the caller turns:
 
 - **Lead weight.** You searched *from the session board*, so **sessions lead**: the palette boosts the session plane to the front of its plane interleave, spec nodes and the rest below. (The board's plain `/` still leads with nodes.) This is one `boost` parameter that reorders which plane leads each interleave round — the scoring maths and the keep-every-plane-visible interleave are untouched, so a session always tops the list while nodes/issues/scenarios stay reachable below.

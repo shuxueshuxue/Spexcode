@@ -8,10 +8,9 @@ const pexec = promisify(execFile)
 const TMUX_SOCK = process.env.SPEXCODE_TMUX || 'spexcode'
 // cold fallback size for a session no viewer has ever sized (see lastFit).
 const DEFAULT_COLS = 120, DEFAULT_ROWS = 40
-// a full (re)attach frame seeds this much of tmux's recent scrollback into the browser terminal (commensurate
-// with xterm's own scrollback), so the wheel reaches output from before the client attached — for a
-// NORMAL-screen pane, whose history lives in tmux's scrollback. A full-screen (alternate-screen) TUI keeps no
-// scrollback there, so this yields only its visible frame; that app owns the mouse and scrolls itself ([[forwardWheel]]).
+// a full (re)attach frame carries this much recent tmux history into the renderer. Wheel navigation still
+// stays pane-owned: normal panes scroll tmux copy-mode over that history; mouse-owning TUIs receive mouse
+// reports and scroll themselves ([[forwardWheel]]).
 const HISTORY_SEED_LINES = 4000
 
 // a viewer: anything we can push pane bytes to (a WebSocket, wrapped).
@@ -42,6 +41,17 @@ type Bridge = {
 const bridges = new Map<string, Bridge>()
 // viewers keyed by session id (not the Bridge), so a subscription outlives any bridge death/respawn.
 const subscribers = new Map<string, Set<Viewer>>()
+
+type PaneMode = {
+  inMode: boolean
+  alternate: boolean
+  mouseStandard: boolean
+  mouseButton: boolean
+  mouseAny: boolean
+  mouseSgr: boolean
+}
+const PANE_MODE_FORMAT = '#{pane_in_mode},#{alternate_on},#{mouse_standard_flag},#{mouse_button_flag},#{mouse_any_flag},#{mouse_sgr_flag}'
+const flag = (v?: string) => v === '1'
 
 // last size each viewer fitted (per session + a global fallback), so pre-warm spawns at the wanted size.
 const lastFit = new Map<string, { cols: number; rows: number }>()
@@ -276,48 +286,62 @@ export function attachViewer(id: string, v: Viewer, initialSize?: { cols: number
   return true
 }
 
+async function readPaneMode(id: string): Promise<PaneMode> {
+  const raw = await tmuxOut(['display-message', '-p', '-t', id, '-F', PANE_MODE_FORMAT])
+  const [inMode, alternate, mouseStandard, mouseButton, mouseAny, mouseSgr] = raw.split(',')
+  return {
+    inMode: flag(inMode),
+    alternate: flag(alternate),
+    mouseStandard: flag(mouseStandard),
+    mouseButton: flag(mouseButton),
+    mouseAny: flag(mouseAny),
+    mouseSgr: flag(mouseSgr),
+  }
+}
+
+function canInjectSgrWheel(mode: PaneMode): boolean {
+  return mode.mouseSgr && (mode.mouseStandard || mode.mouseButton || mode.mouseAny)
+}
+
 // a control-mode bare attach REPLAYS NOTHING (unlike a raw attach, where tmux resends the pane's whole terminal
 // state — alt-screen switch, mouse-tracking modes, …). So a FULL (re)attach frame must RECONSTRUCT that state:
-// read the pane's live mode flags and emit the matching DEC private-mode prelude, so the browser xterm faithfully
-// mirrors the pane — on the ALTERNATE screen for a full-screen TUI (else its redraws would pollute the normal
-// scrollback and mis-render) and in the app's mouse-tracking mode. MEASURED, one exec (not a poll) per full
-// frame; live mode changes flow through %output naturally.
-async function paneModePrelude(id: string): Promise<string> {
-  try {
-    const { stdout } = await pexec('tmux', ['-L', TMUX_SOCK, 'display-message', '-p', '-t', id, '-F',
-      '#{alternate_on},#{mouse_standard_flag},#{mouse_button_flag},#{mouse_any_flag},#{mouse_sgr_flag}'])
-    const [alt, ms, mb, ma, sgr] = stdout.trim().split(',')
-    let s = ''
-    if (alt === '1') s += '\x1b[?1049h'                                   // alternate screen (full-screen TUI)
-    if (ms === '1') s += '\x1b[?1000h'; if (mb === '1') s += '\x1b[?1002h'; if (ma === '1') s += '\x1b[?1003h'
-    if (sgr === '1') s += '\x1b[?1006h'                                   // SGR-encoded mouse reports
-    return s
-  } catch { return '' }
+// emit the matching DEC private-mode prelude from the same pane-mode abstraction used for wheel routing. The
+// browser xterm mirrors the pane on the ALTERNATE screen and in the app's mouse-tracking mode; live mode
+// changes flow through %output naturally.
+function paneModePrelude(mode: PaneMode): string {
+  let s = ''
+  if (mode.alternate) s += '\x1b[?1049h'                                   // alternate screen (full-screen TUI)
+  if (mode.mouseStandard) s += '\x1b[?1000h'
+  if (mode.mouseButton) s += '\x1b[?1002h'
+  if (mode.mouseAny) s += '\x1b[?1003h'
+  if (mode.mouseSgr) s += '\x1b[?1006h'                                    // SGR-encoded mouse reports
+  return s
+}
+
+function wheelMouseReport(up: boolean, col: number, row: number, ticks: number): string {
+  const button = up ? 64 : 65
+  return `\x1b[<${button};${col};${row}M`.repeat(ticks)
 }
 
 // A wheel always enters at the tmux adapter boundary. If the pane is in copy-mode, or is a normal pane with
 // tmux history, tmux scrolls its own copy-mode view and we repaint that view. If the pane is a mouse-owning
-// TUI, inject the SGR wheel report so the application scrolls itself. No harness-specific branch exists here.
+// TUI with SGR mouse reports enabled, inject that wheel report. No harness-specific branch exists.
 export function forwardWheel(id: string, up: boolean, col: number, row: number, ticks: number): void {
   const b = bridges.get(id)
   if (!b) return
   const c = Math.max(1, Math.floor(col) || 1), r = Math.max(1, Math.floor(row) || 1)
   const n = Math.max(1, Math.min(10, Math.floor(ticks) || 1))
   void (async () => {
-    const raw = await tmuxOut(['display-message', '-p', '-t', id, '-F',
-      '#{pane_in_mode},#{alternate_on},#{mouse_standard_flag},#{mouse_button_flag},#{mouse_any_flag},#{mouse_sgr_flag}'])
-    const [inMode, _alt, ms, mb, ma, sgr] = raw.split(',')
-    const mouseOwnsWheel = [ms, mb, ma, sgr].some((v) => v === '1')
-    if (inMode === '1' || !mouseOwnsWheel) {
-      if (up && inMode !== '1') await tmuxRaw(['copy-mode', '-e', '-t', id])
-      if (up || inMode === '1') {
+    const mode = await readPaneMode(id)
+    if (mode.inMode || !canInjectSgrWheel(mode)) {
+      if (up && !mode.inMode) await tmuxRaw(['copy-mode', '-e', '-t', id])
+      if (up || mode.inMode) {
         await tmuxRaw(['send-keys', '-t', id, '-X', '-N', String(n * 5), up ? 'scroll-up' : 'scroll-down'])
         await repaint(b)
       }
       return
     }
-    const seq = `\x1b[<${up ? 64 : 65};${c};${r}M`.repeat(n)
-    await tmuxRaw(['send-keys', '-t', id, '-l', '--', seq])
+    await tmuxRaw(['send-keys', '-t', id, '-l', '--', wheelMouseReport(up, c, r, n)])
   })()
 }
 
@@ -327,12 +351,10 @@ export function forwardWheel(id: string, up: boolean, col: number, row: number, 
 // The capture frame broadcasts synchronously at its block-end, so any %output that follows in the stream
 // lands AFTER the frame and is never overwritten by it — the frame is the attach seed, %output the live tail.
 //
-// A FULL frame (attach / re-bind / reconnect — b.needsFull) leads with the mode prelude and captures tmux's
-// recent scrollback (`-S`): those history lines write into the browser terminal and scroll into ITS scrollback,
-// so on a NORMAL-screen pane the wheel reaches output from before the client attached (the "wheel scrolls real
-// history" contract; a full-screen TUI keeps no such scrollback and scrolls itself via forwardWheel). A resize
-// re-seeds only the visible screen: re-flushing thousands of lines on every resize would be costly and flicker,
-// and the clear is `\x1b[H\x1b[2J` (viewport only, never `\x1b[3J`), so it never wipes the seeded scrollback.
+// A FULL frame (attach / re-bind / reconnect — b.needsFull) leads with the mode prelude and carries recent
+// tmux history (`-S`) so the renderer has the pane's real context. A resize re-seeds only the visible screen:
+// re-flushing thousands of lines on every resize would be costly and flicker, and the clear is
+// `\x1b[H\x1b[2J` (viewport only, never `\x1b[3J`), so it never wipes the seeded context.
 async function repaint(b: Bridge): Promise<void> {
   const token = ++b.repaintToken
   const want = `${b.cols}x${b.rows}`
@@ -341,7 +363,8 @@ async function repaint(b: Bridge): Promise<void> {
   if (token !== b.repaintToken) return
   await awaitLayout(b, want)
   if (token !== b.repaintToken) return
-  const prelude = full ? await paneModePrelude(b.id) : ''
+  const mode = full ? await readPaneMode(b.id) : null
+  const prelude = mode ? paneModePrelude(mode) : ''
   if (token !== b.repaintToken) return
   b.cmdQ.push((lines) => {
     if (token !== b.repaintToken) return

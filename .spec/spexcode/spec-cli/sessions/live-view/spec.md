@@ -97,8 +97,9 @@ A **full** frame — every fresh (re)attach / re-bind, and the resize a viewer s
 xterm — leads the seed with a **DEC-mode prelude reconstructed from the pane's live flags** (`alternate_on`,
 the mouse-tracking flags): so the browser xterm faithfully mirrors the pane — on the **alternate screen** for a
 full-screen TUI (else its redraws pollute the normal scrollback and mis-render) and in the app's **mouse-tracking
-mode**. A plain resize re-seeds only the visible screen, under a viewport-only clear (`\x1b[H\x1b[2J`, never
-`\x1b[3J`), so it never re-floods or wipes the seeded history.
+mode**. That same pane-mode reading is the source for wheel routing below; attach reconstruction and navigation
+are not two independent interpretations of tmux state. A plain resize re-seeds only the visible screen, under a
+viewport-only clear (`\x1b[H\x1b[2J`, never `\x1b[3J`), so it never re-floods or wipes the seeded history.
 
 ## scrolling — the pane's real history, through tmux
 
@@ -110,8 +111,9 @@ bridge decides from tmux's live pane flags:
   the browser from tmux's current view, so the dashboard feels like a real tmux client rather than a page
   scrolling an xterm buffer.
 - **Full-screen TUI** (alternate screen, owns the mouse — e.g. Claude Code): it keeps **no** scrollback in
-  xterm to scroll, and scrolls *itself* on mouse input. So the bridge injects the matching SGR mouse report
-  into the pane (`send-keys`), so the **app scrolls its own real history**.
+  xterm to scroll, and scrolls *itself* on mouse input. So when the pane advertises SGR mouse reports, the
+  bridge injects the matching wheel report into the pane (`send-keys`), so the **app scrolls its own real
+  history**.
 
 The socket still carries no keyboard input — the wheel is the one navigation exception — and neither path is
 harness-specific. Claude Code and Codex differ only in the tmux flags their panes expose.

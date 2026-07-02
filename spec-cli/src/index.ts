@@ -177,8 +177,8 @@ app.post('/api/sessions/:id/merge', async (c) => {
 // one WS over a shared tmux control-mode client (pty-bridge): server→client = raw pane bytes (binary); the
 // view takes no keyboard input, so client→server is only a text control frame — {t:'resize',cols,rows} or
 // {t:'wheel',…}. The bridge resolves the wheel against tmux pane state: copy-mode repaint for normal panes,
-// SGR mouse injection for mouse-owning TUIs. A real tmux client, so the first paint is one coherent frame and
-// live bytes arrive as events.
+// SGR mouse report injection for mouse-owning TUIs. A real tmux client, so the first paint is one coherent
+// frame and live bytes arrive as events.
 app.get('/api/sessions/:id/socket', upgradeWebSocket((c) => {
   const id = c.req.param('id') as string
   // the size-first handshake: a client that already knows its pane size carries it as ?cols=&rows= so the

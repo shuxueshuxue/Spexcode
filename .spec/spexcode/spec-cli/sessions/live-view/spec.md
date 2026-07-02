@@ -35,10 +35,16 @@ inside a multi-byte character — so each wide char stays whole in one line, and
 one byte, all else untouched) yields the pane's exact UTF-8 with no decode/encode cycle to shatter it.
 
 **Resize is deterministic and timer-free.** `refresh-client -C WxH` is guaranteed to emit exactly one
-`%layout-change` carrying the converged `WxH` — even a same-size no-op emits one — so the bridge sets the size,
-then **waits to be told** it re-wrapped by that event, which is a mathematical certainty of arrival, not a
-hope. No settle-timeout, no geometry poll, no per-repaint pull; a repaint whose size already equals the known
-layout paints at once. That guaranteed event is the whole convergence proof.
+`%layout-change` — even a same-size no-op emits one — so the bridge sets the size, then **waits to be told**
+it re-wrapped by that event, which is a mathematical certainty of arrival, not a hope. Crucially the wait
+accepts **whatever size the event announces**, never an exact match on the size that was asked: every
+viewer, peek, and warm client is its own control client sharing ONE window under `window-size latest`, so
+the converged size is routinely another client's — an exact-size wait deadlocks the attach seed forever
+(the full-frame flag latches, mode flips get dropped, `%output` stays frozen: a mute black terminal). For
+the same reason a mode flip **always** repaints (the repaint token dedups), and an *unsolicited* geometry
+change — another client resized the shared window with no repaint in flight — re-seeds the viewers rather
+than letting live deltas paint onto stale geometry. No settle-timeout, no geometry poll, no per-repaint
+pull; a repaint whose size already equals the known layout paints at once.
 
 A supervisor keeps a **warm** client for every *detached* live session — so a tab paints fast — and
 **skips** any session a human is already attached to in their own terminal. It holds the warm client at

@@ -114,7 +114,7 @@ export function loadProposals(): Issue[] {
     .sort((a, b) => a.created.localeCompare(b.created))
 }
 
-function loadOne(id: string): Issue {
+export function loadOne(id: string): Issue {
   const f = join(forumDir(), `${id}.md`)
   if (!existsSync(f)) throw new Error(`no local issue '${id}' (see \`spex issues --all --store local\`)`)
   return parse(id, readFileSync(f, 'utf8'))

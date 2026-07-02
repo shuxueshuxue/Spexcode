@@ -8,7 +8,8 @@
 // store only (proposals.ts); the forge stays read-only (spec-forge's non-negotiable).
 import type { ForgeIssue, ForgePR } from '../../spec-forge/src/port.js'
 import { resolveLinks } from '../../spec-forge/src/links.js'
-import { loadProposals, proposalsEnabled } from './proposals.js'
+import { loadProposals, loadOne, reply, resolve, proposalsEnabled } from './proposals.js'
+import { envSessionId } from './layout.js'
 import { loadSpecsLite } from './specs.js'
 
 export type Reply = { by: string; at: string; body: string }
@@ -66,6 +67,29 @@ export function mergedIssues(forge: ForgeSlice | null, nodeIds: string[]): Issue
   return [...loadProposals(), ...remote].sort((a, b) => a.created.localeCompare(b.created))
 }
 
+// @@@ promote - the ONE cross-store verb ([[issues]]): a local concern that outgrew the repo moves to the
+// forge as one recorded action. The forge issue is composed from the thread itself — concern → title;
+// body + the `Spec: <nodes>` marker (the round-trip: the existing tracer read links it straight back to
+// the same nodes, no new linking code) + the evidence hashes + a provenance footer — and created through
+// the driver (the only network toucher). ORDER makes failure safe: create the forge issue FIRST; only
+// then close the local thread out (a reply carrying the permalink, then resolve `landed`) — an
+// unreachable forge throws with the local thread untouched, and only an `open` thread promotes.
+export async function promote(id: string): Promise<{ url: string; number: number; host: string }> {
+  const t = loadOne(id)
+  if (t.status !== 'open') throw new Error(`'${id}' is ${t.status} — only an open local issue promotes`)
+  const { githubDriver } = await import('../../spec-forge/src/drivers/github.js')
+  const body = [
+    t.body,
+    t.nodes.length ? `\nSpec: ${t.nodes.join(', ')}` : '',
+    t.evidence.length ? `\nEvidence: ${t.evidence.join(', ')} (yatsu blob hashes)` : '',
+    `\n---\nPromoted from the local issue \`${id}\` (opened by ${t.by} @ ${t.created}; promoted by ${envSessionId() || 'unknown'}).`,
+  ].filter(Boolean).join('\n')
+  const { number, url } = await githubDriver.createIssue({ title: t.concern, body })
+  reply(id, `promoted to the forge: ${url}`)
+  resolve(id, 'landed')
+  return { url, number, host: githubDriver.host }
+}
+
 // ───────────────────────── CLI ─────────────────────────
 const fl = (args: string[], name: string): string | undefined => {
   const i = args.indexOf(`--${name}`)
@@ -79,6 +103,18 @@ const hasFlag = (args: string[], name: string) => args.includes(`--${name}`)
 // WEIGHS by judgment, never an automatic priority order. The forge slice is a LIVE pull; an unreachable
 // forge degrades loudly to local-only (one stderr note) — local reading never hostages on a network.
 export async function runIssues(args: string[]): Promise<number> {
+  if (args[0] === 'promote') {
+    const id = args[1]
+    if (!id || id.startsWith('--')) { console.error('usage: spex issues promote <local-issue-id>'); return 2 }
+    try {
+      const r = await promote(id)
+      console.log(`promoted '${id}' → ${r.host}#${r.number}  ${r.url}\n  local thread resolved landed (permalink recorded in its reply trail)`)
+      return 0
+    } catch (e) {
+      console.error(`spex issues promote: ${e instanceof Error ? e.message : e}`)
+      return 1
+    }
+  }
   const nodeIds = loadSpecsLite().map((s) => s.id)
   let forge: ForgeSlice | null = null
   try {

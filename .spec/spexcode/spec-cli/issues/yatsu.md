@@ -13,7 +13,20 @@ scenarios:
       `Spec:` markers already translated into nodes[] (no downstream consumer ever sees a marker); the
       local thread arrives with its signers/replies/evidence. --store and --node filter; default hides
       non-open.
-  - name: local-degrade
+  - name: promote
+    tags: [cli]
+    code: spec-cli/src/issues.ts
+    related: [spec-forge/src/port.ts, spec-forge/src/drivers/github.ts]
+    description: >-
+      Open a local thread (with nodes + evidence), then `spex issues promote <id>` against the REAL forge.
+      Also try promoting an unknown id and the just-landed thread again.
+    expected: >-
+      One recorded action: a real forge issue is created whose title is the concern and whose body carries
+      the thread body, the `Spec: <nodes>` marker, the evidence hashes, and a provenance footer; the merged
+      read then shows that forge issue linked to the SAME nodes through the existing tracer (no new linking
+      code). The local thread ends `landed` with a permalink reply as its trail. An unknown id and a
+      non-open thread both refuse loudly; a failed create leaves the local thread untouched (create-first
+      ordering).
     tags: [cli]
     code: spec-cli/src/issues.ts
     description: >-

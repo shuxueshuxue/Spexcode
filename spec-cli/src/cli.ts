@@ -101,6 +101,7 @@ Specs / graph
   hooks <sub>           harness-agnostic hook system: compile [--out <file>] (flatten surface:hook nodes into the per-session manifest the dispatcher reads)
   self <sub>            diagnose how the workflow reaches THIS self-launched agent: doctor (default) | contract | env
   issues                THE issue read — local forum threads + forge issues, one merged store-tagged list (the drain view)  [--node <id>] [--store local|github] [--all] [--json]
+  issues promote <id>   move an OPEN local issue to the forge (one recorded action: forge issue w/ Spec: marker + evidence, local thread landed w/ permalink)
   propose "<concern>"   open a local issue in the git forum (taste, annotations, off-mainline smells all welcome)  [--node <id>…] [--evidence <hash>…] [--body -|<text>]  | reply|sign|resolve <id> …  | on|off|status
   review <SEL>          manager cockpit: review a session (ahead·merge-base diff·gates·proposal)  [--json]
   review proof <SEL>    render the session's proof of work — self-contained HTML, fully derived (diff·measured yatsu loss·gates)  [--open|--out P|--json]

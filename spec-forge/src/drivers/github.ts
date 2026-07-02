@@ -56,6 +56,16 @@ export const githubDriver: ForgeDriver = {
       closesIssues: (r.closingIssuesReferences ?? []).map((c) => c.number),
     }))
   },
+
+  // the port's one write verb (promotion — see port.ts). `gh issue create` prints the new issue's URL on
+  // stdout; the number is its last path segment. Fails loud like every other driver call.
+  async createIssue({ title, body }: { title: string; body: string }): Promise<{ number: number; url: string }> {
+    const { stdout } = await run('gh', ['issue', 'create', '--title', title, '--body', body], { maxBuffer: 1024 * 1024 })
+    const url = stdout.trim().split('\n').pop() ?? ''
+    const number = parseInt(url.split('/').pop() ?? '', 10)
+    if (!url.startsWith('http') || !Number.isFinite(number)) throw new Error(`gh issue create returned an unexpected result: ${stdout.trim()}`)
+    return { number, url }
+  },
 }
 
 function isUnknownFieldError(err: unknown): boolean {

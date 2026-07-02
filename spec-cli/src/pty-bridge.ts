@@ -33,6 +33,9 @@ type Bridge = {
   // mouse state), not a resize's visible-only re-seed. Set on every (re)attach and re-bind, since a
   // (re)connecting viewer's xterm is blank / just reset.
   needsFull?: boolean
+  // Copy-mode freezes the pane's view. While that mode owns the screen, raw %output still describes the
+  // underlying live grid; repaint owns what viewers see until mode exit snaps them back to the bottom.
+  paneInMode?: boolean
 }
 const bridges = new Map<string, Bridge>()
 // viewers keyed by session id (not the Bridge), so a subscription outlives any bridge death/respawn.
@@ -45,9 +48,15 @@ type PaneMode = {
   mouseButton: boolean
   mouseAny: boolean
   mouseSgr: boolean
+  scrollPosition: number
+  paneHeight: number
 }
-const PANE_MODE_FORMAT = '#{pane_in_mode},#{alternate_on},#{mouse_standard_flag},#{mouse_button_flag},#{mouse_any_flag},#{mouse_sgr_flag}'
+const PANE_MODE_FORMAT = '#{pane_in_mode},#{alternate_on},#{mouse_standard_flag},#{mouse_button_flag},#{mouse_any_flag},#{mouse_sgr_flag},#{scroll_position},#{pane_height}'
 const flag = (v?: string) => v === '1'
+function num(v?: string): number {
+  const n = Number(v)
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0
+}
 
 // last size each viewer fitted (per session + a global fallback), so pre-warm spawns at the wanted size.
 const lastFit = new Map<string, { cols: number; rows: number }>()
@@ -182,6 +191,7 @@ function onLine(b: Bridge, lineBuf: Buffer): void {
     return
   }
   if (head.startsWith('%output ')) {
+    if (b.paneInMode) return
     const sp = head.indexOf(' ', 8)   // skip "%output %<pane> " to the raw (escaped) data
     if (sp > 0) broadcast(b.id, unescapeOutput(line.subarray(sp + 1)))
     return
@@ -191,6 +201,12 @@ function onLine(b: Bridge, lineBuf: Buffer): void {
   if (head.startsWith('%layout-change ')) {
     const m = head.match(/,(\d+x\d+),/)   // layout token = checksum,WIDTHxHEIGHT,x,y,… — the window size
     onLayout(b, m ? m[1] : undefined)
+    return
+  }
+  // Mode enter/exit emits no pane bytes of its own. Route through repaint only: paneInMode is written solely
+  // by repaint under its token, so racing mode flips can't leave a stale read as the last freeze-state write.
+  if (head.startsWith('%pane-mode-changed')) {
+    if (!b.needsFull) void repaint(b)
     return
   }
   // %exit / %client-detached / window close → the client is gone; pty.onExit drives the re-bind.
@@ -284,7 +300,7 @@ export function attachViewer(id: string, v: Viewer, initialSize?: { cols: number
 
 async function readPaneMode(id: string): Promise<PaneMode> {
   const raw = await tmuxOut(['display-message', '-p', '-t', id, '-F', PANE_MODE_FORMAT])
-  const [inMode, alternate, mouseStandard, mouseButton, mouseAny, mouseSgr] = raw.split(',')
+  const [inMode, alternate, mouseStandard, mouseButton, mouseAny, mouseSgr, scrollPosition, paneHeight] = raw.split(',')
   return {
     inMode: flag(inMode),
     alternate: flag(alternate),
@@ -292,6 +308,8 @@ async function readPaneMode(id: string): Promise<PaneMode> {
     mouseButton: flag(mouseButton),
     mouseAny: flag(mouseAny),
     mouseSgr: flag(mouseSgr),
+    scrollPosition: num(scrollPosition),
+    paneHeight: num(paneHeight),
   }
 }
 
@@ -317,6 +335,17 @@ function paneModePrelude(mode: PaneMode): string {
 function wheelMouseReport(up: boolean, col: number, row: number, ticks: number): string {
   const button = up ? 64 : 65
   return `\x1b[<${button};${col};${row}M`.repeat(ticks)
+}
+
+function capturePaneCommand(b: Bridge, mode: PaneMode): string {
+  if (!mode.inMode) return `capture-pane -e -p -t ${b.id}`
+  // tmux capture-pane's default "visible pane" ignores the copy-mode viewport. In copy-mode,
+  // scroll_position is the offset above the bottom visible screen; capture that history window explicitly.
+  const rows = Math.max(1, mode.paneHeight || b.rows)
+  const scroll = mode.scrollPosition
+  const start = scroll === 0 ? '0' : `-${scroll}`
+  const end = rows - 1 - scroll
+  return `capture-pane -e -p -t ${b.id} -S ${start} -E ${end}`
 }
 
 // A wheel always enters at the tmux adapter boundary. If the pane is in copy-mode, or is a normal pane with
@@ -359,9 +388,10 @@ async function repaint(b: Bridge): Promise<void> {
   if (token !== b.repaintToken) return
   await awaitLayout(b, want)
   if (token !== b.repaintToken) return
-  const mode = full ? await readPaneMode(b.id) : null
-  const prelude = mode ? paneModePrelude(mode) : ''
+  const mode = await readPaneMode(b.id)
+  const prelude = full ? paneModePrelude(mode) : ''
   if (token !== b.repaintToken) return
+  b.paneInMode = mode.inMode
   b.cmdQ.push((lines) => {
     if (token !== b.repaintToken) return
     if (full) b.needsFull = false   // cleared only once the full frame actually reaches a viewer
@@ -370,7 +400,7 @@ async function repaint(b: Bridge): Promise<void> {
     // The prelude+clear is ASCII; the body is joined at the BYTE level so a wide char is never string-mangled.
     broadcast(b.id, Buffer.concat([Buffer.from(prelude + '\x1b[H\x1b[2J', 'utf8'), joinLines(lines)]))
   })
-  const cap = `capture-pane -e -p -t ${b.id}`
+  const cap = capturePaneCommand(b, mode)
   try { b.pty.write(cap + '\n') } catch { b.cmdQ.pop() }
 }
 

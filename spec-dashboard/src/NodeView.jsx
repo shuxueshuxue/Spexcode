@@ -352,35 +352,41 @@ export function HistoryPane({ node, rows }) {
   )
 }
 
+// the unified Issue shape ([[issues]]): id · store · status · concern; a forge issue links out, a local
+// one has no permalink.
 function IssueRow({ i }) {
-  return (
-    <a className="issue-card" href={i.url} target="_blank" rel="noreferrer">
+  const inner = (
+    <>
       <span className="issue-card-top">
-        <span className="issue-num">#{i.number}</span>
-        <span className={`issue-state st-${(i.state || '').toLowerCase()}`}>{i.state}</span>
+        <span className="issue-num">{i.id}</span>
+        <span className={`fv-store fv-store-${i.store === 'local' ? 'local' : 'forge'}`}>{i.store}</span>
+        <span className={`issue-state st-${i.status}`}>{i.status}</span>
       </span>
-      <span className="issue-card-title">{i.title}</span>
-    </a>
+      <span className="issue-card-title">{i.concern}</span>
+    </>
   )
+  return i.url
+    ? <a className="issue-card" href={i.url} target="_blank" rel="noreferrer">{inner}</a>
+    : <span className="issue-card">{inner}</span>
 }
 export function IssuesPane({ node }) {
   const t = useT()
   const issues = node.issues || []
   if (!issues.length) return <div className="pane-issues empty">{t('nodeView.noIssues')}</div>
-  const open = issues.filter((i) => (i.state || '').toLowerCase() === 'open')
-  const closed = issues.filter((i) => (i.state || '').toLowerCase() !== 'open')
+  const open = issues.filter((i) => i.status === 'open')
+  const closed = issues.filter((i) => i.status !== 'open')
   return (
     <div className="pane-issues">
       {open.length > 0 && (
         <>
           <div className="issue-group-head">{t('nodeView.openIssues', { n: open.length })}</div>
-          {open.map((i) => <IssueRow key={i.number} i={i} />)}
+          {open.map((i) => <IssueRow key={i.id} i={i} />)}
         </>
       )}
       {closed.length > 0 && (
         <>
           <div className="issue-group-head closed">{t('nodeView.closedIssues', { n: closed.length })}</div>
-          {closed.map((i) => <IssueRow key={i.number} i={i} />)}
+          {closed.map((i) => <IssueRow key={i.id} i={i} />)}
         </>
       )}
     </div>
@@ -462,7 +468,9 @@ function EvalEvidence({ r }) {
       {r.blobState === 'present'
         ? (r.blobKind === 'transcript'
             ? <TranscriptEvidence hash={r.blob} />
-            : <img src={`/api/yatsu/blob/${r.blob}`} alt={t('nodeView.eval.shotAlt', { scenario: r.scenario })} loading="lazy" />)
+            : r.blobKind === 'video'
+              ? <video className="eval-video" src={`/api/yatsu/blob/${r.blob}`} controls preload="metadata" />
+              : <img src={`/api/yatsu/blob/${r.blob}`} alt={t('nodeView.eval.shotAlt', { scenario: r.scenario })} loading="lazy" />)
         : <figcaption className="eval-noimg">{r.blobState === 'miss' ? t('nodeView.eval.miss') : t('nodeView.eval.noImage')}</figcaption>}
     </>
   )
@@ -546,7 +554,7 @@ export default function NodeView({ node, pane, setPane, onClose }) {
   // one fetch per node, feeding the single history pane (the popup's only data dependency).
   const rows = useHistory(node.id)
   const issuesAll = node.issues || []
-  const issueOpen = issuesAll.filter((i) => (i.state || '').toLowerCase() === 'open').length
+  const issueOpen = issuesAll.filter((i) => i.status === 'open').length
   const issueClosed = issuesAll.length - issueOpen
   const editCount = (node.overlays || []).length
   const panes = panesFor(node)

@@ -23,13 +23,15 @@ driving the same sessions through the CLI see identical state.
 
 ## expanded spec
 
-The interface is a **full-screen board** — edge-to-edge over the dimmed app, with **no reserved inset** so no
-screen space is wasted (still a lifted modal with a scale-in pop, not a route). The console **follows the app
-theme**: its chrome — the session list, the right frame, the docked input — uses the same palette tokens as
+The interface is a **routed page** (`#/sessions`, [[side-nav]]) — it fills the app's main area beside the
+navigation rail as a peer of the graph, with no backdrop, no lift, no pop: Enter navigates to it, Esc routes
+home to the graph, and its selected tab echoes into the URL (`#/sessions/<sel>`) so a tab can be deep-linked.
+Leaving the page never unmounts it — the terminals keep their sockets and scroll warm. The console **follows
+the app theme**: its chrome — the session list, the right frame, the docked input — uses the same palette tokens as
 the rest of the dashboard, so re-theming the app re-themes the console with it (no console-scoped palette
 remap). The one surface that stays dark on its own is the **embedded terminal** (`--term-bg`) — legitimately a
-dark terminal, whatever the app theme. Two panes: a left session list and a right area that **morphs** by
-what's focused. The list's **top button row** is a single `＋` New Session button above the session rows, so
+dark terminal, whatever the app theme. Two panes: a left session list (its width user-draggable, [[resizable-panes]]) and a right area that
+**morphs** by what's focused. The list's **top button row** is a single `＋` New Session button above the session rows, so
 it never blocks the `↑/↓` path down to a session.
 
 **New Session** is a centred avatar + auto-growing input. Nothing is prefilled; typing **`[[`** opens the

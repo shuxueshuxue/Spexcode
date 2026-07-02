@@ -6,7 +6,7 @@ import { STATUS_COLOR, sessionForest } from './session.js'
 import { SessionRow, RowLead, useFold } from './SessionWindow.jsx'
 import SessionContextMenu from './SessionContextMenu.jsx'
 import { ProofPane } from './ReviewProof.jsx'
-import ForumView from './ForumView.jsx'
+import { useResizable } from './useResizable.js'
 import { boardCommandsFor } from './sessionCommands.js'
 import { useT } from './i18n/index.jsx'
 
@@ -190,7 +190,7 @@ function highlight(text, q) {
   return <>{text.slice(0, i)}<b className="mention-hit">{text.slice(i, i + q.length)}</b>{text.slice(i + q.length)}</>
 }
 
-export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, onFocusNode, reload }) {
+export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onOpenForum, onPickSession, reload }) {
   const t = useT()
   const [prompt, setPrompt] = useState('')    // the New Session tab's own draft (its boarding-switch cache)
   const [menu, setMenu] = useState(null)      // completion dropdown: { kind:'mention'|'config'|'slash', items, index, start, end, query }
@@ -232,13 +232,16 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const forest = useMemo(() => sessionForest(sessions, (id) => expanded.has(id)), [sessions, expanded])
   const visible = useMemo(() => forest.filter((it) => it.type === 'row').map((it) => it.s), [forest])
   const order = useMemo(() => ['new', ...visible.map((s) => s.id)], [visible])
-  // 'forum' is a third content mode beside 'new' and a session id — the read-only forum info page ([[forum-view]]).
-  const active = (sel === 'forum' || order.includes(sel)) ? sel : 'new'
+  // content mode: 'new' or a session id (the forum left for its own page — [[issues-view]] / [[side-nav]]).
+  const active = order.includes(sel) ? sel : 'new'
   // a removed session (closed here, ended on its own, or closed elsewhere) leaves the tab unresolved: land
-  // on New only if you're still on the now-gone tab. Mirrors `active`'s validity test.
+  // on New only if you're still on the now-gone tab. Mirrors `active`'s validity test. Only while the page
+  // is showing — a background board refresh must not clobber the remembered tab (or the URL echo) mid-boot.
   useEffect(() => {
-    if (sel !== 'forum' && !order.includes(sel)) setSel('new')
-  }, [order, sel, setSel])
+    if (open && !order.includes(sel)) setSel('new')
+  }, [open, order, sel, setSel])
+  // the session list is a user-resizable pane ([[resizable-panes]]): drag the divider, width persists.
+  const [listW, listDrag] = useResizable('spex.siListWidth', 240, { min: 180, max: 480 })
   const focusId = focusNode?.id || null
   const selSession = sessions.find((s) => s.id === active)
   // liveness, not the lifecycle label, gates terminal vs relaunch ([[state]]). showRelaunch skips `queued`
@@ -684,10 +687,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const boardCmds = boardCommandsFor(selSession?.status, runners)
   // window-level key router: ↑/↓ walk the list regardless of focus; Enter on New launches.
   const stateRef = useRef({})
-  stateRef.current = { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, searchOpen, navMode, setNavMode, sendRawKey }
+  stateRef.current = { order, active, submit, menu, navMenu, accept, setMenu, onClose, onOpenForum, open, searchOpen, navMode, setNavMode, sendRawKey }
   useEffect(() => {
     const onKey = (e) => {
-      const { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, searchOpen, navMode, setNavMode, sendRawKey } = stateRef.current
+      const { order, active, submit, menu, navMenu, accept, setMenu, onClose, onOpenForum, open, searchOpen, navMode, setNavMode, sendRawKey } = stateRef.current
       if (!open || searchOpen) return   // panel hidden, OR the search palette modal is open above us and owns the keys: nothing here listens
       // reserved ⌥/⌘+I toggles nav mode: handled before everything else, never forwarded to tmux. Matched by
       // e.code (the physical I key) because ⌥I on a mac prints a dead-key glyph, not 'i'. The chord is a
@@ -704,6 +707,12 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       // not 'n' — the same reason ⌥I above keys off e.code. ⌘N (mac) / ⌃N (win/linux) are the browser's
       // hard-reserved new-window accelerator whose keydown never reaches the page to be cancelled, so ⌥N is the
       // one modifier+N chord the app can actually own (the e.metaKey/ctrlKey arms below stay best-effort).
+      // ⌥+F jumps to the Forum page — the console-level twin of ⌥+N (the forum is its own route now,
+      // [[side-nav]]; the board's bare `f` and the sidebar entry are the other doors). ⌥ only: ⌘F/⌃F stay
+      // the browser's find.
+      if (e.altKey && !e.metaKey && !e.ctrlKey && (e.code === 'KeyF' || e.key === 'f' || e.key === 'F')) {
+        e.preventDefault(); e.stopPropagation(); onOpenForum?.(); return
+      }
       if (e.metaKey || e.altKey || e.ctrlKey) {
         if (e.code === 'KeyN' || e.key === 'n' || e.key === 'N') { e.preventDefault(); e.stopPropagation(); setSel('new'); return }
         if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
@@ -768,7 +777,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // mousedown suppresses the contextmenu in some browsers (Safari/Firefox), killing the rename pop-over;
   // right-click focus retention is handled by the contextmenu blocker below. The terminal owns its selection.
   const keepFocus = (e) => {
-    e.stopPropagation()   // also guards the backdrop from closing on an inside click (any button)
+    e.stopPropagation()
     if (e.button !== 0) return
     const t = e.target
     if (isTextField(t)) return
@@ -793,7 +802,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
 
   return (
     <>
-    <div className="si-backdrop" onMouseDown={onClose} style={open ? undefined : { display: 'none' }}>
+    {/* a routed PAGE ([[side-nav]]), not a lifted modal: no backdrop, no outside-click close — it fills the
+        app's main area and stays MOUNTED while other pages show (display:none) so terminals keep their
+        sockets/scroll warm. */}
+    <div className="si-page" style={open ? undefined : { display: 'none' }}>
       <div className="si-panel" ref={panelRef} onMouseDown={keepFocus}>
         {/* one hidden picker for both surfaces; pickFiles sets fileTargetRef so the result lands in the
             surface whose attach button was clicked. Reset value so re-picking the same file still fires. */}
@@ -804,14 +816,14 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           style={{ display: 'none' }}
           onChange={(e) => { attachFiles(e.target.files, fileTargetRef.current); e.target.value = '' }}
         />
-        <aside className="si-list">
+        <aside className="si-list" style={{ flex: `0 0 ${listW}px` }}>
           <div className="si-toprow">
             <button className={active === 'new' ? 'si-pill new on' : 'si-pill new'} title={t('session.newSessionTitle')} onClick={() => setSel('new')}>
               <span className="si-pill-glyph">＋</span>
             </button>
-            {/* second pill: the read-only forum info page ([[forum-view]]) — a monochrome inline-SVG speech
-                bubble in the dashboard's own glyph vocabulary (currentColor stroke), never a colour emoji. */}
-            <button className={active === 'forum' ? 'si-pill forum on' : 'si-pill forum'} title={t('session.forumTitle')} onClick={() => setSel('forum')}>
+            {/* second pill: a shortcut to the forum PAGE ([[issues-view]] — now its own route) — a
+                monochrome inline-SVG speech bubble in the dashboard's own glyph vocabulary. */}
+            <button className="si-pill forum" title={t('session.issuesTitle')} onClick={() => onOpenForum?.()}>
               <span className="si-pill-glyph">
                 <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M2.5 3.5 h11 v7 h-6 l-3 2.5 v-2.5 h-2 z" />
@@ -848,8 +860,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           })}
         </aside>
 
-        <section className={active === 'forum' ? 'si-content is-forum' : (active === 'new' ? 'si-content is-new' : 'si-content is-session')}>
-          {active === 'forum' && <ForumView onFocusNode={onFocusNode} />}
+        {/* the list's drag handle ([[resizable-panes]]) — straddles the list/content border */}
+        <div className="pane-resizer si-resizer" onMouseDown={listDrag} role="separator" aria-orientation="vertical" />
+
+        <section className={active === 'new' ? 'si-content is-new' : 'si-content is-session'}>
           {active === 'new' && (
             <div className="si-new-center">
               <div className="si-avatar" aria-hidden="true">
@@ -927,7 +941,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               on its right. */}
           <div
             className="si-session-wrap"
-            style={{ display: (active === 'new' || active === 'forum') ? 'none' : 'flex', flexDirection: 'column', flex: 1, minWidth: 0, minHeight: 0, position: 'relative' }}
+            style={{ display: active === 'new' ? 'none' : 'flex', flexDirection: 'column', flex: 1, minWidth: 0, minHeight: 0, position: 'relative' }}
           >
               <div className="si-tabbar">
                 {/* two tabs on the left: the live terminal (default) and the always-available proof of work. */}

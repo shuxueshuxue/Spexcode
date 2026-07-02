@@ -35,7 +35,8 @@ export const ACT = [
   { id: 'board.cycle',     keys: ['o'],      rebind: true, desc: 'legend.board.overlayCycle' },
   { id: 'board.cycleRev',  keys: ['O'],      rebind: true, desc: 'legend.board.overlayCycle' },
   { id: 'board.enter',     keys: ['Enter'],  rebind: true, desc: 'legend.board.enter' },
-  { id: 'board.fresh',     keys: ['@'],      rebind: true, desc: 'legend.board.fresh' },
+  { id: 'board.fresh',     keys: ['['],      rebind: true, desc: 'legend.board.fresh' },
+  { id: 'board.issues',    keys: ['f'],      rebind: true, desc: 'legend.board.issues' },
   // node chords — structural (a two-key grammar, not a single binding)
   { id: 'board.newChild',  keys: ['n'],      rebind: false, desc: 'legend.board.newChild' },
   { id: 'board.del',       keys: ['d'],      rebind: false, desc: 'legend.board.del' },

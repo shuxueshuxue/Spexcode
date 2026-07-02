@@ -5,12 +5,16 @@ import { readFileSync, appendFileSync, existsSync } from 'node:fs'
 // on disk with status:'note'; render stays tolerant of them, the CLI no longer mints them.)
 export type Verdict = { status: 'pass' | 'fail'; note?: string }
 
-// blobKind absent on a legacy reading → rendered as an image (every legacy capture was one)
+// blobKind absent on a legacy reading → rendered as an image (every legacy capture was one). `video` is a
+// screenshot with a time axis — the same content-addressed blob, distinguished only by this tag. A video
+// reading may carry `timelineBlob`: the content hash of its step-timeline sidecar (timeline.ts) — a second
+// blob on the same cache, mapping clip moments to named steps.
 export type Reading = {
   scenario: string
   codeSha: string
   blob: string | null
-  blobKind?: 'image' | 'transcript'
+  blobKind?: 'image' | 'transcript' | 'video'
+  timelineBlob?: string
   evaluator: string
   verdict?: Verdict
   ts: string

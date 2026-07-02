@@ -264,6 +264,8 @@ export default {
     issuesOpenOnForge: 'open on forge ↗',
     issuesForgeReadOnly: 'a forge issue is discussed on the forge — read here, written there.',
     // the human write path ([[issues-view]]) — a reply composer + a New local-issue affordance.
+    issuesThreadsTitle: 'threads',
+    issuesThreadsSummary: ({ open, total }) => `${open} open · ${total} total`,
     issuesNew: 'New',
     issuesCancel: 'Cancel',
     issuesSend: 'Send',

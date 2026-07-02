@@ -38,6 +38,15 @@ export default {
     offline: 'offline',
   },
 
+  // the left navigation rail ([[side-nav]]) — one label per top-level page
+  nav: {
+    railLabel: 'main navigation',
+    graph: 'Spec Node Graph',
+    sessions: 'Session Board',
+    forum: 'Forum',
+    settings: 'Settings',
+  },
+
   hud: {
     helpTitle: 'help — keymap & legend (?)',
     loading: 'loading specs from git…',

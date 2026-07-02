@@ -10,8 +10,8 @@ import { useT } from './i18n/index.jsx'
 // is the CLI drain's judgment); signer/reply counts show as raw data. Store never changes the shape, only
 // two affordances: a LOCAL issue expands to its body + replies and takes a human reply (POSTed through the
 // SAME reply/propose the CLI uses, author 'human'; an @-mention dispatches a worker and the outcome is
-// echoed); a FORGE issue carries its permalink — read here, discussed there. `onFocusNode(id)` closes the
-// console and focuses that node on the board.
+// echoed); a FORGE issue carries its permalink — read here, discussed there. `onFocusNode(id)` routes to
+// the graph page and focuses that node.
 export default function IssuesView({ onFocusNode }) {
   const t = useT()
   const [data, setData] = useState(null)          // null = still loading

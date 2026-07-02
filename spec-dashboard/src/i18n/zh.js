@@ -37,6 +37,15 @@ export default {
     offline: '离线',
   },
 
+  // 左侧导航栏（[[side-nav]]）——每个顶层页面一个标签
+  nav: {
+    railLabel: '主导航',
+    graph: '规格节点图',
+    sessions: '会话面板',
+    forum: '论坛',
+    settings: '设置',
+  },
+
   hud: {
     helpTitle: '帮助 — 按键与图例（?）',
     loading: '正在从 git 加载规格…',

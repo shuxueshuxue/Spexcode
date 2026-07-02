@@ -10,7 +10,11 @@ import Legend from './Legend.jsx'
 import Settings from './Settings.jsx'
 import SpecSearch from './SpecSearch.jsx'
 import BoardStats from './BoardStats.jsx'
+import SideBar from './SideBar.jsx'
+import IssuesView from './IssuesView.jsx'
 import MobileApp from './MobileApp.jsx'
+import { useRoute, navigate } from './route.js'
+import { useResizable } from './useResizable.js'
 import { useIsMobile } from './useIsMobile.js'
 import { loadBoard, subscribeBoard, layout, X_GAP, Y_GAP, projectTitle, projectIcon, faviconHref } from './data.js'
 import { createMomentumScroll } from './scroll.js'
@@ -38,12 +42,14 @@ const CHORD_KEYS = Object.keys(CHORDS)
 const CHORD_LEADERS = new Set(CHORD_KEYS.map((c) => c[0]))
 
 function Dashboard({ specs, sessions, reload, project }) {
+  // the URL is the page switch ([[side-nav]]): #/graph | #/sessions[/<sel>] | #/forum | #/settings.
+  // `page` replaces the old boolean overlay states (sessionUI / settings-modal) — the sidebar, the keyboard,
+  // and the address bar all drive the same route.
+  const { page, param } = useRoute()
   const [focusId, setFocusId] = useState(() => specs.find((s) => !s.parent)?.id)
   const [overlay, setOverlay] = useState(false)   // node-info popup (opened by `i`)
   const [pane, setPane] = useState('spec')
-  const [sessionUI, setSessionUI] = useState(false) // session interface (opened by Enter)
   const [legend, setLegend] = useState(false)     // centered help modal: keymap + visual vocabulary (`?`)
-  const [settings, setSettings] = useState(false) // centered settings modal: language picker etc. (`,`)
   const [search, setSearch] = useState(null)      // search palette mode: null | 'board' (`/`, nodes lead) | 'sessions' (⌘/Ctrl+/, sessions lead)
   const [sessionSel, setSessionSel] = useState('new') // persisted across open/close: last tab/session
   const [highlightId, setHighlightId] = useState(null) // session whose overlays are emphasised
@@ -99,17 +105,33 @@ function Dashboard({ specs, sessions, reload, project }) {
     [sessions],
   )
 
-  const openBoard = useCallback(() => setSessionUI(true), [])
+  const openBoard = useCallback(() => navigate('sessions'), [])
   const openEval = useCallback(() => { setPane('eval'); setOverlay(true) }, [])
-  const openSession = useCallback((id) => { setSessionSel(id); setSessionUI(true) }, [])
-  const startNew = useCallback((text) => { setSessionSel('new'); setSeed(text); setSessionUI(true) }, [])
+  const openSession = useCallback((id) => { setSessionSel(id); navigate('sessions', id) }, [])
+  const startNew = useCallback((text) => { setSessionSel('new'); setSeed(text); navigate('sessions', 'new') }, [])
   // one routing for BOTH palettes (board `/` and session-board ⌘/Ctrl+/): a session opens/switches to its
-  // tab; a non-session closes the session view (a no-op when already on the board) and jumps to the node on
-  // the graph. The select-target branch is shared, not forked — only the lead weight differs by entry point.
+  // tab; a non-session routes back to the graph (a no-op when already there) and jumps to the node.
+  // The select-target branch is shared, not forked — only the lead weight differs by entry point.
   const onSearchPick = useCallback((e) => {
     if (e.kind === 'session') openSession(e.target)
-    else { setSessionUI(false); setFocusId(e.target) }
+    else { navigate('graph'); setFocusId(e.target) }
   }, [openSession])
+
+  // sel ↔ URL, two one-way syncs that converge: a deep-linked / history-walked `#/sessions/<sel>` applies
+  // its param to the selection; a selection made in the UI is ECHOED into the hash with replace (no history
+  // entry per tab-hop — pages push, tabs replace, see route.js).
+  useEffect(() => {
+    if (page === 'sessions' && param && param !== sessionSel) setSessionSel(param)
+  }, [page, param]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (page === 'sessions') navigate('sessions', sessionSel, { replace: true })
+  }, [page, sessionSel])
+
+  // a transient graph overlay never outlives the graph page — navigating away closes it, so a return
+  // lands on the plain page (the session interface is a page now, not part of this overlay set).
+  useEffect(() => {
+    if (page !== 'graph') { setOverlay(false); setLegend(false); setSearch(null) }
+  }, [page])
 
   const children = useMemo(() => specs2.filter((s) => s.parent === focus.id), [specs2, focus])
   const parent = focus.parent ? byId[focus.parent] : null
@@ -224,14 +246,16 @@ function Dashboard({ specs, sessions, reload, project }) {
     animateView({ x: el.clientWidth / 2 - (node.x + NW / 2) * z, y: el.clientHeight / 2 - (node.y + NH / 2) * z, zoom: z }, dur)
   }, [animateView, getViewport])
 
-  // center the root once after first paint; thereafter the follow effect owns the camera
+  // center the root once after the graph page's first VISIBLE paint; thereafter the follow effect owns the
+  // camera. Gated on the route: a deep-load on another page keeps the graph hidden (zero-sized), so framing
+  // waits for the first visit instead of measuring a display:none container.
   const framedRef = useRef(false)
   useEffect(() => {
-    if (framedRef.current) return
+    if (framedRef.current || page !== 'graph') return
     framedRef.current = true
     const id = requestAnimationFrame(() => centerOn(focus, undefined, 0))
     return () => cancelAnimationFrame(id)
-  }, [centerOn, focus])
+  }, [centerOn, focus, page])
 
   // The camera follows the KEYBOARD, not the mouse ([[keyboard-nav]]): a keyboard or programmatic focus move
   // pans to recenter the new focus; a mouse click expands in place and the board STAYS. Node positions are a
@@ -242,17 +266,24 @@ function Dashboard({ specs, sessions, reload, project }) {
   const centerRef = useRef(centerOn); centerRef.current = centerOn
   const followedRef = useRef(false)
   const skipCenterRef = useRef(false)   // a mouse click sets this so the follow effect leaves the board where it is
+  // lastCenteredRef makes the follow route-safe: a focus set while ANOTHER page is up (a forum node chip, a
+  // search pick) can't measure the hidden zero-sized graph, so the pan runs when the graph page shows again —
+  // and an unchanged focus doesn't re-pan on every page return.
+  const lastCenteredRef = useRef(null)
   useEffect(() => {
-    if (!followedRef.current) { followedRef.current = true; return }
-    if (skipCenterRef.current) { skipCenterRef.current = false; return }   // mouse-click focus move: no pan
+    if (page !== 'graph') return
+    if (!followedRef.current) { followedRef.current = true; lastCenteredRef.current = focusId; return }
+    if (skipCenterRef.current) { skipCenterRef.current = false; lastCenteredRef.current = focusId; return }   // mouse-click focus move: no pan
+    if (lastCenteredRef.current === focusId) return
+    lastCenteredRef.current = focusId
     centerRef.current(focusRef.current)
-  }, [focusId])
+  }, [focusId, page])
 
-  // focus-return boundary ([[focus-return]]): a transient overlay (search / help / settings / node popup)
-  // takes focus when it opens; when the LAST one closes, hand focus back to whoever held it — else the
-  // docked sink. Never <body>. The session interface is a surface with its own focus discipline (it hosts
-  // the sink), not a transient overlay, so it stays out of this set.
-  const anyOverlay = overlay || legend || settings || !!search
+  // focus-return boundary ([[focus-return]]): a transient overlay (search / help / node popup) takes focus
+  // when it opens; when the LAST one closes, hand focus back to whoever held it — else the docked sink.
+  // Never <body>. Pages (the session board, forum, settings) are surfaces with their own focus discipline,
+  // not transient overlays, so they stay out of this set.
+  const anyOverlay = overlay || legend || !!search
   const hadOverlay = useRef(anyOverlay)
   useEffect(() => {
     if (hadOverlay.current && !anyOverlay) returnFocus()
@@ -282,7 +313,17 @@ function Dashboard({ specs, sessions, reload, project }) {
       // ⌘/Ctrl+/ opens the SAME palette with SESSIONS boosted — the session board's search escape-hatch,
       // reachable even while the session interface owns its keys. Plain `/` on the board stays nodes-first (below).
       if ((e.metaKey || e.ctrlKey) && e.key === '/') { e.preventDefault(); e.stopPropagation(); setSearch('sessions'); return }
-      if (sessionUI) return // the session interface owns ALL its keys (arrows / Enter / typing / Esc / the graph)
+      if (page === 'sessions') return // the session interface owns ALL its keys (arrows / Enter / typing / Esc / the graph)
+      // the forum page: Esc routes home; the rest of its keys (Tab region-jump, j/k/Enter) are IssuesView's own
+      if (page === 'forum') {
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); navigate('graph') }
+        return
+      }
+      // the settings page: Esc or `,` routes home; typing inside its shortcut-capture stays its own
+      if (page === 'settings') {
+        if (e.key === 'Escape' || firesKey('board.settings', e.key)) { e.preventDefault(); e.stopPropagation(); navigate('graph') }
+        return
+      }
       if (overlay) {
         if (e.key === 'Escape') { e.preventDefault(); setOverlay(false); return }
         if (e.key === 'Tab') { e.preventDefault(); e.stopPropagation(); cyclePane(e.shiftKey ? -1 : 1); return }
@@ -313,13 +354,8 @@ function Dashboard({ specs, sessions, reload, project }) {
         return
       }
       if (firesKey('board.help', e.key)) { e.preventDefault(); setLegend(true); return }
-      // settings modal owns its keys while open (only ,/Esc close it)
-      if (settings) {
-        if (e.key === 'Escape' || e.key === ',') { e.preventDefault(); setSettings(false); return }
-        return
-      }
       if (e.key === 'Escape' && highlightId) { e.preventDefault(); e.stopPropagation(); setHighlightId(null); return }
-      if (firesKey('board.settings', e.key)) { e.preventDefault(); setSettings(true); return }
+      if (firesKey('board.settings', e.key)) { e.preventDefault(); navigate('settings'); return }
       if (firesKey('board.search', e.key)) { e.preventDefault(); e.stopPropagation(); setSearch('board'); return }
       // chord buffer: a leader (n/d) holds, the next letter fires (CHORDS); a non-match or a 700ms lull clears it and falls through
       if (!e.metaKey && !e.ctrlKey && !e.altKey && /^[a-zA-Z]$/.test(e.key)) {
@@ -359,12 +395,12 @@ function Dashboard({ specs, sessions, reload, project }) {
       else if (firesKey('board.enter', e.key)) { e.preventDefault(); openBoard() }
       // [-key (the [[node]] mention opener): jump to a FRESH New Session on the focus ([[<id>]] pre-seeded), unconditional — never enters an existing session
       else if (firesKey('board.fresh', e.key)) { e.preventDefault(); startNew(`[[${focus.id}]] `) }
-      // f-key: open the issues page ([[issues-view]]) — the board-side entry; the console's pill is the other, one surface
-      else if (firesKey('board.issues', e.key)) { e.preventDefault(); openSession('issues') }
+      // f-key: open the forum page ([[issues-view]]) — the board-side entry; the sidebar's Forum is the other, one surface
+      else if (firesKey('board.issues', e.key)) { e.preventDefault(); navigate('forum') }
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [overlay, sessionUI, legend, settings, search, highlightId, focus, cycleNodes, upTarget, downTarget, rightTarget, parent, centerOn, getViewport, openBoard, openSession, startNew, popupScroll, legendScroll])
+  }, [overlay, page, legend, search, highlightId, focus, cycleNodes, upTarget, downTarget, rightTarget, parent, centerOn, getViewport, openBoard, openSession, startNew, popupScroll, legendScroll])
 
   // wake only on a real coordinate change — a pan under a still cursor can emit a synthetic mousemove with unchanged x/y
   useEffect(() => {
@@ -410,8 +446,14 @@ function Dashboard({ specs, sessions, reload, project }) {
     if (first) setFocusId(first.id)
   }, [highlightId, specs])
 
+  // the graph page's right column is user-resizable ([[resizable-panes]]): drag the divider, width persists.
+  const [fpW, fpDrag] = useResizable('spex.fpWidth', 250, { min: 190, max: 520, dir: -1 })
+
   return (
     <div className={kbdMode ? 'app kbd-mode' : 'app'}>
+      <SideBar page={page} onNav={navigate} />
+      <div className="app-main">
+      <div className="page-graph" style={{ '--fp-w': `${fpW}px`, display: page === 'graph' ? undefined : 'none' }}>
       <div className="graph" ref={graphRef}>
         <ReactFlow
           nodes={nodes}
@@ -455,11 +497,13 @@ function Dashboard({ specs, sessions, reload, project }) {
         )}
 
         {legend && <Legend onClose={() => setLegend(false)} />}
-        {settings && <Settings onClose={() => setSettings(false)} />}
         {search && <SpecSearch specs={specs} sessions={sessions} onPick={onSearchPick} onClose={() => setSearch(null)} boost={search === 'sessions' ? 'session' : null} />}
       </div>
 
+      {/* the divider the focus panel hangs on — an 8px col-resize hit strip straddling the pane border */}
+      <div className="pane-resizer" onMouseDown={fpDrag} role="separator" aria-orientation="vertical" />
       <FocusPanel node={focus} onOpenEval={openEval} />
+      </div>
 
       {/* key on focus.id: remount when the open overlay switches nodes, so the lazily-fetched body ([[board-lean]])
           never renders one node's prose under another's header while the new fetch is in flight. */}
@@ -468,17 +512,26 @@ function Dashboard({ specs, sessions, reload, project }) {
         sessions={sessions}
         specs={specs}
         focusNode={focus}
-        open={sessionUI}
+        open={page === 'sessions'}
         searchOpen={!!search}
         sel={sessionSel}
         setSel={setSessionSel}
         seed={seed}
         onSeedConsumed={() => setSeed(null)}
-        onClose={() => setSessionUI(false)}
+        onClose={() => navigate('graph')}
+        onOpenForum={() => navigate('forum')}
         onPickSession={onPickSession}
-        onFocusNode={(id) => { setFocusId(id); setSessionUI(false) }}
         reload={reload}
       />
+      {/* the forum page ([[issues-view]]) — its own route; mounts per visit (it fetches on mount) */}
+      {page === 'forum' && (
+        <div className="page-pane page-forum">
+          <IssuesView onFocusNode={(id) => { setFocusId(id); navigate('graph') }} />
+        </div>
+      )}
+      {/* the settings page ([[settings]]) — same sections as ever, now a routed page instead of a popup */}
+      {page === 'settings' && <Settings />}
+      </div>
     </div>
   )
 }

@@ -52,8 +52,8 @@ scenarios:
       Wheel-up on a NORMAL-screen pane enters tmux copy-mode and increases `#{scroll_position}` while the
       viewer receives a coherent repaint of older tmux history; wheel-down moves that same tmux view back
       toward the bottom. The browser does not scroll an independent xterm buffer, and no mouse bytes are
-      littered into the shell prompt. A full-screen alternate-screen TUI still gets forwarded SGR wheel reports
-      so the app scrolls itself.
+      littered into the shell prompt. A full-screen alternate-screen TUI with SGR mouse reports still gets
+      forwarded wheel reports, so the app scrolls itself.
   - name: output-preserves-utf8-wide-chars
     tags: [backend-api]
     description: >-

@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import { postIssueReply, postIssueThread } from './data.js'
+import { Replies, ReplyComposer } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
 
 // The annotator ([[annotator]]): the human's measuring hand on an ALREADY-captured reading — now the
@@ -6,8 +8,9 @@ import { useT } from './i18n/index.jsx'
 // selected reading gets the full pane height instead of a box inside a box. A video reading renders the
 // clip with a step ruler (from the step-timeline sidecar: click a step → seek; a drag on the paused frame
 // circles a region whose mark is named by the ≤T step); an image renders full-width; a transcript renders
-// as text. Output routes through EXISTING seams only: an issue on the responsible node (typed evidence[])
-// or a manual@1 reading via the eval seam's POST half. No new ledger structure.
+// as text. Output routes through EXISTING seams only: an issue on the responsible node (typed evidence[]),
+// a manual@1 reading via the eval seam's POST half, or a COMMENT on the eval's own thread — a local Issue
+// lazily bound by concern key (EvalComments below). No new ledger structure.
 
 const stepAt = (events, tMs) => { let hit = null; for (const e of events) { if (e.tMs <= tMs) hit = e; else break } return hit }
 const mmss = (tMs) => { const s = Math.floor(tMs / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` }
@@ -23,7 +26,11 @@ function Transcript({ hash }) {
   return <pre className="eval-transcript">{text ?? t('nodeView.eval.loadingTranscript')}</pre>
 }
 
-export default function Annotator({ entry, onFiled }) {
+// the deterministic concern key binding an eval's comment thread to its (node, scenario) — the thread IS
+// a local Issue, looked up by this exact concern text (ids de-collide, concerns don't).
+export const evalConcern = (e) => `eval: ${e.node} · ${e.scenario}`
+
+export default function Annotator({ entry, issues = null, specs = [], sessions = [], onFiled, onWrite }) {
   const t = useT()
   const vid = useRef(null)
   const box = useRef(null)
@@ -169,6 +176,29 @@ export default function Annotator({ entry, onFiled }) {
       {entry.blobState === 'none' && (entry.verdict?.note
         ? <pre className="eval-transcript">{entry.verdict.note}</pre>
         : <div className="an-hint">{t('nodeView.eval.noImage')}</div>)}
+      {issues && <EvalComments entry={entry} issues={issues} specs={specs} sessions={sessions} onWrite={onWrite} />}
     </div>
+  )
+}
+
+// the eval's DISCUSSION layer — no new object, no new store: the comment thread IS a local Issue lazily
+// bound to this (node, scenario) by its concern key. The first comment creates it (the SAME propose the
+// CLI uses, nodes:[node]); every later comment replies to it; the same thread lists in the issues group
+// like any local issue. Rendered only where a resident issues list is wired in (the issues page) — the
+// lookup needs the list, and posting blind would mint duplicate threads.
+function EvalComments({ entry, issues, specs, sessions, onWrite }) {
+  const t = useT()
+  const key = evalConcern(entry)
+  const thread = issues.find((i) => i.store === 'local' && i.concern === key) || null
+  const comments = thread ? [{ by: thread.by, at: thread.created, body: thread.body }, ...(thread.replies || [])] : []
+  const send = (text) => thread
+    ? postIssueReply(thread.id, text)
+    : postIssueThread({ concern: key, nodes: [entry.node], body: text })
+  return (
+    <section className="an-comments">
+      <div className="an-comments-head">{t('annotator.comments', { n: comments.length })}</div>
+      <Replies replies={comments} />
+      <ReplyComposer onSend={send} specs={specs} sessions={sessions} focusId={entry.node} onDone={onWrite} />
+    </section>
   )
 }

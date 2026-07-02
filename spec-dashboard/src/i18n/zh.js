@@ -72,6 +72,7 @@ export default {
     readingFiled: 'reading 已记录 ✓',
     failed: '失败 — 后端在跑吗？',
     reviewFallback: '视频评审',
+    comments: ({ n }) => (n ? `评论（${n}）` : '评论'),
   },
 
 

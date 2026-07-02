@@ -155,7 +155,7 @@ export type RawRecord = {
 //       CODEX_THREAD_ID (== codex's `sessionEnvVar`), so the per-thread var aliases to the RIGHT record while
 //       the shared `SPEXCODE_SESSION_ID` does not.
 //   (2) else `SPEXCODE_SESSION_ID` (the GOVERNED record id the launcher bakes in) — the claude path and the
-//       non-shared baseline, mirroring the shell hooks' `hp_session_id`.
+//       non-shared baseline.
 //   (3) else a harness's env var RAW — a self-launched, non-governed agent's own minted id, which has no
 //       governed record to alias to (codex CODEX_THREAD_ID / claude CLAUDE_CODE_SESSION_ID). The RAW form must
 //       stay BELOW (2): an un-aliased codex thread id is not a record key, so it must never beat a real
@@ -180,10 +180,10 @@ export function readRawRecord(id: string): RawRecord | null {
     return raw && typeof raw === 'object' && raw.session_id ? raw as RawRecord : null
   } catch { return null }
 }
-// resolve a possibly-ALIASED session id to its raw record. A codex hook fires from the shared per-project
-// app-server (no SPEXCODE_SESSION_ID in its env), so the id it carries is the codex THREAD id — the payload
-// session_id — not the SpexCode record id the store is keyed by. Direct id wins; else the one record that
-// captured this id as `harness_session_id` (the backend stored it at thread/start, before any tool turn).
+// resolve a possibly-ALIASED session id to its raw record. A codex hook or spawned command can carry the codex
+// THREAD id — payload session_id / CODEX_THREAD_ID — not the SpexCode record id the store is keyed by. Direct id
+// wins; else the one record that captured this id as `harness_session_id` (the backend stored it at thread/start,
+// before any tool turn).
 // Null when neither resolves. Mirrors the shell `hp_store_dir` alias grep — one resolution rule, both layers.
 export function readAliasedRawRecord(id: string): RawRecord | null {
   const direct = readRawRecord(id)

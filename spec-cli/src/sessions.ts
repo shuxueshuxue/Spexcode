@@ -76,10 +76,12 @@ function maxActive(): number {
 // an overridden home would silently leak the session's hook-state + codex-trust to the default ~/.spexcode /
 // ~/.codex. Deterministic: the session's store = the backend's store, never the ambient env's.
 const rvEnv = (id: string, harness = HARNESS) => {
-  // SPEXCODE_SESSION_ID is the GOVERNED record id every hook resolves (hp_session_id prefers it) — it makes a
-  // codex session, whose own thread id is un-pinnable, still feed its governed record; harmless for claude
-  // (= its pinned id). The CLAUDE_BG rendezvous control socket is the reclaude prompt-delivery path and exists
-  // ONLY for harnesses that own one (claude) — codex has no such daemon, so it's omitted there.
+  // SPEXCODE_SESSION_ID is the governed record id. Claude's harness id is the same value, so hooks and CLI
+  // calls can use it directly. Codex cannot trust this env inside the long-lived shared app-server; codex hooks
+  // start from the payload thread id and alias through harness_session_id, while the short-lived codex-launch
+  // process uses this env only to store the freshly started thread id on the governed record. The CLAUDE_BG
+  // rendezvous control socket is the reclaude prompt-delivery path and exists ONLY for harnesses that own one
+  // (claude) — codex has no such daemon, so it's omitted there.
   const parts = [`SPEXCODE_SESSION_ID=${id}`]
   if (harness.ownsRendezvous) parts.push(`CLAUDE_BG_BACKEND=daemon`, `CLAUDE_BG_RENDEZVOUS_SOCK=${rvSock(id)}`)
   for (const v of ['SPEXCODE_HOME', 'CODEX_HOME']) { const val = process.env[v]; if (val) parts.push(`${v}=${val}`) }

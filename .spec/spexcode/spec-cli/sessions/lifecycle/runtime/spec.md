@@ -19,8 +19,8 @@ root of two problems: it polluted the tree the agent commits, and it forced a 1:
 (a path key), so two agents in one folder would clobber. So the runtime lives OUTSIDE the worktree entirely,
 in a per-user GLOBAL store keyed by SpexCode's governed **`session_id`** — the worktree is left pristine
 (zero SpexCode files), and each agent gets its own record even when several share a folder. Claude Code's
-harness id equals that governed id; Codex mints its own thread id, so the record stores that separately as
-`harness_session_id` once the Codex SessionStart hook reports it.
+harness id equals that governed id; Codex mints its own thread id, so the backend stores that separately as
+`harness_session_id` when `codex-launch` completes `thread/start` for the worktree.
 
 ## expanded spec
 
@@ -61,12 +61,15 @@ in CLAUDE.md/AGENTS.md), none shows as an uncommitted change, so the Stop-gate's
 filtering, and `session.json` is written one-field-per-line with every key present so the hot-path hook edits
 it with sed, not jq ([[state]]).
 
-`session.json` writes are by governed `session_id` (the agent/hook resolves `SPEXCODE_SESSION_ID` first, then
-falls back to the harness env var or payload for self-launched agents), so they never depend on cwd beyond the
-project key. `close` removes the worktree AND sweeps the whole per-session store dir; `exit` keeps both, so an
-offline session is still on the board and `--resume`-able. Codex's project app-server is not swept by closing
-one session because several Codex sessions and several `spexcode serve` processes in the same project may be
-using the same control plane; routing is by `harness_session_id`, not by socket ownership.
+`session.json` writes are by canonical governed `session_id`, never by cwd. Claude's harness id equals that
+record id. Codex hook payloads and spawned commands carry the acting thread id, while the shared app-server env
+may carry a stale `SPEXCODE_SESSION_ID`; those Codex ids are resolved through `harness_session_id` before a
+governed record is written. Self-launched agents with no governed record may still get raw-id sentinel dirs for
+spec-discipline hooks, but board lifecycle hooks no-op without `governed:true`. `close` removes the worktree AND
+sweeps the whole per-session store dir; `exit` keeps both, so an offline session is still on the board and
+`--resume`-able. Codex's project app-server is not swept by closing one session because several Codex sessions
+and several `spexcode serve` processes in the same project may be using the same control plane; routing is by
+`harness_session_id`, not by socket ownership.
 
 This is a CLEAN cut from the old per-worktree `.session/` layout — there is no compat shim. An in-flight session
 launched under the old backend keeps its worktree `.session/` until it drains; the new backend simply doesn't

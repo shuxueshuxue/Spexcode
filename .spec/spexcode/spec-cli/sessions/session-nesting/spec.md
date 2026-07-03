@@ -40,7 +40,10 @@ depth, the whole forest reassembled each render.
 tabs and the map-side `SessionWindow` glance) render that forest: a parent row leads with a **fold pod** — a
 small pill showing the SUBTREE COUNT (how much fleet hides here), filled while collapsed and outline once
 expanded, a far more legible affordance than the old sliver of a triangle — and expanding reveals the child
-rows indented beneath, recursively. The list is collapsed by default, so a fleet reads as one row until
+rows beneath, each **indented by a file-tree connector rail**: a thin vertical spine with a branch tick at
+each child (an elbow at the last), and a pass-through spine down each ancestor column with rows below — so
+belonging is *drawn*, like a notes-app tree, not a blank margin. Recursive to any depth. The list is collapsed
+by default, so a fleet reads as one row until
 opened; ↑/↓ nav walks the VISIBLE rows, so a hidden child is never a nav ghost.
 
 **The parent row's own status is the group's status — no aggregation.** The folded parent's status glyph and

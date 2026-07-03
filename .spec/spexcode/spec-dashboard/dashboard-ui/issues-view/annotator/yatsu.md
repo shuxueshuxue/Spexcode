@@ -44,6 +44,22 @@ scenarios:
       duplicate thread), now with one reply. The thread lists in the issues group like any local issue
       (store chip local, the concern-key row). The '@new' comment dispatches a fresh worker through the
       same write path — the one-line outcome ('@ new→<session>') echoes on the page.
+  - name: ab-history-flip
+    tags: [frontend-e2e]
+    description: >
+      On #/forum, select a scenario that has MORE THAN ONE reading — a fail (A) followed by a pass (B). In
+      the RIGHT detail pane, read the A/B strip's verdict pips and the position label; click the older
+      (fail) pip (or press ‹) and read the header verdict badge, the expected/note text, and which evidence
+      blob the media points at; then click the newest (pass) pip and read them again. Read the comment
+      thread's replies before and after the flips.
+    expected: |
+      The A/B strip renders one verdict pip per reading, oldest→newest, ✗ for a fail (an A pole) and ✓ for
+      a pass (a B pole), the viewed pip outlined. Flipping to the older reading lights its ✗ pip, sets the
+      header badge to ✗, and swaps the media/expected/note IN PLACE to that reading's (a different blob hash
+      than the latest); flipping back to the newest lights the ✓ pip, badge ✓, media back to the latest,
+      and the position label reads 'latest'. The strip is absent for a single-reading scenario. The eval's
+      comment thread (bound by concern 'eval: <node> · <scenario>') is IDENTICAL across both flips — it is
+      per-scenario, not per-reading, so the annotation track spans the whole A/B.
 ---
 # annotator loss
 

@@ -104,12 +104,14 @@ export async function promote(id: string): Promise<{ url: string; number: number
 export async function replyIssue(
   id: string,
   body: string,
-  opts: { author?: string; node?: string | null } = {},
+  opts: { author?: string; node?: string | null; evidence?: string[] } = {},
 ): Promise<{ store: string; replies?: Reply[]; url?: string; outcomes: DispatchOutcome[] }> {
   const author = opts.author || envSessionId() || 'unknown'
   const forge = /^([A-Za-z0-9-]+)#(\d+)$/.exec(id)
   if (!forge) {
-    const { thread, outcomes } = await forumReply(id, body, author)
+    // evidence hashes accrue onto the local thread's typed evidence[] (a forge thread has no such field —
+    // an annotation's frame rides its comment body's image link there, the driver the only network toucher).
+    const { thread, outcomes } = await forumReply(id, body, author, opts.evidence)
     return { store: 'local', replies: thread.replies, outcomes }
   }
   const { githubDriver } = await import('../../spec-forge/src/drivers/github.js')

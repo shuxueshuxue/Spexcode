@@ -54,7 +54,9 @@ verb over both stores** (`replyIssue` — `spex propose reply <id>` and `POST /a
 same routing): a local id goes through the forum's committed write, a forge id (`<host>#<n>`) posts a
 **real comment** through the driver's `createComment` — the [[port]]'s second write verb, the same seam
 discipline as promotion (the driver stays the only network toucher; the tracer stays read-only; a failed
-forge write fails loud, never queues). Either way the reply **text**'s `@`-mentions dispatch afterward
+forge write fails loud, never queues). A local reply may carry optional `evidence` hashes (an anchored
+annotation's frame blob) that accrue onto the thread's typed `evidence[]`, deduped — a forge reply has no
+such field, so its frame rides the comment body's image link instead. Either way the reply **text**'s `@`-mentions dispatch afterward
 ([[mentions]] fires on the words, store-agnostic) — mentioning `@new`/`@session` in any thread IS the
 "assign this issue to an agent" verb; no separate assign machinery exists. Freshness after a forge write
 stays caller-owned: the server forces its resident slice's read-back before answering (the comment shown

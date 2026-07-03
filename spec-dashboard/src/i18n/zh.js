@@ -62,17 +62,17 @@ export default {
 
   annotator: {
     title: '标注器',
-    hint: '在暂停的画面上拖拽圈出问题；时刻自动定位到步骤。',
-    commentPh: '这里哪里不对…',
-    nodeTitle: '这个发现所属的节点',
+    hint: '在画面上拖拽圈出问题 — 它会成为下方一条锚定到该时刻的评论；或点 ⏱ 把一条纯文字备注锚到当前帧。',
+    capturing: '正在截取画面…',
     notePh: '判定备注…',
-    fileIssue: '在节点上开 issue',
     fileReading: '记一条 reading',
-    issueFiled: 'issue 已提交 ✓',
     readingFiled: 'reading 已记录 ✓',
     failed: '失败 — 后端在跑吗？',
-    reviewFallback: '视频评审',
-    comments: ({ n }) => (n ? `评论（${n}）` : '评论'),
+    comments: ({ n }) => (n ? `评审轨道（${n}）` : '评审轨道'),
+  },
+  thread: {
+    anchorNow: '锚定',
+    anchorTitle: '把这条评论锚定到当前帧',
   },
 
 

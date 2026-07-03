@@ -1029,7 +1029,10 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .fv-link { color: var(--blue); font-size: 10.5px; text-decoration: none; }
 .fv-link:hover { text-decoration: underline; }
 .fv-text { font-family: var(--mono); font-size: 12px; line-height: 1.6; color: var(--ink2); white-space: pre-wrap; }
-.fv-reply { margin-top: 10px; padding-left: 12px; border-left: 2px solid var(--line); }
+.fv-reply { margin-top: 10px; padding-left: 12px; border-left: 2px solid var(--line); border-radius: 0 4px 4px 0; transition: background .15s, border-color .15s; }
+/* the review track ([[annotator]]): the playhead-inside comment glows green, the selected one orange — in sync with the scrubber markers. */
+.fv-reply.active { border-left-color: var(--green); background: color-mix(in srgb, var(--green) 7%, transparent); }
+.fv-reply.sel { border-left-color: var(--orange); background: color-mix(in srgb, var(--orange) 9%, transparent); }
 .fv-reply-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; font-family: var(--mono); font-size: 10.5px; }
 .fv-reply-by { color: var(--blue); font-weight: 600; }
 .fv-reply-at { color: var(--muted); }
@@ -1527,9 +1530,35 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .an-comments { margin-top: 22px; padding-top: 10px; border-top: 1px solid var(--line); }
 .an-comments-head { font-size: 10px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--ink2); }
 .an-stage { position: relative; margin: 12px 0 0; cursor: crosshair; }
-.an-video { display: block; width: 100%; background: #000; border: 1px solid var(--line); border-radius: 6px; }
+.an-video { display: block; width: 100%; background: #000; border: 1px solid var(--line); border-radius: 6px 6px 0 0; }
 .an-rect { position: absolute; border: 2px solid var(--orange); border-radius: 3px; background: rgba(255,150,60,.12); pointer-events: none; }
 .an-rect.live { border-style: dashed; }
+/* the paused-state play hint over the frame — a cue, never in the way. */
+.an-bigplay { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); width: 54px; height: 54px; border-radius: 50%;
+  background: rgba(8,12,18,.5); border: 1px solid rgba(255,255,255,.22); display: flex; align-items: center; justify-content: center;
+  font-size: 22px; color: #fff; pointer-events: none; backdrop-filter: blur(3px); }
+
+/* the custom control bar — replaces native chrome so the scrubber can carry the review track. */
+.an-bar { display: flex; align-items: center; gap: 10px; padding: 6px 8px; background: var(--panel2); border: 1px solid var(--line); border-top: none; border-radius: 0 0 6px 6px; }
+.an-play { flex: 0 0 auto; font: inherit; font-size: 13px; width: 30px; height: 26px; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 5px; cursor: pointer; }
+.an-play:hover { border-color: var(--blue); }
+.an-time { flex: 0 0 auto; font-family: var(--mono); font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.an-curstep { flex: 0 0 auto; font-size: 10.5px; color: var(--green); background: color-mix(in srgb, var(--green) 12%, transparent); border: 1px solid color-mix(in srgb, var(--green) 35%, var(--line)); border-radius: 3px; padding: 1px 7px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* the review-track scrubber: play fill + draggable knob + step bands + one marker per anchored comment. */
+.an-seek { flex: 1 1 auto; position: relative; height: 18px; display: flex; align-items: center; cursor: pointer; }
+.an-seek-trk { position: absolute; left: 0; right: 0; height: 5px; background: var(--line); border-radius: 5px; }
+.an-seek-play { position: absolute; left: 0; height: 5px; background: var(--blue); border-radius: 5px; transition: width .12s linear; }
+.an-knob { position: absolute; width: 12px; height: 12px; background: var(--ink); border: 2px solid var(--paper); border-radius: 50%; transform: translateX(-50%); box-shadow: 0 1px 4px rgba(0,0,0,.4); transition: left .12s linear; }
+.an-band { position: absolute; top: 2px; width: 2px; height: 14px; background: color-mix(in srgb, var(--green) 45%, transparent); transform: translateX(-50%); pointer-events: none; }
+/* a comment marker — click to seek + select; the selected one grows orange, the playhead-active one green. */
+.an-mk { position: absolute; top: -1px; width: 10px; height: 20px; padding: 0; transform: translateX(-50%); background: none; border: none; cursor: pointer; }
+.an-mk::after { content: ''; display: block; margin: 0 auto; width: 3px; height: 20px; border-radius: 2px; background: var(--orange); box-shadow: 0 0 0 1px var(--paper); transition: transform .12s, background .12s; }
+.an-mk:hover::after { transform: scaleX(1.8); }
+.an-mk.active::after { background: var(--green); }
+.an-mk.on::after { transform: scaleX(2); background: var(--orange); box-shadow: 0 0 0 1px var(--paper), 0 0 8px color-mix(in srgb, var(--orange) 60%, transparent); }
+.an-seek-hov { position: absolute; bottom: 22px; transform: translateX(-50%); background: var(--panel); border: 1px solid var(--line); color: var(--ink); font-family: var(--mono); font-size: 10.5px; padding: 1px 6px; border-radius: 4px; pointer-events: none; white-space: nowrap; }
+/* a compact shortcut legend under the player. */
+.an-keys { font-family: var(--mono); font-size: 10px; color: var(--muted); padding: 4px 0 0; letter-spacing: .2px; }
 .an-ruler { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 0 0; }
 .an-step { font: inherit; font-size: 11px; color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 2px 8px; cursor: pointer; }
 .an-step.on { border-color: var(--green); color: var(--ink); }

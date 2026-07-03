@@ -37,19 +37,25 @@ export const anchorLine = (tMs, step) => `▶${mmss(tMs)}${step ? ` · ${step}` 
 // the blob hashes a body references (its frame links) — the send derives the thread's `evidence[]` from here.
 export const bodyEvidence = (body) => [...(body || '').matchAll(BLOB_URL)].map((m) => m[1])
 
-export function Replies({ replies, onSeek }) {
+// Over a clip ([[annotator]]) the reply list is the review track: `selIdx`/`activeIdx` mark the explicitly
+// selected and the playhead-inside comments (in sync with the scrubber's markers), and clicking an anchor
+// chip both seeks AND selects (`onSelect(i, tMs)`) so keyboard jumps and marker clicks share one selection.
+// Off a clip these are all absent and a reply renders exactly as before.
+export function Replies({ replies, onSeek, selIdx = null, activeIdx = null, onSelect = null }) {
   return replies.map((r, i) => {
     const a = parseAnchor(r.body)
     const src = a ? a.rest : r.body
     const img = FRAME_MD.exec(src)                       // a circled-frame image renders here, not as raw md
     const prose = (img ? src.replace(img[0], '') : src).trim()
+    const cls = `fv-reply${selIdx === i ? ' sel' : ''}${activeIdx === i ? ' active' : ''}`
+    const seek = a && onSeek ? () => (onSelect ? onSelect(i, a.tMs) : onSeek(a.tMs)) : null
     return (
-      <div className="fv-reply" key={i}>
+      <div className={cls} key={i}>
         <div className="fv-reply-meta">
           <span className="fv-reply-by">{r.by}</span>
           {r.at && <span className="fv-reply-at">{r.at}</span>}
-          {a && (onSeek
-            ? <button type="button" className="fv-anchor" onClick={() => onSeek(a.tMs)} title="seek the clip to this moment">{a.label}</button>
+          {a && (seek
+            ? <button type="button" className="fv-anchor" onClick={seek} title="seek the clip to this moment">{a.label}</button>
             : <span className="fv-anchor static">{a.label}</span>)}
         </div>
         {prose && <div className="fvd-body"><SpecBody body={prose} /></div>}

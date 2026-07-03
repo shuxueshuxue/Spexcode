@@ -18,6 +18,19 @@ finished session records such concerns into one shared, durable **forum**; other
 them like an async chatroom; a supervisor later drains the forum into real work. This keeps **global** taste
 flowing into the codebase's shape, instead of every agent owning only its own slice.
 
+**The forum is narrow on purpose — it is not an issue tracker.** A local issue earns its place only when it
+will **outlive the task at hand**, in one of exactly two shapes: (a) an off-mainline **proposal / taste** —
+a concern you are *not* going to act on now; or (b) a **not-worth-a-spec to-do** — something
+trivial-but-must-not-be-forgotten that doesn't merit a spec node. That's it. It is deliberately **not** a
+general bug tracker: tracking work is what the **spec graph** (the definition) and the **forge** (the
+execution) already do, and a forum that competes with them stops being a durable taste-layer and becomes a
+second, drifting source of truth — a liability. Two anti-patterns follow directly: **don't open an issue for
+a task you're actively driving** — you'll do it and then forget the thread; the design of dispatched work
+rides its dispatch, not a lingering issue. And **close what you finish** — an issue whose work has landed is
+resolved (`landed`/`accepted`), never left open; the open set is the *outstanding* work, so a stale open is a
+lie the drain has to re-triage. The post-merge nudge fires at exactly the moment both disciplines apply (you
+just landed work), and states them.
+
 ## expanded spec
 
 The forum is the **local store of [[issues]]** — the venue where a locally-stored Issue lives. A thread

@@ -87,13 +87,23 @@ surface:
   Consumed by [[session-activity]]'s headline resolver — this capability field is the ONLY harness branch in
   that path (no `if (codex)`).
 - **runtime: liveness + delivery** — the RUNTIME transport, lifted onto the adapter so product code honours
-  `ownsRendezvous` instead of hard-wiring the claude rendezvous socket. `liveness(rec, tmuxAlive, runtimeDir)` answers "is
-  this session's agent ready?": **claude** = the tmux window is up AND its reclaude rendezvous socket exists
-  (the socket is the truth claude is alive — the pane command is the wrapper/shell while claude runs as its
-  child); **codex** = the tmux window is up AND the **per-PROJECT** Codex app-server Unix socket exists (ONE
-  app-server per project, keyed on `runtimeRoot()` — the per-project runtime dir, NOT the session store —
-  shared by every worktree's thread; the per-session window presence is the session signal, the socket is a
-  project control plane). The session's thread id is NOT discovered at all — the BACKEND OWNS it: at launch it
+  `ownsRendezvous` instead of hard-wiring the claude rendezvous socket. `liveness(rec, tmuxAlive, runtimeDir, paneCmd)`
+  answers "is this session's agent ready?" — from the caller's ONE tmux snapshot, which now carries BOTH the
+  window presence AND each pane's `pane_current_command`. **claude** = the tmux window is up AND its reclaude
+  rendezvous socket exists (the socket is the truth claude is alive — the pane command is always the wrapper/shell
+  while claude runs as its child, so claude IGNORES `paneCmd`); **codex** = the tmux window is up AND the pane's
+  foreground command is **codex, NOT the interactive shell**. Codex liveness deliberately does NOT key on the
+  app-server socket: that socket is **per-PROJECT and SHARED** by every worktree's thread, so it stays bound even
+  when THIS session's visible `codex --remote … resume <tid>` TUI FAILED and its launch pane, after the bounded
+  resume retries, dropped back to the shell prompt — sock-presence then read a dead launch as online (the
+  field-confirmed false-positive this contract fixes). The honest per-session signal is the pane itself: while
+  the TUI is up the pane runs codex (or its launcher wrapper); a failed/exited launch sits at a bare shell. "Not
+  a shell" (rather than "== codex") is the test, so a renamed binary or wrapper still reads live and a boot/failed
+  shell never does; a pane command tmux couldn't report is not-live. The 'starting' boot grace stays in the
+  CALLER (sessions.ts liveness), so a still-booting codex pane — bash bootstrapping the shared app-server before
+  it `exec`s the TUI — reads 'starting', not 'offline', for the legitimate startup window. The app-server socket
+  is still the DELIVERY channel (per project, keyed on `runtimeRoot()`, ONE app-server shared by every worktree's
+  thread), just not the liveness gate. The session's thread id is NOT discovered at all — the BACKEND OWNS it: at launch it
   `thread/start { cwd: <this worktree> }`s on the shared server (codex resolves that worktree's per-cwd
   context — `AGENTS.md` + skills + project config — by walking the thread cwd, so one project-scoped server
   behaves analogously to a per-worktree claude launch; its PROJECT HOOKS are the one exception, read from the

@@ -5,6 +5,7 @@ hue: 200
 desc: Two universal in-text reference primitives — [[node]] (a topic) and @session (an actor that carries dispatch) — parsed the same way in EVERY input box. CLI-first; the dashboard is a thin autocomplete over the same resolver. First consumer is the forum; adopted on more surfaces incrementally.
 code:
   - spec-cli/src/mentions.ts
+  - spec-cli/src/mentions.test.ts
   - spec-dashboard/src/mentions.jsx
 ---
 
@@ -43,6 +44,12 @@ grammar is uniform, the logic is tiny.
 - **No new delivery pipe.** `@session` → [[dispatch]]'s `sendKeys` (a prompt = the surrounding text + a
   pointer to where it was written); `@new` → [[launch]]'s `newSession` (a fresh worker). Offline/unreachable
   fails loud (the `DispatchResult`), and the text still persists for the drain.
+- **The drain guard: `@new` on a settled thread must not respawn its work.** Dispatch carries the thread's
+  lifecycle status from the calling surface (the local forum always knows it; a forge reply's state is
+  unknown at write time — no guard there). On a non-open thread `@new` still spawns (the summons may be a
+  deliberate audit), but with two cues, one rule in dispatch, no per-thread special-casing: the worker's
+  prompt leads with the resolved status + verify-on-main-first-instead-of-re-implementing, and the poster's
+  outcome line warns (`new→<id> ⚠ thread landed`).
 - **The `@`-target list is relevance-ranked, active-only.** Candidates are the **online, governed** board
   sessions ([[state]] liveness), ordered: the surface's **owning agent if still active** → **active
   participants, most-recent first** → **`@new`** → **other active sessions** (self demoted). A

@@ -2,16 +2,17 @@
 title: guide
 status: active
 hue: 200
-desc: `spex guide` is the reference surface as a command — no topic prints the setup workflow; `spec`/`yatsu` print the file-format manual an agent authors against.
+desc: `spex guide` is the reference surface as a command — no topic prints the setup workflow; `spec`/`yatsu` print the file-format manual, `config` the runtime-settings manual.
 code:
   - spec-cli/src/guide.ts
 related:
   - spec-cli/src/cli.ts
+  - spec-cli/src/layout.ts
 ---
 # guide
 
-`spex guide` is SpexCode's **reference surface as a command**, not buried docs. It serves two audiences
-from one verb, picked by an optional topic:
+`spex guide` is SpexCode's **reference surface as a command**, not buried docs. It serves the human and
+the agent from one verb, picked by an optional topic:
 
 - **no topic → the human SETUP workflow.** The model it teaches is **install once, then let an agent
   drive** — one SpexCode checkout serves *every* project (the global `spex` CLI acts on whatever repo is
@@ -24,6 +25,15 @@ from one verb, picked by an optional topic:
   loss is measured and filed) — so an agent looks the format up on demand instead of reverse-engineering
   it. The always-on system prompt is the **clue** that the format exists; this manual carries the detail.
   An unknown topic fails loud (names the real topics), never a silent setup dump.
+- **`config` → the agent-facing RUNTIME-SETTINGS manual.** SpexCode's own settings are self-documenting
+  through this same primitive rather than a new mechanism: `spex guide config` prints every `spexcode.json`
+  / `spexcode.local.json` field (launchers, dashboard icon, lint budgets, layout overrides) with a working
+  example — crucially teaching **which of the two files each belongs in**: the committed, portable
+  `spexcode.json` vs. the gitignored, host-specific `spexcode.local.json` (absolute launcher paths,
+  secrets). It **mirrors the `Config` type** in `layout.ts` (the single source of truth — the manual
+  restates the type's own field comments, it does not invent fields), so an agent can configure SpexCode
+  for a user who doesn't know the schema by editing the JSON directly. There is deliberately no imperative
+  `spex config set` — the guide + a direct edit is the whole surface.
 
 A **`--help`/`-h` flag after any subcommand is also a request for this surface** — `spex <cmd> --help`
 prints the command summary and EXITS, without ever running `<cmd>`. This is a safety contract, not a

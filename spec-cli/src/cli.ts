@@ -82,7 +82,7 @@ function printHelp(): void {
 Usage: spex <command> [args]
 
 Specs / graph
-  guide [spec|yatsu]    no topic: the setup workflow; spec/yatsu: the file-format manual for authoring nodes
+  guide [spec|yatsu|config]  no topic: setup workflow; spec/yatsu: file-format manual; config: spexcode.json settings
   init [dir]            scaffold a repo to adopt SpexCode (seed .spec + install git hooks; default: cwd)
     --preset <name>          which .config plugin tier to seed (cumulative: default ⊂ careful; default 'default')
   uninstall [dir]      surgical inverse of init: remove SpexCode's generated artifacts (shims·contract·trust·

@@ -9,7 +9,9 @@ code:
   - spec-cli/test/pty-bridge.stress.ts
   - spec-cli/test/pty-bridge.osc8.ts
   - spec-cli/test/pty-bridge.scroll-redraw.ts
+  - spec-cli/test/pty-bridge.reseed-reconnect.ts
   - spec-cli/test/pty-bridge.history.ts
+  - spec-cli/test/vt-emulate.ts
 ---
 
 # live-view
@@ -124,9 +126,11 @@ new screen. And every frame **ends by placing the cursor where the pane really h
 pane's `cursor_x`/`cursor_y`): a capture restores the grid but not the cursor, and a live inline TUI's next
 `%output` redraws **relative to the cursor** (Ink erases its previous frame by moving up from where it left off,
 which sits on the input line *above* the trailing hint rows, not at the body's end). Leaving the cursor at the
-body's end would make the resumed redraw erase the wrong rows and **double the bottom UI** — the "bottom garbles
-when I scroll up then back down" glitch, since copy-mode exit is exactly when held-back `%output` resumes onto a
-re-seed.
+body's end would make the resumed redraw erase the wrong rows and **double the bottom UI**. This bites on **any**
+re-seed the TUI gets no SIGWINCH for — copy-mode exit (held-back `%output` resumes), a **reconnect**'s full
+frame, or an unsolicited layout-change — so a fresh session on a deploy garbles without anyone scrolling (a
+resize *does* self-correct: the SIGWINCH makes the TUI full-redraw). The cursor restore fixes every trigger at
+the one choke point.
 
 ## scrolling — the pane's real history, through tmux
 

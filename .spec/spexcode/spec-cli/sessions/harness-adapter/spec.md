@@ -216,7 +216,13 @@ The Codex impl of the adapter must encode these (measured against a real self-la
   the direct hit always wins.
 - **no rendezvous** (`ownsRendezvous:false`): codex has no reclaude control socket, so SpexCode uses Codex's
   own app-server. Each SpexCode project has ONE project-scoped `codex app-server --listen unix://<project sock>`
-  (flock-guarded, started once, reused) under the same global project runtime dir as the hook manifest. Each
+  (started once, reused) under the same global project runtime dir as the hook manifest. The check-and-start of
+  that shared server is serialized by a **POSIX-portable lock** — an atomic `mkdir` mutex with a bounded wait,
+  NOT util-linux `flock` (absent on macOS, where the flock path failed the whole bootstrap and left the pane at
+  the shell). The lock is held only across the check-and-start and released immediately; a stale dir left by a
+  dead launcher is cleared after a bounded wait so it can never deadlock a launch. Because a mkdir lock has no
+  inherited-fd hazard (unlike flock, held until every fd on its open file description closes), the long-lived
+  daemon can't pin it — no fd-inheritance guard on the spawn. Each
   worktree session = ONE thread on that server, created by the BACKEND: the launch script runs `spex
   codex-launch <sock> <worktree-cwd> <prompt>`, which `thread/start { cwd }`s (codex loads that worktree's
   per-cwd context — AGENTS.md, skills, project config — from the thread cwd; PROJECT HOOKS are the exception,

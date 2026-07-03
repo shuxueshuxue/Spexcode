@@ -30,8 +30,8 @@ twin of the help legend. The same [[keyboard-nav]] registry the help modal shows
 as a table you can edit — one row per action with its keyboard key. Clicking a cell captures the next
 keypress as that action's new binding, saved per-user and reset to defaults on demand. The help legend
 (`?`) stays the read-only view; this is its rebinding twin, the two projecting the one table from
-different entry points. (Game-controller mapping is **not** here — it lives outside the browser as the
-[[game-controller]] extension; see [[keyboard-nav]].)
+different entry points. (Game-controller mapping is **not** here — the pad binds to action ids, not keys, in
+[[game-controller]]'s controller mode; see [[keyboard-nav]].)
 
 Its third accreted section is **Theme**: a Light/Dark picker mirroring the language section, following
 the same detect-then-defer shape (system `prefers-color-scheme` default, explicit pick overrides and

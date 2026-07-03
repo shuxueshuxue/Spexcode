@@ -280,6 +280,17 @@ live):
 4. If your layout differs from the default (main at root, worktrees in `.worktrees/`, `node/<id>`
    branches), drop a `spexcode.json` to point the tool at your structure instead of forking it.
 
+`spex init` does steps 1–4's scaffolding in one shot: it seeds a starter `.spec/` tree (a root `project`
+node + the default `.config` plugins), plants a starter `spexcode.json`, installs the hooks, and
+**materializes** the harness artifacts — the `<!-- spexcode -->` contract block in `CLAUDE.md`/`AGENTS.md`
+(this guide's prose FOLLOWED BY the `surface: system` config bodies, which the harness auto-discovers) and
+the `.claude`/`.codex` shims (the `settings.json` hooks). Those materialized artifacts are **generated and
+gitignored** — regenerated per clone, kept fresh by the `dispatch.sh` gate on every `.config` edit — so a
+fresh clone re-runs `spex init`/`spex materialize` rather than pulling them from git. This is the same
+render that makes a self-launched agent already know the whole dev flow; the settings an agent tunes after
+adoption (launchers, dashboard icon, lint budgets) all live in those two `spexcode.json` /
+`spexcode.local.json` files, documented in full by **`spex guide config`**.
+
 ## Naming
 
 The project is **SpexCode**. npm root package: `spexcode`; CLI package: `@spexcode/spec-cli`. The

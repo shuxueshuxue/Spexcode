@@ -7,14 +7,17 @@ import { SpecBody } from './NodeView.jsx'
 import { Replies, ReplyComposer } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
 
-// The issues page ([[issues-view]]): MASTER-DETAIL over one full routed page. The LEFT column is one
-// scrolling list in two groups — the evals feed ([[evals-feed]]) leading, the merged issue list below
-// (local forum + forge, store-tagged, API order, no re-sort/no ranking; CONCLUDED issues hidden behind a
-// count chip). The RIGHT pane is the full-height DETAIL of the selection — selection IS the detail, no
-// in-place expansion in a small box: an issue renders its markdown body (SpecBody — the spec dialect),
-// its replies, and the reply composer — BOTH stores ([[issues]]: the reply verb routes by store, so a
-// forge issue's thread reads and writes here like a local one); an eval renders as the [[annotator]].
-// j/k walk the whole left list across both groups, the detail follows; writes post as 'human'.
+// The issues page ([[issues-view]]): MASTER-DETAIL over one full routed page. The LEFT column is ONE
+// box under a prominent TAB SWITCHER — Evals | Threads — the switcher is the title; the active tab
+// shows its own filter bar (evals chips; threads store filter + New + concluded chip, with the
+// open/total meta at the END of the bar) over its full-height list. Evals outrank issues: tab order and
+// the default tab express it. Threads = the merged issue list (local forum + forge, store-tagged, API
+// order, no re-sort/no ranking; CONCLUDED issues hidden behind a count chip). The RIGHT pane is the
+// full-height DETAIL of the selection — selection IS the detail, no in-place expansion in a small box:
+// an issue renders its markdown body (SpecBody — the spec dialect), its replies, and the reply composer
+// — BOTH stores ([[issues]]: the reply verb routes by store); an eval renders as the [[annotator]].
+// j/k walk the ACTIVE tab's list, the detail follows; a tab flip keeps the selection (and its detail)
+// until the human picks in the new tab; writes post as 'human'.
 export default function IssuesView({ onFocusNode, specs = [], sessions = [], issuesData = null, reloadIssues }) {
   const t = useT()
   const data = issuesData                          // RESIDENT app state — the page renders instantly, no per-mount fetch
@@ -23,8 +26,9 @@ export default function IssuesView({ onFocusNode, specs = [], sessions = [], iss
   const [storeFilter, setStoreFilter] = useState('all')  // 'all' | a store present in the data (local/github/…)
   const [notice, setNotice] = useState('')
   const [sel, setSel] = useState(null)            // the ONE selection: 'eval:<node>·<scenario>' | 'issue:<id>'
+  const [tab, setTab] = useState('evals')         // the left box's switcher: 'evals' | 'threads' (evals rank first)
   const [evalRows, setEvalRows] = useState([])    // the evals group's visible entries (its filters are its own)
-  const rowsRef = useRef([])                      // flat key list across BOTH groups, for j/k
+  const rowsRef = useRef([])                      // the ACTIVE tab's key list, for j/k
 
   // a write must show up where it lands: force the app-resident list to refetch (ETag makes it cheap).
   const load = useCallback(() => reloadIssues?.(true), [reloadIssues])
@@ -45,8 +49,10 @@ export default function IssuesView({ onFocusNode, specs = [], sessions = [], iss
 
   const evalByKey = useMemo(() => new Map(evalRows.map((e) => [entryKey(e), e])), [evalRows])
   const issueByKey = useMemo(() => new Map(issues.map((i) => [`issue:${i.id}`, i])), [issues])
-  rowsRef.current = [...evalRows.map(entryKey), ...issues.map((i) => `issue:${i.id}`)]
-  // default selection: the freshest eval, else the first issue — the detail pane is never idle by default.
+  // j/k walk the ACTIVE tab only; a selection made on the other tab stays valid (its detail persists
+  // across a tab flip) — j/k from a cross-tab selection lands on the active list's first row.
+  rowsRef.current = tab === 'evals' ? evalRows.map(entryKey) : issues.map((i) => `issue:${i.id}`)
+  // default selection: the active tab's first row — the detail pane is never idle by default.
   const effSel = sel && (evalByKey.has(sel) || issueByKey.has(sel)) ? sel : rowsRef.current[0] ?? null
 
   const onRows = useCallback((rows) => setEvalRows(rows), [])
@@ -85,11 +91,17 @@ export default function IssuesView({ onFocusNode, specs = [], sessions = [], iss
     <div className="fv-master">
       <div className="fv-list-col">
         {notice && <div className="fv-notice">{notice}</div>}
-        <EvalsGroup nodes={specs} sel={effSel} onSel={(k) => setSel(k)} onRows={onRows} />
-        <section className="fv-group">
+        <nav className="fv-tabs">
+          <button type="button" className={tab === 'evals' ? 'on' : ''} onClick={() => setTab('evals')}>
+            {t('evalsFeed.title')}<span className="fv-tab-n">{evalRows.length}</span>
+          </button>
+          <button type="button" className={tab === 'threads' ? 'on' : ''} onClick={() => setTab('threads')}>
+            {t('session.issuesThreadsTitle')}<span className="fv-tab-n">{openCount}</span>
+          </button>
+        </nav>
+        <EvalsGroup nodes={specs} sel={effSel} onSel={(k) => setSel(k)} onRows={onRows} hidden={tab !== 'evals'} />
+        <section className={`fv-group${tab === 'threads' ? '' : ' fv-hide'}`}>
           <header className="fv-group-head">
-            <span className="fv-group-title">{t('session.issuesThreadsTitle')}</span>
-            <span className="fv-group-meta">{t('session.issuesThreadsSummary', { open: openCount, total: stored.length })}</span>
             <span className="ef-chipbar">
               {stores.length > 1 && (
                 <select className="fv-store-filter" value={storeFilter} onChange={(e) => setStoreFilter(e.target.value)}>
@@ -106,6 +118,7 @@ export default function IssuesView({ onFocusNode, specs = [], sessions = [], iss
                 </button>
               )}
             </span>
+            <span className="fv-group-meta">{t('session.issuesThreadsSummary', { open: openCount, total: stored.length })}</span>
           </header>
           {composing && <NewThreadForm specs={specs} sessions={sessions} onDone={async (outcomes) => { setComposing(false); flash(outcomes); await load() }} />}
           {!issues.length && <div className="fv-note">{t('session.issuesEmpty')}</div>}

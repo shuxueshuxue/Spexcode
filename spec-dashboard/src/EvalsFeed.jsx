@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { ScoreBadge, scenarioStates } from './score.jsx'
 import { useT } from './i18n/index.jsx'
 
-// The evals section ([[evals-feed]]): the LEADING GROUP of the issues page's left list (master-detail,
+// The evals section ([[evals-feed]]): the DEFAULT TAB of the issues page's left box (master-detail,
 // [[issues-view]]) — the project's CURRENT measured loss. The unit is the SCENARIO, never the reading —
 // latest reading per (node, scenario), fresh leading, video first — so the list is bounded by declared
 // scenarios, not by measurement count. Rows are title-only; selecting one opens it in the detail pane
@@ -57,8 +57,10 @@ const rel = (ts) => {
 
 // `nodes`: the board node list, threaded down from the app's one poll. `sel`/`onSel`: the page's single
 // selection (the detail pane follows it). `onRows`: reports the VISIBLE entries upward so the page's
-// j/k walks one flat list across both groups — filter state stays this group's own.
-export default function EvalsGroup({ nodes = [], sel, onSel, onRows }) {
+// j/k walks the active tab's list — filter state stays this group's own. `hidden`: the page's tab
+// switcher owns which group shows; the group stays MOUNTED (rows keep reporting, media state survives a
+// tab flip) and merely hides. The group carries no title of its own — the switcher IS the title.
+export default function EvalsGroup({ nodes = [], sel, onSel, onRows, hidden = false }) {
   const t = useT()
   const [kind, setKind] = useState(null)          // null = the default: video → image → all, first kind present
   const [showStale, setShowStale] = useState(false)
@@ -75,9 +77,8 @@ export default function EvalsGroup({ nodes = [], sel, onSel, onRows }) {
   useEffect(() => { onRows?.(rows) }, [rows, onRows])
 
   return (
-    <section className="fv-group">
+    <section className={`fv-group${hidden ? ' fv-hide' : ''}`}>
       <header className="fv-group-head">
-        <span className="fv-group-title">{t('evalsFeed.title')}</span>
         <span className="ef-chipbar">
           {['video', 'image', 'note', 'all'].map((k) => (
             <button key={k} className={`ef-chip ${effKind === k ? 'on' : ''}`} onClick={() => setKind(k)}>

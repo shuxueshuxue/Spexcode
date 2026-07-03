@@ -4,17 +4,22 @@ scenarios:
     tags: [frontend-e2e]
     description: >
       On #/forum, select a video reading (carrying a step-timeline sidecar) in the left list. In the
-      RIGHT detail pane: click a step on the ruler and read video.currentTime; drag on the paused frame
-      and read the created mark's step label; type a comment, file an issue, then file a fail reading;
-      switch selection to another row and back.
+      RIGHT detail pane: click a step on the ruler and read video.currentTime; press ⏱ in the review-track
+      composer and read the inserted anchor line; drag on the paused frame to circle a region, then read
+      the prefilled comment and send it; click the sent comment's anchor chip and read video.currentTime;
+      send another comment containing '@new'; file a fail reading; switch selection to another row and back.
     expected: |
       The eval detail IS the annotator — full pane height, no modal. The step ruler renders one button per
       timeline event; clicking one SEEKS the video to its tMs (the blob route answers byte ranges —
-      without them the browser clamps to 0). A drag creates a circled region whose mark is named by the
-      ≤T step and prefilled with the step's owning node. Filing the issue lands a thread on /api/issues
-      on the responsible node with typed evidence[] = [clip hash, timeline hash] and the marks as body.
-      Filing the reading appends a manual@1 line (verdict + report transcript) to the scenario's sidecar.
-      Switching selection resets the working marks — an annotation binds to one reading.
+      without them the browser clamps to 0). ⏱ inserts a `▶m:ss · <step>` anchor line at the composer's
+      head (time + the ≤T step). A drag circles a region: the paused frame (rect burned in) is POSTed to
+      /api/yatsu/blob and the composer is prefilled with an anchored comment — the anchor line, a
+      `![frame](/api/yatsu/blob/<hash>)` link, and a `[[node]]` line when the step routes elsewhere.
+      Sending it creates/appends the eval's local Issue thread ('eval: <node> · <scenario>') with that
+      frame in the body AND on the thread's typed evidence[]; the sent comment shows an anchor chip that
+      SEEKS the clip on click and renders the circled frame inline. '@new' dispatches a fresh worker with
+      the anchor in its prompt ('@ new→<session>' echoes). The fail reading appends a manual@1 line
+      (verdict + note, NO marks transcript) to the sidecar. Switching selection resets the working draft.
   - name: image-lightbox
     tags: [frontend-e2e]
     description: >
@@ -42,6 +47,8 @@ scenarios:
 ---
 # annotator loss
 
-YATU through the real browser over a real backend: the seek, the mark naming, the issue with typed
-evidence[], and the manual reading are all read from live surfaces (DOM, /api/issues, the sidecar file) —
-never asserted from the component code.
+YATU through the real browser over a real backend: the seek, the ⏱ anchor, the circled-frame comment (its
+frame on /api/yatsu/blob and the thread's evidence[]), the anchor-chip seek, the @new dispatch, and the
+verdict reading are all read from live surfaces (DOM, /api/issues, the sidecar file) — never asserted from
+the component code. There is ONE annotation primitive (an anchored comment on the eval's thread); the
+verdict reading no longer duplicates the marks.

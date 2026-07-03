@@ -84,9 +84,10 @@ system already nests there.
   output: read the issues, sign/reply if the concern is already raised, else open a new one. Git-native, so
   it reaches a self-launched agent too and costs no harness block-cap.
 - **Surface — the write verbs.** `spex propose "<concern>" [--node <id>…] [--evidence <hash>…]
-  [--body -|<text>]` opens a thread; `propose reply|sign|resolve <id>` act on any local thread. There is
-  deliberately no store-local read command — reading is `spex issues` ([[issues]]), the same list every
-  store feeds.
+  [--body -|<text>]` opens a thread; `propose reply <id> --body -|<text> [--evidence <hash>…]` (the evidence
+  a reply carries accrues onto the thread's `evidence[]`, deduped — an anchored annotation's frame blob),
+  `sign`, and `resolve` act on any local thread. There is deliberately no store-local read command —
+  reading is `spex issues` ([[issues]]), the same list every store feeds.
 - **A human writes too — the forum is the programmatic surface.** The same write verbs carry an optional
   `author` (default the effective session id, else a caller-passed `'human'`), so a person can post from
   outside the CLI. `forumReply(id, body, author)` and `forumPost(concern, {nodes, body, author})` are

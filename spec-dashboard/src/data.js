@@ -119,17 +119,24 @@ export async function loadIssues() {
 // reply/propose the CLI uses (git-committed to the trunk, author 'human'); an @-mention in the text
 // dispatches a worker. Both return the parsed json ({ ok, …, outcomes }); `outcomes` is the one-line
 // @-dispatch summary to echo.
-export async function postIssueReply(id, body) {
+export async function postIssueReply(id, body, evidence) {
   const res = await apiFetch(`/api/issues/${encodeURIComponent(id)}/reply`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ body }),
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ body, ...(evidence?.length ? { evidence } : {}) }),
   })
   return res.json()
 }
-export async function postIssueThread({ concern, nodes, body }) {
+export async function postIssueThread({ concern, nodes, body, evidence }) {
   const res = await apiFetch('/api/issues', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ concern, nodes, body }),
+    body: JSON.stringify({ concern, nodes, body, ...(evidence?.length ? { evidence } : {}) }),
   })
+  return res.json()
+}
+// stash a captured video frame (PNG bytes) in the content-addressed blob store; returns { hash } — what an
+// anchored annotation references (image link in its body, and the typed evidence[] on its thread).
+export async function putFrameBlob(blob) {
+  const res = await apiFetch('/api/yatsu/blob', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: blob })
   return res.json()
 }
 

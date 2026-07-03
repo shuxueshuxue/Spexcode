@@ -169,7 +169,7 @@ function IssueDetail({ issue: th, specs, sessions, onFocusNode, onWrite }) {
       </div>
       {th.body && <div className="fvd-body"><SpecBody body={th.body} /></div>}
       <Replies replies={replies} />
-      <ReplyComposer onSend={(text) => postIssueReply(th.id, text)} specs={specs} sessions={sessions} focusId={nodes[0] || null} onDone={onWrite} />
+      <ReplyComposer onSend={(text, evidence) => postIssueReply(th.id, text, evidence)} specs={specs} sessions={sessions} focusId={nodes[0] || null} onDone={onWrite} />
     </div>
   )
 }

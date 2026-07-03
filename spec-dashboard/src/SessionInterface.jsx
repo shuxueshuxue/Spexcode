@@ -127,6 +127,10 @@ const HARNESSES = [
   { id: 'claude', label: 'Claude Code', Glyph: AnthropicGlyph },
   { id: 'codex', label: 'Codex', Glyph: OpenAIGlyph },
 ]
+// harness id → its vendor mark, so the launcher picker can show the SAME glyph the icon-only harness
+// radios use for the launcher's harness (a native <option> is text-only, so the glyph rides beside the
+// <select>, not inside it). Unknown/absent harness falls back to claude, the launcher default.
+const HARNESS_BY_ID = Object.fromEntries(HARNESSES.map((h) => [h.id, h]))
 
 export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, onOpenSearch, reload }) {
   const t = useT()
@@ -798,16 +802,24 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               {/* launcher picker — a named (harness, cmd) profile ([[launcher-select]]) subsumes the harness pick,
                   so when the project configured launchers we show a name dropdown IN PLACE of the harness radios;
                   with none configured we fall back to the plain icon-only harness radios. */}
-              {launchers.length ? (
+              {launchers.length ? (() => {
+                // the glyph shows the SELECTED launcher's harness as an icon (matching the old icon-only
+                // harness radios) instead of a ` · claude`/` · codex` text suffix on each option; it updates
+                // as the selection changes. A native <option> can't hold an SVG, so it sits beside the select.
+                const selHarness = HARNESS_BY_ID[launchers.find((l) => l.name === launcher)?.harness || 'claude'] || HARNESS_BY_ID.claude
+                const HarnessGlyph = selHarness.Glyph
+                return (
                 <label className="si-launcher-picker" title={t('session.launcherLabel')}>
                   <span className="si-launcher-label">{t('session.launcherLabel')}</span>
+                  <span className="si-launcher-harness" title={selHarness.label} aria-hidden="true"><HarnessGlyph /></span>
                   <select className="si-launcher-select" value={launcher} onChange={(e) => pickLauncher(e.target.value)} aria-label={t('session.launcherLabel')}>
                     {launchers.map((l) => (
-                      <option key={l.name} value={l.name}>{l.name} · {l.harness}</option>
+                      <option key={l.name} value={l.name}>{l.name}</option>
                     ))}
                   </select>
                 </label>
-              ) : (
+                )
+              })() : (
                 <div className="si-agent-picker" role="radiogroup" aria-label={t('session.harnessLabel')}>
                   {HARNESSES.map((h) => {
                     const Glyph = h.Glyph

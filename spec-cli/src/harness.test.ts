@@ -74,17 +74,18 @@ test('codex launch command starts app-server then resumes the backend-owned thre
   } finally { delete process.env.SPEXCODE_CODEX_BYPASS_HOOK_TRUST }
 })
 
-test('codex launch passes --dangerously-bypass-hook-trust (global, before app-server) when the codex binary supports it', () => {
-  // codex >=0.142 requires a persisted hook-trust hash to run hooks; a version bump silently invalidates the
-  // pinned codexHookHash, so codex skips ALL SpexCode hooks (no Stop gate, no mark-active). The bypass flag runs
-  // our own vetted hooks WITHOUT the fragile hash — version-robust. Hooks fire from the SHARED app-server, so the
-  // flag MUST be global BEFORE `app-server` (codex accepts `codex <flag> app-server`, rejects `codex app-server <flag>`).
+test('codex launch puts --dangerously-bypass-hook-trust on the RESUME TUI, not on the (inert) app-server invocation', () => {
+  // codex >=0.142 requires per-thread hook trust to run hooks; the bypass flag runs our own vetted hooks WITHOUT
+  // the fragile pinned hash. But the flag only reaches a thread's trust as a per-request `config` override — codex's
+  // `--remote resume` client forwards it into thread/start+thread/resume config, so it belongs on the resume TUI.
+  // On the `codex app-server` invocation the app-server NEVER reads it for a thread (it was inert there — the bug),
+  // so the launch does NOT put it on the app-server; the backend-owned thread carries bypass via codexStartThread.
   process.env.SPEXCODE_CODEX_BYPASS_HOOK_TRUST = '1'
   try {
     const cmd = codexLaunchCommand('s', 'codex --yolo', 'codex', '/tmp/spex-project')
-    assert.match(cmd, /codex --dangerously-bypass-hook-trust app-server --listen/)   // global position on the app-server
-    assert.match(cmd, /exec codex --yolo --dangerously-bypass-hook-trust --remote/)  // also on the resume TUI (harmless)
-    assert.doesNotMatch(cmd, /(?:^|\s)codex app-server/m)                            // never the bare (rejected) form
+    assert.match(cmd, /exec codex --yolo --dangerously-bypass-hook-trust --remote/)  // on the resume TUI (forwarded to thread config)
+    assert.match(cmd, /(?:^|\s)codex app-server --listen/m)                          // app-server carries NO bypass flag
+    assert.doesNotMatch(cmd, /--dangerously-bypass-hook-trust app-server/)           // never on the inert app-server invocation
   } finally { delete process.env.SPEXCODE_CODEX_BYPASS_HOOK_TRUST }
 })
 

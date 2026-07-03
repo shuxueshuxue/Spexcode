@@ -780,6 +780,13 @@ export function launcherList(root = mainCheckout()): Launcher[] {
   return Object.keys(m).sort().map((name) => ({ name, harness: m[name].harness || defaultHarness.id, cmd: m[name].cmd }))
 }
 
+// the configured default launcher NAME ([[launcher-select]]) — the profile `spex new`/a dropdown pick with no
+// explicit choice resolves. '' when none configured. The dashboard reads this to PRE-SELECT its New-Session
+// dropdown to match the CLI/config default, so the two surfaces agree on which launcher a bare create uses.
+export function defaultLauncher(root = mainCheckout()): string {
+  return readConfig(root).sessions?.defaultLauncher || ''
+}
+
 export function resolveLauncher(name: string, root = mainCheckout()): Launcher {
   const l = readConfig(root).sessions?.launchers?.[name]
   if (!l || !l.cmd) throw new Error(`unknown launcher '${name}' (configured: ${launcherList(root).map((x) => x.name).join(', ') || 'none'})`)

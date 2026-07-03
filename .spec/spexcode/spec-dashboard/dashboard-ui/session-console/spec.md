@@ -8,6 +8,7 @@ code:
   - spec-dashboard/src/SessionWindow.jsx
   - spec-dashboard/src/session.js
   - spec-dashboard/src/sessionCommands.js
+  - spec-dashboard/src/harness.jsx
 related:
   - spec-dashboard/src/SessionTerm.jsx
 ---
@@ -175,7 +176,10 @@ board no longer has.
 ([[session-activity]]) in the SAME **compact one-line, zone-grouped** layout as the console list — but
 KEEPING the **avatar** (its cross-referencing job) and the board's warm paper: the avatar + the session
 **headline** (the worker's live tmux self-summary once it exists, else a launch-prompt placeholder; a rename
-always wins) + a single colour-coded status **glyph** + pending-op count, on one line, with a **monochrome
+always wins) + a single colour-coded status **glyph** + pending-op count + — when the session launched under a
+**named launcher** ([[launcher-select]]) — a **launcher badge** (the launcher's harness vendor glyph, shared
+from `harness.jsx`, + the launcher name), so which launcher/auth brought the worker up is legible at a glance
+(a zero-config/unnamed launch shows no badge); on one line, with a **monochrome
 inline-SVG padlock** (the dashboard's own glyph vocabulary, not a colour emoji) at the headline's end when the
 row is locked. It stays a
 **bounded** glance: the window never grows into a curtain — its height is capped (~80% of the viewport, and

@@ -42,6 +42,7 @@ test('private-overlay: on a host that pre-tracks CLAUDE.md/AGENTS.md/.gitignore,
   spex('init', '.')
   const gitignoreDefault = readFileSync(join(proj, '.gitignore'), 'utf8')
   assert.ok(gitignoreDefault.includes('spexcode:start') && gitignoreDefault.includes('\n\n\ndist/'), 'default block written, user blank-line run intact')
+  assert.ok(gitignoreDefault.includes('.worktrees/'), 'default block ignores SpexCode session worktrees')
   // flip to PRIVATE
   writeFileSync(join(proj, 'spexcode.local.json'), '{"private":true}\n')
   spex('materialize')
@@ -55,6 +56,7 @@ test('private-overlay: on a host that pre-tracks CLAUDE.md/AGENTS.md/.gitignore,
   assert.equal(g('status', '--short').trim(), '', 'working tree must be clean — no leak')
   // (2) the ignore block moved to the per-clone .git/info/exclude, widened to hide .spec + spexcode.json
   assert.match(infoExclude, /spexcode:start[\s\S]*\.spec\/[\s\S]*spexcode\.json[\s\S]*spexcode:end/, 'info/exclude carries the widened block')
+  assert.match(infoExclude, /\.worktrees\//, 'private exclude also hides SpexCode session worktrees')
   // (3) the tracked .gitignore carries NO spexcode block
   assert.ok(!gitignore.includes('spexcode:start'), '.gitignore stays untouched')
   // (4) the pre-tracked contract files are skip-worktree'd, yet the block + the team's prose are BOTH present

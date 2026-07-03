@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import SessionTerm from './SessionTerm.jsx'
-import { loadConfig } from './data.js'
+import { loadConfig, loadLaunchers } from './data.js'
 import { labelColor } from './color.js'
 import { sessionForest } from './session.js'
 import { MENTION_RE, specPath, highlight, nodeMentionAt, actorMentionAt, MentionMenu } from './mentions.jsx'
@@ -144,6 +144,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     try { return localStorage.getItem('si.harness') || 'claude' } catch { return 'claude' }
   })
   const pickHarness = (id) => { setHarness(id); try { localStorage.setItem('si.harness', id) } catch {} }
+  // named launcher profiles ([[launcher-select]]) — a launcher fuses (harness, cmd), so picking one REPLACES the
+  // harness pick. Fetched from /api/launchers; empty → the form falls back to the plain harness picker below.
+  const [launchers, setLaunchers] = useState([])
+  const [launcher, setLauncher] = useState(() => { try { return localStorage.getItem('si.launcher') || '' } catch { return '' } })
+  const pickLauncher = (name) => { setLauncher(name); try { localStorage.setItem('si.launcher', name) } catch {} }
   const [sendErr, setSendErr] = useState(false)   // last /keys dispatch failed — surfaced under the ❯ box
   const [navMode, setNavMode] = useState(false)
   const [menuById, setMenuById] = useState({})   // per-pane menu-sniff flag from each SessionTerm; drives the nav button's `.suggest` pulse
@@ -202,6 +207,15 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // its body into the launch prompt (see submit); listing is display-only, like the slash menu.
   useEffect(() => {
     loadConfig().then((d) => { if (Array.isArray(d)) setPresets(d) }).catch(() => {})
+  }, [])
+  // fetch the configured launcher profiles once; if a project has any, the New box picks one by name (the pick
+  // rides in the POST body as `launcher`). Snap the remembered pick to a still-valid one, else the first.
+  useEffect(() => {
+    loadLaunchers().then((d) => {
+      if (!Array.isArray(d) || !d.length) return
+      setLaunchers(d)
+      setLauncher((cur) => (d.some((l) => l.name === cur) ? cur : d[0].name))
+    }).catch(() => {})
   }, [])
   // /api/config returns only command-surface nodes, so the presets ARE the launchable set — no client filter.
   const commandPresets = presets
@@ -345,9 +359,12 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     if (!raw) return
     const text = composeLaunch(raw)
     setPrompt('')
+    // a launcher SUBSUMES the harness ([[launcher-select]]): when the project configured launchers, send the
+    // chosen `launcher` (the backend derives the harness from it); otherwise send the plain `harness` pick.
+    const body = launchers.length ? { prompt: text, launcher } : { prompt: text, harness }
     fetch('/api/sessions', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt: text, harness }),
+      body: JSON.stringify(body),
     })
       .then((res) => res.json().catch(() => null))
       .then(() => reload?.())
@@ -774,24 +791,37 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 {/* config-preset palette — same `/` dropdown, opening downward under the centered box. */}
                 {menu && menu.kind === 'config' && slashMenu(false, menu.query ? `/${menu.query}` : t('session.menuPresets'))}
               </div>
-              {/* agent picker — icon-only radios; the label lives in aria/title, not visible copy. */}
-              <div className="si-agent-picker" role="radiogroup" aria-label={t('session.harnessLabel')}>
-                {HARNESSES.map((h) => {
-                  const Glyph = h.Glyph
-                  return (
-                    <button
-                      key={h.id}
-                      type="button"
-                      role="radio"
-                      aria-checked={harness === h.id}
-                      aria-label={h.label}
-                      title={h.label}
-                      className={harness === h.id ? 'si-agent-opt on' : 'si-agent-opt'}
-                      onClick={() => pickHarness(h.id)}
-                    ><Glyph /></button>
-                  )
-                })}
-              </div>
+              {/* launcher picker — a named (harness, cmd) profile ([[launcher-select]]) subsumes the harness pick,
+                  so when the project configured launchers we show a name dropdown IN PLACE of the harness radios;
+                  with none configured we fall back to the plain icon-only harness radios. */}
+              {launchers.length ? (
+                <label className="si-launcher-picker" title={t('session.launcherLabel')}>
+                  <span className="si-launcher-label">{t('session.launcherLabel')}</span>
+                  <select className="si-launcher-select" value={launcher} onChange={(e) => pickLauncher(e.target.value)} aria-label={t('session.launcherLabel')}>
+                    {launchers.map((l) => (
+                      <option key={l.name} value={l.name}>{l.name} · {l.harness}</option>
+                    ))}
+                  </select>
+                </label>
+              ) : (
+                <div className="si-agent-picker" role="radiogroup" aria-label={t('session.harnessLabel')}>
+                  {HARNESSES.map((h) => {
+                    const Glyph = h.Glyph
+                    return (
+                      <button
+                        key={h.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={harness === h.id}
+                        aria-label={h.label}
+                        title={h.label}
+                        className={harness === h.id ? 'si-agent-opt on' : 'si-agent-opt'}
+                        onClick={() => pickHarness(h.id)}
+                      ><Glyph /></button>
+                    )
+                  })}
+                </div>
+              )}
               <div className="si-hint">
                 {t('session.hint.before')}<code>[[</code>{t('session.hint.mid')}<code>/</code>{t('session.hint.after')}
               </div>

@@ -1156,6 +1156,15 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .si-agent-opt.on { color: var(--paper); background: var(--blue); border-color: var(--blue); box-shadow: 0 2px 8px rgba(38, 139, 210, .22); }
 .si-agent-opt:disabled { opacity: .5; cursor: default; }
 .si-agent-glyph { width: 16px; height: 16px; display: block; fill: currentColor; }
+/* launcher picker — a name dropdown that stands in for the harness radios when launchers are configured. */
+.si-launcher-picker { display: inline-flex; align-items: center; gap: 6px; }
+.si-launcher-label { font-size: 11px; color: var(--ink2); text-transform: lowercase; }
+.si-launcher-select {
+  height: 28px; padding: 0 8px; cursor: pointer; color: var(--ink);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
+  font-size: 12px; transition: border-color .12s ease;
+}
+.si-launcher-select:hover { border-color: var(--blue); }
 
 /* Active session: FLAT — the terminal fills the pane directly (no inner box, no title bar). A slim action
    strip sits above it, and the ❯ input docks at the bottom as an upward-growing overlay. */

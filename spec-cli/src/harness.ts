@@ -44,9 +44,12 @@ export interface Harness {
   readonly paneTitleIsSelfSummary: boolean
 
   // --- launch / sessionId ---
-  // the base agent command (env-overridable for tests). Claude: `claude …`; Codex starts a project-scoped
-  // app-server and launches the visible TUI with `--remote` pointed at it.
-  launchCmd(id: string, runtimeDir?: string): string
+  // the base agent command. Claude: `claude …`; Codex starts a project-scoped app-server and launches the
+  // visible TUI with `--remote` pointed at it. `cmd`, when given, is the SESSION's persisted launcher command
+  // ([[launcher-select]]) and OVERRIDES the ambient env→config→default resolution — so a session created under a
+  // named launcher keeps that exact command (and auth) on resume, never silently reverting to the global
+  // default. Omitted → the unnamed default resolution (env-overridable, for tests + old records).
+  launchCmd(id: string, runtimeDir?: string, cmd?: string): string
   // the flag that pins the session id at launch. Claude lets the caller choose (`--session-id <id>`); Codex
   // assigns its own, so there is nothing to pass (the id is captured/resumed afterwards).
   sessionIdArg(id: string): string
@@ -677,7 +680,7 @@ export const claudeHarness: Harness = {
   events: CLAUDE_EVENTS,
   ownsRendezvous: true,                              // reclaude opens the rendezvous control socket (prompt delivery + liveness)
   paneTitleIsSelfSummary: true,                      // claude writes its live task summary into the OSC pane title → headline derives from it
-  launchCmd: () => process.env.SPEXCODE_CLAUDE_CMD || readConfig(mainCheckout()).sessions?.claudeCmd || 'claude --dangerously-skip-permissions',
+  launchCmd: (_id, _rt, cmd) => cmd || process.env.SPEXCODE_CLAUDE_CMD || readConfig(mainCheckout()).sessions?.claudeCmd || 'claude --dangerously-skip-permissions',
   sessionIdArg: (id) => `--session-id ${id}`,        // the caller chooses the id
   sessionEnvVar: 'CLAUDE_CODE_SESSION_ID',
   shimFile: (proj) => join(proj, '.claude', 'settings.json'),
@@ -699,7 +702,7 @@ export const codexHarness: Harness = {
   events: CODEX_EVENTS,
   ownsRendezvous: false,                             // no reclaude daemon — liveness + prompts through the project app-server socket
   paneTitleIsSelfSummary: false,                     // codex's pane title is a spinner + the cwd folder name, NOT a task summary → headline uses the prompt
-  launchCmd: (id, runtimeDir) => codexLaunchCommand(id, process.env.SPEXCODE_CODEX_CMD || readConfig(mainCheckout()).sessions?.codexCmd, undefined, runtimeDir ?? runtimeRoot()),   // env→config→default; ONE app-server per PROJECT
+  launchCmd: (id, runtimeDir, cmd) => codexLaunchCommand(id, cmd || process.env.SPEXCODE_CODEX_CMD || readConfig(mainCheckout()).sessions?.codexCmd, undefined, runtimeDir ?? runtimeRoot()),   // launcher cmd→env→config→default; ONE app-server per PROJECT
   sessionIdArg: () => '',                            // codex assigns its own id (the backend owns it via thread/start)
   sessionEnvVar: 'CODEX_THREAD_ID',
   // Codex discovers a LINKED worktree's PROJECT hooks from the ROOT CHECKOUT's `.codex`, NOT the worktree's
@@ -739,4 +742,24 @@ export function harnessById(id: string): Harness {
   const h = HARNESSES.find((x) => x.id === id)
   if (!h) throw new Error(`unknown harness '${id}' (known: ${HARNESSES.map((x) => x.id).join(', ')})`)
   return h
+}
+
+// --- named launcher profiles ([[launcher-select]]) ----------------------------------------------------------
+// a launcher = a `{ harness, cmd }` pair in spexcode.json's `sessions.launchers`, keyed by a human-chosen name.
+// harness defaults to claude. resolveLauncher throws fail-loud on an unknown name (a session must never
+// silently launch under the wrong auth) and validates the harness id.
+export type Launcher = { name: string; harness: string; cmd: string }
+
+// the configured launchers, as a stable name-sorted list (for the dashboard dropdown + the CLI). Empty when a
+// project configured none — the caller then falls back to the unnamed harness pick.
+export function launcherList(root = mainCheckout()): Launcher[] {
+  const m = readConfig(root).sessions?.launchers || {}
+  return Object.keys(m).sort().map((name) => ({ name, harness: m[name].harness || defaultHarness.id, cmd: m[name].cmd }))
+}
+
+export function resolveLauncher(name: string, root = mainCheckout()): Launcher {
+  const l = readConfig(root).sessions?.launchers?.[name]
+  if (!l || !l.cmd) throw new Error(`unknown launcher '${name}' (configured: ${launcherList(root).map((x) => x.name).join(', ') || 'none'})`)
+  harnessById(l.harness || defaultHarness.id)   // validate the harness id fail-loud
+  return { name, harness: l.harness || defaultHarness.id, cmd: l.cmd }
 }

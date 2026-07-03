@@ -297,6 +297,14 @@ if (cmd === 'serve') {
   // the supervisor's/human's drain view. `spex issues [--node id] [--store local|github] [--all] [--json]`.
   const { runIssues } = await import('./issues.js')
   process.exit(await runIssues(process.argv.slice(3)))
+} else if (cmd === 'remark' || cmd === 'resolve' || cmd === 'retract') {
+  // @@@ remark - the resolvable interaction primitive ([[remark-substrate]]): pin a concern to a HOST (a
+  // local issue, or a scenario `<node> --scenario <name>`) that a second agent can `resolve` and the author
+  // can `retract`. CLI-first — the whole author→resolve→retract loop is these thin forum-write wrappers, so
+  // the dashboard adds no capability. `spex remark <host> --body -|<text> [--code-sha <sha>]`.
+  const m = await import('./proposals.js')
+  const run = cmd === 'remark' ? m.runRemark : cmd === 'resolve' ? m.runResolve : m.runRetract
+  process.exit(await run(process.argv.slice(3)))
 } else if (cmd === 'materialize') {
   // @@@ materialize - the pay-per-change render: surface nodes → manifest + AGENTS.md/CLAUDE.md block +
   // shims + Codex trust, for cwd's project. The cheap shell gate (dispatch.sh) invokes it only on change.

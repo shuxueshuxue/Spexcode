@@ -34,7 +34,10 @@ The badge is WORK, distinct from the derived status dot.
 wiring around [[freshness]]'s pure cache) serves the dashboard without a blocking forge call on the
 request path. Its contract: a view is **always instant** (the last successful reconcile), and asking for a
 view opportunistically triggers a **background** reconcile when the cache is stale (a TTL backs off both
-success and failure, so a forge-less repo is not re-probed every poll). The board fold goes through the
+success and failure, so a forge-less repo is not re-probed every poll). The TTL is tuned **near the
+dashboard's live poll cadence** (the forum re-polls every ~15s), so an externally-posted forge issue
+surfaces within ~one poll+cycle — no page reload, the "post a github issue → it just appears" contract —
+while the back-off still spares a forge-less repo a probe on every poll. The board fold goes through the
 **unified Issue port** (spec-cli's [[issues]]): each node gets its **merged** issue list — this cache's
 forge slice AND the local forum's threads ([[proposals]]) — every item in the one Issue shape (id, store,
 kind, concern, status, url), attached **only when there are any**: the full set (open + closed) as

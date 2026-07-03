@@ -69,6 +69,10 @@ export default {
     readingFiled: 'reading 已记录 ✓',
     failed: '失败 — 后端在跑吗？',
     comments: ({ n }) => (n ? `评审轨道（${n}）` : '评审轨道'),
+    abOlder: '更早的 reading（‹ 靠近 A / 复现出的 bug）',
+    abNewer: '更新的 reading（靠近 B / 验证过的修复 ›）',
+    abLatest: '最新',
+    abPos: ({ i, n }) => `${i} / ${n}`,
   },
   thread: {
     anchorNow: '锚定',

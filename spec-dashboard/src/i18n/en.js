@@ -70,6 +70,10 @@ export default {
     readingFiled: 'reading filed ✓',
     failed: 'failed — is the backend up?',
     comments: ({ n }) => (n ? `review track (${n})` : 'review track'),
+    abOlder: 'older reading (‹ toward the A / reproduced bug)',
+    abNewer: 'newer reading (toward the B / verified fix ›)',
+    abLatest: 'latest',
+    abPos: ({ i, n }) => `${i} / ${n}`,
   },
   thread: {
     anchorNow: 'anchor',

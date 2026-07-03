@@ -13,8 +13,18 @@ import { useT } from './i18n/index.jsx'
 // comment carrying that frame (image link in the body, hash indexed as the thread's evidence[]) — a mark IS
 // thereafter a reply: replyable, @-able (`circle + @new fix this` = a timestamped, framed assign). The
 // pass/fail VERDICT stays a separate `manual@1` reading (verdict + note) — it no longer duplicates the marks.
+//
+// A/B history ([[reproduce-before-fix]]): a scenario's readings are its lifecycle, and a bug fix leaves a
+// fail→pass PAIR — the A (reproduced bug) and the B (verified fix). The pane flips through that whole
+// per-scenario history (verdict pips + ‹ › nav), swapping the media in place, so the error→correct
+// transition is right here, not just the latest reading.
 
 const stepAt = (events, tMs) => { let hit = null; for (const e of events) { if (e.tMs <= tMs) hit = e; else break } return hit }
+
+// verdict pip for the A/B history strip: ✓ pass (a B pole) / ✗ fail (an A pole) / · a pre-verdict legacy
+// reading. The verdict is an object `{status, note}` (never a bare string), so read `.status`.
+const verdictMark = (r) => (r.verdict?.status === 'pass' ? '✓' : r.verdict?.status === 'fail' ? '✗' : '·')
+const verdictCls = (r) => (r.verdict?.status === 'pass' ? 'pass' : r.verdict?.status === 'fail' ? 'fail' : 'legacy')
 
 // click-to-enlarge for an evidence image: a fixed overlay showing the same blob at viewport size —
 // click anywhere or Esc closes; Esc is swallowed in capture so the page's own Esc stack never fires.
@@ -60,27 +70,52 @@ export default function Annotator({ entry, issues = null, specs = [], sessions =
   const [draft, setDraft] = useState(null)       // { seq, body } — a circle prefills the review-track composer
   const seq = useRef(0)
 
-  // the reading's evidence LIST → its present video (the annotate-a-loop surface) and its still gallery. A
-  // legacy scalar reading normalizes to a one-entry list, so an old image/video/transcript still renders.
-  const ev = evidenceList(entry)
+  // A/B history: this scenario's WHOLE reading history (newest-first), lazily fetched from the same
+  // /api/specs/:id/evals timeline the eval tab uses — the board only folds the LATEST reading per scenario
+  // ([[board-lean]]), so walking the fail→pass poles needs this one extra read. `histIdx` indexes that list
+  // (0 = the latest, i.e. the `entry` the feed selected); `viewing` is the reading actually shown — the
+  // entry until history lands, then the picked reading.
+  const [history, setHistory] = useState(null)
+  const [histIdx, setHistIdx] = useState(0)
+  const viewing = (history && history[histIdx]) || entry
+
+  // a selection change is a new SCENARIO under annotation — reset the working state AND the history cursor,
+  // then refetch this scenario's slice of the node's timeline.
+  useEffect(() => {
+    setDrag(null); setVerdict(null); setNote(''); setFlash(''); setEvents([]); setZoom(null); setDraft(null)
+    setHistIdx(0); setHistory(null)
+    let on = true
+    fetch(specUrl(entry.node, 'evals'))
+      .then((r) => (r.ok ? r.json() : null))
+      .then((tl) => { if (on && Array.isArray(tl?.readings)) setHistory(tl.readings.filter((r) => r.scenario === entry.scenario)) })
+      .catch(() => {})
+    return () => { on = false }
+  }, [entry.node, entry.scenario, entry.ts, entry.blob])
+
+  // flipping A/B changes the clip/stills under the pen — drop any in-progress mark, zoom, or draft.
+  useEffect(() => { setDrag(null); setZoom(null); setDraft(null) }, [histIdx])
+
+  // the reading's evidence LIST → its present video (the annotate-a-loop surface) and its still gallery, for
+  // the CURRENTLY-VIEWED reading. A legacy scalar reading normalizes to a one-entry list, so an old
+  // image/video/transcript still renders.
+  const ev = evidenceList(viewing)
   const videoEntry = ev.find((e) => e.kind === 'video' && e.state === 'present')
   const images = ev.filter((e) => e.kind === 'image')
   const transcripts = ev.filter((e) => e.kind === 'transcript')
   const hasVideo = !!videoEntry
 
-  // a selection change is a new reading under annotation — the working state belongs to the old one.
-  useEffect(() => { setDrag(null); setVerdict(null); setNote(''); setFlash(''); setEvents([]); setZoom(null); setDraft(null) }, [entry.blob, entry.scenario, entry.node])
-
-  // the step map arrives lazily from the same blob cache the clip streams from; absent → plain player.
+  // the step map arrives lazily from the same blob cache the clip streams from; reset then (re)load on the
+  // viewed reading — absent timeline/video → plain player.
   useEffect(() => {
-    if (!entry.timelineBlob || !hasVideo) return
+    setEvents([])
+    if (!viewing.timelineBlob || !hasVideo) return
     let on = true
-    fetch(`/api/yatsu/blob/${entry.timelineBlob}`)
+    fetch(`/api/yatsu/blob/${viewing.timelineBlob}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => { if (on && Array.isArray(j?.events)) setEvents(j.events) })
       .catch(() => {})
     return () => { on = false }
-  }, [entry.timelineBlob, hasVideo])
+  }, [viewing.timelineBlob, hasVideo])
 
   const pct = (ev) => {
     const r = box.current.getBoundingClientRect()
@@ -140,8 +175,10 @@ export default function Annotator({ entry, issues = null, specs = [], sessions =
   }
   const now = Math.round((vid.current?.currentTime ?? 0) * 1000)
 
-  // the verdict — a manual@1 reading (verdict + note), the existing eval seam. It no longer carries a marks
-  // transcript: the annotation track lives on the eval's Issue thread, not duplicated into a frozen blob.
+  // the verdict — a manual@1 reading (verdict + note), the existing eval seam; it appends a NEW latest
+  // reading for the scenario (the next B, or a fresh A), so it targets the stable (node, scenario), never
+  // the historical reading being viewed. It no longer carries a marks transcript: the annotation track lives
+  // on the eval's Issue thread, not duplicated into a frozen blob.
   const fileReading = async () => {
     if (!verdict) return
     const r = await fetch(specUrl(entry.node, 'yatsu/eval'), {
@@ -156,11 +193,39 @@ export default function Annotator({ entry, issues = null, specs = [], sessions =
       <header className="an-head">
         <span className="an-title">{entry.scenario}</span>
         <span className="an-node">{entry.node}</span>
-        {entry.evaluator && <span className="an-meta">{entry.evaluator}</span>}
-        <span className="an-meta">{new Date(entry.ts).toLocaleString()}</span>
+        <span className={`an-verdict-badge ${verdictCls(viewing)}`}>{verdictMark(viewing)}</span>
+        {viewing.evaluator && <span className="an-meta">{viewing.evaluator}</span>}
+        <span className="an-meta">{new Date(viewing.ts).toLocaleString()}</span>
       </header>
-      {entry.expected && <div className="an-expected"><b>{t('nodeView.eval.expected')}</b> {entry.expected}</div>}
-      {ev.length > 0 && entry.verdict?.note && <div className="an-expected an-prior-note"><b>{t('nodeView.eval.noteLabel')}</b> {entry.verdict.note}</div>}
+
+      {/* the A/B history strip — the scenario's fail→pass lifecycle: verdict pips oldest→newest (✗ = an A
+          repro, ✓ = a B fix), the viewed one lit, ‹ › to walk it. Shown only when there's more than one
+          reading to flip between; a fresh scenario is just its single reading. */}
+      {history && history.length > 1 && (
+        <div className="an-ab">
+          <button type="button" className="an-ab-nav" disabled={histIdx >= history.length - 1}
+            onClick={() => setHistIdx((i) => Math.min(history.length - 1, i + 1))} title={t('annotator.abOlder')}>‹</button>
+          <div className="an-ab-track">
+            {history.slice().reverse().map((r, p) => {
+              const idx = history.length - 1 - p
+              return (
+                <button type="button" key={`${r.ts}-${idx}`}
+                  className={`an-ab-pip ${verdictCls(r)} ${idx === histIdx ? 'on' : ''}`}
+                  onClick={() => setHistIdx(idx)}
+                  title={`${verdictMark(r)} ${new Date(r.ts).toLocaleString()}`}>
+                  {verdictMark(r)}
+                </button>
+              )
+            })}
+          </div>
+          <button type="button" className="an-ab-nav" disabled={histIdx <= 0}
+            onClick={() => setHistIdx((i) => Math.max(0, i - 1))} title={t('annotator.abNewer')}>›</button>
+          <span className="an-ab-pos">{histIdx === 0 ? t('annotator.abLatest') : t('annotator.abPos', { i: history.length - histIdx, n: history.length })}</span>
+        </div>
+      )}
+
+      {viewing.expected && <div className="an-expected"><b>{t('nodeView.eval.expected')}</b> {viewing.expected}</div>}
+      {ev.length > 0 && viewing.verdict?.note && <div className="an-expected an-prior-note"><b>{t('nodeView.eval.noteLabel')}</b> {viewing.verdict.note}</div>}
 
       {/* the video — the annotate-a-loop surface: circle-to-capture, step ruler, verdict footer */}
       {videoEntry && (
@@ -207,8 +272,8 @@ export default function Annotator({ entry, issues = null, specs = [], sessions =
         ? <div className="an-hint" key={`${e.hash}-${i}`}>{t('nodeView.eval.miss')}</div>
         : <Transcript hash={e.hash} key={`${e.hash}-${i}`} />)}
 
-      {ev.length === 0 && (entry.verdict?.note
-        ? <pre className="eval-transcript">{entry.verdict.note}</pre>
+      {ev.length === 0 && (viewing.verdict?.note
+        ? <pre className="eval-transcript">{viewing.verdict.note}</pre>
         : <div className="an-hint">{t('nodeView.eval.noImage')}</div>)}
       {issues && <EvalComments entry={entry} issues={issues} specs={specs} sessions={sessions} onWrite={onWrite}
         vidRef={hasVideo ? vid : null} events={events} draft={draft} />}
@@ -220,8 +285,9 @@ export default function Annotator({ entry, issues = null, specs = [], sessions =
 // to this (node, scenario) by its concern key. The first comment creates it (the SAME propose the CLI uses,
 // nodes:[node]); every later comment replies to it. Anchored comments (`▶m:ss · step`) linkify to their
 // video moment (click = seek) and carry their circled frame; sorted by anchor they read as an annotation
-// track over the clip. Rendered only where a resident issues list is wired in (the issues page) — the
-// lookup needs the list, and posting blind would mint duplicate threads.
+// track over the clip. The thread is per-SCENARIO, not per-reading, so it stays stable as you flip the A/B
+// history above. Rendered only where a resident issues list is wired in (the issues page) — the lookup
+// needs the list, and posting blind would mint duplicate threads.
 function EvalComments({ entry, issues, specs, sessions, onWrite, vidRef, events, draft }) {
   const t = useT()
   const key = evalConcern(entry)

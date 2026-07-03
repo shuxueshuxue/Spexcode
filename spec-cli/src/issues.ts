@@ -48,6 +48,34 @@ export type Issue = {
 export type ForgeState = { issues: ForgeIssue[]; prs: ForgePR[] }
 export type ForgeSlice = { host: string; state: ForgeState }
 
+// ── the (node, scenario) ↔ eval-thread join ([[remark-teeth]]) ────────────────────────────────────────
+// A scenario's remark track lives ONCE in trunk, keyed by its `eval: <node> · <scenario>` concern thread
+// (R4). This is the ONE server-side overlay: the same join the dashboard's Annotator used to compute
+// client-side (concern-key matching), lifted here so the CLI, the board fold, the session proof, and the
+// annotator all read ONE join. It returns, per pair, the thread plus its REMARK replies (the resolvable
+// ones — a plain comment on the thread is not a remark). The teeth ([[remark-teeth]]) read the remark
+// signals; the annotator reads the thread.
+export type RemarkTrack = { threadId: string; node: string; scenario: string; thread: Issue; remarks: Reply[] }
+
+// `eval: <node> · <scenario>` — node first (never contains ' · '), then the scenario (may). One thread per
+// pair (Annotator.jsx evalConcern / proposals.ts resolveRemarkHost mint it), so the last write wins is fine.
+const EVAL_CONCERN_RE = /^eval: (.+?) · (.+)$/
+export const trackKey = (node: string, scenario: string): string => `${node} · ${scenario}`
+
+// read the whole forum ONCE and split the eval-concern threads out (directive 3): trunk-scoped, read-time,
+// no branch write. A remark whose scenario no longer exists still LOADS here (it just keys a pair no reading
+// joins) — never a crash, per [[remark-teeth]]'s dangling clause.
+export function loadEvalRemarkTracks(): Map<string, RemarkTrack> {
+  const out = new Map<string, RemarkTrack>()
+  for (const t of loadProposals()) {
+    const m = EVAL_CONCERN_RE.exec(t.concern)
+    if (!m) continue
+    const node = m[1].trim(), scenario = m[2].trim()
+    out.set(trackKey(node, scenario), { threadId: t.id, node, scenario, thread: t, remarks: t.replies.filter(isRemark) })
+  }
+  return out
+}
+
 // forge → Issue, at the adapter boundary: the host's node-naming conventions (`Spec:` body marker +
 // transitive PR links — spec-forge links.ts) become plain `nodes[]` HERE, validated against the real node
 // ids, so nothing downstream ever knows a marker existed. Every raw issue maps — linked or not — because

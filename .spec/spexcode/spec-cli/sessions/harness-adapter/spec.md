@@ -61,9 +61,15 @@ surface:
   `.codex/skills/`) and `agentDir` for `surface: agent` (sub-agent `<name>.md`s — claude `.claude/agents/`;
   Codex has no file-discovered agent-definition primitive → null, so materialize skips it). Each is ONE
   adapter line; a null dir is the whole "this harness can't" branch, never an `if (codex)` in materialize.
-- **trust** — make a user-self-launched agent run the hooks with zero prompts: Codex writes the
-  deterministic `trusted_hash` into the global `~/.codex/config.toml`; Claude relies on folder-trust (often
-  nothing). The codex-rs hash algorithm is reverse-engineered + pinned.
+- **trust** — make a user-self-launched agent run the hooks with zero prompts. Codex ≥0.142 offers
+  `--dangerously-bypass-hook-trust` (run our OWN vetted dispatch hooks with no persisted hash) — PREFERRED,
+  because the alternative (reverse-engineering codex-rs's `trusted_hash` and pinning it to one version's format)
+  silently breaks on a codex version bump: the pinned hash no longer matches, so codex skips EVERY SpexCode hook
+  and a codex session dies with no Stop gate + no `mark-active`. So a one-time capability probe (`<binary>
+  --help`) picks ONE of two mutually-exclusive paths: flag-supported → pass the flag on the app-server
+  invocation (the SHARED per-project process that fires hooks — at the GLOBAL position BEFORE `app-server`, the
+  only form codex accepts) and SKIP writing the hash; not supported → the reverse-engineered `trusted_hash`
+  still stands in. `SPEXCODE_CODEX_BYPASS_HOOK_TRUST` forces the switch. Claude relies on folder-trust (often nothing).
 - **clean / removeTrust** — the materialize INVERSE: `clean(proj, arts)` surgically removes ONLY this harness's
   own artifacts — the managed contract block (sentinels), the generated shim, the trust block (`removeTrust`,
   the inverse of trust above), and the `arts`-named skill/agent files. Every step is gated on a SpexCode

@@ -53,13 +53,42 @@ test('codex launch command starts app-server then resumes the backend-owned thre
   // and the visible TUI resumes THAT thread on the same project socket.
   assert.match(cmd, /codex-launch "\$sock" "\$PWD" "\$@"/)
   assert.match(cmd, /exec codex --yolo --remote unix:\/\/"\$sock" resume "\$tid"/)
-  assert.match(cmd, /codex-app-server\.sock/)
+  // the app-server socket lives on a SHORT sun_path-safe path (spexcode-cx-<hash>.sock off tmpdir), NOT the old
+  // `<runtimeDir>/codex-app-server.sock` that blew past macOS's ~104-byte sun_path cap on a deep project path.
+  assert.match(cmd, /spexcode-cx-[0-9a-f]+\.sock/)
+  assert.doesNotMatch(cmd, /codex-app-server\.sock/)
+  // pid/log/lock (no sun_path limit) still live under the runtime dir; self-heal drops the orphaned pre-fix lock FILE.
   assert.match(cmd, /codex-app-server\.lock/)
+  assert.match(cmd, /rm -f "\$lock"/)
   assert.match(cmd, /\/tmp\/spex-project/)
   // resume mode: a `--resume <tid>` tail (reopen's resumeArg) takes the OWNED thread id DIRECTLY — it must NOT
   // run codex-launch (which would mint a NEW thread and fire the tail as a first-turn prompt — the resume bug).
   assert.match(cmd, /if \[ "\$1" = "--resume" \]; then/)
   assert.match(cmd, /tid=\$2/)
+})
+
+test('codex app-server socket path is short (sun_path-safe), stable per project, and identical across seams', () => {
+  // A realistically DEEP macOS project path — its encodeProject flattening is exactly what blew past the cap.
+  const deep = '/Users/lexicalmathical/Codebase/gugu-bloome-acp/some/nested/worktree/checkout'
+  const sock = codexAppServerSock(deep)
+  // well under macOS's ~104-byte sun_path ceiling (leave real headroom for a long per-user $TMPDIR).
+  assert.ok(sock.length < 104, `sock path ${sock.length} chars must stay under 104 (got ${sock})`)
+  assert.match(sock, /spexcode-cx-[0-9a-f]{16}\.sock$/)
+  // STABLE per project: same identity → same sock (so launch, liveness, and delivery agree without coordination).
+  assert.equal(codexAppServerSock(deep), sock)
+  // DISTINCT per project: a different identity → a different sock (one app-server per project, no cross-talk).
+  assert.notEqual(codexAppServerSock(deep + '/other'), sock)
+  // the launch script embeds EXACTLY the sock that liveness/delivery compute for the same project identity.
+  assert.ok(codexLaunchCommand('s', 'codex --yolo', 'codex', deep).includes(sock))
+  // SPEXCODE_CODEX_SOCKET_DIR relocates the socket base while keeping the per-project hashed filename.
+  const prev = process.env.SPEXCODE_CODEX_SOCKET_DIR
+  try {
+    process.env.SPEXCODE_CODEX_SOCKET_DIR = '/tmp/cx'
+    assert.equal(codexAppServerSock(deep), join('/tmp/cx', `spexcode-cx-${sock.match(/spexcode-cx-([0-9a-f]{16})/)![1]}.sock`))
+  } finally {
+    if (prev === undefined) delete process.env.SPEXCODE_CODEX_SOCKET_DIR
+    else process.env.SPEXCODE_CODEX_SOCKET_DIR = prev
+  }
 })
 
 test('codex resumeArg is a --resume marker for the owned thread, empty when none captured', () => {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { postIssueReply, postIssueThread, putFrameBlob } from './data.js'
+import { postIssueReply, postIssueThread, putFrameBlob, specUrl } from './data.js'
 import { Replies, ReplyComposer, mmss, anchorLine } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
 
@@ -136,7 +136,7 @@ export default function Annotator({ entry, issues = null, specs = [], sessions =
   // transcript: the annotation track lives on the eval's Issue thread, not duplicated into a frozen blob.
   const fileReading = async () => {
     if (!verdict) return
-    const r = await fetch(`/api/specs/${entry.node}/yatsu/eval`, {
+    const r = await fetch(specUrl(entry.node, 'yatsu/eval'), {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ scenario: entry.scenario, status: verdict, note: note || undefined }),
     }).catch(() => null)

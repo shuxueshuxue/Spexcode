@@ -43,15 +43,18 @@ scenarios:
     tags: [frontend-e2e]
     description: >
       On #/issues select an eval. In the detail pane's comments section under the media: send a first
-      comment; send a second; look for the thread in the issues group; send a third containing '@new'.
-      Read /api/issues between sends.
+      comment; send a second; confirm /api/issues holds exactly ONE local issue for that concern (and that
+      the eval thread is SPLIT OUT of the Threads tab per the eval-remark split); send a third containing
+      '@new'. Read /api/issues between sends.
     expected: |
       The first comment lazily CREATES a local issue bound by concern 'eval: <node> · <scenario>'
       (nodes:[node], the comment as body) and it renders in place under the media. The second comment
       APPENDS to that same thread — /api/issues holds exactly ONE local issue with that concern (no
-      duplicate thread), now with one reply. The thread lists in the issues group like any local issue
-      (store chip local, the concern-key row). The '@new' comment dispatches a fresh worker through the
-      same write path — the one-line outcome ('@ new→<session>') echoes on the page.
+      duplicate thread), now with one reply. The thread IS a real local issue (store local, concern-keyed)
+      but — after the eval-remark read-time split — it is EXCLUDED from the Threads tab / merged issue
+      surfaces (mergedIssues drops isEvalConcern); it surfaces only under its eval, not as a Threads row.
+      The '@new' comment dispatches a fresh worker through the same write path — the one-line outcome
+      ('@ new→<session>') echoes on the page.
   - name: ab-history-flip
     tags: [frontend-e2e]
     description: >

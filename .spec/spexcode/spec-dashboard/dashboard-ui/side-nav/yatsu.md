@@ -4,10 +4,10 @@ scenarios:
     tags: [frontend-e2e, desktop]
     description: >
       Open the dashboard in a real browser at a live backend. Click each rail entry in turn (graph →
-      sessions → forum → settings) and read location.hash after each click; then press the browser Back
+      sessions → issues → settings) and read location.hash after each click; then press the browser Back
       button; then deep-load the app at #/settings directly.
     expected: >
-      Each click swaps the main area to that page and the hash reads #/graph, #/sessions/…, #/forum,
+      Each click swaps the main area to that page and the hash reads #/graph, #/sessions/…, #/issues,
       #/settings respectively, with the clicked rail entry accented; Back returns to the previous page;
       a direct load at #/settings opens on the settings page (no flash through the graph). Zero loss =
       the rail, the URL, and the visible page never disagree.
@@ -16,9 +16,9 @@ scenarios:
     tags: [frontend-e2e, desktop]
     description: >
       In a real browser, exercise the global ⌥ command family from every page: ⌥1..⌥4 (physical digits)
-      must land on graph/sessions/forum/settings, ⌥N on the New Session composer (its pill accented),
-      ⌥F on the forum — including when pressed FROM the session board. Then press Esc on the session
-      board and on the forum and read location.hash. Check a rail tooltip carries its ⌥ hint, and that
+      must land on graph/sessions/issues/settings, ⌥N on the New Session composer (its pill accented),
+      ⌥F on issues — including when pressed FROM the session board. Then press Esc on the session
+      board and on the issues page and read location.hash. Check a rail tooltip carries its ⌥ hint, and that
       the console's top row has exactly the ＋ pill (the forum pill is gone).
     expected: >
       Every ⌥ chord routes to its page regardless of the page it was pressed on; Esc changes NO page's

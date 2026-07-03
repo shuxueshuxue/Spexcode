@@ -9,6 +9,7 @@ code:
   - spec-cli/test/pty-bridge.stress.ts
   - spec-cli/test/pty-bridge.osc8.ts
   - spec-cli/test/pty-bridge.scroll-redraw.ts
+  - spec-cli/test/pty-bridge.history.ts
 ---
 
 # live-view

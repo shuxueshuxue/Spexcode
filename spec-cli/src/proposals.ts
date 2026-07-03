@@ -182,11 +182,14 @@ export function propose(concern: string, opts: { nodes?: string[]; body?: string
   }))
 }
 
-export function reply(id: string, body: string, author?: string): Issue {
+export function reply(id: string, body: string, author?: string, evidence?: string[]): Issue {
   const by = author || currentSession()
   return commitForum(`issue(${id}): reply by ${by}`, () => {
     const p = loadOne(id)   // fresh read under the lock → no lost-update when replies race
     p.replies.push({ by, at: new Date().toISOString(), body: body.trim() })
+    // an anchored annotation carries its frame blob: the reply's evidence hashes accrue onto the THREAD's
+    // typed evidence[] (deduped), so the thread stays the one place a video finding's blobs are indexed.
+    if (evidence?.length) p.evidence = [...new Set([...p.evidence, ...evidence])]
     return p
   })
 }
@@ -196,8 +199,10 @@ export function reply(id: string, body: string, author?: string): Issue {
 // straight to the trunk), and — because the forum is the programmatic surface — a human's @-mention DOES
 // dispatch (a human summons an agent from the issues page, per [[mentions]]). Each returns the written thread
 // plus the @-dispatch outcomes so a caller can echo who was notified.
-export async function forumReply(id: string, body: string, author: string): Promise<{ thread: Issue; outcomes: DispatchOutcome[]; loopIn: LoopIn | null }> {
-  const thread = reply(id, body, author)
+// The two reply deliveries are orthogonal: `evidence?` (f15b) carries a video annotation's frame blobs onto
+// the thread; the originator loop-in ([[mentions]]) notifies who raised the thread. Both apply on every reply.
+export async function forumReply(id: string, body: string, author: string, evidence?: string[]): Promise<{ thread: Issue; outcomes: DispatchOutcome[]; loopIn: LoopIn | null }> {
+  const thread = reply(id, body, author, evidence)
   const node = thread.nodes[0] || null
   const outcomes = await dispatchMentions(body, { threadId: id, node, author, status: thread.status })
   // implicit originator loop-in ([[mentions]]): a courtesy copy to whoever ORIGINATED this thread, if online.
@@ -313,10 +318,10 @@ export async function runPropose(args: string[]): Promise<number> {
     if (sub === 'reply') {
       const id = bare(args.slice(1))[0]
       const body = readBody(args)
-      if (!id || !body) { console.error('usage: spex propose reply <issue-id> --body -|<text>'); return 2 }
+      if (!id || !body) { console.error('usage: spex propose reply <issue-id> --body -|<text> [--evidence <hash>…]'); return 2 }
       // the ONE store-routed reply verb ([[issues]]): a forge id posts a real comment through the driver,
       // a local id commits to the forum — the same command either way (dynamic import: no static cycle).
-      const r = await (await import('./issues.js')).replyIssue(id, body)
+      const r = await (await import('./issues.js')).replyIssue(id, body, { evidence: repeated(args, 'evidence') })
       console.log(r.store === 'local'
         ? `replied to '${id}' — ${r.replies?.length} post(s) in thread`
         : `commented on '${id}' — ${r.url}`)

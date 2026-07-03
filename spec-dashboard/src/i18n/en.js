@@ -63,17 +63,17 @@ export default {
 
   annotator: {
     title: 'annotator',
-    hint: 'drag on the paused frame to circle a problem; the moment names its step.',
-    commentPh: 'what is wrong here…',
-    nodeTitle: 'the node this finding belongs to',
+    hint: 'drag on the frame to circle a problem — it becomes an anchored comment below; or ⏱ to anchor a bare note to the moment.',
+    capturing: 'capturing frame…',
     notePh: 'note on the verdict…',
-    fileIssue: 'file issue on node(s)',
     fileReading: 'file reading',
-    issueFiled: 'issue filed ✓',
     readingFiled: 'reading filed ✓',
     failed: 'failed — is the backend up?',
-    reviewFallback: 'video review',
-    comments: ({ n }) => (n ? `comments (${n})` : 'comments'),
+    comments: ({ n }) => (n ? `review track (${n})` : 'review track'),
+  },
+  thread: {
+    anchorNow: 'anchor',
+    anchorTitle: 'anchor this comment to the current frame',
   },
 
 

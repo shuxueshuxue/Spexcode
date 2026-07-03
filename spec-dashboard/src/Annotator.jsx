@@ -1,19 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
-import { postIssueReply, postIssueThread } from './data.js'
-import { Replies, ReplyComposer } from './Thread.jsx'
+import { postIssueReply, postIssueThread, putFrameBlob } from './data.js'
+import { Replies, ReplyComposer, mmss, anchorLine } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
 
-// The annotator ([[annotator]]): the human's measuring hand on an ALREADY-captured reading — now the
-// issues page's DETAIL PANE for a selected eval (master-detail, [[issues-view]]), no longer a modal: the
-// selected reading gets the full pane height instead of a box inside a box. A video reading renders the
-// clip with a step ruler (from the step-timeline sidecar: click a step → seek; a drag on the paused frame
-// circles a region whose mark is named by the ≤T step); an image renders full-width; a transcript renders
-// as text. Output routes through EXISTING seams only: an issue on the responsible node (typed evidence[]),
-// a manual@1 reading via the eval seam's POST half, or a COMMENT on the eval's own thread — a local Issue
-// lazily bound by concern key (EvalComments below). No new ledger structure.
+// The annotator ([[annotator]]): the human's measuring hand on an ALREADY-captured reading — the issues
+// page's DETAIL PANE for a selected eval (master-detail, [[issues-view]]). A video reading renders the clip
+// with a step ruler (from the step-timeline sidecar: click a step → seek); an image renders full-width; a
+// transcript renders as text. There is ONE annotation primitive: a comment on the eval's own Issue thread,
+// time-anchored by the `▶m:ss · step` prose convention ([[issues-view]]'s Thread). ⏱ stamps the current
+// frame onto a bare note; a drag-circle captures the paused frame to the blob store and prefills an anchored
+// comment carrying that frame (image link in the body, hash indexed as the thread's evidence[]) — a mark IS
+// thereafter a reply: replyable, @-able (`circle + @new fix this` = a timestamped, framed assign). The
+// pass/fail VERDICT stays a separate `manual@1` reading (verdict + note) — it no longer duplicates the marks.
 
 const stepAt = (events, tMs) => { let hit = null; for (const e of events) { if (e.tMs <= tMs) hit = e; else break } return hit }
-const mmss = (tMs) => { const s = Math.floor(tMs / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` }
 
 // click-to-enlarge for an evidence image: a fixed overlay showing the same blob at viewport size —
 // click anywhere or Esc closes; Esc is swallowed in capture so the page's own Esc stack never fires.
@@ -50,16 +50,18 @@ export default function Annotator({ entry, issues = null, specs = [], sessions =
   const vid = useRef(null)
   const box = useRef(null)
   const [events, setEvents] = useState([])
-  const [marks, setMarks] = useState([])      // { tMs, step, node, rect{x,y,w,h in %}, comment }
   const [drag, setDrag] = useState(null)
   const [verdict, setVerdict] = useState(null)
   const [note, setNote] = useState('')
   const [flash, setFlash] = useState('')
   const [zoom, setZoom] = useState(false)
+  const [busy, setBusy] = useState(false)       // capturing a circled frame
+  const [draft, setDraft] = useState(null)       // { seq, body } — a circle prefills the review-track composer
+  const seq = useRef(0)
   const kind = entry.blob ? entry.blobKind || 'image' : 'note'   // same honest-kind rule as the feed's kindOf
 
   // a selection change is a new reading under annotation — the working state belongs to the old one.
-  useEffect(() => { setMarks([]); setDrag(null); setVerdict(null); setNote(''); setFlash(''); setEvents([]); setZoom(false) }, [entry.blob, entry.scenario, entry.node])
+  useEffect(() => { setDrag(null); setVerdict(null); setNote(''); setFlash(''); setEvents([]); setZoom(false); setDraft(null) }, [entry.blob, entry.scenario, entry.node])
 
   // the step map arrives lazily from the same blob cache the clip streams from; absent → plain player.
   useEffect(() => {
@@ -77,12 +79,43 @@ export default function Annotator({ entry, issues = null, specs = [], sessions =
     return { x: ((ev.clientX - r.left) / r.width) * 100, y: ((ev.clientY - r.top) / r.height) * 100 }
   }
   const onDown = (ev) => {
-    if (ev.button !== 0) return
+    if (ev.button !== 0 || busy) return
     vid.current?.pause()
     const p = pct(ev)
     setDrag({ x0: p.x, y0: p.y, x: p.x, y: p.y })
   }
   const onMove = (ev) => { if (drag) { const p = pct(ev); setDrag({ ...drag, x: p.x, y: p.y }) } }
+
+  // burn the circled rect into a PNG of the paused frame at natural resolution, stash it in the blob store,
+  // and prefill the review-track composer with an anchored comment carrying that frame — the mark becomes a
+  // reply. A step whose owning node differs routes the finding there (a `[[node]]` line the reviewer sees).
+  const captureCircle = async (rect) => {
+    const v = vid.current
+    if (!v?.videoWidth) return
+    const tMs = Math.round((v.currentTime ?? 0) * 1000)
+    const st = stepAt(events, tMs)
+    setBusy(true)
+    setFlash(t('annotator.capturing'))
+    try {
+      const cv = document.createElement('canvas')
+      cv.width = v.videoWidth; cv.height = v.videoHeight
+      const ctx = cv.getContext('2d')
+      ctx.drawImage(v, 0, 0, cv.width, cv.height)
+      ctx.strokeStyle = '#ff9a3c'; ctx.lineWidth = Math.max(2, cv.width / 300)
+      ctx.strokeRect(rect.x / 100 * cv.width, rect.y / 100 * cv.height, rect.w / 100 * cv.width, rect.h / 100 * cv.height)
+      const blob = await new Promise((res) => cv.toBlob(res, 'image/png'))
+      const { hash } = await putFrameBlob(blob)
+      if (!hash) throw new Error('no hash')
+      const lines = [anchorLine(tMs, st?.step), `![frame](/api/yatsu/blob/${hash})`]
+      if (st?.node && st.node !== entry.node) lines.push(`re: [[${st.node}]]`)
+      lines.push('')
+      setDraft({ seq: ++seq.current, body: lines.join('\n') })
+      setFlash('')
+    } catch {
+      setFlash(t('annotator.failed'))
+    } finally { setBusy(false) }
+  }
+
   const onUp = () => {
     if (!drag) return
     const rect = {
@@ -91,41 +124,21 @@ export default function Annotator({ entry, issues = null, specs = [], sessions =
     }
     setDrag(null)
     if (rect.w < 1 && rect.h < 1) return   // a click, not a circle
-    const tMs = Math.round((vid.current?.currentTime ?? 0) * 1000)
-    const st = stepAt(events, tMs)
-    setMarks((m) => [...m, { tMs, step: st?.step ?? null, node: st?.node || entry.node, rect, comment: '' }])
+    captureCircle(rect)
   }
-  const setMark = (i, patch) => setMarks((m) => m.map((x, j) => (j === i ? { ...x, ...patch } : x)))
   const liveRect = drag && {
     x: Math.min(drag.x0, drag.x), y: Math.min(drag.y0, drag.y),
     w: Math.abs(drag.x - drag.x0), h: Math.abs(drag.y - drag.y0),
   }
   const now = Math.round((vid.current?.currentTime ?? 0) * 1000)
 
-  // save path 1 — an issue on the responsible node(s): the unified Issue port, typed evidence[].
-  const fileIssue = async () => {
-    const nodes = [...new Set(marks.map((m) => m.node).filter(Boolean))]
-    const lines = marks.map((m) =>
-      `- ${mmss(m.tMs)}${m.step ? ` · ${m.step}` : ''} · [[${m.node}]] · ${m.comment || '(circled)'} @ ${m.rect.x.toFixed(0)},${m.rect.y.toFixed(0)} ${m.rect.w.toFixed(0)}×${m.rect.h.toFixed(0)}%`)
-    const concern = `[video] ${entry.scenario}: ${marks[0]?.comment || t('annotator.reviewFallback')}`
-    const r = await fetch('/api/issues', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        concern, nodes: nodes.length ? nodes : [entry.node], body: lines.join('\n'),
-        evidence: [entry.blob, ...(entry.timelineBlob ? [entry.timelineBlob] : [])],
-      }),
-    }).catch(() => null)
-    setFlash(r?.ok ? t('annotator.issueFiled') : t('annotator.failed'))
-    if (r?.ok) onFiled?.()   // the page's issue list refreshes — a filing must show up where it lands
-  }
-
-  // save path 2 — a manual@1 reading on THIS scenario (the eval seam), the report as transcript evidence.
+  // the verdict — a manual@1 reading (verdict + note), the existing eval seam. It no longer carries a marks
+  // transcript: the annotation track lives on the eval's Issue thread, not duplicated into a frozen blob.
   const fileReading = async () => {
     if (!verdict) return
-    const transcript = JSON.stringify({ clip: entry.blob, timeline: entry.timelineBlob ?? null, marks }, null, 1)
     const r = await fetch(`/api/specs/${entry.node}/yatsu/eval`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scenario: entry.scenario, status: verdict, note: note || undefined, transcript }),
+      body: JSON.stringify({ scenario: entry.scenario, status: verdict, note: note || undefined }),
     }).catch(() => null)
     setFlash(r?.ok ? t('annotator.readingFiled') : t('annotator.failed'))
   }
@@ -145,9 +158,6 @@ export default function Annotator({ entry, issues = null, specs = [], sessions =
         <>
           <div className="an-stage" ref={box} onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp}>
             <video className="an-video" ref={vid} src={`/api/yatsu/blob/${entry.blob}`} controls preload="metadata" />
-            {marks.map((m, i) => (
-              <div key={i} className="an-rect" style={{ left: `${m.rect.x}%`, top: `${m.rect.y}%`, width: `${m.rect.w}%`, height: `${m.rect.h}%` }} />
-            ))}
             {liveRect && <div className="an-rect live" style={{ left: `${liveRect.x}%`, top: `${liveRect.y}%`, width: `${liveRect.w}%`, height: `${liveRect.h}%` }} />}
           </div>
           {events.length > 0 && (
@@ -161,19 +171,8 @@ export default function Annotator({ entry, issues = null, specs = [], sessions =
               ))}
             </div>
           )}
-          <div className="an-marks">
-            {marks.length === 0 && <div className="an-hint">{t('annotator.hint')}</div>}
-            {marks.map((m, i) => (
-              <div key={i} className="an-mark">
-                <span className="an-mark-t">{mmss(m.tMs)}{m.step ? ` · ${m.step}` : ''}</span>
-                <input className="an-mark-node" value={m.node} onChange={(ev) => setMark(i, { node: ev.target.value })} title={t('annotator.nodeTitle')} />
-                <input className="an-mark-c" value={m.comment} placeholder={t('annotator.commentPh')} onChange={(ev) => setMark(i, { comment: ev.target.value })} />
-                <button className="an-mark-x" onClick={() => setMarks((mm) => mm.filter((_, j) => j !== i))}>✕</button>
-              </div>
-            ))}
-          </div>
+          <div className="an-hint">{t('annotator.hint')}</div>
           <footer className="an-actions">
-            <button className="an-act" disabled={!marks.length} onClick={fileIssue}>{t('annotator.fileIssue')}</button>
             <span className="an-verdict">
               <button className={`an-v pass ${verdict === 'pass' ? 'on' : ''}`} onClick={() => setVerdict('pass')}>✓ pass</button>
               <button className={`an-v fail ${verdict === 'fail' ? 'on' : ''}`} onClick={() => setVerdict('fail')}>✗ fail</button>
@@ -195,29 +194,34 @@ export default function Annotator({ entry, issues = null, specs = [], sessions =
       {entry.blobState === 'none' && (entry.verdict?.note
         ? <pre className="eval-transcript">{entry.verdict.note}</pre>
         : <div className="an-hint">{t('nodeView.eval.noImage')}</div>)}
-      {issues && <EvalComments entry={entry} issues={issues} specs={specs} sessions={sessions} onWrite={onWrite} />}
+      {issues && <EvalComments entry={entry} issues={issues} specs={specs} sessions={sessions} onWrite={onWrite}
+        vidRef={kind === 'video' ? vid : null} events={events} draft={draft} />}
     </div>
   )
 }
 
-// the eval's DISCUSSION layer — no new object, no new store: the comment thread IS a local Issue lazily
-// bound to this (node, scenario) by its concern key. The first comment creates it (the SAME propose the
-// CLI uses, nodes:[node]); every later comment replies to it; the same thread lists in the issues group
-// like any local issue. Rendered only where a resident issues list is wired in (the issues page) — the
+// the eval's REVIEW TRACK — no new object, no new store: the comment thread IS a local Issue lazily bound
+// to this (node, scenario) by its concern key. The first comment creates it (the SAME propose the CLI uses,
+// nodes:[node]); every later comment replies to it. Anchored comments (`▶m:ss · step`) linkify to their
+// video moment (click = seek) and carry their circled frame; sorted by anchor they read as an annotation
+// track over the clip. Rendered only where a resident issues list is wired in (the issues page) — the
 // lookup needs the list, and posting blind would mint duplicate threads.
-function EvalComments({ entry, issues, specs, sessions, onWrite }) {
+function EvalComments({ entry, issues, specs, sessions, onWrite, vidRef, events, draft }) {
   const t = useT()
   const key = evalConcern(entry)
   const thread = issues.find((i) => i.store === 'local' && i.concern === key) || null
   const comments = thread ? [{ by: thread.by, at: thread.created, body: thread.body }, ...(thread.replies || [])] : []
-  const send = (text) => thread
-    ? postIssueReply(thread.id, text)
-    : postIssueThread({ concern: key, nodes: [entry.node], body: text })
+  const send = (text, evidence) => thread
+    ? postIssueReply(thread.id, text, evidence)
+    : postIssueThread({ concern: key, nodes: [entry.node], body: text, evidence })
+  // over a clip: seek from an anchor chip, and stamp the current frame as an anchor from ⏱.
+  const onSeek = vidRef ? (tMs) => { if (vidRef.current) vidRef.current.currentTime = tMs / 1000 } : null
+  const anchorNow = vidRef ? () => { const tMs = Math.round((vidRef.current?.currentTime ?? 0) * 1000); return { tMs, step: stepAt(events, tMs)?.step ?? null } } : null
   return (
     <section className="an-comments">
       <div className="an-comments-head">{t('annotator.comments', { n: comments.length })}</div>
-      <Replies replies={comments} />
-      <ReplyComposer onSend={send} specs={specs} sessions={sessions} focusId={entry.node} onDone={onWrite} />
+      <Replies replies={comments} onSeek={onSeek} />
+      <ReplyComposer onSend={send} specs={specs} sessions={sessions} focusId={entry.node} onDone={onWrite} anchorNow={anchorNow} draft={draft} />
     </section>
   )
 }

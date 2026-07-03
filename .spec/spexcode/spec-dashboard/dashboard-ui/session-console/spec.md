@@ -56,7 +56,11 @@ Code, OpenAI for Codex) picks **which agent the launch boots** from the set the 
 ([[harness-adapter]]). There is no visible "harness" label or text inside the buttons; the readable names live
 in `aria-label`/tooltips. The choice rides along in the launch `POST /api/sessions` body and is
 **remembered** (per-browser) so a user who lives in one agent never re-picks; it never assumes a node and
-composes orthogonally with the `/<preset> [[node]]… text` grammar above.
+composes orthogonally with the `/<preset> [[node]]… text` grammar above. When the project configures named
+launchers ([[launcher-select]]) the picker becomes a native launcher-**name** `<select>` in place of the
+radios, and the harness still reads as an **icon**: the SELECTED launcher's harness renders as that same
+vendor glyph beside the select (a native `<option>` is text-only, so the glyph is an adornment, not option
+text, and it updates as the selection changes) — no ` · claude`/` · codex` text suffix.
 
 An existing session shows its **live tmux terminal** (SessionTerm) with the docked **`❯` input** below — a
 **real tmux client but a read-only scrollable view** — but only when its **liveness** ([[state]]) is live

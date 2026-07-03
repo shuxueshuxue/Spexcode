@@ -301,6 +301,28 @@ scenarios:
       inert chrome; it just spares native form controls (`<select>`/`<option>`) that own their own
       mousedown. Regression guard: with the `keepFocus` select exemption removed, the same measurement
       reads `defaultPrevented` TRUE and the dropdown never opens.
+  - name: launcher-picker-shows-harness-icon
+    tags: [frontend-e2e, desktop]
+    description: >
+      Through the running dashboard in a real browser, with the project configured with at least two named
+      launchers whose harnesses DIFFER ([[launcher-select]]) — e.g. one `claude` launcher and one `codex`
+      launcher — so the New-Session composer shows the launcher `<select>` (`.si-launcher-select`). Open the
+      New Session tab. First read the option text: the `<option>`s show ONLY the launcher name, with NO
+      ` · claude`/` · codex` harness text suffix. Then read the harness adornment beside the select
+      (`.si-launcher-harness svg`) and confirm it renders an inline-SVG vendor glyph (the same mark the
+      harness radios use — Anthropic for a claude launcher, OpenAI for a codex launcher), NOT text. With a
+      claude-harness launcher selected, note WHICH glyph shows (its path `d`, or the wrapper's `title`); then
+      change the selection to the codex-harness launcher and RE-READ the adornment. Screenshot the composer on
+      each selection.
+    expected: |
+      The `<option>` labels carry the launcher name alone — no ` · claude`/` · codex` text suffix. Beside the
+      select sits a single small inline-SVG harness glyph (`.si-launcher-harness svg`), never a text harness
+      label: it reflects the SELECTED launcher's harness — the Anthropic mark for a claude launcher, the
+      OpenAI mark for a codex launcher (the SAME vendor glyphs the icon-only harness radios use). Changing the
+      selection to a launcher on the other harness SWAPS the glyph to that harness's mark (the `title` and the
+      SVG path change), so the icon always tracks the current selection. The native `<select>` still opens and
+      operates on click (the launcher-picker-opens-on-click contract is unaffected).
+    related: spec-dashboard/src/SessionInterface.jsx
 ---
 
 # session-console — yatsu

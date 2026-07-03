@@ -3,7 +3,7 @@ scenarios:
   - name: feed-current-loss-video-first-title-only
     tags: [frontend-e2e]
     description: >
-      With at least one fresh video reading filed (spex yatsu eval --video … --timeline …), open #/forum
+      With at least one fresh video reading filed (spex yatsu eval --video … --timeline …), open #/issues
       in a real browser (board `f` or the URL). Read the real DOM: the evals group leads the LEFT list,
       its default kind chip, the rows' media-element count; count /api/board requests fired by opening the
       page; select a video row and read where its media renders.
@@ -18,7 +18,7 @@ scenarios:
     tags: [frontend-e2e]
     description: >
       With blob-less readings on the board (spex yatsu eval … --note only, no --image/--video/--result),
-      open #/forum in a real browser. Cross-check /api/board: readings with no blob vs the rows each kind
+      open #/issues in a real browser. Cross-check /api/board: readings with no blob vs the rows each kind
       chip claims. Click the `note` chip, read the rows' kind tags; click `image`, recount; select a
       note row and read what the detail pane renders.
     expected: |

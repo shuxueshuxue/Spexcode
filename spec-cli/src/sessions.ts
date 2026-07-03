@@ -285,21 +285,26 @@ async function listWorktrees(): Promise<{ path: string; branch: string | null }[
 // claude's rendezvous socket is gone (claude exited), else idle if the idle_prompt hook has fired since
 // the last tool use, else working.
 
-// @@@ liveTmux - which of OUR tmux sessions exist, in ONE tmux call. reconcile used to spawn two tmux per
-// session (has-session + display-message), so listing N sessions was 2N spawns — the dominant /api/sessions
-// cost under multi-agent load. `tmux list-sessions` returns every session on our socket at once; a session
-// present in this set has a live tmux window (session_name = the id we created it with). tmux server down /
-// no sessions → empty set → everything reconciles to offline, which is correct. We deliberately do NOT read
-// `pane_current_command` any more: workers launch through the `reclaude` wrapper, which runs claude as a
-// CHILD rather than exec'ing it, so the pane's foreground command is the wrapper/shell even while claude is
-// very much alive — the pane command is NOT a liveness signal. claude liveness is its rendezvous socket
-// (see reconcile). The per-session alive() above stays for the single-session ops (capture / rawKey).
-async function liveTmux(): Promise<Set<string>> {
-  const s = new Set<string>()
+// @@@ liveTmux - which of OUR tmux sessions exist AND the pane command each is running, in ONE tmux call.
+// reconcile used to spawn two tmux per session (has-session + display-message), so listing N sessions was 2N
+// spawns — the dominant /api/sessions cost under multi-agent load. `tmux list-sessions` returns every session
+// on our socket at once; a session present here has a live tmux window (session_name = the id we created it
+// with), mapped to its active pane's `pane_current_command`. tmux server down / no sessions → empty map →
+// everything reconciles to offline, which is correct. `live.has(id)` = the window presence; `live.get(id)` =
+// the foreground command, which the CODEX adapter's liveness reads to tell a running TUI (command = codex) from
+// a failed launch that dropped back to the shell (see [[harness-adapter]] paneRunsCodex). CLAUDE ignores it —
+// its workers launch through the `reclaude` wrapper, which runs claude as a CHILD, so the pane command is the
+// wrapper/shell even while claude is alive; claude liveness stays its rendezvous socket. The per-session alive()
+// above stays for the single-session ops (capture / rawKey).
+async function liveTmux(): Promise<Map<string, string>> {
+  const m = new Map<string, string>()
   let out = ''
-  try { out = await tmux(['list-sessions', '-F', '#{session_name}']) } catch { return s }
-  for (const line of out.split('\n')) { const name = line.trim(); if (name) s.add(name) }
-  return s
+  try { out = await tmux(['list-sessions', '-F', '#{session_name}\t#{pane_current_command}']) } catch { return m }
+  for (const line of out.split('\n')) {
+    const tab = line.indexOf('\t'); if (tab < 0) { const name = line.trim(); if (name) m.set(name, ''); continue }
+    const name = line.slice(0, tab).trim(); if (name) m.set(name, line.slice(tab + 1).trim())
+  }
+  return m
 }
 
 // @@@ paneTitles - every session pane's RAW tmux title, free from tmux. The worker launches one pane per
@@ -327,7 +332,7 @@ async function paneTitles(): Promise<Map<string, string>> {
 // dashboard waiting for its slow cold-path fallback. Sorted so it only moves on a real change.
 export async function sessionSignature(): Promise<string> {
   const [live, titles] = await Promise.all([liveTmux(), paneTitles()])
-  return [...live].sort().join(',') + '|' + [...titles].sort().map(([k, v]) => `${k}=${v}`).join(',')
+  return [...live.keys()].sort().join(',') + '|' + [...titles].sort().map(([k, v]) => `${k}=${v}`).join(',')
 }
 
 // @@@ paneActivity - the harness-aware live self-summary: the SINGLE place a raw pane title becomes (or does
@@ -370,20 +375,23 @@ const LAUNCH_FAST_FAIL_S = 12 // launchScript retries the agent command when it 
                               // launcher daemon-not-ready race fails in ~8s; a real session runs far longer
 
 // @@@ liveness - the orthogonal axis ([[state]]): is the agent process up, for ANY session regardless of
-// lifecycle, from a prebuilt tmux set (no per-call spawn — see liveTmux) + the rendezvous socket. offline
-// iff the tmux window is gone OR claude's rendezvous socket is absent past the boot window. claude (via the
-// reclaude wrapper) holds CLAUDE_BG_RENDEZVOUS_SOCK open the whole time it is alive, so the socket — NOT
-// pane_current_command, which is the wrapper/shell while claude runs as its child — is the truth it is up.
-// A just-launched agent whose socket hasn't appeared yet reads the transient 'starting' for the grace
-// window; only past it (socket still gone) is it genuinely 'offline'.
-function liveness(rec: SessRec, live: Set<string>): Liveness {
+// lifecycle, from a prebuilt tmux snapshot (no per-call spawn — see liveTmux) + the adapter's own channel
+// check. offline iff the tmux window is gone OR the adapter's online-signal is absent past the boot window.
+// claude (via the reclaude wrapper) holds CLAUDE_BG_RENDEZVOUS_SOCK open the whole time it is alive, so its
+// socket — NOT pane_current_command, which is the wrapper/shell while claude runs as its child — is the truth.
+// codex reads the OPPOSITE from the SAME snapshot: its pane_current_command IS the truth (codex TUI = the pane
+// running codex; a failed launch = the pane at a shell while the shared app-server sock lingers). A just-
+// launched agent whose online-signal hasn't appeared yet reads the transient 'starting' for the grace window;
+// only past it (still not online) is it genuinely 'offline'.
+function liveness(rec: SessRec, live: Map<string, string>): Liveness {
   if (!rec.session) return 'offline'
-  // ask the ADAPTER ([[harness-adapter]]): claude = tmux up AND its rendezvous socket present; codex = tmux up,
-  // app-server up, AND native thread id captured. The 'starting' grace stays here (a launcher concern): a
-  // just-launched agent whose online-signal hasn't appeared yet reads 'starting' for the boot window, only past
-  // it 'offline'.
+  // ask the ADAPTER ([[harness-adapter]]): claude = tmux up AND its rendezvous socket present; codex = tmux up
+  // AND the pane's foreground command is codex (not the shell a failed launch dropped back to). The 'starting'
+  // grace stays here (a launcher concern): a just-launched agent whose online-signal hasn't appeared yet — a
+  // codex pane still at bash bootstrapping its app-server before it exec's the TUI — reads 'starting' for the
+  // boot window, only past it 'offline'.
   const h = harnessById(rec.harness || defaultHarness.id)
-  if (h.liveness(rec, live.has(rec.session), runtimeRoot()) === 'online') return 'online'
+  if (h.liveness(rec, live.has(rec.session), runtimeRoot(), live.get(rec.session)) === 'online') return 'online'
   const at = launchedAt.get(rec.session)
   return at && Date.now() - at < BOOT_GRACE_MS ? 'starting' : 'offline'
 }
@@ -394,7 +402,7 @@ function liveness(rec: SessRec, live: Set<string>): Liveness {
 // liveness (offline/starting), else the active-only idle/working inference (the mark-active hook flips idle
 // → active on the next real work, self-correcting). The orthogonal liveness field is what the UI keys
 // terminal-mount and the relaunch panel on; this label is for badges and `spex ls`.
-function reconcile(rec: SessRec, live: Set<string>): DisplayStatus {
+function reconcile(rec: SessRec, live: Map<string, string>): DisplayStatus {
   if (rec.status === 'awaiting') return PROPOSAL_STATUS[rec.proposal || 'nothing']
   if (rec.status !== 'active' && rec.status !== 'idle') return rec.status  // parked | error | asking | queued (no tmux yet)
   const lv = liveness(rec, live)
@@ -735,11 +743,11 @@ async function launch(id: string, path: string, tail: string, harness: Harness =
 // directly (the socket truth reconcile uses), so an authored `parked` whose claude has since died does NOT
 // pin a slot. The cap throttles concurrent COMPUTE; everything waiting-on-you waits cheap as a live pane.
 const OCCUPIES_SLOT = new Set<DisplayStatus>(['working', 'parked', 'starting'])  // starting's boot window is also held via `launching`
-function isOccupying(s: Session, live: Set<string>): boolean {
+function isOccupying(s: Session, live: Map<string, string>): boolean {
   if (!OCCUPIES_SLOT.has(s.status)) return false                          // waiting-on-human / proposed / queued / dead → free
   const rec = readRecord(s.id)
   if (!rec) return false
-  return harnessById(rec.harness || defaultHarness.id).liveness(rec, live.has(rec.session), runtimeRoot()) === 'online'  // and only while the agent is genuinely live (its adapter's channel)
+  return harnessById(rec.harness || defaultHarness.id).liveness(rec, live.has(rec.session), runtimeRoot(), live.get(rec.session)) === 'online'  // and only while the agent is genuinely live (its adapter's channel)
 }
 // sessions we've JUST launched whose agent hasn't come online yet. During that boot window reconcile reads them
 // `offline` (the adapter's online-signal not up yet) and isOccupying would miss them, so the drainer would
@@ -947,7 +955,8 @@ async function waitForReady(id: string, harness: Harness, timeoutMs = SOCKET_REA
   const deadline = Date.now() + timeoutMs
   for (;;) {
     const rec = readRecord(id)
-    if (rec && harness.liveness(rec, await alive(id), runtimeRoot()) === 'online') return true
+    const live = await liveTmux()   // window presence + pane command in one call — both facts the adapter's liveness needs
+    if (rec && harness.liveness(rec, live.has(id), runtimeRoot(), live.get(id)) === 'online') return true
     if (Date.now() >= deadline) return false
     await new Promise((r) => setTimeout(r, SOCKET_POLL_MS))
   }
@@ -975,7 +984,8 @@ export async function reopen(id: string): Promise<boolean> {
   if (!wt) return false
   const h = harnessById(wt.rec.harness || defaultHarness.id)
   writeRecord({ ...wt.rec, status: wt.rec.status === 'active' ? 'idle' : wt.rec.status })
-  if (h.liveness(wt.rec, await alive(id), runtimeRoot()) !== 'online') {
+  const live = await liveTmux()   // window presence + pane command — the adapter reads both (codex tells a live TUI from a shell)
+  if (h.liveness(wt.rec, live.has(id), runtimeRoot(), live.get(id)) !== 'online') {
     await tmuxOk(['kill-session', '-t', id])   // drop a dead/offline pane if any (no-op when none)
     await launch(id, wt.path, h.resumeArg(wt.rec).trim(), h, launcherCmd(wt.rec))   // resume under the SAME persisted launcher ([[launcher-select]]) — never re-resolve to the global default
     await waitForReady(id, h)   // a relaunched agent is "ready" only once the adapter reads it online

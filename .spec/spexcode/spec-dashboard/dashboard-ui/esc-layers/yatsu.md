@@ -30,7 +30,7 @@ scenarios:
       Escape closes ONLY the proof overlay; the session console behind it stays open. The board does not
       close. (Both faces drive the one overlay, opened from console or typed command.)
     related:
-      - spec-dashboard/src/ReviewProof.jsx
+      - spec-dashboard/src/SessionEval.jsx
 ---
 
 # esc-layers — measurement

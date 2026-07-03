@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { activeTurnIdFromThread, codexAppServerSock, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, codexLaunchCommand, removeManagedBlock, launcherList, resolveLauncher } from './harness.js'
+import { activeTurnIdFromThread, codexAppServerSock, codexBinary, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, codexLaunchCommand, removeManagedBlock, launcherList, resolveLauncher } from './harness.js'
 
 test('codex handshake initializes, confirms the loaded thread, then reads it to decide steer-vs-start', () => {
   const msgs = codexHandshakeMessages('thr_1')
@@ -65,6 +65,33 @@ test('codex launch command starts app-server then resumes the backend-owned thre
   // run codex-launch (which would mint a NEW thread and fire the tail as a first-turn prompt — the resume bug).
   assert.match(cmd, /if \[ "\$1" = "--resume" \]; then/)
   assert.match(cmd, /tid=\$2/)
+})
+
+test('codex app-server runs the SAME install as the launcher/resume (version parity across the one socket)', () => {
+  // The app-server binary is DERIVED from codexCmd's binary (its first shell token), not a bare `codex` off
+  // PATH: on a multi-install host a bare `codex` app-server can be a DIFFERENT version than the launcher's
+  // `--remote … resume`, and that skew breaks the thread/start→resume handoff. codexBinary strips args.
+  assert.equal(codexBinary('codex --yolo'), 'codex')
+  assert.equal(codexBinary('/opt/foo/codex --yolo'), '/opt/foo/codex')
+  assert.equal(codexBinary('  /abs/codex  '), '/abs/codex')
+  // With no explicit serverCmd, the app-server line uses the launcher's OWN binary — never bare `codex`.
+  const derived = codexLaunchCommand('s', '/opt/foo/codex --yolo', undefined, '/tmp/spex-project')
+  assert.match(derived, /\/opt\/foo\/codex app-server --listen unix:\/\/"\$sock"/)
+  assert.match(derived, /exec \/opt\/foo\/codex --yolo --remote unix:\/\/"\$sock" resume "\$tid"/)
+  // the app-server token and the resume token are the SAME install — no bare `codex app-server`.
+  assert.doesNotMatch(derived, /(?:^|\s)codex app-server/m)
+  // SPEXCODE_CODEX_SERVER_CMD remains the explicit escape hatch (highest precedence, overrides the derivation).
+  const prevEnv = process.env.SPEXCODE_CODEX_SERVER_CMD
+  try {
+    process.env.SPEXCODE_CODEX_SERVER_CMD = '/custom/codex-server'
+    const overridden = codexLaunchCommand('s', '/opt/foo/codex --yolo', undefined, '/tmp/spex-project')
+    assert.match(overridden, /\/custom\/codex-server app-server --listen unix:\/\/"\$sock"/)
+    // resume still tracks the launcher binary — the override targets ONLY the app-server.
+    assert.match(overridden, /exec \/opt\/foo\/codex --yolo --remote/)
+  } finally {
+    if (prevEnv === undefined) delete process.env.SPEXCODE_CODEX_SERVER_CMD
+    else process.env.SPEXCODE_CODEX_SERVER_CMD = prevEnv
+  }
 })
 
 test('codex app-server socket path is short (sun_path-safe), stable per project, and identical across seams', () => {

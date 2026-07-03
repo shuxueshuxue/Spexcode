@@ -1,7 +1,7 @@
 ---
 concern: remark: retract silently erases a second party's resolution (no monotonic guard on retract)
 by: b234e3fc-c280-464d-9bb6-96db6e703ce8
-status: open
+status: landed
 nodes: remark-substrate
 created: 2026-07-03T18:07:08.316Z
 ---

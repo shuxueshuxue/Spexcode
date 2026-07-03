@@ -52,7 +52,7 @@ export default {
   },
 
   evalsFeed: {
-    title: '评审 — 当前 loss',
+    title: '评测',
     kind: { video: '视频', image: '图片', note: '备注', all: '全部' },
     staleN: ({ n }) => `${n} 条已过期`,
     summary: ({ n }) => `${n} 条当前`,
@@ -281,6 +281,7 @@ export default {
     // 人工写入路径（[[issues-view]]）—— 回复输入框 + 新建本地 issue。
     issuesThreadsTitle: '讨论帖',
     issuesThreadsSummary: ({ open, total }) => `${open} 开放 · 共 ${total}`,
+    issuesStoreAll: '所有来源',
     issuesNew: '新建',
     issuesCancel: '取消',
     issuesSend: '发送',

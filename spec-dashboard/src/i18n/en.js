@@ -53,7 +53,7 @@ export default {
   },
 
   evalsFeed: {
-    title: 'evals — current loss',
+    title: 'evals',
     kind: { video: 'video', image: 'image', note: 'note', all: 'all' },
     staleN: ({ n }) => `${n} stale`,
     summary: ({ n }) => `${n} current`,
@@ -286,6 +286,7 @@ export default {
     // the human write path ([[issues-view]]) — a reply composer + a New local-issue affordance.
     issuesThreadsTitle: 'threads',
     issuesThreadsSummary: ({ open, total }) => `${open} open · ${total} total`,
+    issuesStoreAll: 'all stores',
     issuesNew: 'New',
     issuesCancel: 'Cancel',
     issuesSend: 'Send',

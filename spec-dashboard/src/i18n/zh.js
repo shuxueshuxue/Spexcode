@@ -301,6 +301,7 @@ export default {
     menuHint: '↑↓ 选择 · ⏎ 插入',
     hint: { before: '输入 ', mid: ' 以引用规格 · ', after: ' 以套用配置预设' },
     harnessLabel: '启动智能体',
+    launcherLabel: '启动器',
     tabTerminal: '终端',
     tabProof: '评测',
     navBtn: '导航',

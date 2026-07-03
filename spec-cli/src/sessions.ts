@@ -6,7 +6,7 @@ import { join, dirname, relative, isAbsolute } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, type ReviewDiffFile } from './git.js'
 import { loadSpecs } from './specs.js'
-import { defaultHarness, harnessById, rvSock, type Harness, type DispatchResult } from './harness.js'
+import { defaultHarness, harnessById, resolveLauncher, rvSock, type Harness, type DispatchResult } from './harness.js'
 import { materialize } from './materialize.js'
 import { mainBranch, gitCommonDir, readConfig, runtimeRoot, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, readAliasedRawRecord, envSessionId, type RawRecord } from './layout.js'
 
@@ -204,6 +204,7 @@ export type SessRec = {
   parent: string | null   // the spawning session's id ([[session-nesting]]); null for a top-level launch
   status: Lifecycle; proposal: Proposal | null; merges: number; note: string | null
   sortKey: number | null; createdAt: number; harness: string; harnessSessionId: string | null
+  launcher: string | null   // the named launcher profile this session launches under ([[launcher-select]]); null → the unnamed global default (an old record, or a zero-config launch)
 }
 const LIFECYCLES = new Set<Lifecycle>(['active', 'idle', 'awaiting', 'parked', 'error', 'asking', 'queued'])
 const PROPOSALS = new Set<Proposal>(['merge', 'nothing', 'close'])
@@ -228,6 +229,7 @@ function fromRaw(raw: RawRecord): SessRec {
     status, proposal, merges: Number(raw.merges) || 0, note: raw.note || null, sortKey, createdAt: Number(raw.createdAt) || 0,
     harness: raw.harness || 'claude',   // records written before the harness field default to claude
     harnessSessionId: raw.harness_session_id || null,
+    launcher: raw.launcher || null,     // records written before launchers → null → the unnamed global resolution
   }
 }
 // @@@ session.json format - written one-field-per-line (JSON.stringify(_, null, 2)) with EVERY key ALWAYS
@@ -252,6 +254,7 @@ function writeRecord(rec: SessRec): void {
     createdAt: rec.createdAt,
     harness: rec.harness || 'claude',
     harness_session_id: rec.harnessSessionId ?? '',
+    launcher: rec.launcher ?? '',
   }
   mkdirSync(sessionStoreDir(rec.session), { recursive: true })
   writeFileSync(sessionRecordPath(rec.session), JSON.stringify(obj, null, 2) + '\n')
@@ -669,12 +672,20 @@ function titleFromPrompt(prompt: string): string | null {
 // `reclaude` wrapper, a grandchild), so the pane command is the wrapper/shell — reconcile reads claude's
 // rendezvous socket instead (present while claude is alive, gone once it exits). The file lives OUTSIDE the
 // worktree (in the store, keyed by session_id), so it never pollutes the spec/code work.
-function launchScript(id: string, tail: string, harness: Harness = HARNESS): string {
+// the launch command for THIS session ([[launcher-select]]): if it was created under a named launcher, resolve
+// that profile's cmd (bypassing the ambient env→config default, so resume reuses the SAME auth); else undefined
+// → the unnamed global resolution the harness adapter does. Resolution is fail-loud on a since-removed launcher.
+function launcherCmd(rec: SessRec): string | undefined {
+  return rec.launcher ? resolveLauncher(rec.launcher).cmd : undefined
+}
+function launchScript(id: string, tail: string, harness: Harness = HARNESS, cmd?: string): string {
   const file = join(storeDir(id), 'launch.sh')
   // NO --append-system-prompt / --settings: the contract + hooks are materialized into the worktree at
   // createSession ([[harness-delivery]]) and the agent auto-discovers them — the SAME path as a self-launched
   // agent. The launch line is just the rendezvous env + the harness command + the session-id/spec-pointer/prompt tail.
-  const invocation = `${rvEnv(id, harness)} ${harness.launchCmd(id, runtimeRoot())} ${tail}`
+  // `cmd` is the session's persisted launcher command ([[launcher-select]]); when set it OVERRIDES the harness's
+  // ambient default so resume reuses the same auth, else undefined → the unnamed global resolution.
+  const invocation = `${rvEnv(id, harness)} ${harness.launchCmd(id, runtimeRoot(), cmd)} ${tail}`
   // Bounded relaunch on a FAST exit: the agent launcher (e.g. the reclaude daemon) can lose a startup
   // race ("daemon did not become ready") and exit within seconds before the rendezvous socket ever
   // appears — a fast exit is the race, not real work, so retry a few times. Once the agent has run past
@@ -696,9 +707,9 @@ function launchScript(id: string, tail: string, harness: Harness = HARNESS): str
   ].join('\n'))
   return file
 }
-async function launch(id: string, path: string, tail: string, harness: Harness = HARNESS): Promise<void> {
+async function launch(id: string, path: string, tail: string, harness: Harness = HARNESS, cmd?: string): Promise<void> {
   await tmux(['new-session', '-d', '-s', id, '-x', String(COLS), '-y', String(ROWS), '-c', path])
-  await tmux(['send-keys', '-t', id, '-l', '--', `bash ${launchScript(id, tail, harness)}`])
+  await tmux(['send-keys', '-t', id, '-l', '--', `bash ${launchScript(id, tail, harness, cmd)}`])
   await tmux(['send-keys', '-t', id, 'Enter'])
   launchedAt.set(id, Date.now())   // stamp the boot window so reconcile reads 'starting', not 'offline', until the socket is up
 }
@@ -740,7 +751,7 @@ async function startQueued(id: string): Promise<boolean> {
   const h = harnessById(wt.rec.harness || defaultHarness.id)   // launch THIS session's chosen harness (also drives waitForReady below)
   try {
     const sq = `'${launchPrompt.replace(/'/g, `'\\''`)}'`
-    await launch(id, wt.path, `${h.sessionIdArg(id)} ${sq}`.trim(), h)
+    await launch(id, wt.path, `${h.sessionIdArg(id)} ${sq}`.trim(), h, launcherCmd(wt.rec))
   } catch {
     launching.delete(id)
     return false   // launch failed → stays `queued`, retried on the next drain tick
@@ -823,7 +834,7 @@ async function assertProjectMatch(): Promise<void> {
 // the CLI POSTs to the running backend whenever one answers, making the backend the single owner of session
 // launching. Only when NO backend is reachable do we fall back to launching in this process (with a stderr
 // warning) — the backend's own POST handler calls newSession directly, so it never re-enters this path.
-export async function createSession(node: string | null, prompt: string, harness: string = defaultHarness.id): Promise<Session> {
+export async function createSession(node: string | null, prompt: string, harness: string = defaultHarness.id, launcher?: string): Promise<Session> {
   await assertProjectMatch()
   // @@@ parent = the CALLER's own session ([[session-nesting]]). Resolve it HERE, in the caller's process,
   // via the SAME ownSessionId env read [[agent-reply-channel]] uses for its sender hint — NOT inside the
@@ -835,11 +846,11 @@ export async function createSession(node: string | null, prompt: string, harness
     res = await fetch(`${apiBase()}/api/sessions`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ node, prompt, harness, parent }),
+      body: JSON.stringify({ node, prompt, harness, parent, launcher }),
     })
   } catch {
     console.error('spex: no backend reachable — launching in-process (caller env owns auth, no concurrency cap)')
-    return newSession(node, prompt, harness, parent)
+    return newSession(node, prompt, harness, parent, launcher)
   }
   if (!res.ok) throw new Error(`backend rejected session (${res.status}): ${await res.text().catch(() => '')}`)
   return await res.json() as Session
@@ -852,9 +863,16 @@ export async function createSession(node: string | null, prompt: string, harness
 // launched agent does itself (the composer's nn/dd chords just prefill a plain instruction). So the server
 // only ever launches a session; it never mutates the spec tree ([[mentions]]: the forum is the sole
 // programmatic surface, every other surface is prompt only).
-export async function newSession(node: string | null, prompt: string, harness: string = defaultHarness.id, parent: string | null = null): Promise<Session> {
+export async function newSession(node: string | null, prompt: string, harness: string = defaultHarness.id, parent: string | null = null, launcher?: string): Promise<Session> {
   const id = randomUUID()
-  const h = harnessById(harness)   // throws on an unknown id — fail loud, never silently launch the wrong harness
+  // a named launcher ([[launcher-select]]) fixes BOTH the launch command (persisted below, re-resolved at each
+  // launch so resume reuses the same auth) AND the harness — so picking one SUBSUMES the harness axis. Explicit
+  // --launcher wins, else the configured defaultLauncher; an unknown name throws fail-loud (never a silent
+  // wrong-auth launch). No launcher → the harness arg (the zero-config path) with a null launcher field → the
+  // unnamed global command resolution at launch.
+  const lname = launcher ?? readConfig(mainRoot()).sessions?.defaultLauncher ?? null
+  const chosen = lname ? resolveLauncher(lname) : null
+  const h = harnessById(chosen ? chosen.harness : harness)   // throws on an unknown id — fail loud, never silently launch the wrong harness
   // node identity + label: explicit --node wins, else the prompt's first `[[id]]` topic ref; a prompt with
   // none is node-agnostic and labeled by its first few words.
   const ref = node || mentionedNode(prompt)
@@ -874,7 +892,7 @@ export async function newSession(node: string | null, prompt: string, harness: s
     // mutated after. A self-parent (a resolver quirk) is dropped so a session can't nest under itself.
     node: ref || null, title, name: null, parent: parent && parent !== id ? parent : null,
     status: 'queued', proposal: null, merges: 0, note: null, sortKey: null, createdAt: Date.now(),
-    harness: h.id, harnessSessionId: null,
+    harness: h.id, harnessSessionId: null, launcher: lname,
   }
   writeRecord(rec)
   writePromptFile(id, prompt)   // capture the ORIGINATING prompt (the human/manager's ask) as store metadata (best-effort)
@@ -949,7 +967,7 @@ export async function reopen(id: string): Promise<boolean> {
   writeRecord({ ...wt.rec, status: wt.rec.status === 'active' ? 'idle' : wt.rec.status })
   if (h.liveness(wt.rec, await alive(id), runtimeRoot()) !== 'online') {
     await tmuxOk(['kill-session', '-t', id])   // drop a dead/offline pane if any (no-op when none)
-    await launch(id, wt.path, h.resumeArg(wt.rec).trim(), h)
+    await launch(id, wt.path, h.resumeArg(wt.rec).trim(), h, launcherCmd(wt.rec))   // resume under the SAME persisted launcher ([[launcher-select]]) — never re-resolve to the global default
     await waitForReady(id, h)   // a relaunched agent is "ready" only once the adapter reads it online
   }
   return true

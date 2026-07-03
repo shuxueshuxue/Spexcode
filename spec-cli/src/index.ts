@@ -13,7 +13,7 @@ import { buildBoard } from './board.js'
 import { boardStream, notifyBoardChanged } from './boardStream.js'
 import { gitA, gitTry, repoRoot } from './git.js'
 import { newSession, listSessions, sendKeys, rawKey, exitSession, closeSession, reopen, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, superviseQueue } from './sessions.js'
-import { defaultHarness, HARNESSES } from './harness.js'
+import { defaultHarness, HARNESSES, launcherList } from './harness.js'
 import { evalTimeline, readBlobByHash } from '../../spec-yatsu/src/evaltab.js'
 import { putBlob } from '../../spec-yatsu/src/cache.js'
 import { yatsuNodes } from '../../spec-yatsu/src/yatsu.js'
@@ -133,6 +133,10 @@ app.get('/api/layout', async (c) => c.json(await resolveLayout()))
 // its prompt `body` ({{targets}} placeholder), `kind`, and folder `dir` + co-located `files`. surface is a
 // frontmatter field, not a dir (specs.ts loadSurface); `surface: system` siblings are gathered elsewhere.
 app.get('/api/config', (c) => c.json(loadConfig()))
+// the named launcher profiles ([[launcher-select]]) the New-Session form's dropdown offers — `{ name, harness }`
+// only (the `cmd` is a host secret, never shipped to the browser). Empty when a project configured none, so the
+// form falls back to the plain harness picker.
+app.get('/api/launchers', (c) => c.json(launcherList().map(({ name, harness }) => ({ name, harness }))))
 // the ISSUES read surface ([[issues]]) for the dashboard's issues page — the merged list over every store
 // (local forum threads + the resident forge slice), the SAME mergedIssues() the CLI drain reads, verbatim
 // (the dashboard computes nothing over it: no re-sort, no salience ranking). The `enabled` flag mirrors
@@ -227,12 +231,14 @@ app.post('/api/sessions', async (c) => {
   const prompt = typeof body?.prompt === 'string' ? body.prompt : ''
   if (!prompt.trim()) return c.json({ error: 'empty prompt' }, 400)
   const harness = typeof body?.harness === 'string' ? body.harness : undefined
+  // the named launcher ([[launcher-select]]) — fixes the session's harness AND its persisted launch command.
+  const launcher = typeof body?.launcher === 'string' && body.launcher.trim() ? body.launcher.trim() : undefined
   // parent = the spawning session's id, resolved by the CALLER (createSession) in its own process and passed
   // through here ([[session-nesting]]); the browser's New Session omits it → a top-level session.
   const parent = typeof body?.parent === 'string' && body.parent.trim() ? body.parent.trim() : null
   try {
-    return c.json(await newSession(typeof body?.node === 'string' ? body.node : null, prompt, harness, parent), 201)
-  } catch (e) { return c.json({ error: String((e as Error).message || e) }, 400) }   // unknown harness id → 400, not a 500
+    return c.json(await newSession(typeof body?.node === 'string' ? body.node : null, prompt, harness, parent, launcher), 201)
+  } catch (e) { return c.json({ error: String((e as Error).message || e) }, 400) }   // unknown harness/launcher id → 400, not a 500
 })
 // one server-side merge bundle (ahead/dirty/diff(merge-base)/gates/proposal) for the manager cockpit;
 // dashboard and `spex review` are thin callers. 404 for an unknown id. See [[manager-cockpit]].

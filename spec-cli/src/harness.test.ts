@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { activeTurnIdFromThread, codexAppServerSock, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, codexLaunchCommand, removeManagedBlock } from './harness.js'
+import { activeTurnIdFromThread, codexAppServerSock, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, codexLaunchCommand, removeManagedBlock, launcherList, resolveLauncher } from './harness.js'
 
 test('codex handshake initializes, confirms the loaded thread, then reads it to decide steer-vs-start', () => {
   const msgs = codexHandshakeMessages('thr_1')
@@ -64,6 +64,34 @@ test('codex resumeArg is a --resume marker for the owned thread, empty when none
   // which the launch script would feed to codex-launch as a literal first-turn prompt.
   assert.equal(codexHarness.resumeArg({ session: 's1', harnessSessionId: 'th_abc' }), '--resume th_abc')
   assert.equal(codexHarness.resumeArg({ session: 's1', harnessSessionId: null }), '')
+})
+
+test('launchCmd cmd override wins over the ambient default (claude + codex) — the launcher-select seam', () => {
+  // a session's persisted launcher command overrides the env→config→default resolution, so resume keeps the
+  // same auth. claude returns the base command verbatim; codex embeds it as the TUI command in its launch script.
+  assert.equal(claudeHarness.launchCmd('id', undefined, '/opt/reclaude --dangerously-skip-permissions'), '/opt/reclaude --dangerously-skip-permissions')
+  const codexCmd = codexHarness.launchCmd('id', '/tmp/spex-proj', 'codex-glm --yolo')
+  assert.match(codexCmd, /exec codex-glm --yolo --remote/)
+})
+
+test('launcherList + resolveLauncher read the named profiles from spexcode.json, fail loud on an unknown name', () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-launchers-'))
+  writeFileSync(join(root, 'spexcode.json'), JSON.stringify({
+    sessions: { launchers: { reclaude: { cmd: 'reclaude --dangerously-skip-permissions' }, 'claude-glm': { harness: 'claude', cmd: 'claude-glm --dangerously-skip-permissions' } } },
+  }))
+  // name-sorted, harness defaults to claude when omitted, cmd carried through.
+  assert.deepEqual(launcherList(root), [
+    { name: 'claude-glm', harness: 'claude', cmd: 'claude-glm --dangerously-skip-permissions' },
+    { name: 'reclaude', harness: 'claude', cmd: 'reclaude --dangerously-skip-permissions' },
+  ])
+  assert.equal(resolveLauncher('claude-glm', root).cmd, 'claude-glm --dangerously-skip-permissions')
+  assert.throws(() => resolveLauncher('nope', root), /unknown launcher 'nope'/)
+})
+
+test('launcherList is empty for a zero-config project (no launchers) → the harness picker fallback', () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-nolaunchers-'))
+  writeFileSync(join(root, 'spexcode.json'), JSON.stringify({ sessions: { maxActive: 4 } }))
+  assert.deepEqual(launcherList(root), [])
 })
 
 test('removeManagedBlock strips ONLY the sentinel block, preserving the user bytes', () => {

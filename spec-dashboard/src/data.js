@@ -108,6 +108,14 @@ export async function loadConfig() {
   return res.json()
 }
 
+// the named launcher profiles ([[launcher-select]]) the backend serves at /api/launchers: `[{ name, harness }]`
+// (never the host `cmd`). Empty when a project configured none → the New-Session form falls back to the plain
+// harness picker.
+export async function loadLaunchers() {
+  const res = await apiFetch('/api/launchers')
+  return res.json()
+}
+
 // the merged issues ([[issues]]) the backend serves at /api/issues: `{ enabled, issues }`, verbatim — the
 // issues page renders what the CLI drain view reads, computing nothing over it (no re-sort, no salience order).
 export async function loadIssues() {

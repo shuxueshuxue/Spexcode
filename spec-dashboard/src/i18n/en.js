@@ -306,6 +306,7 @@ export default {
     menuHint: '↑↓ pick · ⏎ insert',
     hint: { before: 'type ', mid: ' to reference a spec · ', after: ' to apply a config preset' },
     harnessLabel: 'agent launcher',
+    launcherLabel: 'launcher',
     tabTerminal: 'terminal',
     tabProof: 'eval',
     navBtn: 'nav',

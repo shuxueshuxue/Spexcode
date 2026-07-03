@@ -39,8 +39,11 @@ body marker, transitive PR links — [[links]]) translated into `nodes[]` **here
 only `nodes[]` and never know a marker existed. Platform differences live at the adapter boundary; nothing
 downstream branches on store.
 
-**One read, differently freshened.** `mergedIssues(forgeState, nodeIds)` is a pure merge; each caller
-supplies the forge slice at the freshness its surface warrants — the server ([[dashboard-issues]]'s
+**One read, differently freshened — and ONE time line.** `mergedIssues(forgeState, nodeIds)` is a pure
+merge that interleaves every store by creation time, **newest first** — the stores are the same
+abstraction, so a github issue, a gitlab issue, and a local thread sort as one list, never
+store-grouped blocks (that grouping is exactly the two-surfaces smell this node exists to kill). Each
+caller supplies the forge slice at the freshness its surface warrants — the server ([[dashboard-issues]]'s
 resident cache: instant view, background reconcile) for `GET /api/issues` and the board fold, the CLI
 (`spex issues [--node] [--store] [--all] [--json]`) via a live driver pull that **degrades loudly
 to local-only** (one stderr note) when the forge is unreachable — local reading never hostages on a

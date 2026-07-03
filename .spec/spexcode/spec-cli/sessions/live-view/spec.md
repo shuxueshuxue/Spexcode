@@ -7,6 +7,7 @@ code:
   - spec-cli/src/pty-bridge.ts
   - spec-dashboard/src/SessionTerm.jsx
   - spec-cli/test/pty-bridge.stress.ts
+  - spec-cli/test/pty-bridge.osc8.ts
 ---
 
 # live-view
@@ -33,6 +34,13 @@ bridge ever sees it**, unrecoverable. Byte-splitting is safe because tmux escape
 backslash as octal `\NNN` (all `< 0x80`) and passes high bytes through **raw**, and a newline never falls
 inside a multi-byte character — so each wide char stays whole in one line, and un-escaping (each `\NNN` → its
 one byte, all else untouched) yields the pane's exact UTF-8 with no decode/encode cycle to shatter it.
+
+Byte-verbatim covers **escapes that end a captured row**: the control-mode DCS wrapper (`\x1b\\` on exit) is
+stripped from **protocol** lines only — a `capture-pane` reply **body** is pushed **raw**. A pane row can end
+in `\x1b\\` as the ST closing an **OSC 8 hyperlink** (which Claude Code emits for URLs and xterm renders
+underlined); eating it leaves the link unterminated, so xterm never closes it and underlines the **rest of the
+screen** — the "whole terminal goes underlined when I scroll" glitch. The wrapper never rides inside a reply
+block, so the strip stays on the protocol path and the body keeps its terminators.
 
 **Resize is deterministic and timer-free.** `refresh-client -C WxH` is guaranteed to emit exactly one
 `%layout-change` — even a same-size no-op emits one — so the bridge sets the size, then **waits to be told**
@@ -106,7 +114,11 @@ full-screen TUI (else its redraws pollute the normal scrollback and mis-render) 
 mode**. That same pane-mode reading is the source for wheel routing below; attach reconstruction and navigation
 are not two independent interpretations of tmux state. A plain resize re-seeds only the visible screen, under a
 viewport-only clear (`\x1b[H\x1b[2J`, never `\x1b[3J`), so it never re-floods history into a browser-owned
-scrollback.
+scrollback. **Every** frame leads with an SGR reset **and an OSC 8 hyperlink close** (`\x1b[m\x1b]8;;\x1b\\`)
+before that clear, so no attribute or open-hyperlink state can leak across the clear from the prior frame:
+`capture-pane -e` re-emits each cell's attributes and each row's hyperlink opens, so the frame is self-contained
+— but a link whose close sat just below the previous capture window would otherwise stay open and underline the
+new screen.
 
 ## scrolling — the pane's real history, through tmux
 

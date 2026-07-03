@@ -23,8 +23,7 @@ export function fileHumanReading(
   const reading: Reading = {
     scenario: sc.name,
     codeSha: headSha(root),
-    blob,
-    ...(blob ? { blobKind: 'transcript' as const } : {}),
+    ...(blob ? { evidence: [{ hash: blob, kind: 'transcript' as const }] } : {}),
     evaluator: 'manual@1',
     // the filing session (caller-passed — the human annotator has no reachable session, so it stays absent
     // there and the eval-comment loop-in is silent, per [[mentions]])

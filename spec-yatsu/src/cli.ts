@@ -5,7 +5,7 @@ import { loadSpecs } from '../../spec-cli/src/specs.js'
 import { loadConfig } from '../../spec-cli/src/lint.js'
 import { mainBranch, envSessionId, readRawRecord } from '../../spec-cli/src/layout.js'
 import { yatsuNodes, validateScenarios, YATSU_FILE, type YatsuNode } from './yatsu.js'
-import { readReadings, appendReading, latestPerScenario, type Reading, type Verdict } from './sidecar.js'
+import { readReadings, appendReading, latestPerScenario, evidenceOf, type Reading, type Verdict, type Evidence } from './sidecar.js'
 import { staleAxes } from './freshness.js'
 import { evaluatorTag } from './evaluator.js'
 import { putBlob, listBlobs, gc, isStrayBlob } from './cache.js'
@@ -15,6 +15,13 @@ import { evalTimeline, type EvalTimeline } from './evaltab.js'
 function flag(args: string[], name: string): string | undefined {
   const i = args.indexOf(`--${name}`)
   return i >= 0 ? args[i + 1] : undefined
+}
+// every value of a REPEATABLE flag (e.g. `--image a --image b`), in argv order; a trailing `--image` with no
+// value (or another flag as its value) is dropped so a typo can't swallow the next flag.
+function flags(args: string[], name: string): string[] {
+  const out: string[] = []
+  for (let i = 0; i < args.length; i++) if (args[i] === `--${name}`) { const v = args[i + 1]; if (v !== undefined && !v.startsWith('--')) out.push(v) }
+  return out
 }
 const has = (args: string[], name: string) => args.includes(`--${name}`)
 const positional = (args: string[]) => args.find((a) => !a.startsWith('--'))
@@ -176,26 +183,25 @@ async function evalCmd(args: string[]): Promise<number> {
   const verdict = parseVerdict(args)
   if (!verdict) { console.error('spex yatsu eval: a verdict is required — --pass or --fail (either may add --note <text>)'); return 2 }
 
-  // the evidence the agent captured (optional; at most one of --image / --result / --video). The bytes go to
-  // the content-addressed cache exactly the same whichever kind; only `blobKind` records which they are. A
-  // --video clip is the default evidence for a UI-surface scenario — a recording of the loop, not a still.
-  const image = flag(args, 'image')
+  // the evidence the agent captured (optional; a LIST now — REPEATABLE --image plus an optional --result
+  // and/or --video, in any combination). The bytes go to the content-addressed cache exactly the same
+  // whichever kind; each becomes one typed entry on the reading's `evidence` list. A --video clip is the
+  // truest evidence for a UI-surface scenario — a recording of the loop — and N stills can ride beside it.
+  const images = flags(args, 'image')
   const result = flag(args, 'result')
   const video = flag(args, 'video')
-  if ([image, result, video].filter((v) => v !== undefined).length > 1) { console.error('spex yatsu eval: pass at most one of --image / --result / --video'); return 2 }
-  let blob: string | null = null
-  let blobKind: 'image' | 'transcript' | 'video' | undefined
-  if (image !== undefined) { blob = putBlob(readFileSync(image)); blobKind = 'image' }
-  else if (result !== undefined) { blob = putBlob(readFileSync(result === '-' ? 0 : result)); blobKind = 'transcript' }
-  else if (video !== undefined) { blob = putBlob(readFileSync(video)); blobKind = 'video' }
+  const evidence: Evidence[] = []
+  for (const p of images) evidence.push({ hash: putBlob(readFileSync(p)), kind: 'image' })
+  if (result !== undefined) evidence.push({ hash: putBlob(readFileSync(result === '-' ? 0 : result)), kind: 'transcript' })
+  if (video !== undefined) evidence.push({ hash: putBlob(readFileSync(video)), kind: 'video' })
 
-  // --timeline: the clip's step map (timeline.ts) — only meaningful beside --video. Validated LOUD at
+  // --timeline: the clip's step map (timeline.ts) — only meaningful beside a --video entry. Validated LOUD at
   // filing (a malformed map is rejected, never silently reshaped); stored canonicalized so identical
-  // timelines share one blob.
+  // timelines share one blob. It anchors the reading's video evidence entry.
   const timeline = flag(args, 'timeline')
   let timelineBlob: string | undefined
   if (timeline !== undefined) {
-    if (blobKind !== 'video') { console.error('spex yatsu eval: --timeline accompanies --video (it maps moments in the clip to steps)'); return 2 }
+    if (!evidence.some((e) => e.kind === 'video')) { console.error('spex yatsu eval: --timeline accompanies --video (it maps moments in the clip to steps)'); return 2 }
     let parsed: unknown
     try { parsed = JSON.parse(readFileSync(timeline, 'utf8')) } catch { console.error(`spex yatsu eval: --timeline ${timeline} is not readable JSON`); return 2 }
     const terrs = validateTimeline(parsed)
@@ -210,8 +216,7 @@ async function evalCmd(args: string[]): Promise<number> {
   const reading: Reading = {
     scenario: scenario.name,
     codeSha: headSha(root),
-    blob,
-    ...(blobKind ? { blobKind } : {}),
+    ...(evidence.length ? { evidence } : {}),
     ...(timelineBlob ? { timelineBlob } : {}),
     evaluator: evaluatorTag(),
     // the filing session — the originator an eval-comment thread loops in ([[mentions]]); absent if unknown
@@ -220,7 +225,9 @@ async function evalCmd(args: string[]): Promise<number> {
     ts: new Date().toISOString(),
   }
   appendReading(node.sidecarPath, reading)
-  const ev = blob ? `${blobKind} ${blob.slice(0, 12)}…${timelineBlob ? ' +timeline' : ''}` : 'no evidence'
+  const ev = evidence.length
+    ? evidence.map((e) => `${e.kind} ${e.hash.slice(0, 12)}…`).join(', ') + (timelineBlob ? ' +timeline' : '')
+    : 'no evidence'
   console.log(`  ✓ '${id}' scenario '${scenario.name}' → ${verdictText(verdict)} @ ${reading.codeSha.slice(0, 7)} [${reading.evaluator}] (${ev})`)
   console.log(`spex yatsu eval: 1 measurement filed`)
   return 0
@@ -246,8 +253,8 @@ async function clean(args: string[]): Promise<number> {
       const readings = readReadings(n.sidecarPath)
       const keep = keepLatest ? [...latestPerScenario(readings).values()] : readings
       for (const r of keep) {
-        if (r.blob) referenced.add(r.blob)
-        if (r.timelineBlob) referenced.add(r.timelineBlob)   // a video reading's step map lives in the same cache
+        for (const e of evidenceOf(r)) referenced.add(e.hash)   // every evidence entry (N images + a video…)
+        if (r.timelineBlob) referenced.add(r.timelineBlob)       // a video reading's step map lives in the same cache
       }
     }
   }
@@ -311,8 +318,13 @@ export function formatTimeline(tl: EvalTimeline): string {
   const w = Math.max(...tl.readings.map((r) => r.scenario.length))
   const lines = tl.readings.flatMap((r) => {
     const badge = r.fresh ? '✓ current' : `⚠ stale (${r.staleAxes.join(', ')})`
-    const ev = r.blobState === 'present' ? `${r.blobKind ?? 'image'} ${(r.blob ?? '').slice(0, 12)}…`
-      : r.blobState === 'miss' ? 'miss original file' : 'no evidence'
+    // the reading's whole evidence list (N images + a video…), each cell its kind + short hash, or the honest
+    // sentinel for a pruned/absent one; falls back to the scalar view for a legacy/test EvalEntry.
+    const list = r.evidence?.length ? r.evidence
+      : r.blob != null ? [{ hash: r.blob, kind: r.blobKind ?? 'image', state: r.blobState }] : []
+    const ev = list.length
+      ? list.map((e) => e.state === 'miss' ? 'miss original file' : `${e.kind} ${(e.hash ?? '').slice(0, 12)}…`).join(', ')
+      : 'no evidence'
     const head = `  ${r.scenario.padEnd(w)}  ${verdictText(r.verdict)}  ${badge}  ${r.evaluator}  ${r.codeSha.slice(0, 7)}  ${ev}  ${r.ts}`
     return r.expected ? [head, `  ${' '.repeat(w)}  expected: ${r.expected}`] : [head]
   })
@@ -326,6 +338,6 @@ export async function runYatsu(args: string[]): Promise<number> {
   if (sub === 'clean') return clean(args.slice(1))
   if (sub === 'show') return show(args.slice(1))
   if (sub === 'check-staged') return checkStaged()
-  console.error('spex yatsu: scan [--changed] | eval [.|<node>] [--scenario <name>] (--pass|--fail) [--note <text>] [--image <path>|--result <path|->|--video <path> [--timeline <json>]] | show [.|<node>] [--json] | clean [--keep-latest|--all]')
+  console.error('spex yatsu: scan [--changed] | eval [.|<node>] [--scenario <name>] (--pass|--fail) [--note <text>] [--image <path> …repeatable] [--result <path|->] [--video <path> [--timeline <json>]] | show [.|<node>] [--json] | clean [--keep-latest|--all]')
   return 2
 }

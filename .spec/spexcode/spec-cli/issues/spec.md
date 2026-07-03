@@ -59,7 +59,11 @@ same routing): a local id goes through the forum's committed write, a forge id (
 discipline as promotion (the driver stays the only network toucher; the tracer stays read-only; a failed
 forge write fails loud, never queues). Either way the reply **text**'s `@`-mentions dispatch afterward
 ([[mentions]] fires on the words, store-agnostic) — mentioning `@new`/`@session` in any thread IS the
-"assign this issue to an agent" verb; no separate assign machinery exists. Freshness after a forge write
+"assign this issue to an agent" verb; no separate assign machinery exists. Beside that explicit dispatch, the
+same reply also loops in the thread's **originator** as a courtesy if their session is online (the implicit
+loop-in — [[mentions]] owns the mechanism, silent when offline, never a spawn); the originator is a local
+thread's author, or an eval-comment thread's reading-filer, and a forge issue's github-login author resolves
+to nobody, so a forge reply loops in no one. Freshness after a forge write
 stays caller-owned: the server forces its resident slice's read-back before answering (the comment shown
 is the read-back, never a local echo); the CLI's next read is a live pull anyway.
 The one cross-store verb is **promotion** —

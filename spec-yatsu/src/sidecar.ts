@@ -9,6 +9,10 @@ export type Verdict = { status: 'pass' | 'fail'; note?: string }
 // screenshot with a time axis — the same content-addressed blob, distinguished only by this tag. A video
 // reading may carry `timelineBlob`: the content hash of its step-timeline sidecar (timeline.ts) — a second
 // blob on the same cache, mapping clip moments to named steps.
+// `by` is the SESSION that filed this reading (the filer, from envSessionId) — the ORIGINATOR an eval-comment
+// thread loops in on a reply ([[mentions]] implicit loop-in). Pure additive: a legacy reading without it simply
+// has no originator → silent. `evaluator` is WHO/WHAT measured (a tag like `manual@1`); `by` is the reachable
+// session behind the filing — two different axes.
 export type Reading = {
   scenario: string
   codeSha: string
@@ -16,6 +20,7 @@ export type Reading = {
   blobKind?: 'image' | 'transcript' | 'video'
   timelineBlob?: string
   evaluator: string
+  by?: string
   verdict?: Verdict
   ts: string
 }

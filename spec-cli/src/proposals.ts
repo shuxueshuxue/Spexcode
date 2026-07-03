@@ -12,7 +12,7 @@ import { readdirSync, existsSync, mkdirSync, writeFileSync, readFileSync, rmdirS
 import { join } from 'node:path'
 import { git } from './git.js'
 import { mainCheckout, envSessionId, readConfig } from './layout.js'
-import { dispatchMentions, summarize, type DispatchOutcome } from './mentions.js'
+import { dispatchMentions, notifyOriginator, deliveredIds, summarize, type DispatchOutcome, type LoopIn } from './mentions.js'
 import type { Issue, Reply } from './issues.js'
 
 const FORUM_REL = '.spec/.forum'
@@ -196,10 +196,27 @@ export function reply(id: string, body: string, author?: string): Issue {
 // straight to the trunk), and — because the forum is the programmatic surface — a human's @-mention DOES
 // dispatch (a human summons an agent from the issues page, per [[mentions]]). Each returns the written thread
 // plus the @-dispatch outcomes so a caller can echo who was notified.
-export async function forumReply(id: string, body: string, author: string): Promise<{ thread: Issue; outcomes: DispatchOutcome[] }> {
+export async function forumReply(id: string, body: string, author: string): Promise<{ thread: Issue; outcomes: DispatchOutcome[]; loopIn: LoopIn | null }> {
   const thread = reply(id, body, author)
-  const outcomes = await dispatchMentions(body, { threadId: id, node: thread.nodes[0] || null, author, status: thread.status })
-  return { thread, outcomes }
+  const node = thread.nodes[0] || null
+  const outcomes = await dispatchMentions(body, { threadId: id, node, author, status: thread.status })
+  // implicit originator loop-in ([[mentions]]): a courtesy copy to whoever ORIGINATED this thread, if online.
+  const loopIn = await notifyOriginator(await threadOriginator(thread), author, body,
+    { threadId: id, node, alreadyDelivered: deliveredIds(outcomes) })
+  return { thread, outcomes, loopIn }
+}
+
+// The session that ORIGINATED a thread ([[mentions]] loop-in target): normally the thread's author (`by`),
+// but an EVAL-COMMENT thread's originator is the agent who FILED the reading it discusses, not whoever opened
+// the comment thread. Such a thread is a local Issue whose concern is `eval: <node> · <scenario>` (the
+// annotator's key — spec-dashboard/src/Annotator.jsx evalConcern); we resolve that to the reading's filer.
+// Non-eval threads pay nothing (no yatsu import).
+const EVAL_CONCERN_RE = /^eval: (.+?) · (.+)$/   // node first (never contains ' · '), then the scenario (may)
+async function threadOriginator(thread: Issue): Promise<string | null> {
+  const m = EVAL_CONCERN_RE.exec(thread.concern)
+  if (!m) return thread.by
+  const { evalReadingFiler } = await import('../../spec-yatsu/src/filing.js')
+  return evalReadingFiler(m[1].trim(), m[2].trim())
 }
 
 export async function forumPost(
@@ -303,7 +320,7 @@ export async function runPropose(args: string[]): Promise<number> {
       console.log(r.store === 'local'
         ? `replied to '${id}' — ${r.replies?.length} post(s) in thread`
         : `commented on '${id}' — ${r.url}`)
-      const s = summarize(r.outcomes)
+      const s = summarize(r.outcomes, r.loopIn)
       if (s) console.log(`  ${s}`)
       return 0
     }

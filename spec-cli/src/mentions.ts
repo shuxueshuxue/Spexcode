@@ -104,14 +104,58 @@ export async function dispatchMentions(
   return out
 }
 
-// A one-line human summary of what a dispatch did, for the CLI to echo after a post.
-export function summarize(outcomes: DispatchOutcome[]): string {
-  if (!outcomes.length) return ''
-  return '@ ' + outcomes.map((o) => {
+// ── implicit originator loop-in ([[mentions]]) ──────────────────────────────────────────────────────────
+// A committed reply is ALSO auto-delivered to the thread's ORIGINATOR (a forum thread's author; an
+// eval-comment thread's reading-filer) as a COURTESY — never an assignment. It is the same delivery pipe as
+// dispatchMentions (one online-resolution + one sendKeys), but with three cuts that keep courtesy ≠
+// assignment: deliver ONLY if the originator's session is ONLINE (offline → silent, NEVER spawn a worker,
+// NEVER drain — only an explicit @new spawns); SKIP if the originator is the replier (no self-notify); SKIP
+// if the originator was already an explicit @-target of this same text (no double-delivery). The notification
+// carries the reply verbatim, so the originator sees any @mentions inside it. Store-agnostic: a forge issue's
+// author is a github login, resolves to no live session, and stays silent — exactly right.
+export type LoopIn = { originator: string }   // reported ONLY when we actually delivered (originator was online)
+
+// The courtesy prompt — framed as a heads-up, never a command (that is what an @-mention's mentionPrompt is).
+function originatorPrompt(threadId: string, node: string | null, replier: string, text: string): string {
+  const re = node ? ` (re: ${node})` : ''
+  return `A new reply landed on a thread you originated — "${threadId}"${re}, from ${replier}:\n\n  ${text.trim()}\n\n` +
+    `This is a courtesy heads-up (you started this thread), not an assignment. Look if it concerns you; ` +
+    `\`spex issues --all\` lists them, reply with \`spex propose reply ${threadId} --body -\`.`
+}
+
+export async function notifyOriginator(
+  originator: string | null,
+  replier: string,
+  text: string,
+  ctx: { threadId: string; node: string | null; alreadyDelivered?: Set<string> },
+): Promise<LoopIn | null> {
+  if (!originator || originator === replier) return null      // no originator, or it's the replier → nothing to do
+  const { sendKeys, listSessions } = await import('./sessions.js')
+  const sessions = await listSessions()
+  const [resolved] = resolveActors([originator], sessions as unknown as ActorSession[])
+  if (resolved.kind !== 'session') return null                // offline / no live session → silent (never spawn)
+  if (ctx.alreadyDelivered?.has(resolved.session.id)) return null   // already an explicit @-target → no double-delivery
+  const res = await sendKeys(resolved.session.id, originatorPrompt(ctx.threadId, ctx.node, replier, text), 'forum')
+  return res.ok ? { originator } : null                       // a failed send behaves like offline: silent
+}
+
+// The set of session ids a dispatch ALREADY reached (sent or spawned) — what the loop-in skips to avoid a
+// double-delivery to an originator who was also an explicit @-target.
+export function deliveredIds(outcomes: DispatchOutcome[]): Set<string> {
+  return new Set(outcomes.filter((o) => (o.result === 'sent' || o.result === 'spawned') && o.detail).map((o) => o.detail!))
+}
+
+// A one-line human summary of what a dispatch did, for the CLI to echo after a post. The optional loop-in is
+// noted DISTINCT from the @-dispatch — a courtesy copy, not an assignment.
+export function summarize(outcomes: DispatchOutcome[], loopIn?: LoopIn | null): string {
+  const parts: string[] = []
+  if (outcomes.length) parts.push('@ ' + outcomes.map((o) => {
     if (o.result === 'sent') return `${o.token}→sent`
     if (o.result === 'spawned') return `new→${o.detail}${o.note ? ` ⚠ ${o.note} — likely already landed` : ''}`
     if (o.result === 'offline') return `${o.token}→offline (stored)`
     if (o.result === 'unresolved') return `${o.token}→? (no live session; stored)`
     return `${o.token}→failed (${o.detail})`
-  }).join('  ·  ')
+  }).join('  ·  '))
+  if (loopIn) parts.push(`↩ looped in originator @${loopIn.originator} (online)`)
+  return parts.join('  ·  ')
 }

@@ -1,6 +1,6 @@
 import { repoRoot, headSha } from '../../spec-cli/src/git.js'
 import { yatsuNodes } from './yatsu.js'
-import { appendReading, type Reading } from './sidecar.js'
+import { appendReading, readReadings, type Reading } from './sidecar.js'
 import { putBlob } from './cache.js'
 
 export type FileResult = { ok: true; reading: Reading } | { ok: false; error: string }
@@ -11,7 +11,7 @@ export type FileResult = { ok: true; reading: Reading } | { ok: false; error: st
 // the evaluator is the human hand, manual@1. yatsu still runs nothing — this only records.
 export function fileHumanReading(
   nodeId: string,
-  input: { scenario: string; status: 'pass' | 'fail'; note?: string; transcript?: string },
+  input: { scenario: string; status: 'pass' | 'fail'; note?: string; transcript?: string; by?: string },
 ): FileResult {
   const root = repoRoot()
   const node = yatsuNodes(root).find((n) => n.id === nodeId)
@@ -26,9 +26,23 @@ export function fileHumanReading(
     blob,
     ...(blob ? { blobKind: 'transcript' as const } : {}),
     evaluator: 'manual@1',
+    // the filing session (caller-passed — the human annotator has no reachable session, so it stays absent
+    // there and the eval-comment loop-in is silent, per [[mentions]])
+    ...(input.by ? { by: input.by } : {}),
     verdict: { status: input.status, ...(input.note ? { note: input.note } : {}) },
     ts: new Date().toISOString(),
   }
   appendReading(node.sidecarPath, reading)
   return { ok: true, reading }
+}
+
+// The session that filed the LATEST reading for (node, scenario) — the ORIGINATOR an eval-comment thread
+// loops in on a reply ([[mentions]] implicit loop-in). Null when the node/scenario has no reading, or the
+// latest reading is legacy (no `by`). Store-agnostic: the caller resolves this id to a live session or nobody.
+export function evalReadingFiler(nodeId: string, scenario: string): string | null {
+  const root = repoRoot()
+  const node = yatsuNodes(root).find((n) => n.id === nodeId)
+  if (!node) return null
+  const forScenario = readReadings(node.sidecarPath).filter((r) => r.scenario === scenario)
+  return forScenario.length ? forScenario[forScenario.length - 1].by ?? null : null
 }

@@ -151,7 +151,7 @@ app.post('/api/issues/:id/reply', async (c) => {
       : null
     const r = await replyIssue(id, text, { author: 'human', node })
     if (r.store !== 'local') await refreshForgeNow()
-    return c.json({ ok: true, replies: r.replies, url: r.url, outcomes: summarize(r.outcomes) })
+    return c.json({ ok: true, replies: r.replies, url: r.url, outcomes: summarize(r.outcomes, r.loopIn) })
   } catch (e) {
     const msg = String((e as Error).message || e)
     return c.json({ error: msg }, id.includes('#') ? 502 : 404)

@@ -91,7 +91,10 @@ system already nests there.
   `author` (default the effective session id, else a caller-passed `'human'`), so a person can post from
   outside the CLI. `forumReply(id, body, author)` and `forumPost(concern, {nodes, body, author})` are
   the programmatic entrypoints: each does the git-committed write AND then dispatches any `@`-mention in the
-  text ([[mentions]]), returning `{ thread, outcomes }`. Because the forum is the programmatic surface, a
+  text ([[mentions]]). `forumReply` additionally loops in the thread's **originator** — its author, or, for an
+  eval-comment thread (concern `eval: <node> · <scenario>`), the reading's filer — as a courtesy if online
+  (the implicit loop-in, [[mentions]]); `forumPost` opens a *new* thread whose originator is the poster, so it
+  loops in no one. Each returns `{ thread, outcomes, loopIn }`. Because the forum is the programmatic surface, a
   human's `@`-mention in a reply **does** summon the agent — that is the point. The dashboard's write path
   ([[issues-view]]) is a thin caller: `POST /api/issues/:id/reply` and `POST /api/issues` (author `'human'`),
   both gated by the same on/off switch (403 when OFF).

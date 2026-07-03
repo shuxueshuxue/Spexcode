@@ -93,9 +93,14 @@ function walk(dir: string, parent: string | null, acc: Raw[]) {
 
 // re-key each node to the shortest globally-unique trailing path-suffix (overrides walk's placeholder
 // basename id/parent); the second loop recomputes parent by path-ancestry.
+// A node id is a URL-safe single token ([[id-url-safe]]) — never a '/'-joined path, which would break
+// every `:id` route and fetch that treats an id as one path segment. So the disambiguation separator is
+// '_': like '/' it never occurs inside a dir basename (so the join stays unambiguous), but unlike '/' it
+// is a URL/wikilink/DOM-safe unreserved char, so a collision-qualified id (e.g. `.config_spec-scout`)
+// stays a single token everywhere it is resolved.
 function reId(acc: Raw[]): void {
   const segs = acc.map((r) => r.relPath.split(/[/\\]/).slice(1, -1))   // path under .spec, minus 'spec.md'
-  const suffix = (s: string[], k: number) => s.slice(s.length - k).join('/')
+  const suffix = (s: string[], k: number) => s.slice(s.length - k).join('_')
   for (let i = 0; i < acc.length; i++) {
     const s = segs[i]
     let k = 1

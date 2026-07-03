@@ -2,7 +2,7 @@
 title: annotator
 status: active
 hue: 200
-desc: The issues page's eval DETAIL pane — a selected reading full-height (a video plays with a clickable step ruler; the human scrubs, circles, comments; images/transcripts render whole). There is ONE annotation primitive — a time-anchored comment on the eval's own Issue thread — and the verdict stays a separate reading.
+desc: The issues page's eval DETAIL pane — a selected reading full-height (a video plays with a clickable step ruler; the human scrubs, circles, comments; images/transcripts render whole), with an A/B strip that flips through the scenario's whole reading history (its fail→pass lifecycle). There is ONE annotation primitive — a time-anchored comment on the eval's own Issue thread — and the verdict stays a separate reading.
 code:
   - spec-dashboard/src/Annotator.jsx
 related:
@@ -38,6 +38,22 @@ sidecar, a **step ruler** renders under the scrubber (bound to the **video entry
 moment T names its step by the last-boundary-≤T lookup, and a step's optional owning-node routes the
 finding to the node it actually belongs to. Without a sidecar the annotator is a plain player with
 comments — degraded gracefully, never blocked.
+
+**The A/B strip — a scenario's fail→pass lifecycle, walkable in place.** A bug fix leaves a *pair* of
+readings on one scenario — the **A** (the reproduced failure) and the **B** (the verified fix), the
+[[reproduce-before-fix]] contract's proof-of-work — and the error→correct transition is only legible when
+you can see both. So the pane is not pinned to the latest reading: above the media a compact **A/B strip**
+renders the scenario's WHOLE reading history as verdict pips (oldest→newest, ✗ = a fail/A pole, ✓ = a
+pass/B pole, · = a pre-verdict legacy reading), the viewed one lit, with **‹ ›** to walk older→newer and a
+click on any pip to jump. Flipping swaps the media *in place* — the video/gallery, the step ruler, the
+expected, the verdict note, and the header's verdict badge all re-render for the selected reading — so A
+(the bug) and B (the fix) sit one keystroke apart. The board folds only the latest reading per scenario
+([[board-lean]]), so the full history is lazily fetched from the SAME `/api/specs/:id/evals` timeline the
+[[yatsu-eval-tab]] uses (no new endpoint, no board bloat); the strip shows only when a scenario has more
+than one reading (a fresh scenario is just its single reading). The comment thread below is per-SCENARIO,
+not per-reading, so it stays stable as you flip — the annotation track spans the whole A/B, and the verdict
+footer files a NEW latest reading (the next B, or a fresh A) for the scenario, never mutating the historical
+reading on screen.
 
 **One annotation primitive — a time-anchored comment on the eval's thread.** Discussion and annotation are
 the same act: the pane renders the eval's comment thread ([[issues-view]]'s shared `Thread`), and every

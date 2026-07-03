@@ -42,6 +42,8 @@ test('activeTurnIdFromThread finds the inProgress turn, else null', () => {
 })
 
 test('codex launch command starts app-server then resumes the backend-owned thread on the same socket', () => {
+  process.env.SPEXCODE_CODEX_BYPASS_HOOK_TRUST = '0'   // pin the no-flag baseline (the real --help probe is machine-dependent)
+  try {
   const cmd = codexLaunchCommand('sess-1', 'codex --yolo', 'codex', '/tmp/spex-project')
   // POSIX-portable mkdir mutex, NOT flock (absent on macOS): the check-and-start is serialized on `mkdir "$lock.d"`
   // and there is no flock / fd-9 gymnastics left on the daemon spawn.
@@ -69,6 +71,21 @@ test('codex launch command starts app-server then resumes the backend-owned thre
   // never `resume ""` — so the codex-launch call propagates failure and an empty tid is guarded before resume.
   assert.match(cmd, /codex-launch "\$sock" "\$PWD" "\$@"\) \|\| exit 1/)
   assert.match(cmd, /\[ -n "\$tid" \] \|\| \{ echo .* exit 1; \}/)
+  } finally { delete process.env.SPEXCODE_CODEX_BYPASS_HOOK_TRUST }
+})
+
+test('codex launch passes --dangerously-bypass-hook-trust (global, before app-server) when the codex binary supports it', () => {
+  // codex >=0.142 requires a persisted hook-trust hash to run hooks; a version bump silently invalidates the
+  // pinned codexHookHash, so codex skips ALL SpexCode hooks (no Stop gate, no mark-active). The bypass flag runs
+  // our own vetted hooks WITHOUT the fragile hash — version-robust. Hooks fire from the SHARED app-server, so the
+  // flag MUST be global BEFORE `app-server` (codex accepts `codex <flag> app-server`, rejects `codex app-server <flag>`).
+  process.env.SPEXCODE_CODEX_BYPASS_HOOK_TRUST = '1'
+  try {
+    const cmd = codexLaunchCommand('s', 'codex --yolo', 'codex', '/tmp/spex-project')
+    assert.match(cmd, /codex --dangerously-bypass-hook-trust app-server --listen/)   // global position on the app-server
+    assert.match(cmd, /exec codex --yolo --dangerously-bypass-hook-trust --remote/)  // also on the resume TUI (harmless)
+    assert.doesNotMatch(cmd, /(?:^|\s)codex app-server/m)                            // never the bare (rejected) form
+  } finally { delete process.env.SPEXCODE_CODEX_BYPASS_HOOK_TRUST }
 })
 
 test('codexRolloutExists finds a thread by id only once its rollout file lands on disk', () => {

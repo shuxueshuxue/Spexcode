@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { homedir, tmpdir } from 'node:os'
 import { createHash, randomBytes } from 'node:crypto'
 import { createConnection, type Socket } from 'node:net'
-import { execFile } from 'node:child_process'
+import { execFile, execFileSync } from 'node:child_process'
 import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import { claudeSlashCommands, codexSlashCommands, type SlashCommand } from './slash-commands.js'
@@ -280,8 +280,33 @@ export function activeTurnIdFromThread(readResult: unknown): string | null {
 export function codexBinary(codexCmd: string): string {
   return codexCmd.trim().split(/\s+/)[0] || 'codex'
 }
+// codex >=0.142 adds `--dangerously-bypass-hook-trust` — run our OWN (vetted) dispatch hooks without a persisted
+// trusted_hash. We PREFER it over reverse-engineering codexHookHash: that hash is pinned to one codex version's
+// format and silently breaks on a bump (codex then skips ALL our hooks -> no Stop gate, no mark-active, sessions
+// die undeclared). The flag is version-robust. But an OLDER codex HARD-ERRORS on the unknown flag (the whole
+// app-server fails to boot), so we CAPABILITY-PROBE the binary once (`--help` grep) and only pass it when
+// present; otherwise the writeCodexTrust hash path still stands in. Memoized — a per-binary constant.
+const bypassProbe = new Map<string, boolean>()
+export function codexSupportsBypassHookTrust(binary: string): boolean {
+  // explicit escape hatch (also what makes this deterministic in tests): force the capability on/off regardless
+  // of the binary — e.g. if the `--help` probe is unreliable on a wrapper, or to pin behaviour.
+  const env = process.env.SPEXCODE_CODEX_BYPASS_HOOK_TRUST
+  if (env !== undefined) return env === '1' || env === 'true'
+  const hit = bypassProbe.get(binary)
+  if (hit !== undefined) return hit
+  let ok = false
+  try { ok = execFileSync(binary, ['--help'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).includes('--dangerously-bypass-hook-trust') } catch { ok = false }
+  bypassProbe.set(binary, ok)
+  return ok
+}
 export function codexLaunchCommand(_id: string, codexCmd = process.env.SPEXCODE_CODEX_CMD || 'codex --yolo', serverCmd?: string, dir = runtimeRoot()): string {
   const server = process.env.SPEXCODE_CODEX_SERVER_CMD || serverCmd || codexBinary(codexCmd)
+  // per [[harness-adapter]] spec, hooks fire from the SHARED app-server process — so the bypass flag MUST sit on
+  // the app-server invocation, at the GLOBAL position BEFORE `app-server` (codex 0.142.5 accepts `codex <flag>
+  // app-server` but REJECTS `codex app-server <flag>`). Added to the resume TUI too (harmless, global). Guarded
+  // against a double-flag when an explicit env override already carries it.
+  const svrBypass = !server.includes('--dangerously-bypass-hook-trust') && codexSupportsBypassHookTrust(codexBinary(server)) ? ' --dangerously-bypass-hook-trust' : ''
+  const tuiBypass = !codexCmd.includes('--dangerously-bypass-hook-trust') && codexSupportsBypassHookTrust(codexBinary(codexCmd)) ? ' --dangerously-bypass-hook-trust' : ''
   const sock = codexAppServerSock(dir)         // short sun_path-safe path off tmpdir/override — NOT under "$dir"
   const pid = codexAppServerPid(dir)
   const log = join(dir, 'codex-app-server.log')
@@ -313,7 +338,7 @@ export function codexLaunchCommand(_id: string, codexCmd = process.env.SPEXCODE_
     'if [ -S "$sock" ] && [ -s "$pid" ] && ! kill -0 "$(cat "$pid")" 2>/dev/null; then rm -f "$sock"; fi',
     'if [ ! -S "$sock" ]; then',
     // </dev/null detaches the daemon's stdin from the pane so it can't fight the TUI for the tty.
-    `  ${server} app-server --listen unix://"$sock" >"$log" 2>&1 </dev/null &`,
+    `  ${server}${svrBypass} app-server --listen unix://"$sock" >"$log" 2>&1 </dev/null &`,
     '  echo $! > "$pid"',
     '  for i in $(seq 1 100); do [ -S "$sock" ] && break; sleep 0.05; done',
     'fi',
@@ -333,7 +358,7 @@ export function codexLaunchCommand(_id: string, codexCmd = process.env.SPEXCODE_
     `  tid=$(${SPEX} codex-launch "$sock" "$PWD" "$@") || exit 1`,
     `fi`,
     `[ -n "$tid" ] || { echo "[spex] codex-launch produced no resumable thread" >&2; exit 1; }`,
-    `exec ${codexCmd} --remote unix://"$sock" resume "$tid"`,
+    `exec ${codexCmd}${tuiBypass} --remote unix://"$sock" resume "$tid"`,
   ].join('\n')
   return `bash -lc ${shQuote(script)} spexcode-codex`
 }
@@ -833,7 +858,13 @@ export const codexHarness: Harness = {
   skillDir: (proj) => join(proj, '.codex', 'skills'),
   agentDir: () => null,                              // codex has no file-discovered agent-definition primitive — materialize skips it
   shim: (dispatch, spex) => buildShim('codex', CODEX_EVENTS, dispatch, spex),
-  writeTrust: (proj, cmdFor) => writeCodexTrust(mainCheckout(proj), CODEX_EVENTS, cmdFor),
+  // write the codexHookHash trust ONLY when the resolved codex binary lacks `--dangerously-bypass-hook-trust`;
+  // when it has the flag, the launch bypasses trust entirely, so a materialized hash is dead weight (and would
+  // be a stale, version-mismatched value). One capability probe, two mutually-exclusive paths.
+  writeTrust: (proj, cmdFor) => {
+    const bin = codexBinary(process.env.SPEXCODE_CODEX_SERVER_CMD || process.env.SPEXCODE_CODEX_CMD || readConfig(mainCheckout(proj)).sessions?.codexCmd || 'codex --yolo')
+    if (!codexSupportsBypassHookTrust(bin)) writeCodexTrust(mainCheckout(proj), CODEX_EVENTS, cmdFor)
+  },
   // trust is keyed by the MAIN checkout (where the codex shim materializes) — strip it at the same key.
   removeTrust: (proj) => removeCodexTrust(mainCheckout(proj)),
   clean(proj, arts) { cleanHarness(this, proj, arts) },

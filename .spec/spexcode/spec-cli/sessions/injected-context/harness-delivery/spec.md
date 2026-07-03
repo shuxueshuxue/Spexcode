@@ -89,6 +89,14 @@ worktree). Every checkout emits the identical block, so the committed `.gitignor
 never re-dirties a clean tree. The Codex trust hash is not in-tree at all — it lives in
 the global `~/.codex/config.toml`.
 
+That "gitignored, never committed" promise holds cleanly only when a contract file is WHOLLY ours; on a host
+that ALREADY tracks its own `CLAUDE.md`/`AGENTS.md`/`.gitignore`, ignoring a tracked file is a no-op and the
+folded-in block leaks into shared history. [[private-overlay]] (the machine-local `private` toggle) closes that
+gap: the identical render redirects its managed ignore block to the per-clone `.git/info/exclude` (widened to
+hide `.spec` + `spexcode.json`) and marks any already-tracked contract file `skip-worktree`, so the whole
+contract still reaches a self-launched agent while nothing enters the host's tracked files. It is reversible —
+the default render re-asserts the inverse — so this stays one delivery mechanism with two modes, not a fork.
+
 The net ideal path: `npm install spexcode` → `spex init` → the user launches their own `claude`/`codex`, zero
 further operation, no global pollution beyond the scoped Codex trust. The contract files are SpexCode-owned
 generated artifacts (gitignored), so a clone never carries a stale committed copy — any hand-written contract

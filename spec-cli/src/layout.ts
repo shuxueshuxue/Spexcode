@@ -10,6 +10,13 @@ type Config = {
   mainBranch?: string              // source-of-truth BRANCH worktrees fork from (default: auto-detected — see mainBranch())
   branchPrefix?: string            // how a branch names its node (default: "node/")
   preset?: string                  // the SELECTED init preset — which cumulative .config tier `spex init` seeds (default 'default'; seed-time only, no launcher gate; read by init.ts; see [[init-preset]])
+  // PRIVATE-OVERLAY mode ([[private-overlay]]) — belongs in the gitignored spexcode.local.json, NEVER the
+  // committed spexcode.json. When true, `spex materialize` leaves ZERO trace in the host's TRACKED files /
+  // shared history: the managed ignore entries (incl .spec + spexcode.json, which the DEFAULT mode commits —
+  // "git is the database") go to the per-clone `.git/info/exclude`, and any host-tracked contract file
+  // (CLAUDE.md/AGENTS.md) the system block folds into is marked `skip-worktree` so that block never stages.
+  // The dogfood becomes invisible to collaborators, trading away git-derived spec version history ([[source-of-truth]]).
+  private?: boolean
   // which harness targets `spex materialize` delivers into — native ids ('claude'|'codex') or a {plugin:"<folder>"}
   // bundle; resolved + validated by [[harness-select]] (harness-select.ts). Default (omitted): all native harnesses.
   harnesses?: (string | { plugin?: string })[]
@@ -46,7 +53,7 @@ type Config = {
 // `serve`, `harnesses`, and `preset` are frontend/runtime/policy concerns (read separately via readConfig —
 // preset by init.ts at seed time, harnesses by [[harness-select]]; see api-endpoint / sessions.ts maxActive /
 // gateway.ts), NOT layout fields, so they stay out of the convention rather than forcing a default.
-type Convention = Required<Omit<Config, 'dashboard' | 'sessions' | 'serve' | 'harnesses' | 'preset' | 'proposals'>>
+type Convention = Required<Omit<Config, 'dashboard' | 'sessions' | 'serve' | 'harnesses' | 'preset' | 'proposals' | 'private'>>
 
 export type Worktree = {
   path: string; branch: string | null; node: string | null

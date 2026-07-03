@@ -216,7 +216,18 @@ The Codex impl of the adapter must encode these (measured against a real self-la
   the direct hit always wins.
 - **no rendezvous** (`ownsRendezvous:false`): codex has no reclaude control socket, so SpexCode uses Codex's
   own app-server. Each SpexCode project has ONE project-scoped `codex app-server --listen unix://<project sock>`
-  (started once, reused) under the same global project runtime dir as the hook manifest. The check-and-start of
+  (started once, reused). That socket lives on a **short, `sun_path`-safe, per-project-unique path** —
+  `<socketBase>/spexcode-cx-<hash>.sock`, where `<hash>` is a stable digest of the project identity (the
+  runtime dir) and `<socketBase>` is the platform tmpdir (or the `SPEXCODE_CODEX_SOCKET_DIR` override) — NOT
+  nested under the project runtime dir. It MUST be short because a Unix socket path is capped at `sun_path`
+  (~104 bytes on macOS, 108 on Linux) and `runtimeRoot()` flattens the entire project path into one long
+  dash-segment (`encodeProject`), so the naive `<runtimeRoot>/codex-app-server.sock` overran the cap on a deep
+  macOS project (`path must be shorter than SUN_LEN` + connect EINVAL — the app-server never bound; Linux's
+  larger limit + shorter `/root` paths happened to fit). The hash is derived from the SAME project identity the
+  launch, liveness, and delivery seams all pass, so they compute the IDENTICAL sock with no coordination — the
+  one-app-server-per-project invariant. The short-path derivation is unconditional on every platform (no darwin
+  branch — a platform difference handled at the path seam, not a product `if`). The `.pid`/`.log`/`.lock`
+  sidecar files carry no `sun_path` limit and stay under the project runtime dir. The check-and-start of
   that shared server is serialized by a **POSIX-portable lock** — an atomic `mkdir` mutex with a bounded wait,
   NOT util-linux `flock` (absent on macOS, where the flock path failed the whole bootstrap and left the pane at
   the shell). The lock is held only across the check-and-start and released immediately; a stale dir left by a

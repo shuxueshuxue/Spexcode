@@ -5,7 +5,7 @@ scenarios:
     code: spec-dashboard/src/IssuesView.jsx
     description: >-
       Run the dashboard against a backend whose issues span both stores (a local thread with a signer +
-      reply, forge issues). Open #/forum and read the rendered DOM: the issue group's rows, then select
+      reply, forge issues). Open #/issues and read the rendered DOM: the issue group's rows, then select
       the local thread and read the detail pane; check for raw markdown syntax in the detail.
     expected: >-
       The issue group renders the non-concluded rows in the API's order (no re-sort/rank): one compact
@@ -20,7 +20,7 @@ scenarios:
     tags: [frontend-e2e]
     code: [spec-dashboard/src/IssuesView.jsx, spec-dashboard/src/mentions.jsx]
     description: >-
-      On the running forum page, select a LOCAL issue and type into its reply composer, then open the
+      On the running issues page, select a LOCAL issue and type into its reply composer, then open the
       New form and type into its body textarea. In each: type `@`, read the dropdown, pick a row with
       ↓/Enter and read the inserted text; clear, type `[[` (and a partial id), pick, read the insertion;
       press Esc with a menu open and read the hash; type plain prose and look for any menu. Then visit
@@ -55,7 +55,7 @@ scenarios:
 # measuring issues-view
 
 YATU through the REAL running dashboard, never the code: a backend seeded with local + forge issues, the
-worktree dashboard pointed at it, and a headless Chromium that opens #/forum and reads the live DOM
+worktree dashboard pointed at it, and a headless Chromium that opens #/issues and reads the live DOM
 (`.fv-master`, `.fv-row`, `.fv-store`, `.fvd`, `.doc-body`) + screenshots it. The loss is the gap between
 that reading and the spec: master-detail with evals leading, one merged store-tagged list in API order,
 markdown-rendered detail, one thread surface and one composer over both stores. (This reading style is

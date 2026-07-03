@@ -20,6 +20,7 @@ export default function IssuesView({ onFocusNode, specs = [], sessions = [], iss
   const data = issuesData                          // RESIDENT app state — the page renders instantly, no per-mount fetch
   const [composing, setComposing] = useState(false)
   const [showConcluded, setShowConcluded] = useState(false)
+  const [storeFilter, setStoreFilter] = useState('all')  // 'all' | a store present in the data (local/github/…)
   const [notice, setNotice] = useState('')
   const [sel, setSel] = useState(null)            // the ONE selection: 'eval:<node>·<scenario>' | 'issue:<id>'
   const [evalRows, setEvalRows] = useState([])    // the evals group's visible entries (its filters are its own)
@@ -34,9 +35,13 @@ export default function IssuesView({ onFocusNode, specs = [], sessions = [], iss
   // a CONCLUDED issue (forge closed; local rejected/landed) hides by default — the list is the open work,
   // not the archive. open + accepted stay (accepted is approved-but-not-landed: still live).
   const concluded = (i) => i.status === 'closed' || i.status === 'rejected' || i.status === 'landed'
-  const issues = showConcluded ? all : all.filter((i) => !concluded(i))
-  const openCount = all.filter((i) => i.status === 'open').length
-  const concludedCount = all.filter(concluded).length
+  // the store filter's options come from the DATA, not a hardcoded list — a new store (gitlab) appears
+  // in the dropdown the day its driver lands. Default 'all' keeps the stores mixed in API order.
+  const stores = [...new Set(all.map((i) => i.store).filter(Boolean))]
+  const stored = storeFilter === 'all' ? all : all.filter((i) => i.store === storeFilter)
+  const issues = showConcluded ? stored : stored.filter((i) => !concluded(i))
+  const openCount = stored.filter((i) => i.status === 'open').length
+  const concludedCount = stored.filter(concluded).length
 
   const evalByKey = useMemo(() => new Map(evalRows.map((e) => [entryKey(e), e])), [evalRows])
   const issueByKey = useMemo(() => new Map(issues.map((i) => [`issue:${i.id}`, i])), [issues])
@@ -84,8 +89,14 @@ export default function IssuesView({ onFocusNode, specs = [], sessions = [], iss
         <section className="fv-group">
           <header className="fv-group-head">
             <span className="fv-group-title">{t('session.issuesThreadsTitle')}</span>
-            <span className="fv-group-meta">{t('session.issuesThreadsSummary', { open: openCount, total: all.length })}</span>
+            <span className="fv-group-meta">{t('session.issuesThreadsSummary', { open: openCount, total: stored.length })}</span>
             <span className="ef-chipbar">
+              {stores.length > 1 && (
+                <select className="fv-store-filter" value={storeFilter} onChange={(e) => setStoreFilter(e.target.value)}>
+                  <option value="all">{t('session.issuesStoreAll')}</option>
+                  {stores.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              )}
               <button type="button" className="fv-new-btn" onClick={() => setComposing((v) => !v)}>
                 {composing ? t('session.issuesCancel') : t('session.issuesNew')}
               </button>

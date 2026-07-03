@@ -52,7 +52,11 @@ reply/propose the CLI uses, committed straight to the trunk.
   [[proposals]], never an automatic order); signer and reply counts appear as raw data, not a rank.
   **Concluded issues hide by default** — closed / rejected / landed are the archive, not the open work,
   and mixing them in only confuses review; a count chip reveals them on demand (open and accepted stay:
-  accepted is approved-but-not-landed, still live). An
+  accepted is approved-but-not-landed, still live). The group head carries a **store filter** — a small
+  dropdown whose options are DERIVED from the stores actually present in the data plus "all" (never a
+  hardcoded list: a new store's driver landing puts it in the menu for free), defaulting to "all" so the
+  stores stay mixed; picking one narrows rows AND the head's counts to that store, and the control hides
+  itself when only one store exists. An
   issue's ROW is one compact line — store chip, concern, status, reply count; its DETAIL carries the full
   header (status, author, signer count, node chips, permalink) over the **markdown-rendered body and
   replies** — the same SpecBody renderer the spec panes use, so forum markdown and spec markdown read as

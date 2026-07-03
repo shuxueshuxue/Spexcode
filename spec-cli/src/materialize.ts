@@ -78,15 +78,16 @@ export function materialize(proj = process.cwd()): string {
   // the dashboard /api/slash-commands instead, so this render is plugin-only.
   const renderCommand = (cm: { desc: string; body: string }) =>
     (cm.desc ? `---\ndescription: ${JSON.stringify(cm.desc)}\n---\n\n` : '') + `${cm.body}\n`
+  // shim ABSOLUTE paths; relativized into the managed .gitignore block below (checkout-invariant — see there).
   const shimPaths: string[] = []
   for (const h of selected) {
-    if (contract) for (const f of h.contractFiles(proj)) { writeManagedBlock(f, contract); shimPaths.push(relative(proj, f)) }
+    if (contract) for (const f of h.contractFiles(proj)) { writeManagedBlock(f, contract); shimPaths.push(f) }
     const shimFile = h.shimFile(proj)
     mkdirSync(dirname(shimFile), { recursive: true })
     const shim = h.shim(DISPATCH, SPEX)
     writeFileSync(shimFile, shim.json)
     h.writeTrust(proj, shim.cmd)
-    shimPaths.push(relative(proj, shimFile))
+    shimPaths.push(shimFile)
   }
   // (6) skills - each `surface: skill` node → a SKILL.md the harness auto-discovers, written into every
   //     harness's own skillDir (Claude .claude/skills, Codex .codex/skills). Generated wiring, so the paths
@@ -97,7 +98,7 @@ export function materialize(proj = process.cwd()): string {
       const f = join(dir, sk.name, 'SKILL.md')
       mkdirSync(dirname(f), { recursive: true })
       writeFileSync(f, renderSkill(sk))
-      shimPaths.push(relative(proj, f))   // reuse the same managed .gitignore block
+      shimPaths.push(f)   // reuse the same managed .gitignore block (absolute; relativized below)
     }
   }
   // (7) sub-agents - each `surface: agent` node → a <name>.md the harness auto-discovers, written into every
@@ -110,7 +111,7 @@ export function materialize(proj = process.cwd()): string {
       const f = join(dir, `${ag.name}.md`)
       mkdirSync(dirname(f), { recursive: true })
       writeFileSync(f, renderAgent(ag))
-      shimPaths.push(relative(proj, f))   // reuse the same managed .gitignore block
+      shimPaths.push(f)   // reuse the same managed .gitignore block (absolute; relativized below)
     }
   }
   // (8) PRUNE every UNSELECTED harness — clean() is the surgical inverse of the write above, removing ONLY this
@@ -149,18 +150,31 @@ export function materialize(proj = process.cwd()): string {
   // skills + sub-agents — the only tracked prose is the guide SOURCE (docs/AGENT_GUIDE.md), which this render
   // reads. Derived from the adapters' own contractFiles()/shimFile()/skillDir/agentDir, not hardcoded; written
   // as a managed `#` block so the user's own .gitignore is preserved.
-  // only ignore paths that live INSIDE proj. The codex hooks shim now materializes at the MAIN checkout (codex
-  // reads a linked worktree's hooks from the root checkout — see harness.ts); from a linked worktree that path
-  // escapes proj (`../…`) and is gitignored by the main checkout's OWN materialize, not the worktree's.
+  // The managed block must be CHECKOUT-INVARIANT: `.gitignore` is ONE tracked, committed file shared by the
+  // main checkout and every worktree, so if the block differed by where materialize ran, whichever flavor got
+  // committed would leave the OTHER checkout dirtying it on every render. The only artifact that varies is the
+  // codex hooks shim, which materializes at the MAIN checkout (a linked worktree's codex reads the root's
+  // hooks — see harness.ts): from main it is `.codex/hooks.json` (inside proj), from a worktree it is `../…`
+  // (escapes proj). So an ignore entry is anchored to the checkout it LIVES under — proj-relative when inside
+  // proj, else MAIN-checkout-relative — which resolves the codex shim to `.codex/hooks.json` from any checkout
+  // (a pattern naming a main-only path is a harmless no-op in a worktree). Every checkout now emits the same
+  // set → the committed `.gitignore` is stable, never re-dirtied. A path under neither root is not ignorable
+  // here (dropped).
+  const mc = mainCheckout(proj)
+  const anchor = (abs: string): string | null => {
+    const p = relative(proj, abs); if (!p.startsWith('..')) return p
+    const m = relative(mc, abs); if (!m.startsWith('..')) return m
+    return null
+  }
   // spexcode.local.json — the machine-local config overlay (host-specific values, e.g. an absolute worker
   // launcher path; see portable-layout) — joins the SAME block on the same rationale: machine-specific, must
   // never be committed. Without it an adopter who follows our own guidance to put a host path there would
   // `git add -A` and leak it — the exact thing the overlay exists to prevent.
   // each emitted plugin bundle is a generated, machine-local artifact too (its hooks.json bakes THIS install's
-  // SPEX path), so its relative dir joins the same managed block — regenerated per clone/launch, never committed.
-  const bundlePaths = curFolders.map((f) => relative(proj, pluginBundleDir(proj, f))).filter((p) => !p.startsWith('..'))
-  const ignorable = [...shimPaths.filter((p) => !p.startsWith('..')), ...bundlePaths, 'spexcode.local.json']
-  if (ignorable.length) writeManagedBlock(join(proj, '.gitignore'), ignorable.sort().join('\n'), ['# ', ''])
+  // SPEX path), so its dir joins the same managed block — regenerated per clone/launch, never committed.
+  const bundlePaths = curFolders.map((f) => pluginBundleDir(proj, f))
+  const ignorable = [...[...shimPaths, ...bundlePaths].map(anchor).filter((p): p is string => p !== null), 'spexcode.local.json']
+  if (ignorable.length) writeManagedBlock(join(proj, '.gitignore'), [...new Set(ignorable)].sort().join('\n'), ['# ', ''])
   // (5) stamp the content-hash marker LAST (so a crash mid-render leaves it stale → re-renders next gate).
   const h = contentHash(proj)
   writeFileSync(join(rt, 'content-hash'), h)

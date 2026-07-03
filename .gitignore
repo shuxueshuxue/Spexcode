@@ -55,6 +55,7 @@ firecoder-scout.md
 .claude/settings.json
 .claude/skills/e2e-review/SKILL.md
 .claude/skills/taste/SKILL.md
+.codex/hooks.json
 .codex/skills/e2e-review/SKILL.md
 .codex/skills/taste/SKILL.md
 AGENTS.md

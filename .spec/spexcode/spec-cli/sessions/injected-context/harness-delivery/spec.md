@@ -73,13 +73,20 @@ on the next re-materialize, the same back-edge the natives have).
 Placement is harness-fact, not preference (verified): Codex auto-discovers ONLY the repo-root `./AGENTS.md`
 (never `.codex/AGENTS.md`); Claude discovers `./CLAUDE.md` or `./.claude/CLAUDE.md`. Every in-tree artifact this
 render writes is generated, so materialize gitignores it — a managed `#` block in `<repo>/.gitignore` whose
-entries are the adapters' own `contractFiles()` + `shimFile()`s + skill `SKILL.md`s **that live inside this
-project** (the user's existing .gitignore is preserved), all re-rendered per clone/machine, never committed. The
+entries are the adapters' own `contractFiles()` + `shimFile()`s + skill `SKILL.md`s (the user's existing
+.gitignore is preserved), all re-rendered per clone/machine, never committed. The
 **contract files** join that block precisely because their whole content is generated (the docs guide + the
 system block) — they carry no committed prose of their own; only the guide SOURCE (`docs/AGENT_GUIDE.md`) is
 tracked. The shim files additionally carry THIS machine's absolute install path, so they are also machine-local.
-A shim/contract an adapter places in ANOTHER checkout (Codex's hooks, at the [[harness-adapter|main checkout]])
-is gitignored by that checkout's own render instead. The Codex trust hash is not in-tree at all — it lives in
+That managed block is **checkout-invariant**: `.gitignore` is one tracked file shared by the main checkout and
+every worktree, so if the block's entries differed by where materialize ran, whichever flavor got committed
+would leave the OTHER checkout re-dirtying it forever. The only entry that varies is Codex's hooks shim, which
+an adapter places at the [[harness-adapter|main checkout]] (a worktree's codex reads the root's hooks): from
+main it is `.codex/hooks.json`, from a worktree it escapes `proj` (`../…`). So each entry is anchored to the
+checkout it LIVES under — project-relative when inside `proj`, else main-checkout-relative — which resolves that
+shim to `.codex/hooks.json` from ANY checkout (a pattern naming a main-only path is a harmless no-op in a
+worktree). Every checkout emits the identical block, so the committed `.gitignore` is stable and materialize
+never re-dirties a clean tree. The Codex trust hash is not in-tree at all — it lives in
 the global `~/.codex/config.toml`.
 
 The net ideal path: `npm install spexcode` → `spex init` → the user launches their own `claude`/`codex`, zero

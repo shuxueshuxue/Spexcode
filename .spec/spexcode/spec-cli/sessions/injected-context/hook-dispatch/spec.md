@@ -25,7 +25,11 @@ only when that content actually moves. The **dispatcher** (`dispatch.sh`, the on
 in two steps: a **gate** — a ~10ms pure-shell content hash of the config roots on every event; on a mismatch
 with the stored `<runtime>/content-hash` it runs `spex materialize` ([[harness-delivery]], the ~0.85s node
 render) under a re-checked lock (also in `<runtime>`), so node boots only on a real change and concurrent
-sessions never race the write — then it dispatches the event's handlers from the (now-fresh) persistent manifest. The hash is content-based, so it catches bash/sed/user/other-agent/git edits alike;
+sessions never race the write — then it dispatches the event's handlers from the (now-fresh) persistent manifest.
+That gate lock is **POSIX-portable** — an atomic `mkdir` mutex with a bounded wait, NOT util-linux `flock`
+(absent on macOS, where the flock path silently no-op'd and let concurrent sessions race the write); it is held
+only across the re-check + render and released immediately, and a stale lock dir left by a dead entrant is
+cleared after a bounded wait so it can never deadlock a launch. The hash is content-based, so it catches bash/sed/user/other-agent/git edits alike;
 a tool-payload path would miss them.
 
 The dispatcher reproduces the native multi-hook contract — which on BOTH harnesses runs matching hooks in

@@ -43,7 +43,11 @@ test('activeTurnIdFromThread finds the inProgress turn, else null', () => {
 
 test('codex launch command starts app-server then resumes the backend-owned thread on the same socket', () => {
   const cmd = codexLaunchCommand('sess-1', 'codex --yolo', 'codex', '/tmp/spex-project')
-  assert.match(cmd, /flock 9/)
+  // POSIX-portable mkdir mutex, NOT flock (absent on macOS): the check-and-start is serialized on `mkdir "$lock.d"`
+  // and there is no flock / fd-9 gymnastics left on the daemon spawn.
+  assert.match(cmd, /mkdir "\$lockd"/)
+  assert.doesNotMatch(cmd, /flock/)
+  assert.doesNotMatch(cmd, /9>&-/)
   assert.match(cmd, /codex app-server --listen unix:\/\/"\$sock"/)
   // design C: the BACKEND owns the thread — codex-launch does thread/start { cwd } + first turn, prints the id,
   // and the visible TUI resumes THAT thread on the same project socket.

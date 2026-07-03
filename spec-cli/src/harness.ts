@@ -258,20 +258,27 @@ export function codexLaunchCommand(_id: string, codexCmd = process.env.SPEXCODE_
     `log=${shQuote(log)}`,
     `lock=${shQuote(lock)}`,
     'mkdir -p "$dir"',
-    '(',
-    '  flock 9',
-    '  if [ -S "$sock" ] && [ -s "$pid" ] && ! kill -0 "$(cat "$pid")" 2>/dev/null; then rm -f "$sock"; fi',
-    '  if [ ! -S "$sock" ]; then',
-    // 9>&- : do NOT let the long-lived app-server inherit fd 9 (the flock fd). An flock is held until
-    // EVERY fd on its open file description is closed; if the daemon keeps fd 9 open it pins the lock
-    // forever, so every later launcher blocks on `flock 9` and never reaches the thread-owning step
-    // (the pane stays at the shell, no TUI, no thread). </dev/null detaches its stdin from the pane so
-    // it can't fight the TUI for the tty.
-    `    ${serverCmd} app-server --listen unix://"$sock" >"$log" 2>&1 9>&- </dev/null &`,
-    '    echo $! > "$pid"',
-    '    for i in $(seq 1 100); do [ -S "$sock" ] && break; sleep 0.05; done',
-    '  fi',
-    ') 9>"$lock"',
+    // POSIX-portable mutex: mkdir is atomic on every POSIX fs, so it serializes the check-and-start with NO
+    // dependency on util-linux `flock` (absent on macOS — where the old flock path failed the whole app-server
+    // bootstrap, leaving the pane at the shell). Spin on `mkdir "$lock.d"` with a bounded wait; after ~10s
+    // (200 * 0.05s, safely above the ~5s socket-wait a legit holder needs) treat the dir as orphaned by a dead
+    // launcher and clear it, so a stale lock can never deadlock a launch. Held ONLY across the check-and-start,
+    // released immediately after. Unlike flock (held until every fd on its open file description closes) a mkdir
+    // lock has no inherited-fd hazard, so the long-lived daemon can't pin it — no fd-9 gymnastics needed.
+    'lockd="$lock.d"',
+    '_lk=0',
+    'until mkdir "$lockd" 2>/dev/null; do',
+    '  _lk=$((_lk+1)); [ "$_lk" -ge 200 ] && { rm -rf "$lockd" 2>/dev/null; _lk=0; }',
+    '  sleep 0.05',
+    'done',
+    'if [ -S "$sock" ] && [ -s "$pid" ] && ! kill -0 "$(cat "$pid")" 2>/dev/null; then rm -f "$sock"; fi',
+    'if [ ! -S "$sock" ]; then',
+    // </dev/null detaches the daemon's stdin from the pane so it can't fight the TUI for the tty.
+    `  ${serverCmd} app-server --listen unix://"$sock" >"$log" 2>&1 </dev/null &`,
+    '  echo $! > "$pid"',
+    '  for i in $(seq 1 100); do [ -S "$sock" ] && break; sleep 0.05; done',
+    'fi',
+    'rmdir "$lockd" 2>/dev/null',
     // TWO launch modes, on ONE tail channel ("$@"). reopen() hands a `--resume <thread-id>` tail (see
     // codexHarness.resumeArg) to bring the SAME conversation back: resume that OWNED thread DIRECTLY — no new
     // thread, no first-turn prompt. ANY other tail is a NEW launch: BACKEND owns the thread — `codex-launch`

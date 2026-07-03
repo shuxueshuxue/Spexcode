@@ -40,11 +40,21 @@ rt="$(cd "$proj" 2>/dev/null && hp_runtime_dir)" || rt=""
 cur="$( (cd "$proj" 2>/dev/null && hp_config_hash) )"
 if [ -n "$rt" ] && [ -n "$cur" ] && [ "$cur" != "$(cat "$rt/content-hash" 2>/dev/null || true)" ]; then
   mkdir -p "$rt" 2>/dev/null
-  ( flock 9
-    if [ "$cur" != "$(cat "$rt/content-hash" 2>/dev/null || true)" ]; then   # re-check: a sibling dispatch may have just rendered
-      ( cd "$proj" && ${SPEX:-spex} materialize >/dev/null 2>&1 )
-    fi
-  ) 9>"$rt/.materialize.lock"
+  # POSIX-portable mutex: mkdir is atomic on every POSIX fs, so it serializes the render with NO dependency on
+  # util-linux `flock` (absent on macOS — where it silently no-op'd, letting concurrent sessions race the write).
+  # Spin on `mkdir` with a bounded wait; after ~10s (200 * 0.05s, well above the ~0.85s materialize) treat the
+  # dir as orphaned by a dead entrant and clear it, so a stale lock can never deadlock a launch. Held only across
+  # the re-check + render, released right after.
+  lockd="$rt/.materialize.lock.d"
+  _lk=0
+  until mkdir "$lockd" 2>/dev/null; do
+    _lk=$((_lk+1)); [ "$_lk" -ge 200 ] && { rm -rf "$lockd" 2>/dev/null; _lk=0; }
+    sleep 0.05
+  done
+  if [ "$cur" != "$(cat "$rt/content-hash" 2>/dev/null || true)" ]; then   # re-check: a sibling dispatch may have just rendered
+    ( cd "$proj" && ${SPEX:-spex} materialize >/dev/null 2>&1 )
+  fi
+  rmdir "$lockd" 2>/dev/null
 fi
 
 # --- (2) dispatch ---------------------------------------------------------------------------------------

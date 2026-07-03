@@ -34,7 +34,7 @@ scenarios:
     description: >-
       Trigger two dispatch invocations concurrently right after a `.config` change (two events at once).
     expected: >-
-      Only ONE re-materialize runs (the flock + re-check inside it), no torn manifest/contract; the second
+      Only ONE re-materialize runs (the portable mkdir lock + re-check inside it), no torn manifest/contract; the second
       invocation sees the fresh content-hash and skips. Readers never observe a half-written manifest.
 ---
 # yatsu.md — hook-dispatch

@@ -1,18 +1,21 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { postIssueReply, postIssueThread, putFrameBlob, specUrl } from './data.js'
 import { evidenceList } from './EvalsFeed.jsx'
-import { Replies, ReplyComposer, mmss, anchorLine } from './Thread.jsx'
+import { Replies, ReplyComposer, mmss, anchorLine, parseAnchor } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
 
 // The annotator ([[annotator]]): the human's measuring hand on an ALREADY-captured reading — the issues
 // page's DETAIL PANE for a selected eval (master-detail, [[issues-view]]). A reading's evidence is a LIST:
-// the video plays with a step ruler (from the step-timeline sidecar: click a step → seek) AND an image
-// gallery renders in the SAME pane (each still click-to-enlarge); a transcript renders as text. There is ONE annotation primitive: a comment on the eval's own Issue thread,
-// time-anchored by the `▶m:ss · step` prose convention ([[issues-view]]'s Thread). ⏱ stamps the current
-// frame onto a bare note; a drag-circle captures the paused frame to the blob store and prefills an anchored
-// comment carrying that frame (image link in the body, hash indexed as the thread's evidence[]) — a mark IS
-// thereafter a reply: replyable, @-able (`circle + @new fix this` = a timestamped, framed assign). The
-// pass/fail VERDICT stays a separate `manual@1` reading (verdict + note) — it no longer duplicates the marks.
+// the video plays under a CUSTOM review-track scrubber (native chrome replaced so the timeline can carry the
+// review) — anchored comments render as MARKERS on the scrubber, the playhead lights the comment it is
+// inside, clicking a marker/comment seeks; a step-timeline sidecar bands the step boundaries + names the
+// live step, and the named-step ruler under it click-seeks. The whole surface is keyboard-driven (space,
+// arrows, ,/. frame-fine, ↑/↓ jump comments, a = annotate the current frame). An image gallery renders in
+// the SAME pane (each still click-to-enlarge); a transcript renders as text. There is ONE annotation
+// primitive: a comment on the eval's own Issue thread, time-anchored by the `▶m:ss · step` prose convention
+// ([[issues-view]]'s Thread). ⏱/a stamps the current frame onto a note; a drag-circle captures the paused
+// frame to the blob store and prefills an anchored comment carrying it — a mark IS thereafter a reply:
+// replyable, @-able. The pass/fail VERDICT stays a separate `manual@1` reading (verdict + note).
 //
 // A/B history ([[reproduce-before-fix]]): a scenario's readings are its lifecycle, and a bug fix leaves a
 // fail→pass PAIR — the A (reproduced bug) and the B (verified fix). The pane flips through that whole
@@ -60,6 +63,8 @@ export default function Annotator({ entry, issues = null, specs = [], sessions =
   const t = useT()
   const vid = useRef(null)
   const box = useRef(null)
+  const seekRef = useRef(null)
+  const seq = useRef(0)
   const [events, setEvents] = useState([])
   const [drag, setDrag] = useState(null)
   const [verdict, setVerdict] = useState(null)
@@ -67,8 +72,14 @@ export default function Annotator({ entry, issues = null, specs = [], sessions =
   const [flash, setFlash] = useState('')
   const [zoom, setZoom] = useState(null)         // an image gallery still opened in the lightbox (its hash), or null
   const [busy, setBusy] = useState(false)       // capturing a circled frame
-  const [draft, setDraft] = useState(null)       // { seq, body } — a circle prefills the review-track composer
-  const seq = useRef(0)
+  const [draft, setDraft] = useState(null)       // { seq, body } — a circle / `a` prefills the review-track composer
+  // custom-player state: the playhead owns the review track now that native chrome is gone.
+  const [cur, setCur] = useState(0)              // current time, seconds
+  const [dur, setDur] = useState(0)              // duration, seconds
+  const [playing, setPlaying] = useState(false)
+  const [seeking, setSeeking] = useState(false)  // dragging the scrubber
+  const [hoverPct, setHoverPct] = useState(null) // scrubber hover preview, 0..100 or null
+  const [selIdx, setSelIdx] = useState(null)     // index (into comments) of the explicitly-selected comment
 
   // A/B history: this scenario's WHOLE reading history (newest-first), lazily fetched from the same
   // /api/specs/:id/evals timeline the eval tab uses — the board only folds the LATEST reading per scenario
@@ -104,6 +115,26 @@ export default function Annotator({ entry, issues = null, specs = [], sessions =
   const transcripts = ev.filter((e) => e.kind === 'transcript')
   const hasVideo = !!videoEntry
 
+  // the eval's review track IS a local Issue lazily bound to this (node, scenario) by its concern key —
+  // computed here (not just in the comments section) so the scrubber can render each anchored comment as a
+  // marker and the keyboard can jump between them. The (node,scenario)↔thread join is lifted SERVER-SIDE
+  // ([[remark-teeth]]): the session tab attaches it as `entry.thread`, so read that directly; the issues
+  // page still passes a resident `issues` list, so fall back to the concern-key match there.
+  const concern = evalConcern(entry)
+  const thread = entry.thread ?? (issues ? (issues.find((i) => i.store === 'local' && i.concern === concern) || null) : null)
+  const comments = thread ? [{ by: thread.by, at: thread.created, body: thread.body }, ...(thread.replies || [])] : []
+  // the anchored subset, carrying each comment's index into `comments` and its moment — sorted by moment.
+  const anchored = comments
+    .map((c, i) => { const a = parseAnchor(c.body); return a ? { i, tMs: a.tMs, step: a.step, label: a.label } : null })
+    .filter(Boolean)
+    .sort((x, y) => x.tMs - y.tMs)
+
+  // a selection change is a new reading — reset the player-specific state (the shared working state + the
+  // A/B history cursor are reset by the history effect above).
+  useEffect(() => {
+    setCur(0); setDur(0); setPlaying(false); setSeeking(false); setHoverPct(null); setSelIdx(null)
+  }, [entry.blob, entry.scenario, entry.node])
+
   // the step map arrives lazily from the same blob cache the clip streams from; reset then (re)load on the
   // viewed reading — absent timeline/video → plain player.
   useEffect(() => {
@@ -117,17 +148,125 @@ export default function Annotator({ entry, issues = null, specs = [], sessions =
     return () => { on = false }
   }, [viewing.timelineBlob, hasVideo])
 
+  // the playhead follows the media element — timeupdate (~4Hz) + seeked keep the track live; play/pause keep
+  // the toggle honest. The fill/knob CSS transition smooths the coarse ticks. No rAF loop: the review track
+  // re-parses comment markdown on every render, so a 60Hz playhead would burn it for no reviewer-visible gain.
+  useEffect(() => {
+    const v = vid.current
+    if (!v) return
+    const onTime = () => setCur(v.currentTime || 0)
+    const onMeta = () => setDur(v.duration || 0)
+    const onPlay = () => setPlaying(true)
+    const onPause = () => setPlaying(false)
+    v.addEventListener('timeupdate', onTime)
+    v.addEventListener('seeked', onTime)
+    v.addEventListener('loadedmetadata', onMeta)
+    v.addEventListener('durationchange', onMeta)
+    v.addEventListener('play', onPlay)
+    v.addEventListener('pause', onPause)
+    return () => {
+      v.removeEventListener('timeupdate', onTime); v.removeEventListener('seeked', onTime)
+      v.removeEventListener('loadedmetadata', onMeta); v.removeEventListener('durationchange', onMeta)
+      v.removeEventListener('play', onPlay); v.removeEventListener('pause', onPause)
+    }
+  }, [videoEntry?.hash])
+
+  const curMs = Math.round(cur * 1000)
+  const durMs = Math.round(dur * 1000)
+  const playPct = durMs ? (curMs / durMs) * 100 : 0
+  const activeStep = stepAt(events, curMs)
+  // the comment the playhead is currently inside = the last anchored comment at or before now.
+  let activeIdx = null
+  for (const a of anchored) { if (a.tMs <= curMs) activeIdx = a.i; else break }
+
+  const seekMs = useCallback((tMs) => { const v = vid.current; if (v) v.currentTime = tMs / 1000 }, [])
+  const togglePlay = useCallback(() => { const v = vid.current; if (v) (v.paused ? v.play() : v.pause()) }, [])
+  const selectComment = (i, tMs) => { setSelIdx(i); if (tMs != null) seekMs(tMs) }
+  // ⏱ stamps the frame the playhead is on — the current time + the step it is inside.
+  const anchorNow = useCallback(() => { const tMs = Math.round((vid.current?.currentTime ?? 0) * 1000); return { tMs, step: stepAt(events, tMs)?.step ?? null } }, [events])
+
+  // annotate the current frame from the keyboard (`a`): stamp its anchor into the composer, ready to type —
+  // the same start-a-comment path a circle takes, minus the frame image. Routes to the step's node when set.
+  const annotateFrame = useCallback(() => {
+    const v = vid.current
+    if (!v || !issues) return
+    v.pause()
+    const tMs = Math.round((v.currentTime || 0) * 1000)
+    const st = stepAt(events, tMs)
+    const lines = [anchorLine(tMs, st?.step)]
+    if (st?.node && st.node !== entry.node) lines.push(`re: [[${st.node}]]`)
+    lines.push('')
+    setDraft({ seq: ++seq.current, body: lines.join('\n') })
+  }, [issues, events, entry.node])
+
+  // ↑/↓ jump to the previous/next anchored comment (seek + select); with none selected, seed from the
+  // comment the playhead is currently inside so the walk starts where the reviewer is looking.
+  const jumpAnchor = useCallback((dir) => {
+    if (!anchored.length) return
+    let pos = anchored.findIndex((a) => a.i === selIdx)
+    if (pos < 0) {
+      const nowMs = Math.round((vid.current?.currentTime || 0) * 1000)
+      pos = anchored.reduce((acc, a, idx) => (a.tMs <= nowMs ? idx : acc), -1)
+    }
+    pos = Math.min(anchored.length - 1, Math.max(0, pos + dir))
+    const a = anchored[pos]
+    setSelIdx(a.i); seekMs(a.tMs)
+  }, [anchored, selIdx, seekMs])
+
+  // the whole player is keyboard-driven; typing in a field (the composer, the note) is never hijacked.
+  useEffect(() => {
+    if (!hasVideo) return
+    const onKey = (e) => {
+      const el = document.activeElement
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)) return
+      const v = vid.current
+      if (!v) return
+      if (e.key === ' ') { e.preventDefault(); togglePlay() }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); v.currentTime = Math.min(v.duration || v.currentTime, v.currentTime + (e.shiftKey ? 1 : 5)) }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); v.currentTime = Math.max(0, v.currentTime - (e.shiftKey ? 1 : 5)) }
+      else if (e.key === ',') { e.preventDefault(); v.currentTime = Math.max(0, v.currentTime - 1 / 30) }
+      else if (e.key === '.') { e.preventDefault(); if (v.duration) v.currentTime = Math.min(v.duration, v.currentTime + 1 / 30) }
+      else if (e.key === 'ArrowDown') { e.preventDefault(); jumpAnchor(1) }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); jumpAnchor(-1) }
+      else if (e.key === 'a' || e.key === 'A') { e.preventDefault(); annotateFrame() }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [hasVideo, togglePlay, jumpAnchor, annotateFrame])
+
+  // scrubber: click / drag anywhere to seek; hovering previews the moment under the cursor.
+  const seekToX = (clientX) => {
+    const r = seekRef.current?.getBoundingClientRect(); const v = vid.current
+    if (!r || !r.width || !v || !v.duration) return
+    v.currentTime = Math.min(1, Math.max(0, (clientX - r.left) / r.width)) * v.duration
+  }
+  const onSeekDown = (e) => { e.preventDefault(); setSeeking(true); seekToX(e.clientX) }
+  const onSeekHover = (e) => { const r = seekRef.current?.getBoundingClientRect(); if (r?.width) setHoverPct(Math.min(100, Math.max(0, ((e.clientX - r.left) / r.width) * 100))) }
+  useEffect(() => {
+    if (!seeking) return
+    const mv = (e) => seekToX(e.clientX)
+    const up = () => setSeeking(false)
+    window.addEventListener('mousemove', mv); window.addEventListener('mouseup', up)
+    return () => { window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up) }
+  }, [seeking])
+
   const pct = (ev) => {
     const r = box.current.getBoundingClientRect()
     return { x: ((ev.clientX - r.left) / r.width) * 100, y: ((ev.clientY - r.top) / r.height) * 100 }
   }
+  // over the frame: a plain click toggles play/pause; a drag circles a problem region (the video pauses the
+  // moment it becomes a real drag, so the circled frame is frozen).
   const onDown = (ev) => {
     if (ev.button !== 0 || busy) return
-    vid.current?.pause()
     const p = pct(ev)
     setDrag({ x0: p.x, y0: p.y, x: p.x, y: p.y })
   }
-  const onMove = (ev) => { if (drag) { const p = pct(ev); setDrag({ ...drag, x: p.x, y: p.y }) } }
+  const onMove = (ev) => {
+    if (!drag) return
+    const p = pct(ev)
+    if (!vid.current?.paused && (Math.abs(p.x - drag.x0) > 1 || Math.abs(p.y - drag.y0) > 1)) vid.current?.pause()
+    setDrag({ ...drag, x: p.x, y: p.y })
+  }
 
   // burn the circled rect into a PNG of the paused frame at natural resolution, stash it in the blob store,
   // and prefill the review-track composer with an anchored comment carrying that frame — the mark becomes a
@@ -166,14 +305,13 @@ export default function Annotator({ entry, issues = null, specs = [], sessions =
       w: Math.abs(drag.x - drag.x0), h: Math.abs(drag.y - drag.y0),
     }
     setDrag(null)
-    if (rect.w < 1 && rect.h < 1) return   // a click, not a circle
+    if (rect.w < 1 && rect.h < 1) { togglePlay(); return }   // a click, not a circle → play/pause
     captureCircle(rect)
   }
   const liveRect = drag && {
     x: Math.min(drag.x0, drag.x), y: Math.min(drag.y0, drag.y),
     w: Math.abs(drag.x - drag.x0), h: Math.abs(drag.y - drag.y0),
   }
-  const now = Math.round((vid.current?.currentTime ?? 0) * 1000)
 
   // the verdict — a manual@1 reading (verdict + note), the existing eval seam; it appends a NEW latest
   // reading for the scenario (the next B, or a fresh A), so it targets the stable (node, scenario), never
@@ -227,18 +365,40 @@ export default function Annotator({ entry, issues = null, specs = [], sessions =
       {viewing.expected && <div className="an-expected"><b>{t('nodeView.eval.expected')}</b> {viewing.expected}</div>}
       {ev.length > 0 && viewing.verdict?.note && <div className="an-expected an-prior-note"><b>{t('nodeView.eval.noteLabel')}</b> {viewing.verdict.note}</div>}
 
-      {/* the video — the annotate-a-loop surface: circle-to-capture, step ruler, verdict footer */}
+      {/* the video — the annotate-a-loop surface: circle-to-capture, custom review-track scrubber, ruler, verdict */}
       {videoEntry && (
         <>
-          <div className="an-stage" ref={box} onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp}>
-            <video className="an-video" ref={vid} src={`/api/yatsu/blob/${videoEntry.hash}`} controls preload="metadata" />
+          <div className={`an-stage ${playing ? 'playing' : 'paused'}`} ref={box} onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp}>
+            <video className="an-video" ref={vid} src={`/api/yatsu/blob/${videoEntry.hash}`} preload="metadata" playsInline />
             {liveRect && <div className="an-rect live" style={{ left: `${liveRect.x}%`, top: `${liveRect.y}%`, width: `${liveRect.w}%`, height: `${liveRect.h}%` }} />}
+            {!playing && !drag && <div className="an-bigplay" aria-hidden>▶</div>}
           </div>
+
+          {/* the custom control bar — play/pause · review-track scrubber (comment markers + step bands) · time · live step */}
+          <div className="an-bar">
+            <button className="an-play" onClick={togglePlay} title={playing ? t('annotator.pause') : t('annotator.play')}>{playing ? '⏸' : '▶'}</button>
+            <div className="an-seek" ref={seekRef} onMouseDown={onSeekDown} onMouseMove={onSeekHover} onMouseLeave={() => setHoverPct(null)}>
+              <div className="an-seek-trk" />
+              {durMs > 0 && events.map((e, i) => <div key={`band-${i}`} className="an-band" style={{ left: `${(e.tMs / durMs) * 100}%` }} title={e.step} />)}
+              <div className="an-seek-play" style={{ width: `${playPct}%` }} />
+              {durMs > 0 && anchored.map((a) => (
+                <button key={`mk-${a.i}`} type="button"
+                  className={`an-mk ${selIdx === a.i ? 'on' : ''} ${activeIdx === a.i ? 'active' : ''}`}
+                  style={{ left: `${(a.tMs / durMs) * 100}%` }} title={a.label}
+                  onMouseDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); selectComment(a.i, a.tMs) }} />
+              ))}
+              <div className="an-knob" style={{ left: `${playPct}%` }} />
+              {hoverPct != null && durMs > 0 && <div className="an-seek-hov" style={{ left: `${hoverPct}%` }}>{mmss((hoverPct / 100) * durMs)}</div>}
+            </div>
+            <span className="an-time">{mmss(curMs)} / {mmss(durMs)}</span>
+            {activeStep && <span className="an-curstep" title={activeStep.node ? `→ ${activeStep.node}` : undefined}>{activeStep.step}</span>}
+          </div>
+
           {events.length > 0 && (
             <div className="an-ruler">
               {events.map((e, i) => (
-                <button key={i} className={`an-step ${stepAt(events, now) === e ? 'on' : ''}`}
-                  onClick={() => { if (vid.current) vid.current.currentTime = e.tMs / 1000 }}
+                <button key={i} className={`an-step ${stepAt(events, curMs) === e ? 'on' : ''}`}
+                  onClick={() => seekMs(e.tMs)}
                   title={e.node ? `→ ${e.node}` : undefined}>
                   {mmss(e.tMs)} {e.step}
                 </button>
@@ -246,6 +406,7 @@ export default function Annotator({ entry, issues = null, specs = [], sessions =
             </div>
           )}
           <div className="an-hint">{t('annotator.hint')}</div>
+          <div className="an-keys">{t('annotator.keys')}</div>
           <footer className="an-actions">
             <span className="an-verdict">
               <button className={`an-v pass ${verdict === 'pass' ? 'on' : ''}`} onClick={() => setVerdict('pass')}>✓ pass</button>
@@ -275,35 +436,27 @@ export default function Annotator({ entry, issues = null, specs = [], sessions =
       {ev.length === 0 && (viewing.verdict?.note
         ? <pre className="eval-transcript">{viewing.verdict.note}</pre>
         : <div className="an-hint">{t('nodeView.eval.noImage')}</div>)}
-      {(entry.thread || issues) && <EvalComments entry={entry} issues={issues} specs={specs} sessions={sessions} onWrite={onWrite}
-        vidRef={hasVideo ? vid : null} events={events} draft={draft} />}
+      {(entry.thread || issues) && <EvalComments entry={entry} thread={thread} comments={comments} specs={specs} sessions={sessions} onWrite={onWrite}
+        seekMs={hasVideo ? seekMs : null} anchorNow={hasVideo ? anchorNow : null} draft={draft}
+        selIdx={selIdx} activeIdx={activeIdx} onSelect={hasVideo ? selectComment : null} />}
     </div>
   )
 }
 
-// the eval's REVIEW TRACK — no new object, no new store: the comment thread IS a local Issue lazily bound
-// to this (node, scenario) by its concern key. The first comment creates it (the SAME propose the CLI uses,
-// nodes:[node]); every later comment replies to it. Anchored comments (`▶m:ss · step`) linkify to their
-// video moment (click = seek) and carry their circled frame; sorted by anchor they read as an annotation
-// track over the clip. The thread is per-SCENARIO, not per-reading, so it stays stable as you flip the A/B
-// history above. The (node,scenario)↔thread join is lifted SERVER-SIDE ([[remark-teeth]] directive 3): the
-// session tab attaches it as `entry.thread`, so we read that directly; the issues page still passes a
-// resident `issues` list, so we fall back to the concern-key match there (M3 lifts that too).
-function EvalComments({ entry, issues, specs, sessions, onWrite, vidRef, events, draft }) {
+// to this (node, scenario) by its concern key (looked up in the parent — from the server-side `entry.thread`
+// overlay, or the resident `issues` list on the issues page). The first comment creates it (the SAME propose
+// the CLI uses, nodes:[node]); every later comment replies to it. Anchored comments (`▶m:ss · step`) linkify
+// to their video moment (click = seek + select) and carry their circled frame; the selected and
+// playhead-active comments highlight in sync with the scrubber's markers.
+function EvalComments({ entry, thread, comments, specs, sessions, onWrite, seekMs, anchorNow, draft, selIdx, activeIdx, onSelect }) {
   const t = useT()
-  const key = evalConcern(entry)
-  const thread = entry.thread ?? (issues ? issues.find((i) => i.store === 'local' && i.concern === key) : null) ?? null
-  const comments = thread ? [{ by: thread.by, at: thread.created, body: thread.body }, ...(thread.replies || [])] : []
   const send = (text, evidence) => thread
     ? postIssueReply(thread.id, text, evidence)
-    : postIssueThread({ concern: key, nodes: [entry.node], body: text, evidence })
-  // over a clip: seek from an anchor chip, and stamp the current frame as an anchor from ⏱.
-  const onSeek = vidRef ? (tMs) => { if (vidRef.current) vidRef.current.currentTime = tMs / 1000 } : null
-  const anchorNow = vidRef ? () => { const tMs = Math.round((vidRef.current?.currentTime ?? 0) * 1000); return { tMs, step: stepAt(events, tMs)?.step ?? null } } : null
+    : postIssueThread({ concern: evalConcern(entry), nodes: [entry.node], body: text, evidence })
   return (
     <section className="an-comments">
       <div className="an-comments-head">{t('annotator.comments', { n: comments.length })}</div>
-      <Replies replies={comments} onSeek={onSeek} />
+      <Replies replies={comments} onSeek={seekMs} selIdx={selIdx} activeIdx={activeIdx} onSelect={onSelect} />
       <ReplyComposer onSend={send} specs={specs} sessions={sessions} focusId={entry.node} onDone={onWrite} anchorNow={anchorNow} draft={draft} />
     </section>
   )

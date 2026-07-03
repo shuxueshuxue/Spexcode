@@ -27,14 +27,19 @@ anchor. They are **one primitive**: a time-anchored comment on the eval's own th
 The annotator IS the issues page's **detail pane for a selected eval** ([[issues-view]]'s master-detail —
 no modal, no box-in-a-box: the reading gets the pane's full height, and switching selection resets the
 working state to the new reading). A reading's evidence is a **LIST**, so every entry renders in the ONE pane:
-the **video** plays its clip (the annotate-a-loop surface), and an **image gallery** renders beside/under it —
+the **video** plays under a **custom review-track scrubber** — native chrome replaced so the timeline can
+carry the review: anchored comments are **markers** on it, the playhead **lights the comment it is inside**,
+and clicking a marker (or a comment) **seeks** there. The surface is **keyboard-driven** — play/pause,
+coarse and frame-fine scrubbing, jump between comments, and **annotate the current frame** (its
+`▶m:ss · step` stamped into the composer). An **image gallery** renders beside/under the clip —
 each still full-width and **click-to-enlarge** (a click opens that blob in a viewport-size lightbox; click
 anywhere or Esc closes, the Esc swallowed so the page's own Esc stack never fires — a screenshot's detail is
 the evidence, and the pane's width is not its ceiling). A transcript entry renders as
 text, a missing blob as the honest sentinel per entry, a blob-less (`note`) reading its verdict note as the text
 body (never an empty media box). When the reading
 carries a [[step-timeline]]
-sidecar, a **step ruler** renders under the scrubber (bound to the **video entry**) — click a step to seek to its `tMs`; an annotation at
+sidecar, the scrubber **bands its step boundaries** and a **step ruler** renders under it (bound to the
+**video entry**) — click a step to seek to its `tMs`, and a live chip names the step the playhead is in; an annotation at
 moment T names its step by the last-boundary-≤T lookup, and a step's optional owning-node routes the
 finding to the node it actually belongs to. Without a sidecar the annotator is a plain player with
 comments — degraded gracefully, never blocked.
@@ -62,8 +67,9 @@ and `[[node]]` — a body whose first line reads `▶m:ss · <step>` IS anchored
 renderer linkifies it (click seeks the clip), and the composer over a clip gains a **⏱** affordance that
 stamps the current frame (its time + the ≤T step name from the timeline). The reply stays plain
 `{ by, at, body }` — no schema grows, and a raw reader still sees the `▶m:ss` line. Sorted by their anchor,
-the anchored comments read as a **review track** over the clip (the Frame.io/YouTube-time-comment shape),
-but the track is a unified Issue — drainable, assignable, cross-store.
+the anchored comments **are** the review track over the clip — the Frame.io/YouTube-time-comment shape,
+literally the markers on the scrubber, the active one lit as it plays — but the track is a unified Issue —
+drainable, assignable, cross-store.
 
 **A circle is a comment with a frame.** Drag-circling a region on the paused frame captures that frame to
 the blob store (the rect burned in) and **prefills an anchored comment** carrying it: the `▶m:ss · step`

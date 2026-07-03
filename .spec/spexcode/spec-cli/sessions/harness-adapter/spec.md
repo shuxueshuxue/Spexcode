@@ -216,7 +216,17 @@ The Codex impl of the adapter must encode these (measured against a real self-la
   the direct hit always wins.
 - **no rendezvous** (`ownsRendezvous:false`): codex has no reclaude control socket, so SpexCode uses Codex's
   own app-server. Each SpexCode project has ONE project-scoped `codex app-server --listen unix://<project sock>`
-  (started once, reused). That socket lives on a **short, `sun_path`-safe, per-project-unique path** —
+  (started once, reused). The app-server and the visible `codex --remote unix://<sock> resume <tid>` TUI **share
+  that one socket, so they MUST be the SAME codex install** — a version split across the socket breaks the
+  `thread/start`→resume handoff (the app-server on one version creates a thread a differently-versioned resume
+  can't find, and an old-enough app-server can't serve `--remote unix://` at all). So the app-server command is
+  **DERIVED from the in-effect launcher `codexCmd`'s binary** (its first shell token, dropping args like
+  `--yolo`): `<bin> app-server` runs the exact install `<bin> --remote … resume` will. It is NOT a bare `codex`
+  off PATH — on a multi-install host (e.g. a homebrew codex shadowing an nvm codex) a bare `codex` resolves to a
+  DIFFERENT binary than the launcher's, which was the macOS-only version-skew failure. `SPEXCODE_CODEX_SERVER_CMD`
+  stays the explicit escape hatch (highest precedence, overriding the derivation); a `codexCmd` whose first token
+  is a wrapper script forwards `app-server` through the wrapper. That socket lives on a **short, `sun_path`-safe,
+  per-project-unique path** —
   `<socketBase>/spexcode-cx-<hash>.sock`, where `<hash>` is a stable digest of the project identity (the
   runtime dir) and `<socketBase>` is the platform tmpdir (or the `SPEXCODE_CODEX_SOCKET_DIR` override) — NOT
   nested under the project runtime dir. It MUST be short because a Unix socket path is capped at `sun_path`

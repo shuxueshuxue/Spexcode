@@ -55,7 +55,10 @@ system already nests there.
   doesn't branch on it, the drain is judgment — so it would be a label bought with a second creation verb
   and a filter. The forum is the git-native **discussion/annotation layer over the graph**.
 - **One file per thread.** The file is a one-line `concern` plus a prose body plus appended signed replies —
-  each reply preceded by a `<!-- reply: <by> @ <at> -->` sentinel line. Its frontmatter carries `by`
+  each reply preceded by a `<!-- reply: <by> @ <at> -->` sentinel line. A reply may carry **remark** state
+  ([[remark-substrate]]) — a resolvable bit + the codeSha it judges — appended to its sentinel as a
+  ` :: <k=v>` tail; a plain reply has no tail and parses unchanged, and the remark write verbs
+  (`remark`/`resolve`/`retract`) are thin siblings of `reply` over this same committed store. Its frontmatter carries `by`
   (author session), `status`, optional `nodes:` (the product nodes it concerns, linked `[[…]]`), optional
   `evidence:` (yatsu content-addressed blob hashes — the typed reference a cross-node finding carries, per
   [[issues]] / [[video-evidence]]), and `signers`. The sentinel is **unforgeable**: user body text is

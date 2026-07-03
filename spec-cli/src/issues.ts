@@ -14,7 +14,22 @@ import { dispatchMentions, type DispatchOutcome, type LoopIn } from './mentions.
 import { envSessionId } from './layout.js'
 import { loadSpecsLite } from './specs.js'
 
-export type Reply = { by: string; at: string; body: string }
+// A Reply is a plain thread post `{by, at, body}` — OR, when it carries the fields below, a REMARK
+// ([[remark-substrate]]): a reply that pins a RESOLVABLE concern to its host (an issue or a scenario). A
+// remark is not a new record type: it is a reply with the mutable `resolved` bit, a stable `rid` (so it is
+// addressable across retracts), and the `targetCodeSha` it was authored against (the reading it judges). A
+// plain reply omits them all and parses/serializes unchanged (backward compatible). `isRemark` = rid set.
+export type Reply = {
+  by: string
+  at: string
+  body: string
+  rid?: string            // stable per-remark id; a reply is a remark iff this is set. Ref: `<thread-id>#<rid>`
+  targetCodeSha?: string  // the reading/codeSha the remark was authored against (worktree HEAD by default)
+  resolved?: boolean      // the ONE mutable teeth bit — false at author, true after a deliberate `spex resolve`
+  resolvedAt?: string
+  resolvedBy?: string
+}
+export const isRemark = (r: Reply): boolean => r.rid !== undefined
 export type Issue = {
   id: string
   store: string      // 'local' | a forge host ('github') — the adapter that holds it

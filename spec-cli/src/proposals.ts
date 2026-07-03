@@ -10,7 +10,7 @@
 // so a post-merge thread lands durably even though the author's own branch already merged.
 import { readdirSync, existsSync, mkdirSync, writeFileSync, readFileSync, rmdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { git } from './git.js'
+import { git, headSha, repoRoot } from './git.js'
 import { mainCheckout, envSessionId, readConfig } from './layout.js'
 import { dispatchMentions, notifyOriginator, deliveredIds, summarize, type DispatchOutcome, type LoopIn } from './mentions.js'
 import type { Issue, Reply } from './issues.js'
@@ -49,7 +49,13 @@ const sleep = (ms: number) => Atomics.wait(new Int32Array(new SharedArrayBuffer(
 // preceded by a `<!-- reply: <by> @ <iso> -->` sentinel: invisible in rendered markdown, unambiguous to
 // parse. Only the forum writes these files, so a fixed shape is safe. Lists are `key: a, b` scalars so a
 // +1 sign is a one-line change.
-const REPLY_RE = /^<!-- reply: (.+?) @ (.+?) -->$/
+//
+// A REMARK ([[remark-substrate]]) is a reply carrying extra state, appended to the SAME sentinel as a
+// ` :: <space-joined k=v attrs>` tail (a plain reply has no tail → parses unchanged, backward compatible):
+//   rid=<id>            stable per-remark id — its presence marks the reply a remark
+//   sha=<targetCodeSha> the reading the remark was authored against
+//   resolved=<by>@<at>  present only once resolved (absent ⟹ resolved:false)
+const REPLY_RE = /^<!-- reply: (.+?) @ (.+?)(?: :: (.+))? -->$/
 
 function parse(id: string, text: string): Issue {
   const m = text.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/)
@@ -63,7 +69,7 @@ function parse(id: string, text: string): Issue {
   let cur: Reply | null = null
   for (const line of (m ? m[2] : text).replace(/^\n+/, '').split('\n')) {
     const rm = line.match(REPLY_RE)
-    if (rm) { cur = { by: rm[1], at: rm[2], body: '' }; replies.push(cur); continue }
+    if (rm) { cur = { by: rm[1], at: rm[2], body: '', ...parseRemarkAttrs(rm[3]) }; replies.push(cur); continue }
     if (cur) cur.body += (cur.body ? '\n' : '') + line
     else body.push(line)
   }
@@ -90,6 +96,26 @@ function parse(id: string, text: string): Issue {
 const safeBody = (t: string): string => t.trim().replace(/<!-- reply:/g, '<!--​reply:')
 const safeScalar = (t: string): string => t.replace(/[\r\n]+/g, ' ').trim()
 
+// the ` :: k=v k=v` remark tail on a reply sentinel ↔ the reply's remark fields. `undefined` attrs (a plain
+// reply) → no remark fields; `rid` present → the reply IS a remark ([[remark-substrate]]). Values are
+// space-free (ids, a codeSha, a session id, an ISO instant), so a space-split is unambiguous.
+function parseRemarkAttrs(attrs: string | undefined): Partial<Reply> {
+  if (!attrs) return {}
+  const kv = new Map<string, string>()
+  for (const tok of attrs.trim().split(/\s+/)) { const i = tok.indexOf('='); if (i > 0) kv.set(tok.slice(0, i), tok.slice(i + 1)) }
+  if (!kv.has('rid')) return {}
+  const out: Partial<Reply> = { rid: kv.get('rid'), targetCodeSha: kv.get('sha') ?? '', resolved: false }
+  const r = kv.get('resolved')
+  if (r) { const at = r.indexOf('@'); out.resolved = true; out.resolvedBy = r.slice(0, at); out.resolvedAt = r.slice(at + 1) }
+  return out
+}
+function serializeRemarkAttrs(r: Reply): string {
+  if (r.rid === undefined) return ''
+  const parts = [`rid=${r.rid}`, `sha=${r.targetCodeSha ?? ''}`]
+  if (r.resolved) parts.push(`resolved=${r.resolvedBy ?? ''}@${r.resolvedAt ?? ''}`)
+  return ` :: ${parts.join(' ')}`
+}
+
 function serialize(p: Issue): string {
   const fm = [
     `concern: ${safeScalar(p.concern)}`,
@@ -101,7 +127,7 @@ function serialize(p: Issue): string {
     `created: ${p.created}`,
   ].filter(Boolean)
   let out = `---\n${fm.join('\n')}\n---\n\n${safeBody(p.body)}\n`
-  for (const r of p.replies) out += `\n<!-- reply: ${safeScalar(r.by)} @ ${safeScalar(r.at)} -->\n${safeBody(r.body)}\n`
+  for (const r of p.replies) out += `\n<!-- reply: ${safeScalar(r.by)} @ ${safeScalar(r.at)}${serializeRemarkAttrs(r)} -->\n${safeBody(r.body)}\n`
   return out
 }
 
@@ -182,11 +208,24 @@ export function propose(concern: string, opts: { nodes?: string[]; body?: string
   }))
 }
 
-export function reply(id: string, body: string, author?: string, evidence?: string[]): Issue {
+// mint a per-thread-unique remark id (retry on the rare collision within one thread). Short + readable so a
+// `<thread-id>#<rid>` ref is typeable; stable, so a resolve/retract never lands on the wrong remark.
+function mintRid(existing: Set<string>): string {
+  let rid: string
+  do { rid = 'r' + Math.random().toString(36).slice(2, 6) } while (existing.has(rid))
+  return rid
+}
+
+// a REMARK ([[remark-substrate]]) rides the SAME committed reply write, just stamping the remark fields: a
+// fresh unresolved bit + a minted stable rid + the codeSha it was authored against. Absent `remark` this is
+// an ordinary reply, unchanged. Returns the thread; the new reply is its last, so a caller reads back its rid.
+export function reply(id: string, body: string, author?: string, evidence?: string[], remark?: { targetCodeSha: string }): Issue {
   const by = author || currentSession()
-  return commitForum(`issue(${id}): reply by ${by}`, () => {
+  return commitForum(remark ? `remark(${id}): by ${by}` : `issue(${id}): reply by ${by}`, () => {
     const p = loadOne(id)   // fresh read under the lock → no lost-update when replies race
-    p.replies.push({ by, at: new Date().toISOString(), body: body.trim() })
+    const post: Reply = { by, at: new Date().toISOString(), body: body.trim() }
+    if (remark) { post.rid = mintRid(new Set(p.replies.map((r) => r.rid).filter((x): x is string => !!x))); post.targetCodeSha = remark.targetCodeSha; post.resolved = false }
+    p.replies.push(post)
     // an anchored annotation carries its frame blob: the reply's evidence hashes accrue onto the THREAD's
     // typed evidence[] (deduped), so the thread stays the one place a video finding's blobs are indexed.
     if (evidence?.length) p.evidence = [...new Set([...p.evidence, ...evidence])]
@@ -201,8 +240,8 @@ export function reply(id: string, body: string, author?: string, evidence?: stri
 // plus the @-dispatch outcomes so a caller can echo who was notified.
 // The two reply deliveries are orthogonal: `evidence?` (f15b) carries a video annotation's frame blobs onto
 // the thread; the originator loop-in ([[mentions]]) notifies who raised the thread. Both apply on every reply.
-export async function forumReply(id: string, body: string, author: string, evidence?: string[]): Promise<{ thread: Issue; outcomes: DispatchOutcome[]; loopIn: LoopIn | null }> {
-  const thread = reply(id, body, author, evidence)
+export async function forumReply(id: string, body: string, author: string, evidence?: string[], remark?: { targetCodeSha: string }): Promise<{ thread: Issue; outcomes: DispatchOutcome[]; loopIn: LoopIn | null }> {
+  const thread = reply(id, body, author, evidence, remark)
   const node = thread.nodes[0] || null
   const outcomes = await dispatchMentions(body, { threadId: id, node, author, status: thread.status })
   // implicit originator loop-in ([[mentions]]): a courtesy copy to whoever ORIGINATED this thread, if online.
@@ -253,6 +292,81 @@ export function resolve(id: string, as: string): string {
   return as
 }
 
+// ── remarks ([[remark-substrate]]) ──────────────────────────────────────────────────────────────────
+// A remark is a reply carrying a resolvable bit, attached to a HOST: a local issue, or a scenario keyed by
+// (node, scenario). The scenario track is NOT a new store — it is the annotator's lazy eval thread, keyed by
+// its `eval: <node> · <scenario>` concern; a remark reuses it, creating it on first remark as a stub
+// container (every remark is a reply, never the thread body, so the resolved bit always lives in one place).
+const evalConcernKey = (node: string, scenario: string): string => `eval: ${node} · ${scenario}`
+
+async function resolveRemarkHost(host: { issue?: string; node?: string; scenario?: string }, author: string): Promise<string> {
+  if (host.scenario) {
+    const node = host.node
+    if (!node) throw new Error('a scenario remark needs a node plus --scenario <name>')
+    const concern = evalConcernKey(node, host.scenario)
+    const existing = loadProposals().find((t) => t.store === 'local' && t.concern === concern)
+    if (existing) return existing.id
+    const { thread } = await forumPost(concern, { nodes: [node], author, body: `Remarks on the \`${host.scenario}\` eval of [[${node}]].` })
+    return thread.id
+  }
+  if (!host.issue) throw new Error('a remark needs a host: an issue id, or a node with --scenario <name>')
+  return loadOne(host.issue).id   // throws loudly if the issue doesn't exist
+}
+
+// author a remark on a host — the ONE write both the CLI (`spex remark`) and the server call. Stamps the
+// codeSha it was authored against (the worktree HEAD by default — R2). Returns the `<thread-id>#<rid>` ref.
+export async function remarkOnHost(
+  host: { issue?: string; node?: string; scenario?: string },
+  body: string,
+  opts: { codeSha?: string; author?: string; evidence?: string[] } = {},
+): Promise<{ ref: string; rid: string; codeSha: string; thread: Issue; outcomes: DispatchOutcome[]; loopIn: LoopIn | null }> {
+  const author = opts.author || currentSession()
+  const codeSha = opts.codeSha || headSha(repoRoot())
+  const id = await resolveRemarkHost(host, author)
+  const { thread, outcomes, loopIn } = await forumReply(id, body, author, opts.evidence, { targetCodeSha: codeSha })
+  const rid = thread.replies[thread.replies.length - 1].rid!
+  return { ref: `${id}#${rid}`, rid, codeSha, thread, outcomes, loopIn }
+}
+
+// a remark ref is `<thread-id>#<rid>`; the thread id (a forum slug) never contains '#', so split on the last.
+function parseRemarkRef(ref: string): { id: string; rid: string } {
+  const i = ref.lastIndexOf('#')
+  if (i <= 0 || i === ref.length - 1) throw new Error(`bad remark ref '${ref}' — expected <thread-id>#<rid> (the id \`spex remark\` printed)`)
+  return { id: ref.slice(0, i), rid: ref.slice(i + 1) }
+}
+
+// resolve a remark (R3): a DELIBERATE call, agent-only (the dashboard's `human` is rejected — a human
+// RETRACTS their own, resolve is a second party's judgment), NEVER the author (no self-resolve), and
+// MONOTONIC (no un-resolve — a regression is a NEW remark). `by` is the resolving party.
+export function resolveRemark(ref: string, by: string): { thread: Issue; rid: string } {
+  const { id, rid } = parseRemarkRef(ref)
+  const thread = commitForum(`remark(${id}#${rid}): resolved by ${by}`, () => {
+    const p = loadOne(id)
+    const r = p.replies.find((x) => x.rid === rid)
+    if (!r) throw new Error(`no remark '${ref}' in that thread`)
+    if (!by || by === 'human' || by === 'unknown') throw new Error(`resolve is agent-only (needs a real session identity, got '${by || 'none'}'): a human withdraws their own remark with \`spex retract\`, not resolve`)
+    if (r.resolved) throw new Error(`remark '${ref}' is already resolved — monotonic: a regression is a NEW remark, never an un-resolve`)
+    if (r.by === by) throw new Error(`refusing to self-resolve '${ref}': the author (${by}) may not resolve their own remark — resolve is a second party's deliberate judgment`)
+    r.resolved = true; r.resolvedBy = by; r.resolvedAt = new Date().toISOString()
+    return p
+  })
+  return { thread, rid }
+}
+
+// retract a remark (R3): the AUTHOR withdraws their OWN remark, removing it. Only the author may retract.
+export function retractRemark(ref: string, by: string): { thread: Issue; rid: string } {
+  const { id, rid } = parseRemarkRef(ref)
+  const thread = commitForum(`remark(${id}#${rid}): retracted by ${by}`, () => {
+    const p = loadOne(id)
+    const idx = p.replies.findIndex((x) => x.rid === rid)
+    if (idx < 0) throw new Error(`no remark '${ref}' in that thread`)
+    if (p.replies[idx].by !== by) throw new Error(`only the author (${p.replies[idx].by}) may retract '${ref}' — you are '${by}'`)
+    p.replies.splice(idx, 1)
+    return p
+  })
+  return { thread, rid }
+}
+
 // the post-merge nudge TEXT ([[proposals]]) — produced HERE so the toggle and the wording live in one place;
 // the post-merge git hook is a thin caller that just echoes this. Returns '' when the feature is OFF, so the
 // hook prints nothing.
@@ -283,7 +397,7 @@ const fl = (args: string[], name: string): string | undefined => {
   const i = args.indexOf(`--${name}`)
   return i >= 0 ? args[i + 1] : undefined
 }
-const VALUE_FLAGS = new Set(['--node', '--body', '--as', '--evidence'])
+const VALUE_FLAGS = new Set(['--node', '--body', '--as', '--evidence', '--scenario', '--code-sha'])
 // bare positionals, skipping flags + their values.
 function bare(args: string[]): string[] {
   const out: string[] = []
@@ -363,4 +477,51 @@ export async function runPropose(args: string[]): Promise<number> {
     console.error(`spex propose: ${e instanceof Error ? e.message : e}`)
     return 1
   }
+}
+
+// ── remark CLI ([[remark-substrate]]) — CLI-first: the whole author→resolve→retract loop, no server needed ──
+// `spex remark <host> --body -|<text> [--code-sha <sha>] [--scenario <name>] [--evidence <hash>…]`
+// host = a local issue id, OR a <node> with --scenario <name>. Records targetCodeSha (default: worktree HEAD).
+export async function runRemark(args: string[]): Promise<number> {
+  try {
+    const scenario = fl(args, 'scenario')
+    const positional = bare(args)[0]
+    const body = readBody(args)
+    if (!positional || !body) {
+      console.error('usage: spex remark <issue-id | node --scenario name> --body -|<text> [--code-sha <sha>] [--evidence <hash>…]')
+      return 2
+    }
+    const host = scenario ? { node: positional, scenario } : { issue: positional }
+    const r = await remarkOnHost(host, body, { codeSha: fl(args, 'code-sha'), evidence: repeated(args, 'evidence') })
+    console.log(`remark ${r.ref}  (against ${r.codeSha.slice(0, 7) || 'HEAD'}) — read it with \`spex issues --all\``)
+    const s = summarize(r.outcomes, r.loopIn)
+    if (s) console.log(`  ${s}`)
+    return 0
+  } catch (e) {
+    console.error(`spex remark: ${e instanceof Error ? e.message : e}`)
+    return 1
+  }
+}
+
+// `spex resolve <remark-ref>` — flip resolved=true (agent-only, never the author, monotonic — see resolveRemark).
+export async function runResolve(args: string[]): Promise<number> {
+  const ref = bare(args)[0]
+  if (!ref) { console.error('usage: spex resolve <remark-ref>   (the <thread-id>#<rid> `spex remark` printed)'); return 2 }
+  try {
+    const by = currentSession()
+    resolveRemark(ref, by)
+    console.log(`resolved remark ${ref} — by ${by}`)
+    return 0
+  } catch (e) { console.error(`spex resolve: ${e instanceof Error ? e.message : e}`); return 1 }
+}
+
+// `spex retract <remark-ref>` — the author withdraws their OWN remark, removing it (author-only — see retractRemark).
+export async function runRetract(args: string[]): Promise<number> {
+  const ref = bare(args)[0]
+  if (!ref) { console.error('usage: spex retract <remark-ref>'); return 2 }
+  try {
+    retractRemark(ref, currentSession())
+    console.log(`retracted remark ${ref}`)
+    return 0
+  } catch (e) { console.error(`spex retract: ${e instanceof Error ? e.message : e}`); return 1 }
 }

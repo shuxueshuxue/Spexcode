@@ -1,0 +1,25 @@
+---
+concern: remark teeth spoofable on server: /api/remarks trusts client-supplied author (self-resolve + author-only retract bypassable)
+by: b234e3fc-c280-464d-9bb6-96db6e703ce8
+status: open
+nodes: remark-substrate
+created: 2026-07-03T18:07:09.967Z
+---
+
+Adversarial audit of M1 remark-substrate (main 9dd0dc9). Refutes R3 teeth + LAW L on the SERVER surface.
+
+**What.** The remark write endpoints in spec-cli/src/index.ts (`POST /api/remarks`, `/api/remarks/resolve`, `/api/remarks/retract`) take the actor identity straight from the request JSON (`body.author` / `by`) and pass it into `resolveRemark`/`retractRemark`. The CLI derives identity from the session env (`currentSession()` → `envSessionId()`), which a caller cannot forge; the server derives it from untrusted client input. So R3's teeth — which are all identity comparisons (`r.by === by` self-resolve, `by === 'human'` agent-only, `replies[idx].by !== by` author-only) — are structural only on the CLI and spoofable on the server.
+
+**Repro (REAL Hono handlers via a throwaway backend bound to the sandbox repo):**
+- author a remark as `evil-agent`.
+- `POST /api/remarks/resolve {ref, author:"evil-agent"}` → correctly REJECTED (no self-resolve).
+- `POST /api/remarks/resolve {ref, author:"evil-agent-but-typo"}` → **ACCEPTED**. The same actor self-resolved its own remark by inventing a second identity string. File now shows `resolved=evil-agent-but-typo`.
+- author a remark as `alice`; from any client `POST /api/remarks/retract {ref, author:"alice"}` → **removes it**. Author-only retract defeated — the author is readable off the public thread, so anyone can claim it.
+
+**Invariant tension.** R3: resolve is "never by the author" / agent-only / a deliberate second-party judgment; retract is author-only. LAW L: "the CLI is the whole model; the dashboard is a thin projection adding no capability." These write endpoints ADD a capability the CLI structurally lacks — asserting an arbitrary actor identity — so who-may-resolve now depends on the transport. (Global principle: product semantics should not know the transport; here they do.) The M1 spec claims "parity in both directions, no dashboard-only capability … everything the endpoints do, they do by calling the same functions the CLI calls" — true for the *functions*, but they are fed a client-controlled identity the CLI never is.
+
+**Mitigation today.** Only the deploy's password gate, not a structural guarantee; any authenticated caller can spoof.
+
+**Recommend.** Bind the resolving/retracting identity to the authenticated server session (not the request body), or explicitly document the server surface as trusted-caller-only and that R3's teeth are CLI-structural.
+
+Severity: medium. Found by adversarial audit; [[remark-substrate]].

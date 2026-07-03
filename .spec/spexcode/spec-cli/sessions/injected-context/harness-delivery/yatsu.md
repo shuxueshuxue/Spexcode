@@ -24,6 +24,19 @@ scenarios:
       only docs/AGENT_GUIDE.md is tracked. Each file's `<!-- spexcode:start -->…<!-- spexcode:end -->` block
       equals the AGENT_GUIDE.md guide followed by the surface:system bodies in name order; the second run
       reflects the edited body. The writeManagedBlock primitive still preserves any bytes outside the markers.
+  - name: gitignore-block-checkout-invariant
+    tags: [backend-api]
+    code: spec-cli/src/materialize.ts
+    description: >-
+      In a repo with a codex harness, run `spex materialize` from the MAIN checkout and (separately) from a
+      linked WORKTREE, and compare the managed `.gitignore` block each produces; then commit the block and
+      re-run materialize from each to check for a diff.
+    expected: >-
+      Both checkouts emit the IDENTICAL managed block — in particular the codex hooks shim appears as
+      `.codex/hooks.json` from BOTH (a worktree, where that path escapes `proj`, anchors it to the main
+      checkout rather than dropping it). With the committed `.gitignore` matching that block, a re-run from
+      either checkout produces NO diff — materialize never re-dirties a clean tree, so the shared committed
+      file is stable across main and every worktree.
   - name: codex-trust-is-scoped-and-additive
     tags: [backend-api]
     description: >-

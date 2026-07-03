@@ -210,6 +210,8 @@ async function evalCmd(args: string[]): Promise<number> {
     ...(blobKind ? { blobKind } : {}),
     ...(timelineBlob ? { timelineBlob } : {}),
     evaluator: evaluatorTag(),
+    // the filing session — the originator an eval-comment thread loops in ([[mentions]]); absent if unknown
+    ...((envSessionId() ?? undefined) ? { by: envSessionId()! } : {}),
     verdict,
     ts: new Date().toISOString(),
   }

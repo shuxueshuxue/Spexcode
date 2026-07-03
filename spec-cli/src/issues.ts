@@ -10,7 +10,7 @@
 import type { ForgeIssue, ForgePR } from '../../spec-forge/src/port.js'
 import { resolveLinks } from '../../spec-forge/src/links.js'
 import { loadProposals, loadOne, reply, resolve, proposalsEnabled, forumReply } from './proposals.js'
-import { dispatchMentions, type DispatchOutcome } from './mentions.js'
+import { dispatchMentions, type DispatchOutcome, type LoopIn } from './mentions.js'
 import { envSessionId } from './layout.js'
 import { loadSpecsLite } from './specs.js'
 
@@ -107,20 +107,22 @@ export async function replyIssue(
   id: string,
   body: string,
   opts: { author?: string; node?: string | null; evidence?: string[] } = {},
-): Promise<{ store: string; replies?: Reply[]; url?: string; outcomes: DispatchOutcome[] }> {
+): Promise<{ store: string; replies?: Reply[]; url?: string; outcomes: DispatchOutcome[]; loopIn: LoopIn | null }> {
   const author = opts.author || envSessionId() || 'unknown'
   const forge = /^([A-Za-z0-9-]+)#(\d+)$/.exec(id)
   if (!forge) {
     // evidence hashes accrue onto the local thread's typed evidence[] (a forge thread has no such field —
-    // an annotation's frame rides its comment body's image link there, the driver the only network toucher).
-    const { thread, outcomes } = await forumReply(id, body, author, opts.evidence)
-    return { store: 'local', replies: thread.replies, outcomes }
+    // an annotation's frame rides its comment body's image link there, the driver the only network toucher);
+    // forumReply also loops in the thread's originator ([[mentions]]) after the @-dispatch.
+    const { thread, outcomes, loopIn } = await forumReply(id, body, author, opts.evidence)
+    return { store: 'local', replies: thread.replies, outcomes, loopIn }
   }
   const { githubDriver } = await import('../../spec-forge/src/drivers/github.js')
   if (forge[1] !== githubDriver.host) throw new Error(`unknown forge host '${forge[1]}' — this repo's driver is '${githubDriver.host}'`)
   const { url } = await githubDriver.createComment({ number: parseInt(forge[2], 10), body })
   const outcomes = await dispatchMentions(body, { threadId: id, node: opts.node ?? null, author })
-  return { store: forge[1], url, outcomes }
+  // a forge issue's author is a github login, not a live session → no reachable originator to loop in (silent).
+  return { store: forge[1], url, outcomes, loopIn: null }
 }
 
 // ───────────────────────── CLI ─────────────────────────

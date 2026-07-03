@@ -275,7 +275,7 @@ export default function Annotator({ entry, issues = null, specs = [], sessions =
       {ev.length === 0 && (viewing.verdict?.note
         ? <pre className="eval-transcript">{viewing.verdict.note}</pre>
         : <div className="an-hint">{t('nodeView.eval.noImage')}</div>)}
-      {issues && <EvalComments entry={entry} issues={issues} specs={specs} sessions={sessions} onWrite={onWrite}
+      {(entry.thread || issues) && <EvalComments entry={entry} issues={issues} specs={specs} sessions={sessions} onWrite={onWrite}
         vidRef={hasVideo ? vid : null} events={events} draft={draft} />}
     </div>
   )
@@ -286,12 +286,13 @@ export default function Annotator({ entry, issues = null, specs = [], sessions =
 // nodes:[node]); every later comment replies to it. Anchored comments (`▶m:ss · step`) linkify to their
 // video moment (click = seek) and carry their circled frame; sorted by anchor they read as an annotation
 // track over the clip. The thread is per-SCENARIO, not per-reading, so it stays stable as you flip the A/B
-// history above. Rendered only where a resident issues list is wired in (the issues page) — the lookup
-// needs the list, and posting blind would mint duplicate threads.
+// history above. The (node,scenario)↔thread join is lifted SERVER-SIDE ([[remark-teeth]] directive 3): the
+// session tab attaches it as `entry.thread`, so we read that directly; the issues page still passes a
+// resident `issues` list, so we fall back to the concern-key match there (M3 lifts that too).
 function EvalComments({ entry, issues, specs, sessions, onWrite, vidRef, events, draft }) {
   const t = useT()
   const key = evalConcern(entry)
-  const thread = issues.find((i) => i.store === 'local' && i.concern === key) || null
+  const thread = entry.thread ?? (issues ? issues.find((i) => i.store === 'local' && i.concern === key) : null) ?? null
   const comments = thread ? [{ by: thread.by, at: thread.created, body: thread.body }, ...(thread.replies || [])] : []
   const send = (text, evidence) => thread
     ? postIssueReply(thread.id, text, evidence)

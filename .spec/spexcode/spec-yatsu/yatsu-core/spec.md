@@ -66,11 +66,14 @@ run: several stills beside the recorded clip. Backward-compatible: a legacy **sc
 `blobKind`) reads as a one-entry list, so old readings still render; one filed before verdicts existed — or a
 legacy note-only reading — renders as *legacy*.
 
-**Freshness is derived live from git, never stored.** A reading goes stale on three axes since its codeSha —
-a governed `code:` file changed, its scenario's *content* changed, or the evaluator version moved. A bare
-`git mv` reparent is not a content change, so it never stales a reading: the scenario axis judges content the
-way a spec node's own freshness does, not the yatsu.md's path. No hashes kept; an ack vindicates a *spec*,
-not a reading.
+**Freshness is derived live from git, never stored.** A reading goes stale on four axes since its codeSha —
+three git-derived (a governed `code:` file changed, its scenario's *content* changed, or the evaluator
+version moved) plus a fourth, **non-git** axis, the REMARK ([[remark-teeth]]): an unresolved remark on the
+scenario ages it like a drift event, and a resolved one keeps it stale until a reading taken *after* the
+resolve exists. A bare `git mv` reparent is not a content change, so it never stales a reading: the scenario
+axis judges content the way a spec node's own freshness does, not the yatsu.md's path. No hashes kept; an
+ack vindicates a *spec*, not a reading. `freshness.ts` stays a pure computation — the remark track is fed in
+at the call sites, never read from the forum here.
 
 The surface mirrors the code-drift report:
 - **scan [--changed]** — the loss signal's blind spots: a malformed yatsu.md (`yatsu-schema` — missing field,

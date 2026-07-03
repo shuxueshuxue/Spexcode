@@ -1,6 +1,7 @@
 import { relative, dirname } from 'node:path'
 import { repoRoot, driftIndex, historyIndex, type DriftIndex, type HistoryIndex } from '../../spec-cli/src/git.js'
 import { loadSpecs } from '../../spec-cli/src/specs.js'
+import { loadEvalRemarkTracks, trackKey, type RemarkTrack } from '../../spec-cli/src/issues.js'
 import { yatsuNodes, type YatsuNode } from './yatsu.js'
 import { readReadings, evidenceOf, type Verdict, type EvidenceKind } from './sidecar.js'
 import { staleAxes, type StaleAxis } from './freshness.js'
@@ -9,6 +10,23 @@ import { hasBlob, getBlob, MISS_BLOB } from './cache.js'
 // one evidence entry as the tab renders it: the content hash, its kind, and its LIVE blob state (present, or
 // miss when the bytes were pruned). The whole list is the gallery the dashboard maps.
 export type EvidenceView = { hash: string; kind: EvidenceKind; state: 'present' | 'miss' }
+
+// a remark overlaid onto the reading it judged ([[remark-teeth]] R2): the resolvable fields the eval
+// surfaces read, plus `dangling` when its targetCodeSha matched no reading (so it was attached to the
+// scenario's latest as a fallback, never hidden). The teeth read the whole scenario track; THIS is the
+// per-reading display attachment.
+export type RemarkView = {
+  rid: string
+  ref: string             // `<thread-id>#<rid>` — the address `spex resolve`/`spex retract` take
+  by: string
+  at: string
+  body: string
+  targetCodeSha: string
+  resolved: boolean
+  resolvedAt?: string
+  resolvedBy?: string
+  dangling: boolean
+}
 
 export type EvalEntry = {
   scenario: string
@@ -28,6 +46,9 @@ export type EvalEntry = {
   fresh: boolean
   staleAxes: StaleAxis[]
   blobState: 'present' | 'miss' | 'none'
+  // the trunk remark track overlaid onto THIS reading ([[remark-teeth]]): the remarks whose targetCodeSha
+  // pins here (or the latest reading, for a dangling target). Absent when the scenario has no remark.
+  remarks?: RemarkView[]
 }
 
 export type ScenarioInfo = { name: string; expected: string; tags?: string[]; code?: string[] }
@@ -49,13 +70,23 @@ export type EvalContext = {
   idx: DriftIndex
   hidx: HistoryIndex
   ynodes: YatsuNode[]
+  // the trunk remark tracks ([[remark-teeth]]), keyed (node, scenario) — loaded ONCE per board/proof build
+  // and reused for every node, so the fold never re-reads the forum per node.
+  remarks: Map<string, RemarkTrack>
 }
 
 // build the shared context with ONE yatsu walk, reusing the caller's already-computed specs + the two
 // HEAD-keyed git indices (drift for the code axis, history for the rename-safe scenario axis — both warm
-// hits, loadSpecs already derived them).
-export function evalContext(root: string, specs: Awaited<ReturnType<typeof loadSpecs>>, idx: DriftIndex, hidx: HistoryIndex): EvalContext {
-  return { root, specs, idx, hidx, ynodes: yatsuNodes(root) }
+// hits, loadSpecs already derived them). The remark tracks are the fourth, non-git freshness input
+// ([[remark-teeth]]); a caller that omits them gets a live load, so a bare evalTimeline still has teeth.
+export function evalContext(
+  root: string,
+  specs: Awaited<ReturnType<typeof loadSpecs>>,
+  idx: DriftIndex,
+  hidx: HistoryIndex,
+  remarks?: Map<string, RemarkTrack>,
+): EvalContext {
+  return { root, specs, idx, hidx, ynodes: yatsuNodes(root), remarks: remarks ?? loadEvalRemarkTracks() }
 }
 
 export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalTimeline> {
@@ -71,6 +102,9 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
   const idx = ctx?.idx ?? await driftIndex(root)
   const hidx = ctx?.hidx ?? await historyIndex(root)
   const byName = new Map(ynode.scenarios.map((s) => [s.name, s]))   // join each reading to its scenario's expected + code
+  // the trunk remark track per scenario ([[remark-teeth]]) — the non-git freshness input, fed to the teeth.
+  const tracks = ctx?.remarks ?? loadEvalRemarkTracks()
+  const remarksFor = (scenario: string): RemarkTrack['remarks'] => tracks.get(trackKey(id, scenario))?.remarks ?? []
   const scenarios: ScenarioInfo[] = ynode.scenarios.map((s) => ({
     name: s.name, expected: s.expected,
     ...(s.tags?.length ? { tags: s.tags } : {}), ...(s.code?.length ? { code: s.code } : {}),
@@ -78,7 +112,11 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
   const readings: EvalEntry[] = readReadings(ynode.sidecarPath).map((r) => {
     // a scenario's own `code` is its freshness code axis when it declares one; else the whole node's list.
     const sc = byName.get(r.scenario)
-    const axes = staleAxes(r, sc?.code?.length ? sc.code : codeFiles, ynode.yatsuPath, idx, hidx)
+    // the teeth feed the WHOLE scenario track against THIS reading — an unresolved (or not-yet-out-run)
+    // remark makes it remark-stale (T1). Display attachment (which reading each remark pins to) is a separate
+    // read-time overlay below; freshness never depends on that pin.
+    const axes = staleAxes(r, sc?.code?.length ? sc.code : codeFiles, ynode.yatsuPath, idx, hidx,
+      remarksFor(r.scenario).map((rm) => ({ resolved: !!rm.resolved, resolvedAt: rm.resolvedAt })))
     // the reading's evidence list, each entry resolved to its live blob state; the primary (video-first, else
     // first) drives the scalar compat fields for single-evidence consumers.
     const evidence: EvidenceView[] = evidenceOf(r).map((e) => ({ hash: e.hash, kind: e.kind, state: hasBlob(e.hash) ? 'present' : 'miss' }))
@@ -99,7 +137,31 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
       blobState: primary ? primary.state : 'none',
     }
   })
-  readings.reverse()
+  readings.reverse()   // newest-first
+  // R2 display overlay ([[remark-teeth]]): pin each remark to the reading it JUDGED (targetCodeSha match),
+  // else the scenario's latest reading (first in newest-first order) — a dangling target never HIDES the
+  // remark. A remark on a scenario with no reading has nowhere to attach (it surfaces at node level in a
+  // later milestone); it still ages nothing here since there is no reading, and the load never crashed.
+  for (const [, track] of tracks) {
+    if (track.node !== id || !track.remarks.length) continue
+    const rows = readings.filter((r) => r.scenario === track.scenario)
+    if (!rows.length) continue
+    const latest = rows[0]
+    for (const rm of track.remarks) {
+      const target = rows.find((r) => r.codeSha === rm.targetCodeSha)
+      const host = target ?? latest
+      ;(host.remarks ??= []).push({
+        rid: rm.rid!,
+        ref: `${track.threadId}#${rm.rid}`,
+        by: rm.by, at: rm.at, body: rm.body,
+        targetCodeSha: rm.targetCodeSha ?? '',
+        resolved: !!rm.resolved,
+        ...(rm.resolvedAt ? { resolvedAt: rm.resolvedAt } : {}),
+        ...(rm.resolvedBy ? { resolvedBy: rm.resolvedBy } : {}),
+        dangling: !target,
+      })
+    }
+  }
   return { node: id, hasYatsu: true, scenarios, readings }
 }
 

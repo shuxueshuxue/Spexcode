@@ -24,6 +24,11 @@ import { tsxBin } from './tsx-bin.js'
 
 export type HarnessId = 'claude' | 'codex'
 export type HarnessLivenessRecord = { session: string; harnessSessionId?: string | null }
+// the per-pane runtime probe the caller snapshots ONCE for the whole session list and hands liveness():
+// the pane's root pid (tmux `#{pane_pid}`) plus one whole-box pid→(ppid, comm) table (a single `ps` spawn).
+// The adapter that cares (codex) walks the pane pid's descendants in that table; claude ignores it.
+export type ProcTable = Map<number, { ppid: number; comm: string }>
+export type PaneProbe = { panePid?: number; procs?: ProcTable }
 
 export interface Harness {
   readonly id: HarnessId
@@ -80,18 +85,17 @@ export interface Harness {
   slashCommands(): SlashCommand[]
 
   // --- runtime: liveness + prompt delivery ([[harness-delivery]]) ---
-  // is this session's agent process up? The caller passes the tmux facts it already computed in ONE snapshot
-  // (see sessions.ts liveTmux): the window's presence AND the pane's foreground command (pane_current_command).
-  // The adapter adds only its own channel check. claude: online iff the window is up AND its reclaude rendezvous
-  // socket exists (the socket is the truth claude is alive — its pane command is always the wrapper/shell, so
-  // claude IGNORES paneCmd). codex: online iff the window is up AND the pane's foreground command is codex, NOT
-  // the interactive shell — because a codex launch whose visible `--remote resume` TUI FAILED (after its retries)
-  // drops the pane back to the shell while the SHARED per-project app-server socket stays bound, so sock-presence
-  // is NOT proof THIS session's TUI/thread is live; the pane running codex is. paneCmd is undefined when tmux
-  // couldn't report it → treated as not-live. The 'starting' boot grace lives in the caller (sessions.ts
-  // liveness), so a still-booting pane — bash bootstrapping the app-server before codex exec's — reads starting,
-  // not offline, for the legitimate startup window.
-  liveness(rec: HarnessLivenessRecord, tmuxAlive: boolean, runtimeDir?: string, paneCmd?: string): 'online' | 'offline'
+  // is this session's agent process up? The caller passes the runtime facts it already computed in ONE
+  // snapshot (see sessions.ts liveTmux/procSnapshot): the window's presence AND a PaneProbe — the pane's
+  // root pid plus one whole-box process table. The adapter adds only its own channel check. claude: online
+  // iff the window is up AND its reclaude rendezvous socket exists (the socket is the truth claude is alive —
+  // claude IGNORES the pane probe). codex: online iff the window is up AND a codex-ish process (`codex` by any
+  // name, or the `node` its CLI runs under) is live in the pane pid's DESCENDANT tree — NOT the pane's
+  // foreground command name (that is `bash`, the launch wrapper, even while the TUI renders — field-confirmed),
+  // and NOT the SHARED per-project app-server socket (it stays bound after a failed `--remote resume` dropped
+  // the pane back to the shell). A missing probe (tmux/ps couldn't report) is not-live. The 'starting' boot
+  // grace lives in the caller (sessions.ts liveness), so a still-booting pane reads starting, not offline.
+  liveness(rec: HarnessLivenessRecord, tmuxAlive: boolean, runtimeDir?: string, pane?: PaneProbe): 'online' | 'offline'
   // deliver a follow-up prompt to a LIVE session and report whether it landed. claude: through the rendezvous
   // control socket — OPTIMISTIC-after-liveness (loud failure when the socket is missing/dead or the write can't
   // flush; once the reply line flushes to a live socket it returns ok, without waiting for an application ack —
@@ -748,23 +752,37 @@ function cleanHarness(h: Harness, proj: string, arts: HarnessArtifacts): void {
 }
 
 // ---------------------------------------------------------------------------------------------------------
-// codex per-session liveness signal — the pane's foreground process, NOT the shared app-server socket.
+// codex per-session liveness signal — a codex process live in the pane's DESCENDANT tree, NOT the pane's
+// foreground command name, and NOT the shared app-server socket.
 
-// @@@ paneRunsCodex - the codex TUI is alive iff the launch pane's foreground command is codex (or its launcher
-// wrapper), NOT the interactive shell. The launch pane runs `bash <launch.sh>` → `bash -lc <codex script>`
-// (which bootstraps the shared app-server) and only then `exec`s the visible `codex --remote … resume` TUI: so
-// while the TUI is up the pane command is codex/the wrapper, and if that resume FAILED (its bounded retries
-// exhausted) control returns to the shell prompt — pane command back to a bare shell — even though the SHARED
-// per-project app-server socket stays bound. Sock-presence is therefore a FALSE liveness signal (it survives a
-// failed launch); the pane not sitting at a shell is the honest per-session proof a codex TUI/thread is live.
-// "Not a shell" (rather than "== codex") is deliberate: it reads a renamed binary (codex-glm) or a launcher
-// wrapper as live too, and never mistakes the boot/failed shell for the TUI. A missing command (tmux couldn't
-// report it) is not-live; the caller's boot grace still shows a fresh launch as 'starting', not 'offline'.
-const LAUNCH_SHELLS = new Set(['sh', 'bash', 'dash', 'ash', 'zsh', 'fish', 'ksh', 'mksh', 'tcsh', 'csh'])
-export function paneRunsCodex(paneCmd?: string): boolean {
-  if (!paneCmd) return false
-  const c = paneCmd.replace(/^-/, '').trim().toLowerCase()   // tmux may report a login shell without its leading '-'
-  return c.length > 0 && !LAUNCH_SHELLS.has(c)
+// @@@ paneTreeRunsCodex - the codex TUI is alive iff a codex-ish process is live SOMEWHERE in the launch
+// pane's descendant process tree. The pane's FOREGROUND name is NOT the signal: the pane runs
+// `bash <launch.sh>` → `bash -lc <codex script>` → node (the codex CLI) → the vendored `codex` binary, and
+// tmux's `pane_current_command` reports the OUTERMOST of those — `bash` — for the entire life of a healthy,
+// rendering TUI (field-confirmed on macmini and Linux). So "foreground == codex" false-read every live codex
+// as offline, and the earlier sock-presence check false-read a dead one as online (the SHARED per-project
+// app-server socket survives a failed `--remote resume`). The honest shape test: HEALTHY = codex (by whatever
+// name — `codex`, the vendored musl binary, or the `node` its CLI runs under) exists among the pane pid's
+// descendants; FAILED = the launch script's bounded retries exhausted, everything under the pane exited, and
+// the pane sits at the bare shell — no codex/node anywhere below it. The walk is over ONE whole-box
+// pid→(ppid, comm) snapshot the caller took (a single `ps` for the whole session list); missing probe data
+// (tmux/ps couldn't report) is not-live, and the caller's boot grace still shows a fresh launch — whose tree
+// may not yet contain codex — as 'starting', not 'offline'.
+const CODEXISH = /^(codex|node)/i   // the vendored binary ('codex', 'codex-x86_64…') or the CLI's node runtime
+export function paneTreeRunsCodex(pane?: PaneProbe): boolean {
+  if (!pane?.panePid || !pane.procs?.size) return false
+  const kids = new Map<number, number[]>()
+  for (const [pid, p] of pane.procs) {
+    const arr = kids.get(p.ppid); if (arr) arr.push(pid); else kids.set(p.ppid, [pid])
+  }
+  const stack = [...(kids.get(pane.panePid) ?? [])]   // descendants only — the pane pid itself is the shell
+  while (stack.length) {
+    const pid = stack.pop()!
+    const comm = pane.procs.get(pid)?.comm ?? ''
+    if (CODEXISH.test(comm.slice(comm.lastIndexOf('/') + 1))) return true   // basename — macOS ps comm is a full path
+    const c = kids.get(pid); if (c) stack.push(...c)
+  }
+  return false
 }
 
 // ---------------------------------------------------------------------------------------------------------
@@ -820,10 +838,11 @@ export const codexHarness: Harness = {
   removeTrust: (proj) => removeCodexTrust(mainCheckout(proj)),
   clean(proj, arts) { cleanHarness(this, proj, arts) },
   slashCommands: codexSlashCommands,
-  // online iff the tmux window is up AND the pane's foreground command is codex (not the interactive shell) —
-  // see paneRunsCodex. The app-server socket is NOT the liveness gate: it is SHARED per-project and survives a
-  // failed `--remote resume` launch, so it read a dead pane as online (the false-positive this fixes).
-  liveness: (_rec, tmuxAlive, _runtimeDir, paneCmd) => (tmuxAlive && paneRunsCodex(paneCmd) ? 'online' : 'offline'),
+  // online iff the tmux window is up AND a codex-ish process is live in the pane pid's DESCENDANT tree — see
+  // paneTreeRunsCodex. NOT the pane's foreground command (that is `bash`, the launch wrapper, even while the
+  // TUI renders — the field-confirmed false-OFFLINE) and NOT the app-server socket (SHARED per-project, it
+  // survives a failed `--remote resume` — the earlier false-ONLINE).
+  liveness: (_rec, tmuxAlive, _runtimeDir, pane) => (tmuxAlive && paneTreeRunsCodex(pane) ? 'online' : 'offline'),
   deliver: (rec, text) => deliverViaCodexAppServer(rec, text),
   // owned thread id → `--resume <id>` MARKER the codex launch script reads to resume that thread DIRECTLY (NOT
   // a tail handed to a bare `codex` — the script's final `codex … resume "$tid"` performs codex's own resume on

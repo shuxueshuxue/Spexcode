@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { activeTurnIdFromThread, codexAppServerSock, codexBinary, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, codexLaunchCommand, paneRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, resolveLauncher } from './harness.js'
+import { activeTurnIdFromThread, codexAppServerSock, codexBinary, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, codexLaunchCommand, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, resolveLauncher } from './harness.js'
 
 test('codex handshake initializes, confirms the loaded thread, then reads it to decide steer-vs-start', () => {
   const msgs = codexHandshakeMessages('thr_1')
@@ -241,27 +241,45 @@ test('clean leaves a foreign (non-spexcode) shim file untouched', () => {
   assert.ok(existsSync(shim))
 })
 
-test('codex liveness reads the pane foreground command, NOT the shared app-server socket', () => {
+test('codex liveness walks the pane descendant tree, NOT the foreground name or the shared sock', () => {
   const dir = mkdtempSync(join(tmpdir(), 'spex-codex-live-'))
   const rec = { session: 'spex-1', harnessSessionId: 'codex-thread-1' }
-  // FIELD-CONFIRMED FALSE-POSITIVE (macmini): a launch whose `--remote resume` TUI failed leaves the SHARED
-  // per-project app-server socket bound while the pane drops back to the shell. Sock present must NOT read online.
-  writeFileSync(codexAppServerSock(dir), '')
-  assert.equal(codexHarness.liveness(rec, true, dir, 'bash'), 'offline')   // pane at the shell → offline despite the sock
-  assert.equal(codexHarness.liveness(rec, true, dir, '-zsh'), 'offline')   // login shell (tmux may drop the '-') → offline
-  // HAPPY STATE: the visible codex TUI is the pane's foreground command → online.
-  assert.equal(codexHarness.liveness(rec, true, dir, 'codex'), 'online')
-  assert.equal(codexHarness.liveness({ session: 'spex-1', harnessSessionId: null }, true, dir, 'codex'), 'online')
-  assert.equal(codexHarness.liveness(rec, true, dir, 'codex-glm'), 'online')   // a renamed binary / launcher wrapper still reads live
-  // tmux down → offline even when a codex command lingers in a stale snapshot
-  assert.equal(codexHarness.liveness(rec, false, dir, 'codex'), 'offline')
-  // pane command unavailable (tmux couldn't report it) → not-live
+  // FIELD-CONFIRMED shapes (Linux + macmini, codex 0.142.5). HEALTHY: the pane's FOREGROUND command is `bash`
+  // (the launch.sh wrapper) for the TUI's whole life — the codex processes live BELOW it:
+  //   pane bash(100) → bash -lc(101) → node/codex-cli(102) → vendored codex(103).
+  // FAILED: launch.sh's bounded retries exhausted, the wrapper exited, the pane sits at the bare shell —
+  // NOTHING below the pane pid — while the SHARED per-project app-server socket stays bound.
+  writeFileSync(codexAppServerSock(dir), '')   // the sock is present in BOTH shapes — it must not decide
+  const healthy = new Map([
+    [100, { ppid: 1, comm: 'bash' }], [101, { ppid: 100, comm: 'bash' }],
+    [102, { ppid: 101, comm: 'node' }], [103, { ppid: 102, comm: 'codex' }],
+  ])
+  const failed = new Map([[100, { ppid: 1, comm: 'bash' }], [999, { ppid: 1, comm: 'codex' }]])   // an UNRELATED codex elsewhere on the box must not count
+  assert.equal(codexHarness.liveness(rec, true, dir, { panePid: 100, procs: healthy }), 'online')
+  assert.equal(codexHarness.liveness({ session: 'spex-1', harnessSessionId: null }, true, dir, { panePid: 100, procs: healthy }), 'online')
+  assert.equal(codexHarness.liveness(rec, true, dir, { panePid: 100, procs: failed }), 'offline')  // bare shell → offline despite the sock
+  // tmux down → offline even when a stale snapshot still shows the tree
+  assert.equal(codexHarness.liveness(rec, false, dir, { panePid: 100, procs: healthy }), 'offline')
+  // probe unavailable (tmux/ps couldn't report) → not-live
   assert.equal(codexHarness.liveness(rec, true, dir, undefined), 'offline')
+  assert.equal(codexHarness.liveness(rec, true, dir, { panePid: 100 }), 'offline')
+  assert.equal(codexHarness.liveness(rec, true, dir, { procs: healthy }), 'offline')
 })
 
-test('paneRunsCodex: a codex/wrapper command is live; a bare shell (booting or failed launch) is not', () => {
-  for (const shell of ['sh', 'bash', '-bash', 'zsh', 'dash', 'fish', 'ksh']) assert.equal(paneRunsCodex(shell), false, shell)
-  for (const cmd of ['codex', 'codex-glm', 'reclaude', 'node']) assert.equal(paneRunsCodex(cmd), true, cmd)
-  assert.equal(paneRunsCodex(undefined), false)
-  assert.equal(paneRunsCodex(''), false)
+test('paneTreeRunsCodex: codex-ish descendants read live; a bare/unrelated tree does not', () => {
+  const base = new Map([[10, { ppid: 1, comm: 'bash' }]])
+  // any codex spelling — the plain binary, a vendored name, or the CLI's node runtime — anywhere below the pane
+  for (const comm of ['codex', 'codex-x86_64-unknown-linux-musl', 'node']) {
+    const procs = new Map([...base, [11, { ppid: 10, comm: 'bash' }], [12, { ppid: 11, comm }]])
+    assert.equal(paneTreeRunsCodex({ panePid: 10, procs }), true, comm)
+  }
+  // macOS ps may report comm as a full path — match on the basename
+  const macish = new Map([...base, [11, { ppid: 10, comm: '/usr/local/bin/node' }]])
+  assert.equal(paneTreeRunsCodex({ panePid: 10, procs: macish }), true)
+  // the pane pid ITSELF being codex-named must not be needed — but a bare shell with non-codex children is dead
+  const deadish = new Map([...base, [11, { ppid: 10, comm: 'sleep' }]])
+  assert.equal(paneTreeRunsCodex({ panePid: 10, procs: deadish }), false)
+  assert.equal(paneTreeRunsCodex({ panePid: 10, procs: base }), false)          // nothing below the pane
+  assert.equal(paneTreeRunsCodex(undefined), false)
+  assert.equal(paneTreeRunsCodex({ panePid: 10, procs: new Map() }), false)
 })

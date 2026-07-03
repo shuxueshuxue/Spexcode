@@ -58,6 +58,8 @@ firecoder-scout.md
 .codex/hooks.json
 .codex/skills/e2e-review/SKILL.md
 .codex/skills/taste/SKILL.md
+.session
+.worktrees/
 AGENTS.md
 CLAUDE.md
 spexcode.local.json

@@ -1,4 +1,4 @@
-import { writeFileSync, readFileSync, existsSync, mkdirSync, rmSync } from 'node:fs'
+import { writeFileSync, readFileSync, existsSync, mkdirSync, rmSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir, tmpdir } from 'node:os'
 import { createHash, randomBytes } from 'node:crypto'
@@ -321,12 +321,14 @@ export function codexLaunchCommand(_id: string, codexCmd = process.env.SPEXCODE_
     // governed record (SPEXCODE_SESSION_ID), and fires the tail as the FIRST turn, materializing the rollout.
     // Either way it ends with a thread id, which the visible TUI then RESUMES (the rollout persists on disk),
     // rendering it natively. A new launch's tail is always ONE single-quoted prompt arg, so it can never be the
-    // literal "--resume" marker — the discriminator is unambiguous.
+    // literal "--resume" marker — the discriminator is unambiguous. codex-launch only prints an id once its
+    // rollout has landed (resume-ready), so a fail-loud (empty output / non-zero) must ABORT — never `resume ""`.
     `if [ "$1" = "--resume" ]; then`,
     `  tid=$2`,
     `else`,
-    `  tid=$(${SPEX} codex-launch "$sock" "$PWD" "$@")`,
+    `  tid=$(${SPEX} codex-launch "$sock" "$PWD" "$@") || exit 1`,
     `fi`,
+    `[ -n "$tid" ] || { echo "[spex] codex-launch produced no resumable thread" >&2; exit 1; }`,
     `exec ${codexCmd} --remote unix://"$sock" resume "$tid"`,
   ].join('\n')
   return `bash -lc ${shQuote(script)} spexcode-codex`
@@ -567,6 +569,35 @@ function sendCodexAppServerTurn(sock: string, threadId: string, text: string, cw
 // prompt), and delivery reuses it for follow-ups. Exported so the CLI's `codex-launch` can fire the first turn.
 export function codexTurn(sock: string, threadId: string, text: string, cwd?: string): Promise<DispatchResult> {
   return sendCodexAppServerTurn(sock, threadId, text, cwd)
+}
+
+// @@@ codex rollout on disk - the visible TUI resumes a thread via `codex --remote resume <tid>`, which reads
+// the thread's ROLLOUT FILE (`<CODEX_HOME>/sessions/YYYY/MM/DD/rollout-<ts>-<tid>.jsonl`) — so a thread the
+// TUI can render is exactly one whose rollout exists on disk. VERIFIED live (real codex 0.142.5): `thread/start`
+// ALONE writes NO rollout — only the first fired turn materializes it; and a FRESHLY-spawned app-server accepts
+// thread/start+turn but does NOT persist the rollout for its first ~2-4s (a warm-up window) — the SAME thread's
+// rollout just lands a few seconds LATE (not lost). Handing the id to `resume` before then is the "no rollout
+// found for thread id" failure, so codex-launch WAITS for the rollout to land before it trusts the id.
+const codexSessionsDir = () => join(process.env.CODEX_HOME || join(homedir(), '.codex'), 'sessions')
+// does a rollout file for this thread id exist yet? Rollouts are grouped by date, so scan only the newest few
+// day-dirs (lexical order = chronological on zero-padded YYYY/MM/DD) — clock-agnostic and cheap on a big history.
+export function codexRolloutExists(threadId: string, root = codexSessionsDir()): boolean {
+  const kids = (d: string) => { try { return readdirSync(d).sort().reverse() } catch { return [] as string[] } }
+  const days: string[] = []
+  for (const y of kids(root)) { for (const m of kids(join(root, y))) { for (const d of kids(join(root, y, m))) { days.push(join(root, y, m, d)); if (days.length >= 3) break } if (days.length >= 3) break } if (days.length >= 3) break }
+  return days.some((d) => kids(d).some((f) => f.includes(threadId)))
+}
+// poll until the thread's rollout lands (resume-ready) or the budget runs out. Returns false on timeout so the
+// caller can FAIL LOUD instead of handing `resume` / the stored record a non-resumable id. The budget must
+// exceed launch.sh's fast-fail threshold so a genuine failure exits PAST it — the retry loop then treats it as a
+// real end, not a daemon race, and never sprays fresh (duplicate-prompt) threads.
+export async function waitForCodexRollout(threadId: string, timeoutMs = 20000): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs
+  for (;;) {
+    if (codexRolloutExists(threadId)) return true
+    if (Date.now() >= deadline) return false
+    await new Promise((r) => setTimeout(r, 250))
+  }
 }
 
 // codex's deliver: use the Codex app-server JSON-RPC channel that also powers rich clients, never TUI typing.

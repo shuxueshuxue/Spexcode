@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { activeTurnIdFromThread, codexAppServerSock, codexBinary, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, codexLaunchCommand, paneRunsCodex, writeManagedBlock, removeManagedBlock, launcherList, resolveLauncher } from './harness.js'
+import { activeTurnIdFromThread, codexAppServerSock, codexBinary, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, codexLaunchCommand, paneRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, resolveLauncher } from './harness.js'
 
 test('codex handshake initializes, confirms the loaded thread, then reads it to decide steer-vs-start', () => {
   const msgs = codexHandshakeMessages('thr_1')
@@ -65,6 +65,23 @@ test('codex launch command starts app-server then resumes the backend-owned thre
   // run codex-launch (which would mint a NEW thread and fire the tail as a first-turn prompt — the resume bug).
   assert.match(cmd, /if \[ "\$1" = "--resume" \]; then/)
   assert.match(cmd, /tid=\$2/)
+  // codex-launch only prints an id once its rollout is resume-ready; a fail-loud (non-zero / empty) must ABORT,
+  // never `resume ""` — so the codex-launch call propagates failure and an empty tid is guarded before resume.
+  assert.match(cmd, /codex-launch "\$sock" "\$PWD" "\$@"\) \|\| exit 1/)
+  assert.match(cmd, /\[ -n "\$tid" \] \|\| \{ echo .* exit 1; \}/)
+})
+
+test('codexRolloutExists finds a thread by id only once its rollout file lands on disk', () => {
+  const home = mkdtempSync(join(tmpdir(), 'cx-home-'))
+  const day = join(home, '2026', '07', '03')
+  mkdirSync(day, { recursive: true })
+  const tid = '019f2784-0794-78e0-91e9-785b6719c4a6'
+  // thread/start alone writes NO rollout (verified live) → resume-not-ready until the first turn materializes it
+  assert.equal(codexRolloutExists(tid, join(home, 'sessions')), false)   // sessions dir empty
+  mkdirSync(join(home, 'sessions', '2026', '07', '03'), { recursive: true })
+  writeFileSync(join(home, 'sessions', '2026', '07', '03', `rollout-2026-07-03T03-26-32-${tid}.jsonl`), '{}\n')
+  assert.equal(codexRolloutExists(tid, join(home, 'sessions')), true)
+  assert.equal(codexRolloutExists('nonexistent-thread', join(home, 'sessions')), false)
 })
 
 test('codex app-server runs the SAME install as the launcher/resume (version parity across the one socket)', () => {

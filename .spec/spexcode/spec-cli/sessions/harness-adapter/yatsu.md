@@ -69,6 +69,26 @@ scenarios:
       a supervisor could wrongly reopen/kill them. Both are measurable only through a real launch (a synthetic
       pane hides the wrapper-shell tree shape).
     code: spec-cli/src/harness.ts
+  - name: codex-dispatched-thread-fires-lifecycle-hooks
+    tags: [backend-api]
+    description: >-
+      Through the REAL dashboard/app-server launch path (NOT `codex exec`, which has no TUI and is not the path
+      SpexCode uses): start a per-project `codex app-server` and drive a BACKEND-owned thread the way `spex
+      codex-launch` does — `thread/start { cwd = an UNtrusted worktree }` then a `turn/start` first turn — on a
+      codex that supports `--dangerously-bypass-hook-trust` (so materialize wrote NO `trusted_hash`). Trace
+      `dispatch.sh` (its real hook entry point) for the codex lifecycle events across the turn.
+    expected: >-
+      The codex thread fires the full lifecycle through `dispatch.sh` — SessionStart, UserPromptSubmit, and the
+      Stop gate — so a dispatched codex worker has a Stop gate and hook-driven status, identical to a Claude
+      worker. This works ONLY because `thread/start` carries `config.bypass_hook_trust=true`: codex reads the
+      bypass per-thread from that request override, which force-enables the untrusted worktree's `.codex` config
+      layer so its `hooks.json` is discovered and each hook runs untrusted-but-vetted. The failure this locks (the
+      real regression): when the bypass rides ONLY on the `codex app-server` CLI invocation — inert, the app-server
+      never reads it for a thread — the worktree stays untrusted, its hook layer stays disabled, and the thread
+      fires ZERO dispatch events (no Stop gate, no `mark-active`), while `codex exec` in the same worktree still
+      fires them — so an exec-only or app-server-flag-only check passes green and the dashboard regression hides. It
+      is provable only by tracing dispatch across a real app-server-driven turn.
+    code: spec-cli/src/harness.ts
 ---
 # yatsu.md — harness-adapter
 

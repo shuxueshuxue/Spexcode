@@ -301,11 +301,13 @@ export function codexSupportsBypassHookTrust(binary: string): boolean {
 }
 export function codexLaunchCommand(_id: string, codexCmd = process.env.SPEXCODE_CODEX_CMD || 'codex --yolo', serverCmd?: string, dir = runtimeRoot()): string {
   const server = process.env.SPEXCODE_CODEX_SERVER_CMD || serverCmd || codexBinary(codexCmd)
-  // per [[harness-adapter]] spec, hooks fire from the SHARED app-server process — so the bypass flag MUST sit on
-  // the app-server invocation, at the GLOBAL position BEFORE `app-server` (codex 0.142.5 accepts `codex <flag>
-  // app-server` but REJECTS `codex app-server <flag>`). Added to the resume TUI too (harmless, global). Guarded
-  // against a double-flag when an explicit env override already carries it.
-  const svrBypass = !server.includes('--dangerously-bypass-hook-trust') && codexSupportsBypassHookTrust(codexBinary(server)) ? ' --dangerously-bypass-hook-trust' : ''
+  // The bypass flag ONLY reaches a thread's hook trust as a per-request `config` override, NOT as a CLI flag on
+  // the shared `app-server` process (the app-server never reads its own `--dangerously-bypass-hook-trust` for a
+  // thread — it was INERT there, the bug). Two thread paths carry it: (1) the BACKEND-owned `thread/start` sends
+  // `config.bypass_hook_trust` from codex-launch ([[harness-adapter]]); (2) the visible `--remote … resume` TUI,
+  // where codex's OWN client forwards this flag into its thread/start+thread/resume config — so a reopen in a
+  // fresh app-server (where codex-launch never runs) still trusts our hooks. Hence the flag lives on the resume
+  // TUI, never on the app-server invocation. Guarded against a double-flag when an env override already carries it.
   const tuiBypass = !codexCmd.includes('--dangerously-bypass-hook-trust') && codexSupportsBypassHookTrust(codexBinary(codexCmd)) ? ' --dangerously-bypass-hook-trust' : ''
   const sock = codexAppServerSock(dir)         // short sun_path-safe path off tmpdir/override — NOT under "$dir"
   const pid = codexAppServerPid(dir)
@@ -338,7 +340,7 @@ export function codexLaunchCommand(_id: string, codexCmd = process.env.SPEXCODE_
     'if [ -S "$sock" ] && [ -s "$pid" ] && ! kill -0 "$(cat "$pid")" 2>/dev/null; then rm -f "$sock"; fi',
     'if [ ! -S "$sock" ]; then',
     // </dev/null detaches the daemon's stdin from the pane so it can't fight the TUI for the tty.
-    `  ${server}${svrBypass} app-server --listen unix://"$sock" >"$log" 2>&1 </dev/null &`,
+    `  ${server} app-server --listen unix://"$sock" >"$log" 2>&1 </dev/null &`,
     '  echo $! > "$pid"',
     '  for i in $(seq 1 100); do [ -S "$sock" ] && break; sleep 0.05; done',
     'fi',
@@ -468,7 +470,7 @@ export function codexThreadId(sock: string): Promise<{ ok: true; threadId: strin
 // carries the new thread id (`result.thread.id`). The launcher stores that id on the governed record and
 // fires the first turn; there is no capture hook and no rollout/cwd scan. Same WS framing as codexThreadId.
 // Never throws.
-export function codexStartThread(sock: string, cwd?: string): Promise<{ ok: true; threadId: string } | { ok: false; error: string }> {
+export function codexStartThread(sock: string, cwd?: string, bypassHookTrust = false): Promise<{ ok: true; threadId: string } | { ok: false; error: string }> {
   return new Promise((resolve) => {
     const conn: Socket = createConnection(sock)
     const fs: FrameState = { buf: Buffer.alloc(0), fragOp: 0, fragBuf: Buffer.alloc(0) }
@@ -489,7 +491,18 @@ export function codexStartThread(sock: string, cwd?: string): Promise<{ ok: true
       let m: JsonRpc
       try { m = JSON.parse(json) } catch { return }
       if (m.error) return done({ ok: false, error: `codex app-server ${m.id ? `request ${m.id}` : 'notification'} failed: ${m.error.message || JSON.stringify(m.error)}` })
-      if (m.id === 1 && m.result) { send({ method: 'initialized', params: {} }); return send({ id: 2, method: 'thread/start', params: cwd ? { cwd } : {} }) }
+      if (m.id === 1 && m.result) {
+        send({ method: 'initialized', params: {} })
+        // thread/start's `config` is the per-request override map the app-server reads (config_manager reads
+        // `request_overrides["bypass_hook_trust"]`) — the ONLY channel that reaches the thread config; the
+        // `--dangerously-bypass-hook-trust` flag on the `codex app-server` invocation is INERT (the app-server
+        // never reads it for a thread), so a BACKEND-owned thread must carry the bypass here, exactly as codex's
+        // own `--remote resume` TUI client injects it. Without it the worktree's UNtrusted `.codex` config layer
+        // stays disabled → no local hooks discovered → no Stop gate. Only on the bypass path (older codex without
+        // the flag uses writeCodexTrust's hash and never sees this key).
+        const params = { ...(cwd ? { cwd } : {}), ...(bypassHookTrust ? { config: { bypass_hook_trust: true } } : {}) }
+        return send({ id: 2, method: 'thread/start', params })
+      }
       if (m.id === 2 && m.result) {
         const tid = (m.result as { thread?: { id?: string } })?.thread?.id
         return tid ? done({ ok: true, threadId: tid }) : done({ ok: false, error: 'codex thread/start returned no thread id' })

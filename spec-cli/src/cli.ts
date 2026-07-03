@@ -494,12 +494,16 @@ if (cmd === 'serve') {
   // (codex loads that worktree's config/hooks/AGENTS.md), store the new id on the governed record (keyed by
   // SPEXCODE_SESSION_ID), fire the launch prompt as the FIRST turn — materializing the rollout — and print the
   // thread id. The launch script then `resume`s it in the visible TUI.
-  const { codexStartThread, codexTurn, waitForCodexRollout } = await import('./harness.js')
+  const { codexStartThread, codexTurn, waitForCodexRollout, codexBinary, codexSupportsBypassHookTrust } = await import('./harness.js')
   const { markHarnessSessionId } = await import('./sessions.js')
   const sock = process.argv[3], cwd = process.argv[4]
   const prompt = process.argv.slice(5).join(' ')
   if (!sock || !cwd) { console.error('usage: spex codex-launch <sock> <cwd> [prompt...]'); process.exit(2) }
-  const r = await codexStartThread(sock, cwd)
+  // On the bypass-trust path (the codex install supports the flag → materialize skipped writeCodexTrust's hash),
+  // the thread the BACKEND owns must carry `bypass_hook_trust` in thread/start's config so the app-server fires
+  // the worktree's local hooks — mirror materialize's capability decision so the two stay in lockstep.
+  const bypassHookTrust = codexSupportsBypassHookTrust(codexBinary(process.env.SPEXCODE_CODEX_CMD || 'codex --yolo'))
+  const r = await codexStartThread(sock, cwd, bypassHookTrust)
   if (!r.ok) { console.error(r.error); process.exit(1) }
   if (prompt) {
     const t = await codexTurn(sock, r.threadId, prompt, cwd)

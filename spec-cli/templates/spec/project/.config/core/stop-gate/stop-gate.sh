@@ -51,7 +51,7 @@ yatsu_advisory() {
   n=$(printf '%s\n' "$out" | grep -cE 'yatsu-(drift|missing|uncovered):')
   [ "${n:-0}" -gt 0 ] || return 0   # no gap in what you changed (or scan unavailable) -> nothing to nudge
   ids=$(printf '%s\n' "$out" | sed -n "s/.*yatsu-[a-z]*: '\([^']*\)'.*/\1/p" | awk '!seen[$0]++' | head -6 | paste -sd' ' -)
-  msg="yatsu — the loss signal the optimizer reads — flags ${n} gap(s) in nodes you changed: ${ids}. A node whose score went stale/unmeasured: re-measure it (run the scenario, compare to expected, \`spex yatsu eval <node>\`). A FRONTEND node with no yatsu.md: give it one (a scenario — description + expected), since an obvious UI change should carry a loss signal. \`spex yatsu scan --changed\` lists them. (Advisory — fires once, not a gate.)"
+  msg="yatsu — the loss signal the optimizer reads — flags ${n} gap(s) in nodes you changed: ${ids}. A node whose score went stale/unmeasured: re-measure it — PRODUCE the measurement YOURSELF with a real run of the scenario's actual surface (its tag on the \`spex yatsu scan --changed\` line tells you WHICH surface to run), compare to expected, and file it with \`spex yatsu eval <node>\`; don't desk-check it, and don't defer to reviewing a recording after the fact. A FRONTEND node with no yatsu.md: give it one (a scenario — description + expected), since an obvious UI change should carry a loss signal. \`spex yatsu scan --changed\` lists them. (Advisory — fires once, not a gate.)"
   esc=$(printf '%s' "$msg" | sed 's/\\/\\\\/g; s/"/\\"/g')
   printf '{"hookSpecificOutput":{"hookEventName":"Stop","additionalContext":"%s"}}\n' "$esc"
 }

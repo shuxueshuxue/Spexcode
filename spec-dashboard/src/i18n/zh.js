@@ -353,7 +353,7 @@ export default {
     theme: { light: '浅色', dark: '深色' },
     secShortcuts: '快捷键',
     bindPrompt: '按一个键…',
-    shortcutsHint: '点击某个键即可重绑定。导航键与连击键固定不可改。（手柄映射在浏览器之外，是一个独立的 extension。）',
+    shortcutsHint: '点击某个键即可重绑定。导航键与连击键固定不可改。（手柄绑定的是动作而非按键——这里的重绑定不影响手柄。）',
     reset: '恢复默认',
   },
 

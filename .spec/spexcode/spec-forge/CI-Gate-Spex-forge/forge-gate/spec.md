@@ -11,6 +11,10 @@ related:
 ---
 # forge-gate
 
+The orchestration of the [[deliver-port]] **verdict driver** ([[CI-Gate-Spex-forge]]) — an external PR
+reaches it as a [[session-origin]] `pr` session, and this is the entrypoint that makes the gate run and the
+verdict land.
+
 The capstone of [[CI-Gate-Spex-forge]] — the entrypoint that makes the gate *run* and the verdict *land*.
 
 **The orchestration.** `spex forge gate <PR>` sequences the pipeline the parent scopes: Tier 0 (reuse

@@ -9,8 +9,11 @@ related:
 ---
 # forge-write-seam
 
+This node is the **forge driver** of the [[deliver-port]]: the write verbs both a forge delivery (open/update
+a PR) and a verdict delivery (post a Check, upsert a sticky comment) go through.
+
 The one capability [[spec-forge]] deliberately omitted: a **write** path to the forge. The [[port]] today
-is read-only (`listIssues` / `listPRs`); the CI Gate needs to publish a verdict back. This node adds that
+is read-only (`listIssues` / `listPRs`); a delivery needs to publish back. This node adds that
 behind the **same host-agnostic seam** — the name is the seam, never the vendor — so a second host stays
 one registry entry.
 

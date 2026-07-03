@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
 import { parseScenarios, validateScenarios } from './yatsu.js'
-import { readReadings, appendReading, latestPerScenario, type Reading } from './sidecar.js'
+import { readReadings, appendReading, latestPerScenario, evidenceOf, type Reading } from './sidecar.js'
 import { changedSince, staleAxes } from './freshness.js'
 import { putBlob, listBlobs, gc, resolveBlob, MISS_BLOB, isStrayBlob } from './cache.js'
 import { evaluatorTag, parseEvaluator, isEvaluatorStale } from './evaluator.js'
@@ -274,6 +274,36 @@ test('sidecar: latestPerScenario keeps the last line per scenario', () => {
   const latest = latestPerScenario(readReadings(f))
   assert.equal(latest.size, 1)
   assert.equal(latest.get('s')!.codeSha, 'new')
+})
+
+// ---- multi-evidence: the evidence LIST + its scalar→list bridge ----
+
+test('sidecar: evidenceOf — a list rides verbatim, a legacy scalar reads as one entry, empty is empty', () => {
+  // the new list shape is authoritative
+  assert.deepEqual(
+    evidenceOf({ evidence: [{ hash: 'aa', kind: 'image' }, { hash: 'bb', kind: 'video' }] }),
+    [{ hash: 'aa', kind: 'image' }, { hash: 'bb', kind: 'video' }],
+  )
+  // a legacy scalar reading normalizes to a one-entry list so it still renders (absent kind → image)
+  assert.deepEqual(evidenceOf({ blob: 'cc', blobKind: 'video' }), [{ hash: 'cc', kind: 'video' }])
+  assert.deepEqual(evidenceOf({ blob: 'dd' }), [{ hash: 'dd', kind: 'image' }])
+  // no evidence at all → empty list (a note-only reading)
+  assert.deepEqual(evidenceOf({ blob: null }), [])
+  assert.deepEqual(evidenceOf({}), [])
+})
+
+test('sidecar: a mixed reading (N images + a video + timeline) round-trips its whole evidence list', () => {
+  const f = join(tmp(), 'yatsu.evals.ndjson')
+  const r: Reading = {
+    scenario: 'loop', codeSha: 'abc123',
+    evidence: [{ hash: 'img1', kind: 'image' }, { hash: 'img2', kind: 'image' }, { hash: 'clip', kind: 'video' }],
+    timelineBlob: 'tl', evaluator: 'manual@1', verdict: { status: 'pass' }, ts: '2026-07-03T00:00:00.000Z',
+  }
+  appendReading(f, r)
+  assert.deepEqual(readReadings(f), [r])
+  // every evidence hash + the timeline is walkable (clean's --keep-latest reference set)
+  const refs = new Set([...evidenceOf(r).map((e) => e.hash), r.timelineBlob!])
+  assert.deepEqual([...refs].sort(), ['clip', 'img1', 'img2', 'tl'])
 })
 
 // ---- freshness / drift (synthetic indices — the same shapes git.ts builds) ----

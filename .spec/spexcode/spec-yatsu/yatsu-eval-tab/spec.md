@@ -2,7 +2,7 @@
 title: yatsu-eval-tab
 status: active
 hue: 140
-desc: The dashboard eval tab — a node's measurement timeline (verdict + expected + live freshness) with evidence (image, transcript, or video) on expand, plus the spec-cli read API behind it.
+desc: The dashboard eval tab — a node's measurement timeline (verdict + expected + live freshness) with an evidence GALLERY (N images + a video/transcript) on expand, plus the spec-cli read API behind it.
 code:
   - spec-yatsu/src/evaltab.ts
 related:
@@ -17,15 +17,16 @@ related:
 The eval/loss engine ([[spec-yatsu]], built by [[yatsu-core]]) records readings; this is the surface that
 reads them back. Realize the founding **"Evidence — one timeline, two sources"** contract's first source: a
 node's **eval tab** lists its measurements chronologically, each carrying its verdict, the scenario's
-expected, and the freshness signal `spex yatsu scan` reports, with the captured evidence (an image, a
-transcript, or a **video** clip that plays inline) expanding inline. LOCAL readings only for now — the forge issue-events source is a later
+expected, and the freshness signal `spex yatsu scan` reports, with the captured evidence — a **gallery** of the
+reading's whole evidence list (N images plus a **video** clip that plays inline, and/or a transcript) —
+expanding inline. LOCAL readings only for now — the forge issue-events source is a later
 sibling; leave a clean seam for it.
 
 ## expanded spec
 
 Two halves behind one tab. The **read engine** ([[spec-cli]], in `evaltab.ts`) computes what only a live
 read knows. A node's measurement timeline is every reading from its `yatsu.evals.ndjson` sidecar (scenario,
-the read's codeSha, blob + blobKind, evaluator, **verdict**, ts) joined with the scenario's **expected**
+the read's codeSha, an evidence LIST — each `{hash, kind}` resolved to its live blob state — evaluator, **verdict**, ts) joined with the scenario's **expected**
 (from the live yatsu.md — what zero loss looks like) and a **freshness flag**, derived live from git by the
 same [[freshness]] machinery scan uses: a reading is *current* until its governed code, its scenario, or the
 evaluator version moved past the sha it was taken at, otherwise *stale* (and which axis moved);
@@ -37,8 +38,8 @@ scenario onto the node's `evals` and the declared set slim (`{name, tags}`), so 
 (a never-measured scenario still counts as loss). The FULL timeline — each scenario's
 `expected` and per-scenario `code` included — is served by `/api/specs/:id/evals`, lazy-loaded when the tab
 opens. The board attach stays cheap by reusing the board's specs + `driftIndex` and one shared yatsu walk.
-Bytes are never folded anywhere: `/api/yatsu/blob` serves a reading's evidence by content hash from the
-shared cache, fetched **lazily on expand**, with a **miss original file** signal when the bytes are gone, MIME
+Bytes are never folded anywhere: `/api/yatsu/blob` serves each evidence entry by its content hash from the
+shared cache, fetched **lazily on expand**, with a per-entry **miss original file** signal when the bytes are gone, MIME
 sniffed from the content.
 
 The **eval tab** ([[spec-dashboard]]) is a fourth face on the node popup beside spec/history/issues, on the
@@ -49,8 +50,9 @@ scaffold the history tab uses** (see [[work-pane]]): newest expanded, older reve
 row's header names its scenario, the **verdict badge** (✓ pass / ✗ fail, optional **note**
 beside; *legacy* for a pre-verdict or note-only reading), and the per-reading **score circle**
 ([[yatsu-score-badge]]), then its evaluator, codeSha, and time.
-Its evidence is the scenario's **expected** over the captured proof (screenshot, transcript, or video), or *miss original
-file* when the blob was pruned.
+Its evidence is the scenario's **expected** over the captured proof — a **gallery** mapping the reading's
+evidence list (N screenshots, a video, a transcript), each entry showing *miss original file* when its blob
+was pruned.
 
 The tab surfaces the **whole declared set** in **one list**, not only the readings. A **declared scenario
 with no reading** leads that list as a **blind-spot row** — the empty score ring over its name, its

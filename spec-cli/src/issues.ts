@@ -63,12 +63,14 @@ export function fromForge(slice: ForgeSlice, nodeIds: string[]): Issue[] {
   }))
 }
 
-// the one merged read: local forum threads + the caller-supplied forge slice, oldest-first (the stable
-// order the forum alone had). CALLERS own freshness — the server passes the resident cache's state
-// (instant, background reconcile), the CLI a live pull — so the merge itself stays pure.
+// the one merged read: local forum threads + the caller-supplied forge slice, ONE time line — the
+// stores are the same abstraction, so they interleave by creation time, newest first (never
+// store-grouped; a reader's eye lands on what just happened, whatever store holds it). CALLERS own
+// freshness — the server passes the resident cache's state (instant, background reconcile), the CLI a
+// live pull — so the merge itself stays pure.
 export function mergedIssues(forge: ForgeSlice | null, nodeIds: string[]): Issue[] {
   const remote = forge ? fromForge(forge, nodeIds) : []
-  return [...loadProposals(), ...remote].sort((a, b) => a.created.localeCompare(b.created))
+  return [...loadProposals(), ...remote].sort((a, b) => b.created.localeCompare(a.created))
 }
 
 // @@@ promote - the ONE cross-store verb ([[issues]]): a local concern that outgrew the repo moves to the

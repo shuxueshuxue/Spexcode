@@ -51,7 +51,8 @@ reply/propose the CLI uses, committed straight to the trunk.
   board's own pattern — the push/change signal triggers a throttled refetch, the 15s cold lane backstops
   (forge-cache updates arrive nowhere else), and `GET /api/issues` answers **304 via ETag** so a no-change
   refetch costs headers only. A write forces the refetch so it shows up where it lands. The view renders
-  each issue **in the order the API returns**: the frontend
+  each issue **in the order the API returns** — [[issues]]'s one time line, stores interleaved newest
+  first: the frontend
   never re-sorts, and **shows no salience/priority ranking** (recurrence is the drain's judgment, per
   [[proposals]], never an automatic order); signer and reply counts appear as raw data, not a rank.
   **Concluded issues hide by default** — closed / rejected / landed are the archive, not the open work,

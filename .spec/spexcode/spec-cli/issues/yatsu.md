@@ -11,8 +11,9 @@ scenarios:
       ONE list carries both stores, each issue store-tagged (`local` / the forge host) with the same shape:
       a forge issue arrives with by=forge author, created=forge timestamp, its permalink url, and its
       `Spec:` markers already translated into nodes[] (no downstream consumer ever sees a marker); the
-      local thread arrives with its signers/replies/evidence. --store and --node filter; default hides
-      non-open.
+      local thread arrives with its signers/replies/evidence. The list is ONE time line — stores
+      interleaved by created, newest first, never store-grouped blocks. --store and --node filter;
+      default hides non-open.
   - name: promote
     tags: [cli]
     code: spec-cli/src/issues.ts

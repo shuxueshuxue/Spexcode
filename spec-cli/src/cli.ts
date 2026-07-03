@@ -26,6 +26,23 @@ function positionals(from: number): string[] {
   return out
 }
 
+// After a successful launch, nudge the caller to actually MONITOR the session — launch-then-forget is a real
+// gap (a supervisor or human launches and then never watches, so a review/failure goes unnoticed). Goes to
+// STDERR so the JSON on stdout (which callers parse) stays clean; keyed to whoever's calling — a supervising
+// agent has an own-session id, a human at a terminal does not.
+async function launchMonitorReminder(id: string): Promise<void> {
+  const { ownSessionId } = await import('./sessions.js')
+  const agent = ownSessionId()
+  console.error(`\nspex: launched session ${id} — now MONITOR it, or its review/failure goes unnoticed:`)
+  if (agent) {
+    // a supervising agent: the per-worker monitor is a backgrounded `spex wait`, which exits on an actionable status.
+    console.error(`  supervising agent → background \`spex wait ${id}\` (blocks until it hits an actionable status, then exits)`)
+    console.error(`  or watch the whole stream: \`spex watch\``)
+  } else {
+    console.error(`  \`spex watch\` — the live stream of actionable session transitions (or \`spex wait ${id}\` to block on this one)`)
+  }
+}
+
 const greeted = new Set<string>()
 async function greetWatchTargets(watcher: string, selectors: string[]): Promise<void> {
   try {
@@ -362,7 +379,9 @@ if (cmd === 'serve') {
   // it falls back to an in-process launch only when no backend answers.
   const { createSession } = await import('./sessions.js')
   const prompt = flag('prompt') ?? positionals(3)[0] ?? ''
-  console.log(JSON.stringify(await createSession(flag('node') ?? null, prompt, flag('harness') ?? undefined, flag('launcher') ?? undefined), null, 2))
+  const created = await createSession(flag('node') ?? null, prompt, flag('harness') ?? undefined, flag('launcher') ?? undefined)
+  console.log(JSON.stringify(created, null, 2))
+  await launchMonitorReminder(created.id)
 } else if (cmd === 'session') {
   const sub = process.argv[3]
   // `s` (sessions.ts) backs the state PRODUCERS that stay local (state/done/park/fail/ask/idle write the
@@ -383,7 +402,9 @@ if (cmd === 'serve') {
     // route through the backend (auth env + concurrency cap); in-process only if no backend is reachable.
     // prompt = --prompt OR the first positional (after `session new`), so `session new "<prompt>"` works the
     // SAME as the `spex new "<prompt>"` shorthand — one prompt-resolution rule, not two.
-    console.log(JSON.stringify(await s.createSession(flag('node') ?? null, flag('prompt') ?? positionals(4)[0] ?? '', flag('harness') ?? undefined, flag('launcher') ?? undefined), null, 2))
+    const created = await s.createSession(flag('node') ?? null, flag('prompt') ?? positionals(4)[0] ?? '', flag('harness') ?? undefined, flag('launcher') ?? undefined)
+    console.log(JSON.stringify(created, null, 2))
+    await launchMonitorReminder(created.id)
   } else if (sub === 'reopen') {
     // bring the agent back up (relaunch if offline, the backend owns it); demotes a working `active` to idle but
     // leaves a standing declaration/proposal untouched (see sessions.ts reopen()). A following prompt is what works.

@@ -11,6 +11,17 @@ scenarios:
       `[[id]]` for nodes). resolveActors maps `new`→a `new` sentinel, a token matching an ONLINE session→that
       session (by id / id-prefix / name-or-title), and a token matching only an OFFLINE session OR nothing→
       `unresolved` — a dead session is never summoned.
+  - name: landed-thread-guard
+    tags: [cli]
+    code: spec-cli/src/mentions.ts
+    description: >-
+      Build the @new worker prompt (newWorkerPrompt) and the dispatch summary for a thread whose status is
+      non-open (landed/accepted/rejected), and again for an open/unknown-status thread.
+    expected: >-
+      Settled thread: the prompt leads with the resolved status and a verify-on-main-first /
+      reply-instead-of-re-implementing instruction, and the outcome line carries the ⚠ thread-<status>
+      warning. Open or unknown status: no note, no warning — the guard never fires on live work or on a
+      forge reply whose state is unknown at write time.
   - name: forum-dispatch-wiring
     tags: [cli]
     code: spec-cli/src/mentions.ts

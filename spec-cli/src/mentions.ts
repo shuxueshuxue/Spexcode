@@ -48,7 +48,7 @@ export function resolveActors(tokens: string[], sessions: ActorSession[]): Resol
 }
 
 // ── dispatch (integration) ─────────────────────────────────────────────────────────────────────────────
-export type DispatchOutcome = { token: string; result: 'sent' | 'spawned' | 'offline' | 'unresolved' | 'failed'; detail?: string }
+export type DispatchOutcome = { token: string; result: 'sent' | 'spawned' | 'offline' | 'unresolved' | 'failed'; detail?: string; note?: string }
 
 // The prompt an @-mentioned actor receives: the comment verbatim + a pointer back to the thread. It is a
 // nudge to look, never a rigid command — what to do is up to the comment's words.
@@ -58,9 +58,17 @@ function mentionPrompt(threadId: string, node: string | null, author: string, te
     `Read the thread and act as the comment asks (often just a look): \`spex issues --all\` lists them; ` +
     `reply with \`spex propose reply ${threadId} --body -\`.`
 }
-function newWorkerPrompt(threadId: string, node: string | null, author: string, text: string): string {
+// A non-open thread is settled work: a fresh worker spawned onto it must not re-implement what already
+// landed, so the prompt leads with the status and a verify-on-main-first instruction.
+export function newWorkerPrompt(threadId: string, node: string | null, author: string, text: string, status?: string | null): string {
   const on = node ? ` on node ${node}` : ''
+  const settled = status && status !== 'open'
+    ? `NOTE: this thread is already resolved (status: ${status}) — the work it describes has likely LANDED. ` +
+      `Verify the current state on main FIRST; if main already satisfies the thread, reply with that finding ` +
+      `instead of re-implementing.\n\n`
+    : ''
   return `Forum thread "${threadId}"${on} @-mentioned @new (by ${author}) for a fresh look:\n\n  ${text.trim()}\n\n` +
+    settled +
     `Read the thread (\`spex issues --all\`, find ${threadId}) and act on it${node ? `; the relevant node is ${node}` : ''}.`
 }
 
@@ -69,7 +77,7 @@ function newWorkerPrompt(threadId: string, node: string | null, author: string, 
 // lazily; with no actor mentions this returns [] without loading it or hitting the backend.
 export async function dispatchMentions(
   text: string,
-  ctx: { threadId: string; node: string | null; author: string },
+  ctx: { threadId: string; node: string | null; author: string; status?: string | null },
 ): Promise<DispatchOutcome[]> {
   const { actors } = parseMentions(text)
   if (!actors.length) return []
@@ -80,9 +88,12 @@ export async function dispatchMentions(
   for (const r of resolved) {
     if (r.kind === 'unresolved') { out.push({ token: r.token, result: 'unresolved' }); continue }
     if (r.kind === 'new') {
+      // the drain guard ([[mentions]]): @new on a settled thread still spawns (the summons may be a
+      // deliberate audit/re-measure), but the worker prompt carries the status and the outcome line warns.
+      const settled = ctx.status && ctx.status !== 'open' ? ctx.status : undefined
       try {
-        const s = await newSession(ctx.node, newWorkerPrompt(ctx.threadId, ctx.node, ctx.author, text))
-        out.push({ token: r.token, result: 'spawned', detail: s.id })
+        const s = await newSession(ctx.node, newWorkerPrompt(ctx.threadId, ctx.node, ctx.author, text, ctx.status))
+        out.push({ token: r.token, result: 'spawned', detail: s.id, ...(settled ? { note: `thread ${settled}` } : {}) })
       } catch (e) { out.push({ token: r.token, result: 'failed', detail: e instanceof Error ? e.message : String(e) }) }
       continue
     }
@@ -98,7 +109,7 @@ export function summarize(outcomes: DispatchOutcome[]): string {
   if (!outcomes.length) return ''
   return '@ ' + outcomes.map((o) => {
     if (o.result === 'sent') return `${o.token}→sent`
-    if (o.result === 'spawned') return `new→${o.detail}`
+    if (o.result === 'spawned') return `new→${o.detail}${o.note ? ` ⚠ ${o.note} — likely already landed` : ''}`
     if (o.result === 'offline') return `${o.token}→offline (stored)`
     if (o.result === 'unresolved') return `${o.token}→? (no live session; stored)`
     return `${o.token}→failed (${o.detail})`

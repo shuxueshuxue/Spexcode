@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { parseMentions, resolveActors, newWorkerPrompt, summarize, deliveredIds, notifyOriginator, type ActorSession } from './mentions.js'
+import { parseMentions, resolveActors, newWorkerPrompt, summarize, deliveredIds, notifyOriginator, pickLoopIn, type ActorSession } from './mentions.js'
 
 // ---- parseMentions: the pure grammar ----
 
@@ -71,8 +71,45 @@ test('summarize: the loop-in is noted distinct from the @-dispatch, and shows ev
   assert.equal(summarize([]), '')
 })
 
-test('notifyOriginator: no originator, or the originator IS the replier → no delivery (no session load)', async () => {
-  // returns before importing sessions.js — a self-reply or an authorless thread loops in nobody.
-  assert.equal(await notifyOriginator(null, 'alice', 'hi', { threadId: 't1', node: null }), null)
-  assert.equal(await notifyOriginator('alice', 'alice', 'hi', { threadId: 't1', node: null }), null)
+// ---- the dispatch fallback chain (R3): filer → node's governing session → nobody ----
+
+test('pickLoopIn: the reading filer online → delivered to the filer (the first link)', () => {
+  const sessions = [on('filer1', null), on('gov1', null)]
+  const pick = pickLoopIn(['filer1', 'gov1'], 'replier', sessions)
+  assert.equal(pick.kind, 'deliver')
+  assert.equal((pick as { originator: string }).originator, 'filer1')
+})
+
+test('pickLoopIn: filer OFFLINE → falls through to the node governing session', () => {
+  const sessions = [off('filer1', null), on('gov1', null)]
+  const pick = pickLoopIn(['filer1', 'gov1'], 'replier', sessions)
+  assert.equal(pick.kind, 'deliver')
+  assert.equal((pick as { originator: string }).originator, 'gov1')   // the fallback link reached
+})
+
+test('pickLoopIn: whole chain offline/absent → nobody (silent; the teeth still surface it)', () => {
+  const sessions = [off('filer1', null), off('gov1', null)]
+  assert.equal(pickLoopIn(['filer1', 'gov1'], 'replier', sessions).kind, 'none')
+  assert.equal(pickLoopIn([null, 'ghost'], 'replier', sessions).kind, 'none')   // a link that resolves to no session
+})
+
+test('pickLoopIn: a link already reached by an explicit @-target → stop, no double-delivery', () => {
+  const sessions = [on('filer1', null), on('gov1', null)]
+  const pick = pickLoopIn(['filer1', 'gov1'], 'replier', sessions, new Set(['filer1']))
+  assert.equal(pick.kind, 'reached')   // filer got it via @ already → the chain stops, no courtesy to gov1
+})
+
+test('pickLoopIn: the filer being the replier is pruned → the governing session is reached', () => {
+  const sessions = [on('me', null), on('gov1', null)]
+  const pick = pickLoopIn(['me', 'gov1'], 'me', sessions)   // filer == replier (no self-notify)
+  assert.equal(pick.kind, 'deliver')
+  assert.equal((pick as { originator: string }).originator, 'gov1')
+})
+
+test('notifyOriginator: an empty fallback chain (nulls, or only the replier) → no delivery (no session load)', async () => {
+  // returns before importing sessions.js — a self-reply or an authorless thread loops in nobody, and a chain
+  // that prunes down to nothing (every link null or the replier) short-circuits the same way.
+  assert.equal(await notifyOriginator([null], 'alice', 'hi', { threadId: 't1', node: null }), null)
+  assert.equal(await notifyOriginator(['alice'], 'alice', 'hi', { threadId: 't1', node: null }), null)
+  assert.equal(await notifyOriginator(['alice', null, 'alice'], 'alice', 'hi', { threadId: 't1', node: null }), null)
 })

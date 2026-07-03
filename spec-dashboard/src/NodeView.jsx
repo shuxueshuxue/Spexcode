@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ScoreBadge, readingScore, ScenarioCount, scenarioStates, TagChips } from './score.jsx'
 import { evidenceList } from './EvalsFeed.jsx'
+import { Replies } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
 import { specUrl } from './data.js'
 
@@ -260,7 +261,7 @@ function DiffEvidence({ diff }) {
   )
 }
 
-function ChronoPane({ items, itemKey, classes, rowClass, renderHeader, renderEvidence, leading }) {
+function ChronoPane({ items, itemKey, classes, rowClass, renderHeader, renderEvidence, leading, trailing }) {
   const scRef = useRef(null)
   const [open, setOpen] = useState(() => new Set([0]))   // latest expanded; the rest reveal on scroll
   const toggle = useCallback((i) => setOpen((prev) => {
@@ -315,6 +316,7 @@ function ChronoPane({ items, itemKey, classes, rowClass, renderHeader, renderEvi
           </div>
         )
       })}
+      {trailing}
     </div>
   )
 }
@@ -504,6 +506,24 @@ function DeclaredScenario({ s }) {
   )
 }
 
+// a DANGLING remark track ([[remark-teeth]] / directive 5): a (node, scenario) whose scenario was
+// renamed/deleted, so no reading joins it. Its remarks would otherwise surface nowhere — here they render at
+// node level, the orphaned scenario name struck through and marked gone, each remark still resolvable/
+// retractable via its ref (`spex resolve`/`spex retract`). It ages nothing (there is no reading to stale).
+function DanglingTrack({ track }) {
+  const t = useT()
+  return (
+    <div className="eval-row eval-dangling-row">
+      <span className="eval-top">
+        <span className="eval-dangling-badge" title={t('nodeView.eval.danglingTitle')}>⚠</span>
+        <span className="eval-scenario eval-dangling-name">{track.scenario}</span>
+        <span className="eval-dangling-tag">{t('nodeView.eval.danglingGone')}</span>
+      </span>
+      <div className="eval-dangling-remarks"><Replies replies={track.remarks} /></div>
+    </div>
+  )
+}
+
 // the full reading history is NOT on the board ([[board-lean]]): the board's `evals` is only the latest
 // reading per scenario, so this tab lazy-loads the whole timeline from `/api/specs/:id/evals` when opened.
 // The board's `scenarios` fold is slim too ({name, tags}), so the declared set — with each scenario's
@@ -521,25 +541,29 @@ export function EvalPane({ node }) {
     let on = true
     setTimeline(null)
     fetch(specUrl(node.id, 'evals')).then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
-      .then((tl) => { const v = { scenarios: tl.scenarios || node.scenarios || [], readings: tl.readings || [] }; evalCache.set(key, v); if (on) setTimeline(v) })
-      .catch(() => { if (on) setTimeline({ scenarios: node.scenarios || [], readings: node.evals || [] }) })
+      .then((tl) => { const v = { scenarios: tl.scenarios || node.scenarios || [], readings: tl.readings || [], dangling: tl.dangling || [] }; evalCache.set(key, v); if (on) setTimeline(v) })
+      .catch(() => { if (on) setTimeline({ scenarios: node.scenarios || [], readings: node.evals || [], dangling: [] }) })
     return () => { on = false }
   }, [key, node.id])
   if (!node.evals) return <div className="pane-eval empty">{t('nodeView.eval.noScenarios')}</div>
   if (timeline === null) return <div className="pane-eval pane-loading"><span className="spinner" aria-label={t('common.loading')} /></div>
   const readings = timeline.readings
+  const dangling = timeline.dangling || []
   const unmeasured = scenarioStates(timeline.scenarios, readings).filter((s) => !s.reading)
   if (!readings.length) return (
     <div className="pane-eval pane-eval-declared">
       <div className="eval-todo-note">{t('nodeView.eval.noReadings')}</div>
       {unmeasured.map((s) => <DeclaredScenario key={s.name} s={s} />)}
+      {dangling.map((tr) => <DanglingTrack key={tr.threadId} track={tr} />)}
     </div>
   )
-  // unmeasured scenarios lead the one timeline as blind-spot rows — same row frame, just the empty ring
+  // unmeasured scenarios lead the one timeline as blind-spot rows; orphaned tracks trail it — both the same
+  // row frame, an empty ring / a struck-through gone-scenario respectively.
   return (
     <ChronoPane
       items={readings}
       leading={unmeasured.map((s) => <DeclaredScenario key={s.name} s={s} />)}
+      trailing={dangling.map((tr) => <DanglingTrack key={tr.threadId} track={tr} />)}
       itemKey={(r, i) => `${r.scenario}-${r.ts}-${i}`}
       classes={{ pane: 'pane-eval', row: 'eval-row', head: 'eval-head', evidence: 'eval-shot' }}
       renderHeader={(r, i, open) => (

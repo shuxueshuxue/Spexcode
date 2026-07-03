@@ -1049,6 +1049,11 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .fv-anchor:hover { background: var(--orange); color: var(--paper); }
 .fv-anchor.static { cursor: default; }
 .fv-anchor.static:hover { background: color-mix(in srgb, var(--orange) 12%, transparent); color: var(--orange); }
+/* E2 degraded: the step is gone from this reading's timeline, so the frozen m:ss is readable but not
+   seekable — muted + dashed to read as "shown, but not a live link". */
+.fv-anchor.static.degraded { color: var(--muted); background: transparent; border-style: dashed;
+  border-color: color-mix(in srgb, var(--muted) 45%, var(--line)); }
+.fv-anchor.static.degraded:hover { color: var(--muted); background: transparent; }
 /* a circled frame carried inline by an anchored comment. */
 .fv-frame-img { display: block; max-width: 100%; margin-top: 6px; border: 1px solid var(--line); border-radius: 4px; }
 /* the composer's staged frame previews (derived from the draft's blob links). */
@@ -1473,6 +1478,13 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .eval-todo-note { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
 .eval-declared-row .eval-expected { padding-left: 23px; margin: 4px 0 0; }
 .eval-tracks { color: var(--muted); font-family: var(--mono); font-size: 10px; opacity: .85; }
+/* a DANGLING remark track (directive 5): the orphaned scenario's name struck-through/gone, its remarks below
+   — visible, still resolvable via their refs, ageing nothing. */
+.eval-dangling-badge { color: var(--orange); margin-right: 6px; }
+.eval-dangling-name { text-decoration: line-through; color: var(--muted); }
+.eval-dangling-tag { font-family: var(--mono); font-size: 10px; color: var(--orange); margin-left: 8px;
+  border: 1px dashed color-mix(in srgb, var(--orange) 45%, var(--line)); border-radius: 3px; padding: 0 5px; }
+.eval-dangling-remarks { padding-left: 23px; margin: 6px 0 0; }
 .eval-row { border-bottom: 1px solid var(--line); padding: 10px 0; }
 .eval-row:last-child { border-bottom: 0; }
 .eval-head { display: flex; flex-direction: column; gap: 4px; width: 100%; text-align: left; background: none; border: 0; padding: 0; margin: 0; font: inherit; color: inherit; cursor: pointer; }

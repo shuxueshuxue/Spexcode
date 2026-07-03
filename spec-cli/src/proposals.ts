@@ -251,23 +251,34 @@ export async function replyLocalIssue(id: string, body: string, author: string, 
   const thread = reply(id, body, author, evidence, remark)
   const node = thread.nodes[0] || null
   const outcomes = await dispatchMentions(body, { threadId: id, node, author, status: thread.status })
-  // implicit originator loop-in ([[mentions]]): a courtesy copy to whoever ORIGINATED this thread, if online.
-  const loopIn = await notifyOriginator(await threadOriginator(thread), author, body,
+  // implicit originator loop-in ([[mentions]] / [[remark-substrate]] R3): a courtesy copy down the fallback
+  // chain — the reading's filer, then the node's governing session — delivered to the first online link.
+  const loopIn = await notifyOriginator(await threadOriginators(thread), author, body,
     { threadId: id, node, alreadyDelivered: deliveredIds(outcomes) })
   return { thread, outcomes, loopIn }
 }
 
-// The session that ORIGINATED a thread ([[mentions]] loop-in target): normally the thread's author (`by`),
-// but an EVAL-COMMENT thread's originator is the agent who FILED the reading it discusses, not whoever opened
-// the comment thread. Such a thread is a local Issue whose concern is `eval: <node> · <scenario>` (the
-// annotator's key — spec-dashboard/src/Annotator.jsx evalConcern); we resolve that to the reading's filer.
-// Non-eval threads pay nothing (no yatsu import).
+// The FALLBACK CHAIN of candidates a reply loops in ([[mentions]] loop-in / [[remark-substrate]] R3's dispatch
+// clause), tried in order until one is online. A plain thread's only candidate is its author (`by`). An
+// EVAL-COMMENT thread (concern `eval: <node> · <scenario>`, the eval-remark track) chains: the agent who FILED
+// the reading the remark judges FIRST, then — when that filer is offline/absent — the NODE's governing session,
+// so an unresolved remark still REACHES an agent who can act on it. This is notification only; it resolves
+// nothing (R3: resolve is a deliberate `spex resolve`). Non-eval threads pay nothing (no yatsu/specs import).
 const EVAL_CONCERN_RE = /^eval: (.+?) · (.+)$/   // node first (never contains ' · '), then the scenario (may)
-async function threadOriginator(thread: Issue): Promise<string | null> {
+async function threadOriginators(thread: Issue): Promise<(string | null)[]> {
   const m = EVAL_CONCERN_RE.exec(thread.concern)
-  if (!m) return thread.by
+  if (!m) return [thread.by]
+  const node = m[1].trim(), scenario = m[2].trim()
   const { evalReadingFiler } = await import('../../spec-yatsu/src/filing.js')
-  return evalReadingFiler(m[1].trim(), m[2].trim())
+  return [evalReadingFiler(node, scenario), await nodeGoverningSession(node)]
+}
+
+// A node's governing session — the `session` its spec resolves to (the Session: trailer of its latest version,
+// else the frontmatter `session:` fallback; specs.ts owns that derivation). The fallback link when a reading's
+// filer is unreachable. null when the node is unknown or has no governing session.
+async function nodeGoverningSession(nodeId: string): Promise<string | null> {
+  const { loadSpecs } = await import('./specs.js')
+  return (await loadSpecs()).find((s) => s.id === nodeId)?.session ?? null
 }
 
 export async function postLocalIssue(

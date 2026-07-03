@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { postRemark, putFrameBlob, specUrl } from './data.js'
 import { evidenceList } from './EvalsFeed.jsx'
-import { Replies, ReplyComposer, mmss, anchorLine, parseAnchor } from './Thread.jsx'
+import { Replies, ReplyComposer, mmss, anchorLine, parseAnchor, resolveAnchor } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
 
 // EventDetail ([[event-detail]], U1): the ONE evidence+reply detail pane, store-agnostic, reused in every
@@ -128,8 +128,12 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite 
   const thread = entry.thread ?? null
   const comments = thread ? [{ by: thread.by, at: thread.created, body: thread.body }, ...(thread.replies || [])] : []
   // the anchored subset, carrying each comment's index into `comments` and its moment — sorted by moment.
+  // E2: the moment is resolved by STEP-NAME against THIS reading's timeline (resolveAnchor), so a marker sits
+  // where the step actually is in the current clip, not at a frozen m:ss. A degraded anchor (its step gone
+  // from the timeline) can't be reliably placed, so it drops off the scrubber — it still lists in the thread
+  // as a readable-not-seekable chip.
   const anchored = comments
-    .map((c, i) => { const a = parseAnchor(c.body); return a ? { i, tMs: a.tMs, step: a.step, label: a.label } : null })
+    .map((c, i) => { const ra = resolveAnchor(parseAnchor(c.body), events); return ra && ra.seekable ? { i, tMs: ra.tMs, step: ra.step, label: ra.label } : null })
     .filter(Boolean)
     .sort((x, y) => x.tMs - y.tMs)
 
@@ -443,7 +447,7 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite 
         : <div className="an-hint">{t('nodeView.eval.noImage')}</div>)}
       <EvalRemarks entry={entry} comments={comments} specs={specs} sessions={sessions} onWrite={onWrite}
         codeSha={viewing.codeSha} seekMs={hasVideo ? seekMs : null} anchorNow={hasVideo ? anchorNow : null} draft={draft}
-        selIdx={selIdx} activeIdx={activeIdx} onSelect={hasVideo ? selectComment : null} />
+        selIdx={selIdx} activeIdx={activeIdx} onSelect={hasVideo ? selectComment : null} events={hasVideo ? events : null} />
     </div>
   )
 }
@@ -457,13 +461,13 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite 
 // remarks highlight in sync with the scrubber's markers; a resolved remark renders settled ([[remark-teeth]]).
 // Rendered on EVERY eval home — a fresh scenario shows an empty track with a live composer (the session tab's
 // old "no resident issues list" degradation is gone: /api/remarks needs no resident list).
-function EvalRemarks({ entry, comments, codeSha, specs, sessions, onWrite, seekMs, anchorNow, draft, selIdx, activeIdx, onSelect }) {
+function EvalRemarks({ entry, comments, codeSha, specs, sessions, onWrite, seekMs, anchorNow, draft, selIdx, activeIdx, onSelect, events }) {
   const t = useT()
   const send = (text, evidence) => postRemark({ node: entry.node, scenario: entry.scenario, body: text, codeSha, evidence })
   return (
     <section className="an-comments">
       <div className="an-comments-head">{t('annotator.comments', { n: comments.length })}</div>
-      <Replies replies={comments} onSeek={seekMs} selIdx={selIdx} activeIdx={activeIdx} onSelect={onSelect} />
+      <Replies replies={comments} onSeek={seekMs} selIdx={selIdx} activeIdx={activeIdx} onSelect={onSelect} events={events} />
       <ReplyComposer onSend={send} specs={specs} sessions={sessions} focusId={entry.node} onDone={onWrite} anchorNow={anchorNow} draft={draft} />
     </section>
   )

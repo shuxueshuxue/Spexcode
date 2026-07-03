@@ -12,7 +12,7 @@ function reading(over: Partial<EvalEntry>): EvalEntry {
   }
 }
 const timeline = (readings: EvalEntry[], over: Partial<EvalTimeline> = {}): EvalTimeline =>
-  ({ node: 'n', hasYatsu: true, readings, ...over })
+  ({ node: 'n', hasYatsu: true, scenarios: [], dangling: [], readings, ...over })
 
 // ---- formatTimeline: the human face of the SAME EvalTimeline --json emits verbatim ----
 

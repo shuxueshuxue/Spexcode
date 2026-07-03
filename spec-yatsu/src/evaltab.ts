@@ -1,7 +1,7 @@
 import { relative, dirname } from 'node:path'
 import { repoRoot, driftIndex, historyIndex, type DriftIndex, type HistoryIndex } from '../../spec-cli/src/git.js'
 import { loadSpecs } from '../../spec-cli/src/specs.js'
-import { loadEvalRemarkTracks, trackKey, type RemarkTrack, type Issue } from '../../spec-cli/src/issues.js'
+import { loadEvalRemarkTracks, trackKey, type RemarkTrack, type Issue, type Reply } from '../../spec-cli/src/issues.js'
 import { yatsuNodes, type YatsuNode } from './yatsu.js'
 import { readReadings, evidenceOf, type Verdict, type EvidenceKind } from './sidecar.js'
 import { staleAxes, type StaleAxis } from './freshness.js'
@@ -55,6 +55,27 @@ export type EvalEntry = {
   thread?: Issue
 }
 
+// a remark overlaid onto its display host (a reading, above) → the RemarkView the surfaces read.
+function toRemarkView(rm: Reply, threadId: string, dangling: boolean): RemarkView {
+  return {
+    rid: rm.rid!,
+    ref: `${threadId}#${rm.rid}`,
+    by: rm.by, at: rm.at, body: rm.body,
+    targetCodeSha: rm.targetCodeSha ?? '',
+    resolved: !!rm.resolved,
+    ...(rm.resolvedAt ? { resolvedAt: rm.resolvedAt } : {}),
+    ...(rm.resolvedBy ? { resolvedBy: rm.resolvedBy } : {}),
+    dangling,
+  }
+}
+
+// a DANGLING track ([[remark-teeth]]'s dangling clause / directive 5): a (node, scenario) remark track whose
+// scenario no reading joins — the scenario was renamed or deleted, so today the track loads but surfaces
+// nowhere. It ages NOTHING (there is no reading to stale — the teeth read per-reading), but its remarks must
+// stay VISIBLE and resolvable/retractable via their refs, so evalTimeline emits one synthetic row per orphan
+// at NODE level. `scenario` is the orphaned name (rendered struck-through / gone); `remarks` are all dangling.
+export type DanglingTrack = { scenario: string; threadId: string; thread: Issue; remarks: RemarkView[] }
+
 export type ScenarioInfo = { name: string; expected: string; tags?: string[]; code?: string[] }
 
 // `hasYatsu` distinguishes a node that declares no scenarios (no yatsu.md) from one that declares some but
@@ -66,6 +87,10 @@ export type EvalTimeline = {
   hasYatsu: boolean
   scenarios: ScenarioInfo[]
   readings: EvalEntry[]
+  // orphaned remark tracks (renamed/deleted scenarios) — surfaced at node level so their remarks never vanish
+  // ([[remark-teeth]] dangling clause). SEPARATE from `readings` on purpose: a dangling track has no reading,
+  // so it must NOT flow into latestPerScenario / the board scoreboard — it ages nothing.
+  dangling: DanglingTrack[]
 }
 
 export type EvalContext = {
@@ -98,7 +123,7 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
   // short-circuit a non-yatsu node on the (short) yatsu walk — the board attaches `evals` to every node, so
   // this is the common case and must stay cheap (a list the size of the few yatsu nodes, not the whole tree).
   const ynode = (ctx?.ynodes ?? yatsuNodes(root)).find((n) => n.id === id)
-  if (!ynode) return { node: id, hasYatsu: false, scenarios: [], readings: [] }
+  if (!ynode) return { node: id, hasYatsu: false, scenarios: [], readings: [], dangling: [] }
   // the governed `code:` files are the freshness CODE axis; read them from the canonical spec loader so a
   // reparent/rename is seen the same way `spex lint` and `spex yatsu eval` see it (joined by directory).
   const specs = ctx?.specs ?? await loadSpecs()
@@ -146,29 +171,34 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
   readings.reverse()   // newest-first
   // R2 display overlay ([[remark-teeth]]): pin each remark to the reading it JUDGED (targetCodeSha match),
   // else the scenario's latest reading (first in newest-first order) — a dangling target never HIDES the
-  // remark. A remark on a scenario with no reading has nowhere to attach (it surfaces at node level in a
-  // later milestone); it still ages nothing here since there is no reading, and the load never crashed.
+  // remark. A track whose SCENARIO no reading joins (renamed/deleted) has no reading to attach to, so it
+  // becomes a synthetic DANGLING row at node level (directive 5) instead of vanishing — visible, its remarks
+  // resolvable/retractable via their refs, and ageing nothing (there is no reading for the teeth to stale).
+  const declared = new Set(ynode.scenarios.map((s) => s.name))
+  const dangling: DanglingTrack[] = []
   for (const [, track] of tracks) {
     if (track.node !== id || !track.remarks.length) continue
     const rows = readings.filter((r) => r.scenario === track.scenario)
-    if (!rows.length) continue
+    if (!rows.length) {
+      // no reading joins this track. If the scenario is still DECLARED it is just a blind spot (unmeasured),
+      // not orphaned — its remarks wait for a reading. Only a scenario that is BOTH gone from yatsu.md AND
+      // has no reading is truly dangling (renamed/deleted), and that is the one we surface at node level.
+      if (!declared.has(track.scenario)) {
+        dangling.push({
+          scenario: track.scenario, threadId: track.threadId, thread: track.thread,
+          remarks: track.remarks.map((rm) => toRemarkView(rm, track.threadId, true)),
+        })
+      }
+      continue
+    }
     const latest = rows[0]
     for (const rm of track.remarks) {
       const target = rows.find((r) => r.codeSha === rm.targetCodeSha)
       const host = target ?? latest
-      ;(host.remarks ??= []).push({
-        rid: rm.rid!,
-        ref: `${track.threadId}#${rm.rid}`,
-        by: rm.by, at: rm.at, body: rm.body,
-        targetCodeSha: rm.targetCodeSha ?? '',
-        resolved: !!rm.resolved,
-        ...(rm.resolvedAt ? { resolvedAt: rm.resolvedAt } : {}),
-        ...(rm.resolvedBy ? { resolvedBy: rm.resolvedBy } : {}),
-        dangling: !target,
-      })
+      ;(host.remarks ??= []).push(toRemarkView(rm, track.threadId, !target))
     }
   }
-  return { node: id, hasYatsu: true, scenarios, readings }
+  return { node: id, hasYatsu: true, scenarios, readings, dangling }
 }
 
 const HEX64 = /^[0-9a-f]{64}$/

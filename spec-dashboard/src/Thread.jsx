@@ -37,23 +37,45 @@ export const anchorLine = (tMs, step) => `▶${mmss(tMs)}${step ? ` · ${step}` 
 // the blob hashes a body references (its frame links) — the send derives the thread's `evidence[]` from here.
 export const bodyEvidence = (body) => [...(body || '').matchAll(BLOB_URL)].map((m) => m[1])
 
+// E2 — the STEP-NAME is the anchor's canonical form; the m:ss is DERIVED from the CURRENT clip at render
+// time, never trusted frozen. Resolve a parsed anchor against the viewed reading's step timeline (`events`,
+// the {tMs, step} sidecar): if its step is in THIS reading's timeline, the moment is that step's live tMs, so
+// the anchor seeks to the right frame even after a re-measure moved the step (the label's m:ss re-derives to
+// match). If the step is gone from a PRESENT timeline, the frozen m:ss would seek to the wrong moment, so the
+// anchor degrades to readable-not-seekable (shown, never silently wrong). With no timeline (or a step-less
+// `▶m:ss`), the frozen m:ss is all there is — seek to it as before. Returns { tMs, step, label, seekable,
+// degraded } or null.
+export function resolveAnchor(anchor, events) {
+  if (!anchor) return null
+  if (anchor.step && events?.length) {
+    const hit = events.find((e) => e.step === anchor.step)
+    if (hit) return { tMs: hit.tMs, step: anchor.step, label: anchorLine(hit.tMs, anchor.step), seekable: true, degraded: false }
+    // the step named at author time is absent from this reading's timeline — readable, not seekable.
+    return { tMs: anchor.tMs, step: anchor.step, label: anchor.label, seekable: false, degraded: true }
+  }
+  return { tMs: anchor.tMs, step: anchor.step, label: anchor.label, seekable: true, degraded: false }
+}
+
 // Over a clip ([[event-detail]]) the reply list is the review track: `selIdx`/`activeIdx` mark the explicitly
 // selected and the playhead-inside comments (in sync with the scrubber's markers), and clicking an anchor
 // chip both seeks AND selects (`onSelect(i, tMs)`) so keyboard jumps and marker clicks share one selection.
-// Off a clip these are all absent and a reply renders exactly as before. A reply that is a REMARK
+// Off a clip these are all absent and a reply renders exactly as before. `events` is the viewed reading's
+// step timeline: each anchor is resolved by STEP-NAME against it (E2, resolveAnchor) so its moment tracks a
+// re-measure, degrading to a readable-not-seekable chip when the step is gone. A reply that is a REMARK
 // ([[remark-substrate]] — it carries `rid`) shows its `resolved` bit: a resolved remark renders settled
 // (dimmed, ✓), an open one prominent — the loss the eval scoreboard is still carrying, made visible in place.
-export function Replies({ replies, onSeek, selIdx = null, activeIdx = null, onSelect = null }) {
+export function Replies({ replies, onSeek, selIdx = null, activeIdx = null, onSelect = null, events = null }) {
   const t = useT()
   return replies.map((r, i) => {
-    const a = parseAnchor(r.body)
-    const src = a ? a.rest : r.body
+    const parsed = parseAnchor(r.body)
+    const a = resolveAnchor(parsed, events)              // E2: canonical step → the current clip's live tMs
+    const src = parsed ? parsed.rest : r.body
     const img = FRAME_MD.exec(src)                       // a circled-frame image renders here, not as raw md
     const prose = (img ? src.replace(img[0], '') : src).trim()
     const isRemark = r.rid !== undefined
     const remarkCls = isRemark ? (r.resolved ? ' remark resolved' : ' remark open') : ''
     const cls = `fv-reply${selIdx === i ? ' sel' : ''}${activeIdx === i ? ' active' : ''}${remarkCls}`
-    const seek = a && onSeek ? () => (onSelect ? onSelect(i, a.tMs) : onSeek(a.tMs)) : null
+    const seek = a && a.seekable && onSeek ? () => (onSelect ? onSelect(i, a.tMs) : onSeek(a.tMs)) : null
     return (
       <div className={cls} key={i}>
         <div className="fv-reply-meta">
@@ -61,7 +83,7 @@ export function Replies({ replies, onSeek, selIdx = null, activeIdx = null, onSe
           {r.at && <span className="fv-reply-at">{r.at}</span>}
           {a && (seek
             ? <button type="button" className="fv-anchor" onClick={seek} title="seek the clip to this moment">{a.label}</button>
-            : <span className="fv-anchor static">{a.label}</span>)}
+            : <span className={`fv-anchor static${a.degraded ? ' degraded' : ''}`} title={a.degraded ? t('thread.anchorDegraded') : undefined}>{a.label}{a.degraded ? ' ⚠' : ''}</span>)}
           {isRemark && (r.resolved
             ? <span className="fv-remark-state resolved" title={r.resolvedBy ? t('thread.resolvedBy', { by: r.resolvedBy }) : t('thread.resolved')}>✓ {t('thread.resolved')}</span>
             : <span className="fv-remark-state open" title={t('thread.openRemark')}>● {t('thread.openRemark')}</span>)}

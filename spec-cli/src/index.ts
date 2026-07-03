@@ -196,7 +196,11 @@ app.post('/api/issues', async (c) => {
 // the REMARK write surface ([[remark-substrate]]) — server PARITY with the CLI: the dashboard can author /
 // resolve / retract a remark through the SAME functions `spex remark|resolve|retract` call, adding no
 // capability. A ref (`<thread-id>#<rid>`) rides the request BODY, not the path (a '#' in a URL is a
-// fragment). `author` defaults to the human sentinel; resolve rejects it (agent-only, per resolveRemark).
+// fragment). Identity is derived SERVER-SIDE — this is the dashboard's human surface, so the actor is
+// `'human'`, the SAME sentinel /api/issues stamps; it is NEVER read from the request body. That keeps R3's
+// teeth structural (identity is not spoofable over the wire) and honest on both surfaces: resolve rejects
+// `'human'` (agent-only — an agent resolves through the CLI, never the dashboard), and retract binds to the
+// human who authored (only their own `'human'` remarks). Who-may-resolve/retract cannot depend on transport.
 app.post('/api/remarks', async (c) => {
   if (!proposalsEnabled()) return c.json({ error: 'forum workflow is off' }, 403)
   const body = await c.req.json().catch(() => ({}))
@@ -207,9 +211,8 @@ app.post('/api/remarks', async (c) => {
     ? { node: typeof body?.node === 'string' ? body.node : undefined, scenario: body.scenario as string }
     : { issue: typeof body?.issue === 'string' ? body.issue : undefined }
   const codeSha = typeof body?.codeSha === 'string' ? body.codeSha : undefined
-  const author = typeof body?.author === 'string' ? body.author : 'human'
   try {
-    const r = await remarkOnHost(host, text, { codeSha, author, evidence })
+    const r = await remarkOnHost(host, text, { codeSha, author: 'human', evidence })
     return c.json({ ok: true, ref: r.ref, rid: r.rid, codeSha: r.codeSha, outcomes: summarize(r.outcomes, r.loopIn) }, 201)
   } catch (e) {
     return c.json({ error: String((e as Error).message || e) }, 400)
@@ -220,7 +223,7 @@ app.post('/api/remarks/:action{resolve|retract}', async (c) => {
   const body = await c.req.json().catch(() => ({}))
   const ref = typeof body?.ref === 'string' ? body.ref : ''
   if (!ref) return c.json({ error: 'missing remark ref' }, 400)
-  const by = typeof body?.author === 'string' ? body.author : 'human'
+  const by = 'human'   // server-derived identity — never the request body (see /api/remarks above)
   try {
     if (c.req.param('action') === 'resolve') resolveRemark(ref, by)
     else retractRemark(ref, by)

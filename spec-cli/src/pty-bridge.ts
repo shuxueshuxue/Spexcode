@@ -173,23 +173,30 @@ function stripDcs(line: Buffer): Buffer {
 }
 
 function onLine(b: Bridge, lineBuf: Buffer): void {
+  // Inside a command reply everything is verbatim content until %end/%error. Capture-pane body lines are RAW
+  // pane bytes (real escapes + UTF-8), so they must NOT go through stripDcs: a captured row can legitimately
+  // END in \x1b\\ — the ST that terminates an OSC 8 hyperlink (`\x1b]8;;\x1b\\`, e.g. a Claude Code URL) — and
+  // stripDcs's trailing-\x1b\\ strip would eat it, leaving the hyperlink unterminated so xterm never closes it
+  // and paints the rest of the screen underlined. The DCS-exit wrapper only ever ends a control line at stream
+  // exit, never a reply body, so the strip belongs to the protocol path below, not here. Classify %end/%error
+  // on the raw line — but only one whose command number matches this %begin's closes it, so a pane row that
+  // merely starts with "%end" can't false-close.
+  if (b.block) {
+    const h = lineBuf.toString('latin1')
+    const m = h.match(/^%(?:end|error) \S+ (\d+)/)
+    if (m && m[1] === b.blockNum) {
+      const lines = b.block; b.block = null
+      const resolve = b.cmdQ.shift(); if (resolve) resolve(lines)
+    } else {
+      b.block.push(lineBuf)   // raw bytes verbatim — escapes (incl. OSC 8 ST) + UTF-8, not to be string-mangled
+    }
+    return
+  }
   const line = stripDcs(lineBuf)
   // The control PROTOCOL (%begin/%end/%error/%output/%layout-change prefixes, command numbers, layout tokens)
   // is pure ASCII, so decode as latin1 for classification only — a total 1-byte↔1-char map, so a byte index
   // in `head` is the same byte index in `line`; the DATA is taken from the raw Buffer, never from `head`.
   const head = line.toString('latin1')
-  if (b.block) {
-    // Inside a command reply everything is verbatim content until %end/%error — but only one whose command
-    // number matches this %begin's closes it, so a pane row that merely starts with "%end" can't false-close.
-    const m = head.match(/^%(?:end|error) \S+ (\d+)/)
-    if (m && m[1] === b.blockNum) {
-      const lines = b.block; b.block = null
-      const resolve = b.cmdQ.shift(); if (resolve) resolve(lines)
-    } else {
-      b.block.push(line)   // raw bytes — a capture-pane body line is UTF-8, not to be string-mangled
-    }
-    return
-  }
   if (head.startsWith('%output ')) {
     if (b.paneInMode) return
     const sp = head.indexOf(' ', 8)   // skip "%output %<pane> " to the raw (escaped) data
@@ -388,8 +395,9 @@ export function forwardWheel(id: string, up: boolean, col: number, row: number, 
 //
 // A FULL frame (attach / re-bind / reconnect — b.needsFull) leads with the mode prelude so the renderer mirrors
 // the pane's terminal modes. History is not copied into xterm's own scrollback: wheel navigation is tmux-owned,
-// so both FULL frames and resizes capture the current tmux view only. The clear is `\x1b[H\x1b[2J` (viewport
-// only, never `\x1b[3J`).
+// so both FULL frames and resizes capture the current tmux view only. Each frame leads with an SGR reset + an
+// OSC 8 hyperlink close, then a `\x1b[H\x1b[2J` clear (viewport only, never `\x1b[3J`), so no attribute or
+// open-hyperlink state can leak across the clear from the prior frame.
 async function repaint(b: Bridge): Promise<void> {
   const token = ++b.repaintToken
   const want = `${b.cols}x${b.rows}`
@@ -406,9 +414,14 @@ async function repaint(b: Bridge): Promise<void> {
     if (token !== b.repaintToken) return
     if (full) b.needsFull = false   // cleared only once the full frame actually reaches a viewer
     // capture-pane reply lines are RAW bytes (real escapes + UTF-8, not octal-escaped); replay them under the
-    // mode prelude + a clear+home so the frame is one coherent screen (plus, on a full frame, seeded history).
-    // The prelude+clear is ASCII; the body is joined at the BYTE level so a wide char is never string-mangled.
-    broadcast(b.id, Buffer.concat([Buffer.from(prelude + '\x1b[H\x1b[2J', 'utf8'), joinLines(lines)]))
+    // mode prelude + a clean base + clear+home so the frame is one coherent screen (plus, on a full frame,
+    // seeded history). Before the clear we reset SGR (`\x1b[m`) and close any dangling OSC 8 hyperlink
+    // (`\x1b]8;;\x1b\\`): capture re-emits every cell's attributes and per-row hyperlink opens, so the frame
+    // is self-contained — but if the PRIOR frame's last visible row left a hyperlink open (its close sat below
+    // the capture window), that open would otherwise persist across this viewport clear and underline the whole
+    // screen (xterm renders OSC 8 links underlined). The reset+clear is ASCII; the body is joined at the BYTE
+    // level so a wide char is never string-mangled.
+    broadcast(b.id, Buffer.concat([Buffer.from(prelude + '\x1b[m\x1b]8;;\x1b\\\x1b[H\x1b[2J', 'utf8'), joinLines(lines)]))
   })
   const cap = capturePaneCommand(b, mode)
   try { b.pty.write(cap + '\n') } catch { b.cmdQ.pop() }

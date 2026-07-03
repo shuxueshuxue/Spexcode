@@ -59,6 +59,24 @@ scenarios:
       toward the bottom. The browser does not expose or scroll an independent xterm history buffer, and no
       mouse bytes are littered into the shell prompt. A full-screen alternate-screen TUI with SGR mouse reports
       still gets forwarded wheel reports, so the app scrolls itself.
+  - name: scroll-osc8-hyperlink-no-underline-leak
+    tags: [backend-api]
+    description: >-
+      Measure the "whole screen goes underlined when I scroll" regression through the real bridge surface. On
+      a tmux socket, print a line carrying an OSC 8 hyperlink whose closing ST lands at the row's end
+      (`printf '\033]8;;https://example/x\033\\LINK\033]8;;\033\\\n'` — the same shape Claude Code emits for a
+      URL, which xterm renders underlined), then push it up into tmux history behind filler. Attach a viewer
+      through the real API (attachViewer) and send wheel-up frames (forwardWheel, the dashboard's exact path)
+      until copy-mode repaints the link row from history. Capture the bytes the bridge broadcasts and inspect
+      every OSC 8 close (`\x1b]8;;`): each must be properly ST/BEL terminated, never a bare `\x1b]8;;` cut off
+      at a line boundary. File with `spex yatsu eval live-view --scenario
+      scroll-osc8-hyperlink-no-underline-leak --result <txt>`.
+    expected: >-
+      The repainted copy-mode frame carries the hyperlink's close with its `\x1b\\` (ST) intact — ZERO
+      truncated closes — so xterm terminates the link and the underline stays on the link text alone, not the
+      rest of the screen. The bug path (running capture-reply BODY lines through the DCS-exit strip, which eats
+      a trailing `\x1b\\`) must be absent: capture bodies are pushed byte-verbatim, and each frame additionally
+      leads with an SGR reset + OSC 8 close so no open-hyperlink state survives the viewport clear.
   - name: output-preserves-utf8-wide-chars
     tags: [backend-api]
     description: >-

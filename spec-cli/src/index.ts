@@ -4,7 +4,7 @@ import { cors } from 'hono/cors'
 import { etag } from 'hono/etag'
 import { createNodeWebSocket } from '@hono/node-ws'
 import { loadSpecs, loadSpecsLite, specContent, specHistory, specDiffAt, loadConfig } from './specs.js'
-import { proposalsEnabled, forumPost } from './proposals.js'
+import { proposalsEnabled, forumPost, remarkOnHost, resolveRemark, retractRemark } from './proposals.js'
 import { mergedIssues, replyIssue } from './issues.js'
 import { residentForgeState, refreshForgeNow } from '../../spec-forge/src/resident.js'
 import { summarize } from './mentions.js'
@@ -191,6 +191,43 @@ app.post('/api/issues', async (c) => {
   const evidence = Array.isArray(body?.evidence) ? (body.evidence as unknown[]).filter((h): h is string => typeof h === 'string' && /^[0-9a-f]{64}$/.test(h)) : []
   const { thread, outcomes } = await forumPost(concern, { nodes, body: postBody, evidence, author: 'human' })
   return c.json({ ok: true, id: thread.id, outcomes: summarize(outcomes) }, 201)
+})
+
+// the REMARK write surface ([[remark-substrate]]) — server PARITY with the CLI: the dashboard can author /
+// resolve / retract a remark through the SAME functions `spex remark|resolve|retract` call, adding no
+// capability. A ref (`<thread-id>#<rid>`) rides the request BODY, not the path (a '#' in a URL is a
+// fragment). `author` defaults to the human sentinel; resolve rejects it (agent-only, per resolveRemark).
+app.post('/api/remarks', async (c) => {
+  if (!proposalsEnabled()) return c.json({ error: 'forum workflow is off' }, 403)
+  const body = await c.req.json().catch(() => ({}))
+  const text = typeof body?.body === 'string' ? body.body : ''
+  if (!text.trim()) return c.json({ error: 'empty remark' }, 400)
+  const evidence = Array.isArray(body?.evidence) ? (body.evidence as unknown[]).filter((h): h is string => typeof h === 'string' && /^[0-9a-f]{64}$/.test(h)) : []
+  const host = typeof body?.scenario === 'string' && body.scenario
+    ? { node: typeof body?.node === 'string' ? body.node : undefined, scenario: body.scenario as string }
+    : { issue: typeof body?.issue === 'string' ? body.issue : undefined }
+  const codeSha = typeof body?.codeSha === 'string' ? body.codeSha : undefined
+  const author = typeof body?.author === 'string' ? body.author : 'human'
+  try {
+    const r = await remarkOnHost(host, text, { codeSha, author, evidence })
+    return c.json({ ok: true, ref: r.ref, rid: r.rid, codeSha: r.codeSha, outcomes: summarize(r.outcomes, r.loopIn) }, 201)
+  } catch (e) {
+    return c.json({ error: String((e as Error).message || e) }, 400)
+  }
+})
+app.post('/api/remarks/:action{resolve|retract}', async (c) => {
+  if (!proposalsEnabled()) return c.json({ error: 'forum workflow is off' }, 403)
+  const body = await c.req.json().catch(() => ({}))
+  const ref = typeof body?.ref === 'string' ? body.ref : ''
+  if (!ref) return c.json({ error: 'missing remark ref' }, 400)
+  const by = typeof body?.author === 'string' ? body.author : 'human'
+  try {
+    if (c.req.param('action') === 'resolve') resolveRemark(ref, by)
+    else retractRemark(ref, by)
+    return c.json({ ok: true, ref })
+  } catch (e) {
+    return c.json({ error: String((e as Error).message || e) }, 400)
+  }
 })
 // the dashboard input's `/` dropdown — computed by the launcher's HARNESS adapter the same way that harness
 // computes its own `/` menu ([[harness-adapter]]). The client passes `?harness=<id>` for the ACTIVE session,

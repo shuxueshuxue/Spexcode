@@ -45,8 +45,18 @@ cont=$(printf '%s' "$input" | sed -n 's/.*"stop_hook_active"[[:space:]]*:[[:spac
 # (NEVER a block decision: a gap is a heads-up, not a wall). FIRES ONCE: the additionalContext itself forces
 # one continuation, so the CALLER guards it on stop_hook_active — re-emitting on the forced re-stop is what
 # looped 31 turns and tripped the Stop-hook block cap. Called only on ALLOW paths, never alongside a block.
+#
+# The E2E '推一把': when a stale/unmeasured gap sits on a BROWSER-MEASURED scenario, the fix is not a desk
+# check — it is a real run of the product, which an agent will skip at the finish line unless nudged AT the
+# finish line. `scan --changed` now carries each scenario's tags on the drift/missing line, so we spot the
+# browser surface (BROWSER_TAG, the drive-a-real-browser tag from lint.scenarioTags) and, only then, add a
+# pointer to PRODUCE the measurement — drive the running product, capture the reading, file it — before
+# calling the work done. It rides the SAME single additionalContext (still one emit, still fire-once, still
+# not a gate) and NARROWS to browser-tagged drift/missing, so it never mis-fires on a backend/CLI gap or on
+# an uncovered node (which has no scenario to run yet — that stays the generic "give it one" nudge).
+BROWSER_TAG=frontend-e2e
 yatsu_advisory() {
-  local out ids n msg esc
+  local out ids n msg e2e esc
   # Codex Stop hooks reject the Claude-family `hookSpecificOutput.additionalContext` shape on allow paths.
   # Keep Codex Stop stdout empty unless it is a real block decision; the dispatcher still bridges block
   # reasons to Codex stderr.
@@ -56,6 +66,13 @@ yatsu_advisory() {
   [ "${n:-0}" -gt 0 ] || return 0   # no gap in what you changed (or scan unavailable) -> nothing to nudge
   ids=$(printf '%s\n' "$out" | sed -n "s/.*yatsu-[a-z]*: '\([^']*\)'.*/\1/p" | awk '!seen[$0]++' | head -6 | paste -sd' ' -)
   msg="yatsu — the loss signal the optimizer reads — flags ${n} gap(s) in nodes you changed: ${ids}. A node whose score went stale/unmeasured: re-measure it (run the scenario, compare to expected, \`spex yatsu eval <node>\`). A FRONTEND node with no yatsu.md: give it one (a scenario — description + expected), since an obvious UI change should carry a loss signal. \`spex yatsu scan --changed\` lists them. (Advisory — fires once, not a gate.)"
+  # e2e '推一把': a browser-measured (BROWSER_TAG) scenario is stale/unmeasured -> tell the agent to RUN the
+  # pass itself, not defer it. Only drift/missing carry a tag; uncovered nodes have no scenario, so they are
+  # never caught here. This is the moment to drive the product, so it points at doing it BEFORE calling done.
+  if printf '%s\n' "$out" | grep -E 'yatsu-(drift|missing):' | grep -q "$BROWSER_TAG"; then
+    e2e=$(printf '%s\n' "$out" | grep -E 'yatsu-(drift|missing):' | grep "$BROWSER_TAG" | sed -n "s/.*yatsu-[a-z]*: '\([^']*\)'.*/\1/p" | awk '!seen2[$0]++' | head -6 | paste -sd' ' -)
+    msg="${msg} E2E: a browser-measured (${BROWSER_TAG}) scenario in ${e2e} is stale/unmeasured — a real run of the product, not a desk check, refreshes it. Before you call this done, RUN the e2e pass YOURSELF: drive the running product, capture the reading (screenshot/video), and file it with \`spex yatsu eval <node> --scenario <name> --pass|--fail --image|--video <file>\`. (This is producing the measurement, not reviewing a recording after the fact.)"
+  fi
   esc=$(printf '%s' "$msg" | sed 's/\\/\\\\/g; s/"/\\"/g')
   printf '{"hookSpecificOutput":{"hookEventName":"Stop","additionalContext":"%s"}}\n' "$esc"
 }

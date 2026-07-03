@@ -72,8 +72,10 @@ The surface mirrors the code-drift report:
 - **scan [--changed]** — the loss signal's blind spots: a malformed yatsu.md (`yatsu-schema` — missing field,
   unknown key, dup name, ghost `code`/`related` path, out-of-library tag), a stale reading (`yatsu-drift`), a scenario never
   measured (`yatsu-missing`), a **frontend surface** with **no yatsu.md** (`yatsu-uncovered`), and a whole-repo
-  summary — a file governed by > `maxOwners` scenarios (`yatsu-owners`, split it). `--changed` scopes the
-  per-node classes to the nodes the branch touched ([[yatsu-proactive]]); plain scan covers the repo.
+  summary — a file governed by > `maxOwners` scenarios (`yatsu-owners`, split it). A `drift`/`missing` line
+  carries the scenario's **tags**, so a reader (and [[yatsu-proactive]]'s Stop nudge) sees the gap's SURFACE —
+  e.g. a browser-measured `frontend-e2e` scenario needs a real product run to refresh, not a desk check.
+  `--changed` scopes the per-node classes to the nodes the branch touched ([[yatsu-proactive]]); plain scan covers the repo.
 - **eval [.|<node>] [--scenario N] (--pass|--fail|--note T) [--image P|--result P|-|--video P [--timeline P]]** —
   FILE the measurement the agent already took. yatsu runs nothing: it stores the evidence under one verdict,
   for one scenario. The seam has a **write half over data** too (filing.ts): the dashboard annotator files a

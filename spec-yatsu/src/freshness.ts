@@ -4,7 +4,21 @@ import { isEvaluatorStale } from './evaluator.js'
 
 // the CODE axis is touch-based (DriftIndex), so a code-file rename is out of scope — the same blind spot lint's code-drift has
 
-export type StaleAxis = 'code' | 'scenario' | 'evaluator'
+export type StaleAxis = 'code' | 'scenario' | 'evaluator' | 'remark'
+
+// the REMARK axis's input ([[remark-teeth]]): the teeth read only the resolvable bit + when it was resolved,
+// not the whole remark — so freshness stays a PURE function, fed the scenario's remark track at the call
+// sites (never reaching into the forum). One signal per remark on the (node, scenario).
+export type RemarkSignal = { resolved: boolean; resolvedAt?: string }
+
+// the teeth (T1): a scenario is remark-stale unless EVERY remark is resolved AND this reading post-dates
+// every resolution. So an UNRESOLVED remark ages it; a RESOLVED remark keeps it stale until a reading taken
+// strictly after the resolve (reading.ts > resolvedAt) exists — you can't out-run a remark by re-measuring
+// before the resolve, nor clear it by passive receipt. A resolved bit with no timestamp stays conservatively
+// stale (defensive: resolveRemark always stamps one).
+export function remarkStale(reading: { ts: string }, remarks: RemarkSignal[]): boolean {
+  return remarks.some((r) => !r.resolved || !(r.resolvedAt && reading.ts > r.resolvedAt))
+}
 
 // true iff some commit touched `path` strictly NEWER than `sinceSha`. An unknown `sinceSha` (a reading
 // taken off the current history — e.g. on a since-rebased commit) returns true: we can't prove freshness,
@@ -32,11 +46,13 @@ export function staleAxes(
   yatsuPath: string,
   didx: DriftIndex,
   hidx: HistoryIndex,
+  remarks: RemarkSignal[] = [],
 ): StaleAxis[] {
   const axes: StaleAxis[] = []
   if (codeFiles.some((f) => changedSince(didx, reading.codeSha, f))) axes.push('code')
   if (scenarioMoved(hidx, didx.pos, reading.codeSha, yatsuPath)) axes.push('scenario')
   if (isEvaluatorStale(reading.evaluator)) axes.push('evaluator')
+  if (remarkStale(reading, remarks)) axes.push('remark')
   return axes
 }
 
@@ -46,6 +62,7 @@ export function isStale(
   yatsuPath: string,
   didx: DriftIndex,
   hidx: HistoryIndex,
+  remarks: RemarkSignal[] = [],
 ): boolean {
-  return staleAxes(reading, codeFiles, yatsuPath, didx, hidx).length > 0
+  return staleAxes(reading, codeFiles, yatsuPath, didx, hidx, remarks).length > 0
 }

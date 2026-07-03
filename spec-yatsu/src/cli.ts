@@ -7,6 +7,7 @@ import { mainBranch, envSessionId, readRawRecord } from '../../spec-cli/src/layo
 import { yatsuNodes, validateScenarios, YATSU_FILE, type YatsuNode } from './yatsu.js'
 import { readReadings, appendReading, latestPerScenario, evidenceOf, type Reading, type Verdict, type Evidence } from './sidecar.js'
 import { staleAxes } from './freshness.js'
+import { loadEvalRemarkTracks, trackKey } from '../../spec-cli/src/issues.js'
 import { evaluatorTag } from './evaluator.js'
 import { putBlob, listBlobs, gc, isStrayBlob } from './cache.js'
 import { validateTimeline } from './timeline.js'
@@ -86,6 +87,9 @@ async function scan(args: string[] = []): Promise<number> {
   const idx = await driftIndex(root)
   const hidx = await historyIndex(root)
   const specs = await loadSpecs()
+  // the non-git REMARK freshness axis ([[remark-teeth]]): the trunk remark track, read ONCE — the CLI is the
+  // whole model, so `spex yatsu scan` shows a remark-stale scenario with no server running.
+  const remarkTracks = loadEvalRemarkTracks()
   // a file may be governed by several nodes — ordinary composition, not a hub to skip (see governed-related).
   // A change to a shared governed file legitimately triggers EVERY governing node's yatsu, mirroring how
   // lint's drift now fans to every owner; nobody's loss signal is suppressed. An over-owned file is lint's
@@ -127,9 +131,12 @@ async function scan(args: string[] = []): Promise<number> {
           findings.push(`  • yatsu-missing: '${s.id}' scenario '${sc.name}'${tagStr} has no reading yet — measure with \`spex yatsu eval ${s.id}\``)
           continue
         }
-        const axes = staleAxes(r, codeFiles, y.yatsuPath, idx, hidx)
+        const remSignals = (remarkTracks.get(trackKey(s.id, sc.name))?.remarks ?? []).map((rm) => ({ resolved: !!rm.resolved, resolvedAt: rm.resolvedAt }))
+        const axes = staleAxes(r, codeFiles, y.yatsuPath, idx, hidx, remSignals)
         if (axes.length) {
           staleScores++
+          // a remark-stale scenario is unlocked by a second-party resolve, then a fresh reading; the git axes
+          // by a re-measure. Both read the same word: "re-measure with spex yatsu eval".
           findings.push(`  • yatsu-drift: '${s.id}' scenario '${sc.name}'${tagStr} is stale (${axes.join(', ')} changed since ${r.codeSha.slice(0, 7)}) — re-measure with \`spex yatsu eval ${s.id}\``)
         }
       }

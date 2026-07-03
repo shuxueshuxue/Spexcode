@@ -238,14 +238,20 @@ export function nudge(node: string): string {
   if (!proposalsEnabled()) return ''
   return [
     '── issues ─────────────────────────────────────────────────────────',
-    `Your work (${node || 'this node'}) just landed. Before you close: did anything feel`,
-    'OFF this session — a smell, an awkward boundary, a wish — even unrelated to your',
-    'task? Record it so your taste reaches the codebase instead of evaporating:',
-    '  spex issues                             # read the open concerns first (it is non-blind)',
-    '  spex propose sign <id>                  # +1 if your concern is already raised',
-    '  spex propose reply <id> --body -        # add your angle to an existing thread',
-    '  spex propose "<concern>" [--node <id>]   # else open a new one',
-    'A supervisor drains the issues into real work later. (Advisory — skip if nothing nagged.)',
+    `Your work (${node || 'this node'}) just landed. Two forum checks before you close:`,
+    '',
+    '1. CLOSE what you finished. An issue whose work just landed is resolved, not',
+    '   left open — the open set is the OUTSTANDING work, so a stale open reads as a',
+    '   lie:  spex issues --store local     then   spex propose resolve <id> --as landed',
+    '',
+    '2. RECORD only what OUTLIVES this task — a concern you are NOT acting on now:',
+    '   an off-mainline smell / awkward boundary / wish, or a trivial-but-must-not-',
+    "   forget to-do that doesn't earn a spec node. NOT a bug tracker (that is the",
+    '   spec graph + the forge), NOT your assigned task or a fix you are about to',
+    '   make — those need no issue. Only the taste that would otherwise evaporate:',
+    '     spex issues                          # read first — sign/reply if already raised',
+    '     spex propose "<concern>" [--node <id>]   # else open one',
+    'A supervisor drains the forum later. (Advisory — skip if nothing is owed.)',
     '───────────────────────────────────────────────────────────────────',
   ].join('\n')
 }

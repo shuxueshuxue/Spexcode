@@ -83,6 +83,7 @@ export default {
     resolved: '已解决',
     resolvedBy: '由 {by} 解决',
     openRemark: '未解决',
+    anchorDegraded: '该步骤已不在当前测量中——此 m:ss 为原始冻结值，无法跳转',
   },
 
 
@@ -210,6 +211,8 @@ export default {
       noScenarios: '尚未声明场景 —— 此节点没有可测量的 yatsu.md。',
       noReadings: '尚无测量 —— 运行 `spex yatsu eval` 归档一次。已声明的场景：',
       staleAxes: ({ axes }) => `已过期：自本次读取以来 ${axes} 已变动`,
+      danglingTitle: '该场景已被重命名或删除——其评注无读取可依附，但仍可通过 ref 解决',
+      danglingGone: '场景已失',
       pass: '✓ 通过',
       fail: '✗ 未通过',
       note: '≈ 备注',

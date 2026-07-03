@@ -84,6 +84,7 @@ export default {
     resolved: 'resolved',
     resolvedBy: 'resolved by {by}',
     openRemark: 'open',
+    anchorDegraded: 'this step is gone from the current reading — the m:ss is the frozen original, not seekable',
   },
 
 
@@ -213,6 +214,8 @@ export default {
       noScenarios: 'no scenarios declared — this node has no yatsu.md to measure.',
       noReadings: 'no measurements yet — run `spex yatsu eval` to file one. The declared scenarios:',
       staleAxes: ({ axes }) => `stale: ${axes} moved since this reading`,
+      danglingTitle: 'this scenario was renamed or deleted — its remarks have no reading to attach to, but stay resolvable via their refs',
+      danglingGone: 'scenario gone',
       pass: '✓ pass',
       fail: '✗ fail',
       note: '≈ note',

@@ -95,7 +95,7 @@ async function scan(args: string[] = []): Promise<number> {
   // lint's drift now fans to every owner; nobody's loss signal is suppressed. An over-owned file is lint's
   // `owners` concern (split it), not a reason to go silent here.
   const yByDir = new Map(yatsuNodes(root).map((n) => [relative(root, n.dir), n]))
-  let flaggedNodes = 0, malformed = 0, staleScores = 0, missingScores = 0, uncovered = 0
+  let flaggedNodes = 0, malformed = 0, staleScores = 0, missingScores = 0, uncovered = 0, danglingTracks = 0
   for (const s of specs) {
     const dirRel = dirname(s.path)
     if (changed && !nodeChanged(dirRel, s.code, changed)) continue
@@ -140,6 +140,17 @@ async function scan(args: string[] = []): Promise<number> {
           findings.push(`  • yatsu-drift: '${s.id}' scenario '${sc.name}'${tagStr} is stale (${axes.join(', ')} changed since ${r.codeSha.slice(0, 7)}) — re-measure with \`spex yatsu eval ${s.id}\``)
         }
       }
+      // DANGLING remark tracks (directive 5): a (node, scenario) remark track whose scenario is gone from
+      // yatsu.md AND has no reading (renamed/deleted) — its remarks would surface nowhere on the loss signal.
+      // One note per node so the orphan is visible; the remarks stay resolvable/retractable via their refs
+      // (`spex resolve`/`spex retract`), and they age nothing (there is no reading to stale).
+      const declared = new Set(y.scenarios.map((sc) => sc.name))
+      const orphans = [...remarkTracks.values()].filter((tr) => tr.node === s.id && tr.remarks.length && !declared.has(tr.scenario) && !latest.has(tr.scenario))
+      if (orphans.length) {
+        danglingTracks += orphans.length
+        const names = orphans.map((o) => `'${o.scenario}' (${o.threadId}, ${o.remarks.length} remark${o.remarks.length > 1 ? 's' : ''})`).join(', ')
+        findings.push(`  • yatsu-dangling: '${s.id}' has ${orphans.length} orphaned remark track(s) — scenario ${names} renamed/deleted; resolve/retract via \`spex resolve <ref>\` / \`spex retract <ref>\` or restore the scenario name`)
+      }
     } else if (s.code.some(isUiPath)) {
       uncovered++
       findings.push(`  • yatsu-uncovered: '${s.id}' governs frontend code but has no yatsu.md — give it a scenario (description + expected) so its loss can be measured`)
@@ -163,7 +174,8 @@ async function scan(args: string[] = []): Promise<number> {
   }
   const scope = changedOnly ? ' --changed' : ''
   const ownersNote = overOwned ? `, ${overOwned} over-owned` : ''
-  console.error(`spex yatsu scan${scope}: ${flaggedNodes} node(s) flagged (${malformed} malformed, ${staleScores} stale, ${missingScores} missing, ${uncovered} uncovered${ownersNote})`)
+  const danglingNote = danglingTracks ? `, ${danglingTracks} dangling` : ''
+  console.error(`spex yatsu scan${scope}: ${flaggedNodes} node(s) flagged (${malformed} malformed, ${staleScores} stale, ${missingScores} missing, ${uncovered} uncovered${danglingNote}${ownersNote})`)
   return 0
 }
 

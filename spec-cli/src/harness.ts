@@ -139,8 +139,20 @@ export type HarnessArtifacts = { skills: readonly string[]; agents: readonly str
 // claude is alive, gone once it exits); deliver writes to it. Exported because sessions.ts builds the launch env
 // var from it and best-effort sweeps it on close — but the liveness/delivery USE is the adapter's, below.
 export const rvSock = (id: string) => join(tmpdir(), `spexcode-rv-${id}.sock`)
-export const codexAppServerSock = (dir = process.env.SPEXCODE_CODEX_SOCKET_DIR || tmpdir()) => join(dir, 'codex-app-server.sock')
-export const codexAppServerPid = (dir = process.env.SPEXCODE_CODEX_SOCKET_DIR || tmpdir()) => join(dir, 'codex-app-server.pid')
+// The app-server Unix socket MUST live on a SHORT, sun_path-safe path — NOT nested under the project runtime
+// dir. macOS caps `sun_path` at ~104 bytes, and `runtimeRoot()` flattens the ENTIRE project path into one
+// dash-segment (`encodeProject`), so `<runtimeRoot>/codex-app-server.sock` blew past the cap on a deep macOS
+// project (~111 chars) → `path must be shorter than SUN_LEN` + connect EINVAL, and the app-server never bound
+// (Linux's 108 limit + shorter `/root` paths happened to fit; macOS did not). So the socket is
+// `<socketBase>/spexcode-cx-<hash>.sock`, where `<hash>` is a short STABLE digest of the PROJECT identity — the
+// `dir` (runtimeDir) the callers pass — so launch, liveness, and delivery all compute the IDENTICAL sock for a
+// given project (the ONE-app-server-per-project invariant). This is UNCONDITIONAL on every platform (a short
+// hashed path is strictly better everywhere — no darwin branch; platform differences stay at this path seam).
+// `<socketBase>` = the `SPEXCODE_CODEX_SOCKET_DIR` override, else the platform tmpdir. The `.pid`/`.log`/`.lock`
+// files carry no sun_path limit and stay in `runtimeRoot`.
+export const codexAppServerSock = (dir = runtimeRoot()) =>
+  join(process.env.SPEXCODE_CODEX_SOCKET_DIR || tmpdir(), `spexcode-cx-${createHash('sha1').update(dir).digest('hex').slice(0, 16)}.sock`)
+export const codexAppServerPid = (dir = runtimeRoot()) => join(dir, 'codex-app-server.pid')
 
 function shQuote(s: string): string {
   return `'${s.replace(/'/g, `'\\''`)}'`
@@ -246,8 +258,8 @@ export function activeTurnIdFromThread(readResult: unknown): string | null {
   return active?.id ?? null
 }
 
-export function codexLaunchCommand(_id: string, codexCmd = process.env.SPEXCODE_CODEX_CMD || 'codex --yolo', serverCmd = process.env.SPEXCODE_CODEX_SERVER_CMD || 'codex', dir = process.env.SPEXCODE_CODEX_SOCKET_DIR || runtimeRoot()): string {
-  const sock = codexAppServerSock(dir)
+export function codexLaunchCommand(_id: string, codexCmd = process.env.SPEXCODE_CODEX_CMD || 'codex --yolo', serverCmd = process.env.SPEXCODE_CODEX_SERVER_CMD || 'codex', dir = runtimeRoot()): string {
+  const sock = codexAppServerSock(dir)         // short sun_path-safe path off tmpdir/override — NOT under "$dir"
   const pid = codexAppServerPid(dir)
   const log = join(dir, 'codex-app-server.log')
   const lock = join(dir, 'codex-app-server.lock')
@@ -258,6 +270,10 @@ export function codexLaunchCommand(_id: string, codexCmd = process.env.SPEXCODE_
     `log=${shQuote(log)}`,
     `lock=${shQuote(lock)}`,
     'mkdir -p "$dir"',
+    'mkdir -p "$(dirname "$sock")"',           // the socket base (tmpdir or the SPEXCODE_CODEX_SOCKET_DIR override)
+    // self-heal: the pre-fix flock design left an orphaned `codex-app-server.lock` FILE; the mkdir mutex now
+    // uses `"$lock.d"`, so drop that dead residue on already-run deployments (harmless if absent).
+    'rm -f "$lock"',
     // POSIX-portable mutex: mkdir is atomic on every POSIX fs, so it serializes the check-and-start with NO
     // dependency on util-linux `flock` (absent on macOS — where the old flock path failed the whole app-server
     // bootstrap, leaving the pane at the shell). Spin on `mkdir "$lock.d"` with a bounded wait; after ~10s

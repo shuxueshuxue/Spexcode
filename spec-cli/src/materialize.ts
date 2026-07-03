@@ -4,7 +4,8 @@ import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 import { loadSystemConfig, loadSkillConfig, loadAgentConfig, loadConfig } from './specs.js'
 import { compileManifest } from './hooks.js'
-import { writeManagedBlock, type HarnessArtifacts } from './harness.js'
+import { writeManagedBlock, removeManagedBlock, type HarnessArtifacts } from './harness.js'
+import { git } from './git.js'
 import { runtimeRoot, mainCheckout, readConfig } from './layout.js'
 import { resolveHarnessTargets, partitionHarnesses } from './harness-select.js'
 import { emitPlugin, cleanPlugin, pluginBundleDir, pluginVersion } from './plugin-harness.js'
@@ -40,6 +41,31 @@ export function contentHash(proj: string): string {
   } catch { return '' }
 }
 
+// @@@ private overlay ([[private-overlay]]) - the DEFAULT render commits .spec + spexcode.json and ignores its
+// generated wiring through a managed block in the TRACKED <repo>/.gitignore; that only truly hides a file that
+// is wholly ours, so on a host that ALREADY tracks CLAUDE.md/AGENTS.md/.gitignore the folded-in block still
+// lands in a tracked file and leaks. Private mode (spexcode.local.json `private:true`) closes that: it moves the
+// ignore block to the per-clone `.git/info/exclude` (never committed), widens it to hide .spec + spexcode.json
+// too, and `skip-worktree`s any TRACKED contract file so the block sits in the working copy (the harness still
+// discovers it) yet never stages. Every step has an inverse the DEFAULT mode re-asserts, so the toggle is
+// reversible and idempotent. It hides UNTRACKED paths; a pre-existing tracked .spec must be `git rm --cached`d
+// once (the render can't untrack for you — reported, not silently ignored).
+function gitCommonDirOf(proj: string): string {
+  return git(['-C', proj, 'rev-parse', '--path-format=absolute', '--git-common-dir']).trim()
+}
+function infoExcludePath(proj: string): string {
+  return join(gitCommonDirOf(proj), 'info', 'exclude')
+}
+function isTracked(proj: string, file: string): boolean {
+  try { git(['-C', proj, 'ls-files', '--error-unmatch', file]); return true } catch { return false }
+}
+// mark/unmark a TRACKED file skip-worktree (a no-op on an untracked path — info/exclude hides those instead).
+// Best-effort: an index race or a non-repo must not fail the render.
+function setSkipWorktree(proj: string, file: string, on: boolean): void {
+  if (!isTracked(proj, file)) return
+  try { git(['-C', proj, 'update-index', on ? '--skip-worktree' : '--no-skip-worktree', file]) } catch { /* best-effort */ }
+}
+
 // the whole pay-per-change render. proj defaults to cwd. Returns the new content-hash it stamped.
 export function materialize(proj = process.cwd()): string {
   const rt = runtimeRoot(proj)                                            // global per-project store, not the worktree
@@ -59,7 +85,9 @@ export function materialize(proj = process.cwd()): string {
   // native harness). resolveHarnessTargets FAILS LOUD on an illegal set (plugin+native, plugin w/o folder).
   // selected harnesses are write()n below; unselected ones are clean()ed (pruned) after — so dropping a harness
   // from the config removes its products on the next re-materialize. The plugin EMITTER is a later node.
-  const targets = resolveHarnessTargets(readConfig(mainCheckout(proj)).harnesses)
+  const cfg = readConfig(mainCheckout(proj))
+  const targets = resolveHarnessTargets(cfg.harnesses)
+  const priv = !!cfg.private                                              // [[private-overlay]] — hide in .git/info/exclude + skip-worktree, not the tracked .gitignore
   const { selected, unselected, plugins } = partitionHarnesses(targets)
   const skillNodes = loadSkillConfig()
   const agentNodes = loadAgentConfig()
@@ -81,7 +109,7 @@ export function materialize(proj = process.cwd()): string {
   // shim ABSOLUTE paths; relativized into the managed .gitignore block below (checkout-invariant — see there).
   const shimPaths: string[] = []
   for (const h of selected) {
-    if (contract) for (const f of h.contractFiles(proj)) { writeManagedBlock(f, contract); shimPaths.push(f) }
+    if (contract) for (const f of h.contractFiles(proj)) { writeManagedBlock(f, contract); shimPaths.push(f); setSkipWorktree(proj, f, priv) }
     const shimFile = h.shimFile(proj)
     mkdirSync(dirname(shimFile), { recursive: true })
     const shim = h.shim(DISPATCH, SPEX)
@@ -174,7 +202,21 @@ export function materialize(proj = process.cwd()): string {
   // SPEX path), so its dir joins the same managed block — regenerated per clone/launch, never committed.
   const bundlePaths = curFolders.map((f) => pluginBundleDir(proj, f))
   const ignorable = [...[...shimPaths, ...bundlePaths].map(anchor).filter((p): p is string => p !== null), 'spexcode.local.json']
-  if (ignorable.length) writeManagedBlock(join(proj, '.gitignore'), [...new Set(ignorable)].sort().join('\n'), ['# ', ''])
+  const gitignore = join(proj, '.gitignore')
+  if (priv) {
+    // PRIVATE ([[private-overlay]]): hide EVERYTHING — including the .spec tree + spexcode.json the DEFAULT
+    // mode commits ("git is the database") — in the per-clone `.git/info/exclude` (never committed, never
+    // shared), and strip any managed block a prior DEFAULT render left in the tracked .gitignore so switching
+    // INTO private mode leaves the host's shared history clean.
+    const entries = [...new Set([...ignorable, '.spec/', 'spexcode.json'])].sort().join('\n')
+    writeManagedBlock(infoExcludePath(proj), entries, ['# ', ''])
+    removeManagedBlock(gitignore, ['# ', ''], true)
+  } else {
+    // DEFAULT: the checkout-invariant managed block in the TRACKED .gitignore (rationale above); strip any
+    // private exclude block so switching OUT of private mode is equally clean.
+    if (ignorable.length) writeManagedBlock(gitignore, [...new Set(ignorable)].sort().join('\n'), ['# ', ''])
+    removeManagedBlock(infoExcludePath(proj), ['# ', ''], false)
+  }
   // (5) stamp the content-hash marker LAST (so a crash mid-render leaves it stale → re-renders next gate).
   const h = contentHash(proj)
   writeFileSync(join(rt, 'content-hash'), h)

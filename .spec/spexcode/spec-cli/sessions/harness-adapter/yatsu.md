@@ -50,20 +50,24 @@ scenarios:
   - name: codex-liveness-reflects-live-tui-not-sock
     tags: [backend-api]
     description: >-
-      Through a REAL codex launch, construct the FAILED-launch state the macmini reported: the shared per-project
-      app-server socket is bound (a prior/parallel codex is up, or the app-server started) but THIS session's
-      visible `codex --remote … resume <tid>` TUI FAILED and, after its bounded retries, the launch pane dropped
-      back to the shell prompt — no codex TUI. Read the board / `spex ls` for that session. Then launch a codex
-      session whose TUI comes up normally and read it again.
+      Through a REAL codex launch, read liveness for the three real shapes. (a) HEALTHY: a codex session whose
+      TUI is up and rendering — note its pane's `pane_current_command` is `bash` (the launch wrapper; the codex
+      processes are the pane pid's DESCENDANTS: bash → node (the codex CLI) → the vendored codex binary). (b)
+      FAILED: the macmini shape — the shared per-project app-server socket is bound but THIS session's visible
+      `codex --remote … resume <tid>` TUI FAILED and, after its bounded retries, the launch pane dropped back to
+      an idle shell — nothing below the pane pid. (c) BOOTING: a just-launched pane inside the boot-grace
+      window. Read the board / `spex ls` for each.
     expected: >-
-      The failed launch reads **offline** (NOT online/working), because codex liveness now keys on the pane's
-      `pane_current_command` being codex, not on the shared app-server socket existing. The healthy session reads
-      **online**. The failure this locks: keying liveness on sock-presence read the dead launch as online/working
-      because the SHARED sock survives a failed `--remote resume`, so the supervisor was misled into treating a
-      never-started worker as live — measurable only through a real failed launch, since a synthetic sock-present
-      state hides it. A fresh, still-booting codex pane (bash bootstrapping the app-server before it `exec`s the
-      TUI) must read **starting**, not offline, for the boot-grace window — the fix must not flap a legitimate
-      startup to offline.
+      HEALTHY reads **online**, because codex liveness keys on a codex-ish process (basename codex*/node*) being
+      live in the pane pid's DESCENDANT tree — NOT on the pane's foreground command name, which is `bash` for
+      the TUI's whole life. FAILED reads **offline** (NOT online/working) despite the still-bound shared sock.
+      BOOTING reads **starting**, not offline. The TWO failures this locks, one per wrong signal: (1)
+      sock-presence read the dead launch as online/working (the SHARED sock survives a failed `--remote
+      resume`), so the supervisor treated a never-started worker as live; (2) the foreground-name probe
+      (online iff `pane_current_command` == codex) FALSE-read every HEALTHY codex as offline — field-confirmed:
+      a rendering TUI's foreground is the bash wrapper — so the board showed working codex sessions as dead and
+      a supervisor could wrongly reopen/kill them. Both are measurable only through a real launch (a synthetic
+      pane hides the wrapper-shell tree shape).
     code: spec-cli/src/harness.ts
 ---
 # yatsu.md — harness-adapter

@@ -20,6 +20,23 @@ scenarios:
     code:
       - spec-dashboard/src/NodeView.jsx
       - spec-dashboard/src/styles.css
+  - name: multi-evidence-gallery
+    tags: [frontend-e2e, desktop]
+    description: >-
+      File one reading carrying MULTIPLE evidence entries — several `--image` stills AND a `--video`
+      clip — against a node, open that node's eval tab (key `4`), and expand the reading. Its evidence
+      must render as a GALLERY: every image shows AND the video plays inline, together in the one
+      expanded figure — not a single element switched on one kind. A pruned entry shows its own
+      *miss original file* sentinel. Screenshot the expanded gallery and file with
+      `spex yatsu eval yatsu-eval-tab --scenario multi-evidence-gallery --image a.png --image b.png --video clip.webm --pass --image <shot>`.
+    expected: >-
+      The expanded reading shows the reading's whole evidence LIST as a vertical gallery: N `<img>`
+      thumbnails plus an inline `<video controls>`, all present at once. Backward-compatible — a legacy
+      one-blob reading still renders as a single-item gallery. Each entry resolves its own blob state, so
+      one missing entry degrades to the sentinel without hiding the others.
+    code:
+      - spec-dashboard/src/NodeView.jsx
+      - spec-dashboard/src/styles.css
 ---
 # yatsu.md — yatsu-eval-tab
 

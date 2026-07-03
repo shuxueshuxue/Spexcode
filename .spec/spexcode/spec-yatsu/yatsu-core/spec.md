@@ -46,8 +46,9 @@ code freshness axis (a `code`/`related` path that doesn't exist is flagged, neve
 it inherits the node's whole `code:` list. So two scenarios on one node, tracking different files, go stale
 independently — one node's loss is many signals, not one. A file governed by more scenarios than `maxOwners`
 is the `yatsu-owners` smell (split it). Measurements live apart in a flat
-**yatsu.evals.ndjson** sidecar — one JSON line per reading (scenario, codeSha, blob+blobKind, a video
-reading's optional timelineBlob ([[step-timeline]]), evaluator, an optional **`by`** (the SESSION that filed
+**yatsu.evals.ndjson** sidecar — one JSON line per reading (scenario, codeSha, an **evidence LIST** (each entry
+a typed `{hash, kind ∈ image|video|transcript}`), the video entry's optional timelineBlob ([[step-timeline]]),
+evaluator, an optional **`by`** (the SESSION that filed
 it, from envSessionId), **verdict**, ts) — the second git-as-database axis: a reading commit is a *measurement
 event*, not a spec version, so history and attribution apply unchanged. `by` is a different axis than
 `evaluator`: `evaluator` is WHO/WHAT measured (a tag like `manual@1`), `by` is the reachable session behind the
@@ -58,9 +59,12 @@ human `manual@1` filing has no reachable session and omits it too.
 The **verdict** is the loss against `expected`: `pass` or `fail`. Either may carry an optional **note** — a
 one-line annotation (why it failed, how far a pass sits from ideal). A note is an annotation *on* the verdict,
 not a third status: a measurement must commit to pass or fail, and a scenario you haven't actually measured is
-`yatsu-missing`, never a hedged note-as-verdict. The **evidence** is an `image`, `transcript`, or `video` (the captured
-actual behaviour — the *why* lives there, the note only summarises it), content-addressed, distinguished by
-`blobKind`; one filed before verdicts existed — or a legacy note-only reading — renders as *legacy*.
+`yatsu-missing`, never a hedged note-as-verdict. The **evidence** is a **LIST** of content-addressed entries —
+N `image`s and/or a `video` (with its step-timeline) and/or a `transcript`, each typed by its `kind` (the
+captured actual behaviour — the *why* lives there, the note only summarises it). One filing can carry a whole
+run: several stills beside the recorded clip. Backward-compatible: a legacy **scalar** reading (one `blob` +
+`blobKind`) reads as a one-entry list, so old readings still render; one filed before verdicts existed — or a
+legacy note-only reading — renders as *legacy*.
 
 **Freshness is derived live from git, never stored.** A reading goes stale on three axes since its codeSha —
 a governed `code:` file changed, its scenario's *content* changed, or the evaluator version moved. A bare
@@ -76,9 +80,10 @@ The surface mirrors the code-drift report:
   carries the scenario's **tags**, so a reader (and [[yatsu-proactive]]'s Stop nudge) sees the gap's SURFACE —
   e.g. a browser-measured `frontend-e2e` scenario needs a real product run to refresh, not a desk check.
   `--changed` scopes the per-node classes to the nodes the branch touched ([[yatsu-proactive]]); plain scan covers the repo.
-- **eval [.|<node>] [--scenario N] (--pass|--fail|--note T) [--image P|--result P|-|--video P [--timeline P]]** —
+- **eval [.|<node>] [--scenario N] (--pass|--fail|--note T) [--image P …repeatable] [--result P|-] [--video P [--timeline P]]** —
   FILE the measurement the agent already took. yatsu runs nothing: it stores the evidence under one verdict,
-  for one scenario. The seam has a **write half over data** too (filing.ts): the dashboard annotator files a
+  for one scenario. `--image` REPEATS (N stills) and combines freely with `--result`/`--video` in one filing —
+  each is pushed onto the reading's evidence list; `--timeline` anchors the video entry. The seam has a **write half over data** too (filing.ts): the dashboard annotator files a
   human `manual@1` reading (verdict + annotation-report transcript) through the SAME append — one seam, two
   faces.
 - **clean [--keep-latest|--all]** — GC the evidence cache (blobs no reading references, by default).

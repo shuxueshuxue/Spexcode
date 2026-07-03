@@ -26,14 +26,15 @@ anchor. They are **one primitive**: a time-anchored comment on the eval's own th
 
 The annotator IS the issues page's **detail pane for a selected eval** ([[issues-view]]'s master-detail —
 no modal, no box-in-a-box: the reading gets the pane's full height, and switching selection resets the
-working state to the new reading). Every evidence kind renders here — an image full-width and
-**click-to-enlarge** (a click opens the same blob in a viewport-size lightbox; click anywhere or Esc
-closes, the Esc swallowed so the page's own Esc stack never fires — a screenshot's detail is the
-evidence, and the pane's width is not its ceiling), a transcript as
-text, a missing blob as the honest sentinel, a blob-less (`note`) reading its verdict note as the text
-body (never an empty media box) — and a **video** reading plays its clip. When the reading
+working state to the new reading). A reading's evidence is a **LIST**, so every entry renders in the ONE pane:
+the **video** plays its clip (the annotate-a-loop surface), and an **image gallery** renders beside/under it —
+each still full-width and **click-to-enlarge** (a click opens that blob in a viewport-size lightbox; click
+anywhere or Esc closes, the Esc swallowed so the page's own Esc stack never fires — a screenshot's detail is
+the evidence, and the pane's width is not its ceiling). A transcript entry renders as
+text, a missing blob as the honest sentinel per entry, a blob-less (`note`) reading its verdict note as the text
+body (never an empty media box). When the reading
 carries a [[step-timeline]]
-sidecar, a **step ruler** renders under the scrubber — click a step to seek to its `tMs`; an annotation at
+sidecar, a **step ruler** renders under the scrubber (bound to the **video entry**) — click a step to seek to its `tMs`; an annotation at
 moment T names its step by the last-boundary-≤T lookup, and a step's optional owning-node routes the
 finding to the node it actually belongs to. Without a sidecar the annotator is a plain player with
 comments — degraded gracefully, never blocked.

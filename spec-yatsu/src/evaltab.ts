@@ -2,16 +2,25 @@ import { relative, dirname } from 'node:path'
 import { repoRoot, driftIndex, historyIndex, type DriftIndex, type HistoryIndex } from '../../spec-cli/src/git.js'
 import { loadSpecs } from '../../spec-cli/src/specs.js'
 import { yatsuNodes, type YatsuNode } from './yatsu.js'
-import { readReadings, type Verdict } from './sidecar.js'
+import { readReadings, evidenceOf, type Verdict, type EvidenceKind } from './sidecar.js'
 import { staleAxes, type StaleAxis } from './freshness.js'
 import { hasBlob, getBlob, MISS_BLOB } from './cache.js'
+
+// one evidence entry as the tab renders it: the content hash, its kind, and its LIVE blob state (present, or
+// miss when the bytes were pruned). The whole list is the gallery the dashboard maps.
+export type EvidenceView = { hash: string; kind: EvidenceKind; state: 'present' | 'miss' }
 
 export type EvalEntry = {
   scenario: string
   expected: string
   codeSha: string
+  // the reading's whole evidence list (N images and/or a video and/or a transcript). Always populated —
+  // a legacy scalar reading normalizes to a one-entry list — so every read surface sees a gallery.
+  evidence?: EvidenceView[]
+  // primary scalar view (the video entry if any, else the first) — the single-evidence compat face for
+  // consumers that still read one blob (the session proof, the board fold's kind hint).
   blob: string | null
-  blobKind?: 'image' | 'transcript' | 'video'
+  blobKind?: EvidenceKind
   timelineBlob?: string
   evaluator: string
   verdict?: Verdict
@@ -70,19 +79,24 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
     // a scenario's own `code` is its freshness code axis when it declares one; else the whole node's list.
     const sc = byName.get(r.scenario)
     const axes = staleAxes(r, sc?.code?.length ? sc.code : codeFiles, ynode.yatsuPath, idx, hidx)
+    // the reading's evidence list, each entry resolved to its live blob state; the primary (video-first, else
+    // first) drives the scalar compat fields for single-evidence consumers.
+    const evidence: EvidenceView[] = evidenceOf(r).map((e) => ({ hash: e.hash, kind: e.kind, state: hasBlob(e.hash) ? 'present' : 'miss' }))
+    const primary = evidence.find((e) => e.kind === 'video') ?? evidence[0]
     return {
       scenario: r.scenario,
       expected: byName.get(r.scenario)?.expected ?? '',
       codeSha: r.codeSha,
-      blob: r.blob,
-      ...(r.blobKind ? { blobKind: r.blobKind } : {}),
+      ...(evidence.length ? { evidence } : {}),
+      blob: primary?.hash ?? null,
+      ...(primary ? { blobKind: primary.kind } : {}),
       ...(r.timelineBlob ? { timelineBlob: r.timelineBlob } : {}),
       evaluator: r.evaluator,
       ...(r.verdict ? { verdict: r.verdict } : {}),
       ts: r.ts,
       fresh: axes.length === 0,
       staleAxes: axes,
-      blobState: r.blob == null ? 'none' : hasBlob(r.blob) ? 'present' : 'miss',
+      blobState: primary ? primary.state : 'none',
     }
   })
   readings.reverse()

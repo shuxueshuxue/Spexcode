@@ -10,7 +10,6 @@ related:
   - spec-cli/src/index.ts
   - spec-cli/src/cli.ts
   - spec-dashboard/src/SessionInterface.jsx
-  - spec-dashboard/src/SessionWindow.jsx
   - spec-dashboard/src/harness.jsx
 ---
 
@@ -42,13 +41,13 @@ no launchers are configured the list is empty (and `default` blank) and the form
 harness picker, so a zero-config project is unchanged. A resolved launcher fixes the session's harness; an
 unknown launcher name is rejected fail-loud (a 400 from the create path), never silently defaulted.
 
-**Visible per session.** A launcher choice that vanishes the moment the worker boots is unanswerable — "did
-this session actually launch under `claude-glm`?" A session's persisted launcher NAME therefore reaches the
-board: it rides on the session payload (`/api/sessions` + `/api/board`) alongside its `harness`, and every
-session-listing row BADGES it — the launcher's harness vendor glyph (the SAME mark the New-Session picker
-draws, shared from `harness.jsx`) plus the launcher name — so the launch identity is legible at a glance
-without opening the terminal. A session with no named launcher (an old record, or a zero-config default launch)
-shows no badge; only a deliberately-named launch earns one.
+**Persisted and API-exposed, not badged on the board.** A session's chosen launcher NAME is durable data: it
+is stored on the record and rides the session payload (`/api/sessions` + `/api/board`) alongside its
+`harness`, so any surface that needs the launch identity can read it. It is deliberately NOT rendered as a
+per-session board badge — a harness glyph + name on every session row read as visual clutter, so the board
+stays clean. The wrong-launcher confusion (a human "testing claude-glm" quietly handed another launcher) is
+already closed at the point it matters — the create-time picker honoring `defaultLauncher` (above) — not by
+after-the-fact badging.
 
 **Correctness — the choice is persisted, not re-resolved.** The launch command used to be re-resolved
 globally at every launch (env → config → default), so a session created under an API-key launcher would

@@ -644,6 +644,15 @@ export const reportUnwatch = (token: string): Promise<void> => postJSON('/api/se
 // backend-down poll must NOT be swallowed as a transient git/tmux hiccup: watch warns ONCE and keeps
 // streaming rather than emitting false `closed` events for every session.
 export const isBackendDown = (e: unknown): boolean => e instanceof Error && e.name === 'BackendError'
+// @@@ isBackendUnreachable - the TRANSIENT subset of isBackendDown: the fetch itself failed (nothing
+// listening — ECONNREFUSED / "fetch failed"), which client.ts throws as a BackendError with NO HTTP
+// `status`. An HTTP BackendError (the backend answered non-2xx) DOES carry a status and is a real error, not
+// a momentary blip. The distinction matters to `spex wait`: a supervisor's backgrounded wait must survive
+// the ~1s window where the supervisor reboots its hot-reloaded child behind the stable port, retrying until
+// the backend answers again or the deadline hits — never dying on the in-flight fetch that a sibling merge's
+// restart happens to interrupt. Read via a structural cast (no client.ts import — that would be a cycle).
+export const isBackendUnreachable = (e: unknown): boolean =>
+  isBackendDown(e) && (e as { status?: number }).status === undefined
 
 const slugify = (s: string | null) => (s || 'session').replace(/[^a-zA-Z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'session'
 
@@ -1373,6 +1382,7 @@ export async function watchSessions(emit: (line: string) => void, opts: WatchOpt
   const deadline = until ? Date.now() + Math.max(1000, until.timeoutMs) : 0
   const isActionable = (st: DisplayStatus) => WATCH_ACTIONABLE.has(st) || (includeIdle && st === 'idle')
   let warnedDown = false
+  let downMsg: string | null = null   // set while the backend is unreachable, cleared on a good poll; the deadline reports it
   for (;;) {
     try {
       // EXISTENCE is the selector-matched board across ALL statuses — listSessions now lists every worktree
@@ -1381,7 +1391,7 @@ export async function watchSessions(emit: (line: string) => void, opts: WatchOpt
       // emit, never whether a session is present — using it for presence would read a status change out of the
       // filtered set as a (false) removal.
       const all = selectSessions(await source(), selectors)
-      warnedDown = false   // a successful poll re-arms the down-warning, so a recovered-then-redowned backend warns again
+      warnedDown = false; downMsg = null   // a successful poll re-arms the down-warning (and clears the deadline's down-report)
       const ids = new Set(all.map((s) => s.id))
       const passesStatus = (st: DisplayStatus) => !statuses?.length || statuses.includes(st)
       for (const s of all) {
@@ -1408,15 +1418,25 @@ export async function watchSessions(emit: (line: string) => void, opts: WatchOpt
         if (!all.length) return { gone: true }
       }
     } catch (e) {
-      // a backend-down poll must NOT be swallowed as a transient hiccup AND must NOT emit a false `closed`
-      // for every session: we skip the tick (prev is untouched → no phantom removals) and warn ONCE, loudly,
-      // so a manager sees the stream is blind rather than reading silence as "all sessions fine".
-      if (until && isBackendDown(e)) return { backendDown: (e as Error).message }   // a bounded wait fails loud, never a false timeout
-      if (isBackendDown(e) && !warnedDown) { warnedDown = true; console.error(`${tag}[spex] watch: ${(e as Error).message}; retrying every ${intervalMs / 1000}s…`) }
+      // a backend error in the poll must NOT be swallowed AND must NOT emit a false `closed` for every session:
+      // we skip the tick (prev is untouched → no phantom removals). Two shapes of BackendError diverge here:
+      //  • REACHABLE but erroring (an HTTP status) — the backend answered and is broken: a real terminal
+      //    condition, so a bounded `wait` fails loud IMMEDIATELY rather than spinning out its whole timeout.
+      //  • UNREACHABLE (no status — ECONNREFUSED / fetch failed) — nothing is listening, e.g. the supervisor
+      //    is rebooting its hot-reloaded child behind the stable port on a sibling merge. This is TRANSIENT:
+      //    record it, warn ONCE, and keep polling — the deadline (below) is the only hard wall, so a
+      //    backgrounded `spex wait` survives the ~1s restart instead of dying on the interrupted fetch.
+      if (until && isBackendDown(e) && !isBackendUnreachable(e)) return { backendDown: (e as Error).message }
+      if (isBackendDown(e)) {
+        downMsg = (e as Error).message
+        if (!warnedDown) { warnedDown = true; console.error(`${tag}[spex] watch: ${downMsg}; retrying every ${intervalMs / 1000}s…`) }
+      }
     }
-    // the HARD wall — checked every iteration, in EVERY state, even after a thrown poll, BEFORE the sleep:
-    // this is what guarantees `spex wait` can never hang on a worker stuck outside WATCH_ACTIONABLE.
-    if (until && Date.now() >= deadline) return { timedOut: true }
+    // the HARD wall — checked every iteration, in EVERY state, even after a thrown poll, BEFORE the sleep: this
+    // guarantees `spex wait` can never hang on a worker stuck outside WATCH_ACTIONABLE — nor spin forever on a
+    // backend that never comes back. Hitting the deadline while still unreachable reports THAT (`backendDown`),
+    // not a false "no actionable status" timeout, so the manager sees the honest cause.
+    if (until && Date.now() >= deadline) return downMsg ? { backendDown: downMsg } : { timedOut: true }
     await sleep(intervalMs)
   }
 }

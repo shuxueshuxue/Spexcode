@@ -74,4 +74,12 @@ process's edge expires by TTL), even though the poll itself does need the backen
 worker stuck in *any* non-actionable state (`working`, `parked`, `idle`, `queued`, `starting`) can never
 hang the caller — it exits non-zero at the deadline. Actionable = `WATCH_ACTIONABLE` (which excludes
 self-resuming `parked`, so a parked worker correctly does *not* end the wait), plus `idle` when `--idle` is
-given. A vanished/closed target exits at once; a backend-down poll **fails loud**, never a false timeout.
+given. A vanished/closed target exits at once.
+
+**A transient backend restart must NOT kill a wait.** The backend hot-reloads its child on every
+`spec-cli/src` merge (a second of downtime behind the stable port), so a poll can fail because the backend is
+momentarily **unreachable** (`ECONNREFUSED`/fetch-failed — a `BackendError` with no HTTP status). That is
+transient: the wait warns once and **keeps polling** within its timeout, riding out the restart instead of
+dying the instant a sibling merge lands; only exhausting the *whole* timeout still-unreachable fails (as
+backend-down, not a false timeout). An **HTTP error** (reachable but broken — a `BackendError` *with* a
+status) is a real terminal condition and still **fails loud at once**.

@@ -198,7 +198,7 @@ export function reply(id: string, body: string, author?: string): Issue {
 // plus the @-dispatch outcomes so a caller can echo who was notified.
 export async function forumReply(id: string, body: string, author: string): Promise<{ thread: Issue; outcomes: DispatchOutcome[] }> {
   const thread = reply(id, body, author)
-  const outcomes = await dispatchMentions(body, { threadId: id, node: thread.nodes[0] || null, author })
+  const outcomes = await dispatchMentions(body, { threadId: id, node: thread.nodes[0] || null, author, status: thread.status })
   return { thread, outcomes }
 }
 
@@ -207,7 +207,7 @@ export async function forumPost(
   opts: { nodes?: string[]; body?: string; evidence?: string[]; author: string },
 ): Promise<{ thread: Issue; outcomes: DispatchOutcome[] }> {
   const thread = propose(concern, { nodes: opts.nodes, body: opts.body, evidence: opts.evidence, author: opts.author })
-  const outcomes = await dispatchMentions(opts.body || concern, { threadId: thread.id, node: thread.nodes[0] || null, author: opts.author })
+  const outcomes = await dispatchMentions(opts.body || concern, { threadId: thread.id, node: thread.nodes[0] || null, author: opts.author, status: thread.status })
   return { thread, outcomes }
 }
 
@@ -328,7 +328,7 @@ export async function runPropose(args: string[]): Promise<number> {
     }
     const p = propose(concern, { nodes: repeated(args, 'node'), body: readBody(args), evidence: repeated(args, 'evidence') })
     console.log(`proposed '${p.id}'${p.nodes.length ? ` (re: ${p.nodes.join(', ')})` : ''} — committed to the forum; read it with \`spex issues\``)
-    const s = summarize(await dispatchMentions(p.body || concern, { threadId: p.id, node: p.nodes[0] || null, author: p.by }))
+    const s = summarize(await dispatchMentions(p.body || concern, { threadId: p.id, node: p.nodes[0] || null, author: p.by, status: p.status }))
     if (s) console.log(`  ${s}`)
     return 0
   } catch (e) {

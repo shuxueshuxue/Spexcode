@@ -6,7 +6,12 @@ const cache = new ForgeCache()
 let inFlight: Promise<void> | null = null
 // track last ATTEMPT, not last success, so the TTL also backs off failures — else a forge-less repo respawns `gh` every poll
 let lastAttempt = 0
-const TTL_MS = 60_000
+// tuned to the dashboard's LIVE cadence: the forum page re-polls /api/issues every ~15s and each poll
+// opportunistically triggers this refresh, so a TTL near the poll cadence means an externally-posted forge
+// issue surfaces on the board within ~one poll+cycle (~15–30s) with no page reload — the "post a github
+// issue → it just appears" contract. Each cycle is a tiny incremental read (one page), well inside
+// GitHub's rate budget; the back-off still covers a forge-less repo (a failed probe updates lastAttempt).
+const TTL_MS = 20_000
 // incremental-first: after the seeding full reconcile, each TTL cycle fetches only the updated-since
 // window (tiny — normally one page) and merges it; a periodic full reconcile stays as the backstop for
 // what an update window can't see (deleted/transferred issues).

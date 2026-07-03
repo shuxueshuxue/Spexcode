@@ -5,7 +5,7 @@ import { useT } from './i18n/index.jsx'
 
 // The ONE thread UI ([[issues-view]]): the reply list + the reply composer, shared by every home an
 // Issue thread renders in — the issue detail (BOTH stores: a forge issue's GitHub comments are the same
-// replies[], [[issues]]) and the eval detail ([[annotator]]). The composer is delivery-agnostic: the home
+// replies[], [[issues]]) and the eval detail ([[event-detail]]). The composer is delivery-agnostic: the home
 // passes `onSend(text, evidence)` (reply to an existing thread — the server routes it by the issue's store,
 // forum commit or real forge comment — or lazily create one), so the thread's binding stays the caller's
 // concern while the writing surface stays one component — an @-mention dispatches wherever it is typed,
@@ -37,20 +37,34 @@ export const anchorLine = (tMs, step) => `▶${mmss(tMs)}${step ? ` · ${step}` 
 // the blob hashes a body references (its frame links) — the send derives the thread's `evidence[]` from here.
 export const bodyEvidence = (body) => [...(body || '').matchAll(BLOB_URL)].map((m) => m[1])
 
-export function Replies({ replies, onSeek }) {
+// Over a clip ([[event-detail]]) the reply list is the review track: `selIdx`/`activeIdx` mark the explicitly
+// selected and the playhead-inside comments (in sync with the scrubber's markers), and clicking an anchor
+// chip both seeks AND selects (`onSelect(i, tMs)`) so keyboard jumps and marker clicks share one selection.
+// Off a clip these are all absent and a reply renders exactly as before. A reply that is a REMARK
+// ([[remark-substrate]] — it carries `rid`) shows its `resolved` bit: a resolved remark renders settled
+// (dimmed, ✓), an open one prominent — the loss the eval scoreboard is still carrying, made visible in place.
+export function Replies({ replies, onSeek, selIdx = null, activeIdx = null, onSelect = null }) {
+  const t = useT()
   return replies.map((r, i) => {
     const a = parseAnchor(r.body)
     const src = a ? a.rest : r.body
     const img = FRAME_MD.exec(src)                       // a circled-frame image renders here, not as raw md
     const prose = (img ? src.replace(img[0], '') : src).trim()
+    const isRemark = r.rid !== undefined
+    const remarkCls = isRemark ? (r.resolved ? ' remark resolved' : ' remark open') : ''
+    const cls = `fv-reply${selIdx === i ? ' sel' : ''}${activeIdx === i ? ' active' : ''}${remarkCls}`
+    const seek = a && onSeek ? () => (onSelect ? onSelect(i, a.tMs) : onSeek(a.tMs)) : null
     return (
-      <div className="fv-reply" key={i}>
+      <div className={cls} key={i}>
         <div className="fv-reply-meta">
           <span className="fv-reply-by">{r.by}</span>
           {r.at && <span className="fv-reply-at">{r.at}</span>}
-          {a && (onSeek
-            ? <button type="button" className="fv-anchor" onClick={() => onSeek(a.tMs)} title="seek the clip to this moment">{a.label}</button>
+          {a && (seek
+            ? <button type="button" className="fv-anchor" onClick={seek} title="seek the clip to this moment">{a.label}</button>
             : <span className="fv-anchor static">{a.label}</span>)}
+          {isRemark && (r.resolved
+            ? <span className="fv-remark-state resolved" title={r.resolvedBy ? t('thread.resolvedBy', { by: r.resolvedBy }) : t('thread.resolved')}>✓ {t('thread.resolved')}</span>
+            : <span className="fv-remark-state open" title={t('thread.openRemark')}>● {t('thread.openRemark')}</span>)}
         </div>
         {prose && <div className="fvd-body"><SpecBody body={prose} /></div>}
         {img && <img className="fv-frame-img" src={img[1]} alt="circled frame" />}

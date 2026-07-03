@@ -40,7 +40,7 @@ tag its own.
 
 **Rows are title-only, always** — verdict mark · scenario · node · evidence-kind tag · relative time —
 no media request of any kind in the list. Selecting a row opens it in the page's DETAIL pane as the
-[[annotator]] — media loads there, a `<video>` element exists only there. The group reports its visible
+[[event-detail]] — media loads there, a `<video>` element exists only there. The group reports its visible
 rows upward so the page's j/k walk one flat list across both groups; history drills down per scenario
 (the node's [[yatsu-eval-tab]] scaffold), not in the list.
 

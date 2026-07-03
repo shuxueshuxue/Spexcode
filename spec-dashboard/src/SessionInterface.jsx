@@ -931,7 +931,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               ))}
               {/* Proof tab — the review proof rendered INLINE (always available, not review-gated). Mounts on
                   each visit so it reflects the live derived diff/loss/gates ([[review-proof]]). */}
-              {rightTab === 'proof' && <SessionEvalPane sessionId={active} />}
+              {rightTab === 'proof' && <SessionEvalPane sessionId={active} specs={specs} sessions={sessions} />}
           </div>
         </section>
       </div>

@@ -3,38 +3,46 @@ scenarios:
   - name: annotate-seek-circle-file
     tags: [frontend-e2e]
     description: >
-      On #/forum, select a video reading (carrying a step-timeline sidecar) in the left list. In the
-      RIGHT detail pane: click a step on the ruler and read video.currentTime; press ⏱ in the review-track
-      composer and read the inserted anchor line; drag on the paused frame to circle a region, then read
-      the prefilled comment and send it; click the sent comment's anchor chip and read video.currentTime;
-      send another comment containing '@new'; file a fail reading; switch selection to another row and back.
+      On #/issues, select a video reading (carrying a step-timeline sidecar, its thread holding anchored
+      comments) in the left list. In the RIGHT detail pane, over the CUSTOM review-track player: read the
+      scrubber's comment markers + step bands + duration; click a comment marker and read video.currentTime
+      + which comment/marker highlights; play/pause and read the playhead-active comment as it advances;
+      frame-step with '.' and jump comments with ↑/↓ and read video.currentTime; press 'a' and read the
+      composer's stamped anchor; click a step on the ruler; drag on the paused frame to circle a region,
+      read the prefilled comment and send it; click the sent comment's anchor chip; file a fail reading;
+      switch selection to another row and back.
     expected: |
-      The eval detail IS the annotator — full pane height, no modal. The step ruler renders one button per
-      timeline event; clicking one SEEKS the video to its tMs (the blob route answers byte ranges —
-      without them the browser clamps to 0). ⏱ inserts a `▶m:ss · <step>` anchor line at the composer's
-      head (time + the ≤T step). A drag circles a region: the paused frame (rect burned in) is POSTed to
-      /api/yatsu/blob and the composer is prefilled with an anchored comment — the anchor line, a
-      `![frame](/api/yatsu/blob/<hash>)` link, and a `[[node]]` line when the step routes elsewhere.
-      Sending it creates/appends the eval's local Issue thread ('eval: <node> · <scenario>') with that
-      frame in the body AND on the thread's typed evidence[]; the sent comment shows an anchor chip that
-      SEEKS the clip on click and renders the circled frame inline. '@new' dispatches a fresh worker with
-      the anchor in its prompt ('@ new→<session>' echoes). The fail reading appends a manual@1 line
-      (verdict + note, NO marks transcript) to the sidecar. Switching selection resets the working draft.
+      The eval detail IS the event detail — full pane height, no modal — with a CUSTOM player (native chrome
+      replaced): a scrubber carrying the play-fill + knob, one MARKER per anchored comment at its moment,
+      and step BANDS from the timeline; a live time readout + a chip naming the step the playhead is in.
+      Clicking a marker SEEKS to that comment (the blob route answers byte ranges — without them the browser
+      clamps to 0) AND selects it: the marker and the comment both highlight, in sync. As the clip plays the
+      playhead-ACTIVE comment lights and the step chip flips at each boundary. The keyboard drives it —
+      space play/pause, ←→ ±5s (⇧ 1s), , . frame-fine, ↑↓ jump to the prev/next comment (seek + select),
+      'a' stamps a `▶m:ss · <step>` anchor into the composer (+ a `[[node]]` line when the step routes
+      elsewhere) and focuses it. The named-step ruler still click-seeks. A drag circles a region: the paused
+      frame (rect burned in) is POSTed to /api/yatsu/blob and the composer is prefilled with an anchored
+      comment — the anchor line, a `![frame](/api/yatsu/blob/<hash>)` link, and the routing line. Sending it
+      creates/appends the eval's local Issue thread ('eval: <node> · <scenario>') with that frame in the
+      body AND on the thread's typed evidence[]; the sent comment shows an anchor chip that SEEKS + selects
+      on click and renders the circled frame inline. '@new' dispatches a fresh worker with the anchor in its
+      prompt. The fail reading appends a manual@1 line (verdict + note, NO marks transcript) to the sidecar.
+      Switching selection resets the working draft.
   - name: image-lightbox
     tags: [frontend-e2e]
     description: >
-      On #/forum select an IMAGE reading. In the detail pane: read the image's cursor style, click it,
+      On #/issues select an IMAGE reading. In the detail pane: read the image's cursor style, click it,
       measure the overlay image's rendered size against the viewport, press Esc and read the page hash;
       reopen, click the backdrop.
     expected: |
       The evidence image invites the zoom (cursor zoom-in). A click opens a fixed full-viewport lightbox
       showing the SAME blob near viewport size (max ~96vw/96vh — the pane's width is no longer the
-      ceiling). Esc closes ONLY the lightbox — the page stays on #/forum, no page-level Esc handler
+      ceiling). Esc closes ONLY the lightbox — the page stays on #/issues, no page-level Esc handler
       fires; clicking anywhere on the overlay also closes it. Switching selection while open closes it.
   - name: eval-comments
     tags: [frontend-e2e]
     description: >
-      On #/forum select an eval. In the detail pane's comments section under the media: send a first
+      On #/issues select an eval. In the detail pane's comments section under the media: send a first
       comment; send a second; look for the thread in the issues group; send a third containing '@new'.
       Read /api/issues between sends.
     expected: |
@@ -47,7 +55,7 @@ scenarios:
   - name: ab-history-flip
     tags: [frontend-e2e]
     description: >
-      On #/forum, select a scenario that has MORE THAN ONE reading — a fail (A) followed by a pass (B). In
+      On #/issues, select a scenario that has MORE THAN ONE reading — a fail (A) followed by a pass (B). In
       the RIGHT detail pane, read the A/B strip's verdict pips and the position label; click the older
       (fail) pip (or press ‹) and read the header verdict badge, the expected/note text, and which evidence
       blob the media points at; then click the newest (pass) pip and read them again. Read the comment
@@ -61,7 +69,7 @@ scenarios:
       comment thread (bound by concern 'eval: <node> · <scenario>') is IDENTICAL across both flips — it is
       per-scenario, not per-reading, so the annotation track spans the whole A/B.
 ---
-# annotator loss
+# event-detail loss
 
 YATU through the real browser over a real backend: the seek, the ⏱ anchor, the circled-frame comment (its
 frame on /api/yatsu/blob and the thread's evidence[]), the anchor-chip seek, the @new dispatch, and the

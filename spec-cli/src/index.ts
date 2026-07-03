@@ -4,7 +4,7 @@ import { cors } from 'hono/cors'
 import { etag } from 'hono/etag'
 import { createNodeWebSocket } from '@hono/node-ws'
 import { loadSpecs, loadSpecsLite, specContent, specHistory, specDiffAt, loadConfig } from './specs.js'
-import { proposalsEnabled, forumPost, remarkOnHost, resolveRemark, retractRemark } from './proposals.js'
+import { proposalsEnabled, postLocalIssue, remarkOnHost, resolveRemark, retractRemark } from './proposals.js'
 import { mergedIssues, replyIssue } from './issues.js'
 import { residentForgeState, refreshForgeNow } from '../../spec-forge/src/resident.js'
 import { summarize } from './mentions.js'
@@ -189,7 +189,7 @@ app.post('/api/issues', async (c) => {
   const postBody = typeof body?.body === 'string' ? body.body : undefined
   // typed evidence[] — yatsu content-addressed hashes (the annotator's clip reference rides here, not prose)
   const evidence = Array.isArray(body?.evidence) ? (body.evidence as unknown[]).filter((h): h is string => typeof h === 'string' && /^[0-9a-f]{64}$/.test(h)) : []
-  const { thread, outcomes } = await forumPost(concern, { nodes, body: postBody, evidence, author: 'human' })
+  const { thread, outcomes } = await postLocalIssue(concern, { nodes, body: postBody, evidence, author: 'human' })
   return c.json({ ok: true, id: thread.id, outcomes: summarize(outcomes) }, 201)
 })
 

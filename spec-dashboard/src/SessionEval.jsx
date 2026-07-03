@@ -1,30 +1,40 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { EvalRow, entryKey } from './EvalsFeed.jsx'
-import Annotator from './Annotator.jsx'
+import EventDetail from './EventDetail.jsx'
 import { ScoreBadge } from './score.jsx'
 import { useT } from './i18n/index.jsx'
 
-// The session Eval tab ([[review-proof]]'s interactive face): the THIRD scope of the one eval component
-// family — node popup (one node) · forum (project) · here (this session's changed nodes, WORKTREE-rooted
-// readings). Master-detail like the forum: collapsed rows on the left (blind spots lead, then what THIS
-// session measured, newest first; everything earlier folds behind a count chip), the shared Annotator as
-// the full-height detail on the right. Rows are tier-1 JSON; evidence streams lazily on open — nothing is
-// inlined. The self-contained proof HTML remains as the EXPORT artifact behind the ↗ button.
-export default function SessionEvalPane({ sessionId }) {
+// The session Eval tab ([[review-proof]]'s interactive face): the THIRD home of the ONE EventDetail
+// component ([[event-detail]], U1) — node popup (one node) · issues page (project) · here (this session's
+// changed nodes, WORKTREE-rooted readings). Master-detail like the issues page: collapsed rows on the left
+// (blind spots lead, then what THIS session measured, newest first; everything earlier folds behind a count
+// chip), the shared EventDetail as the full-height detail on the right — the SAME media + remark thread +
+// composer, since the (node,scenario) thread rides each reading as `entry.thread` (the server overlay), so
+// there is no "no resident issues list" degradation: the composer authors remarks through /api/remarks.
+// Rows are tier-1 JSON; evidence streams lazily on open — nothing is inlined. The self-contained proof HTML
+// remains as the EXPORT artifact behind the ↗ button.
+export default function SessionEvalPane({ sessionId, specs = [], sessions = [] }) {
   const t = useT()
   const [model, setModel] = useState(null)     // null loading · false none
   const [onlySession, setOnlySession] = useState(false)   // focus filter: only what THIS session measured
   const [sel, setSel] = useState(null)
+  const seq = useRef(0)
+
+  // refetch the session evals model — the source that folds each reading's trunk remark thread (entry.thread),
+  // so a remark authored from the detail composer shows up here after it lands (a .forum commit fires no board
+  // SSE, so the write path pulls this explicitly). A seq guard drops a stale response from a prior session.
+  const loadModel = useCallback(() => {
+    const mine = ++seq.current
+    return fetch(`/api/sessions/${encodeURIComponent(sessionId)}/evals`)
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((m) => { if (mine === seq.current) setModel(m) })
+      .catch(() => { if (mine === seq.current) setModel(false) })
+  }, [sessionId])
 
   useEffect(() => {
-    let on = true
     setModel(null); setSel(null); setOnlySession(false)
-    fetch(`/api/sessions/${encodeURIComponent(sessionId)}/evals`)
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((m) => { if (on) setModel(m) })
-      .catch(() => { if (on) setModel(false) })
-    return () => { on = false }
-  }, [sessionId])
+    loadModel()
+  }, [sessionId, loadModel])
 
   // per node: blind-spot rows lead (declared, never measured — outstanding loss), then the latest reading
   // per scenario, in-session first / newest first; earlier-than-this-session folds behind the count chip.
@@ -95,7 +105,7 @@ export default function SessionEvalPane({ sessionId }) {
           })}
         </div>
         <div className="se-detail">
-          {selEntry?.kind === 'eval' && <Annotator entry={selEntry.item} />}
+          {selEntry?.kind === 'eval' && <EventDetail entry={selEntry.item} specs={specs} sessions={sessions} onWrite={loadModel} />}
           {selEntry?.kind === 'blind' && (
             <div className="an-detail">
               <header className="an-head">

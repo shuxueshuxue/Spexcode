@@ -43,7 +43,7 @@ export default {
     railLabel: 'main navigation',
     graph: 'Spec Node Graph (⌥1)',
     sessions: 'Session Board (⌥2)',
-    forum: 'Forum (⌥3 / ⌥F)',
+    issues: 'Issues (⌥3 / ⌥F)',
     settings: 'Settings (⌥4)',
   },
 
@@ -63,7 +63,10 @@ export default {
 
   annotator: {
     title: 'annotator',
-    hint: 'drag on the frame to circle a problem — it becomes an anchored comment below; or ⏱ to anchor a bare note to the moment.',
+    hint: 'click the frame to play/pause · drag to circle a problem — it becomes an anchored comment below; or ⏱ to anchor a bare note to the moment.',
+    keys: 'space play/pause · ←→ 5s (⇧ 1s) · , . frame · ↑↓ jump comment · a annotate frame',
+    play: 'play',
+    pause: 'pause',
     capturing: 'capturing frame…',
     notePh: 'note on the verdict…',
     fileReading: 'file reading',
@@ -78,6 +81,9 @@ export default {
   thread: {
     anchorNow: 'anchor',
     anchorTitle: 'anchor this comment to the current frame',
+    resolved: 'resolved',
+    resolvedBy: 'resolved by {by}',
+    openRemark: 'open',
   },
 
 
@@ -119,7 +125,7 @@ export default {
       overlayCycle: 'cycle through nodes a worktree is changing (⇧ reverse)',
       enter: 'cross into the focus node’s live session',
       fresh: 'start a fresh session on the focus node',
-      issues: 'open the issues page (local forum + forge, one list)',
+      issues: 'open the issues page (local issues + forge, one list)',
       newChild: 'new child node under the focus (chord)',
       del: 'delete the focused node (chord)',
       settings: 'open settings (language…)',
@@ -280,7 +286,7 @@ export default {
     newSessionTitle: 'New Session (⌥+N)',
     searchTitle: 'Search (⌘+/)',
     // the merged issues page ([[issues-view]]) — the second top pill beside New Session.
-    issuesOff: 'The forum workflow is off.',
+    issuesOff: 'The issues workflow is off.',
     issuesEmpty: 'No issues yet.',
     issuesLoading: 'loading issues…',
     issuesFocusNode: 'focus this node on the board',

@@ -9,7 +9,7 @@
 // (createIssue/createComment — the driver stays the only network toucher; the tracer stays read-only).
 import type { ForgeIssue, ForgePR } from '../../spec-forge/src/port.js'
 import { resolveLinks } from '../../spec-forge/src/links.js'
-import { loadProposals, loadOne, reply, resolve, proposalsEnabled, forumReply } from './proposals.js'
+import { loadProposals, loadOne, reply, resolve, proposalsEnabled, replyLocalIssue } from './proposals.js'
 import { dispatchMentions, type DispatchOutcome, type LoopIn } from './mentions.js'
 import { envSessionId } from './layout.js'
 import { loadSpecsLite } from './specs.js'
@@ -58,9 +58,15 @@ export type ForgeSlice = { host: string; state: ForgeState }
 export type RemarkTrack = { threadId: string; node: string; scenario: string; thread: Issue; remarks: Reply[] }
 
 // `eval: <node> · <scenario>` — node first (never contains ' · '), then the scenario (may). One thread per
-// pair (Annotator.jsx evalConcern / proposals.ts resolveRemarkHost mint it), so the last write wins is fine.
+// pair (EventDetail.jsx evalConcern / proposals.ts resolveRemarkHost mint it), so the last write wins is fine.
 const EVAL_CONCERN_RE = /^eval: (.+?) · (.+)$/
 export const trackKey = (node: string, scenario: string): string => `${node} · ${scenario}`
+
+// an eval-remark thread is the eval scoreboard's data, NOT a drain-worthy issue (I1: a scenario-scoped
+// concern is a remark, never an issue). Its `eval: <node> · <scenario>` concern is the tell — the SAME key
+// loadEvalRemarkTracks isolates them by. The two reads are complementary over one store: mergedIssues (the
+// ISSUE surfaces) excludes these; loadEvalRemarkTracks (the EVAL surfaces) keeps only these.
+export const isEvalConcern = (concern: string): boolean => EVAL_CONCERN_RE.test(concern)
 
 // read the whole forum ONCE and split the eval-concern threads out (directive 3): trunk-scoped, read-time,
 // no branch write. A remark whose scenario no longer exists still LOADS here (it just keys a pair no reading
@@ -106,14 +112,19 @@ export function fromForge(slice: ForgeSlice, nodeIds: string[]): Issue[] {
   }))
 }
 
-// the one merged read: local forum threads + the caller-supplied forge slice, ONE time line — the
+// the one merged read: local issue-store threads + the caller-supplied forge slice, ONE time line — the
 // stores are the same abstraction, so they interleave by creation time, newest first (never
 // store-grouped; a reader's eye lands on what just happened, whatever store holds it). CALLERS own
 // freshness — the server passes the resident cache's state (instant, background reconcile), the CLI a
-// live pull — so the merge itself stays pure.
+// live pull — so the merge itself stays pure. Eval-remark threads are SPLIT OUT read-time (isEvalConcern):
+// they are the eval scoreboard's data, not issues, so every issue surface this feeds — the Threads tab, the
+// board issue badge, the `spex issues` drain — is free of them by construction (they reach the EVAL side
+// through loadEvalRemarkTracks / the reading overlay instead).
 export function mergedIssues(forge: ForgeSlice | null, nodeIds: string[]): Issue[] {
   const remote = forge ? fromForge(forge, nodeIds) : []
-  return [...loadProposals(), ...remote].sort((a, b) => b.created.localeCompare(a.created))
+  return [...loadProposals(), ...remote]
+    .filter((i) => !isEvalConcern(i.concern))
+    .sort((a, b) => b.created.localeCompare(a.created))
 }
 
 // @@@ promote - the ONE cross-store verb ([[issues]]): a local concern that outgrew the repo moves to the
@@ -156,8 +167,8 @@ export async function replyIssue(
   if (!forge) {
     // evidence hashes accrue onto the local thread's typed evidence[] (a forge thread has no such field —
     // an annotation's frame rides its comment body's image link there, the driver the only network toucher);
-    // forumReply also loops in the thread's originator ([[mentions]]) after the @-dispatch.
-    const { thread, outcomes, loopIn } = await forumReply(id, body, author, opts.evidence)
+    // replyLocalIssue also loops in the thread's originator ([[mentions]]) after the @-dispatch.
+    const { thread, outcomes, loopIn } = await replyLocalIssue(id, body, author, opts.evidence)
     return { store: 'local', replies: thread.replies, outcomes, loopIn }
   }
   const { githubDriver } = await import('../../spec-forge/src/drivers/github.js')

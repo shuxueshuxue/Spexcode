@@ -58,7 +58,7 @@ the fail→pass **A/B pair** the [[reproduce-before-fix]] contract requires (the
 verified fix, two readings on one [[yatsu-core]] scenario). So the trunk driver's admission does not invent
 a new proof artifact; it points at the one the eval timeline already holds — the delivered work references
 the governing node whose scenario carries the pair, and the pair rides along as the loss signal that
-justifies the merge (the [[annotator]] is where a reviewer flips A↔B). This stays a *reference*, not a copy:
+justifies the merge (the [[event-detail]] is where a reviewer flips A↔B). This stays a *reference*, not a copy:
 git/`.spec` remains the single source of truth for the readings, exactly as destination-single keeps
 delivery from duplicating what a mirror observes. A non-repair delivery (new intent, no prior failure) has
 no A to reproduce and carries none — the proof is the discipline for repair, not a tax on every landing.

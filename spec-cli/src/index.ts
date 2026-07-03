@@ -15,6 +15,7 @@ import { gitA, gitTry, repoRoot } from './git.js'
 import { newSession, listSessions, sendKeys, rawKey, exitSession, closeSession, reopen, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, superviseQueue } from './sessions.js'
 import { defaultHarness, HARNESSES } from './harness.js'
 import { evalTimeline, readBlobByHash } from '../../spec-yatsu/src/evaltab.js'
+import { putBlob } from '../../spec-yatsu/src/cache.js'
 import { yatsuNodes } from '../../spec-yatsu/src/yatsu.js'
 import { fileHumanReading } from '../../spec-yatsu/src/filing.js'
 import { buildProofModel, renderProofHtml, buildSessionEvals } from '../../spec-yatsu/src/proof.js'
@@ -117,6 +118,16 @@ app.get('/api/yatsu/blob/:hash', (c) => {
   }
   return c.body(new Uint8Array(r.bytes), 200, base)
 })
+// the WRITE half of the blob store ([[annotator]]): the annotator captures a circled video frame to a PNG
+// and stashes the bytes here, content-addressed (same putBlob the yatsu cache uses). The returned hash is
+// what an anchored comment references (image link in the body, and the typed evidence[] on its thread) —
+// bytes never enter git. Raw body, sniffed by the same content-addressed name. Empty → 400, over cap → 413.
+app.post('/api/yatsu/blob', async (c) => {
+  const buf = Buffer.from(await c.req.arrayBuffer())
+  if (buf.length === 0) return c.json({ error: 'empty blob' }, 400)
+  if (buf.length > MAX_UPLOAD_BYTES) return c.json({ error: 'blob too large' }, 413)
+  return c.json({ hash: putBlob(buf) }, 201)
+})
 app.get('/api/layout', async (c) => c.json(await resolveLayout()))
 // the `surface: command` config-root plugins (built/active only) for the new-session `/` dropdown — each with
 // its prompt `body` ({{targets}} placeholder), `kind`, and folder `dir` + co-located `files`. surface is a
@@ -143,13 +154,16 @@ app.post('/api/issues/:id/reply', async (c) => {
   const body = await c.req.json().catch(() => ({}))
   const text = typeof body?.body === 'string' ? body.body : ''
   if (!text.trim()) return c.json({ error: 'empty reply' }, 400)
+  // typed evidence[] — an anchored annotation's frame-blob hashes accrue onto the local thread (same shape
+  // as the create route); a forge reply ignores them (its frame rides the comment body's image link).
+  const evidence = Array.isArray(body?.evidence) ? (body.evidence as unknown[]).filter((h): h is string => typeof h === 'string' && /^[0-9a-f]{64}$/.test(h)) : []
   const id = c.req.param('id')
   try {
     // the mention prompt's node context, from the same resident merge the GET serves
     const node = id.includes('#')
       ? mergedIssues({ host: 'github', state: residentForgeState() }, loadSpecsLite().map((s) => s.id)).find((i) => i.id === id)?.nodes[0] ?? null
       : null
-    const r = await replyIssue(id, text, { author: 'human', node })
+    const r = await replyIssue(id, text, { author: 'human', node, evidence })
     if (r.store !== 'local') await refreshForgeNow()
     return c.json({ ok: true, replies: r.replies, url: r.url, outcomes: summarize(r.outcomes) })
   } catch (e) {

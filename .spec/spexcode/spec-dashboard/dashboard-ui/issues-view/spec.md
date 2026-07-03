@@ -86,10 +86,16 @@ reply/propose the CLI uses, committed straight to the trunk.
   node leading), a pick inserts the token, and Esc closes the menu without leaving the page. A grammar
   that dispatches workers earns discoverability — a bare hint line proved not enough (the human typed
   `@` and got nothing).
-  The reply list and reply composer are ONE shared component (`Thread.jsx`), delivery-agnostic (`onSend`):
-  the issue detail replies to its thread — both stores, the server routing the delivery — and the eval
-  detail ([[annotator]]) renders the SAME thread UI — autocomplete included — over its lazily-bound eval
-  comment thread; one thread UI, every home, the store just a fourth delivery behind the same seam.
+  The reply list and reply composer are ONE shared component (`Thread.jsx`), delivery-agnostic
+  (`onSend(text, evidence)`): the issue detail replies to its thread — both stores, the server routing the
+  delivery — and the eval detail ([[annotator]]) renders the SAME thread UI — autocomplete included — over
+  its lazily-bound eval comment thread; one thread UI, every home, the store just a fourth delivery behind
+  the same seam. A reply is TIME-ANCHORED by a prose convention (same philosophy as `Spec:`/`[[node]]`): a
+  body whose first line reads `▶m:ss · <step>` IS anchored to a video moment — `Thread` linkifies it (click
+  = seek, when the home supplies the clip) and, over a clip, the composer grows a ⏱ affordance that stamps
+  the current frame; a circled frame rides the body as an image link whose hash the send derives as the
+  thread's typed `evidence[]` (the frame-blob write is [[annotator]]'s). The reply stays plain
+  `{ by, at, body }` — no schema grows, and a raw reader still sees the `▶m:ss` line.
 - **Honors the switch.** When the forum workflow is OFF (`enabled: false`, [[proposals]]'s toggle), the
   view shows a muted "off" state instead of the list — the dashboard reflects the one source of truth,
   never forks it.

@@ -1017,9 +1017,24 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .fv-link:hover { text-decoration: underline; }
 .fv-text { font-family: var(--mono); font-size: 12px; line-height: 1.6; color: var(--ink2); white-space: pre-wrap; }
 .fv-reply { margin-top: 10px; padding-left: 12px; border-left: 2px solid var(--line); }
-.fv-reply-meta { display: flex; gap: 8px; margin-bottom: 3px; font-family: var(--mono); font-size: 10.5px; }
+.fv-reply-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; font-family: var(--mono); font-size: 10.5px; }
 .fv-reply-by { color: var(--blue); font-weight: 600; }
 .fv-reply-at { color: var(--muted); }
+/* a time anchor (`▶m:ss · step`) on a reply — a clickable chip that seeks the clip; static (no video) reads plain. */
+.fv-anchor { font-family: var(--mono); font-size: 10.5px; color: var(--orange); background: color-mix(in srgb, var(--orange) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--orange) 35%, var(--line)); border-radius: 3px; padding: 1px 6px; cursor: pointer; }
+.fv-anchor:hover { background: var(--orange); color: var(--paper); }
+.fv-anchor.static { cursor: default; }
+.fv-anchor.static:hover { background: color-mix(in srgb, var(--orange) 12%, transparent); color: var(--orange); }
+/* a circled frame carried inline by an anchored comment. */
+.fv-frame-img { display: block; max-width: 100%; margin-top: 6px; border: 1px solid var(--line); border-radius: 4px; }
+/* the composer's staged frame previews (derived from the draft's blob links). */
+.fv-frames { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+.fv-frame { height: 48px; border: 1px solid var(--line); border-radius: 4px; }
+/* ⏱ — stamp the current frame's anchor onto the comment (only over a clip). */
+.fv-anchor-btn { font-family: var(--mono); font-size: 10.5px; color: var(--orange); background: var(--panel2);
+  border: 1px solid color-mix(in srgb, var(--orange) 35%, var(--line)); border-radius: 4px; padding: 3px 10px; cursor: pointer; }
+.fv-anchor-btn:hover { background: var(--orange); color: var(--paper); }
 
 /* the human write path ([[issues-view]]): the New form in the group head + a reply composer in the detail. */
 .fv-new-btn {
@@ -1493,13 +1508,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .an-ruler { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 0 0; }
 .an-step { font: inherit; font-size: 11px; color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 2px 8px; cursor: pointer; }
 .an-step.on { border-color: var(--green); color: var(--ink); }
-.an-marks { padding: 8px 0 0; }
-.an-hint { color: var(--muted); font-size: 11px; }
-.an-mark { display: flex; align-items: center; gap: 6px; margin: 4px 0; }
-.an-mark-t { font-size: 11px; color: var(--muted); min-width: 90px; }
-.an-mark-node { width: 130px; font: inherit; font-size: 11px; color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 3px 6px; }
-.an-mark-c { flex: 1; font: inherit; font-size: 12px; color: var(--ink); background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 3px 8px; }
-.an-mark-x { font: inherit; color: var(--muted); background: none; border: 0; cursor: pointer; }
+.an-hint { color: var(--muted); font-size: 11px; padding: 8px 0 0; }
 .an-actions { display: flex; align-items: center; gap: 10px; padding: 12px 0 0; flex-wrap: wrap; }
 .an-act { font: inherit; font-size: 12px; color: var(--ink); background: var(--panel2); border: 1px solid var(--blue); border-radius: 5px; padding: 4px 12px; cursor: pointer; }
 .an-act:disabled { opacity: .45; cursor: default; }

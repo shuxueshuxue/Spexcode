@@ -653,6 +653,11 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 }
 .sess-status { color: var(--muted); flex: none; }   /* colour overridden inline by STATUS_COLOR */
 .sess-ops { color: var(--ov, var(--blue)); font-weight: 700; flex: none; }
+/* launcher badge ([[launcher-select]]) — which named launcher a session launched under: the harness vendor
+   glyph + the launcher name, muted so it reads as metadata, not a status. Sits in the meta line beside the ops. */
+.sess-launcher { flex: none; display: inline-flex; align-items: center; gap: 3px; color: var(--muted); min-width: 0; }
+.sess-launcher .si-agent-glyph { width: 11px; height: 11px; }
+.sess-launcher-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 10ch; }
 /* compact one-line face: the status word collapses to a single glyph (STATUS_GLYPH), painted by STATUS_COLOR
    inline; the exact word stays on the title/aria for hover + a11y. */
 .sess-glyph { flex: none; width: 12px; text-align: center; font-size: 11px; line-height: 1; }

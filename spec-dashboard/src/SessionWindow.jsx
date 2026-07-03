@@ -3,6 +3,7 @@ import { Avatar } from './avatar.jsx'
 import { labelColor } from './color.js'
 import { GLYPH } from './SpecNode.jsx'
 import { sessionName, sessionHeadline, STATUS_COLOR, STATUS_GLYPH, sessionForest } from './session.js'
+import { HARNESS_BY_ID } from './harness.jsx'
 import { useT } from './i18n/index.jsx'
 
 // the "locked / claimed by another session" indicator — a monochrome inline-SVG padlock in the dashboard's
@@ -12,6 +13,19 @@ export const LockGlyph = ({ size = 12 }) => (
     <rect x="3.5" y="7" width="9" height="6.5" rx="1.2" /><path d="M5.5 7 V5 a2.5 2.5 0 0 1 5 0 V7" />
   </svg>
 )
+
+// @@@ LauncherBadge ([[launcher-select]]) — which NAMED launcher a session launched under, so "did it actually
+// launch with claude-glm?" is answerable at a glance without opening the terminal. The launcher's harness vendor
+// glyph (the SAME mark the New-Session picker draws) + the launcher NAME. Renders nothing for a session with no
+// launcher (an old record or a zero-config launch) — only a deliberately-named launch earns the badge.
+function LauncherBadge({ launcher, harness }) {
+  const Glyph = (HARNESS_BY_ID[harness] || HARNESS_BY_ID.claude).Glyph
+  return (
+    <span className="sess-launcher" title={`launcher: ${launcher}`}>
+      <Glyph /><span className="sess-launcher-name">{launcher}</span>
+    </span>
+  )
+}
 
 export function opSummary(ops) {
   if (!ops.length) return null
@@ -78,6 +92,7 @@ export function SessionRow({ s, locked, showAvatar = true, compact = false, lead
           ? <span className="sess-glyph" style={{ color: STATUS_COLOR[s.status] }} title={statusWord} aria-label={statusWord}>{STATUS_GLYPH[s.status]}</span>
           : <span className="sess-status" style={{ color: STATUS_COLOR[s.status] }}>{statusWord}</span>}
         {ops && <span className="sess-ops">{ops}</span>}
+        {s.launcher && <LauncherBadge launcher={s.launcher} harness={s.harness} />}
       </span>
       <span className="sess-id" title={headline}>{headline}</span>
       {locked && <span className="sess-lock" title={t('sessionWindow.lockedTitle')}><LockGlyph /></span>}

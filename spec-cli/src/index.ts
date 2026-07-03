@@ -13,7 +13,7 @@ import { buildBoard } from './board.js'
 import { boardStream, notifyBoardChanged } from './boardStream.js'
 import { gitA, gitTry, repoRoot } from './git.js'
 import { newSession, listSessions, sendKeys, rawKey, exitSession, closeSession, reopen, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, superviseQueue } from './sessions.js'
-import { defaultHarness, HARNESSES, launcherList } from './harness.js'
+import { defaultHarness, HARNESSES, launcherList, defaultLauncher } from './harness.js'
 import { evalTimeline, readBlobByHash } from '../../spec-yatsu/src/evaltab.js'
 import { putBlob } from '../../spec-yatsu/src/cache.js'
 import { yatsuNodes } from '../../spec-yatsu/src/yatsu.js'
@@ -134,9 +134,14 @@ app.get('/api/layout', async (c) => c.json(await resolveLayout()))
 // frontmatter field, not a dir (specs.ts loadSurface); `surface: system` siblings are gathered elsewhere.
 app.get('/api/config', (c) => c.json(loadConfig()))
 // the named launcher profiles ([[launcher-select]]) the New-Session form's dropdown offers — `{ name, harness }`
-// only (the `cmd` is a host secret, never shipped to the browser). Empty when a project configured none, so the
-// form falls back to the plain harness picker.
-app.get('/api/launchers', (c) => c.json(launcherList().map(({ name, harness }) => ({ name, harness }))))
+// only (the `cmd` is a host secret, never shipped to the browser) — plus the configured `default` NAME so the
+// dropdown pre-selects the SAME launcher a bare `spex new` uses (the CLI/config default), instead of the
+// alphabetically-first one. `launchers` is empty (and `default` '') when a project configured none, so the form
+// falls back to the plain harness picker.
+app.get('/api/launchers', (c) => c.json({
+  launchers: launcherList().map(({ name, harness }) => ({ name, harness })),
+  default: defaultLauncher(),
+}))
 // the ISSUES read surface ([[issues]]) for the dashboard's issues page — the merged list over every store
 // (local forum threads + the resident forge slice), the SAME mergedIssues() the CLI drain reads, verbatim
 // (the dashboard computes nothing over it: no re-sort, no salience ranking). The `enabled` flag mirrors

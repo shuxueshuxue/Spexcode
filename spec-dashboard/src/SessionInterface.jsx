@@ -5,6 +5,7 @@ import { labelColor } from './color.js'
 import { sessionForest } from './session.js'
 import { MENTION_RE, specPath, highlight, nodeMentionAt, actorMentionAt, MentionMenu } from './mentions.jsx'
 import { SessionRow, RowLead, useFold } from './SessionWindow.jsx'
+import { HARNESSES, HARNESS_BY_ID } from './harness.jsx'
 import SessionContextMenu from './SessionContextMenu.jsx'
 import SessionEvalPane from './SessionEval.jsx'
 import { useResizable } from './useResizable.js'
@@ -22,16 +23,6 @@ const AttachGlyph = () => (
 const BusyGlyph = () => (
   <svg className="si-attach-busy" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
     <circle cx="8" cy="8" r="5.5" opacity="0.3" /><path d="M8 2.5 a5.5 5.5 0 0 1 5.5 5.5" />
-  </svg>
-)
-const AnthropicGlyph = () => (
-  <svg className="si-agent-glyph" viewBox="0 0 24 24" aria-hidden="true">
-    <path d="M17.3041 3.541h-3.6718l6.696 16.918H24Zm-10.6082 0L0 20.459h3.7442l1.3693-3.5527h7.0052l1.3693 3.5528h3.7442L10.5363 3.5409Zm-.3712 10.2232 2.2914-5.9456 2.2914 5.9456Z" />
-  </svg>
-)
-const OpenAIGlyph = () => (
-  <svg className="si-agent-glyph" viewBox="0 0 24 24" aria-hidden="true">
-    <path d="M22.282 9.821a6 6 0 0 0-.516-4.91a6.05 6.05 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a6 6 0 0 0-3.998 2.9a6.05 6.05 0 0 0 .743 7.097a5.98 5.98 0 0 0 .51 4.911a6.05 6.05 0 0 0 6.515 2.9A6 6 0 0 0 13.26 24a6.06 6.06 0 0 0 5.772-4.206a6 6 0 0 0 3.997-2.9a6.06 6.06 0 0 0-.747-7.073M13.26 22.43a4.48 4.48 0 0 1-2.876-1.04l.141-.081l4.779-2.758a.8.8 0 0 0 .392-.681v-6.737l2.02 1.168a.07.07 0 0 1 .038.052v5.583a4.504 4.504 0 0 1-4.494 4.494M3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085l4.783 2.759a.77.77 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646M2.34 7.896a4.5 4.5 0 0 1 2.366-1.973V11.6a.77.77 0 0 0 .388.677l5.815 3.354l-2.02 1.168a.08.08 0 0 1-.071 0l-4.83-2.786A4.504 4.504 0 0 1 2.34 7.872zm16.597 3.855l-5.833-3.387L15.119 7.2a.08.08 0 0 1 .071 0l4.83 2.791a4.494 4.494 0 0 1-.676 8.105v-5.678a.79.79 0 0 0-.407-.667m2.01-3.023l-.141-.085l-4.774-2.782a.78.78 0 0 0-.785 0L9.409 9.23V6.897a.07.07 0 0 1 .028-.061l4.83-2.787a4.5 4.5 0 0 1 6.68 4.66zm-12.64 4.135l-2.02-1.164a.08.08 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08L8.704 5.46a.8.8 0 0 0-.393.681zm1.097-2.365l2.602-1.5l2.607 1.5v2.999l-2.597 1.5l-2.607-1.5Z" />
   </svg>
 )
 
@@ -121,16 +112,6 @@ function matchConfig(presets, query) {
 // flags one of OUR commands (close/merge/nav/proof) — it runs HERE, not in the agent (see boardCommandsFor).
 const SRC_TAG = { user: '(user)', project: '(project)', skill: '[skill]', 'built-in': 'built-in', board: '[board]' }
 
-// the harnesses the backend can launch (spec-cli/src/harness.ts HARNESSES) — `claude` is the default. The
-// New Session box lets the user pick one; its id rides along in the POST /api/sessions body.
-const HARNESSES = [
-  { id: 'claude', label: 'Claude Code', Glyph: AnthropicGlyph },
-  { id: 'codex', label: 'Codex', Glyph: OpenAIGlyph },
-]
-// harness id → its vendor mark, so the launcher picker can show the SAME glyph the icon-only harness
-// radios use for the launcher's harness (a native <option> is text-only, so the glyph rides beside the
-// <select>, not inside it). Unknown/absent harness falls back to claude, the launcher default.
-const HARNESS_BY_ID = Object.fromEntries(HARNESSES.map((h) => [h.id, h]))
 
 export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, onOpenSearch, reload }) {
   const t = useT()
@@ -213,12 +194,20 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     loadConfig().then((d) => { if (Array.isArray(d)) setPresets(d) }).catch(() => {})
   }, [])
   // fetch the configured launcher profiles once; if a project has any, the New box picks one by name (the pick
-  // rides in the POST body as `launcher`). Snap the remembered pick to a still-valid one, else the first.
+  // rides in the POST body as `launcher`). Initial selection HONORS the config default so the dashboard agrees
+  // with the CLI (`spex new` with no --launcher uses `defaultLauncher`): remembered localStorage pick (if still
+  // valid) → configured `default` → first. Without this the dropdown silently pre-selected the alphabetically
+  // first launcher, disagreeing with the config default — a user "testing claude-glm" could get another launcher.
   useEffect(() => {
     loadLaunchers().then((d) => {
-      if (!Array.isArray(d) || !d.length) return
-      setLaunchers(d)
-      setLauncher((cur) => (d.some((l) => l.name === cur) ? cur : d[0].name))
+      const list = d?.launchers
+      if (!Array.isArray(list) || !list.length) return
+      setLaunchers(list)
+      setLauncher((cur) => {
+        if (list.some((l) => l.name === cur)) return cur   // a still-valid remembered pick wins
+        if (d.default && list.some((l) => l.name === d.default)) return d.default   // else the configured default
+        return list[0].name   // else the first
+      })
     }).catch(() => {})
   }, [])
   // /api/config returns only command-surface nodes, so the presets ARE the launchable set — no client filter.

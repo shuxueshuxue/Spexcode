@@ -47,9 +47,13 @@ it inherits the node's whole `code:` list. So two scenarios on one node, trackin
 independently — one node's loss is many signals, not one. A file governed by more scenarios than `maxOwners`
 is the `yatsu-owners` smell (split it). Measurements live apart in a flat
 **yatsu.evals.ndjson** sidecar — one JSON line per reading (scenario, codeSha, blob+blobKind, a video
-reading's optional timelineBlob ([[step-timeline]]), evaluator,
-**verdict**, ts) — the second git-as-database axis: a reading commit is a *measurement event*, not a spec
-version, so history and attribution apply unchanged.
+reading's optional timelineBlob ([[step-timeline]]), evaluator, an optional **`by`** (the SESSION that filed
+it, from envSessionId), **verdict**, ts) — the second git-as-database axis: a reading commit is a *measurement
+event*, not a spec version, so history and attribution apply unchanged. `by` is a different axis than
+`evaluator`: `evaluator` is WHO/WHAT measured (a tag like `manual@1`), `by` is the reachable session behind the
+filing — the ORIGINATOR an eval-comment thread loops in on a reply ([[mentions]]). It is purely additive: a
+legacy reading without it simply has no originator, so the loop-in stays silent; the dashboard annotator's
+human `manual@1` filing has no reachable session and omits it too.
 
 The **verdict** is the loss against `expected`: `pass` or `fail`. Either may carry an optional **note** — a
 one-line annotation (why it failed, how far a pass sits from ideal). A note is an annotation *on* the verdict,

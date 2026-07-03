@@ -44,6 +44,13 @@ grammar is uniform, the logic is tiny.
 - **No new delivery pipe.** `@session` → [[dispatch]]'s `sendKeys` (a prompt = the surrounding text + a
   pointer to where it was written); `@new` → [[launch]]'s `newSession` (a fresh worker). Offline/unreachable
   fails loud (the `DispatchResult`), and the text still persists for the drain.
+- **A reply has two delivery paths; only the explicit `@` is ASSIGNMENT.** Beside it, a committed reply
+  gets an **implicit originator loop-in** — a *courtesy* copy to whoever ORIGINATED the thread, over the SAME
+  resolution + `sendKeys`, delivered ONLY if they are online. Courtesy ≠ assignment: silent when offline
+  (never a spawn or drain — only `@new` spawns), skipped when the originator is the replier or was already an
+  explicit `@`-target. It carries the reply verbatim and is reported distinct from the `@`-dispatch. Who the
+  originator is belongs to the *thread*: a forum author, or an eval-comment thread's reading-filer
+  ([[yatsu-core]]) — a forge author is a github login resolving to nobody, silent by construction.
 - **The drain guard: `@new` on a settled thread must not respawn its work.** Dispatch carries the thread's
   lifecycle status from the calling surface (the local forum always knows it; a forge reply's state is
   unknown at write time — no guard there). On a non-open thread `@new` still spawns (the summons may be a

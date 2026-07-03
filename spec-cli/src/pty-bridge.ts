@@ -399,11 +399,32 @@ export function forwardWheel(id: string, up: boolean, col: number, row: number, 
 // The capture frame broadcasts synchronously at its block-end, so any %output that follows in the stream
 // lands AFTER the frame and is never overwritten by it — the frame is the attach seed, %output the live tail.
 //
-// A FULL frame (attach / re-bind / reconnect — b.needsFull) leads with the mode prelude so the renderer mirrors
-// the pane's terminal modes. History is not copied into xterm's own scrollback: wheel navigation is tmux-owned,
-// so both FULL frames and resizes capture the current tmux view only. Each frame leads with an SGR reset + an
-// OSC 8 hyperlink close, then a `\x1b[H\x1b[2J` clear (viewport only, never `\x1b[3J`), so no attribute or
-// open-hyperlink state can leak across the clear from the prior frame.
+// A frame is a COMPLETE reconstruction of the pane's terminal state at the converged size — so the live
+// %output that follows renders coherently on top of it. A `capture-pane` seed carries only the GRID (cells +
+// their attributes + hyperlinks, byte-verbatim); the frame wraps the rest of the state around it, in stream
+// order:
+//   modes  — alt-screen + mouse tracking, reconstructed from the pane's live flags (FULL frames only — a
+//            plain resize keeps the modes the browser already holds; control mode never re-emits them).
+//   pen    — reset SGR + close any open OSC 8 hyperlink, so no attribute/hyperlink state leaks across the
+//            clear from the prior frame (xterm renders an unclosed hyperlink as a whole-screen underline).
+//   clear  — blank the viewport (`\x1b[H\x1b[2J`, never the scrollback `\x1b[3J`).
+//   grid   — the captured rows, joined at the BYTE level so a wide char / an OSC 8 ST is never string-mangled.
+//   cursor — put the cursor where the pane REALLY has it, so a relative live redraw resumes from the right
+//            origin. An inline TUI (Ink) erases its previous frame by moving up from where it left the cursor
+//            — which sits on the input line, above trailing hint rows; a frame that left the cursor at the
+//            body's end would make the next redraw erase the wrong rows and double the bottom UI.
+// Each live-view rendering bug was ONE missing piece of this reconstruction (a mangled grid byte, a leaked
+// hyperlink, a dropped cursor); building the whole state in one place is what keeps them all fixed.
+function reconstructFrame(mode: PaneMode, lines: Buffer[], full: boolean): Buffer {
+  const modes = full ? paneModePrelude(mode) : ''
+  const pen = '\x1b[m\x1b]8;;\x1b\\'
+  const clear = '\x1b[H\x1b[2J'
+  const cursor = `\x1b[${mode.cursorY + 1};${mode.cursorX + 1}H`
+  return Buffer.concat([Buffer.from(modes + pen + clear, 'utf8'), joinLines(lines), Buffer.from(cursor, 'utf8')])
+}
+
+// every (re)attach and resize routes here to broadcast one reconstructed frame (see reconstructFrame). The
+// frame reflects the pane at its command boundary, so live %output that follows lands after it, never under it.
 async function repaint(b: Bridge): Promise<void> {
   const token = ++b.repaintToken
   const want = `${b.cols}x${b.rows}`
@@ -413,26 +434,12 @@ async function repaint(b: Bridge): Promise<void> {
   await awaitLayout(b, want)
   if (token !== b.repaintToken) return
   const mode = await readPaneMode(b.id)
-  const prelude = full ? paneModePrelude(mode) : ''
   if (token !== b.repaintToken) return
   b.paneInMode = mode.inMode
   b.cmdQ.push((lines) => {
     if (token !== b.repaintToken) return
     if (full) b.needsFull = false   // cleared only once the full frame actually reaches a viewer
-    // capture-pane reply lines are RAW bytes (real escapes + UTF-8, not octal-escaped); replay them under the
-    // mode prelude + a clean base + clear+home so the frame is one coherent screen (plus, on a full frame,
-    // seeded history). Before the clear we reset SGR (`\x1b[m`) and close any dangling OSC 8 hyperlink
-    // (`\x1b]8;;\x1b\\`): capture re-emits every cell's attributes and per-row hyperlink opens, so the frame
-    // is self-contained — but if the PRIOR frame's last visible row left a hyperlink open (its close sat below
-    // the capture window), that open would otherwise persist across this viewport clear and underline the whole
-    // screen (xterm renders OSC 8 links underlined). The reset+clear is ASCII; the body is joined at the BYTE
-    // level so a wide char is never string-mangled. The frame ENDS by placing the cursor where the pane really
-    // has it (`\x1b[y;xH`): capture seeds the grid but not the cursor, and a live TUI's next %output redraws
-    // RELATIVE to the cursor (Ink erases its previous frame by moving up N lines from where it left off) — so a
-    // frame that left the cursor at the body's end would make the resumed redraw erase the wrong rows, doubling
-    // the bottom UI. This matters exactly on copy-mode exit, where held-back %output resumes onto the re-seed.
-    const cur = `\x1b[${mode.cursorY + 1};${mode.cursorX + 1}H`
-    broadcast(b.id, Buffer.concat([Buffer.from(prelude + '\x1b[m\x1b]8;;\x1b\\\x1b[H\x1b[2J', 'utf8'), joinLines(lines), Buffer.from(cur, 'utf8')]))
+    broadcast(b.id, reconstructFrame(mode, lines, full))
   })
   const cap = capturePaneCommand(b, mode)
   try { b.pty.write(cap + '\n') } catch { b.cmdQ.pop() }

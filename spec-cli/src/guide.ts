@@ -247,7 +247,31 @@ Example — govern your own source dir and loosen the altitude budget:
   private     (spexcode.local.json ONLY) private-overlay mode — when true, \`spex materialize\` leaves ZERO
               trace in the host's TRACKED files: managed ignore entries go to .git/info/exclude and any
               tracked contract file is marked skip-worktree. Trades away git-derived spec version history.
-              A HOST decision → never the committed file.`
+              A HOST decision → never the committed file. See PRIVATE MODE below.
+
+── PRIVATE MODE (default ⇄ private — the two delivery modes) ──
+DEFAULT mode (private absent/false): materialize commits .spec + spexcode.json and writes its ignore list as
+a managed block in the TRACKED .gitignore — transparent, but every collaborator sees it. PRIVATE mode
+(spexcode.local.json { "private": true }): the SAME contract reaches the agent, but the ignore list goes to
+the per-clone .git/info/exclude and any host-tracked CLAUDE.md/AGENTS.md is skip-worktree'd — so \`git status\`
+stays clean and nothing enters shared history.
+
+  Switch:   edit spexcode.local.json  ({ "private": true } on / false or remove = off), then \`spex materialize\`
+            (the hook gate also re-runs it on the next agent turn).
+  Reversible + idempotent: the two modes fully CANCEL OUT. default→private→default (or private→default→private)
+            converges to the SAME on-disk state as running that mode once — each mode re-asserts the inverse of
+            the other (exclude block ⇄ .gitignore block, skip-worktree set ⇄ cleared). Switch order never
+            matters; running a mode twice changes nothing.
+
+MANUAL STEP (the only one materialize can't do for you — it also PRINTS this when needed):
+  .git/info/exclude hides UNTRACKED paths only. If you adopted DEFAULT mode first, .spec + spexcode.json are
+  already committed, so private mode can't hide them until you un-track them ONCE:
+      git rm -r --cached .spec spexcode.json     # keeps the files on disk, stops tracking them
+  (then commit that on your branch). A private-from-the-start adoption never needs this.
+
+FOOTGUN (skip-worktree): a host-tracked CLAUDE.md/AGENTS.md is skip-worktree'd in private mode, so a later
+  \`git pull\` that touches it can complain. Fix: flip back to DEFAULT mode (or \`git update-index
+  --no-skip-worktree CLAUDE.md AGENTS.md\`), pull, then re-materialize.`
 
 const TOPICS: Record<string, string> = { spec: SPEC, yatsu: YATSU, config: CONFIG }
 

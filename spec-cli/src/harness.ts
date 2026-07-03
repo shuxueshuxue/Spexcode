@@ -616,7 +616,12 @@ export function removeManagedBlock(file: string, comment: readonly [string, stri
   const re = new RegExp(`\\n*${esc(START)}[\\s\\S]*?${esc(END)}\\n*`)
   const cur = existsSync(file) ? readFileSync(file, 'utf8') : ''
   if (!re.test(cur)) return
-  const out = cur.replace(re, '\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n')
+  // remove ONLY our block plus the blank lines writeManagedBlock inserted around it; do NOT normalize the
+  // user's OWN whitespace elsewhere — this must leave every other byte intact so it is a faithful INVERSE of
+  // writeManagedBlock's append. A global `\n{3,}→\n\n` collapse used to sit here and mutated pre-existing
+  // blank-line runs in the user's file, which broke the private⇄default round-trip ([[private-overlay]]):
+  // default→private→default left a spurious one-line diff on a .gitignore that had internal blank lines.
+  const out = cur.replace(re, '\n').replace(/^\n+/, '')
   if (deleteIfEmpty && !out.trim()) { rmSync(file, { force: true }); return }
   writeFileSync(file, out)
 }

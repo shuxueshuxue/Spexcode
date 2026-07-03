@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { activeTurnIdFromThread, codexAppServerSock, codexBinary, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, codexLaunchCommand, removeManagedBlock, launcherList, resolveLauncher } from './harness.js'
+import { activeTurnIdFromThread, codexAppServerSock, codexBinary, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, codexLaunchCommand, writeManagedBlock, removeManagedBlock, launcherList, resolveLauncher } from './harness.js'
 
 test('codex handshake initializes, confirms the loaded thread, then reads it to decide steer-vs-start', () => {
   const msgs = codexHandshakeMessages('thr_1')
@@ -167,6 +167,23 @@ test('removeManagedBlock strips ONLY the sentinel block, preserving the user byt
   writeFileSync(g, '<!-- spexcode:start -->\nx\n<!-- spexcode:end -->\n')
   removeManagedBlock(g, ['<!-- ', ' -->'], true)
   assert.ok(!existsSync(g))
+})
+
+test('managed-block write→remove is a BYTE-FAITHFUL round-trip (preserves the user\'s own whitespace) — the private⇄default cancel-out invariant', () => {
+  const proj = mkdtempSync(join(tmpdir(), 'spex-mb-rt-'))
+  const f = join(proj, '.gitignore')
+  // user content carrying an INTERNAL blank-line run — the exact shape a global `\n{3,}→\n\n` collapse mangled
+  const G = 'node_modules/\nartifacts/\n\n\n# section two\ndist/\n'
+  writeFileSync(f, G)
+  writeManagedBlock(f, 'a.sock\nb.json', ['# ', ''])
+  assert.ok(readFileSync(f, 'utf8').includes('# spexcode:start'), 'block was written')
+  removeManagedBlock(f, ['# ', ''], false)
+  assert.equal(readFileSync(f, 'utf8'), G, 'remove must restore the user file BYTE-for-byte (incl the \\n\\n\\n run)')
+  // idempotent: writing the same block twice yields one block, identical bytes
+  writeManagedBlock(f, 'a.sock\nb.json', ['# ', ''])
+  const once = readFileSync(f, 'utf8')
+  writeManagedBlock(f, 'a.sock\nb.json', ['# ', ''])
+  assert.equal(readFileSync(f, 'utf8'), once, 'writeManagedBlock is idempotent')
 })
 
 test('claude clean SURGICALLY removes only spexcode artifacts, sparing user prose + sibling files', () => {

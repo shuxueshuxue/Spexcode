@@ -34,11 +34,15 @@ test('private-overlay: on a host that pre-tracks CLAUDE.md/AGENTS.md/.gitignore,
   g('config', 'user.email', 't@t.co'); g('config', 'user.name', 't')
   writeFileSync(join(proj, 'CLAUDE.md'), '# team notes\nkeep me\n')
   writeFileSync(join(proj, 'AGENTS.md'), '# team agents\nkeep me\n')
-  writeFileSync(join(proj, '.gitignore'), 'node_modules/\n')
+  // an INTERNAL blank-line run in the user's .gitignore — the shape the round-trip must preserve exactly
+  writeFileSync(join(proj, '.gitignore'), 'node_modules/\nartifacts/\n\n\ndist/\n')
   g('add', '-A'); g('commit', '-qm', 'init')
 
-  // adopt SpexCode (DEFAULT render), then flip to PRIVATE
+  // adopt SpexCode (DEFAULT render) — capture its canonical .gitignore for the cancel-out check below
   spex('init', '.')
+  const gitignoreDefault = readFileSync(join(proj, '.gitignore'), 'utf8')
+  assert.ok(gitignoreDefault.includes('spexcode:start') && gitignoreDefault.includes('\n\n\ndist/'), 'default block written, user blank-line run intact')
+  // flip to PRIVATE
   writeFileSync(join(proj, 'spexcode.local.json'), '{"private":true}\n')
   spex('materialize')
 
@@ -64,4 +68,8 @@ test('private-overlay: on a host that pre-tracks CLAUDE.md/AGENTS.md/.gitignore,
   assert.ok(!readFileSync(join(proj, '.git', 'info', 'exclude'), 'utf8').includes('spexcode:start'), 'info/exclude block stripped')
   assert.ok(readFileSync(join(proj, '.gitignore'), 'utf8').includes('spexcode:start'), '.gitignore block restored')
   assert.equal(lsv('CLAUDE.md'), 'H', 'CLAUDE.md skip-worktree cleared')
+
+  // (6) CANCEL-OUT: default→private→default lands the .gitignore BYTE-for-byte back to the default render —
+  // switching modes and back is a no-op on the tracked file (this fails if remove mangles the user's whitespace)
+  assert.equal(readFileSync(join(proj, '.gitignore'), 'utf8'), gitignoreDefault, 'default→private→default restores .gitignore exactly (idempotent cancel-out)')
 })

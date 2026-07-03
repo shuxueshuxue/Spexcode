@@ -32,11 +32,16 @@ delivers the SAME contract but routes every seam that would touch shared history
 - any folded-into contract file the host ALREADY tracks is marked `skip-worktree`, so the block sits in the
   working copy — the harness still auto-discovers it, the user's own prose intact — yet never stages.
 
-It is a reversible toggle, not a trap-door: the default render re-asserts the inverse of each step (exclude
-block stripped, `.gitignore` block restored, `skip-worktree` cleared), so flipping back leaves no residue —
-the same *stamped, visible, reversible* invariant the rest of [[footprint]] keeps. It hides UNTRACKED paths;
-a spec tree already committed to the host must be un-tracked once by hand, which the render reports rather than
-silently attempting. The deliberate trade is history: with `.spec` kept out of the host's commits there is no
+It is not merely reversible but an IDEMPOTENT toggle: the two modes fully CANCEL OUT. default→private→default
+(or private→default→private) converges to the SAME on-disk state as running that mode once — each mode
+re-asserts the inverse of the other (exclude block ⇄ `.gitignore` block, `skip-worktree` set ⇄ cleared), so
+switch order never matters and running one mode twice changes nothing. This holds only because the managed-block
+writer and its remover are exact inverses — the remover strips our block WITHOUT touching the user's own
+whitespace (a global collapse there once left a one-line `.gitignore` diff on the round-trip). The single thing
+the render cannot undo for the user: `.git/info/exclude` hides UNTRACKED paths only, so a `.spec`/`spexcode.json`
+already committed under default mode must be un-tracked once by hand — materialize PRINTS that `git rm --cached`
+instruction when it detects the state, and `spex guide config` documents the mode switch + this step, since an
+agent does the setup. The deliberate trade is history: with `.spec` kept out of the host's commits there is no
 git-derived version timeline ([[source-of-truth]]) — current-state governance, lint, and yatsu still measure,
 but the recent/history tabs go quiet. Regaining full history invisibly (a detached spec repo) is a larger,
 separate concern this mode does not attempt.

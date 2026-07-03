@@ -27,7 +27,10 @@ proposal, an annotation, a question) is what its prose says.
 `nodes[]` is the binding to the graph; `status` is the issue's OWN lifecycle,
 authored in its store, never git-derived (a node *defines*, an issue *does* — [[spec-forge]]'s two-plane
 contract holds here unchanged). `evidence[]` is a list of yatsu content-addressed blob hashes — the typed
-target [[video-evidence]] points at when a video finding routes to the responsible node's concern.
+target [[video-evidence]] points at when a video finding routes to the responsible node's concern. A reply
+may itself be a **remark** ([[remark-substrate]]) — the same `{by, at, body}` shape plus a mutable
+`resolved` bit and the reading it was authored against — but that is one reply carrying extra state, not a
+second thread type; a plain reply is unchanged.
 
 **Two stores, one translation rule.** The **local** store is the forum ([[proposals]] owns its whole
 mechanism — venue, file format, lock, trunk commit); a forum thread *is* a local Issue, its `store` implied

@@ -2,7 +2,7 @@
 title: CI-Gate-Spex-forge
 status: pending
 hue: 280
-desc: PENDING design — the forge CI Gate. Turns any external PR into a reviewed object judged against spec intent, then writes the verdict back to the forge. The scoping parent; its four children own the new capabilities. No code yet.
+desc: PENDING design — the INWARD half of the [[deliver-port]] framework: an external PR enters as a from-PR session and is delivered a VERDICT (Check + comment). The scoping parent; its children are the forge + verdict drivers. No code yet.
 related:
   - spec-forge/src/port.ts
   - spec-yatsu/src/proof.ts
@@ -14,6 +14,16 @@ A **pending** design contract — the scope, not the implementation. It marries 
 already carries: [[ci-gate]] (the non-bypassable CI backstop running `spex lint` + `tsc`) and
 [[spec-forge]] (the read-only forge tracer that resolves an issue/PR to the node it serves). The gap
 between them is the whole node:
+
+**This gate is not a standalone feature — it is one direction of the [[deliver-port]] framework.** An
+external PR arrives as a [[session-origin]] `pr`-origin session whose default landing place is
+`destination: verdict`; delivering that verdict (a Check + a sticky comment) is exactly what this subtree
+builds. So this whole cluster is the **verdict driver** of the deliver port (plus the **forge driver**'s
+write verbs it stands on) — the *inward* half (external PR → reviewed → accepted or rejected), mirror of
+the *outward* half (our own session → a PR). The earlier reading of this node as a standalone "outward CI
+gate" is superseded: it is a subset of the symmetric deliver framework, and when a maintainer accepts a
+PR the same session simply retargets to `destination: trunk` and the trunk driver's gate takes over — no
+separate merge path.
 
 > take the **[[review-proof]]** derived-evidence model — today fed only by an internal session's worktree —
 > generalize its root to **any PR branch**, add an **agentic conformance verdict** on top, and write that
@@ -46,13 +56,15 @@ definition (the graph) and execution (the forge) stay un-crossed, exactly as the
 
 ## the decomposition — what each child owns
 
-- **[[forge-write-seam]]** — the write verbs the read-only [[port]] lacks (post a Check, upsert a sticky
-  comment), behind the same host-agnostic seam.
-- **[[conformance-judge]]** — the per-node agentic intent verdict (Tier 1) and its deterministic Tier-0.5
-  spec-touch input. The agentic core.
-- **[[forge-gate]]** — the `spex forge gate <PR>` orchestration + the CI workflow that runs it; also the
-  one change to [[review-proof]]/[[manager-cockpit]] that generalizes the evidence root from a session
-  worktree to any PR ref.
+- **[[forge-write-seam]]** — the [[deliver-port]] **forge driver**'s write verbs the read-only [[port]]
+  lacks (open/update a PR; post a Check; upsert a sticky comment), behind the same host-agnostic seam.
+  These are what BOTH the forge driver (outward: our session → PR) and the verdict driver (inward: Check +
+  comment) deliver through.
+- **[[conformance-judge]]** — the [[deliver-port]] **verdict driver**'s core: the per-node agentic intent
+  verdict (Tier 1) and its deterministic Tier-0.5 spec-touch input.
+- **[[forge-gate]]** — the verdict driver's orchestration: `spex forge gate <PR>` + the CI workflow that
+  runs it; also the one change to [[review-proof]]/[[manager-cockpit]] that generalizes the evidence root
+  from a session worktree to any PR ref (which is what a [[session-origin]] `pr` session already is).
 - **[[dashboard-prs]]** — the dashboard surface: a PR badge, a review lane, a PR proof overlay (the
   open-PR sibling [[dashboard-issues]] deferred).
 

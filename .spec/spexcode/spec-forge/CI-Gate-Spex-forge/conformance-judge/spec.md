@@ -9,8 +9,9 @@ related:
 ---
 # conformance-judge
 
-The agentic heart of [[CI-Gate-Spex-forge]] — and the LLM judge [[spec-lint]] explicitly deferred ("whether
-the code still matches what the spec *says* is the LLM judge's job, async, not in the commit path").
+The agentic core of the [[deliver-port]] **verdict driver** ([[CI-Gate-Spex-forge]]) — and the LLM judge
+[[spec-lint]] explicitly deferred ("whether the code still matches what the spec *says* is the LLM judge's
+job, async, not in the commit path").
 
 **Determinism routes; the agent judges.** Routing is mechanical — the `code:` graph already maps each
 changed file to its node. The judge appears only where *meaning* must be weighed: does this slice of the

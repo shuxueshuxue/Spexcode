@@ -110,16 +110,20 @@ async function scan(args: string[] = []): Promise<number> {
           }
         }
         const codeFiles = sc.code?.length ? sc.code : s.code   // scenario's own subset, else the node's list
+        // carry the scenario's tags on the finding line — its SURFACE (e.g. frontend-e2e = browser-measured)
+        // is what routes a drift/missing gap to the right measuring hand, so the proactive nudge and a human
+        // reading `spex yatsu scan` both see whether this stale score needs a real e2e/browser pass to refresh.
+        const tagStr = sc.tags?.length ? ` [${sc.tags.join(',')}]` : ''
         const r = latest.get(sc.name)
         if (!r) {
           missingScores++
-          findings.push(`  • yatsu-missing: '${s.id}' scenario '${sc.name}' has no reading yet — measure with \`spex yatsu eval ${s.id}\``)
+          findings.push(`  • yatsu-missing: '${s.id}' scenario '${sc.name}'${tagStr} has no reading yet — measure with \`spex yatsu eval ${s.id}\``)
           continue
         }
         const axes = staleAxes(r, codeFiles, y.yatsuPath, idx, hidx)
         if (axes.length) {
           staleScores++
-          findings.push(`  • yatsu-drift: '${s.id}' scenario '${sc.name}' is stale (${axes.join(', ')} changed since ${r.codeSha.slice(0, 7)}) — re-measure with \`spex yatsu eval ${s.id}\``)
+          findings.push(`  • yatsu-drift: '${s.id}' scenario '${sc.name}'${tagStr} is stale (${axes.join(', ')} changed since ${r.codeSha.slice(0, 7)}) — re-measure with \`spex yatsu eval ${s.id}\``)
         }
       }
     } else if (s.code.some(isUiPath)) {

@@ -265,7 +265,20 @@ The Codex impl of the adapter must encode these (measured against a real self-la
   `SPEXCODE_SESSION_ID`), then fires the prompt as the FIRST turn — materializing the thread's rollout on disk,
   which the visible `codex --remote unix://<sock> resume <tid>` TUI then renders natively (VERIFIED: the TUI
   resumes a backend-created thread once it has ≥1 turn, and a later `turn/steer`/`turn/start` also renders live
-  in the pane). Follow-up delivery opens a WebSocket to the same socket's `/rpc` and `turn/steer`/`turn/start`s
+  in the pane). That resume reads the thread's ROLLOUT FILE
+  (`<CODEX_HOME>/sessions/YYYY/MM/DD/rollout-<ts>-<tid>.jsonl`), so a resumable thread is exactly one whose
+  rollout exists — and that file has a **WARM-UP RACE** the launch must wait out (VERIFIED live, codex 0.142.5):
+  `thread/start` ALONE writes no rollout (only a fired turn does), and a **freshly-spawned** app-server acks
+  thread/start+turn but persists the rollout ~2-4s LATE — the SAME thread's file lands a few seconds after, it is
+  not lost. A launch that hands the id to `resume` immediately dies with "no rollout found for thread id", and the
+  launch retry loop then misreads that fast failure as a daemon race, sprays fresh threads, and stores the last
+  (non-resumable) id — wedging every future reopen. The guard is ONE waypoint: `codex-launch` fires the first turn
+  then WAITS (`waitForCodexRollout`, 20s) for the rollout to land BEFORE it stores `harness_session_id` or prints
+  the id — so the id it returns is always resume-ready, and a genuine miss FAILS LOUD (non-zero, stores nothing;
+  launch.sh aborts rather than `resume ""`). The 20s budget deliberately exceeds launch.sh's fast-fail threshold,
+  so a real failure exits PAST it and the retry loop treats it as a true end, never a duplicate-prompt respray —
+  turning a silent permanent wedge into an honest, non-duplicating retry. No cold-branch pre-warm is needed: the
+  wait absorbs the warm-up on the first launch after a server boot (a few extra seconds in `starting`). Follow-up delivery opens a WebSocket to the same socket's `/rpc` and `turn/steer`/`turn/start`s
   the OWNED thread id. The app-server is a shared control plane, not a session identity; session routing is
   solely the owned Codex thread id, so several `spexcode serve` processes never cross-send. Delivery falls back
   to reading the one loaded thread (`thread/loaded/list`) only for a pre-existing session whose id was never

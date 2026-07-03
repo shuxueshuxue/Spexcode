@@ -44,28 +44,27 @@ scenarios:
       with the config default) is gone.
     code: spec-dashboard/src/SessionInterface.jsx
     related: spec-cli/src/index.ts, spec-cli/src/harness.ts
-  - name: session-row-shows-its-launcher
+  - name: launcher-persisted-not-badged-on-board
     tags: [frontend-e2e, desktop]
     description: >-
-      Through the REAL dashboard, measure that a launched session SHOWS which launcher it ran under. On a
-      project with named launchers whose harnesses differ (a `claude`-harness launcher and a `codex`-harness
-      launcher), launch one session under each named launcher (via the New-Session box or `spex new
-      --launcher <name>`). Open the session list (the map-side SessionWindow and the console's own list) and,
-      for each launched row, read the launcher badge: `.sess-launcher` present, its `.sess-launcher-name`
-      text equal to the launcher name, and `.sess-launcher .si-agent-glyph` rendering the matching harness
-      vendor glyph (Anthropic for the claude launcher, OpenAI for the codex launcher). Cross-check the source:
-      the session's `/api/board` (and `/api/sessions`) payload now carries `launcher`. Then confirm the
-      negative: a session launched with NO named launcher (a zero-config/old session) shows NO `.sess-launcher`
-      badge. Screenshot the list with the badges visible.
+      Through the REAL dashboard, measure that a session's launcher is DURABLE DATA but is NOT rendered as a
+      per-session board badge (the badge was removed as visual clutter). Drive a real browser at the dashboard
+      and feed the session list a session whose `/api/board` (and `/api/sessions`) payload carries a
+      `launcher` (e.g. `launcher: "claude-glm"`, `harness: "claude"`) — the exact data that WOULD have drawn
+      the old badge. Open the session list (the map-side SessionWindow and the console's own list) and read
+      the DOM: assert NO `.sess-launcher` element renders on any row (the badge is gone from the component
+      entirely), while the row itself still renders normally. Cross-check the source: the `launcher` field IS
+      still present on the board/sessions payload (the data is kept, only the board render is dropped).
+      Screenshot the clean list (no launcher badges).
     expected: >-
-      Each session row badges the launcher it launched under: the `.sess-launcher-name` reads the launcher's
-      name (e.g. `claude-glm`) and the adjacent `.si-agent-glyph` is the SELECTED launcher's harness vendor
-      mark (the SAME glyph the New-Session picker uses) — so "did it actually launch with claude-glm?" is
-      answerable at a glance without opening the terminal. The `launcher` field is present on the session's
-      board/sessions payload. A session with no named launcher renders no badge at all (the badge marks a
-      deliberately-named launch, not a zero-config one).
+      No session row shows a launcher badge — `document.querySelectorAll('.sess-launcher').length === 0` even
+      for a session whose payload carries a `launcher` — so the board reads clean, without a harness glyph +
+      name on every row. The `launcher` field remains on the session's board/sessions payload (persisted and
+      API-exposed for any surface that needs it); the wrong-launcher confusion is closed at create time by the
+      default-honoring picker ([[dropdown-honors-default-launcher]]), not by after-the-fact board badging. The
+      old per-row `.sess-launcher` / `.sess-launcher-name` / `.si-agent-glyph` badge is gone.
     code: spec-dashboard/src/SessionWindow.jsx
-    related: spec-cli/src/sessions.ts, spec-dashboard/src/harness.jsx
+    related: spec-cli/src/sessions.ts
 ---
 # yatsu.md — launcher-select
 

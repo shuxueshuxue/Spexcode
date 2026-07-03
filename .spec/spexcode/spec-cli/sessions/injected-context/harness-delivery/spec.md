@@ -73,8 +73,10 @@ on the next re-materialize, the same back-edge the natives have).
 Placement is harness-fact, not preference (verified): Codex auto-discovers ONLY the repo-root `./AGENTS.md`
 (never `.codex/AGENTS.md`); Claude discovers `./CLAUDE.md` or `./.claude/CLAUDE.md`. Every in-tree artifact this
 render writes is generated, so materialize gitignores it — a managed `#` block in `<repo>/.gitignore` whose
-entries are the adapters' own `contractFiles()` + `shimFile()`s + skill `SKILL.md`s (the user's existing
-.gitignore is preserved), all re-rendered per clone/machine, never committed. The
+entries are the adapters' own `contractFiles()` + `shimFile()`s + skill `SKILL.md`s, plus SpexCode's own
+per-clone SESSION artifacts (`.worktrees/` — where a launch plants its worktrees — and the `.session` state
+file), never the adopter's code (the user's existing .gitignore is preserved), all re-rendered per clone/
+machine, never committed. The
 **contract files** join that block precisely because their whole content is generated (the docs guide + the
 system block) — they carry no committed prose of their own; only the guide SOURCE (`docs/AGENT_GUIDE.md`) is
 tracked. The shim files additionally carry THIS machine's absolute install path, so they are also machine-local.

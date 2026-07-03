@@ -282,6 +282,25 @@ scenarios:
       survives the round-trip: its multi-line draft is still there AND its rendered height matches the pre-switch
       height (re-fit to the persisted draft on remount) — it is never collapsed back to a single row.
     related: spec-dashboard/src/SessionEval.jsx
+  - name: launcher-picker-opens-on-click
+    tags: [frontend-e2e, desktop]
+    description: >
+      Through the running dashboard in a real browser, with the project configured with named launchers
+      ([[launcher-select]]) so the New-Session composer shows the launcher `<select>` (`.si-launcher-select`)
+      in place of the harness radios. Open the New Session tab and dispatch a REAL pointer mousedown at the
+      centre of the select (not a programmatic `selectOption`, which bypasses the mousedown path that is the
+      whole bug). A native `<select>` opens its dropdown ON the mousedown default action, so the measurable
+      fingerprint is whether the panel-level focus-retention handler (`keepFocus`) cancels that default:
+      attach a one-shot `mousedown` listener on the select, dispatch the pointer, and read the event's
+      `defaultPrevented` after the bubbling panel handler has run. Corroborate that the control is
+      pointer-interactable (its value changes) and screenshot the composer.
+    expected: |
+      The mousedown's `defaultPrevented` is FALSE — the composer's focus retention no longer cancels the
+      select's default action, so the native launcher dropdown opens on a real click and the picker is
+      operable by the pointer (its value follows the chosen option). Focus retention still blankets the
+      inert chrome; it just spares native form controls (`<select>`/`<option>`) that own their own
+      mousedown. Regression guard: with the `keepFocus` select exemption removed, the same measurement
+      reads `defaultPrevented` TRUE and the dropdown never opens.
 ---
 
 # session-console — yatsu

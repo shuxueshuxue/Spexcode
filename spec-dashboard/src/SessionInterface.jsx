@@ -662,6 +662,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     if (e.button !== 0) return
     const t = e.target
     if (isTextField(t)) return
+    // a native <select> opens its dropdown ON the default mousedown action — preventDefault would suppress
+    // it from ever opening (the launcher picker), so leave native form controls alone. Focus retention only
+    // needs to blanket the inert chrome, not the interactive controls that own their own mousedown.
+    if (t.closest && t.closest('select')) return
     // the terminal owns its own text selection — preventing default on it would break the drag-select.
     if (t.closest && t.closest('.si-term-body')) return
     e.preventDefault()

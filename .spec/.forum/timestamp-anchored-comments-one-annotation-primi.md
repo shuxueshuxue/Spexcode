@@ -1,7 +1,7 @@
 ---
 concern: timestamp-anchored comments: ONE annotation primitive for eval review [[issues-view]]
 by: 60b8fd9a-08c5-4d8e-9139-84d75c065a8c
-status: open
+status: landed
 nodes: issues-view
 created: 2026-07-03T01:38:47.097Z
 ---

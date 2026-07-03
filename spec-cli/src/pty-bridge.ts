@@ -50,8 +50,12 @@ type PaneMode = {
   mouseSgr: boolean
   scrollPosition: number
   paneHeight: number
+  cursorX: number
+  cursorY: number
 }
-const PANE_MODE_FORMAT = '#{pane_in_mode},#{alternate_on},#{mouse_standard_flag},#{mouse_button_flag},#{mouse_any_flag},#{mouse_sgr_flag},#{scroll_position},#{pane_height}'
+// cursor_x/cursor_y are the underlying program's cursor (0-based), NOT the copy-mode cursor — so a frame can
+// restore it and any following live %output that moves the cursor RELATIVELY resumes from the right origin.
+const PANE_MODE_FORMAT = '#{pane_in_mode},#{alternate_on},#{mouse_standard_flag},#{mouse_button_flag},#{mouse_any_flag},#{mouse_sgr_flag},#{scroll_position},#{pane_height},#{cursor_x},#{cursor_y}'
 const flag = (v?: string) => v === '1'
 function num(v?: string): number {
   const n = Number(v)
@@ -317,7 +321,7 @@ export function attachViewer(id: string, v: Viewer, initialSize?: { cols: number
 
 async function readPaneMode(id: string): Promise<PaneMode> {
   const raw = await tmuxOut(['display-message', '-p', '-t', id, '-F', PANE_MODE_FORMAT])
-  const [inMode, alternate, mouseStandard, mouseButton, mouseAny, mouseSgr, scrollPosition, paneHeight] = raw.split(',')
+  const [inMode, alternate, mouseStandard, mouseButton, mouseAny, mouseSgr, scrollPosition, paneHeight, cursorX, cursorY] = raw.split(',')
   return {
     inMode: flag(inMode),
     alternate: flag(alternate),
@@ -327,6 +331,8 @@ async function readPaneMode(id: string): Promise<PaneMode> {
     mouseSgr: flag(mouseSgr),
     scrollPosition: num(scrollPosition),
     paneHeight: num(paneHeight),
+    cursorX: num(cursorX),
+    cursorY: num(cursorY),
   }
 }
 
@@ -420,8 +426,13 @@ async function repaint(b: Bridge): Promise<void> {
     // is self-contained — but if the PRIOR frame's last visible row left a hyperlink open (its close sat below
     // the capture window), that open would otherwise persist across this viewport clear and underline the whole
     // screen (xterm renders OSC 8 links underlined). The reset+clear is ASCII; the body is joined at the BYTE
-    // level so a wide char is never string-mangled.
-    broadcast(b.id, Buffer.concat([Buffer.from(prelude + '\x1b[m\x1b]8;;\x1b\\\x1b[H\x1b[2J', 'utf8'), joinLines(lines)]))
+    // level so a wide char is never string-mangled. The frame ENDS by placing the cursor where the pane really
+    // has it (`\x1b[y;xH`): capture seeds the grid but not the cursor, and a live TUI's next %output redraws
+    // RELATIVE to the cursor (Ink erases its previous frame by moving up N lines from where it left off) — so a
+    // frame that left the cursor at the body's end would make the resumed redraw erase the wrong rows, doubling
+    // the bottom UI. This matters exactly on copy-mode exit, where held-back %output resumes onto the re-seed.
+    const cur = `\x1b[${mode.cursorY + 1};${mode.cursorX + 1}H`
+    broadcast(b.id, Buffer.concat([Buffer.from(prelude + '\x1b[m\x1b]8;;\x1b\\\x1b[H\x1b[2J', 'utf8'), joinLines(lines), Buffer.from(cur, 'utf8')]))
   })
   const cap = capturePaneCommand(b, mode)
   try { b.pty.write(cap + '\n') } catch { b.cmdQ.pop() }

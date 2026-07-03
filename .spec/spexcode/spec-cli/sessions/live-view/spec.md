@@ -8,6 +8,7 @@ code:
   - spec-dashboard/src/SessionTerm.jsx
   - spec-cli/test/pty-bridge.stress.ts
   - spec-cli/test/pty-bridge.osc8.ts
+  - spec-cli/test/pty-bridge.scroll-redraw.ts
 ---
 
 # live-view
@@ -118,7 +119,13 @@ scrollback. **Every** frame leads with an SGR reset **and an OSC 8 hyperlink clo
 before that clear, so no attribute or open-hyperlink state can leak across the clear from the prior frame:
 `capture-pane -e` re-emits each cell's attributes and each row's hyperlink opens, so the frame is self-contained
 — but a link whose close sat just below the previous capture window would otherwise stay open and underline the
-new screen.
+new screen. And every frame **ends by placing the cursor where the pane really has it** (`\x1b[y;xH` from the
+pane's `cursor_x`/`cursor_y`): a capture restores the grid but not the cursor, and a live inline TUI's next
+`%output` redraws **relative to the cursor** (Ink erases its previous frame by moving up from where it left off,
+which sits on the input line *above* the trailing hint rows, not at the body's end). Leaving the cursor at the
+body's end would make the resumed redraw erase the wrong rows and **double the bottom UI** — the "bottom garbles
+when I scroll up then back down" glitch, since copy-mode exit is exactly when held-back `%output` resumes onto a
+re-seed.
 
 ## scrolling — the pane's real history, through tmux
 

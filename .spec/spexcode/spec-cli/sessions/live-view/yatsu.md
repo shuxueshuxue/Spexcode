@@ -77,6 +77,23 @@ scenarios:
       rest of the screen. The bug path (running capture-reply BODY lines through the DCS-exit strip, which eats
       a trailing `\x1b\\`) must be absent: capture bodies are pushed byte-verbatim, and each frame additionally
       leads with an SGR reset + OSC 8 close so no open-hyperlink state survives the viewport clear.
+  - name: scroll-updown-no-doubled-redraw
+    tags: [backend-api]
+    description: >-
+      Measure the "bottom garbles when I scroll up then back down" regression through the real bridge. Run an
+      Ink-style redrawer in a tmux pane that reproduces the real pane shape — the cursor parked on the input
+      line ABOVE trailing content (a separator + hint), redrawing each frame RELATIVE to that parked cursor
+      (up to the frame top, clear to end, rewrite). Attach a viewer through the real API (attachViewer), send
+      wheel-up frames (forwardWheel) to enter copy-mode and freeze while the pane keeps advancing, then
+      wheel-down past the bottom to exit copy-mode and resume live output onto the re-seed. Replay the bytes the
+      bridge broadcast through a small VT emulator and count how many copies of the frame's single marker line
+      survive on the final screen. File with `spex yatsu eval live-view --scenario
+      scroll-updown-no-doubled-redraw --result <txt>`.
+    expected: >-
+      Exactly ONE copy of the frame's marker on the final screen — the copy-mode-exit re-seed restored the
+      pane's real cursor position (`\x1b[y;xH` from cursor_x/cursor_y), so the TUI's next cursor-relative redraw
+      erased its previous frame from the right row. The bug path (a re-seed that leaves the cursor at the body's
+      end) doubles the frame — the old and new bottom UI stacked — and must be absent.
   - name: output-preserves-utf8-wide-chars
     tags: [backend-api]
     description: >-

@@ -258,7 +258,22 @@ export function activeTurnIdFromThread(readResult: unknown): string | null {
   return active?.id ?? null
 }
 
-export function codexLaunchCommand(_id: string, codexCmd = process.env.SPEXCODE_CODEX_CMD || 'codex --yolo', serverCmd = process.env.SPEXCODE_CODEX_SERVER_CMD || 'codex', dir = runtimeRoot()): string {
+// The app-server and the visible `--remote … resume` TUI share ONE socket, so they MUST be the SAME codex
+// install — a version split across that socket breaks the thread/start→resume handoff (an app-server on one
+// version creates a thread a differently-versioned resume can't find; an old-enough app-server can't serve
+// `--remote unix://` at all). So `serverCmd` is DERIVED from the in-effect `codexCmd`'s binary (its first shell
+// token, dropping args like `--yolo`) whenever it isn't explicitly forced: `<bin> app-server` then runs the
+// SAME install as `<bin> --remote … resume`. Bare `codex` is NOT the default anymore — on a multi-install host
+// (e.g. homebrew codex shadowing an nvm codex) a bare `codex` resolves via the login-shell PATH to a DIFFERENT
+// binary than the launcher's, which is exactly the version-skew bug. `SPEXCODE_CODEX_SERVER_CMD` stays the
+// explicit escape hatch (highest precedence). Caveat: if `codexCmd`'s first token is a WRAPPER script rather
+// than codex itself, the derived `<wrapper> app-server` only works if the wrapper forwards to codex — the
+// common direct-binary case (`codex …`, `/abs/codex --yolo`) is what this fixes.
+export function codexBinary(codexCmd: string): string {
+  return codexCmd.trim().split(/\s+/)[0] || 'codex'
+}
+export function codexLaunchCommand(_id: string, codexCmd = process.env.SPEXCODE_CODEX_CMD || 'codex --yolo', serverCmd?: string, dir = runtimeRoot()): string {
+  const server = process.env.SPEXCODE_CODEX_SERVER_CMD || serverCmd || codexBinary(codexCmd)
   const sock = codexAppServerSock(dir)         // short sun_path-safe path off tmpdir/override — NOT under "$dir"
   const pid = codexAppServerPid(dir)
   const log = join(dir, 'codex-app-server.log')
@@ -290,7 +305,7 @@ export function codexLaunchCommand(_id: string, codexCmd = process.env.SPEXCODE_
     'if [ -S "$sock" ] && [ -s "$pid" ] && ! kill -0 "$(cat "$pid")" 2>/dev/null; then rm -f "$sock"; fi',
     'if [ ! -S "$sock" ]; then',
     // </dev/null detaches the daemon's stdin from the pane so it can't fight the TUI for the tty.
-    `  ${serverCmd} app-server --listen unix://"$sock" >"$log" 2>&1 </dev/null &`,
+    `  ${server} app-server --listen unix://"$sock" >"$log" 2>&1 </dev/null &`,
     '  echo $! > "$pid"',
     '  for i in $(seq 1 100); do [ -S "$sock" ] && break; sleep 0.05; done',
     'fi',

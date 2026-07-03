@@ -105,7 +105,12 @@ confirm** — typing the exact command is itself the deliberate act, where the r
 easy-to-mis-aim right-click. The box **holds
 focus persistently** — clicking
 chrome never blurs it, the panel **suppresses the native context menu** and **restores** focus after a
-right-click. It **auto-grows upward**, **capped at half** the terminal height, and the grown size **survives a
+right-click. Focus retention blankets the **inert** chrome only: it blocks the blur by cancelling the
+mousedown's default over dead space, but **never over a native form control** (`<select>`, an `<option>`)
+that owns its own mousedown — a native `<select>` *opens* on that default action, so cancelling it would
+leave the control dead to the pointer. The launcher picker ([[launcher-select]]) is such a control; keeping
+the input focused must not cost the picker its click, so the two concerns coexist — focus stays, and the
+native dropdown still opens. It **auto-grows upward**, **capped at half** the terminal height, and the grown size **survives a
 round-trip away from the Terminal tab** — the box unmounts while Eval or nav mode replaces it, but its height is
 derived from the per-session draft (which persists), so on return it re-fits to that draft instead of collapsing
 back to one line. It carries the same **completion** menus

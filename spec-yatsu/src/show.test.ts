@@ -63,3 +63,15 @@ test('formatTimeline: evidence state renders image / transcript / miss / no evid
   assert.match(formatTimeline(timeline([reading({ blobState: 'miss', blob: 'a'.repeat(64) })])), /miss original file/)
   assert.match(formatTimeline(timeline([reading({ blobState: 'none', blob: null })])), /no evidence/)
 })
+
+test('formatTimeline: a mixed reading lists every evidence entry (N images + a video)', () => {
+  const out = formatTimeline(timeline([reading({
+    blobState: 'present', blob: 'img1aaaaaaaaaaaa',
+    evidence: [
+      { hash: 'img1aaaaaaaaaaaa', kind: 'image', state: 'present' },
+      { hash: 'img2bbbbbbbbbbbb', kind: 'image', state: 'present' },
+      { hash: 'clipcccccccccccc', kind: 'video', state: 'present' },
+    ],
+  })]))
+  assert.match(out, /image img1aaaaaaaa…, image img2bbbbbbbb…, video clipcccccccc…/)
+})

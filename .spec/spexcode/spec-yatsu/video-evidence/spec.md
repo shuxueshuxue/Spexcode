@@ -12,18 +12,19 @@ related:
 ---
 # video-evidence
 
-A yatsu reading's evidence is a content-addressed blob distinguished by `blobKind` ([[yatsu-core]]) —
-`image` | `transcript`. A video is a screenshot with a time axis: the **same** primitive, a third kind. For
-a scenario whose loss is a *temporal user loop* (a UI surface), a recording of the loop is the truest
-evidence — the author's choice per scenario, routed by its tag, not a forced default.
+A yatsu reading's evidence is a **list** of content-addressed entries, each typed by its `kind` ([[yatsu-core]]) —
+`image` | `transcript` | `video`. A video is a screenshot with a time axis: the **same** primitive, one more
+kind of entry. For a scenario whose loss is a *temporal user loop* (a UI surface), a recording of the loop is
+the truest evidence — the author's choice per scenario, routed by its tag, not a forced default — and it can
+ride in the same reading as N stills of the same run.
 
 The whole point is that almost nothing is new. `spex yatsu eval --video <clip>` stores the bytes in the same
-shared cache and appends one reading carrying `blobKind: video`; the MIME is sniffed from content (WebM /
-MP4) so `/api/yatsu/blob` streams a playable type — and answers **byte ranges**, without which a browser
+shared cache and pushes one `video` entry onto the reading's evidence list; the MIME is sniffed from content
+(WebM / MP4) so `/api/yatsu/blob` streams a playable type — and answers **byte ranges**, without which a browser
 clamps every seek to 0; the eval tab ([[yatsu-eval-tab]]) and the session proof
-([[review-proof]]) grow **one** render arm — an inline `<video>` beside the image and transcript, lazy on
+([[review-proof]]) render the `<video>` inline among the reading's other evidence, lazy on
 expand, with the same *miss original file* when the blob is pruned; `spex yatsu show` labels it. A clip is
-heavier bytes, so [[yatsu-core]]'s `clean` is the intended prune.
+heavier bytes, so [[yatsu-core]]'s `clean` (which walks every evidence entry) is the intended prune.
 
 An optional refinement — anchoring named steps to moments in the clip so an annotation can land on a step —
 is [[step-timeline]], a separate format built only when a real annotation workflow needs it. yatsu still

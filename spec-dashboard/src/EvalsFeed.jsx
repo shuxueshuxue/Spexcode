@@ -13,9 +13,23 @@ import { useT } from './i18n/index.jsx'
 // panel, and the eval tab use.
 
 const KIND_TAG = { video: 'vid', image: 'img', transcript: 'txt', note: 'note' }
-// kind is HONEST evidence: a blob-less reading (verdict filed with prose only) is a 'note', never a
-// media kind; a blob with no recorded blobKind is a legacy capture, i.e. an image.
-export const kindOf = (r) => (r.blob ? r.blobKind || 'image' : 'note')
+
+// normalize a reading to its evidence LIST (each {hash, kind, state}): the backend's `evidence` list when
+// present, else the legacy scalar (blob + blobKind, absent kind → image) as a one-entry list, else empty —
+// the same scalar→list bridge yatsu's evidenceOf does, so a legacy reading still renders.
+export const evidenceList = (r) =>
+  r.evidence?.length ? r.evidence
+  : r.blob != null ? [{ hash: r.blob, kind: r.blobKind || 'image', state: r.blobState || 'present' }]
+  : []
+
+// a reading's evidence kinds as a SET (video-first), or ['note'] when it carries no blob at all. Kinds stay
+// HONEST: a MIXED reading (images + a video) belongs to EVERY kind it contains — it advertises all its media
+// and none it lacks; a blob-less verdict is a 'note', never a media kind.
+export const kindsOf = (r) => {
+  const ev = evidenceList(r)
+  if (!ev.length) return ['note']
+  return ['video', 'image', 'transcript'].filter((k) => ev.some((e) => e.kind === k))
+}
 
 // flatten board nodes → feed entries via the ONE latest-per-scenario computation (scenarioStates).
 export function currentEntries(nodes) {
@@ -42,7 +56,7 @@ export function EvalRow({ e, selected, onClick }) {
       {e.inSession && <span className="ef-insession" title="measured by this session">✦</span>}
       <span className="ef-scenario">{e.scenario}</span>
       <span className="ef-node" style={{ color: `hsl(${e.hue ?? 210} 60% 70%)` }}>{e.node}</span>
-      <span className="ef-kind">{KIND_TAG[kindOf(e)] ?? 'txt'}</span>
+      <span className="ef-kind">{kindsOf(e).map((k) => KIND_TAG[k]).join('·')}</span>
       <span className="ef-time">{rel(e.ts)}</span>
     </button>
   )
@@ -67,11 +81,12 @@ export default function EvalsGroup({ nodes = [], sel, onSel, onRows, hidden = fa
 
   const all = useMemo(() => currentEntries(nodes), [nodes])
   const fresh = useMemo(() => all.filter((e) => e.fresh), [all])
-  const hasVideo = fresh.some((e) => kindOf(e) === 'video')
-  const hasImage = fresh.some((e) => kindOf(e) === 'image')
+  const hasVideo = fresh.some((e) => kindsOf(e).includes('video'))
+  const hasImage = fresh.some((e) => kindsOf(e).includes('image'))
   const effKind = kind ?? (hasVideo ? 'video' : hasImage ? 'image' : 'all')
   const pool = showStale ? all : fresh
-  const rows = useMemo(() => pool.filter((e) => effKind === 'all' || kindOf(e) === effKind), [pool, effKind])
+  // a mixed reading matches EVERY kind it contains, so images+video shows under both the video and image chips.
+  const rows = useMemo(() => pool.filter((e) => effKind === 'all' || kindsOf(e).includes(effKind)), [pool, effKind])
   const staleN = all.length - fresh.length
 
   useEffect(() => { onRows?.(rows) }, [rows, onRows])

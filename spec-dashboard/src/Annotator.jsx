@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { postIssueReply, postIssueThread, putFrameBlob, specUrl } from './data.js'
+import { evidenceList } from './EvalsFeed.jsx'
 import { Replies, ReplyComposer, mmss, anchorLine } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
 
 // The annotator ([[annotator]]): the human's measuring hand on an ALREADY-captured reading — the issues
-// page's DETAIL PANE for a selected eval (master-detail, [[issues-view]]). A video reading renders the clip
-// with a step ruler (from the step-timeline sidecar: click a step → seek); an image renders full-width; a
-// transcript renders as text. There is ONE annotation primitive: a comment on the eval's own Issue thread,
+// page's DETAIL PANE for a selected eval (master-detail, [[issues-view]]). A reading's evidence is a LIST:
+// the video plays with a step ruler (from the step-timeline sidecar: click a step → seek) AND an image
+// gallery renders in the SAME pane (each still click-to-enlarge); a transcript renders as text. There is ONE annotation primitive: a comment on the eval's own Issue thread,
 // time-anchored by the `▶m:ss · step` prose convention ([[issues-view]]'s Thread). ⏱ stamps the current
 // frame onto a bare note; a drag-circle captures the paused frame to the blob store and prefills an anchored
 // comment carrying that frame (image link in the body, hash indexed as the thread's evidence[]) — a mark IS
@@ -54,25 +55,32 @@ export default function Annotator({ entry, issues = null, specs = [], sessions =
   const [verdict, setVerdict] = useState(null)
   const [note, setNote] = useState('')
   const [flash, setFlash] = useState('')
-  const [zoom, setZoom] = useState(false)
+  const [zoom, setZoom] = useState(null)         // an image gallery still opened in the lightbox (its hash), or null
   const [busy, setBusy] = useState(false)       // capturing a circled frame
   const [draft, setDraft] = useState(null)       // { seq, body } — a circle prefills the review-track composer
   const seq = useRef(0)
-  const kind = entry.blob ? entry.blobKind || 'image' : 'note'   // same honest-kind rule as the feed's kindOf
+
+  // the reading's evidence LIST → its present video (the annotate-a-loop surface) and its still gallery. A
+  // legacy scalar reading normalizes to a one-entry list, so an old image/video/transcript still renders.
+  const ev = evidenceList(entry)
+  const videoEntry = ev.find((e) => e.kind === 'video' && e.state === 'present')
+  const images = ev.filter((e) => e.kind === 'image')
+  const transcripts = ev.filter((e) => e.kind === 'transcript')
+  const hasVideo = !!videoEntry
 
   // a selection change is a new reading under annotation — the working state belongs to the old one.
-  useEffect(() => { setDrag(null); setVerdict(null); setNote(''); setFlash(''); setEvents([]); setZoom(false); setDraft(null) }, [entry.blob, entry.scenario, entry.node])
+  useEffect(() => { setDrag(null); setVerdict(null); setNote(''); setFlash(''); setEvents([]); setZoom(null); setDraft(null) }, [entry.blob, entry.scenario, entry.node])
 
   // the step map arrives lazily from the same blob cache the clip streams from; absent → plain player.
   useEffect(() => {
-    if (!entry.timelineBlob || kind !== 'video') return
+    if (!entry.timelineBlob || !hasVideo) return
     let on = true
     fetch(`/api/yatsu/blob/${entry.timelineBlob}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => { if (on && Array.isArray(j?.events)) setEvents(j.events) })
       .catch(() => {})
     return () => { on = false }
-  }, [entry.timelineBlob, kind])
+  }, [entry.timelineBlob, hasVideo])
 
   const pct = (ev) => {
     const r = box.current.getBoundingClientRect()
@@ -152,12 +160,13 @@ export default function Annotator({ entry, issues = null, specs = [], sessions =
         <span className="an-meta">{new Date(entry.ts).toLocaleString()}</span>
       </header>
       {entry.expected && <div className="an-expected"><b>{t('nodeView.eval.expected')}</b> {entry.expected}</div>}
-      {entry.blob != null && entry.verdict?.note && <div className="an-expected an-prior-note"><b>{t('nodeView.eval.noteLabel')}</b> {entry.verdict.note}</div>}
+      {ev.length > 0 && entry.verdict?.note && <div className="an-expected an-prior-note"><b>{t('nodeView.eval.noteLabel')}</b> {entry.verdict.note}</div>}
 
-      {entry.blobState === 'present' && kind === 'video' && (
+      {/* the video — the annotate-a-loop surface: circle-to-capture, step ruler, verdict footer */}
+      {videoEntry && (
         <>
           <div className="an-stage" ref={box} onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp}>
-            <video className="an-video" ref={vid} src={`/api/yatsu/blob/${entry.blob}`} controls preload="metadata" />
+            <video className="an-video" ref={vid} src={`/api/yatsu/blob/${videoEntry.hash}`} controls preload="metadata" />
             {liveRect && <div className="an-rect live" style={{ left: `${liveRect.x}%`, top: `${liveRect.y}%`, width: `${liveRect.w}%`, height: `${liveRect.h}%` }} />}
           </div>
           {events.length > 0 && (
@@ -183,19 +192,26 @@ export default function Annotator({ entry, issues = null, specs = [], sessions =
           </footer>
         </>
       )}
-      {entry.blobState === 'present' && kind === 'image' && (
-        <>
-          <img className="an-image" src={`/api/yatsu/blob/${entry.blob}`} alt={entry.scenario} onClick={() => setZoom(true)} />
-          {zoom && <ImageLightbox src={`/api/yatsu/blob/${entry.blob}`} alt={entry.scenario} onClose={() => setZoom(false)} />}
-        </>
+
+      {/* the still gallery — every image entry, each click-to-enlarge; shown beside a video or on its own */}
+      {images.length > 0 && (
+        <div className="an-gallery" style={{ display: 'flex', flexDirection: 'column', gap: 10, margin: '12px 0 0' }}>
+          {images.map((e, i) => e.state === 'miss'
+            ? <div className="an-hint" key={`${e.hash}-${i}`}>{t('nodeView.eval.miss')}</div>
+            : <img className="an-image" key={`${e.hash}-${i}`} src={`/api/yatsu/blob/${e.hash}`} alt={entry.scenario} onClick={() => setZoom(e.hash)} />)}
+        </div>
       )}
-      {entry.blobState === 'present' && kind === 'transcript' && <Transcript hash={entry.blob} />}
-      {entry.blobState === 'miss' && <div className="an-hint">{t('nodeView.eval.miss')}</div>}
-      {entry.blobState === 'none' && (entry.verdict?.note
+      {zoom && <ImageLightbox src={`/api/yatsu/blob/${zoom}`} alt={entry.scenario} onClose={() => setZoom(null)} />}
+
+      {transcripts.map((e, i) => e.state === 'miss'
+        ? <div className="an-hint" key={`${e.hash}-${i}`}>{t('nodeView.eval.miss')}</div>
+        : <Transcript hash={e.hash} key={`${e.hash}-${i}`} />)}
+
+      {ev.length === 0 && (entry.verdict?.note
         ? <pre className="eval-transcript">{entry.verdict.note}</pre>
         : <div className="an-hint">{t('nodeView.eval.noImage')}</div>)}
       {issues && <EvalComments entry={entry} issues={issues} specs={specs} sessions={sessions} onWrite={onWrite}
-        vidRef={kind === 'video' ? vid : null} events={events} draft={draft} />}
+        vidRef={hasVideo ? vid : null} events={events} draft={draft} />}
     </div>
   )
 }

@@ -12,6 +12,7 @@ separate store.
 
 - **[Using SpexCode](#using-spexcode)** — adopt the `spex` CLI and drive it through your coding agent to govern *your own* project.
 - **[Contributing to SpexCode](#contributing-to-spexcode)** — hack on the tool itself, in this repo.
+- **[Working with agents →](https://spexcode.net/working-with-agents/)** — the deeper narrative on the docs site, behind this landing.
 
 ---
 
@@ -31,6 +32,12 @@ context (no `--append-system-prompt`, nothing to wire). From there the agent sel
 from the built-in manual — `spex guide` (the workflow), `spex guide spec` / `spex guide yatsu` (the file
 formats), and `spex guide config` (every `spexcode.json` setting). You can literally say *"run `spex guide
 config` and set me up a launcher"* and it will.
+
+For the full narrative — the three pillars of driving SpexCode by talking to your agent (agent
+self-learning via the materialized block + `spex guide`, config, and the init artifacts) — see
+**[working with agents](https://spexcode.net/working-with-agents/)** on the docs site;
+**[getting started](https://spexcode.net/getting-started/)** walks the setup end to end. This README is
+the concise landing; the site goes deep.
 
 > **It's also just plain tooling.** Strip the agent away and the core is still useful on its own: **spec
 > files versioned by git**, checked by `spex lint` and shown on a read-only dashboard — no AI, and nothing
@@ -52,9 +59,10 @@ spex init              # additive — never restructures your code
 ```
 
 `spex init` is additive: it seeds a starter **`.spec/`** tree (a root `project` node plus the `.config`
-plugins that define the dev flow), a starter **`spexcode.json`**, and the per-clone **git hooks**
-(`main-guard`, which blocks direct commits to `main`, and a `prepare-commit-msg` hook that stamps each
-commit's session attribution). It also **materializes** the harness artifacts that make the agent path
+plugins that define the dev flow), a starter **`spexcode.json`**, and the per-clone **git hooks** (a
+`pre-commit` hook that runs **spec-lint** — blocking on broken spec↔code links — and **main-guard**,
+which blocks direct commits to `main`, plus a `prepare-commit-msg` hook that stamps each commit's
+session attribution). It also **materializes** the harness artifacts that make the agent path
 work: the `<!-- spexcode -->` contract block in `CLAUDE.md`/`AGENTS.md`, and the `.claude/` / `.codex/`
 shims (the `settings.json` hooks) a self-launched agent discovers. Those artifacts are generated and
 gitignored — regenerated on each machine, never committed.
@@ -74,7 +82,9 @@ that's the whole discipline:
 - **`spexcode.json`** — *committed, portable*: layout, dashboard identity (`title` + `icon`), lint budgets,
   and launcher **names**. Facts that are true for the project.
 - **`spexcode.local.json`** — *gitignored, host-specific*: absolute launcher command paths, cert/secret
-  paths. Facts that are true for one machine.
+  paths, and the private-overlay switch (`private: true`, which makes `spex materialize` leave zero trace
+  in the tracked tree — ignores go to the local git exclude, not the committed `.gitignore` — so you can
+  run SpexCode on a repo you share but don't own). Facts that are true for one machine.
 
 There is no `spex config set` — you (or your agent) edit the files directly. **`spex guide config`** is the
 authoritative manual for every field and which of the two files it belongs in.

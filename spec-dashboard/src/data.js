@@ -33,6 +33,14 @@ export async function loadBoard() {
   return res.json()
 }
 
+// the ONE way to build a `/api/specs/:id/*` URL ([[id-url-safe]]): the node id is the sole variable path
+// segment, so it is the sole thing encoded — every id-resolve fetch routes through here instead of
+// hand-interpolating the id, so no call site can reintroduce a broken URL for an id with an awkward char.
+// `parts` are trailing path segments (fixed route words like 'content'/'history', or an already-safe git
+// hash) appended verbatim. Ids never contain '/' by construction, but encoding stays the invariant.
+export const specUrl = (id, ...parts) =>
+  `/api/specs/${encodeURIComponent(id)}${parts.map((p) => '/' + p).join('')}`
+
 // subscribe to the board's push channel in DELTA mode ([[board-stream]]/[[board-delta]]): the server sends a
 // full snapshot on connect (`board-full {to, board}`), then hash-chained patches (`board-delta {from, to,
 // set, del}`) — a few KB per change instead of a full refetch. This is the client mirror of the server's

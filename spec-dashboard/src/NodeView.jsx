@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ScoreBadge, readingScore, ScenarioCount, scenarioStates, TagChips } from './score.jsx'
 import { useT } from './i18n/index.jsx'
+import { specUrl } from './data.js'
 
 export const PANES = [
   { key: 'spec',    label: 'spec' },
@@ -150,7 +151,7 @@ function useSpecContent(id, version) {
     if (hit) { setContent(hit); return }             // cached (re-open) → instant, no spinner
     setContent(null)                                  // drop the previous node/version's prose while the new one loads
     let on = true
-    fetch(`/api/specs/${id}/content`).then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+    fetch(specUrl(id, 'content')).then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
       .then((d) => { contentCache.set(key, d); if (on) setContent(d) })   // land the body the instant it arrives — no artificial delay
       .catch(() => { if (on) setContent({ body: '', parts: null }) })
     return () => { on = false }
@@ -203,7 +204,7 @@ export function useHistory(id) {
   const [rows, setRows] = useState(null)
   useEffect(() => {
     let on = true
-    fetch(`/api/specs/${id}/history`).then((r) => r.json()).then((d) => { if (on) setRows(d) }).catch(() => on && setRows([]))
+    fetch(specUrl(id, 'history')).then((r) => r.json()).then((d) => { if (on) setRows(d) }).catch(() => on && setRows([]))
     return () => { on = false }
   }, [id])
   return rows
@@ -220,7 +221,7 @@ function useVersionDiff(id, hash, enabled) {
     const cached = versionDiffCache.get(key)
     if (cached) { setDiff(cached); return }
     let on = true
-    fetch(`/api/specs/${id}/diff/${hash}`).then((r) => r.json())
+    fetch(specUrl(id, 'diff', hash)).then((r) => r.json())
       .then((d) => { versionDiffCache.set(key, d); if (on) setDiff(d) })
       .catch(() => on && setDiff({ patch: '' }))
     return () => { on = false }
@@ -509,7 +510,7 @@ export function EvalPane({ node }) {
     if (evalCache.has(key)) { setTimeline(evalCache.get(key)); return }
     let on = true
     setTimeline(null)
-    fetch(`/api/specs/${node.id}/evals`).then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+    fetch(specUrl(node.id, 'evals')).then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
       .then((tl) => { const v = { scenarios: tl.scenarios || node.scenarios || [], readings: tl.readings || [] }; evalCache.set(key, v); if (on) setTimeline(v) })
       .catch(() => { if (on) setTimeline({ scenarios: node.scenarios || [], readings: node.evals || [] }) })
     return () => { on = false }

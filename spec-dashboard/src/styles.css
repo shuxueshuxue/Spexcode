@@ -1159,6 +1159,9 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* launcher picker — a name dropdown that stands in for the harness radios when launchers are configured. */
 .si-launcher-picker { display: inline-flex; align-items: center; gap: 6px; }
 .si-launcher-label { font-size: 11px; color: var(--ink2); text-transform: lowercase; }
+/* the selected launcher's harness shown as an icon (the vendor mark the harness radios use) beside the
+   name select — a native <option> can't hold an SVG, so the harness rides here, not in the option text. */
+.si-launcher-harness { display: inline-flex; align-items: center; color: var(--ink2); }
 .si-launcher-select {
   height: 28px; padding: 0 8px; cursor: pointer; color: var(--ink);
   background: var(--panel); border: 1px solid var(--line); border-radius: 999px;

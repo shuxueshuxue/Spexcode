@@ -172,20 +172,27 @@ function withForumLock<T>(fn: () => T): T {
   try { return fn() } finally { try { rmdirSync(lock) } catch { /* already gone */ } }
 }
 
-// prepare (a FRESH read-modify or a new thread) + write + commit a single forum file STRAIGHT to the trunk,
-// all under the forum lock so the read-modify-write is atomic. The commit is `--no-verify`: the file is DATA,
+// write + commit ONE forum file STRAIGHT to the trunk. The commit is `--no-verify`: the file is DATA,
 // structurally invisible to spec-lint, and the commit is provably forum-only (one .spec/.forum/ path), so the
 // pre-commit gate would only pass anyway — running it just burns seconds (tsx cold-start) holding the lock.
-// prepare() runs INSIDE the lock, so a reply/sign/resolve reads the current thread, never a stale copy.
+// MUST run while holding withForumLock — it is the write half of a locked read-modify-write; its callers
+// (commitForum, findOrCreateEvalThread) own the lock, so it never acquires one itself (mkdir is not re-entrant).
+function writeForumFile(p: Issue, message: string): void {
+  const root = mainCheckout()
+  const rel = `${FORUM_REL}/${p.id}.md`
+  mkdirSync(join(root, FORUM_REL), { recursive: true })
+  writeFileSync(join(root, rel), serialize(p))
+  git(['-C', root, 'add', '--', rel])
+  git(['-C', root, 'commit', '--no-verify', '-m', message, '--', rel])
+}
+
+// prepare (a FRESH read-modify or a new thread) + write + commit a single forum file, all under the forum
+// lock so the read-modify-write is atomic. prepare() runs INSIDE the lock, so a reply/sign/resolve reads the
+// current thread, never a stale copy.
 function commitForum(message: string, prepare: () => Issue): Issue {
   return withForumLock(() => {
     const p = prepare()
-    const root = mainCheckout()
-    const rel = `${FORUM_REL}/${p.id}.md`
-    mkdirSync(join(root, FORUM_REL), { recursive: true })
-    writeFileSync(join(root, rel), serialize(p))
-    git(['-C', root, 'add', '--', rel])
-    git(['-C', root, 'commit', '--no-verify', '-m', message, '--', rel])
+    writeForumFile(p, message)
     return p
   })
 }
@@ -299,15 +306,34 @@ export function resolve(id: string, as: string): string {
 // container (every remark is a reply, never the thread body, so the resolved bit always lives in one place).
 const evalConcernKey = (node: string, scenario: string): string => `eval: ${node} · ${scenario}`
 
-async function resolveRemarkHost(host: { issue?: string; node?: string; scenario?: string }, author: string): Promise<string> {
+// find-or-create the ONE scenario thread for (node, scenario), keyed by its eval concern, ATOMICALLY under
+// the forum lock. R4 says a scenario's remark track lives ONCE — but a concurrent first-remark burst is a
+// normal dogfood situation (SpexCode runs parallel workers), and if the not-found read sat OUTSIDE the lock
+// two racers could both read "absent" and both create, minting a second thread whose remarks are invisible
+// to the concern key (a silent teeth blind spot). Holding one lock across both the find AND the create closes
+// that window: a racer either sees the thread the first created, or is the first. The stub is a pure
+// container (its body carries a [[wiki-link]], never an @-mention), so it needs no async dispatch — a
+// synchronous create suffices, and staying sync is exactly what lets it share the lock hold.
+function findOrCreateEvalThread(node: string, scenario: string, author: string): Issue {
+  const concern = evalConcernKey(node, scenario)
+  return withForumLock(() => {
+    const existing = loadProposals().find((t) => t.store === 'local' && t.concern === concern)
+    if (existing) return existing
+    const p: Issue = {
+      id: uniqueId(concern), store: 'local', concern, by: author, status: 'open',
+      nodes: [node], signers: [], created: new Date().toISOString(),
+      body: `Remarks on the \`${scenario}\` eval of [[${node}]].`, replies: [], evidence: [],
+    }
+    writeForumFile(p, `issue: ${concern}`)
+    return p
+  })
+}
+
+function resolveRemarkHost(host: { issue?: string; node?: string; scenario?: string }, author: string): string {
   if (host.scenario) {
     const node = host.node
     if (!node) throw new Error('a scenario remark needs a node plus --scenario <name>')
-    const concern = evalConcernKey(node, host.scenario)
-    const existing = loadProposals().find((t) => t.store === 'local' && t.concern === concern)
-    if (existing) return existing.id
-    const { thread } = await forumPost(concern, { nodes: [node], author, body: `Remarks on the \`${host.scenario}\` eval of [[${node}]].` })
-    return thread.id
+    return findOrCreateEvalThread(node, host.scenario, author).id
   }
   if (!host.issue) throw new Error('a remark needs a host: an issue id, or a node with --scenario <name>')
   return loadOne(host.issue).id   // throws loudly if the issue doesn't exist
@@ -322,7 +348,7 @@ export async function remarkOnHost(
 ): Promise<{ ref: string; rid: string; codeSha: string; thread: Issue; outcomes: DispatchOutcome[]; loopIn: LoopIn | null }> {
   const author = opts.author || currentSession()
   const codeSha = opts.codeSha || headSha(repoRoot())
-  const id = await resolveRemarkHost(host, author)
+  const id = resolveRemarkHost(host, author)
   const { thread, outcomes, loopIn } = await forumReply(id, body, author, opts.evidence, { targetCodeSha: codeSha })
   const rid = thread.replies[thread.replies.length - 1].rid!
   return { ref: `${id}#${rid}`, rid, codeSha, thread, outcomes, loopIn }
@@ -353,7 +379,11 @@ export function resolveRemark(ref: string, by: string): { thread: Issue; rid: st
   return { thread, rid }
 }
 
-// retract a remark (R3): the AUTHOR withdraws their OWN remark, removing it. Only the author may retract.
+// retract a remark (R3): the AUTHOR withdraws their OWN remark, removing it — but ONLY while it is
+// unresolved. Only the author may retract; and once a SECOND party has deliberately resolved it, the remark
+// (and that recorded judgment) is part of the record — retract may not erase it. This makes R3's
+// monotonicity two-sided: resolve can't be undone, and retract can't back-door an un-resolve by deleting the
+// resolved remark. A regression after a resolve is a NEW remark, never a retract-and-reraise.
 export function retractRemark(ref: string, by: string): { thread: Issue; rid: string } {
   const { id, rid } = parseRemarkRef(ref)
   const thread = commitForum(`remark(${id}#${rid}): retracted by ${by}`, () => {
@@ -361,6 +391,7 @@ export function retractRemark(ref: string, by: string): { thread: Issue; rid: st
     const idx = p.replies.findIndex((x) => x.rid === rid)
     if (idx < 0) throw new Error(`no remark '${ref}' in that thread`)
     if (p.replies[idx].by !== by) throw new Error(`only the author (${p.replies[idx].by}) may retract '${ref}' — you are '${by}'`)
+    if (p.replies[idx].resolved) throw new Error(`refusing to retract '${ref}': it was resolved by ${p.replies[idx].resolvedBy} — a resolved remark is part of the record (monotonic), retract only withdraws an UNRESOLVED remark; a regression is a NEW remark`)
     p.replies.splice(idx, 1)
     return p
   })

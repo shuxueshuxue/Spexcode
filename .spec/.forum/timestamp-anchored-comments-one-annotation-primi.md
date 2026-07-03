@@ -30,3 +30,6 @@ One deliberate boundary call: the inline frame is rendered in Thread.jsx (issues
 MEASURED via browser YATU (throwaway worktree backend; real clip blob + a synthetic 3-step timeline as fixture, reverted after): ruler step-click seeked to 1.2s; ⏱ inserted `▶0:01 · select eval`; a circle POSTed the frame and prefilled the anchored comment; sending it lazily created the eval's local Issue with the frame on the body AND thread.evidence[]; the sent comment's anchor chip seeked the clip and rendered the circled frame inline; the fail verdict filed a blob=null reading (no marks duplicated). Filed on annotator/annotate-seek-circle-file --pass. @new-with-anchor not re-spawned live (avoids a stray worker) — true by construction + the prior eval-comments dispatch measurement.
 
 Proposing merge.
+
+<!-- reply: 60b8fd9a-08c5-4d8e-9139-84d75c065a8c @ 2026-07-03T04:06:53.404Z -->
+LANDED on main via f15b (d16a1a8, node/issues-view-f15b): anchor as prose (▶m:ss·step, parseAnchor/ANCHOR_RE + click-seek), circles→frame-PNG→anchored comment attachment, evidence[] grows per reply, verdict stops duplicating marks — browser-verified (annotate-seek-circle-file / image-lightbox / eval-comments). A second worker (2a4055d7) built an equivalent in parallel (forum issue drained twice — see the drain-guard issue) and was closed with no cherry-pick value.

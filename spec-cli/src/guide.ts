@@ -27,9 +27,11 @@ the rest, you don't hand-author the spec tree or wire the dashboard yourself.
      spexcode.json sets lint's governedRoots/sourceExtensions and any non-default worktree layout.
      \`spex lint\` must report 0 errors; coverage warnings are your adoption TODO (files no node claims yet).
 
-The file formats an agent authors — run these for the full schema:
+Look these up on demand — the formats an agent authors, and the settings it configures:
   spex guide spec     the spec.md format (frontmatter + body + the rules lint enforces)
-  spex guide yatsu    the yatsu.md format (scenario schema + how loss is measured and filed)`
+  spex guide yatsu    the yatsu.md format (scenario schema + how loss is measured and filed)
+  spex guide config   the spexcode.json / spexcode.local.json settings (launchers, dashboard icon, lint
+                      budgets, layout) — every field, and which of the two files it belongs in`
 
 const SPEC = `spex guide spec — the spec.md file format
 
@@ -133,11 +135,125 @@ code file, the scenario (the yatsu.md), or the evaluator moves since it was file
   spex yatsu show <node>        the reading timeline (verdict · freshness · evidence), newest first
   spex yatsu clean              GC the content-addressed evidence cache`
 
-const TOPICS: Record<string, string> = { spec: SPEC, yatsu: YATSU }
+const CONFIG = `spex guide config — SpexCode's runtime settings (spexcode.json / spexcode.local.json)
+
+SpexCode reads its runtime settings from TWO optional JSON files at the repo root. There is no imperative
+\`spex config set\` — an agent CONFIGURES SpexCode by EDITING these files directly. The two split by
+PORTABILITY, and picking the right one is the whole discipline:
+
+  spexcode.json         COMMITTED — portable, shared by everyone on the repo. Layout, policy, dashboard
+                        identity, lint budgets, launcher NAMES. "Git is the database": tracked so the
+                        team shares ONE configuration.
+  spexcode.local.json   GITIGNORED — host-specific, never committed. Absolute launcher paths, cert/secret
+                        paths, private-overlay mode. Layered OVER spexcode.json (see MERGE below); an env
+                        var (SPEXCODE_CLAUDE_CMD, …) still overrides both at its read site.
+
+Rule of thumb — is the value TRUE FOR THE PROJECT or TRUE FOR THIS MACHINE? A branch name, a dashboard
+icon, a lint budget, a launcher's name+harness are project facts → committed spexcode.json. The ABSOLUTE
+PATH of a launcher wrapper, a TLS cert path, private mode are machine facts → gitignored spexcode.local.json.
+Both files are optional; omit any field to take its default.
+
+MERGE: spexcode.local.json is layered over spexcode.json ONE LEVEL DEEP — per top-level section (dashboard,
+sessions, …), the two objects are shallow-merged with LOCAL WINNING per key; sections only one file names
+pass through untouched. This is exactly what lets a launcher's portable NAME reference (defaultLauncher)
+sit in the committed file while its host-specific DEFINITION (with the abs cmd) sits in the local file —
+see LAUNCHERS.
+
+── LAYOUT (spexcode.json — portable; set only for a NON-DEFAULT repo layout) ──
+  main          path to the source-of-truth checkout. Default: the \`main\` worktree.
+  mainBranch    the source-of-truth BRANCH worktrees fork from. Default: auto-detected.
+  branchPrefix  how a node branch is named. Default "node/".
+Example — a repo whose trunk is \`staging\`, not \`main\`:
+  { "mainBranch": "staging" }
+
+── DASHBOARD (spexcode.json — portable project identity) ──
+  dashboard.title   browser-tab name. Default: the repo-root basename.
+  dashboard.icon    browser-tab favicon: an emoji ("🔭") OR an Iconify name ("mdi:rocket-launch").
+  dashboard.apiUrl  the per-project backend the board proxies to (read frontend-side). For a SHARED
+                    install prefer the API_URL env var; apiUrl here is the default only when the board
+                    lives inside the project.
+Example:
+  { "dashboard": { "title": "MyApp specs", "icon": "mdi:rocket-launch" } }
+
+── SESSIONS / WORKERS ──
+  sessions.maxActive        concurrency cap — max agents AUTONOMOUSLY PROGRESSING at once (default 6).
+                            A policy number → committed spexcode.json.
+  sessions.claudeCmd        the UNNAMED default worker launcher for Claude (default
+                            'claude --dangerously-skip-permissions'); env SPEXCODE_CLAUDE_CMD overrides.
+  sessions.codexCmd         the UNNAMED default worker launcher for Codex (default 'codex --yolo'); env
+                            SPEXCODE_CODEX_CMD overrides.
+  sessions.launchers        NAMED launcher profiles (see LAUNCHERS).
+  sessions.defaultLauncher  the launcher name a create with no explicit --launcher/dropdown pick uses
+                            (else the unnamed claudeCmd/codexCmd path). A portable NAME → committed.
+A claudeCmd/codexCmd or a launcher \`cmd\` that is a HOST-SPECIFIC ABSOLUTE PATH belongs in
+spexcode.local.json — the committed file must stay free of machine paths.
+
+── LAUNCHERS (the profile block, split across the two files) ──
+A named launcher profile fixes BOTH a session's harness AND its exact launch command; a create picks one
+by name, and the chosen name is persisted on the record so a resume reuses the same auth. Shape:
+  "launchers": { "<name>": { "harness": "claude" | "codex", "cmd": "<launch command>" } }
+\`harness\` defaults to "claude"; \`cmd\` is required. Because \`cmd\` is a machine fact (an abs wrapper path),
+the DEFINITION lives in the gitignored spexcode.local.json, while the portable defaultLauncher NAME sits
+in the committed spexcode.json — the merge keeps both:
+
+  spexcode.json  (committed — the portable name reference)
+  { "sessions": { "defaultLauncher": "gpt5" } }
+
+  spexcode.local.json  (gitignored — the host-specific definitions)
+  {
+    "sessions": {
+      "launchers": {
+        "gpt5":       { "harness": "codex",  "cmd": "/Users/me/bin/reclaude-codex --yolo" },
+        "claude-prod": { "harness": "claude", "cmd": "/Users/me/bin/reclaude --dangerously-skip-permissions" }
+      }
+    }
+  }
+
+── SERVE (spexcode.json — public-exposure for \`spex serve --public\`) ──
+  serve.public.enabled   turn public mode on without the --public flag.
+  serve.public.http      drop TLS (the --http escape hatch) — the password then travels in cleartext.
+  serve.public.tls       { "cert": "<path>", "key": "<path>" } — PATHS to your own cert/key; omit for a
+                         cached self-signed default. If the paths are host-specific, put them in
+                         spexcode.local.json.
+The gateway password is NEVER read from these files (flag/env only), so serve.public stays committable.
+
+── PROPOSALS (spexcode.json — portable policy) ──
+  proposals.enabled   the taste-forum on/off switch (default ON). OFF silences the post-merge nudge and
+                      hides the dashboard view; the CLI toggle is \`spex proposals on|off\`.
+
+── LINT (spexcode.json — a top-level "lint" key; budgets are portable, so committed only) ──
+  lint.governedRoots       dirs whose source files must each be governed by a spec (coverage).
+                           '.' = the whole project (only git-TRACKED files). Default
+                           ["spec-dashboard/src", "spec-cli/src"].
+  lint.sourceExtensions    extensions coverage treats as source. Default ["ts","tsx","js","jsx"].
+  lint.testGlobs           globs EXCLUDED from coverage (default ["**/*.test.*"]; [] to govern tests too).
+  lint.identifierExtensions extensions the altitude bare-filename signal recognises.
+  lint.altitude            body budgets: { lineBudget, charBudget, sizeable, dense, steps }
+                           (defaults 50 / 4200 / 35 / 1.3 / 3).
+  lint.maxChildren         breadth budget: warn at >= this many direct children (default 8).
+  lint.driftErrorThreshold commit-local gate HARD-BLOCKS a commit touching a node >= this many commits
+                           behind (default 3).
+  lint.maxOwners           warn when a file is governed by > this many nodes (default 3).
+  lint.scenarioTags        the closed vocabulary a yatsu scenario's tags: must draw from (default
+                           ["frontend-e2e","backend-api","cli","desktop","mobile"]); extend to mint a tag.
+Example — govern your own source dir and loosen the altitude budget:
+  { "lint": { "governedRoots": ["src"], "altitude": { "lineBudget": 70 } } }
+
+── OTHER (spexcode.json unless noted) ──
+  preset      the SELECTED init preset — which cumulative .config tier \`spex init\` seeds (default
+              'default'; seed-time only, read by init.ts).
+  harnesses   which harness targets \`spex materialize\` delivers into — native ids ("claude"|"codex") or a
+              { "plugin": "<folder>" } bundle. Default (omitted): all native harnesses.
+  private     (spexcode.local.json ONLY) private-overlay mode — when true, \`spex materialize\` leaves ZERO
+              trace in the host's TRACKED files: managed ignore entries go to .git/info/exclude and any
+              tracked contract file is marked skip-worktree. Trades away git-derived spec version history.
+              A HOST decision → never the committed file.`
+
+const TOPICS: Record<string, string> = { spec: SPEC, yatsu: YATSU, config: CONFIG }
 
 export function guideText(topic?: string): string {
   if (!topic) return SETUP
   const t = TOPICS[topic]
   if (t) return t
-  return `spex guide: no topic '${topic}'. Topics: spec, yatsu. Run \`spex guide\` (no topic) for the setup workflow.`
+  return `spex guide: no topic '${topic}'. Topics: spec, yatsu, config. Run \`spex guide\` (no topic) for the setup workflow.`
 }

@@ -108,9 +108,10 @@ export async function loadConfig() {
   return res.json()
 }
 
-// the named launcher profiles ([[launcher-select]]) the backend serves at /api/launchers: `[{ name, harness }]`
-// (never the host `cmd`). Empty when a project configured none → the New-Session form falls back to the plain
-// harness picker.
+// the named launcher profiles ([[launcher-select]]) the backend serves at /api/launchers:
+// `{ launchers: [{ name, harness }], default: '<name>' }` (never the host `cmd`) — `default` is the configured
+// `defaultLauncher` so the New-Session dropdown pre-selects the SAME launcher a bare `spex new` uses. `launchers`
+// is empty (and `default` '') when a project configured none → the form falls back to the plain harness picker.
 export async function loadLaunchers() {
   const res = await apiFetch('/api/launchers')
   return res.json()

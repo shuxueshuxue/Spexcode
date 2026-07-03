@@ -108,6 +108,7 @@ export type Session = {
   raw: { name: string | null; title: string | null }   // the bare parts, for explicit consumers only (rename prefill)
   parent: string | null   // the SPAWNING session's id ([[session-nesting]]) — set once at creation when `spex new` ran inside another session, else null; the frontend folds a child under it at read time
   harness: string   // which harness (claude|codex) runs this session — carried so liveness/occupancy route through its adapter
+  launcher: string | null   // the named launcher profile this session launched under ([[launcher-select]]); null → an unnamed/zero-config launch. Surfaced so a row can badge WHICH launcher (glyph + name) actually brought the worker up
   lifecycle: Lifecycle; proposal: Proposal | null; merges: number; status: DisplayStatus; liveness: Liveness; note: string | null
   prompt: string | null; promptPreview: string | null; created: number; activity: string | null
   sortKey: number | null   // manual drag-reorder override ([[session-reorder]]); null = sort by `created`
@@ -418,7 +419,7 @@ export function toSession(rec: SessRec, status: DisplayStatus, lv: Liveness, act
   const act = showActivity ? activity : null
   const pp = prompt ? promptPreview(prompt) : null
   const parts = { id: rec.session, name: rec.name, node: rec.node, title: rec.title, branch: rec.branch, activity: act, promptPreview: pp }
-  return { id: rec.session, node: rec.node, branch: rec.branch, label: deriveLabel(parts), headline: deriveHeadline(parts), raw: { name: rec.name, title: rec.title }, path: rec.worktreePath, parent: rec.parent, harness: rec.harness, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, prompt, promptPreview: pp, created: rec.createdAt, activity: act, sortKey: rec.sortKey }
+  return { id: rec.session, node: rec.node, branch: rec.branch, label: deriveLabel(parts), headline: deriveHeadline(parts), raw: { name: rec.name, title: rec.title }, path: rec.worktreePath, parent: rec.parent, harness: rec.harness, launcher: rec.launcher, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, prompt, promptPreview: pp, created: rec.createdAt, activity: act, sortKey: rec.sortKey }
 }
 
 // @@@ renameSession - set (or clear) a session's human display NAME: the user-chosen override that wins

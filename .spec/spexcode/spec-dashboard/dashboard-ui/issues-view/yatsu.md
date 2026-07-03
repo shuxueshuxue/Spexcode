@@ -36,19 +36,20 @@ scenarios:
     tags: [frontend-e2e]
     code: spec-dashboard/src/IssuesView.jsx
     description: >-
-      On the running issues page, read the master-detail shell: the grid split, which container scrolls,
-      the sticky group heads. Then drive the keys — j repeatedly from the top so the selection crosses
-      from the evals group into the issue group, k back up — and finally type 'j' inside the New-form
-      input.
+      On the running issues page, read the master-detail shell: the grid split, the left box's tab
+      switcher, which container scrolls, the sticky filter bar. Flip between the Evals and Threads tabs
+      and read what each shows; drive j/k within a tab; select in one tab, flip to the other, and read
+      the detail pane; finally type 'j' inside the New-form input.
     expected: >-
-      The page is a two-column grid: the LEFT column holds TWO bounded regions — the evals group caps at
-      ~half and scrolls itself, the issue group is ALWAYS on screen below it (its head visible without any
-      scrolling, however many evals exist) — the RIGHT detail pane scrolls independently, the page itself
-      never scrolls. The list renders INSTANTLY from app-resident issues (no per-mount fetch). j/k move ONE visible
-      selection across BOTH groups (evals rows first, then issue rows) and the detail pane follows the
-      selection immediately — selection IS detail, nothing expands inside the list. Deep j keeps the
-      selected row inside the left column's viewport. A key typed into an input/textarea reaches the
-      input and never moves the selection. No page errors.
+      The page is a two-column grid: the LEFT column is ONE box under a prominent Evals|Threads switcher
+      (each tab button carries a small count) — the switcher is the title, the active tab's filter bar
+      sits under it (the threads bar puts the open/total meta at its END) and its list gets the full
+      column height, scrolling itself; the RIGHT detail pane scrolls independently, the page itself
+      never scrolls. The list renders INSTANTLY from app-resident issues (no per-mount fetch). j/k move
+      ONE visible selection within the ACTIVE tab and the detail pane follows immediately — selection IS
+      detail, nothing expands inside the list; flipping tabs keeps the previous selection's detail until
+      a pick in the new tab. Deep j keeps the selected row inside the left column's viewport. A key
+      typed into an input/textarea reaches the input and never moves the selection. No page errors.
 ---
 
 # measuring issues-view

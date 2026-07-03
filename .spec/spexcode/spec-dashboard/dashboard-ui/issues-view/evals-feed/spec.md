@@ -2,7 +2,7 @@
 title: evals-feed
 status: active
 hue: 200
-desc: The issues view's evals section — the project's current measured loss as a feed, leading above the issues. Latest reading per scenario, fresh first, video first; title-only rows, media strictly lazy.
+desc: The issues view's evals section — the project's current measured loss as a feed, the left box's default tab (the Evals|Threads switcher, [[issues-view]]). Latest reading per scenario, fresh first, video first; title-only rows, media strictly lazy.
 code:
   - spec-dashboard/src/EvalsFeed.jsx
 related:

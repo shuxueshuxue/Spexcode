@@ -15,6 +15,21 @@ import { useT } from './i18n/index.jsx'
 const stepAt = (events, tMs) => { let hit = null; for (const e of events) { if (e.tMs <= tMs) hit = e; else break } return hit }
 const mmss = (tMs) => { const s = Math.floor(tMs / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` }
 
+// click-to-enlarge for an evidence image: a fixed overlay showing the same blob at viewport size —
+// click anywhere or Esc closes; Esc is swallowed in capture so the page's own Esc stack never fires.
+function ImageLightbox({ src, alt, onClose }) {
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onClose() } }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [onClose])
+  return (
+    <div className="lightbox" onClick={onClose}>
+      <img src={src} alt={alt} />
+    </div>
+  )
+}
+
 function Transcript({ hash }) {
   const t = useT()
   const [text, setText] = useState(null)
@@ -40,10 +55,11 @@ export default function Annotator({ entry, issues = null, specs = [], sessions =
   const [verdict, setVerdict] = useState(null)
   const [note, setNote] = useState('')
   const [flash, setFlash] = useState('')
+  const [zoom, setZoom] = useState(false)
   const kind = entry.blob ? entry.blobKind || 'image' : 'note'   // same honest-kind rule as the feed's kindOf
 
   // a selection change is a new reading under annotation — the working state belongs to the old one.
-  useEffect(() => { setMarks([]); setDrag(null); setVerdict(null); setNote(''); setFlash(''); setEvents([]) }, [entry.blob, entry.scenario, entry.node])
+  useEffect(() => { setMarks([]); setDrag(null); setVerdict(null); setNote(''); setFlash(''); setEvents([]); setZoom(false) }, [entry.blob, entry.scenario, entry.node])
 
   // the step map arrives lazily from the same blob cache the clip streams from; absent → plain player.
   useEffect(() => {
@@ -169,7 +185,10 @@ export default function Annotator({ entry, issues = null, specs = [], sessions =
         </>
       )}
       {entry.blobState === 'present' && kind === 'image' && (
-        <img className="an-image" src={`/api/yatsu/blob/${entry.blob}`} alt={entry.scenario} />
+        <>
+          <img className="an-image" src={`/api/yatsu/blob/${entry.blob}`} alt={entry.scenario} onClick={() => setZoom(true)} />
+          {zoom && <ImageLightbox src={`/api/yatsu/blob/${entry.blob}`} alt={entry.scenario} onClose={() => setZoom(false)} />}
+        </>
       )}
       {entry.blobState === 'present' && kind === 'transcript' && <Transcript hash={entry.blob} />}
       {entry.blobState === 'miss' && <div className="an-hint">{t('nodeView.eval.miss')}</div>}

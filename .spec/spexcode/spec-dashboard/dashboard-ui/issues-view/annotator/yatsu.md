@@ -15,6 +15,17 @@ scenarios:
       on the responsible node with typed evidence[] = [clip hash, timeline hash] and the marks as body.
       Filing the reading appends a manual@1 line (verdict + report transcript) to the scenario's sidecar.
       Switching selection resets the working marks — an annotation binds to one reading.
+  - name: image-lightbox
+    tags: [frontend-e2e]
+    description: >
+      On #/forum select an IMAGE reading. In the detail pane: read the image's cursor style, click it,
+      measure the overlay image's rendered size against the viewport, press Esc and read the page hash;
+      reopen, click the backdrop.
+    expected: |
+      The evidence image invites the zoom (cursor zoom-in). A click opens a fixed full-viewport lightbox
+      showing the SAME blob near viewport size (max ~96vw/96vh — the pane's width is no longer the
+      ceiling). Esc closes ONLY the lightbox — the page stays on #/forum, no page-level Esc handler
+      fires; clicking anywhere on the overlay also closes it. Switching selection while open closes it.
   - name: eval-comments
     tags: [frontend-e2e]
     description: >

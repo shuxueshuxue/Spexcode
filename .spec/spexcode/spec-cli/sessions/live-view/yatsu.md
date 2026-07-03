@@ -94,6 +94,22 @@ scenarios:
       pane's real cursor position (`\x1b[y;xH` from cursor_x/cursor_y), so the TUI's next cursor-relative redraw
       erased its previous frame from the right row. The bug path (a re-seed that leaves the cursor at the body's
       end) doubles the frame — the old and new bottom UI stacked — and must be absent.
+  - name: reconnect-reseed-no-doubled-redraw
+    tags: [backend-api]
+    description: >-
+      Measure the SAME doubled-bottom glitch as scroll-updown, but from the trigger a fresh session hits on a
+      deploy WITHOUT scrolling: a reconnect / refit re-seed. Run the Ink-style relative redrawer (cursor parked
+      above trailing content) in a tmux pane, attach a viewer through the real API, and — while it is mid-render
+      — force a bare full-frame re-seed at the SAME size (resizeBridge(cols, rows, full=true), which is what a
+      viewer reconnect / unsolicited layout-change drives). The pane gets no SIGWINCH, so the TUI keeps doing
+      cursor-relative redraws onto the re-seed. Replay the broadcast through the VT emulator and count copies of
+      the frame's single marker. File with `spex yatsu eval live-view --scenario
+      reconnect-reseed-no-doubled-redraw --result <txt>`.
+    expected: >-
+      Exactly ONE copy of the marker — the re-seed restored the pane's real cursor, so the next relative redraw
+      erased its previous frame correctly even with no scroll and no resize. The bug path (a re-seed that leaves
+      the cursor at the body's end) doubles the frame, which is why every fresh session on the deploy garbled at
+      the bottom; it must be absent.
   - name: output-preserves-utf8-wide-chars
     tags: [backend-api]
     description: >-

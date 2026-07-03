@@ -47,6 +47,24 @@ scenarios:
       prior conversation is present and `harness_session_id` is unchanged — the SAME conversation, matching
       claude's `--resume`, not a fresh thread.
     code: spec-cli/src/harness.ts
+  - name: codex-liveness-reflects-live-tui-not-sock
+    tags: [backend-api]
+    description: >-
+      Through a REAL codex launch, construct the FAILED-launch state the macmini reported: the shared per-project
+      app-server socket is bound (a prior/parallel codex is up, or the app-server started) but THIS session's
+      visible `codex --remote … resume <tid>` TUI FAILED and, after its bounded retries, the launch pane dropped
+      back to the shell prompt — no codex TUI. Read the board / `spex ls` for that session. Then launch a codex
+      session whose TUI comes up normally and read it again.
+    expected: >-
+      The failed launch reads **offline** (NOT online/working), because codex liveness now keys on the pane's
+      `pane_current_command` being codex, not on the shared app-server socket existing. The healthy session reads
+      **online**. The failure this locks: keying liveness on sock-presence read the dead launch as online/working
+      because the SHARED sock survives a failed `--remote resume`, so the supervisor was misled into treating a
+      never-started worker as live — measurable only through a real failed launch, since a synthetic sock-present
+      state hides it. A fresh, still-booting codex pane (bash bootstrapping the app-server before it `exec`s the
+      TUI) must read **starting**, not offline, for the boot-grace window — the fix must not flap a legitimate
+      startup to offline.
+    code: spec-cli/src/harness.ts
 ---
 # yatsu.md — harness-adapter
 

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { activeTurnIdFromThread, codexAppServerSock, codexBinary, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, codexLaunchCommand, writeManagedBlock, removeManagedBlock, launcherList, resolveLauncher } from './harness.js'
+import { activeTurnIdFromThread, codexAppServerSock, codexBinary, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, codexLaunchCommand, paneRunsCodex, writeManagedBlock, removeManagedBlock, launcherList, resolveLauncher } from './harness.js'
 
 test('codex handshake initializes, confirms the loaded thread, then reads it to decide steer-vs-start', () => {
   const msgs = codexHandshakeMessages('thr_1')
@@ -224,14 +224,27 @@ test('clean leaves a foreign (non-spexcode) shim file untouched', () => {
   assert.ok(existsSync(shim))
 })
 
-test('codex liveness tracks the per-project app-server socket + tmux, not the thread id', () => {
+test('codex liveness reads the pane foreground command, NOT the shared app-server socket', () => {
   const dir = mkdtempSync(join(tmpdir(), 'spex-codex-live-'))
-  // no socket yet → offline regardless of the stored thread id
-  assert.equal(codexHarness.liveness({ session: 'spex-1', harnessSessionId: 'codex-thread-1' }, true, dir), 'offline')
+  const rec = { session: 'spex-1', harnessSessionId: 'codex-thread-1' }
+  // FIELD-CONFIRMED FALSE-POSITIVE (macmini): a launch whose `--remote resume` TUI failed leaves the SHARED
+  // per-project app-server socket bound while the pane drops back to the shell. Sock present must NOT read online.
   writeFileSync(codexAppServerSock(dir), '')
-  // socket present + tmux up → online (the thread id is owned by the backend, not the liveness signal)
-  assert.equal(codexHarness.liveness({ session: 'spex-1', harnessSessionId: null }, true, dir), 'online')
-  assert.equal(codexHarness.liveness({ session: 'spex-1', harnessSessionId: 'codex-thread-1' }, true, dir), 'online')
-  // tmux down → offline even with the socket present
-  assert.equal(codexHarness.liveness({ session: 'spex-1', harnessSessionId: 'codex-thread-1' }, false, dir), 'offline')
+  assert.equal(codexHarness.liveness(rec, true, dir, 'bash'), 'offline')   // pane at the shell → offline despite the sock
+  assert.equal(codexHarness.liveness(rec, true, dir, '-zsh'), 'offline')   // login shell (tmux may drop the '-') → offline
+  // HAPPY STATE: the visible codex TUI is the pane's foreground command → online.
+  assert.equal(codexHarness.liveness(rec, true, dir, 'codex'), 'online')
+  assert.equal(codexHarness.liveness({ session: 'spex-1', harnessSessionId: null }, true, dir, 'codex'), 'online')
+  assert.equal(codexHarness.liveness(rec, true, dir, 'codex-glm'), 'online')   // a renamed binary / launcher wrapper still reads live
+  // tmux down → offline even when a codex command lingers in a stale snapshot
+  assert.equal(codexHarness.liveness(rec, false, dir, 'codex'), 'offline')
+  // pane command unavailable (tmux couldn't report it) → not-live
+  assert.equal(codexHarness.liveness(rec, true, dir, undefined), 'offline')
+})
+
+test('paneRunsCodex: a codex/wrapper command is live; a bare shell (booting or failed launch) is not', () => {
+  for (const shell of ['sh', 'bash', '-bash', 'zsh', 'dash', 'fish', 'ksh']) assert.equal(paneRunsCodex(shell), false, shell)
+  for (const cmd of ['codex', 'codex-glm', 'reclaude', 'node']) assert.equal(paneRunsCodex(cmd), true, cmd)
+  assert.equal(paneRunsCodex(undefined), false)
+  assert.equal(paneRunsCodex(''), false)
 })

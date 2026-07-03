@@ -211,6 +211,14 @@ export function materialize(proj = process.cwd()): string {
     const entries = [...new Set([...ignorable, '.spec/', 'spexcode.json'])].sort().join('\n')
     writeManagedBlock(infoExcludePath(proj), entries, ['# ', ''])
     removeManagedBlock(gitignore, ['# ', ''], true)
+    // the ONE manual step private mode can't do for you: .git/info/exclude hides UNTRACKED paths only, so a
+    // .spec/spexcode.json ALREADY committed (a repo that adopted DEFAULT mode first) stays visible until
+    // un-tracked. Surface it loudly rather than leaving a silent leak — the agent doing setup acts on this.
+    const stillTracked = ['.spec', 'spexcode.json'].filter((p) => isTracked(proj, p))
+    if (stillTracked.length) console.error(
+      `spexcode private: ${stillTracked.join(' + ')} still git-tracked — private mode hides UNTRACKED paths only.\n` +
+      `  → run once:  git rm -r --cached ${stillTracked.join(' ')}   (keeps the files on disk, stops tracking them; then commit on your branch)`,
+    )
   } else {
     // DEFAULT: the checkout-invariant managed block in the TRACKED .gitignore (rationale above); strip any
     // private exclude block so switching OUT of private mode is equally clean.

@@ -1,7 +1,7 @@
 import { relative, dirname } from 'node:path'
 import { repoRoot, driftIndex, historyIndex, type DriftIndex, type HistoryIndex } from '../../spec-cli/src/git.js'
 import { loadSpecs } from '../../spec-cli/src/specs.js'
-import { loadEvalRemarkTracks, trackKey, type RemarkTrack } from '../../spec-cli/src/issues.js'
+import { loadEvalRemarkTracks, trackKey, type RemarkTrack, type Issue } from '../../spec-cli/src/issues.js'
 import { yatsuNodes, type YatsuNode } from './yatsu.js'
 import { readReadings, evidenceOf, type Verdict, type EvidenceKind } from './sidecar.js'
 import { staleAxes, type StaleAxis } from './freshness.js'
@@ -49,6 +49,10 @@ export type EvalEntry = {
   // the trunk remark track overlaid onto THIS reading ([[remark-teeth]]): the remarks whose targetCodeSha
   // pins here (or the latest reading, for a dangling target). Absent when the scenario has no remark.
   remarks?: RemarkView[]
+  // the (node, scenario) eval-remark THREAD ([[eval-issue-split]]): the SAME join the teeth read, attached
+  // so the eval detail pane reads its whole comment thread from the reading overlay — the counterpart to
+  // splitting eval-remark threads OUT of the issue surfaces (mergedIssues). Absent until the first remark.
+  thread?: Issue
 }
 
 export type ScenarioInfo = { name: string; expected: string; tags?: string[]; code?: string[] }
@@ -105,6 +109,7 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
   // the trunk remark track per scenario ([[remark-teeth]]) — the non-git freshness input, fed to the teeth.
   const tracks = ctx?.remarks ?? loadEvalRemarkTracks()
   const remarksFor = (scenario: string): RemarkTrack['remarks'] => tracks.get(trackKey(id, scenario))?.remarks ?? []
+  const threadFor = (scenario: string): Issue | undefined => tracks.get(trackKey(id, scenario))?.thread
   const scenarios: ScenarioInfo[] = ynode.scenarios.map((s) => ({
     name: s.name, expected: s.expected,
     ...(s.tags?.length ? { tags: s.tags } : {}), ...(s.code?.length ? { code: s.code } : {}),
@@ -135,6 +140,7 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
       fresh: axes.length === 0,
       staleAxes: axes,
       blobState: primary ? primary.state : 'none',
+      ...(threadFor(r.scenario) ? { thread: threadFor(r.scenario) } : {}),
     }
   })
   readings.reverse()   // newest-first

@@ -42,7 +42,7 @@ export default {
     railLabel: '主导航',
     graph: '规格节点图（⌥1）',
     sessions: '会话面板（⌥2）',
-    forum: '论坛（⌥3 / ⌥F）',
+    issues: '议题（⌥3 / ⌥F）',
     settings: '设置（⌥4）',
   },
 
@@ -80,6 +80,9 @@ export default {
   thread: {
     anchorNow: '锚定',
     anchorTitle: '把这条评论锚定到当前帧',
+    resolved: '已解决',
+    resolvedBy: '由 {by} 解决',
+    openRemark: '未解决',
   },
 
 
@@ -121,7 +124,7 @@ export default {
       overlayCycle: '在工作树正在修改的节点间循环（⇧ 反向）',
       enter: '进入聚焦节点的实时会话',
       fresh: '在聚焦节点上开启一个全新会话',
-      issues: '打开 issues 页（本地论坛 + forge，同一张列表）',
+      issues: '打开 issues 页（本地议题 + forge，同一张列表）',
       newChild: '在聚焦节点下新建子节点（连击）',
       del: '删除聚焦节点（连击）',
       settings: '打开设置（语言…）',
@@ -278,7 +281,7 @@ export default {
     newSessionTitle: '新建会话（⌥+N）',
     searchTitle: '搜索（⌘+/）',
     // 合并 issues 页（[[issues-view]]）—— 新建会话旁的第二个顶部按钮。
-    issuesOff: '论坛工作流已关闭。',
+    issuesOff: 'issues 工作流已关闭。',
     issuesEmpty: '暂无 issue。',
     issuesLoading: '正在加载 issues……',
     issuesFocusNode: '在看板上聚焦此节点',

@@ -2,7 +2,7 @@
 title: proposals
 status: active
 hue: 200
-desc: The forum — the LOCAL store of the one Issue object ([[issues]]): git-native threads as plain documents under .spec/.forum (NOT spec nodes); others sign/reply; a supervisor drains it. Proposals are nudged post-merge, once the agent's own work has safely landed.
+desc: The LOCAL store of the one Issue object ([[issues]]): git-native threads as plain documents under .spec/.forum (NOT spec nodes); others sign/reply; a supervisor drains it. Proposals are nudged post-merge, once the agent's own work has safely landed.
 code:
   - spec-cli/src/proposals.ts
   - spec-cli/templates/hooks/post-merge
@@ -14,16 +14,16 @@ code:
 
 An agent finishing a task notices things that feel off — a smell, an awkward boundary, a wish — often
 unrelated to its mainline. That judgment is **taste**, and it must not evaporate when the session ends. So a
-finished session records such concerns into one shared, durable **forum**; other sessions sign and discuss
-them like an async chatroom; a supervisor later drains the forum into real work. This keeps **global** taste
+finished session records such concerns into one shared, durable **local issue store**; other sessions sign and discuss
+them like an async chatroom; a supervisor later drains the local issue store into real work. This keeps **global** taste
 flowing into the codebase's shape, instead of every agent owning only its own slice.
 
-**The forum is narrow on purpose — it is not an issue tracker.** A local issue earns its place only when it
+**The local issue store is narrow on purpose — it is not an issue tracker.** A local issue earns its place only when it
 will **outlive the task at hand**, in one of exactly two shapes: (a) an off-mainline **proposal / taste** —
 a concern you are *not* going to act on now; or (b) a **not-worth-a-spec to-do** — something
 trivial-but-must-not-be-forgotten that doesn't merit a spec node. That's it. It is deliberately **not** a
 general bug tracker: tracking work is what the **spec graph** (the definition) and the **forge** (the
-execution) already do, and a forum that competes with them stops being a durable taste-layer and becomes a
+execution) already do, and a store that competes with them stops being a durable taste-layer and becomes a
 second, drifting source of truth — a liability. Two anti-patterns follow directly: **don't open an issue for
 a task you're actively driving** — you'll do it and then forget the thread; the design of dispatched work
 rides its dispatch, not a lingering issue. And **close what you finish** — an issue whose work has landed is
@@ -33,18 +33,18 @@ just landed work), and states them.
 
 ## expanded spec
 
-The forum is the **local store of [[issues]]** — the venue where a locally-stored Issue lives. A thread
+The local issue store is the **local store of [[issues]]** — the venue where a locally-stored Issue lives. A thread
 *is* an Issue whose `store` is `local`; that store membership is implied by **where the file lives**,
 never written into it. This node owns the store's whole mechanism: the venue, the file format, the write
 verbs, the concurrency discipline, and the post-merge nudge. Reading is not this node's surface — the one
 read over every store (CLI `spex issues`, `GET /api/issues`, the board fold) is [[issues]]'s port.
 
-The forum is **git-tracked data, not a spec node.** A thread reuses almost nothing of the spec-node
+The local issue store is **git-tracked data, not a spec node.** A thread reuses almost nothing of the spec-node
 contract — no title/hue/desc/code frontmatter, no parent-ancestor nesting, no lint, no drift, no
 version-from-`spec.md`-log, no graph render — so forcing it into a `spec.md` would only earn it a pair of
 graph-exemptions to blind it again. Instead each thread is a **plain markdown file** at
 `<root>/.spec/.forum/<id>.md`. Because that file is **not named `spec.md`**, the spec walk descends past
-it without making a node and `isSpecMd` ignores it: the forum is invisible to lint / drift / deriveStatus /
+it without making a node and `isSpecMd` ignores it: the local issue store is invisible to lint / drift / deriveStatus /
 overlay **structurally**, with no special-case exemption. It lives **inside `.spec`** (not a second
 top-level folder) so adopting SpexCode still adds one directory — matching how the reflexive `.config`
 system already nests there.
@@ -53,7 +53,7 @@ system already nests there.
   a Q&A: all the same mechanism, distinguished by nothing but their own words. There is deliberately no
   `kind` taxonomy field ([[issues]]): it would do no mechanical work — the verbs are id-based, dispatch
   doesn't branch on it, the drain is judgment — so it would be a label bought with a second creation verb
-  and a filter. The forum is the git-native **discussion/annotation layer over the graph**.
+  and a filter. The local issue store is the git-native **discussion/annotation layer over the graph**.
 - **One file per thread.** The file is a one-line `concern` plus a prose body plus appended signed replies —
   each reply preceded by a `<!-- reply: <by> @ <at> -->` sentinel line. A reply may carry **remark** state
   ([[remark-substrate]]) — a resolvable bit + the codeSha it judges — appended to its sentinel as a
@@ -64,22 +64,22 @@ system already nests there.
   [[issues]] / [[video-evidence]]), and `signers`. The sentinel is **unforgeable**: user body text is
   neutralized on write, so a body that itself contains that marker can't spawn a phantom reply or truncate
   the thread.
-- **Own lifecycle status**, forum-authored never git-derived: `open` → `accepted | rejected | landed`.
-- **The forum lives on the trunk, not per-branch.** A write reads and commits **straight to the main
-  checkout's `.spec/.forum/`** — a forum file is data, not contract, and the write below commits it with
+- **Own lifecycle status**, store-authored never git-derived: `open` → `accepted | rejected | landed`.
+- **The local issue store lives on the trunk, not per-branch.** A write reads and commits **straight to the main
+  checkout's `.spec/.forum/`** — a local-issue file is data, not contract, and the write below commits it with
   `--no-verify` (provably a single `.spec/.forum/` path), so it lands on the trunk without needing any
   [[main-guard]] exception. So there is no per-branch copy and no cross-worktree union to reconcile: every
   thread is always present to read, sign, and reply to. This is also what lets a **post-merge** proposal
   land durably — the author's own branch has
   already merged, so a proposal written then could never ride it; committed to the trunk directly, it persists.
-- **Writes are serialized + fast, so a burst can't corrupt the forum.** The whole read-mutate-write-commit of
-  one thread runs under a single cross-process **forum lock** (an atomic `.git` dir-lock, stale-stolen), so
+- **Writes are serialized + fast, so a burst can't corrupt the local issue store.** The whole read-mutate-write-commit of
+  one thread runs under a single cross-process **store lock** (an atomic `.git` dir-lock, stale-stolen), so
   concurrent writers can neither collide on the repo index nor lose a racing reply (last-writer-wins is
   impossible — each read is under the lock). The commit itself is **`--no-verify`**: the file is data,
   structurally invisible to lint, and the commit is provably a single `.spec/.forum/` path, so running the
   seconds-long pre-commit gate would only pass anyway — pure overhead that would hold the lock. The id is
   minted under the lock too, so two racing posts can't claim it.
-- **Nudged AFTER the work lands, not during it.** The agent's own task is what matters most, so the forum is
+- **Nudged AFTER the work lands, not during it.** The agent's own task is what matters most, so the local issue store is
   never raised while it is still finishing — it is raised the moment the work **merges**. A **`post-merge`
   git hook** (harness-side gates live in [[state]]; this one is git-side) fires in the doer's dispatched
   merge turn — merge is dispatched to the session's own agent (see [[dispatch]]) — guarded to the
@@ -91,18 +91,18 @@ system already nests there.
   a reply carries accrues onto the thread's `evidence[]`, deduped — an anchored annotation's frame blob),
   `sign`, and `resolve` act on any local thread. There is deliberately no store-local read command —
   reading is `spex issues` ([[issues]]), the same list every store feeds.
-- **A human writes too — the forum is the programmatic surface.** The same write verbs carry an optional
+- **A human writes too — the local issue store is the programmatic surface.** The same write verbs carry an optional
   `author` (default the effective session id, else a caller-passed `'human'`), so a person can post from
-  outside the CLI. `forumReply(id, body, author)` and `forumPost(concern, {nodes, body, author})` are
+  outside the CLI. `replyLocalIssue(id, body, author)` and `postLocalIssue(concern, {nodes, body, author})` are
   the programmatic entrypoints: each does the git-committed write AND then dispatches any `@`-mention in the
-  text ([[mentions]]). `forumReply` additionally loops in the thread's **originator** — its author, or, for an
+  text ([[mentions]]). `replyLocalIssue` additionally loops in the thread's **originator** — its author, or, for an
   eval-comment thread (concern `eval: <node> · <scenario>`), the reading's filer — as a courtesy if online
-  (the implicit loop-in, [[mentions]]); `forumPost` opens a *new* thread whose originator is the poster, so it
-  loops in no one. Each returns `{ thread, outcomes, loopIn }`. Because the forum is the programmatic surface, a
+  (the implicit loop-in, [[mentions]]); `postLocalIssue` opens a *new* thread whose originator is the poster, so it
+  loops in no one. Each returns `{ thread, outcomes, loopIn }`. Because the local issue store is the programmatic surface, a
   human's `@`-mention in a reply **does** summon the agent — that is the point. The dashboard's write path
   ([[issues-view]]) is a thin caller: `POST /api/issues/:id/reply` and `POST /api/issues` (author `'human'`),
   both gated by the same on/off switch (403 when OFF).
-- **Opt-outable, default ON.** The forum workflow is a feature you can switch off: `spex propose on|off`
+- **Opt-outable, default ON.** The issues workflow is a feature you can switch off: `spex propose on|off`
   flips `spexcode.json`'s `proposals.enabled` (the shared settings file every other toggle lives in),
   effective immediately with no commit (config is read from the working tree). OFF silences the post-merge
   nudge and hides the dashboard issues view; the raw write verbs stay usable, since running one is explicit
@@ -114,5 +114,5 @@ system already nests there.
   recurrence is weighed as **salience, not importance**: a sharp singleton outranks a popular gripe, so the
   count never becomes the priority ranking.
 
-The dashboard renders and writes to this same forum through [[issues-view]] — a thin caller over the
+The dashboard renders and writes to this same store through [[issues-view]] — a thin caller over the
 programmatic write surface above, never a second store.

@@ -27,7 +27,7 @@ WebDriver listener, or a computer-use hand narrating each action are all just em
 so scripted and ad-hoc measurement share a single contract and no framework is privileged. Aligning the
 emitter's clock to the clip is the emitter's own job.
 
-Its consumer has arrived: the [[annotator]]'s step ruler reads this map to seek and to name the step an
+Its consumer has arrived: the [[event-detail]]'s step ruler reads this map to seek and to name the step an
 annotation lands on. A step may carry an **optional owning-node id**, so a finding at that moment routes to
 the node actually responsible — not necessarily the node under measure. Deliberately out of scope:
 keyframe/highlight markers beyond a plain step, any on-video caption rendering, any authoring UI, and any

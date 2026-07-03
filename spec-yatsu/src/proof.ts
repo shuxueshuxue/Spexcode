@@ -1,7 +1,6 @@
 import { dirname } from 'node:path'
 import { git, gitA, repoRoot, driftIndex, historyIndex, type ReviewDiffFile } from '../../spec-cli/src/git.js'
 import { loadSpecs } from '../../spec-cli/src/specs.js'
-import { trackKey, type Issue } from '../../spec-cli/src/issues.js'
 import { mainBranch } from '../../spec-cli/src/layout.js'
 import { reviewPayload } from '../../spec-cli/src/sessions.js'
 import { evalTimeline, evalContext, readBlobByHash, type EvalEntry } from './evaltab.js'
@@ -507,10 +506,11 @@ export type SessionEvalNode = {
   hasYatsu: boolean
   uncoveredFrontend: boolean
   scenarios: { name: string; expected: string; tags?: string[] }[]
-  // each reading carries the trunk eval-concern thread for its (node, scenario) ([[remark-teeth]] directive
-  // 3): the server-side join, so the session tab's annotator reads the comment/remark track directly instead
-  // of re-matching a concern key client-side. Null when the pair has no thread yet.
-  evals: (EvalEntry & { inSession: boolean; thread: Issue | null })[]
+  // each reading carries the trunk eval-concern thread for its (node, scenario) ([[remark-teeth]] / directive
+  // 3): the server-side join (attached by evalTimeline as `EvalEntry.thread`), so the session tab's event
+  // detail reads the comment/remark track directly instead of re-matching a concern key client-side. Absent
+  // until the pair has its first remark.
+  evals: (EvalEntry & { inSession: boolean })[]
 }
 export type SessionEvals = {
   id: string
@@ -550,8 +550,9 @@ export async function buildSessionEvals(id: string): Promise<SessionEvals | null
       hasYatsu: tl.hasYatsu,
       uncoveredFrontend: !tl.hasYatsu && (spec?.code ?? []).some(isUiPath),
       scenarios: tl.scenarios,
-      // attach the per-scenario trunk thread (the SAME join the teeth read) so the annotator has it inline.
-      evals: tl.readings.map((r) => ({ ...r, inSession: shas.has(r.codeSha), thread: ctx.remarks.get(trackKey(nid, r.scenario))?.thread ?? null })),
+      // the per-scenario trunk thread rides each reading as `EvalEntry.thread` (evalTimeline's overlay), so
+      // the event detail has the comment/remark track inline — no extra join here.
+      evals: tl.readings.map((r) => ({ ...r, inSession: shas.has(r.codeSha) })),
     })
   }
   // nodes with in-session measurements lead, then the most-measured — the session's own evidence first.

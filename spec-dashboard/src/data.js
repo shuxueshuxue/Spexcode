@@ -150,6 +150,17 @@ export async function postIssueThread({ concern, nodes, body, evidence }) {
   })
   return res.json()
 }
+// author a REMARK on an eval's (node, scenario) thread ([[remark-substrate]] / [[event-detail]]) — the
+// CLI-parity write the eval detail's composer uses (L: no dashboard-only path). The server find-or-creates
+// the one thread for the pair and appends the remark; identity is server-derived ('human'), never sent. A
+// scenario-scoped concern is a remark, never an issue (I1). Returns { ok, ref, rid, codeSha, outcomes }.
+export async function postRemark({ node, scenario, issue, body, codeSha, evidence }) {
+  const res = await apiFetch('/api/remarks', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ node, scenario, issue, body, ...(codeSha ? { codeSha } : {}), ...(evidence?.length ? { evidence } : {}) }),
+  })
+  return res.json()
+}
 // stash a captured video frame (PNG bytes) in the content-addressed blob store; returns { hash } — what an
 // anchored annotation references (image link in its body, and the typed evidence[] on its thread).
 export async function putFrameBlob(blob) {

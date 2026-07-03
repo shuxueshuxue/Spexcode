@@ -15,7 +15,7 @@ import { mainCheckout, envSessionId, readConfig } from './layout.js'
 import { dispatchMentions, notifyOriginator, deliveredIds, summarize, type DispatchOutcome, type LoopIn } from './mentions.js'
 import type { Issue, Reply } from './issues.js'
 
-const FORUM_REL = '.spec/.forum'
+const LOCAL_STORE_REL = '.spec/.forum'
 
 // @@@ the on/off switch - the forum workflow is an OPT-OUTABLE feature (default ON). The single source of
 // truth is `spexcode.json`'s `proposals.enabled` (the same settings file that carries every other toggle),
@@ -38,7 +38,7 @@ const list = (v: string | undefined): string[] =>
 
 // the forum dir on the TRUNK — a fixed path directly under .spec (name-independent, unlike the .config
 // system which nests under the named root node). Every read and write goes here.
-const forumDir = (): string => join(mainCheckout(), FORUM_REL)
+const localStoreDir = (): string => join(mainCheckout(), LOCAL_STORE_REL)
 // the author's signature: the effective governed session id (envSessionId handles the claude/codex split).
 const currentSession = (): string => envSessionId() || 'unknown'
 // a synchronous sleep for the commit-retry backoff (Date/timers-free, safe in any runtime).
@@ -132,7 +132,7 @@ function serialize(p: Issue): string {
 }
 
 export function loadProposals(): Issue[] {
-  const dir = forumDir()
+  const dir = localStoreDir()
   if (!existsSync(dir)) return []
   return readdirSync(dir, { withFileTypes: true })
     .filter((e) => e.isFile() && e.name.endsWith('.md'))
@@ -141,7 +141,7 @@ export function loadProposals(): Issue[] {
 }
 
 export function loadOne(id: string): Issue {
-  const f = join(forumDir(), `${id}.md`)
+  const f = join(localStoreDir(), `${id}.md`)
   if (!existsSync(f)) throw new Error(`no local issue '${id}' (see \`spex issues --all --store local\`)`)
   return parse(id, readFileSync(f, 'utf8'))
 }
@@ -149,7 +149,7 @@ export function loadOne(id: string): Issue {
 // a filesystem-safe, readable, collision-free id from the concern (slug + numeric suffix if taken).
 function uniqueId(concern: string): string {
   const base = concern.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48) || 'issue'
-  const dir = forumDir()
+  const dir = localStoreDir()
   let id = base
   for (let n = 2; existsSync(join(dir, `${id}.md`)); n++) id = `${base}-${n}`
   return id
@@ -160,7 +160,7 @@ function uniqueId(concern: string): string {
 // single cross-process lock serializes the WHOLE prepare→write→commit, killing both. It is an atomic
 // `mkdir` (in .git, never committed); a lock whose holder crashed is stolen after it goes stale. Because the
 // commit is `--no-verify` fast (below), serialized forum writes stay quick even under a burst.
-function withForumLock<T>(fn: () => T): T {
+function withStoreLock<T>(fn: () => T): T {
   const lock = join(mainCheckout(), '.git', 'spexcode-forum.lock')
   for (let i = 0; ; i++) {
     try { mkdirSync(lock); break }                                   // atomic acquire
@@ -175,12 +175,12 @@ function withForumLock<T>(fn: () => T): T {
 // write + commit ONE forum file STRAIGHT to the trunk. The commit is `--no-verify`: the file is DATA,
 // structurally invisible to spec-lint, and the commit is provably forum-only (one .spec/.forum/ path), so the
 // pre-commit gate would only pass anyway — running it just burns seconds (tsx cold-start) holding the lock.
-// MUST run while holding withForumLock — it is the write half of a locked read-modify-write; its callers
-// (commitForum, findOrCreateEvalThread) own the lock, so it never acquires one itself (mkdir is not re-entrant).
-function writeForumFile(p: Issue, message: string): void {
+// MUST run while holding withStoreLock — it is the write half of a locked read-modify-write; its callers
+// (commitStore, findOrCreateEvalThread) own the lock, so it never acquires one itself (mkdir is not re-entrant).
+function writeStoreFile(p: Issue, message: string): void {
   const root = mainCheckout()
-  const rel = `${FORUM_REL}/${p.id}.md`
-  mkdirSync(join(root, FORUM_REL), { recursive: true })
+  const rel = `${LOCAL_STORE_REL}/${p.id}.md`
+  mkdirSync(join(root, LOCAL_STORE_REL), { recursive: true })
   writeFileSync(join(root, rel), serialize(p))
   git(['-C', root, 'add', '--', rel])
   git(['-C', root, 'commit', '--no-verify', '-m', message, '--', rel])
@@ -189,10 +189,10 @@ function writeForumFile(p: Issue, message: string): void {
 // prepare (a FRESH read-modify or a new thread) + write + commit a single forum file, all under the forum
 // lock so the read-modify-write is atomic. prepare() runs INSIDE the lock, so a reply/sign/resolve reads the
 // current thread, never a stale copy.
-function commitForum(message: string, prepare: () => Issue): Issue {
-  return withForumLock(() => {
+function commitStore(message: string, prepare: () => Issue): Issue {
+  return withStoreLock(() => {
     const p = prepare()
-    writeForumFile(p, message)
+    writeStoreFile(p, message)
     return p
   })
 }
@@ -200,7 +200,7 @@ function commitForum(message: string, prepare: () => Issue): Issue {
 // `author` defaults to the effective session id, but a caller (the dashboard's human write path) may pass
 // `'human'` — the write mechanism is identical either way, only the signature differs.
 export function propose(concern: string, opts: { nodes?: string[]; body?: string; evidence?: string[]; author?: string } = {}): Issue {
-  return commitForum(`issue: ${concern}`, () => ({
+  return commitStore(`issue: ${concern}`, () => ({
     id: uniqueId(concern),   // minted INSIDE the lock, so two racing posts can't pick the same id
     store: 'local',
     concern,
@@ -228,7 +228,7 @@ function mintRid(existing: Set<string>): string {
 // an ordinary reply, unchanged. Returns the thread; the new reply is its last, so a caller reads back its rid.
 export function reply(id: string, body: string, author?: string, evidence?: string[], remark?: { targetCodeSha: string }): Issue {
   const by = author || currentSession()
-  return commitForum(remark ? `remark(${id}): by ${by}` : `issue(${id}): reply by ${by}`, () => {
+  return commitStore(remark ? `remark(${id}): by ${by}` : `issue(${id}): reply by ${by}`, () => {
     const p = loadOne(id)   // fresh read under the lock → no lost-update when replies race
     const post: Reply = { by, at: new Date().toISOString(), body: body.trim() }
     if (remark) { post.rid = mintRid(new Set(p.replies.map((r) => r.rid).filter((x): x is string => !!x))); post.targetCodeSha = remark.targetCodeSha; post.resolved = false }
@@ -247,7 +247,7 @@ export function reply(id: string, body: string, author?: string, evidence?: stri
 // plus the @-dispatch outcomes so a caller can echo who was notified.
 // The two reply deliveries are orthogonal: `evidence?` (f15b) carries a video annotation's frame blobs onto
 // the thread; the originator loop-in ([[mentions]]) notifies who raised the thread. Both apply on every reply.
-export async function forumReply(id: string, body: string, author: string, evidence?: string[], remark?: { targetCodeSha: string }): Promise<{ thread: Issue; outcomes: DispatchOutcome[]; loopIn: LoopIn | null }> {
+export async function replyLocalIssue(id: string, body: string, author: string, evidence?: string[], remark?: { targetCodeSha: string }): Promise<{ thread: Issue; outcomes: DispatchOutcome[]; loopIn: LoopIn | null }> {
   const thread = reply(id, body, author, evidence, remark)
   const node = thread.nodes[0] || null
   const outcomes = await dispatchMentions(body, { threadId: id, node, author, status: thread.status })
@@ -270,7 +270,7 @@ async function threadOriginator(thread: Issue): Promise<string | null> {
   return evalReadingFiler(m[1].trim(), m[2].trim())
 }
 
-export async function forumPost(
+export async function postLocalIssue(
   concern: string,
   opts: { nodes?: string[]; body?: string; evidence?: string[]; author: string },
 ): Promise<{ thread: Issue; outcomes: DispatchOutcome[] }> {
@@ -281,7 +281,7 @@ export async function forumPost(
 
 export function sign(id: string): string[] {
   const by = currentSession()
-  return commitForum(`issue(${id}): signed by ${by}`, () => {
+  return commitStore(`issue(${id}): signed by ${by}`, () => {
     const p = loadOne(id)
     if (!p.signers.includes(by)) p.signers.push(by)
     return p
@@ -291,7 +291,7 @@ export function sign(id: string): string[] {
 const RESOLUTIONS = new Set(['accepted', 'rejected', 'landed'])
 export function resolve(id: string, as: string): string {
   if (!RESOLUTIONS.has(as)) throw new Error(`resolution must be one of: ${[...RESOLUTIONS].join(' | ')}`)
-  commitForum(`issue(${id}): resolve ${as}`, () => {
+  commitStore(`issue(${id}): resolve ${as}`, () => {
     const p = loadOne(id)
     p.status = as
     return p
@@ -316,7 +316,7 @@ const evalConcernKey = (node: string, scenario: string): string => `eval: ${node
 // synchronous create suffices, and staying sync is exactly what lets it share the lock hold.
 function findOrCreateEvalThread(node: string, scenario: string, author: string): Issue {
   const concern = evalConcernKey(node, scenario)
-  return withForumLock(() => {
+  return withStoreLock(() => {
     const existing = loadProposals().find((t) => t.store === 'local' && t.concern === concern)
     if (existing) return existing
     const p: Issue = {
@@ -324,7 +324,7 @@ function findOrCreateEvalThread(node: string, scenario: string, author: string):
       nodes: [node], signers: [], created: new Date().toISOString(),
       body: `Remarks on the \`${scenario}\` eval of [[${node}]].`, replies: [], evidence: [],
     }
-    writeForumFile(p, `issue: ${concern}`)
+    writeStoreFile(p, `issue: ${concern}`)
     return p
   })
 }
@@ -349,7 +349,7 @@ export async function remarkOnHost(
   const author = opts.author || currentSession()
   const codeSha = opts.codeSha || headSha(repoRoot())
   const id = resolveRemarkHost(host, author)
-  const { thread, outcomes, loopIn } = await forumReply(id, body, author, opts.evidence, { targetCodeSha: codeSha })
+  const { thread, outcomes, loopIn } = await replyLocalIssue(id, body, author, opts.evidence, { targetCodeSha: codeSha })
   const rid = thread.replies[thread.replies.length - 1].rid!
   return { ref: `${id}#${rid}`, rid, codeSha, thread, outcomes, loopIn }
 }
@@ -366,7 +366,7 @@ function parseRemarkRef(ref: string): { id: string; rid: string } {
 // MONOTONIC (no un-resolve — a regression is a NEW remark). `by` is the resolving party.
 export function resolveRemark(ref: string, by: string): { thread: Issue; rid: string } {
   const { id, rid } = parseRemarkRef(ref)
-  const thread = commitForum(`remark(${id}#${rid}): resolved by ${by}`, () => {
+  const thread = commitStore(`remark(${id}#${rid}): resolved by ${by}`, () => {
     const p = loadOne(id)
     const r = p.replies.find((x) => x.rid === rid)
     if (!r) throw new Error(`no remark '${ref}' in that thread`)
@@ -386,7 +386,7 @@ export function resolveRemark(ref: string, by: string): { thread: Issue; rid: st
 // resolved remark. A regression after a resolve is a NEW remark, never a retract-and-reraise.
 export function retractRemark(ref: string, by: string): { thread: Issue; rid: string } {
   const { id, rid } = parseRemarkRef(ref)
-  const thread = commitForum(`remark(${id}#${rid}): retracted by ${by}`, () => {
+  const thread = commitStore(`remark(${id}#${rid}): retracted by ${by}`, () => {
     const p = loadOne(id)
     const idx = p.replies.findIndex((x) => x.rid === rid)
     if (idx < 0) throw new Error(`no remark '${ref}' in that thread`)

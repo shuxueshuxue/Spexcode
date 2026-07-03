@@ -12,7 +12,7 @@ related:
   - spec-yatsu/src/proof.ts
   - spec-yatsu/src/cli.ts
   - spec-cli/src/board.ts
-  - spec-dashboard/src/Annotator.jsx
+  - spec-dashboard/src/EventDetail.jsx
   - spec-dashboard/src/SessionEval.jsx
 ---
 # remark-teeth
@@ -54,7 +54,7 @@ server running.
 The remark track lives **once in trunk**, keyed `(node, scenario)` by its `eval: <node> · <scenario>`
 concern thread ([[remark-substrate]]'s R4). Reading it is a single function — `loadEvalRemarkTracks` — that
 splits those eval-concern threads out of the forum and hands back, per pair, the thread plus its remark
-replies. That is the join the dashboard's `Annotator.jsx` used to compute **client-side** (concern-key
+replies. That is the join the dashboard's `EventDetail.jsx` used to compute **client-side** (concern-key
 matching against a resident issues list). Lifting it server-side means `buildSessionEvals`, the board fold,
 the CLI, and the annotator all read **one** join instead of each re-deriving it.
 

@@ -85,10 +85,10 @@ body {
 /* the active page: a soft accent wash + accent ink — a state, not a hover effect */
 .rail-btn.on { background: color-mix(in srgb, var(--blue) 14%, transparent); color: var(--blue); }
 
-/* ---- routed page containers (forum, settings) ---- */
+/* ---- routed page containers (issues, settings) ---- */
 .page-pane { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--paper); }
-/* forum keeps the issues-view iron rule: the outer page never scrolls, each region scrolls internally */
-.page-forum { overflow: hidden; padding: 10px 14px; }
+/* the issues page keeps the issues-view iron rule: the outer page never scrolls, each region scrolls internally */
+.page-issues { overflow: hidden; padding: 10px 14px; }
 .page-settings { overflow: auto; flex-direction: row; justify-content: center; }
 .settings-body { width: min(720px, 94%); padding: 26px 0 60px; }
 .page-title { font-size: 17px; font-weight: 700; color: var(--ink2); margin: 6px 2px 14px; }
@@ -1033,6 +1033,13 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* the review track ([[annotator]]): the playhead-inside comment glows green, the selected one orange — in sync with the scrubber markers. */
 .fv-reply.active { border-left-color: var(--green); background: color-mix(in srgb, var(--green) 7%, transparent); }
 .fv-reply.sel { border-left-color: var(--orange); background: color-mix(in srgb, var(--orange) 9%, transparent); }
+/* a remark ([[remark-substrate]]) carries its resolved bit in place: an OPEN remark is prominent (the loss the
+   eval scoreboard is still carrying — a live left-bar), a RESOLVED one is visually settled (dimmed, thin bar). */
+.fv-reply.remark.open { border-left-color: var(--orange); border-left-width: 3px; }
+.fv-reply.remark.resolved { opacity: .62; border-left-color: color-mix(in srgb, var(--green) 45%, var(--line)); }
+.fv-remark-state { font-family: var(--mono); font-size: 10px; padding: 0 5px; border-radius: 3px; margin-left: auto; }
+.fv-remark-state.open { color: var(--orange); background: color-mix(in srgb, var(--orange) 12%, transparent); font-weight: 600; }
+.fv-remark-state.resolved { color: var(--green); background: color-mix(in srgb, var(--green) 12%, transparent); }
 .fv-reply-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; font-family: var(--mono); font-size: 10.5px; }
 .fv-reply-by { color: var(--blue); font-weight: 600; }
 .fv-reply-at { color: var(--muted); }

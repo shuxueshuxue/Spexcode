@@ -2,7 +2,7 @@
 title: issues-view
 status: active
 hue: 200
-desc: The dashboard's ONE issues page — the Forum route (#/forum, [[side-nav]]) as a MASTER-DETAIL — a left list (evals leading, merged issues below) and a full-height detail pane the selection drives; markdown-rendered bodies and threads for both stores, node chips focus the graph, the detail's reply composer routes by store (forum commit or real forge comment).
+desc: The dashboard's ONE issues page — the issues route (#/issues, [[side-nav]]) as a MASTER-DETAIL — a left list (evals leading, merged issues below) and a full-height detail pane the selection drives; markdown-rendered bodies and threads for both stores, node chips focus the graph, the detail's reply composer routes by store (local-store commit or real forge comment).
 code:
   - spec-dashboard/src/IssuesView.jsx
   - spec-dashboard/src/Thread.jsx
@@ -14,14 +14,14 @@ code:
 
 Issues are one object over every store ([[issues]]), and a human wants **one place** to read them — an
 agent's local taste proposal and a GitHub issue on the same node belong on the same page, not on two
-surfaces the user must correlate. So the dashboard carries ONE **Forum page** for them, a top-level page
+surfaces the user must correlate. So the dashboard carries ONE **issues page** for them, a top-level page
 of its own. The dashboard stays a **thin window** over the CLI's truth, never a second source —
 it renders what `/api/issues` returns and computes nothing, and every write goes through the SAME
 reply/propose the CLI uses, committed straight to the trunk.
 
 ## expanded spec
 
-- **Entries — the forum is its OWN page.** The page lives at `#/forum` with its own [[side-nav]] rail
+- **Entries — the local issue store is its OWN page.** The page lives at `#/issues` with its own [[side-nav]] rail
   entry — bookmarkable, reloadable, a peer of the graph and the session board. The keyboard doors are
   [[side-nav]]'s global ⌥ vocabulary — **⌥F / ⌥3** reach it from any page, the console included — plus
   the board's bare **`f` key** ([[keyboard-nav]]'s declarative keymap table, rebindable) as the direct
@@ -41,12 +41,16 @@ reply/propose the CLI uses, committed straight to the trunk.
   rides its switcher button, so the hidden tab is never a mystery. The hidden tab stays MOUNTED (its
   filter state and row reporting survive a flip). The **right pane** is the full-height DETAIL of the
   one selection — **selection IS detail** (email-style, no Enter, no in-place expansion): an issue
-  renders its markdown body, an eval renders as the [[annotator]]. **j/k walk the ACTIVE tab's list**
+  renders its markdown body, an eval renders as the [[event-detail]]. **j/k walk the ACTIVE tab's list**
   and the detail follows; a tab flip keeps the current selection (and its detail) until the human picks
   in the new tab; a key typed into an input is never captured. The section contents are their own nodes
   (children of this one, owned by the video-verification line); this node owns the page shell — the
   split, the tabs, the row grammar, the selection, and the j/k routing.
-- **One merged list, store-tagged — RESIDENT, never cold-fetched.** The list is app-held state beside the
+- **One merged list, store-tagged — RESIDENT, never cold-fetched.** The Threads tab is the merged ISSUE
+  list ([[issues]]'s `mergedIssues`) — which **excludes eval-remark threads** ([[eval-issue-split]]): a
+  scenario-scoped concern is a remark, not an issue (I1), so it never shows in the drain here; it lives on
+  the Evals side instead (the [[evals-feed]] row + the [[event-detail]] remark track). The list is app-held
+  state beside the
   board (one data path): the page renders instantly from it on every visit; freshness inherits the
   board's own pattern — the push/change signal triggers a throttled refetch, the 15s cold lane backstops
   (forge-cache updates arrive nowhere else), and `GET /api/issues` answers **304 via ETag** so a no-change
@@ -64,16 +68,16 @@ reply/propose the CLI uses, committed straight to the trunk.
   itself when only one store exists. An
   issue's ROW is one compact line — store chip, concern, status, reply count; its DETAIL carries the full
   header (status, author, signer count, node chips, permalink) over the **markdown-rendered body and
-  replies** — the same SpecBody renderer the spec panes use, so forum markdown and spec markdown read as
+  replies** — the same SpecBody renderer the spec panes use, so local-issue markdown and spec markdown read as
   one dialect (raw `##`/table pipes never show), and a forge issue's GitHub comments render as the SAME
-  reply thread a forum thread gets ([[issues]] maps them into `replies[]` — one thread type, one
+  reply thread a local issue thread gets ([[issues]] maps them into `replies[]` — one thread type, one
   renderer). Store never changes the shape; the only store-specific affordances are metadata (a local
   issue's signer count, a forge issue's permalink) — the thread itself reads and writes identically.
 - **Node chips focus the graph.** An issue's node chips are clickable — a click routes to the graph page
   and **focuses that node**, so the page stays anchored to the graph it discusses.
 - **A human writes from here — to the issue's OWN store.** EVERY issue's detail carries a **reply
   composer** (a textarea + Send): the POST goes to the one store-routed reply verb ([[issues]]'s
-  `replyIssue`, author `'human'`) — a local issue's reply git-commits to the trunk forum, a forge issue's
+  `replyIssue`, author `'human'`) — a local issue's reply git-commits to the trunk store, a forge issue's
   reply posts a REAL GitHub comment through the driver — then reloads so the post shows where it landed
   (the forge case shows the server's read-back, and a failed forge write surfaces in the composer, never
   a silent swallow). The issue group's head carries a **New** affordance that opens a fresh LOCAL issue
@@ -89,14 +93,14 @@ reply/propose the CLI uses, committed straight to the trunk.
   `@` and got nothing).
   The reply list and reply composer are ONE shared component (`Thread.jsx`), delivery-agnostic
   (`onSend(text, evidence)`): the issue detail replies to its thread — both stores, the server routing the
-  delivery — and the eval detail ([[annotator]]) renders the SAME thread UI — autocomplete included — over
+  delivery — and the eval detail ([[event-detail]]) renders the SAME thread UI — autocomplete included — over
   its lazily-bound eval comment thread; one thread UI, every home, the store just a fourth delivery behind
   the same seam. A reply is TIME-ANCHORED by a prose convention (same philosophy as `Spec:`/`[[node]]`): a
   body whose first line reads `▶m:ss · <step>` IS anchored to a video moment — `Thread` linkifies it (click
   = seek, when the home supplies the clip) and, over a clip, the composer grows a ⏱ affordance that stamps
   the current frame; a circled frame rides the body as an image link whose hash the send derives as the
-  thread's typed `evidence[]` (the frame-blob write is [[annotator]]'s). The reply stays plain
+  thread's typed `evidence[]` (the frame-blob write is [[event-detail]]'s). The reply stays plain
   `{ by, at, body }` — no schema grows, and a raw reader still sees the `▶m:ss` line.
-- **Honors the switch.** When the forum workflow is OFF (`enabled: false`, [[proposals]]'s toggle), the
+- **Honors the switch.** When the issues workflow is OFF (`enabled: false`, [[proposals]]'s toggle), the
   view shows a muted "off" state instead of the list — the dashboard reflects the one source of truth,
   never forks it.

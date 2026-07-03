@@ -42,7 +42,7 @@ const CHORD_KEYS = Object.keys(CHORDS)
 const CHORD_LEADERS = new Set(CHORD_KEYS.map((c) => c[0]))
 
 function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues }) {
-  // the URL is the page switch ([[side-nav]]): #/graph | #/sessions[/<sel>] | #/forum | #/settings.
+  // the URL is the page switch ([[side-nav]]): #/graph | #/sessions[/<sel>] | #/issues | #/settings.
   // `page` replaces the old boolean overlay states (sessionUI / settings-modal) — the sidebar, the keyboard,
   // and the address bar all drive the same route.
   const { page, param } = useRoute()
@@ -308,11 +308,11 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
       // listener falls through the ⌥ command family instead of forwarding it to tmux). Firing one also
       // dismisses the search palette — the navigation intent wins over the modal.
       if (e.altKey && !e.metaKey && !e.ctrlKey) {
-        const pageOf = { Digit1: 'graph', Digit2: 'sessions', Digit3: 'forum', Digit4: 'settings' }
+        const pageOf = { Digit1: 'graph', Digit2: 'sessions', Digit3: 'issues', Digit4: 'settings' }
         const target = pageOf[e.code]
         if (target) { e.preventDefault(); e.stopPropagation(); setSearch(null); navigate(target); return }
         if (e.code === 'KeyN') { e.preventDefault(); e.stopPropagation(); setSearch(null); setSessionSel('new'); navigate('sessions', 'new'); return }
-        if (e.code === 'KeyF') { e.preventDefault(); e.stopPropagation(); setSearch(null); navigate('forum'); return }
+        if (e.code === 'KeyF') { e.preventDefault(); e.stopPropagation(); setSearch(null); navigate('issues'); return }
       }
       // The search palette is a modal: while open it owns its keys over ANY surface — the board OR the session
       // interface (the session interface yields via its searchOpen guard). The SpecSearch input owns ↑/↓/Enter/
@@ -328,7 +328,7 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
       if (page === 'sessions') return // the session interface owns ALL its keys (arrows / Enter / typing / Esc / the graph)
       // the forum page's keys (Tab region-jump, j/k/Enter, its own Esc stack) are IssuesView's own.
       // Esc does NOT route pages anywhere ([[side-nav]]) — leaving is ⌥1..⌥4, the rail, or history.
-      if (page === 'forum') return
+      if (page === 'issues') return
       // the settings page: `,` toggles back home; typing inside its shortcut-capture stays its own
       if (page === 'settings') {
         if (firesKey('board.settings', e.key)) { e.preventDefault(); e.stopPropagation(); navigate('graph') }
@@ -405,8 +405,8 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
       else if (firesKey('board.enter', e.key)) { e.preventDefault(); openBoard() }
       // [-key (the [[node]] mention opener): jump to a FRESH New Session on the focus ([[<id>]] pre-seeded), unconditional — never enters an existing session
       else if (firesKey('board.fresh', e.key)) { e.preventDefault(); startNew(`[[${focus.id}]] `) }
-      // f-key: open the forum page ([[issues-view]]) — the board-side entry; the sidebar's Forum is the other, one surface
-      else if (firesKey('board.issues', e.key)) { e.preventDefault(); navigate('forum') }
+      // f-key: open the issues page ([[issues-view]]) — the board-side entry; the sidebar's Forum is the other, one surface
+      else if (firesKey('board.issues', e.key)) { e.preventDefault(); navigate('issues') }
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
@@ -532,10 +532,10 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
         onOpenSearch={() => setSearch('sessions')}
         reload={reload}
       />
-      {/* the forum page ([[issues-view]]) — its own route; mounts per visit (it fetches on mount) */}
-      {page === 'forum' && (
-        <div className="page-pane page-forum">
-          <IssuesView specs={specs} sessions={sessions} issuesData={issuesData} reloadIssues={reloadIssues} onFocusNode={(id) => { setFocusId(id); navigate('graph') }} />
+      {/* the issues page ([[issues-view]]) — its own route; mounts per visit (it fetches on mount) */}
+      {page === 'issues' && (
+        <div className="page-pane page-issues">
+          <IssuesView specs={specs} sessions={sessions} issuesData={issuesData} reloadIssues={reloadIssues} reloadBoard={reload} onFocusNode={(id) => { setFocusId(id); navigate('graph') }} />
         </div>
       )}
       {/* the settings page ([[settings]]) — same sections as ever, now a routed page instead of a popup */}

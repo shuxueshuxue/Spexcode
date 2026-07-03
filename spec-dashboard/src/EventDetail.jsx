@@ -1,21 +1,25 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { postIssueReply, postIssueThread, putFrameBlob, specUrl } from './data.js'
+import { postRemark, putFrameBlob, specUrl } from './data.js'
 import { evidenceList } from './EvalsFeed.jsx'
 import { Replies, ReplyComposer, mmss, anchorLine, parseAnchor } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
 
-// The annotator ([[annotator]]): the human's measuring hand on an ALREADY-captured reading — the issues
-// page's DETAIL PANE for a selected eval (master-detail, [[issues-view]]). A reading's evidence is a LIST:
-// the video plays under a CUSTOM review-track scrubber (native chrome replaced so the timeline can carry the
-// review) — anchored comments render as MARKERS on the scrubber, the playhead lights the comment it is
-// inside, clicking a marker/comment seeks; a step-timeline sidecar bands the step boundaries + names the
-// live step, and the named-step ruler under it click-seeks. The whole surface is keyboard-driven (space,
-// arrows, ,/. frame-fine, ↑/↓ jump comments, a = annotate the current frame). An image gallery renders in
-// the SAME pane (each still click-to-enlarge); a transcript renders as text. There is ONE annotation
-// primitive: a comment on the eval's own Issue thread, time-anchored by the `▶m:ss · step` prose convention
-// ([[issues-view]]'s Thread). ⏱/a stamps the current frame onto a note; a drag-circle captures the paused
-// frame to the blob store and prefills an anchored comment carrying it — a mark IS thereafter a reply:
-// replyable, @-able. The pass/fail VERDICT stays a separate `manual@1` reading (verdict + note).
+// EventDetail ([[event-detail]], U1): the ONE evidence+reply detail pane, store-agnostic, reused in every
+// home — the issues-page eval tab AND the session eval tab. It renders a selected READING (an "event"):
+// a reading's evidence is a LIST — the video plays under a CUSTOM review-track scrubber (native chrome
+// replaced so the timeline can carry the review) — anchored remarks render as MARKERS on the scrubber, the
+// playhead lights the remark it is inside, clicking a marker/remark seeks; a step-timeline sidecar bands the
+// step boundaries + names the live step, and the named-step ruler under it click-seeks. The whole surface is
+// keyboard-driven (space, arrows, ,/. frame-fine, ↑/↓ jump remarks, a = annotate the current frame). An
+// image gallery renders in the SAME pane (each still click-to-enlarge); a transcript renders as text.
+//
+// There is ONE reply primitive: a REMARK on the eval's own (node, scenario) thread ([[remark-substrate]]) —
+// a scenario-scoped concern is a remark, never an issue (I1). It is time-anchored by the `▶m:ss · step`
+// prose convention ([[issues-view]]'s Thread); ⏱/a stamps the current frame onto a note; a drag-circle
+// captures the paused frame and prefills an anchored remark carrying it. A remark's `resolved` bit renders in
+// the thread (settled when resolved, prominent while open). The composer authors through the CLI-parity
+// /api/remarks (L: the dashboard is a thin wrapper, no dashboard-only write). The pass/fail VERDICT stays a
+// separate `manual@1` reading (verdict + note).
 //
 // A/B history ([[reproduce-before-fix]]): a scenario's readings are its lifecycle, and a bug fix leaves a
 // fail→pass PAIR — the A (reproduced bug) and the B (verified fix). The pane flips through that whole
@@ -55,11 +59,12 @@ function Transcript({ hash }) {
   return <pre className="eval-transcript">{text ?? t('nodeView.eval.loadingTranscript')}</pre>
 }
 
-// the deterministic concern key binding an eval's comment thread to its (node, scenario) — the thread IS
-// a local Issue, looked up by this exact concern text (ids de-collide, concerns don't).
+// the deterministic concern key binding an eval's remark thread to its (node, scenario) — the thread IS a
+// local Issue, keyed by this exact concern text (ids de-collide, concerns don't). Kept only for display /
+// marker lookup; the WRITE side never needs it (the /api/remarks host is (node, scenario), find-or-create).
 export const evalConcern = (e) => `eval: ${e.node} · ${e.scenario}`
 
-export default function Annotator({ entry, issues = null, specs = [], sessions = [], onFiled, onWrite }) {
+export default function EventDetail({ entry, specs = [], sessions = [], onWrite }) {
   const t = useT()
   const vid = useRef(null)
   const box = useRef(null)
@@ -115,13 +120,12 @@ export default function Annotator({ entry, issues = null, specs = [], sessions =
   const transcripts = ev.filter((e) => e.kind === 'transcript')
   const hasVideo = !!videoEntry
 
-  // the eval's review track IS a local Issue lazily bound to this (node, scenario) by its concern key —
-  // computed here (not just in the comments section) so the scrubber can render each anchored comment as a
-  // marker and the keyboard can jump between them. The (node,scenario)↔thread join is lifted SERVER-SIDE
-  // ([[remark-teeth]]): the session tab attaches it as `entry.thread`, so read that directly; the issues
-  // page still passes a resident `issues` list, so fall back to the concern-key match there.
-  const concern = evalConcern(entry)
-  const thread = entry.thread ?? (issues ? (issues.find((i) => i.store === 'local' && i.concern === concern) || null) : null)
+  // the eval's remark track rides the reading as `entry.thread` — the ONE server-side (node,scenario)↔thread
+  // overlay ([[remark-teeth]] / [[eval-issue-split]]), the SAME on BOTH homes (the issues-page feed folds it
+  // in through the board; the session tab through the proof model), so this pane no longer re-matches a
+  // concern against a resident issues list. Computed here (not just in the comments section) so the scrubber
+  // can render each anchored remark as a marker and the keyboard can jump between them.
+  const thread = entry.thread ?? null
   const comments = thread ? [{ by: thread.by, at: thread.created, body: thread.body }, ...(thread.replies || [])] : []
   // the anchored subset, carrying each comment's index into `comments` and its moment — sorted by moment.
   const anchored = comments
@@ -189,7 +193,7 @@ export default function Annotator({ entry, issues = null, specs = [], sessions =
   // the same start-a-comment path a circle takes, minus the frame image. Routes to the step's node when set.
   const annotateFrame = useCallback(() => {
     const v = vid.current
-    if (!v || !issues) return
+    if (!v) return
     v.pause()
     const tMs = Math.round((v.currentTime || 0) * 1000)
     const st = stepAt(events, tMs)
@@ -197,7 +201,7 @@ export default function Annotator({ entry, issues = null, specs = [], sessions =
     if (st?.node && st.node !== entry.node) lines.push(`re: [[${st.node}]]`)
     lines.push('')
     setDraft({ seq: ++seq.current, body: lines.join('\n') })
-  }, [issues, events, entry.node])
+  }, [events, entry.node])
 
   // ↑/↓ jump to the previous/next anchored comment (seek + select); with none selected, seed from the
   // comment the playhead is currently inside so the walk starts where the reviewer is looking.
@@ -324,6 +328,7 @@ export default function Annotator({ entry, issues = null, specs = [], sessions =
       body: JSON.stringify({ scenario: entry.scenario, status: verdict, note: note || undefined }),
     }).catch(() => null)
     setFlash(r?.ok ? t('annotator.readingFiled') : t('annotator.failed'))
+    if (r?.ok) await onWrite?.('')   // a new reading landed → let the home refresh its board/model
   }
 
   return (
@@ -436,23 +441,25 @@ export default function Annotator({ entry, issues = null, specs = [], sessions =
       {ev.length === 0 && (viewing.verdict?.note
         ? <pre className="eval-transcript">{viewing.verdict.note}</pre>
         : <div className="an-hint">{t('nodeView.eval.noImage')}</div>)}
-      {(entry.thread || issues) && <EvalComments entry={entry} thread={thread} comments={comments} specs={specs} sessions={sessions} onWrite={onWrite}
-        seekMs={hasVideo ? seekMs : null} anchorNow={hasVideo ? anchorNow : null} draft={draft}
-        selIdx={selIdx} activeIdx={activeIdx} onSelect={hasVideo ? selectComment : null} />}
+      <EvalRemarks entry={entry} comments={comments} specs={specs} sessions={sessions} onWrite={onWrite}
+        codeSha={viewing.codeSha} seekMs={hasVideo ? seekMs : null} anchorNow={hasVideo ? anchorNow : null} draft={draft}
+        selIdx={selIdx} activeIdx={activeIdx} onSelect={hasVideo ? selectComment : null} />
     </div>
   )
 }
 
-// to this (node, scenario) by its concern key (looked up in the parent — from the server-side `entry.thread`
-// overlay, or the resident `issues` list on the issues page). The first comment creates it (the SAME propose
-// the CLI uses, nodes:[node]); every later comment replies to it. Anchored comments (`▶m:ss · step`) linkify
-// to their video moment (click = seek + select) and carry their circled frame; the selected and
-// playhead-active comments highlight in sync with the scrubber's markers.
-function EvalComments({ entry, thread, comments, specs, sessions, onWrite, seekMs, anchorNow, draft, selIdx, activeIdx, onSelect }) {
+// the eval's REMARK track ([[remark-substrate]] / [[event-detail]]) — no new store: the thread is the ONE
+// local Issue bound to this (node, scenario) by its concern key, folded in as `entry.thread` on BOTH homes.
+// The composer authors a REMARK through the CLI-parity /api/remarks (find-or-create by (node, scenario) — no
+// thread id or concern needed on the write side, L): the first remark mints the thread, every later one
+// appends. A remark records the VIEWED reading's codeSha (R2). Anchored remarks (`▶m:ss · step`) linkify to
+// their video moment (click = seek + select) and carry their circled frame; the selected and playhead-active
+// remarks highlight in sync with the scrubber's markers; a resolved remark renders settled ([[remark-teeth]]).
+// Rendered on EVERY eval home — a fresh scenario shows an empty track with a live composer (the session tab's
+// old "no resident issues list" degradation is gone: /api/remarks needs no resident list).
+function EvalRemarks({ entry, comments, codeSha, specs, sessions, onWrite, seekMs, anchorNow, draft, selIdx, activeIdx, onSelect }) {
   const t = useT()
-  const send = (text, evidence) => thread
-    ? postIssueReply(thread.id, text, evidence)
-    : postIssueThread({ concern: evalConcern(entry), nodes: [entry.node], body: text, evidence })
+  const send = (text, evidence) => postRemark({ node: entry.node, scenario: entry.scenario, body: text, codeSha, evidence })
   return (
     <section className="an-comments">
       <div className="an-comments-head">{t('annotator.comments', { n: comments.length })}</div>

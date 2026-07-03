@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { postIssueReply, postIssueThread } from './data.js'
 import { useMentionAutocomplete } from './mentions.jsx'
 import EvalsGroup, { entryKey } from './EvalsFeed.jsx'
-import Annotator from './Annotator.jsx'
+import EventDetail from './EventDetail.jsx'
 import { SpecBody } from './NodeView.jsx'
 import { Replies, ReplyComposer } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
@@ -18,7 +18,7 @@ import { useT } from './i18n/index.jsx'
 // — BOTH stores ([[issues]]: the reply verb routes by store); an eval renders as the [[annotator]].
 // j/k walk the ACTIVE tab's list, the detail follows; a tab flip keeps the selection (and its detail)
 // until the human picks in the new tab; writes post as 'human'.
-export default function IssuesView({ onFocusNode, specs = [], sessions = [], issuesData = null, reloadIssues }) {
+export default function IssuesView({ onFocusNode, specs = [], sessions = [], issuesData = null, reloadIssues, reloadBoard }) {
   const t = useT()
   const data = issuesData                          // RESIDENT app state — the page renders instantly, no per-mount fetch
   const [composing, setComposing] = useState(false)
@@ -136,7 +136,8 @@ export default function IssuesView({ onFocusNode, specs = [], sessions = [], iss
         </section>
       </div>
       <div className="fv-detail">
-        {selEval && <Annotator entry={selEval} issues={all} specs={specs} sessions={sessions} onFiled={load} onWrite={async (outcomes) => { flash(outcomes); await load() }} />}
+        {selEval && <EventDetail entry={selEval} specs={specs} sessions={sessions}
+          onWrite={async (outcomes) => { flash(outcomes); await reloadBoard?.(); await load() }} />}
         {selIssue && <IssueDetail issue={selIssue} specs={specs} sessions={sessions} onFocusNode={onFocusNode} onWrite={async (outcomes) => { flash(outcomes); await load() }} />}
         {!selEval && !selIssue && <div className="fv-note">{t('session.issuesEmpty')}</div>}
       </div>

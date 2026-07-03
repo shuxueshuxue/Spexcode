@@ -1,7 +1,7 @@
 import { useT } from './i18n/index.jsx'
 
 // The app's left navigation rail ([[side-nav]]) — the standard modern-app skeleton: one slim icon rail,
-// always visible, one entry per top-level page (graph · sessions · forum, settings pinned at the bottom).
+// always visible, one entry per top-level page (graph · sessions · issues, settings pinned at the bottom).
 // Clicking navigates the URL layer (route.js); the active page wears the accent. Icons are the dashboard's
 // monochrome inline-SVG vocabulary (currentColor stroke), labels live in tooltips/aria — the rail stays slim.
 
@@ -19,7 +19,7 @@ const SessionsGlyph = () => (
     <path d="M4.6 6.5 l2.6 2.3 -2.6 2.3 M9 12.4 h4" />
   </svg>
 )
-const ForumGlyph = () => (
+const IssuesGlyph = () => (
   <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M2.5 3.5 h13 v8.4 h-7 l-3.6 3 v-3 h-2.4 z" />
     <path d="M5.4 6.7 h7.2 M5.4 9.2 h4.8" />
@@ -35,7 +35,7 @@ const SettingsGlyph = () => (
 const ENTRIES = [
   { page: 'graph', Glyph: GraphGlyph },
   { page: 'sessions', Glyph: SessionsGlyph },
-  { page: 'forum', Glyph: ForumGlyph },
+  { page: 'issues', Glyph: IssuesGlyph },
 ]
 
 function RailButton({ page, Glyph, active, onNav, label }) {

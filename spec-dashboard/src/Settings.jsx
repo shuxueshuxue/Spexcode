@@ -10,7 +10,8 @@ import { THEMES, getTheme, applyTheme } from './theme.js'
 // help legend — both project the one keymap registry (keymap.js). A row's keyboard cell is clicked to
 // capture the next key as that action's new binding (saved via bindings.js to localStorage); structural
 // rows (nav, the n/d chords) are shown but fixed.
-// (Game-controller mapping is NOT here — it lives outside the browser as the specs-controller profile.)
+// (Game-controller mapping is NOT here — the pad binds to action ids in [[game-controller]]'s controller
+// mode, so a key rebind never touches it.)
 
 // Shortcuts editor — one row per action; a click on a rebindable cell captures the next keypress.
 function Shortcuts({ t }) {

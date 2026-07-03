@@ -104,16 +104,19 @@ export async function dispatchMentions(
   return out
 }
 
-// ── implicit originator loop-in ([[mentions]]) ──────────────────────────────────────────────────────────
-// A committed reply is ALSO auto-delivered to the thread's ORIGINATOR (a forum thread's author; an
-// eval-comment thread's reading-filer) as a COURTESY — never an assignment. It is the same delivery pipe as
-// dispatchMentions (one online-resolution + one sendKeys), but with three cuts that keep courtesy ≠
-// assignment: deliver ONLY if the originator's session is ONLINE (offline → silent, NEVER spawn a worker,
-// NEVER drain — only an explicit @new spawns); SKIP if the originator is the replier (no self-notify); SKIP
-// if the originator was already an explicit @-target of this same text (no double-delivery). The notification
-// carries the reply verbatim, so the originator sees any @mentions inside it. Store-agnostic: a forge issue's
-// author is a github login, resolves to no live session, and stays silent — exactly right.
-export type LoopIn = { originator: string }   // reported ONLY when we actually delivered (originator was online)
+// ── implicit originator loop-in + the dispatch fallback chain ([[mentions]] / [[remark-substrate]] R3) ────
+// A committed reply is ALSO auto-delivered as a COURTESY — never an assignment — to a FALLBACK CHAIN of
+// candidates, in order, stopping at the FIRST one that can be reached: for a remark this is the reading's
+// filer session, then the node's governing session, then nobody (it still surfaces on the board via the
+// teeth). This is a NOTIFICATION chain only — it resolves NOTHING (resolve stays a deliberate `spex resolve`,
+// R3); it just reaches an agent who can act. It is the same delivery pipe as dispatchMentions (one
+// online-resolution + one sendKeys), with the same cuts that keep courtesy ≠ assignment: deliver ONLY to an
+// ONLINE session (an unreachable link is skipped for the next, NEVER spawns a worker, NEVER drains — only an
+// explicit @new spawns); SKIP a candidate that is the replier (no self-notify); a candidate already reached by
+// an explicit @-target of this same text counts as delivered, so the chain STOPS (no double-delivery, no
+// needless escalation). Store-agnostic: a forge issue's author is a github login, resolves to no live session,
+// and the chain runs dry silently — exactly right.
+export type LoopIn = { originator: string }   // the candidate we actually reached (a filer OR a governing-session fallback)
 
 // The courtesy prompt — framed as a heads-up, never a command (that is what an @-mention's mentionPrompt is).
 function originatorPrompt(threadId: string, node: string | null, replier: string, text: string): string {
@@ -123,20 +126,48 @@ function originatorPrompt(threadId: string, node: string | null, replier: string
     `\`spex issues --all\` lists them, reply with \`spex propose reply ${threadId} --body -\`.`
 }
 
+// The pure fallback decision (testable without sessions.ts): walk the ordered chain (nulls/dupes/the-replier
+// pruned) and return the FIRST link that resolves to an online session — that is who the courtesy goes to. A
+// link already reached by an explicit @-target of this same text short-circuits to `reached` (stop, no
+// double-delivery — the actor already has it); an offline/absent link falls through to the next. `none` means
+// the chain ran dry (nobody online). This is the whole fallback logic; delivery is a thin sendKeys around it.
+export type LoopInPick =
+  | { kind: 'deliver'; originator: string; session: ActorSession }
+  | { kind: 'reached' }
+  | { kind: 'none' }
+export function pickLoopIn(
+  chain: (string | null)[],
+  replier: string,
+  sessions: ActorSession[],
+  alreadyDelivered?: Set<string>,
+): LoopInPick {
+  const seen = new Set<string>()
+  const candidates = chain.filter((c): c is string => !!c && c !== replier && !seen.has(c) && (seen.add(c), true))
+  for (const originator of candidates) {
+    const [resolved] = resolveActors([originator], sessions)
+    if (resolved.kind !== 'session') continue                 // offline / no live session → try the next fallback link
+    if (alreadyDelivered?.has(resolved.session.id)) return { kind: 'reached' }   // already an explicit @-target: stop
+    return { kind: 'deliver', originator, session: resolved.session }
+  }
+  return { kind: 'none' }
+}
+
+// `chain` is the ordered fallback list. We deliver the courtesy to the first online link and STOP; an
+// offline/failed link falls through to the next. NOTIFICATION ONLY — this never touches a `resolved` bit
+// (resolve is a deliberate `spex resolve`), never spawns (only `@new` spawns).
 export async function notifyOriginator(
-  originator: string | null,
+  chain: (string | null)[],
   replier: string,
   text: string,
   ctx: { threadId: string; node: string | null; alreadyDelivered?: Set<string> },
 ): Promise<LoopIn | null> {
-  if (!originator || originator === replier) return null      // no originator, or it's the replier → nothing to do
+  const seen = new Set<string>()
+  if (!chain.some((c) => c && c !== replier && !seen.has(c) && (seen.add(c), true))) return null   // nothing to do → no session load
   const { sendKeys, listSessions } = await import('./sessions.js')
-  const sessions = await listSessions()
-  const [resolved] = resolveActors([originator], sessions as unknown as ActorSession[])
-  if (resolved.kind !== 'session') return null                // offline / no live session → silent (never spawn)
-  if (ctx.alreadyDelivered?.has(resolved.session.id)) return null   // already an explicit @-target → no double-delivery
-  const res = await sendKeys(resolved.session.id, originatorPrompt(ctx.threadId, ctx.node, replier, text), 'forum')
-  return res.ok ? { originator } : null                       // a failed send behaves like offline: silent
+  const pick = pickLoopIn(chain, replier, await listSessions() as unknown as ActorSession[], ctx.alreadyDelivered)
+  if (pick.kind !== 'deliver') return null                    // reached via @ / nobody online → silent
+  const res = await sendKeys(pick.session.id, originatorPrompt(ctx.threadId, ctx.node, replier, text), 'forum')
+  return res.ok ? { originator: pick.originator } : null      // a failed send behaves like offline: silent
 }
 
 // The set of session ids a dispatch ALREADY reached (sent or spawned) — what the loop-in skips to avoid a

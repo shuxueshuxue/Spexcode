@@ -957,20 +957,25 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* ---- issues page: MASTER-DETAIL ([[issues-view]]) — a left list (two groups) + a full-height detail
    pane. Selection IS detail: no in-place expansion inside a scroll box. ---- */
 .fv-master { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(300px, 380px) 1fr; }
-/* the left column is TWO BOUNDED regions, not one stream: the evals group sizes to content but caps at
-   55% and scrolls itself; the issue group takes the rest and is ALWAYS on screen — many evals can no
-   longer bury it (the pinning law, applied to the list column where it belongs). Heads stay sticky
-   within their own scroller. */
+/* the left column is ONE box under a prominent TAB SWITCHER (evals | threads): the switcher is the
+   title, the active tab's filter bar sits under it, and the active list gets the full height. The
+   hidden tab stays mounted (fv-hide) so its state and row reporting survive a flip. */
 .fv-list-col { min-height: 0; display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid var(--line); background: var(--paper); }
 .fv-list-col > .fv-notice { flex: none; }
-.fv-list-col > .fv-group:first-of-type { flex: 0 1 auto; max-height: 55%; overflow-y: auto; }
-.fv-list-col > .fv-group:last-of-type { flex: 1 1 auto; min-height: 120px; overflow-y: auto; }
+.fv-tabs { flex: none; display: flex; background: var(--panel2); border-bottom: 1px solid var(--line); }
+.fv-tabs button { flex: 1 1 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font: inherit; font-size: 11px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: var(--muted); background: none; border: 0; border-bottom: 2px solid transparent; padding: 9px 0 7px; cursor: pointer; }
+.fv-tabs button.on { color: var(--ink); border-bottom-color: var(--blue); }
+.fv-tabs button:hover { color: var(--ink2); }
+.fv-tab-n { font-family: var(--mono); font-size: 9px; font-weight: 400; letter-spacing: 0; color: var(--muted); border: 1px solid var(--line); border-radius: 9px; padding: 0 6px; }
+.fv-tabs button.on .fv-tab-n { color: var(--ink2); }
+.fv-list-col > .fv-group { flex: 1 1 auto; min-height: 0; overflow-y: auto; border-top: 0; }
+.fv-hide { display: none !important; }
 .fv-detail { min-height: 0; overflow-y: auto; background: var(--paper); }
 .fv-group { display: flex; flex-direction: column; }
 .fv-group + .fv-group { border-top: 1px solid var(--line); }
 .fv-group-head { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px; background: var(--panel2); border-bottom: 1px solid var(--line); }
 .fv-group-title { font-size: 9px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--ink2); }
-.fv-group-meta { font-size: 9.5px; color: var(--muted); }
+.fv-group-meta { font-size: 9.5px; color: var(--muted); margin-left: auto; }
 /* one row grammar for BOTH groups: a compact single-line button; `.sel` is the page's one selection. */
 .fv-row, .ef-row { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; font: inherit; font-size: 11.5px; color: var(--ink2); background: none; border: 0; border-bottom: 1px solid var(--line); padding: 6px 12px; cursor: pointer; }
 .fv-row:hover, .ef-row:hover { background: var(--panel2); }
@@ -1471,7 +1476,10 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .an-detail { padding: 14px 22px 26px; max-width: 900px; }
 .an-head { display: flex; align-items: center; gap: 10px; padding: 0 0 8px; border-bottom: 1px solid var(--line); }
 .an-meta { font-size: 10.5px; color: var(--muted); }
-.an-image { display: block; max-width: 100%; border: 1px solid var(--line); border-radius: 6px; background: var(--panel2); }
+.an-image { display: block; max-width: 100%; border: 1px solid var(--line); border-radius: 6px; background: var(--panel2); cursor: zoom-in; }
+/* click-to-enlarge overlay for evidence images — click anywhere / Esc closes */
+.lightbox { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, .82); cursor: zoom-out; }
+.lightbox img { max-width: 96vw; max-height: 96vh; object-fit: contain; border-radius: 4px; box-shadow: 0 8px 48px rgba(0, 0, 0, .6); }
 .an-prior-note { color: var(--muted); }
 .an-title { font-weight: 700; font-size: 14px; color: var(--ink); }
 .an-node { font-size: 11px; color: var(--muted); }

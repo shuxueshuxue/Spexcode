@@ -31,17 +31,21 @@ reply/propose the CLI uses, committed straight to the trunk.
 - **The page is a MASTER-DETAIL — a full page deserves a full-height detail, never an expansion inside a
   box.** (The earlier pinned-two-region form was conceived for a height-starved overlay; on a routed
   full page it collapsed content into a small scrolling box — the human called it, and the form
-  changed.) The **left column** is TWO BOUNDED regions — the [[evals-feed]] group leading (evals outrank
-  issues: position expresses it) sizes to content but CAPS at ~half the column and scrolls itself; the
-  merged issue group takes the rest and is **always on screen** — many evals can never bury it (the
-  pinning law, applied to the list column where it belongs). Each group head is sticky within its own
-  scroller and carries its own controls (the evals chips; New + the concluded-count chip). The
-  **right pane** is the full-height DETAIL of the one selection — **selection IS detail** (email-style,
-  no Enter, no in-place expansion): an issue renders its markdown body, an eval renders as the
-  [[annotator]]. **j/k walk the whole left list across both groups** and the detail follows; a key typed
-  into an input is never captured. The section contents are their own nodes (children of this one, owned
-  by the video-verification line); this node owns the page shell — the split, the row grammar, the
-  selection, and the j/k routing.
+  changed.) The **left column** is ONE box under a **prominent tab switcher — Evals | Threads** — the
+  switcher IS the box's title (neither group carries a title of its own), so the column reads as one
+  title plus one filter bar. (The earlier stacked two-region form split the height; the human asked for
+  the switch instead — each tab now gets the FULL column.) Evals outrank issues: tab order and the
+  default tab express it. The active tab shows its own filter bar under the switcher — the evals chips;
+  the store filter + New + the concluded-count chip — with the **open/total meta at the END of the bar,
+  never at its head**; the bar stays sticky over the tab's full-height list. Each tab's small count
+  rides its switcher button, so the hidden tab is never a mystery. The hidden tab stays MOUNTED (its
+  filter state and row reporting survive a flip). The **right pane** is the full-height DETAIL of the
+  one selection — **selection IS detail** (email-style, no Enter, no in-place expansion): an issue
+  renders its markdown body, an eval renders as the [[annotator]]. **j/k walk the ACTIVE tab's list**
+  and the detail follows; a tab flip keeps the current selection (and its detail) until the human picks
+  in the new tab; a key typed into an input is never captured. The section contents are their own nodes
+  (children of this one, owned by the video-verification line); this node owns the page shell — the
+  split, the tabs, the row grammar, the selection, and the j/k routing.
 - **One merged list, store-tagged — RESIDENT, never cold-fetched.** The list is app-held state beside the
   board (one data path): the page renders instantly from it on every visit; freshness inherits the
   board's own pattern — the push/change signal triggers a throttled refetch, the 15s cold lane backstops

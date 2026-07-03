@@ -79,7 +79,9 @@ The reproducibility contract is concrete: `.nvmrc` pins Node (22) and both packa
 installs are deterministic. Machine-local artifacts never enter the tree: the worker launcher resolves
 env `SPEXCODE_CLAUDE_CMD` → a gitignored `spexcode.local.json` (`readConfig` overlays it on committed
 `spexcode.json`) → the default, so a host-specific launcher path has a *durable* home surviving restarts,
-never committed. A launch generates NO per-session SpexCode files in the worktree: the
+never committed. That same gitignored overlay carries the `private` toggle ([[private-overlay]]): machine-local
+by construction, it lets a solo dogfooder on a repo they don't own keep SpexCode's whole presence out of the
+host's shared history. A launch generates NO per-session SpexCode files in the worktree: the
 record and the launcher products (prompt, launch, launch.sh, recorded comms) live in the per-user global
 store ([[runtime]]), keyed by session_id, outside the tree — so nothing per-session is left to ignore or
 commit (the contract instead reaches the agent by materializing into the worktree's OWN tracked

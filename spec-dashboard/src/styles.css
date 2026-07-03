@@ -656,14 +656,28 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* compact one-line face: the status word collapses to a single glyph (STATUS_GLYPH), painted by STATUS_COLOR
    inline; the exact word stays on the title/aria for hover + a11y. */
 .sess-glyph { flex: none; width: 12px; text-align: center; font-size: 11px; line-height: 1; }
-/* @@@ nesting fold ([[session-nesting]]) — the leading gutter on a nested session row. `.sess-lead` carries
-   the depth indent; `.sess-fold` is the fold POD (or an aligned placeholder for a leaf child) whose
-   COLOUR is the subtree rollup, painted inline. A fixed-width slot keeps every headline aligned regardless of
-   depth or whether the row has a triangle. */
-.sess-lead { flex: none; display: inline-flex; align-items: center; }
+/* @@@ nesting fold ([[session-nesting]]) — the leading gutter on a nested session row. `.sess-lead` holds the
+   file-tree connector RAILS (one 14px `.sess-rail` per depth level, drawn with thin borders like a notes-app
+   file tree) and then, for a parent, the fold POD. `.sess-lead` stretches to the row's full height so a
+   pass-through rail's vertical line meets the next row's, drawing an unbroken spine down a sibling group. */
+.sess-lead { flex: none; align-self: stretch; display: inline-flex; align-items: stretch; --rail: color-mix(in srgb, var(--muted) 42%, transparent); }
+/* a connector column. `.rail` = a full-height vertical (an ancestor whose branch continues below this row);
+   `.tee`/`.elbow` = this row's own branch — a half vertical down to the mid-line plus a short horizontal tick
+   pointing at the headline; `.tee` (has a following sibling) keeps the vertical going, `.elbow` (last child)
+   stops it at the tick. `.gap` = an ancestor with nothing more below → blank, holding the indent. */
+/* min-height is a floor for the block-flow case (a SELECTED row un-truncates to `display:block`, where the
+   lead can't stretch); in the resting flex row `align-items:stretch` grows it to full row height so rails join. */
+.sess-rail { flex: none; width: 14px; position: relative; min-height: 1.7em; }
+.sess-rail.rail::before, .sess-rail.tee::before, .sess-rail.elbow::before {
+  content: ''; position: absolute; left: 50%; top: 0; bottom: 0; border-left: 1px solid var(--rail);
+}
+.sess-rail.elbow::before { bottom: 50%; }
+.sess-rail.tee::after, .sess-rail.elbow::after {
+  content: ''; position: absolute; left: 50%; right: 1px; top: 50%; border-top: 1px solid var(--rail);
+}
 .sess-fold {
-  flex: none; width: 18px; display: inline-flex; align-items: center; justify-content: center;
-  font-size: 9px; cursor: pointer; user-select: none;
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  align-self: center; cursor: pointer; user-select: none;
 }
 /* the fold pod: the subtree COUNT on the rollup colour — filled = collapsed (sessions hidden behind it),
    outline = expanded. A bigger, legible target than the old triangle; same informational colour language. */
@@ -672,8 +686,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   font-size: 9.5px; font-weight: 700; line-height: 1; color: var(--paper);
 }
 .sess-fold.pod.open { background: transparent; }
-.sess-fold.placeholder { cursor: default; }
-.sess-fold:not(.placeholder):hover { filter: brightness(1.25); }
+.sess-fold.pod:hover { filter: brightness(1.25); }
 /* the board glance (.sesswin) reuses the SAME two-zone grouping + compact one-line face as the console
    ([[session-console]]) — the one difference is it KEEPS the avatar and stays on the board's warm paper. */
 .sesswin .sess-row { flex-wrap: nowrap; }

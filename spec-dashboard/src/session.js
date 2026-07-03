@@ -92,18 +92,24 @@ export function subtreeRollup(id, childrenOf) {
 // @@@ the ordered render list ([[session-nesting]]) both session-list surfaces share. Roots are zone-sorted by
 // their OWN status (no aggregation), each carrying a zone header when the zone changes; a parent's children
 // follow it (zone-sorted among themselves) ONLY when `isExpanded(id)` — collapsed by default, so a fleet reads
-// as one row. Emits {type:'zone',zone} and {type:'row', s, depth, expandable, expanded, rollup}; the visible
-// row order is also what ↑/↓ nav and drag-reorder walk, so a collapsed child is never a hidden nav target.
+// as one row. Emits {type:'zone',zone} and {type:'row', s, depth, expandable, expanded, rollup, guides}; the
+// visible row order is also what ↑/↓ nav and drag-reorder walk, so a collapsed child is never a hidden nav
+// target. `guides` is the file-tree rail vector, one bool per connector column (length === depth): the LAST
+// entry marks whether THIS row has a following sibling (branch tee vs end elbow), each earlier entry whether
+// the ancestor in that column continues (draw a pass-through vertical line vs blank).
 export function sessionForest(sessions, isExpanded) {
   const { roots, childrenOf } = nestSessions(sessions)
   const items = []
-  const emit = (s, depth, seen) => {
+  const emit = (s, depth, seen, guides) => {
     const kids = childrenOf.get(s.id) || []
     const expandable = kids.length > 0
     const expanded = expandable && !!isExpanded(s.id)
     const roll = expandable ? subtreeRollup(s.id, childrenOf) : null
-    items.push({ type: 'row', s, depth, expandable, expanded, rollup: roll?.color ?? null, kin: roll?.count ?? 0 })
-    if (expanded) for (const c of zoneSort(kids)) { if (!seen.has(c.id)) { seen.add(c.id); emit(c, depth + 1, seen) } }
+    items.push({ type: 'row', s, depth, expandable, expanded, rollup: roll?.color ?? null, kin: roll?.count ?? 0, guides })
+    if (expanded) {
+      const vis = zoneSort(kids).filter((c) => !seen.has(c.id))
+      vis.forEach((c, i) => { seen.add(c.id); emit(c, depth + 1, seen, [...guides, i < vis.length - 1]) })
+    }
   }
   const seen = new Set()
   let prevZone = null
@@ -112,7 +118,7 @@ export function sessionForest(sessions, isExpanded) {
     seen.add(r.id)
     const z = sessionZone(r)
     if (z !== prevZone) { items.push({ type: 'zone', zone: z }); prevZone = z }
-    emit(r, 0, seen)
+    emit(r, 0, seen, [])
   }
   return items
 }

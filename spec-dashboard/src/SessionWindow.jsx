@@ -20,16 +20,22 @@ export function opSummary(ops) {
   return Object.entries(by).map(([op, n]) => `${GLYPH[op]}${n}`).join(' ')
 }
 
-// @@@ RowLead ([[session-nesting]]) — the leading fold gutter on a nested session row: a `depth`-indent plus
-// either the fold POD (a parent) or an aligned placeholder (a leaf child). The pod shows the SUBTREE COUNT
-// (how much fleet hides here) on the subtree-rollup COLOUR (STATUS_COLOR hues, the same purely-informational
-// hint the old triangle tinted): FILLED while collapsed (content hidden behind it), OUTLINE once expanded.
-// Clicking toggles fold WITHOUT selecting/opening the row (stopPropagation). Rendered only when nesting is
-// in play (parent or depth>0), so a flat list with no children looks exactly as before.
-export function RowLead({ depth, expandable, expanded, rollup, kin = 0, onToggle }) {
+// @@@ RowLead ([[session-nesting]]) — the leading gutter on a nested session row: file-tree connector RAILS
+// (one thin-line column per `guides` entry, the last a `├`/`└` branch pointing at the row, earlier ones a
+// pass-through `│` or a blank) that draw the child's belonging to its spawner, then — for a parent — the fold
+// POD. The pod shows the SUBTREE COUNT (how much fleet hides here) on the subtree-rollup COLOUR (STATUS_COLOR
+// hues, the same purely-informational hint the old triangle tinted): FILLED while collapsed (content hidden
+// behind it), OUTLINE once expanded. Clicking toggles fold WITHOUT selecting/opening the row (stopPropagation).
+// A leaf child needs no pod — its branch rail is the affordance. Rendered only when nesting is in play (parent
+// or depth>0), so a flat list with no children looks exactly as before.
+export function RowLead({ guides = [], expandable, expanded, rollup, kin = 0, onToggle }) {
   return (
-    <span className="sess-lead" style={{ paddingLeft: depth ? depth * 14 : 0 }}>
-      {expandable ? (
+    <span className="sess-lead">
+      {guides.map((cont, i) => {
+        const kind = i === guides.length - 1 ? (cont ? 'tee' : 'elbow') : (cont ? 'rail' : 'gap')
+        return <span key={i} className={`sess-rail ${kind}`} aria-hidden="true" />
+      })}
+      {expandable && (
         <span
           className={`sess-fold pod${expanded ? ' open' : ''}`} role="button" tabIndex={-1}
           style={expanded ? { color: rollup, borderColor: rollup } : { background: rollup, borderColor: rollup }}
@@ -37,8 +43,6 @@ export function RowLead({ depth, expandable, expanded, rollup, kin = 0, onToggle
           onClick={(e) => { e.stopPropagation(); onToggle?.() }}
           onMouseDown={(e) => e.stopPropagation()}
         >{kin}</span>
-      ) : (
-        <span className="sess-fold placeholder" aria-hidden="true" />
       )}
     </span>
   )
@@ -101,7 +105,7 @@ export default function SessionWindow({ sessions, activeId, onPick, onOpenSessio
           // so the row locks off s.source — NOT s.id (id keys the board tab; source keys the graph lock).
           const locked = s.source === activeId
           const lead = (it.expandable || it.depth)
-            ? <RowLead depth={it.depth} expandable={it.expandable} expanded={it.expanded} rollup={it.rollup} kin={it.kin} onToggle={() => toggle(s.id)} />
+            ? <RowLead guides={it.guides} expandable={it.expandable} expanded={it.expanded} rollup={it.rollup} kin={it.kin} onToggle={() => toggle(s.id)} />
             : null
           return (
             <button

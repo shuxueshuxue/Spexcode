@@ -1,7 +1,7 @@
 ---
 concern: remark teeth spoofable on server: /api/remarks trusts client-supplied author (self-resolve + author-only retract bypassable)
 by: b234e3fc-c280-464d-9bb6-96db6e703ce8
-status: open
+status: landed
 nodes: remark-substrate
 created: 2026-07-03T18:07:09.967Z
 ---

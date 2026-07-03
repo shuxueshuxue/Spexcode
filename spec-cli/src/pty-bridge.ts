@@ -50,8 +50,12 @@ type PaneMode = {
   mouseSgr: boolean
   scrollPosition: number
   paneHeight: number
+  cursorX: number
+  cursorY: number
 }
-const PANE_MODE_FORMAT = '#{pane_in_mode},#{alternate_on},#{mouse_standard_flag},#{mouse_button_flag},#{mouse_any_flag},#{mouse_sgr_flag},#{scroll_position},#{pane_height}'
+// cursor_x/cursor_y are the underlying program's cursor (0-based), NOT the copy-mode cursor — so a frame can
+// restore it and any following live %output that moves the cursor RELATIVELY resumes from the right origin.
+const PANE_MODE_FORMAT = '#{pane_in_mode},#{alternate_on},#{mouse_standard_flag},#{mouse_button_flag},#{mouse_any_flag},#{mouse_sgr_flag},#{scroll_position},#{pane_height},#{cursor_x},#{cursor_y}'
 const flag = (v?: string) => v === '1'
 function num(v?: string): number {
   const n = Number(v)
@@ -173,23 +177,30 @@ function stripDcs(line: Buffer): Buffer {
 }
 
 function onLine(b: Bridge, lineBuf: Buffer): void {
+  // Inside a command reply everything is verbatim content until %end/%error. Capture-pane body lines are RAW
+  // pane bytes (real escapes + UTF-8), so they must NOT go through stripDcs: a captured row can legitimately
+  // END in \x1b\\ — the ST that terminates an OSC 8 hyperlink (`\x1b]8;;\x1b\\`, e.g. a Claude Code URL) — and
+  // stripDcs's trailing-\x1b\\ strip would eat it, leaving the hyperlink unterminated so xterm never closes it
+  // and paints the rest of the screen underlined. The DCS-exit wrapper only ever ends a control line at stream
+  // exit, never a reply body, so the strip belongs to the protocol path below, not here. Classify %end/%error
+  // on the raw line — but only one whose command number matches this %begin's closes it, so a pane row that
+  // merely starts with "%end" can't false-close.
+  if (b.block) {
+    const h = lineBuf.toString('latin1')
+    const m = h.match(/^%(?:end|error) \S+ (\d+)/)
+    if (m && m[1] === b.blockNum) {
+      const lines = b.block; b.block = null
+      const resolve = b.cmdQ.shift(); if (resolve) resolve(lines)
+    } else {
+      b.block.push(lineBuf)   // raw bytes verbatim — escapes (incl. OSC 8 ST) + UTF-8, not to be string-mangled
+    }
+    return
+  }
   const line = stripDcs(lineBuf)
   // The control PROTOCOL (%begin/%end/%error/%output/%layout-change prefixes, command numbers, layout tokens)
   // is pure ASCII, so decode as latin1 for classification only — a total 1-byte↔1-char map, so a byte index
   // in `head` is the same byte index in `line`; the DATA is taken from the raw Buffer, never from `head`.
   const head = line.toString('latin1')
-  if (b.block) {
-    // Inside a command reply everything is verbatim content until %end/%error — but only one whose command
-    // number matches this %begin's closes it, so a pane row that merely starts with "%end" can't false-close.
-    const m = head.match(/^%(?:end|error) \S+ (\d+)/)
-    if (m && m[1] === b.blockNum) {
-      const lines = b.block; b.block = null
-      const resolve = b.cmdQ.shift(); if (resolve) resolve(lines)
-    } else {
-      b.block.push(line)   // raw bytes — a capture-pane body line is UTF-8, not to be string-mangled
-    }
-    return
-  }
   if (head.startsWith('%output ')) {
     if (b.paneInMode) return
     const sp = head.indexOf(' ', 8)   // skip "%output %<pane> " to the raw (escaped) data
@@ -310,7 +321,7 @@ export function attachViewer(id: string, v: Viewer, initialSize?: { cols: number
 
 async function readPaneMode(id: string): Promise<PaneMode> {
   const raw = await tmuxOut(['display-message', '-p', '-t', id, '-F', PANE_MODE_FORMAT])
-  const [inMode, alternate, mouseStandard, mouseButton, mouseAny, mouseSgr, scrollPosition, paneHeight] = raw.split(',')
+  const [inMode, alternate, mouseStandard, mouseButton, mouseAny, mouseSgr, scrollPosition, paneHeight, cursorX, cursorY] = raw.split(',')
   return {
     inMode: flag(inMode),
     alternate: flag(alternate),
@@ -320,6 +331,8 @@ async function readPaneMode(id: string): Promise<PaneMode> {
     mouseSgr: flag(mouseSgr),
     scrollPosition: num(scrollPosition),
     paneHeight: num(paneHeight),
+    cursorX: num(cursorX),
+    cursorY: num(cursorY),
   }
 }
 
@@ -386,10 +399,32 @@ export function forwardWheel(id: string, up: boolean, col: number, row: number, 
 // The capture frame broadcasts synchronously at its block-end, so any %output that follows in the stream
 // lands AFTER the frame and is never overwritten by it — the frame is the attach seed, %output the live tail.
 //
-// A FULL frame (attach / re-bind / reconnect — b.needsFull) leads with the mode prelude so the renderer mirrors
-// the pane's terminal modes. History is not copied into xterm's own scrollback: wheel navigation is tmux-owned,
-// so both FULL frames and resizes capture the current tmux view only. The clear is `\x1b[H\x1b[2J` (viewport
-// only, never `\x1b[3J`).
+// A frame is a COMPLETE reconstruction of the pane's terminal state at the converged size — so the live
+// %output that follows renders coherently on top of it. A `capture-pane` seed carries only the GRID (cells +
+// their attributes + hyperlinks, byte-verbatim); the frame wraps the rest of the state around it, in stream
+// order:
+//   modes  — alt-screen + mouse tracking, reconstructed from the pane's live flags (FULL frames only — a
+//            plain resize keeps the modes the browser already holds; control mode never re-emits them).
+//   pen    — reset SGR + close any open OSC 8 hyperlink, so no attribute/hyperlink state leaks across the
+//            clear from the prior frame (xterm renders an unclosed hyperlink as a whole-screen underline).
+//   clear  — blank the viewport (`\x1b[H\x1b[2J`, never the scrollback `\x1b[3J`).
+//   grid   — the captured rows, joined at the BYTE level so a wide char / an OSC 8 ST is never string-mangled.
+//   cursor — put the cursor where the pane REALLY has it, so a relative live redraw resumes from the right
+//            origin. An inline TUI (Ink) erases its previous frame by moving up from where it left the cursor
+//            — which sits on the input line, above trailing hint rows; a frame that left the cursor at the
+//            body's end would make the next redraw erase the wrong rows and double the bottom UI.
+// Each live-view rendering bug was ONE missing piece of this reconstruction (a mangled grid byte, a leaked
+// hyperlink, a dropped cursor); building the whole state in one place is what keeps them all fixed.
+function reconstructFrame(mode: PaneMode, lines: Buffer[], full: boolean): Buffer {
+  const modes = full ? paneModePrelude(mode) : ''
+  const pen = '\x1b[m\x1b]8;;\x1b\\'
+  const clear = '\x1b[H\x1b[2J'
+  const cursor = `\x1b[${mode.cursorY + 1};${mode.cursorX + 1}H`
+  return Buffer.concat([Buffer.from(modes + pen + clear, 'utf8'), joinLines(lines), Buffer.from(cursor, 'utf8')])
+}
+
+// every (re)attach and resize routes here to broadcast one reconstructed frame (see reconstructFrame). The
+// frame reflects the pane at its command boundary, so live %output that follows lands after it, never under it.
 async function repaint(b: Bridge): Promise<void> {
   const token = ++b.repaintToken
   const want = `${b.cols}x${b.rows}`
@@ -399,16 +434,12 @@ async function repaint(b: Bridge): Promise<void> {
   await awaitLayout(b, want)
   if (token !== b.repaintToken) return
   const mode = await readPaneMode(b.id)
-  const prelude = full ? paneModePrelude(mode) : ''
   if (token !== b.repaintToken) return
   b.paneInMode = mode.inMode
   b.cmdQ.push((lines) => {
     if (token !== b.repaintToken) return
     if (full) b.needsFull = false   // cleared only once the full frame actually reaches a viewer
-    // capture-pane reply lines are RAW bytes (real escapes + UTF-8, not octal-escaped); replay them under the
-    // mode prelude + a clear+home so the frame is one coherent screen (plus, on a full frame, seeded history).
-    // The prelude+clear is ASCII; the body is joined at the BYTE level so a wide char is never string-mangled.
-    broadcast(b.id, Buffer.concat([Buffer.from(prelude + '\x1b[H\x1b[2J', 'utf8'), joinLines(lines)]))
+    broadcast(b.id, reconstructFrame(mode, lines, full))
   })
   const cap = capturePaneCommand(b, mode)
   try { b.pty.write(cap + '\n') } catch { b.cmdQ.pop() }

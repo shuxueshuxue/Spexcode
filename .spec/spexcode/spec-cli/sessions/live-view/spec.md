@@ -7,6 +7,11 @@ code:
   - spec-cli/src/pty-bridge.ts
   - spec-dashboard/src/SessionTerm.jsx
   - spec-cli/test/pty-bridge.stress.ts
+  - spec-cli/test/pty-bridge.osc8.ts
+  - spec-cli/test/pty-bridge.scroll-redraw.ts
+  - spec-cli/test/pty-bridge.reseed-reconnect.ts
+  - spec-cli/test/pty-bridge.history.ts
+  - spec-cli/test/vt-emulate.ts
 ---
 
 # live-view
@@ -33,6 +38,13 @@ bridge ever sees it**, unrecoverable. Byte-splitting is safe because tmux escape
 backslash as octal `\NNN` (all `< 0x80`) and passes high bytes through **raw**, and a newline never falls
 inside a multi-byte character — so each wide char stays whole in one line, and un-escaping (each `\NNN` → its
 one byte, all else untouched) yields the pane's exact UTF-8 with no decode/encode cycle to shatter it.
+
+Byte-verbatim covers **escapes that end a captured row**: the control-mode DCS wrapper (`\x1b\\` on exit) is
+stripped from **protocol** lines only — a `capture-pane` reply **body** is pushed **raw**. A pane row can end
+in `\x1b\\` as the ST closing an **OSC 8 hyperlink** (which Claude Code emits for URLs and xterm renders
+underlined); eating it leaves the link unterminated, so xterm never closes it and underlines the **rest of the
+screen** — the "whole terminal goes underlined when I scroll" glitch. The wrapper never rides inside a reply
+block, so the strip stays on the protocol path and the body keeps its terminators.
 
 **Resize is deterministic and timer-free.** `refresh-client -C WxH` is guaranteed to emit exactly one
 `%layout-change` — even a same-size no-op emits one — so the bridge sets the size, then **waits to be told**
@@ -99,14 +111,33 @@ serializes commands and notifications on one stream: the capture reflects the pa
 any live output that follows lands *after* it and is never overwritten — the deterministic seed, not the banned
 splice of a guessed-size snapshot into an already-flowing stream.
 
-A **full** frame — every fresh (re)attach / re-bind, and the resize a viewer sends right after it resets its
-xterm — leads the seed with a **DEC-mode prelude reconstructed from the pane's live flags** (`alternate_on`,
-the mouse-tracking flags): so the browser xterm faithfully mirrors the pane — on the **alternate screen** for a
-full-screen TUI (else its redraws pollute the normal scrollback and mis-render) and in the app's **mouse-tracking
-mode**. That same pane-mode reading is the source for wheel routing below; attach reconstruction and navigation
-are not two independent interpretations of tmux state. A plain resize re-seeds only the visible screen, under a
-viewport-only clear (`\x1b[H\x1b[2J`, never `\x1b[3J`), so it never re-floods history into a browser-owned
-scrollback.
+A frame is therefore a **complete reconstruction of the pane's terminal state** at the converged size — not
+just its grid — because the live `%output` that follows renders *on top of* it and assumes the terminal is in
+exactly that state. The capture carries only the grid; one builder wraps the rest of the state around it, in
+five named pieces (stream order):
+
+- **modes** — the alt-screen switch + mouse-tracking, reconstructed from the pane's live flags (`alternate_on`,
+  the mouse flags). Only on a **full** frame (fresh (re)attach / re-bind, or the resize right after a viewer
+  resets its xterm) — a plain resize keeps the modes the browser already holds, since control mode never
+  re-emits them. So the browser mirrors the pane on the **alternate screen** for a full-screen TUI and in its
+  **mouse-tracking mode**. That same pane-mode reading drives wheel routing below — reconstruction and
+  navigation are one interpretation of tmux state, not two.
+- **pen** — reset SGR + close any open OSC 8 hyperlink, so no attribute/hyperlink state leaks across the clear
+  from the prior frame (xterm paints an unclosed hyperlink as a whole-screen underline).
+- **clear** — a viewport-only clear (`\x1b[H\x1b[2J`, never the scrollback `\x1b[3J`), so it never re-floods
+  history into a browser-owned scrollback.
+- **grid** — the captured rows, joined at the byte level (a wide char / an OSC 8 ST is never string-mangled).
+- **cursor** — placed where the pane **really** has it (`\x1b[y;xH` from `cursor_x`/`cursor_y`). A capture
+  restores the grid but not the cursor, and a live inline TUI's next `%output` redraws **relative to the
+  cursor** (Ink erases its previous frame by moving up from where it left off — the input line, *above* the
+  trailing hint rows, not the body's end). Leaving the cursor at the body's end makes that redraw erase the
+  wrong rows and **double the bottom UI** — the garble on **any** re-seed the TUI gets no SIGWINCH for
+  (copy-mode exit, a **reconnect**, an unsolicited layout-change; a resize self-corrects, since its SIGWINCH
+  triggers a full redraw). A fresh session on a deploy garbles this way without anyone scrolling.
+
+Each of the three rendering bugs this node has carried was exactly **one missing piece** of that reconstruction
+(a mangled grid byte, a leaked hyperlink, a dropped cursor); building the whole state in one place is the
+architecture that keeps them all fixed and gives any future state a home.
 
 ## scrolling — the pane's real history, through tmux
 

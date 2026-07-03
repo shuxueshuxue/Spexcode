@@ -59,6 +59,57 @@ scenarios:
       toward the bottom. The browser does not expose or scroll an independent xterm history buffer, and no
       mouse bytes are littered into the shell prompt. A full-screen alternate-screen TUI with SGR mouse reports
       still gets forwarded wheel reports, so the app scrolls itself.
+  - name: scroll-osc8-hyperlink-no-underline-leak
+    tags: [backend-api]
+    description: >-
+      Measure the "whole screen goes underlined when I scroll" regression through the real bridge surface. On
+      a tmux socket, print a line carrying an OSC 8 hyperlink whose closing ST lands at the row's end
+      (`printf '\033]8;;https://example/x\033\\LINK\033]8;;\033\\\n'` — the same shape Claude Code emits for a
+      URL, which xterm renders underlined), then push it up into tmux history behind filler. Attach a viewer
+      through the real API (attachViewer) and send wheel-up frames (forwardWheel, the dashboard's exact path)
+      until copy-mode repaints the link row from history. Capture the bytes the bridge broadcasts and inspect
+      every OSC 8 close (`\x1b]8;;`): each must be properly ST/BEL terminated, never a bare `\x1b]8;;` cut off
+      at a line boundary. File with `spex yatsu eval live-view --scenario
+      scroll-osc8-hyperlink-no-underline-leak --result <txt>`.
+    expected: >-
+      The repainted copy-mode frame carries the hyperlink's close with its `\x1b\\` (ST) intact — ZERO
+      truncated closes — so xterm terminates the link and the underline stays on the link text alone, not the
+      rest of the screen. The bug path (running capture-reply BODY lines through the DCS-exit strip, which eats
+      a trailing `\x1b\\`) must be absent: capture bodies are pushed byte-verbatim, and each frame additionally
+      leads with an SGR reset + OSC 8 close so no open-hyperlink state survives the viewport clear.
+  - name: scroll-updown-no-doubled-redraw
+    tags: [backend-api]
+    description: >-
+      Measure the "bottom garbles when I scroll up then back down" regression through the real bridge. Run an
+      Ink-style redrawer in a tmux pane that reproduces the real pane shape — the cursor parked on the input
+      line ABOVE trailing content (a separator + hint), redrawing each frame RELATIVE to that parked cursor
+      (up to the frame top, clear to end, rewrite). Attach a viewer through the real API (attachViewer), send
+      wheel-up frames (forwardWheel) to enter copy-mode and freeze while the pane keeps advancing, then
+      wheel-down past the bottom to exit copy-mode and resume live output onto the re-seed. Replay the bytes the
+      bridge broadcast through a small VT emulator and count how many copies of the frame's single marker line
+      survive on the final screen. File with `spex yatsu eval live-view --scenario
+      scroll-updown-no-doubled-redraw --result <txt>`.
+    expected: >-
+      Exactly ONE copy of the frame's marker on the final screen — the copy-mode-exit re-seed restored the
+      pane's real cursor position (`\x1b[y;xH` from cursor_x/cursor_y), so the TUI's next cursor-relative redraw
+      erased its previous frame from the right row. The bug path (a re-seed that leaves the cursor at the body's
+      end) doubles the frame — the old and new bottom UI stacked — and must be absent.
+  - name: reconnect-reseed-no-doubled-redraw
+    tags: [backend-api]
+    description: >-
+      Measure the SAME doubled-bottom glitch as scroll-updown, but from the trigger a fresh session hits on a
+      deploy WITHOUT scrolling: a reconnect / refit re-seed. Run the Ink-style relative redrawer (cursor parked
+      above trailing content) in a tmux pane, attach a viewer through the real API, and — while it is mid-render
+      — force a bare full-frame re-seed at the SAME size (resizeBridge(cols, rows, full=true), which is what a
+      viewer reconnect / unsolicited layout-change drives). The pane gets no SIGWINCH, so the TUI keeps doing
+      cursor-relative redraws onto the re-seed. Replay the broadcast through the VT emulator and count copies of
+      the frame's single marker. File with `spex yatsu eval live-view --scenario
+      reconnect-reseed-no-doubled-redraw --result <txt>`.
+    expected: >-
+      Exactly ONE copy of the marker — the re-seed restored the pane's real cursor, so the next relative redraw
+      erased its previous frame correctly even with no scroll and no resize. The bug path (a re-seed that leaves
+      the cursor at the body's end) doubles the frame, which is why every fresh session on the deploy garbled at
+      the bottom; it must be absent.
   - name: output-preserves-utf8-wide-chars
     tags: [backend-api]
     description: >-

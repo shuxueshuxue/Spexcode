@@ -76,17 +76,20 @@ const rel = (ts) => {
 export default function EvalsGroup({ nodes = [], sel, onSel, onRows }) {
   const t = useT()
   const [kind, setKind] = useState(null)          // null = the default: video → image → all, first kind present
-  const [showStale, setShowStale] = useState(false)
+  const [staleOnly, setStaleOnly] = useState(false)   // opt-in NARROWING, never a default hide
 
+  // latest reading per scenario, already newest-first (currentEntries) — fresh AND stale MIXED. Freshness is
+  // not a default filter: a stale reading is real measured loss and stays in the time-ordered feed (its row
+  // carries the muted ✓/✗ that marks it stale, so it reads as stale without being hidden).
   const all = useMemo(() => currentEntries(nodes), [nodes])
-  const fresh = useMemo(() => all.filter((e) => e.fresh), [all])
-  const hasVideo = fresh.some((e) => kindsOf(e).includes('video'))
-  const hasImage = fresh.some((e) => kindsOf(e).includes('image'))
+  const hasVideo = all.some((e) => kindsOf(e).includes('video'))
+  const hasImage = all.some((e) => kindsOf(e).includes('image'))
   const effKind = kind ?? (hasVideo ? 'video' : hasImage ? 'image' : 'all')
-  const pool = showStale ? all : fresh
+  // the stale chip is the INVERSE of a hide: off = everything, on = ONLY stale (drill into outstanding drift).
+  const pool = useMemo(() => (staleOnly ? all.filter((e) => !e.fresh) : all), [all, staleOnly])
   // a mixed reading matches EVERY kind it contains, so images+video shows under both the video and image chips.
   const rows = useMemo(() => pool.filter((e) => effKind === 'all' || kindsOf(e).includes(effKind)), [pool, effKind])
-  const staleN = all.length - fresh.length
+  const staleN = all.filter((e) => !e.fresh).length
 
   useEffect(() => { onRows?.(rows) }, [rows, onRows])
 
@@ -100,7 +103,7 @@ export default function EvalsGroup({ nodes = [], sel, onSel, onRows }) {
             </button>
           ))}
           {staleN > 0 && (
-            <button className={`ef-chip ef-stale ${showStale ? 'on' : ''}`} onClick={() => setShowStale((v) => !v)}>
+            <button className={`ef-chip ef-stale ${staleOnly ? 'on' : ''}`} onClick={() => setStaleOnly((v) => !v)} title={t('evalsFeed.staleOnlyTitle')}>
               {t('evalsFeed.staleN', { n: staleN })}
             </button>
           )}

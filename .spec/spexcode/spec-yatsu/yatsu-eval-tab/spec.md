@@ -29,7 +29,9 @@ read knows. A node's measurement timeline is every reading from its `yatsu.evals
 the read's codeSha, an evidence LIST — each `{hash, kind}` resolved to its live blob state — evaluator, **verdict**, ts) joined with the scenario's **expected**
 (from the live yatsu.md — what zero loss looks like) and a **freshness flag**, derived live from git by the
 same [[freshness]] machinery scan uses: a reading is *current* until its governed code, its scenario, or the
-evaluator version moved past the sha it was taken at, otherwise *stale* (and which axis moved);
+evaluator version moved past the sha it was taken at, otherwise *stale* (and which axis moved); a code-stale
+reading also carries the code axis's per-file drift detail (`codeDrift` — which governed files moved, +how many
+commits) so the [[event-detail]] stale readout can name it, never re-deriving git in the browser;
 newest-first.
 
 The board carries this timeline as a **summary** ([[board-lean]]): `buildBoard` folds the latest reading per

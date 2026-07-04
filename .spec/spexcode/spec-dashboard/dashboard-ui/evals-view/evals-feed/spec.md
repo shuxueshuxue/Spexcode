@@ -2,7 +2,7 @@
 title: evals-feed
 status: active
 hue: 200
-desc: The Evals page's feed — the project's current measured loss as a feed, the left list of the master-detail ([[evals-view]]). Latest reading per scenario, fresh first, video first; title-only rows, media strictly lazy.
+desc: The Evals page's feed — the project's current measured loss as a feed, the left list of the master-detail ([[evals-view]]). Latest reading per scenario, fresh AND stale mixed newest-first (freshness is never a default hide — the stale chip is an opt-in narrowing); title-only rows, media strictly lazy.
 code:
   - spec-dashboard/src/EvalsFeed.jsx
 related:
@@ -24,11 +24,15 @@ slow-growing), never by measurement count. Review attends to what still counts.
 
 ## expanded spec
 
-Default view: **latest reading per scenario, fresh only, newest first**, evidence-kind filter defaulting
-to `video`, falling back to `image` when no fresh reading *contains* a video and to `all` when neither media
-kind is present; stale readings collapse to a count badge, expanded on demand. The chips (video | image | note | all, the
-stale toggle) live in this group's sticky head and are this group's own state — [[evals-view]] owns the
-page shell (split, selection, j/k), never this group's filters.
+Default view: **latest reading per scenario, newest first — fresh and stale MIXED**. Freshness is **never a
+default hide**: a stale reading is real measured loss and stays in the time-ordered feed, its row carrying the
+muted ✓/✗ that marks it stale (so it reads *as* stale without being removed) — hiding it was the bug that let
+a just-filed screenshot vanish behind a chip while newer work looked absent. The evidence-kind filter defaults
+to `video`, falling back to `image` when no reading *contains* a video and to `all` when neither media kind is
+present. The **stale chip is the INVERSE of a hide** — an opt-in narrowing: off shows everything; on shows
+*only* stale readings (drill into the outstanding drift), and it carries the live stale count. The chips
+(video | image | note | all, the stale toggle) live in this group's sticky head and are this group's own
+state — [[evals-view]] owns the page shell (split, selection, j/k), never this group's filters.
 
 **Kinds are honest — and a reading now carries a SET of them.** Evidence is a LIST, so a reading's kinds are
 every entry it holds: `video`/`image`/`transcript` (a legacy scalar blob with no recorded kind is an image —

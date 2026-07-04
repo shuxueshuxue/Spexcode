@@ -9,11 +9,26 @@ scenarios:
       page; select a video row and read where its media renders.
     expected: |
       The evals feed is the page's LEFT list with its chips in a sticky head; the default kind
-      filter is `video` (falling back to `image` when no fresh video reading exists). Rows are the LATEST
-      reading per (node, scenario), fresh only, newest first — title-only ALWAYS: zero <video>/<img>
+      filter is `video` (falling back to `image` when no video reading exists). Rows are the LATEST
+      reading per (node, scenario), newest first — title-only ALWAYS: zero <video>/<img>
       elements in the list. Opening the page fires ZERO extra /api/board fetches (the group rides the
       app's one poll via props). Selecting a video row renders it in the RIGHT detail pane as the
       annotator — the only place its <video> exists.
+  - name: stale-not-hidden-mixed-by-time
+    tags: [frontend-e2e]
+    description: >
+      With BOTH fresh and stale readings on the board (a node whose governed code changed after some of
+      its readings), open #/evals in a real browser with the kind chip on `all`. Read the real DOM: are
+      stale rows (the muted ✓/✗) present in the default list, and is the list ordered purely by time
+      (a stale reading newer than a fresh one sits ABOVE it)? Then click the `N stale` chip and re-read
+      the rows.
+    expected: |
+      By DEFAULT the feed shows fresh AND stale readings together — a stale row is NOT hidden — and the
+      order is strictly newest-first regardless of freshness (a newer stale reading appears above an older
+      fresh one). The `N stale` chip is an opt-in NARROWING, not a hide: with it OFF every latest-per-scenario
+      reading shows; clicking it ON leaves ONLY the stale rows (the fresh ones drop out); clicking again
+      restores the mixed list. No reading ever silently disappears behind the default view.
+
   - name: blobless-reading-honest-note-kind
     tags: [frontend-e2e]
     description: >

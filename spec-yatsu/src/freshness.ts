@@ -31,6 +31,22 @@ export function changedSince(idx: DriftIndex, sinceSha: string, path: string): b
   return (idx.fileCommits.get(path) ?? []).some((h) => !inAncestors(idx, anc, h))
 }
 
+// the code axis's DISPLAY detail: which governed files drifted since a reading, and by HOW MANY commits — so
+// a stale eval can say "EvalsFeed.jsx +3" instead of a bare "code moved". Same DAG reachability as
+// changedSince (a commit touching the file that is NOT an ancestor of the reading's sha lies in sinceSha..HEAD);
+// an off-history sinceSha counts every touch (conservative, matching changedSince's stale-rather-than-pass rule).
+// Reporting only — it never decides freshness (staleAxes does); it explains a decision already made.
+export function codeDrift(idx: DriftIndex, sinceSha: string, codeFiles: string[]): { file: string; behind: number }[] {
+  const anc = ancestorsOf(idx, sinceSha)
+  const out: { file: string; behind: number }[] = []
+  for (const f of codeFiles) {
+    const commits = idx.fileCommits.get(f) ?? []
+    const behind = anc ? commits.filter((h) => !inAncestors(idx, anc, h)).length : commits.length
+    if (behind > 0) out.push({ file: f, behind })
+  }
+  return out
+}
+
 // scenario freshness uses rowsFor (rename-followed content versions, like a spec node), not touch-based fileCommits, so a bare git-mv reparent isn't a change; off-history codeSha → stale
 function scenarioMoved(hidx: HistoryIndex, didx: DriftIndex, sinceSha: string, yatsuPath: string): boolean {
   const anc = ancestorsOf(didx, sinceSha)

@@ -75,7 +75,17 @@ renders the scenario's WHOLE reading history as verdict pips (oldest→newest, �
 pass/B pole, · = a pre-verdict legacy reading), the viewed one lit, with **‹ ›** to walk older→newer and a
 click on any pip to jump. Flipping swaps the media *in place* — the video/gallery, the step ruler, the
 expected, the verdict note, and the header's verdict badge all re-render for the selected reading — so A
-(the bug) and B (the fix) sit one keystroke apart. The board folds only the latest reading per scenario
+(the bug) and B (the fix) sit one keystroke apart.
+
+**A stale reading is shown, so the detail EXPLAINS its staleness.** Because the feeds no longer hide stale
+readings ([[evals-feed]]), a stale one is routinely the viewed reading — and a bare "stale" is not enough to
+act on. So the stage carries a small **stale readout** for a non-fresh viewed reading: the freshness axes that
+moved since it (`code · scenario · evaluator · remark`), and for the **code** axis which governed files drifted
+and by **how many commits** (`EvalsFeed.jsx +3`) — the per-file drift count is [[yatsu-core]]'s `codeDrift`,
+attached to the reading by `evalTimeline` (the frontend has no git). It is reporting only: it never decides
+freshness, it names a decision already made, so a reviewer sees *why* a reading is behind and by how far. Every
+other affordance is freshness-blind — a remark is authored on a stale reading exactly as on a fresh one (the
+composer never consults freshness); staleness changes what the loss signal *says*, never what the human can *do*. The board folds only the latest reading per scenario
 ([[board-lean]]), so the full history is lazily fetched from the SAME `/api/specs/:id/evals` timeline the
 [[yatsu-eval-tab]] uses (no new endpoint, no board bloat); the strip shows only when a scenario has more
 than one reading (a fresh scenario is just its single reading). The remark track in the rail is

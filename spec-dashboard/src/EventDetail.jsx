@@ -342,6 +342,16 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite 
           {viewing.expected && <div className="an-expected"><b>{t('nodeView.eval.expected')}</b> {viewing.expected}</div>}
           {ev.length > 0 && viewing.verdict?.note && <div className="an-expected an-prior-note"><b>{t('nodeView.eval.noteLabel')}</b> {viewing.verdict.note}</div>}
 
+          {/* a stale reading is shown, not hidden — so the detail EXPLAINS how far it's fallen behind: which
+              axes moved, and (for the code axis) which governed files drifted + by how many commits. */}
+          {!viewing.fresh && (viewing.staleAxes?.length ?? 0) > 0 && (
+            <div className="an-expected an-stale" title={t('nodeView.eval.staleReadoutTitle')}>
+              <b>{t('nodeView.eval.staleLabel')}</b> {viewing.staleAxes.join(' · ')}
+              {(viewing.codeDrift?.length ?? 0) > 0 &&
+                <span className="an-stale-files"> — {viewing.codeDrift.map((d) => `${d.file.split('/').pop()} +${d.behind}`).join(', ')}</span>}
+            </div>
+          )}
+
           {/* the video — the annotate-a-loop surface: circle-to-capture, custom review-track scrubber, ruler */}
           {videoEntry && (
             <>

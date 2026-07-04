@@ -1,0 +1,24 @@
+{
+ "events": [
+  {
+   "atMs": 0,
+   "kind": "narrate",
+   "label": "▶ window-bounded-scroll · the SessionWindow glance is capped ~80vh, clears the stats strip, overflow scrolls"
+  },
+  {
+   "atMs": 10582,
+   "kind": "frame",
+   "label": "📷 glance: height=428px (79% vh), bottom=476 vs stats.top=497 clearsStats=true, rows=15, scrollable=true"
+  },
+  {
+   "atMs": 13292,
+   "kind": "frame",
+   "label": "📷 scrolled to end: scrollTop 0→80 (max 80), reachedEnd=true"
+  },
+  {
+   "atMs": 13355,
+   "kind": "frame",
+   "label": "📷 last row '✸○stub row F (fallback)' in view after scroll = true"
+  }
+ ]
+}

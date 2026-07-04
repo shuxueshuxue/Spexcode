@@ -117,9 +117,10 @@ Specs / graph
   yatsu <sub>           measure a node's scenarios and keep score: scan | eval [.|<node>] [--scenario N] (--pass|--fail) [--note T] [--image P|--result P|-] | show [.|<node>] [--json] | clean [--keep-latest|--all]
   blob put <file|->     stash bytes in the shared content-addressed evidence cache, print the hash — no reading filed (re-put restores a pruned/cloned-away blob by content)
   self <sub>            diagnose how the workflow reaches THIS self-launched agent: doctor (default) | contract | conflicts
-  issues                THE issue read — local forum threads + forge issues, one merged store-tagged list (the drain view)  [--node <id>] [--store local|github] [--all] [--json]
+  issues                THE issue read — local + forge issues, one merged store-tagged list (the drain view)  [--node <id>] [--store local|github] [--all] [--json]
+  issues open "<concern>"  open a local issue (taste, annotations, off-mainline smells all welcome)  [--node <id>…] [--evidence <hash>…] [--body -|<text>]
+  issues reply|sign|resolve <id> …   write to any issue — reply routes by the issue's store; sign/resolve act on a local one  | on|off|status toggles the workflow
   issues promote <id>   move an OPEN local issue to the forge (one recorded action: forge issue w/ Spec: marker + evidence, local thread landed w/ permalink)
-  propose "<concern>"   open a local issue in the git forum (taste, annotations, off-mainline smells all welcome)  [--node <id>…] [--evidence <hash>…] [--body -|<text>]  | reply|sign|resolve <id> …  | on|off|status
   review <SEL>          manager cockpit: review a session (ahead·merge-base diff·gates·proposal)  [--json]
   review proof <SEL>    render the session's proof of work — self-contained HTML, fully derived (diff·measured yatsu loss·gates)  [--open|--out P|--json]
   merge <SEL>           manager cockpit: gated atomic merge into main (re-checks gates, then closes)
@@ -292,23 +293,23 @@ if (cmd === 'serve') {
   // cache and print the hash, decoupled from filing a reading. Thin route — the cache lives in spec-yatsu.
   const { runBlob } = await import('../../spec-yatsu/src/cli.js')
   process.exit(runBlob(process.argv.slice(3)))
-} else if (cmd === 'propose') {
-  // @@@ propose - open a local issue in the git forum ([[proposals]]): a thing that felt off this session,
-  // even off-mainline. Thin route; all logic (write + commit straight to the trunk, reply/sign/resolve,
-  // the on|off toggle) lives in proposals.ts. `spex propose "<concern>" [--node id…] [--body -|text]`.
-  const { runPropose } = await import('./proposals.js')
-  process.exit(await runPropose(process.argv.slice(3)))
-} else if (cmd === 'issues') {
-  // @@@ issues - THE issue read ([[issues]]): local forum threads + forge issues as ONE store-tagged list,
-  // the supervisor's/human's drain view. `spex issues [--node id] [--store local|github] [--all] [--json]`.
+} else if (cmd === 'issues' || cmd === 'propose') {
+  // @@@ issues - the ONE issues surface ([[issues]]): bare it is THE read — local + forge issues as ONE
+  // store-tagged list, the supervisor's/human's drain view; a write first-positional (open|reply|sign|
+  // resolve|on|off|status, [[local-issues]]) routes to the local store's write verbs, `promote` moves a
+  // thread cross-store. `propose` is a DEPRECATED hidden alias (pre-rename deployed post-merge hooks call
+  // `spex propose nudge`); its old bare-concern form maps to `open`.
   const { runIssues } = await import('./issues.js')
-  process.exit(await runIssues(process.argv.slice(3)))
+  const { ISSUE_WRITE_SUBS } = await import('./localIssues.js')
+  let args = process.argv.slice(3)
+  if (cmd === 'propose' && !ISSUE_WRITE_SUBS.has(args[0])) args = ['open', ...args]
+  process.exit(await runIssues(args))
 } else if (cmd === 'remark' || cmd === 'resolve' || cmd === 'retract') {
   // @@@ remark - the resolvable interaction primitive ([[remark-substrate]]): pin a concern to a HOST (a
   // local issue, or a scenario `<node> --scenario <name>`) that a second agent can `resolve` and the author
-  // can `retract`. CLI-first — the whole author→resolve→retract loop is these thin forum-write wrappers, so
+  // can `retract`. CLI-first — the whole author→resolve→retract loop is these thin store-write wrappers, so
   // the dashboard adds no capability. `spex remark <host> --body -|<text> [--code-sha <sha>]`.
-  const m = await import('./proposals.js')
+  const m = await import('./localIssues.js')
   const run = cmd === 'remark' ? m.runRemark : cmd === 'resolve' ? m.runResolve : m.runRetract
   process.exit(await run(process.argv.slice(3)))
 } else if (cmd === 'materialize') {

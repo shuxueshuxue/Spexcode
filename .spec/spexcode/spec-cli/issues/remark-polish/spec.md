@@ -7,7 +7,7 @@ related:
   - spec-dashboard/src/Thread.jsx
   - spec-dashboard/src/EventDetail.jsx
   - spec-cli/src/mentions.ts
-  - spec-cli/src/proposals.ts
+  - spec-cli/src/localIssues.ts
   - spec-yatsu/src/evaltab.ts
   - spec-yatsu/src/cli.ts
   - spec-dashboard/src/NodeView.jsx

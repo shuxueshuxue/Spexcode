@@ -57,7 +57,7 @@ function navKeyToken(e) {
 }
 
 // the `[[`/`@` mention machinery — trigger scanners, ranking, MENTION_RE, the MentionMenu dropdown — is the
-// SHARED module ./mentions.jsx ([[mentions]]): one autocomplete for the console and the forum composers.
+// SHARED module ./mentions.jsx ([[mentions]]): one autocomplete for the console and the issue composers.
 
 // the shared auto-grow routine: reset to `auto` (so it can shrink), then height = scrollHeight clamped at
 // `maxH`. overflow-y stays HIDDEN below the cap so a scrollbar never appears from the height transition
@@ -160,7 +160,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const forest = useMemo(() => sessionForest(sessions, (id) => expanded.has(id)), [sessions, expanded])
   const visible = useMemo(() => forest.filter((it) => it.type === 'row').map((it) => it.s), [forest])
   const order = useMemo(() => ['new', ...visible.map((s) => s.id)], [visible])
-  // content mode: 'new' or a session id (the forum left for its own page — [[issues-view]] / [[side-nav]]).
+  // content mode: 'new' or a session id (the issues list left for its own page — [[issues-view]] / [[side-nav]]).
   const active = order.includes(sel) ? sel : 'new'
   // a removed session (closed here, ended on its own, or closed elsewhere) leaves the tab unresolved: land
   // on New only if you're still on the now-gone tab. Mirrors `active`'s validity test. Only while the page
@@ -580,7 +580,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       if ((e.altKey !== e.metaKey) && isI && active !== 'new') {
         e.preventDefault(); e.stopPropagation(); setNavMode((v) => !v); return
       }
-      // the app's GLOBAL ⌥ command family — ⌥N (New Session composer), ⌥F (forum), ⌥1..⌥4 (pages) — is
+      // the app's GLOBAL ⌥ command family — ⌥N (New Session composer), ⌥F (evals), ⌥1..⌥4 (pages) — is
       // reserved over the console too, nav mode included (the same standing as ⌥/⌘+I above): fall through
       // UNHANDLED so the App-level window listener (registered after this child's, so next in the capture
       // chain) routes it — never forwarded to tmux. Matched by e.code for the same mac ⌥-dead-key reason as

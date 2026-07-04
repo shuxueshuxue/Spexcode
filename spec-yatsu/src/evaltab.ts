@@ -100,7 +100,7 @@ export type EvalContext = {
   hidx: HistoryIndex
   ynodes: YatsuNode[]
   // the trunk remark tracks ([[remark-teeth]]), keyed (node, scenario) — loaded ONCE per board/proof build
-  // and reused for every node, so the fold never re-reads the forum per node.
+  // and reused for every node, so the fold never re-reads the issue store per node.
   remarks: Map<string, RemarkTrack>
 }
 

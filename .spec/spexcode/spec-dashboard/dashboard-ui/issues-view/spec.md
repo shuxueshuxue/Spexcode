@@ -2,7 +2,7 @@
 title: issues-view
 status: active
 hue: 200
-desc: The dashboard's Issues page — a top-level route (#/issues, [[side-nav]]) peer to the graph, the session board, and the Evals page, as a MASTER-DETAIL — the merged issue list (local forum + forge, store-tagged) on the left, a full-height detail pane the selection drives on the right; markdown-rendered bodies and threads, node chips focus the graph, the reply composer routes by store (local-store commit or real forge comment).
+desc: The dashboard's Issues page — a top-level route (#/issues, [[side-nav]]) peer to the graph, the session board, and the Evals page, as a MASTER-DETAIL — the merged issue list (local + forge, store-tagged) on the left, a full-height detail pane the selection drives on the right; markdown-rendered bodies and threads, node chips focus the graph, the reply composer routes by store (local-store commit or real forge comment).
 code:
   - spec-dashboard/src/IssuesPage.jsx
   - spec-dashboard/src/Thread.jsx
@@ -15,13 +15,13 @@ related:
 ## raw source
 
 Issues are one object over every store ([[issues]]), and a human wants **one place** to read them — an
-agent's local taste proposal and a GitHub issue on the same node belong on the same page, not on two
+agent's local taste issue and a GitHub issue on the same node belong on the same page, not on two
 surfaces the user must correlate. So the dashboard carries ONE **issues page** for them, a top-level page
 of its own — a peer of the graph, the session board, and the Evals page ([[evals-view]]), never a tab
 folded inside another surface (the earlier `Evals | Threads` switcher was collapsed by the human's
 directive: evals and issues are two top-level pages, not one page with an in-page switch). The dashboard
 stays a **thin window** over the CLI's truth, never a second source — it renders what `/api/issues`
-returns and computes nothing, and every write goes through the SAME reply/propose the CLI uses, committed
+returns and computes nothing, and every write goes through the SAME open/reply the CLI uses, committed
 straight to the trunk.
 
 ## expanded spec
@@ -56,7 +56,7 @@ straight to the trunk.
   no-change refetch costs headers only. A write forces the refetch so it shows up where it lands. The view
   renders each issue **in the order the API returns** — [[issues]]'s one time line, stores interleaved
   newest first: the frontend never re-sorts, and **shows no salience/priority ranking** (recurrence is the
-  drain's judgment, per [[proposals]], never an automatic order); signer and reply counts appear as raw
+  drain's judgment, per [[local-issues]], never an automatic order); signer and reply counts appear as raw
   data, not a rank. **Concluded issues hide by default** — closed / rejected / landed are the archive, not
   the open work, and mixing them in only confuses review; a count chip reveals them on demand (open and
   accepted stay: accepted is approved-but-not-landed, still live). The filter bar carries a **store
@@ -107,6 +107,6 @@ straight to the trunk.
   how the same hash renders on the Evals detail or the node eval tab. The reply stays plain
   `{ by, at, body }` — no schema grows, no typed evidence entries, and a raw reader still
   sees the `▶m:ss` line.
-- **Honors the switch.** When the issues workflow is OFF (`enabled: false`, [[proposals]]'s toggle), the
+- **Honors the switch.** When the issues workflow is OFF (`enabled: false`, [[local-issues]]'s toggle), the
   view shows a muted "off" state instead of the list — the dashboard reflects the one source of truth,
   never forks it.

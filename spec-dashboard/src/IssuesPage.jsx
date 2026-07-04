@@ -7,7 +7,7 @@ import { useT } from './i18n/index.jsx'
 
 // The Issues page ([[issues-view]]): a top-level page (#/issues, [[side-nav]]), peer of the graph, the
 // session board, and the Evals page. MASTER-DETAIL over one full routed page — the LEFT column is the
-// SLIM merged ISSUE list (local forum + forge, store-tagged, API order, no re-sort/no ranking; CONCLUDED
+// SLIM merged ISSUE list (local + forge, store-tagged, API order, no re-sort/no ranking; CONCLUDED
 // issues hidden behind a count chip) under its own filter bar, foldable to a thin strip so the detail
 // owns the width; the RIGHT pane is the full-height DETAIL of the selection — selection IS the detail,
 // no in-place expansion in a small box: an issue renders its markdown body (SpecBody — the spec dialect),

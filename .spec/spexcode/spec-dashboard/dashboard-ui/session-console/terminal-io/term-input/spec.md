@@ -45,7 +45,7 @@ not a hint toward one.
 - **`@` — sessions (an actor), on every prompt.** Typing `@` opens a parallel dropdown of the **live** board
   sessions plus **`@new`** (spawn a fresh worker), ranked by relevance; accepting inserts `@<id>`. This is
   the [[mentions]] grammar: `[[node]]` names a topic, `@session` names an actor — the two never collide. In
-  the composer/inbox the token expands to prompt text (the agent reads it); only in the forum does `@` also
+  the composer/inbox the token expands to prompt text (the agent reads it); only in an issue thread does `@` also
   programmatically dispatch.
 - **`/` on the New Session prompt — the config presets** (our own bespoke preset set), *not* Claude
   Code's palette.

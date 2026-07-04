@@ -57,8 +57,8 @@ it). No standing `ritual` config node is needed — the flow is the product defa
 itself — the composer's board chords merely prefill a plain instruction ("create a new node under
 [[parent]]…" / "delete [[node]]…"), and the agent authors or refactors-away the node like any other spec
 work. The server never mutates the spec tree; it only launches. This holds [[mentions]]'s line: outside the
-forum, a reference expands to prompt text, never a programmatic flow — the forum is the sole surface where
-the system itself dispatches.
+issue store, a reference expands to prompt text, never a programmatic flow — the issue store is the sole
+surface where the system itself dispatches.
 
 The **separate raw nav-key channel** (`rawKey`) keeps its own `tmux send-keys` path — the per-keystroke
 channel for driving the agent's TUI menus, carrying named keys, printable chars, and `⌃`/`⌥`/`⌘` modifier

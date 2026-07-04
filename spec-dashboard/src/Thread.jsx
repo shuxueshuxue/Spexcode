@@ -8,7 +8,7 @@ import { useT } from './i18n/index.jsx'
 // Issue thread renders in — the issue detail (BOTH stores: a forge issue's GitHub comments are the same
 // replies[], [[issues]]) and the eval detail ([[event-detail]]). The composer is delivery-agnostic: the home
 // passes `onSend(text, evidence)` (reply to an existing thread — the server routes it by the issue's store,
-// forum commit or real forge comment — or lazily create one), so the thread's binding stays the caller's
+// local-store commit or real forge comment — or lazily create one), so the thread's binding stays the caller's
 // concern while the writing surface stays one component — an @-mention dispatches wherever it is typed,
 // because every send lands on the same store-routed write path.
 //

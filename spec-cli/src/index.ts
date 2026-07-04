@@ -4,7 +4,7 @@ import { cors } from 'hono/cors'
 import { etag } from 'hono/etag'
 import { createNodeWebSocket } from '@hono/node-ws'
 import { loadSpecs, loadSpecsLite, specContent, specHistory, specDiffAt, loadConfig } from './specs.js'
-import { proposalsEnabled, postLocalIssue, remarkOnHost, resolveRemark, retractRemark } from './proposals.js'
+import { issuesEnabled, postLocalIssue, remarkOnHost, resolveRemark, retractRemark } from './localIssues.js'
 import { mergedIssues, replyIssue } from './issues.js'
 import { residentForgeState, refreshForgeNow } from '../../spec-forge/src/resident.js'
 import { summarize } from './mentions.js'
@@ -153,23 +153,23 @@ app.get('/api/launchers', (c) => c.json({
   default: defaultLauncher(),
 }))
 // the ISSUES read surface ([[issues]]) for the dashboard's issues page — the merged list over every store
-// (local forum threads + the resident forge slice), the SAME mergedIssues() the CLI drain reads, verbatim
+// (local threads + the resident forge slice), the SAME mergedIssues() the CLI drain reads, verbatim
 // (the dashboard computes nothing over it: no re-sort, no salience ranking). The `enabled` flag mirrors
-// the forum-workflow on/off switch so the frontend hides the view when the feature is OFF.
+// the issues-workflow on/off switch so the frontend hides the view when the feature is OFF.
 app.get('/api/issues', etag(), (c) =>
   c.json({
-    enabled: proposalsEnabled(),
+    enabled: issuesEnabled(),
     issues: mergedIssues({ host: 'github', state: residentForgeState() }, loadSpecsLite().map((s) => s.id)),
   }))
-// the WRITE surface ([[proposals]] / [[issues-view]]) — the human reply path, STORE-ROUTED through the one
-// reply verb ([[issues]] replyIssue): a local id git-commits to the trunk forum, a forge id ('github#N')
+// the WRITE surface ([[local-issues]] / [[issues-view]]) — the human reply path, STORE-ROUTED through the one
+// reply verb ([[issues]] replyIssue): a local id git-commits to the trunk store, a forge id ('github#N')
 // posts a REAL comment through the driver; either way the text's @-mentions dispatch (a human summons an
 // agent from the issues page). `outcomes` is the one-line @-dispatch summary the dashboard echoes. The
 // server owns its freshness: a forge write forces the resident slice's read-back before answering, so the
 // reload that follows shows the comment. Honor the on/off switch: 403 when the feature is OFF; an unknown
 // local thread → 404; a failed forge write → 502 with the driver's own message (fail loud, never queued).
 app.post('/api/issues/:id/reply', async (c) => {
-  if (!proposalsEnabled()) return c.json({ error: 'forum workflow is off' }, 403)
+  if (!issuesEnabled()) return c.json({ error: 'issues workflow is off' }, 403)
   const body = await c.req.json().catch(() => ({}))
   const text = typeof body?.body === 'string' ? body.body : ''
   if (!text.trim()) return c.json({ error: 'empty reply' }, 400)
@@ -191,7 +191,7 @@ app.post('/api/issues/:id/reply', async (c) => {
   }
 })
 app.post('/api/issues', async (c) => {
-  if (!proposalsEnabled()) return c.json({ error: 'forum workflow is off' }, 403)
+  if (!issuesEnabled()) return c.json({ error: 'issues workflow is off' }, 403)
   const body = await c.req.json().catch(() => ({}))
   const concern = typeof body?.concern === 'string' ? body.concern.trim() : ''
   if (!concern) return c.json({ error: 'empty concern' }, 400)
@@ -212,7 +212,7 @@ app.post('/api/issues', async (c) => {
 // `'human'` (agent-only — an agent resolves through the CLI, never the dashboard), and retract binds to the
 // human who authored (only their own `'human'` remarks). Who-may-resolve/retract cannot depend on transport.
 app.post('/api/remarks', async (c) => {
-  if (!proposalsEnabled()) return c.json({ error: 'forum workflow is off' }, 403)
+  if (!issuesEnabled()) return c.json({ error: 'issues workflow is off' }, 403)
   const body = await c.req.json().catch(() => ({}))
   const text = typeof body?.body === 'string' ? body.body : ''
   if (!text.trim()) return c.json({ error: 'empty remark' }, 400)
@@ -229,7 +229,7 @@ app.post('/api/remarks', async (c) => {
   }
 })
 app.post('/api/remarks/:action{resolve|retract}', async (c) => {
-  if (!proposalsEnabled()) return c.json({ error: 'forum workflow is off' }, 403)
+  if (!issuesEnabled()) return c.json({ error: 'issues workflow is off' }, 403)
   const body = await c.req.json().catch(() => ({}))
   const ref = typeof body?.ref === 'string' ? body.ref : ''
   if (!ref) return c.json({ error: 'missing remark ref' }, 400)

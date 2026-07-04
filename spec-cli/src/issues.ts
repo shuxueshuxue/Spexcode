@@ -1,15 +1,15 @@
 // @@@ issues - ONE Issue object over every store ([[issues]]). An Issue is a recorded concern bound to
 // spec node(s), carrying its OWN lifecycle, living beside the graph and never as node state. WHERE it is
-// stored — the local git forum ([[proposals]]) or a remote forge (spec-forge) — is a per-issue property
+// stored — the local git store ([[local-issues]]) or a remote forge (spec-forge) — is a per-issue property
 // (`store`), not a project mode: a project holds both at once, mixed. This module owns the core type, the
 // forge→Issue translation (the ONLY place a host's node-naming conventions become `nodes[]` — platform
 // differences stay at the adapter boundary), the merged read every surface consumes (CLI `spex issues`,
 // GET /api/issues, the board fold), the STORE-ROUTED reply verb, and the CLI itself. Content writes are
-// owned per store: local ones live in proposals.ts; a forge write goes through the driver's write verbs
+// owned per store: local ones live in localIssues.ts; a forge write goes through the driver's write verbs
 // (createIssue/createComment — the driver stays the only network toucher; the tracer stays read-only).
 import type { ForgeIssue, ForgePR } from '../../spec-forge/src/port.js'
 import { resolveLinks } from '../../spec-forge/src/links.js'
-import { loadProposals, loadOne, reply, resolve, proposalsEnabled, replyLocalIssue } from './proposals.js'
+import { loadLocalIssues, loadOne, reply, resolve, issuesEnabled, replyLocalIssue, runIssueWrite, ISSUE_WRITE_SUBS } from './localIssues.js'
 import { dispatchMentions, type DispatchOutcome, type LoopIn } from './mentions.js'
 import { envSessionId } from './layout.js'
 import { loadSpecsLite } from './specs.js'
@@ -58,7 +58,7 @@ export type ForgeSlice = { host: string; state: ForgeState }
 export type RemarkTrack = { threadId: string; node: string; scenario: string; thread: Issue; remarks: Reply[] }
 
 // `eval: <node> · <scenario>` — node first (never contains ' · '), then the scenario (may). One thread per
-// pair (EventDetail.jsx evalConcern / proposals.ts resolveRemarkHost mint it), so the last write wins is fine.
+// pair (EventDetail.jsx evalConcern / localIssues.ts resolveRemarkHost mint it), so the last write wins is fine.
 const EVAL_CONCERN_RE = /^eval: (.+?) · (.+)$/
 export const trackKey = (node: string, scenario: string): string => `${node} · ${scenario}`
 
@@ -68,12 +68,12 @@ export const trackKey = (node: string, scenario: string): string => `${node} · 
 // ISSUE surfaces) excludes these; loadEvalRemarkTracks (the EVAL surfaces) keeps only these.
 export const isEvalConcern = (concern: string): boolean => EVAL_CONCERN_RE.test(concern)
 
-// read the whole forum ONCE and split the eval-concern threads out (directive 3): trunk-scoped, read-time,
-// no branch write. A remark whose scenario no longer exists still LOADS here (it just keys a pair no reading
-// joins) — never a crash, per [[remark-teeth]]'s dangling clause.
+// read the whole local store ONCE and split the eval-concern threads out (directive 3): trunk-scoped,
+// read-time, no branch write. A remark whose scenario no longer exists still LOADS here (it just keys a pair
+// no reading joins) — never a crash, per [[remark-teeth]]'s dangling clause.
 export function loadEvalRemarkTracks(): Map<string, RemarkTrack> {
   const out = new Map<string, RemarkTrack>()
-  for (const t of loadProposals()) {
+  for (const t of loadLocalIssues()) {
     const m = EVAL_CONCERN_RE.exec(t.concern)
     if (!m) continue
     const node = m[1].trim(), scenario = m[2].trim()
@@ -104,7 +104,7 @@ export function fromForge(slice: ForgeSlice, nodeIds: string[]): Issue[] {
     signers: [],
     created: i.createdAt,
     body: i.body,
-    // the forge comments ARE the thread — the same Reply shape a forum thread carries, so nothing
+    // the forge comments ARE the thread — the same Reply shape a local thread carries, so nothing
     // downstream renders two kinds of discussion.
     replies: (i.comments ?? []).map((c) => ({ by: c.author, at: c.createdAt, body: c.body })),
     evidence: [],
@@ -122,7 +122,7 @@ export function fromForge(slice: ForgeSlice, nodeIds: string[]): Issue[] {
 // through loadEvalRemarkTracks / the reading overlay instead).
 export function mergedIssues(forge: ForgeSlice | null, nodeIds: string[]): Issue[] {
   const remote = forge ? fromForge(forge, nodeIds) : []
-  return [...loadProposals(), ...remote]
+  return [...loadLocalIssues(), ...remote]
     .filter((i) => !isEvalConcern(i.concern))
     .sort((a, b) => b.created.localeCompare(a.created))
 }
@@ -151,7 +151,7 @@ export async function promote(id: string): Promise<{ url: string; number: number
 }
 
 // @@@ replyIssue - ONE reply verb, store-routed ([[issues]]): store is a property of the issue, so
-// replying doesn't fork by surface — a local id goes through the forum's committed write (proposals.ts,
+// replying doesn't fork by surface — a local id goes through the store's committed write (localIssues.ts,
 // unchanged), a forge id (`<host>#<n>`) posts a REAL comment through the driver's createComment (the same
 // seam discipline as promotion — no second network call-site). Either way the reply TEXT then dispatches
 // its @-mentions (mentions.ts is store-agnostic: the mention fires on the words, and the mention IS the
@@ -186,12 +186,15 @@ const fl = (args: string[], name: string): string | undefined => {
 }
 const hasFlag = (args: string[], name: string) => args.includes(`--${name}`)
 
-// `spex issues [--node id] [--store local|<host>] [--all] [--json]` — THE read over every store: the
-// drain view a supervisor/human works from. Lists concerns as raw data with their recurrence signals
-// (signers, replies); it deliberately imposes NO salience ranking — recurrence is a signal the drain
-// WEIGHS by judgment, never an automatic priority order. The forge slice is a LIVE pull; an unreachable
-// forge degrades loudly to local-only (one stderr note) — local reading never hostages on a network.
+// `spex issues …` — the ONE issues surface. Bare (with filters) it is THE read over every store: the
+// drain view a supervisor/human works from, `[--node id] [--store local|<host>] [--all] [--json]`. A write
+// first-positional (open|reply|sign|resolve|on|off|status|nudge — localIssues.ts) routes to the store's
+// write verbs; `promote` is the one cross-store verb. The list imposes NO salience ranking — recurrence
+// (signers, replies) is a signal the drain WEIGHS by judgment, never an automatic priority order. The forge
+// slice is a LIVE pull; an unreachable forge degrades loudly to local-only (one stderr note) — local
+// reading never hostages on a network.
 export async function runIssues(args: string[]): Promise<number> {
+  if (ISSUE_WRITE_SUBS.has(args[0])) return runIssueWrite(args)
   if (args[0] === 'promote') {
     const id = args[1]
     if (!id || id.startsWith('--')) { console.error('usage: spex issues promote <local-issue-id>'); return 2 }
@@ -230,6 +233,6 @@ export async function runIssues(args: string[]): Promise<number> {
     if (p.replies.length) console.log(`    ${p.replies.length} reply(ies) in thread`)
     if (p.url) console.log(`    ${p.url}`)
   }
-  if (!proposalsEnabled()) console.log('\n(the forum workflow is OFF — `spex propose on` to re-enable writes/nudges)')
+  if (!issuesEnabled()) console.log('\n(the issues workflow is OFF — `spex issues on` to re-enable writes/nudges)')
   return 0
 }

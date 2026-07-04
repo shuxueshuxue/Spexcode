@@ -21,7 +21,7 @@ scenarios:
       accented), ⌥F on evals (the leading loss surface) — including when pressed FROM the session board.
       Also press bare `f` on the graph and read the hash. Then press Esc on the session board and on the
       evals + issues pages and read location.hash. Check a rail tooltip carries its ⌥ hint, and that the
-      console's top row has exactly the ＋ pill (the forum pill is gone).
+      console's top row has exactly the ＋ pill (the old issues pill is gone).
     expected: >
       Every ⌥ chord routes to its page regardless of the page it was pressed on (⌥3 → #/evals, ⌥4 →
       #/issues, ⌥5 → #/settings); ⌥F and bare `f` both land on #/evals; Esc changes NO page's hash (it

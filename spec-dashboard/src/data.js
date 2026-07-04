@@ -132,8 +132,8 @@ export async function loadIssues() {
   return res.json()
 }
 
-// human writes — LOCAL store only ([[issues-view]] / [[proposals]]) — POST straight through the SAME
-// reply/propose the CLI uses (git-committed to the trunk, author 'human'); an @-mention in the text
+// human writes — LOCAL store only ([[issues-view]] / [[local-issues]]) — POST straight through the SAME
+// open/reply the CLI uses (git-committed to the trunk, author 'human'); an @-mention in the text
 // dispatches a worker. Both return the parsed json ({ ok, …, outcomes }); `outcomes` is the one-line
 // @-dispatch summary to echo.
 export async function postIssueReply(id, body, evidence) {

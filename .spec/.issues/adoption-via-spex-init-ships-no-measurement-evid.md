@@ -1,7 +1,7 @@
 ---
 concern: Adoption via 'spex init' ships no measurement/evidence mechanism — a fresh project's materialized contract has zero yatsu / browser-verify / reproduce nudge, so workers never produce or file measured evidence (let alone video)
 by: 508d36a9-84cb-4c2d-a945-789b4f7d0112
-status: open
+status: landed
 nodes: init-preset, reproduce-before-fix
 created: 2026-07-04T04:20:24.386Z
 ---

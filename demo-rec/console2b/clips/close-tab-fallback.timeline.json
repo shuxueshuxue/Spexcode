@@ -1,0 +1,29 @@
+{
+ "v": 1,
+ "events": [
+  {
+   "tMs": 0,
+   "step": "removal decides the landing: viewed tab → New; a made switch stands"
+  },
+  {
+   "tMs": 1078,
+   "step": "header action row = [] — no close control"
+  },
+  {
+   "tMs": 8747,
+   "step": "viewing E"
+  },
+  {
+   "tMs": 26304,
+   "step": "PASS1: closed viewed E → landed on New=true, E gone=true"
+  },
+  {
+   "tMs": 29479,
+   "step": "viewing F"
+  },
+  {
+   "tMs": 42399,
+   "step": "PASS2: closed F + switched to fixture → stayed=true, F gone=true"
+  }
+ ]
+}

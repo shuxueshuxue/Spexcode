@@ -1,0 +1,89 @@
+{
+ "events": [
+  {
+   "atMs": 7247,
+   "kind": "narrate",
+   "label": "\u25b6 create-stays-on-new \u00b7 two launches, view and focus never leave New"
+  },
+  {
+   "atMs": 15544,
+   "kind": "frame",
+   "label": "\ud83d\udcf7 A submitted \u2014 mid-flight focus=true disabled=false cleared=true"
+  },
+  {
+   "atMs": 20656,
+   "kind": "frame",
+   "label": "\ud83d\udcf7 A settled \u2014 still on New=true focus=true rows=1"
+  },
+  {
+   "atMs": 31631,
+   "kind": "frame",
+   "label": "\ud83d\udcf7 B settled \u2014 still on New=true focus=true rows=1"
+  },
+  {
+   "atMs": 31632,
+   "kind": "narrate",
+   "label": "\u25b6 modifier-arrow-switches-regardless-of-focus \u00b7 \u2325\u2191\u2193 steps tabs from any focus; plain arrows stay in the box"
+  },
+  {
+   "atMs": 39322,
+   "kind": "frame",
+   "label": "\ud83d\udcf7 \u2325\u2193 from New draft: NEW \u2192 ?Idle fixture awaiti"
+  },
+  {
+   "atMs": 45737,
+   "kind": "frame",
+   "label": "\ud83d\udcf7 \u2325\u2193\u2325\u2191 walk: \u2192\u22efstub row A (rig fix \u2192?Idle fixture awaiti"
+  },
+  {
+   "atMs": 56029,
+   "kind": "frame",
+   "label": "\ud83d\udcf7 \u2325\u2193 from \u276f inbox mid-text \u2192 \u25ccstub row B (rig fix"
+  },
+  {
+   "atMs": 57705,
+   "kind": "frame",
+   "label": "\ud83d\udcf7 \u2325N \u2192 NEW"
+  },
+  {
+   "atMs": 61367,
+   "kind": "frame",
+   "label": "\ud83d\udcf7 plain \u2191/\u2193 inside box: NEW \u2192 NEW / NEW (must all stay)"
+  },
+  {
+   "atMs": 62167,
+   "kind": "narrate",
+   "label": "\u25b6 nav-mode-alt-i-and-cmd-i-stay-reserved \u00b7 reserved toggles forward nothing; \u2325\u2318I left to the browser"
+  },
+  {
+   "atMs": 70141,
+   "kind": "frame",
+   "label": "\ud83d\udcf7 \u2325I \u2192 nav=true forwards=0"
+  },
+  {
+   "atMs": 71232,
+   "kind": "frame",
+   "label": "\ud83d\udcf7 \u2318I \u2192 nav=false forwards=0"
+  },
+  {
+   "atMs": 72760,
+   "kind": "frame",
+   "label": "\ud83d\udcf7 nav ON + 'x' \u2192 forwards=1 (must be > 0)"
+  },
+  {
+   "atMs": 73851,
+   "kind": "frame",
+   "label": "\ud83d\udcf7 \u2325\u2318I together \u2192 nav unchanged=true"
+  },
+  {
+   "atMs": 74460,
+   "kind": "narrate",
+   "label": "\u25b6 status-word-colour \u00b7 bucket hues on the glyph carrier: asking=yellow, offline=grey"
+  },
+  {
+   "atMs": 78431,
+   "kind": "frame",
+   "label": "\ud83d\udcf7 glyph hues: [{\"status\":\"asking\",\"color\":\"rgb(181, 137, 0)\",\"label\":\"Idle fixture awaitin\"},{\"status\":\"starting\",\"color\":\"rgb(147, 161, 161)\",\"label\":\"stub row B (rig fixt\"},{\"status\":\"offline\",\"color\":\"rgb(147, 161, 161)\",\"label\":\"stub row A (rig fixt\"}]"
+  }
+ ]
+}

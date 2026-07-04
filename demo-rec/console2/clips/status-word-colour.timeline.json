@@ -1,0 +1,13 @@
+{
+ "v": 1,
+ "events": [
+  {
+   "tMs": 0,
+   "step": "bucket hues on the glyph carrier: asking=yellow, offline=grey"
+  },
+  {
+   "tMs": 3971,
+   "step": "glyph hues: [{\"status\":\"asking\",\"color\":\"rgb(181, 137, 0)\",\"label\":\"Idle fixture awaitin\"},{\"status\":\"starting\",\"color\":\"rgb(147, 161, 161)\",\"label\":\"stub row B (rig fixt\"},{\"status\":\"offline\",\"color\":\"rgb(147, 161, 161)\",\"label\":\"stub row A (rig fixt\"}]"
+  }
+ ]
+}

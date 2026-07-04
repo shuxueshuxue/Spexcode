@@ -1,0 +1,11 @@
+{
+ "headerActs": [],
+ "pass1": {
+  "eGone": true,
+  "onNew": true
+ },
+ "pass2": {
+  "fGone": true,
+  "onFixture": true
+ }
+}

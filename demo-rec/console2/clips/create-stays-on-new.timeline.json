@@ -1,0 +1,21 @@
+{
+ "v": 1,
+ "events": [
+  {
+   "tMs": 0,
+   "step": "two launches, view and focus never leave New"
+  },
+  {
+   "tMs": 8297,
+   "step": "A submitted — mid-flight focus=true disabled=false cleared=true"
+  },
+  {
+   "tMs": 13409,
+   "step": "A settled — still on New=true focus=true rows=1"
+  },
+  {
+   "tMs": 24384,
+   "step": "B settled — still on New=true focus=true rows=1"
+  }
+ ]
+}

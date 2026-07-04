@@ -1,0 +1,25 @@
+{
+ "v": 1,
+ "events": [
+  {
+   "tMs": 0,
+   "step": "reserved toggles forward nothing; ⌥⌘I left to the browser"
+  },
+  {
+   "tMs": 7974,
+   "step": "⌥I → nav=true forwards=0"
+  },
+  {
+   "tMs": 9065,
+   "step": "⌘I → nav=false forwards=0"
+  },
+  {
+   "tMs": 10593,
+   "step": "nav ON + 'x' → forwards=1 (must be > 0)"
+  },
+  {
+   "tMs": 11684,
+   "step": "⌥⌘I together → nav unchanged=true"
+  }
+ ]
+}

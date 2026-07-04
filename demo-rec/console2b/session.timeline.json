@@ -1,0 +1,34 @@
+{
+ "events": [
+  {
+   "atMs": 8918,
+   "kind": "narrate",
+   "label": "▶ close-tab-fallback · removal decides the landing: viewed tab → New; a made switch stands"
+  },
+  {
+   "atMs": 9996,
+   "kind": "frame",
+   "label": "📷 header action row = [] — no close control"
+  },
+  {
+   "atMs": 17665,
+   "kind": "frame",
+   "label": "📷 viewing E"
+  },
+  {
+   "atMs": 35222,
+   "kind": "frame",
+   "label": "📷 PASS1: closed viewed E → landed on New=true, E gone=true"
+  },
+  {
+   "atMs": 38397,
+   "kind": "frame",
+   "label": "📷 viewing F"
+  },
+  {
+   "atMs": 51317,
+   "kind": "frame",
+   "label": "📷 PASS2: closed F + switched to fixture → stayed=true, F gone=true"
+  }
+ ]
+}

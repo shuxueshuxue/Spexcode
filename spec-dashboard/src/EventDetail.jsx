@@ -18,8 +18,9 @@ import { useT } from './i18n/index.jsx'
 // prose convention ([[issues-view]]'s Thread); ⏱/a stamps the current frame onto a note; a drag-circle
 // captures the paused frame and prefills an anchored remark carrying it. A remark's `resolved` bit renders in
 // the thread (settled when resolved, prominent while open). The composer authors through the CLI-parity
-// /api/remarks (L: the dashboard is a thin wrapper, no dashboard-only write). The pass/fail VERDICT stays a
-// separate `manual@1` reading (verdict + note).
+// /api/remarks (L: the dashboard is a thin wrapper, no dashboard-only write). The pane READS readings and
+// hosts remarks — it never files a reading: verdicts land through the CLI eval seam (`spex yatsu eval`,
+// [[yatsu-core]]) with evidence, and render here as the header badge + A/B pips.
 //
 // A/B history ([[reproduce-before-fix]]): a scenario's readings are its lifecycle, and a bug fix leaves a
 // fail→pass PAIR — the A (reproduced bug) and the B (verified fix). The pane flips through that whole
@@ -72,9 +73,7 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite 
   const seq = useRef(0)
   const [events, setEvents] = useState([])
   const [drag, setDrag] = useState(null)
-  const [verdict, setVerdict] = useState(null)
-  const [note, setNote] = useState('')
-  const [flash, setFlash] = useState('')
+  const [flash, setFlash] = useState('')         // circle-capture feedback (capturing… / failed)
   const [zoom, setZoom] = useState(null)         // an image gallery still opened in the lightbox (its hash), or null
   const [busy, setBusy] = useState(false)       // capturing a circled frame
   const [draft, setDraft] = useState(null)       // { seq, body } — a circle / `a` prefills the review-track composer
@@ -98,7 +97,7 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite 
   // a selection change is a new SCENARIO under annotation — reset the working state AND the history cursor,
   // then refetch this scenario's slice of the node's timeline.
   useEffect(() => {
-    setDrag(null); setVerdict(null); setNote(''); setFlash(''); setEvents([]); setZoom(null); setDraft(null)
+    setDrag(null); setFlash(''); setEvents([]); setZoom(null); setDraft(null)
     setHistIdx(0); setHistory(null)
     let on = true
     fetch(specUrl(entry.node, 'evals'))
@@ -221,7 +220,7 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite 
     setSelIdx(a.i); seekMs(a.tMs)
   }, [anchored, selIdx, seekMs])
 
-  // the whole player is keyboard-driven; typing in a field (the composer, the note) is never hijacked.
+  // the whole player is keyboard-driven; typing in a field (the composer) is never hijacked.
   useEffect(() => {
     if (!hasVideo) return
     const onKey = (e) => {
@@ -321,20 +320,6 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite 
     w: Math.abs(drag.x - drag.x0), h: Math.abs(drag.y - drag.y0),
   }
 
-  // the verdict — a manual@1 reading (verdict + note), the existing eval seam; it appends a NEW latest
-  // reading for the scenario (the next B, or a fresh A), so it targets the stable (node, scenario), never
-  // the historical reading being viewed. It no longer carries a marks transcript: the annotation track lives
-  // on the eval's Issue thread, not duplicated into a frozen blob.
-  const fileReading = async () => {
-    if (!verdict) return
-    const r = await fetch(specUrl(entry.node, 'yatsu/eval'), {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scenario: entry.scenario, status: verdict, note: note || undefined }),
-    }).catch(() => null)
-    setFlash(r?.ok ? t('annotator.readingFiled') : t('annotator.failed'))
-    if (r?.ok) await onWrite?.('')   // a new reading landed → let the home refresh its board/model
-  }
-
   return (
     <div className="an-detail">
       <header className="an-head">
@@ -374,7 +359,7 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite 
       {viewing.expected && <div className="an-expected"><b>{t('nodeView.eval.expected')}</b> {viewing.expected}</div>}
       {ev.length > 0 && viewing.verdict?.note && <div className="an-expected an-prior-note"><b>{t('nodeView.eval.noteLabel')}</b> {viewing.verdict.note}</div>}
 
-      {/* the video — the annotate-a-loop surface: circle-to-capture, custom review-track scrubber, ruler, verdict */}
+      {/* the video — the annotate-a-loop surface: circle-to-capture, custom review-track scrubber, ruler */}
       {videoEntry && (
         <>
           <div className={`an-stage ${playing ? 'playing' : 'paused'}`} ref={box} onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp}>
@@ -416,15 +401,7 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite 
           )}
           <div className="an-hint">{t('annotator.hint')}</div>
           <div className="an-keys">{t('annotator.keys')}</div>
-          <footer className="an-actions">
-            <span className="an-verdict">
-              <button className={`an-v pass ${verdict === 'pass' ? 'on' : ''}`} onClick={() => setVerdict('pass')}>✓ pass</button>
-              <button className={`an-v fail ${verdict === 'fail' ? 'on' : ''}`} onClick={() => setVerdict('fail')}>✗ fail</button>
-              <input className="an-note" value={note} placeholder={t('annotator.notePh')} onChange={(ev) => setNote(ev.target.value)} />
-              <button className="an-act" disabled={!verdict} onClick={fileReading}>{t('annotator.fileReading')}</button>
-            </span>
-            {flash && <span className="an-flash">{flash}</span>}
-          </footer>
+          {flash && <div className="an-flash">{flash}</div>}
         </>
       )}
 

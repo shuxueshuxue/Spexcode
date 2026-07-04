@@ -53,8 +53,8 @@ it, from envSessionId), **verdict**, ts) — the second git-as-database axis: a 
 event*, not a spec version, so history and attribution apply unchanged. `by` is a different axis than
 `evaluator`: `evaluator` is WHO/WHAT measured (a tag like `manual@1`), `by` is the reachable session behind the
 filing — the ORIGINATOR an eval-comment thread loops in on a reply ([[mentions]]). It is purely additive: a
-legacy reading without it simply has no originator, so the loop-in stays silent; the dashboard annotator's
-human `manual@1` filing has no reachable session and omits it too.
+legacy reading without it simply has no originator, so the loop-in stays silent; a human `manual@1` filing
+has no reachable session and omits it too.
 
 The **verdict** is the loss against `expected`: `pass` or `fail`. Either may carry an optional **note** — a
 one-line annotation (why it failed, how far a pass sits from ideal). A note is an annotation *on* the verdict,
@@ -86,9 +86,10 @@ The surface mirrors the code-drift report:
 - **eval [.|<node>] [--scenario N] (--pass|--fail|--note T) [--image P …repeatable] [--result P|-] [--video P [--timeline P]]** —
   FILE the measurement the agent already took. yatsu runs nothing: it stores the evidence under one verdict,
   for one scenario. `--image` REPEATS (N stills) and combines freely with `--result`/`--video` in one filing —
-  each is pushed onto the reading's evidence list; `--timeline` anchors the video entry. The seam has a **write half over data** too (filing.ts): the dashboard annotator files a
-  human `manual@1` reading (verdict + annotation-report transcript) through the SAME append — one seam, two
-  faces.
+  each is pushed onto the reading's evidence list; `--timeline` anchors the video entry. The seam has a **write half over data** too (filing.ts): a caller with a
+  verdict but no argv — the HTTP eval route, a programmatic filer — appends through the SAME seam
+  (evaluator `manual@1` for a human hand). Filing is the CLI/agent surface: [[event-detail]] reads
+  readings and hosts remarks, it files nothing.
 - **clean [--keep-latest|--all]** — GC the evidence cache (blobs no reading references, by default).
 
 The **evaluator** is metadata only — a tag `<name>@<version>` (e.g. `manual@1`) recording WHO measured, the

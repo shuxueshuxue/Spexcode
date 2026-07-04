@@ -61,7 +61,7 @@ spec 正文永远描述模块的**当下意图**,原地重写,禁止堆 `## v1 /
 - **A/B 历史条**:一个场景的 fail→pass 全生命周期(✗=复现 / ✓=修复)在顶栏原地翻页;
 - **remark 有牙齿**:一条未 resolve 的人类 remark 会让场景变 stale,必须由第二方 agent `spex resolve` + 新读数才算清——人类不是点 pass/fail 的橡皮图章(那个按钮我们删了),人类通过 remark 审判。
 
-【视频:`promo-assets/08-annotator-golden-path.mp4` — 45 秒连续操作实录:打开视频 eval → 圈选一帧(框实时画出)→ composer 自动预填锚点+帧图 → 敲一句 remark 发出 → 滑轨长出新 marker,点击 seek 回那一刻 → 翻 A/B 历史】
+【视频:`promo-assets/08-annotator-golden-path.mp4`(23s)/ 同名 `.gif`(3.7MB,960px,论坛直贴)— 连续操作实录:打开视频 eval → marker seek → 圈选一帧(框实时画出)→ composer 自动预填锚点+帧图 → 补一句"这里该修 @new"发出 → **真的派发了一个 agent**(左上角闪现 `@ new→<session>` 回显)→ 滑轨新 marker 点击 seek → 翻 A/B 历史】
 【图 4:`promo-assets/09-annotator-compose.png` — 圈选后:composer 预填 ▶0:02 锚点 + 帧图预览,视频还在屏上】
 【图 5:`promo-assets/10-annotator-remark-landed.png` — remark 上墙:评审轨第 3 条,锚点 chip + 圈选帧图内嵌,滑轨新 marker】
 

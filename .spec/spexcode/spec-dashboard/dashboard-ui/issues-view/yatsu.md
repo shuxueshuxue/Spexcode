@@ -36,15 +36,19 @@ scenarios:
     tags: [frontend-e2e]
     code: spec-dashboard/src/IssuesPage.jsx
     description: >-
-      On the running issues page (#/issues), read the master-detail shell: the grid split, the left box
-      (NO tab switcher — the Issues page is its own top-level route now), which container scrolls, the
-      sticky filter bar. Drive j/k in the issue list; select a row and read the detail pane; finally type
+      On the running issues page (#/issues), read the master-detail shell: the grid split and the LIST
+      COLUMN'S MEASURED WIDTH, the left box (NO tab switcher — the Issues page is its own top-level route
+      now), which container scrolls, the sticky filter bar. Click the fold toggle and re-measure the
+      columns; unfold. Drive j/k in the issue list; select a row and read the detail pane; finally type
       'j' inside the New-form input.
     expected: >-
-      The page is a two-column grid: the LEFT column is ONE box — the merged issue list under its own
+      The page is a two-column grid whose LEFT column is SLIM (compact one-line rows, at most ~280px —
+      the detail is the protagonist): ONE box — the merged issue list under its own
       sticky filter bar (the store filter + New + the concluded chip, with the open/total meta at its
       END), NO Evals|Threads tab switcher present; its list gets the full column height, scrolling
-      itself; the RIGHT detail pane scrolls independently, the page itself never scrolls. The list
+      itself; the RIGHT detail pane scrolls independently, the page itself never scrolls. The fold
+      toggle collapses the list to a thin strip (the detail takes essentially the full width) and the
+      strip unfolds it with filters and selection intact. The list
       renders INSTANTLY from app-resident issues (no per-mount fetch). j/k move ONE visible selection in
       the issue list and the detail pane follows immediately — selection IS detail, nothing expands
       inside the list. Deep j keeps the selected row inside the left column's viewport. A key typed into

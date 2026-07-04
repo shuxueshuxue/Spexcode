@@ -5,15 +5,18 @@ import { useT } from './i18n/index.jsx'
 
 // The Evals page ([[evals-view]]): a top-level page (#/evals, [[side-nav]]), peer of the graph, the
 // session board, and the Issues page — the project's CURRENT measured loss, leading the surfaces (the
-// board's `f` and ⌥F land here). MASTER-DETAIL over one full routed page: the LEFT column is the
+// board's `f` and ⌥F land here). MASTER-DETAIL over one full routed page: the LEFT column is the SLIM
 // [[evals-feed]] list (latest reading per scenario, fresh first, video first — its own filter chips),
-// the RIGHT pane the full-height [[event-detail]] of the selection. Selection IS the detail (no Enter,
-// no in-place expansion): picking an eval row renders it in EventDetail — the media, the A/B strip, the
-// remark thread + composer. j/k walk the feed, the detail follows. A remark write refreshes the board
-// (the eval thread rides the board overlay, not the issues list).
+// the RIGHT pane the full-height [[event-detail]] of the selection. The list column is title-only, so it
+// stays narrow, and a fold toggle collapses it to a thin strip — once a human is working one eval, the
+// detail workspace owns the width. Selection IS the detail (no Enter, no in-place expansion): picking an
+// eval row renders it in EventDetail — the media stage, the A/B strip, the remark rail. j/k walk the feed
+// even while folded, the detail follows. A remark write refreshes the board (the eval thread rides the
+// board overlay, not the issues list).
 export default function EvalsPage({ specs = [], sessions = [], reloadBoard }) {
   const t = useT()
   const [sel, setSel] = useState(null)            // the ONE selection: 'eval:<node>·<scenario>'
+  const [folded, setFolded] = useState(false)     // the master list folded to a strip — the detail owns the width
   const [evalRows, setEvalRows] = useState([])    // the feed's visible entries (its filters are its own)
   const rowsRef = useRef([])                      // the visible eval key list, for j/k
 
@@ -50,8 +53,12 @@ export default function EvalsPage({ specs = [], sessions = [], reloadBoard }) {
   const selEval = effSel ? evalByKey.get(effSel) : null
 
   return (
-    <div className="fv-master">
-      <div className="fv-list-col">
+    <div className={`fv-master ${folded ? 'folded' : ''}`}>
+      {/* the list column stays MOUNTED while folded (its filter state + the j/k row report live in it) —
+          the fold is pure CSS; the thin strip is the unfold affordance. */}
+      {folded && <button type="button" className="fv-unfold" title={t('masterList.unfold')} onClick={() => setFolded(false)}>›</button>}
+      <div className="fv-list-col" style={folded ? { display: 'none' } : undefined}>
+        <button type="button" className="fv-fold" title={t('masterList.fold')} onClick={() => setFolded(true)}>‹</button>
         <EvalsGroup nodes={specs} sel={effSel} onSel={(k) => setSel(k)} onRows={onRows} />
       </div>
       <div className="fv-detail">

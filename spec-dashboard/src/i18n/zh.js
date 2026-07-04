@@ -61,6 +61,11 @@ export default {
     annotate: '打开并标注',
   },
 
+  masterList: {
+    fold: '折叠列表 — 让详情占满宽度',
+    unfold: '展开列表',
+  },
+
   annotator: {
     title: '标注器',
     hint: '点击画面 播放/暂停 · 拖拽圈出问题 — 它会成为下方一条锚定到该时刻的评论；或点 ⏱ 把一条纯文字备注锚到当前帧。',

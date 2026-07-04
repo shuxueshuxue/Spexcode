@@ -7,16 +7,18 @@ import { useT } from './i18n/index.jsx'
 
 // The Issues page ([[issues-view]]): a top-level page (#/issues, [[side-nav]]), peer of the graph, the
 // session board, and the Evals page. MASTER-DETAIL over one full routed page — the LEFT column is the
-// merged ISSUE list (local forum + forge, store-tagged, API order, no re-sort/no ranking; CONCLUDED
-// issues hidden behind a count chip) under its own filter bar; the RIGHT pane is the full-height DETAIL
-// of the selection — selection IS the detail, no in-place expansion in a small box: an issue renders its
-// markdown body (SpecBody — the spec dialect), its replies, and the reply composer — BOTH stores
-// ([[issues]]: the reply verb routes by store). j/k walk the issue list, the detail follows; writes post
-// as 'human'. The evals are their OWN top-level page now ([[evals-view]]) — no in-page switcher here.
+// SLIM merged ISSUE list (local forum + forge, store-tagged, API order, no re-sort/no ranking; CONCLUDED
+// issues hidden behind a count chip) under its own filter bar, foldable to a thin strip so the detail
+// owns the width; the RIGHT pane is the full-height DETAIL of the selection — selection IS the detail,
+// no in-place expansion in a small box: an issue renders its markdown body (SpecBody — the spec dialect),
+// its replies, and the reply composer — BOTH stores ([[issues]]: the reply verb routes by store). j/k
+// walk the issue list even while folded, the detail follows; writes post as 'human'. The evals are their
+// OWN top-level page now ([[evals-view]]) — no in-page switcher here.
 export default function IssuesPage({ onFocusNode, specs = [], sessions = [], issuesData = null, reloadIssues }) {
   const t = useT()
   const data = issuesData                          // RESIDENT app state — the page renders instantly, no per-mount fetch
   const [composing, setComposing] = useState(false)
+  const [folded, setFolded] = useState(false)      // the master list folded to a strip — the detail owns the width
   const [showConcluded, setShowConcluded] = useState(false)
   const [storeFilter, setStoreFilter] = useState('all')  // 'all' | a store present in the data (local/github/…)
   const [notice, setNotice] = useState('')
@@ -75,8 +77,12 @@ export default function IssuesPage({ onFocusNode, specs = [], sessions = [], iss
   const selIssue = effSel ? issueByKey.get(effSel) : null
 
   return (
-    <div className="fv-master">
-      <div className="fv-list-col">
+    <div className={`fv-master ${folded ? 'folded' : ''}`}>
+      {/* the list column stays MOUNTED while folded (filter state + j/k live in it) — the fold is pure
+          CSS; the thin strip is the unfold affordance. */}
+      {folded && <button type="button" className="fv-unfold" title={t('masterList.unfold')} onClick={() => setFolded(false)}>›</button>}
+      <div className="fv-list-col" style={folded ? { display: 'none' } : undefined}>
+        <button type="button" className="fv-fold" title={t('masterList.fold')} onClick={() => setFolded(true)}>‹</button>
         {notice && <div className="fv-notice">{notice}</div>}
         <section className="fv-group">
           <header className="fv-group-head">

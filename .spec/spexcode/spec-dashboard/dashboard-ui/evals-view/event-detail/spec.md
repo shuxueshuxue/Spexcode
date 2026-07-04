@@ -2,7 +2,7 @@
 title: event-detail
 status: active
 hue: 200
-desc: The ONE evidence+reply detail pane (U1), store-agnostic, reused in EVERY home — the issues page's eval tab AND the session eval tab. A selected reading full-height (a video under a custom review-track scrubber; the human scrubs, circles, remarks; images/transcripts render whole), an A/B strip that flips the scenario's whole fail→pass history, and its (node,scenario) REMARK track folded in as entry.thread — a resolved remark renders settled, an open one prominent. The verdict stays a separate reading.
+desc: The ONE evidence+reply detail pane (U1), store-agnostic, reused in EVERY home — the Evals page ([[evals-view]]) AND the session eval tab. A selected reading full-height (a video under a custom review-track scrubber; the human scrubs, circles, remarks; images/transcripts render whole), an A/B strip that flips the scenario's whole fail→pass history, and its (node,scenario) REMARK track folded in as entry.thread — a resolved remark renders settled, an open one prominent. The verdict stays a separate reading.
 code:
   - spec-dashboard/src/EventDetail.jsx
 related:
@@ -20,12 +20,13 @@ wrong, say what — and have that judgment land where it belongs, as one durable
 an authoring surface over an **already-captured** reading; yatsu still runs nothing, and no new ledger
 structure exists for its sake. "Annotator" was never a real concept (U1): an annotation is just an anchored
 **remark** on a video host, and the pane that shows it is just **the** evidence+reply detail. So there is ONE
-`EventDetail` component, store-agnostic, reused in every home a reading is inspected — the issues page and the
-session eval tab render the SAME media + remark thread + composer, never two drifting surfaces.
+`EventDetail` component, store-agnostic, reused in every home a reading is inspected — the Evals page
+([[evals-view]]) and the session eval tab render the SAME media + remark thread + composer, never two
+drifting surfaces.
 
 ## expanded spec
 
-`EventDetail` IS the **detail pane for a selected eval reading** ([[issues-view]]'s master-detail — no
+`EventDetail` IS the **detail pane for a selected eval reading** ([[evals-view]]'s master-detail — no
 modal, no box-in-a-box: the reading gets the pane's full height, and switching selection resets the working
 state to the new reading). A reading's evidence is a **LIST**, so every entry renders in the ONE pane:
 the **video** plays under a **custom review-track scrubber** — native chrome replaced so the timeline can
@@ -93,7 +94,7 @@ invents no verdict states, no timeline tables, no locks.
 eval's remark track IS the ONE local Issue for this (node, scenario), keyed by its `eval: <node> · <scenario>`
 concern. It is no longer re-matched client-side against a resident issues list: the (node,scenario)↔thread
 join is the server overlay ([[remark-teeth]] / [[eval-issue-split]]), attached to each reading by
-`evalTimeline` and so present on **every** home — the issues-page feed folds it in through the board, the
+`evalTimeline` and so present on **every** home — the Evals-page feed folds it in through the board, the
 session tab through the proof model. The composer authors a **remark** through the CLI-parity `/api/remarks`
 (find-or-create by (node, scenario) — no thread id or concern needed on the write side; identity is
 server-derived `'human'`, L: no dashboard-only write): the first remark mints the thread, every later one

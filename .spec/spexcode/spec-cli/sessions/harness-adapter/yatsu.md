@@ -72,22 +72,28 @@ scenarios:
   - name: codex-dispatched-thread-fires-lifecycle-hooks
     tags: [backend-api]
     description: >-
-      Through the REAL dashboard/app-server launch path (NOT `codex exec`, which has no TUI and is not the path
-      SpexCode uses): start a per-project `codex app-server` and drive a BACKEND-owned thread the way `spex
-      codex-launch` does — `thread/start { cwd = an UNtrusted worktree }` then a `turn/start` first turn — on a
-      codex that supports `--dangerously-bypass-hook-trust` (so materialize wrote NO `trusted_hash`). Trace
-      `dispatch.sh` (its real hook entry point) for the codex lifecycle events across the turn.
+      Through the REAL dashboard/app-server launch path (NOT `codex exec`, whose interactive approval flow
+      AUTO-TRUSTS the cwd and hides the gap): dispatch a codex worker into a FRESH-INIT project (no skill nodes)
+      and trace `dispatch.sh` across its first turn, then read session.json and the worker's commit. The worker
+      runs as a BACKEND-owned thread on the shared per-project app-server with `cwd = a linked worktree`, launched
+      with `--dangerously-bypass-hook-trust`.
     expected: >-
-      The codex thread fires the full lifecycle through `dispatch.sh` — SessionStart, UserPromptSubmit, and the
-      Stop gate — so a dispatched codex worker has a Stop gate and hook-driven status, identical to a Claude
-      worker. This works ONLY because `thread/start` carries `config.bypass_hook_trust=true`: codex reads the
-      bypass per-thread from that request override, which force-enables the untrusted worktree's `.codex` config
-      layer so its `hooks.json` is discovered and each hook runs untrusted-but-vetted. The failure this locks (the
-      real regression): when the bypass rides ONLY on the `codex app-server` CLI invocation — inert, the app-server
-      never reads it for a thread — the worktree stays untrusted, its hook layer stays disabled, and the thread
-      fires ZERO dispatch events (no Stop gate, no `mark-active`), while `codex exec` in the same worktree still
-      fires them — so an exec-only or app-server-flag-only check passes green and the dashboard regression hides. It
-      is provable only by tracing dispatch across a real app-server-driven turn.
+      The codex thread fires the full lifecycle through `dispatch.sh` — SessionStart, UserPromptSubmit, PreToolUse,
+      PostToolUse, Stop — with NO interactive "Hooks need review" prompt; session.json advances past the launch
+      state (the Stop gate flips it to `asking`/`awaiting`/`idle`); and the worker's commit carries the `Session:`
+      trailer. This requires THREE codex preconditions that `--dangerously-bypass-hook-trust` does NOT provide, all
+      established by materialize (bypass is read only PER-HANDLER, after layer discovery — it can neither BUILD nor
+      ENABLE a layer): (a) the worktree carries a `.codex/` ANCHOR so codex builds a project layer for the worktree
+      cwd (whose hooks-folder rewrites to the main-checkout shim); (b) `[projects."<mainCheckout>"] trust_level =
+      "trusted"` ENABLES that layer (codex drops a disabled/untrusted layer before discovery, and the app-server
+      does NOT auto-trust); (c) per-hook `trusted_hash` blocks make the hooks "reviewed", because our `codex resume`
+      TUI is a PERSISTENT RESUME on which codex forces the hook-review prompt regardless of the bypass flag — an
+      unhashed hook WEDGES the worker at an interactive menu. The failure this locks (the real regression): with the
+      bypass sent but the anchor/trust/hashes missing, a fresh-init codex worker fires ZERO dispatch events (frozen
+      session.json, no Stop gate, no Session trailer), while a STANDALONE `.codex` in the cwd — which the exec/TUI
+      flow auto-trusts — still fires them, so a standalone or exec-only check passes green and the dispatched-worker
+      regression hides. Provable only by dispatching a REAL worker into a fresh-init project and tracing dispatch +
+      reading session.json + the commit trailer.
     code: spec-cli/src/harness.ts
 ---
 # yatsu.md — harness-adapter

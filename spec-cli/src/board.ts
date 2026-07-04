@@ -6,6 +6,7 @@ import { repoRoot, driftIndex, historyIndex } from './git.js'
 import { residentForgeState } from '../../spec-forge/src/resident.js'
 import { mergedIssues } from './issues.js'
 import { evalContext, evalTimeline } from '../../spec-yatsu/src/evaltab.js'
+import { yatsuNodesAsync } from '../../spec-yatsu/src/yatsu.js'
 
 // a ghost (added) node's parent: the existing node whose directory is the longest prefix of the new one.
 function resolveParent(path: string, byDir: Record<string, string>): string | null {
@@ -127,8 +128,10 @@ export async function buildBoard() {
   // SLIM — {name, tags} only, the fields every overview surface joins state onto — with its prose
   // (description/expected) and per-scenario code off the hot poll: they ride the `/api/specs/lite` corpus
   // (search palette, focus-panel preview) and the `/api/specs/:id/evals` timeline (eval tab).
-  // evalContext reuses the specs + driftIndex above; evalTimeline short-circuits non-yatsu nodes.
-  const ectx = evalContext(root, specs, idx, hidx)
+  // evalContext reuses the specs + driftIndex above; evalTimeline short-circuits non-yatsu nodes. The
+  // yatsu walk rides fs/promises ([[board-cache]]) so it yields the event loop instead of stalling /health.
+  const ynodes = await yatsuNodesAsync(root)
+  const ectx = evalContext(root, specs, idx, hidx, undefined, ynodes)
   await Promise.all(nodes.map(async (n) => {
     const tl = await evalTimeline(n.id, ectx)
     if (tl.hasYatsu) { n.evals = latestPerScenario(tl.readings); n.scenarios = slimScenarios(tl.scenarios) }

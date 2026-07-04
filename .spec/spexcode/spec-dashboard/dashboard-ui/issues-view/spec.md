@@ -35,10 +35,15 @@ straight to the trunk.
   page it collapsed content into a small scrolling box — the human called it, and the form changed.) The
   **left column** is ONE box — the merged issue list under its own filter bar (the store filter + New + the
   concluded-count chip, with the **open/total meta at the END of the bar, never at its head**); the bar
-  stays sticky over the full-height list, which scrolls itself. The [[side-nav]] rail names the page, so the
+  stays sticky over the full-height list, which scrolls itself. The rows are one compact line each, so the
+  column stays **SLIM** — a picker, never a reading surface that starves the detail (the human called the
+  wide sidebar) — and a **fold toggle** collapses it to a thin strip so the detail owns the width while one
+  issue is being worked; the strip is the unfold affordance, and the folded list keeps its state (filters,
+  selection, j/k) — the fold is pure geometry. The [[side-nav]] rail names the page, so the
   column carries no title of its own. The **right pane** is the full-height DETAIL of the one selection —
   **selection IS detail** (email-style, no Enter, no in-place expansion): an issue renders its markdown
-  body. **j/k walk the issue list** and the detail follows; a key typed into an input is never captured.
+  body. **j/k walk the issue list** (folded or not) and the detail follows; a key typed into an input is
+  never captured.
 - **One merged list, store-tagged — RESIDENT, never cold-fetched.** The list is the merged ISSUE list
   ([[issues]]'s `mergedIssues`) — which **excludes eval-remark threads** ([[eval-issue-split]]): a
   scenario-scoped concern is a remark, not an issue (I1), so it never shows in the drain here; it lives on

@@ -2,7 +2,7 @@
 title: event-detail
 status: active
 hue: 200
-desc: The ONE evidence+reply detail pane (U1), store-agnostic, reused in EVERY home — the Evals page ([[evals-view]]) AND the session eval tab. A selected reading full-height (a video under a custom review-track scrubber; the human scrubs, circles, remarks; images/transcripts render whole), an A/B strip that flips the scenario's whole fail→pass history, and its (node,scenario) REMARK track folded in as entry.thread — a resolved remark renders settled, an open one prominent. The pane reads readings and hosts remarks; it never files one.
+desc: The ONE evidence+reply detail pane (U1), store-agnostic, reused in EVERY home — the Evals page ([[evals-view]]) AND the session eval tab. A selected reading as a WORKSPACE — slim header (verdict badge + A/B strip), the media STAGE center (video under a custom review-track scrubber; the human scrubs, circles; images/transcripts render whole), the REMARK track in an always-visible right RAIL with the composer docked at its foot — circle on the stage, remark right there, no vertical ping-pong. The (node,scenario) remark track rides as entry.thread — a resolved remark renders settled, an open one prominent. The pane reads readings and hosts remarks; it never files one.
 code:
   - spec-dashboard/src/EventDetail.jsx
 related:
@@ -27,15 +27,26 @@ drifting surfaces.
 
 `EventDetail` IS the **detail pane for a selected eval reading** ([[evals-view]]'s master-detail — no
 modal, no box-in-a-box: the reading gets the pane's full height, and switching selection resets the working
-state to the new reading). A reading's evidence is a **LIST**, so every entry renders in the ONE pane:
+state to the new reading). The pane is a **WORKSPACE, not a scroll stack** — the review act is a loop
+(*circle a moment on the clip, say what's wrong, circle the next*), and a layout that stacks
+media→thread→composer vertically forces a scroll ping-pong between the frame (top) and the composer
+(bottom) on every mark. So the pane splits into three fixed regions, the annotator shape: a **slim HEADER
+band** (scenario · node · the verdict badge · evaluator/timestamp · the A/B strip right-aligned), a center
+**MEDIA STAGE**, and an always-visible **RIGHT RAIL** carrying the remark track with the composer **docked
+at the rail's foot**. Stage and rail scroll *independently* — the media never scrolls out of view while
+remarking, and the composer is never below the fold: circle→remark→circle→remark without moving anything.
+At narrow widths the workspace degrades gracefully back to one stacked column (the rail folds under the
+stage).
+
+A reading's evidence is a **LIST**, so every entry renders on the ONE stage:
 the **video** plays under a **custom review-track scrubber** — native chrome replaced so the timeline can
 carry the review: anchored remarks are **markers** on it, the playhead **lights the remark it is inside**,
-and clicking a marker (or a remark) **seeks** there. The surface is **keyboard-driven** — play/pause,
+and clicking a marker (or a remark in the rail) **seeks** there. The surface is **keyboard-driven** — play/pause,
 coarse and frame-fine scrubbing, jump between remarks, and **annotate the current frame** (its
-`▶m:ss · step` stamped into the composer). An **image gallery** renders beside/under the clip —
+`▶m:ss · step` stamped into the composer). An **image gallery** renders on the stage beside/under the clip —
 each still full-width and **click-to-enlarge** (a click opens that blob in a viewport-size lightbox; click
 anywhere or Esc closes, the Esc swallowed so the page's own Esc stack never fires — a screenshot's detail is
-the evidence, and the pane's width is not its ceiling). A transcript entry renders as
+the evidence, and the stage's width is not its ceiling). A transcript entry renders as
 text, a missing blob as the honest sentinel per entry, a blob-less (`note`) reading its verdict note as the text
 body (never an empty media box). When the reading
 carries a [[step-timeline]]
@@ -48,7 +59,7 @@ remarks — degraded gracefully, never blocked.
 **The A/B strip — a scenario's fail→pass lifecycle, walkable in place.** A bug fix leaves a *pair* of
 readings on one scenario — the **A** (the reproduced failure) and the **B** (the verified fix), the
 [[reproduce-before-fix]] contract's proof-of-work — and the error→correct transition is only legible when
-you can see both. So the pane is not pinned to the latest reading: above the media a compact **A/B strip**
+you can see both. So the pane is not pinned to the latest reading: in the header band a compact **A/B strip**
 renders the scenario's WHOLE reading history as verdict pips (oldest→newest, ✗ = a fail/A pole, ✓ = a
 pass/B pole, · = a pre-verdict legacy reading), the viewed one lit, with **‹ ›** to walk older→newer and a
 click on any pip to jump. Flipping swaps the media *in place* — the video/gallery, the step ruler, the
@@ -56,14 +67,14 @@ expected, the verdict note, and the header's verdict badge all re-render for the
 (the bug) and B (the fix) sit one keystroke apart. The board folds only the latest reading per scenario
 ([[board-lean]]), so the full history is lazily fetched from the SAME `/api/specs/:id/evals` timeline the
 [[yatsu-eval-tab]] uses (no new endpoint, no board bloat); the strip shows only when a scenario has more
-than one reading (a fresh scenario is just its single reading). The remark track below is per-SCENARIO,
-not per-reading, so it stays stable as you flip — it spans the whole A/B. New readings arrive only from
-the eval seam's CLI ([[yatsu-core]]'s `spex yatsu eval`) and surface here on the next refresh; the pane
-never mutates or appends the scenario's history itself.
+than one reading (a fresh scenario is just its single reading). The remark track in the rail is
+per-SCENARIO, not per-reading, so it stays stable as you flip — it spans the whole A/B. New readings
+arrive only from the eval seam's CLI ([[yatsu-core]]'s `spex yatsu eval`) and surface here on the next
+refresh; the pane never mutates or appends the scenario's history itself.
 
 **One reply primitive — a REMARK on the eval's own (node, scenario) thread.** Discussion and annotation are
 the same act, and on a scenario that act is a **remark** ([[remark-substrate]]) — a scenario-scoped concern
-is never an issue (I1: else the loss signal could be bypassed). The pane renders the eval's thread
+is never an issue (I1: else the loss signal could be bypassed). The rail renders the eval's thread
 ([[issues-view]]'s shared `Thread`), and every mark is a remark on it, carrying the mutable `resolved` bit.
 A remark is **anchored** by a prose convention — the same philosophy as `Spec:` and `[[node]]` — a body
 whose first line reads `▶m:ss · <step>` IS anchored to that video moment: the renderer linkifies it (click

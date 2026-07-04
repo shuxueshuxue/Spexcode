@@ -62,6 +62,11 @@ export default {
     annotate: 'open & annotate',
   },
 
+  masterList: {
+    fold: 'fold the list — the detail owns the width',
+    unfold: 'unfold the list',
+  },
+
   annotator: {
     title: 'annotator',
     hint: 'click the frame to play/pause · drag to circle a problem — it becomes an anchored comment below; or ⏱ to anchor a bare note to the moment.',

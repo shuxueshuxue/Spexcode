@@ -1,35 +1,54 @@
 ---
 scenarios:
+  - name: workspace-no-pingpong
+    tags: [frontend-e2e, desktop]
+    description: >
+      On #/evals, select a video reading whose thread holds several anchored remarks. Measure the detail
+      pane's geometry: the header band's height and contents; whether the media stage AND the remark
+      rail's composer are BOTH within the viewport at once (getBoundingClientRect on the video and on the
+      composer textarea); scroll the rail's remark list and read whether the video moved; type into the
+      composer and read whether the stage scrolled. Then narrow the window under the breakpoint and
+      re-read the layout.
+    expected: |
+      The detail is a WORKSPACE, not a scroll stack: a slim header (scenario · node · verdict badge ·
+      A/B strip), then the media stage and the remark rail SIDE BY SIDE — the video and the composer are
+      simultaneously visible with NO scrolling (the composer is docked at the rail's foot, never below
+      the media/gallery/thread stack). Scrolling the rail's remark list never moves the stage; the stage
+      scrolls itself when its gallery overflows. Circle→remark→circle needs zero vertical travel — the
+      old top-bottom ping-pong is gone. Under the narrow breakpoint the workspace degrades to one
+      stacked column (stage over rail) instead of clipping.
   - name: annotate-seek-circle-file
     tags: [frontend-e2e]
     description: >
       On #/evals, select a video reading (carrying a step-timeline sidecar, its thread holding anchored
-      comments) in the left list. In the RIGHT detail pane, over the CUSTOM review-track player: read the
-      scrubber's comment markers + step bands + duration; click a comment marker and read video.currentTime
-      + which comment/marker highlights; play/pause and read the playhead-active comment as it advances;
-      frame-step with '.' and jump comments with ↑/↓ and read video.currentTime; press 'a' and read the
-      composer's stamped anchor; click a step on the ruler; drag on the paused frame to circle a region,
-      read the prefilled comment and send it; click the sent comment's anchor chip; read the pane's DOM
-      below the player for any verdict-filing controls (pass/fail buttons, a note input, a file-reading
-      action); switch selection to another row and back.
+      comments) in the left list. On the detail workspace's MEDIA STAGE, over the CUSTOM review-track
+      player: read the scrubber's comment markers + step bands + duration; click a comment marker and read
+      video.currentTime + which comment/marker highlights (the comment lives in the RIGHT RAIL);
+      play/pause and read the playhead-active rail comment as it advances; frame-step with '.' and jump
+      comments with ↑/↓ and read video.currentTime; press 'a' and read the rail composer's stamped anchor;
+      click a step on the ruler; drag on the paused frame to circle a region, read the prefilled composer
+      and send it; click the sent comment's anchor chip; read the pane's DOM for any verdict-filing
+      controls (pass/fail buttons, a note input, a file-reading action); switch selection to another row
+      and back.
     expected: |
-      The eval detail IS the event detail — full pane height, no modal — with a CUSTOM player (native chrome
-      replaced): a scrubber carrying the play-fill + knob, one MARKER per anchored comment at its moment,
-      and step BANDS from the timeline; a live time readout + a chip naming the step the playhead is in.
-      Clicking a marker SEEKS to that comment (the blob route answers byte ranges — without them the browser
-      clamps to 0) AND selects it: the marker and the comment both highlight, in sync. As the clip plays the
-      playhead-ACTIVE comment lights and the step chip flips at each boundary. The keyboard drives it —
-      space play/pause, ←→ ±5s (⇧ 1s), , . frame-fine, ↑↓ jump to the prev/next comment (seek + select),
-      'a' stamps a `▶m:ss · <step>` anchor into the composer (+ a `[[node]]` line when the step routes
-      elsewhere) and focuses it. The named-step ruler still click-seeks. A drag circles a region: the paused
-      frame (rect burned in) is POSTed to /api/yatsu/blob and the composer is prefilled with an anchored
-      comment — the anchor line, a `![frame](/api/yatsu/blob/<hash>)` link, and the routing line. Sending it
-      creates/appends the eval's local Issue thread ('eval: <node> · <scenario>') with that frame in the
-      body AND on the thread's typed evidence[]; the sent comment shows an anchor chip that SEEKS + selects
-      on click and renders the circled frame inline. '@new' dispatches a fresh worker with the anchor in its
-      prompt. The pane carries NO verdict-filing controls — no pass/fail bar, no verdict-note input, no
-      file-reading button (readings are filed by agents via `spex yatsu eval`; the human judges through the
-      remark composer). Switching selection resets the working draft.
+      The eval detail IS the event detail — a full-height workspace, no modal — with a CUSTOM player
+      (native chrome replaced) on the stage: a scrubber carrying the play-fill + knob, one MARKER per
+      anchored comment at its moment, and step BANDS from the timeline; a live time readout + a chip
+      naming the step the playhead is in. Clicking a marker SEEKS to that comment (the blob route answers
+      byte ranges — without them the browser clamps to 0) AND selects it: the marker and the rail comment
+      both highlight, in sync. As the clip plays the playhead-ACTIVE comment lights and the step chip
+      flips at each boundary. The keyboard drives it — space play/pause, ←→ ±5s (⇧ 1s), , . frame-fine,
+      ↑↓ jump to the prev/next comment (seek + select), 'a' stamps a `▶m:ss · <step>` anchor into the
+      rail's docked composer (+ a `[[node]]` line when the step routes elsewhere) and focuses it. The
+      named-step ruler still click-seeks. A drag circles a region: the paused frame (rect burned in) is
+      POSTed to /api/yatsu/blob and the composer is prefilled with an anchored comment — the anchor line,
+      a `![frame](/api/yatsu/blob/<hash>)` link, and the routing line — with the stage still on screen.
+      Sending it creates/appends the eval's local Issue thread ('eval: <node> · <scenario>') with that
+      frame in the body AND on the thread's typed evidence[]; the sent comment shows an anchor chip that
+      SEEKS + selects on click and renders the circled frame inline. '@new' dispatches a fresh worker
+      with the anchor in its prompt. The pane carries NO verdict-filing controls — no pass/fail bar, no
+      verdict-note input, no file-reading button (readings are filed by agents via `spex yatsu eval`; the
+      human judges through the remark composer). Switching selection resets the working draft.
   - name: image-lightbox
     tags: [frontend-e2e]
     description: >
@@ -44,13 +63,13 @@ scenarios:
   - name: eval-comments
     tags: [frontend-e2e]
     description: >
-      On #/evals select an eval. In the detail pane's comments section under the media: send a first
+      On #/evals select an eval. In the detail workspace's remark rail: send a first
       comment; send a second; confirm /api/issues holds exactly ONE local issue for that concern (and that
       the eval thread is SPLIT OUT of the Issues page's merged list per the eval-remark split); send a third containing
       '@new'. Read /api/issues between sends.
     expected: |
       The first comment lazily CREATES a local issue bound by concern 'eval: <node> · <scenario>'
-      (nodes:[node], the comment as body) and it renders in place under the media. The second comment
+      (nodes:[node], the comment as body) and it renders in place in the rail's remark list. The second comment
       APPENDS to that same thread — /api/issues holds exactly ONE local issue with that concern (no
       duplicate thread), now with one reply. The thread IS a real local issue (store local, concern-keyed)
       but — after the eval-remark read-time split — it is EXCLUDED from the Issues page's merged issue
@@ -61,23 +80,24 @@ scenarios:
     tags: [frontend-e2e]
     description: >
       On #/evals, select a scenario that has MORE THAN ONE reading — a fail (A) followed by a pass (B). In
-      the RIGHT detail pane, read the A/B strip's verdict pips and the position label; click the older
-      (fail) pip (or press ‹) and read the header verdict badge, the expected/note text, and which evidence
-      blob the media points at; then click the newest (pass) pip and read them again. Read the comment
-      thread's replies before and after the flips.
+      the detail workspace's HEADER band, read the A/B strip's verdict pips and the position label; click
+      the older (fail) pip (or press ‹) and read the header verdict badge, the expected/note text, and
+      which evidence blob the media points at; then click the newest (pass) pip and read them again. Read
+      the rail's remark thread before and after the flips.
     expected: |
-      The A/B strip renders one verdict pip per reading, oldest→newest, ✗ for a fail (an A pole) and ✓ for
-      a pass (a B pole), the viewed pip outlined. Flipping to the older reading lights its ✗ pip, sets the
+      The A/B strip rides the slim header band (right-aligned), one verdict pip per reading,
+      oldest→newest, ✗ for a fail (an A pole) and ✓ for a pass (a B pole), the viewed pip outlined.
+      Flipping to the older reading lights its ✗ pip, sets the
       header badge to ✗, and swaps the media/expected/note IN PLACE to that reading's (a different blob hash
       than the latest); flipping back to the newest lights the ✓ pip, badge ✓, media back to the latest,
       and the position label reads 'latest'. The strip is absent for a single-reading scenario. The eval's
-      comment thread (bound by concern 'eval: <node> · <scenario>') is IDENTICAL across both flips — it is
+      remark thread (bound by concern 'eval: <node> · <scenario>') is IDENTICAL across both flips — it is
       per-scenario, not per-reading, so the annotation track spans the whole A/B.
 ---
 # event-detail loss
 
-YATU through the real browser over a real backend: the seek, the ⏱ anchor, the circled-frame comment (its
-frame on /api/yatsu/blob and the thread's evidence[]), the anchor-chip seek, the @new dispatch, and the
-absence of verdict-filing controls are all read from live surfaces (DOM, /api/issues) — never asserted from
-the component code. There is ONE annotation primitive (an anchored comment on the eval's thread); the pane
-reads readings, it files none.
+YATU through the real browser over a real backend: the workspace geometry (stage + rail both on screen,
+no ping-pong), the seek, the ⏱ anchor, the circled-frame comment (its frame on /api/yatsu/blob and the
+thread's evidence[]), the anchor-chip seek, the @new dispatch, and the absence of verdict-filing controls
+are all read from live surfaces (DOM, /api/issues) — never asserted from the component code. There is ONE
+annotation primitive (an anchored comment on the eval's thread); the pane reads readings, it files none.

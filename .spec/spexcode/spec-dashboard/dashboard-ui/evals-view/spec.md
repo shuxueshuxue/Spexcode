@@ -2,7 +2,7 @@
 title: evals-view
 status: active
 hue: 200
-desc: The dashboard's Evals page — a top-level route (#/evals, [[side-nav]]) peer to the graph, the session board, and the Issues page, showing the project's current measured loss as a MASTER-DETAIL: the [[evals-feed]] list on the left, the [[event-detail]] of the selection full-height on the right. Evals lead — the board's `f` and ⌥F land here.
+desc: The dashboard's Evals page — a top-level route (#/evals, [[side-nav]]) peer to the graph, the session board, and the Issues page, showing the project's current measured loss as a MASTER-DETAIL: the [[evals-feed]] list in a SLIM, foldable left column, the [[event-detail]] workspace of the selection full-height on the right. Evals lead — the board's `f` and ⌥F land here.
 code:
   - spec-dashboard/src/EvalsPage.jsx
 ---
@@ -27,16 +27,20 @@ surfaces (`f`, ⌥F) land here.
   board's bare **`f`** ([[side-nav]] / the keymap) as the direct jump from the graph. There is no in-page
   switcher: the page IS the evals, the [[issues-view]] page IS the issues, and the rail is how you cross
   between them.
-- **A MASTER-DETAIL — a full page deserves a full-height detail.** The **left column** is the
-  [[evals-feed]] list — the latest reading per (node, scenario), fresh leading, video first — under its own
-  filter chipbar (that bar is the feed's own state; this node owns the page shell, never the filters). The
-  [[side-nav]] rail names the page, so the column carries no title of its own. The **right pane** is the
-  full-height [[event-detail]] of the one selection — **selection IS detail** (no Enter, no in-place
-  expansion): picking an eval row renders it as the event detail — the media under the review-track
-  scrubber, the A/B strip, and the (node, scenario) remark thread + composer. **j/k walk the feed** and the
-  detail follows; a key typed into an input is never captured. The section contents are their own nodes
-  ([[evals-feed]], [[event-detail]]) — this node owns the page shell: the split, the selection, and the
-  j/k routing.
+- **A MASTER-DETAIL — a full page deserves a full-height detail, and the DETAIL is the protagonist.** The
+  **left column** is the [[evals-feed]] list — the latest reading per (node, scenario), fresh leading, video
+  first — under its own filter chipbar (that bar is the feed's own state; this node owns the page shell,
+  never the filters). Its rows are title-only, so the column stays **SLIM** — it never crowds the detail
+  (the human called the wide sidebar: the list is a picker, not a reading surface) — and a **fold toggle**
+  collapses it to a thin strip, giving the whole width to the detail workspace once a human is working one
+  eval; the strip itself is the unfold affordance, and the folded list keeps its state (filters, selection,
+  j/k) — the fold is pure geometry. The [[side-nav]] rail names the page, so the column carries no title of
+  its own. The **right pane** is the full-height [[event-detail]] of the one selection — **selection IS
+  detail** (no Enter, no in-place expansion): picking an eval row renders it as the event detail — the media
+  stage under the review-track scrubber, the A/B strip in the header, and the (node, scenario) remark rail +
+  docked composer. **j/k walk the feed** (folded or not) and the detail follows; a key typed into an input
+  is never captured. The section contents are their own nodes ([[evals-feed]], [[event-detail]]) — this node
+  owns the page shell: the split, the fold, the selection, and the j/k routing.
 - **One data path — the feed rides the app's one board poll.** The list fetches nothing of its own: the
   board nodes arrive as a prop from the app's single board poll + SSE ([[evals-feed]]). A remark authored in
   the [[event-detail]] composer writes through the CLI-parity `/api/remarks` and then refreshes the

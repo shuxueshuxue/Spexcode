@@ -116,6 +116,12 @@ export function materialize(proj = process.cwd()): string {
     writeFileSync(shimFile, shim.json)
     h.writeTrust(proj, shim.cmd)
     shimPaths.push(shimFile)
+    // a linked-worktree ANCHOR copy of the shim, when the harness needs one (codex: the shim lives at the main
+    // checkout, so the worktree gets no `.codex/` unless we place one — and codex only discovers a worktree
+    // thread's hooks if a `.codex/` under the worktree root anchors the project layer). One adapter line; null
+    // for a harness whose shim already sits in the worktree (claude) or on the main checkout itself.
+    const anchor = h.worktreeHookAnchor(proj)
+    if (anchor) { mkdirSync(dirname(anchor), { recursive: true }); writeFileSync(anchor, shim.json); shimPaths.push(anchor) }
   }
   // (6) skills - each `surface: skill` node → a SKILL.md the harness auto-discovers, written into every
   //     harness's own skillDir (Claude .claude/skills, Codex .codex/skills). Generated wiring, so the paths

@@ -1,14 +1,37 @@
 #!/usr/bin/env bash
-# @@@ session-stamp - auto-attribute a commit to the Claude Code session that authored it. SpexCode
-# reads the `Session:` trailer as a version's attribution (git is the database). CLAUDE_CODE_SESSION_ID
-# is the live session id Claude Code exports — and it EQUALS the `--session-id` we launch worktree
-# sessions with, so a spec node's version attribution links to the live session in the dashboard's
-# session window for free. No-op outside Claude Code, or if a Session: trailer is already present
-# (so the dogfood ritual / a human can still set it explicitly).
+# @@@ session-stamp - auto-attribute a commit to the SESSION that authored it, ACROSS HARNESSES. SpexCode
+# reads the `Session:` trailer as a version's attribution (git is the database), keyed by the SpexCode record
+# id so the dashboard's session window links to it. Resolving that id is a harness-adapter concern, mirroring
+# `envSessionId` / the shell `hp_store_dir` alias:
+#   - Claude exports CLAUDE_CODE_SESSION_ID, which EQUALS the record id → stamp it directly.
+#   - Codex has no such equality: its per-command CODEX_THREAD_ID is the THREAD id, not the record key, and the
+#     SHARED per-project app-server means SPEXCODE_SESSION_ID is contaminated with the FIRST session's id — so
+#     it must NOT be trusted. Resolve the thread id → record via the SAME `harness_session_id` alias the shell
+#     hooks use, AT COMMIT TIME (the record is swept on close, so read-time aliasing would fail), and stamp the
+#     resolved RECORD id.
+# No-op outside a governed session, or if a Session: trailer is already present (so the dogfood ritual / a
+# human can still set it explicitly).
 set -euo pipefail
 msg_file="$1"
-sid="${CLAUDE_CODE_SESSION_ID:-}"
-[ -z "$sid" ] && exit 0
 grep -qiE '^Session:[[:space:]]' "$msg_file" && exit 0
+
+sid="${CLAUDE_CODE_SESSION_ID:-}"                       # claude: the exported id IS the record id
+if [ -z "$sid" ] && [ -n "${CODEX_THREAD_ID:-}" ]; then # codex: alias the thread id → record id
+  gcd=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) \
+    || gcd=$(realpath "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null) || gcd=""
+  if [ -n "$gcd" ]; then
+    # the per-project store (mirrors layout.ts runtimeRoot / harness.sh hp_runtime_dir): keyed by the project
+    # (dirname of the ABSOLUTE git-common-dir), '/' and '.' → '-'.
+    rd="${SPEXCODE_HOME:-$HOME/.spexcode}/projects/$(printf '%s' "$(dirname "$gcd")" | sed 's#[/.]#-#g')"
+    if [ -e "$rd/sessions/$CODEX_THREAD_ID/session.json" ]; then
+      sid="$CODEX_THREAD_ID"                             # a governed record keyed by the thread id (rare/direct)
+    else                                                 # else the record that captured it as harness_session_id
+      hit=$(grep -lF "\"harness_session_id\": \"$CODEX_THREAD_ID\"" "$rd"/sessions/*/session.json 2>/dev/null | head -1)
+      [ -n "$hit" ] && sid=$(basename "$(dirname "$hit")")
+    fi
+  fi
+fi
+
+[ -z "$sid" ] && exit 0
 printf '\nSession: %s\n' "$sid" >> "$msg_file"
 exit 0

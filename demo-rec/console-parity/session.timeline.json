@@ -1,0 +1,34 @@
+{
+ "events": [
+  {
+   "atMs": 22889,
+   "kind": "narrate",
+   "label": "▶ board-command-parity · text-only coloured action row (nav yellow, merge green), the / menu, /proof→tab, /nav"
+  },
+  {
+   "atMs": 49294,
+   "kind": "frame",
+   "label": "📷 action row = [{\"text\":\"nav\",\"color\":\"rgb(181, 137, 0)\",\"cls\":\"si-act board sc-yellow nav\"},{\"text\":\"merge\",\"color\":\"rgb(133, 153, 0)\",\"cls\":\"si-act board sc-green merge\"}]; left tabs = [\"terminal\",\"eval\"]"
+  },
+  {
+   "atMs": 55763,
+   "kind": "frame",
+   "label": "📷 / menu rows = [{\"t\":\"// commands — ↑↓ pick · ⏎ insert\",\"color\":\"rgb(147, 161, 161)\"},{\"t\":\"/nav\",\"color\":\"rgb(181, 137, 0)\"},{\"t\":\"Nav mode — forward raw keystrokes to the\",\"color\":\"rgb(147, 161, 161)\"},{\"t\":\"[board]\",\"color\":\"rgb(181, 137, 0)\"},{\"t\":\"/proof\",\"color\":\"rgb(42, 161, 152)\"},{\"t\":\"This session's proof of work — yatsu, di\",\"color\":\"rgb(147, 161, 161)\"},{\"t\":\"[board]\",\"color\":\"rgb(42, 161, 152)\"},{\"t\":\"/merge\",\"color\":\"rgb(133, 153, 0)\"},{\"t\":\"Merge this session to main\",\"color\":\"rgb(147, 161, 161)\"},{\"t\":\"[board]\",\"color\":\"rgb(133, 153, 0)\"},{\"t\":\"/exit\",\"color\":\"rgb(147, 161, 161)\"},{\"t\":\"Exit — stop the agent + tmux but KEEP th\",\"color\":\"rgb(147, 161, 161)\"},{\"t\":\"[board]\",\"color\":\"rgb(147, 161, 161)\"},{\"t\":\"/close\",\"color\":\"rgb(220, 50, 47)\"}]"
+  },
+  {
+   "atMs": 58985,
+   "kind": "frame",
+   "label": "📷 /exit menu entries = [\"// /exit — ↑↓ pick · ⏎ insert\",\"exit\",\"Exit — stop the agent + tmux but KEEP the worktree\"] (board row appears once)"
+  },
+  {
+   "atMs": 69336,
+   "kind": "frame",
+   "label": "📷 /proof typed → active tab='eval' termHidden=true noProofLineDispatched=true"
+  },
+  {
+   "atMs": 75903,
+   "kind": "frame",
+   "label": "📷 /nav typed → navBtnOn=true indicator=true noNavLineDispatched=true"
+  }
+ ]
+}

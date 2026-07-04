@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { activeTurnIdFromThread, codexAppServerSock, codexBinary, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, codexLaunchCommand, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, resolveLauncher } from './harness.js'
+import { activeTurnIdFromThread, codexAppServerSock, codexBinary, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, codexLaunchCommand, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, resolveLauncher, writeCodexTrust } from './harness.js'
 
 test('codex handshake initializes, confirms the loaded thread, then reads it to decide steer-vs-start', () => {
   const msgs = codexHandshakeMessages('thr_1')
@@ -312,4 +312,47 @@ test('paneTreeRunsCodex: codex-ish descendants read live; a bare/unrelated tree 
   assert.equal(paneTreeRunsCodex({ panePid: 10, procs: base }), false)          // nothing below the pane
   assert.equal(paneTreeRunsCodex(undefined), false)
   assert.equal(paneTreeRunsCodex({ panePid: 10, procs: new Map() }), false)
+})
+
+// [[harness-adapter]] — the UNCONDITIONAL codex trust write must be duplicate-SAFE: codex refuses to load a
+// config.toml with a duplicate key, so a pre-existing bare `[projects."<proj>"]` (codex auto-writes one on an
+// interactive trust) or an old-format sentinel block MUST be stripped before we write, else we append a second
+// key and take codex fully offline (the public-vps outage). Also idempotent, and it leaves OTHER projects alone.
+test('writeCodexTrust strips ALL prior trust for the project (bare + old-format) → no duplicate key, idempotent, other projects untouched', () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-cxhome-'))
+  const proj = '/tmp/spex-proj-x'
+  const hooksJson = `${proj}/.codex/hooks.json`
+  const orig = { ...process.env }
+  process.env.CODEX_HOME = home
+  try {
+    // a config that ALREADY carries: another project's trust (keep), a BARE codex-auto trust for OUR project
+    // (the killer), an OLD-format sentinel block for OUR project, and a stray hooks.state for our hooksJson.
+    writeFileSync(join(home, 'config.toml'),
+      `model = "gpt-5.5"\n\n` +
+      `[projects."/other/keep"]\ntrust_level = "trusted"\n\n` +
+      `[projects."${proj}"]\ntrust_level = "trusted"\n\n` +
+      `# spexcode:trust:${proj} (OLD FORMAT)\n[hooks.state."${hooksJson}:stop:0:0"]\ntrusted_hash = "sha256:stale"\n\n` +
+      `[hooks.state."/other/keep/.codex/hooks.json:stop:0:0"]\ntrusted_hash = "sha256:keepme"\n`)
+
+    const cmdFor = (e: string) => `spex dispatch ${e}`
+    writeCodexTrust(proj, ['SessionStart', 'Stop'], cmdFor)
+    let cfg = readFileSync(join(home, 'config.toml'), 'utf8')
+
+    const projKeys = (s: string, p: string) => (s.match(new RegExp(`^\\[projects\\."${p.replace(/[/.]/g, '\\$&')}"\\]$`, 'gm')) || []).length
+    assert.equal(projKeys(cfg, proj), 1, 'exactly ONE [projects."<proj>"] — no duplicate key')
+    assert.equal(projKeys(cfg, '/other/keep'), 1, "other project's trust preserved")
+    assert.ok(cfg.includes('trusted_hash = "sha256:keepme"'), "other project's hooks.state preserved")
+    assert.ok(!cfg.includes('sha256:stale'), 'stale hooks.state for our hooksJson removed')
+    assert.ok(cfg.includes(`# spexcode:trust:${proj} (managed — do not edit)`), 'our current sentinel present')
+    // per-hook hash count for our hooksJson: exactly the 2 events we wrote (no dup, no leftover)
+    assert.equal((cfg.match(new RegExp(`\\[hooks\\.state\\."${hooksJson.replace(/[/.]/g, '\\$&')}:`, 'g')) || []).length, 2, 'exactly our 2 hooks.state entries')
+
+    // idempotent: a second write does not grow the config or add a duplicate
+    writeCodexTrust(proj, ['SessionStart', 'Stop'], cmdFor)
+    const cfg2 = readFileSync(join(home, 'config.toml'), 'utf8')
+    assert.equal(projKeys(cfg2, proj), 1, 're-write keeps exactly ONE project key (idempotent)')
+    assert.equal(cfg2, cfg, 're-write is byte-identical (idempotent)')
+  } finally {
+    process.env = orig
+  }
 })

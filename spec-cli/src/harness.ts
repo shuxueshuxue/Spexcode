@@ -759,13 +759,41 @@ export function codexHookHash(snakeEvent: string, command: string, timeout = 600
   return 'sha256:' + createHash('sha256').update(JSON.stringify(canon(obj))).digest('hex')
 }
 
+// @@@ stripCodexTrustFor - remove EVERY prior definition of THIS project's codex trust from a config.toml body,
+// in ANY form: our own sentinel block (whatever past format its comments used), a BARE `[projects."<proj>"]`
+// table (codex AUTO-writes one the moment it trusts a folder interactively/`exec` — NOT sentinel-wrapped), and
+// any `[hooks.state."<hooksJson>:…"]` tables. This is what makes the UNCONDITIONAL write duplicate-SAFE and
+// SELF-HEALING: codex REFUSES to load a config.toml with a duplicate key ("duplicate key"), so a sentinel-only
+// replace (the old behaviour) that missed a pre-existing bare/old block APPENDED a second `[projects."<proj>"]`
+// and took codex fully OFFLINE (the real cause of the public-vps outage). It is TABLE-scoped and STRING-compared
+// (no regex escaping of the path), so other projects' trust, the shared parent tables (`[projects]`,
+// `[hooks.state]`), and every other config key are untouched; a skipped table's body ends at the next header,
+// blank, or comment, so a user comment attached to a following table is preserved.
+function stripCodexTrustFor(cur: string, proj: string, hooksJson: string): string {
+  const projHeader = `[projects."${proj}"]`
+  const hooksPrefix = `[hooks.state."${hooksJson}:`
+  const out: string[] = []
+  let skip = false
+  for (const line of cur.split('\n')) {
+    const t = line.trim()
+    const isHeader = /^\[\[?/.test(t)                       // a TOML table / array-of-tables header
+    if (skip) { if (t === '' || t.startsWith('#') || isHeader) skip = false; else continue }   // end THIS table's body
+    if (isHeader && (t === projHeader || t.startsWith(hooksPrefix))) { skip = true; continue }
+    if (t === `# spexcode:trust:${proj} (managed — do not edit)` || t === `# spexcode:trust:end:${proj}`) continue
+    out.push(line)
+  }
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').replace(/^\n+/, '').replace(/\n*$/, '')
+}
+
 // additively stamp PROJECT trust (`[projects."<proj>"] trust_level = "trusted"`) AND the per-hook
 // `trusted_hash` blocks for each event into the user's GLOBAL ~/.codex/config.toml, so a dispatched or
 // self-launched codex trusts THIS project's config layer (enabling hook discovery) AND treats each hook as
-// already-reviewed (no "Hooks need review" prompt on a persistent resume — see writeTrust). Scoped to THIS
-// project path; replaces our own prior block (between sentinels) idempotently; never touches the user's other
-// config. CODEX_HOME respected for testability. (`events` may be empty for a trust-only stamp in tests.)
-function writeCodexTrust(proj: string, events: readonly string[], cmdFor: (e: string) => string): void {
+// already-reviewed (no "Hooks need review" prompt on a persistent resume — see writeTrust). ALL prior
+// definitions of this project's trust (ours, bare, or old-format) are STRIPPED first, so the write can never
+// leave a DUPLICATE key (which breaks codex config loading) and self-heals a config that already carried one.
+// Scoped to THIS project path; never touches the user's other config. CODEX_HOME respected for testability.
+// (`events` may be empty for a trust-only stamp in tests.)
+export function writeCodexTrust(proj: string, events: readonly string[], cmdFor: (e: string) => string): void {
   const home = process.env.CODEX_HOME || join(homedir(), '.codex')
   const file = join(home, 'config.toml')
   const hooksJson = join(proj, '.codex', 'hooks.json')
@@ -775,27 +803,25 @@ function writeCodexTrust(proj: string, events: readonly string[], cmdFor: (e: st
     lines.push(`[hooks.state."${hooksJson}:${snake}:0:0"]`, `trusted_hash = "${codexHookHash(snake, cmdFor(e))}"`)
   }
   const blk = `# spexcode:trust:${proj} (managed — do not edit)\n${lines.join('\n')}\n# spexcode:trust:end:${proj}`
-  const esc = proj.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  let cur = existsSync(file) ? readFileSync(file, 'utf8') : ''
-  const re = new RegExp(`# spexcode:trust:${esc} \\(managed[\\s\\S]*?# spexcode:trust:end:${esc}`)
-  if (re.test(cur)) cur = cur.replace(re, blk)
-  else cur = cur.trim() ? `${cur.replace(/\n*$/, '')}\n\n${blk}\n` : `${blk}\n`
+  const cleaned = stripCodexTrustFor(existsSync(file) ? readFileSync(file, 'utf8') : '', proj, hooksJson)
   if (!existsSync(home)) mkdirSync(home, { recursive: true })
-  writeFileSync(file, cur)
+  writeFileSync(file, cleaned ? `${cleaned}\n\n${blk}\n` : `${blk}\n`)
 }
 
-// the inverse of writeCodexTrust: strip THIS project's spexcode trust block from the GLOBAL config.toml,
-// keyed by the SAME project path the block was written under. Leaves the user's other keys + other projects'
-// trust untouched. No-op when the file/block is absent. CODEX_HOME respected for testability.
+// the inverse of writeCodexTrust: strip THIS project's codex trust from the GLOBAL config.toml — the SAME
+// removal writeCodexTrust does before it writes, so uninstall fully clears our trust (sentinel, bare, and
+// hooks.state) and can never leave a half-block. No-op when the file/nothing-of-ours is absent (so it never
+// rewrites/normalizes a config that carries none of our trust). CODEX_HOME respected for testability.
 function removeCodexTrust(proj: string): void {
   const home = process.env.CODEX_HOME || join(homedir(), '.codex')
   const file = join(home, 'config.toml')
   if (!existsSync(file)) return
-  const esc = proj.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const re = new RegExp(`\\n*# spexcode:trust:${esc} \\(managed[\\s\\S]*?# spexcode:trust:end:${esc}\\n*`)
+  const hooksJson = join(proj, '.codex', 'hooks.json')
   const cur = readFileSync(file, 'utf8')
-  if (!re.test(cur)) return
-  writeFileSync(file, cur.replace(re, '\n').replace(/^\n+/, ''))
+  if (!cur.includes(`[projects."${proj}"]`) && !cur.includes(`[hooks.state."${hooksJson}:`) &&
+      !cur.includes(`# spexcode:trust:${proj} `) && !cur.includes(`# spexcode:trust:end:${proj}`)) return
+  const cleaned = stripCodexTrustFor(cur, proj, hooksJson)
+  writeFileSync(file, cleaned ? `${cleaned}\n` : '')
 }
 
 // @@@ cleanHarness - the shared clean: the inverse of materialize's per-harness write, expressed PURELY

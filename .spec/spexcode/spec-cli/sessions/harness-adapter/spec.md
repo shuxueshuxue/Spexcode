@@ -82,7 +82,11 @@ surface:
     dispatched-worker app-server does NOT auto-trust (only the interactive TUI / `codex exec` approval flow
     does — the "auto-trust confound" that made a standalone `.codex` appear to work). So the adapter writes
     PROJECT trust (`[projects."<mainCheckout>"] trust_level = "trusted"`) UNCONDITIONALLY — the main-checkout key
-    covers every worktree via codex's repo-root trust fallback.
+    covers every worktree via codex's repo-root trust fallback. That write must be DUPLICATE-SAFE: codex refuses
+    to load a config.toml with a duplicate key, and codex AUTO-writes a bare `[projects."<proj>"]` the moment it
+    trusts a folder — so the writer STRIPS every prior definition of this project's trust (our sentinel block in
+    any past format, a bare table, and its `[hooks.state]` entries) before appending, self-healing a config that
+    already carries one instead of appending a second key that takes codex fully offline.
   - **(c) hooks REVIEWED** — even trusted+enabled, an unhashed hook is "new or changed", and codex FORCES the
     startup hook-review prompt on a PERSISTENT RESUME regardless of the bypass flag
     (`bypass_hook_trust_for_startup_review = config.bypass_hook_trust && !is_persistent_resume`, tui/src/lib.rs).

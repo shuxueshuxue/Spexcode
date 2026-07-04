@@ -8,10 +8,13 @@
 // invisible to lint / drift / deriveStatus / board with ZERO exemption. The store lives on the TRUNK, not
 // per-branch: reads and writes target the main checkout and commit STRAIGHT to it (--no-verify, provably
 // store-only), so a post-merge thread lands durably even though the author's own branch already merged.
+// A committing write is allowed ONLY from the trunk checkout itself (isPrimaryCheckout) — a linked-worktree
+// backend sharing that main is refused loud, never left to fabricate a stray commit on a main it doesn't own;
+// SPEXCODE_ISSUES_DIR routes an e2e/test rig to a disposable plain-file store (see localStoreDir below).
 // The on-disk dir was historically `.spec/.forum`; a one-shot self-migration ([[issues-store-rename]])
 // renames any legacy `.spec/.forum` to `.spec/.issues` on the first store touch after a toolchain update.
 import { readdirSync, existsSync, mkdirSync, writeFileSync, readFileSync, rmdirSync, statSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, dirname, resolve as resolvePath } from 'node:path'
 import { git, headSha, repoRoot } from './git.js'
 import { mainCheckout, envSessionId, readConfig } from './layout.js'
 import { dispatchMentions, notifyOriginator, deliveredIds, summarize, type DispatchOutcome, type LoopIn } from './mentions.js'
@@ -45,9 +48,39 @@ function setEnabled(on: boolean): void {
 const list = (v: string | undefined): string[] =>
   v ? v.split(',').map((s) => s.trim()).filter(Boolean) : []
 
-// the local issue store dir on the TRUNK — a fixed path directly under .spec (name-independent, unlike the
-// .config system which nests under the named root node). Every read and write goes here.
-const localStoreDir = (): string => join(mainCheckout(), LOCAL_STORE_REL)
+// @@@ where a store write lands — ONE deterministic rule ([[local-issues]] "only the trunk checkout may
+// commit"). Every backend resolves the store to `mainCheckout()` (dirname of the shared git-common-dir), so a
+// backend serving a LINKED WORKTREE would git-commit a stray issue onto the REAL, live main — dirtying it and
+// racing its index.lock. The rule:
+//   1. SPEXCODE_ISSUES_DIR override → a DISPOSABLE store of plain files (no git, no shared main); the e2e/test
+//      seam. Both reads and writes target it, so a test rig throws its whole store away.
+//   2. else the trunk `.spec/.issues/` — but a *committing* write is allowed ONLY from the trunk checkout
+//      itself (repoRoot === mainCheckout: the primary backend, or a throwaway clone owning its own main). A
+//      linked-worktree backend is refused loud (requirePrimaryStore) rather than silently writing someone
+//      else's main. Reads always resolve to the trunk (visibility never hostages on being primary).
+const overrideStoreDir = (): string | null => {
+  const p = process.env.SPEXCODE_ISSUES_DIR?.trim()
+  return p ? p : null
+}
+// is THIS process rooted in the trunk checkout itself? True for the primary backend and for a clone (its own
+// .git → its own disposable main); false for a linked-worktree backend, the store-write footgun.
+const isPrimaryCheckout = (): boolean => {
+  try { return resolvePath(repoRoot()) === resolvePath(mainCheckout()) } catch { return false }
+}
+// fail LOUD before a committing write from a non-trunk checkout: never fabricate a commit on a shared main
+// this process does not own. (The disposable override bypasses this — it commits to nothing.)
+function requirePrimaryStore(action: string): void {
+  if (isPrimaryCheckout()) return
+  throw new Error(
+    `refusing to ${action}: this backend serves a linked worktree (${resolvePath(repoRoot())}), not the trunk ` +
+    `checkout (${resolvePath(mainCheckout())}) — committing here would land a stray issue on the REAL main and ` +
+    `race its index. Run the write from the trunk checkout (or its backend), or, for a throwaway/e2e run, set ` +
+    `SPEXCODE_ISSUES_DIR=<disposable-dir> to write plain files nowhere near the real store.`)
+}
+
+// the local issue store dir — a fixed path directly under the trunk's .spec (name-independent, unlike the
+// .config system which nests under the named root node), OR the disposable override. Every read and write goes here.
+const localStoreDir = (): string => overrideStoreDir() ?? join(mainCheckout(), LOCAL_STORE_REL)
 // the author's signature: the effective governed session id (envSessionId handles the claude/codex split).
 const currentSession = (): string => envSessionId() || 'unknown'
 // a synchronous sleep for the commit-retry backoff (Date/timers-free, safe in any runtime).
@@ -177,7 +210,11 @@ function uniqueId(concern: string): string {
 // the migration race the lock exists to close.
 let lockHeld = false   // re-entrancy guard so ensureStoreMigrated() no-ops when reached from inside a hold
 function withStoreLock<T>(fn: () => T): T {
-  const lock = join(mainCheckout(), '.git', 'spexcode-forum.lock')
+  // the disposable store locks inside its own dir; the trunk store locks in the shared `.git` (one lock name
+  // across every worktree of the clone, so all writers of the SAME real store mutually exclude).
+  const override = overrideStoreDir()
+  const lock = override ? join(override, '.spexcode-issues.lock') : join(mainCheckout(), '.git', 'spexcode-forum.lock')
+  mkdirSync(dirname(lock), { recursive: true })   // parent must exist for the atomic mkdir-acquire (a no-op for .git)
   for (let i = 0; ; i++) {
     try { mkdirSync(lock); break }                                   // atomic acquire
     catch {
@@ -200,6 +237,8 @@ function withStoreLock<T>(fn: () => T): T {
 // dirs present (pathological) → fail LOUD with the repair, never a silent merge.
 function ensureStoreMigrated(): void {
   if (lockHeld) return                                     // inside a hold: an outer entrypoint already ran this
+  if (overrideStoreDir()) return                           // disposable store: no legacy trunk dir to migrate
+  if (!isPrimaryCheckout()) return                         // a git-committing migration is trunk-only; the primary migrates on its next touch
   const root = mainCheckout()
   if (!existsSync(join(root, LEGACY_STORE_REL))) return    // fresh or already-migrated: nothing to do (no lock)
   withStoreLock(() => {
@@ -222,6 +261,13 @@ function ensureStoreMigrated(): void {
 // MUST run while holding withStoreLock — it is the write half of a locked read-modify-write; its callers
 // (commitStore, findOrCreateEvalThread) own the lock, so it never acquires one itself (mkdir is not re-entrant).
 function writeStoreFile(p: Issue, message: string): void {
+  const override = overrideStoreDir()
+  if (override) {                                          // disposable store: a plain file, never a commit, never a shared main
+    mkdirSync(override, { recursive: true })
+    writeFileSync(join(override, `${p.id}.md`), serialize(p))
+    return
+  }
+  requirePrimaryStore('write a local issue')              // a linked-worktree backend must NOT commit onto the real main
   const root = mainCheckout()
   const rel = `${LOCAL_STORE_REL}/${p.id}.md`
   mkdirSync(join(root, LOCAL_STORE_REL), { recursive: true })

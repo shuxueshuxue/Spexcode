@@ -5,10 +5,12 @@ hue: 200
 desc: The ONE evidence+reply detail pane (U1), store-agnostic, reused in EVERY home — the Evals page ([[evals-view]]) AND the session eval tab. A selected reading as a WORKSPACE — slim header (verdict badge + A/B strip), the media STAGE center (video under a custom review-track scrubber; the human scrubs, circles; images/transcripts render whole), the REMARK track in an always-visible right RAIL with the composer docked at its foot — circle on the stage, remark right there, no vertical ping-pong. The (node,scenario) remark track rides as entry.thread — a resolved remark renders settled, an open one prominent. The pane reads readings and hosts remarks; it never files one.
 code:
   - spec-dashboard/src/EventDetail.jsx
+  - spec-dashboard/src/Evidence.jsx
 related:
   - spec-yatsu/src/evaltab.ts
   - spec-cli/src/index.ts
   - spec-dashboard/src/NodeView.jsx
+  - spec-dashboard/src/Thread.jsx
 ---
 # event-detail
 
@@ -41,8 +43,14 @@ remarking, and the composer is never below the fold: circle→remark→circle→
 At narrow widths the workspace degrades gracefully back to one stacked column (the rail folds under the
 stage).
 
-A reading's evidence is a **LIST**, so every entry renders on the ONE stage:
-the **video** plays under a **custom review-track scrubber** — native chrome replaced so the timeline can
+A reading's evidence is a **LIST**, so every entry renders on the ONE stage — and U1's "one evidence
+detail" is literal code: the per-entry renderer is the extracted **`Evidence.jsx`**, this node's second
+file — one kind-dispatch (`EvidenceItem`: video → an inline player, image → click-to-enlarge, transcript →
+text, a pruned blob → the honest miss sentinel) reused verbatim by the node eval tab's gallery
+([[yatsu-eval-tab]]'s `NodeView`) and by a reply's inline blob links ([[issues-view]]'s `Thread`, which
+resolves a bare hash's kind from the blob route's served Content-Type), so a blob renders identically
+wherever it appears. The ONE deliberate specialization is this pane's **clip player**: on this stage the
+**video** plays under a **custom review-track scrubber** — native chrome replaced so the timeline can
 carry the review: anchored remarks are **markers** on it, the playhead **lights the remark it is inside**,
 and clicking a marker (or a remark in the rail) **seeks** there. The surface is **keyboard-driven** — play/pause,
 coarse and frame-fine scrubbing, jump between remarks, and **annotate the current frame** (its

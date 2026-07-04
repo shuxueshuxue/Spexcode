@@ -32,6 +32,22 @@ scenarios:
       composer's menu opens UPWARD (visible above the docked textarea), the New form's downward. Esc
       closes the menu, keeps the draft, and stays on #/issues. Plain text never opens a menu. The
       console's `@`/`[[` menus are unchanged. No page errors.
+  - name: issue-reply-video-plays
+    tags: [frontend-e2e]
+    code: [spec-dashboard/src/Thread.jsx, spec-dashboard/src/Evidence.jsx]
+    description: >-
+      Cache a real clip with `spex blob put <clip.webm>` (no reading filed), post a LOCAL issue reply
+      whose body carries a `![video](/api/yatsu/blob/<hash>)` link (same hash as the reply's evidence),
+      plus a reply with an image link and one with a hash whose blob is absent. Open #/issues, select the
+      thread, and read each rendered reply's real DOM: the media element's tag, its readyState/currentTime
+      after play(), and whether raw markdown link text shows in the prose.
+    expected: >-
+      The video-linked reply renders a real playing HTML5 `<video class="eval-video" controls>` sourced
+      from /api/yatsu/blob/<hash> — frames decode (readyState ≥ HAVE_CURRENT_DATA, currentTime advances
+      after play()), never a broken `<img>` and never raw markdown in the prose. The image link still
+      renders as an image (click-to-enlarge), and the absent blob renders the honest miss sentinel. The
+      element is the SAME shared-renderer output the eval tab and eval detail produce for the same hash —
+      one evidence renderer, every home.
   - name: panel-skeleton
     tags: [frontend-e2e]
     code: spec-dashboard/src/IssuesPage.jsx

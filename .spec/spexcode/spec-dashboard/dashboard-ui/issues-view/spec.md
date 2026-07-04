@@ -6,6 +6,8 @@ desc: The dashboard's Issues page — a top-level route (#/issues, [[side-nav]])
 code:
   - spec-dashboard/src/IssuesPage.jsx
   - spec-dashboard/src/Thread.jsx
+related:
+  - spec-dashboard/src/Evidence.jsx
 ---
 
 # issues-view
@@ -94,9 +96,16 @@ straight to the trunk.
   just another delivery behind the same seam. A reply is TIME-ANCHORED by a prose convention (same
   philosophy as `Spec:`/`[[node]]`): a body whose first line reads `▶m:ss · <step>` IS anchored to a video
   moment — `Thread` linkifies it (click = seek, when the home supplies the clip) and, over a clip, the
-  composer grows a ⏱ affordance that stamps the current frame; a circled frame rides the body as an image
-  link whose hash the send derives as the thread's typed `evidence[]` (the frame-blob write is
-  [[event-detail]]'s). The reply stays plain `{ by, at, body }` — no schema grows, and a raw reader still
+  composer grows a ⏱ affordance that stamps the current frame; a circled frame — or ANY attached blob, a
+  video clip included — rides the body as a `![…](/api/yatsu/blob/<hash>)` link whose hash the send derives
+  as the thread's typed `evidence[]` (the frame-blob write is [[event-detail]]'s; a clip enters the cache
+  via `spex blob put`, [[blob-put]]). Each linked blob renders through the ONE shared evidence renderer
+  ([[event-detail]]'s `Evidence.jsx`): the blob's kind is resolved from the Content-Type the blob route
+  already serves — the server's byte sniff is the single kind authority, so the thread never grows its own
+  magic-number table and a link's label stays free prose — and a video PLAYS as a real `<video>` inline in
+  the thread, an image shows (click-to-enlarge), a pruned blob is the honest miss sentinel, identical to
+  how the same hash renders on the Evals detail or the node eval tab. The reply stays plain
+  `{ by, at, body }` — no schema grows, no typed evidence entries, and a raw reader still
   sees the `▶m:ss` line.
 - **Honors the switch.** When the issues workflow is OFF (`enabled: false`, [[proposals]]'s toggle), the
   view shows a muted "off" state instead of the list — the dashboard reflects the one source of truth,

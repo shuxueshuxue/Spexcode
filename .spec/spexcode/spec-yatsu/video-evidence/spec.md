@@ -8,7 +8,7 @@ related:
   - spec-yatsu/src/sidecar.ts
   - spec-yatsu/src/evaltab.ts
   - spec-yatsu/src/proof.ts
-  - spec-dashboard/src/NodeView.jsx
+  - spec-dashboard/src/Evidence.jsx
 ---
 # video-evidence
 
@@ -19,10 +19,12 @@ the truest evidence — the author's choice per scenario, routed by its tag, not
 ride in the same reading as N stills of the same run.
 
 The whole point is that almost nothing is new. `spex yatsu eval --video <clip>` stores the bytes in the same
-shared cache and pushes one `video` entry onto the reading's evidence list; the MIME is sniffed from content
+shared cache and pushes one `video` entry onto the reading's evidence list (`spex blob put` is the same
+transport WITHOUT a reading, [[blob-put]]); the MIME is sniffed from content
 (WebM / MP4) so `/api/yatsu/blob` streams a playable type — and answers **byte ranges**, without which a browser
-clamps every seek to 0; the eval tab ([[yatsu-eval-tab]]) and the session proof
-([[review-proof]]) render the `<video>` inline among the reading's other evidence, lazy on
+clamps every seek to 0; every dashboard home renders the `<video>` inline through the ONE shared evidence
+renderer ([[event-detail]]'s `Evidence.jsx` — the eval tab [[yatsu-eval-tab]], the session proof
+([[review-proof]]), and an issue/eval thread's blob links alike), lazy on
 expand, with the same *miss original file* when the blob is pruned; `spex yatsu show` labels it. A clip is
 heavier bytes, so [[yatsu-core]]'s `clean` (which walks every evidence entry) is the intended prune.
 
@@ -35,5 +37,6 @@ supersede-by-a-newer-reading path, not a new lifecycle. A finding that is *not* 
 cross-cutting problem, or one belonging to **another** node — is instead a **concern raised on the
 responsible node** (a local or forge issue through the unified Issue port — [[proposals]]'s one Issue
 type, whose typed `evidence[]` carries the hash), pointing at the
-clip by its evidence hash; not a hedged verdict here. So video keeps yatsu's verdict binary and routes the
-"needs another look" elsewhere it belongs.
+clip by its evidence hash — and the thread PLAYS that clip inline through the same shared renderer, so the
+concern's evidence is watchable where the concern is read; not a hedged verdict here. So video keeps yatsu's
+verdict binary and routes the "needs another look" elsewhere it belongs.

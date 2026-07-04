@@ -1060,11 +1060,12 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .fv-anchor.static.degraded { color: var(--muted); background: transparent; border-style: dashed;
   border-color: color-mix(in srgb, var(--muted) 45%, var(--line)); }
 .fv-anchor.static.degraded:hover { color: var(--muted); background: transparent; }
-/* a circled frame carried inline by an anchored comment. */
-.fv-frame-img { display: block; max-width: 100%; margin-top: 6px; border: 1px solid var(--line); border-radius: 4px; }
-/* the composer's staged frame previews (derived from the draft's blob links). */
+/* blobs carried inline by a reply — rendered by the ONE shared evidence renderer (Evidence.jsx), sized to
+   their home: full-width in the thread body, thumbnail strip in the composer preview. */
+.fv-reply-media { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+/* the composer's staged evidence previews (derived from the draft's blob links). */
 .fv-frames { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
-.fv-frame { height: 48px; border: 1px solid var(--line); border-radius: 4px; }
+.fv-frames .an-image, .fv-frames .eval-video { height: 48px; width: auto; max-width: none; }
 /* ⏱ — stamp the current frame's anchor onto the comment (only over a clip). */
 .fv-anchor-btn { font-family: var(--mono); font-size: 10.5px; color: var(--orange); background: var(--panel2);
   border: 1px solid color-mix(in srgb, var(--orange) 35%, var(--line)); border-radius: 4px; padding: 3px 10px; cursor: pointer; }
@@ -1512,7 +1513,10 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
    captured proof — a screenshot, a transcript, or — no capture — a muted note. The figure's own
    left-indent/margin position all of them, so the inner blocks carry no padding of their own. */
 .eval-shot { margin: 8px 0 2px; padding-left: 19px; }
-.eval-shot img, .eval-shot .eval-video { display: block; max-width: 100%; background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; }
+.eval-shot img { display: block; max-width: 100%; background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; }
+/* the shared renderer's inline video — sized like an evidence image WHEREVER it plays (eval tab, eval
+   detail gallery, an issue/eval reply's thread). */
+.eval-video { display: block; max-width: 100%; background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; }
 .eval-noimg { font-size: 11px; color: var(--muted); }
 .eval-expected, .eval-note { font-size: 12px; color: var(--ink2); margin: 0 0 6px; }
 .eval-expected-label { color: var(--muted); font-weight: 600; }

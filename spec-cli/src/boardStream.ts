@@ -4,7 +4,7 @@ import { watch, mkdirSync, type FSWatcher } from 'node:fs'
 import { join } from 'node:path'
 import { sessionsRoot, gitCommonDir } from './layout.js'
 import { sessionSignature } from './sessions.js'
-import { buildBoard } from './board.js'
+import { getBoard, invalidateBoard } from './boardCache.js'
 import { unitize, tagOf, diffUnits, type Units } from './boardDelta.js'
 
 // @@@ board-stream — the board's freshness is PUSHED, not polled. A dashboard subscribes here ONCE; in
@@ -48,7 +48,9 @@ async function rebuildAndBroadcast(): Promise<void> {
     do {
       dirty = false
       let board: unknown
-      try { board = await buildBoard() } catch { for (const n of [...plainSubs]) { try { n() } catch { /* swept on abort */ } }; continue }
+      // share the route's single-flight build ([[board-cache]]); fireChanged() already invalidated the
+      // cache, so this gets a fresh build (or joins one a concurrent poll already started).
+      try { board = await getBoard() } catch { for (const n of [...plainSubs]) { try { n() } catch { /* swept on abort */ } }; continue }
       const boardJson = JSON.stringify(board)
       const { units, ok } = unitize(board as Record<string, unknown>)
       const tag = tagOf(units)
@@ -74,6 +76,10 @@ async function rebuildAndBroadcast(): Promise<void> {
 // delta subscribers the debounced fire rebuilds and broadcasts (plain subs then ride the same tag-moved
 // gate — no spurious refetches); without them it stays the zero-build legacy notify.
 function fireChanged(): void {
+  // invalidate the route's board cache ([[board-cache]]) on EVERY change signal, before the debounce guard
+  // — a plain-mode client that polls /api/board (no delta rebuild here) must still see fresh data on its
+  // next poll, and a delta rebuild below re-reads the same now-stale cache.
+  invalidateBoard()
   if (debounce) return
   debounce = setTimeout(() => {
     debounce = null

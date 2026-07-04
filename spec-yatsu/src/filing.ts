@@ -5,10 +5,11 @@ import { putBlob } from './cache.js'
 
 export type FileResult = { ok: true; reading: Reading } | { ok: false; error: string }
 
-// the eval seam over DATA (no argv, no file paths): the dashboard annotator files a human measurement
-// through the SAME append the CLI uses — one seam, two faces. Evidence arrives as text (the annotation
-// report, which references the clip by hash) → a transcript blob in the same content-addressed cache;
-// the evaluator is the human hand, manual@1. yatsu still runs nothing — this only records.
+// the eval seam over DATA (no argv, no file paths): a caller with a verdict in hand — the HTTP eval route,
+// a programmatic filer — appends through the SAME seam the CLI uses. Optional evidence arrives as text (a
+// report referencing the clip by hash) → a transcript blob in the same content-addressed cache; the
+// evaluator is the human hand, manual@1. yatsu still runs nothing — this only records. The dashboard files
+// nothing through this: [[event-detail]] is read-side on readings.
 export function fileHumanReading(
   nodeId: string,
   input: { scenario: string; status: 'pass' | 'fail'; note?: string; transcript?: string; by?: string },

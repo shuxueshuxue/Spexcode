@@ -47,7 +47,10 @@ one debounced fire that collapses a burst (a merge touches many records) into on
 subscribers get the zero-cost notify they always did, and a closed dashboard costs nothing (the polls stop
 with their last subscriber). With delta subscribers the debounced fire rebuilds ONCE, broadcasts the patch
 to every delta stream, and notifies plain streams only when the board's content tag actually moved — so a
-signature wiggle that changes nothing no longer triggers a fleet of pointless refetches. Every source and
+signature wiggle that changes nothing no longer triggers a fleet of pointless refetches. That rebuild now
+goes through [[board-cache]]'s single-flight `getBoard()`, so the SSE rebuild and a concurrent `/api/board`
+poll share ONE assembly; and every change source calls `invalidateBoard()` before its debounce fires, so
+the route's cache never lags a change the stream would push. Every source and
 watch is best-effort and never throws: a source that can't start just leaves that path to the cold tick or
 the client's own fallback.
 

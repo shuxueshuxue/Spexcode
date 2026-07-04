@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react'
 
 // The app's URL layer ([[side-nav]]): every top-level page has its own address, so a page can be
 // bookmarked, reloaded, and history-navigated like any modern app. HASH routes (#/graph, #/sessions,
-// #/sessions/<id>, #/issues, #/settings) — deliberately not the History API: the dashboard ships as a
-// static dist behind plain file servers/gateways with no index.html fallback, and a hash route needs
-// nothing from the server. No router dependency for four pages.
+// #/sessions/<id>, #/evals, #/issues, #/settings) — deliberately not the History API: the dashboard ships
+// as a static dist behind plain file servers/gateways with no index.html fallback, and a hash route needs
+// nothing from the server. No router dependency for five pages.
 
-export const PAGES = ['graph', 'sessions', 'issues', 'settings']
+export const PAGES = ['graph', 'sessions', 'evals', 'issues', 'settings']
 
 // '#/sessions/abc' → { page: 'sessions', param: 'abc' }. Anything unknown lands on graph (the home page).
 export function parseRoute(hash) {

@@ -4,8 +4,9 @@ import { useT } from './i18n/index.jsx'
 
 // The dashboard's ONE mention-autocomplete ([[mentions]]): the `[[node]]` (topic) and `@session` (actor)
 // triggers, their ranking, and the dropdown — shared by every input box that takes the grammar (the session
-// console's New prompt + ❯ inbox in SessionInterface.jsx, the forum's reply/new-thread composers in
-// IssuesView.jsx). One implementation, never a per-surface fork: the CLI resolver is the semantics, this is
+// console's New prompt + ❯ inbox in SessionInterface.jsx, the Issues page's reply/new-thread composers in
+// IssuesPage.jsx, the eval remark composer in EventDetail.jsx). One implementation, never a per-surface
+// fork: the CLI resolver is the semantics, this is
 // its thin autocomplete.
 
 // a `[[<id>]]` (Obsidian double-bracket) node-mention token. Optional leading dot so `[[.config]]` resolves

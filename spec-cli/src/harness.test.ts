@@ -89,6 +89,18 @@ test('codex launch puts --dangerously-bypass-hook-trust on the RESUME TUI, not o
   } finally { delete process.env.SPEXCODE_CODEX_BYPASS_HOOK_TRUST }
 })
 
+test('codex launch EXPORTS the launcher cmd so codex-launch probes the SAME codex (not a fallback bare `codex`)', () => {
+  // Regression: on a multi-codex box (old Homebrew `codex` on PATH beside the launcher's newer one), codex-launch's
+  // bypass-trust gate resolved `SPEXCODE_CODEX_CMD || 'codex'` — which the launch never set — so it probed the WRONG
+  // (old, flag-less) binary, decided "no bypass support", dropped the thread/start bypass, and NO hooks fired. The
+  // launch already holds the real launcher cmd; it must pin it into the env the codex-launch child inherits.
+  const cmd = codexLaunchCommand('s', '/opt/nvm/v22/bin/codex --yolo', undefined, '/tmp/spex-project')
+  // (the export sits inside the outer `bash -lc '…'`, so its own quotes are shell-escaped as '\'' — match loosely)
+  assert.match(cmd, /export SPEXCODE_CODEX_CMD=\S*\/opt\/nvm\/v22\/bin\/codex --yolo/)
+  // and the export precedes the codex-launch call in the same script, so the child inherits it
+  assert.ok(cmd.indexOf('export SPEXCODE_CODEX_CMD') < cmd.indexOf('codex-launch "$sock"'))
+})
+
 test('codexRolloutExists finds a thread by id only once its rollout file lands on disk', () => {
   const home = mkdtempSync(join(tmpdir(), 'cx-home-'))
   const day = join(home, '2026', '07', '03')

@@ -152,7 +152,7 @@ focus is **outside** any text input. To switch tabs while typing, use the modifi
 **⌘/⌥/⌃+↑/↓** are an **unconditional** switch — they step the selection up/down the list from anywhere, no
 matter which input has focus or what mode you're in (the guaranteed up/down switch a chat app gives you), even
 while nav mode forwards raw keys. **⌥+N** reaching the New Session composer is no longer this console's own
-chord — it belongs to [[side-nav]]'s app-global ⌥ command family (⌥N / ⌥F / ⌥1..⌥4), which the console's
+chord — it belongs to [[side-nav]]'s app-global ⌥ command family (⌥N / ⌥F / ⌥1..⌥5), which the console's
 key handling deliberately **falls through unhandled** — nav mode included — so the window-level handler
 routes it and tmux never sees `M-n`/`M-f`/`M-digit`. (The family is ⌥-based for the same hard browser limit
 that shaped the old chord: **⌘+N/⌃+N are the browser's reserved new-window accelerator** whose keydown never

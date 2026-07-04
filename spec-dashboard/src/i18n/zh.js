@@ -42,8 +42,9 @@ export default {
     railLabel: '主导航',
     graph: '规格节点图（⌥1）',
     sessions: '会话面板（⌥2）',
-    issues: '议题（⌥3 / ⌥F）',
-    settings: '设置（⌥4）',
+    evals: 'Evals（⌥3 / ⌥F）',
+    issues: '议题（⌥4）',
+    settings: '设置（⌥5）',
   },
 
   hud: {
@@ -60,6 +61,11 @@ export default {
     annotate: '打开并标注',
   },
 
+  masterList: {
+    fold: '折叠列表 — 让详情占满宽度',
+    unfold: '展开列表',
+  },
+
   annotator: {
     title: '标注器',
     hint: '点击画面 播放/暂停 · 拖拽圈出问题 — 它会成为下方一条锚定到该时刻的评论；或点 ⏱ 把一条纯文字备注锚到当前帧。',
@@ -67,9 +73,6 @@ export default {
     play: '播放',
     pause: '暂停',
     capturing: '正在截取画面…',
-    notePh: '判定备注…',
-    fileReading: '记一条 reading',
-    readingFiled: 'reading 已记录 ✓',
     failed: '失败 — 后端在跑吗？',
     comments: ({ n }) => (n ? `评审轨道（${n}）` : '评审轨道'),
     abOlder: '更早的 reading（‹ 靠近 A / 复现出的 bug）',
@@ -125,7 +128,7 @@ export default {
       overlayCycle: '在工作树正在修改的节点间循环（⇧ 反向）',
       enter: '进入聚焦节点的实时会话',
       fresh: '在聚焦节点上开启一个全新会话',
-      issues: '打开 issues 页（本地议题 + forge，同一张列表）',
+      evals: '打开 evals 页（项目当前的实测损失）',
       newChild: '在聚焦节点下新建子节点（连击）',
       del: '删除聚焦节点（连击）',
       settings: '打开设置（语言…）',

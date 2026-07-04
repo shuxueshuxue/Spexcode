@@ -1,0 +1,25 @@
+{
+ "v": 1,
+ "events": [
+  {
+   "tMs": 0,
+   "step": "New prompt grows without a scrollbar below the cap"
+  },
+  {
+   "tMs": 36616,
+   "step": "2 lines: h=43 overflowY=hidden"
+  },
+  {
+   "tMs": 38979,
+   "step": "4 lines: h=82 overflowY=hidden"
+  },
+  {
+   "tMs": 42606,
+   "step": "7 lines: h=141 overflowY=hidden"
+  },
+  {
+   "tMs": 47396,
+   "step": "past cap: h=180 overflowY=auto scrollable=true"
+  }
+ ]
+}

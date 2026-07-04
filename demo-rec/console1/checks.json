@@ -1,0 +1,98 @@
+{
+ "tabs": {
+  "tabs": [
+   {
+    "t": "terminal",
+    "on": true
+   },
+   {
+    "t": "eval",
+    "on": false
+   }
+  ],
+  "termVisible": true,
+  "dock": true,
+  "dockDisabled": false,
+  "tabbarBg": "rgb(244, 238, 218)",
+  "termBg": "rgb(13, 17, 23)"
+ },
+ "grownBefore": 102,
+ "tab2": {
+  "termInDom": true,
+  "termDisplay": "none",
+  "dockVisible": false,
+  "proofPane": false,
+  "evalPane": false,
+  "iframe": false,
+  "paneClasses": [
+   "si-session-wrap",
+   "si-tabbar",
+   "si-tabs",
+   "si-tab",
+   "si-actions",
+   "si-act",
+   "si-term-body",
+   "si-term-layer",
+   "st-wrap",
+   "st-host",
+   "terminal",
+   "xterm-viewport"
+  ]
+ },
+ "roundtrip": {
+  "termVisible": true,
+  "dockH": 102,
+  "draft": 5
+ },
+ "darkTabbar": {
+  "tabbarBg": "rgb(22, 27, 34)",
+  "termBg": "rgb(13, 17, 23)"
+ },
+ "dockRest": {
+  "termBottom": 946,
+  "botTop": 946,
+  "overlap": false,
+  "termRect": {
+   "y": 32,
+   "h": 914
+  }
+ },
+ "dockGrown": {
+  "y": 32,
+  "h": 914
+ },
+ "growth": [
+  {
+   "h": 24,
+   "oy": "hidden",
+   "scrollable": false
+  },
+  {
+   "h": 43,
+   "oy": "hidden",
+   "scrollable": false
+  },
+  {
+   "h": 82,
+   "oy": "hidden",
+   "scrollable": false
+  },
+  {
+   "h": 141,
+   "oy": "hidden",
+   "scrollable": false
+  },
+  {
+   "h": 180,
+   "oy": "auto",
+   "scrollable": true
+  }
+ ],
+ "statusColours": [
+  {
+   "label": "◇?Idle fixture awaiting instru",
+   "word": "",
+   "color": null
+  }
+ ]
+}

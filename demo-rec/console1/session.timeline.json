@@ -1,0 +1,79 @@
+{
+ "events": [
+  {
+   "atMs": 7448,
+   "kind": "narrate",
+   "label": "\u25b6 terminal-proof-tabs \u00b7 tab bar, inline proof, term survives round-trip"
+  },
+  {
+   "atMs": 15905,
+   "kind": "frame",
+   "label": "\ud83d\udcf7 console open on live fixture"
+  },
+  {
+   "atMs": 19994,
+   "kind": "frame",
+   "label": "\ud83d\udcf7 default tab=[{\"t\":\"terminal\",\"on\":true},{\"t\":\"eval\",\"on\":false}] termVisible=true"
+  },
+  {
+   "atMs": 28367,
+   "kind": "frame",
+   "label": "\ud83d\udcf7 \u276f grown to 102px (unsent draft)"
+  },
+  {
+   "atMs": 31544,
+   "kind": "frame",
+   "label": "\ud83d\udcf7 tab2(eval): termInDom=true display=none proofPane=false"
+  },
+  {
+   "atMs": 34548,
+   "kind": "frame",
+   "label": "\ud83d\udcf7 back on terminal: visible=true dockH=102 draftLines=5"
+  },
+  {
+   "atMs": 43599,
+   "kind": "frame",
+   "label": "\ud83d\udcf7 dark theme: tabbar=rgb(22, 27, 34) vs term=rgb(13, 17, 23)"
+  },
+  {
+   "atMs": 46977,
+   "kind": "narrate",
+   "label": "\u25b6 input-dock-reserves-bottom-strip \u00b7 terminal ends above the resting dock; growth overlays"
+  },
+  {
+   "atMs": 52287,
+   "kind": "frame",
+   "label": "\ud83d\udcf7 rest: term.bottom=946 dock.top=946 overlap=false"
+  },
+  {
+   "atMs": 59996,
+   "kind": "frame",
+   "label": "\ud83d\udcf7 grown: term rect y=32 h=914 (unchanged=true)"
+  },
+  {
+   "atMs": 60211,
+   "kind": "narrate",
+   "label": "\u25b6 input-grows-no-premature-scrollbar \u00b7 New prompt grows without a scrollbar below the cap"
+  },
+  {
+   "atMs": 96827,
+   "kind": "frame",
+   "label": "\ud83d\udcf7 2 lines: h=43 overflowY=hidden"
+  },
+  {
+   "atMs": 99190,
+   "kind": "frame",
+   "label": "\ud83d\udcf7 4 lines: h=82 overflowY=hidden"
+  },
+  {
+   "atMs": 102817,
+   "kind": "frame",
+   "label": "\ud83d\udcf7 7 lines: h=141 overflowY=hidden"
+  },
+  {
+   "atMs": 107607,
+   "kind": "frame",
+   "label": "\ud83d\udcf7 past cap: h=180 overflowY=auto scrollable=true"
+  }
+ ]
+}

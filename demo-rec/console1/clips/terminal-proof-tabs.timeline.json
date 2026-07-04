@@ -1,0 +1,33 @@
+{
+ "v": 1,
+ "events": [
+  {
+   "tMs": 0,
+   "step": "tab bar, inline proof, term survives round-trip"
+  },
+  {
+   "tMs": 8457,
+   "step": "console open on live fixture"
+  },
+  {
+   "tMs": 12546,
+   "step": "default tab=[{\"t\":\"terminal\",\"on\":true},{\"t\":\"eval\",\"on\":false}] termVisible=true"
+  },
+  {
+   "tMs": 20919,
+   "step": "❯ grown to 102px (unsent draft)"
+  },
+  {
+   "tMs": 24096,
+   "step": "tab2(eval): termInDom=true display=none proofPane=false"
+  },
+  {
+   "tMs": 27100,
+   "step": "back on terminal: visible=true dockH=102 draftLines=5"
+  },
+  {
+   "tMs": 36151,
+   "step": "dark theme: tabbar=rgb(22, 27, 34) vs term=rgb(13, 17, 23)"
+  }
+ ]
+}

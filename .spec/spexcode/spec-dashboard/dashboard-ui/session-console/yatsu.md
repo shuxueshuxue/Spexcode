@@ -123,19 +123,23 @@ scenarios:
   - name: status-word-colour
     tags: [frontend-e2e, desktop]
     description: >
-      Through the running dashboard in a real browser, with several live sessions in DIFFERENT states (at
-      minimum a `working`, an `asking`, and a `close-pending`), look at the top-left SessionWindow glance.
-      For each row read the status word's RENDERED colour (computed `color`), not just its text, and compare
-      against the pre-change baseline (the MAIN dashboard, where every status word is the same muted grey).
-      Screenshot the SessionWindow on both so the contrast is visible.
+      Through the running dashboard in a real browser, with live sessions in DIFFERENT states, look at the
+      top-left SessionWindow glance. Each row's status carrier is coloured from the single STATUS_COLOR map:
+      in the compact glance that carrier is the `.sess-glyph` mark (`STATUS_GLYPH[status]`, the status WORD
+      kept in its `title`/`aria-label`); the expanded row draws the word itself as `.sess-status`. Both read
+      the SAME `STATUS_COLOR[status]`, so read the carrier's computed `color` per row (glyph in the compact
+      glance, word when expanded) and compare against the pre-change baseline (the MAIN dashboard, one muted
+      grey for all). Screenshot the SessionWindow so the per-bucket contrast is visible.
     expected: |
-      On the changed dashboard each status word is painted by its bucket hue from the single STATUS_COLOR
-      map — four hues only: `working` and `parked` green (var --green = rgb(133,153,0)); the waiting-on-you
-      states `asking`/`review`/`done` yellow (var --yellow = rgb(181,137,0)); `error` red; and the dormant
-      rest (`idle`/`starting`/`queued`/`close-pending`/`offline`) muted grey (rgb(147,161,161)). On the
-      MAIN baseline every word is that same muted grey regardless of state. The word's colour equals the
-      session's liveness-dot colour on the surfaces that draw a dot (same source), and `working` green
-      matches the avatar's liveness ring — dot, word, and ring never disagree.
+      Each status carrier is painted by its bucket hue from the single STATUS_COLOR map — four buckets only:
+      `working` and `parked` green (var --green = rgb(133,153,0)); the waiting-on-you states
+      `asking`/`review`/`done` yellow (var --yellow = rgb(181,137,0)); `error` red; and the dormant rest
+      (`idle`/`starting`/`queued`/`close-pending`/`offline`) muted grey (rgb(147,161,161)). The compact
+      glyph and the expanded word are ONE source: `.sess-glyph` and `.sess-status` both take
+      `STATUS_COLOR[status]`, so a bucket reads the same hue whichever renders. On the MAIN baseline every
+      carrier is that same muted grey regardless of state. The carrier's colour equals the session's
+      liveness-dot colour on the surfaces that draw a dot (same source), and `working` green matches the
+      avatar's liveness ring — dot, glyph/word, and ring never disagree.
   - name: nav-mode-modifier-combos-reach-the-terminal
     tags: [frontend-e2e, desktop]
     description: >

@@ -113,7 +113,7 @@
 <figcaption>图 6 · remark 上墙:评审轨第 3 条,锚点 chip + 圈选帧图内嵌,滑轨新 marker</figcaption>
 </figure>
 
-<p>这一段演示本身就是 dogfood:录制它的会话把这两个场景当真实测量跑了一遍,<code>spex yatsu eval --video --timeline</code> 归档了两条带剪辑+时间线的新读数——录 demo 的过程同时给仓库补上了它当时缺失的新鲜视频读数(之前为 0)。</p>
+<p>这一段演示本身就是 dogfood:录制它的会话把这两个场景当真实测量跑了一遍,<code>spex yatsu eval --video --timeline</code> 归档了两条带剪辑+时间线的新读数——录 demo 的过程同时给仓库补上了它当时缺失的新鲜视频读数(之前为 0)。更妙的是:就在录制进行的同一时段,另一个会话的真浏览器重测抓到了一个真 regression(页面拆分让 #/evals 的 @-派发回显静默失声),按 fail→pass 的 A/B 纪律修复合并——<strong>这个工具在用自己录自己的宣传素材时,还顺手修了自己的 bug</strong>。</p>
 
 <h2>它不只治理自己</h2>
 <p>除了自我狗粮,我们拿它治理了两个真实项目:一个跨平台 AI coding agent(<strong>417 个 spec 节点、300+ 条测量读数,测出了真 bug</strong>),和一个 Electron 桌面应用(~99 节点)。提取 spec、并行派发 worker、真浏览器 e2e 测量,整条链路都是在别人的代码库上跑通的。</p>

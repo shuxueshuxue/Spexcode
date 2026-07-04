@@ -180,9 +180,11 @@ export async function specLint(): Promise<Finding[]> {
     out.push({ level: 'warn', rule: 'owners', msg: `${over.length} file(s) are governed by > ${cfg.maxOwners} nodes — each holds more separately-specified functionality than one file should. Worst: ${top}. SPLIT the file so each governor owns its own module (or merge the nodes, or give it a single foundation owner + related:).` })
   }
 
-  // drift: a governed file has commits NOT yet reflected in its spec. Rigorous by git ancestry —
-  // loadSpecs computes `driftFiles` via `git rev-list <spec's last version>..HEAD -- <file>` (see
-  // commitsSince in git.ts), so each warning is "N commit(s) ahead", not a timestamp guess.
+  // drift: a governed file has commits NOT yet reflected in its spec. Judged by true git ancestry —
+  // loadSpecs computes `driftFiles` via driftFor() over the one cached driftIndex walk (git.ts): a
+  // commit to the file counts iff it is NOT reachable from the spec's latest version (in-memory
+  // parent-edge reachability, the equivalent of `rev-list <version>..HEAD -- <file>`), never a
+  // log-position or timestamp guess.
   for (const s of specs) {
     for (const d of s.driftFiles)
       out.push({ level: 'warn', rule: 'drift', spec: s.id, file: d.file, msg: `${d.file} is ${d.behind} commit(s) ahead of spec '${s.id}' (v${s.version}) — may be stale` })

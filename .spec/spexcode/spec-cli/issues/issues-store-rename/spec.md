@@ -15,17 +15,17 @@ the bottom-most name there is. So it goes too: the store now lives at `.spec/.is
 named, top to bottom, as what it holds — a **local Issue**.
 
 The one thing a data-dir rename must not do is break a running deployment or lose a thread. The store is
-plain git-tracked files under a fixed path ([[proposals]]); an old toolchain reads `.spec/.forum`, a new one
+plain git-tracked files under a fixed path ([[local-issues]]); an old toolchain reads `.spec/.forum`, a new one
 reads `.spec/.issues`, and the gap between "toolchain updated" and "directory moved" is exactly where a
 deployment would silently read an empty store. So the rename cannot be a manual step someone remembers to
 run on each box — it has to ride the store's own first touch.
 
 ## expanded spec
 
-**One mechanism, no per-deployment branch.** [[proposals]] owns the store's whole seam, so the migration
+**One mechanism, no per-deployment branch.** [[local-issues]] owns the store's whole seam, so the migration
 lives there too and every deployment migrates itself the same way — there is no host-specific if/else and no
 operator checklist. The trigger is the store's **first touch** after the toolchain updates: any read (the
-board, `spex issues`) or any write (a propose/reply/remark) reaches the store through [[proposals]], and
+board, `spex issues`) or any write (an open/reply/remark) reaches the store through [[local-issues]], and
 that is where the legacy directory is noticed and moved, before the touch proceeds. A fresh repo that never
 had `.spec/.forum` skips it entirely; a deployment that already migrated skips it on the fast path with no
 work.
@@ -39,7 +39,7 @@ reads identically. The commit is data, not a spec version (a pure rename bumps n
 
 **Atomic against a first-touch burst, loud on the pathological case.** SpexCode runs parallel workers, so
 the first store touch after an update can arrive from several at once. The find-check-move runs under the
-same store lock every write already holds ([[proposals]]), so a burst produces **exactly one** rename
+same store lock every write already holds ([[local-issues]]), so a burst produces **exactly one** rename
 commit: the racer that waited re-checks under the lock and finds the move already done. The one state the
 store must never resolve by guessing is **both** directories present — a genuine `.spec/.forum` *and* a
 genuine `.spec/.issues` — since auto-merging could drop threads; that fails **loud** with the manual repair,

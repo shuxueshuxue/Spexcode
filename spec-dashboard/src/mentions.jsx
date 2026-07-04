@@ -139,7 +139,7 @@ export function MentionMenu({ menu, up, onPick, onHover }) {
   )
 }
 
-// the whole autocomplete as ONE hook, for a plain textarea/input surface (the forum composers): owns the
+// the whole autocomplete as ONE hook, for a plain textarea/input surface (the issue composers): owns the
 // menu state, recomputes it from the live caret (sync), inserts the picked token (`[[<id>]] ` / `@<id> `)
 // and drops the caret after it, and claims ↑/↓/Enter/Tab/Esc WHILE the menu is open (onKeyDown returns true
 // when it consumed the key — Esc closes the menu only, never the page). The console keeps its own window-

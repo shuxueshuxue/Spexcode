@@ -21,7 +21,7 @@ export default function SessionEvalPane({ sessionId, specs = [], sessions = [] }
   const seq = useRef(0)
 
   // refetch the session evals model — the source that folds each reading's trunk remark thread (entry.thread),
-  // so a remark authored from the detail composer shows up here after it lands (a .forum commit fires no board
+  // so a remark authored from the detail composer shows up here after it lands (an issue-store commit fires no board
   // SSE, so the write path pulls this explicitly). A seq guard drops a stale response from a prior session.
   const loadModel = useCallback(() => {
     const mine = ++seq.current

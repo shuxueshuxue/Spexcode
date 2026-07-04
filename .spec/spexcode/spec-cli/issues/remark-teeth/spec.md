@@ -26,7 +26,7 @@ join **server-side** so every surface reads the SAME overlay.
 
 Freshness was three git-derived axes (`code` | `scenario` | `evaluator`): a reading stales when a governed
 file, the scenario's content, or the evaluator version moves past its codeSha. The remark adds a fourth
-axis that is **not** git-derived — it is read from the trunk forum's remark track:
+axis that is **not** git-derived — it is read from the trunk issue store's remark track:
 
 > **clean ⟺ latest reading passes ∧ no code drift ∧ every remark resolved ∧ the latest reading post-dates
 > the *resolution* of every remark.**
@@ -44,7 +44,7 @@ follow, and they are the whole point:
 
 This is one computation, fed at the call sites — `freshness.ts` stays a **pure** function: it takes the
 scenario's remark track as an explicit parameter (`{resolved, resolvedAt}` signals) alongside the git
-indices, never reaching into the forum itself. Every surface that scores a reading passes the same track,
+indices, never reaching into the issue store itself. Every surface that scores a reading passes the same track,
 so the axis fires identically in `spex yatsu scan`, the eval tab, the board fold, the session proof, and
 the dashboard score ring. The CLI is the whole model: `spex yatsu scan` shows the `remark` axis with no
 server running.
@@ -53,7 +53,7 @@ server running.
 
 The remark track lives **once in trunk**, keyed `(node, scenario)` by its `eval: <node> · <scenario>`
 concern thread ([[remark-substrate]]'s R4). Reading it is a single function — `loadEvalRemarkTracks` — that
-splits those eval-concern threads out of the forum and hands back, per pair, the thread plus its remark
+splits those eval-concern threads out of the issue store and hands back, per pair, the thread plus its remark
 replies. That is the join the dashboard's `EventDetail.jsx` used to compute **client-side** (concern-key
 matching against a resident issues list). Lifting it server-side means `buildSessionEvals`, the board fold,
 the CLI, and the annotator all read **one** join instead of each re-deriving it.

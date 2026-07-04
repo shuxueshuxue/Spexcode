@@ -3,10 +3,10 @@ scenarios:
   - name: merged-read
     tags: [cli]
     code: spec-cli/src/issues.ts
-    related: [spec-cli/src/proposals.ts, spec-forge/src/links.ts]
+    related: [spec-cli/src/localIssues.ts, spec-forge/src/links.ts]
     description: >-
       In a repo with BOTH stores populated — real forge issues (some carrying `Spec:` markers) and a local
-      forum thread — run `spex issues` / `spex issues --all --json` through the real CLI.
+      local thread — run `spex issues` / `spex issues --all --json` through the real CLI.
     expected: >-
       ONE list carries both stores, each issue store-tagged (`local` / the forge host) with the same shape:
       a forge issue arrives with by=forge author, created=forge timestamp, its permalink url, and its
@@ -33,11 +33,11 @@ scenarios:
     code: spec-cli/src/issues.ts
     related: [spec-forge/src/drivers/github.ts, spec-cli/src/mentions.ts]
     description: >-
-      Against the REAL forge, reply to a `github#N` issue through the one store-routed verb (`spex propose
+      Against the REAL forge, reply to a `github#N` issue through the one store-routed verb (`spex issues
       reply github#N --body …` / `POST /api/issues/:id/reply`), then read the merged list back.
     expected: >-
       A REAL comment lands on the GitHub issue (visible via `gh issue view`), and the next merged read
-      carries it in that issue's replies[] in the SAME Reply shape a forum thread has (by = the forge
+      carries it in that issue's replies[] in the SAME Reply shape a local thread has (by = the forge
       commenter, at, body) — the read-back, never a local echo. An @new/@session in the reply text
       dispatches exactly as a local reply's would (the mention fires on the words, not the store). An
       unreachable forge fails loud with nothing queued; the local store is untouched throughout.
@@ -54,7 +54,7 @@ scenarios:
 
 # measuring issues
 
-YATU through the real `spex issues` against a real forge (`gh`) and the real trunk forum — never a mocked
+YATU through the real `spex issues` against a real forge (`gh`) and the real trunk store — never a mocked
 driver. The merged-read is measured in the live repo itself (its GitHub issues + a genuine local concern);
 the degrade leg in a throwaway repo with no forge. The loss is the gap between the one-object claim and
 the reading: same shape both stores — threads included — markers invisible downstream, a forge reply a

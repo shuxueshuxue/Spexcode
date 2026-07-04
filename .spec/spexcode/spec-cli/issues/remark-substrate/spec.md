@@ -5,7 +5,7 @@ hue: 210
 desc: The remark — one durable interaction primitive that attaches a resolvable concern to a host (an issue OR a scenario reading), authored from the CLI. A remark is a reply that carries a mutable resolved bit and the reading it was measured against; plain replies are untouched. The whole author→resolve→retract loop is CLI-first, so the dashboard adds no capability.
 related:
   - spec-cli/src/issues.ts
-  - spec-cli/src/proposals.ts
+  - spec-cli/src/localIssues.ts
   - spec-cli/src/index.ts
 ---
 # remark-substrate
@@ -25,22 +25,22 @@ remark may attach to an issue **or** a scenario, remark-ness can't be positional
 carries. The bit is the marker.
 
 - **Host.** A remark attaches to a *host*: a local issue, or a scenario keyed by `(node, scenario)`. The
-  scenario track is not a new store — it reuses the existing lazy eval thread (one local forum thread per
+  scenario track is not a new store — it reuses the existing lazy eval thread (one local issue thread per
   pair, keyed by its `eval: <node> · <scenario>` concern); every remark on it — the first included — is a
   reply, never the thread body, so the resolved bit lives in one place. That one-thread-per-pair guarantee is
-  **atomic**: find-or-create runs inside the forum lock, so a concurrent burst of first-remarks on a fresh
+  **atomic**: find-or-create runs inside the store lock, so a concurrent burst of first-remarks on a fresh
   pair (normal, with parallel workers) can't mint two threads — a duplicate would be invisible to the concern
   key and never fire its teeth (R4).
 - **Pinned to a reading.** A remark records the **codeSha it was authored against** (the worktree HEAD by
   default; overridable). Later milestones hang the freshness teeth on this — a remark ages its scenario until
   a fresh reading *after* a resolve clears it — so it must remember which reading it judged.
-- **Trunk-scoped.** Remarks are not code-bound, so they live in the trunk forum, always visible, never
+- **Trunk-scoped.** Remarks are not code-bound, so they live in the trunk issue store, always visible, never
   branch-scoped. A human can remark an un-merged worktree eval without merging — it is overlaid onto the
   reading at read time.
 
 ## The three verbs
 
-Thin wrappers over the forum write path — a remark is a trunk-committed reply that also carries the bit:
+Thin wrappers over the store write path — a remark is a trunk-committed reply that also carries the bit:
 
 - **author** — records a remark on a host, stamping the target codeSha and a fresh unresolved bit.
 - **resolve** — flips the bit to resolved and stamps who/when. This has *teeth*: it is a **deliberate**

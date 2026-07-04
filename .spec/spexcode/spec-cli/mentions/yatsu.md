@@ -22,12 +22,12 @@ scenarios:
       reply-instead-of-re-implementing instruction, and the outcome line carries the ⚠ thread-<status>
       warning. Open or unknown status: no note, no warning — the guard never fires on live work or on a
       forge reply whose state is unknown at write time.
-  - name: forum-dispatch-wiring
+  - name: issue-dispatch-wiring
     tags: [cli]
     code: spec-cli/src/mentions.ts
-    related: [spec-cli/src/proposals.ts]
+    related: [spec-cli/src/localIssues.ts]
     description: >-
-      Through the real CLI, post a forum reply/proposal whose body `@`-mentions an actor and also writes a
+      Through the real CLI, post an issue reply/thread whose body `@`-mentions an actor and also writes a
       `[[node]]` ref, in a repo with no live sessions.
     expected: >-
       The post is committed regardless (storage and delivery are separate); dispatch is best-effort and LOUD —
@@ -38,7 +38,7 @@ scenarios:
 
 # measuring mentions
 
-YATU through the real `mentions` module and the real `spex propose`/`note` CLI. The pure grammar (parse +
-resolve) is measured directly on the exported functions; the wiring is measured by posting to the forum and
+YATU through the real `mentions` module and the real `spex issues`/`note` CLI. The pure grammar (parse +
+resolve) is measured directly on the exported functions; the wiring is measured by posting to the issue store and
 reading the loud dispatch summary. The one part that needs a running backend + live sessions — an actual
 `sendKeys` delivery and an `@new` spawn — is deferred to a real-deployment measurement, not faked here.

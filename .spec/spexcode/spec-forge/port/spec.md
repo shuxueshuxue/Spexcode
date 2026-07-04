@@ -16,7 +16,7 @@ Unlike a projection, the port **reads the forge**. Its two verbs fetch a host's 
 `listIssues() → ForgeIssue[]` (issues of **all** states, so closed work stays linkable, not just live
 issues) and `listPRs() → ForgePR[]` (open PRs). `ForgeIssue` is the small stable subset an
 issue collapses to on every host (number, title, body, url, state, labels, author, createdAt — the body is
-where the `Spec: <id>` marker lives; author/createdAt are what lets a forge issue stand beside a forum
+where the `Spec: <id>` marker lives; author/createdAt are what lets a forge issue stand beside a local issue
 thread as the same object in the unified Issue port, spec-cli's [[issues]], with a `by` and a `created`).
 It also carries the issue's **comments** (`ForgeComment[]`: author, createdAt, body — exactly what becomes
 a unified Issue's `replies[]`), riding the same list reads rather than a second fetch path: the gh list

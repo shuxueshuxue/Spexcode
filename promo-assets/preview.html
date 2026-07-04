@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>linux.do 宣传稿预览 — SpexCode</title>
+<style>
+  :root { --bg:#fafafa; --fg:#222; --muted:#777; --accent:#0088cc; --border:#e3e3e3; --code:#f4f4f4; }
+  body { background:var(--bg); color:var(--fg); font:16px/1.75 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; margin:0; }
+  .banner { background:#fff3cd; border-bottom:1px solid #ffe69c; color:#664d03; padding:10px 24px; font-size:14px; }
+  main { max-width: 860px; margin: 0 auto; padding: 32px 24px 80px; }
+  h1 { font-size: 26px; line-height:1.4; }
+  h2 { font-size: 21px; margin-top:2.2em; border-bottom:1px solid var(--border); padding-bottom:6px; }
+  h3 { font-size: 17px; margin-top:1.8em; }
+  blockquote { border-left: 4px solid var(--accent); margin:1em 0; padding: 8px 16px; background:#fff; color:#444; }
+  code { background:var(--code); padding:2px 5px; border-radius:4px; font-size:14px; }
+  pre { background:#1a1b26; color:#c0caf5; padding:16px 20px; border-radius:8px; overflow-x:auto; font-size:14px; }
+  pre code { background:none; padding:0; color:inherit; }
+  img.shot, video.shot { width:100%; border:1px solid var(--border); border-radius:10px; box-shadow:0 4px 18px rgba(0,0,0,.08); margin:10px 0 4px; }
+  figcaption { color:var(--muted); font-size:13px; margin-bottom:1.5em; }
+  .titles { background:#fff; border:1px solid var(--border); border-radius:10px; padding:16px 20px; }
+  .titles li { margin:6px 0; }
+  .rec { color:var(--accent); font-weight:600; }
+  a { color:var(--accent); }
+  .meta { color:var(--muted); font-size:14px; }
+  hr { border:none; border-top:1px solid var(--border); margin:2.5em 0; }
+</style>
+<div class="banner">📝 草稿预览 — 拟发 linux.do · 素材均为 2026-07-04 从 live 产品实拍 · 分支 node/session-6b36</div>
+<main>
+
+<section class="titles">
+<strong>标题候选(按推荐排序):</strong>
+<ol>
+<li class="rec">17 天前我给 Claude 发了一段中文 prompt,今天它长成了一个自己治理自己的开源 dev 工具</li>
+<li>用 AI 写代码的"第二天问题":第一天是它教你,第二天起是你在教它——我们造了个工具来解决这个</li>
+<li>spec 驱动开发的两种死法,以及我们怎么用 git 当数据库把它救活的</li>
+</ol>
+</section>
+
+<h1>17 天前我给 Claude 发了一段中文 prompt,今天它长成了一个自己治理自己的开源 dev 工具</h1>
+
+<p>17 天前(6 月 17 日),我给 Claude Code 发了这么一段 prompt:</p>
+
+<blockquote>一个 node-graph 形态的界面,每个节点是一个 spec,spec 呈现树状关系。spec 有版本变迁历史,每次版本变迁都 attribute 到一个 claude code session。用户的所有指令落实到一个具体的 spec 节点上,也可以由一个层级较高的 spec 节点来进行子节点自动分配和创建,节点上只能有一个正在工作的 claude code session,每个 claude code session 都在自己的 worktree 里面,都是基于最新的 main 分支创建的。</blockquote>
+
+<p>今天,这段 prompt 逐字保存在这个项目自己的 spec 树的根节点里,而围绕它长出来的东西是:<strong>1642 个 commit、594 次 merge、143 个 spec 节点、750 条带截图/视频证据的测量记录</strong>——一个已经发到 npm 的开源工具,叫 <strong>SpexCode</strong>。最魔幻的是:从第一周起,它的每一次改动就都是用它自己管理的。</p>
+
+<figure>
+<img class="shot" src="01-board-full.png" alt="dashboard 板视图全景">
+<figcaption>图 1 · dashboard 板全景:spec 树 + 左侧实时会话栏(细看 RUNNING 里有一条"编写Linux.do社区宣传稿"——写这篇帖子的会话本身也在板上)</figcaption>
+</figure>
+
+<figure>
+<video class="shot" src="05-board-tour.webm" controls muted loop></video>
+<figcaption>视频 · 20 秒巡览:板 → 下钻 spec-cli → 节点场景 → 损失信号页</figcaption>
+</figure>
+
+<h2>先说痛点:AI 写代码的"第二天问题"</h2>
+<p>用 Claude Code / Codex 这类 agent 写代码,第一天体验都很好。问题从第二天开始:</p>
+<ul>
+<li>agent 改了代码,但<strong>没人记得这个文件现在到底该干什么</strong>——文档(如果有的话)停留在上周;</li>
+<li>你想让 agent 接着改,它读的是代码的"现状",不是你的"意图",于是每次都要重新解释一遍;</li>
+<li>上了 spec-driven development(SDD)的团队会发现 spec 有两种死法:要么<strong>漂移</strong>(代码改了 spec 没改),要么<strong>腐烂成仪式</strong>(spec 变成没人读的 changelog 坟场)。</li>
+</ul>
+<p>我们把 Hacker News 和各家 SDD 项目 issue 区里的抱怨收集了一遍(整理成了一篇 blog,链接在最后),结论是这两种死法几乎是所有 spec 工具的宿命。</p>
+
+<h2>SpexCode 的三个反常识设计</h2>
+
+<h3>1. git 就是数据库,没有别的存储。</h3>
+<p>每个被治理的模块是一个 <code>.spec/**/spec.md</code> 节点。节点的"版本号"= 这个文件的内容 commit 数;"谁改的"= commit 上的 session 归属 trailer;"漂移"= 被治理的代码在 spec 最后一次提交之后又动了——<strong>全部实时从 git log 推导,没有任何外部数据库</strong>。dashboard 只是 git 之上的一个读时聚合器。你 clone 下来,数据就全在了。</p>
+
+<figure>
+<img class="shot" src="02-drill-spec-cli.png" alt="下钻 spec-cli 节点">
+<figcaption>图 2 · 下钻一个包节点:spec-cli 已经 19 个版本,右侧是它的场景读数和关联的 GitHub issue(已关闭的 bug 单)</figcaption>
+</figure>
+
+<h3>2. spec 是活文档,lint 强制执行。</h3>
+<p>spec 正文永远描述模块的<strong>当下意图</strong>,原地重写,禁止堆 <code>## v1 / v2 / v3</code> 式的 changelog(版本历史是 git 的活,不该由人肉维护)。<code>spex lint</code> 把这条当规则查,连同:spec 指向的代码文件还在不在、被治理的源文件有没有 spec 认领(coverage)、代码是不是跑到 spec 前面去了(drift)。spec 腐烂不再靠自觉防,靠 CI 防。</p>
+
+<figure>
+<img class="shot" src="04-spex-lint.png" alt="spex lint 输出">
+<figcaption>图 3 · spex lint 的真实输出:drift 警告精确到"哪个文件领先哪个 spec 几个 commit",下面是修复指引——"Never patch. A blind ack is a lie."</figcaption>
+</figure>
+
+<h3>3. 损失信号(yatsu):每个节点可测量,修 bug 必须 fail→pass。</h3>
+<p>每个节点可以挂场景(描述 + 预期),用真实浏览器/真实 API 跑出读数,截图/视频作为证据内容寻址存进 git。修 bug 的纪律是 A/B:先跑出一条<strong>失败读数</strong>复现它,修完再跑出<strong>通过读数</strong>——一个 bug 的完整生命周期在时间线上可回放。这个仓库目前有 750 条这样的读数。</p>
+
+<figure>
+<img class="shot" src="06-evals-feed.png" alt="损失信号页">
+<figcaption>图 4 · 损失信号页:左列是读数流(pass/fail + 证据类型),右侧展开一条真实浏览器测量——expected(预期)vs note(实测),配截图证据和评审轨</figcaption>
+</figure>
+
+<figure>
+<img class="shot" src="07-node-mentions-scenarios.png" alt="mentions 节点场景">
+<figcaption>图 5(备选)· 一个节点的 3/3 场景全过 + 一条关联的 open issue</figcaption>
+</figure>
+
+<h2>它不只治理自己</h2>
+<p>除了自我狗粮,我们拿它治理了两个真实项目:一个跨平台 AI coding agent(<strong>417 个 spec 节点、300+ 条测量读数,测出了真 bug</strong>),和一个 Electron 桌面应用(~99 节点)。提取 spec、并行派发 worker、真浏览器 e2e 测量,整条链路都是在别人的代码库上跑通的。</p>
+
+<h2>agent 原生,但剥掉 AI 也成立</h2>
+<p><code>spex init</code> 会把整套开发契约(spec 节点怎么写、先 commit 再声明完成、merge 风格)物化进你仓库的 <code>CLAUDE.md</code>/<code>AGENTS.md</code> 托管块——Claude Code 和 Codex <strong>自动发现</strong>,零接线。之后你日常就是对 agent 说人话:"给鉴权流程加个 spec 节点"、"派个 worker 实现 Y",它自己会跑 <code>spex</code> CLI,你在 dashboard 上监工。</p>
+<p>但把 AI 全剥掉,核心还是纯工具:git 版本化的 spec 文件 + <code>spex lint</code> + 一个只读 dashboard,只依赖 Node ≥ 22 和 git。vibe-coding 那层是架在上面的,不是必需的。</p>
+
+<h2>上手</h2>
+<pre><code>npm i -g spexcode   # spexcode@0.1.6
+cd ~/my-app
+spex init           # 纯增量,不动你的代码结构
+spex lint           # coverage 警告就是你的采纳 TODO 清单</code></pre>
+<ul>
+<li>仓库(MIT):<a href="https://github.com/shuxueshuxue/spexcode">github.com/shuxueshuxue/spexcode</a></li>
+<li>文档站:<a href="https://spexcode.net/">spexcode.net</a></li>
+<li>两篇 blog:《The Second Day Problem》《The Pain-Point List》(痛点调研原始材料)</li>
+</ul>
+<p>17 天,从一段中文 prompt 到一个自己治理自己的工具。欢迎拍砖,尤其欢迎拿你自己的项目试 <code>spex init</code> 然后来骂哪里不好用——issue 区见。</p>
+
+<hr>
+<p class="meta">— 草稿完 · 源文件 <code>promo-linux-do-draft.md</code> · 素材 <code>promo-assets/</code> · 反馈直接在会话里说</p>
+</main>
+</html>

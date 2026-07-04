@@ -1,0 +1,47 @@
+{
+ "selPresent": false,
+ "opens": {
+  "defaultPrevented": false,
+  "hasFocusSink": false,
+  "valueChanged": true
+ },
+ "icon": {
+  "optionTexts": [
+   "re-idle",
+   "real-glm",
+   "stub-claude",
+   "stub-codex"
+  ],
+  "claude": {
+   "hasSvg": true,
+   "title": "Claude Code",
+   "d": "M17.3041 3.541h-3.6718l6.696 16.918H24Zm"
+  },
+  "codex": {
+   "hasSvg": true,
+   "title": "Codex",
+   "d": "M22.282 9.821a6 6 0 0 0-.516-4.91a6.05 6"
+  },
+  "swapped": true
+ },
+ "inbox": {
+  "dockDisabled": false,
+  "menu": {
+   "open": true,
+   "up": true,
+   "rows": [
+    "// [[term]] — ↑↓ pick · ⏎ insert",
+    "term",
+    "spexcode/spec-dashboard/dashboard-ui/session-console/terminal-io/term-input",
+    "term",
+    "spexcode/spec-dashboard/dashboard-ui/session-console/terminal-io"
+   ]
+  },
+  "afterAccept": "look at [[term-input]] ",
+  "inserted": true,
+  "resolve": {
+   "termInputExists": true,
+   "path": ".spec/spexcode/spec-dashboard/dashboard-ui/session-console/terminal-io/term-input/spec.md"
+  }
+ }
+}

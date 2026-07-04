@@ -1,0 +1,21 @@
+{
+ "v": 1,
+ "events": [
+  {
+   "tMs": 0,
+   "step": "option = name only; adornment = harness SVG that tracks selection"
+  },
+  {
+   "tMs": 28,
+   "step": "option labels (no · claude/codex suffix): [\"re-idle\",\"real-glm\",\"stub-claude\",\"stub-codex\"]"
+  },
+  {
+   "tMs": 764,
+   "step": "claude launcher → harness glyph: hasSvg=true title=Claude Code"
+  },
+  {
+   "tMs": 1367,
+   "step": "codex launcher → glyph swapped = true (title Claude Code→Codex)"
+  }
+ ]
+}

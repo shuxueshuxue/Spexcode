@@ -1,0 +1,64 @@
+{
+ "events": [
+  {
+   "atMs": 6403,
+   "kind": "narrate",
+   "label": "▶ launcher-picker-opens-on-click · keepFocus spares the native select mousedown"
+  },
+  {
+   "atMs": 7244,
+   "kind": "frame",
+   "label": "📷 New composer shows .si-launcher-select = false"
+  },
+  {
+   "atMs": 7605,
+   "kind": "frame",
+   "label": "📷 mousedown defaultPrevented = false (must be FALSE — dropdown opens)"
+  },
+  {
+   "atMs": 9292,
+   "kind": "frame",
+   "label": "📷 value follows selection = true"
+  },
+  {
+   "atMs": 10036,
+   "kind": "narrate",
+   "label": "▶ launcher-picker-shows-harness-icon · option = name only; adornment = harness SVG that tracks selection"
+  },
+  {
+   "atMs": 10064,
+   "kind": "frame",
+   "label": "📷 option labels (no · claude/codex suffix): [\"re-idle\",\"real-glm\",\"stub-claude\",\"stub-codex\"]"
+  },
+  {
+   "atMs": 10800,
+   "kind": "frame",
+   "label": "📷 claude launcher → harness glyph: hasSvg=true title=Claude Code"
+  },
+  {
+   "atMs": 11403,
+   "kind": "frame",
+   "label": "📷 codex launcher → glyph swapped = true (title Claude Code→Codex)"
+  },
+  {
+   "atMs": 11499,
+   "kind": "narrate",
+   "label": "▶ inbox-mention-dropdown-and-resolution · [[ menu in the live ❯ inbox, insert + send-time resolve"
+  },
+  {
+   "atMs": 24618,
+   "kind": "frame",
+   "label": "📷 [[term → menu open=true up=true rows=[\"// [[term]] — ↑↓ pick · ⏎ insert\",\"term\",\"spexcode/spec-dashboard/dashboard-ui/session-console/terminal-io/term-input\",\"term\",\"spexcode/spec-dashboard/dashboard-ui/session-console/terminal-io\"]"
+  },
+  {
+   "atMs": 25509,
+   "kind": "frame",
+   "label": "📷 accept top row → draft='look at [[term-input]] ' insertedToken=true"
+  },
+  {
+   "atMs": 28709,
+   "kind": "frame",
+   "label": "📷 [[term-input]] resolvable: exists=true path=.spec/spexcode/spec-dashboard/dashboard-ui/session-console/terminal-io/term-input/spec.md"
+  }
+ ]
+}

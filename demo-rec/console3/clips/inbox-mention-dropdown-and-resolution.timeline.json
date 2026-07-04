@@ -1,0 +1,21 @@
+{
+ "v": 1,
+ "events": [
+  {
+   "tMs": 0,
+   "step": "[[ menu in the live ❯ inbox, insert + send-time resolve"
+  },
+  {
+   "tMs": 13119,
+   "step": "[[term → menu open=true up=true rows=[\"// [[term]] — ↑↓ pick · ⏎ insert\",\"term\",\"spexcode/spec-dashboard/dashboard-ui/session-console/terminal-io/term-input\",\"term\",\"spexcode/spec-dashboard/dashboard-ui/session-console/terminal-io\"]"
+  },
+  {
+   "tMs": 14010,
+   "step": "accept top row → draft='look at [[term-input]] ' insertedToken=true"
+  },
+  {
+   "tMs": 17210,
+   "step": "[[term-input]] resolvable: exists=true path=.spec/spexcode/spec-dashboard/dashboard-ui/session-console/terminal-io/term-input/spec.md"
+  }
+ ]
+}

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# @@@ proposal nudge (post-merge) - the taste forum ([[proposals]]) fires AFTER the work lands, not while the
+# @@@ proposal nudge (post-merge) - the taste store ([[proposals]]) fires AFTER the work lands, not while the
 # agent is finishing it: the agent's own task comes first. Merge is dispatched to the session's OWN agent
 # (see [[dispatch]]), so this hook runs in that live merge turn and its stdout reaches the agent as the merge
 # command's own output — a git-native nudge that costs no harness block-cap and reaches a self-launched agent

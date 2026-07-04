@@ -1,0 +1,24 @@
+{
+ "events": [
+  {
+   "atMs": 8928,
+   "kind": "narrate",
+   "label": "▶ close-command-removes · /close removes the row outright, lands on New, no confirm"
+  },
+  {
+   "atMs": 16891,
+   "kind": "frame",
+   "label": "📷 before: live terminal, ❯ enabled=true, row present=true"
+  },
+  {
+   "atMs": 43041,
+   "kind": "frame",
+   "label": "📷 typed /close + Enter (menu dismissed first)"
+  },
+  {
+   "atMs": 59032,
+   "kind": "frame",
+   "label": "📷 after /close: rowRemoved=true landedOnNew=true noCloseLineDispatched=true"
+  }
+ ]
+}

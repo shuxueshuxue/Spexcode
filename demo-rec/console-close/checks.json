@@ -1,0 +1,13 @@
+{
+ "before": {
+  "termVisible": true,
+  "dockEnabled": true,
+  "rowThere": true
+ },
+ "after": {
+  "backendRemoved": true,
+  "rowGone": true,
+  "onNew": true,
+  "closeLineInPane": false
+ }
+}

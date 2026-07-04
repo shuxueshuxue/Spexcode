@@ -1,0 +1,21 @@
+{
+ "v": 1,
+ "events": [
+  {
+   "tMs": 0,
+   "step": "/close removes the row outright, lands on New, no confirm"
+  },
+  {
+   "tMs": 7963,
+   "step": "before: live terminal, ❯ enabled=true, row present=true"
+  },
+  {
+   "tMs": 34113,
+   "step": "typed /close + Enter (menu dismissed first)"
+  },
+  {
+   "tMs": 50104,
+   "step": "after /close: rowRemoved=true landedOnNew=true noCloseLineDispatched=true"
+  }
+ ]
+}

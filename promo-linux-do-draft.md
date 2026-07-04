@@ -51,7 +51,21 @@ spec 正文永远描述模块的**当下意图**,原地重写,禁止堆 `## v1 /
 每个节点可以挂场景(描述 + 预期),用真实浏览器/真实 API 跑出读数,截图/视频作为证据内容寻址存进 git。修 bug 的纪律是 A/B:先跑出一条**失败读数**复现它,修完再跑出**通过读数**——一个 bug 的完整生命周期在时间线上可回放。这个仓库目前有 750 条这样的读数。
 
 【图 3:`promo-assets/06-evals-feed.png` — 损失信号页:左列读数流(pass/fail+证据类型),右侧展开一条真实浏览器测量(expected vs note + 截图证据 + 评审轨)】
-【图 4(备选):`promo-assets/07-node-mentions-scenarios.png` — 一个节点的 3/3 场景全过 + 关联 GitHub issue】
+
+### 视频标注工作台:人类 review 的主战场
+
+损失信号里最狠的一层是**视频证据 + 标注工作台**。e2e 测量可以录整段屏(带 step-timeline 边车),按场景自动切成剪辑归档;人在 dashboard 的三栏工作台里 review:
+
+- **自定义 review 滑轨**:每条 anchored remark 是滑轨上的一个 marker,播放头会点亮正经过的 remark;点 marker 或点评论即 seek 过去;
+- **拖拽圈选**:在暂停帧上框住一处问题,那一帧(带框)自动进 blob 存储,右侧常驻 composer 被预填一条 anchored remark(`▶m:ss` 锚点 + 帧图)——**圈完就写,不用上下滚**;
+- **A/B 历史条**:一个场景的 fail→pass 全生命周期(✗=复现 / ✓=修复)在顶栏原地翻页;
+- **remark 有牙齿**:一条未 resolve 的人类 remark 会让场景变 stale,必须由第二方 agent `spex resolve` + 新读数才算清——人类不是点 pass/fail 的橡皮图章(那个按钮我们删了),人类通过 remark 审判。
+
+【视频:`promo-assets/08-annotator-golden-path.mp4` — 45 秒连续操作实录:打开视频 eval → 圈选一帧(框实时画出)→ composer 自动预填锚点+帧图 → 敲一句 remark 发出 → 滑轨长出新 marker,点击 seek 回那一刻 → 翻 A/B 历史】
+【图 4:`promo-assets/09-annotator-compose.png` — 圈选后:composer 预填 ▶0:02 锚点 + 帧图预览,视频还在屏上】
+【图 5:`promo-assets/10-annotator-remark-landed.png` — remark 上墙:评审轨第 3 条,锚点 chip + 圈选帧图内嵌,滑轨新 marker】
+
+这一段演示本身就是 dogfood:录制它的会话把这两个场景当真实测量跑了一遍,`spex yatsu eval --video --timeline` 归档了两条带剪辑+时间线的新读数——录demo的过程同时给仓库补上了它当时缺失的新鲜视频读数(之前为 0)。
 
 ### 它不只治理自己
 

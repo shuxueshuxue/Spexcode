@@ -1,0 +1,29 @@
+{
+ "v": 1,
+ "events": [
+  {
+   "tMs": 0,
+   "step": "inline video evidence in the node eval tab"
+  },
+  {
+   "tMs": 5796,
+   "step": "board"
+  },
+  {
+   "tMs": 12031,
+   "step": "focus video-evidence — scenario row in the side panel"
+  },
+  {
+   "tMs": 14629,
+   "step": "eval work pane opens on the scenario"
+  },
+  {
+   "tMs": 17938,
+   "step": "video reading expanded in the eval pane"
+  },
+  {
+   "tMs": 19413,
+   "step": "video playing (readyState=4 t=1.20s ct=video/webm)"
+  }
+ ]
+}

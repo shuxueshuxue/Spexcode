@@ -27,7 +27,10 @@ drifting surfaces.
 
 `EventDetail` IS the **detail pane for a selected eval reading** ([[evals-view]]'s master-detail — no
 modal, no box-in-a-box: the reading gets the pane's full height, and switching selection resets the working
-state to the new reading). The pane is a **WORKSPACE, not a scroll stack** — the review act is a loop
+state to the new reading — the remark composer's draft included: the composer is keyed to the (node,
+scenario) identity, so a half-typed or circle-prefilled remark dies with its selection instead of leaking
+onto another eval's composer, where sending it would post one scenario's remark onto another scenario's
+thread). The pane is a **WORKSPACE, not a scroll stack** — the review act is a loop
 (*circle a moment on the clip, say what's wrong, circle the next*), and a layout that stacks
 media→thread→composer vertically forces a scroll ping-pong between the frame (top) and the composer
 (bottom) on every mark. So the pane splits into three fixed regions, the annotator shape: a **slim HEADER

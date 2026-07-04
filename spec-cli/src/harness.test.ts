@@ -51,6 +51,9 @@ test('codex launch command starts app-server then resumes the backend-owned thre
   assert.doesNotMatch(cmd, /flock/)
   assert.doesNotMatch(cmd, /9>&-/)
   assert.match(cmd, /codex app-server --listen unix:\/\/"\$sock"/)
+  // the shared per-project daemon runs in the STABLE runtime dir "$dir", NOT the transient worktree — else a
+  // later worktree deletion dead-cwds the daemon and every future thread's config load fails with ENOENT.
+  assert.match(cmd, /\(\s*cd "\$dir" && exec [^\n]*app-server --listen unix:\/\/"\$sock"/)
   // design C: the BACKEND owns the thread — codex-launch does thread/start { cwd } + first turn, prints the id,
   // and the visible TUI resumes THAT thread on the same project socket.
   assert.match(cmd, /codex-launch "\$sock" "\$PWD" "\$@"/)

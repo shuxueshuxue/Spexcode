@@ -9,7 +9,7 @@ import { mergedIssues, replyIssue } from './issues.js'
 import { residentForgeState, refreshForgeNow } from '../../spec-forge/src/resident.js'
 import { summarize } from './mentions.js'
 import { resolveLayout, mainBranch } from './layout.js'
-import { buildBoard } from './board.js'
+import { getBoardJson } from './boardCache.js'
 import { boardStream, notifyBoardChanged } from './boardStream.js'
 import { gitA, gitTry, repoRoot } from './git.js'
 import { newSession, listSessions, sendKeys, rawKey, exitSession, closeSession, reopen, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, superviseQueue } from './sessions.js'
@@ -40,9 +40,18 @@ app.get('/health', (c) => c.text('ok'))
 // dashboard reloads on a `/api/board/stream` event, not a tight poll, so the route is a conditional-request
 // endpoint: `etag()` hashes the serialized body, and a reload whose `If-None-Match` matches gets a bodyless 304
 // instead of the full transfer (~1 MB on the dogfood board — it scales with the node count). The 304 saves the
-// WIRE only: buildBoard still runs its git read on every request, so cutting poll frequency (the push channel
-// does) is what saves the server work.
-app.get('/api/board', etag(), async (c) => c.json(await buildBoard()))
+// WIRE only; the COMPUTE is saved by [[board-cache]]: getBoard() is single-flight + cached, so a poll storm
+// shares ONE build instead of each running its own — the poll-frequency cut (push channel) and the
+// build-coalescing cut compound. A hard timeout bounds a wedged build to a loud 503 rather than an
+// unboundedly-held connection (the wall sits well above the legitimately-several-seconds cold first build);
+// the underlying single-flight build keeps running and caches for the next poll.
+const BOARD_TIMEOUT_MS = Number(process.env.SPEXCODE_BOARD_TIMEOUT_MS || 20000)
+app.get('/api/board', etag(), async (c) => {
+  const timeout = Symbol('timeout')
+  const json = await Promise.race([getBoardJson(), new Promise<typeof timeout>((r) => setTimeout(() => r(timeout), BOARD_TIMEOUT_MS))])
+  if (json === timeout) return c.json({ error: 'board build timed out' }, 503)
+  return c.body(json as string, 200, { 'content-type': 'application/json; charset=UTF-8' })
+})
 // the board's push channel: an SSE that fires `board-changed` on any session-store write, so the dashboard
 // reloads the instant status moves instead of waiting for its slow fallback poll ([[board-stream]]).
 app.get('/api/board/stream', (c) => boardStream(c))

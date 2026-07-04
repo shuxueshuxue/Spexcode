@@ -114,8 +114,9 @@ export function evalContext(
   idx: DriftIndex,
   hidx: HistoryIndex,
   remarks?: Map<string, RemarkTrack>,
+  ynodes?: YatsuNode[],   // the hot board build precomputes these off the event loop (yatsuNodesAsync); a bare caller walks sync
 ): EvalContext {
-  return { root, specs, idx, hidx, ynodes: yatsuNodes(root), remarks: remarks ?? loadEvalRemarkTracks() }
+  return { root, specs, idx, hidx, ynodes: ynodes ?? yatsuNodes(root), remarks: remarks ?? loadEvalRemarkTracks() }
 }
 
 export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalTimeline> {

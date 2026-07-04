@@ -17,6 +17,7 @@ export default function EvalsPage({ specs = [], sessions = [], reloadBoard }) {
   const t = useT()
   const [sel, setSel] = useState(null)            // the ONE selection: 'eval:<node>·<scenario>'
   const [folded, setFolded] = useState(false)     // the master list folded to a strip — the detail owns the width
+  const [notice, setNotice] = useState('')
   const [evalRows, setEvalRows] = useState([])    // the feed's visible entries (its filters are its own)
   const rowsRef = useRef([])                      // the visible eval key list, for j/k
 
@@ -26,6 +27,10 @@ export default function EvalsPage({ specs = [], sessions = [], reloadBoard }) {
   const effSel = sel && evalByKey.has(sel) ? sel : rowsRef.current[0] ?? null
 
   const onRows = useCallback((rows) => setEvalRows(rows), [])
+
+  // a remark's dispatch echo ([[mentions]], mirrors [[issues-view]]): the write's outcomes summary
+  // ('@ new→<session>') flashes as a notice, so an @-dispatch is never silent.
+  const flash = (outcomes) => { if (outcomes) { setNotice(outcomes); setTimeout(() => setNotice(''), 6000) } }
 
   // page keys ([[evals-view]]): j/k walk the feed; the detail follows the selection (no Enter — selection
   // IS detail). Capture phase; a key typed into an input/textarea or carrying a modifier is never ours.
@@ -59,11 +64,12 @@ export default function EvalsPage({ specs = [], sessions = [], reloadBoard }) {
       {folded && <button type="button" className="fv-unfold" title={t('masterList.unfold')} onClick={() => setFolded(false)}>›</button>}
       <div className="fv-list-col" style={folded ? { display: 'none' } : undefined}>
         <button type="button" className="fv-fold" title={t('masterList.fold')} onClick={() => setFolded(true)}>‹</button>
+        {notice && <div className="fv-notice">{notice}</div>}
         <EvalsGroup nodes={specs} sel={effSel} onSel={(k) => setSel(k)} onRows={onRows} />
       </div>
       <div className="fv-detail">
         {selEval
-          ? <EventDetail entry={selEval} specs={specs} sessions={sessions} onWrite={async () => { await reloadBoard?.() }} />
+          ? <EventDetail entry={selEval} specs={specs} sessions={sessions} onWrite={async (outcomes) => { flash(outcomes); await reloadBoard?.() }} />
           : <div className="fv-note">{t('evalsFeed.empty')}</div>}
       </div>
     </div>

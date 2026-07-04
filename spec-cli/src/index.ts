@@ -100,8 +100,9 @@ app.get('/api/edit', async (c) => {
 // a node's eval timeline (read half of `spex yatsu`): yatsu-sidecar readings joined with a live freshness
 // flag, newest-first; `hasYatsu:false` when none declared. Contract belongs to [[spec-yatsu]].
 app.get('/api/specs/:id/evals', async (c) => c.json(await evalTimeline(c.req.param('id'))))
-// the eval seam's WRITE half for the dashboard annotator ([[spec-yatsu]] filing.ts): a human files a
-// manual@1 reading (verdict + an annotation-report transcript) through the SAME append the CLI uses.
+// the eval seam's WRITE half over HTTP ([[spec-yatsu]] filing.ts): a programmatic caller files a manual@1
+// reading (verdict + optional transcript) through the SAME append the CLI uses. The dashboard does not
+// call this — [[event-detail]] reads readings and hosts remarks, never files.
 app.post('/api/specs/:id/yatsu/eval', async (c) => {
   const b = await c.req.json().catch(() => null)
   if (!b || typeof b.scenario !== 'string') return c.json({ error: 'body needs { scenario, status, note?, transcript? }' }, 400)

@@ -1614,7 +1614,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .an-step { font: inherit; font-size: 11px; color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 2px 8px; cursor: pointer; }
 .an-step.on { border-color: var(--green); color: var(--ink); }
 .an-hint { color: var(--muted); font-size: 11px; padding: 8px 0 0; }
-.an-flash { font-size: 12px; color: var(--green); padding: 6px 0 0; }
+.an-flash { font-size: 12px; color: var(--green); padding: 4px 0 0; }
 
 /* the header verdict of the CURRENTLY-VIEWED reading (flips with the A/B strip) */
 .an-verdict-badge { font-size: 12px; font-weight: 700; line-height: 1; }

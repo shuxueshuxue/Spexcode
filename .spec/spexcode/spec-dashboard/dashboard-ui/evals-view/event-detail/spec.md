@@ -2,12 +2,11 @@
 title: event-detail
 status: active
 hue: 200
-desc: The ONE evidence+reply detail pane (U1), store-agnostic, reused in EVERY home — the Evals page ([[evals-view]]) AND the session eval tab. A selected reading as a WORKSPACE — slim header (verdict badge + A/B strip), the media STAGE center (video under a custom review-track scrubber; the human scrubs, circles; images/transcripts render whole), the REMARK track in an always-visible right RAIL with the composer docked at its foot — circle on the stage, remark right there, no vertical ping-pong. The (node,scenario) remark track rides as entry.thread — a resolved remark renders settled, an open one prominent. The verdict stays a separate reading, filed elsewhere.
+desc: The ONE evidence+reply detail pane (U1), store-agnostic, reused in EVERY home — the Evals page ([[evals-view]]) AND the session eval tab. A selected reading as a WORKSPACE — slim header (verdict badge + A/B strip), the media STAGE center (video under a custom review-track scrubber; the human scrubs, circles; images/transcripts render whole), the REMARK track in an always-visible right RAIL with the composer docked at its foot — circle on the stage, remark right there, no vertical ping-pong. The (node,scenario) remark track rides as entry.thread — a resolved remark renders settled, an open one prominent. The pane reads readings and hosts remarks; it never files one.
 code:
   - spec-dashboard/src/EventDetail.jsx
 related:
   - spec-yatsu/src/evaltab.ts
-  - spec-yatsu/src/filing.ts
   - spec-cli/src/index.ts
   - spec-dashboard/src/NodeView.jsx
 ---
@@ -69,9 +68,9 @@ expected, the verdict note, and the header's verdict badge all re-render for the
 ([[board-lean]]), so the full history is lazily fetched from the SAME `/api/specs/:id/evals` timeline the
 [[yatsu-eval-tab]] uses (no new endpoint, no board bloat); the strip shows only when a scenario has more
 than one reading (a fresh scenario is just its single reading). The remark track in the rail is
-per-SCENARIO, not per-reading, so it stays stable as you flip — it spans the whole A/B; a new reading (the
-next B, or a fresh A) is filed for the scenario through the CLI's eval seam, never by mutating the
-historical reading on screen.
+per-SCENARIO, not per-reading, so it stays stable as you flip — it spans the whole A/B. New readings
+arrive only from the eval seam's CLI ([[yatsu-core]]'s `spex yatsu eval`) and surface here on the next
+refresh; the pane never mutates or appends the scenario's history itself.
 
 **One reply primitive — a REMARK on the eval's own (node, scenario) thread.** Discussion and annotation are
 the same act, and on a scenario that act is a **remark** ([[remark-substrate]]) — a scenario-scoped concern
@@ -94,14 +93,14 @@ remark's typed `evidence[]` on the thread; the body is the one raw-readable sour
 an ordinary reply — replyable, `@`-able: `circle + @new fix this` is a timestamped, framed assign, the
 anchor riding into the dispatched worker's prompt verbatim.
 
-**The verdict stays a reading — and this pane never files one.** The conclusion (pass/fail + a note) is a
-`manual@1` reading filed through the eval seam's write half (filing.ts, [[yatsu-core]]) — by the CLI, not by
-this pane: the pane READS readings and hosts remarks, it carries no verdict-filing footer, and it never
-duplicates the marks into a frozen transcript — the remark track lives on the thread, and a reading records
-only the verdict. A finding
-belonging to *another* node is an anchored remark routing to that node's thread ([[video-evidence]]'s
-routing; the marks are the prose body, the clip and step-map among the thread's `evidence[]`). This pane
-invents no verdict states, no timeline tables, no locks.
+**The pane is READ-side on readings — it files none.** A reading's verdict renders (the header badge, the
+A/B pips, the note) but is never authored here: readings are filed by AGENTS through the eval seam's CLI
+(`spex yatsu eval`, [[yatsu-core]]) *with evidence* — a human pass/fail click would file an evidence-less
+`manual@1` hand-vote, ruled useless, so the pane carries no verdict footer. The human's judgment speaks
+through the REMARK composer: an open remark ages the scenario like a drift event ([[remark-teeth]]), so a
+human "this is wrong" reaches the loss signal without minting a blind reading. A finding belonging to
+*another* node is an anchored remark routing to that node's thread ([[video-evidence]]'s routing). This
+pane invents no verdict states, no timeline tables, no locks.
 
 **The thread rides one server-side overlay — folded in as `entry.thread`, the SAME on both homes.** The
 eval's remark track IS the ONE local Issue for this (node, scenario), keyed by its `eval: <node> · <scenario>`

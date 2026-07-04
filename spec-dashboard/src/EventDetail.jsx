@@ -22,9 +22,9 @@ import { useT } from './i18n/index.jsx'
 // prose convention ([[issues-view]]'s Thread); ⏱/a stamps the current frame onto a note; a drag-circle
 // captures the paused frame and prefills an anchored remark carrying it. A remark's `resolved` bit renders in
 // the thread (settled when resolved, prominent while open). The composer authors through the CLI-parity
-// /api/remarks (L: the dashboard is a thin wrapper, no dashboard-only write). The pass/fail VERDICT stays a
-// separate `manual@1` reading (verdict + note), filed through the CLI — this pane reads readings and hosts
-// remarks, it never writes one.
+// /api/remarks (L: the dashboard is a thin wrapper, no dashboard-only write). The pane READS readings and
+// hosts remarks — it never files a reading: verdicts land through the CLI eval seam (`spex yatsu eval`,
+// [[yatsu-core]]) with evidence, and render here as the header badge + A/B pips.
 //
 // A/B history ([[reproduce-before-fix]]): a scenario's readings are its lifecycle, and a bug fix leaves a
 // fail→pass PAIR — the A (reproduced bug) and the B (verified fix). The pane flips through that whole
@@ -77,7 +77,7 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite 
   const seq = useRef(0)
   const [events, setEvents] = useState([])
   const [drag, setDrag] = useState(null)
-  const [flash, setFlash] = useState('')
+  const [flash, setFlash] = useState('')         // circle-capture feedback (capturing… / failed)
   const [zoom, setZoom] = useState(null)         // an image gallery still opened in the lightbox (its hash), or null
   const [busy, setBusy] = useState(false)       // capturing a circled frame
   const [draft, setDraft] = useState(null)       // { seq, body } — a circle / `a` prefills the review-track composer
@@ -224,7 +224,7 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite 
     setSelIdx(a.i); seekMs(a.tMs)
   }, [anchored, selIdx, seekMs])
 
-  // the whole player is keyboard-driven; typing in a field (the composer, the note) is never hijacked.
+  // the whole player is keyboard-driven; typing in a field (the composer) is never hijacked.
   useEffect(() => {
     if (!hasVideo) return
     const onKey = (e) => {

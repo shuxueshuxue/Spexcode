@@ -46,4 +46,6 @@ surfaces (`f`, ⌥F) land here.
   the [[event-detail]] composer writes through the CLI-parity `/api/remarks` and then refreshes the
   BOARD — the eval's remark thread is the server overlay folded in through the board ([[event-detail]] /
   [[eval-issue-split]]), so it needs no issues-list reload; the Issues page's list stays a separate data
-  path.
+  path. A `@session`/`@new` in that composer **dispatches** ([[mentions]]), and the returned one-line
+  dispatch summary (`@ new→<session>`) is **echoed briefly** as a page notice — the same flash the
+  [[issues-view]] page gives its composers; a summons is never silent.

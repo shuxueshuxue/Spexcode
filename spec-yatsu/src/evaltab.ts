@@ -4,7 +4,7 @@ import { loadSpecs } from '../../spec-cli/src/specs.js'
 import { loadEvalRemarkTracks, trackKey, type RemarkTrack, type Issue, type Reply } from '../../spec-cli/src/issues.js'
 import { yatsuNodes, type YatsuNode } from './yatsu.js'
 import { readReadings, evidenceOf, type Verdict, type EvidenceKind } from './sidecar.js'
-import { staleAxes, type StaleAxis } from './freshness.js'
+import { staleAxes, codeDrift, type StaleAxis } from './freshness.js'
 import { hasBlob, getBlob, MISS_BLOB } from './cache.js'
 
 // one evidence entry as the tab renders it: the content hash, its kind, and its LIVE blob state (present, or
@@ -46,6 +46,10 @@ export type EvalEntry = {
   fresh: boolean
   staleAxes: StaleAxis[]
   blobState: 'present' | 'miss' | 'none'
+  // the code axis's drift detail for a code-stale reading ([[yatsu-core]]'s codeDrift): each governed file
+  // that moved since this reading + how many commits behind, so the eval detail can EXPLAIN the staleness
+  // ("EvalsFeed.jsx +3") rather than just flag it. Absent when the reading isn't code-stale.
+  codeDrift?: { file: string; behind: number }[]
   // the trunk remark track overlaid onto THIS reading ([[remark-teeth]]): the remarks whose targetCodeSha
   // pins here (or the latest reading, for a dangling target). Absent when the scenario has no remark.
   remarks?: RemarkView[]
@@ -146,8 +150,11 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
     // the teeth feed the WHOLE scenario track against THIS reading — an unresolved (or not-yet-out-run)
     // remark makes it remark-stale (T1). Display attachment (which reading each remark pins to) is a separate
     // read-time overlay below; freshness never depends on that pin.
-    const axes = staleAxes(r, sc?.code?.length ? sc.code : codeFiles, ynode.yatsuPath, idx, hidx,
+    const cf = sc?.code?.length ? sc.code : codeFiles
+    const axes = staleAxes(r, cf, ynode.yatsuPath, idx, hidx,
       remarksFor(r.scenario).map((rm) => ({ resolved: !!rm.resolved, resolvedAt: rm.resolvedAt })))
+    // when the code axis is stale, explain it: which of THIS reading's governed files moved, by how many commits.
+    const drift = axes.includes('code') ? codeDrift(idx, r.codeSha, cf) : []
     // the reading's evidence list, each entry resolved to its live blob state; the primary (video-first, else
     // first) drives the scalar compat fields for single-evidence consumers.
     const evidence: EvidenceView[] = evidenceOf(r).map((e) => ({ hash: e.hash, kind: e.kind, state: hasBlob(e.hash) ? 'present' : 'miss' }))
@@ -165,6 +172,7 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
       ts: r.ts,
       fresh: axes.length === 0,
       staleAxes: axes,
+      ...(drift.length ? { codeDrift: drift } : {}),
       blobState: primary ? primary.state : 'none',
       ...(threadFor(r.scenario) ? { thread: threadFor(r.scenario) } : {}),
     }

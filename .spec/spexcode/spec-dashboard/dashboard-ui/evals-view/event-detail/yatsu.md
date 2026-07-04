@@ -17,6 +17,19 @@ scenarios:
       scrolls itself when its gallery overflows. Circle→remark→circle needs zero vertical travel — the
       old top-bottom ping-pong is gone. Under the narrow breakpoint the workspace degrades to one
       stacked column (stage over rail) instead of clipping.
+  - name: stale-reading-readout
+    tags: [frontend-e2e]
+    description: >
+      On #/evals, select a reading whose node's governed code changed after it was taken (a code-stale
+      reading — the muted ✓/✗ in the list). Read the detail's stage: is there a stale readout naming the
+      moved axes, and for the code axis the drifted file(s) + how many commits behind? Then confirm the
+      remark composer works on it exactly as on a fresh reading (type + send a remark).
+    expected: |
+      A non-fresh viewed reading shows a stale readout on the stage: the freshness axes that moved
+      (e.g. `code · scenario`), and for the code axis the drifted governed file(s) with a commits-behind
+      count (e.g. `EvalsFeed.jsx +3`). A fresh reading shows NO readout. The readout is reporting only —
+      selecting/flipping A/B re-renders it for the viewed reading. The remark composer is unaffected by
+      freshness: a remark is authored and sent on a stale reading identically to a fresh one.
   - name: annotate-seek-circle-file
     tags: [frontend-e2e]
     description: >

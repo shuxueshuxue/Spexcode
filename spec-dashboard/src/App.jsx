@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ReactFlow, MarkerType, useReactFlow } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import SpecNode from './SpecNode.jsx'
+import NodeContextMenu from './NodeContextMenu.jsx'
 import NodeView, { panesFor } from './NodeView.jsx'
 import FocusPanel from './FocusPanel.jsx'
 import SessionWindow, { LockGlyph } from './SessionWindow.jsx'
@@ -55,6 +56,7 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
   const [sessionSel, setSessionSel] = useState('new') // persisted across open/close: last tab/session
   const [highlightId, setHighlightId] = useState(null) // session whose overlays are emphasised
   const [seed, setSeed] = useState(null)          // one-shot text a board chord pre-fills the New Session input with
+  const [nodeMenu, setNodeMenu] = useState(null)  // node right-click menu: { x, y, id } | null ([[node-menu]])
   const { getViewport, setViewport } = useReactFlow()
   const t = useT()
   const graphRef = useRef(null)
@@ -131,7 +133,7 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
   // a transient graph overlay never outlives the graph page — navigating away closes it, so a return
   // lands on the plain page (the session interface is a page now, not part of this overlay set).
   useEffect(() => {
-    if (page !== 'graph') { setOverlay(false); setLegend(false); setSearch(null) }
+    if (page !== 'graph') { setOverlay(false); setLegend(false); setSearch(null); setNodeMenu(null) }
   }, [page])
 
   const children = useMemo(() => specs2.filter((s) => s.parent === focus.id), [specs2, focus])
@@ -441,6 +443,17 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
     setFocusId(n.id); setOverlay(true)
   }, [])
 
+  // right-click on a node: suppress the browser menu and open the node's own action menu ([[node-menu]]) —
+  // focusing the node first (in place, no pan, same as click) so the menu and the board agree on the target.
+  // Off-node right-clicks aren't handled here: the open menu closes ITSELF on any window contextmenu
+  // (NodeContextMenu's capture listener), and the browser default stays available elsewhere.
+  const onNodeContextMenu = useCallback((e, n) => {
+    e.preventDefault()
+    if (n.id !== focusRef.current.id) skipCenterRef.current = true
+    setFocusId(n.id)
+    setNodeMenu({ x: e.clientX, y: e.clientY, id: n.id })
+  }, [])
+
   // clicking a session in the top-right window toggles the lock on its worktree's overlays (matched by
   // source = worktree path). Locking ON jumps to the first node it's changing, in TREE order so the
   // camera lands where the `o` cycle enters; focusing a collapsed id is fine (expand-on-focus drills its
@@ -473,6 +486,7 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
           nodeTypes={nodeTypes}
           onNodeClick={onNodeClick}
           onNodeDoubleClick={onNodeDoubleClick}
+          onNodeContextMenu={onNodeContextMenu}
           zoomOnDoubleClick={false}
           nodesDraggable={false}
           nodesFocusable={false}
@@ -491,6 +505,14 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
         <SessionWindow sessions={sessions} activeId={highlightId} onPick={onPickSession} onOpenSession={openSession} />
 
         <BoardStats specs={specs} focusId={focusId} onJump={setFocusId} />
+
+        <NodeContextMenu
+          menu={nodeMenu} onClose={() => setNodeMenu(null)}
+          onInfo={() => setOverlay(true)}
+          onFresh={(id) => startNew(`[[${id}]] `)}
+          onNewChild={(id) => startNew(CHORDS.nn(id))}
+          onDelete={(id) => startNew(CHORDS.dd(id))}
+        />
 
         {lockedSession && (
           <div className="lock-hint" style={{ '--ov': labelColor(lockedSession.id) }}>

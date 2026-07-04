@@ -1,0 +1,29 @@
+{
+ "events": [
+  {
+   "atMs": 6830,
+   "kind": "narrate",
+   "label": "▶ exit-command-stops-keeps-worktree · /exit stops but keeps the row; relaunch resumes"
+  },
+  {
+   "atMs": 22534,
+   "kind": "frame",
+   "label": "📷 before: live terminal, ❯ enabled=true, row present=true"
+  },
+  {
+   "atMs": 26754,
+   "kind": "frame",
+   "label": "📷 typed /exit + Enter (menu dismissed first)"
+  },
+  {
+   "atMs": 34541,
+   "kind": "frame",
+   "label": "📷 after /exit: relaunchPanel=true rowStays=true notOnNew=true noExitLineDispatched=true"
+  },
+  {
+   "atMs": 52240,
+   "kind": "frame",
+   "label": "📷 clicked relaunch → back online (same worktree/conversation) = true"
+  }
+ ]
+}

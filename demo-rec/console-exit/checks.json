@@ -1,0 +1,15 @@
+{
+ "before": {
+  "termVisible": true,
+  "dockEnabled": true,
+  "rowThere": true
+ },
+ "after": {
+  "relaunch": true,
+  "dockDisabled": true,
+  "rowThere": true,
+  "onNew": false,
+  "exitLineInPane": false
+ },
+ "resumed": true
+}

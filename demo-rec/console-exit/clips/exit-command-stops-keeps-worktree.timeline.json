@@ -1,0 +1,25 @@
+{
+ "v": 1,
+ "events": [
+  {
+   "tMs": 0,
+   "step": "/exit stops but keeps the row; relaunch resumes"
+  },
+  {
+   "tMs": 15704,
+   "step": "before: live terminal, ❯ enabled=true, row present=true"
+  },
+  {
+   "tMs": 19924,
+   "step": "typed /exit + Enter (menu dismissed first)"
+  },
+  {
+   "tMs": 27711,
+   "step": "after /exit: relaunchPanel=true rowStays=true notOnNew=true noExitLineDispatched=true"
+  },
+  {
+   "tMs": 45410,
+   "step": "clicked relaunch → back online (same worktree/conversation) = true"
+  }
+ ]
+}

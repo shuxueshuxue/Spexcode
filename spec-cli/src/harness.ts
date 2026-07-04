@@ -363,8 +363,14 @@ export function codexLaunchCommand(_id: string, codexCmd = process.env.SPEXCODE_
     'done',
     'if [ -S "$sock" ] && [ -s "$pid" ] && ! kill -0 "$(cat "$pid")" 2>/dev/null; then rm -f "$sock"; fi',
     'if [ ! -S "$sock" ]; then',
-    // </dev/null detaches the daemon's stdin from the pane so it can't fight the TUI for the tty.
-    `  ${server} app-server --listen unix://"$sock" >"$log" 2>&1 </dev/null &`,
+    // The app-server is a per-PROJECT daemon SHARED across every worktree's threads, so it must run in a STABLE
+    // cwd — the runtime dir "$dir", NOT the launch.sh's transient worktree. A daemon started inside a worktree
+    // keeps that worktree as its process cwd for its whole life; when the session closes and the worktree is
+    // removed, the daemon's cwd becomes a DELETED dir, and codex then fails EVERY new thread's config load with
+    // `failed to load configuration: No such file or directory` — bricking codex launch for the whole project
+    // until the daemon is killed. Running it from "$dir" (which never gets deleted) makes it deletion-proof.
+    // exec so $! is the daemon itself; </dev/null detaches its stdin from the pane so it can't fight the TUI.
+    `  ( cd "$dir" && exec ${server} app-server --listen unix://"$sock" >"$log" 2>&1 </dev/null ) &`,
     '  echo $! > "$pid"',
     '  for i in $(seq 1 100); do [ -S "$sock" ] && break; sleep 0.05; done',
     'fi',

@@ -1,7 +1,7 @@
 ---
 concern: drift signal is a linear git-log-position approximation, not git ancestry — silently under-reports (worst on adoption); lint.ts comment falsely claims rev-list rigor
 by: 4b64d4ad-7844-4e32-a308-b4d33b25ccb8
-status: open
+status: landed
 nodes: drift-by-ancestry
 created: 2026-07-04T03:20:10.889Z
 ---
@@ -18,3 +18,7 @@ created: 2026-07-04T03:20:10.889Z
 **Blast radius.** Every drift warning, the board's per-node drift count, and (transitively) `deriveStatus`. Under-reports on any non-linear history: merges, cherry-picks, back-dated commits, and especially **adoption/back-extraction** (near-total under-report) — the exact onboarding path the project wants to make trustworthy for open-source.
 
 **Disposal.** Schedule — build the pending `drift-by-ancestry` DAG-reachability algorithm (the node IS the scheduled fix). **Immediately** correct the `lint.ts:183-185` comment so the code stops claiming ancestry rigor it does not have.
+
+---
+
+Fixed in node/drift-ancestry-1c62 (commit 9ed4268). The position compare is REPLACED, not paralleled: `buildDriftIndex`'s one cached walk now carries `%P` parent edges, and `driftFor`/`changedSince`/`scenarioMoved` answer "newer than the spec/reading" by in-memory DAG reachability (`ancestorsOf`, memoized bitsets — the equivalent of `rev-list version..HEAD -- file`; the `pos` map is gone). The ack floor is ancestry too: a `Spec-OK` quiets exactly the commits reachable from it. The lying lint.ts comment now states the real mechanism, and spec-lint's drift bullet drops its timing language (2f4df07). Off-history shas keep ONE conservative rule (orphan and reachable-but-unmerged alike: 0 drift measured from them, stale readings stamped with them) — the finer distinction is noted as deferred in the drift-by-ancestry body. A/B on yatsu scenario `branchy-drift-counted`: A/fail — a back-dated merged side-branch change yields 0 lint warnings while `rev-list V..HEAD` proves 1 commit of drift; B/pass — the same fixture warns "1 commit(s) ahead". Re-baseline on this repo surfaced 2 previously hidden drift rows (spec-cli/src/index.ts 7→8 ahead of spec-cli; init.ts newly 1 ahead of spex-init).

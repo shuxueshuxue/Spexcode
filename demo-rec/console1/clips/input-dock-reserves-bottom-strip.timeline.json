@@ -1,0 +1,17 @@
+{
+ "v": 1,
+ "events": [
+  {
+   "tMs": 0,
+   "step": "terminal ends above the resting dock; growth overlays"
+  },
+  {
+   "tMs": 5310,
+   "step": "rest: term.bottom=946 dock.top=946 overlap=false"
+  },
+  {
+   "tMs": 13019,
+   "step": "grown: term rect y=32 h=914 (unchanged=true)"
+  }
+ ]
+}

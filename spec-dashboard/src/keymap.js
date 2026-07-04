@@ -30,11 +30,10 @@ export const ACT = [
   { id: 'board.zoomIn',    keys: ['+', '='], rebind: true, desc: 'legend.board.zoom' },
   { id: 'board.zoomOut',   keys: ['-', '_'], rebind: true, desc: 'legend.board.zoom' },
   { id: 'board.zoomReset', keys: ['0'],      rebind: true, desc: 'legend.board.zoom' },
-  { id: 'board.info',      keys: ['i', 'I'], rebind: true, desc: 'legend.board.info' },
+  { id: 'board.info',      keys: ['i', 'I', 'Enter'], rebind: true, desc: 'legend.board.info' },
   { id: 'board.search',    keys: ['/'],      rebind: true, desc: 'legend.board.search' },
   { id: 'board.cycle',     keys: ['o'],      rebind: true, desc: 'legend.board.overlayCycle' },
   { id: 'board.cycleRev',  keys: ['O'],      rebind: true, desc: 'legend.board.overlayCycle' },
-  { id: 'board.enter',     keys: ['Enter'],  rebind: true, desc: 'legend.board.enter' },
   { id: 'board.fresh',     keys: ['['],      rebind: true, desc: 'legend.board.fresh' },
   { id: 'board.evals',     keys: ['f'],      rebind: true, desc: 'legend.board.evals' },
   // node chords — structural (a two-key grammar, not a single binding)

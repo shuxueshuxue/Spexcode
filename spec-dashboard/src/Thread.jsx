@@ -111,9 +111,13 @@ export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = nul
   const ac = useMentionAutocomplete({ inputRef: taRef, value: body, setValue: setBody, specs, sessions, focusId, up: true })
   const frames = bodyEvidence(body)         // the frame links currently in the draft (preview + the send's evidence[])
 
-  // a circle prefills this composer: replace the draft with its anchored body + frame link, then focus for edit.
+  // a circle prefills this composer: replace the draft with its anchored body + frame link, then focus for
+  // edit. A NULL draft CLEARS — the host nulls it when the working state resets (a selection change, an A/B
+  // flip), and preserving the old text past that reset is exactly the cross-eval draft leak; a freshly
+  // mounted composer may also briefly see the host's stale draft before the host's own reset effect runs,
+  // so the clear (not an early return) is what makes the reset stick.
   useEffect(() => {
-    if (!draft) return
+    if (!draft) { setBody(''); return }
     setBody(draft.body || '')
     taRef.current?.focus()
   }, [draft?.seq])

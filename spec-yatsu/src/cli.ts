@@ -179,8 +179,31 @@ async function scan(args: string[] = []): Promise<number> {
   return 0
 }
 
+// eval's flag set is CLOSED — like the scenario schema's closed field set. An unrecognized flag is
+// rejected LOUD, never silently ignored: an old CLI that didn't know `--video` once filed the clip as an
+// `--image`, and a misfiled reading is worse than none (it reads as proof). Value-flags consume the next
+// token, so a path/note that itself starts with `--` is never mistaken for a flag.
+const EVAL_VALUE_FLAGS = new Set(['scenario', 'note', 'image', 'result', 'video', 'timeline'])
+const EVAL_BOOL_FLAGS = new Set(['pass', 'fail'])
+function rejectUnknownEvalFlag(args: string[]): string | null {
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]
+    if (!a.startsWith('--')) continue
+    const name = a.slice(2)
+    if (EVAL_VALUE_FLAGS.has(name)) { i++; continue }   // its value is the next token — skip it
+    if (EVAL_BOOL_FLAGS.has(name)) continue
+    return a
+  }
+  return null
+}
+
 async function evalCmd(args: string[]): Promise<number> {
   const root = repoRoot()
+  const bad = rejectUnknownEvalFlag(args)
+  if (bad) {
+    console.error(`spex yatsu eval: unknown flag '${bad}' — accepts --scenario --pass --fail --note --image --result --video --timeline`)
+    return 2
+  }
   const sel = positional(args)
   const id = !sel || sel === '.' ? currentNodeId(root) : sel
   if (!id) { console.error('spex yatsu eval .: no current node (no .session/node-branch here) — name a node'); return 2 }

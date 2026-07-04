@@ -29,6 +29,12 @@ the file this node governs (the deeper mechanism lives in its [[source-of-truth]
 eval endpoints' contract belongs to [[spec-yatsu]], so their churn — the eval-blob comment reframed to
 serve a transcript or image, not just pixels — is that subtree's evolution, not spec-cli's drift).
 
+A CLI output contract, in the same fail-loud spirit: a verb with unbounded stdout (`issues --json`,
+`board`, `review --json`, `yatsu show --json`, …) must FULLY reach a pipe. `process.exit()` force-quits
+without draining buffered pipe writes, silently truncating a large dump at the ~64KB pipe buffer, so those
+verbs exit through a shared **flush-then-exit** helper that waits for stdout to drain first — a >64KB piped
+board or issue dump arrives whole, never a JSON cut off mid-object that reads as complete.
+
 The `serve` script (the `npm run api` entry) hot-reloads the backend on changes to **any source tree the
 child actually imports** — its own `spec-cli/src/**` plus the sibling packages it loads at runtime
 (`spec-forge`, `spec-yatsu`) — never on `.spec/**/spec.md` or `spec-dashboard` edits, which it reads via fs

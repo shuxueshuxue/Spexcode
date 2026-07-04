@@ -89,7 +89,10 @@ The surface mirrors the code-drift report:
 - **eval [.|<node>] [--scenario N] (--pass|--fail|--note T) [--image P …repeatable] [--result P|-] [--video P [--timeline P]]** —
   FILE the measurement the agent already took. yatsu runs nothing: it stores the evidence under one verdict,
   for one scenario. `--image` REPEATS (N stills) and combines freely with `--result`/`--video` in one filing —
-  each is pushed onto the reading's evidence list; `--timeline` anchors the video entry. The seam has a **write half over data** too (filing.ts): a caller with a
+  each is pushed onto the reading's evidence list; `--timeline` anchors the video entry. eval's flag set is
+  **closed**, the argv mirror of the scenario schema's closed field set: an unrecognized `--flag` is rejected
+  LOUD (before any node lookup or filing), never silently ignored — a version-skewed CLI that didn't know
+  `--video` once filed the clip as an `--image`, and a misfiled reading is worse than none (it reads as proof). The seam has a **write half over data** too (filing.ts): a caller with a
   verdict but no argv — the HTTP eval route, a programmatic filer — appends through the SAME seam
   (evaluator `manual@1` for a human hand). Filing is the CLI/agent surface: [[event-detail]] reads
   readings and hosts remarks, it files nothing.

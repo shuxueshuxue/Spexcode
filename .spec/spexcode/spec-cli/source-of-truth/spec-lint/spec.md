@@ -49,7 +49,10 @@ rules:
 
 Reusable as a **product**, not a SpexCode-only script: every project-shaped value (roots, extensions,
 budgets, the breadth limit) is read from an optional **`spexcode.json`** (`lint` key), defaulting to values
-tuned to this tree; a different layout or language overrides what fits.
+tuned to this tree; a different layout or language overrides what fits. `loadConfig` reads it through the
+shared fail-loud `readJsonConfig` ([[portable-layout]]): an ABSENT file defaults silently, but a MALFORMED
+one throws LOUD rather than quietly reverting the author's tuned budgets to defaults — a typo that
+green-washes the very altitude/coverage warnings they meant to enforce is a config error they must see.
 
 No file hashes are stored — git is the hash database, so drift is derived live. When
 drift exists, `spex lint` prints **remediation guidance**: drift can't be auto-fixed, so the agent must

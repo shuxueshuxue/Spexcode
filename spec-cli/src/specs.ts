@@ -1,4 +1,5 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
+import { readFile, readdir } from 'node:fs/promises'
 import { join, relative, basename } from 'node:path'
 import { repoRoot, historyIndex, rowsFor, statsFor, pathsStats, driftIndex, driftFor, fileDiffAt } from './git.js'
 
@@ -124,6 +125,30 @@ function raws(): Raw[] {
   return acc
 }
 
+// async twin of walk/raws for the HOT board build ([[board-cache]]): reading each spec.md through
+// fs/promises YIELDS the event loop between files, so a build never stalls a `/health` liveness probe the
+// way the sync walk (one ~450ms uninterrupted stretch) did. Same output as raws() — identical push order
+// (pre-order DFS, dir before children) and the same reId — so every caller reads the same nodes; only
+// loadSpecs (already async, on the hot path) uses it, the light one-shot callers keep the sync raws().
+async function walkAsync(dir: string, parent: string | null, acc: Raw[]): Promise<void> {
+  let myId = parent
+  if (existsSync(join(dir, 'spec.md'))) {
+    myId = basename(dir)
+    const relPath = relative(ROOT, join(dir, 'spec.md'))
+    const { fm, body } = parseFrontmatter(await readFile(join(dir, 'spec.md'), 'utf8'))
+    acc.push({ id: myId, parent, relPath, fm, body })
+  }
+  for (const e of await readdir(dir, { withFileTypes: true })) {
+    if (e.isDirectory()) await walkAsync(join(dir, e.name), myId, acc)
+  }
+}
+async function rawsAsync(): Promise<Raw[]> {
+  const acc: Raw[] = []
+  if (existsSync(SPEC_DIR)) await walkAsync(SPEC_DIR, null, acc)
+  reId(acc)
+  return acc
+}
+
 // spec node(s) that GOVERN a file by the claim rule (exact path, dir-prefix, or *-glob); reads only
 // frontmatter `code:` (cheap, no git) so a per-edit hook can call it. See [[governed-related]].
 export function specOwners(file: string): { id: string; desc: string }[] {
@@ -173,8 +198,7 @@ export function specContent(id: string): { body: string; parts: ReturnType<typeo
 export async function loadSpecs() {
   // both indexes are one cached git walk each and independent — fetch them in parallel (async git, off
   // the event loop). Every node below is then a pure lookup.
-  const [idx, didx] = await Promise.all([historyIndex(ROOT), driftIndex(ROOT)])
-  const allRaws = raws()
+  const [idx, didx, allRaws] = await Promise.all([historyIndex(ROOT), driftIndex(ROOT), rawsAsync()])
   return Promise.all(allRaws.map(async (r) => {
     const h = rowsFor(idx, r.relPath)
     // session = the Session: trailer of the node's latest version; frontmatter `session:` is the fallback.

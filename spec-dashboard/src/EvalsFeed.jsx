@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { ScoreBadge, scenarioStates } from './score.jsx'
 import { useT } from './i18n/index.jsx'
 
-// The evals section ([[evals-feed]]): the DEFAULT TAB of the issues page's left box (master-detail,
-// [[issues-view]]) — the project's CURRENT measured loss. The unit is the SCENARIO, never the reading —
-// latest reading per (node, scenario), fresh leading, video first — so the list is bounded by declared
-// scenarios, not by measurement count. Rows are title-only; selecting one opens it in the detail pane
-// (the [[annotator]]) — media loads THERE, never in the list.
+// The evals feed ([[evals-feed]]): the LEFT list of the Evals page (master-detail, [[evals-view]]) — the
+// project's CURRENT measured loss. The unit is the SCENARIO, never the reading — latest reading per
+// (node, scenario), fresh leading, video first — so the list is bounded by declared scenarios, not by
+// measurement count. Rows are title-only; selecting one opens it in the detail pane ([[event-detail]]) —
+// media loads THERE, never in the list.
 //
 // ONE data path, ONE computation: the board nodes arrive as a PROP (the app's single board poll + SSE),
 // and latest-per-scenario is score.jsx's scenarioStates — the same vocabulary the node badge, the focus
@@ -71,10 +71,9 @@ const rel = (ts) => {
 
 // `nodes`: the board node list, threaded down from the app's one poll. `sel`/`onSel`: the page's single
 // selection (the detail pane follows it). `onRows`: reports the VISIBLE entries upward so the page's
-// j/k walks the active tab's list — filter state stays this group's own. `hidden`: the page's tab
-// switcher owns which group shows; the group stays MOUNTED (rows keep reporting, media state survives a
-// tab flip) and merely hides. The group carries no title of its own — the switcher IS the title.
-export default function EvalsGroup({ nodes = [], sel, onSel, onRows, hidden = false }) {
+// j/k walks this list — filter state stays this group's own. The group carries no title of its own —
+// the [[side-nav]] rail names the Evals page; this list renders just its filter chipbar.
+export default function EvalsGroup({ nodes = [], sel, onSel, onRows }) {
   const t = useT()
   const [kind, setKind] = useState(null)          // null = the default: video → image → all, first kind present
   const [showStale, setShowStale] = useState(false)
@@ -92,7 +91,7 @@ export default function EvalsGroup({ nodes = [], sel, onSel, onRows, hidden = fa
   useEffect(() => { onRows?.(rows) }, [rows, onRows])
 
   return (
-    <section className={`fv-group${hidden ? ' fv-hide' : ''}`}>
+    <section className="fv-group">
       <header className="fv-group-head">
         <span className="ef-chipbar">
           {['video', 'image', 'note', 'all'].map((k) => (

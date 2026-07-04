@@ -85,10 +85,10 @@ body {
 /* the active page: a soft accent wash + accent ink — a state, not a hover effect */
 .rail-btn.on { background: color-mix(in srgb, var(--blue) 14%, transparent); color: var(--blue); }
 
-/* ---- routed page containers (issues, settings) ---- */
+/* ---- routed page containers (evals, issues, settings) ---- */
 .page-pane { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--paper); }
-/* the issues page keeps the issues-view iron rule: the outer page never scrolls, each region scrolls internally */
-.page-issues { overflow: hidden; padding: 10px 14px; }
+/* the evals + issues pages keep the master-detail iron rule: the outer page never scrolls, each region scrolls internally */
+.page-evals, .page-issues { overflow: hidden; padding: 10px 14px; }
 .page-settings { overflow: auto; flex-direction: row; justify-content: center; }
 .settings-body { width: min(720px, 94%); padding: 26px 0 60px; }
 .page-title { font-size: 17px; font-weight: 700; color: var(--ink2); margin: 6px 2px 14px; }
@@ -967,23 +967,29 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .si-pill.forum:hover { color: var(--blue); }
 .si-pill.forum.on { color: var(--blue); background: color-mix(in srgb, var(--blue) 16%, var(--panel2)); border-color: var(--blue); }
 
-/* ---- issues page: MASTER-DETAIL ([[issues-view]]) — a left list (two groups) + a full-height detail
-   pane. Selection IS detail: no in-place expansion inside a scroll box. ---- */
-.fv-master { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(300px, 380px) 1fr; }
-/* the left column is ONE box under a prominent TAB SWITCHER (evals | threads): the switcher is the
-   title, the active tab's filter bar sits under it, and the active list gets the full height. The
-   hidden tab stays mounted (fv-hide) so its state and row reporting survive a flip. */
-.fv-list-col { min-height: 0; display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid var(--line); background: var(--paper); }
+/* ---- the master-detail shell shared by the Evals page ([[evals-view]]) and the Issues page
+   ([[issues-view]]) — a SLIM left list + a full-height detail pane. Selection IS detail: no in-place
+   expansion inside a scroll box. Rows are title-only, so the list earns no more than ~280px; a fold
+   toggle collapses it to a thin strip so the detail workspace owns the width while an eval is worked.
+   Each page is its OWN top-level route now — no in-page tab switcher. ---- */
+.fv-master { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(232px, 280px) 1fr; }
+.fv-master.folded { grid-template-columns: 22px 1fr; }
+/* the left column is ONE box: its own filter bar (the evals chips, or the issues store/New/concluded bar)
+   over a full-height list that scrolls itself. The [[side-nav]] rail names the page — no column title. */
+.fv-list-col { position: relative; min-height: 0; display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid var(--line); background: var(--paper); }
 .fv-list-col > .fv-notice { flex: none; }
-.fv-tabs { flex: none; display: flex; background: var(--panel2); border-bottom: 1px solid var(--line); }
-.fv-tabs button { flex: 1 1 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font: inherit; font-size: 11px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: var(--muted); background: none; border: 0; border-bottom: 2px solid transparent; padding: 9px 0 7px; cursor: pointer; }
-.fv-tabs button.on { color: var(--ink); border-bottom-color: var(--blue); }
-.fv-tabs button:hover { color: var(--ink2); }
-.fv-tab-n { font-family: var(--mono); font-size: 9px; font-weight: 400; letter-spacing: 0; color: var(--muted); border: 1px solid var(--line); border-radius: 9px; padding: 0 6px; }
-.fv-tabs button.on .fv-tab-n { color: var(--ink2); }
 .fv-list-col > .fv-group { flex: 1 1 auto; min-height: 0; overflow-y: auto; border-top: 0; }
-.fv-hide { display: none !important; }
-.fv-detail { min-height: 0; overflow-y: auto; background: var(--paper); }
+/* the fold toggle rides the sticky filter bar's right edge; the bar reserves room for it. */
+.fv-list-col .fv-group-head { padding-right: 34px; }
+.fv-fold { position: absolute; top: 7px; right: 6px; z-index: 3; font: inherit; font-size: 11px; line-height: 1;
+  color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: 4px;
+  width: 20px; height: 20px; cursor: pointer; }
+.fv-fold:hover { color: var(--blue); border-color: var(--blue); }
+/* folded: the whole strip is the unfold affordance — a full-height slim button. */
+.fv-unfold { font: inherit; font-size: 11px; color: var(--muted); background: var(--panel); border: none;
+  border-right: 1px solid var(--line); cursor: pointer; padding: 0; min-height: 0; }
+.fv-unfold:hover { color: var(--blue); background: var(--panel2); }
+.fv-detail { min-height: 0; min-width: 0; overflow-y: auto; background: var(--paper); }
 .fv-group { display: flex; flex-direction: column; }
 .fv-group + .fv-group { border-top: 1px solid var(--line); }
 .fv-group-head { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px; background: var(--panel2); border-bottom: 1px solid var(--line); }
@@ -1534,9 +1540,30 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .ef-kind { margin-left: auto; font-size: 12px; }
 .ef-time { color: var(--muted); font-size: 10px; min-width: 28px; text-align: right; }
 
-/* ---- annotator ([[annotator]]) — the human's measuring hand on an already-captured clip ---- */
-.an-detail { padding: 14px 22px 26px; max-width: 900px; }
-.an-head { display: flex; align-items: center; gap: 10px; padding: 0 0 8px; border-bottom: 1px solid var(--line); }
+/* ---- annotator ([[annotator]]) — the human's measuring hand on an already-captured clip. The pane is a
+   WORKSPACE (the gugu-annotator shape): a slim header band, then MEDIA STAGE | REMARK RAIL side by side,
+   each scrolling itself — circle on the stage, remark in the rail, no vertical ping-pong. ---- */
+.an-detail { height: 100%; min-height: 0; display: flex; flex-direction: column; padding: 0; }
+.an-head { flex: none; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--panel2); }
+/* the stage | rail split: the media owns the center, the remark track + composer the right rail —
+   BOTH always visible, each its own scroll. */
+.an-work { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 340px); }
+.an-stage-col { min-width: 0; min-height: 0; overflow-y: auto; padding: 12px 16px 20px; }
+.an-rail { min-width: 0; min-height: 0; display: flex; flex-direction: column; border-left: 1px solid var(--line); background: var(--panel); }
+.an-rail .an-comments-head { flex: none; padding: 10px 12px 8px; border-bottom: 1px solid var(--line); }
+.an-rail-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 4px 12px 8px; }
+.an-rail-list .fv-reply { margin-top: 8px; }
+/* the composer is DOCKED at the rail's foot — always on screen, never scrolled to. */
+.an-rail-compose { flex: none; border-top: 1px solid var(--line); padding: 0 12px 10px; background: var(--panel); }
+.an-rail-compose .fv-compose { margin-top: 8px; padding-top: 0; border-top: none; }
+/* narrow: the workspace stacks — stage over rail — and the pane scrolls as one column again. */
+@media (max-width: 900px) {
+  .an-detail { height: auto; }
+  .an-work { display: block; }
+  .an-stage-col { overflow: visible; }
+  .an-rail { border-left: none; border-top: 1px solid var(--line); }
+  .an-rail-list { overflow: visible; }
+}
 .an-meta { font-size: 10.5px; color: var(--muted); }
 .an-image { display: block; max-width: 100%; border: 1px solid var(--line); border-radius: 6px; background: var(--panel2); cursor: zoom-in; }
 /* click-to-enlarge overlay for evidence images — click anywhere / Esc closes */
@@ -1546,8 +1573,13 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .an-title { font-weight: 700; font-size: 14px; color: var(--ink); }
 .an-node { font-size: 11px; color: var(--muted); }
 .an-expected { font-size: 12px; color: var(--ink2); padding: 8px 0 0; }
-.an-comments { margin-top: 22px; padding-top: 10px; border-top: 1px solid var(--line); }
 .an-comments-head { font-size: 10px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--ink2); }
+/* the stage's content caps at a review-comfortable width even when the pane is very wide. */
+.an-stage-col > * { max-width: 1100px; }
+/* the still gallery — every image entry stacked on the stage, each click-to-enlarge. */
+.an-gallery { display: flex; flex-direction: column; gap: 10px; margin: 12px 0 0; }
+/* a stage-less an-detail (the session tab's blind-spot face) breathes without the stage column's padding. */
+.an-detail > .an-expected, .an-detail > .an-hint { padding: 8px 16px 0; }
 .an-stage { position: relative; margin: 12px 0 0; cursor: crosshair; }
 .an-video { display: block; width: 100%; background: #000; border: 1px solid var(--line); border-radius: 6px 6px 0 0; }
 .an-rect { position: absolute; border: 2px solid var(--orange); border-radius: 3px; background: rgba(255,150,60,.12); pointer-events: none; }
@@ -1582,15 +1614,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .an-step { font: inherit; font-size: 11px; color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 2px 8px; cursor: pointer; }
 .an-step.on { border-color: var(--green); color: var(--ink); }
 .an-hint { color: var(--muted); font-size: 11px; padding: 8px 0 0; }
-.an-actions { display: flex; align-items: center; gap: 10px; padding: 12px 0 0; flex-wrap: wrap; }
-.an-act { font: inherit; font-size: 12px; color: var(--ink); background: var(--panel2); border: 1px solid var(--blue); border-radius: 5px; padding: 4px 12px; cursor: pointer; }
-.an-act:disabled { opacity: .45; cursor: default; }
-.an-verdict { display: flex; align-items: center; gap: 6px; margin-left: auto; }
-.an-v { font: inherit; font-size: 11px; font-weight: 700; background: none; border: 1px solid var(--line); border-radius: 4px; padding: 2px 8px; cursor: pointer; color: var(--muted); }
-.an-v.pass.on { color: var(--green); border-color: var(--green); }
-.an-v.fail.on { color: var(--orange); border-color: var(--orange); }
-.an-note { width: 180px; font: inherit; font-size: 11px; color: var(--ink); background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 3px 8px; }
-.an-flash { font-size: 12px; color: var(--green); }
+.an-flash { font-size: 12px; color: var(--green); padding: 4px 0 0; }
 
 /* the header verdict of the CURRENTLY-VIEWED reading (flips with the A/B strip) */
 .an-verdict-badge { font-size: 12px; font-weight: 700; line-height: 1; }
@@ -1599,8 +1623,9 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .an-verdict-badge.legacy { color: var(--muted); }
 
 /* ---- the A/B history strip ([[reproduce-before-fix]]): a scenario's fail→pass lifecycle as verdict pips,
-   oldest→newest left-to-right, with ‹ › to walk it. The ✗→✓ progression IS the A/B. ---- */
-.an-ab { display: flex; align-items: center; gap: 8px; padding: 8px 0 0; }
+   oldest→newest left-to-right, with ‹ › to walk it. The ✗→✓ progression IS the A/B — it rides the slim
+   header band, right-aligned. ---- */
+.an-ab { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .an-ab-nav { font: inherit; font-size: 13px; line-height: 1; color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 1px 7px; cursor: pointer; }
 .an-ab-nav:disabled { opacity: .35; cursor: default; }
 .an-ab-track { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; }

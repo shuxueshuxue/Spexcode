@@ -70,7 +70,11 @@ surface:
   `codex app-server` process's own `--dangerously-bypass-hook-trust` CLI flag, which is INERT for a thread (that
   flag on the shared app-server bought nothing — a real regression: dispatched codex threads fired ZERO hooks because
   the untrusted worktree's `.codex` config layer stays *disabled*, so no local hooks are even discovered). So a
-  one-time capability probe (`<binary> --help`) picks ONE of two mutually-exclusive paths: flag-supported → SKIP
+  one-time capability probe (`<binary> --help`) picks ONE of two mutually-exclusive paths — and it MUST probe the
+  SAME codex the session actually runs (the launcher's resolved cmd, the one driving the app-server + resume TUI),
+  so the launch script EXPORTS `SPEXCODE_CODEX_CMD` for the codex-launch child to inherit; a fallback bare `codex`
+  picks the WRONG install on a multi-codex box (an old Homebrew one on PATH beside the launcher's newer nvm one),
+  mis-decides the path, and silently drops the bypass — no hooks fire. flag-supported → SKIP
   writing the hash and deliver the bypass on **both** thread paths — (1) the BACKEND-owned `thread/start`
   (codex-launch) carries `config.bypass_hook_trust`, and (2) the visible `--remote … resume` TUI carries the flag,
   which codex's OWN client forwards into its thread/start+thread/resume `config` (so a reopen in a fresh app-server,

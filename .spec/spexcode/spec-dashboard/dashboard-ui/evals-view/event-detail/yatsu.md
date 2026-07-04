@@ -9,8 +9,9 @@ scenarios:
       + which comment/marker highlights; play/pause and read the playhead-active comment as it advances;
       frame-step with '.' and jump comments with ↑/↓ and read video.currentTime; press 'a' and read the
       composer's stamped anchor; click a step on the ruler; drag on the paused frame to circle a region,
-      read the prefilled comment and send it; click the sent comment's anchor chip; file a fail reading;
-      switch selection to another row and back.
+      read the prefilled comment and send it; click the sent comment's anchor chip; read the pane's DOM
+      below the player for any verdict-filing controls (pass/fail buttons, a note input, a file-reading
+      action); switch selection to another row and back.
     expected: |
       The eval detail IS the event detail — full pane height, no modal — with a CUSTOM player (native chrome
       replaced): a scrubber carrying the play-fill + knob, one MARKER per anchored comment at its moment,
@@ -26,8 +27,9 @@ scenarios:
       creates/appends the eval's local Issue thread ('eval: <node> · <scenario>') with that frame in the
       body AND on the thread's typed evidence[]; the sent comment shows an anchor chip that SEEKS + selects
       on click and renders the circled frame inline. '@new' dispatches a fresh worker with the anchor in its
-      prompt. The fail reading appends a manual@1 line (verdict + note, NO marks transcript) to the sidecar.
-      Switching selection resets the working draft.
+      prompt. The pane carries NO verdict-filing controls — no pass/fail bar, no verdict-note input, no
+      file-reading button (readings are filed by agents via `spex yatsu eval`; the human judges through the
+      remark composer). Switching selection resets the working draft.
   - name: image-lightbox
     tags: [frontend-e2e]
     description: >
@@ -76,6 +78,6 @@ scenarios:
 
 YATU through the real browser over a real backend: the seek, the ⏱ anchor, the circled-frame comment (its
 frame on /api/yatsu/blob and the thread's evidence[]), the anchor-chip seek, the @new dispatch, and the
-verdict reading are all read from live surfaces (DOM, /api/issues, the sidecar file) — never asserted from
-the component code. There is ONE annotation primitive (an anchored comment on the eval's thread); the
-verdict reading no longer duplicates the marks.
+absence of verdict-filing controls are all read from live surfaces (DOM, /api/issues) — never asserted from
+the component code. There is ONE annotation primitive (an anchored comment on the eval's thread); the pane
+reads readings, it files none.

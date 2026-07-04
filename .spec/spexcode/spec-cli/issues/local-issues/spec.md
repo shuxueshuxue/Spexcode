@@ -75,6 +75,28 @@ it to `.spec/.issues` on its first store touch after a toolchain update — the 
   thread is always present to read, sign, and reply to. This is also what lets a **post-merge** concern
   land durably — the author's own branch has
   already merged, so an issue opened then could never ride it; committed to the trunk directly, it persists.
+- **Only the trunk checkout may commit that write — a linked-worktree backend must not fabricate commits on a
+  main it doesn't own.** Because *every* backend resolves the store to `dirname(git-common-dir)` (the shared main),
+  a backend serving a linked worktree — a dev worktree's `spex serve`, a dispatched **e2e** rig — would otherwise
+  `git commit` a stray issue onto the **real, live** main working tree: advancing it under whoever is there and
+  racing its `index.lock`. Trunk-scoping is right and stays (issues are not code-bound, so they belong on the one
+  always-visible store); the bug was never *where* issues live, only *which* checkout's git got the commit. So the
+  write is gated by one deterministic predicate — `repoRoot() === mainCheckout()`, i.e. this process's own root
+  IS the trunk checkout. True for the primary backend and for a throwaway **clone** (its own `.git`, its own
+  disposable main — never the real one); **false only for a linked-worktree backend**, exactly the footgun. When
+  false the commit is **refused, loud, with the repair** — never a silent write onto someone else's main. The
+  legitimate write moment already satisfies the predicate: the post-merge nudge fires inside `git -C <main> merge`
+  (cwd = main), so a doer opening a post-merge concern is running as the trunk checkout.
+- **A disposable store for tests — one override, plain files, no commit, no git at all.** `SPEXCODE_ISSUES_DIR=<abs>`
+  points **both** reads and writes at an isolated directory of plain `.md` files: no `git add/commit`, so it can
+  **never** touch any shared main, and the primary-checkout predicate is moot (nothing is committed). This is the
+  e2e/sandbox seam — a test rig sets it once and exercises the whole open/reply/remark surface against a temp dir
+  it throws away, mirroring how [[blob-put]]'s evidence cache and `SPEXCODE_HOME` keep test artifacts off the repo.
+  (Refuse-when-non-primary is the minimum honest fix that stops the dirtying today; the fuller ambition — a
+  *worktree-independent* commit that lands the write on trunk from ANY checkout without a working-tree touch, e.g.
+  `hash-object`+`commit-tree`+`update-ref` — is deferred: advancing the checked-out trunk **branch** ref leaves its
+  working tree showing phantom deletions, and a dedicated non-branch ref would forfeit working-tree visibility and
+  normal push/pull sync, so it is a redesign of the read side too, not this node's mechanism patch.)
 - **Writes are serialized + fast, so a burst can't corrupt the local issue store.** The whole read-mutate-write-commit of
   one thread runs under a single cross-process **store lock** (an atomic `.git` dir-lock, stale-stolen), so
   concurrent writers can neither collide on the repo index nor lose a racing reply (last-writer-wins is

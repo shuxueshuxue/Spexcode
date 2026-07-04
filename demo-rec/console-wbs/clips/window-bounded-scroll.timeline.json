@@ -1,0 +1,21 @@
+{
+ "v": 1,
+ "events": [
+  {
+   "tMs": 0,
+   "step": "the SessionWindow glance is capped ~80vh, clears the stats strip, overflow scrolls"
+  },
+  {
+   "tMs": 10582,
+   "step": "glance: height=428px (79% vh), bottom=476 vs stats.top=497 clearsStats=true, rows=15, scrollable=true"
+  },
+  {
+   "tMs": 13292,
+   "step": "scrolled to end: scrollTop 0→80 (max 80), reachedEnd=true"
+  },
+  {
+   "tMs": 13355,
+   "step": "last row '✸○stub row F (fallback)' in view after scroll = true"
+  }
+ ]
+}

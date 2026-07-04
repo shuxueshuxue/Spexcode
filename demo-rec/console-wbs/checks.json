@@ -1,0 +1,24 @@
+{
+ "geom": {
+  "vh": 540,
+  "winHeight": 428,
+  "winBottom": 476,
+  "winPctOfVh": 79,
+  "statsTop": 497,
+  "clearsStats": true,
+  "rowCount": 15,
+  "scrollable": true,
+  "scrollHeight": 506,
+  "clientHeight": 426
+ },
+ "scroll": {
+  "before": 0,
+  "after": 80,
+  "maxScroll": 80,
+  "reachedEnd": true
+ },
+ "lastRow": {
+  "lastLabel": "✸○stub row F (fallback)",
+  "lastInView": true
+ }
+}

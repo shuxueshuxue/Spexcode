@@ -10,9 +10,10 @@ code:
 
 ## raw source
 
-A proposal in the local issue store and an issue on a forge are **literally the same object on the proper
+A thread in the local issue store and an issue on a forge are **literally the same object on the proper
 abstract level** — a recorded concern bound to spec node(s), carrying its own lifecycle, living *beside*
-the graph and never *as* node state. Where one is stored is a property of the individual issue, not a
+the graph and never *as* node state. Local and remote issues are the SAME data model under the SAME name —
+an issue; a store where either needs a different model or a different word is a bug. Where one is stored is a property of the individual issue, not a
 mode of the project: a project has **both at once, mixed** — an agent's taste concern living local next
 to a human-visible GitHub issue, on the same nodes. Don't build two parallel systems and promise a
 bridge; build the one object and let the stores be adapters.
@@ -23,7 +24,7 @@ bridge; build the one object and let the stores be adapters.
 body, replies[], evidence[], url? }`. `store` names the adapter that holds it (`local`, or a forge host
 like `github`) — data, not a mode. There is deliberately **no content-kind taxonomy**: a field that does
 no mechanical work (nothing branches on it) is a label, not structure — what a thread *is* (a change
-proposal, an annotation, a question) is what its prose says.
+suggestion, an annotation, a question) is what its prose says.
 `nodes[]` is the binding to the graph; `status` is the issue's OWN lifecycle,
 authored in its store, never git-derived (a node *defines*, an issue *does* — [[spec-forge]]'s two-plane
 contract holds here unchanged). `evidence[]` is a list of yatsu content-addressed blob hashes — the typed
@@ -32,7 +33,7 @@ may itself be a **remark** ([[remark-substrate]]) — the same `{by, at, body}` 
 `resolved` bit and the reading it was authored against — but that is one reply carrying extra state, not a
 second thread type; a plain reply is unchanged.
 
-**Two stores, one translation rule.** The **local** store is the local issue store ([[proposals]] owns its whole
+**Two stores, one translation rule.** The **local** store is the local issue store ([[local-issues]] owns its whole
 mechanism — venue, file format, lock, trunk commit); a local issue thread *is* a local Issue, its `store` implied
 by where it lives, never written into the file. The **forge** store rides [[spec-forge]]'s tracer read:
 a `ForgeIssue` becomes an Issue at this boundary — id `<host>#<number>`, title → concern, state → status,
@@ -59,8 +60,8 @@ per-node surface — tile badge, focus panel, node-info Issues tab, the [[issues
 same mixed set with no second path.
 
 **Writes stay where they're owned — and the reply verb routes by store.** Opening, signing, and resolving
-(`spex propose` / `sign` / `resolve`, and the dashboard's New) stay local-store writes. **Replying is ONE
-verb over both stores** (`replyIssue` — `spex propose reply <id>` and `POST /api/issues/:id/reply` are the
+(`spex issues open` / `sign` / `resolve`, and the dashboard's New) stay local-store writes. **Replying is ONE
+verb over both stores** (`replyIssue` — `spex issues reply <id>` and `POST /api/issues/:id/reply` are the
 same routing): a local id goes through the local issue store's committed write, a forge id (`<host>#<n>`) posts a
 **real comment** through the driver's `createComment` — the [[port]]'s second write verb, the same seam
 discipline as promotion (the driver stays the only network toucher; the tracer stays read-only; a failed

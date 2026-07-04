@@ -217,9 +217,9 @@ in the committed spexcode.json — the merge keeps both:
                          spexcode.local.json.
 The gateway password is NEVER read from these files (flag/env only), so serve.public stays committable.
 
-── PROPOSALS (spexcode.json — portable policy) ──
-  proposals.enabled   the taste-forum on/off switch (default ON). OFF silences the post-merge nudge and
-                      hides the dashboard view; the CLI toggle is \`spex proposals on|off\`.
+── ISSUES (spexcode.json — portable policy) ──
+  issues.enabled      the issues-workflow on/off switch (default ON). OFF silences the post-merge nudge and
+                      hides the dashboard view; the CLI toggle is \`spex issues on|off\`.
 
 ── LINT (spexcode.json — a top-level "lint" key; budgets are portable, so committed only) ──
   lint.governedRoots       dirs whose source files must each be governed by a spec (coverage).

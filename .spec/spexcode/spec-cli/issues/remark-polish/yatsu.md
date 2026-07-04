@@ -15,7 +15,7 @@ scenarios:
       no seek), never silently seeking to a wrong moment. Scrubber markers sit at the resolved step positions.
   - name: dispatch-fallback-chain
     tags: [cli]
-    related: [spec-cli/src/mentions.ts, spec-cli/src/proposals.ts]
+    related: [spec-cli/src/mentions.ts, spec-cli/src/localIssues.ts]
     description: >-
       Author a remark on a (node, scenario) eval track and drive the loop-in fallback chain: (a) the reading's
       filer session online, (b) the filer offline but the node's governing session online, (c) both offline.
@@ -45,7 +45,7 @@ scenarios:
 YATU each strand through the surface a user actually touches. Strand 1 is a **real browser** reading of the
 eval detail across two readings with divergent step-timelines — the only honest proof that the anchor
 re-resolves by step-name rather than seeking a frozen m:ss. Strand 2 is measured through the real
-`remark` + loop-in path in `mentions.ts`/`proposals.ts`, reading who was notified and confirming the remark
+`remark` + loop-in path in `mentions.ts`/`localIssues.ts`, reading who was notified and confirming the remark
 stays unresolved (notification never resolves). Strand 3 is measured both from the CLI (`spex yatsu scan`'s
 `yatsu-dangling` line + the node eval timeline's `dangling` field) and in the browser (the struck-through
 node-level row), on a scratch/disposable yatsu.md so the rename leaves no residue.

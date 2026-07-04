@@ -1,14 +1,14 @@
 ---
-title: proposals
+title: local-issues
 status: active
 hue: 200
-desc: The LOCAL store of the one Issue object ([[issues]]): git-native threads as plain documents under .spec/.issues (NOT spec nodes); others sign/reply; a supervisor drains it. Proposals are nudged post-merge, once the agent's own work has safely landed.
+desc: The LOCAL store of the one Issue object ([[issues]]): git-native threads as plain documents under .spec/.issues (NOT spec nodes); others sign/reply; a supervisor drains it. Opening one is nudged post-merge, once the agent's own work has safely landed.
 code:
-  - spec-cli/src/proposals.ts
+  - spec-cli/src/localIssues.ts
   - spec-cli/templates/hooks/post-merge
 ---
 
-# proposals
+# local-issues
 
 ## raw source
 
@@ -19,8 +19,8 @@ them like an async chatroom; a supervisor later drains the local issue store int
 flowing into the codebase's shape, instead of every agent owning only its own slice.
 
 **The local issue store is narrow on purpose — it is not an issue tracker.** A local issue earns its place only when it
-will **outlive the task at hand**, in one of exactly two shapes: (a) an off-mainline **proposal / taste** —
-a concern you are *not* going to act on now; or (b) a **not-worth-a-spec to-do** — something
+will **outlive the task at hand**, in one of exactly two shapes: (a) an off-mainline **taste concern** —
+something you are *not* going to act on now; or (b) a **not-worth-a-spec to-do** — something
 trivial-but-must-not-be-forgotten that doesn't merit a spec node. That's it. It is deliberately **not** a
 general bug tracker: tracking work is what the **spec graph** (the definition) and the **forge** (the
 execution) already do, and a store that competes with them stops being a durable taste-layer and becomes a
@@ -35,7 +35,8 @@ just landed work), and states them.
 
 The local issue store is the **local store of [[issues]]** — the venue where a locally-stored Issue lives. A thread
 *is* an Issue whose `store` is `local`; that store membership is implied by **where the file lives**,
-never written into it. This node owns the store's whole mechanism: the venue, the file format, the write
+never written into it. Local and remote issues are the SAME data model under the SAME name — an issue — so
+this node owns only the local store's mechanism: the venue, the file format, the write
 verbs, the concurrency discipline, and the post-merge nudge. Reading is not this node's surface — the one
 read over every store (CLI `spex issues`, `GET /api/issues`, the board fold) is [[issues]]'s port.
 
@@ -51,7 +52,7 @@ system already nests there. (The dir was historically `.spec/.forum`; a pre-rena
 it to `.spec/.issues` on its first store touch after a toolchain update — the one-shot mechanism is
 [[issues-store-rename]].)
 
-- **One kind of thread — the prose says what it is.** A change proposal, a durable annotation, a heads-up,
+- **One kind of thread — the prose says what it is.** A change suggestion, a durable annotation, a heads-up,
   a Q&A: all the same mechanism, distinguished by nothing but their own words. There is deliberately no
   `kind` taxonomy field ([[issues]]): it would do no mechanical work — the verbs are id-based, dispatch
   doesn't branch on it, the drain is judgment — so it would be a label bought with a second creation verb
@@ -71,9 +72,9 @@ it to `.spec/.issues` on its first store touch after a toolchain update — the 
   checkout's `.spec/.issues/`** — a local-issue file is data, not contract, and the write below commits it with
   `--no-verify` (provably a single `.spec/.issues/` path), so it lands on the trunk without needing any
   [[main-guard]] exception. So there is no per-branch copy and no cross-worktree union to reconcile: every
-  thread is always present to read, sign, and reply to. This is also what lets a **post-merge** proposal
+  thread is always present to read, sign, and reply to. This is also what lets a **post-merge** concern
   land durably — the author's own branch has
-  already merged, so a proposal written then could never ride it; committed to the trunk directly, it persists.
+  already merged, so an issue opened then could never ride it; committed to the trunk directly, it persists.
 - **Writes are serialized + fast, so a burst can't corrupt the local issue store.** The whole read-mutate-write-commit of
   one thread runs under a single cross-process **store lock** (an atomic `.git` dir-lock, stale-stolen), so
   concurrent writers can neither collide on the repo index nor lose a racing reply (last-writer-wins is
@@ -88,11 +89,15 @@ it to `.spec/.issues` on its first store touch after a toolchain update — the 
   `merge node/<id>:` commit so an ordinary pull never nags; its nudge lands in the agent's own command
   output: read the issues, sign/reply if the concern is already raised, else open a new one. Git-native, so
   it reaches a self-launched agent too and costs no harness block-cap.
-- **Surface — the write verbs.** `spex propose "<concern>" [--node <id>…] [--evidence <hash>…]
-  [--body -|<text>]` opens a thread; `propose reply <id> --body -|<text> [--evidence <hash>…]` (the evidence
-  a reply carries accrues onto the thread's `evidence[]`, deduped — an anchored annotation's frame blob),
-  `sign`, and `resolve` act on any local thread. There is deliberately no store-local read command —
-  reading is `spex issues` ([[issues]]), the same list every store feeds.
+- **Surface — the write verbs live on the ONE issues command.** `spex issues open "<concern>" [--node <id>…]
+  [--evidence <hash>…] [--body -|<text>]` opens a thread; `spex issues reply <id> --body -|<text>
+  [--evidence <hash>…]` (the evidence a reply carries accrues onto the thread's `evidence[]`, deduped — an
+  anchored annotation's frame blob), `sign`, and `resolve` act on any local thread. Read and write share one
+  command because local and remote are one model — the store is a property of the issue, never a second
+  command family. There is deliberately no store-local read command — reading is `spex issues` ([[issues]]),
+  the same list every store feeds. (The write verbs were historically a separate `spex propose` command;
+  that name survives only as an undocumented alias so a pre-rename deployment's `post-merge` hook — a
+  per-clone copy that calls `spex propose nudge` — keeps working until its hooks are reinstalled.)
 - **A human writes too — the local issue store is the programmatic surface.** The same write verbs carry an optional
   `author` (default the effective session id, else a caller-passed `'human'`), so a person can post from
   outside the CLI. `replyLocalIssue(id, body, author)` and `postLocalIssue(concern, {nodes, body, author})` are
@@ -104,14 +109,16 @@ it to `.spec/.issues` on its first store touch after a toolchain update — the 
   human's `@`-mention in a reply **does** summon the agent — that is the point. The dashboard's write path
   ([[issues-view]]) is a thin caller: `POST /api/issues/:id/reply` and `POST /api/issues` (author `'human'`),
   both gated by the same on/off switch (403 when OFF).
-- **Opt-outable, default ON.** The issues workflow is a feature you can switch off: `spex propose on|off`
-  flips `spexcode.json`'s `proposals.enabled` (the shared settings file every other toggle lives in),
+- **Opt-outable, default ON.** The issues workflow is a feature you can switch off: `spex issues on|off`
+  flips `spexcode.json`'s `issues.enabled` (the shared settings file every other toggle lives in),
   effective immediately with no commit (config is read from the working tree). OFF silences the post-merge
   nudge and hides the dashboard issues view; the raw write verbs stay usable, since running one is explicit
-  consent. The nudge text and the toggle both live in the CLI (`spex propose nudge <node>` prints nothing
+  consent. The nudge text and the toggle both live in the CLI (`spex issues nudge <node>` prints nothing
   when OFF), so the post-merge hook is a thin caller and the **dashboard's Settings toggle is a thin
-  wrapper over this same switch** — one source of truth, three consumers (CLI, hook, dashboard).
-- **Dedup is the drain's job, not the write's.** Duplicate proposals are a **signal** (recurrence), folded
+  wrapper over this same switch** — one source of truth, three consumers (CLI, hook, dashboard). (The key
+  was historically `proposals.enabled`; a pre-rename value still reads, and the next toggle write rewrites
+  it under `issues` — self-heal on touch, like the store-dir rename.)
+- **Dedup is the drain's job, not the write's.** A duplicate concern is a **signal** (recurrence), folded
   into one thread by a supervisor's judgment ([[supervisor]]) — never a write-time similarity match. And
   recurrence is weighed as **salience, not importance**: a sharp singleton outranks a popular gripe, so the
   count never becomes the priority ranking.

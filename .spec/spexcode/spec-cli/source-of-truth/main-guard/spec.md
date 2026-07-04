@@ -24,8 +24,8 @@ A `pre-commit` hook rejects a direct commit while `HEAD` is the **trunk**. Merge
 node-branch commits pass because they aren't on the trunk. Escape hatch for seeding / eager topology:
 `SPEXCODE_ALLOW_MAIN=1`.
 
-(The [[proposals]] forum also lands its data commits on the trunk, but it does NOT need a guard exception:
-its programmatic writer commits with `--no-verify` — the commit is provably a single `.spec/.forum/` data
+(The [[local-issues]] store also lands its data commits on the trunk, but it does NOT need a guard exception:
+its programmatic writer commits with `--no-verify` — the commit is provably a single `.spec/.issues/` data
 path, so the hook is pure overhead — so it simply never runs this guard. An earlier `.spec/.forum/**`
 exception here was removed as a redundant special-case once the writer moved to `--no-verify`.)
 

@@ -47,7 +47,7 @@ export function currentEntries(nodes) {
 
 export const entryKey = (e) => `eval:${e.node}·${e.scenario}`
 
-// one eval row — the shared row grammar every eval face uses (the forum's list here; the session Eval
+// one eval row — the shared row grammar every eval face uses (the issues page's list here; the session Eval
 // tab reuses it verbatim so the two surfaces can never drift apart).
 export function EvalRow({ e, selected, onClick }) {
   return (

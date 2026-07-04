@@ -11,7 +11,7 @@ scenarios:
       gitignored/host-specific), documents the launcher schema
       (launchers: { <name>: { harness, cmd } } and defaultLauncher), and shows the working split — the
       portable defaultLauncher name in the committed file, the host absolute `cmd` in the local file.
-      Field coverage spans layout, dashboard, sessions, serve, proposals, and lint budgets. The unknown
+      Field coverage spans layout, dashboard, sessions, serve, issues, and lint budgets. The unknown
       topic fails loud, listing `Topics: spec, yatsu, config`.
     tags: cli
     code: spec-cli/src/guide.ts

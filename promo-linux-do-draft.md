@@ -65,7 +65,7 @@ spec 正文永远描述模块的**当下意图**,原地重写,禁止堆 `## v1 /
 【图 4:`promo-assets/09-annotator-compose.png` — 圈选后:composer 预填 ▶0:02 锚点 + 帧图预览,视频还在屏上】
 【图 5:`promo-assets/10-annotator-remark-landed.png` — remark 上墙:评审轨第 3 条,锚点 chip + 圈选帧图内嵌,滑轨新 marker】
 
-这一段演示本身就是 dogfood:录制它的会话把这两个场景当真实测量跑了一遍,`spex yatsu eval --video --timeline` 归档了两条带剪辑+时间线的新读数——录demo的过程同时给仓库补上了它当时缺失的新鲜视频读数(之前为 0)。更妙的是:就在录制进行的同一时段,另一个会话的真浏览器重测抓到了一个真 regression(页面拆分让 #/evals 的 @-派发回显静默失声),按 fail→pass 的 A/B 纪律修复合并——**这个工具在用自己录自己的宣传素材时,还顺手修了自己的 bug**。
+这一段演示本身就是 dogfood:录制它的会话把这两个场景当真实测量跑了一遍,`spex yatsu eval --video --timeline` 归档了两条带剪辑+时间线的新读数——录demo的过程同时给仓库补上了它当时缺失的新鲜视频读数(之前为 0)。更妙的是接连两个真实战果:录制的同一时段,一次真浏览器重测抓到 #/evals 派发回显静默失声的 regression,按 fail→pass 的 A/B 纪律修复合并;紧接着对黄金路径的全量重测又抓到第二个真 bug——**切换 eval 时 composer 草稿不清空,圈选好的 remark 会串到别的场景线程**——当场落档 A(fail),修复 worker 随即开工。**这个工具在用自己录自己的宣传素材时,自己的损失信号连抓了自己两个 bug。**
 
 ### 它不只治理自己
 

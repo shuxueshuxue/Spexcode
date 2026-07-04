@@ -64,6 +64,20 @@ export interface Harness {
   // --- materialize: shim + contract + trust ([[harness-delivery]]) ---
   // the auto-discovered hook shim file for this harness (.claude/settings.json vs .codex/hooks.json).
   shimFile(proj: string): string
+  // a LINKED WORKTREE's extra shim copy — the worktree-side `.codex` hook file that ANCHORS codex's project
+  // config layer, or null when the harness needs none. codex-rs only builds a project config layer (and thus
+  // only DISCOVERS a worktree thread's hooks) for a dir in [cwd..project_root] that contains a `.codex/`
+  // directory; it then REWRITES that layer's hooks-config folder to the ROOT checkout (root_checkout_hooks_-
+  // folder_for_dir), so the shim CONTENT is still read from `shimFile` at the main checkout. But with the codex
+  // shim living ONLY at the main checkout, a linked worktree has NO `.codex/` at all → codex anchors no layer →
+  // the rewritten root hooks are never visited → ZERO hooks fire (bypass_hook_trust can't help: it only rescues
+  // an untrusted HANDLER inside an already-discovered layer, it never creates one). So codex ALSO writes its
+  // shim into the worktree's own `.codex/hooks.json` purely to anchor the layer (the rewrite ignores its
+  // content, reading the root's — and a codex that DIDN'T rewrite would read this identical shim, so it is
+  // correct either way). Claude: null — its shim already lives IN the worktree (`.claude/settings.json`) and
+  // self-anchors; it has no root-checkout rewrite. Non-worktree (proj == main checkout): null — `shimFile`
+  // already wrote `.codex/hooks.json` there.
+  worktreeHookAnchor(proj: string): string | null
   // the contract file(s) the `surface: system` block is folded into. Claude: ./CLAUDE.md; Codex: ONLY ./AGENTS.md.
   contractFiles(proj: string): string[]
   // the dir this harness auto-discovers skills from, or null if it has no skill primitive — the ONLY place skill-surface divergence lives.
@@ -75,9 +89,12 @@ export interface Harness {
   // the shim payload: the settings/hooks JSON binding every event → the dispatcher (harness id baked in), and
   // the per-event command string (shared with the trust writer so they hash identically).
   shim(dispatch: string, spex: string): { json: string; cmd: (e: string) => string }
-  // make a user-self-launched agent run the hooks with zero prompts. Codex writes a deterministic trusted_hash
-  // into the GLOBAL ~/.codex/config.toml (codex's security model: trust is global-only); Claude is a no-op
-  // (it relies on folder-trust). `cmdFor` MUST be the same per-event command the shim emitted.
+  // make a dispatched/self-launched agent run the hooks with zero prompts. Codex writes PROJECT trust — and, on
+  // a binary without `--dangerously-bypass-hook-trust`, per-hook trusted_hash blocks — into the GLOBAL
+  // ~/.codex/config.toml (codex's security model: trust is global-only). PROJECT trust is UNCONDITIONAL: it
+  // ENABLES the project config layer so codex discovers our hooks at all, a tier bypass_hook_trust does NOT
+  // cover. Claude is a no-op (it relies on folder-trust). `cmdFor` MUST be the same per-event command the shim
+  // emitted.
   writeTrust(proj: string, cmdFor: (e: string) => string): void
 
   // --- the `/` menu ---
@@ -742,9 +759,12 @@ export function codexHookHash(snakeEvent: string, command: string, timeout = 600
   return 'sha256:' + createHash('sha256').update(JSON.stringify(canon(obj))).digest('hex')
 }
 
-// additively stamp directory + per-hook trust into the user's GLOBAL ~/.codex/config.toml so a user-self-
-// launched codex skips the trust prompts. Scoped to THIS project path; replaces our own prior block (between
-// sentinels) idempotently; never touches the user's other config. CODEX_HOME respected for testability.
+// additively stamp PROJECT trust (`[projects."<proj>"] trust_level = "trusted"`) AND the per-hook
+// `trusted_hash` blocks for each event into the user's GLOBAL ~/.codex/config.toml, so a dispatched or
+// self-launched codex trusts THIS project's config layer (enabling hook discovery) AND treats each hook as
+// already-reviewed (no "Hooks need review" prompt on a persistent resume — see writeTrust). Scoped to THIS
+// project path; replaces our own prior block (between sentinels) idempotently; never touches the user's other
+// config. CODEX_HOME respected for testability. (`events` may be empty for a trust-only stamp in tests.)
 function writeCodexTrust(proj: string, events: readonly string[], cmdFor: (e: string) => string): void {
   const home = process.env.CODEX_HOME || join(homedir(), '.codex')
   const file = join(home, 'config.toml')
@@ -789,6 +809,8 @@ function cleanHarness(h: Harness, proj: string, arts: HarnessArtifacts): void {
   for (const f of h.contractFiles(proj)) removeManagedBlock(f, ['<!-- ', ' -->'], true)
   const shim = h.shimFile(proj)
   if (existsSync(shim) && readFileSync(shim, 'utf8').includes('dispatch.sh')) rmSync(shim, { force: true })
+  const anchor = h.worktreeHookAnchor(proj)   // the linked-worktree anchor copy, same identity gate as the shim
+  if (anchor && existsSync(anchor) && readFileSync(anchor, 'utf8').includes('dispatch.sh')) rmSync(anchor, { force: true })
   h.removeTrust(proj)
   const sd = h.skillDir(proj)
   if (sd) for (const n of arts.skills) rmSync(join(sd, n), { recursive: true, force: true })
@@ -845,6 +867,7 @@ export const claudeHarness: Harness = {
   sessionIdArg: (id) => `--session-id ${id}`,        // the caller chooses the id
   sessionEnvVar: 'CLAUDE_CODE_SESSION_ID',
   shimFile: (proj) => join(proj, '.claude', 'settings.json'),
+  worktreeHookAnchor: () => null,                    // claude's shim already lives in the worktree (.claude/settings.json) — self-anchors, no root rewrite
   contractFiles: (proj) => [join(proj, 'CLAUDE.md')],
   skillDir: (proj) => join(proj, '.claude', 'skills'),
   agentDir: (proj) => join(proj, '.claude', 'agents'),
@@ -874,17 +897,36 @@ export const codexHarness: Harness = {
   // per-worktree (codex loads THOSE by walking the thread cwd). dispatch.sh resolves `proj` from the thread
   // cwd, so one shared shim serves every worktree.
   shimFile: (proj) => join(mainCheckout(proj), '.codex', 'hooks.json'),
+  // a LINKED worktree also needs its OWN `.codex/hooks.json` so codex-rs anchors the project config layer for
+  // the worktree cwd (without a `.codex/` under the worktree root, codex builds no layer, so the rewritten
+  // root-checkout hooks are never discovered and NO hooks fire — bypass_hook_trust cannot rescue a layer that
+  // was never built). Its content is ignored (the rewrite reads the root's shim above), so it is a pure anchor.
+  // Only for a genuine worktree: on the main checkout, shimFile already wrote `.codex/hooks.json` there.
+  worktreeHookAnchor: (proj) => (mainCheckout(proj) === proj ? null : join(proj, '.codex', 'hooks.json')),
   contractFiles: (proj) => [join(proj, 'AGENTS.md')],
   skillDir: (proj) => join(proj, '.codex', 'skills'),
   agentDir: () => null,                              // codex has no file-discovered agent-definition primitive — materialize skips it
   shim: (dispatch, spex) => buildShim('codex', CODEX_EVENTS, dispatch, spex),
-  // write the codexHookHash trust ONLY when the resolved codex binary lacks `--dangerously-bypass-hook-trust`;
-  // when it has the flag, the launch bypasses trust entirely, so a materialized hash is dead weight (and would
-  // be a stale, version-mismatched value). One capability probe, two mutually-exclusive paths.
-  writeTrust: (proj, cmdFor) => {
-    const bin = codexBinary(process.env.SPEXCODE_CODEX_SERVER_CMD || process.env.SPEXCODE_CODEX_CMD || readConfig(mainCheckout(proj)).sessions?.codexCmd || 'codex --yolo')
-    if (!codexSupportsBypassHookTrust(bin)) writeCodexTrust(mainCheckout(proj), CODEX_EVENTS, cmdFor)
-  },
+  // Write the FULL codex trust — BOTH tiers, UNCONDITIONALLY — because `bypass_hook_trust` covers neither on
+  // the dispatched-worker path:
+  //   (1) PROJECT trust (`[projects."<mainCheckout>"] trust_level = "trusted"`) ENABLES the project config
+  //       layer — the precondition for codex to DISCOVER our hooks AT ALL. codex-rs `get_layers` drops a
+  //       disabled (untrusted) project layer BEFORE hook discovery runs, and bypass_hook_trust is read only
+  //       AFTER, per-handler — so it can NEVER enable a layer. A dispatched worker's app-server does NOT
+  //       auto-trust the project (only the interactive TUI / `codex exec` approval flow does), so without this
+  //       an untrusted worktree thread fires ZERO hooks ("Project-local config, hooks … are disabled until the
+  //       project is trusted").
+  //   (2) per-HOOK trust (the reverse-engineered `trusted_hash` blocks — codexHookHash) marks each hook Trusted
+  //       so it is NOT "new or changed". This is REQUIRED even though the launch carries
+  //       `--dangerously-bypass-hook-trust`: our visible TUI attaches to the backend-owned thread via `codex …
+  //       resume <tid>`, and codex-rs FORCES the startup hook-review prompt on a PERSISTENT RESUME regardless of
+  //       the flag (`bypass_hook_trust_for_startup_review = config.bypass_hook_trust && !is_persistent_resume`,
+  //       tui/src/lib.rs) — an untrusted/modified hook (no matching hash) leaves the worker WEDGED at an
+  //       interactive "Hooks need review" menu. Matching hashes make review_needed_count == 0, so codex skips
+  //       the prompt and the worker runs unattended. bypass_hook_trust stays on `thread/start` + the resume flag
+  //       as DEFENCE for the non-resume paths (and if a version bump makes a hash mismatch, the app-server
+  //       thread still runs the hooks); it does not REPLACE the hashes here.
+  writeTrust: (proj, cmdFor) => writeCodexTrust(mainCheckout(proj), CODEX_EVENTS, cmdFor),
   // trust is keyed by the MAIN checkout (where the codex shim materializes) — strip it at the same key.
   removeTrust: (proj) => removeCodexTrust(mainCheckout(proj)),
   clean(proj, arts) { cleanHarness(this, proj, arts) },

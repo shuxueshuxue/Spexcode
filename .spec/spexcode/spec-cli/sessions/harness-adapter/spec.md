@@ -7,6 +7,7 @@ code:
   - spec-cli/src/harness.ts
   - spec-cli/src/harness.test.ts
   - spec-cli/hooks/harness.sh
+  - spec-cli/templates/hooks/prepare-commit-msg
 related:
   - spec-cli/src/slash-commands.ts
   - spec-cli/src/materialize.ts
@@ -49,7 +50,15 @@ surface:
   the worktree root reads `<mainCheckout>/.codex/hooks.json`, NEVER the worktree's own. So the Codex shim + its
   trust materialize at the MAIN checkout (one shared `.codex/hooks.json` for the main checkout and every
   worktree — a per-PROJECT artifact, mirroring the per-project runtime tier); `dispatch.sh` resolves its `proj`
-  from the thread cwd, so the one shared shim still gates each worktree correctly. Codex lacks Notification + StopFailure: codex's
+  from the thread cwd, so the one shared shim still gates each worktree correctly. But that rewrite has a
+  LAYER-ANCHOR precondition: codex-rs builds a project config layer only for a dir (in cwd→project-root) that
+  itself contains a `.codex/` directory, THEN rewrites that layer's hooks-folder to the root checkout. A linked
+  worktree whose root has NO `.codex/` anchors NO layer, so the rewritten root hooks are never discovered and
+  ZERO hooks fire — silently (this bit a FRESH-INIT project with no skill nodes: the dogfood only worked by
+  accident, its materialized `.codex/skills` incidentally supplying the anchor). So the Codex adapter ALSO writes
+  its shim into the worktree's own `.codex/hooks.json` — a pure ANCHOR (the rewrite ignores its content, reading
+  the root's; `worktreeHookAnchor`), null for claude (its shim already lives in the worktree) and for the main
+  checkout (`shimFile` wrote it there). Codex lacks Notification + StopFailure: codex's
   canonical hook event set (its `HookEventName` enum, codex 0.142.3) is preToolUse/permissionRequest/postToolUse/
   preCompact/postCompact/sessionStart/userPromptSubmit/subagentStart/subagentStop/stop — there is no idle/
   attention "notification" event and no failed-stop event, so those two claude-only events are genuinely absent,
@@ -61,26 +70,37 @@ surface:
   `.codex/skills/`) and `agentDir` for `surface: agent` (sub-agent `<name>.md`s — claude `.claude/agents/`;
   Codex has no file-discovered agent-definition primitive → null, so materialize skips it). Each is ONE
   adapter line; a null dir is the whole "this harness can't" branch, never an `if (codex)` in materialize.
-- **trust** — make an agent run our hooks with zero prompts. Codex ≥0.142 offers `--dangerously-bypass-hook-trust`
-  (run our OWN vetted dispatch hooks with no persisted hash) — PREFERRED, because the alternative
-  (reverse-engineering codex-rs's `trusted_hash` and pinning it to one version's format) silently breaks on a codex
-  version bump: the pinned hash no longer matches, so codex skips EVERY SpexCode hook and a codex session dies with
-  no Stop gate + no `mark-active`. The load-bearing fact about the bypass: codex applies it **per thread**, from the
-  `bypass_hook_trust` key in a thread-creation request's `config` override map — it is **NOT** read from the
-  `codex app-server` process's own `--dangerously-bypass-hook-trust` CLI flag, which is INERT for a thread (that
-  flag on the shared app-server bought nothing — a real regression: dispatched codex threads fired ZERO hooks because
-  the untrusted worktree's `.codex` config layer stays *disabled*, so no local hooks are even discovered). So a
-  one-time capability probe (`<binary> --help`) picks ONE of two mutually-exclusive paths — and it MUST probe the
-  SAME codex the session actually runs (the launcher's resolved cmd, the one driving the app-server + resume TUI),
-  so the launch script EXPORTS `SPEXCODE_CODEX_CMD` for the codex-launch child to inherit; a fallback bare `codex`
-  picks the WRONG install on a multi-codex box (an old Homebrew one on PATH beside the launcher's newer nvm one),
-  mis-decides the path, and silently drops the bypass — no hooks fire. flag-supported → SKIP
-  writing the hash and deliver the bypass on **both** thread paths — (1) the BACKEND-owned `thread/start`
-  (codex-launch) carries `config.bypass_hook_trust`, and (2) the visible `--remote … resume` TUI carries the flag,
-  which codex's OWN client forwards into its thread/start+thread/resume `config` (so a reopen in a fresh app-server,
-  where codex-launch never runs, still trusts our hooks) — never on the app-server invocation; not supported → the
-  reverse-engineered `trusted_hash` (which enables the layer AND trusts each hook) still stands in.
-  `SPEXCODE_CODEX_BYPASS_HOOK_TRUST` forces the switch. Claude relies on folder-trust (often nothing).
+- **trust** — make an agent run our hooks with zero prompts. This is codex's HARDEST divergence, because
+  `--dangerously-bypass-hook-trust` covers only ONE of THREE independent codex tiers a dispatched worker must
+  satisfy — the other two the adapter establishes explicitly (bypass alone leaves a fresh-init codex worker
+  firing ZERO hooks, session.json frozen, no Session trailer):
+  - **(a) layer BUILT** — the worktree needs a `.codex/` anchor (the events/shim point above); without it codex
+    builds no project layer and the hooks are never even seen.
+  - **(b) layer ENABLED** — codex-rs drops a DISABLED (untrusted) project layer BEFORE hook discovery runs
+    (`get_layers(include_disabled=false)`), and `bypass_hook_trust` is read only AFTER, per-handler — so it can
+    never ENABLE a layer. An untrusted project's WHOLE layer is disabled (`disabled_reason_for_decision`). The
+    dispatched-worker app-server does NOT auto-trust (only the interactive TUI / `codex exec` approval flow
+    does — the "auto-trust confound" that made a standalone `.codex` appear to work). So the adapter writes
+    PROJECT trust (`[projects."<mainCheckout>"] trust_level = "trusted"`) UNCONDITIONALLY — the main-checkout key
+    covers every worktree via codex's repo-root trust fallback.
+  - **(c) hooks REVIEWED** — even trusted+enabled, an unhashed hook is "new or changed", and codex FORCES the
+    startup hook-review prompt on a PERSISTENT RESUME regardless of the bypass flag
+    (`bypass_hook_trust_for_startup_review = config.bypass_hook_trust && !is_persistent_resume`, tui/src/lib.rs).
+    Our visible TUI attaches via `codex … resume <tid>` (a persistent resume), so an unhashed hook WEDGES the
+    worker at an interactive "Hooks need review" menu. So the adapter ALSO writes the reverse-engineered
+    per-hook `trusted_hash` blocks (`codexHookHash`) UNCONDITIONALLY — matching hashes make `review_needed_count`
+    == 0 and codex skips the prompt. (The old belief that a flag-capable binary could SKIP the hash was wrong:
+    the flag does not suppress the resume review. The version-brittleness the bypass was meant to avoid is
+    inherent — codex offers no config to disable the review — so we accept it and keep bypass only as DEFENCE.)
+
+  `bypass_hook_trust` still rides on BOTH thread paths as that defence (so the app-server thread runs the hooks
+  even if a version bump makes a hash mismatch): (1) the BACKEND-owned `thread/start` (codex-launch) carries
+  `config.bypass_hook_trust` — codex applies it **per thread** from the request's `config` override map, NOT from
+  the shared app-server's own `--dangerously-bypass-hook-trust` CLI flag (INERT for a thread); (2) the visible
+  `--remote … resume` TUI carries the flag. The capability probe (`<binary> --help`) MUST probe the SAME codex the
+  session runs, so the launch script EXPORTS `SPEXCODE_CODEX_CMD` for the codex-launch child (a fallback bare
+  `codex` picks the WRONG install on a multi-codex box and mis-decides). `SPEXCODE_CODEX_BYPASS_HOOK_TRUST` forces
+  the switch. Claude relies on folder-trust (often nothing).
 - **clean / removeTrust** — the materialize INVERSE: `clean(proj, arts)` surgically removes ONLY this harness's
   own artifacts — the managed contract block (sentinels), the generated shim, the trust block (`removeTrust`,
   the inverse of trust above), and the `arts`-named skill/agent files. Every step is gated on a SpexCode
@@ -221,8 +241,13 @@ codex runs them in the shared app-server shell (NOT a per-session pane), so they
 baked `SPEXCODE_SESSION_ID` — `envSessionId` ([[portable-layout]]) therefore resolves codex's per-command
 `CODEX_THREAD_ID` (the acting thread's `sessionEnvVar`) through the same `harness_session_id` alias BEFORE that
 contaminated `SPEXCODE_SESSION_ID`, so each thread's declaration lands on its own record; the hook path and the
-interactive-CLI path share one precedence rule. Claude is unaffected on both paths: its exported id equals both
-its payload id and the record key, so the direct hit always wins and the alias step never runs.
+interactive-CLI path share one precedence rule. The **commit-attribution** hook (`prepare-commit-msg`, the
+`Session:` trailer) is a THIRD consumer of this same rule: a codex worker's `git commit` runs in the shared
+app-server shell (contaminated `SPEXCODE_SESSION_ID`) but carries the acting `CODEX_THREAD_ID`, so the hook
+resolves the RECORD id through the SAME `harness_session_id` alias grep AT COMMIT TIME (the record is swept on
+close, so read-time aliasing would fail) — never the raw thread id, never the contaminated env var. Claude is
+unaffected on all paths: its exported `CLAUDE_CODE_SESSION_ID` equals both its payload id and the record key, so
+the direct hit always wins and the alias step never runs.
 
 ## verified codex facts (live round-trip, real codex 0.142.3)
 
@@ -238,8 +263,12 @@ The Codex impl of the adapter must encode these (measured against a real self-la
   NO `file_path`. So the adapter keys the mutation off the `*** … File:` markers (NOT an `apply_patch` token)
   and accepts both `apply_patch` and `Bash` as code-touch tools; otherwise [[spec-of-file]] and an edit-first
   [[spec-first]] are INERT on codex (the first cut had both bugs — proven live, then fixed). The store/dispatch
-  layer is NOT implicated (proven under real codex: zero-prompt launch, hooks fire from the global store, the
-  governed mark-active flip + governed declare/commit gate + silent non-governed Stop all work live).
+  layer itself is sound (mark-active flip, declare/commit gate, silent non-governed Stop all work once hooks
+  fire) — but that was first "proven" on a STANDALONE `.codex` in the cwd, which the interactive/`exec` flow
+  AUTO-TRUSTS, masking the dispatched-worker gap: a linked-worktree thread on the shared app-server needs the
+  layer BUILT + ENABLED + hooks HASHED (the trust point above) before dispatch.sh ever runs. Verified on a real
+  FRESH-INIT dispatched codex worker: with the anchor + project trust + per-hook hashes in place, SessionStart…
+  Stop fire through dispatch.sh, session.json advances past launch, and the commit carries the Session trailer.
 - **session-id model** (codex-rs source-verified): codex MINTS its own thread id internally (`Uuid::new_v4`/
   `ThreadId::new`) — there is NO flag/env to pin a NEW session's id (`CODEX_THREAD_ID` is an OUTPUT codex
   injects, not an input; resume takes an existing rollout id). So a dashboard-launched codex session can't have

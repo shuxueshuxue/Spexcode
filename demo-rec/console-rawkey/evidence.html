@@ -1,0 +1,24 @@
+<!doctype html><meta charset="utf-8">
+<style>body{background:#0d1117;margin:0;padding:24px;font:14px/1.6 "SF Mono",Menlo,monospace;color:#c9d1d9}
+h2{color:#58a6ff;font-size:15px;margin:0 0 4px}.sub{color:#8b949e;font-size:12px;margin:0 0 14px}
+table{border-collapse:collapse;margin:14px 0;font-size:13px}td,th{border:1px solid #30363d;padding:5px 12px;text-align:left}
+th{color:#8b949e}.ok{color:#3fb950}.pane{background:#010409;border:1px solid #30363d;border-radius:6px;padding:14px 18px;white-space:pre;color:#d1d5db}
+.b{color:#e0af68}</style>
+<h2>nav-mode-modifier-combos-reach-the-terminal</h2>
+<p class="sub">POST /api/sessions/:id/rawkey → tmux send-keys → cat -v echoes control bytes · isolated clone rig</p>
+<table>
+<tr><th>token</th><th>HTTP</th><th>bytes at the pane (cat -v)</th><th>expected</th><th></th></tr>
+<tr><td>C-r</td><td>200</td><td class="b">^R</td><td>0x12</td><td class="ok">✓</td></tr>
+<tr><td>M-b</td><td>200</td><td class="b">^[b</td><td>ESC b</td><td class="ok">✓</td></tr>
+<tr><td>S-Tab</td><td>200</td><td class="b">^[[Z</td><td>back-tab</td><td class="ok">✓</td></tr>
+<tr><td>M-B</td><td>200</td><td class="b">^[B</td><td>ESC B</td><td class="ok">✓</td></tr>
+<tr><td>S-Up</td><td>200</td><td class="b">^[[1;2A</td><td>^[[1;2A</td><td class="ok">✓</td></tr>
+<tr><td>C-c</td><td>200</td><td class="b">^C → exit 130</td><td>0x03 interrupt</td><td class="ok">✓</td></tr>
+<tr><td>C-C-x</td><td>404</td><td>— rejected, not sent —</td><td>malformed → 404</td><td class="ok">✓</td></tr>
+</table>
+<div class="pane">root@ser581555022561:~/spex-demo-clone/.worktrees/rawkey-catv-fixture-be8c# cat -v
+^R
+^[b^[[Z^[B^[[1;2A^C
+root@ser581555022561:~/spex-demo-clone/.worktrees/rawkey-catv-fixture-be8c# echo interrupted=$?
+interrupted=130
+root@ser581555022561:~/spex-demo-clone/.worktrees/rawkey-catv-fixture-be8c#</div>

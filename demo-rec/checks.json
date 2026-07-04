@@ -6,18 +6,18 @@
   "contentType": "video/webm",
   "rangeStatus": 206,
   "readyState": 4,
-  "currentTime": 1.195084,
+  "currentTime": 1.38726,
   "paused": false,
   "siblingImgs": 0
  },
  "s2open": {
   "video": true,
   "composerVisible": true,
-  "markers": 1,
+  "markers": 2,
   "abPips": 3
  },
  "markerSeek": {
-  "t": 2.27169,
+  "t": 2.206954,
   "selectedRemark": true
  },
  "circle": {

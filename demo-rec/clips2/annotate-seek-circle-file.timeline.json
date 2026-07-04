@@ -1,0 +1,49 @@
+{
+ "v": 1,
+ "events": [
+  {
+   "tMs": 0,
+   "step": "circle → anchored remark → marker seek → A/B"
+  },
+  {
+   "tMs": 2588,
+   "step": "evals feed (video filter is EMPTY — no fresh video eval yet)"
+  },
+  {
+   "tMs": 7338,
+   "step": "workspace: stage + review track + docked composer"
+  },
+  {
+   "tMs": 8766,
+   "step": "playing — playhead advances the review track"
+  },
+  {
+   "tMs": 10717,
+   "step": "marker click → seek t=2.21s + rail highlight"
+  },
+  {
+   "tMs": 16174,
+   "step": "drag-circle → composer prefilled (▶0:02) + frame captured"
+  },
+  {
+   "tMs": 23598,
+   "step": "remark typed in the docked composer (video still on screen — no scroll)"
+  },
+  {
+   "tMs": 24984,
+   "step": "sent → review track has 2 markers now"
+  },
+  {
+   "tMs": 26493,
+   "step": "new marker click → seeks to the circled moment"
+  },
+  {
+   "tMs": 28868,
+   "step": "A/B strip → flip to an earlier reading (fail/pass history in place)"
+  },
+  {
+   "tMs": 30695,
+   "step": "A/B strip → back to latest"
+  }
+ ]
+}

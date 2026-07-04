@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { postRemark, putFrameBlob, specUrl } from './data.js'
 import { evidenceList } from './EvalsFeed.jsx'
+import { EvidenceItem } from './Evidence.jsx'
 import { Replies, ReplyComposer, mmss, anchorLine, parseAnchor, resolveAnchor } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
 
@@ -38,32 +39,6 @@ const stepAt = (events, tMs) => { let hit = null; for (const e of events) { if (
 const verdictMark = (r) => (r.verdict?.status === 'pass' ? '✓' : r.verdict?.status === 'fail' ? '✗' : '·')
 const verdictCls = (r) => (r.verdict?.status === 'pass' ? 'pass' : r.verdict?.status === 'fail' ? 'fail' : 'legacy')
 
-// click-to-enlarge for an evidence image: a fixed overlay showing the same blob at viewport size —
-// click anywhere or Esc closes; Esc is swallowed in capture so the page's own Esc stack never fires.
-function ImageLightbox({ src, alt, onClose }) {
-  useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onClose() } }
-    window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
-  }, [onClose])
-  return (
-    <div className="lightbox" onClick={onClose}>
-      <img src={src} alt={alt} />
-    </div>
-  )
-}
-
-function Transcript({ hash }) {
-  const t = useT()
-  const [text, setText] = useState(null)
-  useEffect(() => {
-    let on = true
-    fetch(`/api/yatsu/blob/${hash}`).then((r) => (r.ok ? r.text() : Promise.reject())).then((tx) => { if (on) setText(tx) }).catch(() => { if (on) setText('') })
-    return () => { on = false }
-  }, [hash])
-  return <pre className="eval-transcript">{text ?? t('nodeView.eval.loadingTranscript')}</pre>
-}
-
 // the deterministic concern key binding an eval's remark thread to its (node, scenario) — the thread IS a
 // local Issue, keyed by this exact concern text (ids de-collide, concerns don't). Kept only for display /
 // marker lookup; the WRITE side never needs it (the /api/remarks host is (node, scenario), find-or-create).
@@ -78,7 +53,6 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite 
   const [events, setEvents] = useState([])
   const [drag, setDrag] = useState(null)
   const [flash, setFlash] = useState('')         // circle-capture feedback (capturing… / failed)
-  const [zoom, setZoom] = useState(null)         // an image gallery still opened in the lightbox (its hash), or null
   const [busy, setBusy] = useState(false)       // capturing a circled frame
   const [draft, setDraft] = useState(null)       // { seq, body } — a circle / `a` prefills the review-track composer
   // custom-player state: the playhead owns the review track now that native chrome is gone.
@@ -101,7 +75,7 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite 
   // a selection change is a new SCENARIO under annotation — reset the working state AND the history cursor,
   // then refetch this scenario's slice of the node's timeline.
   useEffect(() => {
-    setDrag(null); setFlash(''); setEvents([]); setZoom(null); setDraft(null)
+    setDrag(null); setFlash(''); setEvents([]); setDraft(null)
     setHistIdx(0); setHistory(null)
     let on = true
     fetch(specUrl(entry.node, 'evals'))
@@ -111,8 +85,8 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite 
     return () => { on = false }
   }, [entry.node, entry.scenario, entry.ts, entry.blob])
 
-  // flipping A/B changes the clip/stills under the pen — drop any in-progress mark, zoom, or draft.
-  useEffect(() => { setDrag(null); setZoom(null); setDraft(null) }, [histIdx])
+  // flipping A/B changes the clip/stills under the pen — drop any in-progress mark or draft.
+  useEffect(() => { setDrag(null); setDraft(null) }, [histIdx])
 
   // the reading's evidence LIST → its present video (the annotate-a-loop surface) and its still gallery, for
   // the CURRENTLY-VIEWED reading. A legacy scalar reading normalizes to a one-entry list, so an old
@@ -414,19 +388,16 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite 
             </>
           )}
 
-          {/* the still gallery — every image entry, each click-to-enlarge; on the stage beside/under the clip */}
+          {/* the still gallery + transcripts — every non-clip entry renders through the ONE shared
+              evidence renderer (Evidence.jsx, U1): images click-to-enlarge, a pruned blob is the honest
+              sentinel. Only the clip above is this pane's own — the annotate-a-loop specialization. */}
           {images.length > 0 && (
             <div className="an-gallery">
-              {images.map((e, i) => e.state === 'miss'
-                ? <div className="an-hint" key={`${e.hash}-${i}`}>{t('nodeView.eval.miss')}</div>
-                : <img className="an-image" key={`${e.hash}-${i}`} src={`/api/yatsu/blob/${e.hash}`} alt={entry.scenario} onClick={() => setZoom(e.hash)} />)}
+              {images.map((e, i) => <EvidenceItem e={e} alt={entry.scenario} key={`${e.hash}-${i}`} />)}
             </div>
           )}
-          {zoom && <ImageLightbox src={`/api/yatsu/blob/${zoom}`} alt={entry.scenario} onClose={() => setZoom(null)} />}
 
-          {transcripts.map((e, i) => e.state === 'miss'
-            ? <div className="an-hint" key={`${e.hash}-${i}`}>{t('nodeView.eval.miss')}</div>
-            : <Transcript hash={e.hash} key={`${e.hash}-${i}`} />)}
+          {transcripts.map((e, i) => <EvidenceItem e={e} alt={entry.scenario} key={`${e.hash}-${i}`} />)}
 
           {ev.length === 0 && (viewing.verdict?.note
             ? <pre className="eval-transcript">{viewing.verdict.note}</pre>

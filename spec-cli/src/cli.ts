@@ -115,6 +115,7 @@ Specs / graph
   board                 dump the dashboard board state as JSON
   forge <sub>           trace a forge's issues/PRs onto spec nodes (read-only): links | eval-pending [--host github] [--node <id>] [--json]
   yatsu <sub>           measure a node's scenarios and keep score: scan | eval [.|<node>] [--scenario N] (--pass|--fail) [--note T] [--image P|--result P|-] | show [.|<node>] [--json] | clean [--keep-latest|--all]
+  blob put <file|->     stash bytes in the shared content-addressed evidence cache, print the hash — no reading filed (re-put restores a pruned/cloned-away blob by content)
   self <sub>            diagnose how the workflow reaches THIS self-launched agent: doctor (default) | contract | conflicts
   issues                THE issue read — local forum threads + forge issues, one merged store-tagged list (the drain view)  [--node <id>] [--store local|github] [--all] [--json]
   issues promote <id>   move an OPEN local issue to the forge (one recorded action: forge issue w/ Spec: marker + evidence, local thread landed w/ permalink)
@@ -286,6 +287,11 @@ if (cmd === 'serve') {
   // thin route — all logic lives in spec-yatsu.
   const { runYatsu } = await import('../../spec-yatsu/src/cli.js')
   process.exit(await runYatsu(process.argv.slice(3)))
+} else if (cmd === 'blob') {
+  // @@@ blob - the bare evidence-transport verb ([[blob-put]]): put bytes in the shared content-addressed
+  // cache and print the hash, decoupled from filing a reading. Thin route — the cache lives in spec-yatsu.
+  const { runBlob } = await import('../../spec-yatsu/src/cli.js')
+  process.exit(runBlob(process.argv.slice(3)))
 } else if (cmd === 'propose') {
   // @@@ propose - open a local issue in the git forum ([[proposals]]): a thing that felt off this session,
   // even off-mainline. Thin route; all logic (write + commit straight to the trunk, reply/sign/resolve,

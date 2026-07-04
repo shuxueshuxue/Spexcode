@@ -319,6 +319,13 @@ export function codexLaunchCommand(_id: string, codexCmd = process.env.SPEXCODE_
     `pid=${shQuote(pid)}`,
     `log=${shQuote(log)}`,
     `lock=${shQuote(lock)}`,
+    // codex-launch's bypass-trust gate (and writeTrust's) resolves the codex binary from SPEXCODE_CODEX_CMD;
+    // WE already hold the launcher's real cmd here (it drives the app-server + resume TUI + tuiBypass above), so
+    // pin it into the environment the codex-launch child inherits. Without this the child falls back to a bare
+    // `codex`, which on a multi-install box (e.g. an old Homebrew codex on PATH beside the launcher's newer one)
+    // probes the WRONG binary — deciding "no --dangerously-bypass-hook-trust support" and silently dropping the
+    // thread/start bypass, so the worktree's hooks stay untrusted and NO lifecycle hooks fire.
+    `export SPEXCODE_CODEX_CMD=${shQuote(codexCmd)}`,
     'mkdir -p "$dir"',
     'mkdir -p "$(dirname "$sock")"',           // the socket base (tmpdir or the SPEXCODE_CODEX_SOCKET_DIR override)
     // self-heal: the pre-fix flock design left an orphaned `codex-app-server.lock` FILE; the mkdir mutex now

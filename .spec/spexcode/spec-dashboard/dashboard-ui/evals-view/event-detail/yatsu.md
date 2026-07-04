@@ -63,17 +63,19 @@ scenarios:
   - name: eval-comments
     tags: [frontend-e2e]
     description: >
-      On #/evals select an eval. In the detail workspace's remark rail: send a first
-      comment; send a second; confirm /api/issues holds exactly ONE local issue for that concern (and that
-      the eval thread is SPLIT OUT of the Issues page's merged list per the eval-remark split); send a third containing
-      '@new'. Read /api/issues between sends.
+      On #/evals select an eval with no existing remark thread. In the detail workspace's remark rail:
+      send a first comment; send a second; confirm the trunk store holds exactly ONE local issue for that
+      concern — read it from the board overlay's `entry.thread` (or the store's git log), since
+      /api/issues excludes eval concerns by construction — and that no row for it renders on #/issues;
+      send a third containing '@new'. Read the overlay between sends.
     expected: |
       The first comment lazily CREATES a local issue bound by concern 'eval: <node> · <scenario>'
-      (nodes:[node], the comment as body) and it renders in place in the rail's remark list. The second comment
-      APPENDS to that same thread — /api/issues holds exactly ONE local issue with that concern (no
-      duplicate thread), now with one reply. The thread IS a real local issue (store local, concern-keyed)
-      but — after the eval-remark read-time split — it is EXCLUDED from the Issues page's merged issue
-      list (mergedIssues drops isEvalConcern); it surfaces only under its eval, not as an Issues-page row.
+      (nodes:[node], the comment its first reply) and it renders in place in the rail's remark list. The
+      second comment APPENDS to that same thread — the store holds exactly ONE local issue with that
+      concern (no duplicate thread), now with two replies, both carried by the board overlay's
+      `entry.thread`. The thread IS a real local issue (store local, concern-keyed) but — after the
+      eval-remark read-time split — it is EXCLUDED from the merged issue list server-side (/api/issues'
+      mergedIssues drops isEvalConcern); it surfaces only under its eval, never as an Issues-page row.
       The '@new' comment dispatches a fresh worker through the same write path — the one-line outcome
       ('@ new→<session>') echoes on the page.
   - name: ab-history-flip

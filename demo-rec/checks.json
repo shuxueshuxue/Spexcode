@@ -1,0 +1,33 @@
+{
+ "s1": {
+  "video": true,
+  "cls": "eval-video",
+  "srcIsBlobRoute": true,
+  "contentType": "video/webm",
+  "rangeStatus": 206,
+  "readyState": 4,
+  "currentTime": 1.195084,
+  "paused": false,
+  "siblingImgs": 0
+ },
+ "s2open": {
+  "video": true,
+  "composerVisible": true,
+  "markers": 1,
+  "abPips": 3
+ },
+ "markerSeek": {
+  "t": 2.27169,
+  "selectedRemark": true
+ },
+ "circle": {
+  "composerPrefill": "▶0:02\n![frame](/api/yatsu/blob/b528296e31297670928a3dbc84c5950965903eb69cd9b1bd29007932233900c4)\n",
+  "frames": 1,
+  "paused": true
+ },
+ "sent": {
+  "markers": 2,
+  "remarks": 4,
+  "anchors": 2
+ }
+}

@@ -1,0 +1,89 @@
+{
+ "events": [
+  {
+   "atMs": 0,
+   "kind": "narrate",
+   "label": "▶ video-plays-in-eval-tab · inline video evidence in the node eval tab"
+  },
+  {
+   "atMs": 5796,
+   "kind": "frame",
+   "label": "📷 board"
+  },
+  {
+   "atMs": 12031,
+   "kind": "frame",
+   "label": "📷 focus video-evidence — scenario row in the side panel"
+  },
+  {
+   "atMs": 14629,
+   "kind": "frame",
+   "label": "📷 eval work pane opens on the scenario"
+  },
+  {
+   "atMs": 17938,
+   "kind": "frame",
+   "label": "📷 video reading expanded in the eval pane"
+  },
+  {
+   "atMs": 19413,
+   "kind": "frame",
+   "label": "📷 video playing (readyState=4 t=1.20s ct=video/webm)"
+  },
+  {
+   "atMs": 21248,
+   "kind": "narrate",
+   "label": "▶ annotate-seek-circle-file · circle → anchored remark → marker seek → A/B"
+  },
+  {
+   "atMs": 23896,
+   "kind": "frame",
+   "label": "📷 evals feed (video filter is EMPTY — no fresh video eval yet)"
+  },
+  {
+   "atMs": 30141,
+   "kind": "frame",
+   "label": "📷 workspace: stage + review track + docked composer"
+  },
+  {
+   "atMs": 31625,
+   "kind": "frame",
+   "label": "📷 playing — playhead advances the review track"
+  },
+  {
+   "atMs": 33644,
+   "kind": "frame",
+   "label": "📷 marker click → seek t=2.27s + rail highlight"
+  },
+  {
+   "atMs": 41417,
+   "kind": "frame",
+   "label": "📷 drag-circle → composer prefilled (▶0:02) + frame captured"
+  },
+  {
+   "atMs": 59527,
+   "kind": "frame",
+   "label": "📷 remark typed in the docked composer (video still on screen — no scroll)"
+  },
+  {
+   "atMs": 62994,
+   "kind": "frame",
+   "label": "📷 sent → review track has 2 markers now"
+  },
+  {
+   "atMs": 65035,
+   "kind": "frame",
+   "label": "📷 new marker click → seeks to the circled moment"
+  },
+  {
+   "atMs": 68330,
+   "kind": "frame",
+   "label": "📷 A/B strip → flip to an earlier reading (fail/pass history in place)"
+  },
+  {
+   "atMs": 70425,
+   "kind": "frame",
+   "label": "📷 A/B strip → back to latest"
+  }
+ ]
+}

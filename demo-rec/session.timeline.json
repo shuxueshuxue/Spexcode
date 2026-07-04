@@ -6,82 +6,82 @@
    "label": "▶ video-plays-in-eval-tab · inline video evidence in the node eval tab"
   },
   {
-   "atMs": 5796,
+   "atMs": 5493,
    "kind": "frame",
    "label": "📷 board"
   },
   {
-   "atMs": 12031,
+   "atMs": 10469,
    "kind": "frame",
    "label": "📷 focus video-evidence — scenario row in the side panel"
   },
   {
-   "atMs": 14629,
+   "atMs": 12846,
    "kind": "frame",
    "label": "📷 eval work pane opens on the scenario"
   },
   {
-   "atMs": 17938,
+   "atMs": 13166,
    "kind": "frame",
    "label": "📷 video reading expanded in the eval pane"
   },
   {
-   "atMs": 19413,
+   "atMs": 14590,
    "kind": "frame",
-   "label": "📷 video playing (readyState=4 t=1.20s ct=video/webm)"
+   "label": "📷 video playing (readyState=4 t=1.39s ct=video/webm)"
   },
   {
-   "atMs": 21248,
+   "atMs": 16281,
    "kind": "narrate",
    "label": "▶ annotate-seek-circle-file · circle → anchored remark → marker seek → A/B"
   },
   {
-   "atMs": 23896,
+   "atMs": 18869,
    "kind": "frame",
    "label": "📷 evals feed (video filter is EMPTY — no fresh video eval yet)"
   },
   {
-   "atMs": 30141,
+   "atMs": 23619,
    "kind": "frame",
    "label": "📷 workspace: stage + review track + docked composer"
   },
   {
-   "atMs": 31625,
+   "atMs": 25047,
    "kind": "frame",
    "label": "📷 playing — playhead advances the review track"
   },
   {
-   "atMs": 33644,
+   "atMs": 26998,
    "kind": "frame",
-   "label": "📷 marker click → seek t=2.27s + rail highlight"
+   "label": "📷 marker click → seek t=2.21s + rail highlight"
   },
   {
-   "atMs": 41417,
+   "atMs": 32455,
    "kind": "frame",
    "label": "📷 drag-circle → composer prefilled (▶0:02) + frame captured"
   },
   {
-   "atMs": 59527,
+   "atMs": 39879,
    "kind": "frame",
    "label": "📷 remark typed in the docked composer (video still on screen — no scroll)"
   },
   {
-   "atMs": 62994,
+   "atMs": 41265,
    "kind": "frame",
    "label": "📷 sent → review track has 2 markers now"
   },
   {
-   "atMs": 65035,
+   "atMs": 42774,
    "kind": "frame",
    "label": "📷 new marker click → seeks to the circled moment"
   },
   {
-   "atMs": 68330,
+   "atMs": 45149,
    "kind": "frame",
    "label": "📷 A/B strip → flip to an earlier reading (fail/pass history in place)"
   },
   {
-   "atMs": 70425,
+   "atMs": 46976,
    "kind": "frame",
    "label": "📷 A/B strip → back to latest"
   }

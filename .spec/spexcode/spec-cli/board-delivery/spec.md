@@ -15,14 +15,19 @@ from what the board *contains* (assembly stays with [[sessions]]).
 
 ## expanded spec
 
-Two halves of one budget:
+Three halves of one budget:
 
 - **[[board-lean]]** — the payload: the board carries only the summary the graph overview actually
   renders; per-node detail is lazy-loaded where it is viewed, and stays fresh by construction.
 - **[[board-stream]]** — the freshness: a push signal fires on real change so the client re-fetches on
   transition instead of a tight poll, with conditional requests keeping a no-change reload bodyless.
+- **[[board-cache]]** — the compute: the board is BUILT once per change, not once per poll — a
+  single-flight, change-invalidated cache in front of the assembly, so a poll storm shares one build
+  (and mostly zero) instead of each request re-walking git, and the build never starves the liveness probe.
 
-The two compound: the stream decides *when* the wire is paid, the lean payload decides *how much* —
-together they take the board from megabyte-every-poll toward a small, mostly-static summary fetched only
-on change. Neither owns the board's contents ([[sessions]]) nor the slow cold-path poll for tree reshapes
-([[dashboard-shell]]); this group owns only the wire between the board and its viewers.
+The three compound: the stream decides *when* the wire is paid, the lean payload decides *how much*, and
+the cache decides *how often the board is built* — together they take the board from a megabyte-every-poll
+that could wedge the whole server toward a small, mostly-static summary built on change and fetched from
+cache. None owns the board's contents ([[sessions]]) nor the slow cold-path poll for tree reshapes
+([[dashboard-shell]]); this group owns only the wire between the board and its viewers, and the cost of
+producing what rides it.

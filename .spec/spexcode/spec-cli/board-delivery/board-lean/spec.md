@@ -60,6 +60,9 @@ palette per open, the always-mounted [[focus-panel]] on its first scenario-beari
 prose fills in). The eval tab's blind-spot
 rows take `expected`+`code` from the `/evals` fetch it already makes, falling back to the slim board set — shallow, never wrong. Measured: the fold 73KB → 9KB, the dogfood frame ~304KB → ~240KB (~-21%).
 
-This node holds the lean-payload contract those cuts extend, beside the freshness-side [[board-stream]] and
-the change-side [[board-delta]]. Still duplicated: each summary *reading's* `expected` inside `evals` — the
-annotator lane's follow-up, since `latestPerScenario` is a filter, never a projection.
+This node holds the lean-payload contract those cuts extend, beside the freshness-side [[board-stream]],
+the change-side [[board-delta]], and the compute-side [[board-cache]] — the lean payload is now also BUILT
+once per change and served from cache, so a poll storm no longer re-walks git per request, and the
+assembly's fs walks yield the event loop instead of starving the liveness probe. Still duplicated: each
+summary *reading's* `expected` inside `evals` — the annotator lane's follow-up, since `latestPerScenario`
+is a filter, never a projection.

@@ -1,4 +1,5 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
+import { readFile, readdir } from 'node:fs/promises'
 import { join, relative, basename } from 'node:path'
 
 export const YATSU_FILE = 'yatsu.md'
@@ -189,6 +190,33 @@ export function yatsuNodes(root: string): YatsuNode[] {
         yatsuPath,
         sidecarPath: join(dir, SIDECAR_FILE),
         scenarios: parseScenarios(readFileSync(join(dir, YATSU_FILE), 'utf8')),
+      })
+    }
+    for (const e of ents) if (e.isDirectory()) stack.push(join(dir, e.name))
+  }
+  return out.sort((a, b) => a.id.localeCompare(b.id))
+}
+
+// async twin of yatsuNodes for the HOT board build ([[board-cache]]): reading each yatsu.md through
+// fs/promises YIELDS the event loop between files, so the walk no longer stalls a `/health` probe in one
+// ~600ms uninterrupted stretch. Same output (id-sorted) as yatsuNodes; only buildBoard uses it, other
+// callers keep the sync form.
+export async function yatsuNodesAsync(root: string): Promise<YatsuNode[]> {
+  const specDir = join(root, '.spec')
+  const out: YatsuNode[] = []
+  const stack = existsSync(specDir) ? [specDir] : []
+  while (stack.length) {
+    const dir = stack.pop()!
+    let ents
+    try { ents = await readdir(dir, { withFileTypes: true }) } catch { continue }
+    if (existsSync(join(dir, YATSU_FILE))) {
+      const yatsuPath = relative(root, join(dir, YATSU_FILE))
+      out.push({
+        id: basename(dir),
+        dir,
+        yatsuPath,
+        sidecarPath: join(dir, SIDECAR_FILE),
+        scenarios: parseScenarios(await readFile(join(dir, YATSU_FILE), 'utf8')),
       })
     }
     for (const e of ents) if (e.isDirectory()) stack.push(join(dir, e.name))

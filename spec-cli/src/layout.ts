@@ -62,17 +62,26 @@ export type Worktree = {
 }
 export type Layout = { main: string; convention: Convention; worktrees: Worktree[] }
 
-function readJsonOr(p: string): any {
+// Read an OPTIONAL JSON config file. An ABSENT file is the legitimate default (return {}); a
+// PRESENT-but-malformed one is a user error we must NOT swallow — a typo would otherwise silently
+// drop every tuned setting the file holds (lint budgets, launchers, layout) and revert to defaults
+// with no diagnostic. Fail LOUD, naming the file and the parse error, so the author sees what broke.
+export function readJsonConfig(p: string): any {
   if (!existsSync(p)) return {}
-  try { return JSON.parse(readFileSync(p, 'utf8')) } catch { return {} }
+  try { return JSON.parse(readFileSync(p, 'utf8')) }
+  catch (e) {
+    const err = new Error(`malformed ${p}: ${(e as Error).message}\n  → its settings were NOT applied. Fix the JSON syntax (an absent file is a fine default; a broken one is not).`)
+    err.name = 'ConfigError'   // rendered message-only at the CLI boundary (like BackendError), not as a stack dump
+    throw err
+  }
 }
 // committed `spexcode.json` with an OPTIONAL machine-local `spexcode.local.json` layered on top (gitignored).
 // The local layer is the durable home for HOST-SPECIFIC values that must never be committed — e.g. an
 // absolute worker-launcher path (the host-path leak the repo otherwise warns against). Precedence per field:
 // local over committed; an env var (e.g. SPEXCODE_CLAUDE_CMD) still overrides both at its read site.
 export function readConfig(root: string): Config {
-  const committed = readJsonOr(join(root, 'spexcode.json'))
-  const local = readJsonOr(join(root, 'spexcode.local.json'))
+  const committed = readJsonConfig(join(root, 'spexcode.json'))
+  const local = readJsonConfig(join(root, 'spexcode.local.json'))
   const out: any = { ...committed }
   for (const k of Object.keys(local)) {
     const b = committed[k], o = local[k]

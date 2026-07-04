@@ -41,6 +41,12 @@ than baked in — including the `harnesses` delivery-target set [[harness-select
 materialize` renders into; default = every native harness). Layout resolution doesn't consume it, but it rides
 the same committed-config-with-a-`spexcode.local.json`-overlay seam: persistent, re-read on every materialize.
 
+The config read is the ONE fail-loud seam here (`readJsonConfig`): an **absent** file is the legitimate
+default (yields `{}`), but a **present-but-malformed** one is a user error we never swallow — a JSON typo
+would otherwise silently drop every tuned setting the file holds (layout, launchers, and the lint budgets
+[[spec-lint]]'s `loadConfig` reads through the same helper) and revert to defaults with no diagnostic. It
+fails LOUD instead, naming the file and the parse error, so the author sees exactly what broke.
+
 The **source-of-truth branch** — what worktrees fork from, merges land on, and reviews diff against — is
 detected by `mainBranch()`, never the baked-in name `main`: the `mainBranch` override above wins, else the
 branch the main checkout is currently on (so an adopted repo whose default is `staging`/`feat-x` just works

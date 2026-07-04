@@ -2,6 +2,7 @@ import { readdirSync, readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { repoRoot, stagedFiles, git } from './git.js'
 import { loadSpecs } from './specs.js'
+import { readJsonConfig } from './layout.js'
 
 export type Finding = { level: 'error' | 'warn'; rule: string; spec?: string; file?: string; msg: string }
 
@@ -28,13 +29,10 @@ const DEFAULT_CONFIG: LintConfig = {
   scenarioTags: ['frontend-e2e', 'backend-api', 'cli', 'desktop', 'mobile'],
 }
 export function loadConfig(root: string): LintConfig {
-  try {
-    const raw = JSON.parse(readFileSync(join(root, 'spexcode.json'), 'utf8'))
-    const c = raw?.lint ?? {}
-    return { ...DEFAULT_CONFIG, ...c, altitude: { ...DEFAULT_CONFIG.altitude, ...(c.altitude ?? {}) } }
-  } catch {
-    return DEFAULT_CONFIG   // no file (or unreadable) → tuned defaults; lint is the same as before.
-  }
+  // Absent spexcode.json → tuned defaults; a MALFORMED one throws LOUD (readJsonConfig) rather than
+  // silently reverting the author's budgets to defaults and green-washing the very warnings they tuned.
+  const c = readJsonConfig(join(root, 'spexcode.json'))?.lint ?? {}
+  return { ...DEFAULT_CONFIG, ...c, altitude: { ...DEFAULT_CONFIG.altitude, ...(c.altitude ?? {}) } }
 }
 
 // a minimal glob → RegExp anchored to the full repo-relative path: `**` = any dirs, `*` = within a segment.

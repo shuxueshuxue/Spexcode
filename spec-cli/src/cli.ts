@@ -1,17 +1,39 @@
 export {} // make this a module so top-level await is allowed
 const cmd = process.argv[2]
 
-// registered before any await so a top-level-await rejection lands here; BackendError matched by name to avoid importing it.
-process.on('unhandledRejection', (e: unknown) => {
-  if (e instanceof Error && e.name === 'BackendError') console.error(`spex: ${e.message}`)
+// Registered before any await so a fatal top-level error lands here. Errors we OWN (BackendError, the
+// loud malformed-config ConfigError) are matched BY NAME — to avoid importing them — and rendered as a
+// one-line `spex: <message>` (a user's config typo must read as their typo, not a SpexCode stack dump);
+// anything else prints in full so a real bug keeps its trace. A synchronous throw inside an awaited call
+// (loadConfig on a malformed spexcode.json) surfaces as uncaughtException, not unhandledRejection, so BOTH
+// paths route through the same printer.
+function fatal(e: unknown): never {
+  if (e instanceof Error && (e.name === 'BackendError' || e.name === 'ConfigError')) console.error(`spex: ${e.message}`)
   else console.error(e)
   process.exit(1)
-})
+}
+process.on('unhandledRejection', fatal)
+process.on('uncaughtException', fatal)
 
 // tiny flag reader: --key value  (and bare positionals)
 function flag(name: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`)
   return i >= 0 ? process.argv[i + 1] : undefined
+}
+
+// Exit AFTER stdout has flushed. process.exit() force-quits without draining buffered pipe writes, so a
+// large piped dump (`spex issues --json | …`, board, review --json) is silently cut off at the pipe
+// buffer (~64KB). The empty write's callback fires once every prior queued chunk has drained; the returned
+// promise never resolves (process.exit ends the process inside the callback), so `await flushExit(code)`
+// halts execution here exactly like process.exit did — safe to drop in on any unbounded-output verb.
+// EPIPE (a reader that closed early — `| head`, `| jq` exiting) can never drain, so we ALSO exit on the
+// stream error rather than hang: the truncation is the reader's choice then, not ours.
+function flushExit(code = 0): Promise<never> {
+  return new Promise<never>(() => {
+    const done = () => process.exit(code)
+    process.stdout.on('error', done)
+    process.stdout.write('', done)
+  })
 }
 const has = (name: string) => process.argv.includes(`--${name}`)
 // bare positionals after argv index `from`, skipping flags and their values (selectors for ls/watch).
@@ -238,7 +260,7 @@ if (cmd === 'serve') {
   const { clientProof } = await import('./client.js')
   const r = await clientProof(id, has('json'))
   if (!r.ok) { console.error(`no proof for ${id} (status ${r.status})`); process.exit(1) }
-  if (has('json')) { console.log(r.body); process.exit(0) }
+  if (has('json')) { console.log(r.body); await flushExit(0) }
   const { writeFileSync } = await import('node:fs')
   const { join } = await import('node:path')
   const { tmpdir } = await import('node:os')
@@ -283,16 +305,16 @@ if (cmd === 'serve') {
 } else if (cmd === 'forge') {
   // thin route — all logic lives in spec-forge.
   const { runForge } = await import('../../spec-forge/src/cli.js')
-  process.exit(await runForge(process.argv.slice(3)))
+  await flushExit(await runForge(process.argv.slice(3)))
 } else if (cmd === 'yatsu') {
   // thin route — all logic lives in spec-yatsu.
   const { runYatsu } = await import('../../spec-yatsu/src/cli.js')
-  process.exit(await runYatsu(process.argv.slice(3)))
+  await flushExit(await runYatsu(process.argv.slice(3)))
 } else if (cmd === 'blob') {
   // @@@ blob - the bare evidence-transport verb ([[blob-put]]): put bytes in the shared content-addressed
   // cache and print the hash, decoupled from filing a reading. Thin route — the cache lives in spec-yatsu.
   const { runBlob } = await import('../../spec-yatsu/src/cli.js')
-  process.exit(runBlob(process.argv.slice(3)))
+  await flushExit(runBlob(process.argv.slice(3)))
 } else if (cmd === 'issues' || cmd === 'propose') {
   // @@@ issues - the ONE issues surface ([[issues]]): bare it is THE read — local + forge issues as ONE
   // store-tagged list, the supervisor's/human's drain view; a write first-positional (open|reply|sign|
@@ -303,7 +325,7 @@ if (cmd === 'serve') {
   const { ISSUE_WRITE_SUBS } = await import('./localIssues.js')
   let args = process.argv.slice(3)
   if (cmd === 'propose' && !ISSUE_WRITE_SUBS.has(args[0])) args = ['open', ...args]
-  process.exit(await runIssues(args))
+  await flushExit(await runIssues(args))
 } else if (cmd === 'remark' || cmd === 'resolve' || cmd === 'retract') {
   // @@@ remark - the resolvable interaction primitive ([[remark-substrate]]): pin a concern to a HOST (a
   // local issue, or a scenario `<node> --scenario <name>`) that a second agent can `resolve` and the author
@@ -311,7 +333,7 @@ if (cmd === 'serve') {
   // the dashboard adds no capability. `spex remark <host> --body -|<text> [--code-sha <sha>]`.
   const m = await import('./localIssues.js')
   const run = cmd === 'remark' ? m.runRemark : cmd === 'resolve' ? m.runResolve : m.runRetract
-  process.exit(await run(process.argv.slice(3)))
+  await flushExit(await run(process.argv.slice(3)))
 } else if (cmd === 'materialize') {
   // @@@ materialize - the pay-per-change render: surface nodes → manifest + AGENTS.md/CLAUDE.md block +
   // shims + Codex trust, for cwd's project. The cheap shell gate (dispatch.sh) invokes it only on change.
@@ -323,10 +345,11 @@ if (cmd === 'serve') {
   // hooks+handler-existence · backend) over the same HARNESSES materialize renders through; contract prints
   // the surface:system text; env dumps raw facts. Thin route, like forge/yatsu/hooks.
   const { runSelf } = await import('./self.js')
-  process.exit(await runSelf(process.argv.slice(3)))
+  await flushExit(await runSelf(process.argv.slice(3)))
 } else if (cmd === 'board') {
   const { buildBoard } = await import('./board.js')
   console.log(JSON.stringify(await buildBoard(), null, 2))
+  await flushExit(0)
 } else if (cmd === 'trunk') {
   // @@@ trunk - print the resolved source-of-truth branch (layout.ts mainBranch(): config override →
   // the main checkout's current branch → 'main'). The pre-commit main-guard reads this so it blocks
@@ -340,7 +363,7 @@ if (cmd === 'serve') {
   if (!query.trim()) { console.error('usage: spex search <query> [--json] [--limit N]'); process.exit(2) }
   const limit = Number(flag('limit')) || 10
   const results = await searchSpecs(query, { limit, onStats: (s) => console.error(`[spec-search] compute ${s.ms.toFixed(1)}ms · ${s.nodes} nodes · ${s.tokens} tokens (excludes process start)`) })
-  if (has('json')) { console.log(JSON.stringify(results)); process.exit(0) }
+  if (has('json')) { console.log(JSON.stringify(results)); await flushExit(0) }
   if (!results.length) { console.log(`no spec node matches "${query}"`); process.exit(0) }
   results.forEach((r, i) => {
     console.log(`${String(i + 1).padStart(2)}. ${r.title}  [${r.id}]  ·  score ${r.score}`)

@@ -43,8 +43,9 @@ export default {
     railLabel: 'main navigation',
     graph: 'Spec Node Graph (⌥1)',
     sessions: 'Session Board (⌥2)',
-    issues: 'Issues (⌥3 / ⌥F)',
-    settings: 'Settings (⌥4)',
+    evals: 'Evals (⌥3 / ⌥F)',
+    issues: 'Issues (⌥4)',
+    settings: 'Settings (⌥5)',
   },
 
   hud: {
@@ -126,7 +127,7 @@ export default {
       overlayCycle: 'cycle through nodes a worktree is changing (⇧ reverse)',
       enter: 'cross into the focus node’s live session',
       fresh: 'start a fresh session on the focus node',
-      issues: 'open the issues page (local issues + forge, one list)',
+      evals: 'open the evals page (the project’s current measured loss)',
       newChild: 'new child node under the focus (chord)',
       del: 'delete the focused node (chord)',
       settings: 'open settings (language…)',

@@ -3,7 +3,7 @@ scenarios:
   - name: annotate-seek-circle-file
     tags: [frontend-e2e]
     description: >
-      On #/issues, select a video reading (carrying a step-timeline sidecar, its thread holding anchored
+      On #/evals, select a video reading (carrying a step-timeline sidecar, its thread holding anchored
       comments) in the left list. In the RIGHT detail pane, over the CUSTOM review-track player: read the
       scrubber's comment markers + step bands + duration; click a comment marker and read video.currentTime
       + which comment/marker highlights; play/pause and read the playhead-active comment as it advances;
@@ -31,34 +31,34 @@ scenarios:
   - name: image-lightbox
     tags: [frontend-e2e]
     description: >
-      On #/issues select an IMAGE reading. In the detail pane: read the image's cursor style, click it,
+      On #/evals select an IMAGE reading. In the detail pane: read the image's cursor style, click it,
       measure the overlay image's rendered size against the viewport, press Esc and read the page hash;
       reopen, click the backdrop.
     expected: |
       The evidence image invites the zoom (cursor zoom-in). A click opens a fixed full-viewport lightbox
       showing the SAME blob near viewport size (max ~96vw/96vh — the pane's width is no longer the
-      ceiling). Esc closes ONLY the lightbox — the page stays on #/issues, no page-level Esc handler
+      ceiling). Esc closes ONLY the lightbox — the page stays on #/evals, no page-level Esc handler
       fires; clicking anywhere on the overlay also closes it. Switching selection while open closes it.
   - name: eval-comments
     tags: [frontend-e2e]
     description: >
-      On #/issues select an eval. In the detail pane's comments section under the media: send a first
+      On #/evals select an eval. In the detail pane's comments section under the media: send a first
       comment; send a second; confirm /api/issues holds exactly ONE local issue for that concern (and that
-      the eval thread is SPLIT OUT of the Threads tab per the eval-remark split); send a third containing
+      the eval thread is SPLIT OUT of the Issues page's merged list per the eval-remark split); send a third containing
       '@new'. Read /api/issues between sends.
     expected: |
       The first comment lazily CREATES a local issue bound by concern 'eval: <node> · <scenario>'
       (nodes:[node], the comment as body) and it renders in place under the media. The second comment
       APPENDS to that same thread — /api/issues holds exactly ONE local issue with that concern (no
       duplicate thread), now with one reply. The thread IS a real local issue (store local, concern-keyed)
-      but — after the eval-remark read-time split — it is EXCLUDED from the Threads tab / merged issue
-      surfaces (mergedIssues drops isEvalConcern); it surfaces only under its eval, not as a Threads row.
+      but — after the eval-remark read-time split — it is EXCLUDED from the Issues page's merged issue
+      list (mergedIssues drops isEvalConcern); it surfaces only under its eval, not as an Issues-page row.
       The '@new' comment dispatches a fresh worker through the same write path — the one-line outcome
       ('@ new→<session>') echoes on the page.
   - name: ab-history-flip
     tags: [frontend-e2e]
     description: >
-      On #/issues, select a scenario that has MORE THAN ONE reading — a fail (A) followed by a pass (B). In
+      On #/evals, select a scenario that has MORE THAN ONE reading — a fail (A) followed by a pass (B). In
       the RIGHT detail pane, read the A/B strip's verdict pips and the position label; click the older
       (fail) pip (or press ‹) and read the header verdict badge, the expected/note text, and which evidence
       blob the media points at; then click the newest (pass) pip and read them again. Read the comment

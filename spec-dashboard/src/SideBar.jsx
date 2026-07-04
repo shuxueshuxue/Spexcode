@@ -1,9 +1,10 @@
 import { useT } from './i18n/index.jsx'
 
 // The app's left navigation rail ([[side-nav]]) — the standard modern-app skeleton: one slim icon rail,
-// always visible, one entry per top-level page (graph · sessions · issues, settings pinned at the bottom).
-// Clicking navigates the URL layer (route.js); the active page wears the accent. Icons are the dashboard's
-// monochrome inline-SVG vocabulary (currentColor stroke), labels live in tooltips/aria — the rail stays slim.
+// always visible, one entry per top-level page (graph · sessions · evals · issues, settings pinned at the
+// bottom). Clicking navigates the URL layer (route.js); the active page wears the accent. Icons are the
+// dashboard's monochrome inline-SVG vocabulary (currentColor stroke), labels live in tooltips/aria — the
+// rail stays slim.
 
 const GraphGlyph = () => (
   <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -17,6 +18,16 @@ const SessionsGlyph = () => (
   <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <rect x="1.5" y="2.5" width="15" height="13" rx="1.6" />
     <path d="M4.6 6.5 l2.6 2.3 -2.6 2.3 M9 12.4 h4" />
+  </svg>
+)
+// Evals — the measured-loss feed: a bar-chart of scores with a check mark, the pass/fail readings.
+const EvalsGlyph = () => (
+  <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M2.5 15.5 v-11" />
+    <path d="M2.5 15.5 h13" />
+    <rect x="4.6" y="10" width="2.6" height="3.5" rx="0.5" />
+    <rect x="8.7" y="7" width="2.6" height="6.5" rx="0.5" />
+    <path d="M13 6 l1.4 1.4 L16.5 3.6" />
   </svg>
 )
 const IssuesGlyph = () => (
@@ -35,6 +46,7 @@ const SettingsGlyph = () => (
 const ENTRIES = [
   { page: 'graph', Glyph: GraphGlyph },
   { page: 'sessions', Glyph: SessionsGlyph },
+  { page: 'evals', Glyph: EvalsGlyph },
   { page: 'issues', Glyph: IssuesGlyph },
 ]
 

@@ -9,7 +9,7 @@ desc: M3 of the eval/issue/remark refactor — kill "forum" at the substrate, re
 ## raw source
 
 An eval-remark thread and a taste proposal were living in ONE list and reading as the same kind of thing —
-both "issues" on the board badge, both in the drain, both in the Threads tab. But a **scenario-scoped
+both "issues" on the board badge, both in the drain, both in the Issues page's list. But a **scenario-scoped
 concern is a remark, not an issue** (I1): it ages a scenario's loss and clears only by the teeth
 ([[remark-teeth]]); it must never be a drainable issue, or the loss signal could be bypassed by resolving it
 as an issue. So the two must **split**, read-time, over the one file store — and the word "forum", which
@@ -33,9 +33,9 @@ around it).
   <scenario>` (`isEvalConcern`). Two complementary reads run over the ONE store: `mergedIssues` (the read
   every ISSUE surface consumes) **excludes** eval concerns, and `loadEvalRemarkTracks` (the read the EVAL
   surfaces consume) **keeps only** them. Splitting at the source — inside `mergedIssues` — frees every issue
-  surface at once, by construction: the [[issues-view]] Threads tab, the [[dashboard-issues]] board issue
+  surface at once, by construction: the [[issues-view]] Issues page list, the [[dashboard-issues]] board issue
   badge, and the `spex issues` drain all stop counting eval remarks as issues, with no per-surface filter.
-  The eval-remark tracks instead ride the EVAL side: the [[evals-feed]] rows and the [[event-detail]] pane,
+  The eval-remark tracks instead ride the EVAL side ([[evals-view]]): the [[evals-feed]] rows and the [[event-detail]] pane,
   through the M2 server overlay.
 
 - **One overlay feeds both eval homes.** The (node, scenario)↔thread join is lifted server-side onto the

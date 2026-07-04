@@ -1,34 +1,27 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { postIssueReply, postIssueThread } from './data.js'
 import { useMentionAutocomplete } from './mentions.jsx'
-import EvalsGroup, { entryKey } from './EvalsFeed.jsx'
-import EventDetail from './EventDetail.jsx'
 import { SpecBody } from './NodeView.jsx'
 import { Replies, ReplyComposer } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
 
-// The issues page ([[issues-view]]): MASTER-DETAIL over one full routed page. The LEFT column is ONE
-// box under a prominent TAB SWITCHER — Evals | Threads — the switcher is the title; the active tab
-// shows its own filter bar (evals chips; threads store filter + New + concluded chip, with the
-// open/total meta at the END of the bar) over its full-height list. Evals outrank issues: tab order and
-// the default tab express it. Threads = the merged issue list (local forum + forge, store-tagged, API
-// order, no re-sort/no ranking; CONCLUDED issues hidden behind a count chip). The RIGHT pane is the
-// full-height DETAIL of the selection — selection IS the detail, no in-place expansion in a small box:
-// an issue renders its markdown body (SpecBody — the spec dialect), its replies, and the reply composer
-// — BOTH stores ([[issues]]: the reply verb routes by store); an eval renders as the [[annotator]].
-// j/k walk the ACTIVE tab's list, the detail follows; a tab flip keeps the selection (and its detail)
-// until the human picks in the new tab; writes post as 'human'.
-export default function IssuesView({ onFocusNode, specs = [], sessions = [], issuesData = null, reloadIssues, reloadBoard }) {
+// The Issues page ([[issues-view]]): a top-level page (#/issues, [[side-nav]]), peer of the graph, the
+// session board, and the Evals page. MASTER-DETAIL over one full routed page — the LEFT column is the
+// merged ISSUE list (local forum + forge, store-tagged, API order, no re-sort/no ranking; CONCLUDED
+// issues hidden behind a count chip) under its own filter bar; the RIGHT pane is the full-height DETAIL
+// of the selection — selection IS the detail, no in-place expansion in a small box: an issue renders its
+// markdown body (SpecBody — the spec dialect), its replies, and the reply composer — BOTH stores
+// ([[issues]]: the reply verb routes by store). j/k walk the issue list, the detail follows; writes post
+// as 'human'. The evals are their OWN top-level page now ([[evals-view]]) — no in-page switcher here.
+export default function IssuesPage({ onFocusNode, specs = [], sessions = [], issuesData = null, reloadIssues }) {
   const t = useT()
   const data = issuesData                          // RESIDENT app state — the page renders instantly, no per-mount fetch
   const [composing, setComposing] = useState(false)
   const [showConcluded, setShowConcluded] = useState(false)
   const [storeFilter, setStoreFilter] = useState('all')  // 'all' | a store present in the data (local/github/…)
   const [notice, setNotice] = useState('')
-  const [sel, setSel] = useState(null)            // the ONE selection: 'eval:<node>·<scenario>' | 'issue:<id>'
-  const [tab, setTab] = useState('evals')         // the left box's switcher: 'evals' | 'threads' (evals rank first)
-  const [evalRows, setEvalRows] = useState([])    // the evals group's visible entries (its filters are its own)
-  const rowsRef = useRef([])                      // the ACTIVE tab's key list, for j/k
+  const [sel, setSel] = useState(null)            // the ONE selection: 'issue:<id>'
+  const rowsRef = useRef([])                      // the issue key list, for j/k
 
   // a write must show up where it lands: force the app-resident list to refetch (ETag makes it cheap).
   const load = useCallback(() => reloadIssues?.(true), [reloadIssues])
@@ -47,19 +40,14 @@ export default function IssuesView({ onFocusNode, specs = [], sessions = [], iss
   const openCount = stored.filter((i) => i.status === 'open').length
   const concludedCount = stored.filter(concluded).length
 
-  const evalByKey = useMemo(() => new Map(evalRows.map((e) => [entryKey(e), e])), [evalRows])
   const issueByKey = useMemo(() => new Map(issues.map((i) => [`issue:${i.id}`, i])), [issues])
-  // j/k walk the ACTIVE tab only; a selection made on the other tab stays valid (its detail persists
-  // across a tab flip) — j/k from a cross-tab selection lands on the active list's first row.
-  rowsRef.current = tab === 'evals' ? evalRows.map(entryKey) : issues.map((i) => `issue:${i.id}`)
-  // default selection: the active tab's first row — the detail pane is never idle by default.
-  const effSel = sel && (evalByKey.has(sel) || issueByKey.has(sel)) ? sel : rowsRef.current[0] ?? null
+  rowsRef.current = issues.map((i) => `issue:${i.id}`)
+  // default selection: the list's first row — the detail pane is never idle by default.
+  const effSel = sel && issueByKey.has(sel) ? sel : rowsRef.current[0] ?? null
 
-  const onRows = useCallback((rows) => setEvalRows(rows), [])
-
-  // page keys ([[issues-view]]): j/k walk the ONE flat list across both groups; the detail follows the
-  // selection (no Enter needed — selection IS detail). Capture phase; a key typed into an input/textarea
-  // or carrying a modifier is never ours.
+  // page keys ([[issues-view]]): j/k walk the issue list; the detail follows the selection (no Enter —
+  // selection IS detail). Capture phase; a key typed into an input/textarea or carrying a modifier is
+  // never ours.
   const stateRef = useRef({})
   stateRef.current = { effSel }
   useEffect(() => {
@@ -84,23 +72,13 @@ export default function IssuesView({ onFocusNode, specs = [], sessions = [], iss
   if (data == null) return <div className="fv-note">{t('session.issuesLoading')}</div>
   if (!data.enabled) return <div className="fv-note">{t('session.issuesOff')}</div>
 
-  const selEval = effSel ? evalByKey.get(effSel) : null
   const selIssue = effSel ? issueByKey.get(effSel) : null
 
   return (
     <div className="fv-master">
       <div className="fv-list-col">
         {notice && <div className="fv-notice">{notice}</div>}
-        <nav className="fv-tabs">
-          <button type="button" className={tab === 'evals' ? 'on' : ''} onClick={() => setTab('evals')}>
-            {t('evalsFeed.title')}<span className="fv-tab-n">{evalRows.length}</span>
-          </button>
-          <button type="button" className={tab === 'threads' ? 'on' : ''} onClick={() => setTab('threads')}>
-            {t('session.issuesThreadsTitle')}<span className="fv-tab-n">{openCount}</span>
-          </button>
-        </nav>
-        <EvalsGroup nodes={specs} sel={effSel} onSel={(k) => setSel(k)} onRows={onRows} hidden={tab !== 'evals'} />
-        <section className={`fv-group${tab === 'threads' ? '' : ' fv-hide'}`}>
+        <section className="fv-group">
           <header className="fv-group-head">
             <span className="ef-chipbar">
               {stores.length > 1 && (
@@ -136,10 +114,9 @@ export default function IssuesView({ onFocusNode, specs = [], sessions = [], iss
         </section>
       </div>
       <div className="fv-detail">
-        {selEval && <EventDetail entry={selEval} specs={specs} sessions={sessions}
-          onWrite={async (outcomes) => { flash(outcomes); await reloadBoard?.(); await load() }} />}
-        {selIssue && <IssueDetail issue={selIssue} specs={specs} sessions={sessions} onFocusNode={onFocusNode} onWrite={async (outcomes) => { flash(outcomes); await load() }} />}
-        {!selEval && !selIssue && <div className="fv-note">{t('session.issuesEmpty')}</div>}
+        {selIssue
+          ? <IssueDetail issue={selIssue} specs={specs} sessions={sessions} onFocusNode={onFocusNode} onWrite={async (outcomes) => { flash(outcomes); await load() }} />
+          : <div className="fv-note">{t('session.issuesEmpty')}</div>}
       </div>
     </div>
   )

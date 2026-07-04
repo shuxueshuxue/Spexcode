@@ -11,7 +11,8 @@ import Settings from './Settings.jsx'
 import SpecSearch from './SpecSearch.jsx'
 import BoardStats from './BoardStats.jsx'
 import SideBar from './SideBar.jsx'
-import IssuesView from './IssuesView.jsx'
+import IssuesPage from './IssuesPage.jsx'
+import EvalsPage from './EvalsPage.jsx'
 import MobileApp from './MobileApp.jsx'
 import { useRoute, navigate } from './route.js'
 import { useResizable } from './useResizable.js'
@@ -266,7 +267,7 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
   const centerRef = useRef(centerOn); centerRef.current = centerOn
   const followedRef = useRef(false)
   const skipCenterRef = useRef(false)   // a mouse click sets this so the follow effect leaves the board where it is
-  // lastCenteredRef makes the follow route-safe: a focus set while ANOTHER page is up (a forum node chip, a
+  // lastCenteredRef makes the follow route-safe: a focus set while ANOTHER page is up (an issues-page node chip, a
   // search pick) can't measure the hidden zero-sized graph, so the pan runs when the graph page shows again —
   // and an unchanged focus doesn't re-pan on every page return.
   const lastCenteredRef = useRef(null)
@@ -281,7 +282,7 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
 
   // focus-return boundary ([[focus-return]]): a transient overlay (search / help / node popup) takes focus
   // when it opens; when the LAST one closes, hand focus back to whoever held it — else the docked sink.
-  // Never <body>. Pages (the session board, forum, settings) are surfaces with their own focus discipline,
+  // Never <body>. Pages (the session board, evals, issues, settings) are surfaces with their own focus discipline,
   // not transient overlays, so they stay out of this set.
   const anyOverlay = overlay || legend || !!search
   const hadOverlay = useRef(anyOverlay)
@@ -302,17 +303,17 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
     const bumpScroll = (delta) => popupScroll(
       document.querySelector('.ov-body .pane-doc, .ov-body .pane-hist, .ov-body .pane-issues, .ov-body .pane-eval, .ov-body .pane-edit'), delta)
     const onKey = (e) => {
-      // the GLOBAL ⌥ page vocabulary ([[side-nav]]): ⌥1..⌥4 jump straight to a page in rail order, ⌥N to the
-      // New Session composer, ⌥F to the forum — from ANY page, matched by e.code (⌥-digit/letter on a mac
-      // emits dead-key glyphs for e.key). The console's nav mode yields these on purpose (its earlier capture
-      // listener falls through the ⌥ command family instead of forwarding it to tmux). Firing one also
-      // dismisses the search palette — the navigation intent wins over the modal.
+      // the GLOBAL ⌥ page vocabulary ([[side-nav]]): ⌥1..⌥5 jump straight to a page in rail order, ⌥N to the
+      // New Session composer, ⌥F to the Evals page (the leading loss surface) — from ANY page, matched by
+      // e.code (⌥-digit/letter on a mac emits dead-key glyphs for e.key). The console's nav mode yields these
+      // on purpose (its earlier capture listener falls through the ⌥ command family instead of forwarding it
+      // to tmux). Firing one also dismisses the search palette — the navigation intent wins over the modal.
       if (e.altKey && !e.metaKey && !e.ctrlKey) {
-        const pageOf = { Digit1: 'graph', Digit2: 'sessions', Digit3: 'issues', Digit4: 'settings' }
+        const pageOf = { Digit1: 'graph', Digit2: 'sessions', Digit3: 'evals', Digit4: 'issues', Digit5: 'settings' }
         const target = pageOf[e.code]
         if (target) { e.preventDefault(); e.stopPropagation(); setSearch(null); navigate(target); return }
         if (e.code === 'KeyN') { e.preventDefault(); e.stopPropagation(); setSearch(null); setSessionSel('new'); navigate('sessions', 'new'); return }
-        if (e.code === 'KeyF') { e.preventDefault(); e.stopPropagation(); setSearch(null); navigate('issues'); return }
+        if (e.code === 'KeyF') { e.preventDefault(); e.stopPropagation(); setSearch(null); navigate('evals'); return }
       }
       // The search palette is a modal: while open it owns its keys over ANY surface — the board OR the session
       // interface (the session interface yields via its searchOpen guard). The SpecSearch input owns ↑/↓/Enter/
@@ -326,9 +327,10 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
       // reachable even while the session interface owns its keys. Plain `/` on the board stays nodes-first (below).
       if ((e.metaKey || e.ctrlKey) && e.key === '/') { e.preventDefault(); e.stopPropagation(); setSearch('sessions'); return }
       if (page === 'sessions') return // the session interface owns ALL its keys (arrows / Enter / typing / Esc / the graph)
-      // the forum page's keys (Tab region-jump, j/k/Enter, its own Esc stack) are IssuesView's own.
-      // Esc does NOT route pages anywhere ([[side-nav]]) — leaving is ⌥1..⌥4, the rail, or history.
-      if (page === 'issues') return
+      // the Evals and Issues pages own their own keys (j/k list-walk, their inputs, their own Esc stack) —
+      // EvalsPage / IssuesPage handle them. Esc does NOT route pages anywhere ([[side-nav]]) — leaving is
+      // ⌥1..⌥5, the rail, or history.
+      if (page === 'evals' || page === 'issues') return
       // the settings page: `,` toggles back home; typing inside its shortcut-capture stays its own
       if (page === 'settings') {
         if (firesKey('board.settings', e.key)) { e.preventDefault(); e.stopPropagation(); navigate('graph') }
@@ -405,8 +407,8 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
       else if (firesKey('board.enter', e.key)) { e.preventDefault(); openBoard() }
       // [-key (the [[node]] mention opener): jump to a FRESH New Session on the focus ([[<id>]] pre-seeded), unconditional — never enters an existing session
       else if (firesKey('board.fresh', e.key)) { e.preventDefault(); startNew(`[[${focus.id}]] `) }
-      // f-key: open the issues page ([[issues-view]]) — the board-side entry; the sidebar's Forum is the other, one surface
-      else if (firesKey('board.issues', e.key)) { e.preventDefault(); navigate('issues') }
+      // f-key: open the Evals page ([[evals-view]]) — the leading loss surface — from the board; the rail is the other entry
+      else if (firesKey('board.evals', e.key)) { e.preventDefault(); navigate('evals') }
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
@@ -532,10 +534,16 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
         onOpenSearch={() => setSearch('sessions')}
         reload={reload}
       />
-      {/* the issues page ([[issues-view]]) — its own route; mounts per visit (it fetches on mount) */}
+      {/* the Evals page ([[evals-view]]) — its own top-level route; the feed rides the app's board poll */}
+      {page === 'evals' && (
+        <div className="page-pane page-evals">
+          <EvalsPage specs={specs} sessions={sessions} reloadBoard={reload} />
+        </div>
+      )}
+      {/* the Issues page ([[issues-view]]) — its own route; renders from the app-resident issues list */}
       {page === 'issues' && (
         <div className="page-pane page-issues">
-          <IssuesView specs={specs} sessions={sessions} issuesData={issuesData} reloadIssues={reloadIssues} reloadBoard={reload} onFocusNode={(id) => { setFocusId(id); navigate('graph') }} />
+          <IssuesPage specs={specs} sessions={sessions} issuesData={issuesData} reloadIssues={reloadIssues} onFocusNode={(id) => { setFocusId(id); navigate('graph') }} />
         </div>
       )}
       {/* the settings page ([[settings]]) — same sections as ever, now a routed page instead of a popup */}

@@ -85,10 +85,10 @@ body {
 /* the active page: a soft accent wash + accent ink — a state, not a hover effect */
 .rail-btn.on { background: color-mix(in srgb, var(--blue) 14%, transparent); color: var(--blue); }
 
-/* ---- routed page containers (issues, settings) ---- */
+/* ---- routed page containers (evals, issues, settings) ---- */
 .page-pane { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--paper); }
-/* the issues page keeps the issues-view iron rule: the outer page never scrolls, each region scrolls internally */
-.page-issues { overflow: hidden; padding: 10px 14px; }
+/* the evals + issues pages keep the master-detail iron rule: the outer page never scrolls, each region scrolls internally */
+.page-evals, .page-issues { overflow: hidden; padding: 10px 14px; }
 .page-settings { overflow: auto; flex-direction: row; justify-content: center; }
 .settings-body { width: min(720px, 94%); padding: 26px 0 60px; }
 .page-title { font-size: 17px; font-weight: 700; color: var(--ink2); margin: 6px 2px 14px; }
@@ -967,22 +967,15 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .si-pill.forum:hover { color: var(--blue); }
 .si-pill.forum.on { color: var(--blue); background: color-mix(in srgb, var(--blue) 16%, var(--panel2)); border-color: var(--blue); }
 
-/* ---- issues page: MASTER-DETAIL ([[issues-view]]) — a left list (two groups) + a full-height detail
-   pane. Selection IS detail: no in-place expansion inside a scroll box. ---- */
+/* ---- the master-detail shell shared by the Evals page ([[evals-view]]) and the Issues page
+   ([[issues-view]]) — a left list + a full-height detail pane. Selection IS detail: no in-place
+   expansion inside a scroll box. Each page is its OWN top-level route now — no in-page tab switcher. ---- */
 .fv-master { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(300px, 380px) 1fr; }
-/* the left column is ONE box under a prominent TAB SWITCHER (evals | threads): the switcher is the
-   title, the active tab's filter bar sits under it, and the active list gets the full height. The
-   hidden tab stays mounted (fv-hide) so its state and row reporting survive a flip. */
+/* the left column is ONE box: its own filter bar (the evals chips, or the issues store/New/concluded bar)
+   over a full-height list that scrolls itself. The [[side-nav]] rail names the page — no column title. */
 .fv-list-col { min-height: 0; display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid var(--line); background: var(--paper); }
 .fv-list-col > .fv-notice { flex: none; }
-.fv-tabs { flex: none; display: flex; background: var(--panel2); border-bottom: 1px solid var(--line); }
-.fv-tabs button { flex: 1 1 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font: inherit; font-size: 11px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: var(--muted); background: none; border: 0; border-bottom: 2px solid transparent; padding: 9px 0 7px; cursor: pointer; }
-.fv-tabs button.on { color: var(--ink); border-bottom-color: var(--blue); }
-.fv-tabs button:hover { color: var(--ink2); }
-.fv-tab-n { font-family: var(--mono); font-size: 9px; font-weight: 400; letter-spacing: 0; color: var(--muted); border: 1px solid var(--line); border-radius: 9px; padding: 0 6px; }
-.fv-tabs button.on .fv-tab-n { color: var(--ink2); }
 .fv-list-col > .fv-group { flex: 1 1 auto; min-height: 0; overflow-y: auto; border-top: 0; }
-.fv-hide { display: none !important; }
 .fv-detail { min-height: 0; overflow-y: auto; background: var(--paper); }
 .fv-group { display: flex; flex-direction: column; }
 .fv-group + .fv-group { border-top: 1px solid var(--line); }

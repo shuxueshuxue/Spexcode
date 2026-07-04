@@ -238,35 +238,44 @@ export async function fileDiffAt(root: string, relPath: string, hash: string): P
   return gitA(['-C', root, '-c', 'core.quotePath=false', 'show', '-M', '--format=', hash, '--', at])
 }
 
-// ONE cached `git log` over HEAD (mirrors historyIndex): each commit's position (0 = newest) + per
-// file the commits that touched it; driftFor() is then a pure lookup. `acks`/`specNodes` carry the
-// Spec-OK convention (see driftFor): acks[hash] = node ids declared still-valid via `Spec-OK:` trailers;
-// specNodes[hash] = node ids whose spec.md it touched.
+// ONE cached `git log` over HEAD (mirrors historyIndex), enriched with parent edges so "newer than
+// the spec" is answered by true DAG reachability, never by a log-position/date compare (a linear
+// order can't encode a branching history's partial order and silently under-reports — back-dated
+// branches, adoption). driftFor()/ancestorsOf() are then pure in-memory lookups. `acks`/`specNodes`
+// carry the Spec-OK convention (see driftFor): acks[hash] = node ids declared still-valid via
+// `Spec-OK:` trailers; specNodes[hash] = node ids whose spec.md it touched.
 export type DriftIndex = {
-  pos: Map<string, number>
+  ord: Map<string, number>            // hash -> dense id from the walk: a bitset slot, NEVER an order to compare
+  parents: Map<string, string[]>      // hash -> parent hashes (the DAG edges, from the same walk)
   fileCommits: Map<string, string[]>
   acks: Map<string, Set<string>>      // commit hash -> node ids acknowledged via `Spec-OK:` trailers
   specNodes: Map<string, Set<string>> // commit hash -> node ids whose spec.md it touched (its versions)
+  anc: Map<string, Uint8Array>        // memoized reachability bitsets, lazily built per queried sha
 }
 let driftIdxCache: { head: string; idx: DriftIndex } | null = null
 
 async function buildDriftIndex(root: string): Promise<DriftIndex> {
-  const pos = new Map<string, number>(), fileCommits = new Map<string, string[]>()
+  const ord = new Map<string, number>(), parents = new Map<string, string[]>()
+  const fileCommits = new Map<string, string[]>()
   const acks = new Map<string, Set<string>>(), specNodes = new Map<string, Set<string>>()
-  // RS-delimited records: `<hash>US<comma-joined Spec-OK values>` on line 1, then the --name-only file
-  // list. `valueonly,separator` collapses the trailer block to one line so it never collides with the
-  // file names below it (a raw `%b` body would interleave with them and be unparseable).
+  const idx: DriftIndex = { ord, parents, fileCommits, acks, specNodes, anc: new Map() }
+  // RS-delimited records: `<hash>US<parents>US<comma-joined Spec-OK values>` on line 1, then the
+  // --name-only file list. `valueonly,separator` collapses the trailer block to one line so it never
+  // collides with the file names below it (a raw `%b` body would interleave and be unparseable).
   const out = await gitA(['-C', root, '-c', 'core.quotePath=false', 'log', '--name-only',
-    `--format=${RS}%H${US}%(trailers:key=Spec-OK,valueonly,separator=%x2C)`, 'HEAD'])
-  if (!out) return { pos, fileCommits, acks, specNodes }
+    `--format=${RS}%H${US}%P${US}%(trailers:key=Spec-OK,valueonly,separator=%x2C)`, 'HEAD'])
+  if (!out) return idx
   let i = 0
   for (const rec of out.split(RS)) {
     const r = rec.replace(/^\n/, '')
     if (!r) continue
     const lines = r.split('\n')
-    const [hash, ackStr = ''] = lines[0].split(US)
+    const [hash, parentStr = '', ackStr = ''] = lines[0].split(US)
     if (!hash) continue
-    if (!pos.has(hash)) pos.set(hash, i++)
+    if (!ord.has(hash)) {
+      ord.set(hash, i++)
+      parents.set(hash, parentStr.split(' ').filter(Boolean))
+    }
     const ackSet = new Set(ackStr.split(',').map((s) => s.trim()).filter(Boolean))
     if (ackSet.size) acks.set(hash, ackSet)
     for (const line of lines.slice(1)) {
@@ -279,7 +288,7 @@ async function buildDriftIndex(root: string): Promise<DriftIndex> {
       }
     }
   }
-  return { pos, fileCommits, acks, specNodes }
+  return idx
 }
 export async function driftIndex(root: string): Promise<DriftIndex> {
   const head = headOrEmpty(root) // filesystem HEAD, no subprocess — see historyIndex
@@ -288,33 +297,63 @@ export async function driftIndex(root: string): Promise<DriftIndex> {
   if (head) driftIdxCache = { head, idx }
   return idx
 }
-// pure lookup: how many commits to `path` are newer than `sinceHash` (the spec's last version) and not
-// yet acknowledged. No git calls.
+// the reachability set of `sha` — itself plus every ancestor — as a bitset over the walk's dense ids.
+// Built once per queried sha by following parent edges in memory (no git fork), memoized on the index;
+// a bitset costs history-length BITS, so hundreds of cached shas stay cheap on the board hot path.
+// undefined when `sha` is not reachable from HEAD (rebased away, an unmerged branch, or never on any
+// ref) — callers apply their own conservative rule to that "can't prove" case.
+export function ancestorsOf(idx: DriftIndex, sha: string): Uint8Array | undefined {
+  const hit = idx.anc.get(sha)
+  if (hit) return hit
+  const start = idx.ord.get(sha)
+  if (start === undefined) return undefined
+  const bits = new Uint8Array((idx.ord.size + 7) >> 3)
+  bits[start >> 3] |= 1 << (start & 7)
+  const stack = [sha]
+  while (stack.length) {
+    for (const p of idx.parents.get(stack.pop()!) ?? []) {
+      const o = idx.ord.get(p)
+      if (o === undefined) continue // shallow-clone boundary: an unwalked parent ends the chain
+      const m = 1 << (o & 7)
+      if (bits[o >> 3] & m) continue
+      bits[o >> 3] |= m
+      stack.push(p)
+    }
+  }
+  idx.anc.set(sha, bits)
+  return bits
+}
+export function inAncestors(idx: DriftIndex, bits: Uint8Array, sha: string): boolean {
+  const o = idx.ord.get(sha)
+  return o !== undefined && (bits[o >> 3] & (1 << (o & 7))) !== 0
+}
+
+// pure lookup, no git: a commit to `path` is drift iff it is NOT an ancestor of `sinceHash` — it lies
+// in `sinceHash..HEAD` by true DAG reachability, wherever a date-ordered log happens to place it.
 //
 // `sinceHash` is the node's OWN latest version commit, so the node(s) it's a version of
-// (specNodes[sinceHash]) name the node being measured; an ack counts only if its `Spec-OK:` set names one
-// of those — `Spec-OK: A` quiets A's drift, never B's.
+// (specNodes[sinceHash]) name the node being measured; an ack counts only if its `Spec-OK:` set names
+// one of those — `Spec-OK: A` quiets A's drift, never B's. An ack that is itself an ancestor of the
+// version can't speak for it (a re-version invalidates older acks); a valid ack quiets exactly the
+// commits reachable from it. An off-history `sinceHash` → 0: no basis on HEAD to measure from.
 export function driftFor(idx: DriftIndex, sinceHash: string, path: string): number {
   if (!sinceHash) return 0
-  const sp = idx.pos.get(sinceHash)
-  if (sp === undefined) return 0
+  const base = ancestorsOf(idx, sinceHash)
+  if (!base) return 0
   const targets = idx.specNodes.get(sinceHash)
-  // the newest commit that acks a target (smallest pos = closest to HEAD) is the floor at/below which all
-  // drift is acknowledged. No target / no matching ack → Infinity, so nothing is quieted. An ack at or
-  // before the version (p >= sp) can't speak for it — a re-version invalidates older acks.
-  let ackPos = Infinity
+  const ackCover: Uint8Array[] = []
   if (targets) {
     for (const [h, ackSet] of idx.acks) {
-      const p = idx.pos.get(h)
-      if (p === undefined || p >= sp) continue
-      if ([...targets].some((t) => ackSet.has(t))) ackPos = Math.min(ackPos, p)
+      if (inAncestors(idx, base, h)) continue
+      if (![...targets].some((t) => ackSet.has(t))) continue
+      const a = ancestorsOf(idx, h)
+      if (a) ackCover.push(a)
     }
   }
   let n = 0
   for (const h of idx.fileCommits.get(path) ?? []) {
-    const p = idx.pos.get(h)
-    if (p === undefined || p >= sp) continue   // older than / at the version → not drift
-    if (p >= ackPos) continue                  // at or below the newest covering ack → acknowledged
+    if (inAncestors(idx, base, h)) continue           // reachable from the version → not drift
+    if (ackCover.some((a) => inAncestors(idx, a, h))) continue // covered by an ack → acknowledged
     n++
   }
   return n

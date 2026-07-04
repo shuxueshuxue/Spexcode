@@ -32,7 +32,8 @@ rules:
   enumerated from **git-tracked** files (`git ls-files`), so `governedRoots: ["."]` safely means the whole
   project (node_modules/build/nested-worktrees are never in the index). **`lint.testGlobs`** (default
   `**/*.test.*`) drops tests; roots matching no tracked file warn "governing nothing".
-- **drift** (warn): a governed file has commits newer than its spec's latest version → maybe stale. A file
+- **drift** (warn): a governed file has commits not reachable from its spec's latest version — true git
+  ancestry ([[drift-by-ancestry]]), never a log-position/date guess → maybe stale. A file
   governed by several nodes drifts **every** owner — shared governance is ordinary, and each has a stake.
 - **altitude** (warn): a body states *intent and contract*, not a re-narration of the implementation.
   The rule can't judge meaning, so it fires on cheap proxies of a mechanics dump — grown long (lines /

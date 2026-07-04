@@ -71,7 +71,10 @@ three git-derived (a governed `code:` file changed, its scenario's *content* cha
 version moved) plus a fourth, **non-git** axis, the REMARK ([[remark-teeth]]): an unresolved remark on the
 scenario ages it like a drift event, and a resolved one keeps it stale until a reading taken *after* the
 resolve exists. A bare `git mv` reparent is not a content change, so it never stales a reading: the scenario
-axis judges content the way a spec node's own freshness does, not the yatsu.md's path. No hashes kept; an
+axis judges content the way a spec node's own freshness does, not the yatsu.md's path. Both git axes judge
+"changed since" by true ancestry ([[drift-by-ancestry]]): a commit stales the reading iff it is *not an
+ancestor* of its codeSha, and an off-history codeSha — orphaned by a rebase or on a never-merged branch
+alike — reads conservatively stale. No hashes kept; an
 ack vindicates a *spec*, not a reading. `freshness.ts` stays a pure computation — the remark track is fed in
 at the call sites, never read from the forum here.
 

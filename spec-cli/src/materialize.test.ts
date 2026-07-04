@@ -75,3 +75,40 @@ test('private-overlay: on a host that pre-tracks CLAUDE.md/AGENTS.md/.gitignore,
   // switching modes and back is a no-op on the tracked file (this fails if remove mangles the user's whitespace)
   assert.equal(readFileSync(join(proj, '.gitignore'), 'utf8'), gitignoreDefault, 'default→private→default restores .gitignore exactly (idempotent cancel-out)')
 })
+
+// [[harness-adapter]] — a dispatched CODEX worker runs in a LINKED WORKTREE, and codex fires its hooks only
+// when the worktree (a) ANCHORS a project config layer and (b) that project is TRUSTED and (c) each hook is
+// HASHED — none of which `--dangerously-bypass-hook-trust` provides. materialize must satisfy all three at the
+// worktree so a fresh-init codex worker's hooks fire (before this, only a project that happened to materialize
+// `.codex/skills` got the anchor, and the bypass path skipped the trust entirely → ZERO hooks).
+test('codex worktree materialize plants the .codex anchor + unconditional project trust + per-hook hashes', { skip: !gitAvailable() && 'git not available' }, () => {
+  const proj = mkdtempSync(join(tmpdir(), 'spex-cxwt-'))
+  const home = mkdtempSync(join(tmpdir(), 'spex-home-'))
+  const codex = mkdtempSync(join(tmpdir(), 'spex-codex-'))
+  const env = { ...process.env, SPEXCODE_HOME: home, CODEX_HOME: codex }
+  const g = (...args: string[]) => execFileSync('git', ['-C', proj, ...args], { encoding: 'utf8', env })
+  const spex = (cwd: string, ...args: string[]) => execFileSync(TSX, [CLI, ...args], { cwd, encoding: 'utf8', env })
+
+  g('init', '-q', '-b', 'main')
+  g('config', 'user.email', 't@t.co'); g('config', 'user.name', 't')
+  writeFileSync(join(proj, 'README.md'), '# app\n')
+  g('add', '-A'); g('commit', '-qm', 'init')
+  spex(proj, 'init', '.')                                  // seeds .spec (incl .config/core) + materializes at main
+  g('add', '-A'); g('commit', '-qm', 'adopt', '--no-verify')
+
+  // a linked worktree, the shape a dispatched codex worker runs in
+  const wt = join(proj, '.worktrees', 'wt')
+  g('worktree', 'add', '-q', wt, '-b', 'node/wt')
+  spex(wt, 'materialize')                                  // per-worktree render (as sessions.ts does at launch)
+
+  // (a) the worktree carries a .codex/hooks.json ANCHOR (else codex builds no layer for the worktree cwd)
+  assert.ok(existsSync(join(wt, '.codex', 'hooks.json')), 'worktree has a .codex/hooks.json anchor')
+  // the shim codex actually reads via the root rewrite still lives at the MAIN checkout
+  assert.ok(existsSync(join(proj, '.codex', 'hooks.json')), 'main checkout still has the codex shim')
+
+  // (b)+(c) config.toml carries PROJECT trust for the MAIN checkout AND a per-hook trusted_hash for each event
+  const cfg = readFileSync(join(codex, 'config.toml'), 'utf8')
+  assert.ok(cfg.includes(`[projects."${proj}"]`) && cfg.includes('trust_level = "trusted"'), 'main-checkout project trusted')
+  for (const snake of ['session_start', 'user_prompt_submit', 'pre_tool_use', 'post_tool_use', 'stop'])
+    assert.match(cfg, new RegExp(`hooks.state."[^"]*:${snake}:0:0"\\]\\s*\\ntrusted_hash = "sha256:`), `per-hook trusted_hash for ${snake}`)
+})

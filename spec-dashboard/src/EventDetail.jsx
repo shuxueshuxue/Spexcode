@@ -462,7 +462,10 @@ function EvalRemarks({ entry, comments, codeSha, specs, sessions, onWrite, seekM
         <Replies replies={comments} onSeek={seekMs} selIdx={selIdx} activeIdx={activeIdx} onSelect={onSelect} events={events} />
       </div>
       <div className="an-rail-compose">
-        <ReplyComposer onSend={send} specs={specs} sessions={sessions} focusId={entry.node} onDone={onWrite} anchorNow={anchorNow} draft={draft} />
+        {/* keyed by the (node, scenario) identity: the composer owns its body state, so only a remount
+            resets the working draft on selection change — a half-typed or circle-prefilled remark must
+            die with its selection, never surface on another eval's thread (it would post there). */}
+        <ReplyComposer key={`${entry.node}·${entry.scenario}`} onSend={send} specs={specs} sessions={sessions} focusId={entry.node} onDone={onWrite} anchorNow={anchorNow} draft={draft} />
       </div>
     </aside>
   )

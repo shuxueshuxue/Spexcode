@@ -308,10 +308,12 @@ test('sidecar: a mixed reading (N images + a video + timeline) round-trips its w
 
 // ---- freshness / drift (synthetic indices — the same shapes git.ts builds) ----
 
-// commits newest→oldest: c3 (pos 0), c2 (pos 1), c1 (pos 2).
+// linear chain c1 <- c2 <- c3 (c3 = tip): "newer than X" = not reachable from X.
 function fakeIndex(fileCommits: Record<string, string[]>): DriftIndex {
   return {
-    pos: new Map([['c3', 0], ['c2', 1], ['c1', 2]]),
+    ord: new Map([['c3', 0], ['c2', 1], ['c1', 2]]),
+    parents: new Map([['c3', ['c2']], ['c2', ['c1']], ['c1', []]]),
+    anc: new Map(),
     fileCommits: new Map(Object.entries(fileCommits)),
     acks: new Map(),
     specNodes: new Map(),

@@ -1,0 +1,73 @@
+{
+ "midflight1": {
+  "active": true,
+  "disabled": false,
+  "val": ""
+ },
+ "afterA": {
+  "active": true,
+  "onNew": true,
+  "rows": [
+   "?Idle fixture awaiting i"
+  ]
+ },
+ "afterB": {
+  "active": true,
+  "onNew": true,
+  "rowsN": 1
+ },
+ "mod": {
+  "from": "NEW",
+  "afterDown": "?Idle fixture awaiti",
+  "afterDown2": "⋯stub row A (rig fix",
+  "afterUp": "?Idle fixture awaiti",
+  "fromInbox": "◌stub row B (rig fix",
+  "caretIntact": true,
+  "altN": "NEW",
+  "plainUp": {
+   "before": "NEW",
+   "after": "NEW"
+  },
+  "plainDown": "NEW"
+ },
+ "nav": {
+  "start": false,
+  "afterAltI": true,
+  "fwd1": 0,
+  "afterMetaI": false,
+  "fwd2": 0,
+  "fwdAfterX": 1,
+  "navNow": true,
+  "afterBoth": true
+ },
+ "status": [
+  {
+   "status": "asking",
+   "color": "rgb(181, 137, 0)",
+   "label": "Idle fixture awaitin"
+  },
+  {
+   "status": "starting",
+   "color": "rgb(147, 161, 161)",
+   "label": "stub row B (rig fixt"
+  },
+  {
+   "status": "offline",
+   "color": "rgb(147, 161, 161)",
+   "label": "stub row A (rig fixt"
+  }
+ ],
+ "close": {
+  "headerActs": [
+   "nav"
+  ],
+  "pass1": {
+   "onNew": false,
+   "aGone": false
+  },
+  "pass2": {
+   "onFixture": true,
+   "bGone": true
+  }
+ }
+}

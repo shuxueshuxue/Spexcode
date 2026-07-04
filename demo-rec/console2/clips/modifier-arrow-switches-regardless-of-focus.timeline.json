@@ -1,0 +1,29 @@
+{
+ "v": 1,
+ "events": [
+  {
+   "tMs": 0,
+   "step": "⌥↑↓ steps tabs from any focus; plain arrows stay in the box"
+  },
+  {
+   "tMs": 7690,
+   "step": "⌥↓ from New draft: NEW → ?Idle fixture awaiti"
+  },
+  {
+   "tMs": 14105,
+   "step": "⌥↓⌥↑ walk: →⋯stub row A (rig fix →?Idle fixture awaiti"
+  },
+  {
+   "tMs": 24397,
+   "step": "⌥↓ from ❯ inbox mid-text → ◌stub row B (rig fix"
+  },
+  {
+   "tMs": 26073,
+   "step": "⌥N → NEW"
+  },
+  {
+   "tMs": 29735,
+   "step": "plain ↑/↓ inside box: NEW → NEW / NEW (must all stay)"
+  }
+ ]
+}

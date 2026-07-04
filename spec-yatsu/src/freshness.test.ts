@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { remarkStale, type RemarkSignal } from './freshness.js'
+import { changedSince, remarkStale, type RemarkSignal } from './freshness.js'
+import type { DriftIndex } from '../../spec-cli/src/git.js'
 
 // The teeth ([[remark-teeth]] T1) as a pure state machine — the five transitions the CLI verification walks,
 // proven here without git so the critical edge is pinned regardless of a repo's history.
@@ -37,4 +38,32 @@ test('remarkStale: many remarks — ANY not-yet-cleared one keeps it stale', () 
 
 test('remarkStale: a resolved bit with no timestamp stays conservatively stale', () => {
   assert.equal(remarkStale(R('2026-07-03T12:00:00Z'), [{ resolved: true }]), true)
+})
+
+// ---- the code axis is an ancestry question, not a log-position one ----
+
+// hand-built DAG (same shape as git.test.ts): reachability decides, never walk order.
+function didx(parents: Record<string, string[]>, fileCommits: [string, string[]][]): DriftIndex {
+  const ord = new Map<string, number>(), p = new Map<string, string[]>()
+  let i = 0
+  for (const [h, ps] of Object.entries(parents)) { ord.set(h, i++); p.set(h, ps) }
+  return { ord, parents: p, fileCommits: new Map(fileCommits), acks: new Map(), specNodes: new Map(), anc: new Map() }
+}
+
+test('changedSince: a merged side-branch change stales a reading even when its date pre-dates the codeSha', () => {
+  // reading taken at VER; f.ts changed on parallel C (back-dated), merged in M. The old pos-compare
+  // read C as "older than the reading" → fresh; by ancestry C is not reachable from VER → stale.
+  const i = didx({ M: ['VER', 'C'], VER: ['BASE'], C: ['BASE'], BASE: [] }, [['f.ts', ['C', 'BASE']]])
+  assert.equal(changedSince(i, 'VER', 'f.ts'), true)
+})
+
+test('changedSince: only ancestors of the codeSha count as already-measured', () => {
+  const i = didx({ TIP: ['B'], B: ['A'], A: ['BASE'], BASE: [] }, [['f.ts', ['A', 'BASE']]])
+  assert.equal(changedSince(i, 'B', 'f.ts'), false)   // both changes are ancestors of the reading
+  assert.equal(changedSince(i, 'BASE', 'f.ts'), true) // A came after that reading
+})
+
+test('changedSince: an off-history codeSha (rebased away or never merged) is conservatively stale', () => {
+  const i = didx({ TIP: ['BASE'], BASE: [] }, [['f.ts', ['BASE']]])
+  assert.equal(changedSince(i, 'GONE', 'f.ts'), true)
 })

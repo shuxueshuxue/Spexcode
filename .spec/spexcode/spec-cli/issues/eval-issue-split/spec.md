@@ -8,7 +8,7 @@ desc: M3 of the eval/issue/remark refactor — kill "forum" at the substrate, re
 
 ## raw source
 
-An eval-remark thread and a taste proposal were living in ONE list and reading as the same kind of thing —
+An eval-remark thread and a taste issue were living in ONE list and reading as the same kind of thing —
 both "issues" on the board badge, both in the drain, both in the Issues page's list. But a **scenario-scoped
 concern is a remark, not an issue** (I1): it ages a scenario's loss and clears only by the teeth
 ([[remark-teeth]]); it must never be a drainable issue, or the loss signal could be bypassed by resolving it
@@ -27,7 +27,7 @@ issues name top to bottom, and the old data-dir name is no longer residue but re
   identifiers are the issues model — `postLocalIssue` / `replyLocalIssue` (the programmatic write
   entrypoints), `localStoreDir` / `LOCAL_STORE_REL` (the venue), `withStoreLock` / `commitStore` /
   `writeStoreFile` (the write mechanism). The dashboard route is `#/issues` (not `#/forum`), the side-nav
-  entry reads **Issues**, and the user-facing prose says "issues page", never "Forum". [[proposals]] still
+  entry reads **Issues**, and the user-facing prose says "issues page", never "Forum". [[local-issues]] still
   OWNS the local store's whole mechanism; it is simply named as what it is — the local store of [[issues]].
 
 - **Read-time split by concern key.** An eval-remark thread's tell is its concern, `eval: <node> ·

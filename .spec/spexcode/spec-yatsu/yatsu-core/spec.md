@@ -76,7 +76,7 @@ axis judges content the way a spec node's own freshness does, not the yatsu.md's
 ancestor* of its codeSha, and an off-history codeSha — orphaned by a rebase or on a never-merged branch
 alike — reads conservatively stale. No hashes kept; an
 ack vindicates a *spec*, not a reading. `freshness.ts` stays a pure computation — the remark track is fed in
-at the call sites, never read from the forum here.
+at the call sites, never read from the issue store here.
 
 The surface mirrors the code-drift report:
 - **scan [--changed]** — the loss signal's blind spots: a malformed yatsu.md (`yatsu-schema` — missing field,

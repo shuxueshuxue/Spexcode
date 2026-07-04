@@ -6,7 +6,7 @@ const cache = new ForgeCache()
 let inFlight: Promise<void> | null = null
 // track last ATTEMPT, not last success, so the TTL also backs off failures — else a forge-less repo respawns `gh` every poll
 let lastAttempt = 0
-// tuned to the dashboard's LIVE cadence: the forum page re-polls /api/issues every ~15s and each poll
+// tuned to the dashboard's LIVE cadence: the issues page re-polls /api/issues every ~15s and each poll
 // opportunistically triggers this refresh, so a TTL near the poll cadence means an externally-posted forge
 // issue surfaces on the board within ~one poll+cycle (~15–30s) with no page reload — the "post a github
 // issue → it just appears" contract. Each cycle is a tiny incremental read (one page), well inside
@@ -36,7 +36,7 @@ function refreshIfStale(now: number): void {
 }
 
 // the raw cached forge set, same freshness contract as the view (instant, background reconcile) — the
-// server-side slice the unified Issue port (spec-cli issues.ts) merges with the local forum.
+// server-side slice the unified Issue port (spec-cli issues.ts) merges with the local store.
 export function residentForgeState(): { issues: ForgeIssue[]; prs: ForgePR[] } {
   refreshIfStale(Date.now())
   return cache.state()

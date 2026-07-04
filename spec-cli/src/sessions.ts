@@ -895,7 +895,7 @@ export async function createSession(node: string | null, prompt: string, harness
 // immediately if we're under the concurrency cap, else it waits its turn. Backs both the dashboard POST and
 // `spex session new`. Creating or deleting a spec node is NOT a server op — it is prompt-driven work the
 // launched agent does itself (the composer's nn/dd chords just prefill a plain instruction). So the server
-// only ever launches a session; it never mutates the spec tree ([[mentions]]: the forum is the sole
+// only ever launches a session; it never mutates the spec tree ([[mentions]]: the issue store is the sole
 // programmatic surface, every other surface is prompt only).
 export async function newSession(node: string | null, prompt: string, harness: string = defaultHarness.id, parent: string | null = null, launcher?: string): Promise<Session> {
   const id = randomUUID()

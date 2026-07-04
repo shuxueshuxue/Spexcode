@@ -8,7 +8,7 @@ export type StaleAxis = 'code' | 'scenario' | 'evaluator' | 'remark'
 
 // the REMARK axis's input ([[remark-teeth]]): the teeth read only the resolvable bit + when it was resolved,
 // not the whole remark — so freshness stays a PURE function, fed the scenario's remark track at the call
-// sites (never reaching into the forum). One signal per remark on the (node, scenario).
+// sites (never reaching into the issue store). One signal per remark on the (node, scenario).
 export type RemarkSignal = { resolved: boolean; resolvedAt?: string }
 
 // the teeth (T1): a scenario is remark-stale unless EVERY remark is resolved AND this reading post-dates

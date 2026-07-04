@@ -104,7 +104,7 @@ export async function buildBoard() {
     ...Object.values(ghostById),
   ]
   // fold each node's issues onto it through the unified Issue port ([[issues]]): the resident forge slice
-  // AND the local forum's threads, one merged store-tagged list (full set → issues, open subset →
+  // AND the local store's threads, one merged store-tagged list (full set → issues, open subset →
   // openIssues, attached only when non-empty). Non-blocking: residentForgeState never waits on `gh` and is
   // empty absent a forge, so the fold then carries the local slice alone. Sorted open-first, newest first.
   const isOpen = (i: { status: string }) => i.status === 'open'

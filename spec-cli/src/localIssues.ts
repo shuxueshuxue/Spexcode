@@ -1,7 +1,7 @@
-// @@@ the local issue store - the LOCAL store of the one Issue object ([[issues]] / [[proposals]] /
+// @@@ the local issue store - the LOCAL store of the one Issue object ([[issues]] / [[local-issues]] /
 // [[mentions]]). A thread IS an Issue whose `store` is 'local' — membership implied by WHERE the file lives,
 // never written into it. One thread = one PLAIN markdown file at <main>/.spec/.issues/<id>.md; there is
-// deliberately no content-kind taxonomy (a change proposal, an annotation, a Q&A are the same mechanism —
+// deliberately no content-kind taxonomy (a change suggestion, an annotation, a Q&A are the same mechanism —
 // the prose says what it is). Others sign/reply/discuss like an async chatroom; a supervisor drains it via
 // `spex issues` (reading is the port's job, issues.ts — this module owns only the store + its write verbs).
 // Because a thread file is NOT named spec.md, the spec walk never nodes it and isSpecMd ignores it —
@@ -22,18 +22,23 @@ const LOCAL_STORE_REL = '.spec/.issues'
 const LEGACY_STORE_REL = '.spec/.forum'
 
 // @@@ the on/off switch - the issues workflow is an OPT-OUTABLE feature (default ON). The single source of
-// truth is `spexcode.json`'s `proposals.enabled` (the same settings file that carries every other toggle),
+// truth is `spexcode.json`'s `issues.enabled` (the same settings file that carries every other toggle),
 // read via readConfig so a machine-local `spexcode.local.json` can override it. OFF silences the post-merge
 // nudge (and, in the dashboard, hides the issues view); the raw write verbs stay usable, since running one
-// is explicit consent. `spex propose on|off` flips the flag on disk — effective immediately, no commit
+// is explicit consent. `spex issues on|off` flips the flag on disk — effective immediately, no commit
 // needed, because readConfig reads the working tree. The dashboard toggle is a thin wrapper over this same
-// switch.
-export const proposalsEnabled = (): boolean => readConfig(mainCheckout()).proposals?.enabled ?? true
+// switch. (The key was historically `proposals.enabled`; a pre-rename value still reads, and the next
+// toggle write rewrites it under `issues` — the same self-heal-on-touch discipline as the store-dir rename.)
+export const issuesEnabled = (): boolean => {
+  const cfg = readConfig(mainCheckout())
+  return cfg.issues?.enabled ?? (cfg as { proposals?: { enabled?: boolean } }).proposals?.enabled ?? true
+}
 
 function setEnabled(on: boolean): void {
   const f = join(mainCheckout(), 'spexcode.json')
   const cfg = existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : {}
-  cfg.proposals = { ...(cfg.proposals || {}), enabled: on }
+  cfg.issues = { ...(cfg.issues || {}), enabled: on }
+  delete cfg.proposals   // the pre-rename key, superseded by `issues` on this write
   writeFileSync(f, JSON.stringify(cfg, null, 2) + '\n')
 }
 
@@ -135,7 +140,7 @@ function serialize(p: Issue): string {
   return out
 }
 
-export function loadProposals(): Issue[] {
+export function loadLocalIssues(): Issue[] {
   ensureStoreMigrated()   // read path: a pre-rename deployment migrates on first read, so no thread is lost
   const dir = localStoreDir()
   if (!existsSync(dir)) return []
@@ -239,7 +244,7 @@ function commitStore(message: string, prepare: () => Issue): Issue {
 
 // `author` defaults to the effective session id, but a caller (the dashboard's human write path) may pass
 // `'human'` — the write mechanism is identical either way, only the signature differs.
-export function propose(concern: string, opts: { nodes?: string[]; body?: string; evidence?: string[]; author?: string } = {}): Issue {
+export function openIssue(concern: string, opts: { nodes?: string[]; body?: string; evidence?: string[]; author?: string } = {}): Issue {
   return commitStore(`issue: ${concern}`, () => ({
     id: uniqueId(concern),   // minted INSIDE the lock, so two racing posts can't pick the same id
     store: 'local',
@@ -281,7 +286,7 @@ export function reply(id: string, body: string, author?: string, evidence?: stri
 }
 
 // @@@ the PROGRAMMATIC store write surface — the dashboard's human write path calls these (author `'human'`).
-// The store is git-native data, so a human's write goes through the SAME reply/propose the CLI uses (committed
+// The store is git-native data, so a human's write goes through the SAME open/reply the CLI uses (committed
 // straight to the trunk), and — because the store is the programmatic surface — a human's @-mention DOES
 // dispatch (a human summons an agent from the issues page, per [[mentions]]). Each returns the written thread
 // plus the @-dispatch outcomes so a caller can echo who was notified.
@@ -325,7 +330,7 @@ export async function postLocalIssue(
   concern: string,
   opts: { nodes?: string[]; body?: string; evidence?: string[]; author: string },
 ): Promise<{ thread: Issue; outcomes: DispatchOutcome[] }> {
-  const thread = propose(concern, { nodes: opts.nodes, body: opts.body, evidence: opts.evidence, author: opts.author })
+  const thread = openIssue(concern, { nodes: opts.nodes, body: opts.body, evidence: opts.evidence, author: opts.author })
   const outcomes = await dispatchMentions(opts.body || concern, { threadId: thread.id, node: thread.nodes[0] || null, author: opts.author, status: thread.status })
   return { thread, outcomes }
 }
@@ -369,7 +374,7 @@ function findOrCreateEvalThread(node: string, scenario: string, author: string):
   ensureStoreMigrated()   // migrate before the lock (ensure takes it itself; never nest a store-lock hold)
   const concern = evalConcernKey(node, scenario)
   return withStoreLock(() => {
-    const existing = loadProposals().find((t) => t.store === 'local' && t.concern === concern)
+    const existing = loadLocalIssues().find((t) => t.store === 'local' && t.concern === concern)
     if (existing) return existing
     const p: Issue = {
       id: uniqueId(concern), store: 'local', concern, by: author, status: 'open',
@@ -450,26 +455,26 @@ export function retractRemark(ref: string, by: string): { thread: Issue; rid: st
   return { thread, rid }
 }
 
-// the post-merge nudge TEXT ([[proposals]]) — produced HERE so the toggle and the wording live in one place;
-// the post-merge git hook is a thin caller that just echoes this. Returns '' when the feature is OFF, so the
-// hook prints nothing.
+// the post-merge nudge TEXT ([[local-issues]]) — produced HERE so the toggle and the wording live in one
+// place; the post-merge git hook is a thin caller that just echoes this. Returns '' when the feature is OFF,
+// so the hook prints nothing.
 export function nudge(node: string): string {
-  if (!proposalsEnabled()) return ''
+  if (!issuesEnabled()) return ''
   return [
     '── issues ─────────────────────────────────────────────────────────',
     `Your work (${node || 'this node'}) just landed. Two issue checks before you close:`,
     '',
     '1. CLOSE what you finished. An issue whose work just landed is resolved, not',
     '   left open — the open set is the OUTSTANDING work, so a stale open reads as a',
-    '   lie:  spex issues --store local     then   spex propose resolve <id> --as landed',
+    '   lie:  spex issues --store local     then   spex issues resolve <id> --as landed',
     '',
     '2. RECORD only what OUTLIVES this task — a concern you are NOT acting on now:',
     '   an off-mainline smell / awkward boundary / wish, or a trivial-but-must-not-',
     "   forget to-do that doesn't earn a spec node. NOT a bug tracker (that is the",
     '   spec graph + the forge), NOT your assigned task or a fix you are about to',
     '   make — those need no issue. Only the taste that would otherwise evaporate:',
-    '     spex issues                          # read first — sign/reply if already raised',
-    '     spex propose "<concern>" [--node <id>]   # else open one',
+    '     spex issues                              # read first — sign/reply if already raised',
+    '     spex issues open "<concern>" [--node <id>]   # else open one',
     'A supervisor drains the store later. (Advisory — skip if nothing is owed.)',
     '───────────────────────────────────────────────────────────────────',
   ].join('\n')
@@ -501,21 +506,23 @@ function readBody(args: string[]): string | undefined {
 const repeated = (args: string[], name: string): string[] =>
   args.flatMap((a, i) => (a === `--${name}` ? [args[i + 1]] : [])).filter(Boolean) as string[]
 
-// `spex propose "<concern>" [--node id…] [--evidence hash…] [--body -|text]`, the sub-verbs
-// reply | sign | resolve (id-based, any local issue), and the feature toggle on | off | status.
-export async function runPropose(args: string[]): Promise<number> {
+// the local-issue WRITE verbs, folded into the one issues surface (`spex issues <sub>` — the read routes
+// here when its first positional is a write sub): open "<concern>" [--node id…] [--evidence hash…]
+// [--body -|text], the id-based reply | sign | resolve, and the feature toggle on | off | status. `nudge`
+// is internal (the post-merge hook's caller). Store is a property of the issue, never a second command.
+export async function runIssueWrite(args: string[]): Promise<number> {
   const sub = args[0]
   try {
     if (sub === 'on' || sub === 'off') {
       setEnabled(sub === 'on')
-      console.log(`issues workflow ${sub.toUpperCase()} — spexcode.json proposals.enabled = ${sub === 'on'}${sub === 'on' ? '' : ' (post-merge nudge silenced; dashboard issues view hidden)'}`)
+      console.log(`issues workflow ${sub.toUpperCase()} — spexcode.json issues.enabled = ${sub === 'on'}${sub === 'on' ? '' : ' (post-merge nudge silenced; dashboard issues view hidden)'}`)
       return 0
     }
-    if (sub === 'status') { console.log(`issues workflow is ${proposalsEnabled() ? 'ON' : 'OFF'}`); return 0 }
+    if (sub === 'status') { console.log(`issues workflow is ${issuesEnabled() ? 'ON' : 'OFF'}`); return 0 }
     if (sub === 'reply') {
       const id = bare(args.slice(1))[0]
       const body = readBody(args)
-      if (!id || !body) { console.error('usage: spex propose reply <issue-id> --body -|<text> [--evidence <hash>…]'); return 2 }
+      if (!id || !body) { console.error('usage: spex issues reply <issue-id> --body -|<text> [--evidence <hash>…]'); return 2 }
       // the ONE store-routed reply verb ([[issues]]): a forge id posts a real comment through the driver,
       // a local id commits to the store — the same command either way (dynamic import: no static cycle).
       const r = await (await import('./issues.js')).replyIssue(id, body, { evidence: repeated(args, 'evidence') })
@@ -528,14 +535,14 @@ export async function runPropose(args: string[]): Promise<number> {
     }
     if (sub === 'sign') {
       const id = bare(args.slice(1))[0]
-      if (!id) { console.error('usage: spex propose sign <issue-id>'); return 2 }
+      if (!id) { console.error('usage: spex issues sign <issue-id>'); return 2 }
       console.log(`signed '${id}' — signers: ${sign(id).join(', ')}`)
       return 0
     }
     if (sub === 'resolve') {
       const id = bare(args.slice(1))[0]
       const as = fl(args, 'as')
-      if (!id || !as) { console.error('usage: spex propose resolve <issue-id> --as accepted|rejected|landed'); return 2 }
+      if (!id || !as) { console.error('usage: spex issues resolve <issue-id> --as accepted|rejected|landed'); return 2 }
       console.log(`resolved '${id}' → ${resolve(id, as)}`)
       return 0
     }
@@ -545,22 +552,26 @@ export async function runPropose(args: string[]): Promise<number> {
       if (text) console.log(text)
       return 0
     }
-    // default: open a new local issue. The concern is the bare positional(s).
-    const concern = bare(args).join(' ').trim()
+    // `open`: start a new local issue. The concern is the bare positional(s) after the sub.
+    const concern = sub === 'open' ? bare(args.slice(1)).join(' ').trim() : ''
     if (!concern) {
-      console.error('usage: spex propose "<concern>" [--node <id>…] [--evidence <hash>…] [--body -|<text>]\n       spex propose reply|sign|resolve <issue-id> …  |  on|off|status')
+      console.error('usage: spex issues open "<concern>" [--node <id>…] [--evidence <hash>…] [--body -|<text>]\n       spex issues reply|sign|resolve <issue-id> …  |  on|off|status')
       return 2
     }
-    const p = propose(concern, { nodes: repeated(args, 'node'), body: readBody(args), evidence: repeated(args, 'evidence') })
-    console.log(`proposed '${p.id}'${p.nodes.length ? ` (re: ${p.nodes.join(', ')})` : ''} — committed to the local issue store; read it with \`spex issues\``)
+    const p = openIssue(concern, { nodes: repeated(args, 'node'), body: readBody(args), evidence: repeated(args, 'evidence') })
+    console.log(`opened '${p.id}'${p.nodes.length ? ` (re: ${p.nodes.join(', ')})` : ''} — committed to the local issue store; read it with \`spex issues\``)
     const s = summarize(await dispatchMentions(p.body || concern, { threadId: p.id, node: p.nodes[0] || null, author: p.by, status: p.status }))
     if (s) console.log(`  ${s}`)
     return 0
   } catch (e) {
-    console.error(`spex propose: ${e instanceof Error ? e.message : e}`)
+    console.error(`spex issues: ${e instanceof Error ? e.message : e}`)
     return 1
   }
 }
+
+// the first positionals runIssueWrite handles — the issues command routes these to it, everything else is
+// the read. Exported so the router and the runner can never drift.
+export const ISSUE_WRITE_SUBS = new Set(['open', 'reply', 'sign', 'resolve', 'on', 'off', 'status', 'nudge'])
 
 // ── remark CLI ([[remark-substrate]]) — CLI-first: the whole author→resolve→retract loop, no server needed ──
 // `spex remark <host> --body -|<text> [--code-sha <sha>] [--scenario <name>] [--evidence <hash>…]`

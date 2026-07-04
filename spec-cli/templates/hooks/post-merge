@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# @@@ proposal nudge (post-merge) - the taste store ([[proposals]]) fires AFTER the work lands, not while the
+# @@@ issue nudge (post-merge) - the taste store ([[local-issues]]) fires AFTER the work lands, not while the
 # agent is finishing it: the agent's own task comes first. Merge is dispatched to the session's OWN agent
 # (see [[dispatch]]), so this hook runs in that live merge turn and its stdout reaches the agent as the merge
 # command's own output — a git-native nudge that costs no harness block-cap and reaches a self-launched agent
 # too. GUARDED to the `merge node/<id>:` commit, so an ordinary `git pull`/unrelated merge never nags.
 #
-# The nudge TEXT and the on/off toggle both live in the CLI (`spex propose nudge <node>` prints nothing when
+# The nudge TEXT and the on/off toggle both live in the CLI (`spex issues nudge <node>` prints nothing when
 # the feature is OFF in spexcode.json), so this hook is a THIN resolver + caller: resolve `spex` the same
 # three ways the pre-commit hook does, pass the merged node, echo whatever it prints. No CLI resolvable → no
 # nudge (safe degradation, same as the lint shim's advisory mode).
@@ -18,10 +18,10 @@ node=$(printf '%s' "$subj" | sed -n 's#^merge \(node/[^:]*\):.*#\1#p')
 main_root=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)")
 repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
 if command -v spex >/dev/null 2>&1; then
-  spex propose nudge "$node"
+  spex issues nudge "$node"
 elif [ -x "$repo_root/node_modules/.bin/spex" ]; then
-  "$repo_root/node_modules/.bin/spex" propose nudge "$node"
+  "$repo_root/node_modules/.bin/spex" issues nudge "$node"
 elif [ -x "$main_root/spec-cli/node_modules/.bin/tsx" ] && [ -f "$main_root/spec-cli/src/cli.ts" ]; then
-  "$main_root/spec-cli/node_modules/.bin/tsx" "$main_root/spec-cli/src/cli.ts" propose nudge "$node"
+  "$main_root/spec-cli/node_modules/.bin/tsx" "$main_root/spec-cli/src/cli.ts" issues nudge "$node"
 fi
 exit 0

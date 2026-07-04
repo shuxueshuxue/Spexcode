@@ -1,0 +1,21 @@
+{
+ "v": 1,
+ "events": [
+  {
+   "tMs": 0,
+   "step": "keepFocus spares the native select mousedown"
+  },
+  {
+   "tMs": 841,
+   "step": "New composer shows .si-launcher-select = false"
+  },
+  {
+   "tMs": 1202,
+   "step": "mousedown defaultPrevented = false (must be FALSE — dropdown opens)"
+  },
+  {
+   "tMs": 2889,
+   "step": "value follows selection = true"
+  }
+ ]
+}

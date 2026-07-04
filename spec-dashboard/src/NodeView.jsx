@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ScoreBadge, readingScore, ScenarioCount, scenarioStates, TagChips } from './score.jsx'
 import { evidenceList } from './EvalsFeed.jsx'
+import { EvidenceItem } from './Evidence.jsx'
 import { Replies } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
 import { specUrl } from './data.js'
@@ -450,31 +451,6 @@ function VerdictBadge({ verdict }) {
   return <span className="eval-verdict note" title={verdict.note}>{t('nodeView.eval.note')}</span>
 }
 
-function TranscriptEvidence({ hash }) {
-  const t = useT()
-  const [text, setText] = useState(null)
-  useEffect(() => {
-    let live = true
-    fetch(`/api/yatsu/blob/${hash}`)
-      .then((r) => (r.ok ? r.text() : Promise.reject(new Error('miss'))))
-      .then((tx) => { if (live) setText(tx) })
-      .catch(() => { if (live) setText('') })
-    return () => { live = false }
-  }, [hash])
-  if (text === null) return <pre className="eval-transcript loading">{t('nodeView.eval.loadingTranscript')}</pre>
-  return <pre className="eval-transcript">{text}</pre>
-}
-
-// one evidence entry rendered by its kind — a transcript pulls its text, a video plays inline, an image
-// shows; a pruned entry (state 'miss') is the honest sentinel, never a broken media box.
-function EvidenceItem({ e, scenario }) {
-  const t = useT()
-  if (e.state === 'miss') return <figcaption className="eval-noimg">{t('nodeView.eval.miss')}</figcaption>
-  if (e.kind === 'transcript') return <TranscriptEvidence hash={e.hash} />
-  if (e.kind === 'video') return <video className="eval-video" src={`/api/yatsu/blob/${e.hash}`} controls preload="metadata" />
-  return <img src={`/api/yatsu/blob/${e.hash}`} alt={t('nodeView.eval.shotAlt', { scenario })} loading="lazy" />
-}
-
 function EvalEvidence({ r }) {
   const t = useT()
   // a reading's evidence is a LIST — render it as a GALLERY (N images + a video…); empty → the honest
@@ -485,7 +461,7 @@ function EvalEvidence({ r }) {
       {r.expected && <div className="eval-expected"><span className="eval-expected-label">{t('nodeView.eval.expected')}</span> {r.expected}</div>}
       {r.verdict?.note && <div className="eval-note"><span className="eval-expected-label">{t('nodeView.eval.noteLabel')}</span> {r.verdict.note}</div>}
       {ev.length > 0
-        ? <div className="eval-gallery" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{ev.map((e, i) => <EvidenceItem key={`${e.hash}-${i}`} e={e} scenario={r.scenario} />)}</div>
+        ? <div className="eval-gallery" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{ev.map((e, i) => <EvidenceItem key={`${e.hash}-${i}`} e={e} alt={t('nodeView.eval.shotAlt', { scenario: r.scenario })} />)}</div>
         : <figcaption className="eval-noimg">{r.blobState === 'miss' ? t('nodeView.eval.miss') : t('nodeView.eval.noImage')}</figcaption>}
     </>
   )

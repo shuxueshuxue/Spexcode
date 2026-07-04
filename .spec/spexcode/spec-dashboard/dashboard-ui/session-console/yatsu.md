@@ -123,19 +123,23 @@ scenarios:
   - name: status-word-colour
     tags: [frontend-e2e, desktop]
     description: >
-      Through the running dashboard in a real browser, with several live sessions in DIFFERENT states (at
-      minimum a `working`, an `asking`, and a `close-pending`), look at the top-left SessionWindow glance.
-      For each row read the status word's RENDERED colour (computed `color`), not just its text, and compare
-      against the pre-change baseline (the MAIN dashboard, where every status word is the same muted grey).
-      Screenshot the SessionWindow on both so the contrast is visible.
+      Through the running dashboard in a real browser, with live sessions in DIFFERENT states, look at the
+      top-left SessionWindow glance. Each row's status carrier is coloured from the single STATUS_COLOR map:
+      in the compact glance that carrier is the `.sess-glyph` mark (`STATUS_GLYPH[status]`, the status WORD
+      kept in its `title`/`aria-label`); the expanded row draws the word itself as `.sess-status`. Both read
+      the SAME `STATUS_COLOR[status]`, so read the carrier's computed `color` per row (glyph in the compact
+      glance, word when expanded) and compare against the pre-change baseline (the MAIN dashboard, one muted
+      grey for all). Screenshot the SessionWindow so the per-bucket contrast is visible.
     expected: |
-      On the changed dashboard each status word is painted by its bucket hue from the single STATUS_COLOR
-      map — four hues only: `working` and `parked` green (var --green = rgb(133,153,0)); the waiting-on-you
-      states `asking`/`review`/`done` yellow (var --yellow = rgb(181,137,0)); `error` red; and the dormant
-      rest (`idle`/`starting`/`queued`/`close-pending`/`offline`) muted grey (rgb(147,161,161)). On the
-      MAIN baseline every word is that same muted grey regardless of state. The word's colour equals the
-      session's liveness-dot colour on the surfaces that draw a dot (same source), and `working` green
-      matches the avatar's liveness ring — dot, word, and ring never disagree.
+      Each status carrier is painted by its bucket hue from the single STATUS_COLOR map — four buckets only:
+      `working` and `parked` green (var --green = rgb(133,153,0)); the waiting-on-you states
+      `asking`/`review`/`done` yellow (var --yellow = rgb(181,137,0)); `error` red; and the dormant rest
+      (`idle`/`starting`/`queued`/`close-pending`/`offline`) muted grey (rgb(147,161,161)). The compact
+      glyph and the expanded word are ONE source: `.sess-glyph` and `.sess-status` both take
+      `STATUS_COLOR[status]`, so a bucket reads the same hue whichever renders. On the MAIN baseline every
+      carrier is that same muted grey regardless of state. The carrier's colour equals the session's
+      liveness-dot colour on the surfaces that draw a dot (same source), and `working` green matches the
+      avatar's liveness ring — dot, glyph/word, and ring never disagree.
   - name: nav-mode-modifier-combos-reach-the-terminal
     tags: [frontend-e2e, desktop]
     description: >
@@ -258,29 +262,30 @@ scenarios:
     tags: [frontend-e2e, desktop]
     description: >
       Through the running dashboard in a real browser, open the session interface (Enter) on a LIVE session.
-      The right pane is a two-tab view: a horizontal tab bar (Terminal | Proof) above the pane content. Confirm
-      the DEFAULT tab is Terminal — the live terminal shows and the docked `❯` input is present below it. Read
-      the tab bar's computed background against the terminal's (`.si-tabbar` vs `.si-term-body`) to confirm they
-      differ (a distinct panel + a bottom separator), and repeat in BOTH light and dark themes. Then click the
-      Proof tab: confirm the terminal is hidden (display:none) but NOT unmounted (the `.si-term-body` node stays
-      in the DOM so its socket/scroll survive), the `❯` input dock is gone (input belongs to Terminal only), and
-      the review proof renders INLINE in a `.proof-pane` (an `<iframe>` for a session with work, else a clean
-      empty/loading placeholder) — never a floating overlay. Switch back to Terminal and confirm the live pane
-      is intact. Then the grown-input round-trip: on Terminal, grow the `❯` box multi-line (a several-line
-      draft, unsent), read its rendered height, switch to the other tab and back, and re-read the box's height
-      and draft. Screenshot the tab bar + pane on each tab, plus the grown box before and after the round-trip.
+      The right pane is a two-tab view: a horizontal tab bar (Terminal | Eval — the former Proof tab, which
+      [[review-proof]] folded into the session Eval; the proof HTML lives on as that tab's export ↗ link)
+      above the pane content. Confirm the DEFAULT tab is Terminal — the live terminal shows and the docked `❯`
+      input is present below it. Read the tab bar's computed background against the terminal's (`.si-tabbar`
+      vs `.si-term-body`) to confirm they differ (a distinct panel + a bottom separator), and repeat in BOTH
+      light and dark themes. Then click the Eval tab: confirm the terminal is hidden (display:none) but NOT
+      unmounted (the `.si-term-body` node stays in the DOM so its socket/scroll survive), the `❯` input dock
+      is gone (input belongs to Terminal only), and the session's eval view renders INLINE — never a floating
+      overlay. Switch back to Terminal and confirm the live pane is intact. Then the grown-input round-trip:
+      on Terminal, grow the `❯` box multi-line (a several-line draft, unsent), read its rendered height,
+      switch to the other tab and back, and re-read the box's height and draft. Screenshot the tab bar + pane
+      on each tab, plus the grown box before and after the round-trip.
     expected: |
       The right pane opens on the Terminal tab by default: the live terminal is visible with the docked `❯`
       input below it. The tab bar is a clear horizontal row set VISIBLY APART from the dark terminal — a lighter
       app-chrome panel (var --panel) with a bottom separator (var --line), distinct from the terminal's var
-      --term-bg in BOTH light (#f4eeda vs #0d1117) and dark (#161b22 vs #0d1117) themes. Clicking Proof hides the
+      --term-bg in BOTH light (#f4eeda vs #0d1117) and dark (#161b22 vs #0d1117) themes. Clicking Eval hides the
       terminal (display:none) without unmounting it — `.si-term-body` and its terminal layers stay in the DOM so
-      the socket and scrollback survive a round-trip — drops the `❯` input dock, and renders the proof INLINE as
-      a `.proof-pane` (the self-contained proof `<iframe>`, or the empty/loading placeholder when there is
-      nothing to prove yet), not a modal overlay. Returning to Terminal restores the live pane unchanged. The
-      proof is always available on this tab for any selected session, not only one in review. The grown `❯` box
-      survives the round-trip: its multi-line draft is still there AND its rendered height matches the pre-switch
-      height (re-fit to the persisted draft on remount) — it is never collapsed back to a single row.
+      the socket and scrollback survive a round-trip — drops the `❯` input dock, and renders the session eval
+      INLINE in the pane (the eval feed of the session's work, carrying the proof export ↗ link), not a modal
+      overlay. Returning to Terminal restores the live pane unchanged. The Eval tab is always available for any
+      selected session, not only one in review. The grown `❯` box survives the round-trip: its multi-line draft
+      is still there AND its rendered height matches the pre-switch height (re-fit to the persisted draft on
+      remount) — it is never collapsed back to a single row.
     related: spec-dashboard/src/SessionEval.jsx
   - name: launcher-picker-opens-on-click
     tags: [frontend-e2e, desktop]

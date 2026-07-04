@@ -1,13 +1,15 @@
-// @@@ forum - the LOCAL store of the one Issue object ([[issues]] / [[proposals]] / [[mentions]]). A
-// thread IS an Issue whose `store` is 'local' — membership implied by WHERE the file lives, never written
-// into it. One thread = one PLAIN markdown file at <main>/.spec/.forum/<id>.md; there is deliberately no
-// content-kind taxonomy (a change proposal, an annotation, a Q&A are the same mechanism — the prose says
-// what it is). Others sign/reply/discuss like an async chatroom; a supervisor drains it via `spex issues`
-// (reading is the port's job, issues.ts — this module owns only the store + its write verbs). Because a
-// thread file is NOT named spec.md, the spec walk never nodes it and isSpecMd ignores it — invisible to
-// lint / drift / deriveStatus / board with ZERO exemption. The forum lives on the TRUNK, not per-branch:
-// reads and writes target the main checkout and commit STRAIGHT to it (--no-verify, provably forum-only),
-// so a post-merge thread lands durably even though the author's own branch already merged.
+// @@@ the local issue store - the LOCAL store of the one Issue object ([[issues]] / [[proposals]] /
+// [[mentions]]). A thread IS an Issue whose `store` is 'local' — membership implied by WHERE the file lives,
+// never written into it. One thread = one PLAIN markdown file at <main>/.spec/.issues/<id>.md; there is
+// deliberately no content-kind taxonomy (a change proposal, an annotation, a Q&A are the same mechanism —
+// the prose says what it is). Others sign/reply/discuss like an async chatroom; a supervisor drains it via
+// `spex issues` (reading is the port's job, issues.ts — this module owns only the store + its write verbs).
+// Because a thread file is NOT named spec.md, the spec walk never nodes it and isSpecMd ignores it —
+// invisible to lint / drift / deriveStatus / board with ZERO exemption. The store lives on the TRUNK, not
+// per-branch: reads and writes target the main checkout and commit STRAIGHT to it (--no-verify, provably
+// store-only), so a post-merge thread lands durably even though the author's own branch already merged.
+// The on-disk dir was historically `.spec/.forum`; a one-shot self-migration ([[issues-store-rename]])
+// renames any legacy `.spec/.forum` to `.spec/.issues` on the first store touch after a toolchain update.
 import { readdirSync, existsSync, mkdirSync, writeFileSync, readFileSync, rmdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { git, headSha, repoRoot } from './git.js'
@@ -15,9 +17,11 @@ import { mainCheckout, envSessionId, readConfig } from './layout.js'
 import { dispatchMentions, notifyOriginator, deliveredIds, summarize, type DispatchOutcome, type LoopIn } from './mentions.js'
 import type { Issue, Reply } from './issues.js'
 
-const LOCAL_STORE_REL = '.spec/.forum'
+const LOCAL_STORE_REL = '.spec/.issues'
+// the pre-rename dir ([[issues-store-rename]]); ensureStoreMigrated() renames it to LOCAL_STORE_REL once.
+const LEGACY_STORE_REL = '.spec/.forum'
 
-// @@@ the on/off switch - the forum workflow is an OPT-OUTABLE feature (default ON). The single source of
+// @@@ the on/off switch - the issues workflow is an OPT-OUTABLE feature (default ON). The single source of
 // truth is `spexcode.json`'s `proposals.enabled` (the same settings file that carries every other toggle),
 // read via readConfig so a machine-local `spexcode.local.json` can override it. OFF silences the post-merge
 // nudge (and, in the dashboard, hides the issues view); the raw write verbs stay usable, since running one
@@ -36,8 +40,8 @@ function setEnabled(on: boolean): void {
 const list = (v: string | undefined): string[] =>
   v ? v.split(',').map((s) => s.trim()).filter(Boolean) : []
 
-// the forum dir on the TRUNK — a fixed path directly under .spec (name-independent, unlike the .config
-// system which nests under the named root node). Every read and write goes here.
+// the local issue store dir on the TRUNK — a fixed path directly under .spec (name-independent, unlike the
+// .config system which nests under the named root node). Every read and write goes here.
 const localStoreDir = (): string => join(mainCheckout(), LOCAL_STORE_REL)
 // the author's signature: the effective governed session id (envSessionId handles the claude/codex split).
 const currentSession = (): string => envSessionId() || 'unknown'
@@ -47,7 +51,7 @@ const sleep = (ms: number) => Atomics.wait(new Int32Array(new SharedArrayBuffer(
 // ── file format ──────────────────────────────────────────────────────────────────────────────────────
 // frontmatter (concern/by/status/nodes/evidence/signers/created) + a prose body, then any replies — each
 // preceded by a `<!-- reply: <by> @ <iso> -->` sentinel: invisible in rendered markdown, unambiguous to
-// parse. Only the forum writes these files, so a fixed shape is safe. Lists are `key: a, b` scalars so a
+// parse. Only the store writes these files, so a fixed shape is safe. Lists are `key: a, b` scalars so a
 // +1 sign is a one-line change.
 //
 // A REMARK ([[remark-substrate]]) is a reply carrying extra state, appended to the SAME sentinel as a
@@ -132,6 +136,7 @@ function serialize(p: Issue): string {
 }
 
 export function loadProposals(): Issue[] {
+  ensureStoreMigrated()   // read path: a pre-rename deployment migrates on first read, so no thread is lost
   const dir = localStoreDir()
   if (!existsSync(dir)) return []
   return readdirSync(dir, { withFileTypes: true })
@@ -141,6 +146,7 @@ export function loadProposals(): Issue[] {
 }
 
 export function loadOne(id: string): Issue {
+  ensureStoreMigrated()
   const f = join(localStoreDir(), `${id}.md`)
   if (!existsSync(f)) throw new Error(`no local issue '${id}' (see \`spex issues --all --store local\`)`)
   return parse(id, readFileSync(f, 'utf8'))
@@ -155,11 +161,16 @@ function uniqueId(concern: string): string {
   return id
 }
 
-// @@@ forum lock - forum writes contend two ways: git commits share the repo index.lock, and a reply's
-// read-modify-write of one thread file loses an update if two race (both read the base, last write wins). A
-// single cross-process lock serializes the WHOLE prepare→write→commit, killing both. It is an atomic
-// `mkdir` (in .git, never committed); a lock whose holder crashed is stolen after it goes stale. Because the
-// commit is `--no-verify` fast (below), serialized forum writes stay quick even under a burst.
+// @@@ store lock - local-issue writes contend two ways: git commits share the repo index.lock, and a
+// reply's read-modify-write of one thread file loses an update if two race (both read the base, last write
+// wins). A single cross-process lock serializes the WHOLE prepare→write→commit, killing both. It is an
+// atomic `mkdir` (in .git, never committed); a lock whose holder crashed is stolen after it goes stale.
+// Because the commit is `--no-verify` fast (below), serialized writes stay quick even under a burst. The
+// lock FILE keeps its historical `spexcode-forum.lock` name ON PURPOSE: during the one-shot store-dir
+// migration ([[issues-store-rename]]) an old and a new toolchain can run against the SAME checkout at once,
+// and they mutually exclude only while contending on the SAME lock name — renaming it would open exactly
+// the migration race the lock exists to close.
+let lockHeld = false   // re-entrancy guard so ensureStoreMigrated() no-ops when reached from inside a hold
 function withStoreLock<T>(fn: () => T): T {
   const lock = join(mainCheckout(), '.git', 'spexcode-forum.lock')
   for (let i = 0; ; i++) {
@@ -169,11 +180,39 @@ function withStoreLock<T>(fn: () => T): T {
       sleep(40 + Math.floor(Math.random() * 80))                     // spin with jitter until free / stolen
     }
   }
-  try { return fn() } finally { try { rmdirSync(lock) } catch { /* already gone */ } }
+  lockHeld = true
+  try { return fn() } finally { lockHeld = false; try { rmdirSync(lock) } catch { /* already gone */ } }
 }
 
-// write + commit ONE forum file STRAIGHT to the trunk. The commit is `--no-verify`: the file is DATA,
-// structurally invisible to spec-lint, and the commit is provably forum-only (one .spec/.forum/ path), so the
+// @@@ one-shot store-dir migration ([[issues-store-rename]]) - the local issue store's on-disk dir was
+// historically `.spec/.forum`; it is now `.spec/.issues`. Any pre-rename deployment migrates ITSELF on the
+// first store touch after its toolchain updates: a single committed `git mv` on the trunk, so a thread's
+// whole reply history reads identically afterwards (`git log --follow` traces through the rename — the data
+// is git, and a rename preserves it). Called at every store entrypoint BEFORE the lock is taken; it takes
+// the lock itself to do the mv, so the whole find→check→mv is atomic against a concurrent first-touch burst:
+// exactly ONE mv commit, because a racer that waited on the lock re-checks under it and finds nothing to do.
+// Fast path: no legacy dir → instant, no lock (the common case after migration / on a fresh repo). Both
+// dirs present (pathological) → fail LOUD with the repair, never a silent merge.
+function ensureStoreMigrated(): void {
+  if (lockHeld) return                                     // inside a hold: an outer entrypoint already ran this
+  const root = mainCheckout()
+  if (!existsSync(join(root, LEGACY_STORE_REL))) return    // fresh or already-migrated: nothing to do (no lock)
+  withStoreLock(() => {
+    const r = mainCheckout()
+    const legacy = join(r, LEGACY_STORE_REL), current = join(r, LOCAL_STORE_REL)
+    if (!existsSync(legacy)) return                        // a racer migrated it while we waited on the lock
+    if (existsSync(current)) throw new Error(
+      `both ${LEGACY_STORE_REL} and ${LOCAL_STORE_REL} exist in ${r} — refusing to auto-merge the local ` +
+      `issue store. Reconcile by hand: move any threads from ${LEGACY_STORE_REL} into ${LOCAL_STORE_REL}, ` +
+      `then \`git rm -r ${LEGACY_STORE_REL} && git commit\`, and re-run.`)
+    git(['-C', r, 'mv', LEGACY_STORE_REL, LOCAL_STORE_REL])
+    git(['-C', r, 'commit', '--no-verify', '-m', `issues: store dir ${LEGACY_STORE_REL} → ${LOCAL_STORE_REL}`,
+      '--', LEGACY_STORE_REL, LOCAL_STORE_REL])
+  })
+}
+
+// write + commit ONE store file STRAIGHT to the trunk. The commit is `--no-verify`: the file is DATA,
+// structurally invisible to spec-lint, and the commit is provably store-only (one .spec/.issues/ path), so the
 // pre-commit gate would only pass anyway — running it just burns seconds (tsx cold-start) holding the lock.
 // MUST run while holding withStoreLock — it is the write half of a locked read-modify-write; its callers
 // (commitStore, findOrCreateEvalThread) own the lock, so it never acquires one itself (mkdir is not re-entrant).
@@ -186,10 +225,11 @@ function writeStoreFile(p: Issue, message: string): void {
   git(['-C', root, 'commit', '--no-verify', '-m', message, '--', rel])
 }
 
-// prepare (a FRESH read-modify or a new thread) + write + commit a single forum file, all under the forum
+// prepare (a FRESH read-modify or a new thread) + write + commit a single store file, all under the store
 // lock so the read-modify-write is atomic. prepare() runs INSIDE the lock, so a reply/sign/resolve reads the
-// current thread, never a stale copy.
+// current thread, never a stale copy. A pre-rename store migrates first (before the lock — ensure takes it).
 function commitStore(message: string, prepare: () => Issue): Issue {
+  ensureStoreMigrated()
   return withStoreLock(() => {
     const p = prepare()
     writeStoreFile(p, message)
@@ -240,9 +280,9 @@ export function reply(id: string, body: string, author?: string, evidence?: stri
   })
 }
 
-// @@@ the PROGRAMMATIC forum write surface — the dashboard's human write path calls these (author `'human'`).
-// The forum is git-native data, so a human's write goes through the SAME reply/propose the CLI uses (committed
-// straight to the trunk), and — because the forum is the programmatic surface — a human's @-mention DOES
+// @@@ the PROGRAMMATIC store write surface — the dashboard's human write path calls these (author `'human'`).
+// The store is git-native data, so a human's write goes through the SAME reply/propose the CLI uses (committed
+// straight to the trunk), and — because the store is the programmatic surface — a human's @-mention DOES
 // dispatch (a human summons an agent from the issues page, per [[mentions]]). Each returns the written thread
 // plus the @-dispatch outcomes so a caller can echo who was notified.
 // The two reply deliveries are orthogonal: `evidence?` (f15b) carries a video annotation's frame blobs onto
@@ -318,7 +358,7 @@ export function resolve(id: string, as: string): string {
 const evalConcernKey = (node: string, scenario: string): string => `eval: ${node} · ${scenario}`
 
 // find-or-create the ONE scenario thread for (node, scenario), keyed by its eval concern, ATOMICALLY under
-// the forum lock. R4 says a scenario's remark track lives ONCE — but a concurrent first-remark burst is a
+// the store lock. R4 says a scenario's remark track lives ONCE — but a concurrent first-remark burst is a
 // normal dogfood situation (SpexCode runs parallel workers), and if the not-found read sat OUTSIDE the lock
 // two racers could both read "absent" and both create, minting a second thread whose remarks are invisible
 // to the concern key (a silent teeth blind spot). Holding one lock across both the find AND the create closes
@@ -326,6 +366,7 @@ const evalConcernKey = (node: string, scenario: string): string => `eval: ${node
 // container (its body carries a [[wiki-link]], never an @-mention), so it needs no async dispatch — a
 // synchronous create suffices, and staying sync is exactly what lets it share the lock hold.
 function findOrCreateEvalThread(node: string, scenario: string, author: string): Issue {
+  ensureStoreMigrated()   // migrate before the lock (ensure takes it itself; never nest a store-lock hold)
   const concern = evalConcernKey(node, scenario)
   return withStoreLock(() => {
     const existing = loadProposals().find((t) => t.store === 'local' && t.concern === concern)
@@ -365,7 +406,7 @@ export async function remarkOnHost(
   return { ref: `${id}#${rid}`, rid, codeSha, thread, outcomes, loopIn }
 }
 
-// a remark ref is `<thread-id>#<rid>`; the thread id (a forum slug) never contains '#', so split on the last.
+// a remark ref is `<thread-id>#<rid>`; the thread id (a store slug) never contains '#', so split on the last.
 function parseRemarkRef(ref: string): { id: string; rid: string } {
   const i = ref.lastIndexOf('#')
   if (i <= 0 || i === ref.length - 1) throw new Error(`bad remark ref '${ref}' — expected <thread-id>#<rid> (the id \`spex remark\` printed)`)
@@ -416,7 +457,7 @@ export function nudge(node: string): string {
   if (!proposalsEnabled()) return ''
   return [
     '── issues ─────────────────────────────────────────────────────────',
-    `Your work (${node || 'this node'}) just landed. Two forum checks before you close:`,
+    `Your work (${node || 'this node'}) just landed. Two issue checks before you close:`,
     '',
     '1. CLOSE what you finished. An issue whose work just landed is resolved, not',
     '   left open — the open set is the OUTSTANDING work, so a stale open reads as a',
@@ -429,7 +470,7 @@ export function nudge(node: string): string {
     '   make — those need no issue. Only the taste that would otherwise evaporate:',
     '     spex issues                          # read first — sign/reply if already raised',
     '     spex propose "<concern>" [--node <id>]   # else open one',
-    'A supervisor drains the forum later. (Advisory — skip if nothing is owed.)',
+    'A supervisor drains the store later. (Advisory — skip if nothing is owed.)',
     '───────────────────────────────────────────────────────────────────',
   ].join('\n')
 }
@@ -467,16 +508,16 @@ export async function runPropose(args: string[]): Promise<number> {
   try {
     if (sub === 'on' || sub === 'off') {
       setEnabled(sub === 'on')
-      console.log(`forum workflow ${sub.toUpperCase()} — spexcode.json proposals.enabled = ${sub === 'on'}${sub === 'on' ? '' : ' (post-merge nudge silenced; dashboard issues view hidden)'}`)
+      console.log(`issues workflow ${sub.toUpperCase()} — spexcode.json proposals.enabled = ${sub === 'on'}${sub === 'on' ? '' : ' (post-merge nudge silenced; dashboard issues view hidden)'}`)
       return 0
     }
-    if (sub === 'status') { console.log(`forum workflow is ${proposalsEnabled() ? 'ON' : 'OFF'}`); return 0 }
+    if (sub === 'status') { console.log(`issues workflow is ${proposalsEnabled() ? 'ON' : 'OFF'}`); return 0 }
     if (sub === 'reply') {
       const id = bare(args.slice(1))[0]
       const body = readBody(args)
       if (!id || !body) { console.error('usage: spex propose reply <issue-id> --body -|<text> [--evidence <hash>…]'); return 2 }
       // the ONE store-routed reply verb ([[issues]]): a forge id posts a real comment through the driver,
-      // a local id commits to the forum — the same command either way (dynamic import: no static cycle).
+      // a local id commits to the store — the same command either way (dynamic import: no static cycle).
       const r = await (await import('./issues.js')).replyIssue(id, body, { evidence: repeated(args, 'evidence') })
       console.log(r.store === 'local'
         ? `replied to '${id}' — ${r.replies?.length} post(s) in thread`
@@ -511,7 +552,7 @@ export async function runPropose(args: string[]): Promise<number> {
       return 2
     }
     const p = propose(concern, { nodes: repeated(args, 'node'), body: readBody(args), evidence: repeated(args, 'evidence') })
-    console.log(`proposed '${p.id}'${p.nodes.length ? ` (re: ${p.nodes.join(', ')})` : ''} — committed to the forum; read it with \`spex issues\``)
+    console.log(`proposed '${p.id}'${p.nodes.length ? ` (re: ${p.nodes.join(', ')})` : ''} — committed to the local issue store; read it with \`spex issues\``)
     const s = summarize(await dispatchMentions(p.body || concern, { threadId: p.id, node: p.nodes[0] || null, author: p.by, status: p.status }))
     if (s) console.log(`  ${s}`)
     return 0

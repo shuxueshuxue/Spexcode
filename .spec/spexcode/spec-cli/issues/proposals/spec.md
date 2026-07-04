@@ -2,7 +2,7 @@
 title: proposals
 status: active
 hue: 200
-desc: The LOCAL store of the one Issue object ([[issues]]): git-native threads as plain documents under .spec/.forum (NOT spec nodes); others sign/reply; a supervisor drains it. Proposals are nudged post-merge, once the agent's own work has safely landed.
+desc: The LOCAL store of the one Issue object ([[issues]]): git-native threads as plain documents under .spec/.issues (NOT spec nodes); others sign/reply; a supervisor drains it. Proposals are nudged post-merge, once the agent's own work has safely landed.
 code:
   - spec-cli/src/proposals.ts
   - spec-cli/templates/hooks/post-merge
@@ -43,11 +43,13 @@ The local issue store is **git-tracked data, not a spec node.** A thread reuses 
 contract — no title/hue/desc/code frontmatter, no parent-ancestor nesting, no lint, no drift, no
 version-from-`spec.md`-log, no graph render — so forcing it into a `spec.md` would only earn it a pair of
 graph-exemptions to blind it again. Instead each thread is a **plain markdown file** at
-`<root>/.spec/.forum/<id>.md`. Because that file is **not named `spec.md`**, the spec walk descends past
+`<root>/.spec/.issues/<id>.md`. Because that file is **not named `spec.md`**, the spec walk descends past
 it without making a node and `isSpecMd` ignores it: the local issue store is invisible to lint / drift / deriveStatus /
 overlay **structurally**, with no special-case exemption. It lives **inside `.spec`** (not a second
 top-level folder) so adopting SpexCode still adds one directory — matching how the reflexive `.config`
-system already nests there.
+system already nests there. (The dir was historically `.spec/.forum`; a pre-rename deployment self-migrates
+it to `.spec/.issues` on its first store touch after a toolchain update — the one-shot mechanism is
+[[issues-store-rename]].)
 
 - **One kind of thread — the prose says what it is.** A change proposal, a durable annotation, a heads-up,
   a Q&A: all the same mechanism, distinguished by nothing but their own words. There is deliberately no
@@ -66,8 +68,8 @@ system already nests there.
   the thread.
 - **Own lifecycle status**, store-authored never git-derived: `open` → `accepted | rejected | landed`.
 - **The local issue store lives on the trunk, not per-branch.** A write reads and commits **straight to the main
-  checkout's `.spec/.forum/`** — a local-issue file is data, not contract, and the write below commits it with
-  `--no-verify` (provably a single `.spec/.forum/` path), so it lands on the trunk without needing any
+  checkout's `.spec/.issues/`** — a local-issue file is data, not contract, and the write below commits it with
+  `--no-verify` (provably a single `.spec/.issues/` path), so it lands on the trunk without needing any
   [[main-guard]] exception. So there is no per-branch copy and no cross-worktree union to reconcile: every
   thread is always present to read, sign, and reply to. This is also what lets a **post-merge** proposal
   land durably — the author's own branch has
@@ -76,7 +78,7 @@ system already nests there.
   one thread runs under a single cross-process **store lock** (an atomic `.git` dir-lock, stale-stolen), so
   concurrent writers can neither collide on the repo index nor lose a racing reply (last-writer-wins is
   impossible — each read is under the lock). The commit itself is **`--no-verify`**: the file is data,
-  structurally invisible to lint, and the commit is provably a single `.spec/.forum/` path, so running the
+  structurally invisible to lint, and the commit is provably a single `.spec/.issues/` path, so running the
   seconds-long pre-commit gate would only pass anyway — pure overhead that would hold the lock. The id is
   minted under the lock too, so two racing posts can't claim it.
 - **Nudged AFTER the work lands, not during it.** The agent's own task is what matters most, so the local issue store is

@@ -18,9 +18,10 @@ still named the local store everywhere in the code, had to go with them: the loc
 
 ## expanded spec
 
-Three moves, one milestone — all read-time, no storage migration (the `.spec/.forum/` directory stays put; a
-data-dir rename would touch every deployment, so it is left as deliberate residue, its identifiers renamed
-around it).
+Three moves, one milestone — a read-time split. This node killed "forum" from every code identifier; the
+on-disk store dir itself was renamed next, in the follow-on [[issues-store-rename]] (`.spec/.forum` →
+`.spec/.issues`, with a one-shot self-migration so no deployment breaks) — so the substrate now carries the
+issues name top to bottom, and the old data-dir name is no longer residue but retired.
 
 - **Kill "forum" at the substrate.** The local issue store's code no longer speaks "forum": its data-level
   identifiers are the issues model — `postLocalIssue` / `replyLocalIssue` (the programmatic write

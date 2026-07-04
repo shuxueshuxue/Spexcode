@@ -3,12 +3,12 @@ scenarios:
   - name: feed-current-loss-video-first-title-only
     tags: [frontend-e2e]
     description: >
-      With at least one fresh video reading filed (spex yatsu eval --video … --timeline …), open #/issues
-      in a real browser (board `f` or the URL). Read the real DOM: the evals group leads the LEFT list,
+      With at least one fresh video reading filed (spex yatsu eval --video … --timeline …), open #/evals
+      in a real browser (board `f` or the URL). Read the real DOM: the evals feed IS the LEFT list,
       its default kind chip, the rows' media-element count; count /api/board requests fired by opening the
       page; select a video row and read where its media renders.
     expected: |
-      The evals group is the left list's FIRST group with its chips in a sticky head; the default kind
+      The evals feed is the page's LEFT list with its chips in a sticky head; the default kind
       filter is `video` (falling back to `image` when no fresh video reading exists). Rows are the LATEST
       reading per (node, scenario), fresh only, newest first — title-only ALWAYS: zero <video>/<img>
       elements in the list. Opening the page fires ZERO extra /api/board fetches (the group rides the
@@ -18,7 +18,7 @@ scenarios:
     tags: [frontend-e2e]
     description: >
       With blob-less readings on the board (spex yatsu eval … --note only, no --image/--video/--result),
-      open #/issues in a real browser. Cross-check /api/board: readings with no blob vs the rows each kind
+      open #/evals in a real browser. Cross-check /api/board: readings with no blob vs the rows each kind
       chip claims. Click the `note` chip, read the rows' kind tags; click `image`, recount; select a
       note row and read what the detail pane renders.
     expected: |

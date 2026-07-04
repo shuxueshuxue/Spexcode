@@ -42,8 +42,9 @@ export default {
     railLabel: '主导航',
     graph: '规格节点图（⌥1）',
     sessions: '会话面板（⌥2）',
-    issues: '议题（⌥3 / ⌥F）',
-    settings: '设置（⌥4）',
+    evals: 'Evals（⌥3 / ⌥F）',
+    issues: '议题（⌥4）',
+    settings: '设置（⌥5）',
   },
 
   hud: {
@@ -125,7 +126,7 @@ export default {
       overlayCycle: '在工作树正在修改的节点间循环（⇧ 反向）',
       enter: '进入聚焦节点的实时会话',
       fresh: '在聚焦节点上开启一个全新会话',
-      issues: '打开 issues 页（本地议题 + forge，同一张列表）',
+      evals: '打开 evals 页（项目当前的实测损失）',
       newChild: '在聚焦节点下新建子节点（连击）',
       del: '删除聚焦节点（连击）',
       settings: '打开设置（语言…）',

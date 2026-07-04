@@ -118,7 +118,10 @@ surface:
 - **launch / sessionId** — the launch command and id model: Claude `claude --session-id <uuid> [--worktree]`
   (caller chooses the id); Codex `codex` with `--yolo`/approval+sandbox (id is codex-assigned — the backend
   owns it via `thread/start` at launch and resumes by it). The agent-typed CLI resolves its own id via the
-  harness's env (`CLAUDE_CODE_SESSION_ID` / …).
+  harness's env (`CLAUDE_CODE_SESSION_ID` / …). Codex's app-server is a per-PROJECT daemon shared across every
+  worktree's threads, so it is started in the STABLE per-project runtime dir — never a caller's transient
+  worktree: a daemon that inherited a worktree cwd is bricked when that worktree is later removed (its cwd goes
+  `(deleted)` and codex then fails EVERY new thread's config load with `No such file or directory`).
 - **worktree** — Claude has a native `--worktree` + `WorktreeCreate`/`WorktreeRemove` hooks; Codex has none
   (SpexCode manages the worktree itself). The adapter exposes whether the harness owns worktrees.
 - **pane-title semantics** (`paneTitleIsSelfSummary`) — whether the harness's tmux pane title IS the agent's

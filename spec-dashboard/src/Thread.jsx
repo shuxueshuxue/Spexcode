@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { SpecBody } from './NodeView.jsx'
+import { BlobMedia } from './Evidence.jsx'
 import { useMentionAutocomplete } from './mentions.jsx'
 import { useT } from './i18n/index.jsx'
 
@@ -14,13 +15,16 @@ import { useT } from './i18n/index.jsx'
 // A reply is TIME-ANCHORED by a prose convention (same philosophy as `Spec:`/`[[node]]`): a body whose
 // first line reads `▶m:ss · <step>` IS anchored to that video moment. The renderer linkifies it (click =
 // seek the clip); the composer over a clip grows a ⏱ affordance that stamps the current frame, and a
-// circled frame rides the body as a `![frame](/api/yatsu/blob/<hash>)` image link — the SAME hash the send
-// derives as the thread's typed `evidence[]`, so the body is the one raw-readable source. The reply stays
+// circled frame — or any attached blob, a clip included — rides the body as a
+// `![…](/api/yatsu/blob/<hash>)` link — the SAME hash the send derives as the thread's typed
+// `evidence[]`, so the body is the one raw-readable source. Each linked blob renders through the ONE
+// shared evidence renderer ([[event-detail]]'s Evidence.jsx, kind sniffed from the served Content-Type):
+// a video PLAYS in the thread, an image shows, a pruned blob is the honest sentinel. The reply stays
 // plain `{ by, at, body }`; no schema grows.
 
 const ANCHOR_RE = /^▶\s*(\d+):([0-5]?\d)(?:\s*·\s*([^\n]*))?/
 const BLOB_URL = /\/api\/yatsu\/blob\/([0-9a-f]{64})/g
-const FRAME_MD = /!\[[^\]]*\]\((\/api\/yatsu\/blob\/[0-9a-f]{64})\)/   // an inline frame image link
+const BLOB_MD = /!\[[^\]]*\]\(\/api\/yatsu\/blob\/([0-9a-f]{64})\)/g   // an inline evidence link (frame, clip, …)
 export const mmss = (tMs) => { const s = Math.floor(tMs / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` }
 // the first line of a body, parsed as an anchor: { tMs, step, label, rest } or null. `rest` is the body
 // with the anchor line stripped, so the moment renders as a chip and the prose renders below it.
@@ -70,8 +74,8 @@ export function Replies({ replies, onSeek, selIdx = null, activeIdx = null, onSe
     const parsed = parseAnchor(r.body)
     const a = resolveAnchor(parsed, events)              // E2: canonical step → the current clip's live tMs
     const src = parsed ? parsed.rest : r.body
-    const img = FRAME_MD.exec(src)                       // a circled-frame image renders here, not as raw md
-    const prose = (img ? src.replace(img[0], '') : src).trim()
+    const media = [...src.matchAll(BLOB_MD)].map((m) => m[1])   // linked blobs render as media, not raw md
+    const prose = (media.length ? src.replace(BLOB_MD, '') : src).trim()
     const isRemark = r.rid !== undefined
     const remarkCls = isRemark ? (r.resolved ? ' remark resolved' : ' remark open') : ''
     const cls = `fv-reply${selIdx === i ? ' sel' : ''}${activeIdx === i ? ' active' : ''}${remarkCls}`
@@ -89,7 +93,11 @@ export function Replies({ replies, onSeek, selIdx = null, activeIdx = null, onSe
             : <span className="fv-remark-state open" title={t('thread.openRemark')}>● {t('thread.openRemark')}</span>)}
         </div>
         {prose && <div className="fvd-body"><SpecBody body={prose} /></div>}
-        {img && <img className="fv-frame-img" src={img[1]} alt="circled frame" />}
+        {media.length > 0 && (
+          <div className="fv-reply-media">
+            {media.map((h, k) => <BlobMedia hash={h} alt="evidence" key={`${h}-${k}`} />)}
+          </div>
+        )}
       </div>
     )
   })
@@ -145,7 +153,7 @@ export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = nul
     <div className="fv-compose">
       {frames.length > 0 && (
         <div className="fv-frames">
-          {frames.map((h) => <img className="fv-frame" src={`/api/yatsu/blob/${h}`} alt="frame" key={h} />)}
+          {frames.map((h) => <BlobMedia hash={h} alt="frame" key={h} />)}
         </div>
       )}
       <div className="fv-tawrap">

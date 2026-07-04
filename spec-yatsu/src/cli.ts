@@ -360,3 +360,23 @@ export async function runYatsu(args: string[]): Promise<number> {
   console.error('spex yatsu: scan [--changed] | eval [.|<node>] [--scenario <name>] (--pass|--fail) [--note <text>] [--image <path> …repeatable] [--result <path|->] [--video <path> [--timeline <json>]] | show [.|<node>] [--json] | clean [--keep-latest|--all]')
   return 2
 }
+
+// `spex blob put <file|->` ([[blob-put]]) — the bare transport half of evidence: stash bytes in the shared
+// content-addressed cache and print the hash, WITHOUT filing a reading (`yatsu eval --video` couples the
+// two). putBlob is idempotent by content, so the same command re-seeds a checkout whose cache lacks a blob
+// some thread already references by hash (the clone-evidence-404 repair).
+export function runBlob(args: string[]): number {
+  const file = args[1]
+  if (args[0] !== 'put' || file === undefined) {
+    console.error('spex blob: put <file|-> — stash bytes in the shared evidence cache, print the content hash')
+    return 2
+  }
+  let bytes: Buffer
+  try { bytes = readFileSync(file === '-' ? 0 : file) } catch (e) {
+    console.error(`spex blob put: cannot read ${file}: ${(e as Error).message}`)
+    return 2
+  }
+  if (bytes.length === 0) { console.error('spex blob put: refusing an empty blob'); return 2 }
+  console.log(putBlob(bytes))
+  return 0
+}

@@ -45,8 +45,18 @@ cont=$(printf '%s' "$input" | sed -n 's/.*"stop_hook_active"[[:space:]]*:[[:spac
 # (NEVER a block decision: a gap is a heads-up, not a wall). FIRES ONCE: the additionalContext itself forces
 # one continuation, so the CALLER guards it on stop_hook_active — re-emitting on the forced re-stop is what
 # looped 31 turns and tripped the Stop-hook block cap. Called only on ALLOW paths, never alongside a block.
+#
+# SURFACE-NEUTRAL: a stale/unmeasured score is refreshed only by PRODUCING the measurement on the scenario's
+# OWN surface — a real run, never a desk check and never deferring to review a recording after the fact. The
+# nudge privileges NO surface: `scan --changed` carries each drift/missing scenario's tag on its finding line
+# ([[yatsu-core]]'s lint.scenarioTags — frontend-e2e / backend-api / cli / desktop / mobile), so the agent
+# reads there WHICH surface to run. One line covers all five surfaces; there is no per-surface branch.
 yatsu_advisory() {
   local out ids n msg esc
+  # Codex Stop hooks reject the Claude-family `hookSpecificOutput.additionalContext` shape on allow paths.
+  # Keep Codex Stop stdout empty unless it is a real block decision; the dispatcher still bridges block
+  # reasons to Codex stderr.
+  [ "${SPEXCODE_HARNESS:-claude}" = codex ] && return 0
   out=$($S yatsu scan --changed 2>&1)
   n=$(printf '%s\n' "$out" | grep -cE 'yatsu-(drift|missing|uncovered):')
   [ "${n:-0}" -gt 0 ] || return 0   # no gap in what you changed (or scan unavailable) -> nothing to nudge

@@ -1,7 +1,7 @@
 ---
 concern: spex CLI truncates piped stdout over 64KB — process.exit before drain
 by: c3f86a1a-5fb5-437c-95a8-5ef7d5d761e6
-status: open
+status: landed
 created: 2026-07-02T17:58:58.757Z
 ---
 

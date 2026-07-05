@@ -51,6 +51,19 @@ scenarios:
       entirely, needing no guard exception. A plain non-store commit is still BLOCKED, and a plain
       store-only commit (no `--no-verify`) is now blocked TOO: main-guard carries no `.spec/.issues/`
       special-case, so the guard stays the single clean question "am I committing directly onto the trunk?".
+  - name: nodes-inferred-from-links
+    tags: [cli]
+    code: spec-cli/src/localIssues.ts
+    related: [spec-cli/src/mentions.ts]
+    description: >-
+      Through the real CLI (store routed to a disposable dir via SPEXCODE_ISSUES_DIR), open one issue
+      whose concern/body carry `[[node]]` links but NO --node flag, one with an explicit --node X plus a
+      body linking [[Y]], and one with plain prose (no links, no flag). Read each back with
+      `spex issues --all --store local --json`.
+    expected: >-
+      The link-only thread's nodes are exactly the ids inside its `[[…]]` links (concern + body, deduped);
+      the mixed thread carries the UNION of the explicit --node and the linked id; the plain thread has no
+      nodes. A writer links nodes by writing them — no separate ids field is required of any caller.
   - name: post-merge-nudge
     tags: [cli]
     code: spec-cli/templates/hooks/post-merge

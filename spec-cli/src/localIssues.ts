@@ -17,7 +17,7 @@ import { readdirSync, existsSync, mkdirSync, writeFileSync, readFileSync, rmdirS
 import { join, dirname, resolve as resolvePath } from 'node:path'
 import { git, headSha, repoRoot } from './git.js'
 import { mainCheckout, envSessionId, readConfig } from './layout.js'
-import { dispatchMentions, notifyOriginator, deliveredIds, summarize, type DispatchOutcome, type LoopIn } from './mentions.js'
+import { parseMentions, dispatchMentions, notifyOriginator, deliveredIds, summarize, type DispatchOutcome, type LoopIn } from './mentions.js'
 import type { Issue, Reply } from './issues.js'
 
 const LOCAL_STORE_REL = '.spec/.issues'
@@ -290,14 +290,18 @@ function commitStore(message: string, prepare: () => Issue): Issue {
 
 // `author` defaults to the effective session id, but a caller (the dashboard's human write path) may pass
 // `'human'` — the write mechanism is identical either way, only the signature differs.
+// The thread's `nodes:` are INFERRED from the text's `[[node]]` topic links ([[mentions]] — the one in-text
+// reference primitive every input already carries), unioned with any explicitly-passed ids (`--node`): a
+// writer links nodes by writing them, never by re-typing ids into a separate field.
 export function openIssue(concern: string, opts: { nodes?: string[]; body?: string; evidence?: string[]; author?: string } = {}): Issue {
+  const nodes = [...new Set([...(opts.nodes || []), ...parseMentions(`${concern}\n${opts.body || ''}`).nodes])]
   return commitStore(`issue: ${concern}`, () => ({
     id: uniqueId(concern),   // minted INSIDE the lock, so two racing posts can't pick the same id
     store: 'local',
     concern,
     by: opts.author || currentSession(),
     status: 'open',
-    nodes: opts.nodes || [],
+    nodes,
     signers: [],
     created: new Date().toISOString(),
     body: (opts.body || `(no detail given — ${concern})`).trim(),

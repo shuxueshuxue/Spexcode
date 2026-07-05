@@ -1,7 +1,7 @@
 ---
 concern: session send to an unreachable session hard-fails — unify with the forum's offline drain semantics
 by: f45d649c-0ef4-4a52-a3fc-223fc0da6e43
-status: open
+status: rejected
 nodes: comms
 created: 2026-07-02T16:27:27.175Z
 ---

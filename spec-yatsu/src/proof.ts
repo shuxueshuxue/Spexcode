@@ -79,7 +79,8 @@ export async function buildProofModel(id: string): Promise<ProofModel | null> {
   // root the eval context at the SESSION's worktree (its branch's readings/freshness), not the backend checkout which would show main's; specs stay backend-shared (paths/titles/hues), only readings + drift are per-worktree
   const wtPath = worktreePathForBranch(payload.branch)
   const ctxRoot = wtPath ?? repoRoot()
-  const ctx = evalContext(ctxRoot, specs, await driftIndex(ctxRoot), await historyIndex(ctxRoot))
+  const [didx, hidx] = await Promise.all([driftIndex(ctxRoot), historyIndex(ctxRoot)])
+  const ctx = evalContext(ctxRoot, specs, didx, hidx)
 
   // enrich each changed file with its unified diff + full before/after content (derived from the session
   // worktree at the merge-base ↔ HEAD), so the proof can drill summary → diff → whole-file comparison with no
@@ -530,7 +531,8 @@ export async function buildSessionEvals(id: string): Promise<SessionEvals | null
   const specById = new Map(specs.map((s) => [s.id, s]))
   const wtPath = worktreePathForBranch(payload.branch)
   const ctxRoot = wtPath ?? repoRoot()
-  const ctx = evalContext(ctxRoot, specs, await driftIndex(ctxRoot), await historyIndex(ctxRoot))
+  const [didx, hidx] = await Promise.all([driftIndex(ctxRoot), historyIndex(ctxRoot)])
+  const ctx = evalContext(ctxRoot, specs, didx, hidx)
   // this session's own commits — the membership test behind `inSession`
   const shas = wtPath ? new Set((await gitA(['-C', wtPath, 'rev-list', `${mainBranch()}..HEAD`])).split('\n').filter(Boolean)) : new Set<string>()
 

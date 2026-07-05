@@ -78,6 +78,11 @@ alike — reads conservatively stale. No hashes kept; an
 ack vindicates a *spec*, not a reading. `freshness.ts` stays a pure computation — the remark track is fed in
 at the call sites, never read from the issue store here.
 
+The code axis also **reports its drift for display**, not just decides it: `codeDrift` counts, per governed
+file, how many commits in `codeSha..HEAD` touched it (the same ancestry reachability, reused — not a second
+freshness path), so a surface can say `EvalsFeed.jsx +3` instead of a bare "code moved" ([[event-detail]]'s
+stale readout). It is derived, never stored, and never feeds the stale/fresh decision — it explains one.
+
 The surface mirrors the code-drift report:
 - **scan [--changed]** — the loss signal's blind spots: a malformed yatsu.md (`yatsu-schema` — missing field,
   unknown key, dup name, ghost `code`/`related` path, out-of-library tag), a stale reading (`yatsu-drift`), a scenario never

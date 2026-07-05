@@ -108,10 +108,20 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
     [sessions],
   )
 
-  const openBoard = useCallback(() => navigate('sessions'), [])
   const openEval = useCallback(() => { setPane('eval'); setOverlay(true) }, [])
   const openSession = useCallback((id) => { setSessionSel(id); navigate('sessions', id) }, [])
   const startNew = useCallback((text) => { setSessionSel('new'); setSeed(text); navigate('sessions', 'new') }, [])
+
+  // sessions overlaying the right-clicked node — its live worktrees (overlay.source === session.source).
+  // The node-menu appends one item per session below its verbs, the one mouse path into an existing
+  // session ([[node-menu]]); recomputed only while the menu is open on a node.
+  const menuSessions = useMemo(() => {
+    if (!nodeMenu) return []
+    const node = specs.find((n) => n.id === nodeMenu.id)
+    if (!node?.overlays?.length) return []
+    const srcs = [...new Set(node.overlays.map((o) => o.source))]
+    return srcs.map((src) => sessions.find((s) => s.source === src)).filter(Boolean)
+  }, [nodeMenu, specs, sessions])
   // one routing for BOTH palettes (board `/` and session-board ⌘/Ctrl+/): a session opens/switches to its
   // tab; a non-session routes back to the graph (a no-op when already there) and jumps to the node.
   // The select-target branch is shared, not forked — only the lead weight differs by entry point.
@@ -351,8 +361,9 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
           bumpScroll(e.key === 'j' || e.key === 'ArrowDown' ? 120 : -120)
           return
         }
-        // Enter crosses from reading the node to the session board (at the remembered tab). Popup closes behind.
-        if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); setOverlay(false); openBoard(); return }
+        // Enter is INERT here: the info popup is a pure reading surface, not a launchpad. Crossing into
+        // the node's live session is a right-click node-menu action ([[node-menu]]), never a keystroke —
+        // so Enter (like any other key) is swallowed and does nothing, leaving the popup open.
         return // anything else does NOT move the board behind the popup
       }
       // graph mode. The help modal owns its keys while open (only ?/Esc close it)
@@ -405,8 +416,9 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
         const next = cycleNext(cycleNodes, focus.id, firesKey('board.cycleRev', e.key) ? -1 : 1, (n) => n.id)
         if (next) setFocusId(next.id)
       }
-      // Enter is folded into board.info above — from the graph it opens the node-info popup, the same as `i`
-      // (crossing into a session is then the popup's own Enter). [-key (the [[node]] mention opener): jump to a
+      // Enter is folded into board.info above — from the graph it opens the node-info popup, the same as `i`;
+      // crossing into an existing session is the right-click node-menu's job ([[node-menu]]), not a keystroke.
+      // [-key (the [[node]] mention opener): jump to a
       // FRESH New Session on the focus ([[<id>]] pre-seeded), unconditional — never enters an existing session
       else if (firesKey('board.fresh', e.key)) { e.preventDefault(); startNew(`[[${focus.id}]] `) }
       // f-key: open the Evals page ([[evals-view]]) — the leading loss surface — from the board; the rail is the other entry
@@ -414,7 +426,7 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [overlay, page, legend, search, highlightId, focus, cycleNodes, upTarget, downTarget, rightTarget, parent, centerOn, getViewport, openBoard, openSession, startNew, popupScroll, legendScroll])
+  }, [overlay, page, legend, search, highlightId, focus, cycleNodes, upTarget, downTarget, rightTarget, parent, centerOn, getViewport, openSession, startNew, popupScroll, legendScroll])
 
   // wake only on a real coordinate change — a pan under a still cursor can emit a synthetic mousemove with unchanged x/y
   useEffect(() => {
@@ -512,6 +524,8 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
           onFresh={(id) => startNew(`[[${id}]] `)}
           onNewChild={(id) => startNew(CHORDS.nn(id))}
           onDelete={(id) => startNew(CHORDS.dd(id))}
+          sessions={menuSessions}
+          onOpenSession={openSession}
         />
 
         {lockedSession && (

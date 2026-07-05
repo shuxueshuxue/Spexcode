@@ -1,18 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { EvalRow, entryKey } from './EvalsFeed.jsx'
+import { EvalMasterDetail } from './EvalsPage.jsx'
 import EventDetail from './EventDetail.jsx'
 import { ScoreBadge } from './score.jsx'
 import { useT } from './i18n/index.jsx'
 
 // The session Eval tab ([[review-proof]]'s interactive face): the THIRD home of the ONE EventDetail
-// component ([[event-detail]], U1) — node popup (one node) · issues page (project) · here (this session's
-// changed nodes, WORKTREE-rooted readings). Master-detail like the issues page: collapsed rows on the left
-// (blind spots lead, then what THIS session measured, newest first; everything earlier folds behind a count
-// chip), the shared EventDetail as the full-height detail on the right — the SAME media + remark thread +
-// composer, since the (node,scenario) thread rides each reading as `entry.thread` (the server overlay), so
-// there is no "no resident issues list" degradation: the composer authors remarks through /api/remarks.
-// Rows are tier-1 JSON; evidence streams lazily on open — nothing is inlined. The self-contained proof HTML
-// remains as the EXPORT artifact behind the ↗ button.
+// component ([[event-detail]], U1) — node popup (one node) · Evals page (project) · here (this session's
+// changed nodes, WORKTREE-rooted readings). The master-detail is the SAME shared shell the Evals page
+// renders ([[evals-view]]'s EvalMasterDetail — split, fold, j/k), so the two surfaces cannot drift:
+// collapsed rows on the left (blind spots lead, then what THIS session measured, newest first; everything
+// earlier folds behind a count chip), the shared EventDetail as the full-height detail on the right — the
+// SAME media + remark thread + composer, since the (node,scenario) thread rides each reading as
+// `entry.thread` (the server overlay), so there is no "no resident issues list" degradation: the composer
+// authors remarks through /api/remarks. Rows are tier-1 JSON; evidence streams lazily on open — nothing is
+// inlined. The self-contained proof HTML remains as the EXPORT artifact behind the ↗ button.
 export default function SessionEvalPane({ sessionId, specs = [], sessions = [] }) {
   const t = useT()
   const [model, setModel] = useState(null)     // null loading · false none
@@ -64,6 +66,21 @@ export default function SessionEvalPane({ sessionId, specs = [], sessions = [] }
   if (model === null) return <div className="fv-note">{t('common.loading')}</div>
   if (model === false) return <div className="fv-note">{t('proof.none')}</div>
 
+  const detail = selEntry?.kind === 'eval'
+    ? <EventDetail entry={selEntry.item} specs={specs} sessions={sessions} onWrite={loadModel} />
+    : selEntry?.kind === 'blind'
+      ? (
+        <div className="an-detail">
+          <header className="an-head">
+            <span className="an-title">{selEntry.item.scenario}</span>
+            <span className="an-node">{selEntry.item.node}</span>
+          </header>
+          {selEntry.item.expected && <div className="an-expected"><b>{t('nodeView.eval.expected')}</b> {selEntry.item.expected}</div>}
+          <div className="an-hint">{t('sessionEval.blindHint')}</div>
+        </div>
+      )
+      : <div className="fv-note">{t('sessionEval.empty')}</div>
+
   return (
     <div className="se-pane">
       <div className="se-gates">
@@ -79,8 +96,8 @@ export default function SessionEvalPane({ sessionId, specs = [], sessions = [] }
           {t('sessionEval.export')}
         </a>
       </div>
-      <div className="se-master">
-        <div className="se-list">
+      <EvalMasterDetail rowKeys={visible.map((v) => v.key)} sel={effSel} onSel={setSel} detail={detail}>
+        <div className="fv-scroll">
           {visible.length === 0 && <div className="fv-note">{t('sessionEval.empty')}</div>}
           {groups.map((g) => {
             const gRows = visible.filter((v) => v.item.node === g.node.id)
@@ -104,21 +121,7 @@ export default function SessionEvalPane({ sessionId, specs = [], sessions = [] }
             )
           })}
         </div>
-        <div className="se-detail">
-          {selEntry?.kind === 'eval' && <EventDetail entry={selEntry.item} specs={specs} sessions={sessions} onWrite={loadModel} />}
-          {selEntry?.kind === 'blind' && (
-            <div className="an-detail">
-              <header className="an-head">
-                <span className="an-title">{selEntry.item.scenario}</span>
-                <span className="an-node">{selEntry.item.node}</span>
-              </header>
-              {selEntry.item.expected && <div className="an-expected"><b>{t('nodeView.eval.expected')}</b> {selEntry.item.expected}</div>}
-              <div className="an-hint">{t('sessionEval.blindHint')}</div>
-            </div>
-          )}
-          {!selEntry && <div className="fv-note">{t('sessionEval.empty')}</div>}
-        </div>
-      </div>
+      </EvalMasterDetail>
     </div>
   )
 }

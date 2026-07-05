@@ -1,62 +1,38 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
-import EvalsGroup, { entryKey } from './EvalsFeed.jsx'
+import EvalsGroup, { currentEntries, entryKey } from './EvalsFeed.jsx'
 import EventDetail from './EventDetail.jsx'
+import { navigate, useRoute } from './route.js'
 import { useT } from './i18n/index.jsx'
 
-// The Evals page ([[evals-view]]): a top-level page (#/evals, [[side-nav]]), peer of the graph, the
-// session board, and the Issues page — the project's CURRENT measured loss, leading the surfaces (the
-// board's `f` and ⌥F land here). MASTER-DETAIL over one full routed page: the LEFT column is the SLIM
-// [[evals-feed]] list (latest reading per scenario, fresh first, video first — its own filter chips),
-// the RIGHT pane the full-height [[event-detail]] of the selection. The list column is title-only, so it
-// stays narrow, and a fold toggle collapses it to a thin strip — once a human is working one eval, the
-// detail workspace owns the width. Selection IS the detail (no Enter, no in-place expansion): picking an
-// eval row renders it in EventDetail — the media stage, the A/B strip, the remark rail. j/k walk the feed
-// even while folded, the detail follows. A remark write refreshes the board (the eval thread rides the
-// board overlay, not the issues list).
-export default function EvalsPage({ specs = [], sessions = [], reloadBoard }) {
+// The ONE eval master-detail SHELL ([[evals-view]]): the split, the fold, the j/k walk, and the detail
+// slot — shared by BOTH eval master-detail homes (the Evals page below, and the session console's Eval
+// tab, [[review-proof]]'s SessionEval), so the two surfaces cannot drift apart on geometry or keys.
+// Controlled: the parent owns the selection (`sel` already fallback-resolved) and the visible key list;
+// the shell owns only what is purely shell — fold state, the j/k binding (capture; a key typed into an
+// input or carrying a modifier is never ours), and keeping the selected row scrolled into view.
+export function EvalMasterDetail({ rowKeys, sel, onSel, detail, children }) {
   const t = useT()
-  const [sel, setSel] = useState(null)            // the ONE selection: 'eval:<node>·<scenario>'
-  const [folded, setFolded] = useState(false)     // the master list folded to a strip — the detail owns the width
-  const [notice, setNotice] = useState('')
-  const [evalRows, setEvalRows] = useState([])    // the feed's visible entries (its filters are its own)
-  const rowsRef = useRef([])                      // the visible eval key list, for j/k
-
-  const evalByKey = useMemo(() => new Map(evalRows.map((e) => [entryKey(e), e])), [evalRows])
-  rowsRef.current = evalRows.map(entryKey)
-  // default selection: the feed's first row — the detail pane is never idle by default.
-  const effSel = sel && evalByKey.has(sel) ? sel : rowsRef.current[0] ?? null
-
-  const onRows = useCallback((rows) => setEvalRows(rows), [])
-
-  // a remark's dispatch echo ([[mentions]], mirrors [[issues-view]]): the write's outcomes summary
-  // ('@ new→<session>') flashes as a notice, so an @-dispatch is never silent.
-  const flash = (outcomes) => { if (outcomes) { setNotice(outcomes); setTimeout(() => setNotice(''), 6000) } }
-
-  // page keys ([[evals-view]]): j/k walk the feed; the detail follows the selection (no Enter — selection
-  // IS detail). Capture phase; a key typed into an input/textarea or carrying a modifier is never ours.
+  const [folded, setFolded] = useState(false)   // the master list folded to a strip — the detail owns the width
   const stateRef = useRef({})
-  stateRef.current = { effSel }
+  stateRef.current = { rowKeys, sel }
   useEffect(() => {
     const onKey = (e) => {
       const tag = e.target?.tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA' || e.metaKey || e.ctrlKey || e.altKey) return
       if (e.key !== 'j' && e.key !== 'k') return
       e.preventDefault(); e.stopPropagation()
-      const rows = rowsRef.current
+      const { rowKeys: rows, sel: cur } = stateRef.current
       if (!rows.length) return
-      const cur = rows.indexOf(stateRef.current.effSel)
-      const next = cur < 0 ? (e.key === 'j' ? 0 : rows.length - 1) : Math.max(0, Math.min(rows.length - 1, cur + (e.key === 'j' ? 1 : -1)))
-      setSel(rows[next])
+      const i = rows.indexOf(cur)
+      const next = i < 0 ? (e.key === 'j' ? 0 : rows.length - 1) : Math.max(0, Math.min(rows.length - 1, i + (e.key === 'j' ? 1 : -1)))
+      onSel(rows[next])
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [])
+  }, [onSel])
   useEffect(() => {
     document.querySelector('.fv-list-col .sel')?.scrollIntoView({ block: 'nearest' })
-  }, [effSel])
-
-  const selEval = effSel ? evalByKey.get(effSel) : null
-
+  }, [sel])
   return (
     <div className={`fv-master ${folded ? 'folded' : ''}`}>
       {/* the list column stays MOUNTED while folded (its filter state + the j/k row report live in it) —
@@ -64,14 +40,80 @@ export default function EvalsPage({ specs = [], sessions = [], reloadBoard }) {
       {folded && <button type="button" className="fv-unfold" title={t('masterList.unfold')} onClick={() => setFolded(false)}>›</button>}
       <div className="fv-list-col" style={folded ? { display: 'none' } : undefined}>
         <button type="button" className="fv-fold" title={t('masterList.fold')} onClick={() => setFolded(true)}>‹</button>
-        {notice && <div className="fv-notice">{notice}</div>}
-        <EvalsGroup nodes={specs} sel={effSel} onSel={(k) => setSel(k)} onRows={onRows} />
+        {children}
       </div>
-      <div className="fv-detail">
-        {selEval
-          ? <EventDetail entry={selEval} specs={specs} sessions={sessions} onWrite={async (outcomes) => { flash(outcomes); await reloadBoard?.() }} />
-          : <div className="fv-note">{t('evalsFeed.empty')}</div>}
-      </div>
+      <div className="fv-detail">{detail}</div>
     </div>
+  )
+}
+
+// The Evals page ([[evals-view]]): a top-level page (#/evals, [[side-nav]]), peer of the graph, the
+// session board, and the Issues page — the project's CURRENT measured loss, leading the surfaces (the
+// board's `f` and ⌥F land here). MASTER-DETAIL over one full routed page: the LEFT column is the SLIM
+// [[evals-feed]] list (latest reading per scenario, fresh first, video first — its own filter chips),
+// the RIGHT pane the full-height [[event-detail]] of the selection. Selection IS the detail (no Enter,
+// no in-place expansion), and the selection HAS an address: `#/evals/<node>/<scenario>` is the canonical
+// eval URL — a deep link selects that eval (widening the feed's default kind filter if it would hide it),
+// and every selection echoes back into the hash with replace (tabs replace, pages push — [[side-nav]]),
+// so the shown eval is always shareable. A remark write refreshes the board (the eval thread rides the
+// board overlay, not the issues list).
+export default function EvalsPage({ specs = [], sessions = [], reloadBoard }) {
+  const t = useT()
+  const { page, param } = useRoute()
+  const [sel, setSel] = useState(null)            // the ONE selection: 'eval:<node>·<scenario>'
+  const [notice, setNotice] = useState('')
+  const [evalRows, setEvalRows] = useState([])    // the feed's visible entries (its filters are its own)
+  const rowsRef = useRef([])                      // the visible eval key list, for j/k
+  const evalByKey = useMemo(() => new Map(evalRows.map((e) => [entryKey(e), e])), [evalRows])
+  rowsRef.current = evalRows.map(entryKey)
+  // default selection: the feed's first row — the detail pane is never idle by default.
+  const effSel = sel && evalByKey.has(sel) ? sel : rowsRef.current[0] ?? null
+
+  // deep link → selection: '#/evals/<node>/<scenario>' applies its address to the selection (the
+  // sessions-page param sync's twin). The target may be hidden by the feed's default kind filter —
+  // `mustShow` hands it to the feed, which widens its own filter (the filter stays the feed's state).
+  const urlSel = useMemo(() => {
+    if (!param) return null
+    const i = param.indexOf('/')
+    return i > 0 ? `eval:${param.slice(0, i)}·${param.slice(i + 1)}` : null
+  }, [param])
+  useEffect(() => { if (page === 'evals' && urlSel) setSel(urlSel) }, [page, urlSel])
+  // selection → URL echo with replace (no history entry per row-hop). While a deep-linked selection is
+  // still pending (its row not yet in the visible list), hold the echo — never canonicalize AWAY from an
+  // address the user just arrived on before the feed has had the chance to show it. An address naming an
+  // eval that does not EXIST (checked against the same latest-per-scenario computation the feed renders)
+  // is dropped instead: the page falls back to the first row and the URL canonicalizes to it.
+  const pending = sel && !evalByKey.has(sel)
+  const selExists = useMemo(
+    () => !pending || currentEntries(specs).some((e) => entryKey(e) === sel),
+    [pending, specs, sel],
+  )
+  useEffect(() => { if (pending && !selExists) setSel(null) }, [pending, selExists])
+  useEffect(() => {
+    if (page !== 'evals' || !effSel || pending) return
+    const m = /^eval:([^·]+)·(.+)$/.exec(effSel)
+    if (m) navigate('evals', `${m[1]}/${m[2]}`, { replace: true })
+  }, [page, effSel, pending])
+
+  const onRows = useCallback((rows) => setEvalRows(rows), [])
+
+  // a remark's dispatch echo ([[mentions]], mirrors [[issues-view]]): the write's outcomes summary
+  // ('@ new→<session>') flashes as a notice, so an @-dispatch is never silent.
+  const flash = (outcomes) => { if (outcomes) { setNotice(outcomes); setTimeout(() => setNotice(''), 6000) } }
+
+  const selEval = effSel ? evalByKey.get(effSel) : null
+
+  return (
+    <EvalMasterDetail
+      rowKeys={rowsRef.current}
+      sel={effSel}
+      onSel={setSel}
+      detail={selEval
+        ? <EventDetail entry={selEval} specs={specs} sessions={sessions} onWrite={async (outcomes) => { flash(outcomes); await reloadBoard?.() }} />
+        : <div className="fv-note">{t('evalsFeed.empty')}</div>}
+    >
+      {notice && <div className="fv-notice">{notice}</div>}
+      <EvalsGroup nodes={specs} sel={effSel} onSel={(k) => setSel(k)} onRows={onRows} mustShow={pending ? sel : null} />
+    </EvalMasterDetail>
   )
 }

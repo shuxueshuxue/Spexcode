@@ -15,6 +15,23 @@ scenarios:
       a row is selected and the shared annotator detail opens). The `export ↗` link serves the
       self-contained export HTML: derived masthead, gate row, inlined evidence, per-file diff drill-down —
       whole, not garbled.
+  - name: eval-tab-shared-shell
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/SessionEval.jsx, spec-dashboard/src/EvalsPage.jsx]
+    description: >
+      Open a session's Eval tab in a real browser and read the master-detail's DOM against the Evals
+      page's: is the shell the SAME component family (`.fv-master` / `.fv-list-col` / `.fv-detail` — no
+      `.se-master`/`.se-list`/`.se-detail` clone)? Click the fold toggle and re-measure the columns;
+      unfold. Press j/k (focus not in an input) and read whether the selection walks the rows and the
+      detail follows, exactly as on #/evals.
+    expected: >
+      The Eval tab's master-detail IS the shared shell ([[evals-view]]'s EvalMasterDetail): the same
+      .fv-master grid with the slim .fv-list-col left (gates strip riding above, session-scoped groups
+      inside) and the full-height .fv-detail right, the same fold-to-a-strip toggle (fold collapses the
+      list, the strip unfolds it, selection intact), and the same j/k walk (selection moves through blind
+      + measured rows, the detail pane follows; a key typed into an input or the terminal's textarea is
+      never captured). No session-only shell classes remain. Zero loss = one shell, two homes — the
+      session tab can never drift from the Evals page on geometry, fold, or keys.
 ---
 # review-proof loss
 

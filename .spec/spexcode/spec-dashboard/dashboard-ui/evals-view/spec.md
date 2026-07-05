@@ -27,6 +27,15 @@ surfaces (`f`, ⌥F) land here.
   board's bare **`f`** ([[side-nav]] / the keymap) as the direct jump from the graph. There is no in-page
   switcher: the page IS the evals, the [[issues-view]] page IS the issues, and the rail is how you cross
   between them.
+- **The selection has an ADDRESS — `#/evals/<node>/<scenario>` is the canonical eval URL.** An eval a
+  human wants another human (or a dispatched agent) to look at must be pointable-at: the deep link selects
+  exactly that (node, scenario) in the detail pane — widening the feed's default kind filter when it would
+  hide the target ([[evals-feed]]'s `mustShow`, the feed widening its own state) — and every selection made
+  in the page (a row click, a j/k hop) is ECHOED back into the hash with replace ([[side-nav]]'s
+  pages-push/details-replace discipline), so the address bar always names the eval on screen and copy-URL
+  is the share affordance, no button needed. An address naming no real eval falls back to the feed's first
+  row and canonicalizes; a deep link to an eval that exists is never silently rewritten before the feed has
+  shown it.
 - **A MASTER-DETAIL — a full page deserves a full-height detail, and the DETAIL is the protagonist.** The
   **left column** is the [[evals-feed]] list — the latest reading per (node, scenario), fresh leading, video
   first — under its own filter chipbar (that bar is the feed's own state; this node owns the page shell,
@@ -40,7 +49,10 @@ surfaces (`f`, ⌥F) land here.
   stage under the review-track scrubber, the A/B strip in the header, and the (node, scenario) remark rail +
   docked composer. **j/k walk the feed** (folded or not) and the detail follows; a key typed into an input
   is never captured. The section contents are their own nodes ([[evals-feed]], [[event-detail]]) — this node
-  owns the page shell: the split, the fold, the selection, and the j/k routing.
+  owns the page shell: the split, the fold, the selection, and the j/k routing. That shell is ONE exported
+  component (`EvalMasterDetail`), and it is deliberately SHARED: the session console's Eval tab
+  ([[review-proof]]) renders the same shell around its own worktree-rooted list, so the two eval
+  master-detail homes cannot drift apart on geometry, fold, or keys.
 - **One data path — the feed rides the app's one board poll.** The list fetches nothing of its own: the
   board nodes arrive as a prop from the app's single board poll + SSE ([[evals-feed]]). A remark authored in
   the [[event-detail]] composer writes through the CLI-parity `/api/remarks` and then refreshes the

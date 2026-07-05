@@ -61,7 +61,13 @@ wherever it appears. The ONE deliberate specialization is this pane's **clip pla
 carry the review: anchored remarks are **markers** on it, the playhead **lights the remark it is inside**,
 and clicking a marker (or a remark in the rail) **seeks** there. The surface is **keyboard-driven** — play/pause,
 coarse and frame-fine scrubbing, jump between remarks, and **annotate the current frame** (its
-`▶m:ss · step` stamped into the composer). An **image gallery** renders on the stage beside/under the clip —
+`▶m:ss · step` stamped into the composer). Because that custom bar **replaces** native chrome — its
+built-in fullscreen included — the bar carries an explicit **fullscreen control**: the ONE shared
+`FullscreenButton` ([[video-evidence]]'s `Evidence.jsx`), `requestFullscreen` on the whole player wrapper
+(stage + bar, so the review-track controls stay usable large). It exists on every media home a *video*
+renders: a plain `<video controls>` (the eval-tab gallery, a thread's blob link) gets fullscreen from its
+native controls, and only a controls-suppressed player (this clip player) grows the explicit button — one
+control, never doubled where the native chrome already offers it. An **image gallery** renders on the stage beside/under the clip —
 each still full-width and **click-to-enlarge** (a click opens that blob in a viewport-size lightbox; click
 anywhere or Esc closes, the Esc swallowed so the page's own Esc stack never fires — a screenshot's detail is
 the evidence, and the stage's width is not its ceiling). A transcript entry renders as

@@ -22,6 +22,26 @@ scenarios:
       detail follows. A direct reload at #/evals opens on the Evals page (hash routing intact — no flash
       through the graph). Zero loss = the Evals page is a real top-level route with its own master-detail
       whose slim, foldable list never starves the detail.
+  - name: canonical-eval-url
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/EvalsPage.jsx, spec-dashboard/src/route.js, spec-dashboard/src/EvalsFeed.jsx]
+    description: >
+      In a real browser at a live backend: on #/evals select an eval row and read location.hash. j/k to
+      another row and read the hash again, then check history.length did not grow per hop (the echo
+      replaces). Copy the hash, open it directly in a FRESH page load (#/evals/<node>/<scenario>), and read
+      which eval the detail pane renders. Then deep-link an eval whose evidence kind the feed's DEFAULT
+      filter would hide (e.g. an image/note eval while the video chip is the default) and read the feed's
+      active kind chip + the rendered detail. Finally load a made-up address (#/evals/no-such/nope) and
+      read the hash + detail after the feed settles.
+    expected: >
+      Every selection is ECHOED into the address bar as #/evals/<node>/<scenario> (replace — row-hopping
+      buries no history entries), so the shown eval is always shareable by copy-URL. A fresh load at a
+      canonical address opens the Evals page with EXACTLY that (node, scenario) selected and rendered in
+      the detail pane — even when the feed's default kind filter would have hidden it: the feed widens its
+      own kind chip to 'all' so the target row is visible and selected, never a silent fallback to the
+      first row. A bogus address falls back to the first row and the hash canonicalizes to that row's real
+      address. Zero loss = an eval is a pointable, shareable THING: the URL in the bar always names the
+      eval on screen.
 ---
 # measuring evals-view
 

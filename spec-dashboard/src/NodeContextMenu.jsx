@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useEscLayer } from './escStack.js'
 import { useT } from './i18n/index.jsx'
-import { STATUS_COLOR, STATUS_GLYPH, sessionName } from './session.js'
+import { STATUS_COLOR, STATUS_GLYPH, sessionHeadline } from './session.js'
 
 // @@@ NodeContextMenu - the spec node's right-click menu ([[node-menu]]): the mouse parallel of the board's
 // node verbs (i / [ / nn / dd), replacing the browser's default menu on a node. It exposes the EXISTING
@@ -48,7 +48,7 @@ export default function NodeContextMenu({ menu, onClose, onInfo, onFresh, onNewC
       {sessions.map((s) => (
         <button key={s.id} className="sess-menu-item sess-menu-sess" onClick={open(s.id)}>
           <span className="sess-glyph" style={{ color: STATUS_COLOR[s.status] }} aria-hidden="true">{STATUS_GLYPH[s.status]}</span>
-          {sessionName(s)}
+          {sessionHeadline(s)}
         </button>
       ))}
     </div>

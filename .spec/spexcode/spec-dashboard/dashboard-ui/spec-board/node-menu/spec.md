@@ -30,7 +30,9 @@ work, never a direct server op, so a mis-aimed right-click can't destroy anythin
 
 **Overlay sessions.** When the node carries session overlay(s) — a live worktree whose pending ops
 currently touch it (`overlay.source === session.source`) — the menu appends, below a divider from the
-four verbs, **one item per overlaying session**: a status-coloured glyph plus the session's name.
+four verbs, **one item per overlaying session**: a status-coloured glyph plus the session's **headline** —
+the SAME live line the board rows show ([[session-activity]]'s one-name-every-surface / `sessionHeadline`),
+never the stable label, so a session reads identically here and on the board it overlays.
 Picking one opens that session in the console ([[session-console]]). This is the **one place a crossing
 into an *existing* session lives** — the graph deliberately has no bare keystroke for it and the
 node-info popup's Enter is inert ([[keyboard-nav]]), so the mouse menu is where "jump into the session

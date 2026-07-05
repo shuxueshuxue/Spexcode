@@ -415,9 +415,17 @@ export function paneActivity(harness: Harness, paneTitle: string | null | undefi
 // splash. The leading glyph run (with the spaces/`·` between and after) is stripped — the dashboard draws its
 // own status dot, a frozen spinner frame is just noise — leaving only the summary text (null if it is empty).
 // ONE regex is the single source of the glyph rule: it gates (requires ≥1 glyph) and strips in one match.
+// The glyph gate alone is not enough: Claude Code emits a glyph-led SPLASH of its own app name (`✳ Claude
+// Code`) between pane birth and its first real task summary — it CLEARS the glyph gate yet is the app naming
+// itself, not the task. GENERIC_SUMMARY rejects that stripped splash too, so the row keeps its launch-prompt
+// placeholder instead of flashing "Claude Code" for a tick (the glyph-LESS `Claude Code` splash was already
+// rejected by the gate; this catches its glyph-led twin).
+const GENERIC_SUMMARY = /^claude code$/i
 export function selfSummary(paneTitle: string): string | null {
   const m = /^[\s·]*(?:[✳✶✻✽✢⠀-⣿][\s·]*)+(.*)$/u.exec(paneTitle)
-  return m ? (m[1].trim() || null) : null
+  if (!m) return null
+  const text = m[1].trim()
+  return text && !GENERIC_SUMMARY.test(text) ? text : null
 }
 
 // @@@ launchedAt - when we last started a tmux window for an id (set in launch()). claude needs ~15-20s

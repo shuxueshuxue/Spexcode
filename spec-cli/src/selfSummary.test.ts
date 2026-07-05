@@ -27,6 +27,16 @@ test('selfSummary: a glyph with no summary text → null (idle, nothing said yet
   assert.equal(selfSummary('✳   '), null)
 })
 
+test('selfSummary: a glyph-LED app-name splash is still the app, not a task → null', () => {
+  // Claude Code emits `✳ Claude Code` between pane birth and its first real task summary — glyph-led, so it
+  // CLEARS the glyph gate, but it is the app naming itself, not the task. It must not flash as the headline.
+  assert.equal(selfSummary('✳ Claude Code'), null)
+  assert.equal(selfSummary('⠐ Claude Code'), null)   // the spinner-frame twin
+  assert.equal(selfSummary('✳ claude code'), null)   // case-insensitive
+  // a REAL summary that merely mentions the app name survives — only the bare splash is rejected.
+  assert.equal(selfSummary('✳ Improve Claude Code onboarding'), 'Improve Claude Code onboarding')
+})
+
 // paneActivity gates the raw pane title by the harness capability: claude's pane title IS its task summary,
 // codex's is a spinner + the cwd FOLDER name (e.g. `⠙ codex-naming`) — NOT a self-summary, so it is refused
 // and the headline falls through to the launch prompt instead of showing the worktree folder.

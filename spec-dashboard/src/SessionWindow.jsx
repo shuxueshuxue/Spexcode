@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Avatar } from './avatar.jsx'
 import { labelColor } from './color.js'
 import { GLYPH } from './SpecNode.jsx'
-import { sessionName, sessionHeadline, STATUS_COLOR, STATUS_GLYPH, sessionForest } from './session.js'
+import { sessionHandle, sessionHeadline, STATUS_COLOR, STATUS_GLYPH, sessionForest } from './session.js'
 import { useT } from './i18n/index.jsx'
 
 // the "locked / claimed by another session" indicator — a monochrome inline-SVG padlock in the dashboard's
@@ -69,7 +69,7 @@ export function SessionRow({ s, locked, showAvatar = true, compact = false, lead
   return (
     <>
       {lead}
-      {showAvatar && <Avatar seed={s.id} status={s.status} title={`${sessionName(s)} · ${statusWord} — ${s.id.slice(0, 8)}`} />}
+      {showAvatar && <Avatar seed={s.id} status={s.status} title={`${sessionHandle(s)} · ${statusWord} — ${s.id.slice(0, 8)}`} />}
       {/* meta is rendered BEFORE the headline in source (CSS `order` keeps it visually last in the resting
           flex row) so that, when a selected row wraps ([[session-activity]] reveal), it can FLOAT onto the
           headline's first line and the wrapped lines below run full-width beneath it. */}

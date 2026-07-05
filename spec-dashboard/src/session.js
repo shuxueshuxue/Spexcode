@@ -41,12 +41,20 @@ export const zoneSort = (sessions) => {
 }
 
 // the session's display strings are DERIVED SERVER-SIDE ([[session-label]]): the wire carries `label`
-// (stable handle — tooltips, the lock hint, search) and `headline` (the live line a human reads), computed
-// once in toSession; the bare parts (rename `name`, prompt-truncation `title`) don't ride the wire at the
-// top level, so a surface CANNOT re-derive its own chain — these two accessors are the only doors, and the
-// legacy chain below them exists solely as the old-backend fallback, confined to THIS file. Reach for
-// s.raw.name / s.raw.title only for an explicitly raw consumer (the rename prefill).
-export const sessionName = (s) =>
+// (stable handle) and `headline` (the live line a human reads), computed once in toSession; the bare parts
+// (rename `name`, prompt-truncation `title`) don't ride the wire at the top level, so a surface CANNOT
+// re-derive its own chain — these two accessors are the only doors, and the legacy chain below each exists
+// solely as the old-backend fallback, confined to THIS file. Reach for s.raw.name / s.raw.title only for an
+// explicitly raw consumer (the rename prefill).
+//
+// `sessionHandle` is the STABLE handle — its ONLY sanctioned uses are the avatar/hover TOOLTIP, mobile's
+// handle-line, and search MATCHING (search still matches node/branch/id even where it shows the headline).
+// It is NEVER a visible one-line title: EVERY surface where a human reads "which session is this" (board
+// rows, the map window, Enter tabs, the console strip, the search palette, the @-mention dropdown, and the
+// node-menu overlay list) renders `sessionHeadline`. Naming the stable door `Handle`, not `Name`, is the
+// architectural guard: a dev wanting "the name to show" reaches for the headline by reflex and can no longer
+// grab the handle by mistake — the divergence that kept recurring ([[session-activity]]: one name everywhere).
+export const sessionHandle = (s) =>
   s?.label || s?.name || s?.node || s?.title || s?.branch || s?.id
 
 export const sessionHeadline = (s) =>

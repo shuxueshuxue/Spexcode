@@ -3,7 +3,7 @@ import { Avatar } from './avatar.jsx'
 import { STATUS, GLYPH } from './SpecNode.jsx'
 import { SpecPane, HistoryPane, IssuesPane, EditPane, useHistory, panesFor } from './NodeView.jsx'
 import { SessionRow } from './SessionWindow.jsx'
-import { sessionName, STATUS_COLOR } from './session.js'
+import { sessionHandle, STATUS_COLOR } from './session.js'
 import { useT } from './i18n/index.jsx'
 
 // the desktop pane keys → their localized tab labels (panesFor hands back English labels; we relabel so
@@ -28,7 +28,7 @@ function NodeRow({ node, kids, editors, onTap }) {
       <span className="m-row-title">{node.title}</span>
       {editors.length > 0 && (
         <span className="m-row-faces">
-          {editors.slice(0, 3).map((e) => <Avatar key={e.id} seed={e.id} status={e.status} title={sessionName(e)} />)}
+          {editors.slice(0, 3).map((e) => <Avatar key={e.id} seed={e.id} status={e.status} title={sessionHandle(e)} />)}
         </span>
       )}
       {node.version ? <span className="m-row-ver">v{node.version}</span> : null}
@@ -62,7 +62,7 @@ function MobileNode({ node, childrenOf, sessions, onOpenChild }) {
         <span className="m-node-status">{t(`status.${node.status}`)}</span>
         {editors.length > 0 && (
           <span className="m-node-faces" title={t('mobile.liveEditors', { n: editors.length })}>
-            {editors.map((e) => <Avatar key={e.id} seed={e.id} status={e.status} title={sessionName(e)} />)}
+            {editors.map((e) => <Avatar key={e.id} seed={e.id} status={e.status} title={sessionHandle(e)} />)}
           </span>
         )}
       </div>
@@ -101,7 +101,7 @@ function MobileSessions({ sessions, openId, setOpenId, byId, goToNode }) {
         <div className="m-sess-card">
           <Avatar seed={open.id} status={open.status} />
           <div className="m-sess-meta">
-            <span className="m-sess-name">{sessionName(open)}</span>
+            <span className="m-sess-name">{sessionHandle(open)}</span>
             <span className="m-sess-status" style={{ color: STATUS_COLOR[open.status] }}>{t(`status.${open.status}`)}</span>
           </div>
         </div>

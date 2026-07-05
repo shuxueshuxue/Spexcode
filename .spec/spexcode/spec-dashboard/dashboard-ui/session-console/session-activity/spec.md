@@ -3,6 +3,8 @@ title: session-activity
 status: active
 hue: 260
 desc: Each session row's headline IS the worker's own live one-line self-summary (its tmux pane title), overriding the launch-prompt placeholder; the status + op tally ride a quieter second line on the map-side face, or fold to a single inline status glyph on the console's compact terminal sidebar.
+code:
+  - spec-cli/src/selfSummary.test.ts
 related:
   - spec-cli/src/sessions.ts
   - spec-dashboard/src/SessionWindow.jsx
@@ -39,7 +41,12 @@ braille spinner frame while working); that glyph is the **proof** the title is t
 and not tmux's default — which, from pane birth until the agent first speaks, is the **host name** (e.g.
 `ser581555022561`), and the app may flash a bare splash before its first task. So the glyph is **required**:
 a pane title without one is "not spoken yet" → `activity` is `null`, and the row keeps its launch-prompt
-placeholder rather than flickering through the host name and splash. Once present the glyph is stripped (the
+placeholder rather than flickering through the host name and splash. The glyph gate alone is not quite
+enough: Claude Code also emits a **glyph-LED splash of its own app name** (`✳ Claude Code`) in the gap
+between pane birth and its first real task summary — it clears the glyph gate yet is the app naming
+*itself*, not the task, so it too is refused (a stripped summary equal to the bare app name → `null`) and
+the row holds its launch-prompt placeholder rather than flashing "Claude Code" for a tick. Once present and
+past those guards the glyph is stripped (the
 dashboard draws its own status; a frozen spinner frame is noise) and only the summary text is kept. Activity
 is **live and never persisted** — also `null` for any session that isn't up (offline / starting / queued),
 so a dead or booting row never shows a stale line. A tmux hiccup drops the line for one tick, never the
@@ -94,15 +101,20 @@ headline `flex:1` of that width and ellipsises far **later** than the compact ro
 there is space for more.
 
 **One name, every surface.** The `sessionHeadline` is a session's display name *everywhere a human reads
-which session this is* — rows, window, Enter tabs, console action strip, and now **the search palette and the
-lock-hint banner** show the identical line, so where a session is searched from and where it is found never
-disagree. (Pinning those two to the stable `sessionName` bought nothing — the ordered slot, and the avatar
-where it's shown, are the fixed anchor and a rename already wins — and cost a palette that named a session differently from its own board.) The stable
-`sessionName` survives ONLY as a fixed-identity *reveal*, never a title: the avatar/hover **tooltips**. Even
+which session this is* — rows, window, Enter tabs, console action strip, **the search palette, the
+lock-hint banner, and the [[node-menu]] overlay list** (right-clicking a node lists its live sessions —
+the same live line the board rows show, never the stable label beside it) all show the identical line, so
+wherever a session is named it reads the same. (Pinning any of them to the stable handle bought nothing —
+the ordered slot, and the avatar where it's shown, are the fixed anchor and a rename already wins — and
+cost a surface that named a session differently from its own board.) The stable
+`sessionHandle` survives ONLY as a fixed-identity *reveal*, never a one-line title: the avatar/hover
+**tooltips** and mobile's handle-line. Even
 the [[session-rename]] prompt — where you edit the `name` override — titles itself with the headline the row
 shows, not this handle, so it never names the session differently from the row it was opened from; its input
 still prefills with the raw `name` override. Search still *matches* the handle even when it no longer
-*shows* it, so finding a session by node/branch/id keeps working.
+*shows* it, so finding a session by node/branch/id keeps working. That the door is *named* `sessionHandle`,
+not `sessionName`, is what keeps this guarantee from eroding again — a new pick-list can't grab the stable
+label by reflex ([[session-label]]).
 
 This node's slice of the shared `styles.css` is the status line (`.sess-meta`, the full-width dimmer wrap)
 and its compact-variant collapse (the `.si-item` one-line overrides that fold `.sess-meta` inline and drop

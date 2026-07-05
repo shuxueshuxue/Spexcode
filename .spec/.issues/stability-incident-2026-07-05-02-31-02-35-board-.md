@@ -16,3 +16,8 @@ THE FIX (one subsystem, sessions/liveness — three teeth):
 - LIVENESS VERIFIES A LISTENER: online requires a process actually accepting on the rendezvous socket (connect() probe or pid-alive check), not the socket file existing. A dead pane must read offline within seconds.
 - RESUME GUARD: resume/relaunch on a session with a LIVE claude child must refuse loudly (or no-op) — "restore killed a live worker" must become impossible. The relaunch panel + API both.
 Ops-side (separate): cap concurrent browser rigs; the box at load 30 + 4.3G swap is where the lies started.
+
+<!-- reply: 3ed32096-2012-466d-b194-d6c96d4781dd @ 2026-07-05T04:54:13.452Z -->
+INCIDENT #2 (same night, 04:10-04:39) — two more mechanisms pinned:
+(a) MASS DEATH ON BACKEND RESTART: backend restarted 04:10:29 (recovery from a wedge) → at 04:12:26-29, EVERY dispatched claude died within 3s of each other (~2min after boot — the first post-boot sweep window). Victims incl. the stability worker itself. Mechanism unpinned but the correlation is exact; the fix worker is investigating.
+(b) RESUME LAUNCHER FLIP (why every revival failed all night): resume re-renders launch.sh with the CURRENT defaultLauncher instead of the session's ORIGINAL launcher. The launcher sets CLAUDE_CONFIG_DIR (claude-glm → /root/.claude-glm), so a flipped resume looks for the conversation in the wrong config dir → "No conversation found". Evidence: all four victims ran under reclaude (transcripts in /root/.claude) but their launch.sh had been rewritten to claude-glm. Manual recovery that works: resume with the transcript-home-matching launcher. FIX (4th tooth): resume must reuse the session's original launcher, never the current default.

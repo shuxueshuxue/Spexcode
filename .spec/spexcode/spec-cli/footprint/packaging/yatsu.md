@@ -7,11 +7,13 @@ scenarios:
       with curl: the dashboard index, a hashed bundled asset, an unknown SPA route, and an /api hit that must
       reach a running `spex serve`. Read the startup line and confirm the bind is loopback-only.
     expected: |
-      Startup logs "serving bundled build" and "[gateway] dashboard on http://localhost:P". GET / → 200 and
-      is the BUNDLED index.html (contains <title>SpexCode</title> and a hashed /assets/index-*.js reference,
-      not a vite dev shell). GET that asset → 200 text/javascript. An unknown non-file route (/some/deep/route)
-      → 200 (SPA fallback to index.html). GET /api/board is proxied to the backend on :8787 — 200
-      application/json when `spex serve` is up, 502 when it is not. The listener is on 127.0.0.1 only.
+      Startup logs which dist it serves ("serving monorepo build" — the package ships spec-dashboard/dist
+      in-layout, so the sibling-path resolver finds the SHIPPED bundle even in a clean npm install) and
+      "[gateway] dashboard on http://localhost:P". GET / → 200 and is the BUNDLED index.html (contains
+      <title>SpexCode</title> and a hashed /assets/index-*.js reference, not a vite dev shell). GET that
+      asset → 200 text/javascript. An unknown non-file route (/some/deep/route) → 200 (SPA fallback to
+      index.html). GET /api/board is proxied to the backend — 200 application/json when `spex serve` is up,
+      502 when it is not. The listener is on 127.0.0.1 only.
     code: spec-cli/src/gateway.ts
     related: spec-cli/src/cli.ts
   - name: clean-install-cli-starts

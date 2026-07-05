@@ -330,7 +330,6 @@ export default {
     issuesMentionHint: '@session to summon · [[node]] to link',
     issuesReplyPlaceholder: 'reply…',
     issuesConcernPlaceholder: 'concern — one line',
-    issuesNodesPlaceholder: 'node ids, comma-separated (optional)',
     issuesBodyPlaceholder: 'details (optional)',
     ask: 'What would you like to do?',
     inputPlaceholder: 'describe the work · @ spec · / command · ⏎ to launch · ⇧⏎ newline',

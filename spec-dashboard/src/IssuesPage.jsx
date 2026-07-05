@@ -165,14 +165,15 @@ function IssueDetail({ issue: th, specs, sessions, onFocusNode, onWrite }) {
   )
 }
 
-// the "New" affordance — a concern line, an optional node-ids field, and a body. Posts a fresh LOCAL
-// issue as 'human' (a new thread opens local; promotion is what moves one to the forge); an @-mention in
-// the body dispatches. The body textarea carries the shared `[[node]]`/`@session` autocomplete
-// ([[mentions]]) — the form sits at the top of the list column, so its menu opens downward.
+// the "New" affordance — a concern line and a body. Posts a fresh LOCAL issue as 'human' (a new thread
+// opens local; promotion is what moves one to the forge); an @-mention in the body dispatches, and a
+// `[[node]]` link in the text IS the node link — the store infers the thread's `nodes:` from them, so
+// there is no separate node-ids field to re-type. The body textarea carries the shared
+// `[[node]]`/`@session` autocomplete ([[mentions]]) — the form sits at the top of the list column, so its
+// menu opens downward.
 function NewThreadForm({ specs, sessions, onDone }) {
   const t = useT()
   const [concern, setConcern] = useState('')
-  const [nodes, setNodes] = useState('')
   const [body, setBody] = useState('')
   const [busy, setBusy] = useState(false)
   const taRef = useRef(null)
@@ -182,17 +183,14 @@ function NewThreadForm({ specs, sessions, onDone }) {
     if (!c || busy) return
     setBusy(true)
     try {
-      const nodeList = nodes.split(',').map((s) => s.trim()).filter(Boolean)
-      const res = await postIssueThread({ concern: c, nodes: nodeList, body: body.trim() || undefined })
-      if (res?.ok) { setConcern(''); setNodes(''); setBody(''); await onDone?.(res.outcomes || '') }
+      const res = await postIssueThread({ concern: c, body: body.trim() || undefined })
+      if (res?.ok) { setConcern(''); setBody(''); await onDone?.(res.outcomes || '') }
     } finally { setBusy(false) }
   }
   return (
     <div className="fv-new-form">
       <input className="fv-input" value={concern} placeholder={t('session.issuesConcernPlaceholder')}
         disabled={busy} onChange={(e) => setConcern(e.target.value)} />
-      <input className="fv-input" value={nodes} placeholder={t('session.issuesNodesPlaceholder')}
-        disabled={busy} onChange={(e) => setNodes(e.target.value)} />
       <div className="fv-tawrap">
         <textarea ref={taRef} className="fv-textarea" rows={3} value={body} placeholder={t('session.issuesBodyPlaceholder')}
           disabled={busy} onChange={(e) => { setBody(e.target.value); ac.sync(e.target) }}

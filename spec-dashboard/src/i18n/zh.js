@@ -325,7 +325,6 @@ export default {
     issuesMentionHint: '@会话 召唤 · [[节点]] 关联',
     issuesReplyPlaceholder: '回复……',
     issuesConcernPlaceholder: '关切 —— 一行概述',
-    issuesNodesPlaceholder: '节点 id，逗号分隔（可选）',
     issuesBodyPlaceholder: '详情（可选）',
     ask: '你想做点什么？',
     inputPlaceholder: '描述工作 · @ 规格 · / 命令 · ⏎ 启动 · ⇧⏎ 换行',

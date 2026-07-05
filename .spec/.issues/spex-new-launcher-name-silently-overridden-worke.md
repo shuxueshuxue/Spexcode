@@ -1,7 +1,7 @@
 ---
 concern: spex new --launcher <name> silently overridden — worker bakes a different launcher than requested
 by: 3ed32096-2012-466d-b194-d6c96d4781dd
-status: open
+status: landed
 nodes: launch
 created: 2026-07-05T01:41:51.199Z
 ---

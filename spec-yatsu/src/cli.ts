@@ -1,12 +1,13 @@
 import { readFileSync, existsSync } from 'node:fs'
 import { join, relative, dirname } from 'node:path'
-import { repoRoot, headSha, driftIndex, historyIndex, stagedFiles, git } from '../../spec-cli/src/git.js'
+import { repoRoot, headSha, driftIndex, stagedFiles, git } from '../../spec-cli/src/git.js'
 import { loadSpecs } from '../../spec-cli/src/specs.js'
 import { loadConfig } from '../../spec-cli/src/lint.js'
 import { mainBranch, envSessionId, readRawRecord } from '../../spec-cli/src/layout.js'
 import { yatsuNodes, validateScenarios, YATSU_FILE, type YatsuNode } from './yatsu.js'
 import { readReadings, appendReading, latestPerScenario, evidenceOf, type Reading, type Verdict, type Evidence } from './sidecar.js'
 import { staleAxes } from './freshness.js'
+import { scenarioIndex } from './scenariofresh.js'
 import { loadEvalRemarkTracks, trackKey } from '../../spec-cli/src/issues.js'
 import { evaluatorTag } from './evaluator.js'
 import { putBlob, listBlobs, gc, isStrayBlob } from './cache.js'
@@ -85,7 +86,7 @@ async function scan(args: string[] = []): Promise<number> {
   const changedOnly = has(args, 'changed')
   const changed = changedOnly ? changedSinceBase(root) : null
   const idx = await driftIndex(root)
-  const hidx = await historyIndex(root)
+  const scidx = await scenarioIndex(root, yatsuNodes(root).map((n) => n.yatsuPath))
   const specs = await loadSpecs()
   // the non-git REMARK freshness axis ([[remark-teeth]]): the trunk remark track, read ONCE — the CLI is the
   // whole model, so `spex yatsu scan` shows a remark-stale scenario with no server running.
@@ -132,7 +133,7 @@ async function scan(args: string[] = []): Promise<number> {
           continue
         }
         const remSignals = (remarkTracks.get(trackKey(s.id, sc.name))?.remarks ?? []).map((rm) => ({ resolved: !!rm.resolved, resolvedAt: rm.resolvedAt }))
-        const axes = staleAxes(r, codeFiles, y.yatsuPath, idx, hidx, remSignals)
+        const axes = staleAxes(r, codeFiles, y.yatsuPath, idx, scidx, remSignals)
         if (axes.length) {
           staleScores++
           // a remark-stale scenario is unlocked by a second-party resolve, then a fresh reading; the git axes

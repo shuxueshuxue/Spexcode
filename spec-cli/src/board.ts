@@ -131,7 +131,7 @@ export async function buildBoard() {
   // evalContext reuses the specs + driftIndex above; evalTimeline short-circuits non-yatsu nodes. The
   // yatsu walk rides fs/promises ([[board-cache]]) so it yields the event loop instead of stalling /health.
   const ynodes = await yatsuNodesAsync(root)
-  const ectx = evalContext(root, specs, idx, hidx, undefined, ynodes)
+  const ectx = await evalContext(root, specs, idx, hidx, undefined, ynodes)
   await Promise.all(nodes.map(async (n) => {
     const tl = await evalTimeline(n.id, ectx)
     if (tl.hasYatsu) { n.evals = latestPerScenario(tl.readings); n.scenarios = slimScenarios(tl.scenarios) }

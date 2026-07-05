@@ -8,6 +8,7 @@ code:
   - spec-yatsu/src/yatsu.ts
   - spec-yatsu/src/sidecar.ts
   - spec-yatsu/src/freshness.ts
+  - spec-yatsu/src/scenariofresh.ts
   - spec-yatsu/src/cache.ts
   - spec-yatsu/src/evaluator.ts
   - spec-yatsu/src/filing.ts
@@ -70,11 +71,17 @@ legacy note-only reading — renders as *legacy*.
 three git-derived (a governed `code:` file changed, its scenario's *content* changed, or the evaluator
 version moved) plus a fourth, **non-git** axis, the REMARK ([[remark-teeth]]): an unresolved remark on the
 scenario ages it like a drift event, and a resolved one keeps it stale until a reading taken *after* the
-resolve exists. A bare `git mv` reparent is not a content change, so it never stales a reading: the scenario
-axis judges content the way a spec node's own freshness does, not the yatsu.md's path. Both git axes judge
-"changed since" by true ancestry ([[drift-by-ancestry]]): a commit stales the reading iff it is *not an
-ancestor* of its codeSha, and an off-history codeSha — orphaned by a rebase or on a never-merged branch
-alike — reads conservatively stale. No hashes kept; an
+resolve exists. The scenario-content axis is **per-scenario, not per-file**: because a scenario is the unit
+of measurement, a reading stales only when ITS OWN block (name/description/expected/tags/code) moved, never
+when a *sibling* scenario sharing the same yatsu.md did — so one file's routine growth (an added scenario, a
+neighbour's reword) can't spray false stale scores across every reading it holds. Git has no sub-file
+history, so this is built ([[scenariofresh]]): per scenario NAME, the commits where that block's content
+changed, rename-followed — a bare `git mv` reparent leaves the block byte-identical, so it records no change
+and never stales (the same content-not-path rule a reparented spec node follows). Both git axes then judge
+"changed since" by the SAME true ancestry ([[drift-by-ancestry]]) — the code axis over a governed file's
+commits, the scenario axis over that one scenario's block-change commits: a commit stales the reading iff it
+is *not an ancestor* of its codeSha, and an off-history codeSha — orphaned by a rebase or on a never-merged
+branch alike — reads conservatively stale. No hashes kept; an
 ack vindicates a *spec*, not a reading. `freshness.ts` stays a pure computation — the remark track is fed in
 at the call sites, never read from the issue store here.
 

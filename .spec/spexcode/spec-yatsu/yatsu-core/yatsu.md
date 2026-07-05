@@ -23,6 +23,18 @@ scenarios:
       scan reports a `yatsu-schema` finding naming each violation (unknown key, missing required
       field) and counts it under "N malformed"; check-staged prints the same violations and exits
       non-zero (blocking the commit), while a well-formed staged yatsu.md exits zero.
+  - name: sibling-edit-doesnt-stale
+    tags: [cli]
+    description: >-
+      Through the real `spex yatsu scan`: take a node whose yatsu.md holds several scenarios with fresh
+      readings, then commit a change to ONE scenario's block (edit it, or add a brand-new sibling
+      scenario) in that yatsu.md, leaving every other scenario's block byte-identical. Re-run
+      `spex yatsu scan`.
+    expected: >-
+      Only the scenario whose OWN block moved (or the newly-added one) is flagged `yatsu-drift` on the
+      scenario axis; every sibling whose block was untouched stays fresh. The scenario axis is
+      per-scenario, not per-file — a sibling's edit never re-stales this reading, so one yatsu.md's
+      routine growth no longer generates a wave of false stale scores.
 ---
 # yatsu.md — yatsu-core
 

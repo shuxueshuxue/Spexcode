@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { postRemark, putFrameBlob, specUrl } from './data.js'
 import { evidenceList } from './EvalsFeed.jsx'
-import { EvidenceItem } from './Evidence.jsx'
+import { EvidenceItem, FullscreenButton } from './Evidence.jsx'
 import { Replies, ReplyComposer, OriginatorLiveness, mmss, anchorLine, parseAnchor, resolveAnchor } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
 
@@ -49,6 +49,7 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite 
   const vid = useRef(null)
   const box = useRef(null)
   const seekRef = useRef(null)
+  const playerRef = useRef(null)   // the video+controls wrapper — the fullscreen target (controls stay usable)
   const seq = useRef(0)
   const [events, setEvents] = useState([])
   const [drag, setDrag] = useState(null)
@@ -360,16 +361,19 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite 
             </div>
           )}
 
-          {/* the video — the annotate-a-loop surface: circle-to-capture, custom review-track scrubber, ruler */}
+          {/* the video — the annotate-a-loop surface: circle-to-capture, custom review-track scrubber, ruler.
+              stage + control bar are ONE `an-player` wrapper so fullscreen carries the custom controls too
+              (native chrome is suppressed here, so the bar's fullscreen button is the only door to it). */}
           {videoEntry && (
             <>
+              <div className="an-player" ref={playerRef}>
               <div className={`an-stage ${playing ? 'playing' : 'paused'}`} ref={box} onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp}>
                 <video className="an-video" ref={vid} src={`/api/yatsu/blob/${videoEntry.hash}`} preload="metadata" playsInline />
                 {liveRect && <div className="an-rect live" style={{ left: `${liveRect.x}%`, top: `${liveRect.y}%`, width: `${liveRect.w}%`, height: `${liveRect.h}%` }} />}
                 {!playing && !drag && <div className="an-bigplay" aria-hidden>▶</div>}
               </div>
 
-              {/* the custom control bar — play/pause · review-track scrubber (comment markers + step bands) · time · live step */}
+              {/* the custom control bar — play/pause · review-track scrubber (comment markers + step bands) · time · live step · fullscreen */}
               <div className="an-bar">
                 <button className="an-play" onClick={togglePlay} title={playing ? t('annotator.pause') : t('annotator.play')}>{playing ? '⏸' : '▶'}</button>
                 <div className="an-seek" ref={seekRef} onMouseDown={onSeekDown} onMouseMove={onSeekHover} onMouseLeave={() => setHoverPct(null)}>
@@ -387,6 +391,8 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite 
                 </div>
                 <span className="an-time">{mmss(curMs)} / {mmss(durMs)}</span>
                 {activeStep && <span className="an-curstep" title={activeStep.node ? `→ ${activeStep.node}` : undefined}>{activeStep.step}</span>}
+                <FullscreenButton target={playerRef} />
+              </div>
               </div>
 
               {events.length > 0 && (

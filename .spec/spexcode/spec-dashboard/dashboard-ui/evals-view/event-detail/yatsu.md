@@ -62,6 +62,28 @@ scenarios:
       with the anchor in its prompt. The pane carries NO verdict-filing controls — no pass/fail bar, no
       verdict-note input, no file-reading button (readings are filed by agents via `spex yatsu eval`; the
       human judges through the remark composer). Switching selection resets the working draft.
+  - name: fullscreen-control-present
+    tags: [frontend-e2e]
+    code: [spec-dashboard/src/EventDetail.jsx, spec-dashboard/src/Evidence.jsx]
+    description: >
+      On #/evals, select a VIDEO reading. On the detail workspace's MEDIA STAGE, read the custom player's
+      control bar (`.an-bar`): does it carry a fullscreen control (`.an-fs`) alongside play/pause · scrubber
+      · time? Read the button's glyph (must NOT be an emoji — an inline SVG icon) and its title/aria-label.
+      Click it and read `document.fullscreenElement` — is it the player wrapper (`.an-player`, so the custom
+      scrubber/controls are still on screen), not just the bare `<video>`? Read the button's title again
+      (should flip to an exit label). Exit fullscreen (Esc) and confirm the element clears. Separately, on a
+      plain `<video controls>` home (a node eval-tab gallery clip, or a thread blob link) confirm NO extra
+      `.an-fs` is added — native controls already carry fullscreen (no doubled control).
+    expected: |
+      The custom review-track player — which SUPPRESSES native `<video>` chrome — carries an explicit
+      fullscreen control in its bar (`.an-fs`), rendered as an inline corner-bracket SVG (house icon style),
+      NO emoji glyph, with a 'fullscreen' title/aria-label. Clicking it calls requestFullscreen on the whole
+      player wrapper (`.an-player` = stage + control bar), so in fullscreen the video fills the screen AND
+      the custom scrubber/markers/time stay usable (keyboard scrubbing still drives it); the title flips to
+      'exit fullscreen' and the icon to the inward-bracket variant. Esc exits and `document.fullscreenElement`
+      clears. It is the ONE shared FullscreenButton (from Evidence.jsx), used ONLY where controls are
+      suppressed: a plain `<video controls>` gets fullscreen from its own native chrome and grows NO second
+      control — the fullscreen affordance is present on every video surface, never duplicated.
   - name: image-lightbox
     tags: [frontend-e2e]
     description: >

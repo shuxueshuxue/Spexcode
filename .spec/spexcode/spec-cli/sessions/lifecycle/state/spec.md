@@ -70,6 +70,13 @@ The surfaces compose the two without precedence: the badge shows lifecycle, whil
 shows the relaunch panel whatever the lifecycle** — a dead `asking` agent still needs you, now resumable —
 the sole exception being `queued`, which has not launched yet and self-starts as a slot frees.
 
+The **review** reading (an `awaiting` proposal, as the board and `spex watch` surface it) is the
+orthogonality in one example: review means the agent has *stopped active work* — mark-active flips it
+back to `active` on any agent tool action — and says nothing about liveness. Done-but-alive reads
+review+`online` (process alive, rendezvous socket open, the terminal mounts); done-exited reads
+review+`offline` (the relaunch panel). A stable review+`online` session genuinely exists — a doer
+proposes, then idles awaiting the merge — not just a test artifact.
+
 Offline is reachable on purpose, not only by a crash. **`exit`** is the human-only *soft stop* — the inverse
 of `reopen`: it kills the agent's tmux + rendezvous socket but **leaves the worktree, branch, transcript, and
 the global record**, so the session simply reads `offline` and the relaunch panel offers to `--resume` the same

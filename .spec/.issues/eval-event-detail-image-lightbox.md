@@ -1,7 +1,7 @@
 ---
 concern: eval: event-detail · image-lightbox
 by: human
-status: open
+status: landed
 nodes: event-detail
 created: 2026-07-04T08:15:10.509Z
 ---

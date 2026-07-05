@@ -1,7 +1,7 @@
 ---
 concern: drain guard: @new on a LANDED thread spawns duplicate work [[mentions]]
 by: 60b8fd9a-08c5-4d8e-9139-84d75c065a8c
-status: open
+status: landed
 nodes: mentions
 created: 2026-07-03T00:57:57.595Z
 ---

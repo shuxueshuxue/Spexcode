@@ -73,6 +73,20 @@ both call (not a branch inside the keep-alive guard) reaps the booted child firs
 async throw (a worktree vanishing mid-read during a worker self-merge, say) is logged and the process
 KEEPS SERVING rather than exiting and dropping the public port (and the tmux session) with it.
 
+**Connection reaping — abandoned sockets die server-side.** A backend that never reaps abandoned connections
+wedges even while its event loop is idle: a client that times out and kills its request leaks one server-side
+socket each time, and enough of them (135 were observed piling on the public port) starve the backend into
+*looking* dead while it is actually healthy — the trigger of the mass-restore cascade. Two layers close this,
+matched to what each server is. The **child** (and, in public mode, the **gateway**) is a real HTTP server, so
+it carries `keepAliveTimeout` / `headersTimeout` / `requestTimeout`: an idle keep-alive socket, a slow-header
+crawler, or a request whose body never completes is reaped by the HTTP layer — which reaps only IDLE/STALLED
+sockets, so an *active* WS/SSE response (the board-stream, the terminal socket) is never mistaken for
+abandoned and cut. The **supervisor** is a raw-TCP proxy, so its equivalent is pairing: a close on *either*
+half tears down *both* — the old handler bailed only on `error`, so a clean FIN or a silent client drop left
+the upstream half-open forever (the leak). A truly silent abandon that never sends FIN/RST is reaped from the
+child by its idle timeout, whose close then propagates back through the proxy — so no raw idle timeout is put
+on the proxy itself, which would blind it to a legitimately-idle WS/SSE.
+
 Read routes: `/api/board` (the assembled board — merged tree + per-worktree overlay + session list, the
 dashboard's single source, identical to `spex board`) and its push companion `/api/board/stream`
 ([[board-stream]]), an SSE that fires on session-store change so the dashboard reloads on real transitions

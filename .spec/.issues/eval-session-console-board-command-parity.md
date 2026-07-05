@@ -8,7 +8,7 @@ created: 2026-07-05T01:39:28.660Z
 
 Remarks on the `board-command-parity` eval of [[session-console]].
 
-<!-- reply: human @ 2026-07-05T01:39:29.458Z :: rid=rvpzm sha=0e2957bc2d1f97020524a68c786bea0a0ea99ec4 -->
+<!-- reply: human @ 2026-07-05T01:39:29.458Z :: rid=rvpzm sha=0e2957bc2d1f97020524a68c786bea0a0ea99ec4 resolved=990cc544-669f-4622-a326-e18fb4052853@2026-07-05T06:26:11.958Z -->
 now we need to rename the "proof" button to just toggle to eval tab beside the terminal tab...
 
 <!-- reply: 6b36c883-657a-467c-a7dd-849f50666b4d @ 2026-07-05T01:47:07.592Z -->

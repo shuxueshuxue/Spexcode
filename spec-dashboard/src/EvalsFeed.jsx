@@ -71,9 +71,12 @@ const rel = (ts) => {
 
 // `nodes`: the board node list, threaded down from the app's one poll. `sel`/`onSel`: the page's single
 // selection (the detail pane follows it). `onRows`: reports the VISIBLE entries upward so the page's
-// j/k walks this list — filter state stays this group's own. The group carries no title of its own —
-// the [[side-nav]] rail names the Evals page; this list renders just its filter chipbar.
-export default function EvalsGroup({ nodes = [], sel, onSel, onRows }) {
+// j/k walks this list — filter state stays this group's own. `mustShow`: an entryKey a deep link needs
+// visible ([[evals-view]]'s canonical URL) — if the entry exists but the kind filter hides it, the group
+// widens ITS OWN filter to 'all' (the filter stays this group's state; the page never reaches in). The
+// group carries no title of its own — the [[side-nav]] rail names the Evals page; this list renders just
+// its filter chipbar.
+export default function EvalsGroup({ nodes = [], sel, onSel, onRows, mustShow = null }) {
   const t = useT()
   const [kind, setKind] = useState(null)          // null = the default: video → image → all, first kind present
   const [staleOnly, setStaleOnly] = useState(false)   // opt-in NARROWING, never a default hide
@@ -92,6 +95,15 @@ export default function EvalsGroup({ nodes = [], sel, onSel, onRows }) {
   const staleN = all.filter((e) => !e.fresh).length
 
   useEffect(() => { onRows?.(rows) }, [rows, onRows])
+
+  // a deep-linked eval hidden by the current filters un-hides itself: widen the kind chip to 'all' (and
+  // drop the stale narrowing) so the canonical URL always renders its eval — but only when the entry
+  // actually exists; a bad address changes nothing.
+  useEffect(() => {
+    if (!mustShow) return
+    if (rows.some((e) => entryKey(e) === mustShow)) return
+    if (all.some((e) => entryKey(e) === mustShow)) { setKind('all'); setStaleOnly(false) }
+  }, [mustShow, rows, all])
 
   return (
     <section className="fv-group">

@@ -984,6 +984,9 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .fv-list-col { position: relative; min-height: 0; display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid var(--line); background: var(--paper); }
 .fv-list-col > .fv-notice { flex: none; }
 .fv-list-col > .fv-group { flex: 1 1 auto; min-height: 0; overflow-y: auto; border-top: 0; }
+/* a multi-section list (the session Eval tab's per-node groups) scrolls as ONE box under the col. */
+.fv-list-col > .fv-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.fv-list-col > .fv-scroll .fv-group { border-top: 0; }
 /* the fold toggle rides the sticky filter bar's right edge; the bar reserves room for it. */
 .fv-list-col .fv-group-head { padding-right: 34px; }
 .fv-fold { position: absolute; top: 7px; right: 6px; z-index: 3; font: inherit; font-size: 11px; line-height: 1;
@@ -1678,9 +1681,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .se-gate.bad { color: var(--red); border-color: color-mix(in srgb, var(--red) 40%, var(--line)); }
 .se-export { margin-left: auto; font-family: var(--mono); font-size: 10.5px; color: var(--blue); text-decoration: none; }
 .se-export:hover { text-decoration: underline; }
-.se-master { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(260px, 340px) 1fr; }
-.se-list { min-height: 0; overflow-y: auto; border-right: 1px solid var(--line); }
-.se-detail { min-height: 0; overflow-y: auto; }
+/* the master-detail below the gates is the SHARED shell (.fv-master, [[evals-view]]) — no session-only clone. */
 .se-blind .ef-scenario { color: var(--muted); }
 .se-warn { font-family: var(--mono); font-size: 10px; color: var(--orange); }
 .ef-insession { color: var(--blue); font-size: 10px; flex: none; }

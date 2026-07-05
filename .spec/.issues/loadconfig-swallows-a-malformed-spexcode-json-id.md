@@ -1,7 +1,7 @@
 ---
 concern: loadConfig swallows a MALFORMED spexcode.json identically to an absent one — user's lint budgets silently vanish, bending fail-loudly
 by: 4b64d4ad-7844-4e32-a308-b4d33b25ccb8
-status: open
+status: landed
 nodes: spec-lint
 created: 2026-07-04T03:21:52.297Z
 ---

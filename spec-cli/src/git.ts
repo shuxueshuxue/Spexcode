@@ -139,14 +139,35 @@ function parseStatPath(token: string): { from: string; to: string } {
   return { from: token, to: token }
 }
 
-let indexCache: { head: string; idx: HistoryIndex } | null = null
+// Both bulk indices are pure functions of a checkout's HEAD, and they are read for SEVERAL roots at
+// once — the backend checkout (board, loadSpecs) plus every session worktree ([[review-proof]]'s eval
+// tab roots its readings at the session's branch). A single-slot cache thrashes between those roots:
+// each eval-tab request evicts the board's entry and vice versa, so every request re-runs a full-history
+// `git log` and re-parses it on the event loop — which is what starves every other request (the board,
+// remark posts) under load. So the cache is a small LRU keyed by HEAD (same head ⇒ same index, whatever
+// the root), holding the in-flight PROMISE so concurrent requests for one head share a single build.
+const INDEX_SLOTS = 16
+function lruGet<V>(m: Map<string, V>, k: string): V | undefined {
+  const v = m.get(k)
+  if (v !== undefined) { m.delete(k); m.set(k, v) }   // refresh recency
+  return v
+}
+function lruPut<V>(m: Map<string, V>, k: string, v: V): void {
+  m.set(k, v)
+  while (m.size > INDEX_SLOTS) m.delete(m.keys().next().value!)
+}
 
-export async function historyIndex(root: string): Promise<HistoryIndex> {
+const indexCache = new Map<string, Promise<HistoryIndex>>()
+
+export function historyIndex(root: string): Promise<HistoryIndex> {
   const head = headOrEmpty(root)
-  if (indexCache && head && indexCache.head === head) return indexCache.idx
-  const idx = await buildIndex(root)
-  if (head) indexCache = { head, idx }
-  return idx
+  if (!head) return buildIndex(root)
+  const hit = lruGet(indexCache, head)
+  if (hit) return hit
+  const p = buildIndex(root)
+  p.catch(() => { indexCache.delete(head) })   // don't pin a failed build
+  lruPut(indexCache, head, p)
+  return p
 }
 
 // resolve HEAD for cache-keying, '' if unreadable (fails the cache test → recompute); warns once.
@@ -238,7 +259,7 @@ export async function fileDiffAt(root: string, relPath: string, hash: string): P
   return gitA(['-C', root, '-c', 'core.quotePath=false', 'show', '-M', '--format=', hash, '--', at])
 }
 
-// ONE cached `git log` over HEAD (mirrors historyIndex), enriched with parent edges so "newer than
+// A cached `git log` over HEAD (HEAD-keyed like historyIndex), enriched with parent edges so "newer than
 // the spec" is answered by true DAG reachability, never by a log-position/date compare (a linear
 // order can't encode a branching history's partial order and silently under-reports — back-dated
 // branches, adoption). driftFor()/ancestorsOf() are then pure in-memory lookups. `acks`/`specNodes`
@@ -252,7 +273,7 @@ export type DriftIndex = {
   specNodes: Map<string, Set<string>> // commit hash -> node ids whose spec.md it touched (its versions)
   anc: Map<string, Uint8Array>        // memoized reachability bitsets, lazily built per queried sha
 }
-let driftIdxCache: { head: string; idx: DriftIndex } | null = null
+const driftIdxCache = new Map<string, Promise<DriftIndex>>()   // HEAD-keyed LRU, same shape as indexCache above
 
 async function buildDriftIndex(root: string): Promise<DriftIndex> {
   const ord = new Map<string, number>(), parents = new Map<string, string[]>()
@@ -290,12 +311,15 @@ async function buildDriftIndex(root: string): Promise<DriftIndex> {
   }
   return idx
 }
-export async function driftIndex(root: string): Promise<DriftIndex> {
+export function driftIndex(root: string): Promise<DriftIndex> {
   const head = headOrEmpty(root) // filesystem HEAD, no subprocess — see historyIndex
-  if (driftIdxCache && head && driftIdxCache.head === head) return driftIdxCache.idx
-  const idx = await buildDriftIndex(root)
-  if (head) driftIdxCache = { head, idx }
-  return idx
+  if (!head) return buildDriftIndex(root)
+  const hit = lruGet(driftIdxCache, head)
+  if (hit) return hit
+  const p = buildDriftIndex(root)
+  p.catch(() => { driftIdxCache.delete(head) })
+  lruPut(driftIdxCache, head, p)
+  return p
 }
 // the reachability set of `sha` — itself plus every ancestor — as a bitset over the walk's dense ids.
 // Built once per queried sha by following parent edges in memory (no git fork), memoized on the index;

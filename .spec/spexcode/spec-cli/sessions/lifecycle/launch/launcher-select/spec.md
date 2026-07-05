@@ -2,7 +2,7 @@
 title: launcher-select
 status: active
 hue: 280
-desc: A session picks a NAMED launcher profile at create time — a `{ harness, cmd }` pair from config — and that choice is PERSISTED on its record, so resume/relaunch reuses the same command (and the same auth) instead of re-resolving the global default.
+desc: A session picks a NAMED launcher profile at create time — a `{ harness, cmd }` pair from config — and the RESOLVED command is PINNED on its record, so resume/relaunch replays the exact same launcher (its command, auth, and config-dir env) instead of re-resolving a since-changed default.
 related:
   - spec-cli/src/harness.ts
   - spec-cli/src/sessions.ts
@@ -49,13 +49,25 @@ stays clean. The wrong-launcher confusion (a human "testing claude-glm" quietly 
 already closed at the point it matters — the create-time picker honoring `defaultLauncher` (above) — not by
 after-the-fact badging.
 
-**Correctness — the choice is persisted, not re-resolved.** The launch command used to be re-resolved
-globally at every launch (env → config → default), so a session created under an API-key launcher would
-silently become a login session on resume the moment the backend's env or default differed. The fix: the
-chosen launcher NAME is stored on the session record ([[sessions-core]]'s `launcher` field) and consulted at
-EVERY launch — first launch, drain, and `reopen`/relaunch alike — resolving that named profile's `cmd`
-(bypassing the env default) so the same auth path is reused for the life of the session. A record with no
-launcher (an old session, or a zero-config default launch) falls back to the current global resolution, so
-nothing pre-dating this node changes behavior. The per-session command reaches the agent through the
-[[harness-adapter]]'s `launchCmd`, which now accepts the resolved command as an override rather than always
-reading the global default — the ONE seam where a launcher's identity overrides the ambient default.
+**Correctness — the RESOLVED command is pinned, not re-resolved (the resume-launcher-pin).** The launch
+command used to be re-resolved globally at every launch (env → config → default), so a session created under
+an API-key launcher would silently become a login session on resume the moment the backend's env or default
+differed. Storing the launcher NAME alone did not fully close this: an UNNAMED session (a zero-config default
+launch) has no name to reuse and STILL re-resolved ambiently, and even a named launcher whose `cmd` config
+later changed would resume under the NEW command. This is not cosmetic — the launcher command carries the
+agent's **config-dir env** (claude's `CLAUDE_CONFIG_DIR`, codex's `CODEX_HOME`), and that dir is where the
+conversation transcript lives. A drifted launcher sends `--resume` at the WRONG config dir and the conversation
+is simply not found ("No conversation found") — the failure that, under a backend restart onto a different
+default launcher, silently broke every resume in the mass-restore incident (victims' `launch.sh` rewritten to a
+different launcher while their transcripts lived under the original's config dir).
+
+So the launch owner PINS the **resolved base launcher command** on the record at creation ([[sessions-core]]'s
+`launchCmd` field, resolved via the [[harness-adapter]]'s `baseCmd`), and EVERY launch — first launch, drain,
+and `reopen`/relaunch alike — replays THAT exact command. The pin subsumes both axes: a named launcher's
+resolved `cmd` and an unnamed launch's ambient resolution are both frozen at birth, so the session resumes
+under the identical launcher (and identical config dir) for its whole life, immune to any later change of the
+default or of the launcher's own config. The launcher NAME is still stored (for display and as the pre-pin
+fallback); a record with neither a pinned command nor a name (a truly old session) falls back to the current
+ambient resolution, so nothing pre-dating this changes behavior. The pinned command reaches the agent through
+`launchCmd`, which builds its invocation ON TOP of this base — the ONE seam where a session's frozen launcher
+identity overrides the ambient default.

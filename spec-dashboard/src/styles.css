@@ -1333,6 +1333,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .si-offline-msg { font-size: 15px; color: var(--ink2); }
 .si-offline-sub { font-size: 12px; color: var(--muted); max-width: 460px; line-height: 1.6; }
 .si-offline-sub code { color: var(--blue); background: var(--panel2); padding: 0 4px; border-radius: 3px; }
+.si-offline-err { margin-top: 10px; font-size: 12px; color: var(--yellow); max-width: 460px; line-height: 1.55; border: 1px solid var(--yellow); border-radius: 4px; padding: 8px 10px; background: var(--panel2); }
 
 /* ============================================================================
    MOBILE INTERFACE (MobileApp) — the touch-first face. Only mounted on a phone

@@ -332,7 +332,15 @@ app.get('/api/sessions/:id/prompt', async (c) => {
   return p == null ? c.text('no prompt recorded', 404) : c.text(p)
 })
 // lifecycle transitions (thin callers of the session state machine)
-app.post('/api/sessions/:id/resume', async (c) => c.json({ ok: await reopen(c.req.param('id')) }))   // relaunch if offline; demotes working→idle, keeps any declaration
+// relaunch ONLY if confirmed offline; demotes working→idle, keeps any declaration. The RESUME GUARD refuses
+// (409) when the agent is alive or its liveness is unproven — restore-on-alive was the incident's kill-shot.
+// `force` (query ?force=1 or JSON {force:true}) overrides for a wedged-but-alive process.
+app.post('/api/sessions/:id/resume', async (c) => {
+  const body = await c.req.json().catch(() => ({} as { force?: boolean }))
+  const force = body?.force === true || c.req.query('force') === '1'
+  const r = await reopen(c.req.param('id'), { force })
+  return c.json(r, r.ok ? 200 : (r.refused ? 409 : 404))
+})
 // a dispatch to the session's own agent (it runs the merge), never a server merge — the server never touches
 // main's tree. 200 {dispatched:true} once the prompt is accepted, 409 {dispatched:false} if the agent is unreachable.
 app.post('/api/sessions/:id/merge', async (c) => {

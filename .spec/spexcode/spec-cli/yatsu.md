@@ -31,6 +31,24 @@ scenarios:
       crash under dashboard.
     code: [spec-cli/src/listen.ts, spec-cli/src/supervise.ts]
     related: spec-cli/src/gateway.ts
+  - name: server-reaps-abandoned-connections
+    tags: [backend-api]
+    description: >-
+      Drive the connection-reaping contract through the REAL backend. Start the child server, then open a raw
+      socket that sends PARTIAL headers and never completes the request (an abandoned/slow client — the shape
+      every client-side timeout-kill leaves behind), and observe when the SERVER closes it. Separately, confirm
+      an ACTIVE long-lived response is NOT reaped: open the board-stream SSE (`/api/board/stream`) and hold it
+      idle past the timeout — it must stay open. File the transcript with `spex yatsu eval spec-cli --scenario
+      server-reaps-abandoned-connections --result <txt> --pass`.
+    expected: >-
+      The stalled/partial request is REAPED server-side (the server closes the socket) at ~headersTimeout,
+      never left to linger indefinitely / to the multi-minute Node default — so abandoned connections cannot
+      pile up and wedge the backend (the 135-conn starvation that started the mass-restore cascade). The active
+      board-stream SSE is UNTOUCHED (an active response is not idle keep-alive), so a real dashboard's live
+      stream is never severed by the reaper. The raw-TCP supervisor proxy propagates a close on either half to
+      both, so a reaped upstream frees its public-side socket too.
+    code: [spec-cli/src/index.ts, spec-cli/src/supervise.ts]
+    related: spec-cli/src/gateway.ts
   - name: board-conditional-request
     tags: [backend-api]
     description: >-

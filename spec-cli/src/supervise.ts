@@ -106,6 +106,14 @@ async function reload(reason: string): Promise<void> {
 }
 
 // the public port: a raw byte pipe to the current backend. Works for HTTP and WS upgrades alike.
+// @@@ connection reaping ([[spec-cli]]) - a raw TCP proxy must tear down the PAIR when EITHER end goes, or it
+// leaks the still-open half. The wedge that started the mass-restore incident was exactly this: every
+// client-side timeout-kill left the client's UPSTREAM socket half-open to the child (the old handler bailed
+// only on `error`, so a clean FIN / a silent drop never reaped the upstream) — 135 leaked conns piled on the
+// child and it looked dead. So a close on either side destroys BOTH (idempotent). The abandoned-but-silent
+// case (no FIN/RST ever arrives) is reaped from the CHILD instead — its HTTP keepAliveTimeout/requestTimeout
+// close an idle/stalled socket, whose close then propagates here — so an active WS/SSE (not idle keep-alive)
+// is never mistaken for abandoned and cut.
 const proxy = net.createServer((client) => {
   const target = current
   if (!target) { client.destroy(); return }
@@ -113,6 +121,12 @@ const proxy = net.createServer((client) => {
   client.setNoDelay(true); up.setNoDelay(true)   // proxy a request promptly — don't let Nagle add latency
   const bail = () => { client.destroy(); up.destroy() }
   client.on('error', bail); up.on('error', bail)
+  client.once('close', () => up.destroy())   // client abandoned → reap its upstream (THE leak that wedged :8787); nothing left to flush to a gone client
+  // upstream gone → drop the client half, but ONLY force it when the close was ABNORMAL: on a normal FIN,
+  // `up.pipe(client)` has already called `client.end()` (writableEnded), so let the client flush the last of a
+  // large response (e.g. /api/board) rather than truncate it with a destroy; a crash/half-open close (no prior
+  // end) still gets reaped.
+  up.once('close', () => { if (!client.writableEnded) client.destroy() })
   client.pipe(up); up.pipe(client)
 })
 

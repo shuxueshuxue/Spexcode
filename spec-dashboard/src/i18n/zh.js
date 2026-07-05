@@ -73,6 +73,8 @@ export default {
     keys: '空格 播放/暂停 · ←→ 5秒（⇧ 1秒）· , . 逐帧 · ↑↓ 跳评论 · a 标注当前帧',
     play: '播放',
     pause: '暂停',
+    fullscreen: '全屏',
+    exitFullscreen: '退出全屏',
     capturing: '正在截取画面…',
     failed: '失败 — 后端在跑吗？',
     comments: ({ n }) => (n ? `评审轨道（${n}）` : '评审轨道'),

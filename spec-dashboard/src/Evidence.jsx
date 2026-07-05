@@ -53,6 +53,49 @@ function EvidenceImage({ hash, alt }) {
   )
 }
 
+// The ONE shared FULLSCREEN control ([[event-detail]]) — used wherever a media surface SUPPRESSES the
+// native `<video controls>` chrome (the annotator's custom review-track player), so a suppressed player
+// still offers fullscreen. Never duplicated where native controls already provide it (Evidence's plain
+// `<video controls>` below). It fullscreens the `target` element (the whole player wrapper, so the custom
+// scrubber/controls stay usable in fullscreen), toggling on the standard Fullscreen API with the WebKit
+// fallback for Safari viewers. The glyph is an inline corner-bracket SVG (house icon style), no emoji.
+function FullscreenIcon({ exit }) {
+  return (
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {exit
+        ? <><path d="M6 2v4H2" /><path d="M10 2v4h4" /><path d="M6 14v-4H2" /><path d="M10 14v-4h4" /></>
+        : <><path d="M2 6V2h4" /><path d="M14 6V2h-4" /><path d="M2 10v4h4" /><path d="M14 10v4h-4" /></>}
+    </svg>
+  )
+}
+
+export function FullscreenButton({ target, className = '' }) {
+  const t = useT()
+  const [fs, setFs] = useState(false)
+  useEffect(() => {
+    const on = () => {
+      const fsEl = document.fullscreenElement
+      const el = target?.current
+      setFs(!!fsEl && !!el && (fsEl === el || el.contains(fsEl)))
+    }
+    document.addEventListener('fullscreenchange', on)
+    return () => document.removeEventListener('fullscreenchange', on)
+  }, [target])
+  const toggle = () => {
+    const el = target?.current
+    if (!el) return
+    if (document.fullscreenElement) (document.exitFullscreen || document.webkitExitFullscreen)?.call(document)
+    else (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el)
+  }
+  return (
+    <button type="button" className={`an-fs ${className}`} onClick={toggle}
+      title={fs ? t('annotator.exitFullscreen') : t('annotator.fullscreen')}
+      aria-label={fs ? t('annotator.exitFullscreen') : t('annotator.fullscreen')}>
+      <FullscreenIcon exit={fs} />
+    </button>
+  )
+}
+
 // one evidence entry rendered by its kind — a transcript pulls its text, a video plays inline, an image
 // shows (click-to-enlarge); a pruned entry (state 'miss') is the honest sentinel, never a broken media box.
 export function EvidenceItem({ e, alt = '' }) {

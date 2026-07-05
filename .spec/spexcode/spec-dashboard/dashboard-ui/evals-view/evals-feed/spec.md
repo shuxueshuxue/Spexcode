@@ -32,7 +32,12 @@ to `video`, falling back to `image` when no reading *contains* a video and to `a
 present. The **stale chip is the INVERSE of a hide** — an opt-in narrowing: off shows everything; on shows
 *only* stale readings (drill into the outstanding drift), and it carries the live stale count. The chips
 (video | image | note | all, the stale toggle) live in this group's sticky head and are this group's own
-state — [[evals-view]] owns the page shell (split, selection, j/k), never this group's filters.
+state — [[evals-view]] owns the page shell (split, selection, j/k), never this group's filters. One
+deliberate exception rides that ownership the RIGHT way round: a **deep-linked eval the current filters
+would hide** ([[evals-view]]'s canonical `#/evals/<node>/<scenario>` address) is handed down as a
+`mustShow` key, and the group widens **its own** filter to `all` (dropping the stale narrowing) so the
+address always renders its eval — the page never reaches into the group's filter state, and an address
+naming no real eval changes nothing.
 
 **Kinds are honest — and a reading now carries a SET of them.** Evidence is a LIST, so a reading's kinds are
 every entry it holds: `video`/`image`/`transcript` (a legacy scalar blob with no recorded kind is an image —

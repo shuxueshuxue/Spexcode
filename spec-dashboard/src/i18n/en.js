@@ -74,6 +74,8 @@ export default {
     keys: 'space play/pause · ←→ 5s (⇧ 1s) · , . frame · ↑↓ jump comment · a annotate frame',
     play: 'play',
     pause: 'pause',
+    fullscreen: 'fullscreen',
+    exitFullscreen: 'exit fullscreen',
     capturing: 'capturing frame…',
     failed: 'failed — is the backend up?',
     comments: ({ n }) => (n ? `review track (${n})` : 'review track'),

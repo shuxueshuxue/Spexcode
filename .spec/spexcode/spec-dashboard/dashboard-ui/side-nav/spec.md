@@ -29,13 +29,18 @@ pages**, side by side with the graph and the board.
   tooltips/aria (i18n'd), so the rail stays slim and the pages keep their space. The rail is chrome, not a
   page — it never scrolls away and never overlays content.
 - **The URL is the page state.** Routes are hash paths — `#/graph` (home; any unknown hash lands here),
-  `#/sessions` (+ `#/sessions/<sel>` deep-linking a tab), `#/evals`, `#/issues`, `#/settings`. Hash,
+  `#/sessions` (+ `#/sessions/<sel>` deep-linking a tab), `#/evals` (+ `#/evals/<node>/<scenario>`, the
+  canonical eval address — [[evals-view]] owns what it selects; the route layer just carries the
+  multi-segment param, each segment encoded on its own so the path shape survives), `#/issues`,
+  `#/settings`. Hash,
   deliberately not the History API: the dashboard ships as a static dist behind plain gateways with no
   index.html fallback, and a hash route needs nothing from any server. Five pages need no router
   dependency — `route.js` is the whole layer (parse, navigate, one hashchange hook).
 - **Pages push, details replace.** Switching pages pushes a history entry (back walks pages); an
-  in-page detail echo — the session board's selected tab — replaces, so tab-hopping never buries
-  history. The echo makes every board tab a shareable address without making it a history landmine.
+  in-page detail echo — the session board's selected tab, the evals page's selected eval — replaces, so
+  detail-hopping never buries
+  history. The echo makes every board tab and every shown eval a shareable address without making it a
+  history landmine.
 - **Pages are peers, not layers.** Navigation swaps which page fills the main area beside the rail;
   nothing dims or floats. Surfaces that must stay warm across switches (the graph's camera, the session
   board's live terminals) stay mounted and display-toggled — a route change may never cost a terminal

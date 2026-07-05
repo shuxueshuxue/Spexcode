@@ -92,34 +92,36 @@ scenarios:
     description: >
       Through the running dashboard in a real browser, open the session interface (Enter) on a session in the
       REVIEW state (so nav + merge apply). (1) Read the tab bar: on the LEFT two tabs — Terminal (default) and
-      Proof; on the RIGHT the action row shows two small TEXT buttons — nav, merge — with NO leading glyph/emoji
-      (no ⌨ keyboard, no ◆ diamond), each in a distinct colour, and NO "proof" button (proof is a TAB now, not an
-      action). (2) On the Terminal tab, in the `❯` inbox type `/` and read the completion menu: the board's own
-      commands (`/nav`, `/proof`, `/merge`, `/exit`, `/close`) lead the list, each `/name` and its `[board]` tag
+      Eval; on the RIGHT the action row shows two small TEXT buttons — nav, merge — with NO leading glyph/emoji
+      (no ⌨ keyboard, no ◆ diamond), each in a distinct colour, and NO eval button (the eval is a TAB, not an
+      action) — and the word "proof" appears nowhere in the UI. (2) On the Terminal tab, in the `❯` inbox type
+      `/` and read the completion menu: the board's own
+      commands (`/nav`, `/eval`, `/merge`, `/exit`, `/close`) lead the list, each `/name` and its `[board]` tag
       painted its identity colour, visibly apart from Claude Code's blue command rows. Now narrow the query —
       type `/exit`, a name Claude Code ALSO ships: confirm the menu shows `/exit` exactly ONCE (the board's
       coloured row), not a duplicate pair, and that each row's description reads as a sentence (first letter
       capitalised, e.g. "Exit — stop the agent…", not "exit — …").
-      (3) Type `/proof` and Enter: the view switches to the Proof tab and the proof renders inline — identical
-      to clicking the Proof tab; switch back to Terminal and click the Proof tab to confirm the SAME inline
-      proof. (4) Type `/nav` and Enter: nav mode engages (the `❯` box becomes the nav indicator AND the nav
+      (3) Type `/eval` and Enter: the view switches to the Eval tab and the evaluation renders inline — identical
+      to clicking the Eval tab; switch back to Terminal and click the Eval tab to confirm the SAME inline
+      view. (4) Type `/nav` and Enter: nav mode engages (the `❯` box becomes the nav indicator AND the nav
       button shows its active `.on` state); click the nav button to toggle it back off. Screenshot the tab bar
       and the `/` menu.
     expected: |
       The action-row buttons are text-only (no glyphs/emoji) and colour-coded — nav yellow (var --yellow =
-      rgb(181,137,0)) and merge green (var --green = rgb(133,153,0)); there is NO proof button — Proof is a
-      permanent TAB (blue underline when active), always available, not a review-gated action.
+      rgb(181,137,0)) and merge green (var --green = rgb(133,153,0)); there is NO eval button — Eval is a
+      permanent TAB (blue underline when active), always available, not a review-gated action — and no UI
+      surface says "proof" (the tab, the command, and its menu description all say eval).
       In the `/` menu the five board commands lead, each name + `[board]` tag in its identity colour — the
-      SAME hue as its button where it has one (nav yellow, merge green), with `/proof` still cyan (var --cyan =
+      SAME hue as its button where it has one (nav yellow, merge green), with `/eval` still cyan (var --cyan =
       rgb(42,161,152)) even though it now drives a TAB, not a button; the two button-less terminal verbs split
       by destructiveness — exit muted grey (var --muted = rgb(147,161,161), the dormant/offline hue it sends the
       session to) and close red (var --red = rgb(220,50,47), the worktree removal) — while CC's commands stay
       blue (rgb(38,139,210)); one element, one colour in both places. A name the board owns that Claude Code
       also ships (`/exit`) appears exactly ONCE — the board's row overrides CC's twin, never a duplicate pair —
-      and every row's description reads as a capitalised sentence. Typing `/proof` switches to the Proof tab and
-      shows the same inline proof the tab click does (one shared tab-state); typing `/nav` toggles nav mode
+      and every row's description reads as a capitalised sentence. Typing `/eval` switches to the Eval tab and
+      shows the same inline view the tab click does (one shared tab-state); typing `/nav` toggles nav mode
       exactly as the nav button does, and the button reflects that same state. A board command is never
-      dispatched to the agent — its line is intercepted and the draft cleared — so no `/proof`/`/nav` text reaches the pane.
+      dispatched to the agent — its line is intercepted and the draft cleared — so no `/eval`/`/nav` text reaches the pane.
   - name: status-word-colour
     tags: [frontend-e2e, desktop]
     description: >

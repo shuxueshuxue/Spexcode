@@ -42,7 +42,7 @@ diff and both file versions are there to jump into, no extra fetch.
 
 **The faces split by purpose — the interactive face is the eval component family, the artifact is the
 export.** The dashboard's face is the console right pane's **Eval tab** (Terminal / Eval; the typed
-`/proof` board command still switches to it): the THIRD scope of the ONE eval component family — the node
+`/eval` board command switches to it): the THIRD scope of the ONE eval component family — the node
 popup reads one node, the Evals page reads the project, this tab reads *this session* — the same rows, the
 same [[event-detail]] detail, inside the SAME master-detail shell the Evals page renders ([[evals-view]]'s
 shared `EvalMasterDetail`: the split, the fold-to-a-strip, the j/k walk — no session-only clone of the

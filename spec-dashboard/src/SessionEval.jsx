@@ -64,7 +64,7 @@ export default function SessionEvalPane({ sessionId, specs = [], sessions = [] }
   const selEntry = visible.find((v) => v.key === effSel)
 
   if (model === null) return <div className="fv-note">{t('common.loading')}</div>
-  if (model === false) return <div className="fv-note">{t('proof.none')}</div>
+  if (model === false) return <div className="fv-note">{t('sessionEval.none')}</div>
 
   const detail = selEntry?.kind === 'eval'
     ? <EventDetail entry={selEntry.item} specs={specs} sessions={sessions} onWrite={loadModel} />

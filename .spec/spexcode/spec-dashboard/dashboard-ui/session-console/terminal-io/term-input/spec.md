@@ -25,8 +25,8 @@ realised wherever a live terminal sits beside spec navigation.
   agent. Dispatch is **fail-loud**: a failed send restores the draft and flags the error rather than
   pretend it sent. A **set of `/` commands never reaches the agent** — the *board* commands, handled by
   the dashboard itself: `/exit` stops the session but **keeps** its worktree (it goes offline, resumable),
-  `/close` removes the worktree (the no-prompt discard), `/merge` merges it, `/nav` toggles nav mode, `/proof`
-  opens the proof. Each is the **typed twin of a header button** — drawn from
+  `/close` removes the worktree (the no-prompt discard), `/merge` merges it, `/nav` toggles nav mode, `/eval`
+  opens the Eval tab. Each is the **typed twin of a header button** — drawn from
   **one registry**, so the command and its button are one action, one identity colour, and can never
   drift. Sending these words to a live agent would only drive the agent's own process, not the board.
   Realised in [[session-console]].
@@ -50,7 +50,7 @@ not a hint toward one.
 - **`/` on the New Session prompt — the config presets** (our own bespoke preset set), *not* Claude
   Code's palette.
 - **`/` on a running session's `❯` inbox — the board commands, then Claude Code's own `/` menu.** The
-  board's own commands (`/exit`·`/close`·`/merge`·`/nav`·`/proof`) **lead** the list, each in its **identity
+  board's own commands (`/exit`·`/close`·`/merge`·`/nav`·`/eval`) **lead** the list, each in its **identity
   colour** with a `[board]` tag, visibly apart from CC's blue command rows below — because there you talk
   to a live agent (CC commands make sense), but the board commands act HERE on the dashboard.
 

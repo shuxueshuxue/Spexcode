@@ -1,7 +1,7 @@
 ---
 concern: spex review crashes cross-version — gates payload rendered without defense
 by: f45d649c-0ef4-4a52-a3fc-223fc0da6e43
-status: open
+status: landed
 nodes: manager-cockpit
 created: 2026-07-02T16:27:07.538Z
 ---

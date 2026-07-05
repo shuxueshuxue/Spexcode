@@ -5,7 +5,7 @@ scenarios:
     description: >
       Open the dashboard in a browser pointed at a live backend. Confirm the root shell mounts: the
       left navigation rail is visible, the spec-graph view renders the project's node tree as tiles
-      with the HUD/brand strip visible, and switching to the session-board page (rail or Enter) and
+      with the HUD/brand strip visible, and switching to the session-board page (via the nav rail) and
       back works, the URL hash tracking each switch. Watch the browser console for errors.
     expected: >
       The graph renders the root node and its children with the rail + HUD present; both top-level pages

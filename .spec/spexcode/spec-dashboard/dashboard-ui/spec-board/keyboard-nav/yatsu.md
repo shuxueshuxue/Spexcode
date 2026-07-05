@@ -1,5 +1,20 @@
 ---
 scenarios:
+  - name: enter-opens-info-not-session-board
+    tags: [frontend-e2e, desktop]
+    description: >-
+      Open the dashboard on the spec node graph (no popup open). Press `Enter` with a node focused.
+      The node-info popup opens over the graph — exactly as pressing `i` does — and the page stays on
+      the graph route (`#/`); it does NOT navigate to the Session Board (`#/sessions`). Screenshot the
+      board with the info popup open and file with
+      `spex yatsu eval keyboard-nav --scenario enter-opens-info-not-session-board --image <png> --pass`.
+    expected: >-
+      From the graph, Enter is a plain alias for the info key `i`: it opens the node-info popup on the
+      focused node and the route stays on the graph. Enter no longer crosses to the Session Board — that
+      crossing is now only the popup's own Enter, once the popup is open.
+    code:
+      - spec-dashboard/src/App.jsx
+      - spec-dashboard/src/keymap.js
   - name: click-does-not-pan-keyboard-does
     tags: [frontend-e2e, desktop]
     description: >-

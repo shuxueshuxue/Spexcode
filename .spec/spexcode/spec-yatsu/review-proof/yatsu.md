@@ -10,11 +10,27 @@ scenarios:
     expected: |
       The Eval tab shows the gates strip (lint · merge · ahead · committed, the spex-review numbers) and
       COLLAPSED scenario rows grouped by changed node — blind spots lead with the empty ring, then this
-      session's own readings (codeSha ∈ branch commits) newest-first; earlier readings hide behind a count
-      chip. NO evidence bytes load with the list (rows are tier-1 JSON; the blob request happens only when
-      a row is selected and the shared annotator detail opens). The `export ↗` link serves the
-      self-contained export HTML: derived masthead, gate row, inlined evidence, per-file diff drill-down —
-      whole, not garbled.
+      session's own readings ✦-marked and newest-first, then the inherited baseline under its divider;
+      the ✦ count chip narrows to the session's own. NO evidence bytes load with the list (rows are
+      tier-1 JSON; the blob request happens only when a row is selected and the shared annotator detail
+      opens). The `export ↗` link serves the self-contained export HTML: derived masthead, gate row,
+      inlined evidence, per-file diff drill-down — whole, not garbled.
+  - name: session-attribution-legible
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/SessionEval.jsx, spec-yatsu/src/proof.ts]
+    description: >
+      Open the Eval tab of a session that filed a reading WITHOUT committing code (its codeSha is the
+      merge-base) over a node carrying older readings by other sessions plus a retired scenario's residual
+      reading. Read the rows in a real browser: verdict marks, the ✦ session attribution, the divider, the
+      count chip, and whether the retired scenario shows.
+    expected: >
+      Every measured row carries its ✓/✗ verdict mark (muted when stale). The session's own reading is
+      ✦-marked and leads its group even when the session has no code commits (a reading is the session's
+      own when IT filed it, not only when its codeSha is a branch commit), and the ✦ count chip is present
+      to narrow to those. Inherited rows (other sessions' latest readings) sit below an explicit divider
+      naming them, so the session's own work and the inherited baseline can never be misread as one. A
+      retired scenario (declared in no yatsu.md) contributes NO row — the tab is bounded by declared
+      scenarios, the same latest-per-scenario computation every eval face reads.
   - name: eval-tab-shared-shell
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/SessionEval.jsx, spec-dashboard/src/EvalsPage.jsx]

@@ -49,11 +49,16 @@ shared `EvalMasterDetail`: the split, the fold-to-a-strip, the j/k walk — no s
 geometry or the keys). It fetches the LEAN model (`GET
 /api/sessions/:id/evals` — rows only, worktree-rooted, no diff enrichment, no inlined bytes) and rides the
 tiered loading every eval face shares: collapsed scenario rows first, evidence streamed from
-`/api/yatsu/blob` only when a row opens. Rows order by attention: **blind spots lead** (declared, never
-measured — the outstanding loss), then the latest reading per scenario — the CURRENT score of what the
-session changed — with the session's own measurements first and ✦-marked (a reading is the session's own
-iff its `codeSha` is one of the branch's commits — derived, never tagged); a count chip narrows the list
-to only those when the reviewer wants the session's evidence alone. A gates strip (the same
+`/api/yatsu/blob` only when a row opens. Rows order by attention — and every row must be legible as WHAT
+it is, because a reviewer misreading the inherited baseline as the session's own output is this face's one
+fatal failure: **blind spots lead** (declared, never measured — the outstanding loss), then the session's
+own measurements ✦-marked (a reading is the session's own iff THIS session filed it or its `codeSha` is
+one of the branch's commits — derived from the reading, never hand-tagged; filing alone counts, else a
+session that measured without committing code reads as if it did nothing), then the **inherited
+baseline** — other sessions' latest readings — under an explicit divider naming it; a count chip narrows
+the list to the session's own alone. The rows are the DECLARED scenarios' current score, the same
+latest-per-scenario computation every eval face reads (each row carrying its ✓/✗, muted when stale) — a
+retired scenario's residual reading contributes no row. A gates strip (the same
 `reviewPayload` numbers `spex review` prints — lint memoized on the checkout fingerprint,
 [[manager-cockpit]]) sits above; there is NO build/typecheck/test gate, because soundness is proven by
 measuring the real product, not by a language-specific checker. When the session has no worktree/diff the

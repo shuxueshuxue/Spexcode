@@ -128,7 +128,6 @@ export default {
       info: 'open the node-info popup (or double-click a node)',
       search: 'search & jump across nodes, sessions, issues & scenarios',
       overlayCycle: 'cycle through nodes a worktree is changing (⇧ reverse)',
-      enter: 'cross into the focus node’s live session',
       fresh: 'start a fresh session on the focus node',
       evals: 'open the evals page (the project’s current measured loss)',
       newChild: 'new child node under the focus (chord)',

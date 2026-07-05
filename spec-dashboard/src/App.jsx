@@ -405,9 +405,9 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
         const next = cycleNext(cycleNodes, focus.id, firesKey('board.cycleRev', e.key) ? -1 : 1, (n) => n.id)
         if (next) setFocusId(next.id)
       }
-      // Enter opens the session board at the remembered tab (boarding switch — see openBoard).
-      else if (firesKey('board.enter', e.key)) { e.preventDefault(); openBoard() }
-      // [-key (the [[node]] mention opener): jump to a FRESH New Session on the focus ([[<id>]] pre-seeded), unconditional — never enters an existing session
+      // Enter is folded into board.info above — from the graph it opens the node-info popup, the same as `i`
+      // (crossing into a session is then the popup's own Enter). [-key (the [[node]] mention opener): jump to a
+      // FRESH New Session on the focus ([[<id>]] pre-seeded), unconditional — never enters an existing session
       else if (firesKey('board.fresh', e.key)) { e.preventDefault(); startNew(`[[${focus.id}]] `) }
       // f-key: open the Evals page ([[evals-view]]) — the leading loss surface — from the board; the rail is the other entry
       else if (firesKey('board.evals', e.key)) { e.preventDefault(); navigate('evals') }

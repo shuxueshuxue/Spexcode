@@ -100,7 +100,7 @@ colour**, never two codepaths. The two terminal verbs split by what they destroy
 session (`act('exit')`, **muted grey**) — it kills the agent + tmux but **keeps the worktree**, so the session
 goes `offline` and offers **relaunch** (the same resumable stop a crash produces, see [[state]]); **`/close`**
 removes it (`act('close')`, **red**) — worktree + branch gone, the work discarded, the row's right-click Close's
-twin. `/merge` merges (green), `/nav` toggles nav mode (yellow), `/proof` jumps to the **Eval tab** (cyan). In the inbox
+twin. `/merge` merges (green), `/nav` toggles nav mode (yellow), `/eval` jumps to the **Eval tab** (cyan). In the inbox
 `/` menu they **lead** the list, coloured, tagged `[board]`, apart from CC's blue command rows; accepting one
 **runs** it (the one row that acts, not inserts — see [[term-input]]). A board command **overrides** a
 same-named CC command (CC ships its own `/exit`), so that name shows **once** — as the board's, never a
@@ -162,7 +162,7 @@ right side** holds the same board-command registry as action buttons, narrowed t
 identity colour; an `offline` liveness (any lifecycle) swaps them for a relaunch button, and review is
 **agent-proposed** at the stop-gate. **The evaluation is no longer one of these buttons** — it is a
 permanent **Eval tab**, always available for any selected session (see [[review-proof]]), reached by
-clicking the tab or the typed `/proof`. There is
+clicking the tab or the typed `/eval`. There is
 **no close/exit button** here (neither has a button twin — a strip "close" misreads as "close the panel"
 while it discards the worktree): the destructive **close** (worktree removal) lives only on the row's
 right-click menu, behind a confirm ([[session-rename]]); both verbs are otherwise reachable as the typed

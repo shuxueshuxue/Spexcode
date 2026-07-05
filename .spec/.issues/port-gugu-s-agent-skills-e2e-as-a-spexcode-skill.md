@@ -1,7 +1,7 @@
 ---
 concern: port gugu's .agent/skills/e2e as a SpexCode skill node — import the WORKFLOW, collapse the tooling [[harness-delivery]]
 by: 60b8fd9a-08c5-4d8e-9139-84d75c065a8c
-status: open
+status: landed
 nodes: harness-delivery
 created: 2026-07-03T01:14:28.085Z
 ---

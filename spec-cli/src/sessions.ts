@@ -49,6 +49,7 @@ const TMUX_SOCK = process.env.SPEXCODE_TMUX || 'spexcode'
 // Claude. Resolved once here ([[harness-adapter]]); a future codex launcher flips defaultHarness, nothing else.
 const HARNESS = defaultHarness
 const COLS = 120, ROWS = 32
+const REAP_GRACE_MS = 2000   // teardown: window between the SIGTERM (let claude flush) and the SIGKILL backstop (reapWorkerTree)
 // @@@ concurrency cap - the most working agents we let run AT ONCE. Heavy multi-agent load (many claude
 // processes computing simultaneously) was the source of resource-pressure crashes, so a launch beyond the
 // cap is QUEUED, not started: it becomes a durable `queued` worktree that the drainer launches the moment a
@@ -1216,13 +1217,66 @@ export async function mergeSession(id: string): Promise<{ dispatched: boolean; r
   return { dispatched: true }
 }
 
+// @@@ workerArgsSnapshot - one `ps` spawn giving every pid its ppid AND full argv, the argv being the durable
+// handle reapWorkerTree matches the session id on. Separate from procSnapshot (comm-only, the hot reconcile
+// path) because argv is wider output we only need on the rare teardown, not on every /api/sessions tick.
+async function workerArgsSnapshot(): Promise<Map<number, { ppid: number; args: string }>> {
+  const t = new Map<number, { ppid: number; args: string }>()
+  let out = ''
+  try { ({ stdout: out } = await pexec('ps', ['-eo', 'pid=,ppid=,args='])) } catch { return t }
+  for (const line of out.split('\n')) {
+    const m = /^\s*(\d+)\s+(\d+)\s+(.*)$/.exec(line)
+    if (m) t.set(Number(m[1]), { ppid: Number(m[2]), args: m[3] })
+  }
+  return t
+}
+// transitive descendants of `root` (exclusive) over a pid→ppid table — the pane's live process subtree.
+function descendantPids(root: number, table: Map<number, { ppid: number }>): Set<number> {
+  const kids = new Map<number, number[]>()
+  for (const [pid, { ppid }] of table) { const a = kids.get(ppid); if (a) a.push(pid); else kids.set(ppid, [pid]) }
+  const out = new Set<number>(); const stack = [root]
+  while (stack.length) { const p = stack.pop()!; for (const c of kids.get(p) ?? []) if (!out.has(c)) { out.add(c); stack.push(c) } }
+  return out
+}
+
+// @@@ reapWorkerTree - DETERMINISTIC teardown of a session's whole worker process tree, the piece
+// `tmux kill-session` alone provably cannot do. Two facts force it: (1) claude CATCHES SIGHUP *and* SIGTERM
+// (its own `SigCgt` mask), so the pty hangup a bare kill-session delivers does NOT terminate it; (2) the
+// `reclaude` wrapper runs claude as a CHILD and `setsid`s it into its OWN session/process-group ([[launch]]),
+// so the worker escapes the pane's foreground group entirely — when the pane dies it reparents to init and
+// runs forever (the accumulating `ppid=1` `claude` processes a closed session leaves behind). Neither ancestry
+// nor the process-group is a reliable handle once reclaude has detached, so we target the worker by the ONE
+// thing bound to the session for its whole life: its `--session-id <id>` argv, which every claude carries
+// ([[launch]]) and which survives reparenting. We union that with the pane's LIVE descendant subtree (resolved
+// before kill-session, while it is still intact — catches the wrapper, `bash launch.sh`, and any backgrounded
+// `spex wait <id>` monitor that carries no id) and SIGTERM→SIGKILL the whole set. SIGKILL is the backstop
+// claude cannot catch; the id-match reaps even an already-reparented orphan. So a worker cannot outlive its
+// session's teardown no matter how reclaude detached it — orphaning is structurally impossible, not swept.
+async function reapWorkerTree(id: string): Promise<void> {
+  let panePid: number | undefined                       // resolve BEFORE kill-session, while the subtree is intact
+  try { const s = (await tmux(['display-message', '-p', '-t', id, '#{pane_pid}'])).trim(); const n = Number(s); if (Number.isFinite(n) && n > 0) panePid = n } catch { /* no live window; the id-match still reaps a reparented orphan */ }
+  const table = await workerArgsSnapshot()
+  const doomed = new Set<number>()
+  for (const [pid, { args }] of table) if (args.includes(id)) doomed.add(pid)   // the durable handle: session id in argv, survives reparenting
+  if (panePid !== undefined) for (const pid of descendantPids(panePid, table)) doomed.add(pid)  // + the pane's live subtree (wrapper/launch.sh/monitors)
+  doomed.delete(process.pid); doomed.delete(1)          // never the backend itself or init
+  if (doomed.size === 0) return
+  for (const pid of doomed) { try { process.kill(pid, 'SIGTERM') } catch { /* already gone */ } }  // let claude flush
+  await new Promise((r) => setTimeout(r, REAP_GRACE_MS))
+  for (const pid of doomed) { try { process.kill(pid, 0); process.kill(pid, 'SIGKILL') } catch { /* gone */ } }  // uncatchable backstop
+}
+
 // @@@ stopAgentProcess - the shared teardown both exit and close begin with, so there is ONE kill path, not
-// two: kill the agent's tmux client, drop its boot-window stamp (else a just-launched id lingers in the grace
-// window reading `starting` instead of `offline`), and sweep its rendezvous socket. The socket lives in the OS
-// tmpdir (NOT the worktree), so worktree removal alone would leave it behind — closing many sessions over time
-// would accumulate stale `spexcode-rv-*.sock` files; we unlink it here (force = no error if claude/OS already
-// removed it). Deliberately does NOT drainQueue — the caller drains once, after it has settled the worktree.
+// two: reap the agent's whole worker process tree (reapWorkerTree), tear down its tmux window, drop its
+// boot-window stamp (else a just-launched id lingers in the grace window reading `starting` instead of
+// `offline`), and sweep its rendezvous socket. The reap runs BEFORE kill-session on purpose: kill-session only
+// hangs up the pane (a SIGHUP claude catches) and leaves reclaude's `setsid`'d claude child orphaned to init,
+// so the tree must be reaped by session-id argv while the pane is still up to resolve it. The socket lives in
+// the OS tmpdir (NOT the worktree), so worktree removal alone would leave it behind — closing many sessions
+// over time would accumulate stale `spexcode-rv-*.sock` files; we unlink it here (force = no error if
+// claude/OS already removed it). Deliberately does NOT drainQueue — the caller drains once, after it settles.
 async function stopAgentProcess(id: string): Promise<void> {
+  await reapWorkerTree(id)
   await tmuxOk(['kill-session', '-t', id])
   launchedAt.delete(id)
   try { rmSync(rvSock(id), { force: true }) } catch { /* best-effort sweep; tmpdir socket, claude/OS may already be gone */ }

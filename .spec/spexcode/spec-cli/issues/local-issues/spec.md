@@ -114,7 +114,10 @@ it to `.spec/.issues` on its first store touch after a toolchain update — the 
 - **Surface — the write verbs live on the ONE issues command.** `spex issues open "<concern>" [--node <id>…]
   [--evidence <hash>…] [--body -|<text>]` opens a thread; `spex issues reply <id> --body -|<text>
   [--evidence <hash>…]` (the evidence a reply carries accrues onto the thread's `evidence[]`, deduped — an
-  anchored annotation's frame blob), `sign`, and `resolve` act on any local thread. Read and write share one
+  anchored annotation's frame blob), `sign`, and `resolve` act on any local thread. A new thread's `nodes:`
+  are **inferred from the `[[node]]` topic links in its own text** (concern + body, [[mentions]]'s one
+  in-text reference primitive), unioned with any explicit `--node` — a writer links nodes by writing them,
+  so no caller needs a separate ids field. Read and write share one
   command because local and remote are one model — the store is a property of the issue, never a second
   command family. There is deliberately no store-local read command — reading is `spex issues` ([[issues]]),
   the same list every store feeds. (The write verbs were historically a separate `spex propose` command;

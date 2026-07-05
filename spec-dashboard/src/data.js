@@ -143,10 +143,10 @@ export async function postIssueReply(id, body, evidence) {
   })
   return res.json()
 }
-export async function postIssueThread({ concern, nodes, body, evidence }) {
+export async function postIssueThread({ concern, body, evidence }) {
   const res = await apiFetch('/api/issues', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ concern, nodes, body, ...(evidence?.length ? { evidence } : {}) }),
+    body: JSON.stringify({ concern, body, ...(evidence?.length ? { evidence } : {}) }),
   })
   return res.json()
 }

@@ -89,9 +89,11 @@ straight to the trunk.
   `replyIssue`, author `'human'`) — a local issue's reply git-commits to the trunk store, a forge issue's
   reply posts a REAL GitHub comment through the driver — then reloads so the post shows where it landed
   (the forge case shows the server's read-back, and a failed forge write surfaces in the composer, never
-  a silent swallow). The filter bar carries a **New** affordance that opens a fresh LOCAL issue
-  (a one-line concern, optional `[[node]]` links, an optional body — new threads open local; promotion
-  moves one to the forge). The dashboard adds no store of its own. A `@session`/`@new` in the text
+  a silent swallow). The filter bar carries a **New** affordance that opens a fresh LOCAL issue —
+  a one-line concern and an optional body, nothing else: a `[[node]]` link written in the text IS the
+  node link (the store infers the thread's `nodes:` from them, [[local-issues]]), so the form carries
+  **no separate node-ids field** to re-type what the prose already says. New threads open local;
+  promotion moves one to the forge. The dashboard adds no store of its own. A `@session`/`@new` in the text
   **dispatches** ([[mentions]]) exactly as a CLI post would, whatever the store — a human summons an
   agent from any thread, and that mention IS the "assign to an agent" verb; the returned one-line
   dispatch summary is echoed briefly. Both composers carry the SAME `@session` / `[[node]]`

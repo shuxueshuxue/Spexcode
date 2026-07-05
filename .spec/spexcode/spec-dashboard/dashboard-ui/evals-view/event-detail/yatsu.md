@@ -108,6 +108,24 @@ scenarios:
       and the position label reads 'latest'. The strip is absent for a single-reading scenario. The eval's
       remark thread (bound by concern 'eval: <node> · <scenario>') is IDENTICAL across both flips — it is
       per-scenario, not per-reading, so the annotation track spans the whole A/B.
+  - name: originator-liveness-shown
+    tags: [frontend-e2e]
+    code: spec-dashboard/src/EventDetail.jsx
+    description: >
+      On #/evals, select a video reading whose LATEST reading carries a `by` (the session that filed it)
+      that is an ONLINE board session. In the detail workspace's HEADER band, read the filer pill
+      (`.fv-originator`): the originator id, its alive/offline class, the dot's computed colour, and the
+      title/reach phrase (which must read as an EVAL, not an issue). Confirm a reading with no `by`
+      (a legacy reading) shows no filer pill.
+    expected: |
+      The header surfaces the FILER — the session that filed the viewed scenario's latest reading (from
+      `evalTimeline`'s per-reading `by`) — with a liveness dot: an ONLINE filer reads `alive` (a
+      status-hued dot from the board's `STATUS_COLOR`, the reach phrase "alive · replies reach it live"),
+      an absent/offline filer reads `offline` ("offline · replies skip it"). The title names it an EVAL
+      ("session that filed this eval … un-@'d remarks courtesy-deliver to it while alive"), the same
+      shared `OriginatorLiveness` the issues header uses, distinct only in wording. A legacy reading with
+      no `by` resolves to nobody and the header simply shows no filer pill — exactly the case where the
+      loop-in chain runs dry silently. No second palette, no page errors.
 ---
 # event-detail loss
 

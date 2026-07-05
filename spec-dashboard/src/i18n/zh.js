@@ -88,6 +88,10 @@ export default {
     resolvedBy: '由 {by} 解决',
     openRemark: '未解决',
     anchorDegraded: '该步骤已不在当前测量中——此 m:ss 为原始冻结值，无法跳转',
+    originatorAlive: '在线 · 回复可实时送达',
+    originatorOffline: '离线 · 回复不会送达',
+    originatorIssue: '发起此 issue 的会话：{by} — 未 @ 的回复会在其在线时顺带送达',
+    originatorEval: '记录此评测的会话：{by} — 未 @ 的评注会在其在线时顺带送达',
   },
 
 

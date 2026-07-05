@@ -10,11 +10,28 @@ scenarios:
       `spex yatsu eval keyboard-nav --scenario enter-opens-info-not-session-board --image <png> --pass`.
     expected: >-
       From the graph, Enter is a plain alias for the info key `i`: it opens the node-info popup on the
-      focused node and the route stays on the graph. Enter no longer crosses to the Session Board — that
-      crossing is now only the popup's own Enter, once the popup is open.
+      focused node and the route stays on the graph. Enter no longer crosses to the Session Board from
+      anywhere — not from the graph (it opens the info popup) and not from inside the popup either (see
+      enter-in-info-popup-is-inert). Crossing into a node's live session is now a right-click node-menu
+      action ([[node-menu]]), never a keystroke.
     code:
       - spec-dashboard/src/App.jsx
       - spec-dashboard/src/keymap.js
+  - name: enter-in-info-popup-is-inert
+    tags: [frontend-e2e, desktop]
+    description: >-
+      Open the dashboard on the spec node graph and press `i` (or Enter) to open the node-info popup —
+      the "Information Board". With the popup OPEN, press `Enter`. Nothing happens: the popup stays open
+      and the route stays on the graph (`#/`); it does NOT navigate to the Session Board (`#/sessions`).
+      Screenshot the still-open popup after the Enter and file with
+      `spex yatsu eval keyboard-nav --scenario enter-in-info-popup-is-inert --image <png> --pass`.
+    expected: >-
+      Inside the open node-info popup, Enter is inert — it is a pure reading surface with no Enter verb,
+      so pressing Enter does nothing: the popup does not close and the route does not leave the graph.
+      Enter no longer crosses from the popup into the node's live Session Board; that crossing moved to
+      the right-click node-menu ([[node-menu]]).
+    code:
+      - spec-dashboard/src/App.jsx
   - name: click-does-not-pan-keyboard-does
     tags: [frontend-e2e, desktop]
     description: >-

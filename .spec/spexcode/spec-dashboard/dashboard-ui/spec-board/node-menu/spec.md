@@ -28,6 +28,15 @@ The two chord items inherit the chords' safety contract ([[keyboard-nav]]): they
 Session prompt the human completes and confirms — creating or deleting a node stays prompt-driven agent
 work, never a direct server op, so a mis-aimed right-click can't destroy anything.
 
+**Overlay sessions.** When the node carries session overlay(s) — a live worktree whose pending ops
+currently touch it (`overlay.source === session.source`) — the menu appends, below a divider from the
+four verbs, **one item per overlaying session**: a status-coloured glyph plus the session's name.
+Picking one opens that session in the console ([[session-console]]). This is the **one place a crossing
+into an *existing* session lives** — the graph deliberately has no bare keystroke for it and the
+node-info popup's Enter is inert ([[keyboard-nav]]), so the mouse menu is where "jump into the session
+editing this node" belongs. A node with no overlay shows only the four verbs — no divider, no empty
+section.
+
 Dismissal follows the dashboard's shared menu conventions ([[session-rename]]'s row menu): any click
 outside closes it, Esc peels it through the [[esc-layers]] stack (never closing the board surface
 behind it), picking an item closes it before the action fires, and a right-click anywhere while it is

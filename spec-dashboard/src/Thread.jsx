@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { SpecBody } from './NodeView.jsx'
 import { BlobMedia } from './Evidence.jsx'
 import { useMentionAutocomplete } from './mentions.jsx'
+import { STATUS_COLOR, sessionZone } from './session.js'
 import { useT } from './i18n/index.jsx'
 
 // The ONE thread UI ([[issues-view]]): the reply list + the reply composer, shared by every home an
@@ -58,6 +59,31 @@ export function resolveAnchor(anchor, events) {
     return { tMs: anchor.tMs, step: anchor.step, label: anchor.label, seekable: false, degraded: true }
   }
   return { tMs: anchor.tMs, step: anchor.step, label: anchor.label, seekable: true, degraded: false }
+}
+
+// The thread's ORIGINATOR liveness ([[mentions]] loop-in) — WHO filed this issue/eval, and whether their
+// session is still ALIVE. It matters because an un-@'d reply courtesy-delivers to the FIRST ONLINE link of
+// the originator chain (the reply verb routes through notifyOriginator, silent when offline), so the reader
+// should see honestly whether a plain reply reaches a live agent. Read-only and computes NOTHING beyond a
+// thin join of the originator id against the live board sessions the page already holds — alive = the
+// session is listed and not offline (a closed session isn't listed at all; sessionZone folds both). Reuses
+// the board's four-hue STATUS_COLOR (the live status paints the dot), never a second palette. `kind`
+// ('issue' | 'eval') only picks the label wording. A missing/unresolvable originator renders nothing —
+// exactly the case where the loop-in chain runs dry silently (a forge github login, a legacy reading).
+export function OriginatorLiveness({ originator, sessions = [], kind = 'issue' }) {
+  const t = useT()
+  if (!originator) return null
+  const s = (sessions || []).find((x) => x.id === originator)
+  const alive = !!s && sessionZone(s) !== 'offline'
+  const color = alive ? (STATUS_COLOR[s.status] || STATUS_COLOR.working) : STATUS_COLOR.offline
+  return (
+    <span className={`fv-originator ${alive ? 'alive' : 'offline'}`}
+          title={t(kind === 'eval' ? 'thread.originatorEval' : 'thread.originatorIssue', { by: originator })}>
+      <span className="fv-originator-dot" style={{ background: color }} aria-hidden="true" />
+      <span className="fv-originator-who">{originator}</span>
+      <span className="fv-originator-reach">{alive ? t('thread.originatorAlive') : t('thread.originatorOffline')}</span>
+    </span>
+  )
 }
 
 // Over a clip ([[event-detail]]) the reply list is the review track: `selIdx`/`activeIdx` mark the explicitly

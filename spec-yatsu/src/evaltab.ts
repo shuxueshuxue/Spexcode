@@ -41,6 +41,11 @@ export type EvalEntry = {
   blobKind?: EvidenceKind
   timelineBlob?: string
   evaluator: string
+  // the SESSION that filed this reading ([[event-detail]] originator liveness / [[mentions]] loop-in): the
+  // reachable actor an un-@'d eval remark courtesy-delivers to (the latest reading's filer is the chain's
+  // first link). Surfaced so the eval detail can show whether that session is still alive. Absent on a legacy
+  // reading (no `by`) — the pane simply shows no originator, exactly as the offline chain runs dry silently.
+  by?: string
   verdict?: Verdict
   ts: string
   fresh: boolean
@@ -168,6 +173,7 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
       ...(primary ? { blobKind: primary.kind } : {}),
       ...(r.timelineBlob ? { timelineBlob: r.timelineBlob } : {}),
       evaluator: r.evaluator,
+      ...(r.by ? { by: r.by } : {}),
       ...(r.verdict ? { verdict: r.verdict } : {}),
       ts: r.ts,
       fresh: axes.length === 0,

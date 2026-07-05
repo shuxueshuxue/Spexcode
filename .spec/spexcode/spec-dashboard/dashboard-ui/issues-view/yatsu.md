@@ -69,6 +69,31 @@ scenarios:
       the issue list and the detail pane follows immediately — selection IS detail, nothing expands
       inside the list. Deep j keeps the selected row inside the left column's viewport. A key typed into
       an input/textarea reaches the input and never moves the selection. No page errors.
+  - name: signed-badge-only-when-nonzero
+    tags: [frontend-e2e]
+    code: spec-dashboard/src/IssuesPage.jsx
+    description: >-
+      Run the dashboard against a backend with two LOCAL issues: one with ZERO signers, one with ≥1
+      signers. Open #/issues, select each, and read the detail meta strip (`.fvd-meta`) — look for the
+      signed badge (`.fv-count` reading "+N signed").
+    expected: >-
+      The zero-signer issue's detail shows NO signed badge at all (a "+0 signed" is noise — suppressed,
+      mirroring the CLI's own nonzero guard). The signed issue shows "+N signed" with the true count. The
+      sign feature is otherwise unchanged. No page errors.
+  - name: originator-liveness-shown
+    tags: [frontend-e2e]
+    code: spec-dashboard/src/Thread.jsx
+    description: >-
+      Run the dashboard against a backend whose board lists live sessions. Seed one LOCAL issue whose `by`
+      is an ONLINE session id and one whose `by` is an id absent from the board. Open #/issues, select
+      each, and read the detail header's originator pill (`.fv-originator`): its alive/offline class, the
+      dot's computed background colour, and the reach phrase.
+    expected: >-
+      Each local issue's header shows the originator id with a liveness dot and reach phrase. The ONLINE
+      originator reads `alive` (a status-hued dot from the board's `STATUS_COLOR`, "alive · replies reach
+      it live") — an un-@'d reply courtesy-delivers to it. The absent originator reads `offline` (muted
+      dot, "offline · replies skip it"). A forge issue's github-login `by` resolves to no session and
+      stays a plain author label. No second palette, no page errors.
 ---
 
 # measuring issues-view

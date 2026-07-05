@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { postIssueReply, postIssueThread } from './data.js'
 import { useMentionAutocomplete } from './mentions.jsx'
 import { SpecBody } from './NodeView.jsx'
-import { Replies, ReplyComposer } from './Thread.jsx'
+import { Replies, ReplyComposer, OriginatorLiveness } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
 
 // The Issues page ([[issues-view]]): a top-level page (#/issues, [[side-nav]]), peer of the graph, the
@@ -144,8 +144,15 @@ function IssueDetail({ issue: th, specs, sessions, onFocusNode, onWrite }) {
       </header>
       <div className="fvd-meta">
         {th.status && <span className={`fv-status fv-st-${th.status}`}>{th.status}</span>}
-        {th.by && <span className="fv-by">{th.by}</span>}
-        {local && <span className="fv-count">{t('session.issuesSigned', { n: signers.length })}</span>}
+        {/* the originator (who filed) + whether their session is still ALIVE — a local thread's `by` is a
+            session id (join it against the board for liveness); a forge issue's `by` is a github login that
+            resolves to no session, so it stays a plain label. */}
+        {local
+          ? <OriginatorLiveness originator={th.by} sessions={sessions} kind="issue" />
+          : (th.by && <span className="fv-by">{th.by}</span>)}
+        {/* signers badge only when someone actually signed — a "+0 signed" is noise (mirrors the CLI's
+            `if (p.signers.length)` guard, issues.ts). The sign feature itself is untouched. */}
+        {local && signers.length > 0 && <span className="fv-count">{t('session.issuesSigned', { n: signers.length })}</span>}
         {nodes.map((id) => (
           <button key={id} type="button" className="fv-chip" onClick={() => onFocusNode?.(id)} title={t('session.issuesFocusNode')}>{id}</button>
         ))}

@@ -1020,6 +1020,14 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .fv-st-landed   { color: var(--green); border-color: color-mix(in srgb, var(--green) 40%, var(--line)); }
 .fv-st-rejected { color: var(--red);   border-color: color-mix(in srgb, var(--red) 40%, var(--line)); }
 .fv-by { flex: none; color: var(--muted); font-size: 11px; }
+/* the originator liveness pill ([[mentions]] loop-in): who filed + whether their session is alive. The dot
+   takes the board's live STATUS_COLOR (inline style); the reach phrase reads muted, greened when alive. */
+.fv-originator { flex: none; display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
+.fv-originator-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.fv-originator-who { color: var(--ink2); font-family: var(--mono); font-size: 10.5px; }
+.fv-originator-reach { font-size: 10px; }
+.fv-originator.alive .fv-originator-reach { color: var(--green); }
+.fv-originator.offline { opacity: .7; }
 .fv-chips { flex: none; display: flex; flex-wrap: wrap; gap: 5px; }
 /* the detail pane's issue face: header, meta strip, markdown-rendered body (SpecBody's doc vocabulary). */
 .fvd { padding: 16px 22px 24px; max-width: 860px; }

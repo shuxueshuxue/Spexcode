@@ -36,12 +36,19 @@ thread). The pane is a **WORKSPACE, not a scroll stack** — the review act is a
 (*circle a moment on the clip, say what's wrong, circle the next*), and a layout that stacks
 media→thread→composer vertically forces a scroll ping-pong between the frame (top) and the composer
 (bottom) on every mark. So the pane splits into three fixed regions, the annotator shape: a **slim HEADER
-band** (scenario · node · the verdict badge · evaluator/timestamp · the A/B strip right-aligned), a center
+band** (scenario · node · the verdict badge · evaluator/timestamp · the FILER's liveness · the A/B strip
+right-aligned), a center
 **MEDIA STAGE**, and an always-visible **RIGHT RAIL** carrying the remark track with the composer **docked
 at the rail's foot**. Stage and rail scroll *independently* — the media never scrolls out of view while
 remarking, and the composer is never below the fold: circle→remark→circle→remark without moving anything.
 At narrow widths the workspace degrades gracefully back to one stacked column (the rail folds under the
-stage).
+stage). The header's **filer liveness** names the session that FILED this scenario's reading — the courtesy
+target an un-@'d remark reaches, since the eval loop-in chains the reading's filer first ([[mentions]] /
+[[remark-substrate]]) — with a liveness dot (alive = the session is on the board and not offline, its live
+`STATUS_COLOR` painting the dot, [[state]]; offline otherwise), so the reader sees whether a plain remark
+reaches a live agent. The filer is the LATEST reading's `by` (the chain's first link; the reading carries it
+from the eval seam via `evalTimeline`); a legacy reading without `by` resolves to nobody and the header
+simply shows no filer — exactly the case where the offline chain runs dry silently.
 
 A reading's evidence is a **LIST**, so every entry renders on the ONE stage — and U1's "one evidence
 detail" is literal code: the per-entry renderer is the extracted **`Evidence.jsx`**, this node's second

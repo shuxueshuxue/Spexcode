@@ -720,6 +720,11 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* close is destructive — tinted orange like the header's kill button, inverting on hover. */
 .sess-menu-item.danger { color: var(--orange); }
 .sess-menu-item.danger:hover { background: var(--orange); color: var(--paper); }
+/* overlay-session items ([[node-menu]]): a thin divider parts them from the verbs, each row a status
+   glyph + the session name. The glyph keeps its status colour on hover (inline colour wins). */
+.sess-menu-sep { height: 1px; margin: 3px 4px; background: var(--line); }
+.sess-menu-item.sess-menu-sess { display: flex; align-items: center; gap: 6px; }
+.sess-menu-item.sess-menu-sess .sess-glyph { width: 11px; }
 /* the rename prompt rides the shared Modal chrome, just narrower than the wide help/legend popup. */
 .sess-rename-modal { width: min(360px, 92vw); }
 .sess-rename { display: flex; flex-direction: column; gap: 10px; padding: 4px 2px 2px; }

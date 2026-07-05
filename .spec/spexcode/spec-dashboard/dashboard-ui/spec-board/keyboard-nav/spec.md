@@ -20,7 +20,7 @@ Move through the spec tree by **relationship, not geometry** — the tree sits a
 
 ## keymap
 
-On the board, arrows (or vim keys) walk the focus through the tree (below); the rest are direct verbs — zoom and reset-to-overview, the node-info popup (`i` or Enter — Enter is a plain alias for the info key, not a separate verb), search, cycle in-flight edits, start a fresh session, help, settings, new-child / delete chords. A board-level Esc only releases a locked session. Inside any popup the keys re-bind to it: left/right (or vim, or a numbered pane) switch panes, up/down scroll, Enter crosses, Esc closes.
+On the board, arrows (or vim keys) walk the focus through the tree (below); the rest are direct verbs — zoom and reset-to-overview, the node-info popup (`i` or Enter — Enter is a plain alias for the info key, not a separate verb), search, cycle in-flight edits, start a fresh session, help, settings, new-child / delete chords. A board-level Esc only releases a locked session. Inside the node-info popup the keys re-bind to it: left/right (or vim, or a numbered pane) switch panes, up/down scroll, Esc closes — and **Enter is inert**: the popup is a pure reading surface, so Enter (like any unbound key) is swallowed and does nothing, never crossing into a session.
 
 ## one registry, two readers
 
@@ -45,7 +45,7 @@ The board is a drill-down (see [[node-graph]]), so a node in a collapsed subtree
 
 ## focus, sessions & chords
 
-A node does **not** belong to a session; `node.session` is only a last-editor attribution. The live link is the overlay — the session(s) whose pending ops currently touch the node. From the graph, **Enter opens the node-info popup — the same action as `i`**, the reading surface; crossing from there into the node's live session is the popup's *own* Enter (see the popup keys above). So the graph has no bare single-key jump straight into a session — the **fresh-session** key is the graph's one session verb, always a *new* session on the focus. The new-child and delete **chords** are likewise node ops on the focus, never destructive on the live tree, each pre-seeding the New Session input with a plain-prose instruction the human confirms before launch — creating or deleting a node is prompt-driven agent work, never a server op ([[dispatch]]).
+A node does **not** belong to a session; `node.session` is only a last-editor attribution. The live link is the overlay — the session(s) whose pending ops currently touch the node. From the graph, **Enter opens the node-info popup — the same action as `i`**, the reading surface; the popup is read-only, so its **Enter is inert** (see the popup keys above) — it does not cross into a session. Crossing into a node's live session is a **mouse** verb: the right-click **node-menu** ([[node-menu]]) lists the node's overlay sessions and opens the one you pick. So the graph has no bare single-key jump straight into a session — the **fresh-session** key is the graph's one keyboard session verb, always a *new* session on the focus. The new-child and delete **chords** are likewise node ops on the focus, never destructive on the live tree, each pre-seeding the New Session input with a plain-prose instruction the human confirms before launch — creating or deleting a node is prompt-driven agent work, never a server op ([[dispatch]]).
 
 ## HUD & governed file
 

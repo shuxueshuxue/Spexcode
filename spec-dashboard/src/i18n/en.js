@@ -286,6 +286,14 @@ export default {
     expandable: ({ n }) => `${n} child${n === 1 ? '' : 'ren'} — focus to drill in`,
   },
 
+  // the node right-click menu ([[node-menu]]) — labels for the board's node verbs, mouse-side.
+  nodeMenu: {
+    info: 'node info',
+    newSession: 'new session',
+    newChild: 'new child node…',
+    del: 'delete node…',
+  },
+
   session: {
     opsTitle: 'nodes this session is changing — double-click the tab to lock + focus them',
     newSession: 'New Session',

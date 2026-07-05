@@ -281,6 +281,14 @@ export default {
     expandable: ({ n }) => `${n} 个子节点——聚焦展开`,
   },
 
+  // 节点右键菜单（[[node-menu]]）——板上节点动词的鼠标侧标签。
+  nodeMenu: {
+    info: '查看详情',
+    newSession: '新建会话',
+    newChild: '新建子节点…',
+    del: '删除节点…',
+  },
+
   session: {
     opsTitle: '此会话正在改动的节点 —— 双击标签锁定并聚焦它们',
     newSession: '新建会话',

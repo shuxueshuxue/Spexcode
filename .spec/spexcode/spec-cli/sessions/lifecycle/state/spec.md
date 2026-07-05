@@ -78,9 +78,22 @@ review+`offline` (the relaunch panel). A stable review+`online` session genuinel
 proposes, then idles awaiting the merge — not just a test artifact.
 
 Offline is reachable on purpose, not only by a crash. **`exit`** is the human-only *soft stop* — the inverse
-of `reopen`: it kills the agent's tmux + rendezvous socket but **leaves the worktree, branch, transcript, and
-the global record**, so the session simply reads `offline` and the relaunch panel offers to `--resume` the same
-conversation. Because it touches no `session.json`, the lifecycle the agent last authored survives the stop
+of `reopen`: it reaps the agent's whole worker process tree + rendezvous socket + tmux window but **leaves the
+worktree, branch, transcript, and the global record**, so the session simply reads `offline` and the relaunch
+panel offers to `--resume` the same conversation.
+
+**Teardown reaps the process tree, not just the window (`stopAgentProcess`).** `tmux kill-session` alone is
+NOT a stop: it only hangs up the pane, and the worker survives it two ways at once — claude *catches* SIGHUP
+and SIGTERM (its own `SigCgt` mask, so a pty hangup does not terminate it), and the `reclaude` wrapper
+([[launch]]) `setsid`s claude into its OWN session/process-group, so the worker has already escaped the pane's
+group and, when the pane dies, reparents to init and runs forever — the accumulating `ppid=1` `claude`
+processes a "closed" session leaves behind, burning compute for weeks. So the single shared teardown BOTH
+`exit` and `close` run FIRST reaps the worker by the one handle bound to the session for its whole life: its
+**`--session-id <id>` argv**, which every claude carries and which survives reparenting. It unions that with
+the pane's live descendant subtree (resolved before kill-session — catches the wrapper, `bash launch.sh`, and
+any backgrounded `spex wait <id>` monitor that carries no id) and SIGTERM→SIGKILL the whole set; SIGKILL is the
+backstop claude cannot catch. A worker therefore cannot outlive its session's teardown no matter how reclaude
+detached it — orphaning is structurally impossible, never swept after the fact. Because it touches no `session.json`, the lifecycle the agent last authored survives the stop
 untouched — whereas `close` removes the worktree AND sweeps the global record dir. **`reopen`** is the inverse
 of `exit`, and it is symmetric: it brings the agent back up (relaunching it `--resume`d into the same
 conversation only when it is genuinely offline; the frontend exposes this solely as the offline relaunch panel)

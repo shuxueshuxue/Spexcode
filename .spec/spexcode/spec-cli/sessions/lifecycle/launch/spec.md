@@ -32,8 +32,11 @@ the rendezvous socket, and the commit attribution, so the conversation `--resume
 it to its worktree, and a spec node links to it. Codex launches a visible TUI attached to the project's shared
 `codex app-server --listen unix://<runtimeRoot>/codex-app-server.sock`; its Codex thread id is captured later
 into `harness_session_id` because Codex does not let the launcher pin a new thread id. Workers run through the **`reclaude` wrapper**
-(`SPEXCODE_CLAUDE_CMD`), which runs claude as a **child** rather than exec'ing it, so the pane's foreground
-command is the wrapper/shell — **not** a liveness signal ([[state]] reads the socket instead). The spawned
+(`SPEXCODE_CLAUDE_CMD`), which runs claude as a **child** rather than exec'ing it (and `setsid`s it into its
+own session), so the pane's foreground command is the wrapper/shell — **not** a liveness signal ([[state]]
+reads the socket instead). That same child-detach means the window is not a kill handle either: `tmux
+kill-session` cannot reap the worker (claude catches SIGHUP/SIGTERM and has escaped the pane's group), so
+teardown reaps it by its `--session-id <id>` argv instead ([[state]]). The spawned
 command alone carries `CLAUDE_BG_BACKEND=daemon` and a `CLAUDE_BG_RENDEZVOUS_SOCK` path **derived from the
 session id** as an env prefix (never global, never a plugin), so [[dispatch]] addresses only our sockets.
 Codex's app-server launch is project-idempotent: simultaneous `spexcode serve` processes in the same project

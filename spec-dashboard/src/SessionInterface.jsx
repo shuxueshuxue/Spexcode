@@ -135,6 +135,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [launcher, setLauncher] = useState(() => { try { return localStorage.getItem('si.launcher') || '' } catch { return '' } })
   const pickLauncher = (name) => { setLauncher(name); try { localStorage.setItem('si.launcher', name) } catch {} }
   const [sendErr, setSendErr] = useState(false)   // last /keys dispatch failed — surfaced under the ❯ box
+  const [actErr, setActErr] = useState(null)      // last lifecycle action refused/failed (e.g. the resume guard: relaunching a LIVE agent) — surfaced by the relaunch panel
   const [navMode, setNavMode] = useState(false)
   const [menuById, setMenuById] = useState({})   // per-pane menu-sniff flag from each SessionTerm; drives the nav button's `.suggest` pulse
   // which of the right pane's two tabs is showing: the live terminal (default) or the always-available proof.
@@ -224,6 +225,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     }
   }, [rightTab])
   useEffect(() => { if (selSession?.liveness === 'offline') setNavMode(false) }, [selSession?.liveness])
+  useEffect(() => { setActErr(null) }, [active])   // a stale action error must not bleed onto the next session's panel
   // leaving nav mode hands focus back to the ❯ box. Guarded to the on→off edge for a live tab — a tab
   // switch or going offline exits nav too, but the tab-focus effect owns focus there.
   const wasNavRef = useRef(false)
@@ -549,9 +551,15 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // open the file picker, remembering which surface its result should land in.
   const pickFiles = (target) => { fileTargetRef.current = target; fileRef.current?.click() }
 
-  // lifecycle actions — thin POSTs to the session state machine, then reload the board.
+  // lifecycle actions — thin POSTs to the session state machine, then reload the board. A non-2xx carrying an
+  // `error` is surfaced LOUD via actErr (the resume guard refuses a relaunch on a live agent with 409 — the
+  // human must SEE that, never a silent no-op that reads as "it didn't work").
   const act = async (verb) => {
-    await fetch(`/api/sessions/${active}/${verb}`, { method: 'POST' }).catch(() => {})
+    setActErr(null)
+    try {
+      const res = await fetch(`/api/sessions/${active}/${verb}`, { method: 'POST' })
+      if (!res.ok) { const j = await res.json().catch(() => null); if (j?.error) setActErr(j.error) }
+    } catch { /* network hiccup — the reload below re-reads truth */ }
     await reload?.()
   }
 
@@ -882,6 +890,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                     <div className="si-offline-msg">{t('session.offlineMsg')}</div>
                     <div className="si-offline-sub">{t('session.offlineSubBefore')}<code>{active.slice(0, 8)}…</code>{t('session.offlineSubAfter')}</div>
                     <button className="si-act go big" onClick={() => act('resume')}>{t('session.relaunchResume')}</button>
+                    {actErr && <div className="si-offline-err" role="alert">{actErr}</div>}
                   </div>
                 )}
               </div>

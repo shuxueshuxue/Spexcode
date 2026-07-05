@@ -92,6 +92,10 @@ must never block a launch. A launch beyond the cap lands as a durable **`queued`
 (fully prepared, claude not started, its prompt parked as the `launch` artifact in the global store). A **drainer** starts
 queued sessions oldest-first the instant a slot frees — on every slot-freeing server action and on a
 periodic tick (catching frees the server never sees: a hook subprocess, a crash). A restart re-drains
-survivors. `reopen` relaunches a dead session and **waits for its rendezvous socket** before returning, so
+survivors. Occupancy is counted from the SAME liveness snapshot the board uses, so when that probe **fails**
+(tmux timing out — the overload condition), occupancy is unknowable and the drainer **launches nothing this
+pass**, deferring to the next tick: under load the safe move is to add no compute, never to over-launch off an
+undercount ([[state]] board honesty applied to the cap). `reopen` relaunches a **confirmed-dead** session (the
+resume guard refuses an alive one — [[state]]) and **waits for its rendezvous socket** before returning, so
 a follow-on [[dispatch]] hits a live socket. `closeSession` is the only removal — human-only, deleting the
 worktree, **sweeping the rendezvous socket** (in the tmpdir), and removing the session's global record dir.

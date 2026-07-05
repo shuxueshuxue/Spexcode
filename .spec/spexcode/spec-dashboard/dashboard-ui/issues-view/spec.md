@@ -63,9 +63,15 @@ straight to the trunk.
   filter** — a small dropdown whose options are DERIVED from the stores actually present in the data plus
   "all" (never a hardcoded list: a new store's driver landing puts it in the menu for free), defaulting to
   "all" so the stores stay mixed; picking one narrows rows AND the counts to that store, and the control
-  hides itself when only one store exists. An issue's ROW is one compact line — store chip, concern, status,
-  reply count; its DETAIL carries the full header (status, ORIGINATOR + its liveness, signer count, node
-  chips, permalink) over the **markdown-rendered body and replies** — the same SpecBody renderer the spec
+  hides itself when only one store exists. An issue's ROW is one compact line that leads with the issue
+  itself, never its plumbing: a **status DOT** (the status vocabulary as color — a boxed "open" on every row
+  was noise), then the concern; the trailing edge carries the quiet meta — a compact reply-count pill and a
+  **store mini-tag** (borderless, muted, and rendered only while stores are actually mixed — a single-store
+  list carries no tags, mirroring the filter's own self-hiding). **The store is metadata, never identity: it
+  never leads a row and never sits on a title** (the human called the leading boxed chip). The DETAIL opens
+  with the concern ALONE as its title; everything else — status, store, ORIGINATOR + its liveness, signer
+  count, node chips, permalink — is the meta strip under it, over the **markdown-rendered body and
+  replies** — the same SpecBody renderer the spec
   panes use, so local-issue markdown and spec markdown read as one dialect (raw `##`/table pipes never show),
   and a forge issue's GitHub comments render as the SAME reply thread a local issue thread gets ([[issues]]
   maps them into `replies[]` — one thread type, one renderer). Store never changes the shape; the only

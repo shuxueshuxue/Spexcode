@@ -106,14 +106,16 @@ export default function IssuesPage({ onFocusNode, specs = [], sessions = [], iss
           </header>
           {composing && <NewThreadForm specs={specs} sessions={sessions} onDone={async (outcomes) => { setComposing(false); flash(outcomes); await load() }} />}
           {!issues.length && <div className="fv-note">{t('session.issuesEmpty')}</div>}
+          {/* a row leads with the ISSUE (status dot + concern); store/replies are trailing quiet meta —
+              the store mini-tag renders only while stores are actually mixed ([[issues-view]]). */}
           {issues.map((th) => {
             const k = `issue:${th.id}`
             return (
               <button key={th.id} className={`fv-row ${effSel === k ? 'sel' : ''}`} onClick={() => setSel(k)}>
-                <span className={`fv-store fv-store-${th.store === 'local' ? 'local' : 'forge'}`}>{th.store}</span>
+                <span className={`fv-dot st-${th.status || 'open'}`} title={th.status} />
                 <span className="fv-concern">{th.concern}</span>
-                {th.status && <span className={`fv-status fv-st-${th.status}`}>{th.status}</span>}
-                {(th.replies?.length ?? 0) > 0 && <span className="fv-count">{t('session.issuesReplies', { n: th.replies.length })}</span>}
+                {(th.replies?.length ?? 0) > 0 && <span className="fv-replies" title={t('session.issuesReplies', { n: th.replies.length })}>{th.replies.length}</span>}
+                {stores.length > 1 && <span className={`fv-store fv-store-${th.store === 'local' ? 'local' : 'forge'}`}>{th.store}</span>}
               </button>
             )
           })}
@@ -138,12 +140,14 @@ function IssueDetail({ issue: th, specs, sessions, onFocusNode, onWrite }) {
   const replies = Array.isArray(th.replies) ? th.replies : []
   return (
     <div className="fvd">
+      {/* the title is the concern ALONE — the store is metadata, never identity: it lives in the meta
+          strip below, never on the title ([[issues-view]]). */}
       <header className="fvd-head">
-        <span className={`fv-store fv-store-${local ? 'local' : 'forge'}`}>{th.store}</span>
         <span className="fvd-concern">{th.concern}</span>
       </header>
       <div className="fvd-meta">
         {th.status && <span className={`fv-status fv-st-${th.status}`}>{th.status}</span>}
+        <span className={`fv-store fv-store-${local ? 'local' : 'forge'}`}>{th.store}</span>
         {/* the originator (who filed) + whether their session is still ALIVE — a local thread's `by` is a
             session id (join it against the board for liveness); a forge issue's `by` is a github login that
             resolves to no session, so it stays a plain label. */}

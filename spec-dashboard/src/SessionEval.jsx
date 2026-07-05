@@ -2,15 +2,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { EvalRow, entryKey } from './EvalsFeed.jsx'
 import { EvalMasterDetail } from './EvalsPage.jsx'
 import EventDetail from './EventDetail.jsx'
-import { ScoreBadge } from './score.jsx'
+import { ScoreBadge, scenarioStates } from './score.jsx'
 import { useT } from './i18n/index.jsx'
 
 // The session Eval tab ([[review-proof]]'s interactive face): the THIRD home of the ONE EventDetail
 // component ([[event-detail]], U1) — node popup (one node) · Evals page (project) · here (this session's
 // changed nodes, WORKTREE-rooted readings). The master-detail is the SAME shared shell the Evals page
 // renders ([[evals-view]]'s EvalMasterDetail — split, fold, j/k), so the two surfaces cannot drift:
-// collapsed rows on the left (blind spots lead, then what THIS session measured, newest first; everything
-// earlier folds behind a count chip), the shared EventDetail as the full-height detail on the right — the
+// collapsed rows on the left (blind spots lead, then what THIS session measured ✦-marked, then the
+// inherited baseline — other sessions' latest readings — under an explicit divider; the ✦ chip narrows
+// to the session's own), the shared EventDetail as the full-height detail on the right — the
 // SAME media + remark thread + composer, since the (node,scenario) thread rides each reading as
 // `entry.thread` (the server overlay), so there is no "no resident issues list" degradation: the composer
 // authors remarks through /api/remarks. Rows are tier-1 JSON; evidence streams lazily on open — nothing is
@@ -38,17 +39,19 @@ export default function SessionEvalPane({ sessionId, specs = [], sessions = [] }
     loadModel()
   }, [sessionId, loadModel])
 
-  // per node: blind-spot rows lead (declared, never measured — outstanding loss), then the latest reading
-  // per scenario, in-session first / newest first; earlier-than-this-session folds behind the count chip.
+  // per node: blind-spot rows lead (declared, never measured — outstanding loss), then the DECLARED
+  // scenarios' current score via the ONE shared computation (scenarioStates — same as the node badge and
+  // the Evals feed, so a retired scenario's residual reading never masquerades as current loss, and every
+  // row carries the ✓/✗ state ScoreBadge renders). This session's own readings (✦) lead, then the
+  // inherited baseline newest-first.
   const groups = useMemo(() => {
     if (!model) return []
     return model.nodes.map((n) => {
-      const latest = new Map()
-      for (const r of n.evals) if (!latest.has(r.scenario)) latest.set(r.scenario, r)   // newest-first list
-      const measured = new Set(latest.keys())
-      const blind = (n.scenarios ?? []).filter((s) => !measured.has(s.name))
+      const states = scenarioStates(n.scenarios, n.evals)
+      const blind = states.filter((s) => !s.reading)
         .map((s) => ({ blind: true, scenario: s.name, expected: s.expected, tags: s.tags, node: n.id, hue: n.hue, state: 'missing' }))
-      const rows = [...latest.values()].map((r) => ({ ...r, node: n.id, hue: n.hue }))
+      const rows = states.filter((s) => s.reading)
+        .map((s) => ({ ...s.reading, expected: s.expected ?? s.reading.expected, state: s.state, node: n.id, hue: n.hue }))
         .sort((a, b) => (Number(b.inSession) - Number(a.inSession)) || (a.ts < b.ts ? 1 : -1))
       return { node: n, blind, rows, sessionN: rows.filter((r) => r.inSession).length }
     })
@@ -108,15 +111,22 @@ export default function SessionEvalPane({ sessionId, specs = [], sessions = [] }
                   <span className="fv-group-title" style={{ color: `hsl(${g.node.hue} 60% 60%)` }}>{g.node.title}</span>
                   {g.node.uncoveredFrontend && <span className="se-warn">{t('sessionEval.noYatsu')}</span>}
                 </header>
-                {gRows.map((v) => v.kind === 'blind' ? (
-                  <button key={v.key} className={`ef-row se-blind ${effSel === v.key ? 'sel' : ''}`} onClick={() => setSel(v.key)}>
-                    <ScoreBadge state="missing" />
-                    <span className="ef-scenario">{v.item.scenario}</span>
-                    <span className="ef-time">{t('sessionEval.unmeasured')}</span>
-                  </button>
-                ) : (
-                  <EvalRow key={v.key} e={v.item} selected={effSel === v.key} onClick={() => setSel(v.key)} />
-                ))}
+                {gRows.map((v, i) => {
+                  // the attribution boundary: the first inherited row after the session's own ✦ rows gets a
+                  // divider naming the baseline, so the two provenances can never be misread as one list.
+                  const divider = v.kind === 'eval' && !v.item.inSession && i > 0 &&
+                    gRows[i - 1].kind === 'eval' && gRows[i - 1].item.inSession
+                  const row = v.kind === 'blind' ? (
+                    <button key={v.key} className={`ef-row se-blind ${effSel === v.key ? 'sel' : ''}`} onClick={() => setSel(v.key)}>
+                      <ScoreBadge state="missing" />
+                      <span className="ef-scenario">{v.item.scenario}</span>
+                      <span className="ef-time">{t('sessionEval.unmeasured')}</span>
+                    </button>
+                  ) : (
+                    <EvalRow key={v.key} e={v.item} selected={effSel === v.key} onClick={() => setSel(v.key)} />
+                  )
+                  return divider ? [<div key={`div:${g.node.id}`} className="se-divider">{t('sessionEval.inherited')}</div>, row] : row
+                })}
               </section>
             )
           })}

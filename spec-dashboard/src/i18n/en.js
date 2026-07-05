@@ -103,6 +103,7 @@ export default {
     btnTitle: "switch to this session's eval tab — the measured yatsu evidence, the diff, and the merge gates",
     none: 'no evaluation for this session yet',
     sessionN: ({ n }) => `✦ this session: ${n}`,
+    inherited: 'inherited · latest readings by other sessions',
     export: 'export ↗',
     exportTitle: 'export this evaluation as a self-contained HTML report',
     empty: 'nothing measured for this session yet.',

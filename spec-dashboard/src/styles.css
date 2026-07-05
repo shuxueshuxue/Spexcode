@@ -1685,6 +1685,9 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .se-blind .ef-scenario { color: var(--muted); }
 .se-warn { font-family: var(--mono); font-size: 10px; color: var(--orange); }
 .ef-insession { color: var(--blue); font-size: 10px; flex: none; }
+/* the attribution boundary inside a group: ✦ (this session's readings) above, inherited baseline below. */
+.se-divider { display: flex; align-items: center; gap: 8px; padding: 5px 10px 3px; font-family: var(--mono); font-size: 9px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); }
+.se-divider::before, .se-divider::after { content: ''; flex: 1; border-top: 1px dashed var(--line); }
 
 /* the threads store filter — a small select deriving its options from the stores actually present
    (all · local · github · a future gitlab appears by itself); default = all, mixed in API order. */

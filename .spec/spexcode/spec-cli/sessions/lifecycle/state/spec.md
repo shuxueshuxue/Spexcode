@@ -61,14 +61,28 @@ independent facts, computed independently:
 - **liveness** — *whether the agent process is up and addressable*, **derived by the runtime for every
   session regardless of lifecycle**: `offline` (no tmux window for the id, or the harness adapter's online
   signal never became session-addressable — genuinely dead), transient `starting` (window up, adapter signal
-  still booting — see [[launch]]), else `online`. Read from the **adapter's runtime signal, never the pane's
-  foreground command**: Claude uses its rendezvous socket; Codex uses the shared app-server socket only after
-  the governed record has captured the Codex thread id, because a project socket alone is not a session
-  address.
+  still booting — see [[launch]]), `unknown` (the liveness PROBE ITSELF failed — see below), else `online`.
+  Read from the **adapter's runtime signal, never the pane's foreground command**: Claude requires a **live
+  LISTENER on its rendezvous socket** — a `connect()` the running agent accepts, **not** the socket FILE
+  merely existing, because a crashed claude leaves its unix-socket path on disk and a file-existence check
+  then read a DEAD pane as `online` indefinitely (a dead pane must read `offline` within seconds); Codex uses
+  the shared app-server socket only after the governed record has captured the Codex thread id, because a
+  project socket alone is not a session address.
+
+  **Board honesty under load — the probe can fail, and a failed probe is not a death.** The liveness snapshot
+  is one bounded tmux call; under heavy load it can time out. A timed-out probe means we **cannot tell** who is
+  alive, which is categorically different from "tmux is up and this session is gone." So a probe failure yields
+  `unknown` for the affected rows — rendered **probe-failed**, never `offline`/`closed`, and the row **never
+  vanishes** from the list (the list is enumerated from the durable store, and the tmux call is bounded so a
+  hung tmux can't freeze board assembly into a stale/empty view). This is the honesty rule that the mass-restore
+  incident violated from the other side: a slow box read as a graveyard, the human restored everything, and
+  live workers died. Fail loud (`unknown`), never guess (`offline`).
 
 The surfaces compose the two without precedence: the badge shows lifecycle, while **liveness `offline`
 shows the relaunch panel whatever the lifecycle** — a dead `asking` agent still needs you, now resumable —
-the sole exception being `queued`, which has not launched yet and self-starts as a slot frees.
+the sole exception being `queued`, which has not launched yet and self-starts as a slot frees. `unknown`
+(probe-failed) shows **no** relaunch panel: we have not proven the agent dead, so we must not invite a restore
+that could kill a live worker.
 
 The **review** reading (an `awaiting` proposal, as the board and `spex watch` surface it) is the
 orthogonality in one example: review means the agent has *stopped active work* — mark-active flips it
@@ -92,6 +106,19 @@ reversible only by MESSAGING the session (mark-active clears them), never as a h
 So reopen never itself makes the agent work; the `merge` dispatch, which reopens ONLY to relaunch a dead agent
 so the dispatch hits a live one, then sends the merge prompt — and THAT prompt is what flips the lifecycle to
 `active` (and clears the now-obsolete proposal) through mark-active.
+
+**The resume guard — restore-on-alive must be impossible.** Relaunch is a *kill-then-respawn*, so it destroys
+a running agent's in-flight work the instant the agent is actually alive. That was the incident's kill-shot:
+the board lied (a live worker read `offline`), the human hit relaunch, and live claude processes died mid-task.
+So reopen re-derives the agent's liveness **freshly** (the same listener-verified probe above, not a possibly-
+stale board reading) and **REFUSES LOUD** rather than relaunch a live agent — the API answers `409` and the
+dashboard's relaunch panel shows the refusal, never a silent no-op. You steer a live agent by **messaging** it,
+not by restoring it. Death must be **proven**: an `unknown` probe (the tmux timeout that starts under load)
+also refuses, since a live worker can't be ruled out. A **`force`** escape exists for a genuinely wedged-but-
+alive process (the one case where a deliberate kill is the repair). Only a **confirmed `offline`** agent (or
+`force`) is relaunched. The `merge` dispatch is the sole non-guarded caller: it merely needs a *live* agent to
+send the merge prompt to, so an already-`online` one is a satisfied no-op (never a refusal) and only a
+confirmed-offline one is relaunched — the guard protects the human relaunch, not the internal ensure-live.
 Contrast **`close`**, the other human-only terminal verb: it *removes* the worktree, discarding the work. Both
 are human-only and direct (not agent proposals); exit is fully reversible (relaunch), close is not. An exited
 session occupies no working-set slot ([[launch]]) — offline never does — so the freed capacity drains a queued

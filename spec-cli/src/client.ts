@@ -74,10 +74,12 @@ export async function clientMerge(id: string): Promise<{ dispatched: boolean; re
   return await r.json().catch(() => ({ dispatched: false, reason: `bad backend response (${r.status})` }))
 }
 
-// POST /api/sessions/:id/resume — bring the agent back (relaunch if offline); demotes working→idle, keeps any declaration. {ok:false} = no such session.
-export async function clientReopen(id: string): Promise<boolean> {
-  const r = await apiFetch(`/api/sessions/${seg(id)}/resume`, post({}))
-  return !!(await r.json().catch(() => ({ ok: false })))?.ok
+// POST /api/sessions/:id/resume — bring the agent back (relaunch ONLY if confirmed offline); demotes
+// working→idle, keeps any declaration. The RESUME GUARD REFUSES (409 {refused:true}) on a live/unproven agent;
+// `force` overrides for a wedged-but-alive process. {ok:false} otherwise = no such session (404).
+export async function clientReopen(id: string, force = false): Promise<{ ok: boolean; error?: string; refused?: boolean }> {
+  const r = await apiFetch(`/api/sessions/${seg(id)}/resume`, post({ force }))
+  return await r.json().catch(() => ({ ok: false, error: `bad backend response (${r.status})` }))
 }
 
 // POST /api/sessions/:id/exit — the soft stop: kill tmux + socket, KEEP the worktree (session goes offline,

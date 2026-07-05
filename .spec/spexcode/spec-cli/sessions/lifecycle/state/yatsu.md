@@ -91,6 +91,46 @@ scenarios:
       session), keyed on whether a resource should outlive the task and never on who started it, stated as a
       nudge and not a gate. The merge/nothing confirmations do NOT carry it. The reminder is project-agnostic
       (no repo-specific paths), so it reads the same in any adopted project.
+  - name: probe-failure-reads-unknown-not-offline
+    tags: [backend-api]
+    description: >-
+      With a governed live session on the board, inject a liveness-PROBE failure — make the tmux window-list
+      snapshot time out / error (the load-30 condition), e.g. point the probe at a wedged tmux or force the
+      bounded timeout to fire. Read the session's liveness on the board (listSessions / `spex board`). Contrast
+      with a genuinely-empty tmux server (no sessions), which exits cleanly non-zero.
+    expected: >-
+      The session STILL appears (it is enumerated from the durable store — it never vanishes) and its liveness
+      reads `unknown` (probe-failed), NEVER `offline`/`closed` and never a stale `working`. A clean "no server /
+      no sessions" is DISTINCT — that authoritatively reads `offline`. Only a probe TIMEOUT/kill yields
+      `unknown`: the board never guesses a death from a failed probe, so a slow box cannot masquerade as a
+      graveyard (the lie that drove the mass-restore). The bounded probe timeout also means a hung tmux can't
+      freeze board assembly (no vanished/frozen list). `unknown` shows no relaunch panel.
+  - name: dead-claude-reads-offline-within-seconds
+    tags: [backend-api]
+    description: >-
+      Launch (or stub) a governed claude session and confirm it reads `online`. KILL the claude process but
+      leave its tmux pane/wrapper AND its stale rendezvous socket FILE on disk. Re-read the board liveness a
+      few seconds later. (A = the pre-fix reading; B = after the listener-verify fix.)
+    expected: >-
+      A (fail) — the old file-existence check (`existsSync(rvSock)`) read the dead pane as `online`/`working`
+      for as long as the stale socket file lingered (the incident's "dead pane stuck working for 30+ min").
+      B (pass) — liveness verifies a live LISTENER (a `connect()` probe): with claude dead nothing accepts on
+      the socket, so it reads `offline` within seconds and surfaces the relaunch panel. The socket FILE merely
+      existing is never sufficient; a stale file refuses the connect (ECONNREFUSED) and reads offline.
+  - name: resume-on-alive-refuses-loud
+    tags: [backend-api]
+    description: >-
+      With a governed session whose claude child is genuinely ALIVE, invoke the human relaunch — `POST
+      /api/sessions/:id/resume` (reopen) / `spex session reopen` — WITHOUT force. Then repeat with `--force`,
+      and separately exercise the merge dispatch (reopen guard:false) on the same live agent.
+    expected: >-
+      A (fail) — pre-fix reopen trusted a possibly-stale board liveness and would kill+relaunch a live agent
+      SILENTLY (the incident's kill-shot: restore-on-alive killed live workers mid-work). B (pass) — reopen
+      re-derives liveness FRESH (the listener-verified probe) and REFUSES LOUD on a live agent: the API answers
+      409 and the dashboard relaunch panel shows the refusal, the live worker is untouched. An `unknown`
+      (probe-failed) liveness ALSO refuses — death is unproven. `--force` is the ONLY way to relaunch an alive
+      agent (the wedged-but-alive escape, a deliberate kill). The merge dispatch (guard:false) is exempt: it
+      reuses an already-online agent without refusing, and relaunches only a confirmed-offline one.
 ---
 # yatsu.md — state
 

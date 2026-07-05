@@ -3,7 +3,8 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { activeTurnIdFromThread, codexAppServerSock, codexBinary, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, codexLaunchCommand, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, resolveLauncher, writeCodexTrust } from './harness.js'
+import { createServer } from 'node:net'
+import { activeTurnIdFromThread, codexAppServerSock, codexBinary, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, codexLaunchCommand, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, resolveLauncher, writeCodexTrust, rendezvousListening, rvSock } from './harness.js'
 
 test('codex handshake initializes, confirms the loaded thread, then reads it to decide steer-vs-start', () => {
   const msgs = codexHandshakeMessages('thr_1')
@@ -297,6 +298,43 @@ test('codex liveness walks the pane descendant tree, NOT the foreground name or 
   assert.equal(codexHarness.liveness(rec, true, dir, undefined), 'offline')
   assert.equal(codexHarness.liveness(rec, true, dir, { panePid: 100 }), 'offline')
   assert.equal(codexHarness.liveness(rec, true, dir, { procs: healthy }), 'offline')
+})
+
+test('claude liveness verifies a LISTENER, not the socket file — tmux up AND socketLive gates online', () => {
+  const rec = { session: 'spex-c', harnessSessionId: null }
+  // tooth 2: online iff the window is up AND a live listener answered the connect probe (socketLive). A stale
+  // socket FILE left by a crashed claude is NOT enough — the caller connect-probes and passes socketLive=false.
+  assert.equal(claudeHarness.liveness(rec, true, undefined, undefined, true), 'online')    // window + live listener → online
+  assert.equal(claudeHarness.liveness(rec, true, undefined, undefined, false), 'offline')  // window up but NO listener (stale sock / dead claude) → offline
+  assert.equal(claudeHarness.liveness(rec, false, undefined, undefined, true), 'offline')  // no window → offline regardless
+  assert.equal(claudeHarness.liveness(rec, true, undefined, undefined, undefined), 'offline') // socketLive unknown/absent → not live
+})
+
+test('baseCmd resolves the launcher command the pin freezes: explicit cmd wins, else the ambient env', () => {
+  const prev = process.env.SPEXCODE_CLAUDE_CMD
+  process.env.SPEXCODE_CLAUDE_CMD = 'ambient-claude'
+  try {
+    assert.equal(claudeHarness.baseCmd('reclaude --pinned'), 'reclaude --pinned')   // an explicit (named-launcher) cmd wins
+    assert.equal(claudeHarness.baseCmd(undefined), 'ambient-claude')                // else the ambient default — captured at creation, then frozen
+  } finally {
+    if (prev === undefined) delete process.env.SPEXCODE_CLAUDE_CMD; else process.env.SPEXCODE_CLAUDE_CMD = prev
+  }
+})
+
+test('rendezvousListening: a live listener reads true; a stale socket file / absent path reads false', async () => {
+  const id = `unit-rv-${process.pid}-${Date.now()}`
+  // absent path → false, fast (ENOENT)
+  assert.equal(await rendezvousListening(id, 500), false)
+  // a real listener on the id's rvSock → true
+  const srv = createServer(() => {})
+  await new Promise<void>((res) => srv.listen(rvSock(id), () => res()))
+  try {
+    assert.equal(await rendezvousListening(id, 500), true)
+  } finally {
+    await new Promise<void>((res) => srv.close(() => res()))
+  }
+  // after close the socket FILE lingers but nothing listens → false (the exact stale-file-reads-dead case)
+  if (existsSync(rvSock(id))) assert.equal(await rendezvousListening(id, 500), false)
 })
 
 test('paneTreeRunsCodex: codex-ish descendants read live; a bare/unrelated tree does not', () => {

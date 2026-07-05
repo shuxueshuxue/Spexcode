@@ -444,10 +444,14 @@ if (cmd === 'serve') {
     console.log(JSON.stringify(created, null, 2))
     await launchMonitorReminder(created.id)
   } else if (sub === 'reopen') {
-    // bring the agent back up (relaunch if offline, the backend owns it); demotes a working `active` to idle but
-    // leaves a standing declaration/proposal untouched (see sessions.ts reopen()). A following prompt is what works.
+    // bring the agent back up (relaunch ONLY if confirmed offline, the backend owns it); demotes a working
+    // `active` to idle but leaves a standing declaration/proposal untouched (see sessions.ts reopen()). The
+    // RESUME GUARD refuses a relaunch on a LIVE/unproven agent (that would kill a live worker) — `--force`
+    // overrides for a genuinely wedged process. A following prompt is what actually re-drives it.
     const full = await resolveSelectorOrExit(id)
-    console.log(await c.clientReopen(full) ? `${full} -> reopened` : `no such session ${full}`)
+    const r = await c.clientReopen(full, process.argv.includes('--force'))
+    if (r.ok) console.log(`${full} -> reopened`)
+    else { console.error(`spex session reopen: ${r.error || `no such session ${full}`}`); process.exit(2) }
   } else if (sub === 'state') {
     // the agent authors ITS OWN state: active|awaiting|parked|error  [--propose] [--note] [--session]
     const st = process.argv[4] as any

@@ -1,7 +1,7 @@
 ---
 concern: STABILITY INCIDENT 2026-07-05 02:31-02:35: board dishonesty under load caused a human mass-restore that killed live workers — three-part fix (board honesty, liveness listener-verify, resume guard)
 by: 3ed32096-2012-466d-b194-d6c96d4781dd
-status: open
+status: landed
 nodes: sessions
 created: 2026-07-05T02:58:15.276Z
 ---

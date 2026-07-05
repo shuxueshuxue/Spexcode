@@ -1,7 +1,7 @@
 ---
 concern: forum writes commit to the trunk checkout from any backend — e2e runs dirty main
 by: f45d649c-0ef4-4a52-a3fc-223fc0da6e43
-status: open
+status: landed
 nodes: proposals
 created: 2026-07-02T16:27:06.382Z
 ---

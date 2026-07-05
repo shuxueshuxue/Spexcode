@@ -497,8 +497,9 @@ footer{margin-top:48px;padding-top:20px;border-top:1px solid var(--line);color:v
 // The lean, TIERED counterpart of buildProofModel: the same worktree-rooted marshaling, but rows only —
 // no diff enrichment, no inlined evidence bytes (the dashboard's Eval tab rides the shared eval
 // components: blobs stream lazily from /api/yatsu/blob on open). Each reading carries `inSession`
-// (its codeSha is one of the branch's own commits) so the tab can lead with what THIS session measured
-// and fold everything earlier behind a count.
+// (this session filed it, or its codeSha is one of the branch's own commits — a diagnostic session
+// that changed no code still owns the readings it filed at the merge-base) so the tab can lead with
+// what THIS session measured, ✦-marked, over the inherited baseline.
 export type SessionEvalNode = {
   id: string
   title: string
@@ -553,8 +554,10 @@ export async function buildSessionEvals(id: string): Promise<SessionEvals | null
       uncoveredFrontend: !tl.hasYatsu && (spec?.code ?? []).some(isUiPath),
       scenarios: tl.scenarios,
       // the per-scenario trunk thread rides each reading as `EvalEntry.thread` (evalTimeline's overlay), so
-      // the event detail has the comment/remark track inline — no extra join here.
-      evals: tl.readings.map((r) => ({ ...r, inSession: shas.has(r.codeSha) })),
+      // the event detail has the comment/remark track inline — no extra join here. A reading is the
+      // session's own when it filed it (`by`) OR when its codeSha is a branch commit — filing alone counts,
+      // else a session that measured without committing code reads as if it did nothing.
+      evals: tl.readings.map((r) => ({ ...r, inSession: r.by === id || shas.has(r.codeSha) })),
     })
   }
   // nodes with in-session measurements lead, then the most-measured — the session's own evidence first.

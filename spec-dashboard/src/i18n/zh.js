@@ -102,6 +102,7 @@ export default {
     btnTitle: '切换到此会话的评测页 —— 测得的 yatsu 证据、改动与合并门禁',
     none: '此会话暂无评测',
     sessionN: ({ n }) => `✦ 本会话 ${n} 条`,
+    inherited: '继承基线 · 其他会话的最新读数',
     export: '导出 ↗',
     exportTitle: '导出本次评测为自包含的 HTML 报告',
     empty: '该会话尚无测量。',

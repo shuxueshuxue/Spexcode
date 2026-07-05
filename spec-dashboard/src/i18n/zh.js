@@ -96,6 +96,9 @@ export default {
 
 
   sessionEval: {
+    btn: '评测',
+    btnTitle: '切换到此会话的评测页 —— 测得的 yatsu 证据、改动与合并门禁',
+    none: '此会话暂无评测',
     sessionN: ({ n }) => `✦ 本会话 ${n} 条`,
     export: '导出 ↗',
     exportTitle: '导出本次评测为自包含的 HTML 报告',
@@ -333,7 +336,7 @@ export default {
     harnessLabel: '启动智能体',
     launcherLabel: '启动器',
     tabTerminal: '终端',
-    tabProof: '评测',
+    tabEval: '评测',
     navBtn: '导航',
     navTitle: '导航模式——转发原始按键（含 ⌃/⌥/⌘ 组合键）以驱动智能体的终端（⌥/⌘+I）',
     relaunch: '重新启动',
@@ -356,7 +359,7 @@ export default {
     // `*Desc` 是 `/` 菜单行的说明；`*Title` 是按钮的悬停提示。
     cmd: {
       navDesc: '导航模式 —— 转发原始按键给智能体',
-      proofDesc: '此会话的工作证明 —— yatsu、改动、合并门禁',
+      evalDesc: '切换到此会话的评测页 —— yatsu 证据、改动、合并门禁',
       mergeTitle: '将此会话合并到 main',
       mergeDesc: '将此会话合并到 main',
       exitTitle: '退出此会话（停止智能体，保留工作树 —— 可恢复）',
@@ -364,17 +367,6 @@ export default {
       closeTitle: '关闭此会话（移除工作树）',
       closeDesc: '关闭 —— 移除工作树与分支，丢弃此工作（等同右键菜单 → 关闭）',
     },
-  },
-
-  proof: {
-    btn: '证明',
-    btnTitle: '打开此会话的工作证明 —— 测得的 yatsu 证据、改动与合并门禁',
-    title: '工作证明',
-    newTab: '在新标签页打开',
-    close: '关闭（esc）',
-    loading: '正在生成证明…',
-    emptyMsg: '暂无证明',
-    emptySub: '此会话尚未产生可供证明的工作。一旦产生，其工作证明 —— yatsu 证据、改动与合并门禁 —— 将显示在这里。',
   },
 
   settings: {

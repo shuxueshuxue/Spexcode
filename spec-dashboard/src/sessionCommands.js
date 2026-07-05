@@ -3,10 +3,10 @@
 export const BOARD_COMMANDS = [
   { name: 'nav',   color: 'yellow', button: true,  when: (st) => !!st && st !== 'offline',
     labelKey: 'session.navBtn', titleKey: 'session.navTitle', descKey: 'session.cmd.navDesc' },
-  // proof's surface is the console's always-on Proof TAB, not a header button — the typed `/proof` just jumps
+  // eval's surface is the console's always-on Eval TAB, not a header button — the typed `/eval` just jumps
   // to that tab (`button: false`, available for any live session, not only review).
-  { name: 'proof', color: 'cyan',   button: false, when: (st) => !!st && st !== 'offline',
-    labelKey: 'proof.btn', titleKey: 'proof.btnTitle', descKey: 'session.cmd.proofDesc' },
+  { name: 'eval', color: 'cyan',   button: false, when: (st) => !!st && st !== 'offline',
+    labelKey: 'sessionEval.btn', titleKey: 'sessionEval.btnTitle', descKey: 'session.cmd.evalDesc' },
   { name: 'merge', color: 'green',  button: true,  when: (st) => st === 'review' || st === 'done',
     labelKey: 'session.merge', titleKey: 'session.cmd.mergeTitle', descKey: 'session.cmd.mergeDesc' },
   { name: 'exit',  color: 'muted',  button: false, when: (st) => !!st && st !== 'offline',

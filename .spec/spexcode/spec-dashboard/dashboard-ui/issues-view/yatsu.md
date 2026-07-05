@@ -69,6 +69,18 @@ scenarios:
       the issue list and the detail pane follows immediately — selection IS detail, nothing expands
       inside the list. Deep j keeps the selected row inside the left column's viewport. A key typed into
       an input/textarea reaches the input and never moves the selection. No page errors.
+  - name: new-form-node-links
+    tags: [frontend-e2e]
+    code: spec-dashboard/src/IssuesPage.jsx
+    description: >-
+      On the running issues page, open the New form and count its text surfaces; then post an issue whose
+      concern is plain prose and whose body links a real node with `[[<id>]]`. After the post lands,
+      select the new thread and read its detail meta strip (`.fvd-meta`).
+    expected: >-
+      The form carries exactly TWO text surfaces — the concern input and the body textarea; NO node-ids
+      field exists (nothing placeholder-labelled "node ids"). The posted thread's detail header shows the
+      linked node as a clickable chip — the store inferred `nodes:` from the body's `[[…]]` link
+      ([[local-issues]]), the writer never re-typed an id into a separate field. No page errors.
   - name: signed-badge-only-when-nonzero
     tags: [frontend-e2e]
     code: spec-dashboard/src/IssuesPage.jsx

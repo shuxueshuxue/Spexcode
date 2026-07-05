@@ -42,7 +42,7 @@ diff and both file versions are there to jump into, no extra fetch.
 
 **The faces split by purpose — the interactive face is the eval component family, the artifact is the
 export.** The dashboard's face is the console right pane's **Eval tab** (Terminal / Eval; the typed
-`/proof` board command still switches to it): the THIRD scope of the ONE eval component family — the node
+`/eval` board command switches to it): the THIRD scope of the ONE eval component family — the node
 popup reads one node, the issues page reads the project, this tab reads *this session* — the same rows, the same
 [[event-detail]] detail, master-detail like the issues page. It fetches the LEAN model (`GET
 /api/sessions/:id/evals` — rows only, worktree-rooted, no diff enrichment, no inlined bytes) and rides the

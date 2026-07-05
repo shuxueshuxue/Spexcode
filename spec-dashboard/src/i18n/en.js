@@ -97,6 +97,9 @@ export default {
 
 
   sessionEval: {
+    btn: 'eval',
+    btnTitle: "switch to this session's eval tab — the measured yatsu evidence, the diff, and the merge gates",
+    none: 'no evaluation for this session yet',
     sessionN: ({ n }) => `✦ this session: ${n}`,
     export: 'export ↗',
     exportTitle: 'export this evaluation as a self-contained HTML report',
@@ -338,7 +341,7 @@ export default {
     harnessLabel: 'agent launcher',
     launcherLabel: 'launcher',
     tabTerminal: 'terminal',
-    tabProof: 'eval',
+    tabEval: 'eval',
     navBtn: 'nav',
     navTitle: "nav mode — forward raw keystrokes incl. ⌃/⌥/⌘ combos to drive the agent's terminal (⌥/⌘+I)",
     relaunch: 'relaunch',
@@ -361,7 +364,7 @@ export default {
     // header button. `*Desc` is the `/` menu row's description; `*Title` is a button's hover tooltip.
     cmd: {
       navDesc: 'nav mode — forward raw keystrokes to the agent',
-      proofDesc: "this session's proof of work — yatsu, diff, merge gates",
+      evalDesc: "switch to this session's eval tab — yatsu evidence, diff, merge gates",
       mergeTitle: 'merge this session to main',
       mergeDesc: 'merge this session to main',
       exitTitle: 'exit this session (stop the agent, keep the worktree — resumable)',
@@ -369,17 +372,6 @@ export default {
       closeTitle: 'close this session (removes the worktree)',
       closeDesc: 'close — remove the worktree + branch, discarding the work (= row menu → Close)',
     },
-  },
-
-  proof: {
-    btn: 'proof',
-    btnTitle: "open this session's proof of work — the measured yatsu evidence, the diff, and the merge gates",
-    title: 'proof of work',
-    newTab: 'open in new tab',
-    close: 'close (esc)',
-    loading: 'building proof…',
-    emptyMsg: 'no proof yet',
-    emptySub: "this session hasn't produced any work to prove. the proof — its yatsu evidence, the diff, and the merge gates — appears here once it does.",
   },
 
   settings: {

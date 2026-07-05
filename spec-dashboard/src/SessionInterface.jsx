@@ -109,7 +109,7 @@ function matchConfig(presets, query) {
 }
 
 // the row's trailing source tag, mirroring CC: `(user)` / `(project)` / `[skill]` / `built-in`. `[board]`
-// flags one of OUR commands (close/merge/nav/proof) — it runs HERE, not in the agent (see boardCommandsFor).
+// flags one of OUR commands (close/merge/nav/eval) — it runs HERE, not in the agent (see boardCommandsFor).
 const SRC_TAG = { user: '(user)', project: '(project)', skill: '[skill]', 'built-in': 'built-in', board: '[board]' }
 
 
@@ -138,7 +138,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [actErr, setActErr] = useState(null)      // last lifecycle action refused/failed (e.g. the resume guard: relaunching a LIVE agent) — surfaced by the relaunch panel
   const [navMode, setNavMode] = useState(false)
   const [menuById, setMenuById] = useState({})   // per-pane menu-sniff flag from each SessionTerm; drives the nav button's `.suggest` pulse
-  // which of the right pane's two tabs is showing: the live terminal (default) or the always-available proof.
+  // which of the right pane's two tabs is showing: the live terminal (default) or the always-available eval.
   const [rightTab, setRightTab] = useState('terminal')
   const [uploading, setUploading] = useState(false)
   const [uploadErr, setUploadErr] = useState(false)
@@ -567,7 +567,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // button's onClick fires; `boardCmds` narrows the registry to the current session state. See [[term-input]].
   const runners = {
     nav: () => setNavMode((v) => !v),
-    proof: () => setRightTab('proof'),
+    eval: () => setRightTab('eval'),
     merge: () => act('merge'),
     exit: () => act('exit'),     // soft stop: kill tmux + socket, KEEP the worktree → session goes offline + relaunch panel
     close: () => act('close'),   // removal: kill + remove the worktree + branch (the row right-click Close's twin)
@@ -841,7 +841,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             </div>
           )}
           {/* the session pane stays MOUNTED even on the New tab (just display:none) so the terminals'
-              WebSockets + scroll survive the tab switch. A horizontal TAB BAR (Terminal | Proof) sits above
+              WebSockets + scroll survive the tab switch. A horizontal TAB BAR (Terminal | Eval) sits above
               the pane content — it replaces the old floating title/action strip, is visibly set apart from the
               dark terminal below (panel background + separator, both themes), and carries the lifecycle actions
               on its right. */}
@@ -850,13 +850,13 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             style={{ display: active === 'new' ? 'none' : 'flex', flexDirection: 'column', flex: 1, minWidth: 0, minHeight: 0, position: 'relative' }}
           >
               <div className="si-tabbar">
-                {/* two tabs on the left: the live terminal (default) and the always-available proof of work. */}
+                {/* two tabs on the left: the live terminal (default) and the always-available eval. */}
                 <div className="si-tabs" role="tablist">
                   <button role="tab" aria-selected={rightTab === 'terminal'} className={rightTab === 'terminal' ? 'si-tab on' : 'si-tab'} onClick={() => setRightTab('terminal')}>{t('session.tabTerminal')}</button>
-                  <button role="tab" aria-selected={rightTab === 'proof'} className={rightTab === 'proof' ? 'si-tab on' : 'si-tab'} onClick={() => setRightTab('proof')}>{t('session.tabProof')}</button>
+                  <button role="tab" aria-selected={rightTab === 'eval'} className={rightTab === 'eval' ? 'si-tab on' : 'si-tab'} onClick={() => setRightTab('eval')}>{t('session.tabEval')}</button>
                 </div>
                 {/* no headline here: the left sidebar already identifies the session; the tab bar is just the
-                    Terminal|Proof tabs (left) + lifecycle actions (right). */}
+                    Terminal|Eval tabs (left) + lifecycle actions (right). */}
                 <div className="si-actions">
                   {showRelaunch
                     ? <button className="si-act go" onClick={() => act('resume')}>{t('session.relaunch')}</button>
@@ -876,7 +876,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 </div>
               </div>
               {/* Terminal tab — the live pane stays MOUNTED across tab switches (warm-terminals contract); the
-                  Proof tab merely hides it with display:none, never unmounts it, so socket + scroll survive. */}
+                  Eval tab merely hides it with display:none, never unmounts it, so socket + scroll survive. */}
               <div className="si-term-body" ref={termRef} style={{ position: 'relative', display: rightTab === 'terminal' ? undefined : 'none' }}>
                 {/* every opened session's terminal stays mounted; only the active one is shown */}
                 {[...opened].map((id) => (
@@ -894,7 +894,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   </div>
                 )}
               </div>
-              {/* the docked ❯ input belongs to the Terminal tab only (the Proof tab has nothing to type at). */}
+              {/* the docked ❯ input belongs to the Terminal tab only (the Eval tab has nothing to type at). */}
               {rightTab === 'terminal' && (navMode ? (
                 // nav mode replaces the prompt box: keys go straight to the pane (handled at the window level).
                 <div className="si-bottom nav" onClick={() => setNavMode(false)} title={t('session.navExit')}>
@@ -938,9 +938,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   {menu && (menu.kind === 'mention' || menu.kind === 'actor') && mentionMenuEl(true)}
                 </div>
               ))}
-              {/* Proof tab — the review proof rendered INLINE (always available, not review-gated). Mounts on
-                  each visit so it reflects the live derived diff/loss/gates ([[review-proof]]). */}
-              {rightTab === 'proof' && <SessionEvalPane sessionId={active} specs={specs} sessions={sessions} />}
+              {/* Eval tab — the session's derived evaluation rendered INLINE (always available, not
+                  review-gated). Mounts on each visit so it reflects the live diff/loss/gates ([[review-proof]]). */}
+              {rightTab === 'eval' && <SessionEvalPane sessionId={active} specs={specs} sessions={sessions} />}
           </div>
         </section>
       </div>

@@ -26,8 +26,9 @@ scenarios:
       Drive a PreToolUse event for a session that should be nudged (first code access, spec untouched), so
       spec-first emits its decision. Capture the dispatcher's stdout/exit.
     expected: >-
-      The dispatcher passes spec-first's `{"decision":"block","reason":…}` stdout through UNCHANGED (exit 0)
-      so the harness blocks — the real blocking hooks use the stdout JSON-decision mechanism, NOT exit 2.
+      The dispatcher passes spec-first's `{"decision":"block","reason":…}` stdout through UNCHANGED and
+      exits 2 — a block:true handler's JSON decision or its own exit 2 both raise the dispatch exit, the one
+      signal both harnesses propagate, with the stdout JSON as the reason payload (per the governing spec).
       mark-active still ran (its side effect happened) regardless of spec-first's block — all handlers run.
   - name: gate-concurrent-rerender-is-atomic
     tags: [backend-api]

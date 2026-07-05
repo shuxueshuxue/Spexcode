@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { postRemark, putFrameBlob, specUrl } from './data.js'
 import { evidenceList } from './EvalsFeed.jsx'
 import { EvidenceItem } from './Evidence.jsx'
-import { Replies, ReplyComposer, mmss, anchorLine, parseAnchor, resolveAnchor } from './Thread.jsx'
+import { Replies, ReplyComposer, OriginatorLiveness, mmss, anchorLine, parseAnchor, resolveAnchor } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
 
 // EventDetail ([[event-detail]], U1): the ONE evidence+reply detail pane, store-agnostic, reused in every
@@ -104,6 +104,11 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite 
   // can render each anchored remark as a marker and the keyboard can jump between them.
   const thread = entry.thread ?? null
   const comments = thread ? [{ by: thread.by, at: thread.created, body: thread.body }, ...(thread.replies || [])] : []
+  // the eval's ORIGINATOR ([[mentions]] loop-in) — the session that FILED this scenario's reading, which is
+  // the courtesy target an un-@'d remark reaches. The chain's first link is the LATEST reading's filer, so
+  // read it from the newest history row (history is newest-first), falling back to the viewed reading; a
+  // legacy reading without `by` yields nothing and the header simply shows no originator.
+  const filer = (history && history[0]?.by) || entry.by || null
   // the anchored subset, carrying each comment's index into `comments` and its moment — sorted by moment.
   // E2: the moment is resolved by STEP-NAME against THIS reading's timeline (resolveAnchor), so a marker sits
   // where the step actually is in the current clip, not at a frozen m:ss. A degraded anchor (its step gone
@@ -307,6 +312,9 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite 
         <span className={`an-verdict-badge ${verdictCls(viewing)}`}>{verdictMark(viewing)}</span>
         {viewing.evaluator && <span className="an-meta">{viewing.evaluator}</span>}
         <span className="an-meta">{new Date(viewing.ts).toLocaleString()}</span>
+        {/* the filer's liveness — whether the session that filed this eval is still alive, so a human sees if
+            an un-@'d remark on the rail reaches it live (the loop-in silently skips it when offline). */}
+        <OriginatorLiveness originator={filer} sessions={sessions} kind="eval" />
 
         {/* the A/B history strip — the scenario's fail→pass lifecycle: verdict pips oldest→newest (✗ = an A
             repro, ✓ = a B fix), the viewed one lit, ‹ › to walk it. Shown only when there's more than one

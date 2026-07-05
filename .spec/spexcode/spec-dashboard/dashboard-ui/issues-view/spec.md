@@ -64,13 +64,24 @@ straight to the trunk.
   "all" (never a hardcoded list: a new store's driver landing puts it in the menu for free), defaulting to
   "all" so the stores stay mixed; picking one narrows rows AND the counts to that store, and the control
   hides itself when only one store exists. An issue's ROW is one compact line — store chip, concern, status,
-  reply count; its DETAIL carries the full header (status, author, signer count, node chips, permalink) over
-  the **markdown-rendered body and replies** — the same SpecBody renderer the spec panes use, so
-  local-issue markdown and spec markdown read as one dialect (raw `##`/table pipes never show), and a forge
-  issue's GitHub comments render as the SAME reply thread a local issue thread gets ([[issues]] maps them
-  into `replies[]` — one thread type, one renderer). Store never changes the shape; the only store-specific
-  affordances are metadata (a local issue's signer count, a forge issue's permalink) — the thread itself
-  reads and writes identically.
+  reply count; its DETAIL carries the full header (status, ORIGINATOR + its liveness, signer count, node
+  chips, permalink) over the **markdown-rendered body and replies** — the same SpecBody renderer the spec
+  panes use, so local-issue markdown and spec markdown read as one dialect (raw `##`/table pipes never show),
+  and a forge issue's GitHub comments render as the SAME reply thread a local issue thread gets ([[issues]]
+  maps them into `replies[]` — one thread type, one renderer). Store never changes the shape; the only
+  store-specific affordances are metadata (a local issue's signer count, a forge issue's permalink) — the
+  thread itself reads and writes identically.
+- **The originator's liveness is on the header — because an un-@'d reply defaults to it.** A committed reply
+  gets an implicit originator loop-in ([[mentions]]): a courtesy copy to whoever raised the thread, delivered
+  only while they are ONLINE (silent when offline). So the reader must see, honestly, whether a plain reply
+  reaches a live agent — the detail header shows the originator (a local thread's `by` is a session id) with
+  a liveness dot: **alive** when that session is listed on the board and not offline (its live status paints
+  the dot in the board's four-hue `STATUS_COLOR`, [[state]]), **offline** otherwise. It is a thin read-time
+  join of the id against the board sessions the page already holds — no new query, no second palette. A forge
+  issue's `by` is a github login resolving to no session, so it stays a plain author label (the loop-in is
+  silent there by construction). The **signer count renders only when someone actually signed** — a "+0
+  signed" is noise, so the badge is suppressed at zero (mirroring the CLI's own nonzero guard); the sign
+  feature is unchanged.
 - **Node chips focus the graph.** An issue's node chips are clickable — a click routes to the graph page
   and **focuses that node**, so the page stays anchored to the graph it discusses.
 - **A human writes from here — to the issue's OWN store.** EVERY issue's detail carries a **reply

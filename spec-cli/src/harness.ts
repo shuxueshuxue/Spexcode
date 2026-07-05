@@ -55,6 +55,13 @@ export interface Harness {
   // named launcher keeps that exact command (and auth) on resume, never silently reverting to the global
   // default. Omitted → the unnamed default resolution (env-overridable, for tests + old records).
   launchCmd(id: string, runtimeDir?: string, cmd?: string): string
+  // the RESOLVED base launcher command alone — the wrapper/binary that carries the agent's config-dir env
+  // (claude `CLAUDE_CONFIG_DIR`, codex `CODEX_HOME`), WITHOUT the per-launch script built around it. `cmd`,
+  // when given, wins; else the ambient env→config→default resolution. The launch owner PINS this on the record
+  // at creation so a resume replays the EXACT launcher that created the conversation — never re-resolving
+  // against a since-changed default, which would point `--resume` at the wrong config dir and lose the
+  // transcript ([[launcher-select]], the resume-launcher-pin). launchCmd builds its invocation ON TOP of this.
+  baseCmd(cmd?: string): string
   // the flag that pins the session id at launch. Claude lets the caller choose (`--session-id <id>`); Codex
   // assigns its own, so there is nothing to pass (the id is captured/resumed afterwards).
   sessionIdArg(id: string): string
@@ -103,16 +110,18 @@ export interface Harness {
 
   // --- runtime: liveness + prompt delivery ([[harness-delivery]]) ---
   // is this session's agent process up? The caller passes the runtime facts it already computed in ONE
-  // snapshot (see sessions.ts liveTmux/procSnapshot): the window's presence AND a PaneProbe — the pane's
-  // root pid plus one whole-box process table. The adapter adds only its own channel check. claude: online
-  // iff the window is up AND its reclaude rendezvous socket exists (the socket is the truth claude is alive —
-  // claude IGNORES the pane probe). codex: online iff the window is up AND a codex-ish process (`codex` by any
+  // snapshot (see sessions.ts liveSnapshot): the window's presence, a PaneProbe — the pane's root pid plus one
+  // whole-box process table — AND `socketLive`, whether a CONNECT to this session's rendezvous socket found a
+  // live listener (the caller probes all windowed sessions once per snapshot). The adapter adds only its own
+  // channel check. claude: online iff the window is up AND its reclaude rendezvous socket has a live LISTENER
+  // (`socketLive` — a connect that a live claude accepts and a stale socket FILE refuses; claude IGNORES the
+  // pane probe). codex: online iff the window is up AND a codex-ish process (`codex` by any
   // name, or the `node` its CLI runs under) is live in the pane pid's DESCENDANT tree — NOT the pane's
   // foreground command name (that is `bash`, the launch wrapper, even while the TUI renders — field-confirmed),
   // and NOT the SHARED per-project app-server socket (it stays bound after a failed `--remote resume` dropped
   // the pane back to the shell). A missing probe (tmux/ps couldn't report) is not-live. The 'starting' boot
   // grace lives in the caller (sessions.ts liveness), so a still-booting pane reads starting, not offline.
-  liveness(rec: HarnessLivenessRecord, tmuxAlive: boolean, runtimeDir?: string, pane?: PaneProbe): 'online' | 'offline'
+  liveness(rec: HarnessLivenessRecord, tmuxAlive: boolean, runtimeDir?: string, pane?: PaneProbe, socketLive?: boolean): 'online' | 'offline'
   // deliver a follow-up prompt to a LIVE session and report whether it landed. claude: through the rendezvous
   // control socket — OPTIMISTIC-after-liveness (loud failure when the socket is missing/dead or the write can't
   // flush; once the reply line flushes to a live socket it returns ok, without waiting for an application ack —
@@ -160,10 +169,35 @@ export type HarnessArtifacts = { skills: readonly string[]; agents: readonly str
 // `{"type":"reply","text":"…"}\n` injects + submits the text as a prompt — no PTY typing, so multi-line input
 // and Enters can't be corrupted the way `tmux send-keys` was. The path is uniquely derived from the session id,
 // so we only ever address OUR OWN sockets (HARD ethics rule: never touch a session outside this product). It
-// lives in tmpdir tied to the claude process, so no extra lifecycle. liveness reads its existence (present while
-// claude is alive, gone once it exits); deliver writes to it. Exported because sessions.ts builds the launch env
-// var from it and best-effort sweeps it on close — but the liveness/delivery USE is the adapter's, below.
+// lives in tmpdir tied to the claude process, so no extra lifecycle. liveness CONNECTS to it (a live LISTENER,
+// not merely the file — see rendezvousListening); deliver writes to it. Exported because sessions.ts builds the
+// launch env var from it and best-effort sweeps it on close — but the liveness/delivery USE is the adapter's, below.
 export const rvSock = (id: string) => join(tmpdir(), `spexcode-rv-${id}.sock`)
+
+// @@@ rendezvousListening - the LISTENER check that IS claude's liveness truth ([[state]], [[harness-adapter]]).
+// A crashed/killed claude can leave its rvSock FILE on disk (a unix-domain socket path is NOT auto-unlinked on
+// an unclean exit), so the old `existsSync(rvSock)` read a DEAD pane as `online` for as long as the stale file
+// lingered — the incident's "dead pane stuck `working` for 30+ min". The honest signal is a live LISTENER:
+// connect() to the socket. A real claude is accepting → connects; a stale file → ECONNREFUSED (instant); an
+// absent file → ENOENT (instant). So the common cases cost no waiting; the short timeout only bounds the
+// pathological file-present-but-listener-wedged case (then treated as not-live). Never throws.
+export function rendezvousListening(id: string, timeoutMs = 800): Promise<boolean> {
+  return new Promise((resolve) => {
+    let settled = false
+    let c: ReturnType<typeof createConnection> | undefined
+    const done = (v: boolean) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      try { c?.destroy() } catch { /* */ }
+      resolve(v)
+    }
+    const timer = setTimeout(() => done(false), timeoutMs)
+    try { c = createConnection({ path: rvSock(id) }) } catch { return done(false) }
+    c.on('connect', () => done(true))
+    c.on('error', () => done(false))   // ECONNREFUSED (stale file) / ENOENT (gone) — both mean no live agent
+  })
+}
 // The app-server Unix socket MUST live on a SHORT, sun_path-safe path — NOT nested under the project runtime
 // dir. macOS caps `sun_path` at ~104 bytes, and `runtimeRoot()` flattens the ENTIRE project path into one
 // dash-segment (`encodeProject`), so `<runtimeRoot>/codex-app-server.sock` blew past the cap on a deep macOS
@@ -890,12 +924,18 @@ export function paneTreeRunsCodex(pane?: PaneProbe): boolean {
 const CLAUDE_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop', 'StopFailure', 'Notification'] as const
 const CODEX_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop'] as const
 
+// the resolved base launcher command per harness (the wrapper that sets the config-dir env), shared by
+// launchCmd and baseCmd so the two never diverge: `cmd` override wins, else ambient env→config→default.
+const claudeBaseCmd = (cmd?: string) => cmd || process.env.SPEXCODE_CLAUDE_CMD || readConfig(mainCheckout()).sessions?.claudeCmd || 'claude --dangerously-skip-permissions'
+const codexBaseCmd = (cmd?: string) => cmd || process.env.SPEXCODE_CODEX_CMD || readConfig(mainCheckout()).sessions?.codexCmd || 'codex --yolo'
+
 export const claudeHarness: Harness = {
   id: 'claude',
   events: CLAUDE_EVENTS,
   ownsRendezvous: true,                              // reclaude opens the rendezvous control socket (prompt delivery + liveness)
   paneTitleIsSelfSummary: true,                      // claude writes its live task summary into the OSC pane title → headline derives from it
-  launchCmd: (_id, _rt, cmd) => cmd || process.env.SPEXCODE_CLAUDE_CMD || readConfig(mainCheckout()).sessions?.claudeCmd || 'claude --dangerously-skip-permissions',
+  launchCmd: (_id, _rt, cmd) => claudeBaseCmd(cmd),  // claude's full invocation IS its base command (the tail is appended by the caller)
+  baseCmd: claudeBaseCmd,
   sessionIdArg: (id) => `--session-id ${id}`,        // the caller chooses the id
   sessionEnvVar: 'CLAUDE_CODE_SESSION_ID',
   shimFile: (proj) => join(proj, '.claude', 'settings.json'),
@@ -908,7 +948,10 @@ export const claudeHarness: Harness = {
   removeTrust: () => { /* Claude wrote no trust — nothing to strip */ },
   clean(proj, arts) { cleanHarness(this, proj, arts) },
   slashCommands: claudeSlashCommands,
-  liveness: (rec, tmuxAlive) => (tmuxAlive && existsSync(rvSock(rec.session)) ? 'online' : 'offline'),
+  // online iff the window is up AND a LIVE LISTENER is on the rendezvous socket (`socketLive`, connect-probed by
+  // the caller) — NOT the mere existence of a stale socket FILE a crashed claude leaves behind (the 30-min
+  // dead-pane-reads-working bug). See rendezvousListening.
+  liveness: (_rec, tmuxAlive, _runtimeDir, _pane, socketLive) => (tmuxAlive && !!socketLive ? 'online' : 'offline'),
   deliver: (rec, text) => deliverViaRendezvous(rec.session, text),
   resumeArg: (rec) => `--resume ${rec.session}`,
 }
@@ -918,7 +961,8 @@ export const codexHarness: Harness = {
   events: CODEX_EVENTS,
   ownsRendezvous: false,                             // no reclaude daemon — liveness + prompts through the project app-server socket
   paneTitleIsSelfSummary: false,                     // codex's pane title is a spinner + the cwd folder name, NOT a task summary → headline uses the prompt
-  launchCmd: (id, runtimeDir, cmd) => codexLaunchCommand(id, cmd || process.env.SPEXCODE_CODEX_CMD || readConfig(mainCheckout()).sessions?.codexCmd, undefined, runtimeDir ?? runtimeRoot()),   // launcher cmd→env→config→default; ONE app-server per PROJECT
+  launchCmd: (id, runtimeDir, cmd) => codexLaunchCommand(id, codexBaseCmd(cmd), undefined, runtimeDir ?? runtimeRoot()),   // the full app-server+TUI script BUILT AROUND the resolved base command; ONE app-server per PROJECT
+  baseCmd: codexBaseCmd,
   sessionIdArg: () => '',                            // codex assigns its own id (the backend owns it via thread/start)
   sessionEnvVar: 'CODEX_THREAD_ID',
   // Codex discovers a LINKED worktree's PROJECT hooks from the ROOT CHECKOUT's `.codex`, NOT the worktree's

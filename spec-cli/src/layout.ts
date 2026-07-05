@@ -162,6 +162,7 @@ export type RawRecord = {
   status: string; proposal: string | null; merges: number; note: string | null
   sortkey: number | null; createdAt: number; harness?: string; harness_session_id?: string
   launcher?: string   // the named launcher profile this session was created under ([[launcher-select]]); absent/empty → the unnamed global default
+  launch_cmd?: string // the RESOLVED base launcher command PINNED at creation, so a resume replays the EXACT launcher (and its config-dir env) that made the conversation, never a since-changed default ([[launcher-select]] resume-launcher-pin); absent → old record, fall back to the launcher name / ambient
 }
 // the agent's OWN session id from the environment — the only locator now that the record left the worktree.
 // Three tiers, in order:

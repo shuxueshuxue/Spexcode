@@ -6,7 +6,7 @@ import { join, dirname, relative, isAbsolute } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, type ReviewDiffFile } from './git.js'
 import { loadSpecs } from './specs.js'
-import { defaultHarness, harnessById, resolveLauncher, rvSock, type Harness, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
+import { defaultHarness, harnessById, resolveLauncher, rvSock, rendezvousListening, type Harness, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
 import { materialize } from './materialize.js'
 import { mainBranch, gitCommonDir, readConfig, runtimeRoot, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, readAliasedRawRecord, envSessionId, type RawRecord } from './layout.js'
 
@@ -21,9 +21,11 @@ import { mainBranch, gitCommonDir, readConfig, runtimeRoot, sessionStoreDir, ses
 //   lifecycle (authored): active | idle | awaiting | parked | error | asking | queued. `idle` is the ONE
 //              inferred one (the Notification(idle_prompt) hook, guarded active-only so it never clobbers a
 //              declaration; mark-active flips it back to active on real work).
-//   liveness (derived for EVERY session): online | starting | offline. offline = no tmux for the id, or the
-//              harness online-signal (claude's rendezvous socket) is gone past the boot grace; starting =
-//              the boot window. reconcile composes the two into the compact DisplayStatus for one-glyph surfaces.
+//   liveness (derived for EVERY session): online | starting | offline | unknown. offline = no tmux for the id,
+//              or the harness online-signal (claude's rendezvous socket LISTENER — a connect, not the socket
+//              FILE) is gone past the boot grace; starting = the boot window; unknown = the tmux probe itself
+//              failed (timed out under load) so death is UNPROVEN — render probe-failed, never offline/vanish.
+//              reconcile composes the two into the compact DisplayStatus for one-glyph surfaces.
 //   awaiting → the agent's PROPOSAL, awaiting a human:
 //                proposal=merge   → shown "review"        ("ready, merge me")
 //                proposal=nothing → shown "done"          ("finished, your call")
@@ -95,11 +97,14 @@ export type { DispatchResult }
 
 export type Lifecycle = 'active' | 'idle' | 'awaiting' | 'parked' | 'error' | 'asking' | 'queued'
 export type Proposal = 'merge' | 'nothing' | 'close'
-export type DisplayStatus = 'working' | 'idle' | 'offline' | 'starting' | 'review' | 'done' | 'close-pending' | 'parked' | 'error' | 'asking' | 'queued'
+export type DisplayStatus = 'working' | 'idle' | 'offline' | 'starting' | 'review' | 'done' | 'close-pending' | 'parked' | 'error' | 'asking' | 'queued' | 'unknown'
 // liveness — the orthogonal axis to Lifecycle: whether the agent process is actually up, derived (never
 // authored) for EVERY session regardless of its lifecycle. See [[state]]: lifecycle and liveness never
 // override each other; the UI keys the terminal-mount / relaunch panel on this, the badge on lifecycle.
-export type Liveness = 'online' | 'starting' | 'offline'
+// `unknown` = the liveness PROBE ITSELF failed (the tmux snapshot timed out / errored under load), so we
+// CANNOT tell — the row renders probe-failed, NEVER offline/closed and never vanishes (board honesty: a slow
+// box must not masquerade as a graveyard, the failure that drove the mass-restore incident).
+export type Liveness = 'online' | 'starting' | 'offline' | 'unknown'
 const PROPOSAL_STATUS: Record<Proposal, DisplayStatus> = { merge: 'review', nothing: 'done', close: 'close-pending' }
 
 export type Session = {
@@ -172,9 +177,22 @@ export const deriveHeadline = (r: { name?: string | null; activity?: string | nu
 export const sessionLabel = (s: Session): string => s.label
 export const sessionHeadline = (s: Session): string => s.headline
 
-async function tmux(args: string[]): Promise<string> {
-  const { stdout } = await pexec('tmux', ['-L', TMUX_SOCK, ...args], { encoding: 'utf8' })
+// @@@ tmux probe timeout - under load (the incident: load ~30 + swap thrash) a bare `tmux list-sessions` can
+// HANG, and with no bound the whole board assembly hung behind it — the dashboard froze / dropped rows, which
+// the human read as "sessions disappeared". So the liveness/title probes pass a bounded timeout; on expiry
+// execFile SIGKILLs the child and rejects with `killed:true`, which liveSnapshot tells apart from a clean
+// "no server" exit (see probeTimedOut) so a timeout renders `unknown`, not a false `offline`.
+const TMUX_PROBE_TIMEOUT_MS = 4000
+async function tmux(args: string[], timeoutMs?: number): Promise<string> {
+  const { stdout } = await pexec('tmux', ['-L', TMUX_SOCK, ...args], { encoding: 'utf8', ...(timeoutMs ? { timeout: timeoutMs, killSignal: 'SIGKILL' as const } : {}) })
   return stdout
+}
+// a rejected pexec whose child we KILLED (timeout) vs one that exited cleanly non-zero (e.g. tmux "no server
+// running" when there are genuinely no sessions). Only the former is a PROBE FAILURE (→ unknown); a clean
+// non-zero exit is authoritative (→ everything offline). node sets `killed`/`signal` when it SIGKILLs on timeout.
+function probeTimedOut(e: unknown): boolean {
+  const err = e as { killed?: boolean; signal?: string | null; code?: string }
+  return err?.killed === true || err?.signal === 'SIGKILL' || err?.code === 'ETIMEDOUT'
 }
 async function tmuxOk(args: string[]): Promise<boolean> { try { await tmux(args); return true } catch { return false } }
 export async function alive(id: string): Promise<boolean> { return tmuxOk(['has-session', '-t', id]) }
@@ -206,6 +224,7 @@ export type SessRec = {
   status: Lifecycle; proposal: Proposal | null; merges: number; note: string | null
   sortKey: number | null; createdAt: number; harness: string; harnessSessionId: string | null
   launcher: string | null   // the named launcher profile this session launches under ([[launcher-select]]); null → the unnamed global default (an old record, or a zero-config launch)
+  launchCmd: string | null  // the RESOLVED base launcher command pinned at creation ([[launcher-select]] resume-launcher-pin); null → old record → fall back to the launcher name / ambient
 }
 const LIFECYCLES = new Set<Lifecycle>(['active', 'idle', 'awaiting', 'parked', 'error', 'asking', 'queued'])
 const PROPOSALS = new Set<Proposal>(['merge', 'nothing', 'close'])
@@ -231,6 +250,7 @@ function fromRaw(raw: RawRecord): SessRec {
     harness: raw.harness || 'claude',   // records written before the harness field default to claude
     harnessSessionId: raw.harness_session_id || null,
     launcher: raw.launcher || null,     // records written before launchers → null → the unnamed global resolution
+    launchCmd: raw.launch_cmd || null,  // records written before the pin → null → fall back to launcher name / ambient
   }
 }
 // @@@ session.json format - written one-field-per-line (JSON.stringify(_, null, 2)) with EVERY key ALWAYS
@@ -256,6 +276,7 @@ function writeRecord(rec: SessRec): void {
     harness: rec.harness || 'claude',
     harness_session_id: rec.harnessSessionId ?? '',
     launcher: rec.launcher ?? '',
+    launch_cmd: rec.launchCmd ?? '',
   }
   mkdirSync(sessionStoreDir(rec.session), { recursive: true })
   writeFileSync(sessionRecordPath(rec.session), JSON.stringify(obj, null, 2) + '\n')
@@ -301,25 +322,43 @@ async function listWorktrees(): Promise<{ path: string; branch: string | null }[
 async function procSnapshot(): Promise<ProcTable> {
   const t: ProcTable = new Map()
   let out = ''
-  try { ({ stdout: out } = await pexec('ps', ['-eo', 'pid=,ppid=,comm='])) } catch { return t }
+  try { ({ stdout: out } = await pexec('ps', ['-eo', 'pid=,ppid=,comm='], { timeout: TMUX_PROBE_TIMEOUT_MS, killSignal: 'SIGKILL' })) } catch { return t }
   for (const line of out.split('\n')) {
     const m = /^\s*(\d+)\s+(\d+)\s+(.*)$/.exec(line)
     if (m) t.set(Number(m[1]), { ppid: Number(m[2]), comm: m[3].trim() })
   }
   return t
 }
-async function liveTmux(): Promise<Map<string, PaneProbe>> {
-  const m = new Map<string, PaneProbe>()
-  let out = ''
-  let procs: ProcTable | undefined
-  try { [out, procs] = await Promise.all([tmux(['list-sessions', '-F', '#{session_name}\t#{pane_pid}']), procSnapshot()]) } catch { return m }
+// @@@ LiveSnap - the ONE liveness snapshot the whole session list shares. `windows` = our live tmux windows
+// (id → PaneProbe) + one whole-box process table; `sockets` = the ids whose rendezvous socket has a LIVE
+// LISTENER (connect-probed once here, not the file-exists lie — [[harness-adapter]]); `probeFailed` = the tmux
+// window probe itself FAILED (timed out under load), which is DISTINCT from "tmux up, no sessions" — the former
+// means death is UNPROVEN so those rows read `unknown`, the latter is authoritative and reads `offline`.
+export type LiveSnap = { probeFailed: boolean; windows: Map<string, PaneProbe>; sockets: Set<string> }
+async function liveSnapshot(): Promise<LiveSnap> {
+  const windows = new Map<string, PaneProbe>()
+  let out: string
+  try {
+    out = await tmux(['list-sessions', '-F', '#{session_name}\t#{pane_pid}'], TMUX_PROBE_TIMEOUT_MS)
+  } catch (e) {
+    // a TIMEOUT/kill is a probe FAILURE (we can't tell who's alive → unknown, never a false graveyard). A clean
+    // non-zero exit ("no server running" — genuinely zero sessions) is authoritative → the empty map = offline.
+    return { probeFailed: probeTimedOut(e), windows, sockets: new Set() }
+  }
+  const procs = await procSnapshot().catch(() => undefined)   // codex-only, auxiliary; its failure isn't a liveness failure
   for (const line of out.split('\n')) {
-    const tab = line.indexOf('\t'); if (tab < 0) { const name = line.trim(); if (name) m.set(name, { procs }); continue }
+    const tab = line.indexOf('\t'); if (tab < 0) { const name = line.trim(); if (name) windows.set(name, { procs }); continue }
     const name = line.slice(0, tab).trim(); if (!name) continue
     const pid = Number(line.slice(tab + 1).trim())
-    m.set(name, { panePid: Number.isFinite(pid) && pid > 0 ? pid : undefined, procs })
+    windows.set(name, { panePid: Number.isFinite(pid) && pid > 0 ? pid : undefined, procs })
   }
-  return m
+  // LISTENER probe for every windowed session, once, in parallel (tooth: a live listener, not a lingering
+  // socket file). A codex session has no rvSock → instant ENOENT → not in the set, and codex ignores it anyway.
+  const ids = [...windows.keys()]
+  const listening = await Promise.all(ids.map((id) => rendezvousListening(id)))
+  const sockets = new Set<string>()
+  ids.forEach((id, i) => { if (listening[i]) sockets.add(id) })
+  return { probeFailed: false, windows, sockets }
 }
 
 // @@@ paneTitles - every session pane's RAW tmux title, free from tmux. The worker launches one pane per
@@ -346,8 +385,11 @@ async function paneTitles(): Promise<Map<string, string>> {
 // poll this to push a `board-changed` the instant a worker dies or updates its headline, instead of the
 // dashboard waiting for its slow cold-path fallback. Sorted so it only moves on a real change.
 export async function sessionSignature(): Promise<string> {
-  const [live, titles] = await Promise.all([liveTmux(), paneTitles()])
-  return [...live.keys()].sort().join(',') + '|' + [...titles].sort().map(([k, v]) => `${k}=${v}`).join(',')
+  const [snap, titles] = await Promise.all([liveSnapshot(), paneTitles()])
+  // fold in probe-failure and the live-listener set so a socket dying (claude exit) OR the probe flipping to
+  // unknown pushes a board-changed immediately, not only on window churn.
+  return (snap.probeFailed ? 'PROBEFAIL|' : '') + [...snap.windows.keys()].sort().join(',') + '#' +
+    [...snap.sockets].sort().join(',') + '|' + [...titles].sort().map(([k, v]) => `${k}=${v}`).join(',')
 }
 
 // @@@ paneActivity - the harness-aware live self-summary: the SINGLE place a raw pane title becomes (or does
@@ -390,24 +432,26 @@ const LAUNCH_FAST_FAIL_S = 12 // launchScript retries the agent command when it 
                               // launcher daemon-not-ready race fails in ~8s; a real session runs far longer
 
 // @@@ liveness - the orthogonal axis ([[state]]): is the agent process up, for ANY session regardless of
-// lifecycle, from a prebuilt runtime snapshot (no per-call spawn — see liveTmux) + the adapter's own channel
-// check. offline iff the tmux window is gone OR the adapter's online-signal is absent past the boot window.
-// claude (via the reclaude wrapper) holds CLAUDE_BG_RENDEZVOUS_SOCK open the whole time it is alive, so its
-// socket — NOT the pane, whose foreground is the wrapper/shell while claude runs as its child — is the truth.
-// codex has no such socket, so its truth is the pane's DESCENDANT PROCESS TREE from the SAME snapshot: a live
-// TUI keeps a codex/node process below the pane pid (the foreground name stays `bash`, the launch wrapper);
-// a failed launch leaves the pane at a bare shell with nothing below it, even while the shared app-server
+// lifecycle, from a prebuilt runtime snapshot (no per-call spawn — see liveSnapshot) + the adapter's own channel
+// check. Order of honesty: if the PROBE ITSELF failed (tmux timed out under load) death is UNPROVEN → `unknown`
+// (render probe-failed, NEVER a false offline that empties the board and provokes a mass-restore). Else offline
+// iff the tmux window is gone OR the adapter's online-signal is absent past the boot window. claude (via the
+// reclaude wrapper) holds CLAUDE_BG_RENDEZVOUS_SOCK open the whole time it is alive, so a LIVE LISTENER on that
+// socket (`snap.sockets`, connect-probed — NOT the socket FILE, which a crash leaves behind) is the truth —
+// not the pane, whose foreground is the wrapper/shell while claude runs as its child. codex has no such socket,
+// so its truth is the pane's DESCENDANT PROCESS TREE from the SAME snapshot: a live TUI keeps a codex/node
+// process below the pane pid; a failed launch leaves the pane at a bare shell, even while the shared app-server
 // sock lingers. A just-launched agent whose online-signal hasn't appeared yet reads the transient 'starting'
 // for the grace window; only past it (still not online) is it genuinely 'offline'.
-function liveness(rec: SessRec, live: Map<string, PaneProbe>): Liveness {
+export function liveness(rec: SessRec, snap: LiveSnap): Liveness {
   if (!rec.session) return 'offline'
-  // ask the ADAPTER ([[harness-adapter]]): claude = tmux up AND its rendezvous socket present; codex = tmux up
-  // AND a codex-ish process live among the pane pid's descendants (not the bare shell a failed launch dropped
-  // back to). The 'starting' grace stays here (a launcher concern): a just-launched agent whose online-signal
-  // hasn't appeared yet — a codex pane still bootstrapping its app-server before the TUI's processes exist —
-  // reads 'starting' for the boot window, only past it 'offline'.
+  if (snap.probeFailed) return 'unknown'   // the probe failed — we can't tell, and MUST NOT guess offline
+  // ask the ADAPTER ([[harness-adapter]]): claude = tmux up AND a live listener on its rendezvous socket; codex
+  // = tmux up AND a codex-ish process live among the pane pid's descendants (not the bare shell a failed launch
+  // dropped back to). The 'starting' grace stays here (a launcher concern): a just-launched agent whose
+  // online-signal hasn't appeared yet reads 'starting' for the boot window, only past it 'offline'.
   const h = harnessById(rec.harness || defaultHarness.id)
-  if (h.liveness(rec, live.has(rec.session), runtimeRoot(), live.get(rec.session)) === 'online') return 'online'
+  if (h.liveness(rec, snap.windows.has(rec.session), runtimeRoot(), snap.windows.get(rec.session), snap.sockets.has(rec.session)) === 'online') return 'online'
   const at = launchedAt.get(rec.session)
   return at && Date.now() - at < BOOT_GRACE_MS ? 'starting' : 'offline'
 }
@@ -415,14 +459,14 @@ function liveness(rec: SessRec, live: Map<string, PaneProbe>): Liveness {
 // reconcile the compact DisplayStatus — a DERIVED label composing lifecycle + liveness for one-glyph
 // surfaces ([[state]]), never a third source of truth. Lifecycle wins the label except where liveness must
 // show through: awaiting → its proposal label; parked/error/asking/queued → themselves; active/idle → their
-// liveness (offline/starting), else the active-only idle/working inference (the mark-active hook flips idle
-// → active on the next real work, self-correcting). The orthogonal liveness field is what the UI keys
+// liveness (offline/starting/unknown), else the active-only idle/working inference (the mark-active hook flips
+// idle → active on the next real work, self-correcting). The orthogonal liveness field is what the UI keys
 // terminal-mount and the relaunch panel on; this label is for badges and `spex ls`.
-function reconcile(rec: SessRec, live: Map<string, PaneProbe>): DisplayStatus {
+function reconcile(rec: SessRec, snap: LiveSnap): DisplayStatus {
   if (rec.status === 'awaiting') return PROPOSAL_STATUS[rec.proposal || 'nothing']
   if (rec.status !== 'active' && rec.status !== 'idle') return rec.status  // parked | error | asking | queued (no tmux yet)
-  const lv = liveness(rec, live)
-  if (lv !== 'online') return lv  // 'offline' | 'starting'
+  const lv = liveness(rec, snap)
+  if (lv !== 'online') return lv  // 'offline' | 'starting' | 'unknown'
   return rec.status === 'idle' ? 'idle' : 'working'
 }
 
@@ -489,8 +533,8 @@ const lastKnownSession = new Map<string, Session>()
 export async function listSessions(): Promise<Session[]> {
   // ONE store enumeration + ONE tmux liveness snapshot + ONE pane-title snapshot for the whole list (all
   // independent), then every session reconciles by a pure set lookup + one existsSync — no per-session tmux spawn.
-  const [ids, live, titles] = await Promise.all([
-    Promise.resolve(listSessionIds()), liveTmux(), paneTitles(),
+  const [ids, snap, titles] = await Promise.all([
+    Promise.resolve(listSessionIds()), liveSnapshot(), paneTitles(),
   ])
   const rows = ids.map((id) => guardSession(id, () => {
     const rec = readRecord(id)
@@ -498,7 +542,7 @@ export async function listSessions(): Promise<Session[]> {
     // the pane title → headline activity, gated by THIS session's harness ([[harness-adapter]]): claude's title
     // is its task self-summary (used); codex's is the cwd folder name (refused → headline falls to the prompt).
     const activity = paneActivity(harnessById(rec.harness || defaultHarness.id), titles.get(id))
-    const s = toSession(rec, reconcile(rec, live), liveness(rec, live), activity)
+    const s = toSession(rec, reconcile(rec, snap), liveness(rec, snap), activity)
     lastKnownSession.set(id, s)
     return s
   }, () => {
@@ -706,10 +750,14 @@ function titleFromPrompt(prompt: string): string | null {
 // `reclaude` wrapper, a grandchild), so the pane command is the wrapper/shell — reconcile reads claude's
 // rendezvous socket instead (present while claude is alive, gone once it exits). The file lives OUTSIDE the
 // worktree (in the store, keyed by session_id), so it never pollutes the spec/code work.
-// the launch command for THIS session ([[launcher-select]]): if it was created under a named launcher, resolve
-// that profile's cmd (bypassing the ambient env→config default, so resume reuses the SAME auth); else undefined
-// → the unnamed global resolution the harness adapter does. Resolution is fail-loud on a since-removed launcher.
-function launcherCmd(rec: SessRec): string | undefined {
+// the launch command for THIS session ([[launcher-select]] resume-launcher-pin): the RESOLVED base command
+// PINNED on the record at creation wins — so a (re)launch replays the EXACT launcher that made the conversation
+// (and its config-dir env), never re-resolving against a since-changed default that would send `--resume` to the
+// wrong config dir and lose the transcript. Fall back to the named-launcher resolution (an old record with a
+// launcher name but no pinned cmd; fail-loud on a since-removed launcher), then undefined (truly old record →
+// the harness adapter's ambient resolution, best-effort).
+export function launcherCmd(rec: SessRec): string | undefined {
+  if (rec.launchCmd) return rec.launchCmd
   return rec.launcher ? resolveLauncher(rec.launcher).cmd : undefined
 }
 function launchScript(id: string, tail: string, harness: Harness = HARNESS, cmd?: string): string {
@@ -759,11 +807,11 @@ async function launch(id: string, path: string, tail: string, harness: Harness =
 // directly (the socket truth reconcile uses), so an authored `parked` whose claude has since died does NOT
 // pin a slot. The cap throttles concurrent COMPUTE; everything waiting-on-you waits cheap as a live pane.
 const OCCUPIES_SLOT = new Set<DisplayStatus>(['working', 'parked', 'starting'])  // starting's boot window is also held via `launching`
-function isOccupying(s: Session, live: Map<string, PaneProbe>): boolean {
+function isOccupying(s: Session, snap: LiveSnap): boolean {
   if (!OCCUPIES_SLOT.has(s.status)) return false                          // waiting-on-human / proposed / queued / dead → free
   const rec = readRecord(s.id)
   if (!rec) return false
-  return harnessById(rec.harness || defaultHarness.id).liveness(rec, live.has(rec.session), runtimeRoot(), live.get(rec.session)) === 'online'  // and only while the agent is genuinely live (its adapter's channel)
+  return harnessById(rec.harness || defaultHarness.id).liveness(rec, snap.windows.has(rec.session), runtimeRoot(), snap.windows.get(rec.session), snap.sockets.has(rec.session)) === 'online'  // and only while the agent is genuinely live (its adapter's channel)
 }
 // sessions we've JUST launched whose agent hasn't come online yet. During that boot window reconcile reads them
 // `offline` (the adapter's online-signal not up yet) and isOccupying would miss them, so the drainer would
@@ -809,8 +857,13 @@ export async function drainQueue(): Promise<void> {
   try {
     const cap = maxActive()   // read once per drain pass (spexcode.json → env → 6); won't shift mid-burst
     for (;;) {
-      const [sessions, live] = await Promise.all([listSessions(), liveTmux()])
-      const occupied = sessions.reduce((n, s) => n + (launching.has(s.id) || isOccupying(s, live) ? 1 : 0), 0)
+      const [sessions, snap] = await Promise.all([listSessions(), liveSnapshot()])
+      // if the liveness probe FAILED (tmux timing out — the overload condition), occupancy is UNKNOWABLE: every
+      // session would read window-less and isOccupying would undercount, so the drainer would OVER-launch and pile
+      // MORE compute onto an already-thrashing box. Under load, do the safe thing — launch nothing this pass and
+      // let the next tick re-drain once the probe recovers ([[state]] board honesty applied to the cap).
+      if (snap.probeFailed) break
+      const occupied = sessions.reduce((n, s) => n + (launching.has(s.id) || isOccupying(s, snap) ? 1 : 0), 0)
       if (occupied >= cap) break
       const next = sessions.find((s) => s.status === 'queued' && !launching.has(s.id))
       if (!next) break
@@ -927,6 +980,10 @@ export async function newSession(node: string | null, prompt: string, harness: s
     node: ref || null, title, name: null, parent: parent && parent !== id ? parent : null,
     status: 'queued', proposal: null, merges: 0, note: null, sortKey: null, createdAt: Date.now(),
     harness: h.id, harnessSessionId: null, launcher: lname,
+    // PIN the resolved base launcher command NOW ([[launcher-select]] resume-launcher-pin) so every future
+    // (re)launch replays THIS exact launcher — the one whose config-dir env holds the conversation — instead of
+    // re-resolving against a default that may have flipped (a backend restarted under a different launcher).
+    launchCmd: h.baseCmd(chosen?.cmd),
   }
   writeRecord(rec)
   writePromptFile(id, prompt)   // capture the ORIGINATING prompt (the human/manager's ask) as store metadata (best-effort)
@@ -971,42 +1028,54 @@ async function waitForReady(id: string, harness: Harness, timeoutMs = SOCKET_REA
   const deadline = Date.now() + timeoutMs
   for (;;) {
     const rec = readRecord(id)
-    const live = await liveTmux()   // window presence + pane probe in one snapshot — both facts the adapter's liveness needs
-    if (rec && harness.liveness(rec, live.has(id), runtimeRoot(), live.get(id)) === 'online') return true
+    const snap = await liveSnapshot()   // window + pane probe + live-listener set in one snapshot — all the adapter needs
+    if (rec && harness.liveness(rec, snap.windows.has(id), runtimeRoot(), snap.windows.get(id), snap.sockets.has(id)) === 'online') return true
     if (Date.now() >= deadline) return false
     await new Promise((r) => setTimeout(r, SOCKET_POLL_MS))
   }
 }
 
-// @@@ reopen - bring the agent back up (relaunch iff offline) and settle its RESTING lifecycle. Two rules, both
-// narrow:
-//   • liveness: relaunch only when the agent isn't running for this id — the SAME deterministic liveness the
-//     adapter computes ([[harness-adapter]]): claude offline = no tmux OR no rendezvous socket (claude exited,
-//     even though the wrapper/shell may still hold the pane); codex offline = no tmux, no project app-server, or
-//     no captured native thread id. When offline we drop any stale pane and launch a fresh window through the
-//     adapter's resumeArg — claude `--resume <id>` (the SAME conversation), codex `resume <thread-id>` once
-//     captured, else a fresh TUI in the same worktree/record — then WAIT (waitForReady) so a caller that
-//     dispatches immediately after (e.g. mergeSession's merge) addresses a LIVE agent, not a racing boot.
+// @@@ reopen - bring the agent back up and settle its RESTING lifecycle. THREE rules:
+//   • RESUME GUARD ([[state]]): a relaunch KILLS the running agent (`kill-session` + fresh window), so it is a
+//     data-loss operation the moment the agent is actually ALIVE — the incident's kill-shot was restore-on-alive
+//     (the board LIED offline, the human relaunched, live workers died mid-work). So reopen re-derives the
+//     agent's liveness FRESH and, when the caller is guarding (the human relaunch panel / `spex session reopen`,
+//     `guard` default true), REFUSES LOUD rather than relaunch a live agent — you steer a live agent by
+//     MESSAGING it, not by restoring it. Death must be PROVEN: an `unknown` probe (tmux timed out under load —
+//     the exact condition that started the incident) also refuses, since a live worker can't be ruled out. A
+//     `force` escape exists for a genuinely-wedged-but-alive process. The merge dispatch passes `guard:false`:
+//     it only needs a LIVE agent to send the merge prompt to, so an already-online agent is a satisfied no-op
+//     (never a refusal), and only a CONFIRMED-offline one is relaunched.
+//   • liveness/relaunch: relaunch only when the agent is CONFIRMED `offline` (or `force`) — never on `online`
+//     (alive), `starting` (booting), or `unknown` (unproven). We drop any stale pane and launch a fresh window
+//     through the adapter's resumeArg — claude `--resume <id>` (the SAME conversation), codex `resume
+//     <thread-id>` once captured, else a fresh TUI — then WAIT (waitForReady) so a caller that dispatches
+//     immediately after (mergeSession's merge) addresses a LIVE agent, not a racing boot.
 //   • lifecycle: the SAME active-only guard markIdle uses — a resumed agent that was WORKING (`active`) is now
 //     just sitting at its prompt → `idle`; EVERY deliberate declaration survives untouched (`awaiting` + its
 //     proposal, `asking`, `parked`, `error`, `queued`). reopen does NOT touch the `proposal` — resuming a
-//     session that is proposing a merge must NOT silently withdraw it (proposals are reversible by MESSAGING
-//     the session — mark-active clears them — never as a hidden side-effect of a relaunch). This is the inverse
-//     symmetry of `exit`, which leaves the last-authored lifecycle untouched: exit preserves it, reopen
-//     preserves it too, demoting only a now-false "working" claim.
+//     session that is proposing a merge must NOT silently withdraw it. Only applied when we actually relaunch;
+//     a refusal leaves the record wholly untouched.
 // Fail-loud is unchanged: if the agent never comes online, the later deliver() fails loud.
-export async function reopen(id: string): Promise<boolean> {
+export async function reopen(id: string, opts: { force?: boolean; guard?: boolean } = {}): Promise<{ ok: boolean; error?: string; refused?: boolean }> {
+  const { force = false, guard = true } = opts
   const wt = await findWorktree(id)
-  if (!wt) return false
+  if (!wt) return { ok: false, error: `no such session ${id}` }
   const h = harnessById(wt.rec.harness || defaultHarness.id)
+  const lv = liveness(wt.rec, await liveSnapshot())   // FRESH, honest liveness (listener-verified) — the guard must not trust a stale board reading
+  if (guard && !force && lv === 'online')
+    return { ok: false, refused: true, error: `session ${id} is ALIVE — refusing to relaunch, which would kill a live worker mid-work. To steer it, send it a message; use force only for a genuinely wedged (but alive) process.` }
+  if (guard && !force && lv === 'unknown')
+    return { ok: false, refused: true, error: `session ${id}: the liveness probe failed (the box is likely overloaded) — refusing to relaunch since a live worker can't be ruled out. Retry in a moment, or use force to override.` }
+  // proceeding: settle the RESTING lifecycle (a resumed working agent is now idle), then relaunch iff the agent
+  // is CONFIRMED offline (or force — the wedged-but-alive escape). `starting`/`unknown` fall through to a no-op.
   writeRecord({ ...wt.rec, status: wt.rec.status === 'active' ? 'idle' : wt.rec.status })
-  const live = await liveTmux()   // window presence + pane probe — the adapter reads both (codex walks the pane's process tree)
-  if (h.liveness(wt.rec, live.has(id), runtimeRoot(), live.get(id)) !== 'online') {
-    await tmuxOk(['kill-session', '-t', id])   // drop a dead/offline pane if any (no-op when none)
-    await launch(id, wt.path, h.resumeArg(wt.rec).trim(), h, launcherCmd(wt.rec))   // resume under the SAME persisted launcher ([[launcher-select]]) — never re-resolve to the global default
+  if (force || lv === 'offline') {
+    await tmuxOk(['kill-session', '-t', id])   // drop a dead/offline pane (or a force-killed live one)
+    await launch(id, wt.path, h.resumeArg(wt.rec).trim(), h, launcherCmd(wt.rec))   // resume under the SAME persisted launcher ([[launcher-select]])
     await waitForReady(id, h)   // a relaunched agent is "ready" only once the adapter reads it online
   }
-  return true
+  return { ok: true }
 }
 
 // @@@ agent-authored state - the agent (forced by gates at boundaries) writes its OWN state; it is the
@@ -1208,7 +1277,10 @@ export async function mergeSession(id: string): Promise<{ dispatched: boolean; r
   const wt = await findWorktree(id)
   if (!wt || !wt.branch) return { dispatched: false, reason: 'no such session' }
   const branch = wt.branch, main = mainRoot()
-  if (!(await reopen(id))) return { dispatched: false, reason: 'could not reopen session' }
+  // ensure-live, NOT the guarded human relaunch: an already-online agent is reused (the merge prompt just needs
+  // a live socket), and only a confirmed-offline one is relaunched — so merge never refuses on a live agent.
+  const re = await reopen(id, { guard: false })
+  if (!re.ok) return { dispatched: false, reason: re.error || 'could not reopen session' }
   const subject = (await gitA(['-C', main, 'log', '-1', '--format=%s', branch])).trim()
   const reason = subject.replace(/^spec:\s+/, '') || branch
   const r = await sendKeys(id, mergePrompt(main, branch, reason))
@@ -1285,10 +1357,10 @@ export async function captureSessionResult(id: string): Promise<CaptureResult> {
 // @@@ presentation + selection - shared by `spex ls` (pretty), `spex watch` (events) and the API.
 export const STATUS_GLYPH: Record<DisplayStatus, string> = {
   working: '\u25cf', idle: '\u25cb', offline: '\u23fb', starting: '\u25d4', review: '\u25c6', done: '\u2713',
-  'close-pending': '\u2715', parked: '\u29d6', error: '\u2717', asking: '\u2370', queued: '\u25cc',
+  'close-pending': '\u2715', parked: '\u29d6', error: '\u2717', asking: '\u2370', queued: '\u25cc', unknown: '\u2047',
 }
 const ANSI: Record<DisplayStatus, string> = {
-  working: '33', idle: '90', offline: '90', starting: '36', review: '35', done: '34', 'close-pending': '31', parked: '36', error: '31', asking: '93', queued: '90',
+  working: '33', idle: '90', offline: '90', starting: '36', review: '35', done: '34', 'close-pending': '31', parked: '36', error: '31', asking: '93', queued: '90', unknown: '93',
 }
 
 // @@@ session selectors - the ONE matcher every session command shares (see [[session-selectors]]). A

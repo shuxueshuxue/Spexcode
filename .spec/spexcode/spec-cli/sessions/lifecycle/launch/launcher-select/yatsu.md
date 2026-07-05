@@ -65,6 +65,25 @@ scenarios:
       old per-row `.sess-launcher` / `.sess-launcher-name` / `.si-agent-glyph` badge is gone.
     code: spec-dashboard/src/SessionWindow.jsx
     related: spec-cli/src/sessions.ts
+  - name: resume-replays-original-launcher-not-current-default
+    tags: [backend-api]
+    description: >-
+      Create a governed session under launcher A (whose `cmd` wrapper sets a specific config-dir env — e.g.
+      `CLAUDE_CONFIG_DIR=/root/.claude`). Then CHANGE the ambient default to launcher B with a DIFFERENT
+      config dir (a new `SPEXCODE_CLAUDE_CMD` / `defaultLauncher`), exactly as a backend restart onto a
+      different default would. Take the session offline and resume it (reopen); inspect the regenerated
+      `launch.sh` and the resolved launch command. Do this for BOTH a named-launcher session and an UNNAMED
+      (zero-config default) session.
+    expected: >-
+      The (re)launch replays launcher A's EXACT pinned command (its config-dir env intact), NOT the current
+      default B — so `--resume` looks in A's config dir and FINDS the conversation. `launch.sh` is NOT
+      rewritten to B. This holds for the UNNAMED session too: whatever command launched it is frozen on the
+      record (`launch_cmd`) at creation and replayed verbatim. Before the pin, an unnamed/default session
+      re-resolved ambiently and resumed under B's config dir → "No conversation found" (the resume-death half
+      of the mass-restore incident, where victims' `launch.sh` were rewritten to a different launcher while
+      their transcripts lived under the original's config dir).
+    code: spec-cli/src/sessions.ts
+    related: spec-cli/src/harness.ts
 ---
 # yatsu.md — launcher-select
 

@@ -5,6 +5,7 @@ export const STATUS_COLOR = {
   error: 'var(--red)',
   idle: 'var(--muted)', starting: 'var(--muted)', queued: 'var(--muted)',
   'close-pending': 'var(--muted)', offline: 'var(--muted)',
+  unknown: 'var(--yellow)',   // liveness probe FAILED (box overloaded) — death unproven, so warn, never read as dead
 }
 
 // compact one-line surfaces (the console's terminal-styled sidebar) render the status as a SINGLE glyph
@@ -14,7 +15,7 @@ export const STATUS_GLYPH = {
   working: '●', parked: '‖',
   asking: '?', review: '◑', done: '✓',
   error: '✕',
-  idle: '·', starting: '◌', queued: '⋯', 'close-pending': '⊘', offline: '○',
+  idle: '·', starting: '◌', queued: '⋯', 'close-pending': '⊘', offline: '○', unknown: '⁇',
 }
 
 // the three triage zones the session list groups into — "whose turn is it?". `offline` = the process is

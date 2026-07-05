@@ -131,12 +131,18 @@ surface:
   Consumed by [[session-activity]]'s headline resolver — this capability field is the ONLY harness branch in
   that path (no `if (codex)`).
 - **runtime: liveness + delivery** — the RUNTIME transport, lifted onto the adapter so product code honours
-  `ownsRendezvous` instead of hard-wiring the claude rendezvous socket. `liveness(rec, tmuxAlive, runtimeDir, pane)`
+  `ownsRendezvous` instead of hard-wiring the claude rendezvous socket. `liveness(rec, tmuxAlive, runtimeDir, pane, socketLive)`
   answers "is this session's agent ready?" — from the caller's ONE runtime snapshot, which carries the window
-  presence AND a per-pane probe (the pane's root pid + one whole-box process table from a single `ps`).
-  **claude** = the tmux window is up AND its reclaude
-  rendezvous socket exists (the socket is the truth claude is alive — the pane command is always the wrapper/shell
-  while claude runs as its child, so claude IGNORES the pane probe); **codex** = the tmux window is up AND a
+  presence, a per-pane probe (the pane's root pid + one whole-box process table from a single `ps`), AND
+  `socketLive` (whether a CONNECT to this session's rendezvous socket found a live listener, probed once for the
+  whole list). **claude** = the tmux window is up AND a live LISTENER is on its reclaude rendezvous socket
+  (`socketLive`) — a listener the OS accepts, **not** the mere existence of the socket FILE. This matters
+  because a crashed/killed claude does **not** unlink its unix-socket path, so the old `existsSync(rvSock)` read
+  a DEAD pane as `online` for as long as that stale file lingered — the incident's "dead pane stuck `working`
+  for 30+ minutes". A `connect()` is the honest test: a live claude accepts it, a stale file refuses it
+  (ECONNREFUSED, instant), an absent file ENOENTs (instant) — so a dead claude reads `offline` within seconds.
+  (The pane command is always the wrapper/shell while claude runs as its child, so claude still IGNORES the pane
+  probe.) **codex** = the tmux window is up AND a
   **codex process is live in the pane's DESCENDANT process tree**. The pane's FOREGROUND name is NOT the signal:
   a healthy, rendering codex TUI's `pane_current_command` is **`bash`** (the launch wrapper) for its whole life —
   the codex processes live BELOW the pane pid (`bash launch.sh` → `bash -lc` → `node` (the codex CLI) → the

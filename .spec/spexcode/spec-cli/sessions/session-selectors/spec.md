@@ -32,6 +32,13 @@ is just the one-part case. This closes a silent failure: before, `watch a,b` was
 matched no session at all (an id/node/branch never contains a comma), so a comma-joined watch streamed
 **zero events forever** with no error — exactly the trap a `--status`-trained user falls into.
 
+**A part sheds an optional reference sigil.** Each comma-part passes through [[mentions]]'s `stripRefSigil`
+before matching, so `@<sel>` and `[[<sel>]]` name exactly the session the bare token names — the reference
+grammar a user learns in the dashboard's input boxes works verbatim as a CLI selector (`spex review @graph`
+≡ `spex review graph`). The single-target exact-id check strips too, so `@<full-id>` keeps the
+exact-wins-over-prefix rule. Because the strip lives in the ONE matcher, every selector-taking verb
+tolerates the sigil at once, and tolerance never widens what matches.
+
 **Two shapes over the one predicate.** `selectSessions` is the MANY shape — the list / stream / graph filter
 ([[graph]], `spex ls`): empty selectors (or `@all`) means everything, with an optional status filter on top.
 `resolveSession` is the ONE shape — the single-target lookup the control verbs need. Its result is

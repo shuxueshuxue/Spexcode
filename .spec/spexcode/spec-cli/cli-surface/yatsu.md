@@ -6,7 +6,9 @@ scenarios:
       map must group porcelain by loop, include search and owner, and name both the per-command layer
       and the guide; (2) `spex help wait` and `spex watch --help` — one command's usage with its
       caveats and a see-also plus the map/guide footer; (3) `spex guide yatsu` — the skill page must
-      footer back to the help layers. Also probe the dead-ends: `spex nosuch`, `spex help nosuch`,
+      footer back to the help layers. (4) `spex help session` and `spex help issues` — each entry must
+      carry the mention-grammar hint (`@session` · `[[node]]`, usable in any prompt/issue/remark body,
+      CLI args included). Also probe the dead-ends: `spex nosuch`, `spex help nosuch`,
       `spex guide nosuch`, and bare `spex internal` must each fail loud AND name the layer to return
       to; `spex session new --help` must print help without creating a session.
     expected: >
@@ -28,6 +30,18 @@ scenarios:
     tags: [cli]
     code: [spec-cli/src/cli.ts]
     related: [spec-cli/src/harness.ts, spec-cli/templates/hooks/pre-commit]
+  - name: verb-mirror
+    description: >
+      One verb, either drawer, through the real CLI: `spex session ls` prints the same sessions table
+      as `spex ls`; `spex session review --help` prints the review entry without running the verb; a
+      bare typeable sub answers at the top level (`spex capture` with no selector exits 2 with the
+      selector usage line; `spex send --help` and `spex help send` both print the session entry); and
+      the hook-driven subs stay namespace-only (`spex idle`, `spex state` exit 2 as unknown commands).
+    expected: >
+      Both spellings of every mirrored verb reach the same handler — same output, same exit codes,
+      help probes resolving through the canonical entry — and no hook-driven sub is promoted.
+    tags: [cli]
+    code: [spec-cli/src/cli.ts, spec-cli/src/help.ts]
 ---
 
 Measure through the real CLI binary (`tsx spec-cli/src/cli.ts …`), never by reading help.ts: run each

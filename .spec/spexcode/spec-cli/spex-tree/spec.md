@@ -24,8 +24,13 @@ the same filtered subtree as nested objects with the badge counts precomputed (a
 `spex board` remains the full flat payload).
 
 Colour is reinforcement, never the signal: statuses map to the dashboard palette (green merged,
-cyan active, warning-yellow drift, muted pending), but the status word always prints, so under
-`NO_COLOR` or a non-tty pipe the tree degrades to plain text with nothing lost.
+cyan active, warning-yellow drift, muted pending). Status labelling follows a **base-state law —
+the ground state is invisible, only deviation gets a label**: `merged` is the healthy done-state of
+the vast majority of nodes, already carried by the dot's colour, so a coloured tree prints no
+`[merged]` text (a bare node *is* merged) and labels only the deviations (`active`, `pending`,
+drift). When colour is absent (`NO_COLOR` or a non-tty pipe) the text label is the only signal
+left, so every status word — merged included — prints and the tree degrades to plain text with
+nothing lost. Badges (drift/stale/issues counts) are unaffected by the law.
 
 The verb lives in the *find & read the graph* group of `spex help`'s map ([[cli-surface]]);
 `tree.ts` is the verb's own module, `cli.ts` stays the thin dispatch hub.

@@ -27,7 +27,12 @@ grammar is uniform, the logic is tiny.
 - **`@session` — an actor reference, and a HANDLE.** Resolves to a **live board session** and carries *what
   you can do to it*: watch it, or send it a prompt. **`@new`** is the special actor — dispatch a **fresh
   worker** (on the surface's node / the thread's node), optionally with a preset. So an `@` in text is a
-  contact you hand to a reader; what happens next is a **dispatch**, never a new datastore.
+  contact you hand to a reader; what happens next is a **dispatch**, never a new datastore. **Any spawn's
+  parent = its originator**: the `@new` worker records the mentioning author as its `parent`
+  ([[session-nesting]]) so it folds under the session that summoned it — but only when that author IS a
+  real board session id; a dashboard `human`, an `unknown` CLI author, or a forge login is no session →
+  null parent, a top-level worker, never a phantom nest (the same no-sender rule `spex new` from a plain
+  shell follows).
 - **The two never collide** because topic is `[[]]` and actor is `@` — no weighting, no third symbol, and no
   reserved verbs. Every legacy `@<node>` usage was **migrated to `[[node]]`**: the composer autocomplete + the
   board fresh-session key ([[session-console]] / [[term-input]]) and the server's node-derivation (`MENTION`).
@@ -41,6 +46,18 @@ grammar is uniform, the logic is tiny.
   by every dashboard input that takes the grammar (the console's New prompt and ❯ inbox, the issue
   composers), never re-implemented per surface. An agent `@`-ing another agent under an issue post is the
   identical path a human uses — **storage (the text) and delivery (the dispatch) stay separate**.
+  Discoverability is symmetric: the dashboard hints via its autocomplete dropdowns; the CLI hints via a
+  mention line in `spex help session` and `spex help issues` — a CLI user must not have to find the
+  grammar by reading the dashboard.
+- **In a CLI argument the sigil is OPTIONAL, never banned.** In free text the sigils are what set a
+  reference apart from prose, so they stay required there; but a CLI reference argument IS the reference,
+  so it tolerates the dashboard-learned form: `spex review @graph` ≡ `spex review graph`, `spex yatsu eval
+  [[cli-surface]]` ≡ `spex yatsu eval cli-surface`. One shared `stripRefSigil` (in this module, beside the
+  parser) sheds a leading `@` or a full `[[…]]` wrapper — the session-selector matcher
+  ([[session-selectors]]) applies it per comma-part, so EVERY selector-taking verb tolerates it at once,
+  and each node-arg read site (yatsu eval/retract/show, `owner`, the `--node` flags) passes through it.
+  Tolerance never widens matching: a stripped token matches exactly what the bare token matches, and a
+  wrong sigiled token errors exactly like the bare one.
 - **No new delivery pipe.** `@session` → [[dispatch]]'s `sendKeys` (a prompt = the surrounding text + a
   pointer to where it was written); `@new` → [[launch]]'s `newSession` (a fresh worker). Offline/unreachable
   fails loud (the `DispatchResult`), and the text still persists for the drain.

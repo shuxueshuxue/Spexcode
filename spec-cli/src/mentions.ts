@@ -13,6 +13,18 @@ const NODE_RE = /\[\[([^\]\s]+)\]\]/g
 
 const uniq = (xs: string[]): string[] => [...new Set(xs)]
 
+// ── CLI sigil tolerance ───────────────────────────────────────────────────────────────────────────────
+// In FREE TEXT the sigils are required — they are what marks a reference apart from prose. In a CLI
+// ARGUMENT the whole token IS the reference, so the sigil is optional: `spex review @graph` ≡
+// `spex review graph`, `spex yatsu eval [[cli-surface]]` ≡ `spex yatsu eval cli-surface`. One shared strip,
+// applied by the session-selector matcher and every node-arg read site, so the habit a user learns in the
+// dashboard's input boxes works verbatim on the CLI — never a second grammar to learn.
+export function stripRefSigil(token: string): string {
+  const wrapped = /^\[\[(.*)\]\]$/.exec(token)
+  if (wrapped) return wrapped[1]
+  return token.startsWith('@') ? token.slice(1) : token
+}
+
 export function parseMentions(text: string): { actors: string[]; nodes: string[] } {
   const actors: string[] = []
   const nodes: string[] = []
@@ -45,6 +57,15 @@ export function resolveActors(tokens: string[], sessions: ActorSession[]): Resol
       online.find((s) => label(s).startsWith(t) && t.length >= 2)
     return hit ? { token, kind: 'session', session: hit } : { token, kind: 'unresolved' }
   })
+}
+
+// Any spawn's parent = its originator ([[session-nesting]]): the `@new` worker nests under the session that
+// wrote the mention — but ONLY when the author IS a real board session id. A dashboard 'human', a CLI
+// 'unknown', or a forge login resolves to no session → null → a top-level worker, never a phantom nest.
+// Exact id match only (lineage is provenance, not addressing — no prefix/name resolution), any liveness:
+// a parent that later closes is auto-promoted at read time by the derived tree.
+export function spawnParent(author: string, sessions: { id: string }[]): string | null {
+  return sessions.some((s) => s.id === author) ? author : null
 }
 
 // ── dispatch (integration) ─────────────────────────────────────────────────────────────────────────────
@@ -92,7 +113,7 @@ export async function dispatchMentions(
       // deliberate audit/re-measure), but the worker prompt carries the status and the outcome line warns.
       const settled = ctx.status && ctx.status !== 'open' ? ctx.status : undefined
       try {
-        const s = await newSession(ctx.node, newWorkerPrompt(ctx.threadId, ctx.node, ctx.author, text, ctx.status))
+        const s = await newSession(ctx.node, newWorkerPrompt(ctx.threadId, ctx.node, ctx.author, text, ctx.status), undefined, spawnParent(ctx.author, sessions))
         out.push({ token: r.token, result: 'spawned', detail: s.id, ...(settled ? { note: `thread ${settled}` } : {}) })
       } catch (e) { out.push({ token: r.token, result: 'failed', detail: e instanceof Error ? e.message : String(e) }) }
       continue

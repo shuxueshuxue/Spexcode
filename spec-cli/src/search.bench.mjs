@@ -54,10 +54,17 @@ for (const row of rows) {
 }
 
 // zero-result fail-loud regression: a CJK query over the English corpus returns nothing, and the
-// zero-result message must carry the corpus-is-English translate-and-retry fact (fail-loud, unconditional).
+// zero-result message must carry the corpus-is-English translate-and-retry fact (fail-loud, unconditional)
+// plus the browse-all next step (no nearest titles — a CJK query has nothing to be lexically near).
 const cjk = execFileSync('node', [BIN, 'search', '重命名一个会话'], { encoding: 'utf8' })
-const cjkPass = cjk.includes('corpus is English')
-console.log(`${cjkPass ? '✓ ' : '✗ '} cjk-zero-result       want=corpus-is-English hint  ${cjkPass ? 'hint present' : 'HINT MISSING: ' + cjk.trim()}`)
+const cjkPass = cjk.includes('corpus is English') && cjk.includes('spex tree')
+console.log(`${cjkPass ? '✓ ' : '✗ '} cjk-zero-result       want=corpus-is-English + spex-tree  ${cjkPass ? 'both present' : 'MISSING: ' + cjk.trim()}`)
+
+// zero-result typo routing: an English typo that matches nothing must surface the nearest node titles
+// (per-word edit distance) plus the browse-all next step, so a typo routes forward instead of dead-ending.
+const typo = execFileSync('node', [BIN, 'search', 'kyeboard'], { encoding: 'utf8' })
+const typoPass = typo.includes('nearest titles') && typo.includes('keyboard-nav') && typo.includes('spex tree')
+console.log(`${typoPass ? '✓ ' : '✗ '} typo-zero-result      want=nearest-titles(keyboard-nav) + spex-tree  ${typoPass ? 'both present' : 'MISSING: ' + typo.trim()}`)
 
 console.log('—'.repeat(72))
-console.log(`recall@1 = ${r1}/${n} = ${(r1 / n).toFixed(3)}   recall@3 = ${r3}/${n} = ${(r3 / n).toFixed(3)}   MRR = ${(mrr / n).toFixed(3)}   cjk-hint = ${cjkPass ? 'PASS' : 'FAIL'}`)
+console.log(`recall@1 = ${r1}/${n} = ${(r1 / n).toFixed(3)}   recall@3 = ${r3}/${n} = ${(r3 / n).toFixed(3)}   MRR = ${(mrr / n).toFixed(3)}   cjk-hint = ${cjkPass ? 'PASS' : 'FAIL'}   typo-route = ${typoPass ? 'PASS' : 'FAIL'}`)

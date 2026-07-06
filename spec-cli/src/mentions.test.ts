@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { parseMentions, resolveActors, newWorkerPrompt, summarize, deliveredIds, notifyOriginator, pickLoopIn, type ActorSession } from './mentions.js'
+import { parseMentions, resolveActors, spawnParent, newWorkerPrompt, summarize, deliveredIds, notifyOriginator, pickLoopIn, stripRefSigil, type ActorSession } from './mentions.js'
 
 // ---- parseMentions: the pure grammar ----
 
@@ -28,6 +28,19 @@ test('resolveActors: new → sentinel; online id-prefix → session; offline-onl
   assert.equal((hit as { session: ActorSession }).session.id, 'abcd1234')
   assert.equal(dead.kind, 'unresolved')   // a dead session is never summoned
   assert.equal(nobody.kind, 'unresolved')
+})
+
+// ---- spawnParent: any spawn's parent = its originator, session ids only ----
+
+test('spawnParent: an author that IS a board session id becomes the parent (exact id, any liveness)', () => {
+  const sessions = [on('abcd1234', 'scout'), off('ffff9999', 'ghost')]
+  assert.equal(spawnParent('abcd1234', sessions), 'abcd1234')
+  assert.equal(spawnParent('ffff9999', sessions), 'ffff9999')   // offline spawner still owns its lineage
+})
+
+test('spawnParent: human / unknown / forge-login / id-prefix authors are no parent — top-level, never a phantom nest', () => {
+  const sessions = [on('abcd1234', 'scout')]
+  for (const author of ['human', 'unknown', 'shuxueshuxue', 'abcd']) assert.equal(spawnParent(author, sessions), null)
 })
 
 // ---- the drain guard: @new on a settled thread ----
@@ -112,4 +125,18 @@ test('notifyOriginator: an empty fallback chain (nulls, or only the replier) →
   assert.equal(await notifyOriginator([null], 'alice', 'hi', { threadId: 't1', node: null }), null)
   assert.equal(await notifyOriginator(['alice'], 'alice', 'hi', { threadId: 't1', node: null }), null)
   assert.equal(await notifyOriginator(['alice', null, 'alice'], 'alice', 'hi', { threadId: 't1', node: null }), null)
+})
+
+// ---- stripRefSigil: CLI args tolerate the reference sigils ----
+
+test('stripRefSigil: sheds a leading @ or a [[ ]] wrapper; bare tokens pass through', () => {
+  assert.equal(stripRefSigil('@graph'), 'graph')
+  assert.equal(stripRefSigil('[[cli-surface]]'), 'cli-surface')
+  assert.equal(stripRefSigil('cli-surface'), 'cli-surface')
+  assert.equal(stripRefSigil('node/graph-abcd'), 'node/graph-abcd')   // a branch selector is untouched
+})
+
+test('stripRefSigil: only a FULL wrapper counts; a lone @ strips to empty (→ treated as missing)', () => {
+  assert.equal(stripRefSigil('[[x]]y'), '[[x]]y')   // not a pure wrapper — left alone
+  assert.equal(stripRefSigil('@'), '')
 })

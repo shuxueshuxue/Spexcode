@@ -20,7 +20,7 @@ bridge; build the one object and let the stores be adapters.
 
 ## expanded spec
 
-**The core type.** An `Issue` is `{ id, store, concern, by, status, nodes[], signers[], created,
+**The core type.** An `Issue` is `{ id, store, concern, by, status, nodes[], created,
 body, replies[], evidence[], url? }`. `store` names the adapter that holds it (`local`, or a forge host
 like `github`) — data, not a mode. There is deliberately **no content-kind taxonomy**: a field that does
 no mechanical work (nothing branches on it) is a label, not structure — what a thread *is* (a change
@@ -66,7 +66,7 @@ the dashboard New form's compact store picker, or the CLI's `--store <host>` —
 through that store's driver, no local→forge promote round-trip when a concern is born forge-visible. The
 created forge issue body carries the same `Spec: <nodes>` marker used by promotion, derived from the
 author's `[[node]]` prose links (unioned with explicit `--node` ids), so the tracer links it back on the
-next read; no surface-only node field appears. Signing and resolving stay local-store writes. **Replying is ONE
+next read; no surface-only node field appears. **Replying is ONE
 verb over both stores** (`replyIssue` — `spex issues reply <id>` and `POST /api/issues/:id/reply` are the
 same routing): a local id goes through the local issue store's committed write, a forge id (`<host>#<n>`) posts a
 **real comment** through the driver's `createComment` — the [[port]]'s second write verb, the same seam
@@ -89,7 +89,7 @@ thread itself — concern → title; body + the `Spec: <nodes>` marker + the evi
 footer — and creates it through the [[port]]'s driver (the driver stays the only thing that touches the
 network; no second `gh` call-site). The marker is the round-trip: the promoted issue links back to the
 same nodes through the EXISTING tracer read, so promotion adds no linking code. Order makes failure safe:
-the forge issue is created FIRST, and only then is the local thread closed out — resolved `landed` with a
+the forge issue is created FIRST, and only then is the local thread closed out — marked `landed` with a
 reply carrying the permalink (its file remains as the recorded trail); an unreachable forge fails loud
 with the local thread untouched, and only an `open` thread promotes. The two-plane contract is untouched
 throughout: a forge issue is execution, never node state. Promotion is human-reachable too: the dashboard's
@@ -98,9 +98,9 @@ permalink reply carry the caller's surface-derived identity — a session id fro
 the dashboard).
 **Closing is ONE verb over both stores, on both surfaces too** (`closeIssue` — `spex issues close <id>`
 and `POST /api/issues/:id/close` behind the dashboard's Close button are the same routing). A local id
-resolves the thread `landed` through the local store; a forge id (`<host>#<n>`) calls the driver's
+marks the thread `landed` through the local store; a forge id (`<host>#<n>`) calls the driver's
 `closeIssue` — so an agent can close a github issue with the same verb the human clicks. The server forces
 a forge refresh before answering, so the follow-up read shows the store-authored closed state; the CLI's
-next read is a live pull. (`spex issues resolve <id> --as …` remains the local-only verb for the richer
-local resolutions — `accepted`/`rejected` — where `close` means specifically "this landed".) Closing is
-lifecycle on the issue object, not graph state; it never writes a spec node's status.
+next read is a live pull. There is no parallel sign/accept/reject lifecycle; an issue is open until it is
+closed or promoted. Closing is lifecycle on the issue object, not graph state; it never writes a spec
+node's status.

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
-import { postIssueClose, postIssuePromote, postIssueReply, postIssueResolve, postIssueSign, postIssueThread } from './data.js'
+import { postIssueClose, postIssuePromote, postIssueReply, postIssueThread } from './data.js'
 import { useMentionAutocomplete } from './mentions.jsx'
 import { SpecBody } from './NodeView.jsx'
 import { Replies, ReplyComposer, OriginatorLiveness } from './Thread.jsx'
@@ -33,9 +33,8 @@ export default function IssuesPage({ onFocusNode, onOpenSession, specs = [], ses
   const flash = (outcomes) => { if (outcomes) { setNotice(outcomes); setTimeout(() => setNotice(''), 6000) } }
 
   const all = Array.isArray(data?.issues) ? data.issues : []
-  // a CONCLUDED issue (forge closed; local rejected/landed) hides by default — the list is the open work,
-  // not the archive. open + accepted stay (accepted is approved-but-not-landed: still live).
-  const concluded = (i) => i.status === 'closed' || i.status === 'rejected' || i.status === 'landed'
+  // a non-open issue is archive by default — the list is the open work, not lifecycle history.
+  const concluded = (i) => i.status !== 'open'
   // the store filter's options come from the DATA, not a hardcoded list — a new store (gitlab) appears
   // in the dropdown the day its driver lands. Default 'all' keeps the stores mixed in API order.
   const stores = [...new Set(all.map((i) => i.store).filter(Boolean))]
@@ -141,18 +140,15 @@ export default function IssuesPage({ onFocusNode, onOpenSession, specs = [], ses
 // the issue detail — full-height, split like the eval rail: a scrolling thread region (header
 // (store/status/author/node chips/permalink), the markdown-RENDERED body, the replies) over the composer
 // DOCKED at the pane's foot — one thread surface for both stores, the write affordance always on screen.
-// The composer's action row carries the issue's WHOLE human-reachable lifecycle at CLI parity
-// ([[issues-view]]): Sign · Accept · Reject · Promote (local-store verbs — an open local issue only; sign
-// hides once 'human' signed) beside the store-routed Close every non-concluded issue gets. Each POSTs to
-// the thin endpoint wrapping the same store function the CLI verb calls, then reloads the resident list.
+// The composer's action row stays narrow: reply is the main path, close is the lifecycle path, and an open
+// local thread can be promoted when it needs forge visibility. Sign/accept/reject are not product verbs.
 function IssueDetail({ issue: th, specs, sessions, onFocusNode, onOpenSession, onWrite }) {
   const t = useT()
   const local = th.store === 'local'
-  const concluded = th.status === 'closed' || th.status === 'rejected' || th.status === 'landed'
+  const concluded = th.status !== 'open'
   const [acting, setActing] = useState('')   // the lifecycle action in flight — one at a time
   const [actErr, setActErr] = useState('')
   const nodes = Array.isArray(th.nodes) ? th.nodes : []
-  const signers = Array.isArray(th.signers) ? th.signers : []
   const replies = Array.isArray(th.replies) ? th.replies : []
   const run = (name, fn) => async () => {
     if (acting) return
@@ -188,9 +184,6 @@ function IssueDetail({ issue: th, specs, sessions, onFocusNode, onOpenSession, o
           {local
             ? <OriginatorLiveness originator={th.by} sessions={sessions} kind="issue" onOpenSession={onOpenSession} />
             : (th.by && <span className="fv-by">{th.by}</span>)}
-          {/* signers badge only when someone actually signed — a "+0 signed" is noise (mirrors the CLI's
-              `if (p.signers.length)` guard, issues.ts). */}
-          {local && signers.length > 0 && <span className="fv-count" title={signers.join(', ')}>{t('session.issuesSigned', { n: signers.length })}</span>}
           {nodes.map((id) => (
             <button key={id} type="button" className="fv-chip" onClick={() => onFocusNode?.(id)} title={t('session.issuesFocusNode')}>{id}</button>
           ))}
@@ -215,14 +208,8 @@ function IssueDetail({ issue: th, specs, sessions, onFocusNode, onOpenSession, o
           actionsEnd={!concluded && (
             <>
               {actErr && <span className="fv-error">{actErr}</span>}
-              {local && th.status === 'open' && !signers.includes('human') &&
-                lifecycleBtn('sign', t('session.issuesSign'), () => postIssueSign(th.id), t('session.issuesSignTitle'))}
-              {local && th.status === 'open' && <>
-                {lifecycleBtn('accept', t('session.issuesAccept'), () => postIssueResolve(th.id, 'accepted'), t('session.issuesAcceptTitle'))}
-                {lifecycleBtn('reject', t('session.issuesReject'), () => postIssueResolve(th.id, 'rejected'), t('session.issuesRejectTitle'))}
-                {lifecycleBtn('promote', t('session.issuesPromote'), () => postIssuePromote(th.id), t('session.issuesPromoteTitle'))}
-              </>}
-              {lifecycleBtn('close', t('session.issuesCloseIssue'), () => postIssueClose(th.id))}
+              {local && lifecycleBtn('promote', t('session.issuesPromote'), () => postIssuePromote(th.id), t('session.issuesPromoteTitle'))}
+              {lifecycleBtn('close', t('session.issuesCloseIssue'), () => postIssueClose(th.id), t('session.issuesCloseIssueTitle'))}
             </>
           )}
         />

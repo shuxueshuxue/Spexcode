@@ -125,17 +125,16 @@ export async function loadLaunchers() {
   return res.json()
 }
 
-// the merged issues ([[issues]]) the backend serves at /api/issues: `{ enabled, issues }`, verbatim — the
-// issues page renders what the CLI drain view reads, computing nothing over it (no re-sort, no salience order).
+// the merged issues ([[issues]]) the backend serves at /api/issues: `{ enabled, stores, issues }`, verbatim —
+// the issues page renders what the CLI drain view reads, computing nothing over it (no re-sort, no salience order).
 export async function loadIssues() {
   const res = await apiFetch('/api/issues')
   return res.json()
 }
 
-// human writes — LOCAL store only ([[issues-view]] / [[local-issues]]) — POST straight through the SAME
-// open/reply the CLI uses (git-committed to the trunk, author 'human'); an @-mention in the text
-// dispatches a worker. Both return the parsed json ({ ok, …, outcomes }); `outcomes` is the one-line
-// @-dispatch summary to echo.
+// human writes — store-routed through the unified issue port ([[issues-view]] / [[issues]]) — local commits
+// to the trunk store, forge choices call the configured driver. An @-mention in the text dispatches a
+// worker. Returns parsed json ({ ok, …, outcomes }); `outcomes` is the one-line @-dispatch summary to echo.
 export async function postIssueReply(id, body, evidence) {
   const res = await apiFetch(`/api/issues/${encodeURIComponent(id)}/reply`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -147,10 +146,10 @@ export async function postIssueClose(id) {
   const res = await apiFetch(`/api/issues/${encodeURIComponent(id)}/close`, { method: 'POST' })
   return res.json()
 }
-export async function postIssueThread({ concern, body, evidence }) {
+export async function postIssueThread({ concern, body, evidence, store }) {
   const res = await apiFetch('/api/issues', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ concern, body, ...(evidence?.length ? { evidence } : {}) }),
+    body: JSON.stringify({ concern, body, store, ...(evidence?.length ? { evidence } : {}) }),
   })
   return res.json()
 }

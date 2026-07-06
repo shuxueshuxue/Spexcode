@@ -1,14 +1,8 @@
 import { loadSpecs } from '../../spec-cli/src/specs.js'
 import type { ForgeDriver, ForgeIssue, ForgePR } from './port.js'
-import { githubDriver } from './drivers/github.js'
+import { DEFAULT_FORGE_HOST, FORGE_DRIVERS, forgeDriverFor } from './drivers.js'
 import { resolveLinks, type NodeLinks } from './links.js'
 import { resolveEvalPending, type NodeEvalPending } from './needs-yatsu-eval.js'
-
-const DRIVERS: ForgeDriver[] = [githubDriver]
-const DEFAULT_HOST = 'github'
-function driverFor(host: string): ForgeDriver | undefined {
-  return DRIVERS.find((d) => d.host === host)
-}
 
 // tiny flag reader over this command's own arg slice (everything after `forge`), so cli.ts stays routing-only.
 function flag(args: string[], name: string): string | undefined {
@@ -20,10 +14,10 @@ const has = (args: string[], name: string) => args.includes(`--${name}`)
 async function readForge(
   args: string[],
 ): Promise<{ driver: ForgeDriver; nodeIds: string[]; issues: ForgeIssue[]; prs: ForgePR[] } | null> {
-  const host = flag(args, 'host') ?? DEFAULT_HOST
-  const driver = driverFor(host)
+  const host = flag(args, 'host') ?? DEFAULT_FORGE_HOST
+  const driver = forgeDriverFor(host)
   if (!driver) {
-    console.error(`forge: unknown host '${host}' (known: ${DRIVERS.map((d) => d.host).join(', ')})`)
+    console.error(`forge: unknown host '${host}' (known: ${FORGE_DRIVERS.map((d) => d.host).join(', ')})`)
     return null
   }
   const nodeIds = (await loadSpecs()).map((s) => s.id)

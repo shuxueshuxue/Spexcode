@@ -110,3 +110,8 @@ agent**, not a server merge — it returns `{dispatched}` and never touches main
 `/api/sessions/graph` edges are DERIVED from live `spex watch` monitors (`watch`/`unwatch` register +
 heartbeat), not a stored subscription. `/api/uploads` writes a pasted file to this (worker) machine's
 /tmp and returns its path. At boot the server also runs `superviseQueue()` to launch queued sessions.
+
+Issue routes follow the same thin-port rule: `GET /api/issues` returns the merged issue list plus the
+writable stores (`local` and configured forge drivers), and `POST /api/issues` opens a new issue in the
+chosen store. Local writes hit the git-native local store; forge writes call the driver and force a resident
+read-back before the dashboard reloads.

@@ -32,8 +32,9 @@ scenarios:
       Both composers carry the console's OWN mention dropdowns ([[mentions]] — one shared menu, not a
       fork): `@` lists the live sessions plus `@new` and a pick inserts `@<id> ` (trailing space); `[[`
       lists the spec nodes (a partial query filters) and a pick inserts `[[<id>]] `. The reply
-      composer's menu opens UPWARD (visible above the docked textarea), the New form's downward. Esc
-      closes the menu, keeps the draft, and stays on #/issues. Plain text never opens a menu. The
+      composer's menu opens UPWARD (visible above the docked textarea), and the New form's menu also opens
+      UPWARD outside the New pop-out itself, never inserted into or clipped by the modal body and never
+      covering the store/concern controls. Esc closes the menu, keeps the draft, and stays on #/issues. Plain text never opens a menu. The
       console's `@`/`[[` menus are unchanged. No page errors.
   - name: issue-reply-video-plays
     tags: [frontend-e2e]
@@ -103,10 +104,12 @@ scenarios:
       select the new thread and read its detail meta strip (`.fvd-meta`).
     expected: >-
       The New action opens a centered pop-out over the Issues page, not an inline form in the left list.
-      The form carries exactly TWO text surfaces — the concern input and the body textarea; NO node-ids
-      field exists (nothing placeholder-labelled "node ids"). The posted thread's detail header shows the
-      linked node as a clickable chip — the store inferred `nodes:` from the body's `[[…]]` link
-      ([[local-issues]]), the writer never re-typed an id into a separate field. No page errors.
+      The form carries exactly TWO text surfaces — the concern input and the body textarea — plus one compact
+      store picker for local/configured forge stores; NO node-ids field exists (nothing placeholder-labelled
+      "node ids"). Posted local threads show the linked node as a clickable chip — the store inferred
+      `nodes:` from the body's `[[…]]` link ([[local-issues]]), the writer never re-typed an id into a
+      separate field. A forge post writes the same node link as a `Spec:` marker and, after the forced forge
+      read-back, the issue appears with that node chip. No page errors.
   - name: close-issue-button
     tags: [frontend-e2e]
     code: [spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/Thread.jsx, spec-cli/src/issues.ts]

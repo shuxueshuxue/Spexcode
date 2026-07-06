@@ -5,6 +5,7 @@ hue: 280
 desc: The host-agnostic forge port (ForgeDriver) that READS a host's issues (open + closed, comments included) and open PRs, and WRITES through issue verbs (createIssue for promotion, createComment for replies, closeIssue for lifecycle close), plus its first real driver — github via the gh CLI.
 code:
   - spec-forge/src/port.ts
+  - spec-forge/src/drivers.ts
   - spec-forge/src/drivers/github.ts
 ---
 # port
@@ -48,9 +49,11 @@ the degrade is that narrow field-version case alone, never a blanket swallow.
 
 The port carries three **write verbs**, existing solely so the unified Issue port's cross-store actions
 (spec-cli's [[issues]]) go through this same seam — the driver stays the ONLY thing that touches the
-network, writes included, rather than a second vendor call-site growing in product code:
-`createIssue({title, body}) → {number, url}` (promotion: a local thread moving to the forge; gh wraps
-`gh issue create`) and `createComment({number, body}) → {url}` (the store-routed reply: commenting on a
+network, writes included, rather than a second vendor call-site growing in product code. A tiny driver
+registry exposes the configured forge issue stores to callers as store ids (`github`, later `gitlab`, ...),
+so product code chooses by store id and then talks to one host-agnostic driver shape:
+`createIssue({title, body}) → {number, url}` (promotion OR a dashboard New issue opened directly on the
+forge; gh wraps `gh issue create`) and `createComment({number, body}) → {url}` (the store-routed reply: commenting on a
 forge issue from any SpexCode surface; gh wraps `gh issue comment`) and
 `closeIssue({number}) → {url}` (the store-routed lifecycle close: closing a forge issue from the unified
 Issues page; gh wraps `gh issue close`). All fail loud. The **tracer**

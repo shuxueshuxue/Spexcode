@@ -162,5 +162,6 @@ it to `.spec/.issues` on its first store touch after a toolchain update — the 
   recurrence is weighed as **salience, not importance**: a sharp singleton outranks a popular gripe, so the
   count never becomes the priority ranking.
 
-The dashboard renders and writes to this same store through [[issues-view]] — a thin caller over the
-programmatic write surface above, never a second store.
+When the dashboard's [[issues-view]] New form chooses `local`, it writes to this same store through the
+programmatic write surface above — a thin caller, never a second local store. Other choices belong to the
+unified [[issues]] port and the forge driver.

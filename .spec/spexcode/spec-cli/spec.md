@@ -9,7 +9,6 @@ code:
   - spec-cli/src/supervise.ts
   - spec-cli/src/listen.ts
   - spec-cli/src/slash-commands.ts
-  - spec-cli/src/cli.ts
 ---
 # spec-cli
 

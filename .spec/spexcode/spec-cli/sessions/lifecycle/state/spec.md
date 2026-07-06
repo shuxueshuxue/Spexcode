@@ -135,7 +135,7 @@ Every hook reads the **effective session id** through the harness resolver. Clau
 hooks run inside the shared per-project app-server, whose env can carry another session's
 `SPEXCODE_SESSION_ID`, so Codex hook state starts from the payload `session_id` (the acting thread id) and aliases
 that through `harness_session_id` to the governed SpexCode record. That alias is created by the backend launch
-path: `spex codex-launch` asks the shared app-server to `thread/start { cwd }`, stores the returned thread id on
+path: `spex internal codex-launch` asks the shared app-server to `thread/start { cwd }`, stores the returned thread id on
 the governed record, then fires the first prompt. The global record path is project key from the git common dir →
 `<store>/projects/<enc>/sessions/<id>/session.json`.
 The hooks split on the `governed` flag. The **board-lifecycle** hooks below (mark-active, the Stop gate,

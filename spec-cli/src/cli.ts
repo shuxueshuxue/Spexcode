@@ -115,53 +115,12 @@ async function resolveSelectorOrExit(selector: string): Promise<string> {
   process.exit(2)
 }
 
-function printHelp(): void {
-  console.log(`spex — SpexCode CLI (spec↔code graph + worktree session state machine)
-
-Usage: spex <command> [args]
-
-Specs / graph
-  guide [spec|yatsu|config]  no topic: setup workflow; spec/yatsu: file-format manual; config: spexcode.json settings
-  init [dir]            scaffold a repo to adopt SpexCode (seed .spec + install git hooks; default: cwd)
-    --preset <name>          which .config plugin tier to seed (cumulative: default ⊂ careful; default 'default')
-  uninstall [dir]      surgical inverse of init: remove SpexCode's generated artifacts (shims·contract·trust·
-                        gitignore block·global store·plugin bundle), keep .spec/.config. [--hooks] also removes the hooks
-  lint                  check the spec↔code graph (integrity·living·coverage·drift); when committing, gates on heavy commit-local drift
-  ack <node>… --reason  stamp Spec-OK on HEAD for one or more nodes (this change keeps their specs valid); --reason required, not stored
-  serve                 run the API server (default :8787). [--port N] sets the listen port (mirrors
-                        dashboard --api-port, so many projects coexist on one host — cwd picks the project)
-    --public --password <pw>   expose it on a public IP behind a password + self-signed TLS (no domain
-                               needed). [--tls-cert F --tls-key F] for your own cert · [--http] to drop TLS
-  dashboard             serve the dashboard UI on its own port (default 5173), proxying /api to a running
-                        \`spex serve\`. [--port N] [--api-port N=8787]. The installed replacement for \`npm run web\`.
-  board                 dump the dashboard board state as JSON
-  forge <sub>           trace a forge's issues/PRs onto spec nodes (read-only): links | eval-pending [--host github] [--node <id>] [--json]
-  yatsu <sub>           measure a node's scenarios and keep score: scan | eval [.|<node>] [--scenario N] (--pass|--fail) [--note T] [--image P|--result P|-] | retract [.|<node>] [--scenario N] [--last|--ts ISO] [--note T] | show [.|<node>] [--json] | clean [--keep-latest|--all]
-  blob put <file|->     stash bytes in the shared content-addressed evidence cache, print the hash — no reading filed (re-put restores a pruned/cloned-away blob by content)
-  self <sub>            diagnose how the workflow reaches THIS self-launched agent: doctor (default) | contract | conflicts
-  issues                THE issue read — local + forge issues, one merged store-tagged list (the drain view)  [--node <id>] [--store local|github] [--all] [--json]
-  issues open "<concern>"  open a local issue (taste, annotations, off-mainline smells all welcome)  [--node <id>…] [--evidence <hash>…] [--body -|<text>]
-  issues reply|sign|resolve <id> …   write to any issue — reply routes by the issue's store; sign/resolve act on a local one  | on|off|status toggles the workflow
-  issues promote <id>   move an OPEN local issue to the forge (one recorded action: forge issue w/ Spec: marker + evidence, local thread landed w/ permalink)
-  review <SEL>          manager cockpit: review a session (ahead·merge-base diff·gates·proposal)  [--json]
-  review proof <SEL>    render the session's proof of work — self-contained HTML, fully derived (diff·measured yatsu loss·gates)  [--open|--out P|--json]
-  merge <SEL>           manager cockpit: gated atomic merge into main (re-checks gates, then closes)
-
-Sessions
-  ls [SEL…]             living-sessions table          [--status a,b] [--json]
-  watch [SEL…]          stream actionable transitions — NEVER EXITS; run it in the BACKGROUND, don't block a turn on it (poll one-shot with \`wait\`)  [--as NAME] [--status a,b] [--idle] [--interval N]
-  wait <SEL>            block until <SEL> is actionable, print it, exit (one-shot — the non-blocking counterpart to watch; draws the graph edge)  [--timeout S=1200] [--interval S]
-  new "<prompt>"        start a session (= session new)  [--node X]
-  session <sub>         new | reopen | done | park | ask | exit | close | send | capture | prompt
-  session prompt <SEL>  print the session's originating prompt (what it was asked to do)
-
-  SEL = session id (or id-prefix), node, or branch — accepted by every read/control verb (ls·watch·wait·
-        review·merge·reopen·exit·close·send·capture·prompt); none (or @all) = every session.`)
-}
-
-// a trailing --help/-h prints the summary and exits BEFORE any verb runs, so a help probe never fires a streaming/mutating command.
+// a trailing --help/-h prints help and exits BEFORE any verb runs, so a help probe never fires a
+// streaming/mutating command. It prints THAT command's usage when an entry exists (the second layer
+// of the help journey — see help.ts), falling back to the map for an unknown token.
 if (cmd && cmd !== 'help' && (has('help') || process.argv.includes('-h'))) {
-  printHelp()
+  const { commandHelp, overviewHelp } = await import('./help.js')
+  console.log(commandHelp(cmd) ?? overviewHelp())
   process.exit(0)
 }
 
@@ -186,10 +145,22 @@ if (cmd === 'serve') {
   if (!Number.isInteger(port) || !Number.isInteger(apiPort)) { console.error('spex dashboard: --port and --api-port must be integers'); process.exit(2) }
   serveDashboardLocal({ port, apiPort })
 } else if (cmd === undefined || cmd === 'help' || cmd === '--help' || cmd === '-h') {
-  printHelp()
+  // `spex help <cmd>` drills into one command; bare help is the map. Both name the next layer down.
+  const { commandHelp, overviewHelp } = await import('./help.js')
+  const topic = positionals(3)[0]
+  if (cmd === 'help' && topic) {
+    const h = commandHelp(topic)
+    if (!h) { console.error(`spex help: no command '${topic}' — run \`spex help\` for the map`); process.exit(2) }
+    console.log(h)
+  } else console.log(overviewHelp())
 } else if (cmd === 'guide') {
   const { guideText } = await import('./guide.js')
-  console.log(guideText(process.argv[3]))
+  const text = guideText(process.argv[3])
+  if (text === null) {
+    console.error(`spex guide: no topic '${process.argv[3]}'. Topics: spec, yatsu, config. Run \`spex guide\` (no topic) for the setup workflow, \`spex help\` for the command map.`)
+    process.exit(2)
+  }
+  console.log(text)
 } else if (cmd === 'owner') {
   const { specOwners } = await import('./specs.js')
   const { loadConfig } = await import('./lint.js')
@@ -315,17 +286,14 @@ if (cmd === 'serve') {
   // cache and print the hash, decoupled from filing a reading. Thin route — the cache lives in spec-yatsu.
   const { runBlob } = await import('../../spec-yatsu/src/cli.js')
   await flushExit(runBlob(process.argv.slice(3)))
-} else if (cmd === 'issues' || cmd === 'propose') {
+} else if (cmd === 'issues') {
   // @@@ issues - the ONE issues surface ([[issues]]): bare it is THE read — local + forge issues as ONE
   // store-tagged list, the supervisor's/human's drain view; a write first-positional (open|reply|sign|
   // resolve|on|off|status, [[local-issues]]) routes to the local store's write verbs, `promote` moves a
-  // thread cross-store. `propose` is a DEPRECATED hidden alias (pre-rename deployed post-merge hooks call
-  // `spex propose nudge`); its old bare-concern form maps to `open`.
+  // thread cross-store. (The pre-rename `spex propose` alias is gone — a deployed post-merge hook still
+  // calling it prints an unknown-command line, advisory-only, until `npm run hooks` reinstalls it.)
   const { runIssues } = await import('./issues.js')
-  const { ISSUE_WRITE_SUBS } = await import('./localIssues.js')
-  let args = process.argv.slice(3)
-  if (cmd === 'propose' && !ISSUE_WRITE_SUBS.has(args[0])) args = ['open', ...args]
-  await flushExit(await runIssues(args))
+  await flushExit(await runIssues(process.argv.slice(3)))
 } else if (cmd === 'remark' || cmd === 'resolve' || cmd === 'retract') {
   // @@@ remark - the resolvable interaction primitive ([[remark-substrate]]): pin a concern to a HOST (a
   // local issue, or a scenario `<node> --scenario <name>`) that a second agent can `resolve` and the author
@@ -350,13 +318,6 @@ if (cmd === 'serve') {
   const { buildBoard } = await import('./board.js')
   console.log(JSON.stringify(await buildBoard(), null, 2))
   await flushExit(0)
-} else if (cmd === 'trunk') {
-  // @@@ trunk - print the resolved source-of-truth branch (layout.ts mainBranch(): config override →
-  // the main checkout's current branch → 'main'). The pre-commit main-guard reads this so it blocks
-  // direct commits on whatever the repo's trunk is actually named, never a hardcoded 'main'. One value,
-  // one line, for the hook to capture; GET /api/layout exposes the same resolution.
-  const { mainBranch } = await import('./layout.js')
-  console.log(mainBranch())
 } else if (cmd === 'search') {
   const { searchSpecs } = await import('./search.js')
   const query = positionals(3).join(' ')
@@ -531,46 +492,62 @@ if (cmd === 'serve') {
   } else {
     console.error('spex session: new|reopen|done|park|ask|idle|exit|close|send|capture|prompt'); process.exit(2)
   }
-} else if (cmd === 'codex-launch') {
-  // BACKEND-owned codex thread. On the shared per-project app-server: thread/start { cwd = this worktree }
-  // (codex loads that worktree's config/hooks/AGENTS.md), store the new id on the governed record (keyed by
-  // SPEXCODE_SESSION_ID), fire the launch prompt as the FIRST turn — materializing the rollout — and print the
-  // thread id. The launch script then `resume`s it in the visible TUI.
-  const { codexStartThread, codexTurn, waitForCodexRollout, codexBinary, codexSupportsBypassHookTrust } = await import('./harness.js')
-  const { markHarnessSessionId } = await import('./sessions.js')
-  const sock = process.argv[3], cwd = process.argv[4]
-  const prompt = process.argv.slice(5).join(' ')
-  if (!sock || !cwd) { console.error('usage: spex codex-launch <sock> <cwd> [prompt...]'); process.exit(2) }
-  // On the bypass-trust path (the codex install supports the flag → materialize skipped writeCodexTrust's hash),
-  // the thread the BACKEND owns must carry `bypass_hook_trust` in thread/start's config so the app-server fires
-  // the worktree's local hooks — mirror materialize's capability decision so the two stay in lockstep.
-  const bypassHookTrust = codexSupportsBypassHookTrust(codexBinary(process.env.SPEXCODE_CODEX_CMD || 'codex --yolo'))
-  const r = await codexStartThread(sock, cwd, bypassHookTrust)
-  if (!r.ok) { console.error(r.error); process.exit(1) }
-  if (prompt) {
-    const t = await codexTurn(sock, r.threadId, prompt, cwd)
-    if (!t.ok) { console.error(t.error); process.exit(1) }
-    // The visible TUI resumes this thread from its ON-DISK rollout; a freshly-spawned app-server acks the turn
-    // but persists the rollout a few seconds LATE (verified live: the SAME thread's file lands at ~2-4s, not
-    // lost). WAIT for it to land BEFORE storing the id / printing it, else FAIL LOUD — never store a
-    // non-resumable harness_session_id (that permanently wedges every reopen). The 15s budget exceeds launch.sh's
-    // fast-fail threshold, so a real failure exits past it and the retry loop won't spray duplicate-prompt threads.
-    if (!await waitForCodexRollout(r.threadId, 20000)) {
-      console.error(`codex thread ${r.threadId} started but persisted no rollout within 20s — app-server not ready; not storing a non-resumable id`)
-      process.exit(1)
+} else if (cmd === 'internal') {
+  // @@@ internal - the machine-plumbing namespace: verbs only generated hooks and launch scripts call,
+  // kept OUT of the porcelain top level so `spex help`'s vocabulary is exactly what a human/agent types.
+  const sub = process.argv[3]
+  if (sub === 'trunk') {
+    // print the resolved source-of-truth branch (layout.ts mainBranch(): config override → the main
+    // checkout's current branch → 'main'). The pre-commit main-guard captures this so it blocks direct
+    // commits on whatever the repo's trunk is actually named, never a hardcoded 'main'. One value, one
+    // line; GET /api/layout exposes the same resolution.
+    const { mainBranch } = await import('./layout.js')
+    console.log(mainBranch())
+  } else if (sub === 'codex-launch') {
+    // BACKEND-owned codex thread. On the shared per-project app-server: thread/start { cwd = this worktree }
+    // (codex loads that worktree's config/hooks/AGENTS.md), store the new id on the governed record (keyed by
+    // SPEXCODE_SESSION_ID), fire the launch prompt as the FIRST turn — materializing the rollout — and print the
+    // thread id. The launch script then `resume`s it in the visible TUI.
+    const { codexStartThread, codexTurn, waitForCodexRollout, codexBinary, codexSupportsBypassHookTrust } = await import('./harness.js')
+    const { markHarnessSessionId } = await import('./sessions.js')
+    const sock = process.argv[4], cwd = process.argv[5]
+    const prompt = process.argv.slice(6).join(' ')
+    if (!sock || !cwd) { console.error('usage: spex internal codex-launch <sock> <cwd> [prompt...]'); process.exit(2) }
+    // On the bypass-trust path (the codex install supports the flag → materialize skipped writeCodexTrust's hash),
+    // the thread the BACKEND owns must carry `bypass_hook_trust` in thread/start's config so the app-server fires
+    // the worktree's local hooks — mirror materialize's capability decision so the two stay in lockstep.
+    const bypassHookTrust = codexSupportsBypassHookTrust(codexBinary(process.env.SPEXCODE_CODEX_CMD || 'codex --yolo'))
+    const r = await codexStartThread(sock, cwd, bypassHookTrust)
+    if (!r.ok) { console.error(r.error); process.exit(1) }
+    if (prompt) {
+      const t = await codexTurn(sock, r.threadId, prompt, cwd)
+      if (!t.ok) { console.error(t.error); process.exit(1) }
+      // The visible TUI resumes this thread from its ON-DISK rollout; a freshly-spawned app-server acks the turn
+      // but persists the rollout a few seconds LATE (verified live: the SAME thread's file lands at ~2-4s, not
+      // lost). WAIT for it to land BEFORE storing the id / printing it, else FAIL LOUD — never store a
+      // non-resumable harness_session_id (that permanently wedges every reopen). The 15s budget exceeds launch.sh's
+      // fast-fail threshold, so a real failure exits past it and the retry loop won't spray duplicate-prompt threads.
+      if (!await waitForCodexRollout(r.threadId, 20000)) {
+        console.error(`codex thread ${r.threadId} started but persisted no rollout within 20s — app-server not ready; not storing a non-resumable id`)
+        process.exit(1)
+      }
     }
+    const sid = process.env.SPEXCODE_SESSION_ID
+    if (sid) markHarnessSessionId(sid, r.threadId)
+    console.log(r.threadId)
+  } else if (sub === 'codex-turn') {
+    // fire a follow-up turn on an OWNED thread over the per-project socket (the delivery channel, exposed for
+    // tests / scripts). steer-vs-start is chosen live from the thread read.
+    const { codexTurn } = await import('./harness.js')
+    const sock = process.argv[4], tid = process.argv[5], text = process.argv.slice(6).join(' ')
+    if (!sock || !tid || !text) { console.error('usage: spex internal codex-turn <sock> <threadId> <text...>'); process.exit(2) }
+    const r = await codexTurn(sock, tid, text)
+    if (r.ok) { console.log('ok') } else { console.error(r.error); process.exit(1) }
+  } else {
+    const { commandHelp } = await import('./help.js')
+    console.error(commandHelp('internal'))
+    process.exit(2)
   }
-  const sid = process.env.SPEXCODE_SESSION_ID
-  if (sid) markHarnessSessionId(sid, r.threadId)
-  console.log(r.threadId)
-} else if (cmd === 'codex-turn') {
-  // fire a follow-up turn on an OWNED thread over the per-project socket (the delivery channel, exposed for
-  // tests / scripts). steer-vs-start is chosen live from the thread read.
-  const { codexTurn } = await import('./harness.js')
-  const sock = process.argv[3], tid = process.argv[4], text = process.argv.slice(5).join(' ')
-  if (!sock || !tid || !text) { console.error('usage: spex codex-turn <sock> <threadId> <text...>'); process.exit(2) }
-  const r = await codexTurn(sock, tid, text)
-  if (r.ok) { console.log('ok') } else { console.error(r.error); process.exit(1) }
 } else {
   console.error(`spex: unknown command '${cmd}' (try: spex help)`)
   process.exit(2)

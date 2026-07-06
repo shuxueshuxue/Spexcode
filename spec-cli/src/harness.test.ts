@@ -57,7 +57,7 @@ test('codex launch command starts app-server then resumes the backend-owned thre
   assert.match(cmd, /\(\s*cd "\$dir" && exec [^\n]*app-server --listen unix:\/\/"\$sock"/)
   // design C: the BACKEND owns the thread — codex-launch does thread/start { cwd } + first turn, prints the id,
   // and the visible TUI resumes THAT thread on the same project socket.
-  assert.match(cmd, /codex-launch "\$sock" "\$PWD" "\$@"/)
+  assert.match(cmd, /internal codex-launch "\$sock" "\$PWD" "\$@"/)
   assert.match(cmd, /exec codex --yolo --remote unix:\/\/"\$sock" resume "\$tid"/)
   // the app-server socket lives on a SHORT sun_path-safe path (spexcode-cx-<hash>.sock off tmpdir), NOT the old
   // `<runtimeDir>/codex-app-server.sock` that blew past macOS's ~104-byte sun_path cap on a deep project path.
@@ -73,7 +73,7 @@ test('codex launch command starts app-server then resumes the backend-owned thre
   assert.match(cmd, /tid=\$2/)
   // codex-launch only prints an id once its rollout is resume-ready; a fail-loud (non-zero / empty) must ABORT,
   // never `resume ""` — so the codex-launch call propagates failure and an empty tid is guarded before resume.
-  assert.match(cmd, /codex-launch "\$sock" "\$PWD" "\$@"\) \|\| exit 1/)
+  assert.match(cmd, /internal codex-launch "\$sock" "\$PWD" "\$@"\) \|\| exit 1/)
   assert.match(cmd, /\[ -n "\$tid" \] \|\| \{ echo .* exit 1; \}/)
   } finally { delete process.env.SPEXCODE_CODEX_BYPASS_HOOK_TRUST }
 })
@@ -102,7 +102,7 @@ test('codex launch EXPORTS the launcher cmd so codex-launch probes the SAME code
   // (the export sits inside the outer `bash -lc '…'`, so its own quotes are shell-escaped as '\'' — match loosely)
   assert.match(cmd, /export SPEXCODE_CODEX_CMD=\S*\/opt\/nvm\/v22\/bin\/codex --yolo/)
   // and the export precedes the codex-launch call in the same script, so the child inherits it
-  assert.ok(cmd.indexOf('export SPEXCODE_CODEX_CMD') < cmd.indexOf('codex-launch "$sock"'))
+  assert.ok(cmd.indexOf('export SPEXCODE_CODEX_CMD') < cmd.indexOf('internal codex-launch "$sock"'))
 })
 
 test('codexRolloutExists finds a thread by id only once its rollout file lands on disk', () => {

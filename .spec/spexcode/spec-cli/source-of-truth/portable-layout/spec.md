@@ -51,7 +51,7 @@ The **source-of-truth branch** — what worktrees fork from, merges land on, and
 detected by `mainBranch()`, never the baked-in name `main`: the `mainBranch` override above wins, else the
 branch the main checkout is currently on (so an adopted repo whose default is `staging`/`feat-x` just works
 with no config), else `main`. This single resolution is surfaced two ways downstream — `GET /api/layout`
-for the dashboard and `spex trunk` (one line, for shell consumers like the [[main-guard]] pre-commit hook,
+for the dashboard and `spex internal trunk` (one line, for shell consumers like the [[main-guard]] pre-commit hook,
 which asks "is HEAD the trunk?" instead of hardcoding `main`). Both resolve via the shared git **common**
 dir, so they answer identically from the main checkout, a linked worktree, or a commit hook:
 `mainCheckout()` exposes the root working tree itself

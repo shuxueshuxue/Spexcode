@@ -430,7 +430,7 @@ export function codexLaunchCommand(_id: string, codexCmd = process.env.SPEXCODE_
     `if [ "$1" = "--resume" ]; then`,
     `  tid=$2`,
     `else`,
-    `  tid=$(${SPEX} codex-launch "$sock" "$PWD" "$@") || exit 1`,
+    `  tid=$(${SPEX} internal codex-launch "$sock" "$PWD" "$@") || exit 1`,
     `fi`,
     `[ -n "$tid" ] || { echo "[spex] codex-launch produced no resumable thread" >&2; exit 1; }`,
     `exec ${codexCmd}${tuiBypass} --remote unix://"$sock" resume "$tid"`,

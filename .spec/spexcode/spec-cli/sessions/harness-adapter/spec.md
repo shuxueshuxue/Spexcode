@@ -200,7 +200,7 @@ surface:
   turn. `resumeArg(rec)` is the relaunch tail `reopen()` hands `launch()`, but the two harnesses consume that
   tail differently and the codex side MUST honour that: **claude** `--resume <id>` is appended straight to the
   `claude` command (the SAME conversation, the id we pinned). **codex** has no bare `codex` to append to — its
-  `launchCmd` is a bootstrap script that feeds the tail (`"$@"`) to `spex codex-launch`, which mints a NEW
+  `launchCmd` is a bootstrap script that feeds the tail (`"$@"`) to `spex internal codex-launch`, which mints a NEW
   thread and fires the tail AS the first-turn prompt. So the codex resume tail is a `--resume <thread-id>`
   **marker** the script branches on: it resumes the owned thread DIRECTLY (skip `codex-launch`, no new thread,
   no prompt turn — `tid=<thread-id>`), then its final `codex … resume "$tid"` performs codex's own resume on the

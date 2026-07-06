@@ -121,8 +121,9 @@ it to `.spec/.issues` on its first store touch after a toolchain update — the 
   command because local and remote are one model — the store is a property of the issue, never a second
   command family. There is deliberately no store-local read command — reading is `spex issues` ([[issues]]),
   the same list every store feeds. (The write verbs were historically a separate `spex propose` command;
-  that name survives only as an undocumented alias so a pre-rename deployment's `post-merge` hook — a
-  per-clone copy that calls `spex propose nudge` — keeps working until its hooks are reinstalled.)
+  that alias is now removed — the top level is porcelain-only ([[cli-surface]]). A pre-rename deployment's
+  `post-merge` hook — a per-clone copy calling `spex propose nudge` — prints one unknown-command line,
+  advisory only, until `npm run hooks` reinstalls it.)
 - **A human writes too — the local issue store is the programmatic surface.** The same write verbs carry an optional
   `author` (default the effective session id, else a caller-passed `'human'`), so a person can post from
   outside the CLI. `replyLocalIssue(id, body, author)` and `postLocalIssue(concern, {nodes, body, author})` are

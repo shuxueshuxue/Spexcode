@@ -421,7 +421,14 @@ if (cmd === 'serve') {
   } else if (sub === 'done') {
     // sugar for awaiting; --propose merge|nothing|close, optional --note
     const p = (flag('propose') as any) || 'nothing'
-    const closeNote = p === 'close' ? CLOSE_CLEANUP : ''
+    let closeNote = p === 'close' ? CLOSE_CLEANUP : ''
+    if (p === 'close') {
+      // the DATA half of the close nudge ([[local-issues]] closeoutNudge): the still-open local issues this
+      // session touched, listed by id — empty/OFF/no-identity prints nothing. Loud on failure but never
+      // gating: the declaration must land whatever the issue store is doing.
+      try { closeNote += (await import('./localIssues.js')).closeoutNudge(sess ?? s.ownSessionId()) }
+      catch (e) { console.error(`issue closeout check failed (declaration unaffected): ${e instanceof Error ? e.message : e}`) }
+    }
     console.log(s.markDone(p, sess) ? `done (${p})${DECLARED}${closeNote}` : 'no session record')
   } else if (sub === 'park') {
     // sugar: the agent is waiting on a background task; it will self-resume (NOT idle/awaiting)

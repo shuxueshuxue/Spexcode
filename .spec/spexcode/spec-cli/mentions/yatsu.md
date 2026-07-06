@@ -34,6 +34,19 @@ scenarios:
       an unresolved/offline actor is reported ("no live session; stored"), never failing the committed post;
       the `[[node]]` ref is passive (parsed, never dispatched). Live delivery (sendKeys to an online session,
       `@new` spawning a worker) reuses [[dispatch]]/[[launch]] and is measured on a real backend deployment.
+  - name: spawn-parent-lineage
+    tags: [cli]
+    code: spec-cli/src/mentions.ts
+    description: >-
+      In an isolated store (SPEXCODE_HOME + SPEXCODE_TMUX + SPEXCODE_CLAUDE_CMD pointed at an inert command),
+      seed one governed session record, then through the real CLI post `spex issues open … --body "@new …"`
+      twice: once authored BY that session (SPEXCODE_SESSION_ID = its id), once authored by a non-session
+      identity (`human`/`unknown`/a forge login). Read each spawned worker's session.json `parent` field.
+    expected: >-
+      The spawn's parent = its originator: when the mentioning author is a real board session id, the spawned
+      worker's record carries it as `parent` (so the dashboard folds the worker under the session that
+      summoned it, [[session-nesting]]); an author that is NOT a session — human, unknown, a forge login —
+      yields an empty parent, a top-level worker, never a phantom nest.
 ---
 
 # measuring mentions

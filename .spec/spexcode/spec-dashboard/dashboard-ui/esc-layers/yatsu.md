@@ -7,9 +7,12 @@ scenarios:
       modal over the open panel. Press Escape ONCE, then a SECOND time. Measure what each press closes
       (never click the red Close — Escape on the confirm cancels it harmlessly).
     expected: >
-      The first Escape closes ONLY the confirm modal; the session console panel is still open behind it.
-      The second Escape closes the panel, returning to the board. One layer peels per press, in reverse
-      open order — never the confirm and the panel together on a single press.
+      The first Escape closes ONLY the confirm modal; the session console panel is still open behind it —
+      never the confirm and the panel together on a single press. The second Escape is a page-level no-op:
+      since [[side-nav]] demoted Esc to an overlay-closer (Esc routes nothing — pages are peers, not
+      layers), the session page stays at #/sessions/<id> with the panel open; leaving it is navigation
+      (the rail, ⌥digit, or history), never Esc. One layer peels per press, and with no overlay left the
+      press falls through to nothing.
     related:
       - spec-dashboard/src/SessionContextMenu.jsx
   - name: layering-survives-hot-reload

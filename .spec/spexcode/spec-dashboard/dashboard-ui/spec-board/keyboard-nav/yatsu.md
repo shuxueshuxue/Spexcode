@@ -1,5 +1,21 @@
 ---
 scenarios:
+  - name: enter-activates-focused-control
+    tags: [frontend-e2e, desktop]
+    description: >-
+      Open the dashboard on the spec node graph and put real keyboard focus on the HUD's `?` help
+      button (Tab to it or focus it directly — `document.activeElement` must be the `.hud-help`
+      button). Press `Enter`. Then, as the contrast, click the same button with the mouse. Screenshot
+      the state after the Enter and file with
+      `spex yatsu eval keyboard-nav --scenario enter-activates-focused-control --image <png>`.
+    expected: >-
+      Enter on the focused `?` button activates the button — the help/keymap legend opens, exactly as a
+      mouse click does. A focused native control (button, link, form field) owns its activation keys:
+      the board's key vocabulary steps aside, so Enter is the control's click here, NOT the board.info
+      alias — the node-info popup must not open instead. Tabbing to a control and pressing Enter must
+      always equal clicking it (keyboard reachability).
+    code:
+      - spec-dashboard/src/Dashboard.jsx
   - name: enter-opens-info-not-session-board
     tags: [frontend-e2e, desktop]
     description: >-

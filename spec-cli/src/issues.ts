@@ -148,10 +148,15 @@ export function mergedIssues(forge: ForgeSlice | null, nodeIds: string[]): Issue
     .sort((a, b) => b.created.localeCompare(a.created))
 }
 
+// @@@ createIssue - the ONE creation port, store-routed ([[issues]]): the dashboard's New form
+// (POST /api/issues) and `spex issues open [--store <store>]` run this SAME routine. Default local commits
+// to the trunk store; a forge store creates the REAL forge issue through that store's driver, its body
+// carrying the `Spec: <nodes>` marker so the existing tracer read links it straight back — no promote
+// round-trip needed when the concern is born forge-visible.
 export async function createIssue(
   concern: string,
   opts: { store?: string; nodes?: string[]; body?: string; evidence?: string[]; author?: string } = {},
-): Promise<{ store: string; id: string; url?: string; outcomes: DispatchOutcome[] }> {
+): Promise<{ store: string; id: string; nodes: string[]; url?: string; outcomes: DispatchOutcome[] }> {
   const store = opts.store || 'local'
   const author = opts.author || envSessionId() || 'unknown'
   if (store === 'local') {
@@ -161,7 +166,7 @@ export async function createIssue(
       evidence: opts.evidence,
       author,
     })
-    return { store: 'local', id: thread.id, outcomes }
+    return { store: 'local', id: thread.id, nodes: thread.nodes, outcomes }
   }
 
   const driver = forgeDriverFor(store)
@@ -173,7 +178,7 @@ export async function createIssue(
   })
   const id = `${driver.host}#${number}`
   const outcomes = await dispatchMentions(opts.body || concern, { threadId: id, node: nodes[0] || null, author, status: 'open' })
-  return { store: driver.host, id, url, outcomes }
+  return { store: driver.host, id, nodes, url, outcomes }
 }
 
 // @@@ promote - the ONE cross-store verb ([[issues]]): a local concern that outgrew the repo moves to the
@@ -251,12 +256,31 @@ const hasFlag = (args: string[], name: string) => args.includes(`--${name}`)
 // `spex issues …` — the ONE issues surface. Bare (with filters) it is THE read over every store: the
 // drain view a supervisor/human works from, `[--node id] [--store local|<host>] [--all] [--json]`. A write
 // first-positional (open|reply|sign|resolve|on|off|status|nudge — localIssues.ts) routes to the store's
-// write verbs; `promote` is the one cross-store verb. The list imposes NO salience ranking — recurrence
-// (signers, replies) is a signal the drain WEIGHS by judgment, never an automatic priority order. The forge
-// slice is a LIVE pull; an unreachable forge degrades loudly to local-only (one stderr note) — local
-// reading never hostages on a network.
+// write verbs (open and reply are themselves store-routed: `open --store <host>` / a `<host>#<n>` id go
+// through the driver); `close` is the store-routed lifecycle verb (the SAME closeIssue the dashboard's
+// Close button calls); `promote` is the one cross-store verb. The list imposes NO salience ranking —
+// recurrence (signers, replies) is a signal the drain WEIGHS by judgment, never an automatic priority
+// order. The forge slice is a LIVE pull; an unreachable forge degrades loudly to local-only (one stderr
+// note) — local reading never hostages on a network.
 export async function runIssues(args: string[]): Promise<number> {
   if (ISSUE_WRITE_SUBS.has(args[0])) return runIssueWrite(args)
+  if (args[0] === 'close') {
+    // the CLI leg of the ONE close verb ([[issues]] closeIssue — the same routing POST /api/issues/:id/close
+    // runs): a local id resolves the thread `landed`, a forge id (`<host>#<n>`) closes the remote issue
+    // through the driver. Lifecycle on the issue object, never node state.
+    const id = args[1]
+    if (!id || id.startsWith('--')) { console.error('usage: spex issues close <issue-id>   (a local id, or a forge id like github#12)'); return 2 }
+    try {
+      const r = await closeIssue(id)
+      console.log(r.store === 'local'
+        ? `closed '${id}' — local thread resolved landed`
+        : `closed '${id}' on ${r.store}${r.url ? `  ${r.url}` : ''}`)
+      return 0
+    } catch (e) {
+      console.error(`spex issues close: ${e instanceof Error ? e.message : e}`)
+      return 1
+    }
+  }
   if (args[0] === 'promote') {
     const id = args[1]
     if (!id || id.startsWith('--')) { console.error('usage: spex issues promote <local-issue-id>'); return 2 }

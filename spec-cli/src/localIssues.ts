@@ -563,7 +563,7 @@ const fl = (args: string[], name: string): string | undefined => {
   const i = args.indexOf(`--${name}`)
   return i >= 0 ? args[i + 1] : undefined
 }
-const VALUE_FLAGS = new Set(['--node', '--body', '--as', '--evidence', '--scenario', '--code-sha'])
+const VALUE_FLAGS = new Set(['--node', '--body', '--as', '--evidence', '--scenario', '--code-sha', '--store'])
 // bare positionals, skipping flags + their values.
 function bare(args: string[]): string[] {
   const out: string[] = []
@@ -585,9 +585,11 @@ const repeated = (args: string[], name: string): string[] =>
   args.flatMap((a, i) => (a === `--${name}` ? [args[i + 1]] : [])).filter(Boolean) as string[]
 
 // the local-issue WRITE verbs, folded into the one issues surface (`spex issues <sub>` — the read routes
-// here when its first positional is a write sub): open "<concern>" [--node id…] [--evidence hash…]
-// [--body -|text], the id-based reply | sign | resolve, and the feature toggle on | off | status. `nudge`
-// is internal (the post-merge hook's caller). Store is a property of the issue, never a second command.
+// here when its first positional is a write sub): open "<concern>" [--store local|<host>] [--node id…]
+// [--evidence hash…] [--body -|text], the id-based reply | sign | resolve, and the feature toggle
+// on | off | status. `nudge` is internal (the post-merge hook's caller). Store is a property of the issue,
+// never a second command — open and reply route by it (issues.ts createIssue/replyIssue); sign and resolve
+// are local-store verbs (a forge issue's lifecycle verb is `spex issues close`, issues.ts).
 export async function runIssueWrite(args: string[]): Promise<number> {
   const sub = args[0]
   try {
@@ -631,15 +633,26 @@ export async function runIssueWrite(args: string[]): Promise<number> {
       if (text) console.log(text)
       return 0
     }
-    // `open`: start a new local issue. The concern is the bare positional(s) after the sub.
+    // `open`: start a new issue — STORE-ROUTED through the one creation port ([[issues]] createIssue, the
+    // same routine POST /api/issues runs): default local commits to the trunk store; `--store <host>`
+    // creates the real forge issue through that store's driver (no promote round-trip when the concern is
+    // born forge-visible). The concern is the bare positional(s) after the sub.
     const concern = sub === 'open' ? bare(args.slice(1)).join(' ').trim() : ''
     if (!concern) {
-      console.error('usage: spex issues open "<concern>" [--node <id>…] [--evidence <hash>…] [--body -|<text>]\n       spex issues reply|sign|resolve <issue-id> …  |  on|off|status')
+      console.error('usage: spex issues open "<concern>" [--store local|<host>] [--node <id>…] [--evidence <hash>…] [--body -|<text>]\n       spex issues reply|sign|resolve|close <issue-id> …  |  on|off|status')
       return 2
     }
-    const p = openIssue(concern, { nodes: repeated(args, 'node'), body: readBody(args), evidence: repeated(args, 'evidence') })
-    console.log(`opened '${p.id}'${p.nodes.length ? ` (re: ${p.nodes.join(', ')})` : ''} — committed to the local issue store; read it with \`spex issues\``)
-    const s = summarize(await dispatchMentions(p.body || concern, { threadId: p.id, node: p.nodes[0] || null, author: p.by, status: p.status }))
+    const r = await (await import('./issues.js')).createIssue(concern, {
+      store: fl(args, 'store'),
+      nodes: repeated(args, 'node'),
+      body: readBody(args),
+      evidence: repeated(args, 'evidence'),
+    })
+    const re = r.nodes.length ? ` (re: ${r.nodes.join(', ')})` : ''
+    console.log(r.store === 'local'
+      ? `opened '${r.id}'${re} — committed to the local issue store; read it with \`spex issues\``
+      : `opened '${r.id}' on ${r.store}${re} — ${r.url}`)
+    const s = summarize(r.outcomes)
     if (s) console.log(`  ${s}`)
     return 0
   } catch (e) {

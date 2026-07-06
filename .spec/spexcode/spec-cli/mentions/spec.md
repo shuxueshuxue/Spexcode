@@ -49,6 +49,15 @@ grammar is uniform, the logic is tiny.
   Discoverability is symmetric: the dashboard hints via its autocomplete dropdowns; the CLI hints via a
   mention line in `spex help session` and `spex help issues` — a CLI user must not have to find the
   grammar by reading the dashboard.
+- **In a CLI argument the sigil is OPTIONAL, never banned.** In free text the sigils are what set a
+  reference apart from prose, so they stay required there; but a CLI reference argument IS the reference,
+  so it tolerates the dashboard-learned form: `spex review @graph` ≡ `spex review graph`, `spex yatsu eval
+  [[cli-surface]]` ≡ `spex yatsu eval cli-surface`. One shared `stripRefSigil` (in this module, beside the
+  parser) sheds a leading `@` or a full `[[…]]` wrapper — the session-selector matcher
+  ([[session-selectors]]) applies it per comma-part, so EVERY selector-taking verb tolerates it at once,
+  and each node-arg read site (yatsu eval/retract/show, `owner`, the `--node` flags) passes through it.
+  Tolerance never widens matching: a stripped token matches exactly what the bare token matches, and a
+  wrong sigiled token errors exactly like the bare one.
 - **No new delivery pipe.** `@session` → [[dispatch]]'s `sendKeys` (a prompt = the surrounding text + a
   pointer to where it was written); `@new` → [[launch]]'s `newSession` (a fresh worker). Offline/unreachable
   fails loud (the `DispatchResult`), and the text still persists for the drain.

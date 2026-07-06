@@ -13,6 +13,18 @@ const NODE_RE = /\[\[([^\]\s]+)\]\]/g
 
 const uniq = (xs: string[]): string[] => [...new Set(xs)]
 
+// ── CLI sigil tolerance ───────────────────────────────────────────────────────────────────────────────
+// In FREE TEXT the sigils are required — they are what marks a reference apart from prose. In a CLI
+// ARGUMENT the whole token IS the reference, so the sigil is optional: `spex review @graph` ≡
+// `spex review graph`, `spex yatsu eval [[cli-surface]]` ≡ `spex yatsu eval cli-surface`. One shared strip,
+// applied by the session-selector matcher and every node-arg read site, so the habit a user learns in the
+// dashboard's input boxes works verbatim on the CLI — never a second grammar to learn.
+export function stripRefSigil(token: string): string {
+  const wrapped = /^\[\[(.*)\]\]$/.exec(token)
+  if (wrapped) return wrapped[1]
+  return token.startsWith('@') ? token.slice(1) : token
+}
+
 export function parseMentions(text: string): { actors: string[]; nodes: string[] } {
   const actors: string[] = []
   const nodes: string[] = []

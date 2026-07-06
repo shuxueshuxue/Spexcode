@@ -47,6 +47,18 @@ scenarios:
       worker's record carries it as `parent` (so the dashboard folds the worker under the session that
       summoned it, [[session-nesting]]); an author that is NOT a session — human, unknown, a forge login —
       yields an empty parent, a top-level worker, never a phantom nest.
+  - name: cli-sigil-tolerance
+    tags: [cli]
+    code: spec-cli/src/mentions.ts
+    related: [spec-cli/src/sessions.ts, spec-yatsu/src/cli.ts]
+    description: >-
+      Through the real CLI, name the same referent with and without its sigil: a session selector as
+      `<sel>`, `@<sel>`, and `[[<sel>]]` (a list verb like `spex ls` AND a control verb through the
+      single-target resolver), and a node arg as `<node>` and `[[<node>]]` (`spex yatsu show`/`eval`).
+    expected: >-
+      Identical output for every pair — a sigiled CLI argument resolves to exactly what the bare token
+      resolves to, never widening a match (a wrong sigiled token errors the same as the bare one). Sigils
+      stay REQUIRED in free text; the tolerance is CLI-argument-only.
 ---
 
 # measuring mentions

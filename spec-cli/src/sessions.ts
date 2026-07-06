@@ -9,6 +9,7 @@ import { loadSpecs } from './specs.js'
 import { defaultHarness, harnessById, resolveLauncher, rvSock, rendezvousListening, type Harness, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
 import { materialize } from './materialize.js'
 import { mainBranch, gitCommonDir, readConfig, runtimeRoot, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, readAliasedRawRecord, envSessionId, type RawRecord } from './layout.js'
+import { stripRefSigil } from './mentions.js'
 
 // @@@ sessions - the WORKTREE is the durable unit; tmux is a disposable runtime handle. The per-session
 // SOURCE OF TRUTH is an untracked record (`session.json`) in a per-user GLOBAL store keyed by the harness
@@ -1459,8 +1460,9 @@ export function matchesSelector(s: Session, q: string): boolean {
   // names the session, so `watch a,b` and `watch a b` are equivalent. A single name is the one-part case. This
   // is what stops a comma-joined selector from silently matching nothing — an id/node/branch never holds a
   // comma, so without the split `a,b` would be one literal selector that matches no session and streams in
-  // silence forever.
-  return q.split(',').map((p) => p.trim()).filter(Boolean)
+  // silence forever. Each part sheds an optional reference sigil (stripRefSigil): `@<sel>` / `[[<sel>]]` name
+  // the same session as the bare token, so the dashboard's mention grammar is tolerated in every CLI selector.
+  return q.split(',').map((p) => stripRefSigil(p.trim())).filter(Boolean)
     .some((p) => s.id === p || s.id.startsWith(p) || s.node === p || s.branch === p)
 }
 
@@ -1481,7 +1483,8 @@ export function selectSessions(all: Session[], selectors: string[], statuses?: s
 // otherwise a lone match is `ok`, several is `ambiguous` (a prefix/node hitting many), none is `none`.
 export type Resolved = { ok: Session } | { ambiguous: Session[] } | { none: true }
 export function resolveSession(selector: string, sessions: Session[]): Resolved {
-  const exact = sessions.find((s) => s.id === selector)
+  // the exact-id check sheds the optional sigil too, so `@<full-id>` keeps the exact-wins-over-prefix rule
+  const exact = sessions.find((s) => s.id === stripRefSigil(selector))
   if (exact) return { ok: exact }
   const hits = sessions.filter((s) => matchesSelector(s, selector))
   if (hits.length === 1) return { ok: hits[0] }

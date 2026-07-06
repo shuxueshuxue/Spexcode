@@ -1,4 +1,7 @@
 export {} // make this a module so top-level await is allowed
+// static import is fine here: mentions.ts is dependency-free at module level, and stripRefSigil is needed
+// by several verbs (owner, new, tree) — a CLI reference arg tolerates an optional @/[[ ]] sigil ([[mentions]]).
+import { stripRefSigil } from './mentions.js'
 
 // @@@ verb mirror - one verb, either drawer ([[cli-surface]]): a session verb promoted to the top
 // level also answers under `spex session …`, and a typeable session sub also answers bare at the top
@@ -180,8 +183,9 @@ if (cmd === 'serve') {
   // (related: — pointers; coverage only, never drift/yatsu).
   const { specOwners, specRelated } = await import('./specs.js')
   const { loadConfig } = await import('./lint.js')
-  const p = positionals(3)[0]
-  if (!p) { console.error('usage: spex owner <path> [--actionable]'); process.exit(2) }
+  const p0 = positionals(3)[0]
+  if (!p0) { console.error('usage: spex owner <path> [--actionable]'); process.exit(2) }
+  const p = stripRefSigil(p0)
   const rel = p.startsWith(process.cwd()) ? p.slice(process.cwd().length + 1) : p
   const owners = specOwners(p)
   const related = specRelated(p)
@@ -354,7 +358,7 @@ if (cmd === 'serve') {
   const depthRaw = flag('depth')
   const depth = depthRaw === undefined ? undefined : Number(depthRaw)
   if (depth !== undefined && (!Number.isInteger(depth) || depth < 0)) { console.error('spex tree: --depth must be a non-negative integer'); process.exit(2) }
-  const opts = { node: flag('node'), depth, color: process.stdout.isTTY && !process.env.NO_COLOR }
+  const opts = { node: flag('node') && stripRefSigil(flag('node')!), depth, color: process.stdout.isTTY && !process.env.NO_COLOR }
   const { nodes } = await buildBoard()
   try {
     console.log(has('json') ? JSON.stringify(treeJson(nodes, opts), null, 2) : renderTree(nodes, opts))
@@ -437,7 +441,8 @@ if (cmd === 'serve') {
   // it falls back to an in-process launch only when no backend answers.
   const { createSession } = await import('./sessions.js')
   const prompt = flag('prompt') ?? positionals(3)[0] ?? ''
-  const created = await createSession(flag('node') ?? null, prompt, flag('harness') ?? undefined, flag('launcher') ?? undefined)
+  const nodeArg = flag('node')
+  const created = await createSession(nodeArg ? stripRefSigil(nodeArg) : null, prompt, flag('harness') ?? undefined, flag('launcher') ?? undefined)
   console.log(JSON.stringify(created, null, 2))
   await launchMonitorReminder(created.id)
 } else if (cmd === 'session') {

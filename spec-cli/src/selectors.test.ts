@@ -89,3 +89,21 @@ test('selectSessions and resolveSession agree on the shared predicate', () => {
     assert.deepEqual(resolveSession(q, board), { ok: filtered[0] })
   }
 })
+
+// ---- sigil tolerance: a CLI selector sheds an optional @ / [[ ]] (see [[mentions]]) ----
+
+test('matchesSelector: @sel and [[sel]] name the same session as the bare token', () => {
+  assert.ok(matchesSelector(a, '@sessions'))
+  assert.ok(matchesSelector(a, '[[sessions]]'))
+  assert.ok(matchesSelector(a, '@aaaa1111'))            // sigil + id-prefix
+  assert.ok(matchesSelector(a, '@sessions,@graph'))     // per-part in a comma list
+  assert.ok(!matchesSelector(c, '@sessions'))           // tolerance never widens what matches
+})
+
+test('resolveSession: a sigiled selector resolves like the bare one; @full-id keeps exact-wins', () => {
+  assert.deepEqual(resolveSession('@graph', board), { ok: b })
+  assert.deepEqual(resolveSession('[[graph]]', board), { ok: b })
+  const x = mk('dead', 'x', 'node/x')
+  const y = mk('deadbeef', 'y', 'node/y')
+  assert.deepEqual(resolveSession('@dead', [x, y]), { ok: x })   // exact full-id wins through the sigil
+})

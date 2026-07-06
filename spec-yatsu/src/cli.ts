@@ -9,6 +9,7 @@ import { readReadings, readSidecar, appendReading, appendRetraction, latestPerSc
 import { staleAxes } from './freshness.js'
 import { scenarioIndex } from './scenariofresh.js'
 import { loadEvalRemarkTracks, trackKey } from '../../spec-cli/src/issues.js'
+import { stripRefSigil } from '../../spec-cli/src/mentions.js'
 import { evaluatorTag } from './evaluator.js'
 import { putBlob, blobPath, listBlobs, gc, isStrayBlob } from './cache.js'
 import { validateTimeline } from './timeline.js'
@@ -206,7 +207,7 @@ async function evalCmd(args: string[]): Promise<number> {
     return 2
   }
   const sel = positional(args)
-  const id = !sel || sel === '.' ? currentNodeId(root) : sel
+  const id = !sel || sel === '.' ? currentNodeId(root) : stripRefSigil(sel)   // node args tolerate @/[[ ]] sigils ([[mentions]])
   if (!id) { console.error('spex yatsu eval .: no current node (no .session/node-branch here) — name a node'); return 2 }
   const node = (await gatherNodes(root)).find((n) => n.id === id)
   if (!node) { console.error(`spex yatsu eval: no yatsu node '${id}' (a node needs a yatsu.md)`); return 1 }
@@ -309,7 +310,7 @@ async function retractCmd(args: string[]): Promise<number> {
     return 2
   }
   const sel = positional(args)
-  const id = !sel || sel === '.' ? currentNodeId(root) : sel
+  const id = !sel || sel === '.' ? currentNodeId(root) : stripRefSigil(sel)
   if (!id) { console.error('spex yatsu retract .: no current node (no .session/node-branch here) — name a node'); return 2 }
   const node = yatsuNodes(root).find((n) => n.id === id)
   if (!node) { console.error(`spex yatsu retract: no yatsu node '${id}' (a node needs a yatsu.md)`); return 1 }
@@ -410,7 +411,7 @@ function checkStaged(): number {
 async function show(args: string[]): Promise<number> {
   const root = repoRoot()
   const sel = positional(args)
-  const id = !sel || sel === '.' ? currentNodeId(root) : sel
+  const id = !sel || sel === '.' ? currentNodeId(root) : stripRefSigil(sel)
   if (!id) { console.error('spex yatsu show .: no current node (no .session/node-branch here) — name a node'); return 2 }
   const tl = await evalTimeline(id)   // no ctx → evalTimeline derives specs + driftIndex itself for this one id
   if (has(args, 'json')) { console.log(JSON.stringify(tl, null, 2)); return 0 }
@@ -502,7 +503,7 @@ async function blobGet(args: string[]): Promise<number> {
   if (local.ok) return emitBlob(local.bytes, out)
   if (local.reason === 'invalid') { console.error(`spex blob get: bad hash '${hash}' — a blob hash is 64 hex chars`); return 2 }
   const { apiBase } = await import('../../spec-cli/src/sessions.js')
-  const url = `${apiBase()}/api/yatsu/blob/${hash}`
+  const url = `${await apiBase()}/api/yatsu/blob/${hash}`
   let backendMiss: string
   try {
     const r = await fetch(url)

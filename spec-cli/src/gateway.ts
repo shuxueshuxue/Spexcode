@@ -173,15 +173,17 @@ export function startGateway(opts: GatewayOpts): void {
     socket.on('error', bail); up.on('error', bail)
   })
 
-  // `spex dashboard` passes an explicit loopback host; `--public` passes none → bind ALL interfaces (the
-  // original behaviour, IPv4+IPv6), so adding the local path never narrows the public gateway's reach.
-  const isLocal = !!opts.host
+  // `spex dashboard` passes an explicit host (loopback by default, --host to widen); `--public` passes
+  // none → bind ALL interfaces (the original behaviour, IPv4+IPv6), so adding the local path never
+  // narrows the public gateway's reach. The gate note keys on LOOPBACK, not on host-being-explicit:
+  // an ungated loopback bind is normal, an ungated wide bind is announced — never silent.
+  const isLoopback = opts.host === '127.0.0.1' || opts.host === 'localhost' || opts.host === '::1'
   const onListen = () => {
     const scheme = secure ? 'https' : 'http'
     const label = opts.label ?? 'public mode'
-    const gate = isLocal ? '' : ` — ${gated ? 'password-gated' : 'OPEN (no password)'}`   // ungated loopback is normal, not a warning
-    console.log(`[gateway] ${label} on ${scheme}://${isLocal ? 'localhost' : '0.0.0.0'}:${opts.publicPort}${gate}, proxying /api to :${opts.upstreamPort}`)
-    if (!secure && !isLocal) console.log('[gateway] (TLS off — --http)')
+    const gate = isLoopback ? '' : ` — ${gated ? 'password-gated' : 'OPEN (no password)'}`
+    console.log(`[gateway] ${label} on ${scheme}://${isLoopback ? 'localhost' : (opts.host ?? '0.0.0.0')}:${opts.publicPort}${gate}, proxying /api to :${opts.upstreamPort}`)
+    if (!secure && !isLoopback && !opts.host) console.log('[gateway] (TLS off — --http)')
   }
   // a busy public port is a hard, loud, non-zero exit — the SAME contract as the supervisor's proxy
   // (see [[spec-cli]] / listen.ts), so `spex serve` and `spex dashboard` fail a port clash identically.
@@ -270,13 +272,15 @@ export function ensureDashboardBuilt(repoRoot: string, distDir: string): void {
 }
 
 // @@@ serveDashboardLocal - the engine behind `spex dashboard`: the SAME gateway as public mode, bound to
-// loopback with no TLS and no password. It serves the bundled dist and proxies /api + the terminal socket
-// to a separately-run `spex serve`. This is the post-install replacement for the dogfood-only `npm run web`
-// (a vite dev server an installed user has no source tree for). See [[packaging]].
-export function serveDashboardLocal(opts: { port: number; apiPort: number }): void {
+// loopback by default with no TLS and no password — `--host` widens the bind to a chosen interface
+// (LAN/tailnet viewing) while staying plain HTTP; the internet face remains `spex serve --public`.
+// It serves the bundled dist and proxies /api + the terminal socket to a separately-run `spex serve`.
+// This is the post-install replacement for the dogfood-only `npm run web` (a vite dev server an
+// installed user has no source tree for). See [[packaging]].
+export function serveDashboardLocal(opts: { port: number; apiPort: number; host?: string }): void {
   const pkgRoot = fileURLToPath(new URL('..', import.meta.url))
   const distDir = resolveDistDir()
   ensureDashboardBuilt(join(pkgRoot, '..'), distDir) // bundled dist already has index.html → returns at once
   console.log(`[dashboard] serving ${distDir.endsWith('dashboard-dist') ? 'bundled' : 'monorepo'} build, /api → backend :${opts.apiPort}`)
-  startGateway({ host: '127.0.0.1', publicPort: opts.port, upstreamPort: opts.apiPort, password: '', tls: null, distDir, label: 'dashboard' })
+  startGateway({ host: opts.host ?? '127.0.0.1', publicPort: opts.port, upstreamPort: opts.apiPort, password: '', tls: null, distDir, label: 'dashboard' })
 }

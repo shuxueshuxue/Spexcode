@@ -13,7 +13,8 @@ scenarios:
       <title>SpexCode</title> and a hashed /assets/index-*.js reference, not a vite dev shell). GET that
       asset → 200 text/javascript. An unknown non-file route (/some/deep/route) → 200 (SPA fallback to
       index.html). GET /api/board is proxied to the backend — 200 application/json when `spex serve` is up,
-      502 when it is not. The listener is on 127.0.0.1 only.
+      502 when it is not. The listener is on 127.0.0.1 only by default; with `--host 0.0.0.0` it binds
+      wide, the startup line names the real bind and announces "OPEN (no password)".
     code: spec-cli/src/gateway.ts
     related: spec-cli/src/cli.ts
   - name: clean-install-cli-starts

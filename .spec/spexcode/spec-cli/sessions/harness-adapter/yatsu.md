@@ -69,6 +69,24 @@ scenarios:
       a supervisor could wrongly reopen/kill them. Both are measurable only through a real launch (a synthetic
       pane hides the wrapper-shell tree shape).
     code: spec-cli/src/harness.ts
+  - name: codex-app-server-sock-binds-on-hardened-tmp
+    tags: [backend-api]
+    description: >-
+      On a normally-hardened Linux host (`fs.protected_regular=2`, root-owned sticky `/tmp` — stock Ubuntu), with
+      NO `SPEXCODE_CODEX_SOCKET_DIR` override set: derive the app-server socket path exactly as the launch path
+      does (`codexAppServerSock`), then run the launch script's own spawn — `codex app-server --listen
+      unix://<sock>` — and the client's `connect()` against it. Control: the SAME codex binding the SAME filename
+      inside an owned 0700 subdirectory.
+    expected: >-
+      The default-derived socket binds and accepts a connect out of the box — no env knob required. The failure
+      this locks (github#30): the derivation defaulted to BARE `tmpdir()`, and codex (≥0.137 field-confirmed,
+      0.142.5 reported) refuses to bind a unix socket directly in the shared sticky `/tmp` — `Error: Operation
+      not permitted (os error 1)` — so the server never comes up, the client's connect gets ENOENT, and launch.sh
+      burns all its retries: EVERY codex-launcher session on a fresh hardened install dies with `codex app-server
+      connection failed: connect ENOENT /tmp/spexcode-cx-<hash>.sock` while claude launchers work — yet the same
+      codex binds fine in any OWNED subdirectory (the control), so the fix belongs to the path derivation, not
+      the host.
+    code: spec-cli/src/harness.ts
   - name: codex-dispatched-thread-fires-lifecycle-hooks
     tags: [backend-api]
     description: >-

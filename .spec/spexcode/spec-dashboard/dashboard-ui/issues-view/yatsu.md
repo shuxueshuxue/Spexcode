@@ -86,8 +86,9 @@ scenarios:
     expected: >-
       The page is a two-column grid whose LEFT column is SLIM (compact one-line rows, at most ~280px —
       the detail is the protagonist): ONE box — the merged issue list under its own
-      sticky filter bar (the store filter + New + the concluded chip, with the open/total meta at its
-      END), NO Evals|Threads tab switcher present; its list gets the full column height, scrolling
+      sticky filter bar (first row: the store filter + the concluded chip; second row: New beside the
+      open/total meta, the meta at that row's END), NO Evals|Threads tab switcher present; its list gets
+      the full column height, scrolling
       itself; the RIGHT detail pane scrolls independently, the page itself never scrolls. The fold
       toggle collapses the list to a thin strip (the detail takes essentially the full width) and the
       strip unfolds it with filters and selection intact. The list
@@ -125,6 +126,21 @@ scenarios:
       `nodes:` from the body's `[[…]]` link ([[local-issues]]), the writer never re-typed an id into a
       separate field. A forge post writes the same node link as a `Spec:` marker and, after the forced forge
       read-back, the issue appears with that node chip. No page errors.
+  - name: filter-bar-shared-dropdown
+    tags: [frontend-e2e]
+    code: [spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/FilterSelect.jsx]
+    description: >-
+      With issues spanning both stores on the running dashboard, open #/issues and read the filter bar's
+      real DOM: the store dropdown's options and their labels, the bar's row structure (which row New and
+      the open/total meta sit on), and the dropdown's element/class compared with the evals feed's kind
+      dropdown on #/evals.
+    expected: >-
+      The store dropdown is the SAME shared control as the evals feed's kind filter — one component, the
+      same select element and `fv-filter` class on both pages. Its options are the stores present plus a
+      first option labelled exactly "all" (the bare word — never "all stores"). The bar's FIRST row
+      carries the store dropdown (+ the concluded chip when present); New sits on the SECOND row beside
+      the open/total meta, the meta pushed to that row's end — New never occupies the first row alone.
+      No page errors.
   - name: close-issue-button
     tags: [frontend-e2e]
     code: [spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/Thread.jsx, spec-cli/src/issues.ts]

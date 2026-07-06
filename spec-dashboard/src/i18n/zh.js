@@ -56,9 +56,7 @@ export default {
 
   evalsFeed: {
     title: '评测',
-    kind: { video: '视频', image: '图片', note: '备注', all: '全部' },
-    staleN: ({ n }) => `${n} 条已过期`,
-    staleOnlyTitle: '只看已过期的读取（默认将新鲜与过期一起、按时间倒序显示）',
+    kind: { video: '视频', image: '图片', all: '全部' },
     summary: ({ n }) => `${n} 条当前`,
     empty: '没有匹配的当前读数 — 先测量一个场景，或切换筛选。',
     annotate: '打开并标注',
@@ -333,7 +331,7 @@ export default {
     // 人工写入路径（[[issues-view]]）—— 回复输入框 + 新建本地 issue。
     issuesThreadsTitle: '讨论帖',
     issuesThreadsSummary: ({ open, total }) => `${open} 开放 · 共 ${total}`,
-    issuesStoreAll: '所有来源',
+    issuesStoreAll: '全部',
     issuesStoreLabel: '来源',
     issuesNew: '新建',
     issuesCancel: '取消',

@@ -2,7 +2,7 @@
 title: evals-feed
 status: active
 hue: 200
-desc: The Evals page's feed — the project's current measured loss as a feed, the left list of the master-detail ([[evals-view]]). Latest reading per scenario, fresh AND stale mixed newest-first (freshness is never a default hide — the stale chip is an opt-in narrowing); title-only rows, media strictly lazy.
+desc: The Evals page's feed — the project's current measured loss as a feed, the left list of the master-detail ([[evals-view]]). Latest reading per scenario, fresh AND stale mixed newest-first (freshness is never a filter — no stale control exists); one kind dropdown (video | image | all) as the only filter, the shared control the issues drain wears; title-only rows, media strictly lazy.
 code:
   - spec-dashboard/src/EvalsFeed.jsx
 related:
@@ -24,30 +24,32 @@ slow-growing), never by measurement count. Review attends to what still counts.
 
 ## expanded spec
 
-Default view: **latest reading per scenario, newest first — fresh and stale MIXED**. Freshness is **never a
-default hide**: a stale reading is real measured loss and stays in the time-ordered feed, its row carrying the
-muted ✓/✗ that marks it stale (so it reads *as* stale without being removed) — hiding it was the bug that let
-a just-filed screenshot vanish behind a chip while newer work looked absent. The evidence-kind filter defaults
-to `video`, falling back to `image` when no reading *contains* a video and to `all` when neither media kind is
-present. The **stale chip is the INVERSE of a hide** — an opt-in narrowing: off shows everything; on shows
-*only* stale readings (drill into the outstanding drift), and it carries the live stale count. The chips
-(video | image | note | all, the stale toggle) live in this group's sticky head and are this group's own
-state — [[evals-view]] owns the page shell (split, selection, j/k), never this group's filters. One
-deliberate exception rides that ownership the RIGHT way round: a **deep-linked eval the current filters
-would hide** ([[evals-view]]'s canonical `#/evals/<node>/<scenario>` address) is handed down as a
-`mustShow` key, and the group widens **its own** filter to `all` (dropping the stale narrowing) so the
-address always renders its eval — the page never reaches into the group's filter state, and an address
-naming no real eval changes nothing. The widen is **one-shot per arrival**: once the target is visible the
-key clears, so a chip click that hides the *current selection* is the human's filter decision and always
-wins — the selection falls to the first visible row instead of the filter snapping back.
+Default view: **latest reading per scenario, newest first — fresh and stale MIXED, always**. Freshness is
+**never a filter**: a stale reading is real measured loss and stays in the time-ordered feed, its row carrying
+the muted ✓/✗ that marks it stale (so it reads *as* stale without being removed) — hiding it was the bug that
+let a just-filed screenshot vanish while newer work looked absent, and the stale-only toggle once offered on
+top of the always-mixed default proved redundant, so the head carries **no stale control at all**. The ONE
+filter control is the **evidence-kind dropdown** — exactly three options, **video | image | all** — rendered
+by the SAME shared `FilterSelect` control the [[issues-view]] drain's store filter uses (one implementation,
+one look, never two page-local forks). It defaults to `video`, falling back to `image` when no reading
+*contains* a video and to `all` when neither media kind is present. The dropdown lives in this group's sticky
+head and is this group's own state — [[evals-view]] owns the page shell (split, selection, j/k), never this
+group's filter. One deliberate exception rides that ownership the RIGHT way round: a **deep-linked eval the
+current filter would hide** ([[evals-view]]'s canonical `#/evals/<node>/<scenario>` address) is handed down
+as a `mustShow` key, and the group widens **its own** dropdown to `all` so the address always renders its
+eval — the page never reaches into the group's filter state, and an address naming no real eval changes
+nothing. The widen is **one-shot per arrival**: once the target is visible the key clears, so a dropdown pick
+that hides the *current selection* is the human's filter decision and always wins — the selection falls to
+the first visible row instead of the filter snapping back.
 
-**Kinds are honest — and a reading now carries a SET of them.** Evidence is a LIST, so a reading's kinds are
+**Kinds are honest — and a reading carries a SET of them.** Evidence is a LIST, so a reading's kinds are
 every entry it holds: `video`/`image`/`transcript` (a legacy scalar blob with no recorded kind is an image —
 every legacy capture was one), and **`note`** when it holds no blob at all (a verdict filed with prose only). A
-**MIXED** reading (images + a video) belongs to **EVERY** kind-filter it contains — it shows under both the
-`video` and `image` chips — and its row tag lists the full set, video-first (e.g. `vid·img`). A reading never
-advertises media it lacks: a blob-less reading is a `note`, claimed by no media filter, the `note` chip and
-tag its own.
+**MIXED** reading (images + a video) belongs to **EVERY** media filter it contains — it shows under both the
+`video` and `image` picks — and its row tag lists its media kinds, video-first (e.g. `vid·img`). A reading
+never advertises media it lacks. But `note` and `transcript` are **data-level kinds only, never filter
+options**: the dropdown stays video | image | all, so a transcript-only or blob-less reading surfaces under
+`all` alone, and a blob-less row simply carries no media tag.
 
 **Rows are title-only, always** — verdict mark · scenario · node · evidence-kind tag · relative time —
 no media request of any kind in the list. Selecting a row opens it in the page's DETAIL pane as the

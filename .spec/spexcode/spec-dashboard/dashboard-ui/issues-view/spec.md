@@ -7,6 +7,7 @@ code:
   - spec-dashboard/src/IssuesPage.jsx
   - spec-dashboard/src/IssueCard.jsx
   - spec-dashboard/src/Thread.jsx
+  - spec-dashboard/src/FilterSelect.jsx
   - spec-dashboard/src/textarea.js
 related:
   - spec-dashboard/src/Evidence.jsx
@@ -37,8 +38,9 @@ straight to the trunk.
 - **The page is a MASTER-DETAIL — a full page deserves a full-height detail, never an expansion inside a
   box.** (The earlier pinned-two-region form was conceived for a height-starved overlay; on a routed full
   page it collapsed content into a small scrolling box — the human called it, and the form changed.) The
-  **left column** is ONE box — the merged issue list under its own filter bar (the store filter + New + the
-  concluded-count chip, with the **open/total meta at the END of the bar, never at its head**); the bar
+  **left column** is ONE box — the merged issue list under its own filter bar (first row: the store filter +
+  the concluded-count chip; second row: **New beside the open/total meta, the meta at that row's END — the
+  action never occupies the bar's head alone and the meta never leads**); the bar
   stays sticky over the full-height list, which scrolls itself. The rows are one compact line each, so the
   column stays **SLIM** — a picker, never a reading surface that starves the detail (the human called the
   wide sidebar) — and a **fold toggle** (the shared [[fold-toggle]] icon button) collapses it to a thin
@@ -46,9 +48,9 @@ straight to the trunk.
   issue is being worked; the strip is the unfold affordance, and the folded list keeps its state (filters,
   selection, j/k) — the fold is pure geometry. The [[side-nav]] rail names the page, so the
   column carries no title of its own. The list CHROME is not this page's own dialect — it is the SAME
-  grammar the [[evals-view]] picker wears: one filter-control language (a segmented pill set with the
-  accent filling the active filter, New and the store control sharing that height and radius, the
-  open/total meta at the bar's end), uniform single-line rows that truncate rather than wrap, and the same
+  grammar the [[evals-view]] picker wears: one filter-control language (ONE shared dropdown filter
+  component — this store filter and the evals feed's kind filter are literally one control — with chips and
+  New sharing that height and radius, the open/total meta at its row's end), uniform single-line rows that truncate rather than wrap, and the same
   unhurried spacing over a hairline-soft divider — so the two top-level pages read as ONE surface. The **right pane** is the full-height DETAIL of the one selection —
   **selection IS detail** (email-style, no Enter, no in-place expansion): an issue renders its markdown
   body. **j/k walk the issue list** (folded or not) and the detail follows; a key typed into an input is
@@ -67,8 +69,9 @@ straight to the trunk.
   rank. **Concluded issues hide by default** — any non-open issue is archive (local `landed`, forge
   `closed`), not open work, and mixing them in only confuses review; a count chip reveals them on demand.
   The filter bar carries a **store
-  filter** — a small dropdown whose options are DERIVED from the stores actually present in the data plus
-  "all" (never a hardcoded list: a new store's driver landing puts it in the menu for free), defaulting to
+  filter** — the shared dropdown control ([[evals-view]]'s one filter grammar) whose options are DERIVED from
+  the stores actually present in the data plus "all" — the bare word, never "all stores" (and never a
+  hardcoded list: a new store's driver landing puts it in the menu for free), defaulting to
   "all" so the stores stay mixed; picking one narrows rows AND the counts to that store, and the control
   hides itself when only one store exists. An issue's ROW is one compact line that leads with the issue
   itself, never its plumbing: a **status DOT** (the status vocabulary as color — a boxed "open" on every row

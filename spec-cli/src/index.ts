@@ -146,8 +146,7 @@ app.get('/api/config', (c) => c.json(loadConfig()))
 // the named launcher profiles ([[launcher-select]]) the New-Session form's dropdown offers — `{ name, harness }`
 // only (the `cmd` is a host secret, never shipped to the browser) — plus the configured `default` NAME so the
 // dropdown pre-selects the SAME launcher a bare `spex new` uses (the CLI/config default), instead of the
-// alphabetically-first one. `launchers` is empty (and `default` '') when a project configured none, so the form
-// falls back to the plain harness picker.
+// alphabetically-first one. Built-in `claude`/`codex` launchers mean the form always has one launch control.
 app.get('/api/launchers', (c) => c.json({
   launchers: launcherList().map(({ name, harness }) => ({ name, harness })),
   default: defaultLauncher(),
@@ -326,15 +325,15 @@ app.post('/api/sessions', async (c) => {
   const body = await c.req.json().catch(() => ({}))
   const prompt = typeof body?.prompt === 'string' ? body.prompt : ''
   if (!prompt.trim()) return c.json({ error: 'empty prompt' }, 400)
-  const harness = typeof body?.harness === 'string' ? body.harness : undefined
+  if (typeof body?.harness === 'string') return c.json({ error: 'harness is not a create-session input; use launcher' }, 400)
   // the named launcher ([[launcher-select]]) — fixes the session's harness AND its persisted launch command.
   const launcher = typeof body?.launcher === 'string' && body.launcher.trim() ? body.launcher.trim() : undefined
   // parent = the spawning session's id, resolved by the CALLER (createSession) in its own process and passed
   // through here ([[session-nesting]]); the browser's New Session omits it → a top-level session.
   const parent = typeof body?.parent === 'string' && body.parent.trim() ? body.parent.trim() : null
   try {
-    return c.json(await newSession(typeof body?.node === 'string' ? body.node : null, prompt, harness, parent, launcher), 201)
-  } catch (e) { return c.json({ error: String((e as Error).message || e) }, 400) }   // unknown harness/launcher id → 400, not a 500
+    return c.json(await newSession(typeof body?.node === 'string' ? body.node : null, prompt, parent, launcher), 201)
+  } catch (e) { return c.json({ error: String((e as Error).message || e) }, 400) }   // unknown launcher id → 400, not a 500
 })
 // one server-side merge bundle (ahead/dirty/diff(merge-base)/gates/proposal) for the manager cockpit;
 // dashboard and `spex review` are thin callers. 404 for an unknown id. See [[manager-cockpit]].

@@ -199,19 +199,23 @@ Example:
                             Counts compute slots, not total sessions: idle/asking/review/done do not
                             occupy one. A policy number → committed spexcode.json; omit it to use the
                             default, or tune higher/lower for the project's usual host.
-  sessions.claudeCmd        the UNNAMED default worker launcher for Claude (default
+  sessions.claudeCmd        command used by the built-in "claude" launcher (default
                             'claude --dangerously-skip-permissions'); env SPEXCODE_CLAUDE_CMD overrides.
-  sessions.codexCmd         the UNNAMED default worker launcher for Codex (default 'codex --yolo'); env
+  sessions.codexCmd         command used by the built-in "codex" launcher (default 'codex --yolo'); env
                             SPEXCODE_CODEX_CMD overrides.
-  sessions.launchers        NAMED launcher profiles (see LAUNCHERS).
+  sessions.launchers        additional NAMED launcher profiles (see LAUNCHERS).
   sessions.defaultLauncher  the launcher name a create with no explicit --launcher/dropdown pick uses
-                            (else the unnamed claudeCmd/codexCmd path). A portable NAME → committed.
+                            (default: "claude"). A portable NAME → committed.
 A claudeCmd/codexCmd or a launcher \`cmd\` that is a HOST-SPECIFIC ABSOLUTE PATH belongs in
 spexcode.local.json — the committed file must stay free of machine paths.
 
 ── LAUNCHERS (the profile block, split across the two files) ──
 A named launcher profile fixes BOTH a session's harness AND its exact launch command; a create picks one
-by name, and the chosen name is persisted on the record so a resume reuses the same auth. Shape:
+by name with --launcher/the dashboard dropdown, and the chosen name is persisted on the record so a resume
+reuses the same auth. Built-in profiles always exist:
+  "claude" → { "harness": "claude", "cmd": sessions.claudeCmd or SPEXCODE_CLAUDE_CMD }
+  "codex"  → { "harness": "codex",  "cmd": sessions.codexCmd or SPEXCODE_CODEX_CMD }
+Add more profiles when a project needs named auth/config-dir variants. Shape:
   "launchers": { "<name>": { "harness": "claude" | "codex", "cmd": "<launch command>" } }
 \`harness\` defaults to "claude"; \`cmd\` is required. Because \`cmd\` is a machine fact (an abs wrapper path),
 the DEFINITION lives in the gitignored spexcode.local.json, while the portable defaultLauncher NAME sits

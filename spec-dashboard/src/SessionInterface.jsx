@@ -120,7 +120,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [menu, setMenu] = useState(null)      // completion dropdown: { kind:'mention'|'config'|'slash', items, index, start, end, query }
   const [ctxMenu, setCtxMenu] = useState(null) // session-row right-click menu { x, y, session } — the RENAME gesture lives here, on the board's session list
   const [selecting, setSelecting] = useState(false)  // multi-select mode ([[session-multi-select]]): rows become checkboxes, not tabs
-  const [picked, setPicked] = useState(() => new Set()) // the ids ticked for bulk delete while `selecting`
+  const [picked, setPicked] = useState(() => new Set()) // the ids ticked for bulk close while `selecting`
   const [slashCmds, setSlashCmds] = useState([])   // the `/` command list (built-in + user/project/skill), fetched once
   const [presets, setPresets] = useState([])       // the config presets (GET /api/config) — the New Session box's `/` palette
   // bottom-input drafts, keyed by session id — each session tab keeps its OWN typed-but-unsent line, never
@@ -576,7 +576,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     return next
   })
   // after a bulk delete: leave the mode and re-read the board so the removed rows drop off every surface.
-  const onBulkDeleted = () => { exitSelect(); reload?.() }
+  const onBulkClosed = () => { exitSelect(); reload?.() }
 
   // `runners` binds each board-command name to the closure that DOES it — the SAME closure the header
   // button's onClick fires; `boardCmds` narrows the registry to the current session state. See [[term-input]].
@@ -721,7 +721,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           {/* while multi-selecting ([[session-multi-select]]) the New/Search pills give way to the select bar —
               a pick count + bulk delete + cancel; the rows below toggle picks instead of switching tabs. */}
           {selecting ? (
-            <SessionSelectBar ids={[...picked]} onCancel={exitSelect} onDeleted={onBulkDeleted} />
+            <SessionSelectBar ids={[...picked]} onCancel={exitSelect} onClosed={onBulkClosed} />
           ) : (
           <div className="si-toprow">
             <button className={active === 'new' ? 'si-pill new on' : 'si-pill new'} title={t('session.newSessionTitle')} onClick={() => setSel('new')}>

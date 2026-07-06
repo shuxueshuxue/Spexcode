@@ -184,12 +184,14 @@ export default {
     renamePlaceholder: 'display name (blank to reset)',
   },
 
-  // the multi-select bar + bulk-delete confirm ([[session-multi-select]]).
+  // the multi-select bar + bulk-close confirm ([[session-multi-select]]). The verb is `close` — the SAME
+  // one the single-row menu uses ([[session-rename]]) — not a third "delete" word, since it fires the same
+  // close endpoint per session.
   sessionSelect: {
     selected: ({ n }) => `${n} selected`,
-    delete: 'delete',
-    deleteTitle: ({ n }) => (n === 1 ? 'delete 1 session?' : `delete ${n} sessions?`),
-    deleteConfirm: 'This closes every selected session and removes its worktree. Any uncommitted changes are lost.',
+    close: 'close',
+    closeTitle: ({ n }) => (n === 1 ? 'close 1 session?' : `close ${n} sessions?`),
+    closeConfirm: 'This closes every selected session and removes its worktree. Any uncommitted changes are lost.',
   },
 
   // top-of-screen banner shown while a session owns the graph (locked). It names the grip and tells

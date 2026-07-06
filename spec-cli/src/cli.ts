@@ -353,14 +353,22 @@ if (cmd === 'serve') {
   }
   await flushExit(0)
 } else if (cmd === 'search') {
-  const { searchSpecs } = await import('./search.js')
+  const { searchSpecs, nearestTitles } = await import('./search.js')
   const query = positionals(3).join(' ')
   if (!query.trim()) { console.error('usage: spex search <query> [--json] [--limit N]'); process.exit(2) }
   const limit = Number(flag('limit')) || 10
   const results = await searchSpecs(query, { limit, onStats: (s) => console.error(`[spec-search] compute ${s.ms.toFixed(1)}ms · ${s.nodes} nodes · ${s.tokens} tokens (excludes process start)`) })
-  // zero-result fail-loud: the message always carries the corpus-is-English fact (unconditional — no
-  // language sniffing, no score threshold), so a non-English query self-explains instead of dead-ending.
-  const NO_MATCH = (q: string) => `no spec node matches "${q}" (the corpus is English — if your query isn't, translate and retry)`
+  // zero-result fail-loud + route-to-next-step: always the corpus-is-English fact (unconditional — no
+  // language sniffing, no score threshold), plus the nearest titles when anything is even near (typo
+  // recovery) and the browse-all pointer, so no query dead-ends.
+  const NO_MATCH = (q: string) => {
+    const near = nearestTitles(q, 3)
+    return [
+      `no spec node matches "${q}" (the corpus is English — if your query isn't, translate and retry)`,
+      ...(near.length ? ['nearest titles:', ...near.map((t) => `  ${t.title}  [${t.id}]`)] : []),
+      'browse all: spex tree',
+    ].join('\n')
+  }
   if (has('json')) {
     if (!results.length) console.error(NO_MATCH(query))   // stderr: the stdout JSON contract stays verbatim
     console.log(JSON.stringify(results)); await flushExit(0)

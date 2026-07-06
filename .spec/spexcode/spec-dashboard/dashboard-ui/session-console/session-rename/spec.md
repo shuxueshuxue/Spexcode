@@ -29,8 +29,8 @@ A rename sets a session's **name** — a user-chosen display override kept disti
 title, so naming a session never fights or erases the launch-time derivation. The name sits at the
 **top** of the label precedence on every surface (`name` ▸ node ▸ title ▸ branch ▸ id): once set it wins
 over the node a session references, so the human's label is authoritative wherever the session is
-named — the top-left window, the [[session-graph]], the [[session-console]] tabs, and the CLI's `spex`
-listings — because they all read that one shared precedence.
+named — the top-left window, the [[session-console]] tabs, and the CLI's `spex` listings — because they
+all read that one shared precedence.
 
 The name lives where the rest of a session's record lives: the session's record in the per-user global
 store ([[state]]/[[runtime]]), written by the one backend that owns it. So a rename **persists** — it survives a backend restart and is read
@@ -38,9 +38,8 @@ back like any other field, never held only in the browser. A session in **any** 
 (queued, live, or offline), because the gesture edits the on-disk record, not the live terminal.
 
 The gesture is a **right-click** on a session row **in the session board's left-hand session list**
-([[session-console]]) — the interactive surface where a human manages sessions, not the read-only
-top-right glance ([[session-graph]]), which deliberately carries NO menu: a mutation belongs on the
-board, never on the at-a-glance summary. It opens a cursor-anchored pop-over (its own surface). Picking
+([[session-console]]) — the interactive surface where a human manages sessions: a mutation belongs on
+the board, never on a read-only at-a-glance summary. It opens a cursor-anchored pop-over (its own surface). Picking
 **rename** swaps the menu for a centred prompt (the shared modal chrome) that **titles itself with the
 session's headline** — the same words its row shows ([[session-activity]]), not the stable rename handle,
 so the human reads the very label they right-clicked and never renames what looks like a different
@@ -51,8 +50,9 @@ derived label. Renaming an unknown session fails loudly — the endpoint answers
 success.
 
 The menu also carries a **reset order** item — shown only when the row has been dragged out of birth order —
-which belongs to [[session-reorder]] (it clears that row's manual sort-key), not to this node's rename/close
-contract; it rides in this pop-over because the same right-click is where a human reaches for it.
+which belongs to the session list's drag-to-reorder gesture ([[session-console]]; it clears that row's manual
+sort-key), not to this node's rename/close contract; it rides in this pop-over because the same right-click
+is where a human reaches for it.
 
 The menu's second item, **close**, runs the same human-only worktree removal as the typed `/close` command,
 but behind a **confirm prompt** — a right-click is easy to mis-aim and the removal is destructive, so unlike

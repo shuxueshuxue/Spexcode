@@ -106,7 +106,7 @@ export default {
     none: 'no evaluation for this session yet',
     sessionN: ({ n }) => `✦ this session: ${n}`,
     inherited: 'inherited · latest readings by other sessions',
-    export: 'export ↗',
+    export: 'export',
     exportTitle: 'export this evaluation as a self-contained HTML report',
     empty: 'nothing measured for this session yet.',
     blindHint: 'declared but never measured — this is the outstanding loss; measure it with spex yatsu eval.',

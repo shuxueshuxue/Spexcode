@@ -8,7 +8,8 @@ the rest, you don't hand-author the spec tree or wire the dashboard yourself.
    It always operates on the repo of your current directory — that cwd is the only "which repo" knob.
    (Dogfooding an unpublished HEAD from a source checkout? \`npm link\` at the repo ROOT — that links
    the \`spexcode\` package itself, never the internal @spexcode/spec-cli. Both paths own the same
-   \`spex\` bin, so uninstall one before switching (\`npm rm -g spexcode\`). A source link ships no
+   \`spex\` bin, so uninstall one before switching (\`npm rm -g spexcode\`; a legacy link of the
+   inner package uninstalls as \`@spexcode/spec-cli\`). A source link ships no
    prebuilt dashboard dist — \`spex dashboard\` needs a manual dashboard build, or use the dev server.)
 
 2. Adopt a repo
@@ -24,6 +25,9 @@ the rest, you don't hand-author the spec tree or wire the dashboard yourself.
      spex dashboard                              # serves the bundled board on :5173, proxying /api
    Point it at another backend with --api-port (pairs with \`spex serve --port\`); one dashboard per
    project. The board is a viewer — which backend it proxies is the only "which project" knob.
+   Loopback-only by default: viewing from another machine needs \`--host 0.0.0.0\` (or a specific
+   interface) — still plain HTTP with no gate, so bind wide only on a LAN/tailnet you trust (for
+   the internet, use \`spex serve --public\` instead).
    (Dogfood/source alternative: API_URL=http://localhost:<port> npm run dev in spec-dashboard —
    the dev server; "dashboard": { "apiUrl": "..." } in spexcode.json applies only to that layout.)
 

@@ -3,13 +3,14 @@
 import net from 'node:net'
 import http from 'node:http'
 import { spawn, type ChildProcess } from 'node:child_process'
-import { statSync, readdirSync, type Dirent } from 'node:fs'
+import { statSync, readdirSync, mkdirSync, writeFileSync, readFileSync, rmSync, type Dirent } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { installProcessGuards } from './resilience.js'
 import { listenOrExit } from './listen.js'
 import { resolvePublicConfig, startGateway, ensureDashboardBuilt, resolveDistDir } from './gateway.js'
 import { tsxBin } from './tsx-bin.js'
+import { runtimeRoot } from './layout.js'
 
 // the supervisor OWNS the public port, so it must outlive any transient throw: an uncaught error here is
 // logged and survived, never an exit that closes the port (and the tmux session) and takes the frontend down.
@@ -74,8 +75,11 @@ async function boot(): Promise<Backend | null> {
   const port = await freePort()
   // PORT pins the child's PRIVATE bind port; SPEXCODE_API_URL pins everything the child SPAWNS (launched
   // sessions + their hooks) at the PUBLIC port, so a launched agent's own `spex` reaches the stable proxy
-  // and never inherits this ephemeral, soon-retired port (apiBase() prefers SPEXCODE_API_URL over PORT).
-  const child = spawn(tsx, [entry], { stdio: 'inherit', env: { ...process.env, PORT: String(port), SPEXCODE_API_URL: process.env.SPEXCODE_API_URL || childApiBase } })
+  // and never inherits this ephemeral, soon-retired port. ALWAYS childApiBase, never the ambient
+  // process.env.SPEXCODE_API_URL: the env this serve itself inherited may carry ANOTHER project's backend
+  // (the exact misroute [[remote-client]]'s ladder exists to kill), and a worker's env is its routing
+  // LIFELINE — it must be a deterministic backend-injected fact, not an inheritance gamble.
+  const child = spawn(tsx, [entry], { stdio: 'inherit', env: { ...process.env, PORT: String(port), SPEXCODE_API_URL: childApiBase } })
   // if the ACTIVE backend dies unexpectedly (crash, OOM), restart it so the public port keeps serving.
   // Planned retirement sets current to the NEW child first, so the old child's exit fails this identity
   // check and is ignored. boot()'s ~5s health budget rate-limits any crash loop.
@@ -130,7 +134,27 @@ const proxy = net.createServer((client) => {
   client.pipe(up); up.pipe(client)
 })
 
-const shutdown = () => { try { current?.child.kill('SIGTERM') } catch { /* */ } process.exit(0) }
+// @@@ endpoint record - this project's live backend endpoint, written into the per-project runtime tier
+// (~/.spexcode/projects/<enc>/backend.json) only AFTER the public bind succeeds. It's what lets a bare
+// `spex` run from this project's tree find ITS OWN backend instead of an env URL inherited from another
+// project's ([[remote-client]]'s resolution ladder). Readers /health-probe before trusting, so a crash
+// leaves at worst a dead record that is ignored — never followed. The recorded URL is the LOOPBACK face
+// local agents reach (equals the public port when public mode is off), never the password-gated gateway.
+const backendRecordPath = () => join(runtimeRoot(), 'backend.json')
+function recordEndpoint(url: string): void {
+  try {
+    mkdirSync(runtimeRoot(), { recursive: true })
+    writeFileSync(backendRecordPath(), JSON.stringify({ url, pid: process.pid, startedAt: new Date().toISOString() }, null, 2) + '\n')
+  } catch (e) {
+    console.error(`[supervisor] could not record the backend endpoint (${(e as Error).message}) — cwd-based \`spex\` discovery won't find this backend`)
+  }
+}
+// best-effort removal on a clean stop, only if the record is OURS (a newer serve may have overwritten it).
+function dropEndpoint(): void {
+  try { if (JSON.parse(readFileSync(backendRecordPath(), 'utf8'))?.pid === process.pid) rmSync(backendRecordPath()) } catch { /* not ours / already gone */ }
+}
+
+const shutdown = () => { dropEndpoint(); try { current?.child.kill('SIGTERM') } catch { /* */ } process.exit(0) }
 process.on('SIGINT', shutdown)
 process.on('SIGTERM', shutdown)
 
@@ -146,10 +170,10 @@ if (publicCfg) {
   // public mode: the raw proxy stays on loopback; the password-gated gateway owns the public port.
   const distDir = resolveDistDir() // bundled <pkg>/dashboard-dist when installed, else monorepo spec-dashboard/dist
   ensureDashboardBuilt(repoRoot, distDir)
-  listenOrExit(proxy, proxyPort, { host: '127.0.0.1', label: 'supervisor (loopback proxy)', cleanup: reapChild, onListen: () => console.log(`spec-cli supervisor on loopback :${proxyPort} (zero-downtime reloads, backend :${first.port})`) })
+  listenOrExit(proxy, proxyPort, { host: '127.0.0.1', label: 'supervisor (loopback proxy)', cleanup: reapChild, onListen: () => { recordEndpoint(childApiBase); console.log(`spec-cli supervisor on loopback :${proxyPort} (zero-downtime reloads, backend :${first.port})`) } })
   startGateway({ publicPort, upstreamPort: proxyPort, password: publicCfg.password, tls: publicCfg.tls, distDir, onBindFail: reapChild })
 } else {
-  listenOrExit(proxy, publicPort, { label: 'supervisor', cleanup: reapChild, onListen: () => console.log(`spec-cli supervisor serving on http://localhost:${publicPort} (zero-downtime reloads, backend :${first.port})`) })
+  listenOrExit(proxy, publicPort, { label: 'supervisor', cleanup: reapChild, onListen: () => { recordEndpoint(childApiBase); console.log(`spec-cli supervisor serving on http://localhost:${publicPort} (zero-downtime reloads, backend :${first.port})`) } })
 }
 
 // watch every imported source tree; debounce a burst of writes (a merge touching several files across

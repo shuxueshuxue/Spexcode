@@ -13,9 +13,11 @@ scenarios:
       `spex yatsu eval spec-scout --scenario finds-governing-node-by-user-story --result <txt> --pass`.
     expected: >-
       The conclusion names the governing node **session-console** (NOT a code-central node), states the
-      user-story it encodes — the dashboard ❯-box intercepts `/exit` alone and runs `act('close')`, the full
-      worktree+tmux cleanup, so /exit there does NOT orphan resources — and points at the code to read
-      (`SessionInterface.jsx` first). It is read-only (edits nothing). If the lexical floor's top and its
+      user-story it encodes — the dashboard ❯-box intercepts `/exit` alone as a board command and runs
+      `act('exit')`: it kills the agent + tmux but deliberately KEEPS the worktree (a resumable offline
+      stop; `/close` is the destroyer that removes worktree + branch), so /exit neither orphans the tmux
+      nor silently discards work — and points at the code to read
+      (`SessionInterface.jsx` among the first). It is read-only (edits nothing). If the lexical floor's top and its
       user-story judgement disagree it says which it trusts and why. This is the exact node a pure
       code-trace MISSES (the session's opening question was answered wrong from code; only the spec node
       corrected it — this agent makes that correction the cheap default).

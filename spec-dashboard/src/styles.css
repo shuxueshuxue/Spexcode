@@ -1033,6 +1033,8 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .fv-group-head { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; row-gap: 5px; padding: 9px 12px; background: var(--panel2); border-bottom: 1px solid var(--line); }
 .fv-group-title { font-size: 9px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--ink2); }
 .fv-group-meta { font-size: 10px; color: var(--muted); margin-left: auto; }
+/* the filter bar's second row: the action (New) beside the open/total meta — never a lone first row. */
+.fv-head-row { flex-basis: 100%; display: flex; align-items: center; gap: 6px; }
 /* ONE row grammar for BOTH tabs: a compact SINGLE-LINE button (the title truncates, never wraps, so the
    two pickers keep an identical, uniform rhythm) with unhurried vertical air and a hairline-soft divider
    (the old full-strength border on every row read as a dense ledger). `.sel` is the page's one selection. */
@@ -1792,10 +1794,10 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .se-divider { display: flex; align-items: center; gap: 8px; padding: 5px 10px 3px; font-family: var(--mono); font-size: 9px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); }
 .se-divider::before, .se-divider::after { content: ''; flex: 1; border-top: 1px dashed var(--line); }
 
-/* the threads store filter — a small select deriving its options from the stores actually present
-   (all · local · github · a future gitlab appears by itself); default = all, mixed in API order. */
-.fv-store-filter { font-family: var(--mono); font-size: 11px; line-height: 1.35; color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; cursor: pointer; transition: border-color .12s; }
-.fv-store-filter:hover { border-color: color-mix(in srgb, var(--blue) 45%, var(--line)); }
+/* the ONE shared dropdown filter (FilterSelect) both pickers wear — the issues drain's store filter and
+   the evals feed's kind filter; one control, one look. */
+.fv-filter { font-family: var(--mono); font-size: 11px; line-height: 1.35; color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; cursor: pointer; transition: border-color .12s; }
+.fv-filter:hover { border-color: color-mix(in srgb, var(--blue) 45%, var(--line)); }
 
 /* boot fail-loud ([[dashboard-shell]]): the pre-first-board window shows an error + retry instead of an
    eternal spinner when the backend is unreachable; once a board has landed this surface never returns. */

@@ -57,9 +57,7 @@ export default {
 
   evalsFeed: {
     title: 'evals',
-    kind: { video: 'video', image: 'image', note: 'note', all: 'all' },
-    staleN: ({ n }) => `${n} stale`,
-    staleOnlyTitle: 'show only stale readings (default shows fresh and stale together, newest first)',
+    kind: { video: 'video', image: 'image', all: 'all' },
     summary: ({ n }) => `${n} current`,
     empty: 'no current readings match — measure a scenario or switch the filter.',
     annotate: 'open & annotate',
@@ -340,7 +338,7 @@ export default {
     // the human write path ([[issues-view]]) — a reply composer + a New local-issue affordance.
     issuesThreadsTitle: 'threads',
     issuesThreadsSummary: ({ open, total }) => `${open} open · ${total} total`,
-    issuesStoreAll: 'all stores',
+    issuesStoreAll: 'all',
     issuesStoreLabel: 'store',
     issuesNew: 'New',
     issuesCancel: 'Cancel',

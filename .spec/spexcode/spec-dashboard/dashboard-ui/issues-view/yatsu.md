@@ -152,6 +152,26 @@ scenarios:
       it live") — an un-@'d reply courtesy-delivers to it. The absent originator reads `offline` (muted
       dot, "offline · replies skip it"). A forge issue's github-login `by` resolves to no session and
       stays a plain author label. No second palette, no page errors.
+  - name: lifecycle-actions-parity
+    tags: [frontend-e2e]
+    code: spec-dashboard/src/IssuesPage.jsx
+    description: >-
+      Run the dashboard against a backend on a DISPOSABLE local store (SPEXCODE_ISSUES_DIR) seeded with
+      agent-authored OPEN local issues. Open #/issues, select one, and read the composer action row:
+      which lifecycle buttons render (Sign / Accept / Reject / Promote / Close issue). Click Sign and
+      re-read the meta strip and the action row; click Accept on one issue and Reject on another and
+      re-read status + list membership. Verify Promote renders on an open local issue but do NOT click
+      it through (a real forge issue would be created); select a non-open issue and re-read its row.
+    expected: >-
+      An OPEN local issue's composer action row carries the whole human-reachable local lifecycle at CLI
+      parity beside Send: Sign, Accept, Reject, Promote, Close issue. Sign POSTs the store-routed sign
+      (author 'human'): the "+N signed" badge appears/increments and the Sign button hides (human is
+      already a signer). Accept resolves accepted — the status chip flips and the issue STAYS listed
+      (approved-not-landed), the open-only verbs (Accept/Reject/Promote) gone. Reject resolves rejected —
+      the issue disappears under the default concluded-hidden filter into the archive chip's count.
+      Promote renders only on an open LOCAL issue. A concluded issue never grows the lifecycle verbs
+      (and a forge issue keeps Close only). A refused write surfaces its server message in the row.
+      No page errors.
 ---
 
 # measuring issues-view

@@ -395,8 +395,9 @@ export async function postLocalIssue(
   return { thread, outcomes }
 }
 
-export function sign(id: string): string[] {
-  const by = currentSession()
+// `author` mirrors reply/open: the effective session id by default, `'human'` from the dashboard's thin caller.
+export function sign(id: string, author?: string): string[] {
+  const by = author || currentSession()
   return commitStore(`issue(${id}): signed by ${by}`, () => {
     const p = loadOne(id)
     if (!p.signers.includes(by)) p.signers.push(by)
@@ -479,16 +480,18 @@ function parseRemarkRef(ref: string): { id: string; rid: string } {
   return { id: ref.slice(0, i), rid: ref.slice(i + 1) }
 }
 
-// resolve a remark (R3): a DELIBERATE call, agent-only (the dashboard's `human` is rejected — a human
-// RETRACTS their own, resolve is a second party's judgment), NEVER the author (no self-resolve), and
-// MONOTONIC (no un-resolve — a regression is a NEW remark). `by` is the resolving party.
+// resolve a remark (R3): a DELIBERATE call by a SECOND PARTY — never the author (no self-resolve: an
+// identity comparison, so the dashboard's `human` cannot resolve a human-authored remark either), and
+// MONOTONIC (no un-resolve — a regression is a NEW remark). The resolver's identity is derived by the
+// SURFACE ([[remark-substrate]] LAW L): a governed session id from the CLI, the `human` sentinel from the
+// dashboard — both are real second parties, so the same rule runs on both. `by` is the resolving party.
 export function resolveRemark(ref: string, by: string): { thread: Issue; rid: string } {
   const { id, rid } = parseRemarkRef(ref)
   const { issue: thread } = commitStore(`remark(${id}#${rid}): resolved by ${by}`, () => {
     const p = loadOne(id)
     const r = p.replies.find((x) => x.rid === rid)
     if (!r) throw new Error(`no remark '${ref}' in that thread`)
-    if (!by || by === 'human' || by === 'unknown') throw new Error(`resolve is agent-only (needs a real session identity, got '${by || 'none'}'): a human withdraws their own remark with \`spex retract\`, not resolve`)
+    if (!by || by === 'unknown') throw new Error(`resolve needs a real identity (got '${by || 'none'}'): run it under a governed session, or from the dashboard (its actor is 'human')`)
     if (r.resolved) throw new Error(`remark '${ref}' is already resolved — monotonic: a regression is a NEW remark, never an un-resolve`)
     if (r.by === by) throw new Error(`refusing to self-resolve '${ref}': the author (${by}) may not resolve their own remark — resolve is a second party's deliberate judgment`)
     r.resolved = true; r.resolvedBy = by; r.resolvedAt = new Date().toISOString()

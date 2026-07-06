@@ -92,7 +92,10 @@ same nodes through the EXISTING tracer read, so promotion adds no linking code. 
 the forge issue is created FIRST, and only then is the local thread closed out — resolved `landed` with a
 reply carrying the permalink (its file remains as the recorded trail); an unreachable forge fails loud
 with the local thread untouched, and only an `open` thread promotes. The two-plane contract is untouched
-throughout: a forge issue is execution, never node state.
+throughout: a forge issue is execution, never node state. Promotion is human-reachable too: the dashboard's
+Promote affordance is a thin `POST /api/issues/:id/promote` over this same verb (the provenance footer and
+permalink reply carry the caller's surface-derived identity — a session id from the CLI, `'human'` from
+the dashboard).
 **Closing is ONE verb over both stores, on both surfaces too** (`closeIssue` — `spex issues close <id>`
 and `POST /api/issues/:id/close` behind the dashboard's Close button are the same routing). A local id
 resolves the thread `landed` through the local store; a forge id (`<host>#<n>`) calls the driver's

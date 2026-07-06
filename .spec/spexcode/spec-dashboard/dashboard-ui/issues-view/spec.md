@@ -137,7 +137,17 @@ straight to the trunk.
   detail pane. Every non-concluded issue, local or remote, gets the same affordance there; the click goes
   through ONE store-routed close verb, then the resident issue list reloads so the issue disappears under
   the default concluded-hidden filter. The frontend does not branch on store beyond rendering metadata;
-  local close resolves the local thread, and remote close asks the forge driver to close its issue. A reply
+  local close resolves the local thread, and remote close asks the forge driver to close its issue.
+  The same action row carries the issue's whole human-reachable LOCAL lifecycle at **CLI parity** — the
+  dashboard hides no verb the CLI has: **Sign** (`spex issues sign`; hides once `human` signed — the signed
+  badge reflects it), **Accept** / **Reject** (`spex issues resolve --as accepted|rejected`), and
+  **Promote** (`spex issues promote` — the [[issues]] verb verbatim: the real forge issue first, then the
+  local thread resolved landed with the permalink). Each is a thin POST to the store-routed endpoint
+  wrapping the SAME store function its CLI verb calls, author `'human'` server-derived; the buttons render
+  only where the verb applies (an OPEN local issue — a forge issue's lifecycle stays its host's, Close
+  only), and a refused write surfaces its server message in the row, never swallowed. A reply that is a
+  REMARK renders its resolve/retract affordance here too — the shared thread UI's remark verbs
+  ([[remark-substrate]] LAW L), the same rows the eval rail gets. A reply
   is TIME-ANCHORED by a prose convention (same
   philosophy as `Spec:`/`[[node]]`): a body whose first line reads `▶m:ss · <step>` IS anchored to a video
   moment — `Thread` linkifies it (click = seek, when the home supplies the clip) and, over a clip, the

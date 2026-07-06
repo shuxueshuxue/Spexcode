@@ -86,6 +86,23 @@ scenarios:
     expected: >-
       The node merge prints the issues nudge in the merge command's own output, naming the merged
       node id; the unrelated merge stays silent (the hook is guarded to `merge node/*`).
+  - name: close-time-issue-closeout
+    tags: [cli]
+    code: spec-cli/src/localIssues.ts
+    related: [spec-cli/src/cli.ts]
+    description: >-
+      With a disposable store (SPEXCODE_ISSUES_DIR) and an isolated session record (SPEXCODE_HOME), declare
+      `spex session done --propose close --session <id>` for a session that (a) opened one still-open issue
+      and replied to another session's open issue, while a third open issue it never touched and an
+      `eval: <node> · <scenario>` container it remarked on also exist; then (b) resolve both touched issues
+      and declare close again; and (c) with issues switched OFF, declare close once more. Also declare
+      `--propose merge` and bare done.
+    expected: >-
+      (a) the close declaration appends ONE issue-closeout line naming exactly the two touched open ids —
+      never the untouched one, never the eval container — asking resolve-or-say-why, appended beside the
+      resource-cleanup reminder, and the declaration itself still lands (a nudge, never a gate). (b) with
+      nothing owed the closeout line is absent entirely (no vacuous reminder). (c) OFF silences it.
+      `--propose merge` and bare done never carry it.
   - name: feature-toggle
     tags: [cli]
     code: spec-cli/src/localIssues.ts

@@ -177,4 +177,9 @@ a scratch session — before the worktree is discarded and they orphan (the leak
 visible: a torn-down worktree's own backend outliving it). It is **advisory, a nudge and never a gate** (the agent
 checks, then carries on; the next tool call re-flips it to `active`), and **project-agnostic**: the criterion is
 whether a resource should outlive the task, never who started it — a deliberately long-running service or a
-production build is started-by-you yet left alone, and anything you are unsure about is left running.
+production build is started-by-you yet left alone, and anything you are unsure about is left running. Beside that
+resource reminder the same declaration appends a **data-driven issue closeout** line, owned by [[local-issues]]
+(the store owns the query and the wording): the still-open local threads this session opened or replied to,
+listed by id, with the ask to resolve each or say why it outlives the session — silent when the session owes
+nothing or the issues feature is off, and equally a nudge, never a gate (a failure in the store check is
+reported loud but the declaration still lands).

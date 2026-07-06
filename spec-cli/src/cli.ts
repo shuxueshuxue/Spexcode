@@ -437,6 +437,13 @@ if (cmd === 'serve') {
   const DECLARED = ' — recorded; the human sees it in the dashboard. This state lives in your session\'s global record; your next tool call flips that record back to active (the mark-active hook, by design), so it is normal for this declaration not to persist.'
   // appended ONLY to a propose-close declaration: a worktree about to be discarded may still own ephemeral things the agent started to test this change; nudge (not gate) it to reclaim them before the worktree goes, keyed on whether the thing should outlive the task — never on who started it (a deliberately long-running service / a production build is started-by-you yet must be left alone). Project-agnostic on purpose.
   const CLOSE_CLEANUP = '\n\nBefore this worktree closes, check whether you left anything running that you started to test this change — a background process, a dev or preview server, a bound port, a scratch session. If nothing depends on it anymore, shut it down, or it keeps running as an orphan. Leave anything meant to keep running: a service you deliberately stood up, a production build, anything other work relies on. What matters is whether it still needs to exist after this task, not whether you started it. If unsure, leave it. This is a reminder to check, not a required step.'
+  // truncation transparency ([[state]]): the board table shows only the first NOTE_BOARD_LIMIT chars of a
+  // note. When a declared note overflows that cap, the confirmation says so — length, what the board shows,
+  // where the full text is readable — so the cut is visible to the author instead of silently eaten.
+  // A nudge riding the echo, never a gate: the declaration has already landed.
+  const noteEcho = (note?: string) => (note && note.length > s.NOTE_BOARD_LIMIT)
+    ? `\nyour note is ${note.length} chars; the board table shows only the first ${s.NOTE_BOARD_LIMIT} — the full text IS recorded, and readable via spex review ${(sess || s.ownSessionId() || '<your-session>').slice(0, 8)} / spex ls --json.`
+    : ''
   if (sub === 'new') {
     // route through the backend (auth env + concurrency cap); in-process only if no backend is reachable.
     // prompt = --prompt OR the first positional (after `session new`), so `session new "<prompt>"` works the
@@ -457,7 +464,7 @@ if (cmd === 'serve') {
     // the agent authors ITS OWN state: active|awaiting|parked|error  [--propose] [--note] [--session]
     const st = process.argv[4] as any
     const ok = s.markState(st, { proposal: flag('propose') as any, note: flag('note'), sessionId: sess })
-    console.log(ok ? `state -> ${st}` : 'no session record (unknown --session / no CLAUDE_CODE_SESSION_ID, or bad status)')
+    console.log(ok ? `state -> ${st}${noteEcho(flag('note'))}` : 'no session record (unknown --session / no CLAUDE_CODE_SESSION_ID, or bad status)')
   } else if (sub === 'done') {
     // sugar for awaiting; --propose merge|nothing|close, optional --note
     const p = (flag('propose') as any) || 'nothing'
@@ -469,10 +476,10 @@ if (cmd === 'serve') {
       try { closeNote += (await import('./localIssues.js')).closeoutNudge(sess ?? s.ownSessionId()) }
       catch (e) { console.error(`issue closeout check failed (declaration unaffected): ${e instanceof Error ? e.message : e}`) }
     }
-    console.log(s.markDone(p, sess) ? `done (${p})${DECLARED}${closeNote}` : 'no session record')
+    console.log(s.markDone(p, sess, flag('note')) ? `done (${p})${DECLARED}${noteEcho(flag('note'))}${closeNote}` : 'no session record')
   } else if (sub === 'park') {
     // sugar: the agent is waiting on a background task; it will self-resume (NOT idle/awaiting)
-    console.log(s.markState('parked', { note: flag('note'), sessionId: sess }) ? `parked${DECLARED}` : 'no session record')
+    console.log(s.markState('parked', { note: flag('note'), sessionId: sess }) ? `parked${DECLARED}${noteEcho(flag('note'))}` : 'no session record')
   } else if (sub === 'fail') {
     // the StopFailure hook marks its session (--session from the payload) as error (turn died on an API error)
     console.log(s.markError(sess) ? 'marked error' : 'no session record')
@@ -480,7 +487,7 @@ if (cmd === 'serve') {
     // the agent DELIBERATELY declares it is pausing to ask the human a question (like `done`/`park`, an
     // authored state — NOT guarded active-only). The --note carries the question. Distinct from `park`
     // (waiting on a background task, self-resumes): an asking agent resumes only when the human replies.
-    console.log(s.markState('asking', { note: flag('note'), sessionId: sess }) ? `asking${DECLARED}` : 'no session record')
+    console.log(s.markState('asking', { note: flag('note'), sessionId: sess }) ? `asking${DECLARED}${noteEcho(flag('note'))}` : 'no session record')
   } else if (sub === 'commit-gate') {
     // the Stop gate's deterministic commit check (from cwd = the worktree): exit 0 if the node branch is
     // ready to declare done/merge (work committed + ahead of main), else print the reason and exit 1. Uses

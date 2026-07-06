@@ -1,4 +1,5 @@
 import { apiBase, assertProjectMatch, resolveSession, type Session, type Resolved, type DispatchResult, type ReviewPayload } from './sessions.js'
+import type { SessionEvals } from '../../spec-yatsu/src/proof.js'
 
 export class BackendError extends Error {
   constructor(message: string, readonly status?: number) {
@@ -63,15 +64,25 @@ export async function clientReview(id: string): Promise<ReviewPayload | null> {
   return await r.json() as ReviewPayload
 }
 
-// GET /api/sessions/:id/proof — the rendered review PROOF ([[review-proof]]): the self-contained HTML the
-// backend builds (default), or the model JSON (`json:true` → ?format=json). The engine runs on the backend,
-// so the CLI is a thin fetcher that writes/opens these bytes — works against a remote backend unchanged.
-// 404 → no such session.
+// GET /api/sessions/:id/proof — the rendered proof EXPORT artifact ([[review-proof]]): the self-contained
+// HTML the backend builds (default), or the model JSON (`json:true` → ?format=json). The engine runs on the
+// backend, so the CLI is a thin fetcher that writes/opens these bytes — works against a remote backend
+// unchanged. 404 → no such session.
 export type ProofResult = { ok: true; body: string } | { ok: false; status: number }
 export async function clientProof(id: string, json = false): Promise<ProofResult> {
   const r = await apiFetch(`/api/sessions/${seg(id)}/proof${json ? '?format=json' : ''}`)
   if (r.ok) return { ok: true, body: await r.text() }
   return { ok: false, status: r.status }
+}
+
+// GET /api/sessions/:id/evals — the session EVAL model ([[review-proof]]'s interactive face): the changed
+// nodes' worktree-rooted reading rows (each carrying `inSession`), no diff enrichment, no inlined evidence
+// bytes — what `spex eval` renders, the dashboard Eval tab's source. 404 → no such session.
+export type EvalsResult = { ok: true; model: SessionEvals } | { ok: false; status: number }
+export async function clientEvals(id: string): Promise<EvalsResult> {
+  const r = await apiFetch(`/api/sessions/${seg(id)}/evals`)
+  if (!r.ok) return { ok: false, status: r.status }
+  return { ok: true, model: await r.json() as SessionEvals }
 }
 
 // POST /api/sessions/:id/merge — the cockpit's merge DISPATCH (200 {dispatched:true} / 409 {reason}).

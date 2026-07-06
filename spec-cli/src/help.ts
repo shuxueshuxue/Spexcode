@@ -17,7 +17,14 @@ backend explicitly — the flag always wins. Bare, it resolves: worker env / the
 recorded backend / fallback / :8787 (spex guide config → BACKEND ROUTING).`
 
 // aliases resolve to a canonical entry so `spex help session` and `spex session new --help` meet the same text.
-const ALIAS: Record<string, string> = { 'review-proof': 'eval', help: 'help' }
+// The session-sub tokens mirror the CLI's verb-mirror rule: each typeable sub also answers bare at the top
+// level, so its help probe (`spex send --help`, `spex help send`) must land on the session entry, not dead-end.
+const SESSION_SUB_TOKENS = ['reopen', 'done', 'park', 'ask', 'exit', 'close', 'send', 'capture', 'attach', 'rename', 'rawkey', 'prompt']
+const ALIAS: Record<string, string> = {
+  'review-proof': 'eval',
+  help: 'help',
+  ...Object.fromEntries(SESSION_SUB_TOKENS.map((t) => [t, 'session'])),
+}
 
 const ENTRIES: Record<string, Entry> = {
   // ── find & read the graph ─────────────────────────────────────────────────
@@ -142,7 +149,10 @@ fails loud naming each path. Bytes go to stdout by default (pipe-friendly); -o w
 Bare \`spex issues\` is the drain view a supervisor reads. \`open\` welcomes taste, annotations, and
 off-mainline smells — not only bugs; \`--store <host>\` opens straight on the forge (the same port the
 dashboard's New form uses). \`close\` and \`reply\` route by the issue's store — one verb, local or forge,
-the same routing as the dashboard. (\`nudge\` exists but is fired by the post-merge hook, not typed.)`,
+the same routing as the dashboard. (\`nudge\` exists but is fired by the post-merge hook, not typed.)
+Mentions: @session · [[node]] work in any concern/body — CLI args included. [[node]] links the topic
+node (it also tags the issue, like --node); @session hands the text to that live agent; @new spawns
+a fresh worker on the thread's node.`,
     see: 'spex remark (pin a resolvable concern to an issue or scenario) · spex forge (trace forge → nodes)',
   },
   remark: {
@@ -248,7 +258,7 @@ ${SEL_NOTE}`,
     see: 'spex review (before) · spex session close (after the merge is confirmed)',
   },
   session: {
-    line: 'session <sub>         the state machine: new·reopen·done·park·ask·exit·close·send·capture·attach·rename·rawkey·prompt',
+    line: 'session <sub>         every session verb answers here: new·ls·watch·wait·review·merge·reopen·done·park·ask·exit·close·send·capture·attach·rename·rawkey·prompt',
     body: `Worker verbs (declare YOUR OWN state — a claim the board and your supervisor act on):
   spex session done --propose merge|nothing|close [--note T]   committed and stopping; merge = ready for review
   spex session park --note <what-you-await>                    a real background task will wake you
@@ -264,7 +274,12 @@ Manager verbs (control another session; all take SEL):
   spex session reopen <SEL> [--force]  relaunch ONLY if confirmed offline (--force for a wedged live one)
   spex session exit <SEL>              soft stop: kill the agent, KEEP the worktree (resumable)
   spex session close <SEL>             retire the session and its worktree
-  spex session new "<prompt>"          = spex new
+
+Promoted verbs — they answer in this drawer too (same verb, either drawer):
+  spex session new|ls|watch|wait|review|merge …   ≡   spex new|ls|watch|wait|review|merge …
+And the reverse holds for every sub above: it also answers bare at the top level
+(spex send <SEL> "…" ≡ spex session send <SEL> "…"). One implementation, two spellings —
+you never have to guess which drawer a session verb lives in.
 
 Human escape hatch:
   spex session attach <SEL>            sit in the worker's REAL tmux (detach: C-b d; the session keeps
@@ -272,6 +287,10 @@ Human escape hatch:
                                        NEVER run it in a turn (it freezes you): use capture/send/rawkey.
                                        LOCAL-only — the tmux server is the backend machine's, so it fails
                                        loud when the resolved backend is remote. Offline session → loud.
+
+Mentions: @session · [[node]] work in ANY prompt, issue, or remark body — text passed as a CLI arg
+included. [[node]] names the topic (a new session derives its node from the prompt's first one);
+@session hands the surrounding text to that live agent; @new dispatches a fresh worker.
 
 (state · fail · idle · commit-gate also exist but are hook-driven — the lifecycle hooks call them;
 never type them.) ${SEL_NOTE}

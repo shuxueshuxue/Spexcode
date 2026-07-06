@@ -1,4 +1,18 @@
 export {} // make this a module so top-level await is allowed
+// static import is fine here: mentions.ts is dependency-free at module level, and stripRefSigil is needed
+// by several verbs (owner, new, tree) — a CLI reference arg tolerates an optional @/[[ ]] sigil ([[mentions]]).
+import { stripRefSigil } from './mentions.js'
+
+// @@@ verb mirror - one verb, either drawer ([[cli-surface]]): a session verb promoted to the top
+// level also answers under `spex session …`, and a typeable session sub also answers bare at the top
+// level. Pure argv rewrite BEFORE the single dispatch — an alias, never a second copy of the logic —
+// so every downstream reader (--help interception included) sees the canonical spelling. Hook-driven
+// subs (state · fail · idle · commit-gate) stay namespace-only: nobody types them, so they are not
+// vocabulary to guess.
+const PROMOTED_SESSION_VERBS = new Set(['new', 'ls', 'watch', 'wait', 'review', 'merge'])
+const SESSION_SUBS = new Set(['reopen', 'done', 'park', 'ask', 'exit', 'close', 'send', 'capture', 'attach', 'rename', 'rawkey', 'prompt'])
+if (process.argv[2] === 'session' && PROMOTED_SESSION_VERBS.has(process.argv[3])) process.argv.splice(2, 1)
+else if (SESSION_SUBS.has(process.argv[2])) process.argv.splice(2, 0, 'session')
 const cmd = process.argv[2]
 
 // Registered before any await so a fatal top-level error lands here. Errors we OWN — BackendError, the
@@ -191,8 +205,9 @@ if (cmd === 'serve') {
   // (related: — pointers; coverage only, never drift/yatsu).
   const { specOwners, specRelated } = await import('./specs.js')
   const { loadConfig } = await import('./lint.js')
-  const p = positionals(3)[0]
-  if (!p) { console.error('usage: spex owner <path> [--actionable]'); process.exit(2) }
+  const p0 = positionals(3)[0]
+  if (!p0) { console.error('usage: spex owner <path> [--actionable]'); process.exit(2) }
+  const p = stripRefSigil(p0)
   const rel = p.startsWith(process.cwd()) ? p.slice(process.cwd().length + 1) : p
   const owners = specOwners(p)
   const related = specRelated(p)
@@ -397,7 +412,7 @@ if (cmd === 'serve') {
   const depthRaw = flag('depth')
   const depth = depthRaw === undefined ? undefined : Number(depthRaw)
   if (depth !== undefined && (!Number.isInteger(depth) || depth < 0)) { console.error('spex tree: --depth must be a non-negative integer'); process.exit(2) }
-  const opts = { node: flag('node'), depth, color: process.stdout.isTTY && !process.env.NO_COLOR }
+  const opts = { node: flag('node') && stripRefSigil(flag('node')!), depth, color: process.stdout.isTTY && !process.env.NO_COLOR }
   const { nodes } = await buildBoard()
   try {
     console.log(has('json') ? JSON.stringify(treeJson(nodes, opts), null, 2) : renderTree(nodes, opts))
@@ -407,14 +422,22 @@ if (cmd === 'serve') {
   }
   await flushExit(0)
 } else if (cmd === 'search') {
-  const { searchSpecs } = await import('./search.js')
+  const { searchSpecs, nearestTitles } = await import('./search.js')
   const query = positionals(3).join(' ')
   if (!query.trim()) { console.error('usage: spex search <query> [--json] [--limit N]'); process.exit(2) }
   const limit = Number(flag('limit')) || 10
   const results = await searchSpecs(query, { limit, onStats: (s) => console.error(`[spec-search] compute ${s.ms.toFixed(1)}ms · ${s.nodes} nodes · ${s.tokens} tokens (excludes process start)`) })
-  // zero-result fail-loud: the message always carries the corpus-is-English fact (unconditional — no
-  // language sniffing, no score threshold), so a non-English query self-explains instead of dead-ending.
-  const NO_MATCH = (q: string) => `no spec node matches "${q}" (the corpus is English — if your query isn't, translate and retry)`
+  // zero-result fail-loud + route-to-next-step: always the corpus-is-English fact (unconditional — no
+  // language sniffing, no score threshold), plus the nearest titles when anything is even near (typo
+  // recovery) and the browse-all pointer, so no query dead-ends.
+  const NO_MATCH = (q: string) => {
+    const near = nearestTitles(q, 3)
+    return [
+      `no spec node matches "${q}" (the corpus is English — if your query isn't, translate and retry)`,
+      ...(near.length ? ['nearest titles:', ...near.map((t) => `  ${t.title}  [${t.id}]`)] : []),
+      'browse all: spex tree',
+    ].join('\n')
+  }
   if (has('json')) {
     if (!results.length) console.error(NO_MATCH(query))   // stderr: the stdout JSON contract stays verbatim
     console.log(JSON.stringify(results)); await flushExit(0)
@@ -472,7 +495,8 @@ if (cmd === 'serve') {
   // it falls back to an in-process launch only when no backend answers.
   const { createSession } = await import('./sessions.js')
   const prompt = flag('prompt') ?? positionals(3)[0] ?? ''
-  const created = await createSession(flag('node') ?? null, prompt, flag('harness') ?? undefined, flag('launcher') ?? undefined)
+  const nodeArg = flag('node')
+  const created = await createSession(nodeArg ? stripRefSigil(nodeArg) : null, prompt, flag('harness') ?? undefined, flag('launcher') ?? undefined)
   console.log(JSON.stringify(created, null, 2))
   await launchMonitorReminder(created.id)
 } else if (cmd === 'session') {
@@ -491,14 +515,14 @@ if (cmd === 'serve') {
   const DECLARED = ' — recorded; the human sees it in the dashboard. This state lives in your session\'s global record; your next tool call flips that record back to active (the mark-active hook, by design), so it is normal for this declaration not to persist.'
   // appended ONLY to a propose-close declaration: a worktree about to be discarded may still own ephemeral things the agent started to test this change; nudge (not gate) it to reclaim them before the worktree goes, keyed on whether the thing should outlive the task — never on who started it (a deliberately long-running service / a production build is started-by-you yet must be left alone). Project-agnostic on purpose.
   const CLOSE_CLEANUP = '\n\nBefore this worktree closes, check whether you left anything running that you started to test this change — a background process, a dev or preview server, a bound port, a scratch session. If nothing depends on it anymore, shut it down, or it keeps running as an orphan. Leave anything meant to keep running: a service you deliberately stood up, a production build, anything other work relies on. What matters is whether it still needs to exist after this task, not whether you started it. If unsure, leave it. This is a reminder to check, not a required step.'
-  if (sub === 'new') {
-    // route through the backend (auth env + concurrency cap); in-process only if no backend is reachable.
-    // prompt = --prompt OR the first positional (after `session new`), so `session new "<prompt>"` works the
-    // SAME as the `spex new "<prompt>"` shorthand — one prompt-resolution rule, not two.
-    const created = await s.createSession(flag('node') ?? null, flag('prompt') ?? positionals(4)[0] ?? '', flag('harness') ?? undefined, flag('launcher') ?? undefined)
-    console.log(JSON.stringify(created, null, 2))
-    await launchMonitorReminder(created.id)
-  } else if (sub === 'reopen') {
+  // truncation transparency ([[state]]): the board table shows only the first NOTE_BOARD_LIMIT chars of a
+  // note. When a declared note overflows that cap, the confirmation says so — length, what the board shows,
+  // where the full text is readable — so the cut is visible to the author instead of silently eaten.
+  // A nudge riding the echo, never a gate: the declaration has already landed.
+  const noteEcho = (note?: string) => (note && note.length > s.NOTE_BOARD_LIMIT)
+    ? `\nyour note is ${note.length} chars; the board table shows only the first ${s.NOTE_BOARD_LIMIT} — the full text IS recorded, and readable via spex review ${(sess || s.ownSessionId() || '<your-session>').slice(0, 8)} / spex ls --json.`
+    : ''
+  if (sub === 'reopen') {
     // bring the agent back up (relaunch ONLY if confirmed offline, the backend owns it); demotes a working
     // `active` to idle but leaves a standing declaration/proposal untouched (see sessions.ts reopen()). The
     // RESUME GUARD refuses a relaunch on a LIVE/unproven agent (that would kill a live worker) — `--force`
@@ -511,7 +535,7 @@ if (cmd === 'serve') {
     // the agent authors ITS OWN state: active|awaiting|parked|error  [--propose] [--note] [--session]
     const st = process.argv[4] as any
     const ok = s.markState(st, { proposal: flag('propose') as any, note: flag('note'), sessionId: sess })
-    console.log(ok ? `state -> ${st}` : 'no session record (unknown --session / no CLAUDE_CODE_SESSION_ID, or bad status)')
+    console.log(ok ? `state -> ${st}${noteEcho(flag('note'))}` : 'no session record (unknown --session / no CLAUDE_CODE_SESSION_ID, or bad status)')
   } else if (sub === 'done') {
     // sugar for awaiting; --propose merge|nothing|close, optional --note
     const p = (flag('propose') as any) || 'nothing'
@@ -523,10 +547,10 @@ if (cmd === 'serve') {
       try { closeNote += (await import('./localIssues.js')).closeoutNudge(sess ?? s.ownSessionId()) }
       catch (e) { console.error(`issue closeout check failed (declaration unaffected): ${e instanceof Error ? e.message : e}`) }
     }
-    console.log(s.markDone(p, sess) ? `done (${p})${DECLARED}${closeNote}` : 'no session record')
+    console.log(s.markDone(p, sess, flag('note')) ? `done (${p})${DECLARED}${noteEcho(flag('note'))}${closeNote}` : 'no session record')
   } else if (sub === 'park') {
     // sugar: the agent is waiting on a background task; it will self-resume (NOT idle/awaiting)
-    console.log(s.markState('parked', { note: flag('note'), sessionId: sess }) ? `parked${DECLARED}` : 'no session record')
+    console.log(s.markState('parked', { note: flag('note'), sessionId: sess }) ? `parked${DECLARED}${noteEcho(flag('note'))}` : 'no session record')
   } else if (sub === 'fail') {
     // the StopFailure hook marks its session (--session from the payload) as error (turn died on an API error)
     console.log(s.markError(sess) ? 'marked error' : 'no session record')
@@ -534,7 +558,7 @@ if (cmd === 'serve') {
     // the agent DELIBERATELY declares it is pausing to ask the human a question (like `done`/`park`, an
     // authored state — NOT guarded active-only). The --note carries the question. Distinct from `park`
     // (waiting on a background task, self-resumes): an asking agent resumes only when the human replies.
-    console.log(s.markState('asking', { note: flag('note'), sessionId: sess }) ? `asking${DECLARED}` : 'no session record')
+    console.log(s.markState('asking', { note: flag('note'), sessionId: sess }) ? `asking${DECLARED}${noteEcho(flag('note'))}` : 'no session record')
   } else if (sub === 'commit-gate') {
     // the Stop gate's deterministic commit check (from cwd = the worktree): exit 0 if the node branch is
     // ready to declare done/merge (work committed + ahead of main), else print the reason and exit 1. Uses
@@ -617,7 +641,7 @@ if (cmd === 'serve') {
     if (!r.ok) { console.error(`no prompt recorded for ${full}`); process.exit(1) }
     process.stdout.write(r.prompt.endsWith('\n') ? r.prompt : r.prompt + '\n')
   } else {
-    console.error('spex session: new|reopen|done|park|ask|idle|exit|close|send|capture|attach|rename|rawkey|prompt'); process.exit(2)
+    console.error('spex session: new|ls|watch|wait|review|merge|reopen|done|park|ask|exit|close|send|capture|attach|rename|rawkey|prompt  (spex help session)'); process.exit(2)
   }
 } else if (cmd === 'internal') {
   // @@@ internal - the machine-plumbing namespace: verbs only generated hooks and launch scripts call,

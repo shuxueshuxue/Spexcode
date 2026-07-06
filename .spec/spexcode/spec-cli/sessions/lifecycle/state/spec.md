@@ -171,7 +171,13 @@ writers live in `sessions.ts`; state's only stake in the shared `cli.ts` hub is 
 declaration commands and the `spex ls` table — a sibling verb's churn there, like the `yatsu` usage line
 rewritten in the measure-and-score reframe, moves the file but is not state's drift. A declaration echoes a one-line confirmation — recorded for
 the dashboard, after which the next tool call (via mark-active) flips the record back to `active`, so an agent never reads
-that re-flip as a lost proposal. A **propose-close** declaration additionally carries a plain reminder to reclaim
+that re-flip as a lost proposal. Every note-carrying declaration (`done`/`ask`/`park`/`state`, all of which
+accept `--note` — done included, its note reaches the record like the others') stores the note **in full**;
+display surfaces may cap it (the board table shows only the first `NOTE_BOARD_LIMIT` chars), but a cut must be
+**transparent to the author**: when the declared note overflows that cap, the confirmation states the note's
+length, how much the board shows, and where the full text is readable (`spex review <id>` / `spex ls --json`),
+so trimming is the author's informed choice — never a silent loss. Like every echo addendum it is a nudge
+riding the confirmation, not a gate. A **propose-close** declaration additionally carries a plain reminder to reclaim
 the ephemeral things the agent started to test this change — a stray process, a dev/preview server, a bound port,
 a scratch session — before the worktree is discarded and they orphan (the leak the shared tmux socket made
 visible: a torn-down worktree's own backend outliving it). It is **advisory, a nudge and never a gate** (the agent

@@ -36,6 +36,18 @@ echoes the canonical form on stderr, so a caller migrates without breakage (`spe
 `spex eval <SEL> --proof`, after proof was demoted from a review sub-noun to the export flag of the
 [[review-proof]] eval read).
 
+**One verb, either drawer — the session-verb mirror.** A user must never have to guess whether a
+session verb lives at the top level or under `spex session`: every promoted session verb
+(`new · ls · watch · wait · review · merge`) also answers in its namespace form (`spex session
+review` ≡ `spex review`), and every *typeable* `session` sub (`reopen · done · park · ask · exit ·
+close · send · capture · attach · rename · rawkey · prompt`) also answers bare (`spex send` ≡
+`spex session send`). The mirror is an **alias, never a second copy of the logic**: one argv rewrite
+before the single dispatch normalizes either spelling to the canonical one, so `--help` probes,
+flags, and positionals all flow through the same handler (a mirrored sub's probe answers with the
+`session` entry). Hook-driven subs (`state · fail · idle · commit-gate`) stay namespace-only —
+nobody types them. The map stays porcelain: mirrored spellings add no map lines; the `session`
+entry lists the whole drawer, promoted verbs included, and states the equivalence both ways.
+
 **The three-layer help journey** — each layer states what the next one is for, so the reader always
 has a move:
 
@@ -57,5 +69,8 @@ Dead-end rule: an unknown command, an unknown help topic, an unknown guide topic
 The map must stay honest: every porcelain verb `cli.ts` dispatches appears in it (a hidden typeable
 verb is the bug this node exists to prevent — `search` and `owner` were exactly that), and each verb
 with caveats carries them in its own entry (`watch` says it never exits and points at `wait`).
+Cross-cutting input grammar is advertised in the entries where a user would first need it: the
+mention hint (`@session` · `[[node]]`, [[mentions]]) rides the `session` and `issues` entries, so a
+CLI-only user learns the grammar without ever seeing the dashboard's autocomplete.
 `cli.ts` remains the thin dispatch hub — verbs' logic lives in their own modules; help text lives in
 `help.ts`; a sibling verb's churn in the hub is that feature's, not this node's drift.

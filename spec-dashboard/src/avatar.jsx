@@ -22,7 +22,7 @@ export function Avatar({ seed, status, title, size = 16 }) {
   const a = avatarFor(seed)
   const box = { width: size, height: size }
   return (
-    <span className={`avatar av-st-${status || 'none'}`} title={title} style={box}>
+    <span className={`avatar av-st-${status || 'none'}`} data-tip={title} aria-label={title} style={box}>
       <span className={`av-face av-gen av-${a.shape}`} style={{ ...box, background: a.bg, color: a.fg, fontSize: size * 0.62 }}>
         {a.glyph}
       </span>

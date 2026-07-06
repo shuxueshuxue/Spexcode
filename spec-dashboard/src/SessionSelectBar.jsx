@@ -40,7 +40,7 @@ export default function SessionSelectBar({ ids, onCancel, onClosed }) {
       </div>
       {confirming && (
         <Modal
-          title={t('sessionSelect.closeTitle', { n: count })}
+          data-tip={t('sessionSelect.closeTitle', { n: count })}
           closeLabel={t('common.close')}
           className="sess-rename-modal"
           onClose={() => setConfirming(false)}

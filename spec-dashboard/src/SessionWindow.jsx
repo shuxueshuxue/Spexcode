@@ -39,7 +39,7 @@ export function RowLead({ guides = [], expandable, expanded, rollup, kin = 0, on
         <span
           className={`sess-fold pod${expanded ? ' open' : ''}`} role="button" tabIndex={-1}
           style={expanded ? { color: rollup, borderColor: rollup } : { background: rollup, borderColor: rollup }}
-          title={`${kin} nested session${kin === 1 ? '' : 's'} — click to ${expanded ? 'collapse' : 'expand'}`}
+          data-tip={`${kin} nested session${kin === 1 ? '' : 's'} — click to ${expanded ? 'collapse' : 'expand'}`}
           onClick={(e) => { e.stopPropagation(); onToggle?.() }}
           onMouseDown={(e) => e.stopPropagation()}
         >{kin}</span>
@@ -75,12 +75,12 @@ export function SessionRow({ s, locked, showAvatar = true, compact = false, lead
           headline's first line and the wrapped lines below run full-width beneath it. */}
       <span className="sess-meta">
         {compact
-          ? <span className="sess-glyph" style={{ color: STATUS_COLOR[s.status] }} title={statusWord} aria-label={statusWord}>{STATUS_GLYPH[s.status]}</span>
+          ? <span className="sess-glyph" style={{ color: STATUS_COLOR[s.status] }} data-tip={statusWord} aria-label={statusWord}>{STATUS_GLYPH[s.status]}</span>
           : <span className="sess-status" style={{ color: STATUS_COLOR[s.status] }}>{statusWord}</span>}
         {ops && <span className="sess-ops">{ops}</span>}
       </span>
-      <span className="sess-id" title={headline}>{headline}</span>
-      {locked && <span className="sess-lock" title={t('sessionWindow.lockedTitle')}><LockGlyph /></span>}
+      <span className="sess-id" data-tip={headline}>{headline}</span>
+      {locked && <span className="sess-lock" data-tip={t('sessionWindow.lockedTitle')}><LockGlyph /></span>}
     </>
   )
 }
@@ -116,7 +116,7 @@ export default function SessionWindow({ sessions, activeId, onPick, onOpenSessio
               style={{ '--ov': labelColor(s.id) }}
               onClick={() => onPick(s)}
               onDoubleClick={() => onOpenSession(s.id)}
-              title={t('sessionWindow.rowTitle')}
+              data-tip={t('sessionWindow.rowTitle')}
             >
               <SessionRow s={s} locked={locked} compact lead={lead} />
             </button>

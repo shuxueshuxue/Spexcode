@@ -6,7 +6,7 @@ export default function IssueCard({ issue }) {
   const store = issue?.store || 'local'
   const status = issue?.status || 'open'
   return (
-    <a className="issue-card" href={routeHash('issues', issue.id)} title={issue.concern || issue.id}>
+    <a className="issue-card" href={routeHash('issues', issue.id)} data-tip={issue.concern || issue.id}>
       <span className="issue-card-top">
         <span className="issue-num">{issue.id}</span>
         <span className={`fv-store fv-store-${store === 'local' ? 'local' : 'forge'}`}>{store}</span>

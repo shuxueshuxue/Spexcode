@@ -51,7 +51,7 @@ function summarize(specs) {
 function Stat({ count, ids, focusId, onJump, title, cls = '', children }) {
   const live = ids.length > 0
   return (
-    <button type="button" className={`bstat ${cls}`.trim()} disabled={!live} title={title}
+    <button type="button" className={`bstat ${cls}`.trim()} disabled={!live} data-tip={title} aria-label={title}
       onClick={live ? () => onJump(cycleNext(ids, focusId)) : undefined}>
       {children}{count}
     </button>
@@ -65,7 +65,7 @@ export default function BoardStats({ specs, focusId, onJump }) {
   return (
     <div className="board-stats" role="group" aria-label={t('stats.aria')}>
       {/* composition — the four status dots, counted. The leading number is the whole tree's size. */}
-      <span className="bstat-total" title={t('stats.totalTitle', { n: s.total })}>{s.total}</span>
+      <span className="bstat-total" data-tip={t('stats.totalTitle', { n: s.total })}>{s.total}</span>
       {STATUS_ORDER.map((k) => (
         <Stat key={k} count={s.status[k].length} ids={s.status[k]} focusId={focusId} onJump={jump}
           title={t('stats.statusTitle', { n: s.status[k].length, status: t(`status.${k}`) })}>

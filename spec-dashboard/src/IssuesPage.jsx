@@ -128,9 +128,9 @@ export default function IssuesPage({ onFocusNode, onOpenSession, specs = [], ses
             const k = `issue:${th.id}`
             return (
               <button key={th.id} className={`fv-row ${effSel === k ? 'sel' : ''}`} onClick={() => setSel(k)}>
-                <span className={`fv-dot st-${th.status || 'open'}`} title={th.status} />
-                <span className="fv-concern" title={th.concern}>{th.concern}</span>
-                {(th.replies?.length ?? 0) > 0 && <span className="fv-replies" title={t('session.issuesReplies', { n: th.replies.length })}>{th.replies.length}</span>}
+                <span className={`fv-dot st-${th.status || 'open'}`} data-tip={th.status} />
+                <span className="fv-concern" data-tip={th.concern}>{th.concern}</span>
+                {(th.replies?.length ?? 0) > 0 && <span className="fv-replies" data-tip={t('session.issuesReplies', { n: th.replies.length })}>{th.replies.length}</span>}
                 {stores.length > 1 && <span className={`fv-store fv-store-${th.store === 'local' ? 'local' : 'forge'}`}>{th.store}</span>}
               </button>
             )
@@ -176,7 +176,7 @@ function IssueDetail({ issue: th, specs, sessions, onFocusNode, onOpenSession, o
     }
   }
   const lifecycleBtn = (name, label, fn, title) => (
-    <button type="button" className={`fv-close-issue fv-life-${name}`} disabled={!!acting} title={title}
+    <button type="button" className={`fv-close-issue fv-life-${name}`} disabled={!!acting} data-tip={title}
       onMouseDown={(e) => e.preventDefault()} onClick={run(name, fn)}>
       {acting === name ? t('session.issuesActing') : label}
     </button>
@@ -199,7 +199,7 @@ function IssueDetail({ issue: th, specs, sessions, onFocusNode, onOpenSession, o
             ? <OriginatorLiveness originator={th.by} sessions={sessions} kind="issue" onOpenSession={onOpenSession} />
             : (th.by && <span className="fv-by">{th.by}</span>)}
           {nodes.map((id) => (
-            <button key={id} type="button" className="fv-chip" onClick={() => onFocusNode?.(id)} title={t('session.issuesFocusNode')}>{id}</button>
+            <button key={id} type="button" className="fv-chip" onClick={() => onFocusNode?.(id)} data-tip={t('session.issuesFocusNode')}>{id}</button>
           ))}
           {th.url && <a className="fv-link" href={th.url} target="_blank" rel="noreferrer">{t('session.issuesOpenOnForge')}</a>}
         </div>

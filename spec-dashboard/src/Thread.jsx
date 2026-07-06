@@ -86,14 +86,14 @@ export function OriginatorLiveness({ originator, sessions = [], kind = 'issue', 
   )
   if (alive && onOpenSession) {
     return (
-      <button type="button" className="fv-originator alive openable" title={title} aria-label={title} onClick={() => onOpenSession(originator)}>
+      <button type="button" className="fv-originator alive openable" data-tip={title} aria-label={title} onClick={() => onOpenSession(originator)}>
         {body}
       </button>
     )
   }
   return (
     <span className={`fv-originator ${alive ? 'alive' : 'offline'}`}
-          title={title}>
+          data-tip={title}>
       {body}
     </span>
   )
@@ -143,14 +143,14 @@ export function Replies({ replies, onSeek, selIdx = null, activeIdx = null, onSe
           <span className="fv-reply-by">{r.by}</span>
           {r.at && <span className="fv-reply-at">{r.at}</span>}
           {a && (seek
-            ? <button type="button" className="fv-anchor" onClick={seek} title="seek the clip to this moment">{a.label}</button>
-            : <span className={`fv-anchor static${a.degraded ? ' degraded' : ''}`} title={a.degraded ? t('thread.anchorDegraded') : undefined}>{a.label}{a.degraded ? ' ⚠' : ''}</span>)}
+            ? <button type="button" className="fv-anchor" onClick={seek} data-tip="seek the clip to this moment">{a.label}</button>
+            : <span className={`fv-anchor static${a.degraded ? ' degraded' : ''}`} data-tip={a.degraded ? t('thread.anchorDegraded') : undefined}>{a.label}{a.degraded ? ' ⚠' : ''}</span>)}
           {isRemark && (r.resolved
-            ? <span className="fv-remark-state resolved" title={r.resolvedBy ? t('thread.resolvedBy', { by: r.resolvedBy }) : t('thread.resolved')}>✓ {t('thread.resolved')}</span>
-            : <span className="fv-remark-state open" title={t('thread.openRemark')}>● {t('thread.openRemark')}</span>)}
+            ? <span className="fv-remark-state resolved" data-tip={r.resolvedBy ? t('thread.resolvedBy', { by: r.resolvedBy }) : t('thread.resolved')}>✓ {t('thread.resolved')}</span>
+            : <span className="fv-remark-state open" data-tip={t('thread.openRemark')}>● {t('thread.openRemark')}</span>)}
           {ref && onRemarkChange && !r.resolved && (r.by === 'human'
-            ? <button type="button" className="fv-remark-act retract" disabled={!!acting} title={t('thread.retractTitle')} onClick={() => act('retract', ref)}>{t('thread.retract')}</button>
-            : <button type="button" className="fv-remark-act resolve" disabled={!!acting} title={t('thread.resolveTitle')} onClick={() => act('resolve', ref)}>{t('thread.resolve')}</button>)}
+            ? <button type="button" className="fv-remark-act retract" disabled={!!acting} data-tip={t('thread.retractTitle')} onClick={() => act('retract', ref)}>{t('thread.retract')}</button>
+            : <button type="button" className="fv-remark-act resolve" disabled={!!acting} data-tip={t('thread.resolveTitle')} onClick={() => act('resolve', ref)}>{t('thread.resolve')}</button>)}
         </div>
         {actErr && actErr.ref === ref && <div className="fv-error">{actErr.msg}</div>}
         {prose && <div className="fvd-body"><SpecBody body={prose} /></div>}
@@ -243,7 +243,7 @@ export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = nul
           collapse the row before the click could land, unless a host lifecycle action pins it visible). */}
       {showActions && (
         <div className="fv-actions">
-          {anchorNow && <button type="button" className="fv-anchor-btn" title={t('thread.anchorTitle')} onMouseDown={(e) => e.preventDefault()} onClick={stampAnchor}>⏱ {t('thread.anchorNow')}</button>}
+          {anchorNow && <button type="button" className="fv-anchor-btn" data-tip={t('thread.anchorTitle')} onMouseDown={(e) => e.preventDefault()} onClick={stampAnchor}>⏱ {t('thread.anchorNow')}</button>}
           <span className="fv-hint">{err || t('session.issuesMentionHint')}</span>
           <button type="button" className="fv-send" disabled={busy || !body.trim()} onMouseDown={(e) => e.preventDefault()} onClick={send}>
             {busy ? t('session.issuesSending') : t('session.issuesSend')}

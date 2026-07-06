@@ -735,12 +735,12 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             <SessionSelectBar ids={[...picked]} onCancel={exitSelect} onClosed={onBulkClosed} />
           ) : (
           <div className="si-toprow">
-            <button className={active === 'new' ? 'si-pill new on' : 'si-pill new'} title={t('session.newSessionTitle')} onClick={() => setSel('new')}>
+            <button className={active === 'new' ? 'si-pill new on' : 'si-pill new'} data-tip={t('session.newSessionTitle')} onClick={() => setSel('new')}>
               <span className="si-pill-glyph">＋</span>
             </button>
             {/* the click twin of ⌘/Ctrl+/ ([[session-board-search]]) — same palette open, the tooltip
                 teaches the chord. Momentary (no .on state): the palette floats above, no tab switches. */}
-            <button className="si-pill search" title={t('session.searchTitle')} onClick={onOpenSearch}>
+            <button className="si-pill search" data-tip={t('session.searchTitle')} onClick={onOpenSearch}>
               <span className="si-pill-glyph">
                 <svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <circle cx="7.6" cy="7.6" r="5.1" />
@@ -773,7 +773,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 onClick={() => (selecting ? togglePick(s.id) : setSel(s.id))}
                 onDoubleClick={() => { if (!selecting && s.ops?.length && onPickSession) { onPickSession(s, false); onClose() } }}
                 onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); if (!selecting) setCtxMenu({ x: e.clientX, y: e.clientY, session: s }) }}
-                title={s.ops?.length ? t('session.opsTitle') : undefined}
+                data-tip={s.ops?.length ? t('session.opsTitle') : undefined}
               >
                 {selecting && <span className={`si-check${isPicked ? ' on' : ''}`} aria-hidden="true" />}
                 <SessionRow s={s} locked={false} showAvatar={false} compact lead={lead} />
@@ -824,7 +824,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 <button
                   type="button"
                   className="si-attach"
-                  title={t('session.attachTitle')}
+                  data-tip={t('session.attachTitle')}
                   onClick={() => pickFiles('new')}
                   disabled={uploading}
                 >{uploading && attachAt === 'new' ? <BusyGlyph /> : <AttachGlyph />}</button>
@@ -842,9 +842,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 const selHarness = HARNESS_BY_ID[launchers.find((l) => l.name === launcher)?.harness || 'claude'] || HARNESS_BY_ID.claude
                 const HarnessGlyph = selHarness.Glyph
                 return (
-                <label className="si-launcher-picker" title={t('session.launcherLabel')}>
+                <label className="si-launcher-picker" data-tip={t('session.launcherLabel')}>
                   <span className="si-launcher-label">{t('session.launcherLabel')}</span>
-                  <span className="si-launcher-harness" title={selHarness.label} aria-hidden="true"><HarnessGlyph /></span>
+                  <span className="si-launcher-harness" data-tip={selHarness.label} aria-hidden="true"><HarnessGlyph /></span>
                   <select className="si-launcher-select" value={launcher} onChange={(e) => pickLauncher(e.target.value)} aria-label={t('session.launcherLabel')}>
                     {launchers.map((l) => (
                       <option key={l.name} value={l.name}>{l.name}</option>
@@ -886,7 +886,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                           <button
                             key={c.name}
                             className={`si-act board sc-${c.color} ${c.name}${state}`}
-                            title={t(c.titleKey)}
+                            data-tip={t(c.titleKey)}
                             onClick={c.run}
                           >{t(c.labelKey)}</button>
                         )
@@ -915,7 +915,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               {/* the docked ❯ input belongs to the Terminal tab only (the Eval tab has nothing to type at). */}
               {rightTab === 'terminal' && (navMode ? (
                 // nav mode replaces the prompt box: keys go straight to the pane (handled at the window level).
-                <div className="si-bottom nav" onClick={() => setNavMode(false)} title={t('session.navExit')}>
+                <div className="si-bottom nav" onClick={() => setNavMode(false)} data-tip={t('session.navExit')}>
                   <span className="si-nav-ind">{t('session.navInd')}</span>
                   <span className="si-nav-help">{t('session.navHelp')}</span>
                 </div>
@@ -945,7 +945,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   <button
                     type="button"
                     className="si-attach"
-                    title={t('session.attachTitle')}
+                    data-tip={t('session.attachTitle')}
                     onClick={() => pickFiles('msg')}
                     disabled={uploading || noLivePane}
                   >{uploading && attachAt === 'msg' ? <BusyGlyph /> : <AttachGlyph />}</button>

@@ -12,67 +12,54 @@ related:
 ---
 # public-mode
 
-## raw source
+The bar: **a developer with only a public IP — no domain, no reverse proxy, no extra tooling — runs one
+command and trusted people use the SpexCode dashboard over the internet behind a password, or, when they
+choose, with no gate at all.** SpexCode is a fast-lane between people who trust each other, not a public
+service; it must never require the apparatus of one (DNS, a CA-issued cert, a separate proxy). **The gate
+is opt-in:** a password makes a real login appear; without one the dashboard serves open — and because
+dashboard access is effectively remote code execution through the agents, that open choice is loud-warned,
+never silent.
 
-The bar this node is held to: **a developer with only a public IP — no domain, no reverse proxy, no
-extra tooling — runs one command and trusted people use the SpexCode dashboard over the internet behind
-a password — or, when they choose, with no gate at all.** If that is not true, the design is wrong.
-SpexCode is a technical fast-lane between people who trust each other, not a public service; it must never
-require the apparatus of one (DNS, a CA-issued cert, a separate proxy) to stand up. **The gate is opt-in:**
-a password makes a real login appear; without one the dashboard is served open. Because access to the
-dashboard is effectively remote code execution through the agents, an open public deployment is loud-warned
-— the operator chooses, but the choice is never silent in either direction.
-
-## expanded spec
-
-`spex serve --public` raises a **gateway** on `0.0.0.0:PORT` that is the only thing facing the internet. It
+`spex serve --public` raises a **gateway** on `0.0.0.0:PORT` — the only thing facing the internet. It
 terminates TLS, serves the built dashboard, reverse-proxies `/api/*` and the terminal WebSocket to the
-loopback supervisor, and — **when `--password <pw>` is given** — gates every request behind a login. The supervisor and its
-child stay bound to `127.0.0.1`; **loopback is the trust boundary, the gateway is the internet face.**
-Locally launched agents reach the loopback supervisor directly, so they never carry the password — only
-outside traffic meets the gate. Without `--public` nothing changes: dev stays plain loopback, no TLS, no
-gate. This is a pure additive switch over [[spec-cli]]'s supervisor; the dashboard needs no change (it
-already calls `/api` same-origin and opens its socket as `wss://` under HTTPS).
+loopback supervisor, and, when `--password <pw>` is given, gates every request behind a login. The
+supervisor and its child stay on `127.0.0.1`: **loopback is the trust boundary, the gateway is the
+internet face.** Locally launched agents reach the loopback supervisor directly and never carry the
+password. Without `--public` nothing changes: dev stays plain
+loopback, no TLS, no gate — a pure additive switch over [[spec-cli]]'s supervisor; the dashboard needs no
+change (it already calls `/api` same-origin and opens its socket as `wss://` under HTTPS).
 
 **Compression is transport, so it lives at the gateway — once, for every deployment.** Text-ish responses
-ship gzipped when the client accepts it: static dist files memoized per (path, mtime) — a dist file is
-immutable per build, so each compresses once — and proxied `/api` bodies stream-gzipped (measured: the
-board JSON and the dashboard bundle both ride down at under a third). The upstream and product semantics
-never know compression exists, and
-three structural exclusions are load-bearing: an SSE stream never sits in a zlib buffer (event latency),
-an already-encoded response is not re-encoded, and binary media (video/image evidence blobs) gains
-nothing and would fight Range requests.
+ship gzipped when the client accepts it, static and proxied alike; upstream and product semantics never
+know compression exists. Three exclusions are load-bearing: an SSE stream is
+never buffered (event latency), an already-encoded response is not re-encoded, and binary media
+(video/image evidence) passes through untouched — it gains nothing and would fight Range requests.
 
-**When a password is set, the gate is a designed login, not the browser's Basic dialog.** An unauthenticated
-visitor gets a styled SpexCode login page; the posted password is compared in constant time and, on success,
-mints a signed `httpOnly` cookie (derived from the password via HMAC, so it survives a restart and stores no
-server-side session) **named per public port** (`spex_auth_<port>`) so two same-host gateways — cookies are
-host-scoped — don't evict each other's login. The cookie authorises every later request including the WebSocket upgrade — the browser
-sends it on the same-origin handshake, so the terminal socket is gated by the same secret with no query-token
-hack. With **no** password the whole login layer is absent — no `/login`, no cookie check — and every request
-is served straight through; the operator has chosen open access (and was warned).
+**With a password, the gate is a designed login, not the browser's Basic dialog.** An unauthenticated
+visitor gets a styled login page; the posted password is compared in constant time and, on success, mints
+a signed `httpOnly` cookie that survives a gateway restart with no server-side session, **named per public
+port** (`spex_auth_<port>`) so two same-host gateways — cookies are host-scoped — don't evict each other's
+login. That cookie authorises every later request including the same-origin WebSocket upgrade, so the
+terminal socket is gated by the same secret with no query-token hack. With no password the login layer is
+absent — no `/login`, no cookie check — and every request is served straight through.
 
-**The certificate is a resolved value, never hardcoded.** Precedence: `--tls-cert/--tls-key` flags > the
-`SPEXCODE_TLS_CERT`/`SPEXCODE_TLS_KEY` env > `spexcode.json` `serve.public.tls` > a **self-signed default**,
-generated once and cached so visitors accept it only once. Point the flags at a real cert (e.g. Let's
-Encrypt `fullchain.pem`/`privkey.pem`) and the same gateway is warning-free HTTPS the moment a domain
-exists. `--http` drops TLS entirely — loud-warned, because the password then crosses the network in clear
-and secure-context features (clipboard) break — for someone who knowingly wants zero friction. The one
-unavoidable cost: web PKI will not issue a browser-trusted cert for a bare IP, so the self-signed default
-costs a single "proceed" click per visitor — that is the price of needing no domain, and it is the default,
-not a requirement.
+**The certificate is a resolved value, never hardcoded.** Precedence: `--tls-cert/--tls-key` flags >
+`SPEXCODE_TLS_CERT`/`SPEXCODE_TLS_KEY` env > `spexcode.json` `serve.public.tls` > a self-signed default,
+generated once and cached so each visitor accepts it only once. Point it at a real cert and the same
+gateway is warning-free HTTPS. `--http` drops TLS entirely — loud-warned, because the password then
+crosses the network in clear and secure-context features break. Web PKI won't issue a browser-trusted
+cert for a bare IP, so the self-signed default costs one "proceed" click per visitor — the price of
+needing no domain, and a default, not a requirement.
 
-**Secrets stay out of the repo, and failures are loud.** The password is taken only from the flag or env,
-never the committable `spexcode.json`; config holds cert file *paths*, the key file lives outside git.
-`--public` with no password serves open with a loud warning (never a silent exposure); a cert file that does
-not exist is a named error pointing at the repair, never a silent fallback to insecure serving.
+**Secrets stay out of the repo; failures are loud.** The password comes only from the flag or env, never
+the committable `spexcode.json`; config holds cert file *paths*, the key file lives outside git. A cert
+file that does not exist is a named error pointing at the repair, never a silent fallback to insecure
+serving.
 
-**The same gateway also powers local serve.** [[packaging]]'s `spex dashboard` is this gateway on loopback,
-ungated, no TLS; the internet face here is the other configuration of one engine. And the dist it serves is
-a resolved location, never hardcoded: an installed `spexcode` serves its bundled `dashboard-dist`, the
-dogfood monorepo falls back to the sibling `spec-dashboard/dist`.
+**The same gateway powers local serve.** [[packaging]]'s `spex dashboard` is this gateway on loopback,
+ungated, no TLS. The dist it serves is a resolved location: an installed `spexcode` serves the bundled
+`dashboard-dist`; a monorepo checkout falls back to the sibling `spec-dashboard/dist`.
 
-**A busy port fails loudly, the same way the supervisor's does.** Binding a public port, the gateway obeys
-[[spec-cli]]'s port-ownership contract: a port already in use (or permission-denied) is a non-zero exit
-naming the port and the repair, never a silent or half-up serve. Both surfaces route `listen` through one
-shared bind helper, so `spex serve` and `spex dashboard` answer the identical busy-port condition identically.
+**A busy port fails loudly.** The gateway obeys [[spec-cli]]'s port-ownership contract: a port already in
+use (or permission-denied) is a non-zero exit naming the port and the repair, never a silent or half-up
+serve — and `spex serve` and `spex dashboard` answer it identically.

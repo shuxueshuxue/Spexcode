@@ -17,7 +17,14 @@ backend explicitly — the flag always wins. Bare, it resolves: worker env / the
 recorded backend / fallback / :8787 (spex guide config → BACKEND ROUTING).`
 
 // aliases resolve to a canonical entry so `spex help session` and `spex session new --help` meet the same text.
-const ALIAS: Record<string, string> = { 'review-proof': 'review', help: 'help' }
+// The session-sub tokens mirror the CLI's verb-mirror rule: each typeable sub also answers bare at the top
+// level, so its help probe (`spex send --help`, `spex help send`) must land on the session entry, not dead-end.
+const SESSION_SUB_TOKENS = ['reopen', 'done', 'park', 'ask', 'exit', 'close', 'send', 'capture', 'attach', 'rename', 'rawkey', 'prompt']
+const ALIAS: Record<string, string> = {
+  'review-proof': 'review',
+  help: 'help',
+  ...Object.fromEntries(SESSION_SUB_TOKENS.map((t) => [t, 'session'])),
+}
 
 const ENTRIES: Record<string, Entry> = {
   // ── find & read the graph ─────────────────────────────────────────────────
@@ -233,7 +240,7 @@ ${SEL_NOTE}`,
     see: 'spex review (before) · spex session close (after the merge is confirmed)',
   },
   session: {
-    line: 'session <sub>         the state machine: new·reopen·done·park·ask·exit·close·send·capture·attach·rename·rawkey·prompt',
+    line: 'session <sub>         every session verb answers here: new·ls·watch·wait·review·merge·reopen·done·park·ask·exit·close·send·capture·attach·rename·rawkey·prompt',
     body: `Worker verbs (declare YOUR OWN state — a claim the board and your supervisor act on):
   spex session done --propose merge|nothing|close [--note T]   committed and stopping; merge = ready for review
   spex session park --note <what-you-await>                    a real background task will wake you
@@ -249,7 +256,12 @@ Manager verbs (control another session; all take SEL):
   spex session reopen <SEL> [--force]  relaunch ONLY if confirmed offline (--force for a wedged live one)
   spex session exit <SEL>              soft stop: kill the agent, KEEP the worktree (resumable)
   spex session close <SEL>             retire the session and its worktree
-  spex session new "<prompt>"          = spex new
+
+Promoted verbs — they answer in this drawer too (same verb, either drawer):
+  spex session new|ls|watch|wait|review|merge …   ≡   spex new|ls|watch|wait|review|merge …
+And the reverse holds for every sub above: it also answers bare at the top level
+(spex send <SEL> "…" ≡ spex session send <SEL> "…"). One implementation, two spellings —
+you never have to guess which drawer a session verb lives in.
 
 Human escape hatch:
   spex session attach <SEL>            sit in the worker's REAL tmux (detach: C-b d; the session keeps

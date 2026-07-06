@@ -1,4 +1,15 @@
 export {} // make this a module so top-level await is allowed
+
+// @@@ verb mirror - one verb, either drawer ([[cli-surface]]): a session verb promoted to the top
+// level also answers under `spex session …`, and a typeable session sub also answers bare at the top
+// level. Pure argv rewrite BEFORE the single dispatch — an alias, never a second copy of the logic —
+// so every downstream reader (--help interception included) sees the canonical spelling. Hook-driven
+// subs (state · fail · idle · commit-gate) stay namespace-only: nobody types them, so they are not
+// vocabulary to guess.
+const PROMOTED_SESSION_VERBS = new Set(['new', 'ls', 'watch', 'wait', 'review', 'merge'])
+const SESSION_SUBS = new Set(['reopen', 'done', 'park', 'ask', 'exit', 'close', 'send', 'capture', 'attach', 'rename', 'rawkey', 'prompt'])
+if (process.argv[2] === 'session' && PROMOTED_SESSION_VERBS.has(process.argv[3])) process.argv.splice(2, 1)
+else if (SESSION_SUBS.has(process.argv[2])) process.argv.splice(2, 0, 'session')
 const cmd = process.argv[2]
 
 // Registered before any await so a fatal top-level error lands here. Errors we OWN — BackendError, the
@@ -445,14 +456,7 @@ if (cmd === 'serve') {
   const DECLARED = ' — recorded; the human sees it in the dashboard. This state lives in your session\'s global record; your next tool call flips that record back to active (the mark-active hook, by design), so it is normal for this declaration not to persist.'
   // appended ONLY to a propose-close declaration: a worktree about to be discarded may still own ephemeral things the agent started to test this change; nudge (not gate) it to reclaim them before the worktree goes, keyed on whether the thing should outlive the task — never on who started it (a deliberately long-running service / a production build is started-by-you yet must be left alone). Project-agnostic on purpose.
   const CLOSE_CLEANUP = '\n\nBefore this worktree closes, check whether you left anything running that you started to test this change — a background process, a dev or preview server, a bound port, a scratch session. If nothing depends on it anymore, shut it down, or it keeps running as an orphan. Leave anything meant to keep running: a service you deliberately stood up, a production build, anything other work relies on. What matters is whether it still needs to exist after this task, not whether you started it. If unsure, leave it. This is a reminder to check, not a required step.'
-  if (sub === 'new') {
-    // route through the backend (auth env + concurrency cap); in-process only if no backend is reachable.
-    // prompt = --prompt OR the first positional (after `session new`), so `session new "<prompt>"` works the
-    // SAME as the `spex new "<prompt>"` shorthand — one prompt-resolution rule, not two.
-    const created = await s.createSession(flag('node') ?? null, flag('prompt') ?? positionals(4)[0] ?? '', flag('harness') ?? undefined, flag('launcher') ?? undefined)
-    console.log(JSON.stringify(created, null, 2))
-    await launchMonitorReminder(created.id)
-  } else if (sub === 'reopen') {
+  if (sub === 'reopen') {
     // bring the agent back up (relaunch ONLY if confirmed offline, the backend owns it); demotes a working
     // `active` to idle but leaves a standing declaration/proposal untouched (see sessions.ts reopen()). The
     // RESUME GUARD refuses a relaunch on a LIVE/unproven agent (that would kill a live worker) — `--force`
@@ -571,7 +575,7 @@ if (cmd === 'serve') {
     if (!r.ok) { console.error(`no prompt recorded for ${full}`); process.exit(1) }
     process.stdout.write(r.prompt.endsWith('\n') ? r.prompt : r.prompt + '\n')
   } else {
-    console.error('spex session: new|reopen|done|park|ask|idle|exit|close|send|capture|attach|rename|rawkey|prompt'); process.exit(2)
+    console.error('spex session: new|ls|watch|wait|review|merge|reopen|done|park|ask|exit|close|send|capture|attach|rename|rawkey|prompt  (spex help session)'); process.exit(2)
   }
 } else if (cmd === 'internal') {
   // @@@ internal - the machine-plumbing namespace: verbs only generated hooks and launch scripts call,

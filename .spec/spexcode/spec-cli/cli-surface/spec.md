@@ -32,6 +32,18 @@ still calls the old top-level token degrades to the hook's pure-git trunk fallba
 and is healed by `npm run hooks`; the deprecated `spex propose` alias is gone the same way — a stale
 post-merge hook prints one unknown-command line (advisory) until reinstalled.
 
+**One verb, either drawer — the session-verb mirror.** A user must never have to guess whether a
+session verb lives at the top level or under `spex session`: every promoted session verb
+(`new · ls · watch · wait · review · merge`) also answers in its namespace form (`spex session
+review` ≡ `spex review`), and every *typeable* `session` sub (`reopen · done · park · ask · exit ·
+close · send · capture · attach · rename · rawkey · prompt`) also answers bare (`spex send` ≡
+`spex session send`). The mirror is an **alias, never a second copy of the logic**: one argv rewrite
+before the single dispatch normalizes either spelling to the canonical one, so `--help` probes,
+flags, and positionals all flow through the same handler (a mirrored sub's probe answers with the
+`session` entry). Hook-driven subs (`state · fail · idle · commit-gate`) stay namespace-only —
+nobody types them. The map stays porcelain: mirrored spellings add no map lines; the `session`
+entry lists the whole drawer, promoted verbs included, and states the equivalence both ways.
+
 **The three-layer help journey** — each layer states what the next one is for, so the reader always
 has a move:
 

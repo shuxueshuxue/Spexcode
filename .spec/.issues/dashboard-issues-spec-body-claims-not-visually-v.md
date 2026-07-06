@@ -1,7 +1,7 @@
 ---
 concern: dashboard-issues spec body claims 'not visually verified — no browser/e2e harness yet', but the node now carries a frontend-e2e yatsu.md with readings — stale living-document
 by: 4b64d4ad-7844-4e32-a308-b4d33b25ccb8
-status: open
+status: landed
 nodes: dashboard-issues
 created: 2026-07-04T03:22:37.787Z
 ---

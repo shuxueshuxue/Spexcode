@@ -7,6 +7,7 @@ code:
   - spec-forge/src/resident.ts
 related:
   - spec-cli/src/board.ts
+  - spec-dashboard/src/IssueCard.jsx
   - spec-dashboard/src/SpecNode.jsx
 ---
 # dashboard-issues
@@ -52,9 +53,12 @@ watermark past it. Read-only throughout — the resident module never writes the
 **Frontend — one glance badge; the list lives in the focus panel.** When a node carries open issues, its
 first row gains one badge — the **count**, hue distinct from the status dot and drift-badge (the three
 signals never blur), absent at zero. The detail —
-each issue a card (store, kind, status, concern, forge permalink) — is read in the
+each issue a card (id, store, status, concern) — is read in the
 [[focus-panel]] for the focused node, **beside that node's scenarios** (the node-info Issues tab keeps the
-same list); no card pops on the node's own hover/focus. The badge renders in the node tile
+same list); no card pops on the node's own hover/focus. These cards are the shared dashboard issue card:
+local and forge use the same markup and truncation, and clicking either opens the internal Issues page with
+that issue selected (`#/issues/<issue-id>`). Forge permalinks are secondary metadata in the Issues detail,
+never the card's primary destination. The badge renders in the node tile
 ([[node-graph]]), its copy through the shared translator `t` ([[settings]]); each issue's
 number/state/title stay raw forge data.
 

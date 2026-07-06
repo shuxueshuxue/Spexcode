@@ -567,11 +567,11 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .focus-panel .issue-group-head { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 8px 2px 3px; }
 .focus-panel .issue-card { padding: 6px 6px; border-radius: 5px; }
 
-.issue-card { display: block; padding: 5px 6px; border-radius: 5px; text-decoration: none; }
+.issue-card { display: block; max-width: 100%; min-width: 0; box-sizing: border-box; overflow: hidden; padding: 5px 6px; border-radius: 5px; text-decoration: none; }
 .issue-card + .issue-card { margin-top: 2px; }
 .issue-card:hover { background: var(--panel2); }
-.issue-card-top { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
-.issue-num { font-size: 10px; font-weight: 700; color: var(--magenta); flex: none; font-family: var(--mono); }
+.issue-card-top { display: flex; align-items: center; gap: 6px; min-width: 0; margin-bottom: 2px; }
+.issue-num { font-size: 10px; font-weight: 700; color: var(--magenta); flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); }
 .issue-state { font-size: 8px; color: var(--muted); flex: none; text-transform: uppercase; letter-spacing: .04em; border: 1px solid var(--line); border-radius: 3px; padding: 0 3px; line-height: 1.5; }
 .issue-state.st-open { color: var(--green); border-color: color-mix(in srgb, var(--green) 45%, transparent); }
 .issue-state.st-closed { color: var(--magenta); border-color: color-mix(in srgb, var(--magenta) 45%, transparent); }
@@ -588,7 +588,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .pane-issues .issue-group-head.closed { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 14px; }
 .pane-issues .issue-card { padding: 7px 8px; }
 .pane-issues .issue-card + .issue-card { margin-top: 1px; }
-.pane-issues .issue-card-title { -webkit-line-clamp: unset; display: block; font-size: 12px; }
+.pane-issues .issue-card-title { font-size: 12px; }
 /* edit pane — the node's pending change, reusing the history tab's .ev-diff renderer */
 .pane-edit { flex: 1; min-width: 0; padding: 16px 20px; overflow: auto; }
 .pane-edit.empty { color: var(--muted); font-size: 13px; }

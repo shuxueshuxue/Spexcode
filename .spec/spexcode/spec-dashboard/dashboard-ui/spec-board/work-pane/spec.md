@@ -6,6 +6,8 @@ hue: 335
 desc: The node popup — a reference view of intent; the live work surface moved to the session interface.
 code:
   - spec-dashboard/src/NodeView.jsx
+related:
+  - spec-dashboard/src/IssueCard.jsx
 ---
 # work-pane
 
@@ -29,9 +31,11 @@ labelled parts — raw source / expanded spec — when authored that way, else t
 an agent-authored *current state* — what's-done is read from the derived status, never narrated, because
 agents hallucinate completion. The proof and
 evolution of that intent live in the **history** tab.
-An **issues** tab lists the forge work bound to this node — open and closed alike, with both counts on the
-tab face (the board's badge/card show only the open ones; see [[dashboard-issues]]); the data already rides
-the board fold (`node.issues`), so the tab is a no-fetch group, silent when empty. A **long pane earns a
+An **issues** tab lists the unified issue work bound to this node — local and forge, open and closed alike,
+with both counts on the tab face (the board's badge/card show only the open ones; see [[dashboard-issues]]);
+the data already rides the board fold (`node.issues`), so the tab is a no-fetch group, silent when empty.
+Each entry is the shared compact `IssueCard`, clamped inside the popup and routed to the internal Issues
+page selection (`#/issues/<issue-id>`), not directly to the forge. A **long pane earns a
 small sticky text filter** (substring, over id + concern) — short lists skip it, the affordance would be
 chrome; the eval timeline mounts the same control ([[yatsu-eval-tab]]). An **edit** tab makes a
 node's in-flight change reviewable from the board: it exists **only** while the node has a pending overlay,

@@ -25,7 +25,10 @@ dashboard-shell owns the cross-cutting dashboard files: `App.jsx` (the entry —
 layer, owns the fail-loud boot below, and picks the face by viewport width), `Dashboard.jsx` (the desktop
 root — it mounts the [[side-nav]] rail and swaps the routed page into the main area beside it, keeping the
 warm pages — the graph, the session board — mounted across switches), `data.js` (the shared polled board
-data every view reads), and `styles.css` (the global stylesheet). **Each face is its own lazy chunk**, and
+data every view reads), and `styles.css` (the global stylesheet). Route params that belong to a feature
+(`#/issues/<id>`, `#/evals/<node>/<scenario>`) pass through this shell unchanged; the destination feature
+owns their meaning. Likewise, feature-level shared widgets may add compact global style vocabulary here
+when the rule is genuinely reused across shell surfaces. **Each face is its own lazy chunk**, and
 the desktop root lazy-loads its heavy leaves (the session console with xterm, the evals/issues pages with
 the annotator) the same way — so the phone face ([[mobile-ui]]) never downloads the graph or terminal
 libraries, and the first graph paint doesn't wait on them either; the split moves bytes only, never

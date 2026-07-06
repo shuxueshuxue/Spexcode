@@ -600,7 +600,7 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
       {page === 'issues' && (
         <div className="page-pane page-issues">
           <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
-            <IssuesPage specs={specs} sessions={sessions} issuesData={issuesData} reloadIssues={reloadIssues} onOpenSession={openSession} onFocusNode={(id) => { setFocusId(id); navigate('graph') }} />
+            <IssuesPage specs={specs} sessions={sessions} issuesData={issuesData} reloadIssues={reloadIssues} issueId={param} onOpenSession={openSession} onFocusNode={(id) => { setFocusId(id); navigate('graph') }} />
           </Suspense>
         </div>
       )}

@@ -16,7 +16,7 @@ import { useEscLayer } from './escStack.js'
 // its replies, and the reply composer — BOTH stores ([[issues]]: the reply/close verbs route by store). j/k
 // walk the issue list even while folded, the detail follows; writes post as 'human'. The evals are their
 // OWN top-level page now ([[evals-view]]) — no in-page switcher here.
-export default function IssuesPage({ onFocusNode, onOpenSession, specs = [], sessions = [], issuesData = null, reloadIssues }) {
+export default function IssuesPage({ onFocusNode, onOpenSession, specs = [], sessions = [], issuesData = null, reloadIssues, issueId = null }) {
   const t = useT()
   const data = issuesData                          // RESIDENT app state — the page renders instantly, no per-mount fetch
   const [composing, setComposing] = useState(false)
@@ -39,6 +39,14 @@ export default function IssuesPage({ onFocusNode, onOpenSession, specs = [], ses
   // in the dropdown the day its driver lands. Default 'all' keeps the stores mixed in API order.
   const stores = [...new Set(all.map((i) => i.store).filter(Boolean))]
   const writeStores = Array.isArray(data?.stores) && data.stores.length ? data.stores : [{ id: 'local', label: 'local', kind: 'local' }]
+  useEffect(() => {
+    if (!issueId || !all.length) return
+    const hit = all.find((i) => i.id === issueId)
+    if (!hit) return
+    if (storeFilter !== 'all' && hit.store !== storeFilter) setStoreFilter('all')
+    if (concluded(hit)) setShowConcluded(true)
+    setSel(`issue:${hit.id}`)
+  }, [issueId, all, storeFilter])
   const stored = storeFilter === 'all' ? all : all.filter((i) => i.store === storeFilter)
   const issues = showConcluded ? stored : stored.filter((i) => !concluded(i))
   const openCount = stored.filter((i) => i.status === 'open').length

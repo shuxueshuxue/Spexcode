@@ -9,7 +9,6 @@ import { git } from './git.js'
 import { runtimeRoot, mainCheckout, readConfig } from './layout.js'
 import { resolveHarnessTargets, partitionHarnesses } from './harness-select.js'
 import { emitPlugin, cleanPlugin, pluginBundleDir, pluginVersion } from './plugin-harness.js'
-import { tsxBin } from './tsx-bin.js'
 
 // @@@ materialize - the "pay-per-change" node step (≈0.85s) the cheap shell gate invokes ONLY when the
 // .config content-hash moved. It renders the spec tree's surface nodes into the flat artifacts each
@@ -26,7 +25,10 @@ import { tsxBin } from './tsx-bin.js'
 
 const PKG = fileURLToPath(new URL('..', import.meta.url))                 // installed spec-cli root
 const DISPATCH = join(PKG, 'hooks', 'dispatch.sh')
-const SPEX = `${tsxBin(PKG)} ${join(PKG, 'src', 'cli.ts')}`
+// the ONE spex entry: the launcher (bin/spex.mjs), never a raw `tsx cli.ts` pair — the launcher owns tsx
+// resolution AND the mid-merge guard (a conflicted source tree degrades to one line + exit 75, not an
+// esbuild stacktrace), so every hook-baked callback inherits both.
+const SPEX = join(PKG, 'bin', 'spex.mjs')
 // the manifest + content-hash marker render into the GLOBAL per-project store (layout.runtimeRoot), NOT the
 // worktree — the worktree keeps zero SpexCode-rendered runtime; only the harness-discovered contract files +
 // shims (which the harness must find in-tree) are written under proj below.

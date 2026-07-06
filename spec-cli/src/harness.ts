@@ -8,7 +8,6 @@ import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import { claudeSlashCommands, codexSlashCommands, type SlashCommand } from './slash-commands.js'
 import { runtimeRoot, mainCheckout, readConfig } from './layout.js'
-import { tsxBin } from './tsx-bin.js'
 
 // @@@ harness-adapter - the ONE seam between SpexCode and the coding-agent harness (Claude Code, Codex, …).
 // Every harness-specific fact lives behind THIS interface with one implementation per harness; product code
@@ -226,11 +225,12 @@ function shQuote(s: string): string {
   return `'${s.replace(/'/g, `'\\''`)}'`
 }
 
-// the tsx + cli.ts invocation, baked into the codex launch script (mirrors materialize.ts's SPEX) so the
-// launch shell can call back into `spex codex-launch` to own the thread + fire the first turn before it
-// exec's the visible TUI.
+// the spex launcher (bin/spex.mjs), baked into the codex launch script (mirrors materialize.ts's SPEX) so
+// the launch shell can call back into `spex codex-launch` to own the thread + fire the first turn before it
+// exec's the visible TUI. The launcher, never a raw `tsx cli.ts` pair: it owns tsx resolution and the
+// mid-merge guard (conflicted source → one line + exit 75, not a stacktrace).
 const PKG = fileURLToPath(new URL('..', import.meta.url))
-const SPEX = `${tsxBin(PKG)} ${join(PKG, 'src', 'cli.ts')}`
+const SPEX = join(PKG, 'bin', 'spex.mjs')
 
 // @@@ replyViaSocket - OPTIMISTIC-after-liveness delivery: connect to the LIVE rendezvous socket and WRITE the
 // `{type:reply}\n` line; once that line FLUSHES to the socket with no immediate transport error, the reply is on

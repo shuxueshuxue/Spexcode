@@ -41,6 +41,23 @@ scenarios:
       commenter, at, body) — the read-back, never a local echo. An @new/@session in the reply text
       dispatches exactly as a local reply's would (the mention fires on the words, not the store). An
       unreachable forge fails loud with nothing queued; the local store is untouched throughout.
+  - name: cli-store-parity
+    tags: [cli]
+    code: spec-cli/src/issues.ts
+    related: [spec-cli/src/localIssues.ts, spec-forge/src/drivers/github.ts]
+    description: >-
+      The CLI drives the SAME store-routed verbs the dashboard clicks: `spex issues open "<concern>"
+      --store github --node <id>` against the REAL forge, then `spex issues close github#N`; also the
+      local legs (`open` default / `--store local`, `close <local-id>` twice) and the loud errors
+      (`--store bogus`, close an unknown id, bare close).
+    expected: >-
+      `open --store github` creates a REAL forge issue through the driver (visible via `gh issue view`),
+      its body carrying the `Spec: <nodes>` marker so the next merged read shows it linked to the same
+      nodes (re: <id>) with no promote round-trip; default/--store local commits to the trunk store
+      unchanged. `close` routes by id — a local id resolves the thread `landed` (idempotent on repeat),
+      `close github#N` REALLY closes the remote issue (gh reads state CLOSED) — one verb, the same
+      closeIssue/createIssue routing as POST /api/issues[/:id/close]. Unknown store/id fail loud with the
+      known-stores list / the store hint; bare close prints usage and exits 2.
   - name: degrade
     tags: [cli]
     code: spec-cli/src/issues.ts

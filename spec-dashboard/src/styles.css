@@ -1284,19 +1284,9 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .si-hint { font-size: 11px; color: var(--muted); }
 .si-hint code { color: var(--blue); background: var(--panel2); padding: 0 4px; border-radius: 3px; }
 
-/* agent picker under the New Session box — icon-only radios in the panel's pill idiom. */
-.si-agent-picker { display: flex; align-items: center; gap: 7px; }
-.si-agent-opt {
-  width: 32px; height: 28px; padding: 0; cursor: pointer;
-  display: inline-flex; align-items: center; justify-content: center; color: var(--ink);
-  background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
-  transition: border-color .12s ease, color .12s ease, background .12s ease, box-shadow .12s ease;
-}
-.si-agent-opt:hover:not(.on):not(:disabled) { border-color: var(--blue); color: var(--ink2); }
-.si-agent-opt.on { color: var(--paper); background: var(--blue); border-color: var(--blue); box-shadow: 0 2px 8px rgba(38, 139, 210, .22); }
-.si-agent-opt:disabled { opacity: .5; cursor: default; }
+/* vendor glyph shared by launcher-derived harness adornments. */
 .si-agent-glyph { width: 16px; height: 16px; display: block; fill: currentColor; }
-/* launcher picker — a name dropdown that stands in for the harness radios when launchers are configured. */
+/* launcher picker — the sole launch choice; harness is a derived glyph, not an input. */
 .si-launcher-picker { display: inline-flex; align-items: center; gap: 6px; }
 .si-launcher-label { font-size: 11px; color: var(--ink2); text-transform: lowercase; }
 /* the selected launcher's harness shown as an icon (the vendor mark the harness radios use) beside the

@@ -276,10 +276,12 @@ TLS (own cert via --tls-cert/--tls-key; --http drops TLS).`,
   },
   dashboard: {
     line: 'dashboard             serve the dashboard UI (default :5173), proxying /api to a running serve',
-    body: `Usage: spex dashboard [--port N=5173] [--api-port N=8787]
+    body: `Usage: spex dashboard [--port N=5173] [--api-port N=8787] [--host H=127.0.0.1]
 
 Serves the bundled dashboard on its own port and proxies /api + the terminal socket to a running
-\`spex serve\`. The installed replacement for the dev-only \`npm run web\`.`,
+\`spex serve\`. The installed replacement for the dev-only \`npm run web\`. Loopback-only by default;
+--host 0.0.0.0 (or a specific interface) opens it to a LAN/tailnet — still plain HTTP with no gate,
+so bind wide only on a network you trust (for the internet, use \`spex serve --public\`).`,
     see: 'spex serve (must be running first)',
   },
 

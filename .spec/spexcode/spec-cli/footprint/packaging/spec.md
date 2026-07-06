@@ -47,6 +47,9 @@ starting the backend never drags the UI along:
 - `spex dashboard` — the UI on its own port, serving the bundled dist and proxying `/api` + the terminal
   socket to a running `spex serve` (`--api-port N` names that backend). The post-install replacement for the
   dogfood-only `npm run web` (a vite dev server against a source tree an installed user has no copy of).
+  Loopback by default; `--host H` widens the bind for private-network viewing (a LAN or tailnet), still
+  plain HTTP with no gate — the trust call is the network's, and a non-loopback bind is announced at
+  startup, never silent. The internet face stays `spex serve --public`.
 
 Both ports are **explicit flags**, which is what lets several projects coexist on one host:
 `spex serve --port 8788` beside `spex dashboard --port 5174 --api-port 8788` runs a second instance next
@@ -54,7 +57,7 @@ to the dogfood's 8787/5173, with cwd choosing which project's `.spec` each serve
 silently collides two projects.
 
 `spex dashboard` shares the serve-the-built-dashboard engine with [[public-mode]] — local serve is that
-same gateway on loopback with no TLS and no password. The dogfood monorepo is unaffected: its root keeps
+same gateway with no TLS and no password, on loopback unless `--host` widens it. The dogfood monorepo is unaffected: its root keeps
 the `npm run api`/`npm run web` dev loop, and the dist resolver falls back to the sibling
 `spec-dashboard/dist` whenever no bundled copy is present. Those root scripts delegate into a sibling
 package with `cd spec-cli && npm run …`, never `npm --prefix spec-cli run …`: npm's `--prefix` is

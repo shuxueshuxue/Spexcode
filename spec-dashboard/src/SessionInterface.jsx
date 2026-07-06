@@ -140,6 +140,13 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // fold-to-strip): the eval tab is itself a master-detail whose scenario list needs the width, so the
   // console's session list folds out of the way while it's shown and unfolds on the way back to Terminal.
   const [listFolded, setListFolded] = useState(false)
+  // The fold is only ever visible on the Eval tab. `listFolded` is driven by a LAGGING effect (below) that
+  // fires one render AFTER `rightTab` flips, so gating the render on it alone would, on the way BACK to
+  // Terminal, paint the terminal for one frame at the wide (list-folded) width and then snap it narrow — two
+  // spurious resizes that reflow a NORMAL-screen (codex) pane into a scroll-through-history redraw (an
+  // alternate-screen pane hides it by redrawing in place). Gate the DISPLAY on the tab too, so returning to
+  // Terminal shows the list — and the terminal's real width — synchronously, with no transient reflow.
+  const showFolded = listFolded && rightTab === 'eval'
   const [uploading, setUploading] = useState(false)
   const [uploadErr, setUploadErr] = useState(false)
   const [dragTarget, setDragTarget] = useState(null)
@@ -720,10 +727,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         {/* folded (Eval tab): the whole strip is the unfold affordance, mirroring the Evals page's master-list
             fold ([[evals-view]]'s .fv-unfold). The list stays MOUNTED (display:none) behind it, so its zone
             grouping / nesting-fold / selection survive — the fold is pure geometry. */}
-        {listFolded && (
+        {showFolded && (
           <button type="button" className="si-list-unfold" title={t('masterList.unfold')} onClick={() => setListFolded(false)}>›</button>
         )}
-        <aside className="si-list" style={listFolded ? { display: 'none' } : { flex: `0 0 ${listW}px` }}>
+        <aside className="si-list" style={showFolded ? { display: 'none' } : { flex: `0 0 ${listW}px` }}>
           {/* while multi-selecting ([[session-multi-select]]) the New/Search pills give way to the select bar —
               a pick count + bulk delete + cancel; the rows below toggle picks instead of switching tabs. */}
           {selecting ? (
@@ -779,7 +786,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
 
         {/* the list's drag handle ([[resizable-panes]]) — straddles the list/content border. Hidden while the
             list is folded to a strip: there's no width to resize when the detail owns it all. */}
-        {!listFolded && <div className="pane-resizer si-resizer" onMouseDown={listDrag} role="separator" aria-orientation="vertical" />}
+        {!showFolded && <div className="pane-resizer si-resizer" onMouseDown={listDrag} role="separator" aria-orientation="vertical" />}
 
         <section className={active === 'new' ? 'si-content is-new' : 'si-content is-session'}>
           {active === 'new' && (

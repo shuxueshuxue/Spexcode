@@ -87,7 +87,9 @@ scenario list ([[review-proof]]) needs room, so leaving the console's full-width
 crowd two lists into the width one deserves. The collapse is **automatic on entering the tab and reverts on
 returning to Terminal**; the strip is the unfold affordance (click to bring the list back, which then stays
 until you leave the tab), and the list stays **mounted** behind it — the fold is pure geometry, so its zone
-grouping, nesting-fold, and selection survive untouched. The bar wears the app-chrome background with a bottom separator, so it reads
+grouping, nesting-fold, and selection survive untouched. The fold shows **only while Eval is the tab**, so the
+terminal's width is **stable across a Terminal↔Eval round-trip** — the warm pane is never reflowed on the way
+back (a reflow would scroll a normal-screen codex pane back through its history; see [[live-view]]). The bar wears the app-chrome background with a bottom separator, so it reads
 **visibly apart from the dark terminal** below it in both light and dark themes (the old flat strip blended
 into that dark edge — the complaint this replaces). Between the tabs and the actions it still carries the
 **shared session headline** (`si-th-name`, [[session-activity]]) — same source and content as the session

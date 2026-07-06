@@ -312,6 +312,29 @@ scenarios:
       Terminal tab restores the full session list automatically. On the MAIN baseline the session list keeps its
       full width on the Eval tab — there is no fold.
     related: spec-dashboard/src/SessionInterface.jsx
+  - name: eval-return-no-terminal-reflow
+    tags: [frontend-e2e, desktop]
+    description: >
+      Through the running dashboard in a real browser, open the session interface on a LIVE session whose pane
+      is a NORMAL-screen program — a shell or a codex-style inline TUI on the main screen (NOT an
+      alternate-screen full-screen TUI like Claude Code) — with real scrollback below the fold. Instrument the
+      terminal WebSocket to log every OUTGOING `{t:'resize'}` frame. On the Terminal tab, let the pane settle
+      and note its visible bottom content. Now do the round-trip the list-fold makes lossy: click Eval (which
+      folds the session list to a strip, [[eval-tab-folds-session-list]]) and then click straight back to
+      Terminal. Collect the resize frames emitted DURING that round-trip and the pane's visible content right
+      after returning and once settled. Screenshot the pane on the Terminal tab BEFORE the round-trip and just
+      after returning.
+    expected: |
+      A Terminal→Eval→Terminal round-trip sends ZERO resize frames to the pane — the terminal's column count is
+      identical before and after — so tmux never reflows the pane and a normal-screen (codex) program receives
+      no SIGWINCH. The pane comes back showing exactly its prior bottom content, in place, with no re-render: it
+      does NOT re-seed from high in its scrollback and animate downward to the live bottom. The bug path — the
+      list unfold restoring on a LAGGING effect one frame after the tab flips, so the pane paints one frame at
+      the wide (list-folded) width and then snaps to the narrow (list-shown) width, firing two resizes (wide
+      then narrow) that reflow a normal-screen pane into a scroll-through-history redraw (an alternate-screen
+      pane redraws in place and hides it) — must be absent: the list is never folded while the Terminal tab
+      shows, so the terminal width is stable across the round-trip and no resize is emitted.
+    related: spec-dashboard/src/SessionInterface.jsx
   - name: launcher-picker-opens-on-click
     tags: [frontend-e2e, desktop]
     description: >

@@ -14,10 +14,10 @@ related:
 
 ## raw source
 
-When overlays stack — a close-confirm over the open session panel, the proof report over the board —
-**Escape must peel exactly the one in front**, then the next press the one behind it. The frustrating
-failure is a single Esc skipping a layer: dismiss the confirm AND the panel it sat on in one keystroke, or
-the proof closing the whole board behind it. A human reaches for Esc to undo the last thing that appeared,
+When overlays stack — a close-confirm over the row context-menu's page, a rename modal over the session
+list — **Escape must peel exactly the one in front**, then the next press the one behind it. The
+frustrating failure is a single Esc skipping a layer: dismiss the confirm AND the surface it sat on in one
+keystroke. A human reaches for Esc to undo the last thing that appeared,
 nothing more. There should be **one** rule for this, not a different ad-hoc handler bolted onto each overlay.
 
 ## expanded spec
@@ -26,8 +26,10 @@ The contract is a **LIFO layer stack**. Any overlay that floats as its own compo
 surface registers itself as the top layer while open; a single Escape press **closes the topmost layer
 only** and is **swallowed there**, so the surface beneath it never also closes on the same press. Close that
 layer and the next press reaches the one below. This is the mechanism behind the layering other nodes
-already promise in z-order terms — [[session-rename]]'s confirm that "renders above the board," the
-[[review-proof]] overlay over the [[session-console]] panel.
+already promise in z-order terms — [[session-rename]]'s confirm that "renders above the board," the row
+context-menu, the issues page's floating overlays. (The [[review-proof]] overlay that once floated over the
+[[session-console]] panel is gone — proof is an always-available inline right-pane tab now, so it no longer
+holds a stack layer.)
 
 Why a stack and not each overlay minding its own Esc: the overlays that broke were **separate components**
 all listening on the window at once. With nothing arbitrating, the winner was decided by **registration
@@ -39,7 +41,7 @@ are **one source of truth that survives a hot-reload** — both live on a single
 module reuses the array the live listener reads; a module-scoped copy would let an open tab that hot-swapped
 across a deploy keep watching a dead stack, and Esc would close the surface behind the top overlay again.
 
-**Scope is deliberately the cross-component overlays** — the proof, a row's rename and close-confirm modals,
+**Scope is deliberately the cross-component overlays** — a row's rename and close-confirm modals,
 the row context-menu. The board's own keys are **out of scope and unchanged**: the help/settings/search
 modals and the locked-session release route through one already-coherent handler ([[keyboard-nav]]), and a
 panel's internal sub-states (its completion menu, nav-mode's raw-key forwarding, the graph legend) order

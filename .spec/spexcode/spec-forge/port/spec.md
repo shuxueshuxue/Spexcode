@@ -19,13 +19,13 @@ issue collapses to on every host (number, title, body, url, state, labels, autho
 where the `Spec: <id>` marker lives; author/createdAt are what lets a forge issue stand beside a local issue
 thread as the same object in the unified Issue port, spec-cli's [[issues]], with a `by` and a `created`).
 It also carries the issue's **comments** (`ForgeComment[]`: author, createdAt, body — exactly what becomes
-a unified Issue's `replies[]`), riding the same list reads rather than a second fetch path: the gh list
+a unified Issue's `replies[]`), riding the same list reads, not a second fetch path: the gh list
 asks for the `comments` JSON field (heavier per call, covered by [[freshness]]'s TTL), and the incremental
 window — whose REST rows carry only a comment *count* — fetches each **commented** updated issue's thread
 alongside (a since-window is a handful of issues, so that stays a handful of calls).
 `ForgePR` adds `headRefName` (the `node/<id>` branch = a free structural link)
 and `closesIssues` (the issue numbers it closes, for transitive linking). These vendor-neutral shapes are
-exactly what lets one port cover GitHub/GitLab/Bitbucket. A driver may also offer the **optional
+what let one port cover any host. A driver may also offer the **optional
 incremental window** `listIssuesSince(sinceISO)` — only issues updated since that moment — which lets
 [[freshness]]'s resident cache merge small deltas instead of full-listing every cycle; a driver without it
 is simply always full-listed. State casing is normalized to lowercase **at the driver** — platform
@@ -42,9 +42,9 @@ a `gh pr list` JSON field that older `gh` builds don't know. Only the **transiti
 core links (the `node/<id>` PR branch and the `Spec:` issue marker) read baseline fields. So a `gh` too old
 for that one field must degrade **only** transitive linking, never take the whole driver down — otherwise
 [[freshness]]'s resident cache swallows the throw and the dashboard goes blank ([[dashboard-issues]]). The
-driver asks for the field, and **only** on gh's specific "unknown JSON field" rejection retries without it
-(`closesIssues` empty) and warns once. Every other failure (no `gh`, no auth, no repo) is a different error
-and still throws loud — the degrade is the narrow field-version case alone, not a blanket swallow.
+driver asks for the field and, **only** on gh's specific "unknown JSON field" rejection, retries without it
+(`closesIssues` empty) and warns once; every other failure (no `gh`, no auth, no repo) still throws loud —
+the degrade is that narrow field-version case alone, never a blanket swallow.
 
 The port carries two **write verbs**, existing solely so the unified Issue port's cross-store actions
 (spec-cli's [[issues]]) go through this same seam — the driver stays the ONLY thing that touches the
@@ -56,5 +56,5 @@ forge issue from any SpexCode surface; gh wraps `gh issue comment`). Both fail l
 nothing here ever writes a node's version or status (which stays git-derived) — a created issue or
 comment is execution-plane work, never graph state.
 
-Out of scope here: the link resolution itself ([[links]]), the CLI surface ([[forge-cli]]), and any second
-driver (gitlab/bitbucket wrapping their own CLI later).
+Out of scope: link resolution ([[links]]), the CLI surface ([[forge-cli]]), and any second driver
+(gitlab/bitbucket wrapping their own CLI later).

@@ -15,15 +15,12 @@ already carries: [[ci-gate]] (the non-bypassable CI backstop running `spex lint`
 [[spec-forge]] (the read-only forge tracer that resolves an issue/PR to the node it serves). The gap
 between them is the whole node:
 
-**This gate is not a standalone feature — it is one direction of the [[deliver-port]] framework.** An
-external PR arrives as a [[session-origin]] `pr`-origin session whose default landing place is
-`destination: verdict`; delivering that verdict (a Check + a sticky comment) is exactly what this subtree
-builds. So this whole cluster is the **verdict driver** of the deliver port (plus the **forge driver**'s
-write verbs it stands on) — the *inward* half (external PR → reviewed → accepted or rejected), mirror of
-the *outward* half (our own session → a PR). The earlier reading of this node as a standalone "outward CI
-gate" is superseded: it is a subset of the symmetric deliver framework, and when a maintainer accepts a
-PR the same session simply retargets to `destination: trunk` and the trunk driver's gate takes over — no
-separate merge path.
+**Not a standalone feature — one direction of the [[deliver-port]] framework.** An external PR arrives
+as a [[session-origin]] `pr`-origin session defaulting to `destination: verdict`; delivering that verdict
+(a Check + a sticky comment) is what this subtree builds. The cluster is the deliver port's **verdict
+driver** (plus the **forge driver**'s write verbs it stands on) — the *inward* half (external PR →
+reviewed → accepted or rejected), mirror of the outward half (our own session → a PR). When a maintainer
+accepts, the same session simply retargets to `destination: trunk` — no separate merge path.
 
 > take the **[[review-proof]]** derived-evidence model — today fed only by an internal session's worktree —
 > generalize its root to **any PR branch**, add an **agentic conformance verdict** on top, and write that
@@ -36,16 +33,15 @@ commit path; whether the code still honors what the spec *says* is judged here, 
 
 A forge event (PR opened/synchronized) runs `spex forge gate <PR>` in CI. Four layers:
 
-- **Tier 0 — deterministic, blocking.** Reuse [[ci-gate]] / [[manager-cockpit]]'s gates: `spex lint`
-  errors + `tsc --noEmit` + `conflictsWithMain` (the `git merge-tree` dry-run). Red here fails before any
-  agent runs — cheap, no LLM.
+- **Tier 0 — deterministic, blocking.** Reuse [[ci-gate]]/[[manager-cockpit]]'s gates: `spex lint` errors
+  + `tsc --noEmit` + `conflictsWithMain`. Red here fails before any agent runs — cheap, no LLM.
 - **Tier 0.5 — deterministic, signal.** The **spec-touch matrix**: route each merge-base-diff file to its
-  node via the `code:` graph, then classify `(spec touched?, code touched?)` per node. The load-bearing
-  cell is *code changed / spec untouched* — the silent divergence the dogfood forbids.
-- **Tier 1 — agentic, the verdict.** One judge **per touched node**, structured output. Owned by
+  node via the `code:` graph, classify `(spec touched?, code touched?)` per node. The load-bearing cell is
+  *code changed / spec untouched* — the silent divergence the dogfood forbids.
+- **Tier 1 — agentic, the verdict.** One judge per touched node, structured output. Owned by
   [[conformance-judge]].
 - **Tier 2 — agentic, optional (default off).** On `diverges`/`spec-missing`, propose the spec edit or
-  missing yatsu scenario as a forge **suggestion** — never an auto-push, never an auto-merge.
+  missing yatsu scenario as a forge **suggestion** — never an auto-push or auto-merge.
 
 ## the load-bearing decision — writing back does NOT break the read-only contract
 
@@ -56,22 +52,19 @@ definition (the graph) and execution (the forge) stay un-crossed, exactly as the
 
 ## the decomposition — what each child owns
 
-- **[[forge-write-seam]]** — the [[deliver-port]] **forge driver**'s write verbs the read-only [[port]]
-  lacks (open/update a PR; post a Check; upsert a sticky comment), behind the same host-agnostic seam.
-  These are what BOTH the forge driver (outward: our session → PR) and the verdict driver (inward: Check +
-  comment) deliver through.
-- **[[conformance-judge]]** — the [[deliver-port]] **verdict driver**'s core: the per-node agentic intent
-  verdict (Tier 1) and its deterministic Tier-0.5 spec-touch input.
-- **[[forge-gate]]** — the verdict driver's orchestration: `spex forge gate <PR>` + the CI workflow that
-  runs it; also the one change to [[review-proof]]/[[manager-cockpit]] that generalizes the evidence root
-  from a session worktree to any PR ref (which is what a [[session-origin]] `pr` session already is).
-- **[[dashboard-prs]]** — the dashboard surface: a PR badge, a review lane, a PR proof overlay (the
-  open-PR sibling [[dashboard-issues]] deferred).
+- **[[forge-write-seam]]** — the forge driver's write verbs the read-only [[port]] lacks (open/update a
+  PR; post a Check; upsert a sticky comment), behind the same host-agnostic seam — what both the outward
+  (session → PR) and inward (Check + comment) deliveries go through.
+- **[[conformance-judge]]** — the verdict driver's core: the per-node agentic intent verdict (Tier 1) and
+  its deterministic Tier-0.5 spec-touch input.
+- **[[forge-gate]]** — the orchestration: `spex forge gate <PR>` + the CI workflow that runs it; also the
+  one change generalizing the [[review-proof]] evidence root from a session worktree to any PR ref.
+- **[[dashboard-prs]]** — the dashboard surface: PR badge, review lane, PR proof overlay (the open-PR
+  sibling [[dashboard-issues]] deferred).
 
 ## scope
 
 The whole subtree is **pending** — design only, no code. Out of scope until a build decision: any
-implementation, the second (GitLab) driver beyond the abstraction, and any auto-remediation past a Tier-2
-suggestion. This parent owns only the cross-cutting shape and the load-bearing decision; the children own
-the slices; [[ci-gate]] still owns the deterministic backstop, [[review-proof]] the evidence engine,
-[[spec-lint]] the graph rules.
+implementation, a second (GitLab) driver, auto-remediation past a Tier-2 suggestion. This parent owns only
+the cross-cutting shape and the load-bearing decision; [[ci-gate]] keeps the deterministic backstop,
+[[review-proof]] the evidence engine, [[spec-lint]] the graph rules.

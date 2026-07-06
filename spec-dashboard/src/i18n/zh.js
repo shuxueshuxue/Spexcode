@@ -50,6 +50,8 @@ export default {
   hud: {
     helpTitle: '帮助 — 按键与图例（?）',
     loading: '正在从 git 加载规格…',
+    loadError: '无法连接后端 —— 看板加载失败。',
+    retry: '重试',
   },
 
   evalsFeed: {
@@ -205,6 +207,10 @@ export default {
     paneIssues: 'issue',
     paneEval: '评测',
     paneEdit: '改动',
+    expandAll: ({ n }) => `全部展开（${n}）`,
+    filterIssues: '筛选 issue…',
+    filterScenarios: '筛选场景…',
+    filterNone: '没有匹配的条目。',
     noEdit: '暂无进行中的改动 —— 此节点没有正在编辑的会话。',
     editCommitted: '已提交',
     editDirty: '未提交',

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { postRemark, putFrameBlob, specUrl } from './data.js'
 import { evidenceList } from './EvalsFeed.jsx'
 import { EvidenceItem, FullscreenButton } from './Evidence.jsx'
@@ -56,9 +56,17 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite 
   const [flash, setFlash] = useState('')         // circle-capture feedback (capturing… / failed)
   const [busy, setBusy] = useState(false)       // capturing a circled frame
   const [draft, setDraft] = useState(null)       // { seq, body } — a circle / `a` prefills the review-track composer
-  // custom-player state: the playhead owns the review track now that native chrome is gone.
-  const [cur, setCur] = useState(0)              // current time, seconds
+  // custom-player state: the playhead owns the review track now that native chrome is gone. The playhead
+  // POSITION paints straight to the DOM (fill/knob/time via the refs below) — a state playhead re-rendered
+  // the whole workspace, remark markdown re-parsed included, at every ~4Hz timeupdate tick. React state
+  // keeps only the COARSE derivations (active step / active remark), set only when they actually flip.
+  const fillRef = useRef(null)                   // .an-seek-play — width tracks the playhead
+  const knobRef = useRef(null)                   // .an-knob — left tracks the playhead
+  const timeRef = useRef(null)                   // .an-time — "m:ss / m:ss" text
+  const curMsRef = useRef(0)                     // current time, ms — the one value the paints read/write
   const [dur, setDur] = useState(0)              // duration, seconds
+  const [activeStepIdx, setActiveStepIdx] = useState(-1) // index into events of the step the playhead is in
+  const [activeIdx, setActiveIdx] = useState(null)       // comments-index of the remark the playhead is inside
   const [playing, setPlaying] = useState(false)
   const [seeking, setSeeking] = useState(false)  // dragging the scrubber
   const [hoverPct, setHoverPct] = useState(null) // scrubber hover preview, 0..100 or null
@@ -104,7 +112,10 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite 
   // concern against a resident issues list. Computed here (not just in the comments section) so the scrubber
   // can render each anchored remark as a marker and the keyboard can jump between them.
   const thread = entry.thread ?? null
-  const comments = thread ? [{ by: thread.by, at: thread.created, body: thread.body }, ...(thread.replies || [])] : []
+  const comments = useMemo(
+    () => (thread ? [{ by: thread.by, at: thread.created, body: thread.body }, ...(thread.replies || [])] : []),
+    [thread],
+  )
   // the eval's ORIGINATOR ([[mentions]] loop-in) — the session that FILED this scenario's reading, which is
   // the courtesy target an un-@'d remark reaches. The chain's first link is the LATEST reading's filer, so
   // read it from the newest history row (history is newest-first), falling back to the viewed reading; a
@@ -115,15 +126,37 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite 
   // where the step actually is in the current clip, not at a frozen m:ss. A degraded anchor (its step gone
   // from the timeline) can't be reliably placed, so it drops off the scrubber — it still lists in the thread
   // as a readable-not-seekable chip.
-  const anchored = comments
+  const anchored = useMemo(() => comments
     .map((c, i) => { const ra = resolveAnchor(parseAnchor(c.body), events); return ra && ra.seekable ? { i, tMs: ra.tMs, step: ra.step, label: ra.label } : null })
     .filter(Boolean)
-    .sort((x, y) => x.tMs - y.tMs)
+    .sort((x, y) => x.tMs - y.tMs), [comments, events])
+  // the paint handler below is bound per-video, not per-render — it reads the live lists through refs.
+  const eventsRef = useRef(events); eventsRef.current = events
+  const anchoredRef = useRef(anchored); anchoredRef.current = anchored
+  // derive the coarse playhead state (active step / active remark) from the current moment; called from the
+  // media paints AND when the lists themselves change (a fresh remark while paused). Bail-outs keep a
+  // no-flip derivation render-free.
+  const deriveActive = useCallback(() => {
+    const ms = curMsRef.current
+    const evs = eventsRef.current
+    let sIdx = -1
+    for (let i = 0; i < evs.length; i++) { if (evs[i].tMs <= ms) sIdx = i; else break }
+    setActiveStepIdx((prev) => (prev === sIdx ? prev : sIdx))
+    let aIdx = null
+    for (const a of anchoredRef.current) { if (a.tMs <= ms) aIdx = a.i; else break }
+    setActiveIdx((prev) => (prev === aIdx ? prev : aIdx))
+  }, [])
+  useEffect(() => { deriveActive() }, [anchored, events, deriveActive])
 
   // a selection change is a new reading — reset the player-specific state (the shared working state + the
-  // A/B history cursor are reset by the history effect above).
+  // A/B history cursor are reset by the history effect above). The DOM-painted playhead zeroes by hand.
   useEffect(() => {
-    setCur(0); setDur(0); setPlaying(false); setSeeking(false); setHoverPct(null); setSelIdx(null)
+    curMsRef.current = 0
+    if (fillRef.current) fillRef.current.style.width = '0%'
+    if (knobRef.current) knobRef.current.style.left = '0%'
+    if (timeRef.current) timeRef.current.textContent = ''
+    setActiveStepIdx(-1); setActiveIdx(null)
+    setDur(0); setPlaying(false); setSeeking(false); setHoverPct(null); setSelIdx(null)
   }, [entry.blob, entry.scenario, entry.node])
 
   // the step map arrives lazily from the same blob cache the clip streams from; reset then (re)load on the
@@ -140,35 +173,41 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite 
   }, [viewing.timelineBlob, hasVideo])
 
   // the playhead follows the media element — timeupdate (~4Hz) + seeked keep the track live; play/pause keep
-  // the toggle honest. The fill/knob CSS transition smooths the coarse ticks. No rAF loop: the review track
-  // re-parses comment markdown on every render, so a 60Hz playhead would burn it for no reviewer-visible gain.
+  // the toggle honest. The fill/knob CSS transition smooths the coarse ticks. Position paints straight to
+  // the DOM (see the refs above); only the coarse active step/remark go through state. No rAF loop — the
+  // 4Hz media cadence plus the CSS smoothing is all the reviewer can see.
   useEffect(() => {
     const v = vid.current
     if (!v) return
-    const onTime = () => setCur(v.currentTime || 0)
-    const onMeta = () => setDur(v.duration || 0)
+    const paint = () => {
+      const ms = Math.round((v.currentTime || 0) * 1000)
+      const d = Math.round((v.duration || 0) * 1000)
+      curMsRef.current = ms
+      const p = d ? (ms / d) * 100 : 0
+      if (fillRef.current) fillRef.current.style.width = `${p}%`
+      if (knobRef.current) knobRef.current.style.left = `${p}%`
+      if (timeRef.current) timeRef.current.textContent = `${mmss(ms)} / ${mmss(d)}`
+      deriveActive()
+    }
+    const onMeta = () => { setDur(v.duration || 0); paint() }
     const onPlay = () => setPlaying(true)
     const onPause = () => setPlaying(false)
-    v.addEventListener('timeupdate', onTime)
-    v.addEventListener('seeked', onTime)
+    v.addEventListener('timeupdate', paint)
+    v.addEventListener('seeked', paint)
     v.addEventListener('loadedmetadata', onMeta)
     v.addEventListener('durationchange', onMeta)
     v.addEventListener('play', onPlay)
     v.addEventListener('pause', onPause)
+    paint()   // sync the bar to wherever the element already is (a remount, an A/B flip)
     return () => {
-      v.removeEventListener('timeupdate', onTime); v.removeEventListener('seeked', onTime)
+      v.removeEventListener('timeupdate', paint); v.removeEventListener('seeked', paint)
       v.removeEventListener('loadedmetadata', onMeta); v.removeEventListener('durationchange', onMeta)
       v.removeEventListener('play', onPlay); v.removeEventListener('pause', onPause)
     }
-  }, [videoEntry?.hash])
+  }, [videoEntry?.hash, deriveActive])
 
-  const curMs = Math.round(cur * 1000)
   const durMs = Math.round(dur * 1000)
-  const playPct = durMs ? (curMs / durMs) * 100 : 0
-  const activeStep = stepAt(events, curMs)
-  // the comment the playhead is currently inside = the last anchored comment at or before now.
-  let activeIdx = null
-  for (const a of anchored) { if (a.tMs <= curMs) activeIdx = a.i; else break }
+  const activeStep = events[activeStepIdx] || null
 
   const seekMs = useCallback((tMs) => { const v = vid.current; if (v) v.currentTime = tMs / 1000 }, [])
   const togglePlay = useCallback(() => { const v = vid.current; if (v) (v.paused ? v.play() : v.pause()) }, [])
@@ -379,17 +418,19 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite 
                 <div className="an-seek" ref={seekRef} onMouseDown={onSeekDown} onMouseMove={onSeekHover} onMouseLeave={() => setHoverPct(null)}>
                   <div className="an-seek-trk" />
                   {durMs > 0 && events.map((e, i) => <div key={`band-${i}`} className="an-band" style={{ left: `${(e.tMs / durMs) * 100}%` }} title={e.step} />)}
-                  <div className="an-seek-play" style={{ width: `${playPct}%` }} />
+                  {/* fill/knob carry NO React-managed position style — the media paint owns them via refs */}
+                  <div className="an-seek-play" ref={fillRef} />
                   {durMs > 0 && anchored.map((a) => (
                     <button key={`mk-${a.i}`} type="button"
                       className={`an-mk ${selIdx === a.i ? 'on' : ''} ${activeIdx === a.i ? 'active' : ''}`}
                       style={{ left: `${(a.tMs / durMs) * 100}%` }} title={a.label}
                       onMouseDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); selectComment(a.i, a.tMs) }} />
                   ))}
-                  <div className="an-knob" style={{ left: `${playPct}%` }} />
+                  <div className="an-knob" ref={knobRef} />
                   {hoverPct != null && durMs > 0 && <div className="an-seek-hov" style={{ left: `${hoverPct}%` }}>{mmss((hoverPct / 100) * durMs)}</div>}
                 </div>
-                <span className="an-time">{mmss(curMs)} / {mmss(durMs)}</span>
+                {/* text owned by the media paint (ref) — constant-empty children so React never overwrites it */}
+                <span className="an-time" ref={timeRef} />
                 {activeStep && <span className="an-curstep" title={activeStep.node ? `→ ${activeStep.node}` : undefined}>{activeStep.step}</span>}
                 <FullscreenButton target={playerRef} />
               </div>
@@ -398,7 +439,7 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite 
               {events.length > 0 && (
                 <div className="an-ruler">
                   {events.map((e, i) => (
-                    <button key={i} className={`an-step ${stepAt(events, curMs) === e ? 'on' : ''}`}
+                    <button key={i} className={`an-step ${activeStepIdx === i ? 'on' : ''}`}
                       onClick={() => seekMs(e.tMs)}
                       title={e.node ? `→ ${e.node}` : undefined}>
                       {mmss(e.tMs)} {e.step}

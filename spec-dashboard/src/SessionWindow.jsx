@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Avatar } from './avatar.jsx'
 import { labelColor } from './color.js'
-import { GLYPH } from './SpecNode.jsx'
+import { GLYPH } from './specMeta.js'
 import { sessionHandle, sessionHeadline, STATUS_COLOR, STATUS_GLYPH, sessionForest } from './session.js'
 import { useT } from './i18n/index.jsx'
 
@@ -88,7 +88,9 @@ export function SessionRow({ s, locked, showAvatar = true, compact = false, lead
 export default function SessionWindow({ sessions, activeId, onPick, onOpenSession }) {
   const t = useT()
   const { expanded, toggle } = useFold()
-  const isExpanded = (id) => expanded.has(id)
+  // memoized off the exposed fold Set (stable per state), matching the console list — the forest's
+  // nest+zone-sort otherwise re-runs on every board poll AND every unrelated re-render of the glance.
+  const forest = useMemo(() => sessionForest(sessions, (id) => expanded.has(id)), [sessions, expanded])
   return (
     <div className="sesswin">
       {sessions.length === 0 ? (
@@ -98,7 +100,7 @@ export default function SessionWindow({ sessions, activeId, onPick, onOpenSessio
         // the ONE difference is this map-side glance KEEPS the avatar (cross-references the node avatars). Nested
         // sessions fold under their spawner ([[session-nesting]]): the forest gives zone headers + rows, and a
         // parent's children appear only while expanded (collapsed by default).
-        sessionForest(sessions, isExpanded).map((it) => {
+        forest.map((it) => {
           if (it.type === 'zone') return <div className={`sesswin-zone sesswin-zone-${it.zone}`} key={`zone-${it.zone}`}>{t(`sessionZone.${it.zone}`)}</div>
           const s = it.s
           // activeId is the locked session's worktree path (board highlight matches overlays by source),

@@ -17,7 +17,8 @@ The desktop board is a zoomable canvas walked with vim keys, chords, and hover p
 instruments a phone has no pointer or keyboard for. So a narrow viewport gets a separate,
 touch-first face rather than a squeezed graph. The choice is viewport width alone (a media
 query, reactive so a rotate or resize flips it with no reload); both faces read the one polled
-board, so nothing about the data or the backend forks.
+board, so nothing about the data or the backend forks. The phone face is its **own lazy chunk**
+([[dashboard-shell]]): a phone downloads none of the desktop's graph/terminal/annotator libraries.
 
 The phone keeps the same two planes the desktop shows, made native to touch:
 

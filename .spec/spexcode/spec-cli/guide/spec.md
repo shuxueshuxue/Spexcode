@@ -15,11 +15,15 @@ related:
 the agent from one verb, picked by an optional topic:
 
 - **no topic → the human SETUP workflow.** The model it teaches is **install once, then let an agent
-  drive** — one SpexCode checkout serves *every* project (the global `spex` CLI acts on whatever repo is
-  cwd, the dashboard is a viewer pointed per project), so the human's only manual steps are the global
-  install and pointing at a backend; authoring spec nodes and the dogfood ritual are an agent's job. Each
-  step names the real seam, not internals: **cwd** is the "which repo" knob, **`API_URL`** is the
-  dashboard's endpoint seam, **`spexcode.json`** governs lint's layout.
+  drive** — one global install (`npm i -g spexcode`, the [[packaging]] contract) serves *every* project
+  (the `spex` CLI acts on whatever repo is cwd, `spex dashboard` is a viewer pointed per project), so the
+  human's only manual steps are the global install and pointing at a backend; authoring spec nodes and the
+  dogfood ritual are an agent's job. Each step names the real seam, not internals: **cwd** is the "which
+  repo" knob, **`--api-port`** is the dashboard's endpoint seam, **`spexcode.json`** governs lint's layout.
+  The source-checkout path (repo-root `npm link`, the dashboard dev server) stays a *dogfood footnote* with
+  its real footguns (shared `spex` bin — uninstall before switching; no prebuilt dist under a source link),
+  never the headline: teaching the maintainer's path as the install was exactly the drift the packaging
+  node's arrival made stale.
 - **`spec` / `yatsu` → the agent-facing FILE-FORMAT manual.** The whole detail of the two authored
   artifacts — spec.md (frontmatter, body, the rules lint enforces) and yatsu.md (the scenario schema, how
   loss is measured and filed) — so an agent looks the format up on demand instead of reverse-engineering

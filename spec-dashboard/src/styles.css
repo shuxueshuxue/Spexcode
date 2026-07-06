@@ -953,6 +953,23 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* @@@ top button row - New Session (＋, blue) + Search, compact buttons (not full-width rows) so they don't
    sit in the ↑/↓ path to a session. Selected gets a hue wash + ring, mirroring the session rows' wash. */
 .si-toprow { display: flex; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+/* multi-select bar ([[session-multi-select]]) — takes the top row's slot while selecting: a live pick count
+   pushes the destructive delete + cancel to the right. Delete reuses the orange `.sess-rename-btn.danger`. */
+.si-selbar { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.si-selcount { flex: 1; font-family: var(--mono); font-size: 11px; color: var(--ink2); }
+.si-selbar .sess-rename-btn { padding: 4px 10px; font-size: 11px; }
+/* row checkbox shown only while selecting — an empty square that fills blue-with-a-tick when picked. */
+.si-check {
+  flex: none; width: 13px; height: 13px; border: 1.5px solid var(--muted); border-radius: 3px; box-sizing: border-box;
+}
+.si-check.on { border-color: var(--blue); background: var(--blue); position: relative; }
+.si-check.on::after {
+  content: ''; position: absolute; left: 3.5px; top: 1px; width: 3px; height: 6px;
+  border: solid var(--paper); border-width: 0 1.5px 1.5px 0; transform: rotate(45deg);
+}
+/* a picked row wears the same soft blue wash as the selected tab, so the checklist reads at a glance. */
+.si-item.picked { background: color-mix(in srgb, var(--blue) 12%, var(--panel2)); }
+.si-item.picked:hover { background: color-mix(in srgb, var(--blue) 20%, var(--panel2)); }
 .si-pill {
   flex: 1; display: flex; align-items: center; justify-content: center;
   padding: 7px 0; background: none; border: 1px solid var(--line); border-radius: 5px;

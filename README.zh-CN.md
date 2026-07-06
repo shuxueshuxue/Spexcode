@@ -12,11 +12,11 @@ review 和 merge;工具负责让意图和实现不分家。
 
 一个 spec 节点就是 `.spec/` 下的一个目录,里面有一个 `spec.md`:frontmatter(title、status、
 声明管辖文件的 `code:` 清单)加一段正文,描述系统这一部分当前应该做什么。节点可以嵌套,所以这棵树
-对应你对项目的理解方式,而不是文件布局。正文本身有两个 owner:很短的人写 **raw source**(意图,
-改它需要人),和 agent 写的 **expanded spec**(对意图的详细展开,自由迭代,但必须始终和 raw
-source 一致)。
+对应你对项目的理解方式,而不是文件布局。正文分两个部分。很短的 **raw source** 写意图,改它需要
+人的明确认可,agent 起草、人拍板的也算;**expanded spec** 是 agent 对这个意图的详细展开,自由
+迭代,但必须始终和 raw source 一致。
 
-<img src="docs/readme-node.png" alt="看板上的一个 spec 节点:人写的 raw source、agent 写的 expanded spec、DRIFT 徽章,以及它管辖的文件">
+<img src="docs/readme-node.png" alt="看板上的一个 spec 节点:由人把关的 raw source、agent 维护的 expanded spec、DRIFT 徽章,以及它管辖的文件">
 
 三条规则让这套东西成立:
 
@@ -25,10 +25,20 @@ source 一致)。
    git 之上的一个读取时聚合器。
 2. **正文是活文档。** 永远描述当前意图,原地重写。spec 正文里禁止出现 changelog 标题(linter 强制),
    历史 git 已经记了。
-3. **spec 和代码一起落地。** 一次改动就是一个 commit,同时更新 `spec.md` 和它所解释的代码。代码悄悄
-   偏离 spec 是唯一被禁止的动作。
+3. **spec 和代码一起落地。** 一次改动就是一个 commit,同时更新 `spec.md` 和它所解释的代码。改代码、
+   改 spec 都随时可以,禁止的只有一种情况:代码变了,spec 还停在旧行为上,两边不声不响分了家。
 
-按优化过程来读:spec 定义目标,yatsu 的测量给出当前行为离目标多远,commit 推着代码逼近目标。
+## 优化循环
+
+上面这几件东西合起来是一个循环,用机器学习的话最好讲。spec 是损失函数:定义你要什么,这一半由人
+拍板。commit 是优化器:agent 推着代码逼近目标。**yatsu** 是 SpexCode 的测量子系统(下文有专门
+一节),负责评估:量出当前行为离 spec 还有多远,分数的历史照样存在 git 里。
+
+<img src="docs/readme-loop.zh.png" alt="循环:spec.md 是目标,agent 的 commit 是优化器,spex yatsu eval 报出量到的 loss">
+
+这个框架也决定了人平时站在哪。没有人逐行审神经网络的权重,大家看的是 loss 曲线。在两次 merge 之间,
+对 agent 写的代码就用同一种姿态:把目标定义好,下降交给机器,曲线保持可见。到了 merge 门口,diff
+还是要读的。
 
 ## 快速开始
 
@@ -70,7 +80,8 @@ spex new "让设置页记住上次打开的标签" --node settings
 
 会在 `node/settings` 分支的独立 worktree 里启动一个 worker 会话。worker 动代码之前先读管辖 spec,
 做出改动,把 spec 正文改写到和实现一致,把两者一起 commit(hook 自动盖 `Session:` 戳),然后提出
-merge 并停下。worker 从不自己 merge。
+merge 并停下。worker 从不自己 merge。同样的派工在看板网页上就是一个按钮(board 的 new-session
+输入框);命令行形态是 agent 之间互相委派时用的。
 
 你在外面督工,用看板,或者用 agent 也在用的这几条命令:
 
@@ -90,7 +101,8 @@ spex session close settings
 
 ## 测量行为:yatsu
 
-spec 说这部分应该做什么;旁边的 `yatsu.md` 说怎么验。每条 scenario 就是一段普通描述加一个期望结果。
+yatsu 就是上面循环里负责测量的那一半。spec 说这部分应该做什么;旁边的 `yatsu.md` 说怎么验。每条
+scenario 就是一段普通描述加一个期望结果。
 没有 DSL,yatsu 自己什么都不执行:agent 用诚实的任何方式跑这个场景(测试文件、真实浏览器、动手点),
 把实际结果和期望对比,连证据一起把读数记档:
 

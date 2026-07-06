@@ -14,11 +14,11 @@ English | [中文](./README.zh-CN.md) · Docs: [spexcode.net](https://spexcode.n
 A spec node is a directory under `.spec/` containing a `spec.md`: frontmatter (title, status, a
 `code:` list of the files it governs) plus a prose body stating what that part of the system is
 supposed to do, right now. Nodes nest, so the tree mirrors how you think about the project rather
-than the file layout. The body itself has two owners: a short human-written **raw source** (the
-intent; changing it needs a human), and an agent-written **expanded spec** (the detailed reading of
-that intent; iterates freely, must always match the raw source).
+than the file layout. The body has two parts. The short **raw source** states the intent; changing it takes explicit
+human approval (an agent can draft it, a human signs off). The **expanded spec** is the agent's
+detailed reading of that intent; it iterates freely but must always match the raw source.
 
-<img src="docs/readme-node.png" alt="A spec node on the dashboard: human-owned raw source, agent-owned expanded spec, a DRIFT badge, and the files it governs">
+<img src="docs/readme-node.png" alt="A spec node on the dashboard: the human-approved raw source, the agent-maintained expanded spec, a DRIFT badge, and the files it governs">
 
 Three rules make this workable:
 
@@ -30,10 +30,23 @@ Three rules make this workable:
    Changelog headings are banned from spec bodies (the linter enforces this); git already keeps the
    history.
 3. **Spec and code land together.** A change is one commit that updates both the `spec.md` and the
-   code it justifies. Code that silently diverges from its spec is the one forbidden move.
+   code it justifies. Changing either side is always allowed; the forbidden thing is the silent
+   split, code that moved while its spec still describes the old behavior.
 
-Read as an optimization loop: the spec states the target, yatsu measurements score how far live
-behavior sits from it, and commits move the code toward the target.
+## The optimization loop
+
+The parts above compose into one loop, easiest to state in machine-learning terms. The spec is the
+loss function: it defines what you want, and it is the half a human signs off on. Commits are the
+optimizer: agents push the code toward that target. **yatsu**, SpexCode's measurement subsystem
+(its own section below), is the evaluation: it scores how far live behavior currently sits from the
+spec, and the score's history lives in git like everything else.
+
+<img src="docs/readme-loop.png" alt="The loop: spec.md is the target, agents commit as the optimizer, spex yatsu eval reports the measured loss">
+
+This framing also settles where the human stands day to day. Nobody reviews neural-network weights
+line by line; you watch the loss curve. Between merge gates, treat agent-written code the same way:
+define the target well, let the machine descend, keep the curve visible. At the gate you still read
+the diff.
 
 ## Quick start
 
@@ -82,7 +95,8 @@ spex new "make the settings page remember the last tab" --node settings
 launches a worker session in its own worktree on branch `node/settings`. The worker reads the
 governing spec before touching code, makes the change, rewrites the spec body to match, commits
 both (a hook stamps the `Session:` trailer), then proposes a merge and stops. Workers never merge
-themselves.
+themselves. The same dispatch is a button on the dashboard (the new-session box on the board); the
+command form is what agents themselves use when they delegate.
 
 You supervise from outside — on the board, or with the same commands your agent uses:
 
@@ -104,7 +118,8 @@ docs site covers this way of driving SpexCode in full.
 
 ## Measuring behavior: yatsu
 
-A spec says what a part should do; a `yatsu.md` beside it says how to check. Each scenario is a
+yatsu is the measuring half of the optimization loop above. A spec says what a part should do; a
+`yatsu.md` beside it says how to check. Each scenario is a
 plain description plus an expected result. There is no DSL and yatsu executes nothing: an agent
 runs the scenario however is honest (a test file, a real browser, by hand), compares actual to
 expected, and files the reading with evidence:

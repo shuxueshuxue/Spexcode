@@ -43,7 +43,11 @@ straight to the trunk.
   wide sidebar) — and a **fold toggle** collapses it to a thin strip so the detail owns the width while one
   issue is being worked; the strip is the unfold affordance, and the folded list keeps its state (filters,
   selection, j/k) — the fold is pure geometry. The [[side-nav]] rail names the page, so the
-  column carries no title of its own. The **right pane** is the full-height DETAIL of the one selection —
+  column carries no title of its own. The list CHROME is not this page's own dialect — it is the SAME
+  grammar the [[evals-view]] picker wears: one filter-control language (a segmented pill set with the
+  accent filling the active filter, New and the store control sharing that height and radius, the
+  open/total meta at the bar's end), uniform single-line rows that truncate rather than wrap, and the same
+  unhurried spacing over a hairline-soft divider — so the two top-level pages read as ONE surface. The **right pane** is the full-height DETAIL of the one selection —
   **selection IS detail** (email-style, no Enter, no in-place expansion): an issue renders its markdown
   body. **j/k walk the issue list** (folded or not) and the detail follows; a key typed into an input is
   never captured.

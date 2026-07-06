@@ -1,7 +1,7 @@
 ---
 concern: done/ask --note board truncation is opaque to the author
 by: f45d649c-0ef4-4a52-a3fc-223fc0da6e43
-status: open
+status: landed
 nodes: state
 created: 2026-07-02T16:27:30.648Z
 ---

@@ -678,11 +678,80 @@ export async function sessionGraph(): Promise<{ nodes: Session[]; edges: Edge[] 
   return { nodes, edges }
 }
 
+// @@@ apiBase resolution - WHICH backend a client verb talks to, resolved ONCE per process with the
+// source kept as a discriminant ([[remote-client]]). The core thesis: a FLAG is the only signal that is
+// provably deliberate — an env var cannot tell "I exported this on the command" from "I inherited this
+// from the backend that launched my shell", and that ambiguity is exactly the misroute bug (a shell
+// carrying project A's SPEXCODE_API_URL silently drives every bare `spex` in project B at A's backend).
+// The ladder:
+//   1. explicit `--api <url>` (`--port <n>` = localhost sugar)      — always wins, any verb
+//   2a. WORKER (SPEXCODE_SESSION_ID present): env SPEXCODE_API_URL  — the backend-injected lifeline; a
+//       worker's state writes must NEVER gamble on cwd discovery, so the env is not demotable by (2b)
+//   2b. HUMAN (no session id): the cwd project's RECORDED live backend (`spex serve` writes it, we
+//       /health-probe before trusting — a dead record is ignored, never followed)
+//   3. the other side as fallback (human with no live record → env; worker with no env → record)
+//   4. default http://127.0.0.1:$PORT||8787
+export type ApiBaseSource = 'flag' | 'worker-env' | 'record' | 'env-fallback' | 'default'
+export type ApiBaseInfo = { url: string; source: ApiBaseSource }
+const usageError = (msg: string): Error => { const e = new Error(msg); e.name = 'UsageError'; return e }
+// the explicit routing flag, read from THIS process's argv (never the environment — that's the point).
+// `--port` doubles as a BIND port for serve/dashboard, so the sugar is skipped for those verbs.
+function explicitApiFlag(): string | null {
+  const argv = process.argv
+  const ai = argv.indexOf('--api')
+  if (ai >= 0) {
+    const v = argv[ai + 1]
+    if (!v || v.startsWith('--')) throw usageError('--api expects a URL (e.g. --api http://127.0.0.1:8901)')
+    const withScheme = v.includes('://') ? v : `http://${v}`
+    try { new URL(withScheme) } catch { throw usageError(`--api: not a URL: ${v}`) }
+    return withScheme.replace(/\/+$/, '')
+  }
+  if (argv[2] === 'serve' || argv[2] === 'dashboard') return null   // their --port is a bind port, not routing
+  const pi = argv.indexOf('--port')
+  if (pi >= 0) {
+    const v = argv[pi + 1]
+    if (!v || !Number.isInteger(Number(v))) throw usageError('--port expects an integer (localhost sugar for --api http://127.0.0.1:<n>)')
+    return `http://127.0.0.1:${v}`
+  }
+  return null
+}
+// the cwd project's recorded backend ({url,pid}, written by `spex serve` at bind time into the per-project
+// runtime tier), trusted only after a live /health probe — a stale record must never swallow a command.
+async function liveRecordUrl(): Promise<string | null> {
+  let file: string
+  try { file = join(runtimeRoot(), 'backend.json') } catch { return null }   // cwd not in a git repo → nothing to discover
+  let url = ''
+  try { const rec = JSON.parse(readFileSync(file, 'utf8')); if (typeof rec?.url === 'string') url = rec.url.trim() } catch { return null }
+  if (!url) return null
+  const ctrl = new AbortController()
+  const t = setTimeout(() => ctrl.abort(), 600)
+  try { return (await fetch(`${url}/health`, { signal: ctrl.signal })).ok ? url : null }
+  catch { return null }
+  finally { clearTimeout(t) }
+}
+async function resolveApiBase(): Promise<ApiBaseInfo> {
+  const flag = explicitApiFlag()
+  if (flag) return { url: flag, source: 'flag' }
+  const env = process.env.SPEXCODE_API_URL?.trim() || null
+  if (process.env.SPEXCODE_SESSION_ID?.trim()) {
+    if (env) return { url: env, source: 'worker-env' }
+    const rec = await liveRecordUrl()
+    if (rec) return { url: rec, source: 'record' }
+  } else {
+    const rec = await liveRecordUrl()
+    if (rec) return { url: rec, source: 'record' }
+    if (env) return { url: env, source: 'env-fallback' }
+  }
+  return { url: `http://127.0.0.1:${process.env.PORT || 8787}`, source: 'default' }
+}
+let apiBaseMemo: Promise<ApiBaseInfo> | null = null
+export const apiBaseInfo = (): Promise<ApiBaseInfo> => (apiBaseMemo ??= resolveApiBase())
+export const apiBase = async (): Promise<string> => (await apiBaseInfo()).url
+
 // @@@ watch registration (CLIENT side) - a `spex watch` process is separate from the server, so it
 // REPORTS itself to the backend's registration store over HTTP: register+heartbeat while it runs,
 // deregister on exit (see cli.ts `watch`). All best-effort — if the backend is down the watch still
 // streams its events; the graph edge just won't appear until a heartbeat lands. Never throws.
-export const apiBase = () => process.env.SPEXCODE_API_URL || `http://127.0.0.1:${process.env.PORT || 8787}`
 // the agent's OWN session id from the HARNESS env var — the public name used across cli.ts/sessions.ts.
 // Single adapter-routed impl lives in layout.ts (`envSessionId`, iterating each adapter's sessionEnvVar);
 // re-exported here so callers keep one name. Used by `spex watch` + the agent-typed `spex session …`
@@ -708,7 +777,7 @@ export function withSenderHint(text: string, sender: MsgSender | null): string {
 }
 async function postJSON(path: string, body: unknown): Promise<void> {
   try {
-    await fetch(`${apiBase()}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+    await fetch(`${await apiBase()}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
   } catch { /* best-effort: backend may be down; the next heartbeat / TTL reconciles */ }
 }
 export const reportWatch = (token: string, watcher: string, selectors: string[], ttlMs: number): Promise<void> =>
@@ -897,30 +966,38 @@ export function superviseQueue(intervalMs = 3000): void {
   void tick()
 }
 
-// @@@ assertProjectMatch - the launch is PROJECT-BOUND, but routing is by URL. `spex new`'s intent is "create a
-// session for the project my cwd is in", yet `apiBase()` is SPEXCODE_API_URL||PORT||8787 — a pure URL carrying
-// no project identity. The backend it answers builds the worktree under ITS OWN mainRoot, so a stale inherited
-// SPEXCODE_API_URL (e.g. pointing at another repo's backend) silently lands the session in the WRONG repo. Read/
-// control verbs deliberately point anywhere (viewer-points-anywhere, see remote-client); only the mutating
-// launch is bound to the caller's project. So before launching, compare the caller's repo root to the backend's
-// served root and FAIL LOUD on a provable, same-host mismatch — never a silent misroute. The guard fires only on
-// a positive mismatch: no local repo, an unreachable backend, or a backend root that isn't a resolvable local
-// path (a genuinely remote backend) all fall through to allow, so legit remote dispatch is untouched.
-async function assertProjectMatch(): Promise<void> {
+// @@@ assertProjectMatch - a WRITE is PROJECT-BOUND, but routing is by URL. A mutating verb's intent is
+// "act on the project my cwd is in", yet the resolved base is a pure URL carrying no project identity —
+// the backend it answers acts on ITS OWN mainRoot, so a stale inherited SPEXCODE_API_URL (pointing at
+// another repo's backend) silently lands the write in the WRONG repo. Read/control-READS deliberately
+// point anywhere (viewer-points-anywhere, see remote-client); every MUTATING verb (new/merge/send/close/
+// rename/rawkey/reopen/exit) is bound to the caller's project. So before writing, compare the caller's
+// repo root to the backend's served root and FAIL LOUD on a provable, same-host mismatch — never a silent
+// misroute. An explicit `--api`/`--port` flag SKIPS the guard: the flag is the one provably-deliberate
+// cross-project signal (that's the whole flag-beats-env thesis). The guard fires only on a positive
+// mismatch: no local repo, an unreachable backend, or a backend root that isn't a resolvable local path
+// (a genuinely remote backend) all fall through to allow, so legit remote drive stays untouched.
+export async function assertProjectMatch(verb: string): Promise<void> {
+  const { url, source } = await apiBaseInfo()
+  if (source === 'flag') return                                   // explicitly routed — the caller named the target
   let localMain: string
   try { localMain = realpathSync(mainRoot()) } catch { return }   // caller not in a repo → can't prove a mismatch
   let served: string | null = null
   try {
-    const r = await fetch(`${apiBase()}/api/layout`)
+    const r = await fetch(`${url}/api/layout`)
     if (r.ok) served = (await r.json() as { main?: string }).main ?? null
-  } catch { return }                                              // backend unreachable → the POST surfaces it (fail-loud there)
+  } catch { return }                                              // backend unreachable → the write itself surfaces it (fail-loud there)
   if (!served || !isAbsolute(served)) return                      // unknown / config-aliased root → don't risk a false refusal
   let backendMain: string
   try { backendMain = realpathSync(served) } catch { return }     // backend root not a local path → a remote backend, allow
-  if (backendMain !== localMain)
-    throw new Error(
-      `spex new: refusing — cwd is in ${localMain} but the backend at ${apiBase()} serves ${backendMain}.\n` +
-      `Start this project's backend:  cd ${localMain} && spex serve   (or point SPEXCODE_API_URL at it)`)
+  if (backendMain !== localMain) {
+    const e = new Error(
+      `${verb}: refusing WRITE — cwd is in ${localMain} but the backend at ${url} serves ${backendMain}.\n` +
+      `Name the target explicitly (--api <url> / --port <n>) to write cross-project on purpose,\n` +
+      `or run this project's own backend:  cd ${localMain} && spex serve.  (Reads stay unguarded.)`)
+    e.name = 'GuardError'
+    throw e
+  }
 }
 
 // @@@ createSession (dispatch via backend) - `spex new` / `spex session new` must launch the worker in the
@@ -931,7 +1008,7 @@ async function assertProjectMatch(): Promise<void> {
 // launching. Only when NO backend is reachable do we fall back to launching in this process (with a stderr
 // warning) — the backend's own POST handler calls newSession directly, so it never re-enters this path.
 export async function createSession(node: string | null, prompt: string, harness: string = defaultHarness.id, launcher?: string): Promise<Session> {
-  await assertProjectMatch()
+  await assertProjectMatch('spex new')
   // @@@ parent = the CALLER's own session ([[session-nesting]]). Resolve it HERE, in the caller's process,
   // via the SAME ownSessionId env read [[agent-reply-channel]] uses for its sender hint — NOT inside the
   // backend, whose process env carries no acting session id. An agent that runs `spex new` stamps its own id;
@@ -939,7 +1016,7 @@ export async function createSession(node: string | null, prompt: string, harness
   const parent = ownSessionId()
   let res: Response
   try {
-    res = await fetch(`${apiBase()}/api/sessions`, {
+    res = await fetch(`${await apiBase()}/api/sessions`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ node, prompt, harness, parent, launcher }),

@@ -234,6 +234,23 @@ in the committed spexcode.json — the merge keeps both:
                          spexcode.local.json.
 The gateway password is NEVER read from these files (flag/env only), so serve.public stays committable.
 
+── BACKEND ROUTING (not a config field — how a \`spex\` command picks its backend) ──
+One host runs many projects' backends, and a shell inherits the launching backend's SPEXCODE_API_URL —
+an env var cannot prove intent (exported-on-this-command vs inherited look identical), so the client
+resolves its backend per this ladder, flag first:
+  1.  --api <url>            explicit flag on any session verb — ALWAYS wins (--port <n> is localhost
+                             sugar for --api http://127.0.0.1:<n>).
+  2a. worker (SPEXCODE_SESSION_ID set): env SPEXCODE_API_URL — the backend-injected lifeline; cwd
+                             discovery never steals it.
+  2b. human (no session id): the cwd project's RECORDED live backend — \`spex serve\` records {url,pid}
+                             in ~/.spexcode/projects/<enc>/backend.json at bind time; the reader
+                             health-probes before trusting (a dead record is ignored).
+  3.  the other side as fallback (human with no live record → env; worker with no env → record).
+  4.  default http://127.0.0.1:$PORT||8787.
+WRITES are project-bound: every mutating verb (new/merge/send/close/rename/rawkey/reopen/exit) refuses
+loudly when the resolved backend serves a DIFFERENT same-host project — an explicit --api/--port skips
+the guard (the flag is the proof of intent). Reads point anywhere.
+
 ── ISSUES (spexcode.json — portable policy) ──
   issues.enabled      the issues-workflow on/off switch (default ON). OFF silences the post-merge nudge and
                       hides the dashboard view; the CLI toggle is \`spex issues on|off\`.

@@ -41,16 +41,17 @@ scenarios:
     description: >-
       Through the real `spex yatsu` CLI in a scratch repo: leave an UNCOMMITTED edit in a
       scenario's governed code file, run `spex yatsu eval <node> --pass`, then commit that edit
-      and re-run `spex yatsu scan`. Also file once against a clean tree, and once following the
-      commit-first order (commit the governed code first, measure and file after).
+      and re-run `spex yatsu scan`. Also file once following the honest measure→commit→file
+      flow: measure on the working tree until green, commit that just-tested tree as-is, THEN
+      file the reading against the clean HEAD.
     expected: >-
       eval warns LOUD at filing time — a ⚠ line naming each governed file with uncommitted
-      changes and saying the reading is MIS-ANCHORED from birth: codeSha can only name HEAD,
-      and HEAD does not contain the edits just measured, so the reading claims a pass for code
-      that was never run (commit first, then measure) — while still filing it (a warning,
-      never a block). A filing against a clean tree prints no warning, and a commit-first
-      reading stays fresh on the next scan; the later stale flag on a dirty-tree reading is
-      freshness correctly exposing the mis-anchor, not an engine bug.
+      changes and saying the reading is MIS-ANCHORED from birth: codeSha can only name a
+      commit, never a working tree, and HEAD does not contain the edits just measured, so the
+      reading claims a pass for code that never ran — while still filing it (a warning, never
+      a block; retract is the repair). A measure→commit→file reading prints no warning and
+      stays fresh on the next scan; the later stale flag on a dirty-tree reading is freshness
+      correctly exposing the mis-anchor, not an engine bug.
   - name: retract-undoes-a-botched-filing
     tags: [cli]
     description: >-

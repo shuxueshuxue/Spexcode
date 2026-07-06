@@ -278,12 +278,12 @@ async function evalCmd(args: string[]): Promise<number> {
   // @@@mis-anchor guard - a codeSha names a COMMIT, never a working tree: filed over uncommitted governed
   // edits, this reading claims a verdict at HEAD while HEAD lacks the code actually measured — wrong from
   // birth, and the stale flag after the next commit is freshness exposing it, not an engine bug. Warn,
-  // never block: the honest order is commit code+spec first, then measure and file.
+  // never block: the honest flow is measure on the tree until green → commit that tested tree → file.
   const dirty = dirtyGoverned(root, [...(scenario.code?.length ? scenario.code : node.codeFiles), node.yatsuPath])
   if (dirty.length) {
     console.error(`  ⚠ mis-anchored reading: uncommitted changes in governed ${dirty.join(', ')}`)
     console.error(`    this reading anchors to HEAD ${reading.codeSha.slice(0, 7)}, which does NOT contain those edits — it claims a ${verdict.status} for code that never ran, and the commit that lands them will (correctly) read it stale.`)
-    console.error(`    the honest order: commit code+spec first, then measure and file (retract this reading if it measured the dirty tree).`)
+    console.error(`    the honest flow: measure on the tree until green → commit that just-tested tree (code+spec) → THEN file the reading against the clean HEAD (retract this one if it recorded the dirty run).`)
   }
   return 0
 }

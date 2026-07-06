@@ -130,8 +130,13 @@ The surface mirrors the code-drift report:
   freshness correctly exposing that lie, not an engine bug. eval therefore probes the scenario's governed
   files (its `code` subset, else the node's list, plus its own yatsu.md) for uncommitted changes and warns
   LOUD when it finds any — a warning, never a block (the filing proceeds; retract is the repair). The
-  contract it teaches is **commit-then-measure**: land code+spec first, then measure and file — the eval
-  sidecar appends as the last layer of evidence, never as a claim about code still sitting uncommitted. The seam has a **write half over data** too (filing.ts): a caller with a
+  discipline it teaches is NOT "commit before you test" — gaining confidence and archiving sha-anchored
+  evidence are two different acts. ① **Measure on the working tree** (dirty, with the fix), re-measure until
+  green: the informal confidence gate, before any commit. ② **Commit that just-tested tree as-is** — what
+  lands is code already verified, so no blind commit and no revert-as-routine — and now the tree is clean:
+  HEAD *is* the code measured. ③ **Only then file the reading**: codeSha=HEAD names committed, verified
+  code, the guard stays silent, and the eval sidecar appends as the last layer of evidence. The sha anchor
+  can only land after the commit; the confidence must land before it. The seam has a **write half over data** too (filing.ts): a caller with a
   verdict but no argv — the HTTP eval route, a programmatic filer — appends through the SAME seam
   (evaluator `manual@1` for a human hand). Filing is the CLI/agent surface: [[event-detail]] reads
   readings and hosts remarks, it files nothing.

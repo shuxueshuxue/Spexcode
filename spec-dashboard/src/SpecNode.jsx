@@ -19,6 +19,13 @@ function timeAgo(iso, t) {
 }
 
 const MAX_AVATARS = 4   // beyond this the row shows "+N" rather than overflow the node width
+const EDGE_ANCHOR_PROPS = {
+  isConnectable: false,
+  isConnectableStart: false,
+  isConnectableEnd: false,
+  style: { pointerEvents: 'none' },
+  'aria-hidden': true,
+}
 
 // STATUS/GLYPH live in specMeta.js (dependency-free) so light chunks — the mobile face, the session
 // window rows — read them without pulling this tile (and thus xyflow) into their bundle; re-exported
@@ -68,7 +75,7 @@ export default function SpecNode({ data, selected }) {
   ].filter(Boolean).join(' ')
   return (
     <div className={cls} style={lead ? { '--ov': labelColor(lead.seed) } : undefined}>
-      <Handle type="target" position={Position.Left} />
+      <Handle type="target" position={Position.Left} {...EDGE_ANCHOR_PROPS} />
       <div className="node-row1">
         <span className="node-dot" style={{ background: s.color }}>
           {data.status === 'active' && <span className="pulse" style={{ background: s.color }} />}
@@ -96,7 +103,7 @@ export default function SpecNode({ data, selected }) {
       {data.collapsed && (
         <span className="node-expand" data-tip={t('specNode.expandable', { n: data.childCount })}>▸{data.childCount}</span>
       )}
-      <Handle type="source" position={Position.Right} />
+      <Handle type="source" position={Position.Right} {...EDGE_ANCHOR_PROPS} />
     </div>
   )
 }

@@ -112,12 +112,17 @@ undo for a botched filing: it APPENDS a retraction event (traceable, never delet
     see: 'spex guide yatsu (yatsu.md format + evidence rules) · spex blob (stash evidence bytes)',
   },
   blob: {
-    line: 'blob put <file|->     stash evidence bytes in the content-addressed cache, print the hash',
+    line: 'blob put|get          evidence bytes ⇄ content hash: put stashes & prints the hash, get reads back',
     body: `Usage: spex blob put <file|->
+       spex blob get <hash> [-o <file>]
 
-Writes bytes into the shared content-addressed evidence cache and prints the hash — transport only,
-no reading filed. Use the hash with --evidence on issues/remarks; re-putting the same content
-restores a pruned or cloned-away blob.`,
+put writes bytes into the shared content-addressed evidence cache and prints the hash — transport
+only, no reading filed. Use the hash with --evidence on issues/remarks; re-putting the same content
+restores a pruned or cloned-away blob.
+
+get is the symmetric read: hash in, bytes out. Local cache first (no backend needed — the evidence
+is usually on this disk), then the backend's /api/yatsu/blob/:hash on a local miss; both missing
+fails loud naming each path. Bytes go to stdout by default (pipe-friendly); -o writes a file.`,
     see: 'spex yatsu eval (file a reading with evidence) · spex issues open --evidence <hash>',
   },
   issues: {

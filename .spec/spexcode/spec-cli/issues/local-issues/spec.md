@@ -2,7 +2,7 @@
 title: local-issues
 status: active
 hue: 200
-desc: The LOCAL store of the one Issue object ([[issues]]): git-native threads as plain documents under .spec/.issues (NOT spec nodes); others sign/reply; a supervisor drains it. Opening one is nudged post-merge, once the agent's own work has safely landed; closing yours is nudged at propose-close.
+desc: The LOCAL store of the one Issue object ([[issues]]): git-native threads as plain documents under .spec/.issues (NOT spec nodes); others reply; a supervisor drains it. Opening one is nudged post-merge, once the agent's own work has safely landed; closing yours is nudged at propose-close.
 code:
   - spec-cli/src/localIssues.ts
   - spec-cli/templates/hooks/post-merge
@@ -14,7 +14,7 @@ code:
 
 An agent finishing a task notices things that feel off — a smell, an awkward boundary, a wish — often
 unrelated to its mainline. That judgment is **taste**, and it must not evaporate when the session ends. So a
-finished session records such concerns into one shared, durable **local issue store**; other sessions sign and discuss
+finished session records such concerns into one shared, durable **local issue store**; other sessions discuss
 them like an async chatroom; a supervisor later drains the local issue store into real work. This keeps **global** taste
 flowing into the codebase's shape, instead of every agent owning only its own slice.
 
@@ -27,7 +27,7 @@ execution) already do, and a store that competes with them stops being a durable
 second, drifting source of truth — a liability. Two anti-patterns follow directly: **don't open an issue for
 a task you're actively driving** — you'll do it and then forget the thread; the design of dispatched work
 rides its dispatch, not a lingering issue. And **close what you finish** — an issue whose work has landed is
-resolved (`landed`/`accepted`), never left open; the open set is the *outstanding* work, so a stale open is a
+`landed`, never left open; the open set is the *outstanding* work, so a stale open is a
 lie the drain has to re-triage. The post-merge nudge fires at exactly the moment both disciplines apply (you
 just landed work), and states them.
 
@@ -57,22 +57,22 @@ it to `.spec/.issues` on its first store touch after a toolchain update — the 
   `kind` taxonomy field ([[issues]]): it would do no mechanical work — the verbs are id-based, dispatch
   doesn't branch on it, the drain is judgment — so it would be a label bought with a second creation verb
   and a filter. The local issue store is the git-native **discussion/annotation layer over the graph**.
-- **One file per thread.** The file is a one-line `concern` plus a prose body plus appended signed replies —
+- **One file per thread.** The file is a one-line `concern` plus a prose body plus appended replies —
   each reply preceded by a `<!-- reply: <by> @ <at> -->` sentinel line. A reply may carry **remark** state
   ([[remark-substrate]]) — a resolvable bit + the codeSha it judges — appended to its sentinel as a
   ` :: <k=v>` tail; a plain reply has no tail and parses unchanged, and the remark write verbs
   (`remark`/`resolve`/`retract`) are thin siblings of `reply` over this same committed store. Its frontmatter carries `by`
   (author session), `status`, optional `nodes:` (the product nodes it concerns, linked `[[…]]`), optional
   `evidence:` (yatsu content-addressed blob hashes — the typed reference a cross-node finding carries, per
-  [[issues]] / [[video-evidence]]), and `signers`. The sentinel is **unforgeable**: user body text is
+  [[issues]] / [[video-evidence]]). The sentinel is **unforgeable**: user body text is
   neutralized on write, so a body that itself contains that marker can't spawn a phantom reply or truncate
   the thread.
-- **Own lifecycle status**, store-authored never git-derived: `open` → `accepted | rejected | landed`.
+- **Own lifecycle status**, store-authored never git-derived: `open` → `landed`.
 - **The local issue store lives on the trunk, not per-branch.** A write reads and commits **straight to the main
   checkout's `.spec/.issues/`** — a local-issue file is data, not contract, and the write below commits it with
   `--no-verify` (provably a single `.spec/.issues/` path), so it lands on the trunk without needing any
   [[main-guard]] exception. So there is no per-branch copy and no cross-worktree union to reconcile: every
-  thread is always present to read, sign, and reply to. This is also what lets a **post-merge** concern
+  thread is always present to read and reply to. This is also what lets a **post-merge** concern
   land durably — the author's own branch has
   already merged, so an issue opened then could never ride it; committed to the trunk directly, it persists.
 - **Only the trunk checkout may commit that write — a linked-worktree backend must not fabricate commits on a
@@ -104,22 +104,22 @@ it to `.spec/.issues` on its first store touch after a toolchain update — the 
   structurally invisible to lint, and the commit is provably a single `.spec/.issues/` path, so running the
   seconds-long pre-commit gate would only pass anyway — pure overhead that would hold the lock. The id is
   minted under the lock too, so two racing posts can't claim it. And a **no-change write is idempotent
-  success**: when the requested state already IS the stored state (a duplicate resolve, a repeat sign), the
-  write detects the no-op after staging and skips the commit — the verb reports "already <state>" and exits
+  success**: when the requested state already IS the stored state (a duplicate close), the
+  write detects the no-op after staging and skips the commit — the verb reports success and exits
   0, never surfacing git's nothing-to-commit failure as an error for a store that is exactly as asked.
 - **Nudged AFTER the work lands, not during it.** The agent's own task is what matters most, so the local issue store is
   never raised while it is still finishing — it is raised the moment the work **merges**. A **`post-merge`
   git hook** (harness-side gates live in [[state]]; this one is git-side) fires in the doer's dispatched
   merge turn — merge is dispatched to the session's own agent (see [[dispatch]]) — guarded to the
   `merge node/<id>:` commit so an ordinary pull never nags; its nudge lands in the agent's own command
-  output: read the issues, sign/reply if the concern is already raised, else open a new one. Git-native, so
+  output: read the issues, reply if the concern is already raised, else open a new one. Git-native, so
   it reaches a self-launched agent too and costs no harness block-cap.
 - **Nudged again at close — the session's issue closeout.** The post-merge nudge fires when work lands; a
   second, **data-driven** nudge fires when the session proposes **close** — appended to the
   `done --propose close` declaration beside [[state]]'s resource-cleanup reminder, the same insertion point
   and the same semantics. `closeoutNudge(sessionId)` lists the **still-open local threads that session
   touched** (authored or replied — eval `eval: <node> · <scenario>` remark containers excluded, they outlive
-  every session by design), asking for each: resolve it now if its work is finished, or reply why it should
+  every session by design), asking for each: close it now if its work is finished, or reply why it should
   stay open past this session. Empty set, feature OFF, or no session identity → it prints **nothing**, so a
   declaration never carries a vacuous reminder — the line is earned by data, never boilerplate. And it is a
   **nudge, never a gate**: some issues rightly outlive their session (a taste concern awaiting the drain),
@@ -129,7 +129,8 @@ it to `.spec/.issues` on its first store touch after a toolchain update — the 
   port — its local default lands here; `--store <host>` bypasses this store for the forge driver);
   `spex issues reply <id> --body -|<text>
   [--evidence <hash>…]` (the evidence a reply carries accrues onto the thread's `evidence[]`, deduped — an
-  anchored annotation's frame blob), `sign`, and `resolve` act on any local thread. A new thread's `nodes:`
+  anchored annotation's frame blob), and `spex issues close <id>` marks a local thread landed through
+  [[issues]]'s store-routed close. A new thread's `nodes:`
   are **inferred from the `[[node]]` topic links in its own text** (concern + body, [[mentions]]'s one
   in-text reference primitive), unioned with any explicit `--node` — a writer links nodes by writing them,
   so no caller needs a separate ids field. Read and write share one
@@ -149,9 +150,8 @@ it to `.spec/.issues` on its first store touch after a toolchain update — the 
   loops in no one. Each returns `{ thread, outcomes, loopIn }`. Because the local issue store is the programmatic surface, a
   human's `@`-mention in a reply **does** summon the agent — that is the point. The dashboard's write path
   ([[issues-view]]) is a thin caller: `POST /api/issues/:id/reply` and `POST /api/issues` (author `'human'`),
-  plus the lifecycle parity routes `POST /api/issues/:id/sign|resolve|promote` — thin wrappers over the SAME
-  `sign`/`resolve`/`promote` the CLI verbs call (`sign` takes the same optional `author`), local-store only
-  (a forge id is refused). All gated by the same on/off switch (403 when OFF).
+  plus `POST /api/issues/:id/promote` for the one local-to-forge move. All gated by the same on/off switch
+  (403 when OFF).
 - **Opt-outable, default ON.** The issues workflow is a feature you can switch off: `spex issues on|off`
   flips `spexcode.json`'s `issues.enabled` (the shared settings file every other toggle lives in),
   effective immediately with no commit (config is read from the working tree). OFF silences the post-merge

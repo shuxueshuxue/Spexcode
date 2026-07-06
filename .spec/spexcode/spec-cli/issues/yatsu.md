@@ -11,7 +11,7 @@ scenarios:
       ONE list carries both stores, each issue store-tagged (`local` / the forge host) with the same shape:
       a forge issue arrives with by=forge author, created=forge timestamp, its permalink url, and its
       `Spec:` markers already translated into nodes[] (no downstream consumer ever sees a marker); the
-      local thread arrives with its signers/replies/evidence. The list is ONE time line — stores
+      local thread arrives with its replies/evidence. The list is ONE time line — stores
       interleaved by created, newest first, never store-grouped blocks. --store and --node filter;
       default hides non-open.
   - name: promote
@@ -20,7 +20,7 @@ scenarios:
     related: [spec-forge/src/port.ts, spec-forge/src/drivers/github.ts]
     description: >-
       Open a local thread (with nodes + evidence), then `spex issues promote <id>` against the REAL forge.
-      Also try promoting an unknown id and the just-landed thread again.
+      Also try promoting an unknown id and the just-closed thread again.
     expected: >-
       One recorded action: a real forge issue is created whose title is the concern and whose body carries
       the thread body, the `Spec: <nodes>` marker, the evidence hashes, and a provenance footer; the merged
@@ -54,7 +54,7 @@ scenarios:
       `open --store github` creates a REAL forge issue through the driver (visible via `gh issue view`),
       its body carrying the `Spec: <nodes>` marker so the next merged read shows it linked to the same
       nodes (re: <id>) with no promote round-trip; default/--store local commits to the trunk store
-      unchanged. `close` routes by id — a local id resolves the thread `landed` (idempotent on repeat),
+      unchanged. `close` routes by id — a local id marks the thread `landed` (idempotent on repeat),
       `close github#N` REALLY closes the remote issue (gh reads state CLOSED) — one verb, the same
       closeIssue/createIssue routing as POST /api/issues[/:id/close]. Unknown store/id fail loud with the
       known-stores list / the store hint; bare close prints usage and exits 2.

@@ -2,7 +2,7 @@
 // [[mentions]]). A thread IS an Issue whose `store` is 'local' — membership implied by WHERE the file lives,
 // never written into it. One thread = one PLAIN markdown file at <main>/.spec/.issues/<id>.md; there is
 // deliberately no content-kind taxonomy (a change suggestion, an annotation, a Q&A are the same mechanism —
-// the prose says what it is). Others sign/reply/discuss like an async chatroom; a supervisor drains it via
+// the prose says what it is). Others reply/discuss like an async chatroom; a supervisor drains it via
 // `spex issues` (reading is the port's job, issues.ts — this module owns only the store + its write verbs).
 // Because a thread file is NOT named spec.md, the spec walk never nodes it and isSpecMd ignores it —
 // invisible to lint / drift / deriveStatus / board with ZERO exemption. The store lives on the TRUNK, not
@@ -87,10 +87,9 @@ const currentSession = (): string => envSessionId() || 'unknown'
 const sleep = (ms: number) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
 
 // ── file format ──────────────────────────────────────────────────────────────────────────────────────
-// frontmatter (concern/by/status/nodes/evidence/signers/created) + a prose body, then any replies — each
+// frontmatter (concern/by/status/nodes/evidence/created) + a prose body, then any replies — each
 // preceded by a `<!-- reply: <by> @ <iso> -->` sentinel: invisible in rendered markdown, unambiguous to
-// parse. Only the store writes these files, so a fixed shape is safe. Lists are `key: a, b` scalars so a
-// +1 sign is a one-line change.
+// parse. Only the store writes these files, so a fixed shape is safe.
 //
 // A REMARK ([[remark-substrate]]) is a reply carrying extra state, appended to the SAME sentinel as a
 // ` :: <space-joined k=v attrs>` tail (a plain reply has no tail → parses unchanged, backward compatible):
@@ -120,9 +119,8 @@ function parse(id: string, text: string): Issue {
     store: 'local',
     concern: fm.concern || id,
     by: fm.by || 'unknown',
-    status: fm.status || 'open',
+    status: fm.status === 'landed' ? 'landed' : 'open',
     nodes: list(fm.nodes),
-    signers: list(fm.signers),
     created: fm.created || '',
     body: body.join('\n').trim(),
     replies: replies.map((r) => ({ ...r, body: r.body.trim() })),
@@ -165,7 +163,6 @@ function serialize(p: Issue): string {
     `status: ${safeScalar(p.status)}`,
     p.nodes.length ? `nodes: ${p.nodes.join(', ')}` : '',
     p.evidence.length ? `evidence: ${p.evidence.join(', ')}` : '',
-    p.signers.length ? `signers: ${p.signers.join(', ')}` : '',
     `created: ${p.created}`,
   ].filter(Boolean)
   let out = `---\n${fm.join('\n')}\n---\n\n${safeBody(p.body)}\n`
@@ -259,7 +256,7 @@ function ensureStoreMigrated(): void {
 // structurally invisible to spec-lint, and the commit is provably store-only (one .spec/.issues/ path), so the
 // pre-commit gate would only pass anyway — running it just burns seconds (tsx cold-start) holding the lock.
 // A NO-CHANGE write is idempotent SUCCESS, never a failure: when the serialized bytes already equal the
-// stored state (a duplicate resolve/sign — the store IS the requested state), `git commit` would exit 1
+// stored state (a duplicate close — the store IS the requested state), `git commit` would exit 1
 // 'nothing to commit', so we detect the no-op after `add` (the staged path equals HEAD → status is silent)
 // and skip the commit. Returns whether the store actually changed, so a caller can say 'already <state>'.
 // MUST run while holding withStoreLock — it is the write half of a locked read-modify-write; its callers
@@ -286,7 +283,7 @@ function writeStoreFile(p: Issue, message: string): boolean {
 }
 
 // prepare (a FRESH read-modify or a new thread) + write + commit a single store file, all under the store
-// lock so the read-modify-write is atomic. prepare() runs INSIDE the lock, so a reply/sign/resolve reads the
+// lock so the read-modify-write is atomic. prepare() runs INSIDE the lock, so a reply/close reads the
 // current thread, never a stale copy. A pre-rename store migrates first (before the lock — ensure takes it).
 // `changed: false` = the store already held exactly this state (see writeStoreFile) — success, nothing committed.
 function commitStore(message: string, prepare: () => Issue): { issue: Issue; changed: boolean } {
@@ -312,7 +309,6 @@ export function openIssue(concern: string, opts: { nodes?: string[]; body?: stri
     by: opts.author || currentSession(),
     status: 'open',
     nodes,
-    signers: [],
     created: new Date().toISOString(),
     body: (opts.body || `(no detail given — ${concern})`).trim(),
     replies: [],
@@ -395,26 +391,13 @@ export async function postLocalIssue(
   return { thread, outcomes }
 }
 
-// `author` mirrors reply/open: the effective session id by default, `'human'` from the dashboard's thin caller.
-export function sign(id: string, author?: string): string[] {
-  const by = author || currentSession()
-  return commitStore(`issue(${id}): signed by ${by}`, () => {
+export function closeLocalIssue(id: string): { status: 'landed'; already: boolean } {
+  const { changed } = commitStore(`issue(${id}): close`, () => {
     const p = loadOne(id)
-    if (!p.signers.includes(by)) p.signers.push(by)
-    return p
-  }).issue.signers
-}
-
-const RESOLUTIONS = new Set(['accepted', 'rejected', 'landed'])
-// `already` = the thread was in that state before this call — an idempotent success, nothing committed.
-export function resolve(id: string, as: string): { as: string; already: boolean } {
-  if (!RESOLUTIONS.has(as)) throw new Error(`resolution must be one of: ${[...RESOLUTIONS].join(' | ')}`)
-  const { changed } = commitStore(`issue(${id}): resolve ${as}`, () => {
-    const p = loadOne(id)
-    p.status = as
+    p.status = 'landed'
     return p
   })
-  return { as, already: !changed }
+  return { status: 'landed', already: !changed }
 }
 
 // ── remarks ([[remark-substrate]]) ──────────────────────────────────────────────────────────────────
@@ -440,7 +423,7 @@ function findOrCreateEvalThread(node: string, scenario: string, author: string):
     if (existing) return existing
     const p: Issue = {
       id: uniqueId(concern), store: 'local', concern, by: author, status: 'open',
-      nodes: [node], signers: [], created: new Date().toISOString(),
+      nodes: [node], created: new Date().toISOString(),
       body: `Remarks on the \`${scenario}\` eval of [[${node}]].`, replies: [], evidence: [],
     }
     writeStoreFile(p, `issue: ${concern}`)
@@ -528,16 +511,16 @@ export function nudge(node: string): string {
     '── issues ─────────────────────────────────────────────────────────',
     `Your work (${node || 'this node'}) just landed. Two issue checks before you close:`,
     '',
-    '1. CLOSE what you finished. An issue whose work just landed is resolved, not',
+    '1. CLOSE what you finished. An issue whose work just landed is closed, not',
     '   left open — the open set is the OUTSTANDING work, so a stale open reads as a',
-    '   lie:  spex issues --store local     then   spex issues resolve <id> --as landed',
+    '   lie:  spex issues --store local     then   spex issues close <id>',
     '',
     '2. RECORD only what OUTLIVES this task — a concern you are NOT acting on now:',
     '   an off-mainline smell / awkward boundary / wish, or a trivial-but-must-not-',
     "   forget to-do that doesn't earn a spec node. NOT a bug tracker (that is the",
     '   spec graph + the forge), NOT your assigned task or a fix you are about to',
     '   make — those need no issue. Only the taste that would otherwise evaporate:',
-    '     spex issues                              # read first — sign/reply if already raised',
+    '     spex issues                              # read first — reply if already raised',
     '     spex issues open "<concern>" [--node <id>]   # else open one',
     'A supervisor drains the store later. (Advisory — skip if nothing is owed.)',
     '───────────────────────────────────────────────────────────────────',
@@ -550,7 +533,7 @@ export function nudge(node: string): string {
 // still-open local threads THIS session touched (authored or replied; eval `eval: <node> · <scenario>`
 // containers excluded — they host remarks and outlive every session by design) and prints NOTHING when the
 // session owes nothing, when the feature is OFF, or when there is no session identity. Some issues rightly
-// outlive their session (a taste concern waiting for the drain), so the ask is resolve OR say why it stays
+// outlive their session (a taste concern waiting for the drain), so the ask is close OR say why it stays
 // open — never a forced close.
 export function closeoutNudge(sessionId: string | null | undefined): string {
   if (!sessionId || sessionId === 'unknown' || !issuesEnabled()) return ''
@@ -558,7 +541,7 @@ export function closeoutNudge(sessionId: string | null | undefined): string {
     t.status === 'open' && !EVAL_CONCERN_RE.test(t.concern) &&
     (t.by === sessionId || t.replies.some((r) => r.by === sessionId)))
   if (!mine.length) return ''
-  return `\n\nIssue closeout — ${mine.length} still-open local issue(s) you touched (opened or replied): ${mine.map((t) => t.id).join(', ')}. For each, resolve it now if its work is finished (\`spex issues resolve <id> --as landed|rejected|accepted\`), or reply why it should stay open past this session (\`spex issues reply <id> --body "<why>"\`). Some issues rightly outlive their session — this is a reminder to sweep, not a gate.`
+  return `\n\nIssue closeout — ${mine.length} still-open local issue(s) you touched (opened or replied): ${mine.map((t) => t.id).join(', ')}. For each, close it now if its work is finished (\`spex issues close <id>\`), or reply why it should stay open past this session (\`spex issues reply <id> --body "<why>"\`). Some issues rightly outlive their session — this is a reminder to sweep, not a gate.`
 }
 
 // ───────────────────────── CLI ─────────────────────────
@@ -566,7 +549,7 @@ const fl = (args: string[], name: string): string | undefined => {
   const i = args.indexOf(`--${name}`)
   return i >= 0 ? args[i + 1] : undefined
 }
-const VALUE_FLAGS = new Set(['--node', '--body', '--as', '--evidence', '--scenario', '--code-sha', '--store'])
+const VALUE_FLAGS = new Set(['--node', '--body', '--evidence', '--scenario', '--code-sha', '--store'])
 // bare positionals, skipping flags + their values.
 function bare(args: string[]): string[] {
   const out: string[] = []
@@ -589,10 +572,9 @@ const repeated = (args: string[], name: string): string[] =>
 
 // the local-issue WRITE verbs, folded into the one issues surface (`spex issues <sub>` — the read routes
 // here when its first positional is a write sub): open "<concern>" [--store local|<host>] [--node id…]
-// [--evidence hash…] [--body -|text], the id-based reply | sign | resolve, and the feature toggle
+// [--evidence hash…] [--body -|text], the id-based reply, and the feature toggle
 // on | off | status. `nudge` is internal (the post-merge hook's caller). Store is a property of the issue,
-// never a second command — open and reply route by it (issues.ts createIssue/replyIssue); sign and resolve
-// are local-store verbs (a forge issue's lifecycle verb is `spex issues close`, issues.ts).
+// never a second command — open and reply route by it (issues.ts createIssue/replyIssue).
 export async function runIssueWrite(args: string[]): Promise<number> {
   const sub = args[0]
   try {
@@ -616,20 +598,6 @@ export async function runIssueWrite(args: string[]): Promise<number> {
       if (s) console.log(`  ${s}`)
       return 0
     }
-    if (sub === 'sign') {
-      const id = bare(args.slice(1))[0]
-      if (!id) { console.error('usage: spex issues sign <issue-id>'); return 2 }
-      console.log(`signed '${id}' — signers: ${sign(id).join(', ')}`)
-      return 0
-    }
-    if (sub === 'resolve') {
-      const id = bare(args.slice(1))[0]
-      const as = fl(args, 'as')
-      if (!id || !as) { console.error('usage: spex issues resolve <issue-id> --as accepted|rejected|landed'); return 2 }
-      const r = resolve(id, as)
-      console.log(r.already ? `'${id}' already ${r.as} — store unchanged` : `resolved '${id}' → ${r.as}`)
-      return 0
-    }
     if (sub === 'nudge') {
       // internal: the post-merge hook calls this to print the (toggle-aware) nudge for a merged node.
       const text = nudge(bare(args.slice(1))[0] || '')
@@ -642,7 +610,7 @@ export async function runIssueWrite(args: string[]): Promise<number> {
     // born forge-visible). The concern is the bare positional(s) after the sub.
     const concern = sub === 'open' ? bare(args.slice(1)).join(' ').trim() : ''
     if (!concern) {
-      console.error('usage: spex issues open "<concern>" [--store local|<host>] [--node <id>…] [--evidence <hash>…] [--body -|<text>]\n       spex issues reply|sign|resolve|close <issue-id> …  |  on|off|status')
+      console.error('usage: spex issues open "<concern>" [--store local|<host>] [--node <id>…] [--evidence <hash>…] [--body -|<text>]\n       spex issues reply|close|promote <issue-id> …  |  on|off|status')
       return 2
     }
     const r = await (await import('./issues.js')).createIssue(concern, {
@@ -666,7 +634,7 @@ export async function runIssueWrite(args: string[]): Promise<number> {
 
 // the first positionals runIssueWrite handles — the issues command routes these to it, everything else is
 // the read. Exported so the router and the runner can never drift.
-export const ISSUE_WRITE_SUBS = new Set(['open', 'reply', 'sign', 'resolve', 'on', 'off', 'status', 'nudge'])
+export const ISSUE_WRITE_SUBS = new Set(['open', 'reply', 'on', 'off', 'status', 'nudge'])
 
 // ── remark CLI ([[remark-substrate]]) — CLI-first: the whole author→resolve→retract loop, no server needed ──
 // `spex remark <host> --body -|<text> [--code-sha <sha>] [--scenario <name>] [--evidence <hash>…]`

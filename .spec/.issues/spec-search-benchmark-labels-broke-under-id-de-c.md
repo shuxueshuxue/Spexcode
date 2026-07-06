@@ -1,7 +1,7 @@
 ---
 concern: spec-search benchmark labels broke under id de-collision; recall degraded with corpus growth
 by: f45d649c-0ef4-4a52-a3fc-223fc0da6e43
-status: open
+status: landed
 nodes: spec-search
 created: 2026-07-02T16:27:28.983Z
 ---

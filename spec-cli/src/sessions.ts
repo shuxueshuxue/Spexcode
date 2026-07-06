@@ -45,7 +45,7 @@ import { mainBranch, gitCommonDir, readConfig, runtimeRoot, sessionStoreDir, ses
 // SPEXCODE_TMUX / SPEXCODE_CLAUDE_CMD override both for tests.
 
 const pexec = promisify(execFile)
-const TMUX_SOCK = process.env.SPEXCODE_TMUX || 'spexcode'
+export const TMUX_SOCK = process.env.SPEXCODE_TMUX || 'spexcode'
 // the harness the dashboard/CLI launcher drives. ALL harness-specific launch facts (the agent command, the
 // session-id flag, the hook shim, the session env var) come from this adapter — the launcher never names
 // Claude. Resolved once here ([[harness-adapter]]); a future codex launcher flips defaultHarness, nothing else.

@@ -33,7 +33,7 @@ and is healed by `npm run hooks`; the deprecated `spex propose` alias is gone th
 post-merge hook prints one unknown-command line (advisory) until reinstalled. A *demoted* spelling
 degrades more gently than a removed one: it stays as a **deprecated alias** that still runs but
 echoes the canonical form on stderr, so a caller migrates without breakage (`spex review proof` →
-`spex eval <SEL> --proof`, after proof was demoted from a review sub-noun to the export flag of the
+`spex eval <SEL> --export`, after proof was demoted from a review sub-noun to the export flag of the
 [[review-proof]] eval read).
 
 **One verb, either drawer — the session-verb mirror.** A user must never have to guess whether a

@@ -1,14 +1,15 @@
 export {} // make this a module so top-level await is allowed
 const cmd = process.argv[2]
 
-// Registered before any await so a fatal top-level error lands here. Errors we OWN (BackendError, the
-// loud malformed-config ConfigError) are matched BY NAME — to avoid importing them — and rendered as a
-// one-line `spex: <message>` (a user's config typo must read as their typo, not a SpexCode stack dump);
+// Registered before any await so a fatal top-level error lands here. Errors we OWN — BackendError, the
+// loud malformed-config ConfigError, the --api/--port UsageError, the write-guard GuardError — are
+// matched BY NAME (to avoid importing them) and rendered as a one-line `spex: <message>` (a user's
+// config typo or a refused cross-project write must read as their situation, not a SpexCode stack dump);
 // anything else prints in full so a real bug keeps its trace. A synchronous throw inside an awaited call
 // (loadConfig on a malformed spexcode.json) surfaces as uncaughtException, not unhandledRejection, so BOTH
 // paths route through the same printer.
 function fatal(e: unknown): never {
-  if (e instanceof Error && (e.name === 'BackendError' || e.name === 'ConfigError')) console.error(`spex: ${e.message}`)
+  if (e instanceof Error && ['BackendError', 'ConfigError', 'UsageError', 'GuardError'].includes(e.name)) console.error(`spex: ${e.message}`)
   else console.error(e)
   process.exit(1)
 }
@@ -37,7 +38,7 @@ function flushExit(code = 0): Promise<never> {
 }
 const has = (name: string) => process.argv.includes(`--${name}`)
 // bare positionals after argv index `from`, skipping flags and their values (selectors for ls/watch).
-const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--timeout', '--reason', '--out', '--password', '--tls-cert', '--tls-key', '--harness', '--launcher', '--harness-session', '--port', '--api-port', '--host', '--preset', '--limit', '--session', '--depth'])
+const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--timeout', '--reason', '--out', '--password', '--tls-cert', '--tls-key', '--harness', '--launcher', '--harness-session', '--port', '--api', '--api-port', '--host', '--preset', '--limit', '--session', '--depth'])
 function positionals(from: number): string[] {
   const out: string[] = []
   for (let i = from; i < process.argv.length; i++) {
@@ -552,7 +553,7 @@ if (cmd === 'serve') {
     // real session. Guards fail loud BEFORE resolving: local-only (the tmux server is the backend
     // machine's) and terminal-only (an agent must never block its turn on it — capture/send/rawkey).
     const { assertLocalBackend, attachSession } = await import('./attach.js')
-    assertLocalBackend()
+    await assertLocalBackend()
     await attachSession(await resolveSelectorOrExit(id))
   } else if (sub === 'prompt') {
     // print the session's full ORIGINATING prompt (what it was asked to do), captured at launch.

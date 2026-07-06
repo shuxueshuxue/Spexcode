@@ -179,10 +179,10 @@ async function doubleDeliveryReport(base: string): Promise<{ lines: string[]; co
   return { lines: L, conflict }
 }
 
-// ping the backend (apiBase) with a short timeout so doctor never hangs on a dead/wrong SPEXCODE_API_URL.
+// ping the backend (the resolved apiBase) with a short timeout so doctor never hangs on a dead/wrong backend.
 async function backendReachable(): Promise<{ base: string; up: boolean }> {
   let base = 'http://127.0.0.1:8787'
-  try { base = (await import('./sessions.js')).apiBase() } catch { /* keep default */ }
+  try { base = await (await import('./sessions.js')).apiBase() } catch { /* keep default */ }
   const ctrl = new AbortController()
   const t = setTimeout(() => ctrl.abort(), 800)
   try { return { base, up: (await fetch(`${base}/api/sessions`, { signal: ctrl.signal })).ok } }

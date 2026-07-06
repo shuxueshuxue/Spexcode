@@ -137,17 +137,17 @@ scenarios:
       On #/evals, select a video reading whose LATEST reading carries a `by` (the session that filed it)
       that is an ONLINE board session. In the detail workspace's HEADER band, read the filer pill
       (`.fv-originator`): the originator id, its alive/offline class, the dot's computed colour, and the
-      title/reach phrase (which must read as an EVAL, not an issue). Confirm a reading with no `by`
-      (a legacy reading) shows no filer pill.
+      title (which must read as an EVAL, not an issue), whether the ONLINE filer is a click target, and
+      whether the old reach phrase is absent. Confirm a reading with no `by` (a legacy reading) shows no
+      filer chip.
     expected: |
       The header surfaces the FILER — the session that filed the viewed scenario's latest reading (from
-      `evalTimeline`'s per-reading `by`) — with a liveness dot: an ONLINE filer reads `alive` (a
-      status-hued dot from the board's `STATUS_COLOR`, the reach phrase "alive · replies reach it live"),
-      an absent/offline filer reads `offline` ("offline · replies skip it"). The title names it an EVAL
-      ("session that filed this eval … un-@'d remarks courtesy-deliver to it while alive"), the same
-      shared `OriginatorLiveness` the issues header uses, distinct only in wording. A legacy reading with
-      no `by` resolves to nobody and the header simply shows no filer pill — exactly the case where the
-      loop-in chain runs dry silently. No second palette, no page errors.
+      `evalTimeline`'s per-reading `by`) — with a liveness dot and no visible reach phrase: an ONLINE filer
+      reads `alive`, uses a status-hued dot from the board's `STATUS_COLOR`, renders as a clickable chip,
+      and clicking it opens `#/sessions/<id>` with that session selected. An absent/offline filer reads
+      `offline`, uses the muted dot, and is not clickable. The title names it an EVAL, the same shared
+      `OriginatorLiveness` the issues header uses, distinct only in wording. A legacy reading with no `by`
+      resolves to nobody and the header simply shows no filer chip. No second palette, no page errors.
   - name: remark-resolve-retract
     tags: [frontend-e2e]
     code: [spec-dashboard/src/Thread.jsx, spec-dashboard/src/EventDetail.jsx]

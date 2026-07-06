@@ -46,13 +46,13 @@ permanent but never bulky. Stage and rail scroll *independently* — the media n
 remarking, and the composer is never below the fold: circle→remark→circle→remark without moving anything.
 At narrow widths the workspace degrades gracefully back to one stacked column (the rail folds under the
 stage), and the composer stays a **sticky bar at the column's foot** — the one-column mode keeps the
-docked-writer geometry instead of burying the composer under the thread. The header's **filer liveness** names the session that FILED this scenario's reading — the courtesy
-target an un-@'d remark reaches, since the eval loop-in chains the reading's filer first ([[mentions]] /
-[[remark-substrate]]) — with a liveness dot (alive = the session is on the board and not offline, its live
-`STATUS_COLOR` painting the dot, [[state]]; offline otherwise), so the reader sees whether a plain remark
-reaches a live agent. The filer is the LATEST reading's `by` (the chain's first link; the reading carries it
-from the eval seam via `evalTimeline`); a legacy reading without `by` resolves to nobody and the header
-simply shows no filer — exactly the case where the offline chain runs dry silently.
+docked-writer geometry instead of burying the composer under the thread. The header's **filer chip** names the session that FILED this scenario's reading, with a liveness dot
+(alive = the session is on the board and not offline, its live `STATUS_COLOR` painting the dot, [[state]];
+offline otherwise). A live filer chip is the direct door back to the session board: click it and the
+dashboard opens `#/sessions/<id>`, selecting that session's tab. Offline filers stay static, and the header
+does not spell out the courtesy-delivery mechanics in a reach phrase. The filer is the LATEST reading's
+`by` (the chain's first link; the reading carries it from the eval seam via `evalTimeline`); a legacy reading
+without `by` resolves to nobody and the header simply shows no filer.
 
 A reading's evidence is a **LIST**, so every entry renders on the ONE stage — and U1's "one evidence
 detail" is literal code: the per-entry renderer is the extracted **`Evidence.jsx`**, this node's second

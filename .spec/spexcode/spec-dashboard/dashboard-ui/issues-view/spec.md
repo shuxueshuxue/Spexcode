@@ -78,15 +78,14 @@ straight to the trunk.
   maps them into `replies[]` — one thread type, one renderer). Store never changes the shape; the only
   store-specific affordances are metadata (a local issue's signer count, a forge issue's permalink) — the
   thread itself reads and writes identically.
-- **The originator's liveness is on the header — because an un-@'d reply defaults to it.** A committed reply
-  gets an implicit originator loop-in ([[mentions]]): a courtesy copy to whoever raised the thread, delivered
-  only while they are ONLINE (silent when offline). So the reader must see, honestly, whether a plain reply
-  reaches a live agent — the detail header shows the originator (a local thread's `by` is a session id) with
-  a liveness dot: **alive** when that session is listed on the board and not offline (its live status paints
-  the dot in the board's four-hue `STATUS_COLOR`, [[state]]), **offline** otherwise. It is a thin read-time
-  join of the id against the board sessions the page already holds — no new query, no second palette. A forge
-  issue's `by` is a github login resolving to no session, so it stays a plain author label (the loop-in is
-  silent there by construction). The **signer count renders only when someone actually signed** — a "+0
+- **The originator's session is on the header.** A local thread's `by` is a session id, so the detail header
+  renders it as a compact session chip with a liveness dot: **alive** when that session is listed on the
+  board and not offline (its live status paints the dot in the board's four-hue `STATUS_COLOR`, [[state]]),
+  **offline** otherwise. A live chip is the direct door back to the session board: click it and the dashboard
+  opens `#/sessions/<id>`, selecting that session's tab. Offline originators stay as static identity chips.
+  This is a thin read-time join of the id against the board sessions the page already holds — no new query,
+  no second palette, and no explanatory reach phrase in the meta strip. A forge issue's `by` is a github
+  login resolving to no session, so it stays a plain author label. The **signer count renders only when someone actually signed** — a "+0
   signed" is noise, so the badge is suppressed at zero (mirroring the CLI's own nonzero guard); the sign
   feature is unchanged.
 - **Node chips focus the graph.** An issue's node chips are clickable — a click routes to the graph page

@@ -107,7 +107,7 @@ function matchConfig(presets, query) {
 const SRC_TAG = { user: '(user)', project: '(project)', skill: '[skill]', 'built-in': 'built-in', board: '[board]' }
 
 
-export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, onOpenSearch, reload }) {
+export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, onOpenSession, onOpenSearch, reload }) {
   const t = useT()
   const [prompt, setPrompt] = useState('')    // the New Session tab's own draft (its boarding-switch cache)
   const [menu, setMenu] = useState(null)      // completion dropdown: { kind:'mention'|'config'|'slash', items, index, start, end, query }
@@ -982,7 +982,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               ))}
               {/* Eval tab — the session's derived evaluation rendered INLINE (always available, not
                   review-gated). Mounts on each visit so it reflects the live diff/loss/gates ([[review-proof]]). */}
-              {rightTab === 'eval' && <SessionEvalPane sessionId={active} specs={specs} sessions={sessions} />}
+              {rightTab === 'eval' && <SessionEvalPane sessionId={active} specs={specs} sessions={sessions} onOpenSession={onOpenSession} />}
           </div>
         </section>
       </div>

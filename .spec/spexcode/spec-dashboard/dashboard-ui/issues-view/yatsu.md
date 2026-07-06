@@ -144,14 +144,15 @@ scenarios:
     description: >-
       Run the dashboard against a backend whose board lists live sessions. Seed one LOCAL issue whose `by`
       is an ONLINE session id and one whose `by` is an id absent from the board. Open #/issues, select
-      each, and read the detail header's originator pill (`.fv-originator`): its alive/offline class, the
-      dot's computed background colour, and the reach phrase.
+      each, and read the detail header's originator chip (`.fv-originator`): its alive/offline class, the
+      dot's computed background colour, whether the ONLINE originator is a click target, and whether the
+      old reach phrase is absent.
     expected: >-
-      Each local issue's header shows the originator id with a liveness dot and reach phrase. The ONLINE
-      originator reads `alive` (a status-hued dot from the board's `STATUS_COLOR`, "alive · replies reach
-      it live") — an un-@'d reply courtesy-delivers to it. The absent originator reads `offline` (muted
-      dot, "offline · replies skip it"). A forge issue's github-login `by` resolves to no session and
-      stays a plain author label. No second palette, no page errors.
+      Each local issue's header shows the originator id with a liveness dot and no visible reach phrase. The
+      ONLINE originator reads `alive`, uses a status-hued dot from the board's `STATUS_COLOR`, renders as a
+      clickable chip, and clicking it opens `#/sessions/<id>` with that session selected. The absent
+      originator reads `offline`, uses the muted dot, and is not clickable. A forge issue's github-login
+      `by` resolves to no session and stays a plain author label. No second palette, no page errors.
   - name: lifecycle-actions-parity
     tags: [frontend-e2e]
     code: spec-dashboard/src/IssuesPage.jsx

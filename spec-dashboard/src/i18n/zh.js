@@ -96,10 +96,8 @@ export default {
     retract: '撤回',
     retractTitle: '撤回你自己未解决的评注 —— 从线程中移除',
     anchorDegraded: '该步骤已不在当前测量中——此 m:ss 为原始冻结值，无法跳转',
-    originatorAlive: '在线 · 回复可实时送达',
-    originatorOffline: '离线 · 回复不会送达',
-    originatorIssue: '发起此 issue 的会话：{by} — 未 @ 的回复会在其在线时顺带送达',
-    originatorEval: '记录此评测的会话：{by} — 未 @ 的评注会在其在线时顺带送达',
+    originatorIssue: '打开发起此 issue 的会话：{by}',
+    originatorEval: '打开记录此评测的会话：{by}',
   },
 
 

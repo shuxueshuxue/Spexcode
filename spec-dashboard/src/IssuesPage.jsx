@@ -16,7 +16,7 @@ import { useEscLayer } from './escStack.js'
 // its replies, and the reply composer — BOTH stores ([[issues]]: the reply/close verbs route by store). j/k
 // walk the issue list even while folded, the detail follows; writes post as 'human'. The evals are their
 // OWN top-level page now ([[evals-view]]) — no in-page switcher here.
-export default function IssuesPage({ onFocusNode, specs = [], sessions = [], issuesData = null, reloadIssues }) {
+export default function IssuesPage({ onFocusNode, onOpenSession, specs = [], sessions = [], issuesData = null, reloadIssues }) {
   const t = useT()
   const data = issuesData                          // RESIDENT app state — the page renders instantly, no per-mount fetch
   const [composing, setComposing] = useState(false)
@@ -126,7 +126,7 @@ export default function IssuesPage({ onFocusNode, specs = [], sessions = [], iss
       </div>
       <div className="fv-detail">
         {selIssue
-          ? <IssueDetail issue={selIssue} specs={specs} sessions={sessions} onFocusNode={onFocusNode} onWrite={async (outcomes) => { flash(outcomes); await load() }} />
+          ? <IssueDetail issue={selIssue} specs={specs} sessions={sessions} onFocusNode={onFocusNode} onOpenSession={onOpenSession} onWrite={async (outcomes) => { flash(outcomes); await load() }} />
           : <div className="fv-note">{t('session.issuesEmpty')}</div>}
       </div>
       {composing && (
@@ -145,7 +145,7 @@ export default function IssuesPage({ onFocusNode, specs = [], sessions = [], iss
 // ([[issues-view]]): Sign · Accept · Reject · Promote (local-store verbs — an open local issue only; sign
 // hides once 'human' signed) beside the store-routed Close every non-concluded issue gets. Each POSTs to
 // the thin endpoint wrapping the same store function the CLI verb calls, then reloads the resident list.
-function IssueDetail({ issue: th, specs, sessions, onFocusNode, onWrite }) {
+function IssueDetail({ issue: th, specs, sessions, onFocusNode, onOpenSession, onWrite }) {
   const t = useT()
   const local = th.store === 'local'
   const concluded = th.status === 'closed' || th.status === 'rejected' || th.status === 'landed'
@@ -183,10 +183,10 @@ function IssueDetail({ issue: th, specs, sessions, onFocusNode, onWrite }) {
           {th.status && <span className={`fv-status fv-st-${th.status}`}>{th.status}</span>}
           <span className={`fv-store fv-store-${local ? 'local' : 'forge'}`}>{th.store}</span>
           {/* the originator (who filed) + whether their session is still ALIVE — a local thread's `by` is a
-              session id (join it against the board for liveness); a forge issue's `by` is a github login that
-              resolves to no session, so it stays a plain label. */}
+              session id (join it against the board for liveness, click through when live); a forge issue's
+              `by` is a github login that resolves to no session, so it stays a plain label. */}
           {local
-            ? <OriginatorLiveness originator={th.by} sessions={sessions} kind="issue" />
+            ? <OriginatorLiveness originator={th.by} sessions={sessions} kind="issue" onOpenSession={onOpenSession} />
             : (th.by && <span className="fv-by">{th.by}</span>)}
           {/* signers badge only when someone actually signed — a "+0 signed" is noise (mirrors the CLI's
               `if (p.signers.length)` guard, issues.ts). */}

@@ -64,26 +64,37 @@ export function resolveAnchor(anchor, events) {
 }
 
 // The thread's ORIGINATOR liveness ([[mentions]] loop-in) — WHO filed this issue/eval, and whether their
-// session is still ALIVE. It matters because an un-@'d reply courtesy-delivers to the FIRST ONLINE link of
-// the originator chain (the reply verb routes through notifyOriginator, silent when offline), so the reader
-// should see honestly whether a plain reply reaches a live agent. Read-only and computes NOTHING beyond a
-// thin join of the originator id against the live board sessions the page already holds — alive = the
-// session is listed and not offline (a closed session isn't listed at all; sessionZone folds both). Reuses
-// the board's four-hue STATUS_COLOR (the live status paints the dot), never a second palette. `kind`
-// ('issue' | 'eval') only picks the label wording. A missing/unresolvable originator renders nothing —
-// exactly the case where the loop-in chain runs dry silently (a forge github login, a legacy reading).
-export function OriginatorLiveness({ originator, sessions = [], kind = 'issue' }) {
+// session is still ALIVE. This is a thin join of the originator id against the live board sessions the page
+// already holds — alive = the session is listed and not offline (a closed session isn't listed at all;
+// sessionZone folds both). A live originator is a direct door to its session-board tab; offline remains a
+// static identity chip. Reuses the board's four-hue STATUS_COLOR (the live status paints the dot), never a
+// second palette. `kind` ('issue' | 'eval') only picks the label wording. A missing/unresolvable originator
+// renders nothing — exactly the case where the loop-in chain runs dry silently (a forge github login, a
+// legacy reading).
+export function OriginatorLiveness({ originator, sessions = [], kind = 'issue', onOpenSession = null }) {
   const t = useT()
   if (!originator) return null
   const s = (sessions || []).find((x) => x.id === originator)
   const alive = !!s && sessionZone(s) !== 'offline'
   const color = alive ? (STATUS_COLOR[s.status] || STATUS_COLOR.working) : STATUS_COLOR.offline
-  return (
-    <span className={`fv-originator ${alive ? 'alive' : 'offline'}`}
-          title={t(kind === 'eval' ? 'thread.originatorEval' : 'thread.originatorIssue', { by: originator })}>
+  const title = t(kind === 'eval' ? 'thread.originatorEval' : 'thread.originatorIssue', { by: originator })
+  const body = (
+    <>
       <span className="fv-originator-dot" style={{ background: color }} aria-hidden="true" />
       <span className="fv-originator-who">{originator}</span>
-      <span className="fv-originator-reach">{alive ? t('thread.originatorAlive') : t('thread.originatorOffline')}</span>
+    </>
+  )
+  if (alive && onOpenSession) {
+    return (
+      <button type="button" className="fv-originator alive openable" title={title} aria-label={title} onClick={() => onOpenSession(originator)}>
+        {body}
+      </button>
+    )
+  }
+  return (
+    <span className={`fv-originator ${alive ? 'alive' : 'offline'}`}
+          title={title}>
+      {body}
     </span>
   )
 }

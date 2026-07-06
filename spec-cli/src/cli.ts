@@ -37,7 +37,7 @@ function flushExit(code = 0): Promise<never> {
 }
 const has = (name: string) => process.argv.includes(`--${name}`)
 // bare positionals after argv index `from`, skipping flags and their values (selectors for ls/watch).
-const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--timeout', '--reason', '--out', '--password', '--tls-cert', '--tls-key', '--harness', '--launcher', '--harness-session', '--port', '--api-port', '--host', '--preset', '--limit', '--session'])
+const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--timeout', '--reason', '--out', '--password', '--tls-cert', '--tls-key', '--harness', '--launcher', '--harness-session', '--port', '--api-port', '--host', '--preset', '--limit', '--session', '--depth'])
 function positionals(from: number): string[] {
   const out: string[] = []
   for (let i = from; i < process.argv.length; i++) {
@@ -331,6 +331,24 @@ if (cmd === 'serve') {
 } else if (cmd === 'board') {
   const { buildBoard } = await import('./board.js')
   console.log(JSON.stringify(await buildBoard(), null, 2))
+  await flushExit(0)
+} else if (cmd === 'tree') {
+  // @@@ tree - the human-readable graph ([[spex-tree]]): the same buildBoard() the dashboard renders,
+  // as an indented status-coloured terminal tree. Colour degrades cleanly: off unless stdout is a tty,
+  // and NO_COLOR always wins.
+  const { buildBoard } = await import('./board.js')
+  const { renderTree, treeJson } = await import('./tree.js')
+  const depthRaw = flag('depth')
+  const depth = depthRaw === undefined ? undefined : Number(depthRaw)
+  if (depth !== undefined && (!Number.isInteger(depth) || depth < 0)) { console.error('spex tree: --depth must be a non-negative integer'); process.exit(2) }
+  const opts = { node: flag('node'), depth, color: process.stdout.isTTY && !process.env.NO_COLOR }
+  const { nodes } = await buildBoard()
+  try {
+    console.log(has('json') ? JSON.stringify(treeJson(nodes, opts), null, 2) : renderTree(nodes, opts))
+  } catch (e: any) {
+    console.error(`spex tree: ${e?.message ?? e}`)
+    process.exit(2)
+  }
   await flushExit(0)
 } else if (cmd === 'search') {
   const { searchSpecs } = await import('./search.js')

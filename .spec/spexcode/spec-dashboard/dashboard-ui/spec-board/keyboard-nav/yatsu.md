@@ -15,7 +15,7 @@ scenarios:
       enter-in-info-popup-is-inert). Crossing into a node's live session is now a right-click node-menu
       action ([[node-menu]]), never a keystroke.
     code:
-      - spec-dashboard/src/App.jsx
+      - spec-dashboard/src/Dashboard.jsx
       - spec-dashboard/src/keymap.js
   - name: enter-in-info-popup-is-inert
     tags: [frontend-e2e, desktop]
@@ -31,7 +31,7 @@ scenarios:
       Enter no longer crosses from the popup into the node's live Session Board; that crossing moved to
       the right-click node-menu ([[node-menu]]).
     code:
-      - spec-dashboard/src/App.jsx
+      - spec-dashboard/src/Dashboard.jsx
   - name: click-does-not-pan-keyboard-does
     tags: [frontend-e2e, desktop]
     description: >-
@@ -47,7 +47,7 @@ scenarios:
       embedding. A keyboard focus move (arrow/vim) DOES pan the camera to recentre the new focus. The
       camera follows the keyboard, not the mouse.
     code:
-      - spec-dashboard/src/App.jsx
+      - spec-dashboard/src/Dashboard.jsx
   - name: slash-search-spans-four-planes
     tags: [frontend-e2e, desktop]
     description: >-
@@ -93,6 +93,22 @@ scenarios:
       stale target.
     code:
       - spec-dashboard/src/scroll.js
+  - name: modified-browser-shortcuts-pass-through
+    tags: [frontend-e2e, desktop]
+    description: >-
+      Open the dashboard on the graph page and attach a capture-phase keydown probe after the app has
+      mounted. Press modified browser/system shortcut chords whose base keys are graph bindings:
+      Ctrl/⌘+L (`l` is child nav), Ctrl/⌘+, (`,` is settings), Alt+Left (left is parent nav), and
+      Ctrl/⌘+0 (`0` is zoom reset). Record whether those events arrive at the probe with
+      `defaultPrevented === false` and the graph route / focused node / visible overlays unchanged.
+      Then press the intentional modified app shortcut Ctrl/⌘+/ and confirm it opens the search palette.
+    expected: >-
+      Modified browser/system shortcuts pass through the graph handler: they are not prevented, do not
+      move focus, do not open graph overlays, and do not navigate the dashboard. The only modified
+      shortcuts the graph claims are the explicit app accelerators: Ctrl/⌘+/ for session-boosted search
+      and the Alt page jumps.
+    code:
+      - spec-dashboard/src/Dashboard.jsx
   - name: palette-fits-screen-and-truncates-rows
     tags: [frontend-e2e, desktop]
     description: >-
@@ -120,4 +136,7 @@ search scenarios scope their freshness `code:` to the search palette (`SpecSearc
 keyboard shell (`App.jsx`) — so unrelated keyboard-nav edits don't stale these readings. The
 **manual-scroll-wins** scenario is looked at the same way — start a J/K glide on a scrollable surface,
 wheel against it mid-flight, screenshot that the wheel position holds — and scopes its freshness to the
-shared momentum scroller (`scroll.js`).
+shared momentum scroller (`scroll.js`). The modified-shortcuts scenario probes the real browser event
+stream after the app's capture handler has run: base keys that are graph bindings must remain browser
+shortcuts when Ctrl/⌘/Alt modifies them, while the deliberately declared modified app shortcut still
+opens search.

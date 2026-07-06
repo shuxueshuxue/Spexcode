@@ -12,7 +12,7 @@ function reading(over: Partial<EvalEntry>): EvalEntry {
   }
 }
 const timeline = (readings: EvalEntry[], over: Partial<EvalTimeline> = {}): EvalTimeline =>
-  ({ node: 'n', hasYatsu: true, scenarios: [], dangling: [], readings, ...over })
+  ({ node: 'n', hasYatsu: true, scenarios: [], retractions: [], dangling: [], readings, ...over })
 
 // ---- formatTimeline: the human face of the SAME EvalTimeline --json emits verbatim ----
 
@@ -74,4 +74,13 @@ test('formatTimeline: a mixed reading lists every evidence entry (N images + a v
     ],
   })]))
   assert.match(out, /image img1aaaaaaaa…, image img2bbbbbbbb…, video clipcccccccc…/)
+})
+
+test('formatTimeline: retraction events render as the undo trace — beside readings, and even when all readings are retracted', () => {
+  const retractions = [{ retracts: 't9', scenario: 's', note: 'botched smoke run', by: 'sess-1', ts: 't10' }]
+  const withReadings = formatTimeline(timeline([reading({})], { retractions }))
+  assert.match(withReadings, /⟲ retracted: scenario 's' reading @ t9 — botched smoke run {2}by sess-1/)
+  const allRetracted = formatTimeline(timeline([], { retractions }))
+  assert.match(allRetracted, /no reading yet/)          // effective view is honestly unmeasured…
+  assert.match(allRetracted, /⟲ retracted: scenario 's'/)   // …but the trace still shows
 })

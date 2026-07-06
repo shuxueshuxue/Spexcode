@@ -3,7 +3,7 @@ import { repoRoot, driftIndex, historyIndex, type DriftIndex, type HistoryIndex 
 import { loadSpecs } from '../../spec-cli/src/specs.js'
 import { loadEvalRemarkTracks, trackKey, type RemarkTrack, type Issue, type Reply } from '../../spec-cli/src/issues.js'
 import { yatsuNodes, type YatsuNode } from './yatsu.js'
-import { readReadings, evidenceOf, type Verdict, type EvidenceKind } from './sidecar.js'
+import { readSidecar, applyRetractions, evidenceOf, type Verdict, type EvidenceKind, type Retraction } from './sidecar.js'
 import { staleAxes, codeDrift, type StaleAxis } from './freshness.js'
 import { scenarioIndex, type ScenarioIndex } from './scenariofresh.js'
 import { hasBlob, getBlob, MISS_BLOB } from './cache.js'
@@ -97,6 +97,11 @@ export type EvalTimeline = {
   hasYatsu: boolean
   scenarios: ScenarioInfo[]
   readings: EvalEntry[]
+  // retraction events ([[yatsu-core]]'s retract verb), newest first — the sanctioned-undo TRACE. `readings`
+  // above is already the effective view (a retracted reading is dropped from the scoreboard everywhere);
+  // this list is how a surface still shows that the undo happened: which (scenario, ts) was withdrawn,
+  // by whom, why. Additive — a consumer that ignores it sees exactly the effective scoreboard.
+  retractions: Retraction[]
   // orphaned remark tracks (renamed/deleted scenarios) — surfaced at node level so their remarks never vanish
   // ([[remark-teeth]] dangling clause). SEPARATE from `readings` on purpose: a dangling track has no reading,
   // so it must NOT flow into latestPerScenario / the board scoreboard — it ages nothing.
@@ -137,7 +142,7 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
   // short-circuit a non-yatsu node on the (short) yatsu walk — the board attaches `evals` to every node, so
   // this is the common case and must stay cheap (a list the size of the few yatsu nodes, not the whole tree).
   const ynode = (ctx?.ynodes ?? yatsuNodes(root)).find((n) => n.id === id)
-  if (!ynode) return { node: id, hasYatsu: false, scenarios: [], readings: [], dangling: [] }
+  if (!ynode) return { node: id, hasYatsu: false, scenarios: [], readings: [], retractions: [], dangling: [] }
   // the governed `code:` files are the freshness CODE axis; read them from the canonical spec loader so a
   // reparent/rename is seen the same way `spex lint` and `spex yatsu eval` see it (joined by directory).
   const specs = ctx?.specs ?? await loadSpecs()
@@ -156,7 +161,10 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
     name: s.name, expected: s.expected,
     ...(s.tags?.length ? { tags: s.tags } : {}), ...(s.code?.length ? { code: s.code } : {}),
   }))
-  const readings: EvalEntry[] = readReadings(ynode.sidecarPath).map((r) => {
+  // one raw sidecar read: the effective readings feed the scoreboard rows below; the retraction events ride
+  // along as the undo trace (newest-first, like the readings).
+  const { readings: rawReadings, retractions } = readSidecar(ynode.sidecarPath)
+  const readings: EvalEntry[] = applyRetractions(rawReadings, retractions).map((r) => {
     // a scenario's own `code` is its freshness code axis when it declares one; else the whole node's list.
     const sc = byName.get(r.scenario)
     // the teeth feed the WHOLE scenario track against THIS reading — an unresolved (or not-yet-out-run)
@@ -220,7 +228,7 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
       ;(host.remarks ??= []).push(toRemarkView(rm, track.threadId, !target))
     }
   }
-  return { node: id, hasYatsu: true, scenarios, readings, dangling }
+  return { node: id, hasYatsu: true, scenarios, readings, retractions: [...retractions].reverse(), dangling }
 }
 
 const HEX64 = /^[0-9a-f]{64}$/

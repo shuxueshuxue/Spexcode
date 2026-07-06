@@ -35,6 +35,21 @@ scenarios:
       scenario axis; every sibling whose block was untouched stays fresh. The scenario axis is
       per-scenario, not per-file — a sibling's edit never re-stales this reading, so one yatsu.md's
       routine growth no longer generates a wave of false stale scores.
+  - name: retract-undoes-a-botched-filing
+    tags: [cli]
+    description: >-
+      Through the real `spex yatsu` CLI in a scratch repo: file a good reading, then a junk one (a
+      simulated botched e2e/smoke run), confirm `show` leads with the junk verdict, then run
+      `spex yatsu retract <node> --scenario <s> --note <why>`. Re-run `show` and `scan`; retract
+      again until nothing is left, and check the loud error on one retract too many plus the
+      unknown-flag rejection. Inspect the sidecar file itself.
+    expected: >-
+      retract appends a retraction event — no sidecar line is ever deleted or rewritten; the junk
+      line stays in the file and `show` renders the ⟲ retracted trace beside the readings. The
+      effective scoreboard drops the retracted reading everywhere at once: the prior good reading
+      is the latest again (scan quiet), and retracting every reading returns the scenario to
+      yatsu-missing. A retract with no un-retracted reading left fails loud, as does an unknown
+      flag.
 ---
 # yatsu.md — yatsu-core
 

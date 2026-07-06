@@ -136,7 +136,7 @@ Specs / graph
                         \`spex serve\`. [--port N] [--api-port N=8787]. The installed replacement for \`npm run web\`.
   board                 dump the dashboard board state as JSON
   forge <sub>           trace a forge's issues/PRs onto spec nodes (read-only): links | eval-pending [--host github] [--node <id>] [--json]
-  yatsu <sub>           measure a node's scenarios and keep score: scan | eval [.|<node>] [--scenario N] (--pass|--fail) [--note T] [--image P|--result P|-] | show [.|<node>] [--json] | clean [--keep-latest|--all]
+  yatsu <sub>           measure a node's scenarios and keep score: scan | eval [.|<node>] [--scenario N] (--pass|--fail) [--note T] [--image P|--result P|-] | retract [.|<node>] [--scenario N] [--last|--ts ISO] [--note T] | show [.|<node>] [--json] | clean [--keep-latest|--all]
   blob put <file|->     stash bytes in the shared content-addressed evidence cache, print the hash — no reading filed (re-put restores a pruned/cloned-away blob by content)
   self <sub>            diagnose how the workflow reaches THIS self-launched agent: doctor (default) | contract | conflicts
   issues                THE issue read — local + forge issues, one merged store-tagged list (the drain view)  [--node <id>] [--store local|github] [--all] [--json]

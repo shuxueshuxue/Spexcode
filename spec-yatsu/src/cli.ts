@@ -5,7 +5,7 @@ import { loadSpecs } from '../../spec-cli/src/specs.js'
 import { loadConfig } from '../../spec-cli/src/lint.js'
 import { mainBranch, envSessionId, readRawRecord } from '../../spec-cli/src/layout.js'
 import { yatsuNodes, validateScenarios, YATSU_FILE, type YatsuNode } from './yatsu.js'
-import { readReadings, appendReading, latestPerScenario, evidenceOf, type Reading, type Verdict, type Evidence } from './sidecar.js'
+import { readReadings, readSidecar, appendReading, appendRetraction, latestPerScenario, evidenceOf, type Reading, type Verdict, type Evidence, type Retraction } from './sidecar.js'
 import { staleAxes } from './freshness.js'
 import { scenarioIndex } from './scenariofresh.js'
 import { loadEvalRemarkTracks, trackKey } from '../../spec-cli/src/issues.js'
@@ -286,6 +286,78 @@ function parseVerdict(args: string[]): Verdict | null {
   return null
 }
 
+// retract's flag set is closed like eval's — an unknown flag is rejected LOUD, never silently ignored.
+const RETRACT_VALUE_FLAGS = new Set(['scenario', 'ts', 'note'])
+const RETRACT_BOOL_FLAGS = new Set(['last'])
+
+// `spex yatsu retract` — the sanctioned inverse of eval: undo a botched filing through the SAME surface
+// that wrote it. It appends a RETRACTION event to the sidecar (append-only stays true; the target line
+// stays as history; git carries who/when/why) — never a deleted line. The effective scoreboard then drops
+// the retracted reading everywhere at once: the previous reading becomes the latest again, or the scenario
+// honestly returns to yatsu-missing. Default target is the scenario's LATEST effective reading (--last is
+// that default made explicit — repeated retracts peel junk e2e/smoke filings back one at a time); --ts
+// pins an exact reading by its timestamp.
+async function retractCmd(args: string[]): Promise<number> {
+  const root = repoRoot()
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]
+    if (!a.startsWith('--')) continue
+    const name = a.slice(2)
+    if (RETRACT_VALUE_FLAGS.has(name)) { i++; continue }
+    if (RETRACT_BOOL_FLAGS.has(name)) continue
+    console.error(`spex yatsu retract: unknown flag '${a}' — accepts --scenario --last --ts --note`)
+    return 2
+  }
+  const sel = positional(args)
+  const id = !sel || sel === '.' ? currentNodeId(root) : sel
+  if (!id) { console.error('spex yatsu retract .: no current node (no .session/node-branch here) — name a node'); return 2 }
+  const node = yatsuNodes(root).find((n) => n.id === id)
+  if (!node) { console.error(`spex yatsu retract: no yatsu node '${id}' (a node needs a yatsu.md)`); return 1 }
+
+  // which scenario, resolved exactly as eval resolves it: --scenario, or the sole declared scenario. A
+  // reading for a since-deleted scenario is still retractable by naming it — the sidecar knows names the
+  // yatsu.md may have dropped.
+  const scName = flag(args, 'scenario')
+  const declared = node.scenarios.map((s) => s.name)
+  const scenario = scName ?? (declared.length === 1 ? declared[0] : undefined)
+  if (!scenario) {
+    console.error(`spex yatsu retract: '${id}' declares ${declared.length} scenarios — name one with --scenario <name> (declared: ${declared.join(', ')})`)
+    return 1
+  }
+
+  const ts = flag(args, 'ts')
+  if (ts !== undefined && has(args, 'last')) { console.error('spex yatsu retract: --ts and --last conflict — pin one reading or take the latest, not both'); return 2 }
+  const effective = readReadings(node.sidecarPath).filter((r) => r.scenario === scenario)
+  if (!effective.length) {
+    const { readings } = readSidecar(node.sidecarPath)
+    const had = readings.some((r) => r.scenario === scenario)
+    console.error(`spex yatsu retract: '${id}' scenario '${scenario}' has no ${had ? 'un-retracted ' : ''}reading${had ? ' left' : ''} — nothing to retract`)
+    return 1
+  }
+  const target = ts !== undefined ? effective.find((r) => r.ts === ts) : effective[effective.length - 1]
+  if (!target) {
+    console.error(`spex yatsu retract: '${id}' scenario '${scenario}' has no un-retracted reading @ ${ts} — readings: ${effective.map((r) => r.ts).join(', ')}`)
+    return 1
+  }
+
+  const note = flag(args, 'note')
+  const retraction: Retraction = {
+    retracts: target.ts,
+    scenario,
+    ...(note !== undefined ? { note } : {}),
+    ...((envSessionId() ?? undefined) ? { by: envSessionId()! } : {}),
+    ts: new Date().toISOString(),
+  }
+  appendRetraction(node.sidecarPath, retraction)
+  const left = readReadings(node.sidecarPath).filter((r) => r.scenario === scenario)
+  const now = left.length
+    ? `latest is now ${left[left.length - 1].ts} (${verdictText(left[left.length - 1].verdict)})`
+    : 'the scenario is unmeasured again (yatsu-missing)'
+  console.log(`  ⟲ '${id}' scenario '${scenario}' reading @ ${target.ts} (${verdictText(target.verdict)} [${target.evaluator}]) retracted — ${now}`)
+  console.log('spex yatsu retract: 1 reading retracted (an appended event — commit the sidecar so the retraction is attributed)')
+  return 0
+}
+
 async function clean(args: string[]): Promise<number> {
   const root = repoRoot()
   const all = has(args, 'all')
@@ -357,7 +429,13 @@ function verdictText(v: Verdict | undefined): string {
 
 export function formatTimeline(tl: EvalTimeline): string {
   if (!tl.hasYatsu) return `spex yatsu show: '${tl.node}' declares no scenarios (no yatsu.md)`
-  if (!tl.readings.length) return `spex yatsu show: '${tl.node}' has scenarios but no reading yet — run \`spex yatsu eval ${tl.node}\``
+  // the retraction trace, newest first — the undo stays visible through the same surface that shows readings.
+  const retractLines = (tl.retractions ?? []).map((x) =>
+    `  ⟲ retracted: scenario '${x.scenario}' reading @ ${x.retracts}${x.note ? ` — ${x.note}` : ''}${x.by ? `  by ${x.by}` : ''}  ${x.ts}`)
+  if (!tl.readings.length) {
+    const head = `spex yatsu show: '${tl.node}' has scenarios but no reading yet — run \`spex yatsu eval ${tl.node}\``
+    return retractLines.length ? [head, '', ...retractLines].join('\n') : head
+  }
   const w = Math.max(...tl.readings.map((r) => r.scenario.length))
   const lines = tl.readings.flatMap((r) => {
     const badge = r.fresh ? '✓ current' : `⚠ stale (${r.staleAxes.join(', ')})`
@@ -371,17 +449,18 @@ export function formatTimeline(tl: EvalTimeline): string {
     const head = `  ${r.scenario.padEnd(w)}  ${verdictText(r.verdict)}  ${badge}  ${r.evaluator}  ${r.codeSha.slice(0, 7)}  ${ev}  ${r.ts}`
     return r.expected ? [head, `  ${' '.repeat(w)}  expected: ${r.expected}`] : [head]
   })
-  return [`spex yatsu show: '${tl.node}' — ${tl.readings.length} reading(s), newest first`, '', ...lines].join('\n')
+  return [`spex yatsu show: '${tl.node}' — ${tl.readings.length} reading(s), newest first`, '', ...lines, ...retractLines].join('\n')
 }
 
 export async function runYatsu(args: string[]): Promise<number> {
   const sub = args[0]
   if (sub === 'scan') return scan(args.slice(1))
   if (sub === 'eval') return evalCmd(args.slice(1))
+  if (sub === 'retract') return retractCmd(args.slice(1))
   if (sub === 'clean') return clean(args.slice(1))
   if (sub === 'show') return show(args.slice(1))
   if (sub === 'check-staged') return checkStaged()
-  console.error('spex yatsu: scan [--changed] | eval [.|<node>] [--scenario <name>] (--pass|--fail) [--note <text>] [--image <path> …repeatable] [--result <path|->] [--video <path> [--timeline <json>]] | show [.|<node>] [--json] | clean [--keep-latest|--all]')
+  console.error('spex yatsu: scan [--changed] | eval [.|<node>] [--scenario <name>] (--pass|--fail) [--note <text>] [--image <path> …repeatable] [--result <path|->] [--video <path> [--timeline <json>]] | retract [.|<node>] [--scenario <name>] [--last | --ts <iso>] [--note <why>] | show [.|<node>] [--json] | clean [--keep-latest|--all]')
   return 2
 }
 

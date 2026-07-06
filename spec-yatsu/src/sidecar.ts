@@ -41,25 +41,61 @@ export function evidenceOf(r: { evidence?: Evidence[]; blob?: string | null; blo
   return []
 }
 
-// parse the sidecar: one Reading per non-blank line. A malformed line is skipped (the file is append-only
-// and git-tracked, so a partial write or a hand-edit shouldn't sink the whole read) — fail soft per line.
-export function readReadings(sidecarPath: string): Reading[] {
-  if (!existsSync(sidecarPath)) return []
-  const out: Reading[] = []
+// a RETRACTION is the sanctioned inverse of a filing — itself an appended event, never a deleted line
+// (the sidecar stays append-only; git shows who retracted what, when). `retracts` is the target reading's
+// `ts` within `scenario` (its natural key). Deliberately NO `evaluator` field: an old reader's line filter
+// (which requires an evaluator string) skips a retraction entirely, so version skew degrades to "the
+// retraction isn't applied yet", never to a mis-rendered reading. `by` is the retracting session; `note`
+// says why (a botched e2e filing, a wrong verdict).
+export type Retraction = { retracts: string; scenario: string; note?: string; by?: string; ts: string }
+
+// parse the sidecar RAW: one event per non-blank line — a Reading, or a Retraction (a line carrying a
+// string `retracts`). A malformed line is skipped (the file is append-only and git-tracked, so a partial
+// write or a hand-edit shouldn't sink the whole read) — fail soft per line.
+export function readSidecar(sidecarPath: string): { readings: Reading[]; retractions: Retraction[] } {
+  const readings: Reading[] = []
+  const retractions: Retraction[] = []
+  if (!existsSync(sidecarPath)) return { readings, retractions }
   for (const line of readFileSync(sidecarPath, 'utf8').split('\n')) {
     const t = line.trim()
     if (!t) continue
     try {
       const r = JSON.parse(t)
-      if (r && typeof r.scenario === 'string' && typeof r.evaluator === 'string') out.push(r as Reading)
+      if (!r || typeof r.scenario !== 'string') continue
+      if (typeof r.retracts === 'string') retractions.push(r as Retraction)
+      else if (typeof r.evaluator === 'string') readings.push(r as Reading)
     } catch { /* skip a malformed line */ }
   }
-  return out
+  return { readings, retractions }
+}
+
+// the retraction join, shared by every effective-view reader: drop each reading a retraction targets by
+// (scenario, ts) — NUL-joined, since a scenario name may contain spaces. A retraction matching nothing is
+// inert: it excludes no reading and harms no read.
+export function applyRetractions(readings: Reading[], retractions: Retraction[]): Reading[] {
+  if (!retractions.length) return readings
+  const gone = new Set(retractions.map((x) => `${x.scenario}\0${x.retracts}`))
+  return readings.filter((r) => !gone.has(`${r.scenario}\0${r.ts}`))
+}
+
+// the EFFECTIVE readings — what the scoreboard sees: every reading minus the retracted. Every score
+// consumer (freshness, scan, clean's referenced set, the eval tab, the proof) reads through here, so a
+// retract undoes a botched filing on ALL of them at once — the previous reading becomes the latest again,
+// or the scenario honestly returns to yatsu-missing.
+export function readReadings(sidecarPath: string): Reading[] {
+  const { readings, retractions } = readSidecar(sidecarPath)
+  return applyRetractions(readings, retractions)
 }
 
 // append ONE reading as a JSON line — the only mutation eval performs (a reading is an event, never an
 // overwrite; superseding readings are newer lines, freshness picks the latest per scenario).
 export function appendReading(sidecarPath: string, r: Reading): void {
+  appendFileSync(sidecarPath, JSON.stringify(r) + '\n')
+}
+
+// append ONE retraction as a JSON line — the sanctioned undo writes through the same append-only surface
+// that filed the reading; the target line stays in place as history.
+export function appendRetraction(sidecarPath: string, r: Retraction): void {
   appendFileSync(sidecarPath, JSON.stringify(r) + '\n')
 }
 

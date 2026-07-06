@@ -282,9 +282,14 @@ FOOTGUN (skip-worktree): a host-tracked CLAUDE.md/AGENTS.md is skip-worktree'd i
 
 const TOPICS: Record<string, string> = { spec: SPEC, yatsu: YATSU, config: CONFIG }
 
-export function guideText(topic?: string): string {
-  if (!topic) return SETUP
+// every guide page ends by naming the OTHER help layer, so a reader never dead-ends here: guide is
+// the skill layer (workflows · formats · settings); command usage lives in help.ts's two layers.
+const FOOTER = `\n\n(This is the skill layer. Command usage: \`spex help\` for the map, \`spex help <command>\` for one command.)`
+
+// null = unknown topic: the caller fails loud (exit non-zero) while still naming the layers to go
+// back to — an unknown topic must never read as a successful page ([[cli-surface]]'s dead-end rule).
+export function guideText(topic?: string): string | null {
+  if (!topic) return SETUP + FOOTER
   const t = TOPICS[topic]
-  if (t) return t
-  return `spex guide: no topic '${topic}'. Topics: spec, yatsu, config. Run \`spex guide\` (no topic) for the setup workflow.`
+  return t ? t + FOOTER : null
 }

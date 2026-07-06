@@ -87,6 +87,9 @@ each. There is no discovery phase.
 - **CLOSE** — only **after** the merge is confirmed: `spex session close <id>`.
 - **GUIDE** — `spex session send <id> "<msg>"` corrects or steers a live worker. Keep `spex lint` at
   **0 errors** across the tree.
+- **HELP** — lost? `spex help` is the command map, `spex help <cmd>` one command's usage, and
+  `spex guide <topic>` the workflows/formats those commands assume. A `--help` probe is always safe:
+  it prints and exits before the verb runs.
 
 ## What a spec node is
 

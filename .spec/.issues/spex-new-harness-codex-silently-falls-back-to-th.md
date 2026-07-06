@@ -1,0 +1,9 @@
+---
+concern: spex new --harness codex silently falls back to the default claude launcher instead of selecting the configured codex launcher. Repro: backend has launchers [claude-glm(default), codex, reclaude]; 'spex new ... --harness codex' produced sessions with harness=claude launcher=claude-glm (verified on b0c5cc2d and the whole wave). The working path is --launcher codex (the named launcher). So --harness <h> either (a) does nothing when no --launcher is given, silently using the default launcher of possibly the WRONG harness, or (b) doesn't map <h> to a launcher of that harness. Sibling of the known 'spex new --launcher silently overridden' bug. Expected: --harness codex selects the codex-harness launcher (the configured 'codex'), or fails loud if none exists — never silently launches the wrong harness. Cost tonight: a whole wave I intended as codex ran as claude-glm.
+by: 3ec0a7c5-550a-4ff3-8de6-f0b9509018d4
+status: open
+nodes: launcher-select
+created: 2026-07-06T18:08:20.284Z
+---
+
+(no detail given — spex new --harness codex silently falls back to the default claude launcher instead of selecting the configured codex launcher. Repro: backend has launchers [claude-glm(default), codex, reclaude]; 'spex new ... --harness codex' produced sessions with harness=claude launcher=claude-glm (verified on b0c5cc2d and the whole wave). The working path is --launcher codex (the named launcher). So --harness <h> either (a) does nothing when no --launcher is given, silently using the default launcher of possibly the WRONG harness, or (b) doesn't map <h> to a launcher of that harness. Sibling of the known 'spex new --launcher silently overridden' bug. Expected: --harness codex selects the codex-harness launcher (the configured 'codex'), or fails loud if none exists — never silently launches the wrong harness. Cost tonight: a whole wave I intended as codex ran as claude-glm.)

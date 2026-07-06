@@ -35,6 +35,22 @@ scenarios:
       scenario axis; every sibling whose block was untouched stays fresh. The scenario axis is
       per-scenario, not per-file — a sibling's edit never re-stales this reading, so one yatsu.md's
       routine growth no longer generates a wave of false stale scores.
+  - name: dirty-governed-warns-at-filing
+    tags: [cli]
+    code: [spec-yatsu/src/cli.ts]
+    description: >-
+      Through the real `spex yatsu` CLI in a scratch repo: leave an UNCOMMITTED edit in a
+      scenario's governed code file, run `spex yatsu eval <node> --pass`, then commit that edit
+      and re-run `spex yatsu scan`. Also file once against a clean tree, and once following the
+      commit-first order (commit the governed code first, measure and file after).
+    expected: >-
+      eval warns LOUD at filing time — a ⚠ line naming each governed file with uncommitted
+      changes and saying the reading is MIS-ANCHORED from birth: codeSha can only name HEAD,
+      and HEAD does not contain the edits just measured, so the reading claims a pass for code
+      that was never run (commit first, then measure) — while still filing it (a warning,
+      never a block). A filing against a clean tree prints no warning, and a commit-first
+      reading stays fresh on the next scan; the later stale flag on a dirty-tree reading is
+      freshness correctly exposing the mis-anchor, not an engine bug.
   - name: retract-undoes-a-botched-filing
     tags: [cli]
     description: >-

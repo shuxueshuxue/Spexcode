@@ -41,6 +41,9 @@ grammar is uniform, the logic is tiny.
   by every dashboard input that takes the grammar (the console's New prompt and ❯ inbox, the issue
   composers), never re-implemented per surface. An agent `@`-ing another agent under an issue post is the
   identical path a human uses — **storage (the text) and delivery (the dispatch) stay separate**.
+  Discoverability is symmetric: the dashboard hints via its autocomplete dropdowns; the CLI hints via a
+  mention line in `spex help session` and `spex help issues` — a CLI user must not have to find the
+  grammar by reading the dashboard.
 - **No new delivery pipe.** `@session` → [[dispatch]]'s `sendKeys` (a prompt = the surrounding text + a
   pointer to where it was written); `@new` → [[launch]]'s `newSession` (a fresh worker). Offline/unreachable
   fails loud (the `DispatchResult`), and the text still persists for the drain.

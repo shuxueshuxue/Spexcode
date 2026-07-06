@@ -142,7 +142,10 @@ fails loud naming each path. Bytes go to stdout by default (pipe-friendly); -o w
 Bare \`spex issues\` is the drain view a supervisor reads. \`open\` welcomes taste, annotations, and
 off-mainline smells — not only bugs; \`--store <host>\` opens straight on the forge (the same port the
 dashboard's New form uses). \`close\` and \`reply\` route by the issue's store — one verb, local or forge,
-the same routing as the dashboard. (\`nudge\` exists but is fired by the post-merge hook, not typed.)`,
+the same routing as the dashboard. (\`nudge\` exists but is fired by the post-merge hook, not typed.)
+Mentions: @session · [[node]] work in any concern/body — CLI args included. [[node]] links the topic
+node (it also tags the issue, like --node); @session hands the text to that live agent; @new spawns
+a fresh worker on the thread's node.`,
     see: 'spex remark (pin a resolvable concern to an issue or scenario) · spex forge (trace forge → nodes)',
   },
   remark: {
@@ -257,6 +260,10 @@ Human escape hatch:
                                        NEVER run it in a turn (it freezes you): use capture/send/rawkey.
                                        LOCAL-only — the tmux server is the backend machine's, so it fails
                                        loud when the resolved backend is remote. Offline session → loud.
+
+Mentions: @session · [[node]] work in ANY prompt, issue, or remark body — text passed as a CLI arg
+included. [[node]] names the topic (a new session derives its node from the prompt's first one);
+@session hands the surrounding text to that live agent; @new dispatches a fresh worker.
 
 (state · fail · idle · commit-gate also exist but are hook-driven — the lifecycle hooks call them;
 never type them.) ${SEL_NOTE}

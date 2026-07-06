@@ -53,5 +53,8 @@ Dead-end rule: an unknown command, an unknown help topic, an unknown guide topic
 The map must stay honest: every porcelain verb `cli.ts` dispatches appears in it (a hidden typeable
 verb is the bug this node exists to prevent — `search` and `owner` were exactly that), and each verb
 with caveats carries them in its own entry (`watch` says it never exits and points at `wait`).
+Cross-cutting input grammar is advertised in the entries where a user would first need it: the
+mention hint (`@session` · `[[node]]`, [[mentions]]) rides the `session` and `issues` entries, so a
+CLI-only user learns the grammar without ever seeing the dashboard's autocomplete.
 `cli.ts` remains the thin dispatch hub — verbs' logic lives in their own modules; help text lives in
 `help.ts`; a sibling verb's churn in the hub is that feature's, not this node's drift.

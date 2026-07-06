@@ -1,7 +1,7 @@
 ---
 concern: freshness scenario-axis is file-granular, not per-scenario — one scenario's prose edit re-stales its siblings (violates D3)
 by: 3ed32096-2012-466d-b194-d6c96d4781dd
-status: open
+status: landed
 nodes: freshness
 created: 2026-07-04T15:54:24.302Z
 ---

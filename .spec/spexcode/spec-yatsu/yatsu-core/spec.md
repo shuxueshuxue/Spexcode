@@ -122,7 +122,16 @@ The surface mirrors the code-drift report:
   each is pushed onto the reading's evidence list; `--timeline` anchors the video entry. eval's flag set is
   **closed**, the argv mirror of the scenario schema's closed field set: an unrecognized `--flag` is rejected
   LOUD (before any node lookup or filing), never silently ignored — a version-skewed CLI that didn't know
-  `--video` once filed the clip as an `--image`, and a misfiled reading is worse than none (it reads as proof). The seam has a **write half over data** too (filing.ts): a caller with a
+  `--video` once filed the clip as an `--image`, and a misfiled reading is worse than none (it reads as proof).
+  A reading anchors to `codeSha` — and a sha can only name a COMMIT, never a working tree — so **the only
+  honest reading is measured on a CLEAN tree**, where HEAD *is* the code measured. Filed over uncommitted
+  governed edits, a reading is **mis-anchored at birth**: it claims a verdict at HEAD while HEAD lacks the
+  edits actually measured — a pass for code that never ran — and the stale flag after the next commit is
+  freshness correctly exposing that lie, not an engine bug. eval therefore probes the scenario's governed
+  files (its `code` subset, else the node's list, plus its own yatsu.md) for uncommitted changes and warns
+  LOUD when it finds any — a warning, never a block (the filing proceeds; retract is the repair). The
+  contract it teaches is **commit-then-measure**: land code+spec first, then measure and file — the eval
+  sidecar appends as the last layer of evidence, never as a claim about code still sitting uncommitted. The seam has a **write half over data** too (filing.ts): a caller with a
   verdict but no argv — the HTTP eval route, a programmatic filer — appends through the SAME seam
   (evaluator `manual@1` for a human hand). Filing is the CLI/agent surface: [[event-detail]] reads
   readings and hosts remarks, it files nothing.

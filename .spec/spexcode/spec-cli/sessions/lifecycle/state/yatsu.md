@@ -91,6 +91,20 @@ scenarios:
       session), keyed on whether a resource should outlive the task and never on who started it, stated as a
       nudge and not a gate. The merge/nothing confirmations do NOT carry it. The reminder is project-agnostic
       (no repo-specific paths), so it reads the same in any adopted project.
+  - name: long-note-truncation-transparent
+    tags: [backend-api]
+    description: >-
+      With an isolated SPEXCODE_HOME and a governed record, declare each note-carrying state — `spex session
+      done --propose nothing --note <long>`, `ask --note <long>`, `park --note <long>` — where <long> exceeds
+      the board table's note display cap. Read (1) the record's stored note, (2) the declaration's echo, and
+      (3) the `spex ls` NOTE column. Repeat with a short note under the cap.
+    expected: >-
+      The note reaches the record IN FULL for all three verbs (done included — it must not silently drop its
+      --note). The board table still truncates for display, but the truncation is TRANSPARENT to the author:
+      a long note's declaration echo states the note's length, how many chars the board table shows, and
+      where the full text is readable (the session record / `spex ls --json` / `spex review`). A short note
+      gets no such line. The echo is a nudge riding the confirmation — the declaration lands regardless,
+      nothing gates.
   - name: probe-failure-reads-unknown-not-offline
     tags: [backend-api]
     description: >-

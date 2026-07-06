@@ -41,7 +41,8 @@ straight to the trunk.
   concluded-count chip, with the **open/total meta at the END of the bar, never at its head**); the bar
   stays sticky over the full-height list, which scrolls itself. The rows are one compact line each, so the
   column stays **SLIM** — a picker, never a reading surface that starves the detail (the human called the
-  wide sidebar) — and a **fold toggle** collapses it to a thin strip so the detail owns the width while one
+  wide sidebar) — and a **fold toggle** (the shared [[fold-toggle]] icon button) collapses it to a thin
+  strip so the detail owns the width while one
   issue is being worked; the strip is the unfold affordance, and the folded list keeps its state (filters,
   selection, j/k) — the fold is pure geometry. The [[side-nav]] rail names the page, so the
   column carries no title of its own. The list CHROME is not this page's own dialect — it is the SAME

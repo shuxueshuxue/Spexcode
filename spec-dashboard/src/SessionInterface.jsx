@@ -12,6 +12,7 @@ import SessionEvalPane from './SessionEval.jsx'
 import { useResizable } from './useResizable.js'
 import { boardCommandsFor } from './sessionCommands.js'
 import { fitTextarea } from './textarea.js'
+import FoldToggle from './FoldToggle.jsx'
 import { useT } from './i18n/index.jsx'
 
 // the attach affordance — a monochrome inline glyph in the dashboard's own SVG vocabulary (currentColor
@@ -731,7 +732,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             fold ([[evals-view]]'s .fv-unfold). The list stays MOUNTED (display:none) behind it, so its zone
             grouping / nesting-fold / selection survive — the fold is pure geometry. */}
         {showFolded && (
-          <button type="button" className="si-list-unfold" title={t('masterList.unfold')} onClick={() => setListFolded(false)}>›</button>
+          <FoldToggle className="si-list-unfold" folded onToggle={() => setListFolded(false)} />
         )}
         <aside className="si-list" style={showFolded ? { display: 'none' } : { flex: `0 0 ${listW}px` }}>
           {/* while multi-selecting ([[session-multi-select]]) the New/Search pills give way to the select bar —

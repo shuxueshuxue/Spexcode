@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import EvalsGroup, { currentEntries, entryKey } from './EvalsFeed.jsx'
 import EventDetail from './EventDetail.jsx'
+import FoldToggle from './FoldToggle.jsx'
 import { navigate, useRoute } from './route.js'
 import { useT } from './i18n/index.jsx'
 
@@ -11,7 +12,6 @@ import { useT } from './i18n/index.jsx'
 // the shell owns only what is purely shell — fold state, the j/k binding (capture; a key typed into an
 // input or carrying a modifier is never ours), and keeping the selected row scrolled into view.
 export function EvalMasterDetail({ rowKeys, sel, onSel, detail, children }) {
-  const t = useT()
   const [folded, setFolded] = useState(false)   // the master list folded to a strip — the detail owns the width
   const stateRef = useRef({})
   stateRef.current = { rowKeys, sel }
@@ -37,9 +37,9 @@ export function EvalMasterDetail({ rowKeys, sel, onSel, detail, children }) {
     <div className={`fv-master ${folded ? 'folded' : ''}`}>
       {/* the list column stays MOUNTED while folded (its filter state + the j/k row report live in it) —
           the fold is pure CSS; the thin strip is the unfold affordance. */}
-      {folded && <button type="button" className="fv-unfold" title={t('masterList.unfold')} onClick={() => setFolded(false)}>›</button>}
+      {folded && <FoldToggle className="fv-unfold" folded onToggle={() => setFolded(false)} />}
       <div className="fv-list-col" style={folded ? { display: 'none' } : undefined}>
-        <button type="button" className="fv-fold" title={t('masterList.fold')} onClick={() => setFolded(true)}>‹</button>
+        <FoldToggle className="fv-fold" onToggle={() => setFolded(true)} />
         {children}
       </div>
       <div className="fv-detail">{detail}</div>

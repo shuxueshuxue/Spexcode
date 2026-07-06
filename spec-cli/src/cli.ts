@@ -37,7 +37,7 @@ function flushExit(code = 0): Promise<never> {
 }
 const has = (name: string) => process.argv.includes(`--${name}`)
 // bare positionals after argv index `from`, skipping flags and their values (selectors for ls/watch).
-const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--timeout', '--reason', '--out', '--password', '--tls-cert', '--tls-key', '--harness', '--launcher', '--harness-session', '--port', '--api-port', '--host', '--preset'])
+const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--timeout', '--reason', '--out', '--password', '--tls-cert', '--tls-key', '--harness', '--launcher', '--harness-session', '--port', '--api-port', '--host', '--preset', '--limit', '--session'])
 function positionals(from: number): string[] {
   const out: string[] = []
   for (let i = from; i < process.argv.length; i++) {
@@ -337,8 +337,14 @@ if (cmd === 'serve') {
   if (!query.trim()) { console.error('usage: spex search <query> [--json] [--limit N]'); process.exit(2) }
   const limit = Number(flag('limit')) || 10
   const results = await searchSpecs(query, { limit, onStats: (s) => console.error(`[spec-search] compute ${s.ms.toFixed(1)}ms · ${s.nodes} nodes · ${s.tokens} tokens (excludes process start)`) })
-  if (has('json')) { console.log(JSON.stringify(results)); await flushExit(0) }
-  if (!results.length) { console.log(`no spec node matches "${query}"`); process.exit(0) }
+  // zero-result fail-loud: the message always carries the corpus-is-English fact (unconditional — no
+  // language sniffing, no score threshold), so a non-English query self-explains instead of dead-ending.
+  const NO_MATCH = (q: string) => `no spec node matches "${q}" (the corpus is English — if your query isn't, translate and retry)`
+  if (has('json')) {
+    if (!results.length) console.error(NO_MATCH(query))   // stderr: the stdout JSON contract stays verbatim
+    console.log(JSON.stringify(results)); await flushExit(0)
+  }
+  if (!results.length) { console.log(NO_MATCH(query)); process.exit(0) }
   results.forEach((r, i) => {
     console.log(`${String(i + 1).padStart(2)}. ${r.title}  [${r.id}]  ·  score ${r.score}`)
     console.log(`    ${r.path}`)

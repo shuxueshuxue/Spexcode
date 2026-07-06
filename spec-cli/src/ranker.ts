@@ -10,7 +10,9 @@ const W_BODY = 1
 
 // a tiny stoplist of question scaffolding + length-1 tokens, dropped so "how does the … is it …" can't drown
 // the content words. Deliberately small and general — NOT tuned to any benchmark; just the function words a
-// natural-language query carries that match nothing meaningful.
+// natural-language query carries that match nothing meaningful. Quantifiers (many, several, same, too…) are
+// NOT stopped: in this corpus they are load-bearing ("too many owners" IS the multi-ownership concept —
+// dropping them measurably breaks that reach).
 const STOP = new Set([
   'the', 'a', 'an', 'and', 'or', 'of', 'to', 'in', 'on', 'is', 'it', 'its', 'as', 'at', 'by', 'for',
   'how', 'does', 'do', 'what', 'which', 'that', 'this', 'these', 'those', 'with', 'from', 'into', 'are',
@@ -32,11 +34,24 @@ function words(text: string): string[] {
   return text.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean)
 }
 
-// name match is forward-only (a chosen short field — reverse would let a plural query light up every `spec-*`
-// name); desc/body match bidirectionally so a singular/plural mismatch still hits, reverse gated to words ≥3
-// chars so a stray short word can't swallow a longer term (IDF neutralises the generic words it pulls in).
-function nameMatch(term: string, w: string): boolean { return w.startsWith(term) }
-function textMatch(term: string, w: string): boolean { return w.startsWith(term) || (w.length >= 3 && term.startsWith(w)) }
+// light query-side stem for prefix matching: drop a trailing plural 's' (len≥4, not 'ss') then a mute 'e'
+// (len≥5) — so `sessions` prefix-reaches `session`, `merge`→`merg` reaches `merging`, `declare`→`declar`
+// reaches `declaration`. Without the e-drop the spec's promised merge↔merging reach silently never worked
+// (`'merging'.startsWith('merge')` is false). Query-side only; IDF self-neutralises the extra reach (a
+// looser term matches more docs → bigger df → smaller idf), so no flood.
+function stem(t: string): string {
+  let s = t
+  if (s.length >= 4 && s.endsWith('s') && !s.endsWith('ss')) s = s.slice(0, -1)
+  if (s.length >= 5 && s.endsWith('e')) s = s.slice(0, -1)
+  return s
+}
+
+// name match is forward-only (a chosen short field — reverse would let a stray short word swallow it);
+// desc/body match bidirectionally so a longer doc word still reaches a shorter query term, reverse gated to
+// words ≥3 chars so a stray short word can't swallow a longer term (IDF neutralises the generic words it
+// pulls in).
+function nameMatch(term: string, w: string): boolean { return w.startsWith(stem(term)) }
+function textMatch(term: string, w: string): boolean { return w.startsWith(stem(term)) || (w.length >= 3 && term.startsWith(w)) }
 
 // classic BM25 tf: frequency with saturation (K1 sets how fast it saturates) and length-normalisation (B),
 // both in a wide insensitive plateau. tf=0 → 0.
@@ -51,13 +66,16 @@ function bm25tf(tf: number, len: number, avgLen: number): number {
 type Fields<T> = { ref: T; name: string; nameWords: string[]; desc: string; descWords: string[]; bodyWords: string[]; snippetText: string }
 
 // the pre-IDF weight a term earns against one doc, picking its single best tier (three fields): a name
-// word-prefix beats a name substring beats a desc hit beats a body hit. Name and desc are short, chosen
-// fields → binary presence; the body carries the BM25-saturated, length-normalised frequency that
-// discriminates the long ties.
-function tierWeight<T>(term: string, n: Fields<T>, avgBodyLen: number): number {
+// word-prefix beats a name substring beats a desc hit beats a body hit. Name is a short, chosen field →
+// binary presence. Desc is presence too (a curated one-liner — repetition there is stuffing, not evidence)
+// but LENGTH-NORMALISED: it was flat-binary until descs drifted long and a bloated desc became a cheat code
+// (one 60-word desc catches every query term a curated one-liner can't). bm25tf(1, avgLen, avgLen) = 1, so
+// a hit in an average-length desc scores exactly the old binary W_DESC — the normalisation only bites
+// outliers. The body keeps the full BM25-saturated term-frequency that discriminates the long ties.
+function tierWeight<T>(term: string, n: Fields<T>, avgBodyLen: number, avgDescLen: number): number {
   if (n.nameWords.some((w) => nameMatch(term, w))) return W_NAME_PREFIX
   if (n.name.includes(term)) return W_NAME_SUBSTR
-  if (n.descWords.some((w) => textMatch(term, w))) return W_DESC
+  if (n.descWords.some((w) => textMatch(term, w))) return W_DESC * bm25tf(1, n.descWords.length, avgDescLen)
   const tf = n.bodyWords.reduce((c, w) => c + (textMatch(term, w) ? 1 : 0), 0)
   return W_BODY * bm25tf(tf, n.bodyWords.length, avgBodyLen)
 }
@@ -108,6 +126,7 @@ export function rankDocs<T>(query: string, inputs: RankInput<T>[], opts: { limit
   // a rare one carries the rank. Read from the corpus, not hand-set.
   const N = docs.length
   const avgBodyLen = docs.reduce((a, n) => a + n.bodyWords.length, 0) / (N || 1)
+  const avgDescLen = docs.reduce((a, n) => a + n.descWords.length, 0) / (N || 1)
   const idf: Record<string, number> = {}
   for (const t of qterms) {
     let df = 0
@@ -120,7 +139,7 @@ export function rankDocs<T>(query: string, inputs: RankInput<T>[], opts: { limit
   const scored: Ranked<T>[] = []
   for (const n of docs) {
     let score = 0
-    for (const t of qterms) score += tierWeight(t, n, avgBodyLen) * idf[t]
+    for (const t of qterms) score += tierWeight(t, n, avgBodyLen, avgDescLen) * idf[t]
     if (score <= 0) continue
     scored.push({ ref: n.ref, score: Math.round(score * 100) / 100, snippet: snippetFor(n.snippetText, n.desc, qterms) })
   }

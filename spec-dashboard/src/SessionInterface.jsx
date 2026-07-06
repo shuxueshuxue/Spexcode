@@ -143,6 +143,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [menuById, setMenuById] = useState({})   // per-pane menu-sniff flag from each SessionTerm; drives the nav button's `.suggest` pulse
   // which of the right pane's two tabs is showing: the live terminal (default) or the always-available eval.
   const [rightTab, setRightTab] = useState('terminal')
+  // the Eval tab auto-collapses the session list to a thin strip ([[session-console]] / [[evals-view]]'s
+  // fold-to-strip): the eval tab is itself a master-detail whose scenario list needs the width, so the
+  // console's session list folds out of the way while it's shown and unfolds on the way back to Terminal.
+  const [listFolded, setListFolded] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadErr, setUploadErr] = useState(false)
   const [dragTarget, setDragTarget] = useState(null)
@@ -220,6 +224,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // nav mode binds to ONE live session's menu — leaving the tab (or it going offline) exits it, so raw
   // keystrokes can never leak into the wrong pane.
   useEffect(() => { setNavMode(false); setSendErr(false); setMenu(null); setRightTab('terminal') }, [active])
+  // fold the session list on the Eval tab, unfold on Terminal. Keyed on the tab TRANSITION (not held
+  // continuously), so a manual unfold on the Eval tab sticks — it only re-folds when you re-enter the tab.
+  useEffect(() => { setListFolded(rightTab === 'eval') }, [rightTab])
   // returning to the Terminal tab re-focuses the ❯ input — switching to Proof and back must not strand the
   // caret. Only when live and not in nav mode; rAF waits for the input to (re)mount under the Terminal tab.
   useEffect(() => {
@@ -717,7 +724,13 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           style={{ display: 'none' }}
           onChange={(e) => { attachFiles(e.target.files, fileTargetRef.current); e.target.value = '' }}
         />
-        <aside className="si-list" style={{ flex: `0 0 ${listW}px` }}>
+        {/* folded (Eval tab): the whole strip is the unfold affordance, mirroring the Evals page's master-list
+            fold ([[evals-view]]'s .fv-unfold). The list stays MOUNTED (display:none) behind it, so its zone
+            grouping / nesting-fold / selection survive — the fold is pure geometry. */}
+        {listFolded && (
+          <button type="button" className="si-list-unfold" title={t('masterList.unfold')} onClick={() => setListFolded(false)}>›</button>
+        )}
+        <aside className="si-list" style={listFolded ? { display: 'none' } : { flex: `0 0 ${listW}px` }}>
           {/* while multi-selecting ([[session-multi-select]]) the New/Search pills give way to the select bar —
               a pick count + bulk delete + cancel; the rows below toggle picks instead of switching tabs. */}
           {selecting ? (
@@ -771,8 +784,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           })}
         </aside>
 
-        {/* the list's drag handle ([[resizable-panes]]) — straddles the list/content border */}
-        <div className="pane-resizer si-resizer" onMouseDown={listDrag} role="separator" aria-orientation="vertical" />
+        {/* the list's drag handle ([[resizable-panes]]) — straddles the list/content border. Hidden while the
+            list is folded to a strip: there's no width to resize when the detail owns it all. */}
+        {!listFolded && <div className="pane-resizer si-resizer" onMouseDown={listDrag} role="separator" aria-orientation="vertical" />}
 
         <section className={active === 'new' ? 'si-content is-new' : 'si-content is-session'}>
           {active === 'new' && (

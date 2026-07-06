@@ -80,7 +80,14 @@ line is therefore never hidden. Only when the box grows multi-line does it **ove
 reserves space — growth overlays). Above the pane a **horizontal tab bar** replaces the old title/action
 strip, carrying **two tabs on the left** — **Terminal** (the default) and **Eval**: Terminal shows the live
 pane with the docked `❯` input; Eval shows this session's measured evaluation **inline** (an always-available
-view — the shared eval components, session-scoped; below and [[review-proof]]). The bar wears the app-chrome background with a bottom separator, so it reads
+view — the shared eval components, session-scoped; below and [[review-proof]]). **Opening the Eval tab
+auto-collapses the left session list to a thin strip** — the same fold-to-strip geometry the Evals page's
+master list uses ([[evals-view]]), and for the same reason: the Eval tab is itself a master-detail whose own
+scenario list ([[review-proof]]) needs room, so leaving the console's full-width session list beside it would
+crowd two lists into the width one deserves. The collapse is **automatic on entering the tab and reverts on
+returning to Terminal**; the strip is the unfold affordance (click to bring the list back, which then stays
+until you leave the tab), and the list stays **mounted** behind it — the fold is pure geometry, so its zone
+grouping, nesting-fold, and selection survive untouched. The bar wears the app-chrome background with a bottom separator, so it reads
 **visibly apart from the dark terminal** below it in both light and dark themes (the old flat strip blended
 into that dark edge — the complaint this replaces). Between the tabs and the actions it still carries the
 **shared session headline** (`si-th-name`, [[session-activity]]) — same source and content as the session

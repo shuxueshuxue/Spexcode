@@ -294,10 +294,11 @@ if (cmd === 'serve') {
   const { runYatsu } = await import('../../spec-yatsu/src/cli.js')
   await flushExit(await runYatsu(process.argv.slice(3)))
 } else if (cmd === 'blob') {
-  // @@@ blob - the bare evidence-transport verb ([[blob-put]]): put bytes in the shared content-addressed
-  // cache and print the hash, decoupled from filing a reading. Thin route — the cache lives in spec-yatsu.
+  // @@@ blob - the bare evidence-transport pair ([[blob-put]], [[blob-get]]): put bytes in the shared
+  // content-addressed cache / read them back by hash, decoupled from filing a reading. Thin route — the
+  // cache lives in spec-yatsu. flushExit matters here: `get` pipes raw blob bytes to stdout.
   const { runBlob } = await import('../../spec-yatsu/src/cli.js')
-  await flushExit(runBlob(process.argv.slice(3)))
+  await flushExit(await runBlob(process.argv.slice(3)))
 } else if (cmd === 'issues') {
   // @@@ issues - the ONE issues surface ([[issues]]): bare it is THE read — local + forge issues as ONE
   // store-tagged list, the supervisor's/human's drain view; a write first-positional (open|reply|sign|

@@ -1,4 +1,4 @@
-import { readFileSync, existsSync } from 'node:fs'
+import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { join, relative, dirname } from 'node:path'
 import { repoRoot, headSha, driftIndex, stagedFiles, git } from '../../spec-cli/src/git.js'
 import { loadSpecs } from '../../spec-cli/src/specs.js'
@@ -10,9 +10,9 @@ import { staleAxes } from './freshness.js'
 import { scenarioIndex } from './scenariofresh.js'
 import { loadEvalRemarkTracks, trackKey } from '../../spec-cli/src/issues.js'
 import { evaluatorTag } from './evaluator.js'
-import { putBlob, listBlobs, gc, isStrayBlob } from './cache.js'
+import { putBlob, blobPath, listBlobs, gc, isStrayBlob } from './cache.js'
 import { validateTimeline } from './timeline.js'
-import { evalTimeline, type EvalTimeline } from './evaltab.js'
+import { evalTimeline, readBlobByHash, type EvalTimeline } from './evaltab.js'
 
 function flag(args: string[], name: string): string | undefined {
   const i = args.indexOf(`--${name}`)
@@ -464,16 +464,20 @@ export async function runYatsu(args: string[]): Promise<number> {
   return 2
 }
 
-// `spex blob put <file|->` ([[blob-put]]) — the bare transport half of evidence: stash bytes in the shared
-// content-addressed cache and print the hash, WITHOUT filing a reading (`yatsu eval --video` couples the
-// two). putBlob is idempotent by content, so the same command re-seeds a checkout whose cache lacks a blob
+// `spex blob put <file|->` / `spex blob get <hash> [-o <file>]` ([[blob-put]], [[blob-get]]) — the bare
+// evidence-transport pair: put stashes bytes in the shared content-addressed cache and prints the hash,
+// WITHOUT filing a reading (`yatsu eval --video` couples the two); get is its symmetric read — hash in,
+// bytes out. putBlob is idempotent by content, so re-putting re-seeds a checkout whose cache lacks a blob
 // some thread already references by hash (the clone-evidence-404 repair).
-export function runBlob(args: string[]): number {
-  const file = args[1]
-  if (args[0] !== 'put' || file === undefined) {
-    console.error('spex blob: put <file|-> — stash bytes in the shared evidence cache, print the content hash')
-    return 2
-  }
+export async function runBlob(args: string[]): Promise<number> {
+  if (args[0] === 'put' && args[1] !== undefined) return blobPut(args[1])
+  if (args[0] === 'get') return blobGet(args.slice(1))
+  console.error('spex blob: put <file|-> — stash bytes in the shared evidence cache, print the content hash')
+  console.error('           get <hash> [-o <file>] — read a blob back: local cache first, backend fallback')
+  return 2
+}
+
+function blobPut(file: string): number {
   let bytes: Buffer
   try { bytes = readFileSync(file === '-' ? 0 : file) } catch (e) {
     console.error(`spex blob put: cannot read ${file}: ${(e as Error).message}`)
@@ -481,5 +485,49 @@ export function runBlob(args: string[]): number {
   }
   if (bytes.length === 0) { console.error('spex blob put: refusing an empty blob'); return 2 }
   console.log(putBlob(bytes))
+  return 0
+}
+
+// the read half: ① the local content-addressed cache (the evidence usually IS on this disk — no backend
+// needed), ② on a local miss the same GET /api/yatsu/blob/:hash the dashboard streams from (the blob may
+// have been pruned here, or put on another machine sharing the backend), ③ both missed → fail loud naming
+// both paths. No third read mechanism — this reuses readBlobByHash and the existing endpoint verbatim.
+async function blobGet(args: string[]): Promise<number> {
+  const oIdx = args.indexOf('-o')
+  const out = oIdx >= 0 ? args[oIdx + 1] : undefined
+  if (oIdx >= 0 && (out === undefined || out.startsWith('-'))) { console.error('spex blob get: -o needs a <file>'); return 2 }
+  const hash = args.find((a, i) => (oIdx < 0 || (i !== oIdx && i !== oIdx + 1)) && !a.startsWith('-'))
+  if (!hash) { console.error('spex blob get: usage: spex blob get <hash> [-o <file>]'); return 2 }
+  const local = readBlobByHash(hash)   // validates 64-hex before touching the fs, then reads the shared cache
+  if (local.ok) return emitBlob(local.bytes, out)
+  if (local.reason === 'invalid') { console.error(`spex blob get: bad hash '${hash}' — a blob hash is 64 hex chars`); return 2 }
+  const { apiBase } = await import('../../spec-cli/src/sessions.js')
+  const url = `${apiBase()}/api/yatsu/blob/${hash}`
+  let backendMiss: string
+  try {
+    const r = await fetch(url)
+    if (r.ok) return emitBlob(Buffer.from(await r.arrayBuffer()), out)
+    backendMiss = `HTTP ${r.status}`
+  } catch (e) {
+    backendMiss = `unreachable (${(e as Error).message})`
+  }
+  console.error(`spex blob get: ${hash} — not found on either path:`)
+  console.error(`  local cache: ${blobPath(hash)} — no such blob (pruned, or put on another machine)`)
+  console.error(`  backend:     ${url} — ${backendMiss}`)
+  return 1
+}
+
+// default stdout (pipe-friendly; the cli.ts flushExit drains a large piped dump before exit), -o writes a
+// file. Raw bytes straight at a human's terminal get a one-line stderr warning, not a block.
+function emitBlob(bytes: Buffer, out?: string): number {
+  if (out !== undefined) {
+    try { writeFileSync(out, bytes) } catch (e) {
+      console.error(`spex blob get: cannot write ${out}: ${(e as Error).message}`)
+      return 2
+    }
+    return 0
+  }
+  if (process.stdout.isTTY) console.error(`spex blob get: writing ${bytes.length} raw bytes to a tty — pipe it or use -o <file>`)
+  process.stdout.write(bytes)
   return 0
 }

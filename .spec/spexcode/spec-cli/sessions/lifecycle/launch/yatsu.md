@@ -23,10 +23,10 @@ scenarios:
       live board's occupied/queued counts. Then EDIT `sessions.maxActive` (raise or lower it) and, without
       restarting the backend, watch the next drain tick: a raised cap should launch more `queued` sessions; a
       lowered cap should stop launching new ones (already-running agents are never killed). Precedence:
-      `spexcode.json` wins, else the `SPEXCODE_MAX_ACTIVE` env, else default 6; a value < 1 floors to 1.
+      `spexcode.json` wins, else the `SPEXCODE_MAX_ACTIVE` env, else default 8; a value < 1 floors to 1.
     expected: |
       The effective cap equals `spexcode.json` `sessions.maxActive` when present (env only fills in when the
-      JSON key is absent; default 6 when neither is set). A live edit to the JSON re-tunes the cap on the
+      JSON key is absent; default 8 when neither is set). A live edit to the JSON re-tunes the cap on the
       next drain with no backend restart — raising it drains more `queued` sessions immediately, lowering it
       simply stops further launches (running agents keep their slots). The cap value is never baked into the
       toolchain.

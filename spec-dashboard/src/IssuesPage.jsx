@@ -115,7 +115,7 @@ export default function IssuesPage({ onFocusNode, onOpenSession, specs = [], ses
             return (
               <button key={th.id} className={`fv-row ${effSel === k ? 'sel' : ''}`} onClick={() => setSel(k)}>
                 <span className={`fv-dot st-${th.status || 'open'}`} title={th.status} />
-                <span className="fv-concern">{th.concern}</span>
+                <span className="fv-concern" title={th.concern}>{th.concern}</span>
                 {(th.replies?.length ?? 0) > 0 && <span className="fv-replies" title={t('session.issuesReplies', { n: th.replies.length })}>{th.replies.length}</span>}
                 {stores.length > 1 && <span className={`fv-store fv-store-${th.store === 'local' ? 'local' : 'forge'}`}>{th.store}</span>}
               </button>

@@ -348,6 +348,9 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
       // ⌘/Ctrl+/ opens the SAME palette with SESSIONS boosted — the session board's search escape-hatch,
       // reachable even while the session interface owns its keys. Plain `/` on the board stays nodes-first (below).
       if ((e.metaKey || e.ctrlKey) && e.key === '/') { e.preventDefault(); e.stopPropagation(); setSearch('sessions'); return }
+      // Everything below is the plain-key board vocabulary. Browser/system accelerators that happen to use
+      // the same base key (`Ctrl/⌘+L`, `Ctrl/⌘+,`, `Alt+←`, …) pass through unless declared above.
+      if (e.metaKey || e.ctrlKey || e.altKey) return
       if (page === 'sessions') return // the session interface owns ALL its keys (arrows / Enter / typing / Esc / the graph)
       // the Evals and Issues pages own their own keys (j/k list-walk, their inputs, their own Esc stack) —
       // EvalsPage / IssuesPage handle them. Esc does NOT route pages anywhere ([[side-nav]]) — leaving is

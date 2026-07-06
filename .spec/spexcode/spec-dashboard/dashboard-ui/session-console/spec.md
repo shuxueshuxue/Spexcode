@@ -52,16 +52,14 @@ greyed and unfocused until the POST *and* a board re-read returned. You stay on 
 appears in the list below (the immediate board refresh, else the next poll, surfaces it). The old
 auto-jump-to-the-new-session is gone; only a tab's *removal* (below) ever moves your selection for you.
 
-Beneath the box an **agent picker** (icon-only radio pills using the vendors' marks — Anthropic for Claude
-Code, OpenAI for Codex) picks **which agent the launch boots** from the set the backend can start
-([[harness-adapter]]). There is no visible "harness" label or text inside the buttons; the readable names live
-in `aria-label`/tooltips. The choice rides along in the launch `POST /api/sessions` body and is
-**remembered** (per-browser) so a user who lives in one agent never re-picks; it never assumes a node and
-composes orthogonally with the `/<preset> [[node]]… text` grammar above. When the project configures named
-launchers ([[launcher-select]]) the picker becomes a native launcher-**name** `<select>` in place of the
-radios, and the harness still reads as an **icon**: the SELECTED launcher's harness renders as that same
-vendor glyph beside the select (a native `<option>` is text-only, so the glyph is an adornment, not option
-text, and it updates as the selection changes) — no ` · claude`/` · codex` text suffix.
+Beneath the box a native launcher-**name** `<select>` is the ONLY launch choice ([[launcher-select]]). A
+launcher names both the harness ([[harness-adapter]] — Claude vs Codex) and the command/auth profile, so the
+launch `POST /api/sessions` carries only `launcher`; the backend derives `harness` from that selected profile.
+Built-in `claude` and `codex` launchers keep the select present even in a zero-config project, and configured
+profiles add more names. The selected launcher's harness reads as a derived **icon** beside the select: the
+vendor glyph updates as the selection changes, but it is an adornment, not a second input. The launcher pick is
+**remembered** (per-browser), honors the backend's configured default when there is no remembered valid pick,
+never assumes a node, and composes orthogonally with the `/<preset> [[node]]… text` grammar above.
 
 An existing session shows its **live tmux terminal** (SessionTerm) with the docked **`❯` input** below — a
 **real tmux client but a read-only scrollable view** — but only when its **liveness** ([[state]]) is live
@@ -185,10 +183,9 @@ board no longer has.
 ([[session-activity]]) in the SAME **compact one-line, zone-grouped** layout as the console list — but
 KEEPING the **avatar** (its cross-referencing job) and the board's warm paper: the avatar + the session
 **headline** (the worker's live tmux self-summary once it exists, else a launch-prompt placeholder; a rename
-always wins) + a single colour-coded status **glyph** + pending-op count + — when the session launched under a
-**named launcher** ([[launcher-select]]) — a **launcher badge** (the launcher's harness vendor glyph, shared
-from `harness.jsx`, + the launcher name), so which launcher/auth brought the worker up is legible at a glance
-(a zero-config/unnamed launch shows no badge); on one line, with a **monochrome
+always wins) + a single colour-coded status **glyph** + pending-op count; the session's `launcher` remains
+durable data on the API payload but is not rendered as a per-row badge, keeping the glance clean. On one line,
+with a **monochrome
 inline-SVG padlock** (the dashboard's own glyph vocabulary, not a colour emoji) at the headline's end when the
 row is locked. It stays a
 **bounded** glance: the window never grows into a curtain — its height is capped (~80% of the viewport, and

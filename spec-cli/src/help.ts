@@ -177,11 +177,13 @@ a node/<id> branch links its PR for free). Read-only — git/.spec stays the sin
   },
   // ── dispatch & manage sessions (manager loop) ─────────────────────────────
   new: {
-    line: 'new "<prompt>"        launch a worker session in its own node worktree  [--node <id>]',
-    body: `Usage: spex new "<task prompt>" [--node <id>] [--harness <name>] [--launcher <cmd>]
+    line: 'new "<prompt>"        launch a worker session in its own node worktree  [--node <id>] [--launcher <name>]',
+    body: `Usage: spex new "<task prompt>" [--node <id>] [--launcher <name>]
 
 Creates a session: node branch + worktree + a launched agent carrying your prompt (= session new).
 Give it ONLY its task — the dev-flow contract reaches it through the materialized system prompt.
+The launcher name selects both the agent harness and the command/auth profile (built-ins: claude, codex);
+omitting it uses sessions.defaultLauncher, else claude.
 Routes through the running backend (auth env + concurrency cap); prints the created session JSON.
 Then MONITOR it: background \`spex wait <id>\`, or \`spex watch\` for the whole stream.`,
     see: 'spex wait / spex watch (monitor) · spex review (when it proposes) · ' + SEL_NOTE.split('\n')[0],

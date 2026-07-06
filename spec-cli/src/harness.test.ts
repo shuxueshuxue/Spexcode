@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readFileSync, statSy
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createServer } from 'node:net'
-import { activeTurnIdFromThread, codexAppServerSock, codexBinary, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, codexLaunchCommand, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, resolveLauncher, writeCodexTrust, rendezvousListening, rvSock } from './harness.js'
+import { activeTurnIdFromThread, codexAppServerSock, codexBinary, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, codexLaunchCommand, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, resolveLauncher, defaultLauncher, writeCodexTrust, rendezvousListening, rvSock } from './harness.js'
 
 test('codex handshake initializes, confirms the loaded thread, then reads it to decide steer-vs-start', () => {
   const msgs = codexHandshakeMessages('thr_1')
@@ -196,23 +196,52 @@ test('launchCmd cmd override wins over the ambient default (claude + codex) — 
 })
 
 test('launcherList + resolveLauncher read the named profiles from spexcode.json, fail loud on an unknown name', () => {
+  const oldClaude = process.env.SPEXCODE_CLAUDE_CMD
+  const oldCodex = process.env.SPEXCODE_CODEX_CMD
+  delete process.env.SPEXCODE_CLAUDE_CMD
+  delete process.env.SPEXCODE_CODEX_CMD
+  try {
   const root = mkdtempSync(join(tmpdir(), 'spex-launchers-'))
   writeFileSync(join(root, 'spexcode.json'), JSON.stringify({
     sessions: { launchers: { reclaude: { cmd: 'reclaude --dangerously-skip-permissions' }, 'claude-glm': { harness: 'claude', cmd: 'claude-glm --dangerously-skip-permissions' } } },
   }))
-  // name-sorted, harness defaults to claude when omitted, cmd carried through.
+  // name-sorted, built-ins present, harness defaults to claude when omitted, cmd carried through.
   assert.deepEqual(launcherList(root), [
+    { name: 'claude', harness: 'claude', cmd: 'claude --dangerously-skip-permissions' },
     { name: 'claude-glm', harness: 'claude', cmd: 'claude-glm --dangerously-skip-permissions' },
+    { name: 'codex', harness: 'codex', cmd: 'codex --yolo' },
     { name: 'reclaude', harness: 'claude', cmd: 'reclaude --dangerously-skip-permissions' },
   ])
   assert.equal(resolveLauncher('claude-glm', root).cmd, 'claude-glm --dangerously-skip-permissions')
+  assert.equal(resolveLauncher('codex', root).harness, 'codex')
   assert.throws(() => resolveLauncher('nope', root), /unknown launcher 'nope'/)
+  } finally {
+    if (oldClaude === undefined) delete process.env.SPEXCODE_CLAUDE_CMD
+    else process.env.SPEXCODE_CLAUDE_CMD = oldClaude
+    if (oldCodex === undefined) delete process.env.SPEXCODE_CODEX_CMD
+    else process.env.SPEXCODE_CODEX_CMD = oldCodex
+  }
 })
 
-test('launcherList is empty for a zero-config project (no launchers) → the harness picker fallback', () => {
+test('zero-config projects still expose built-in launchers, with claude as the default', () => {
+  const oldClaude = process.env.SPEXCODE_CLAUDE_CMD
+  const oldCodex = process.env.SPEXCODE_CODEX_CMD
+  delete process.env.SPEXCODE_CLAUDE_CMD
+  delete process.env.SPEXCODE_CODEX_CMD
+  try {
   const root = mkdtempSync(join(tmpdir(), 'spex-nolaunchers-'))
   writeFileSync(join(root, 'spexcode.json'), JSON.stringify({ sessions: { maxActive: 4 } }))
-  assert.deepEqual(launcherList(root), [])
+  assert.deepEqual(launcherList(root), [
+    { name: 'claude', harness: 'claude', cmd: 'claude --dangerously-skip-permissions' },
+    { name: 'codex', harness: 'codex', cmd: 'codex --yolo' },
+  ])
+  assert.equal(defaultLauncher(root), 'claude')
+  } finally {
+    if (oldClaude === undefined) delete process.env.SPEXCODE_CLAUDE_CMD
+    else process.env.SPEXCODE_CLAUDE_CMD = oldClaude
+    if (oldCodex === undefined) delete process.env.SPEXCODE_CODEX_CMD
+    else process.env.SPEXCODE_CODEX_CMD = oldCodex
+  }
 })
 
 test('removeManagedBlock strips ONLY the sentinel block, preserving the user bytes', () => {

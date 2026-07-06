@@ -5,7 +5,7 @@ import { labelColor } from './color.js'
 import { sessionForest } from './session.js'
 import { MENTION_RE, specPath, highlight, nodeMentionAt, actorMentionAt, MentionMenu } from './mentions.jsx'
 import { SessionRow, RowLead, useFold } from './SessionWindow.jsx'
-import { HARNESSES, HARNESS_BY_ID } from './harness.jsx'
+import { HARNESS_BY_ID } from './harness.jsx'
 import SessionContextMenu from './SessionContextMenu.jsx'
 import SessionSelectBar from './SessionSelectBar.jsx'
 import SessionEvalPane from './SessionEval.jsx'
@@ -119,14 +119,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // bottom-input drafts, keyed by session id — each session tab keeps its OWN typed-but-unsent line, never
   // a single shared box. Survives tab switches and close/reopen (the panel stays mounted, see `open`).
   const [drafts, setDrafts] = useState({})
-  // which harness the next New Session launches (claude | codex). Remembered for the session of use so a
-  // user who works in one harness doesn't re-pick each launch; rides along in the POST body (default claude).
-  const [harness, setHarness] = useState(() => {
-    try { return localStorage.getItem('si.harness') || 'claude' } catch { return 'claude' }
-  })
-  const pickHarness = (id) => { setHarness(id); try { localStorage.setItem('si.harness', id) } catch {} }
-  // named launcher profiles ([[launcher-select]]) — a launcher fuses (harness, cmd), so picking one REPLACES the
-  // harness pick. Fetched from /api/launchers; empty → the form falls back to the plain harness picker below.
+  // named launcher profiles ([[launcher-select]]) — a launcher fuses (harness, cmd), so this is the sole launch
+  // choice. Fetched from /api/launchers; built-in claude/codex profiles mean the list is never intentionally empty.
   const [launchers, setLaunchers] = useState([])
   const [launcher, setLauncher] = useState(() => { try { return localStorage.getItem('si.launcher') || '' } catch { return '' } })
   const pickLauncher = (name) => { setLauncher(name); try { localStorage.setItem('si.launcher', name) } catch {} }
@@ -364,9 +358,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     if (!raw) return
     const text = composeLaunch(raw)
     setPrompt('')
-    // a launcher SUBSUMES the harness ([[launcher-select]]): when the project configured launchers, send the
-    // chosen `launcher` (the backend derives the harness from it); otherwise send the plain `harness` pick.
-    const body = launchers.length ? { prompt: text, launcher } : { prompt: text, harness }
+    // a launcher SUBSUMES the harness ([[launcher-select]]): send only the chosen launcher; the backend derives
+    // harness from that profile. If the picker has not loaded yet, omit it and let the backend use its default.
+    const body = launcher ? { prompt: text, launcher } : { prompt: text }
     fetch('/api/sessions', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -838,9 +832,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 {/* config-preset palette — same `/` dropdown, opening downward under the centered box. */}
                 {menu && menu.kind === 'config' && slashMenu(false, menu.query ? `/${menu.query}` : t('session.menuPresets'))}
               </div>
-              {/* launcher picker — a named (harness, cmd) profile ([[launcher-select]]) subsumes the harness pick,
-                  so when the project configured launchers we show a name dropdown IN PLACE of the harness radios;
-                  with none configured we fall back to the plain icon-only harness radios. */}
+              {/* launcher picker — the only launch choice. The selected launcher's harness is displayed as a
+                  derived vendor glyph, never as a second input. */}
               {launchers.length ? (() => {
                 // the glyph shows the SELECTED launcher's harness as an icon (matching the old icon-only
                 // harness radios) instead of a ` · claude`/` · codex` text suffix on each option; it updates
@@ -858,25 +851,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   </select>
                 </label>
                 )
-              })() : (
-                <div className="si-agent-picker" role="radiogroup" aria-label={t('session.harnessLabel')}>
-                  {HARNESSES.map((h) => {
-                    const Glyph = h.Glyph
-                    return (
-                      <button
-                        key={h.id}
-                        type="button"
-                        role="radio"
-                        aria-checked={harness === h.id}
-                        aria-label={h.label}
-                        title={h.label}
-                        className={harness === h.id ? 'si-agent-opt on' : 'si-agent-opt'}
-                        onClick={() => pickHarness(h.id)}
-                      ><Glyph /></button>
-                    )
-                  })}
-                </div>
-              )}
+              })() : null}
               <div className="si-hint">
                 {t('session.hint.before')}<code>[[</code>{t('session.hint.mid')}<code>/</code>{t('session.hint.after')}
               </div>

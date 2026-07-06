@@ -289,6 +289,29 @@ scenarios:
       is still there AND its rendered height matches the pre-switch height (re-fit to the persisted draft on
       remount) — it is never collapsed back to a single row.
     related: spec-dashboard/src/SessionEval.jsx
+  - name: eval-tab-folds-session-list
+    tags: [frontend-e2e, desktop]
+    description: >
+      Through the running dashboard in a real browser, open the session interface (Enter) on a LIVE session so
+      the right pane shows the Terminal|Eval tab bar and the left session list (`.si-list`) is at its full
+      width. Read the left column geometry on the Terminal tab: `.si-list` is present with its top button row +
+      session rows, and the drag divider (`.si-resizer`) sits on its border. Now click the Eval tab and re-read
+      the left column: measure `.si-list`'s rendered width/visibility and whether a thin unfold strip
+      (`.si-list-unfold`, ~22px, the Evals page's `.fv-unfold` twin) has taken its place, with the resizer gone.
+      Click that strip and confirm the full list returns while STILL on the Eval tab (a manual unfold sticks).
+      Then, from the folded state again (re-enter Eval), switch back to the Terminal tab and confirm the full
+      list is restored automatically. Screenshot the left column on the Terminal tab, on the Eval tab (folded),
+      and after the manual unfold.
+    expected: |
+      Opening the Eval tab auto-collapses the session list to a thin strip: `.si-list` is no longer taking its
+      full ~240px width (it is display:none, still in the DOM so its zone/nesting/selection state survives), and
+      in its place sits the slim `.si-list-unfold` strip (~22px, the same fold-to-strip geometry the Evals page's
+      master list uses) with the `.si-resizer` drag divider removed — the eval master-detail owns the width.
+      Clicking the strip brings the full session list back while the Eval tab is still shown, and it stays
+      unfolded (the manual unfold sticks; it only re-folds on a fresh entry to the tab). Switching back to the
+      Terminal tab restores the full session list automatically. On the MAIN baseline the session list keeps its
+      full width on the Eval tab — there is no fold.
+    related: spec-dashboard/src/SessionInterface.jsx
   - name: launcher-picker-opens-on-click
     tags: [frontend-e2e, desktop]
     description: >

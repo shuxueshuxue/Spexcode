@@ -503,7 +503,7 @@ async function blobGet(args: string[]): Promise<number> {
   if (local.ok) return emitBlob(local.bytes, out)
   if (local.reason === 'invalid') { console.error(`spex blob get: bad hash '${hash}' — a blob hash is 64 hex chars`); return 2 }
   const { apiBase } = await import('../../spec-cli/src/sessions.js')
-  const url = `${apiBase()}/api/yatsu/blob/${hash}`
+  const url = `${await apiBase()}/api/yatsu/blob/${hash}`
   let backendMiss: string
   try {
     const r = await fetch(url)

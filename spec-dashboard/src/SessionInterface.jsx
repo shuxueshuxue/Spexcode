@@ -163,14 +163,15 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const forest = useMemo(() => sessionForest(sessions, (id) => expanded.has(id)), [sessions, expanded])
   const visible = useMemo(() => forest.filter((it) => it.type === 'row').map((it) => it.s), [forest])
   const order = useMemo(() => ['new', ...visible.map((s) => s.id)], [visible])
+  const validIds = useMemo(() => new Set(['new', ...sessions.map((s) => s.id)]), [sessions])
   // content mode: 'new' or a session id (the issues list left for its own page — [[issues-view]] / [[side-nav]]).
-  const active = order.includes(sel) ? sel : 'new'
+  const active = validIds.has(sel) ? sel : 'new'
   // a removed session (closed here, ended on its own, or closed elsewhere) leaves the tab unresolved: land
   // on New only if you're still on the now-gone tab. Mirrors `active`'s validity test. Only while the page
   // is showing — a background board refresh must not clobber the remembered tab (or the URL echo) mid-boot.
   useEffect(() => {
-    if (open && !order.includes(sel)) setSel('new')
-  }, [open, order, sel, setSel])
+    if (open && !validIds.has(sel)) setSel('new')
+  }, [open, validIds, sel, setSel])
   // the session list is a user-resizable pane ([[resizable-panes]]): drag the divider, width persists.
   const [listW, listDrag] = useResizable('spex.siListWidth', 240, { min: 180, max: 480 })
   const focusId = focusNode?.id || null

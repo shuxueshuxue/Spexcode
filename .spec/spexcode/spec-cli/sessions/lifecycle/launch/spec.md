@@ -84,7 +84,7 @@ only closes the startup race; it adds no fallback and never masks a dead agent.
 ### Concurrency cap (bounded working set)
 
 At most **N** agents run **autonomously progressing** at once — **N configured per project in `spexcode.json`
-(`sessions.maxActive`, default 6)**, not hardcoded, read live so an edit applies on the next drain (the
+(`sessions.maxActive`, default 8)**, not hardcoded, read live so an edit applies on the next drain (the
 `SPEXCODE_MAX_ACTIVE` env is a fallback). A slot is **compute** pressure: a session holds one **only while
 live AND `working` or `parked`** (self-resuming). Everything **waiting on the human frees its slot** — `idle`,
 `asking`, and the proposals (review/done/close-pending) — like offline/closed, since they burn no compute and

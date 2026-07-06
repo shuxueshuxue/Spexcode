@@ -26,7 +26,7 @@ type Config = {
     icon?: string                  // the browser-tab favicon: an emoji ("🔭") or an Iconify name ("mdi:rocket-launch"); see tab-icon
   }
   sessions?: {
-    maxActive?: number             // concurrency cap: max agents AUTONOMOUSLY PROGRESSING at once (default 6; see sessions.ts maxActive)
+    maxActive?: number             // concurrency cap: max agents AUTONOMOUSLY PROGRESSING at once (default 8; see sessions.ts maxActive)
     claudeCmd?: string             // the UNNAMED default worker launcher for Claude (default 'claude --dangerously-skip-permissions'); env SPEXCODE_CLAUDE_CMD overrides. A host-specific ABS path belongs in the gitignored spexcode.local.json, not here.
     codexCmd?: string              // the UNNAMED default worker launcher for Codex (default 'codex --yolo'); env SPEXCODE_CODEX_CMD overrides. Same host-path rule.
     // named launcher profiles: a session picks ONE by name at create time ([[launcher-select]]), fixing both

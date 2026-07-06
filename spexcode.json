@@ -9,7 +9,7 @@
     "scenarioTags": ["frontend-e2e", "backend-api", "cli", "desktop", "mobile"]
   },
   "sessions": {
-    "maxActive": 6
+    "maxActive": 8
   },
   "dashboard": {
     "icon": "lucide:terminal"

@@ -56,8 +56,9 @@ const COLS = 120, ROWS = 32
 // cap is QUEUED, not started: it becomes a durable `queued` worktree that the drainer launches the moment a
 // slot frees (an agent stops working/dies). NOT hardcoded — configured PER PROJECT in `spexcode.json`
 // (`sessions.maxActive`), so a box can be tuned to its capacity without touching the toolchain. Precedence:
-// spexcode.json → `SPEXCODE_MAX_ACTIVE` env → default 6. Read LIVE (cheap file read) so an edit takes effect
+// spexcode.json → `SPEXCODE_MAX_ACTIVE` env → default 8. Read LIVE (cheap file read) so an edit takes effect
 // on the next drain tick, no restart. Floored at 1 so a bad value can't wedge the queue to 0.
+const DEFAULT_MAX_ACTIVE = 8
 function maxActive(): number {
   let v: number | undefined
   try {
@@ -65,7 +66,7 @@ function maxActive(): number {
     if (typeof fromJson === 'number' && Number.isFinite(fromJson)) v = fromJson
   } catch { /* config unreadable — fall through to env/default */ }
   if (v === undefined) { const e = Number(process.env.SPEXCODE_MAX_ACTIVE); if (Number.isFinite(e) && e > 0) v = e }
-  return Math.max(1, Math.floor(v ?? 6))
+  return Math.max(1, Math.floor(v ?? DEFAULT_MAX_ACTIVE))
 }
 
 // the rendezvous control socket path + its prompt-delivery/liveness logic now live in the [[harness-adapter]]
@@ -863,7 +864,7 @@ export async function drainQueue(): Promise<void> {
   if (draining) return
   draining = true
   try {
-    const cap = maxActive()   // read once per drain pass (spexcode.json → env → 6); won't shift mid-burst
+    const cap = maxActive()   // read once per drain pass (spexcode.json → env → default); won't shift mid-burst
     for (;;) {
       const [sessions, snap] = await Promise.all([listSessions(), liveSnapshot()])
       // if the liveness probe FAILED (tmux timing out — the overload condition), occupancy is UNKNOWABLE: every

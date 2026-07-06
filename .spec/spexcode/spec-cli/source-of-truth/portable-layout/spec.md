@@ -7,6 +7,7 @@ desc: Where things live — main, worktree→node mapping, the spec root node �
 code:
   - spec-cli/src/layout.ts
   - spec-cli/src/layout-session-id.test.ts
+  - spexcode.json
   - .nvmrc
 ---
 # portable-layout

@@ -176,8 +176,10 @@ Example:
   { "dashboard": { "title": "MyApp specs", "icon": "mdi:rocket-launch" } }
 
 ── SESSIONS / WORKERS ──
-  sessions.maxActive        concurrency cap — max agents AUTONOMOUSLY PROGRESSING at once (default 6).
-                            A policy number → committed spexcode.json.
+  sessions.maxActive        concurrency cap — max agents AUTONOMOUSLY PROGRESSING at once (default 8).
+                            Counts compute slots, not total sessions: idle/asking/review/done do not
+                            occupy one. A policy number → committed spexcode.json; omit it to use the
+                            default, or tune higher/lower for the project's usual host.
   sessions.claudeCmd        the UNNAMED default worker launcher for Claude (default
                             'claude --dangerously-skip-permissions'); env SPEXCODE_CLAUDE_CMD overrides.
   sessions.codexCmd         the UNNAMED default worker launcher for Codex (default 'codex --yolo'); env

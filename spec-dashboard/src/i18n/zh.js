@@ -332,6 +332,8 @@ export default {
     issuesSend: '发送',
     issuesPost: '发布',
     issuesSending: '发送中……',
+    issuesClosing: '关闭中……',
+    issuesCloseIssue: '关闭 issue',
     issuesMentionHint: '@会话 召唤 · [[节点]] 关联',
     issuesReplyPlaceholder: '回复……',
     issuesConcernPlaceholder: '关切 —— 一行概述',

@@ -4,9 +4,9 @@
 // (`store`), not a project mode: a project holds both at once, mixed. This module owns the core type, the
 // forge→Issue translation (the ONLY place a host's node-naming conventions become `nodes[]` — platform
 // differences stay at the adapter boundary), the merged read every surface consumes (CLI `spex issues`,
-// GET /api/issues, the board fold), the STORE-ROUTED reply verb, and the CLI itself. Content writes are
+// GET /api/issues, the board fold), the STORE-ROUTED reply/close verbs, and the CLI itself. Content writes are
 // owned per store: local ones live in localIssues.ts; a forge write goes through the driver's write verbs
-// (createIssue/createComment — the driver stays the only network toucher; the tracer stays read-only).
+// (createIssue/createComment/closeIssue — the driver stays the only network toucher; the tracer stays read-only).
 import type { ForgeIssue, ForgePR } from '../../spec-forge/src/port.js'
 import { resolveLinks } from '../../spec-forge/src/links.js'
 import { loadLocalIssues, loadOne, reply, resolve, issuesEnabled, replyLocalIssue, runIssueWrite, ISSUE_WRITE_SUBS } from './localIssues.js'
@@ -177,6 +177,18 @@ export async function replyIssue(
   const outcomes = await dispatchMentions(body, { threadId: id, node: opts.node ?? null, author })
   // a forge issue's author is a github login, not a live session → no reachable originator to loop in (silent).
   return { store: forge[1], url, outcomes, loopIn: null }
+}
+
+// @@@ closeIssue - ONE lifecycle close over every store ([[issues]]): the issue owns its status, so the
+// dashboard Close button routes by id and never writes node state. Local closes resolve the local thread
+// `landed`; forge closes call the driver's close verb and let the forced read-back reveal the closed state.
+export async function closeIssue(id: string): Promise<{ store: string; status: string; url?: string }> {
+  const forge = /^([A-Za-z0-9-]+)#(\d+)$/.exec(id)
+  if (!forge) return { store: 'local', status: resolve(id, 'landed') }
+  const { githubDriver } = await import('../../spec-forge/src/drivers/github.js')
+  if (forge[1] !== githubDriver.host) throw new Error(`unknown forge host '${forge[1]}' — this repo's driver is '${githubDriver.host}'`)
+  const { url } = await githubDriver.closeIssue({ number: parseInt(forge[2], 10) })
+  return { store: forge[1], status: 'closed', url }
 }
 
 // ───────────────────────── CLI ─────────────────────────

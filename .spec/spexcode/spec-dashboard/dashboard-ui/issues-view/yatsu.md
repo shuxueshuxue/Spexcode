@@ -80,10 +80,27 @@ scenarios:
       concern is plain prose and whose body links a real node with `[[<id>]]`. After the post lands,
       select the new thread and read its detail meta strip (`.fvd-meta`).
     expected: >-
+      The New action opens a centered pop-out over the Issues page, not an inline form in the left list.
       The form carries exactly TWO text surfaces — the concern input and the body textarea; NO node-ids
       field exists (nothing placeholder-labelled "node ids"). The posted thread's detail header shows the
       linked node as a clickable chip — the store inferred `nodes:` from the body's `[[…]]` link
       ([[local-issues]]), the writer never re-typed an id into a separate field. No page errors.
+  - name: close-issue-button
+    tags: [frontend-e2e]
+    code: [spec-dashboard/src/IssuesPage.jsx, spec-cli/src/issues.ts]
+    description: >-
+      Run the issues page against a backend with a disposable LOCAL issue store. Select an open issue,
+      read the detail's Close issue action beside the thread composer, click it, and read the subsequent issue list plus the
+      network response. When a non-disposable forge fixture is present, only inspect that the same detail
+      affordance renders for the forge issue; do not close a real remote issue as evidence.
+    expected: >-
+      Each non-concluded issue detail shows one Close issue action near the thread composer, GitHub-style,
+      and no close action in the title's top-right chrome. Clicking it posts to the same
+      dashboard close route, disables while pending, then reloads the resident issue list. The local issue
+      is resolved in the disposable local store; with the default concluded-hidden filter, it disappears
+      from the visible list after the write. The same button renders for a forge issue because the frontend
+      does not branch by store; the remote write path is the store-routed backend route. A concluded issue
+      shows no Close button. No page errors.
   - name: signed-badge-only-when-nonzero
     tags: [frontend-e2e]
     code: spec-dashboard/src/IssuesPage.jsx

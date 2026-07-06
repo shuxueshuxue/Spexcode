@@ -35,11 +35,12 @@ export interface ForgeDriver {
   readonly host: string
   listIssues(): Promise<ForgeIssue[]>
   listPRs(): Promise<ForgePR[]>
-  // the port's two write verbs — used solely by the unified Issue port (spec-cli issues.ts): promotion
-  // creates an issue, a store-routed reply comments on one. The driver stays the only network toucher;
-  // the tracer never calls either; node state is never touched.
+  // the port's issue write verbs — used solely by the unified Issue port (spec-cli issues.ts): promotion
+  // creates an issue, a store-routed reply comments on one, and close advances the forge issue's own
+  // lifecycle. The driver stays the only network toucher; the tracer never calls these; node state is never touched.
   createIssue(input: { title: string; body: string }): Promise<{ number: number; url: string }>
   createComment(input: { number: number; body: string }): Promise<{ url: string }>
+  closeIssue(input: { number: number }): Promise<{ url: string }>
   // optional INCREMENTAL window — only issues whose updated-at ≥ sinceISO. A driver that offers it lets
   // the resident cache merge small deltas between periodic full reconciles instead of re-listing the
   // world every TTL; a driver without it simply always full-lists.

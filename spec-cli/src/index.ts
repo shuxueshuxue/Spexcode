@@ -5,7 +5,7 @@ import { etag } from 'hono/etag'
 import { createNodeWebSocket } from '@hono/node-ws'
 import { loadSpecs, loadSpecsLite, specContent, specHistory, specDiffAt, loadConfig } from './specs.js'
 import { issuesEnabled, postLocalIssue, remarkOnHost, resolveRemark, retractRemark } from './localIssues.js'
-import { mergedIssues, replyIssue } from './issues.js'
+import { closeIssue, mergedIssues, replyIssue } from './issues.js'
 import { residentForgeState, refreshForgeNow } from '../../spec-forge/src/resident.js'
 import { summarize } from './mentions.js'
 import { resolveLayout, mainBranch } from './layout.js'
@@ -185,6 +185,20 @@ app.post('/api/issues/:id/reply', async (c) => {
     const r = await replyIssue(id, text, { author: 'human', node, evidence })
     if (r.store !== 'local') await refreshForgeNow()
     return c.json({ ok: true, replies: r.replies, url: r.url, outcomes: summarize(r.outcomes, r.loopIn) })
+  } catch (e) {
+    const msg = String((e as Error).message || e)
+    return c.json({ error: msg }, id.includes('#') ? 502 : 404)
+  }
+})
+// store-routed lifecycle close ([[issues]]): local resolves the local thread, forge closes the remote
+// issue through the driver. A forge close forces read-back before the dashboard reloads the resident list.
+app.post('/api/issues/:id/close', async (c) => {
+  if (!issuesEnabled()) return c.json({ error: 'issues workflow is off' }, 403)
+  const id = c.req.param('id')
+  try {
+    const r = await closeIssue(id)
+    if (r.store !== 'local') await refreshForgeNow()
+    return c.json({ ok: true, ...r })
   } catch (e) {
     const msg = String((e as Error).message || e)
     return c.json({ error: msg }, id.includes('#') ? 502 : 404)

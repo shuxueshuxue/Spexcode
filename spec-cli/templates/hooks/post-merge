@@ -21,7 +21,7 @@ if command -v spex >/dev/null 2>&1; then
   spex issues nudge "$node"
 elif [ -x "$repo_root/node_modules/.bin/spex" ]; then
   "$repo_root/node_modules/.bin/spex" issues nudge "$node"
-elif [ -x "$main_root/spec-cli/node_modules/.bin/tsx" ] && [ -f "$main_root/spec-cli/src/cli.ts" ]; then
-  "$main_root/spec-cli/node_modules/.bin/tsx" "$main_root/spec-cli/src/cli.ts" issues nudge "$node"
+elif [ -x "$main_root/spec-cli/bin/spex.mjs" ]; then
+  "$main_root/spec-cli/bin/spex.mjs" issues nudge "$node"
 fi
 exit 0

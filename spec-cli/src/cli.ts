@@ -37,7 +37,7 @@ function flushExit(code = 0): Promise<never> {
 }
 const has = (name: string) => process.argv.includes(`--${name}`)
 // bare positionals after argv index `from`, skipping flags and their values (selectors for ls/watch).
-const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--timeout', '--reason', '--out', '--password', '--tls-cert', '--tls-key', '--harness', '--launcher', '--harness-session', '--port', '--api-port', '--preset'])
+const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--timeout', '--reason', '--out', '--password', '--tls-cert', '--tls-key', '--harness', '--launcher', '--harness-session', '--port', '--api-port', '--host', '--preset'])
 function positionals(from: number): string[] {
   const out: string[] = []
   for (let i = from; i < process.argv.length; i++) {
@@ -137,13 +137,15 @@ if (cmd === 'serve') {
   }
   await import('./supervise.js')
 } else if (cmd === 'dashboard') {
-  // the natural post-install UI: serve the bundled dashboard on its OWN loopback port, proxying /api +
-  // the terminal socket to a separately-run `spex serve`. Replaces the dogfood-only `npm run web` (vite).
+  // the natural post-install UI: serve the bundled dashboard on its OWN port (loopback by default;
+  // --host widens the bind for LAN/tailnet viewing), proxying /api + the terminal socket to a
+  // separately-run `spex serve`. Replaces the dogfood-only `npm run web` (vite).
   const { serveDashboardLocal } = await import('./gateway.js')
   const port = Number(flag('port') ?? process.env.SPEXCODE_DASHBOARD_PORT ?? 5173)
   const apiPort = Number(flag('api-port') ?? process.env.PORT ?? 8787)
+  const host = flag('host') ?? '127.0.0.1'
   if (!Number.isInteger(port) || !Number.isInteger(apiPort)) { console.error('spex dashboard: --port and --api-port must be integers'); process.exit(2) }
-  serveDashboardLocal({ port, apiPort })
+  serveDashboardLocal({ port, apiPort, host })
 } else if (cmd === undefined || cmd === 'help' || cmd === '--help' || cmd === '-h') {
   // `spex help <cmd>` drills into one command; bare help is the map. Both name the next layer down.
   const { commandHelp, overviewHelp } = await import('./help.js')

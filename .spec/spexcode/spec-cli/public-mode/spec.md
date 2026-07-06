@@ -56,9 +56,12 @@ the committable `spexcode.json`; config holds cert file *paths*, the key file li
 file that does not exist is a named error pointing at the repair, never a silent fallback to insecure
 serving.
 
-**The same gateway powers local serve.** [[packaging]]'s `spex dashboard` is this gateway on loopback,
-ungated, no TLS. The dist it serves is a resolved location: an installed `spexcode` serves the bundled
-`dashboard-dist`; a monorepo checkout falls back to the sibling `spec-dashboard/dist`.
+**The same gateway powers local serve.** [[packaging]]'s `spex dashboard` is this gateway ungated with no
+TLS, on loopback by default — its `--host` widens the bind for a private network (LAN/tailnet), and the
+gate note keys on the loopback boundary, not on how the host was passed: an ungated loopback bind is
+normal, an ungated wide bind is announced at startup. The dist it serves is a resolved location: an
+installed `spexcode` serves the bundled `dashboard-dist`; a monorepo checkout falls back to the sibling
+`spec-dashboard/dist`.
 
 **A busy port fails loudly.** The gateway obeys [[spec-cli]]'s port-ownership contract: a port already in
 use (or permission-denied) is a non-zero exit naming the port and the repair, never a silent or half-up

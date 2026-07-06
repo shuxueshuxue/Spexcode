@@ -91,7 +91,11 @@ when a *sibling* scenario sharing the same yatsu.md did — so one file's routin
 neighbour's reword) can't spray false stale scores across every reading it holds. Git has no sub-file
 history, so this is built ([[scenariofresh]]): per scenario NAME, the commits where that block's content
 changed, rename-followed — a bare `git mv` reparent leaves the block byte-identical, so it records no change
-and never stales (the same content-not-path rule a reparented spec node follows). Both git axes then judge
+and never stales (the same content-not-path rule a reparented spec node follows). A block version is keyed by
+its **content hash**, so a scenario's freshness is identical in every checkout that shares the history — a
+worktree reads the same score as the main line, without a per-branch rebuild — and the walk is **whole-history**,
+never first-parent-simplified, so a block edit that landed on a node branch and merged in still counts and is
+never silently read as fresh. Both git axes then judge
 "changed since" by the SAME true ancestry ([[drift-by-ancestry]]) — the code axis over a governed file's
 commits, the scenario axis over that one scenario's block-change commits: a commit stales the reading iff it
 is *not an ancestor* of its codeSha, and an off-history codeSha — orphaned by a rebase or on a never-merged

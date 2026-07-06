@@ -1,7 +1,7 @@
 ---
 title: review-proof
 hue: 150
-desc: A session's fully-derived evaluation — the console's Eval tab (the shared eval components, session-scoped, tiered loading) over the same worktree-rooted engine that renders the self-contained proof HTML as an EXPORT artifact. No agent authoring.
+desc: A session's fully-derived evaluation — the console's Eval tab (the shared eval components, session-scoped, tiered loading) and its CLI twin `spex eval <SEL>`, over the same worktree-rooted engine that renders the self-contained proof HTML as an EXPORT artifact (`--proof`). No agent authoring.
 code:
   - spec-yatsu/src/proof.ts
   - spec-dashboard/src/SessionEval.jsx
@@ -70,6 +70,15 @@ The **self-contained HTML** (`renderProofHtml`: evidence inlined as data-URIs, e
 diff + before/after drill-down) remains as the **export artifact** — CI attachments, sharing, a bare
 browser — behind the tab's `export ↗` link (labelled as the export it is, tooltip naming the self-contained
 HTML report), `GET /api/sessions/:id/proof` (`?format=json` = the model), and
-`spex review proof <SEL>` (`--out`/`--open`, a backend client that works against a remote backend
+`spex eval <SEL> --proof` (`--out`/`--open`, a backend client that works against a remote backend
 unchanged). Inlining everything is the right shape for a file that must stand alone, and the wrong shape
 for an interactive tab — that is the whole split.
+
+**The CLI mirrors the vocabulary, not just the artifact.** `spex eval <SEL>` is the Eval tab's CLI twin:
+it reads the same lean `/evals` model and renders the same attention order as text — blind spots lead,
+the session's own readings ✦-marked, the inherited baseline under its named divider, an uncovered
+frontend node flagged — so a terminal-bound manager reads the measured loss without the dashboard.
+`proof` is no longer a top-level noun beside `review`: the export rides the eval read as its `--proof`
+flag, and the old `spex review proof` spelling survives only as a deprecated alias that runs and echoes
+the canonical form. The read/write split stays intact: `spex eval` READS a session's evaluation;
+filing a reading remains `spex yatsu eval`.

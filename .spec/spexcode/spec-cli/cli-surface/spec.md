@@ -30,7 +30,11 @@ namespaced under `spex internal`, absent from the map; its own usage text tells 
 porcelain they probably wanted. Consequence of the move: a *stale installed* pre-commit hook that
 still calls the old top-level token degrades to the hook's pure-git trunk fallback (advisory-safe),
 and is healed by `npm run hooks`; the deprecated `spex propose` alias is gone the same way — a stale
-post-merge hook prints one unknown-command line (advisory) until reinstalled.
+post-merge hook prints one unknown-command line (advisory) until reinstalled. A *demoted* spelling
+degrades more gently than a removed one: it stays as a **deprecated alias** that still runs but
+echoes the canonical form on stderr, so a caller migrates without breakage (`spex review proof` →
+`spex eval <SEL> --proof`, after proof was demoted from a review sub-noun to the export flag of the
+[[review-proof]] eval read).
 
 **The three-layer help journey** — each layer states what the next one is for, so the reader always
 has a move:

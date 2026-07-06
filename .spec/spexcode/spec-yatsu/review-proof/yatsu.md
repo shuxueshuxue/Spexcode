@@ -31,7 +31,23 @@ scenarios:
       naming them, so the session's own work and the inherited baseline can never be misread as one. A
       retired scenario (declared in no yatsu.md) contributes NO row — the tab is bounded by declared
       scenarios, the same latest-per-scenario computation every eval face reads.
-  - name: eval-tab-shared-shell
+  - name: eval-cli-read
+    tags: [cli]
+    code: [spec-cli/src/cli.ts, spec-cli/src/client.ts, spec-cli/src/help.ts]
+    description: >
+      Drive the real CLI against a live backend: `spex eval <SEL>` on a session with committed changes
+      and readings, on a session with an empty diff, and with --json; `spex eval <SEL> --proof` and the
+      old `spex review proof <SEL>` spelling; the help probes (`spex help eval`, `spex eval <SEL> --help`,
+      `spex help review`, the `spex help` map). Capture stdout/stderr + exit codes as the transcript.
+    expected: >
+      `spex eval <SEL>` renders the /evals model as text in the tab's attention order — gates strip, a ✦
+      legend when the session filed its own readings, per changed node: blind spots lead, ✦-marked own
+      readings, then the inherited baseline under a named divider; an empty diff prints a clean
+      nothing-to-evaluate line; --json dumps the model. --proof writes the self-contained HTML path (its
+      --json = the model). `spex review proof` still works but echoes the canonical `spex eval <SEL>
+      --proof` deprecation line on stderr. Help: the map lists eval beside review, `spex help review` no
+      longer carries a proof sub-noun, and an --help probe never fires the verb.
+
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/SessionEval.jsx, spec-dashboard/src/EvalsPage.jsx]
     description: >

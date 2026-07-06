@@ -116,6 +116,28 @@ async function resolveSelectorOrExit(selector: string): Promise<string> {
   process.exit(2)
 }
 
+// the [[review-proof]] EXPORT artifact, shared by `spex eval <SEL> --proof` (canonical) and the deprecated
+// `spex review proof` alias: fetch the backend-rendered self-contained HTML (or the model, --json), write
+// it (--out, else a tmp file) or open it (--open). Never returns.
+async function proofExport(id: string): Promise<never> {
+  const { clientProof } = await import('./client.js')
+  const r = await clientProof(id, has('json'))
+  if (!r.ok) { console.error(`no proof for ${id} (status ${r.status})`); process.exit(1) }
+  if (has('json')) { console.log(r.body); await flushExit(0) }
+  const { writeFileSync } = await import('node:fs')
+  const { join } = await import('node:path')
+  const { tmpdir } = await import('node:os')
+  const out = flag('out') ?? join(tmpdir(), `spexcode-proof-${id.slice(0, 8)}.html`)
+  writeFileSync(out, r.body)
+  if (has('open')) {
+    const { spawn } = await import('node:child_process')
+    const opener = process.platform === 'darwin' ? 'open' : 'xdg-open'
+    try { spawn(opener, [out], { detached: true, stdio: 'ignore' }).unref(); console.log(`opened ${out}`) }
+    catch { console.log(`wrote ${out} — couldn't auto-open, open it in a browser`) }
+  } else console.log(out)
+  process.exit(0)
+}
+
 // a trailing --help/-h prints help and exits BEFORE any verb runs, so a help probe never fires a
 // streaming/mutating command. It prints THAT command's usage when an entry exists (the second layer
 // of the help journey — see help.ts), falling back to the map for an unknown token.
@@ -237,26 +259,58 @@ if (cmd === 'serve') {
   // prose. Git hooks preserved unless --hooks. spex uninstall [targetDir] [--hooks]
   const { uninstall } = await import('./uninstall.js')
   uninstall(positionals(3)[0], { hooks: has('hooks') })
-} else if (cmd === 'review' && positionals(3)[0] === 'proof') {
-  const sel = positionals(3)[1]
-  if (!sel) { console.error('usage: spex review proof <selector> [--open | --out <path> | --json]'); process.exit(2) }
+} else if (cmd === 'eval') {
+  // the session EVAL read ([[review-proof]]'s interactive face as a CLI verb): the dashboard Eval tab's
+  // text twin. Renders the session's changed nodes with each DECLARED scenario at its CURRENT score
+  // (latest reading per scenario, worktree-rooted) — blind spots lead, the session's OWN measurements
+  // ✦-marked ahead of the inherited baseline under its divider. --proof exports the self-contained HTML
+  // artifact instead (the demoted `spex review proof`).
+  const sel = positionals(3)[0]
+  if (!sel) { console.error('usage: spex eval <SEL> [--json]   |   spex eval <SEL> --proof [--open | --out <path> | --json]'); process.exit(2) }
   const id = await resolveSelectorOrExit(sel)
-  const { clientProof } = await import('./client.js')
-  const r = await clientProof(id, has('json'))
-  if (!r.ok) { console.error(`no proof for ${id} (status ${r.status})`); process.exit(1) }
-  if (has('json')) { console.log(r.body); await flushExit(0) }
-  const { writeFileSync } = await import('node:fs')
-  const { join } = await import('node:path')
-  const { tmpdir } = await import('node:os')
-  const out = flag('out') ?? join(tmpdir(), `spexcode-proof-${id.slice(0, 8)}.html`)
-  writeFileSync(out, r.body)
-  if (has('open')) {
-    const { spawn } = await import('node:child_process')
-    const opener = process.platform === 'darwin' ? 'open' : 'xdg-open'
-    try { spawn(opener, [out], { detached: true, stdio: 'ignore' }).unref(); console.log(`opened ${out}`) }
-    catch { console.log(`wrote ${out} — couldn't auto-open, open it in a browser`) }
-  } else console.log(out)
-  process.exit(0)
+  if (has('proof')) await proofExport(id)
+  const { clientEvals } = await import('./client.js')
+  const r = await clientEvals(id)
+  if (!r.ok) { console.error(`no evals for ${id} (status ${r.status})`); process.exit(1) }
+  if (has('json')) { console.log(JSON.stringify(r.model, null, 2)); await flushExit(0) }
+  const m = r.model
+  // mirror the tab's scenarioStates per node: latest reading per DECLARED scenario (evals arrive
+  // newest-first), so a retired scenario's residual reading contributes no row; the ✦ count is over
+  // these rows — the same number the tab's chip shows.
+  const groups = m.nodes.map((n) => {
+    const latest = new Map<string, (typeof n.evals)[number]>()
+    for (const e of n.evals) if (!latest.has(e.scenario)) latest.set(e.scenario, e)
+    const blind = n.scenarios.filter((s) => !latest.has(s.name))
+    const rows = n.scenarios.filter((s) => latest.has(s.name)).map((s) => latest.get(s.name)!)
+      .sort((a, b) => (Number(b.inSession) - Number(a.inSession)) || (a.ts < b.ts ? 1 : -1))
+    return { n, blind, rows }
+  })
+  const own = groups.reduce((a, g) => a + g.rows.filter((e) => e.inSession).length, 0)
+  console.log(`eval ${m.title}  [${m.id}]`)
+  console.log(`  branch : ${m.branch ?? '—'} · ${m.ahead} commit(s) ahead · ${m.dirtyNonRuntime} uncommitted`)
+  console.log(`  gates  : ${m.gates.map((g) => `${g.ok ? '✓' : '✗'} ${g.label} — ${g.detail}`).join(' · ')}`)
+  if (own) console.log(`  ✦      : ${own} scenario(s) measured by THIS session (unmarked rows = inherited baseline)`)
+  if (!m.nodes.length) console.log('\n  no changed spec nodes — nothing to evaluate yet (empty diff)')
+  for (const { n, blind, rows } of groups) {
+    console.log(`\n${n.title}  [${n.id}]${n.uncoveredFrontend ? '  ⚠ frontend change with NO yatsu.md — a blind spot: give it a scenario' : ''}`)
+    for (const s of blind) console.log(`      ∅ unmeasured  ${s.name}  — declared, never measured (blind spot)`)
+    let divided = false
+    for (const e of rows) {
+      if (!e.inSession && !divided && rows.some((x) => x.inSession)) { console.log(`      ── inherited baseline (other sessions' latest readings) ──`); divided = true }
+      const verdict = e.verdict?.status === 'pass' ? '✓ pass' : e.verdict?.status === 'fail' ? '✗ fail' : '· unscored'
+      const stale = e.fresh ? '' : ` (stale: ${e.staleAxes.join(',')})`
+      console.log(`    ${e.inSession ? '✦' : ' '} ${verdict}${stale}  ${e.scenario}  — ${e.ts}${e.evaluator ? ` · ${e.evaluator}` : ''}`)
+    }
+    if (!n.hasYatsu && !n.uncoveredFrontend) console.log('      (no yatsu.md — nothing declared to measure)')
+    else if (n.hasYatsu && !n.scenarios.length) console.log('      (yatsu.md declares no scenarios)')
+  }
+} else if (cmd === 'review' && positionals(3)[0] === 'proof') {
+  // deprecated alias — proof was demoted from a review sub-noun to the export face of the ONE eval read.
+  // Still runs, but echoes the canonical form so callers migrate.
+  const sel = positionals(3)[1]
+  if (!sel) { console.error('usage: spex eval <SEL> --proof [--open | --out <path> | --json]   (`spex review proof` is a deprecated alias)'); process.exit(2) }
+  console.error('spex: `spex review proof` is deprecated — use `spex eval <SEL> --proof`')
+  await proofExport(await resolveSelectorOrExit(sel))
 } else if (cmd === 'review') {
   const { clientReview } = await import('./client.js')
   const sel = positionals(3)[0]

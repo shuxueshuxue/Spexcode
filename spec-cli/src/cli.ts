@@ -332,6 +332,9 @@ if (cmd === 'serve') {
   await flushExit(await runDoctor(process.argv.slice(3)))
 } else if (cmd === 'board') {
   const { buildBoard } = await import('./board.js')
+  // interactive-only stderr hint: the JSON dump is machine food; a human at a tty gets pointed at
+  // the readable twin. Piped/redirected stdout stays byte-identical (the hint never touches stdout).
+  if (process.stdout.isTTY) console.error('(human-readable tree: spex tree)')
   console.log(JSON.stringify(await buildBoard(), null, 2))
   await flushExit(0)
 } else if (cmd === 'tree') {

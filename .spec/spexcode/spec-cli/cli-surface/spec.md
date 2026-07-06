@@ -50,6 +50,11 @@ has a move:
 Dead-end rule: an unknown command, an unknown help topic, an unknown guide topic, and a bare
 `spex internal` each fail loud AND name the layer to go back to — never a silent exit.
 
+A machine dump names its human twin: `spex board`'s JSON is for programs, so when stdout is a tty a
+single stderr line — `(human-readable tree: spex tree)` — points the human at the readable graph.
+The hint is stderr-only and tty-gated, so piped or redirected `spex board` output stays
+byte-identical (the pipe contract is untouched).
+
 The map must stay honest: every porcelain verb `cli.ts` dispatches appears in it (a hidden typeable
 verb is the bug this node exists to prevent — `search` and `owner` were exactly that), and each verb
 with caveats carries them in its own entry (`watch` says it never exits and points at `wait`).

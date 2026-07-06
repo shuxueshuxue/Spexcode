@@ -58,12 +58,15 @@ resolve or retract from landing on the wrong remark.
 ## One model, two surfaces
 
 The CLI is the whole model; the server exposes the same three actions — every endpoint calls the same
-functions the CLI calls, adding no dashboard-only capability. **Identity is derived by the surface, never
-sent by the caller:** the CLI's actor is the governed
-session id, the server's the `human` sentinel — never the request body. R3's teeth are identity comparisons,
-so a caller free to name its own actor could self-resolve or defeat author-only retract. Hence resolve is
-unreachable from the dashboard (agent-only) and retract touches only the human's own remarks — identical on
-both surfaces (LAW L).
+functions the CLI calls, adding no dashboard-only capability, and hiding no CLI capability either (write
+PARITY: what an agent can do to a remark, a human can do from the dashboard). **Identity is derived by the
+surface, never sent by the caller:** the CLI's actor is the governed session id, the server's the `human`
+sentinel — never the request body. R3's teeth are identity comparisons, so a caller free to name its own
+actor could self-resolve or defeat author-only retract; with the identity pinned by the surface, the SAME
+rules run identically on both (LAW L): resolve is any SECOND party's deliberate judgment — a governed
+session from the CLI, the human from the dashboard — and `human` is an identity like any other, so it can
+never resolve a human-authored remark (self-resolve stays structurally rejected) and retract touches only
+the caller's own unresolved remarks.
 
 Out of scope here (later milestones): the freshness/staleness computation that reads the resolved bit,
 the server-side overlay join, and any dashboard UI — this node builds only the substrate they stand on.

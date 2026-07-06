@@ -44,7 +44,8 @@ notifies a thread's originator when online; M4 makes it a **fallback chain**: fo
 candidates are, in order, the **reading's filer** session, then the **node's governing session**, then
 **nobody** (the remark still surfaces on the board through the teeth). Delivery walks the chain and stops at
 the first ONLINE link; an offline/absent link falls through to the next. This is **notification only** — it
-**resolves nothing** (R3: resolve is a deliberate `spex resolve`, agent-only, never from dispatch/delivery),
+**resolves nothing** (R3: resolve is a deliberate second-party call — `spex resolve`, or the dashboard's resolve — never from
+dispatch/delivery),
 never spawns a worker (only an explicit `@new` spawns), and stays silent when the chain runs dry. It is one
 small extension of the existing loop-in seam (`notifyOriginator` takes the chain; `mentions.ts` owns it), not
 a new subsystem — a plain issue thread's chain is still just its author, so nothing else changes.

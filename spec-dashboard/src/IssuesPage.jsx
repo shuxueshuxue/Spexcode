@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
-import { postIssueClose, postIssueReply, postIssueThread } from './data.js'
+import { postIssueClose, postIssuePromote, postIssueReply, postIssueResolve, postIssueSign, postIssueThread } from './data.js'
 import { useMentionAutocomplete } from './mentions.jsx'
 import { SpecBody } from './NodeView.jsx'
 import { Replies, ReplyComposer, OriginatorLiveness } from './Thread.jsx'
@@ -141,26 +141,36 @@ export default function IssuesPage({ onFocusNode, specs = [], sessions = [], iss
 // the issue detail — full-height, split like the eval rail: a scrolling thread region (header
 // (store/status/author/node chips/permalink), the markdown-RENDERED body, the replies) over the composer
 // DOCKED at the pane's foot — one thread surface for both stores, the write affordance always on screen.
+// The composer's action row carries the issue's WHOLE human-reachable lifecycle at CLI parity
+// ([[issues-view]]): Sign · Accept · Reject · Promote (local-store verbs — an open local issue only; sign
+// hides once 'human' signed) beside the store-routed Close every non-concluded issue gets. Each POSTs to
+// the thin endpoint wrapping the same store function the CLI verb calls, then reloads the resident list.
 function IssueDetail({ issue: th, specs, sessions, onFocusNode, onWrite }) {
   const t = useT()
   const local = th.store === 'local'
   const concluded = th.status === 'closed' || th.status === 'rejected' || th.status === 'landed'
-  const [closing, setClosing] = useState(false)
-  const [closeErr, setCloseErr] = useState('')
+  const [acting, setActing] = useState('')   // the lifecycle action in flight — one at a time
+  const [actErr, setActErr] = useState('')
   const nodes = Array.isArray(th.nodes) ? th.nodes : []
   const signers = Array.isArray(th.signers) ? th.signers : []
   const replies = Array.isArray(th.replies) ? th.replies : []
-  const close = async () => {
-    if (closing) return
-    setClosing(true)
+  const run = (name, fn) => async () => {
+    if (acting) return
+    setActing(name)
     try {
-      const res = await postIssueClose(th.id)
-      if (res?.ok) { setCloseErr(''); await onWrite?.('') }
-      else setCloseErr(res?.error || 'close failed')
+      const res = await fn()
+      if (res?.ok) { setActErr(''); await onWrite?.('') }
+      else setActErr(res?.error || `${name} failed`)
     } finally {
-      setClosing(false)
+      setActing('')
     }
   }
+  const lifecycleBtn = (name, label, fn, title) => (
+    <button type="button" className={`fv-close-issue fv-life-${name}`} disabled={!!acting} title={title}
+      onMouseDown={(e) => e.preventDefault()} onClick={run(name, fn)}>
+      {acting === name ? t('session.issuesActing') : label}
+    </button>
+  )
   return (
     <div className="fvd">
       <div className="fvd-scroll">
@@ -179,15 +189,17 @@ function IssueDetail({ issue: th, specs, sessions, onFocusNode, onWrite }) {
             ? <OriginatorLiveness originator={th.by} sessions={sessions} kind="issue" />
             : (th.by && <span className="fv-by">{th.by}</span>)}
           {/* signers badge only when someone actually signed — a "+0 signed" is noise (mirrors the CLI's
-              `if (p.signers.length)` guard, issues.ts). The sign feature itself is untouched. */}
-          {local && signers.length > 0 && <span className="fv-count">{t('session.issuesSigned', { n: signers.length })}</span>}
+              `if (p.signers.length)` guard, issues.ts). */}
+          {local && signers.length > 0 && <span className="fv-count" title={signers.join(', ')}>{t('session.issuesSigned', { n: signers.length })}</span>}
           {nodes.map((id) => (
             <button key={id} type="button" className="fv-chip" onClick={() => onFocusNode?.(id)} title={t('session.issuesFocusNode')}>{id}</button>
           ))}
           {th.url && <a className="fv-link" href={th.url} target="_blank" rel="noreferrer">{t('session.issuesOpenOnForge')}</a>}
         </div>
         {th.body && <div className="fvd-body"><SpecBody body={th.body} /></div>}
-        <Replies replies={replies} />
+        {/* a reply that is a REMARK gets its resolve/retract verb here too ([[remark-substrate]] — a remark
+            can host on an issue, not only a scenario); the shared Thread UI enforces nothing itself. */}
+        <Replies replies={replies} threadId={local ? th.id : null} onRemarkChange={() => onWrite?.('')} />
       </div>
       {/* the composer is DOCKED at the detail's foot ([[issues-view]]) — always on screen, the thread
           scrolls behind it (no scroll-to-the-bottom to reply); keyed to the issue so a half-typed draft
@@ -202,10 +214,15 @@ function IssueDetail({ issue: th, specs, sessions, onFocusNode, onWrite }) {
           onDone={onWrite}
           actionsEnd={!concluded && (
             <>
-              {closeErr && <span className="fv-error">{closeErr}</span>}
-              <button type="button" className="fv-close-issue" disabled={closing} onMouseDown={(e) => e.preventDefault()} onClick={close}>
-                {closing ? t('session.issuesClosing') : t('session.issuesCloseIssue')}
-              </button>
+              {actErr && <span className="fv-error">{actErr}</span>}
+              {local && th.status === 'open' && !signers.includes('human') &&
+                lifecycleBtn('sign', t('session.issuesSign'), () => postIssueSign(th.id), t('session.issuesSignTitle'))}
+              {local && th.status === 'open' && <>
+                {lifecycleBtn('accept', t('session.issuesAccept'), () => postIssueResolve(th.id, 'accepted'), t('session.issuesAcceptTitle'))}
+                {lifecycleBtn('reject', t('session.issuesReject'), () => postIssueResolve(th.id, 'rejected'), t('session.issuesRejectTitle'))}
+                {lifecycleBtn('promote', t('session.issuesPromote'), () => postIssuePromote(th.id), t('session.issuesPromoteTitle'))}
+              </>}
+              {lifecycleBtn('close', t('session.issuesCloseIssue'), () => postIssueClose(th.id))}
             </>
           )}
         />

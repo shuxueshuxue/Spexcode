@@ -454,7 +454,11 @@ function EvalRemarks({ entry, comments, codeSha, specs, sessions, onWrite, seekM
     <aside className="an-rail">
       <div className="an-comments-head">{t('annotator.comments', { n: comments.length })}</div>
       <div className="an-rail-list">
-        <Replies replies={comments} onSeek={seekMs} selIdx={selIdx} activeIdx={activeIdx} onSelect={onSelect} events={events} />
+        {/* threadId + onRemarkChange arm the rows' resolve/retract verbs (CLI-parity, [[remark-substrate]]):
+            the human resolves an agent's unresolved remark (second-party judgment) or retracts their own —
+            same endpoints `spex resolve`/`spex retract` parallel, reload through the host's onWrite. */}
+        <Replies replies={comments} onSeek={seekMs} selIdx={selIdx} activeIdx={activeIdx} onSelect={onSelect} events={events}
+          threadId={entry.thread?.id ?? null} onRemarkChange={() => onWrite?.('')} />
       </div>
       <div className="an-rail-compose">
         {/* keyed by the (node, scenario) identity: the composer owns its body state, so only a remount

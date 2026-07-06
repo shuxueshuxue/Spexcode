@@ -39,7 +39,8 @@ follow, and they are the whole point:
   that reading pre-dates the resolution, so axis (b) still fires. The scenario stays stale until a reading
   taken *after* the resolve exists.
 - **You can't clear it by passive receipt.** Resolve is a deliberate second-party call ([[remark-substrate]]'s
-  R3: agent-only, never the author, monotonic), never a side effect of dispatch or delivery. Resolving
+  R3: never the author — a governed session or the dashboard's human, monotonic), never a side effect of
+  dispatch or delivery. Resolving
   *unlocks*; only the post-resolve reading *clears*.
 
 This is one computation, fed at the call sites — `freshness.ts` stays a **pure** function: it takes the

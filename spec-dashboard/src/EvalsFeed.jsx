@@ -53,8 +53,8 @@ export function EvalRow({ e, selected, onClick }) {
   return (
     <button className={`ef-row ${selected ? 'sel' : ''}`} onClick={onClick}>
       <ScoreBadge state={e.state} />
-      {e.inSession && <span className="ef-insession" title="measured by this session">✦</span>}
-      <span className="ef-scenario" title={e.scenario}>{e.scenario}</span>
+      {e.inSession && <span className="ef-insession" data-tip="measured by this session">✦</span>}
+      <span className="ef-scenario" data-tip={e.scenario}>{e.scenario}</span>
       <span className="ef-node" style={{ color: `hsl(${e.hue ?? 210} 60% 70%)` }}>{e.node}</span>
       <span className="ef-kind">{kindsOf(e).map((k) => KIND_TAG[k]).join('·')}</span>
       <span className="ef-time">{rel(e.ts)}</span>
@@ -115,7 +115,7 @@ export default function EvalsGroup({ nodes = [], sel, onSel, onRows, mustShow = 
             </button>
           ))}
           {staleN > 0 && (
-            <button className={`ef-chip ef-stale ${staleOnly ? 'on' : ''}`} onClick={() => setStaleOnly((v) => !v)} title={t('evalsFeed.staleOnlyTitle')}>
+            <button className={`ef-chip ef-stale ${staleOnly ? 'on' : ''}`} onClick={() => setStaleOnly((v) => !v)} data-tip={t('evalsFeed.staleOnlyTitle')}>
               {t('evalsFeed.staleN', { n: staleN })}
             </button>
           )}

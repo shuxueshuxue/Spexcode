@@ -88,14 +88,14 @@ export default function SessionEvalPane({ sessionId, specs = [], sessions = [], 
     <div className="se-pane">
       <div className="se-gates">
         {model.gates.map((g) => (
-          <span key={g.label} className={`se-gate ${g.ok ? 'ok' : 'bad'}`} title={g.detail}>{g.ok ? '✓' : '✗'} {g.label}</span>
+          <span key={g.label} className={`se-gate ${g.ok ? 'ok' : 'bad'}`} data-tip={g.detail}>{g.ok ? '✓' : '✗'} {g.label}</span>
         ))}
         {sessionTotal > 0 && (
           <button className={`ef-chip ef-stale ${onlySession ? 'on' : ''}`} onClick={() => setOnlySession((v) => !v)}>
             {t('sessionEval.sessionN', { n: sessionTotal })}
           </button>
         )}
-        <a className="se-export" href={`/api/sessions/${encodeURIComponent(sessionId)}/proof`} target="_blank" rel="noreferrer" title={t('sessionEval.exportTitle')}>
+        <a className="se-export" href={`/api/sessions/${encodeURIComponent(sessionId)}/proof`} target="_blank" rel="noreferrer" data-tip={t('sessionEval.exportTitle')}>
           {t('sessionEval.export')}
         </a>
       </div>

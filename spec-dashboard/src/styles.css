@@ -1821,3 +1821,26 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .pane-filter-input:focus { border-color: var(--muted); }
 .pane-filter-input::placeholder { color: var(--muted); }
 .pane-filter-none { color: var(--muted); font-family: var(--mono); font-size: 11px; padding: 6px 2px; }
+
+/* ---- shared tooltip ([[tooltip]]): the ONE hover/focus bubble every `data-tip` renders through.
+   Palette-only colours (no browser-default yellow box), so light/dark both come from the theme vars;
+   z-index 100 floats it above modals (60) and the mobile shell (10-20). */
+.ui-tip {
+  position: fixed; z-index: 100; pointer-events: none;
+  background: var(--panel2); color: var(--ink2);
+  border: 1px solid var(--line); border-radius: 6px;
+  padding: 4px 9px; font-family: var(--mono); font-size: 11px; line-height: 1.5;
+  max-width: 320px; white-space: pre-line; overflow-wrap: break-word;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .22);
+  opacity: 0; transition: opacity .14s ease, transform .14s ease;
+}
+.ui-tip[data-place='top'] { transform: translateY(3px); }
+.ui-tip[data-place='bottom'] { transform: translateY(-3px); }
+.ui-tip.show { opacity: 1; transform: translateY(0); }
+.ui-tip-arrow {
+  position: absolute; width: 8px; height: 8px;
+  background: var(--panel2);
+  border-right: 1px solid var(--line); border-bottom: 1px solid var(--line);
+}
+.ui-tip[data-place='top'] .ui-tip-arrow { bottom: -4.5px; transform: rotate(45deg); }
+.ui-tip[data-place='bottom'] .ui-tip-arrow { top: -4.5px; transform: rotate(225deg); }

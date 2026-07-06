@@ -172,13 +172,13 @@ export function SpecPane({ node }) {
       <h1># {node.title}</h1>
       <blockquote>{node.desc}</blockquote>
       <div className="doc-stat">
-        <span className={`stat-status st-${node.status}`} title={t('nodeView.statusLabel')}>
+        <span className={`stat-status st-${node.status}`} data-tip={t('nodeView.statusLabel')}>
           <i className="stat-dot" />{t(`status.${node.status}`)}
         </span>
-        <span className="stat-chip" title={t('nodeView.versionLabel')}>v{node.version || 0}</span>
+        <span className="stat-chip" data-tip={t('nodeView.versionLabel')}>v{node.version || 0}</span>
         <ScenarioCount scenarios={node.scenarios} evals={node.evals} />
-        {node.drift > 0 && <span className="stat-chip stat-drift" title={driftTitle}>⚠{node.drift}</span>}
-        <span className="stat-sess" title={t('nodeView.lastEditedBy')}>✎ <b>{node.session || t('common.none')}</b></span>
+        {node.drift > 0 && <span className="stat-chip stat-drift" data-tip={driftTitle}>⚠{node.drift}</span>}
+        <span className="stat-sess" data-tip={t('nodeView.lastEditedBy')}>✎ <b>{node.session || t('common.none')}</b></span>
       </div>
       {node.code?.length > 0 ? (
         <div className="doc-gov">
@@ -461,7 +461,7 @@ function VerdictBadge({ verdict }) {
   if (verdict.status === 'pass') return <span className="eval-verdict pass">{t('nodeView.eval.pass')}</span>
   if (verdict.status === 'fail') return <span className="eval-verdict fail">{t('nodeView.eval.fail')}</span>
   // legacy note-only reading (status:'note' predates the annotation model); new readings are always pass/fail
-  return <span className="eval-verdict note" title={verdict.note}>{t('nodeView.eval.note')}</span>
+  return <span className="eval-verdict note" data-tip={verdict.note}>{t('nodeView.eval.note')}</span>
 }
 
 function EvalEvidence({ r }) {
@@ -504,7 +504,7 @@ function DanglingTrack({ track }) {
   return (
     <div className="eval-row eval-dangling-row">
       <span className="eval-top">
-        <span className="eval-dangling-badge" title={t('nodeView.eval.danglingTitle')}>⚠</span>
+        <span className="eval-dangling-badge" data-tip={t('nodeView.eval.danglingTitle')}>⚠</span>
         <span className="eval-scenario eval-dangling-name">{track.scenario}</span>
         <span className="eval-dangling-tag">{t('nodeView.eval.danglingGone')}</span>
       </span>
@@ -620,12 +620,12 @@ export default function NodeView({ node, pane, setPane, onClose }) {
                 <kbd>{i + 1}</kbd> {t(PANE_LABEL[p.key])}
                 {p.key === 'issues' && (issueOpen > 0 || issueClosed > 0) && (
                   <span className="ov-tab-counts">
-                    {issueOpen > 0 && <span className="ovc st-open" title={t('nodeView.openIssues', { n: issueOpen })}>{issueOpen}</span>}
-                    {issueClosed > 0 && <span className="ovc st-closed" title={t('nodeView.closedIssues', { n: issueClosed })}>{issueClosed}</span>}
+                    {issueOpen > 0 && <span className="ovc st-open" data-tip={t('nodeView.openIssues', { n: issueOpen })}>{issueOpen}</span>}
+                    {issueClosed > 0 && <span className="ovc st-closed" data-tip={t('nodeView.closedIssues', { n: issueClosed })}>{issueClosed}</span>}
                   </span>
                 )}
                 {p.key === 'edit' && editCount > 0 && (
-                  <span className="ov-tab-counts"><span className="ovc st-edit" title={t('nodeView.pendingEdits', { n: editCount })}>{editCount}</span></span>
+                  <span className="ov-tab-counts"><span className="ovc st-edit" data-tip={t('nodeView.pendingEdits', { n: editCount })}>{editCount}</span></span>
                 )}
               </button>
             ))}

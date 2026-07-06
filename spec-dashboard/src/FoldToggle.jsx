@@ -21,7 +21,7 @@ export default function FoldToggle({ className, folded, onToggle }) {
   const t = useT()
   const label = t(folded ? 'masterList.unfold' : 'masterList.fold')
   return (
-    <button type="button" className={className} title={label} aria-label={label} onClick={onToggle}>
+    <button type="button" className={className} data-tip={label} aria-label={label} onClick={onToggle}>
       <FoldToggleIcon />
     </button>
   )

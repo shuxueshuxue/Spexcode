@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readFileSync, statSync, rmSync } from 'node:fs'
+import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createServer } from 'node:net'
 import { activeTurnIdFromThread, codexAppServerSock, codexBinary, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, codexLaunchCommand, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, resolveLauncher, writeCodexTrust, rendezvousListening, rvSock } from './harness.js'
@@ -152,6 +152,14 @@ test('codex app-server socket path is short (sun_path-safe), stable per project,
   // well under macOS's ~104-byte sun_path ceiling (leave real headroom for a long per-user $TMPDIR).
   assert.ok(sock.length < 104, `sock path ${sock.length} chars must stay under 104 (got ${sock})`)
   assert.match(sock, /spexcode-cx-[0-9a-f]{16}\.sock$/)
+  // the default base is an OWNED per-uid subdir of tmpdir, NEVER bare tmpdir — codex EPERMs binding a unix
+  // socket directly in the shared sticky /tmp on a hardened host (fs.protected_regular=2), so the bare-tmpdir
+  // default failed every codex launch out of the box (github#30). The derivation guarantees the dir exists.
+  const base = dirname(sock)
+  assert.notEqual(base, tmpdir(), 'sock must not sit directly in bare tmpdir')
+  assert.equal(base, join(tmpdir(), `spexcode-cx-${process.getuid?.() ?? 0}`))
+  assert.ok(statSync(base).isDirectory())
+  if (process.getuid) assert.equal(statSync(base).mode & 0o777, 0o700)
   // STABLE per project: same identity → same sock (so launch, liveness, and delivery agree without coordination).
   assert.equal(codexAppServerSock(deep), sock)
   // DISTINCT per project: a different identity → a different sock (one app-server per project, no cross-talk).
@@ -160,12 +168,14 @@ test('codex app-server socket path is short (sun_path-safe), stable per project,
   assert.ok(codexLaunchCommand('s', 'codex --yolo', 'codex', deep).includes(sock))
   // SPEXCODE_CODEX_SOCKET_DIR relocates the socket base while keeping the per-project hashed filename.
   const prev = process.env.SPEXCODE_CODEX_SOCKET_DIR
+  const override = mkdtempSync(join(tmpdir(), 'cx-base-'))
   try {
-    process.env.SPEXCODE_CODEX_SOCKET_DIR = '/tmp/cx'
-    assert.equal(codexAppServerSock(deep), join('/tmp/cx', `spexcode-cx-${sock.match(/spexcode-cx-([0-9a-f]{16})/)![1]}.sock`))
+    process.env.SPEXCODE_CODEX_SOCKET_DIR = override
+    assert.equal(codexAppServerSock(deep), join(override, `spexcode-cx-${sock.match(/spexcode-cx-([0-9a-f]{16})/)![1]}.sock`))
   } finally {
     if (prev === undefined) delete process.env.SPEXCODE_CODEX_SOCKET_DIR
     else process.env.SPEXCODE_CODEX_SOCKET_DIR = prev
+    rmSync(override, { recursive: true, force: true })
   }
 })
 

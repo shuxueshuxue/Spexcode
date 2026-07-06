@@ -305,8 +305,17 @@ The Codex impl of the adapter must encode these (measured against a real self-la
   is a wrapper script forwards `app-server` through the wrapper. That socket lives on a **short, `sun_path`-safe,
   per-project-unique path** —
   `<socketBase>/spexcode-cx-<hash>.sock`, where `<hash>` is a stable digest of the project identity (the
-  runtime dir) and `<socketBase>` is the platform tmpdir (or the `SPEXCODE_CODEX_SOCKET_DIR` override) — NOT
-  nested under the project runtime dir. It MUST be short because a Unix socket path is capped at `sun_path`
+  runtime dir) and `<socketBase>` is an **owned per-uid subdirectory of the platform tmpdir**
+  (`spexcode-cx-<uid>`, created 0700 by the derivation itself; the `SPEXCODE_CODEX_SOCKET_DIR` env override
+  still replaces it) — NEVER bare tmpdir, and NOT
+  nested under the project runtime dir. Bare `/tmp` is not merely untidy, it is BROKEN out of the box: on a
+  normally-hardened Linux host (`fs.protected_regular=2`, root-owned sticky `/tmp` — stock Ubuntu) codex
+  refuses to bind a unix socket directly in the shared sticky `/tmp` (EPERM), so the server never comes up,
+  the client connect ENOENTs, and every codex-launcher session dies through launch.sh's retries while claude
+  launchers work — yet the same codex binds fine in any owned subdirectory (github#30). Per-uid, not one
+  shared dir, so a second user on the box never lands in the first user's 0700 dir; the launch script
+  re-`mkdir -p -m 700`s the base at run time in case a tmp cleaner wiped it after the bake.
+  The path MUST also stay short because a Unix socket path is capped at `sun_path`
   (~104 bytes on macOS, 108 on Linux) and `runtimeRoot()` flattens the entire project path into one long
   dash-segment (`encodeProject`), so the naive `<runtimeRoot>/codex-app-server.sock` overran the cap on a deep
   macOS project (`path must be shorter than SUN_LEN` + connect EINVAL — the app-server never bound; Linux's

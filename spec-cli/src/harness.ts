@@ -207,10 +207,19 @@ export function rendezvousListening(id: string, timeoutMs = 800): Promise<boolea
 // `dir` (runtimeDir) the callers pass — so launch, liveness, and delivery all compute the IDENTICAL sock for a
 // given project (the ONE-app-server-per-project invariant). This is UNCONDITIONAL on every platform (a short
 // hashed path is strictly better everywhere — no darwin branch; platform differences stay at this path seam).
-// `<socketBase>` = the `SPEXCODE_CODEX_SOCKET_DIR` override, else the platform tmpdir. The `.pid`/`.log`/`.lock`
-// files carry no sun_path limit and stay in `runtimeRoot`.
-export const codexAppServerSock = (dir = runtimeRoot()) =>
-  join(process.env.SPEXCODE_CODEX_SOCKET_DIR || tmpdir(), `spexcode-cx-${createHash('sha1').update(dir).digest('hex').slice(0, 16)}.sock`)
+// `<socketBase>` = the `SPEXCODE_CODEX_SOCKET_DIR` override, else an OWNED per-uid subdir of the platform
+// tmpdir (`spexcode-cx-<uid>`, created 0700) — NEVER bare tmpdir: codex (0.137+ field-confirmed) refuses to
+// bind a unix socket directly in the shared sticky `/tmp` on a host with `fs.protected_regular=2` (EPERM), so
+// the bare-tmpdir default failed every codex launch on a stock hardened Ubuntu out of the box (github#30),
+// while the SAME codex binds fine in any owned subdirectory. Per-uid (not one shared `spexcode-cx`) so a
+// second user on the box never lands in the first user's 0700 dir. The derivation GUARANTEES the dir exists
+// (idempotent mkdir) so every consumer — launch bake, liveness connect, delivery, tests — shares one creation
+// point. The `.pid`/`.log`/`.lock` files carry no sun_path limit and stay in `runtimeRoot`.
+export const codexAppServerSock = (dir = runtimeRoot()) => {
+  const base = process.env.SPEXCODE_CODEX_SOCKET_DIR || join(tmpdir(), `spexcode-cx-${process.getuid?.() ?? 0}`)
+  mkdirSync(base, { recursive: true, mode: 0o700 })
+  return join(base, `spexcode-cx-${createHash('sha1').update(dir).digest('hex').slice(0, 16)}.sock`)
+}
 export const codexAppServerPid = (dir = runtimeRoot()) => join(dir, 'codex-app-server.pid')
 
 function shQuote(s: string): string {
@@ -360,7 +369,7 @@ export function codexLaunchCommand(_id: string, codexCmd = process.env.SPEXCODE_
   // fresh app-server (where codex-launch never runs) still trusts our hooks. Hence the flag lives on the resume
   // TUI, never on the app-server invocation. Guarded against a double-flag when an env override already carries it.
   const tuiBypass = !codexCmd.includes('--dangerously-bypass-hook-trust') && codexSupportsBypassHookTrust(codexBinary(codexCmd)) ? ' --dangerously-bypass-hook-trust' : ''
-  const sock = codexAppServerSock(dir)         // short sun_path-safe path off tmpdir/override — NOT under "$dir"
+  const sock = codexAppServerSock(dir)         // short sun_path-safe path in the owned tmp subdir/override — NOT under "$dir"
   const pid = codexAppServerPid(dir)
   const log = join(dir, 'codex-app-server.log')
   const lock = join(dir, 'codex-app-server.lock')
@@ -378,7 +387,7 @@ export function codexLaunchCommand(_id: string, codexCmd = process.env.SPEXCODE_
     // thread/start bypass, so the worktree's hooks stay untrusted and NO lifecycle hooks fire.
     `export SPEXCODE_CODEX_CMD=${shQuote(codexCmd)}`,
     'mkdir -p "$dir"',
-    'mkdir -p "$(dirname "$sock")"',           // the socket base (tmpdir or the SPEXCODE_CODEX_SOCKET_DIR override)
+    'mkdir -p -m 700 "$(dirname "$sock")"',    // the socket base (owned tmp subdir or the SPEXCODE_CODEX_SOCKET_DIR override) — re-created here because a tmp cleaner may have wiped it since the bake; NEVER bare /tmp (codex EPERMs binding there on hardened hosts, github#30)
     // self-heal: the pre-fix flock design left an orphaned `codex-app-server.lock` FILE; the mkdir mutex now
     // uses `"$lock.d"`, so drop that dead residue on already-run deployments (harmless if absent).
     'rm -f "$lock"',

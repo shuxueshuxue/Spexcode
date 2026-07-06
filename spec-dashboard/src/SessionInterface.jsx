@@ -6,6 +6,7 @@ import { sessionForest } from './session.js'
 import { MENTION_RE, specPath, highlight, nodeMentionAt, actorMentionAt, MentionMenu } from './mentions.jsx'
 import { SessionRow, RowLead, useFold } from './SessionWindow.jsx'
 import { HARNESS_BY_ID } from './harness.jsx'
+import { Icon } from './icons.jsx'
 import SessionContextMenu from './SessionContextMenu.jsx'
 import SessionSelectBar from './SessionSelectBar.jsx'
 import SessionEvalPane from './SessionEval.jsx'
@@ -15,19 +16,11 @@ import { fitTextarea } from './textarea.js'
 import FoldToggle from './FoldToggle.jsx'
 import { useT } from './i18n/index.jsx'
 
-// the attach affordance — a monochrome inline glyph in the dashboard's own SVG vocabulary (currentColor
-// stroke, so it inherits the .si-attach muted→blue hover), NOT a color emoji. AttachGlyph is the paperclip;
-// BusyGlyph is the in-flight (uploading) state, a spinning ring.
-const AttachGlyph = () => (
-  <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M12.5 7.2 L7 12.6 a2.6 2.6 0 0 1-3.7-3.7 L9 3.2 a1.7 1.7 0 0 1 2.4 2.4 L5.8 11.2 a0.8 0.8 0 0 1-1.2-1.2 L9.7 5" />
-  </svg>
-)
-const BusyGlyph = () => (
-  <svg className="si-attach-busy" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
-    <circle cx="8" cy="8" r="5.5" opacity="0.3" /><path d="M8 2.5 a5.5 5.5 0 0 1 5.5 5.5" />
-  </svg>
-)
+// the attach affordance — the shared `paperclip` glyph ([[icon-system]], currentColor stroke, so it
+// inherits the .si-attach muted→blue hover), NOT a color emoji. BusyGlyph is the in-flight (uploading)
+// state, the spinning `loader` ring.
+const AttachGlyph = () => <Icon name="paperclip" size={15} />
+const BusyGlyph = () => <Icon name="loader" size={15} className="si-attach-busy" />
 
 // Window-level (capture) key handling, not panel onKeyDown: arrowing off the New Session tab unmounts its
 // textarea, so a panel listener would lose focus and kill nav; a window listener is focus-independent.
@@ -736,18 +729,13 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             <SessionSelectBar ids={[...picked]} onCancel={exitSelect} onClosed={onBulkClosed} />
           ) : (
           <div className="si-toprow">
-            <button className={active === 'new' ? 'si-pill new on' : 'si-pill new'} data-tip={t('session.newSessionTitle')} onClick={() => setSel('new')}>
-              <span className="si-pill-glyph">＋</span>
+            <button className={active === 'new' ? 'si-pill new on' : 'si-pill new'} data-tip={t('session.newSessionTitle')} aria-label={t('session.newSessionTitle')} onClick={() => setSel('new')}>
+              <span className="si-pill-glyph"><Icon name="plus" size={15} strokeWidth={2} /></span>
             </button>
             {/* the click twin of ⌘/Ctrl+/ ([[session-board-search]]) — same palette open, the tooltip
                 teaches the chord. Momentary (no .on state): the palette floats above, no tab switches. */}
-            <button className="si-pill search" data-tip={t('session.searchTitle')} onClick={onOpenSearch}>
-              <span className="si-pill-glyph">
-                <svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <circle cx="7.6" cy="7.6" r="5.1" />
-                  <path d="M11.4 11.4 L15.6 15.6" />
-                </svg>
-              </span>
+            <button className="si-pill search" data-tip={t('session.searchTitle')} aria-label={t('session.searchTitle')} onClick={onOpenSearch}>
+              <span className="si-pill-glyph"><Icon name="search" size={15} /></span>
             </button>
           </div>
           )}

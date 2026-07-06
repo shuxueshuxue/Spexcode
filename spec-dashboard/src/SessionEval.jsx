@@ -4,6 +4,7 @@ import { EvalMasterDetail } from './EvalsPage.jsx'
 import EventDetail from './EventDetail.jsx'
 import { ScoreBadge, scenarioStates } from './score.jsx'
 import { useT } from './i18n/index.jsx'
+import { Icon } from './icons.jsx'
 
 // The session Eval tab ([[review-proof]]'s interactive face): the THIRD home of the ONE EventDetail
 // component ([[event-detail]], U1) — node popup (one node) · Evals page (project) · here (this session's
@@ -95,8 +96,8 @@ export default function SessionEvalPane({ sessionId, specs = [], sessions = [], 
             {t('sessionEval.sessionN', { n: sessionTotal })}
           </button>
         )}
-        <a className="se-export" href={`/api/sessions/${encodeURIComponent(sessionId)}/proof`} target="_blank" rel="noreferrer" data-tip={t('sessionEval.exportTitle')}>
-          {t('sessionEval.export')}
+        <a className="se-export" href={`/api/sessions/${encodeURIComponent(sessionId)}/proof`} target="_blank" rel="noreferrer" data-tip={t('sessionEval.exportTitle')} aria-label={t('sessionEval.export')}>
+          <Icon name="download" size={13} />
         </a>
       </div>
       <EvalMasterDetail rowKeys={visible.map((v) => v.key)} sel={effSel} onSel={setSel} detail={detail}>

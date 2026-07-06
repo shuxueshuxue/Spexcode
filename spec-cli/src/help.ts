@@ -27,12 +27,14 @@ spec.md body is the current contract for that area. Prints title, id, path, snip
     see: 'spex owner (file → node, the reverse edge) · spex guide spec (what a node is)',
   },
   owner: {
-    line: 'owner <path>          the reverse edge: which spec node(s) claim a file',
+    line: 'owner <path>          the reverse edge: which spec node(s) govern or reference a file',
     body: `Usage: spex owner <path> [--actionable]
 
-Maps a source file to the spec node(s) governing it, with the verdict spelled out: uncovered
-("give it a home"), sanely governed (read/honor that spec), or over-owned (> maxOwners — split the
-file). --actionable prints NOTHING for the sane case (hook use: only fires when action is needed).`,
+Maps a source file to BOTH spec relations: its GOVERNORS (code: — the source of truth; drives
+drift/yatsu) and its REFERENCERS (related: — coverage only), with the verdict spelled out:
+uncovered ("give it a home"), related-only (covered, but nothing tracks its drift), sanely
+governed (read/honor that spec), or over-owned (> maxOwners — split the file). --actionable
+prints NOTHING unless action is needed (hook use): only uncovered / over-owned fire.`,
     see: 'spex search (topic → node) · spex lint (coverage over the whole tree)',
   },
   board: {
@@ -138,18 +140,6 @@ Resolves a forge's open issues/PRs to the spec nodes they serve (the Spec: marke
 a node/<id> branch links its PR for free). Read-only — git/.spec stays the single source of truth.`,
     see: 'spex issues (the merged read that includes forge threads)',
   },
-  self: {
-    line: 'self <sub>            diagnose whether the workflow actually reaches THIS agent: doctor | contract | conflicts',
-    body: `Usage: spex self [doctor]      per-layer coverage report: preconditions · git-hook floor · contract ·
-                               hooks + handler existence · backend — for every harness materialize renders
-       spex self contract      print the composed surface:system text any agent here reads
-       spex self conflicts     detect double-delivery (loose artifacts beside the managed ones)
-
-Run it when a worker seems to be missing its contract or hooks — it names the broken layer and the
-repair, instead of you diffing materialized files by hand.`,
-    see: 'spex materialize (re-render the artifacts doctor checks)',
-  },
-
   // ── dispatch & manage sessions (manager loop) ─────────────────────────────
   new: {
     line: 'new "<prompt>"        launch a worker session in its own node worktree  [--node <id>]',
@@ -261,7 +251,18 @@ Renders the surface:system config nodes into the managed <!-- spexcode --> block
 CLAUDE.md/AGENTS.md plus the .claude/.codex shims, and prints the content hash. Run it after a
 toolchain update or any .config edit that the automatic dispatch gate hasn't picked up — these
 artifacts are generated and gitignored, so they never arrive via git.`,
-    see: 'spex self doctor (verify the render actually reaches an agent)',
+    see: 'spex doctor (verify the render actually reaches an agent)',
+  },
+  doctor: {
+    line: 'doctor                diagnose whether the workflow actually reaches this agent — per-layer, per-harness',
+    body: `Usage: spex doctor             per-layer coverage report: preconditions · git-hook floor · contract ·
+                               hooks + handler existence · backend — for every harness materialize renders
+       spex doctor contract    print the composed surface:system text any agent here reads
+       spex doctor conflicts   detect double-delivery (loose artifacts beside the managed ones)
+
+Run it when a worker seems to be missing its contract or hooks — it names the broken layer and the
+repair, instead of you diffing materialized files by hand.`,
+    see: 'spex materialize (re-render the artifacts doctor checks)',
   },
   serve: {
     line: 'serve                 run the API backend (default :8787)  [--port N] [--public --password pw]',
@@ -337,7 +338,6 @@ Author & verify (the worker loop)
   ${ENTRIES.issues.line}
   ${ENTRIES.remark.line}
   ${ENTRIES.forge.line}
-  ${ENTRIES.self.line}
 
 Dispatch & manage sessions (the manager loop)
   ${ENTRIES.new.line}
@@ -352,6 +352,7 @@ Install & serve (the operator loop)
   ${ENTRIES.init.line}
   ${ENTRIES.uninstall.line}
   ${ENTRIES.materialize.line}
+  ${ENTRIES.doctor.line}
   ${ENTRIES.serve.line}
   ${ENTRIES.dashboard.line}
 

@@ -164,25 +164,35 @@ if (cmd === 'serve') {
   }
   console.log(text)
 } else if (cmd === 'owner') {
-  const { specOwners } = await import('./specs.js')
+  // BOTH [[governed-related]] relations, distinctly: governors (code: — the verdict) and referencers
+  // (related: — pointers; coverage only, never drift/yatsu).
+  const { specOwners, specRelated } = await import('./specs.js')
   const { loadConfig } = await import('./lint.js')
   const p = positionals(3)[0]
-  if (!p) { console.error('usage: spex owner <path>'); process.exit(2) }
+  if (!p) { console.error('usage: spex owner <path> [--actionable]'); process.exit(2) }
   const rel = p.startsWith(process.cwd()) ? p.slice(process.cwd().length + 1) : p
   const owners = specOwners(p)
+  const related = specRelated(p)
   const maxOwners = loadConfig(process.cwd()).maxOwners
-  if (owners.length === 0) {
-    console.log(`${rel} — no spec governs this yet (uncovered). If your change is substantive, give it a home before it drifts.`)
+  const names = (xs: { id: string }[]) => xs.map((o) => `'${o.id}'`).join(', ')
+  const relLine = related.length ? `\n  also referenced by ${names(related)} (related: coverage only — no drift, no yatsu)` : ''
+  if (owners.length === 0 && related.length === 0) {
+    console.log(`${rel} — no spec claims this yet (uncovered). If your change is substantive, give it a home before it drifts.`)
+  } else if (owners.length === 0) {
+    // related-only: lint's coverage is satisfied, so the per-edit hook stays silent (lint-consistent) —
+    // but a human asking gets the honest nuance: nothing tracks this file's drift.
+    if (has('actionable')) process.exit(0)
+    console.log(`${rel} — not governed (no code: claim), but referenced by ${names(related)} (related: coverage only). Nothing tracks its drift; if your change is substantive, consider giving it a governing home.`)
   } else if (owners.length <= maxOwners) {
     // a sanely-owned file is NOT actionable: --actionable callers (the per-edit spec-of-file hook) stay
     // silent here, so the annotation fires only on an OVER-owned or uncovered file — rare and worth acting on.
     if (has('actionable')) process.exit(0)
     const named = owners.map((o) => `'${o.id}'`).join(', ')
     const lead = owners.length === 1 ? `${rel} is governed by ${named} — ${owners[0].desc}` : `${rel} is governed by ${named} (shared, fine).`
-    console.log(`${lead} Read/honor the spec; if your change shifts the intent, update the spec in the SAME commit.`)
+    console.log(`${lead} Read/honor the spec; if your change shifts the intent, update the spec in the SAME commit.${relLine}`)
   } else {
     const ids = owners.map((o) => o.id).join(', ')
-    console.log(`${rel} is governed by ${owners.length} specs (${ids}) — more than one file should hold. This file does TOO MUCH: SPLIT it so each governor owns its own module (or merge the nodes if they're one concern, or give it a single foundation owner + relate the rest).`)
+    console.log(`${rel} is governed by ${owners.length} specs (${ids}) — more than one file should hold. This file does TOO MUCH: SPLIT it so each governor owns its own module (or merge the nodes if they're one concern, or give it a single foundation owner + relate the rest).${relLine}`)
   }
 } else if (cmd === 'lint') {
   const { specLint, driftGate, DRIFT_GUIDANCE } = await import('./lint.js')
@@ -309,13 +319,14 @@ if (cmd === 'serve') {
   // shims + Codex trust, for cwd's project. The cheap shell gate (dispatch.sh) invokes it only on change.
   const { materialize } = await import('./materialize.js')
   console.log(`materialized — content-hash ${materialize()}`)
-} else if (cmd === 'self') {
-  // @@@ self - the self-diagnosis surface (spec-cli/self): does the materialized workflow actually reach
-  // THIS self-launched agent? doctor reports per-layer coverage (preconditions · git-hook floor · contract ·
-  // hooks+handler-existence · backend) over the same HARNESSES materialize renders through; contract prints
-  // the surface:system text; env dumps raw facts. Thin route, like forge/yatsu/hooks.
-  const { runSelf } = await import('./self.js')
-  await flushExit(await runSelf(process.argv.slice(3)))
+} else if (cmd === 'doctor') {
+  // @@@ doctor - the diagnosis surface ([[doctor]], né `self` — renamed: "self" read as the tool itself /
+  // the global install, while the report is about THIS agent's wiring): does the materialized workflow
+  // actually reach this agent? Bare `doctor` reports per-layer coverage (preconditions · git-hook floor ·
+  // contract · hooks+handler-existence · backend) over the same HARNESSES materialize renders through;
+  // `contract` prints the surface:system text; `conflicts` just the double-delivery check. Thin route.
+  const { runDoctor } = await import('./doctor.js')
+  await flushExit(await runDoctor(process.argv.slice(3)))
 } else if (cmd === 'board') {
   const { buildBoard } = await import('./board.js')
   console.log(JSON.stringify(await buildBoard(), null, 2))

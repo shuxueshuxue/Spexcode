@@ -4,6 +4,7 @@ import { useMentionAutocomplete } from './mentions.jsx'
 import { SpecBody } from './NodeView.jsx'
 import { Replies, ReplyComposer, OriginatorLiveness } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
+import FoldToggle from './FoldToggle.jsx'
 import Modal from './Modal.jsx'
 import { useEscLayer } from './escStack.js'
 
@@ -91,9 +92,9 @@ export default function IssuesPage({ onFocusNode, onOpenSession, specs = [], ses
     <div className={`fv-master ${folded ? 'folded' : ''}`}>
       {/* the list column stays MOUNTED while folded (filter state + j/k live in it) — the fold is pure
           CSS; the thin strip is the unfold affordance. */}
-      {folded && <button type="button" className="fv-unfold" title={t('masterList.unfold')} onClick={() => setFolded(false)}>›</button>}
+      {folded && <FoldToggle className="fv-unfold" folded onToggle={() => setFolded(false)} />}
       <div className="fv-list-col" style={folded ? { display: 'none' } : undefined}>
-        <button type="button" className="fv-fold" title={t('masterList.fold')} onClick={() => setFolded(true)}>‹</button>
+        <FoldToggle className="fv-fold" onToggle={() => setFolded(true)} />
         {notice && <div className="fv-notice">{notice}</div>}
         <section className="fv-group">
           <header className="fv-group-head">

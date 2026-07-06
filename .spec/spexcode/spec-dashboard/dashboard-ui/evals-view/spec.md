@@ -41,7 +41,8 @@ surfaces (`f`, ⌥F) land here.
   first — under its own filter chipbar (that bar is the feed's own state; this node owns the page shell,
   never the filters). Its rows are title-only, so the column stays **SLIM** — it never crowds the detail
   (the human called the wide sidebar: the list is a picker, not a reading surface) — and a **fold toggle**
-  collapses it to a thin strip, giving the whole width to the detail workspace once a human is working one
+  (the shared [[fold-toggle]] icon button) collapses it to a thin strip, giving the whole width to the
+  detail workspace once a human is working one
   eval; the strip itself is the unfold affordance, and the folded list keeps its state (filters, selection,
   j/k) — the fold is pure geometry. The [[side-nav]] rail names the page, so the column carries no title of
   its own. The **right pane** is the full-height [[event-detail]] of the one selection — **selection IS

@@ -225,21 +225,21 @@ ${SEL_NOTE}`,
 The ONE review payload for a session: commits ahead of the trunk, uncommitted files, its proposal,
 the gates (conflicts with the trunk, lint), and the merge-base diff — decide from this, don't
 hand-run git. The MEASURED side of the decision is \`spex eval <SEL>\`: the changed nodes' eval
-readings, and (--proof) the self-contained proof export.
+readings, and (--export) the self-contained HTML export.
 ${SEL_NOTE}`,
     see: 'spex eval (the session’s measured loss) · spex merge (act on an approved review)',
   },
   eval: {
-    line: 'eval <SEL>            the session’s eval readings: its changed nodes’ measured loss  [--proof]',
+    line: 'eval <SEL>            the session’s eval readings: its changed nodes’ measured loss  [--export]',
     body: `Usage: spex eval <SEL> [--json]
-       spex eval <SEL> --proof [--open | --out <path> | --json]
+       spex eval <SEL> --export [--open | --out <path> | --json]
 
 The session's evaluation, read from the backend (the dashboard Eval tab's CLI twin): every spec node
 the session's diff touches, each DECLARED scenario at its CURRENT score (latest reading, rooted at
 the session's worktree). Blind spots lead (declared, never measured — the outstanding loss), then
 the session's OWN measurements ✦-marked, then the inherited baseline (other sessions' latest
 readings) under an explicit divider. A frontend change with no yatsu.md is flagged, never hidden.
---proof exports the review PROOF instead — the self-contained HTML artifact (diff · evidence
+--export writes the evaluation as ONE self-contained HTML artifact instead (diff · evidence
 inlined · gates; --json = the model) for CI/sharing. (\`spex review proof\` is its deprecated alias.)
 This is the READ; filing a reading stays \`spex yatsu eval\`.
 ${SEL_NOTE}`,

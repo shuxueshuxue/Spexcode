@@ -130,18 +130,18 @@ async function resolveSelectorOrExit(selector: string): Promise<string> {
   process.exit(2)
 }
 
-// the [[review-proof]] EXPORT artifact, shared by `spex eval <SEL> --proof` (canonical) and the deprecated
+// the [[review-proof]] EXPORT artifact, shared by `spex eval <SEL> --export` (canonical) and the deprecated
 // `spex review proof` alias: fetch the backend-rendered self-contained HTML (or the model, --json), write
 // it (--out, else a tmp file) or open it (--open). Never returns.
 async function proofExport(id: string): Promise<never> {
   const { clientProof } = await import('./client.js')
   const r = await clientProof(id, has('json'))
-  if (!r.ok) { console.error(`no proof for ${id} (status ${r.status})`); process.exit(1) }
+  if (!r.ok) { console.error(`no export for ${id} (status ${r.status})`); process.exit(1) }
   if (has('json')) { console.log(r.body); await flushExit(0) }
   const { writeFileSync } = await import('node:fs')
   const { join } = await import('node:path')
   const { tmpdir } = await import('node:os')
-  const out = flag('out') ?? join(tmpdir(), `spexcode-proof-${id.slice(0, 8)}.html`)
+  const out = flag('out') ?? join(tmpdir(), `spexcode-eval-${id.slice(0, 8)}.html`)
   writeFileSync(out, r.body)
   if (has('open')) {
     const { spawn } = await import('node:child_process')
@@ -278,12 +278,12 @@ if (cmd === 'serve') {
   // the session EVAL read ([[review-proof]]'s interactive face as a CLI verb): the dashboard Eval tab's
   // text twin. Renders the session's changed nodes with each DECLARED scenario at its CURRENT score
   // (latest reading per scenario, worktree-rooted) — blind spots lead, the session's OWN measurements
-  // ✦-marked ahead of the inherited baseline under its divider. --proof exports the self-contained HTML
+  // ✦-marked ahead of the inherited baseline under its divider. --export writes the self-contained HTML
   // artifact instead (the demoted `spex review proof`).
   const sel = positionals(3)[0]
-  if (!sel) { console.error('usage: spex eval <SEL> [--json]   |   spex eval <SEL> --proof [--open | --out <path> | --json]'); process.exit(2) }
+  if (!sel) { console.error('usage: spex eval <SEL> [--json]   |   spex eval <SEL> --export [--open | --out <path> | --json]'); process.exit(2) }
   const id = await resolveSelectorOrExit(sel)
-  if (has('proof')) await proofExport(id)
+  if (has('export')) await proofExport(id)
   const { clientEvals } = await import('./client.js')
   const r = await clientEvals(id)
   if (!r.ok) { console.error(`no evals for ${id} (status ${r.status})`); process.exit(1) }
@@ -323,8 +323,8 @@ if (cmd === 'serve') {
   // deprecated alias — proof was demoted from a review sub-noun to the export face of the ONE eval read.
   // Still runs, but echoes the canonical form so callers migrate.
   const sel = positionals(3)[1]
-  if (!sel) { console.error('usage: spex eval <SEL> --proof [--open | --out <path> | --json]   (`spex review proof` is a deprecated alias)'); process.exit(2) }
-  console.error('spex: `spex review proof` is deprecated — use `spex eval <SEL> --proof`')
+  if (!sel) { console.error('usage: spex eval <SEL> --export [--open | --out <path> | --json]   (`spex review proof` is a deprecated alias)'); process.exit(2) }
+  console.error('spex: `spex review proof` is deprecated ≡ spex eval <SEL> --export')
   await proofExport(await resolveSelectorOrExit(sel))
 } else if (cmd === 'review') {
   const { clientReview } = await import('./client.js')

@@ -352,6 +352,11 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
       // Everything below is the plain-key board vocabulary. Browser/system accelerators that happen to use
       // the same base key (`Ctrl/⌘+L`, `Ctrl/⌘+,`, `Alt+←`, …) pass through unless declared above.
       if (e.metaKey || e.ctrlKey || e.altKey) return
+      // A focused native control owns its activation keys: Enter/Space on a button, link, or form field is
+      // that control's click — tabbing to the HUD `?` and pressing Enter must equal clicking it — so the
+      // board vocabulary (board.info's Enter alias included) steps aside and lets the default action fire.
+      // Graph tiles never collide: nodesFocusable is off, so board focus is never DOM focus on a control.
+      if ((e.key === 'Enter' || e.key === ' ') && e.target?.closest?.('button, a[href], input, select, textarea, summary')) return
       if (page === 'sessions') return // the session interface owns ALL its keys (arrows / Enter / typing / Esc / the graph)
       // the Evals and Issues pages own their own keys (j/k list-walk, their inputs, their own Esc stack) —
       // EvalsPage / IssuesPage handle them. Esc does NOT route pages anywhere ([[side-nav]]) — leaving is

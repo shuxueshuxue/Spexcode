@@ -28,8 +28,16 @@ export async function apiFetch(input, init) {
   }
 }
 
+// conditional board fetch ([[dashboard-shell]]): remember the last ETag and send If-None-Match, so the
+// always-on fallback poll costs headers only while nothing changed — the server answers a bodyless 304 and
+// we return null ("unchanged", the caller skips its repaint). cache:'no-store' keeps the browser HTTP cache
+// out of the loop, so the 304 reaches US instead of being swallowed into a cache-served 200 that would
+// repaint an identical board every tick.
+let boardTag = ''
 export async function loadBoard() {
-  const res = await apiFetch('/api/board')
+  const res = await apiFetch('/api/board', { cache: 'no-store', headers: boardTag ? { 'If-None-Match': boardTag } : {} })
+  if (res.status === 304) return null
+  boardTag = res.headers.get('etag') || ''
   return res.json()
 }
 
@@ -48,11 +56,13 @@ export const specUrl = (id, ...parts) =>
 // patch applies only when its `from` tag matches ours (a mismatch reopens the stream, which re-anchors on a
 // fresh board-full — bounded, explicit recovery), and the rendered board is reconstructed from the map after
 // every apply. An OLD backend ignores `?mode=delta` and emits bare `board-changed` — that flips us to legacy
-// mode: `onLegacyChange` fires and the caller refetches, exactly the pre-delta protocol. `onLive` reports
-// whether push is proven alive, so the caller's slow fallback poll can stand down instead of re-downloading
-// the snapshot it already holds. EventSource auto-reconnects on drop (a backend hot-reload); every reconnect
-// gets a fresh board-full, so a lost stream self-heals with no client repair logic. Returns an unsubscribe.
-export function subscribeBoardLive({ onBoard, onLegacyChange, onLive }) {
+// mode: `onLegacyChange` fires and the caller refetches, exactly the pre-delta protocol. The stream makes NO
+// liveness promise to its caller — a silently dead EventSource (half-open tunnel, sleep-resume) is
+// indistinguishable from a healthy quiet one, so the caller's fallback poll never stands down; it just rides
+// loadBoard's conditional request. EventSource auto-reconnects on drop (a backend hot-reload); every
+// reconnect gets a fresh board-full, so a lost stream self-heals with no client repair logic. Returns an
+// unsubscribe.
+export function subscribeBoardLive({ onBoard, onLegacyChange }) {
   let es = null
   let closed = false
   let values = null   // unit-value map, the client's copy of the server's decomposition
@@ -71,12 +81,11 @@ export function subscribeBoardLive({ onBoard, onLegacyChange, onLive }) {
   const reopen = () => { try { es?.close() } catch { /* already closed */ } ; values = null; tag = ''; open() }
   const open = () => {
     if (closed) return
-    try { es = new EventSource('/api/board/stream?mode=delta') } catch { es = null; onLive?.(false); return }
+    try { es = new EventSource('/api/board/stream?mode=delta') } catch { es = null; return }
     es.addEventListener('board-full', (e) => {
       const { to, board } = JSON.parse(e.data)
       values = unitize(board)
       tag = to
-      onLive?.(true)
       onBoard(board)
     })
     es.addEventListener('board-delta', (e) => {
@@ -85,11 +94,9 @@ export function subscribeBoardLive({ onBoard, onLegacyChange, onLive }) {
       for (const k of d.del || []) values.delete(k)
       for (const [k, v] of Object.entries(d.set || {})) values.set(k, v)
       tag = d.to
-      onLive?.(true)
       onBoard(boardFrom(values))
     })
-    es.addEventListener('board-changed', () => { onLive?.(false); onLegacyChange?.() })
-    es.addEventListener('error', () => onLive?.(false))
+    es.addEventListener('board-changed', () => onLegacyChange?.())
   }
   open()
   return () => { closed = true; try { es?.close() } catch { /* already closed */ } }

@@ -25,6 +25,21 @@ scenarios:
       never an eternal spinner; a retry once the backend is reachable lands the board. Zero loss = a
       dead backend is legible at a glance and recoverable without a manual page reload.
     code: [spec-dashboard/src/App.jsx]
+  - name: silent-push-death-self-heals
+    tags: [frontend-e2e, desktop]
+    description: >
+      Open the dashboard in a real browser against a live backend, with /api routed through a
+      per-connection relay. Once the board has rendered and the SSE push channel is established,
+      freeze the relay's established pairs WITHOUT closing them (no FIN, no error event — a
+      half-open tunnel / sleep-resume / network-switch death; new connections still pass), then
+      change the board server-side (add a spec node). Watch the rendered board without reloading.
+    expected: >
+      The board reflects the change within ~15s (one fallback-poll period) — a silently dead push
+      channel degrades to poll freshness, never to a frozen board. And while nothing changes, the
+      always-on poll costs nothing: /api/board answers the If-None-Match request with a bodyless
+      304. Zero loss = no silent-death mode can stall the board past the poll period, and the poll
+      that guarantees it is free when the board is quiet.
+    code: [spec-dashboard/src/App.jsx, spec-dashboard/src/data.js]
 ---
 # dashboard-shell — measurement
 

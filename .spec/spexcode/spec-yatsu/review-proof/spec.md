@@ -49,7 +49,9 @@ shared `EvalMasterDetail`: the split, the fold-to-a-strip, the j/k walk — no s
 geometry or the keys). It fetches the LEAN model (`GET
 /api/sessions/:id/evals` — rows only, worktree-rooted, no diff enrichment, no inlined bytes) and rides the
 tiered loading every eval face shares: collapsed scenario rows first, evidence streamed from
-`/api/yatsu/blob` only when a row opens. Rows order by attention — and every row must be legible as WHAT
+`/api/yatsu/blob` only when a row opens. It also keeps the same native reading affordances as the top-level
+Evals page: browser text selection inside the eval workspace is allowed, and the session console's
+input-focus retention must never cancel the Eval tab's mousedown defaults. Rows order by attention — and every row must be legible as WHAT
 it is, because a reviewer misreading the inherited baseline as the session's own output is this face's one
 fatal failure: **blind spots lead** (declared, never measured — the outstanding loss), then the session's
 own measurements ✦-marked (a reading is the session's own iff THIS session filed it or its `codeSha` is

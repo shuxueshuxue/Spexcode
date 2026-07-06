@@ -48,6 +48,18 @@ scenarios:
       + measured rows, the detail pane follows; a key typed into an input or the terminal's textarea is
       never captured). No session-only shell classes remain. Zero loss = one shell, two homes — the
       session tab can never drift from the Evals page on geometry, fold, or keys.
+  - name: eval-tab-text-selection
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/SessionEval.jsx]
+    description: >
+      Open a session's Eval tab and the top-level Evals page in a real browser. In each, drag-select
+      visible eval detail text such as the expected paragraph or scenario title, and inspect the
+      mousedown event/default behavior plus `window.getSelection()`.
+    expected: >
+      Text in the session Eval tab selects like text in the top-level Evals page. The session console's
+      focus-retention mousedown handler does not preventDefault inside the Eval workspace, a drag creates
+      a non-empty browser selection, and ordinary Eval-tab buttons/row selection still work. No page
+      errors.
 ---
 # review-proof loss
 

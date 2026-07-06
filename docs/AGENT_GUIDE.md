@@ -87,8 +87,6 @@ each. There is no discovery phase.
 - **CLOSE** — only **after** the merge is confirmed: `spex session close <id>`.
 - **GUIDE** — `spex session send <id> "<msg>"` corrects or steers a live worker. Keep `spex lint` at
   **0 errors** across the tree.
-- **FOOTGUN** — `spex session new --help` is **not** a help flag: it CREATES a stray session. Always
-  dispatch with `spex new`.
 
 ## What a spec node is
 

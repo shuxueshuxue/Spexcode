@@ -11,12 +11,14 @@ export const PAGES = ['graph', 'sessions', 'evals', 'issues', 'settings']
 
 // '#/sessions/abc' → { page: 'sessions', param: 'abc' }. '#/evals/<node>/<scenario>' → param
 // 'node/scenario' (the canonical eval address — each segment decoded; the page splits on the first '/').
+// '#/issues/<id>' deep-links to SpexCode's internal issue detail.
 // Anything unknown lands on graph (the home page).
 export function parseRoute(hash) {
   const parts = (hash || '').replace(/^#\/?/, '').split('/').filter(Boolean)
   const page = PAGES.includes(parts[0]) ? parts[0] : 'graph'
   const param = page === 'sessions' ? (parts[1] || null)
     : page === 'evals' ? (parts.length > 1 ? parts.slice(1).map(decodeURIComponent).join('/') : null)
+    : page === 'issues' ? (parts.length > 1 ? parts.slice(1).map(decodeURIComponent).join('/') : null)
     : null
   return { page, param }
 }

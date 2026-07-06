@@ -7,6 +7,7 @@ code:
   - spec-dashboard/src/FocusPanel.jsx
 related:
   - spec-dashboard/src/App.jsx
+  - spec-dashboard/src/IssueCard.jsx
   - spec-dashboard/src/styles.css
 ---
 # focus-panel
@@ -51,8 +52,11 @@ scopes its own freshness — the **files it tracks** (per-scenario `code`, [[yat
 reading timeline, not a dead end. The section header carries the **✓ satisfied / total** count, the same
 tally the tile shows, coloured by the worst-first aggregate.
 
-**Issues, open and closed.** The full bound set, grouped open-first then closed, each a card (number · state ·
-title) linking to the forge — the same `.issue-card` vocabulary the node-info Issues tab uses. The on-tile
+**Issues, open and closed.** The full bound set, grouped open-first then closed, each rendered through the
+same compact `IssueCard` the node-info Issues tab uses (id · store · state · clamped concern). The card is
+a route into SpexCode's own Issues page (`#/issues/<issue-id>`) and selects that issue's detail there;
+forge permalinks stay secondary metadata in the Issues detail, never this glance's primary route. Long ids
+and concerns truncate inside the column, so the right sidebar never grows a bottom scrollbar. The on-tile
 **count badge** (◆N) stays as the glance; the LIST now lives here, not in a popover.
 
 **Where it mounts.** It is the board shell's right grid column (`App.jsx`, the shared `.app` layout), beside

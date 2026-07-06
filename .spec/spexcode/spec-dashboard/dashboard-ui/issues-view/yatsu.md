@@ -95,6 +95,21 @@ scenarios:
       the issue list and the detail pane follows immediately — selection IS detail, nothing expands
       inside the list. Deep j keeps the selected row inside the left column's viewport. A key typed into
       an input/textarea reaches the input and never moves the selection. No page errors.
+  - name: node-issue-cards-route-internally
+    tags: [frontend-e2e]
+    code: [spec-dashboard/src/IssueCard.jsx, spec-dashboard/src/FocusPanel.jsx, spec-dashboard/src/NodeView.jsx, spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/route.js, spec-dashboard/src/styles.css]
+    description: >-
+      On the running dashboard, focus a node whose bound issues include a long LOCAL issue id/concern and
+      a forge issue. Read the focus panel and node-info Issues tab issue cards: their DOM shape, measured
+      width against the right sidebar, document/body horizontal overflow, and click targets. Click the
+      local card, return, then click the forge card.
+    expected: >-
+      Local and forge issue cards are rendered by one shared component with the same markup: issue id,
+      muted store tag, status, and clamped concern. Long local ids and concerns truncate inside the card,
+      never widen the focus panel or node-info sidebar and never create a bottom horizontal scrollbar on
+      the page/body. Clicking either card navigates internally to `#/issues/<issue-id>` and the Issues
+      page selects that issue's detail; a forge card does NOT open GitHub directly. The forge permalink is
+      still available only inside the selected Issues detail meta strip. No page errors.
   - name: new-form-node-links
     tags: [frontend-e2e]
     code: spec-dashboard/src/IssuesPage.jsx

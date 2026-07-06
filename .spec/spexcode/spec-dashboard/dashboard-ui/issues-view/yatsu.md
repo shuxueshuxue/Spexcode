@@ -51,6 +51,26 @@ scenarios:
       renders as an image (click-to-enlarge), and the absent blob renders the honest miss sentinel. The
       element is the SAME shared-renderer output the eval tab and eval detail produce for the same hash —
       one evidence renderer, every home.
+  - name: composer-docked-autogrow
+    tags: [frontend-e2e]
+    code: [spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/Thread.jsx, spec-dashboard/src/textarea.js]
+    description: >-
+      On the running issues page, select an issue whose thread is LONG (body + replies overflow the
+      detail pane). WITHOUT scrolling, read the reply composer's geometry (getBoundingClientRect on
+      `.fvd-compose` and its textarea) against the viewport; read the collapsed textarea's height and
+      whether the actions row (`.fv-actions`) is present. Focus the textarea and re-read; type several
+      lines and read the height after each; clear and blur and re-read. Then scroll the thread region
+      and read whether the composer moved. Repeat the collapsed/engaged reading on an eval detail's
+      rail composer (#/evals).
+    expected: >-
+      The composer is DOCKED at the detail pane's foot — visible in the viewport immediately on
+      selection, no scrolling needed even on a long thread; the thread scrolls in its own region
+      (`.fvd-scroll`) behind it and the composer never moves. Idle, it is COLLAPSED: a single-line
+      textarea, no actions row. Focusing reveals the actions row (hint + Send); typing grows the
+      textarea line by line (capped — it never eats the pane), and deleting shrinks it back. An
+      emptied, blurred composer collapses back to one line. Switching to another issue clears the
+      draft (keyed to the selection). The eval detail's rail composer shows the SAME collapsed→engaged
+      shape — one shared composer, every home. No page errors.
   - name: panel-skeleton
     tags: [frontend-e2e]
     code: spec-dashboard/src/IssuesPage.jsx

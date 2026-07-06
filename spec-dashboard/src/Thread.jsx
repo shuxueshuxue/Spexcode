@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { SpecBody } from './NodeView.jsx'
 import { BlobMedia } from './Evidence.jsx'
 import { useMentionAutocomplete } from './mentions.jsx'
+import { fitTextarea } from './textarea.js'
 import { STATUS_COLOR, sessionZone } from './session.js'
 import { useT } from './i18n/index.jsx'
 
@@ -129,21 +130,35 @@ export function Replies({ replies, onSeek, selIdx = null, activeIdx = null, onSe
   })
 }
 
-// a small textarea + Send — posts through the caller's `onSend(text, evidence)` as 'human'. An @-mention in
-// the text summons a worker; the returned outcomes string surfaces via onDone. The textarea carries the SAME
-// `[[node]]`/`@session` autocomplete as the console ([[mentions]], one shared menu, never a fork); the
-// composer is docked at the detail's bottom, so its menu opens UPWARD. The thread's own node leads the
-// `[[` list. Over a clip the home passes `anchorNow()` → a ⏱ button stamps the current frame's `▶m:ss ·
-// step` at the body's head; a circle pushes a `draft` (prefilled anchored body + a frame image link), so a
-// mark is thereafter an ordinary — replyable, @-able — reply, its frame indexed as the thread's evidence[].
+// the docked composer bar — the console-❯-box shape, shared by every home: COLLAPSED to a single line
+// while idle, it auto-grows with the draft (the shared fitTextarea, capped by its CSS max-height) and
+// reveals its actions row (⏱ / hint / Send) only while ENGAGED — focused, carrying a draft or staged
+// frames, or showing a send error (an error must never hide with the row). Posts through the caller's
+// `onSend(text, evidence)` as 'human'. An @-mention in the text summons a worker; the returned outcomes
+// string surfaces via onDone. The textarea carries the SAME `[[node]]`/`@session` autocomplete as the
+// console ([[mentions]], one shared menu, never a fork); the composer is docked at the detail's bottom,
+// so its menu opens UPWARD. The thread's own node leads the `[[` list. Over a clip the home passes
+// `anchorNow()` → a ⏱ button stamps the current frame's `▶m:ss · step` at the body's head; a circle
+// pushes a `draft` (prefilled anchored body + a frame image link), so a mark is thereafter an ordinary —
+// replyable, @-able — reply, its frame indexed as the thread's evidence[].
 export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = null, onDone, anchorNow = null, draft = null }) {
   const t = useT()
   const [body, setBody] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')       // a failed send (a forge can be unreachable) surfaces, never swallows
+  const [focused, setFocused] = useState(false)
   const taRef = useRef(null)
   const ac = useMentionAutocomplete({ inputRef: taRef, value: body, setValue: setBody, specs, sessions, focusId, up: true })
   const frames = bodyEvidence(body)         // the frame links currently in the draft (preview + the send's evidence[])
+  const engaged = focused || !!body || frames.length > 0 || !!err
+
+  // auto-grow like the ❯ box: refit on every draft change AND on the engage flip (the actions row
+  // mounting shifts the layout, and a collapsed remount must land back at one line). The cap is the
+  // textarea's CSS max-height.
+  useEffect(() => {
+    const ta = taRef.current
+    if (ta) fitTextarea(ta, parseFloat(getComputedStyle(ta).maxHeight) || Infinity)
+  }, [body, engaged])
 
   // a circle prefills this composer: replace the draft with its anchored body + frame link, then focus for
   // edit. A NULL draft CLEARS — the host nulls it when the working state resets (a selection change, an A/B
@@ -176,26 +191,30 @@ export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = nul
     } finally { setBusy(false) }
   }
   return (
-    <div className="fv-compose">
+    <div className={`fv-compose${engaged ? ' engaged' : ''}`}>
       {frames.length > 0 && (
         <div className="fv-frames">
           {frames.map((h) => <BlobMedia hash={h} alt="frame" key={h} />)}
         </div>
       )}
       <div className="fv-tawrap">
-        <textarea ref={taRef} className="fv-textarea" rows={2} value={body} placeholder={t('session.issuesReplyPlaceholder')}
+        <textarea ref={taRef} className="fv-textarea" rows={1} value={body} placeholder={t('session.issuesReplyPlaceholder')}
           disabled={busy} onChange={(e) => { setBody(e.target.value); ac.sync(e.target) }}
-          onSelect={(e) => ac.sync(e.target)} onBlur={ac.close}
+          onSelect={(e) => ac.sync(e.target)} onFocus={() => setFocused(true)} onBlur={() => { setFocused(false); ac.close() }}
           onKeyDown={(e) => { if (ac.onKeyDown(e)) return; if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); send() } }} />
         {ac.menuEl}
       </div>
-      <div className="fv-actions">
-        {anchorNow && <button type="button" className="fv-anchor-btn" title={t('thread.anchorTitle')} onClick={stampAnchor}>⏱ {t('thread.anchorNow')}</button>}
-        <span className="fv-hint">{err || t('session.issuesMentionHint')}</span>
-        <button type="button" className="fv-send" disabled={busy || !body.trim()} onClick={send}>
-          {busy ? t('session.issuesSending') : t('session.issuesSend')}
-        </button>
-      </div>
+      {/* the actions row shows only while engaged; the buttons swallow mousedown so a click never blurs
+          the textarea (a blur-with-empty-draft would collapse the row before the click could land). */}
+      {engaged && (
+        <div className="fv-actions">
+          {anchorNow && <button type="button" className="fv-anchor-btn" title={t('thread.anchorTitle')} onMouseDown={(e) => e.preventDefault()} onClick={stampAnchor}>⏱ {t('thread.anchorNow')}</button>}
+          <span className="fv-hint">{err || t('session.issuesMentionHint')}</span>
+          <button type="button" className="fv-send" disabled={busy || !body.trim()} onMouseDown={(e) => e.preventDefault()} onClick={send}>
+            {busy ? t('session.issuesSending') : t('session.issuesSend')}
+          </button>
+        </div>
+      )}
     </div>
   )
 }

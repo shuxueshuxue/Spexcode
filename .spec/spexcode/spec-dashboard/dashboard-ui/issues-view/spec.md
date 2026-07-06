@@ -2,10 +2,11 @@
 title: issues-view
 status: active
 hue: 200
-desc: The dashboard's Issues page — a top-level route (#/issues, [[side-nav]]) peer to the graph, the session board, and the Evals page, as a MASTER-DETAIL — the merged issue list (local + forge, store-tagged) on the left, a full-height detail pane the selection drives on the right; markdown-rendered bodies and threads, node chips focus the graph, the reply composer routes by store (local-store commit or real forge comment).
+desc: The dashboard's Issues page — a top-level route (#/issues, [[side-nav]]) peer to the graph, the session board, and the Evals page, as a MASTER-DETAIL — the merged issue list (local + forge, store-tagged) on the left, a full-height detail pane the selection drives on the right; markdown-rendered bodies and threads, node chips focus the graph, the reply composer — a collapsed auto-growing bar DOCKED at the detail's foot — routes by store (local-store commit or real forge comment).
 code:
   - spec-dashboard/src/IssuesPage.jsx
   - spec-dashboard/src/Thread.jsx
+  - spec-dashboard/src/textarea.js
 related:
   - spec-dashboard/src/Evidence.jsx
 ---
@@ -90,8 +91,17 @@ straight to the trunk.
   feature is unchanged.
 - **Node chips focus the graph.** An issue's node chips are clickable — a click routes to the graph page
   and **focuses that node**, so the page stays anchored to the graph it discusses.
-- **A human writes from here — to the issue's OWN store.** EVERY issue's detail carries a **reply
-  composer** (a textarea + Send): the POST goes to the one store-routed reply verb ([[issues]]'s
+- **A human writes from here — to the issue's OWN store, from a composer that is ALWAYS on screen.** EVERY
+  issue's detail carries a **reply composer**, and it is **DOCKED at the detail pane's foot** — the thread
+  region scrolls behind it, so replying to a long thread never needs a scroll to its bottom (the same
+  docked-bar shape as the eval rail's composer and the console's ❯ box, one write-affordance geometry across
+  the review surfaces). The composer is the console-❯-box SHAPE: a **single collapsed line while idle** that
+  **auto-grows with the draft** (the shared `textarea.js` fitTextarea — one grow routine for the console's
+  boxes and the thread composers, capped so it never eats the pane) and reveals its actions row (hint + Send,
+  the ⏱ where a clip supplies one) only while **engaged** — focused, carrying a draft or staged frames, or
+  showing a send error (an error must never collapse out of view). It is **keyed to the selected issue**, so
+  a half-typed draft dies with its selection instead of leaking onto another issue's thread. The POST goes
+  to the one store-routed reply verb ([[issues]]'s
   `replyIssue`, author `'human'`) — a local issue's reply git-commits to the trunk store, a forge issue's
   reply posts a REAL GitHub comment through the driver — then reloads so the post shows where it landed
   (the forge case shows the server's read-back, and a failed forge write surfaces in the composer, never

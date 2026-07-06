@@ -130,8 +130,9 @@ export default function IssuesPage({ onFocusNode, specs = [], sessions = [], iss
   )
 }
 
-// the issue detail — full-height: header (store/status/author/node chips/permalink), the markdown-RENDERED
-// body, the reply thread, and the composer — one thread surface for both stores.
+// the issue detail — full-height, split like the eval rail: a scrolling thread region (header
+// (store/status/author/node chips/permalink), the markdown-RENDERED body, the replies) over the composer
+// DOCKED at the pane's foot — one thread surface for both stores, the write affordance always on screen.
 function IssueDetail({ issue: th, specs, sessions, onFocusNode, onWrite }) {
   const t = useT()
   const local = th.store === 'local'
@@ -140,31 +141,38 @@ function IssueDetail({ issue: th, specs, sessions, onFocusNode, onWrite }) {
   const replies = Array.isArray(th.replies) ? th.replies : []
   return (
     <div className="fvd">
-      {/* the title is the concern ALONE — the store is metadata, never identity: it lives in the meta
-          strip below, never on the title ([[issues-view]]). */}
-      <header className="fvd-head">
-        <span className="fvd-concern">{th.concern}</span>
-      </header>
-      <div className="fvd-meta">
-        {th.status && <span className={`fv-status fv-st-${th.status}`}>{th.status}</span>}
-        <span className={`fv-store fv-store-${local ? 'local' : 'forge'}`}>{th.store}</span>
-        {/* the originator (who filed) + whether their session is still ALIVE — a local thread's `by` is a
-            session id (join it against the board for liveness); a forge issue's `by` is a github login that
-            resolves to no session, so it stays a plain label. */}
-        {local
-          ? <OriginatorLiveness originator={th.by} sessions={sessions} kind="issue" />
-          : (th.by && <span className="fv-by">{th.by}</span>)}
-        {/* signers badge only when someone actually signed — a "+0 signed" is noise (mirrors the CLI's
-            `if (p.signers.length)` guard, issues.ts). The sign feature itself is untouched. */}
-        {local && signers.length > 0 && <span className="fv-count">{t('session.issuesSigned', { n: signers.length })}</span>}
-        {nodes.map((id) => (
-          <button key={id} type="button" className="fv-chip" onClick={() => onFocusNode?.(id)} title={t('session.issuesFocusNode')}>{id}</button>
-        ))}
-        {th.url && <a className="fv-link" href={th.url} target="_blank" rel="noreferrer">{t('session.issuesOpenOnForge')}</a>}
+      <div className="fvd-scroll">
+        {/* the title is the concern ALONE — the store is metadata, never identity: it lives in the meta
+            strip below, never on the title ([[issues-view]]). */}
+        <header className="fvd-head">
+          <span className="fvd-concern">{th.concern}</span>
+        </header>
+        <div className="fvd-meta">
+          {th.status && <span className={`fv-status fv-st-${th.status}`}>{th.status}</span>}
+          <span className={`fv-store fv-store-${local ? 'local' : 'forge'}`}>{th.store}</span>
+          {/* the originator (who filed) + whether their session is still ALIVE — a local thread's `by` is a
+              session id (join it against the board for liveness); a forge issue's `by` is a github login that
+              resolves to no session, so it stays a plain label. */}
+          {local
+            ? <OriginatorLiveness originator={th.by} sessions={sessions} kind="issue" />
+            : (th.by && <span className="fv-by">{th.by}</span>)}
+          {/* signers badge only when someone actually signed — a "+0 signed" is noise (mirrors the CLI's
+              `if (p.signers.length)` guard, issues.ts). The sign feature itself is untouched. */}
+          {local && signers.length > 0 && <span className="fv-count">{t('session.issuesSigned', { n: signers.length })}</span>}
+          {nodes.map((id) => (
+            <button key={id} type="button" className="fv-chip" onClick={() => onFocusNode?.(id)} title={t('session.issuesFocusNode')}>{id}</button>
+          ))}
+          {th.url && <a className="fv-link" href={th.url} target="_blank" rel="noreferrer">{t('session.issuesOpenOnForge')}</a>}
+        </div>
+        {th.body && <div className="fvd-body"><SpecBody body={th.body} /></div>}
+        <Replies replies={replies} />
       </div>
-      {th.body && <div className="fvd-body"><SpecBody body={th.body} /></div>}
-      <Replies replies={replies} />
-      <ReplyComposer onSend={(text, evidence) => postIssueReply(th.id, text, evidence)} specs={specs} sessions={sessions} focusId={nodes[0] || null} onDone={onWrite} />
+      {/* the composer is DOCKED at the detail's foot ([[issues-view]]) — always on screen, the thread
+          scrolls behind it (no scroll-to-the-bottom to reply); keyed to the issue so a half-typed draft
+          dies with its selection instead of leaking onto another issue's thread. */}
+      <div className="fvd-compose">
+        <ReplyComposer key={th.id} onSend={(text, evidence) => postIssueReply(th.id, text, evidence)} specs={specs} sessions={sessions} focusId={nodes[0] || null} onDone={onWrite} />
+      </div>
     </div>
   )
 }

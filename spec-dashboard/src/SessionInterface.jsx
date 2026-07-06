@@ -11,6 +11,7 @@ import SessionSelectBar from './SessionSelectBar.jsx'
 import SessionEvalPane from './SessionEval.jsx'
 import { useResizable } from './useResizable.js'
 import { boardCommandsFor } from './sessionCommands.js'
+import { fitTextarea } from './textarea.js'
 import { useT } from './i18n/index.jsx'
 
 // the attach affordance — a monochrome inline glyph in the dashboard's own SVG vocabulary (currentColor
@@ -60,16 +61,8 @@ function navKeyToken(e) {
 // the `[[`/`@` mention machinery — trigger scanners, ranking, MENTION_RE, the MentionMenu dropdown — is the
 // SHARED module ./mentions.jsx ([[mentions]]): one autocomplete for the console and the issue composers.
 
-// the shared auto-grow routine: reset to `auto` (so it can shrink), then height = scrollHeight clamped at
-// `maxH`. overflow-y stays HIDDEN below the cap so a scrollbar never appears from the height transition
-// lagging or from scrollHeight's sub-pixel rounding; only past the cap does it flip to `auto`. `maxH` is the
-// only per-surface difference.
-function fitTextarea(ta, maxH) {
-  if (!ta) return
-  ta.style.height = 'auto'
-  ta.style.overflowY = ta.scrollHeight > maxH ? 'auto' : 'hidden'
-  ta.style.height = `${Math.min(ta.scrollHeight, maxH)}px`
-}
+// the textarea auto-grow (reset + clamp at a per-surface max-height) is the SHARED ./textarea.js
+// fitTextarea — one routine for the New-tab prompt, the ❯ inbox, and the thread composers.
 
 // filter the command list by the typed prefix: startsWith beats a mid-string include; server order is
 // preserved within a score band (stable sort). Empty query (just `/`) lists everything.

@@ -1,16 +1,12 @@
 import { useT } from './i18n/index.jsx'
+import { Icon } from './icons.jsx'
 
-// The ONE sidebar-toggle glyph ([[fold-toggle]]): an Obsidian-style icon — an outlined panel with a
-// filled inner bar marking the list column — replacing the old ‹/› text arrows. One glyph for BOTH
-// states (Obsidian keeps the same icon for a sidebar open or collapsed; the button's title carries the
-// direction), so fold and unfold read as one affordance, not two glyphs to learn.
+// The ONE sidebar-toggle glyph ([[fold-toggle]]): the shared `panel-left` icon ([[icon-system]]) — an
+// outlined panel with a filled inner bar marking the list column — replacing the old ‹/› text arrows.
+// One glyph for BOTH states (Obsidian keeps the same icon for a sidebar open or collapsed; the button's
+// title carries the direction), so fold and unfold read as one affordance, not two glyphs to learn.
 export function FoldToggleIcon() {
-  return (
-    <svg className="fold-toggle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <rect x="1" y="2" width="22" height="20" rx="4" />
-      <rect className="sidebar-toggle-icon-inner" x="4" y="5" width="2" height="14" rx="2" fill="currentColor" stroke="none" />
-    </svg>
-  )
+  return <Icon name="panel-left" className="fold-toggle-icon" />
 }
 
 // The shared fold/unfold BUTTON over that glyph — every master-list fold site (the eval/issues

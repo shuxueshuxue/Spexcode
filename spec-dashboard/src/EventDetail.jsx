@@ -44,7 +44,7 @@ const verdictCls = (r) => (r.verdict?.status === 'pass' ? 'pass' : r.verdict?.st
 // marker lookup; the WRITE side never needs it (the /api/remarks host is (node, scenario), find-or-create).
 export const evalConcern = (e) => `eval: ${e.node} · ${e.scenario}`
 
-export default function EventDetail({ entry, specs = [], sessions = [], onWrite }) {
+export default function EventDetail({ entry, specs = [], sessions = [], onWrite, onOpenSession }) {
   const t = useT()
   const vid = useRef(null)
   const box = useRef(null)
@@ -116,10 +116,10 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite 
     () => (thread ? [{ by: thread.by, at: thread.created, body: thread.body }, ...(thread.replies || [])] : []),
     [thread],
   )
-  // the eval's ORIGINATOR ([[mentions]] loop-in) — the session that FILED this scenario's reading, which is
-  // the courtesy target an un-@'d remark reaches. The chain's first link is the LATEST reading's filer, so
-  // read it from the newest history row (history is newest-first), falling back to the viewed reading; a
-  // legacy reading without `by` yields nothing and the header simply shows no originator.
+  // the eval's ORIGINATOR ([[mentions]] loop-in) — the session that FILED this scenario's reading. The
+  // chain's first link is the LATEST reading's filer, so read it from the newest history row (history is
+  // newest-first), falling back to the viewed reading; a legacy reading without `by` yields nothing and the
+  // header simply shows no originator.
   const filer = (history && history[0]?.by) || entry.by || null
   // the anchored subset, carrying each comment's index into `comments` and its moment — sorted by moment.
   // E2: the moment is resolved by STEP-NAME against THIS reading's timeline (resolveAnchor), so a marker sits
@@ -358,9 +358,9 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite 
         <span className={`an-verdict-badge ${verdictCls(viewing)}`}>{verdictMark(viewing)}</span>
         {viewing.evaluator && <span className="an-meta">{viewing.evaluator}</span>}
         <span className="an-meta">{new Date(viewing.ts).toLocaleString()}</span>
-        {/* the filer's liveness — whether the session that filed this eval is still alive, so a human sees if
-            an un-@'d remark on the rail reaches it live (the loop-in silently skips it when offline). */}
-        <OriginatorLiveness originator={filer} sessions={sessions} kind="eval" />
+        {/* the filer's liveness — whether the session that filed this eval is still alive; live filers click
+            through to their session-board tab. */}
+        <OriginatorLiveness originator={filer} sessions={sessions} kind="eval" onOpenSession={onOpenSession} />
 
         {/* the A/B history strip — the scenario's fail→pass lifecycle: verdict pips oldest→newest (✗ = an A
             repro, ✓ = a B fix), the viewed one lit, ‹ › to walk it. Shown only when there's more than one

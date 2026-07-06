@@ -126,6 +126,13 @@ not a hedged fail). \`--note <text>\` is an OPTIONAL one-line annotation on eith
 pass sits from ideal); it does NOT replace evidence — the image/transcript is the captured actual behaviour.
 Frontend → \`--image <png>\` (visual evidence); backend → \`--result <txt>\` (a transcript; \`-\` reads stdin).
 
+A botched filing (a junk e2e/smoke run, a wrong verdict) is undone through the SAME surface:
+  spex yatsu retract <node> [--scenario <name>] [--last | --ts <iso>] [--note <why>]
+retract APPENDS a retraction event to the sidecar (never deletes a line — the trace stays, git records
+who/when/why); the scoreboard then drops the retracted reading everywhere: the previous reading becomes
+the latest again, or the scenario honestly returns to \`missing\`. Default target is the scenario's latest
+reading (\`--last\` makes that explicit; repeat to peel junk back one filing at a time); \`--ts\` pins one.
+
 THE SCOREBOARD: readings live in yatsu.evals.ndjson beside the yatsu.md — one JSON line per measurement
 (a second git-as-database axis). Freshness is derived live from git: a reading goes STALE when a governed
 code file, the scenario (the yatsu.md), or the evaluator moves since it was filed.

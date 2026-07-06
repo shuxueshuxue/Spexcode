@@ -35,6 +35,9 @@ original file").
 
 - **`spex yatsu scan`** — which scores are stale or missing.
 - **`spex yatsu eval [.|<node>]`** — the agent files a measurement (evidence + verdict).
+- **`spex yatsu retract [.|<node>]`** — the sanctioned inverse of eval: withdraw a botched filing by
+  appending a retraction event (the sidecar stays append-only; the trace stays), so a junk e2e/smoke
+  reading is reversible through the same surface that wrote it.
 - **`spex yatsu show [.|<node>] [--json]`** — read a node's scores; the same data the dashboard's eval
   tab renders (one engine, two faces).
 - **`spex yatsu clean [--keep-latest|--all]`** — prune the evidence cache.

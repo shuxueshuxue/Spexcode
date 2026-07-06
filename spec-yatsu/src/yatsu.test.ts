@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
 import { parseScenarios, validateScenarios } from './yatsu.js'
-import { readReadings, appendReading, latestPerScenario, evidenceOf, type Reading } from './sidecar.js'
+import { readReadings, readSidecar, appendReading, appendRetraction, latestPerScenario, evidenceOf, type Reading } from './sidecar.js'
 import { changedSince, staleAxes } from './freshness.js'
 import { putBlob, listBlobs, gc, resolveBlob, MISS_BLOB, isStrayBlob } from './cache.js'
 import { evaluatorTag, parseEvaluator, isEvaluatorStale } from './evaluator.js'
@@ -275,6 +275,51 @@ test('sidecar: latestPerScenario keeps the last line per scenario', () => {
   const latest = latestPerScenario(readReadings(f))
   assert.equal(latest.size, 1)
   assert.equal(latest.get('s')!.codeSha, 'new')
+})
+
+// ---- retraction: the sanctioned inverse of a filing — an appended event, never a deleted line ----
+
+test('sidecar: a retraction drops its target from the effective view; the previous reading is latest again', () => {
+  const f = join(tmp(), 'y.ndjson')
+  appendReading(f, { scenario: 's', codeSha: 'good', blob: null, evaluator: 'manual@1', verdict: { status: 'pass' }, ts: 't1' })
+  appendReading(f, { scenario: 's', codeSha: 'junk', blob: null, evaluator: 'manual@1', verdict: { status: 'fail' }, ts: 't2' })
+  appendRetraction(f, { retracts: 't2', scenario: 's', note: 'botched smoke run', ts: 't3' })
+  const eff = readReadings(f)
+  assert.equal(eff.length, 1)
+  assert.equal(latestPerScenario(eff).get('s')!.codeSha, 'good')   // the undo restored the prior latest
+  // the raw view keeps both the junk line AND the retraction event — the trace, not a deletion
+  const raw = readSidecar(f)
+  assert.equal(raw.readings.length, 2)
+  assert.deepEqual(raw.retractions, [{ retracts: 't2', scenario: 's', note: 'botched smoke run', ts: 't3' }])
+})
+
+test('sidecar: retracting every reading returns the scenario to unmeasured (empty effective view)', () => {
+  const f = join(tmp(), 'y.ndjson')
+  appendReading(f, { scenario: 's', codeSha: 'a', blob: null, evaluator: 'manual@1', verdict: { status: 'pass' }, ts: 't1' })
+  appendRetraction(f, { retracts: 't1', scenario: 's', ts: 't2' })
+  assert.deepEqual(readReadings(f), [])
+})
+
+test('sidecar: a retraction is scoped by (scenario, ts) — a same-ts reading in another scenario survives, an unmatched one is inert', () => {
+  const f = join(tmp(), 'y.ndjson')
+  appendReading(f, { scenario: 'a', codeSha: 'x', blob: null, evaluator: 'manual@1', verdict: { status: 'pass' }, ts: 't1' })
+  appendReading(f, { scenario: 'b', codeSha: 'y', blob: null, evaluator: 'manual@1', verdict: { status: 'pass' }, ts: 't1' })
+  appendRetraction(f, { retracts: 't1', scenario: 'a', ts: 't2' })
+  appendRetraction(f, { retracts: 'never-filed', scenario: 'b', ts: 't3' })   // matches nothing → inert
+  const eff = readReadings(f)
+  assert.equal(eff.length, 1)
+  assert.equal(eff[0].scenario, 'b')
+})
+
+test('sidecar: a retraction line has no evaluator, so a legacy reader treats it as neither reading nor poison', () => {
+  // an old readReadings required an `evaluator` string per line — a retraction (deliberately without one)
+  // must never surface as a reading there. The new raw parser routes it by its `retracts` field instead.
+  const f = join(tmp(), 'y.ndjson')
+  appendRetraction(f, { retracts: 't0', scenario: 's', ts: 't1' })
+  const raw = readSidecar(f)
+  assert.equal(raw.readings.length, 0)
+  assert.equal(raw.retractions.length, 1)
+  assert.ok(!('evaluator' in raw.retractions[0]))
 })
 
 // ---- multi-evidence: the evidence LIST + its scalar→list bridge ----

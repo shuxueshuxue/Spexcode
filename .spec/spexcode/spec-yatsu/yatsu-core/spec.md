@@ -47,7 +47,8 @@ code freshness axis (a `code`/`related` path that doesn't exist is flagged, neve
 it inherits the node's whole `code:` list. So two scenarios on one node, tracking different files, go stale
 independently — one node's loss is many signals, not one. A file governed by more scenarios than `maxOwners`
 is the `yatsu-owners` smell (split it). Measurements live apart in a flat
-**yatsu.evals.ndjson** sidecar — one JSON line per reading (scenario, codeSha, an **evidence LIST** (each entry
+**yatsu.evals.ndjson** sidecar — **append-only, one JSON line per EVENT**. A filing appends a *reading*
+(scenario, codeSha, an **evidence LIST** (each entry
 a typed `{hash, kind ∈ image|video|transcript}`), the video entry's optional timelineBlob ([[step-timeline]]),
 evaluator, an optional **`by`** (the SESSION that filed
 it, from envSessionId), **verdict**, ts) — the second git-as-database axis: a reading commit is a *measurement
@@ -56,6 +57,19 @@ event*, not a spec version, so history and attribution apply unchanged. `by` is 
 filing — the ORIGINATOR an eval-comment thread loops in on a reply ([[mentions]]). It is purely additive: a
 legacy reading without it simply has no originator, so the loop-in stays silent; a human `manual@1` filing
 has no reachable session and omits it too.
+
+The sanctioned undo appends a **retraction** — `{retracts: <target reading's ts>, scenario, note?, by?, ts}`
+— never deletes or rewrites a line, so a botched filing (a junk e2e/smoke run, a wrong verdict) is reversible
+*through the same surface that wrote it* while the trace stays: the target line remains as history, the
+retraction event says who withdrew it and why, and git carries both. Every score consumer reads the
+**effective view** (readings minus the retracted, joined by (scenario, ts)) through one seam
+(`readReadings`), so a retract undoes the filing on freshness, scan, clean's referenced-blob set, the eval
+tab, and the proof at once — the previous reading becomes the latest again, or the scenario honestly returns
+to `yatsu-missing`; a retracted reading's blobs simply fall out of the referenced set at the next clean. A
+retraction line deliberately carries **no `evaluator`** field: a version-skewed old reader (whose line filter
+requires one) skips it whole, degrading to "retraction not applied yet", never to a mis-rendered reading; a
+retraction matching no reading is inert. The trace stays navigable: the timeline carries the retraction
+events beside the effective readings, and `show` renders each as a `⟲ retracted` line.
 
 The **verdict** is the loss against `expected`: `pass` or `fail`. Either may carry an optional **note** — a
 one-line annotation (why it failed, how far a pass sits from ideal). A note is an annotation *on* the verdict,
@@ -108,6 +122,12 @@ The surface mirrors the code-drift report:
   verdict but no argv — the HTTP eval route, a programmatic filer — appends through the SAME seam
   (evaluator `manual@1` for a human hand). Filing is the CLI/agent surface: [[event-detail]] reads
   readings and hosts remarks, it files nothing.
+- **retract [.|<node>] [--scenario N] [--last | --ts <iso>] [--note <why>]** — the sanctioned inverse of
+  eval: withdraw a botched filing by APPENDING a retraction event (see above), never by deleting its line.
+  Node and scenario resolve exactly as eval resolves them; the default target is the scenario's latest
+  effective reading (`--last` makes that explicit — repeated retracts peel a junk run back one filing at a
+  time), `--ts` pins an exact one. A retract that finds nothing to withdraw — no reading, an unknown ts, an
+  already-retracted target — fails LOUD; its flag set is closed like eval's.
 - **clean [--keep-latest|--all]** — GC the evidence cache (blobs no reading references, by default).
 
 The **evaluator** is metadata only — a tag `<name>@<version>` (e.g. `manual@1`) recording WHO measured, the

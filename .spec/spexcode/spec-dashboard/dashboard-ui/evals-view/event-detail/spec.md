@@ -39,10 +39,14 @@ media→thread→composer vertically forces a scroll ping-pong between the frame
 band** (scenario · node · the verdict badge · evaluator/timestamp · the FILER's liveness · the A/B strip
 right-aligned), a center
 **MEDIA STAGE**, and an always-visible **RIGHT RAIL** carrying the remark track with the composer **docked
-at the rail's foot**. Stage and rail scroll *independently* — the media never scrolls out of view while
+at the rail's foot**. The docked composer is the console-❯-box SHAPE ([[issues-view]]'s shared thread
+composer): a single collapsed line while idle — the rail's height belongs to the remarks — that auto-grows
+with the draft and reveals its actions row (⏱ / Send) only while engaged, so the write affordance is
+permanent but never bulky. Stage and rail scroll *independently* — the media never scrolls out of view while
 remarking, and the composer is never below the fold: circle→remark→circle→remark without moving anything.
 At narrow widths the workspace degrades gracefully back to one stacked column (the rail folds under the
-stage). The header's **filer liveness** names the session that FILED this scenario's reading — the courtesy
+stage), and the composer stays a **sticky bar at the column's foot** — the one-column mode keeps the
+docked-writer geometry instead of burying the composer under the thread. The header's **filer liveness** names the session that FILED this scenario's reading — the courtesy
 target an un-@'d remark reaches, since the eval loop-in chains the reading's filer first ([[mentions]] /
 [[remark-substrate]]) — with a liveness dot (alive = the session is on the board and not offline, its live
 `STATUS_COLOR` painting the dot, [[state]]; offline otherwise), so the reader sees whether a plain remark

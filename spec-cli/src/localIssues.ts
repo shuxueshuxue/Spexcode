@@ -258,14 +258,21 @@ function ensureStoreMigrated(): void {
 // write + commit ONE store file STRAIGHT to the trunk. The commit is `--no-verify`: the file is DATA,
 // structurally invisible to spec-lint, and the commit is provably store-only (one .spec/.issues/ path), so the
 // pre-commit gate would only pass anyway — running it just burns seconds (tsx cold-start) holding the lock.
+// A NO-CHANGE write is idempotent SUCCESS, never a failure: when the serialized bytes already equal the
+// stored state (a duplicate resolve/sign — the store IS the requested state), `git commit` would exit 1
+// 'nothing to commit', so we detect the no-op after `add` (the staged path equals HEAD → status is silent)
+// and skip the commit. Returns whether the store actually changed, so a caller can say 'already <state>'.
 // MUST run while holding withStoreLock — it is the write half of a locked read-modify-write; its callers
 // (commitStore, findOrCreateEvalThread) own the lock, so it never acquires one itself (mkdir is not re-entrant).
-function writeStoreFile(p: Issue, message: string): void {
+function writeStoreFile(p: Issue, message: string): boolean {
   const override = overrideStoreDir()
   if (override) {                                          // disposable store: a plain file, never a commit, never a shared main
     mkdirSync(override, { recursive: true })
-    writeFileSync(join(override, `${p.id}.md`), serialize(p))
-    return
+    const f = join(override, `${p.id}.md`)
+    const data = serialize(p)
+    if (existsSync(f) && readFileSync(f, 'utf8') === data) return false
+    writeFileSync(f, data)
+    return true
   }
   requirePrimaryStore('write a local issue')              // a linked-worktree backend must NOT commit onto the real main
   const root = mainCheckout()
@@ -273,18 +280,21 @@ function writeStoreFile(p: Issue, message: string): void {
   mkdirSync(join(root, LOCAL_STORE_REL), { recursive: true })
   writeFileSync(join(root, rel), serialize(p))
   git(['-C', root, 'add', '--', rel])
+  if (!git(['-C', root, 'status', '--porcelain', '--', rel]).trim()) return false   // staged == HEAD: the no-op
   git(['-C', root, 'commit', '--no-verify', '-m', message, '--', rel])
+  return true
 }
 
 // prepare (a FRESH read-modify or a new thread) + write + commit a single store file, all under the store
 // lock so the read-modify-write is atomic. prepare() runs INSIDE the lock, so a reply/sign/resolve reads the
 // current thread, never a stale copy. A pre-rename store migrates first (before the lock — ensure takes it).
-function commitStore(message: string, prepare: () => Issue): Issue {
+// `changed: false` = the store already held exactly this state (see writeStoreFile) — success, nothing committed.
+function commitStore(message: string, prepare: () => Issue): { issue: Issue; changed: boolean } {
   ensureStoreMigrated()
   return withStoreLock(() => {
     const p = prepare()
-    writeStoreFile(p, message)
-    return p
+    const changed = writeStoreFile(p, message)
+    return { issue: p, changed }
   })
 }
 
@@ -307,7 +317,7 @@ export function openIssue(concern: string, opts: { nodes?: string[]; body?: stri
     body: (opts.body || `(no detail given — ${concern})`).trim(),
     replies: [],
     evidence: opts.evidence || [],
-  }))
+  })).issue
 }
 
 // mint a per-thread-unique remark id (retry on the rare collision within one thread). Short + readable so a
@@ -332,7 +342,7 @@ export function reply(id: string, body: string, author?: string, evidence?: stri
     // typed evidence[] (deduped), so the thread stays the one place a video finding's blobs are indexed.
     if (evidence?.length) p.evidence = [...new Set([...p.evidence, ...evidence])]
     return p
-  })
+  }).issue
 }
 
 // @@@ the PROGRAMMATIC store write surface — the dashboard's human write path calls these (author `'human'`).
@@ -391,18 +401,19 @@ export function sign(id: string): string[] {
     const p = loadOne(id)
     if (!p.signers.includes(by)) p.signers.push(by)
     return p
-  }).signers
+  }).issue.signers
 }
 
 const RESOLUTIONS = new Set(['accepted', 'rejected', 'landed'])
-export function resolve(id: string, as: string): string {
+// `already` = the thread was in that state before this call — an idempotent success, nothing committed.
+export function resolve(id: string, as: string): { as: string; already: boolean } {
   if (!RESOLUTIONS.has(as)) throw new Error(`resolution must be one of: ${[...RESOLUTIONS].join(' | ')}`)
-  commitStore(`issue(${id}): resolve ${as}`, () => {
+  const { changed } = commitStore(`issue(${id}): resolve ${as}`, () => {
     const p = loadOne(id)
     p.status = as
     return p
   })
-  return as
+  return { as, already: !changed }
 }
 
 // ── remarks ([[remark-substrate]]) ──────────────────────────────────────────────────────────────────
@@ -473,7 +484,7 @@ function parseRemarkRef(ref: string): { id: string; rid: string } {
 // MONOTONIC (no un-resolve — a regression is a NEW remark). `by` is the resolving party.
 export function resolveRemark(ref: string, by: string): { thread: Issue; rid: string } {
   const { id, rid } = parseRemarkRef(ref)
-  const thread = commitStore(`remark(${id}#${rid}): resolved by ${by}`, () => {
+  const { issue: thread } = commitStore(`remark(${id}#${rid}): resolved by ${by}`, () => {
     const p = loadOne(id)
     const r = p.replies.find((x) => x.rid === rid)
     if (!r) throw new Error(`no remark '${ref}' in that thread`)
@@ -493,7 +504,7 @@ export function resolveRemark(ref: string, by: string): { thread: Issue; rid: st
 // resolved remark. A regression after a resolve is a NEW remark, never a retract-and-reraise.
 export function retractRemark(ref: string, by: string): { thread: Issue; rid: string } {
   const { id, rid } = parseRemarkRef(ref)
-  const thread = commitStore(`remark(${id}#${rid}): retracted by ${by}`, () => {
+  const { issue: thread } = commitStore(`remark(${id}#${rid}): retracted by ${by}`, () => {
     const p = loadOne(id)
     const idx = p.replies.findIndex((x) => x.rid === rid)
     if (idx < 0) throw new Error(`no remark '${ref}' in that thread`)
@@ -593,7 +604,8 @@ export async function runIssueWrite(args: string[]): Promise<number> {
       const id = bare(args.slice(1))[0]
       const as = fl(args, 'as')
       if (!id || !as) { console.error('usage: spex issues resolve <issue-id> --as accepted|rejected|landed'); return 2 }
-      console.log(`resolved '${id}' → ${resolve(id, as)}`)
+      const r = resolve(id, as)
+      console.log(r.already ? `'${id}' already ${r.as} — store unchanged` : `resolved '${id}' → ${r.as}`)
       return 0
     }
     if (sub === 'nudge') {

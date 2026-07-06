@@ -64,6 +64,19 @@ scenarios:
       The link-only thread's nodes are exactly the ids inside its `[[…]]` links (concern + body, deduped);
       the mixed thread carries the UNION of the explicit --node and the linked id; the plain thread has no
       nodes. A writer links nodes by writing them — no separate ids field is required of any caller.
+  - name: idempotent-write
+    tags: [cli]
+    code: spec-cli/src/localIssues.ts
+    description: >-
+      Through the real CLI, resolve an ALREADY-resolved thread to the same state
+      (`spex issues resolve <landed-id> --as landed`) and sign a thread twice from the same session —
+      both are no-change store writes (the serialized bytes equal the stored state). Then make a
+      genuinely new write to confirm the normal path still commits.
+    expected: >-
+      A no-change write is idempotent SUCCESS: the CLI reports the store already holds the requested
+      state (e.g. 'already landed') and exits 0, committing nothing — never a failing `git commit`
+      hitting nothing-to-commit that mistakes a landed state for an error. The store file and trunk
+      history are untouched by the no-op; the subsequent genuine write still lands as one commit.
   - name: post-merge-nudge
     tags: [cli]
     code: spec-cli/templates/hooks/post-merge

@@ -9,6 +9,9 @@ implementation from drifting apart. (All screenshots below are this very repo on
 
 English | [中文](./README.zh-CN.md) · Docs: [spexcode.net](https://spexcode.net) · License: MIT
 
+Quick links: [the model](#the-model) · [quick start](#quick-start) ·
+[agents](#working-with-agents) · [yatsu](#measuring-behavior-yatsu) · [config](#configuration)
+
 ## The model
 
 A spec node is a directory under `.spec/` containing a `spec.md`: frontmatter (title, status, a
@@ -20,31 +23,34 @@ detailed reading of that intent; it iterates freely but must always match the ra
 
 <img src="docs/readme-node.png" alt="spec node popup">
 
-Three rules make this workable:
+Two rules make this workable:
 
 1. **Git is the database.** There is no separate store. A node's version count is the number of
-   commits that touched its `spec.md`; its history view is `git log` on that file; each version is
-   attributed, via a `Session:` commit trailer, to the agent session that wrote it. The dashboard is
-   a read-time aggregator over git.
-2. **The body is a living document.** It always describes present intent and is rewritten in place.
-   Changelog headings are banned from spec bodies (the linter enforces this); git already keeps the
-   history.
-3. **Spec and code land together.** A change is one commit that updates both the `spec.md` and the
-   code it justifies. When code moves without its spec, the linter flags the file as drifted and
-   keeps flagging it until the spec catches up.
+   commits that touched its `spec.md`, its history view is `git log` on that file, and each version
+   is attributed to an agent session through a `Session:` commit trailer. This is also why a spec
+   body always describes present intent and gets rewritten in place: changelog headings inside the
+   body are banned (the linter enforces it), because git already keeps the history.
+2. **Spec and code land together.** A change is one commit that updates both the `spec.md` and the
+   code it justifies. When code moves without its spec, the linter flags it,
+
+   ```
+   drift: spec-cli/src/board.ts is 1 commit(s) ahead of spec 'board-lean' (v8) — may be stale
+   ```
+
+   and keeps flagging until the spec catches up.
 
 ## The optimization loop
 
-The parts above compose into one loop. The spec is the loss function: it states what you want, and
+Specs, commits, and yatsu readings compose into one loop. The spec is the loss function: it states what you want, and
 it's the half a human signs off on. Commits are the optimizer. **yatsu**, the measurement
 subsystem, is the eval: it scores how far live behavior currently sits from the spec, and the
 score's history lives in git like everything else.
 
 <img src="docs/readme-loop.png" alt="the spec/code optimization loop">
 
-This framing also settles where the human stands day to day. Nobody reviews neural-network weights
-line by line; you watch the loss curve. Agent-written code works the same way between merge gates:
-your attention goes to the spec and the eval readings, and you read the actual diff at merge time.
+It also settles where the human stands day to day: nobody reads a neural net by staring at its
+weights, and between merge gates you don't have to stare at agent diffs either. Attention goes to
+the spec and the eval readings; the diff gets read once, at merge time.
 
 ## Quick start
 
@@ -59,7 +65,7 @@ spex dashboard           # board UI on :5173, proxying to the backend
 ```
 
 `spex init` is additive. It works on any existing git repo and never overwrites your files: it
-seeds a root `.spec/project/spec.md`, plants a starter `spexcode.json`, installs the pre-commit
+creates a root `.spec/project/spec.md` and a starter `spexcode.json`, installs the pre-commit
 hooks, and writes a managed block into `CLAUDE.md`/`AGENTS.md` so any agent working in the repo
 discovers the workflow on its own.
 
@@ -92,8 +98,8 @@ spex new "make the settings page remember the last tab" --node settings
 launches a worker session in its own worktree on branch `node/settings`. The worker reads the
 governing spec before touching code, makes the change, rewrites the spec body to match, commits
 both (a hook stamps the `Session:` trailer), then proposes a merge and stops. Workers never merge
-themselves; the merge is the manager's call. When you fire it, the session's own agent runs the
-actual `git merge`, so conflicts get resolved by the one who knows the work. The same dispatch is a
+themselves. The merge stays with the manager: when you fire it, the session's own agent runs the
+actual `git merge`, so conflicts land on the one who knows the work. The same dispatch is a
 button on the dashboard (the new-session box on the board); the command form is what agents
 themselves use when they delegate.
 
@@ -117,7 +123,7 @@ prompt stays task-only. More on this mode of working:
 
 ## Measuring behavior: yatsu
 
-yatsu is the measuring half of the optimization loop above. A spec says what a part should do; a
+yatsu is the measuring half of [the loop](#the-optimization-loop). A spec says what a part should do; a
 `yatsu.md` beside it says how to check. Each scenario is a plain description plus an expected
 result. yatsu itself runs nothing (no DSL, no runner). An agent runs the scenario however it can:
 a test file, a real browser, or just clicking through by hand and screenshotting. It compares
@@ -142,7 +148,7 @@ and recorded video evidence in the middle.*
 |---|---|
 | `spec-cli` | The `spex` CLI and the HTTP backend (Hono, runs via tsx, no build step). Reads `.spec` and git live; owns the session state machine and the linter. |
 | `spec-dashboard` | React board: the node graph, per-node spec/history/issues panes, and a real terminal onto each live agent session. |
-| `spec-yatsu` | The measurement bookkeeping described above. |
+| `spec-yatsu` | Scenario definitions, readings, evidence blobs. |
 | `spec-forge` | Read-only tracer that resolves a forge's open issues and PRs to the spec nodes they serve (GitHub today). An issue links itself with a `Spec: <node-id>` line in its body; a PR from a `node/<id>` branch links for free. |
 
 ## The linter
@@ -170,9 +176,10 @@ maps the commands.
 
 SpexCode develops itself with itself: the `.spec/` tree in this repo is the tool's own spec, and
 every change to the tool lands through the same worker/manager loop it implements. The dashboard
-you install is the one it was built on. It is young, and some edges have names:
-`spex session new --help` doesn't print help, it creates a session named `--help` (dispatch with
-`spex new`), and the altitude lint will nag about long spec bodies before you've learned to care.
+you install is the one it was built on. Known warts: `spex session new --help`
+doesn't print help, it creates a session named `--help` (dispatch with `spex new`). And the
+altitude lint currently reports forty-odd warnings against this repo's own specs; I haven't had
+time to pay that down.
 The first public write-up was posted on the [LINUX DO](https://linux.do) community — thanks for
 the first round of discussion there.
 

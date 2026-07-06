@@ -3,9 +3,13 @@ const SETUP = `spex guide — run SpexCode on your own repo
 The product model: install SpexCode ONCE, then use it across all your projects — an agent drives
 the rest, you don't hand-author the spec tree or wire the dashboard yourself.
 
-1. Install the CLI (one-time, global — this ONE checkout serves every project)
-     cd spec-cli && npm install && npm link      # \`spex\` now runs from ANY directory
+1. Install the CLI (one-time, global — ONE install serves every project)
+     npm i -g spexcode                           # ONE command lands on PATH: \`spex\` (Node ≥ 22)
    It always operates on the repo of your current directory — that cwd is the only "which repo" knob.
+   (Dogfooding an unpublished HEAD from a source checkout? \`npm link\` at the repo ROOT — that links
+   the \`spexcode\` package itself, never the internal @spexcode/spec-cli. Both paths own the same
+   \`spex\` bin, so uninstall one before switching (\`npm rm -g spexcode\`). A source link ships no
+   prebuilt dashboard dist — \`spex dashboard\` needs a manual dashboard build, or use the dev server.)
 
 2. Adopt a repo
      cd <your-repo> && spex init                 # seeds .spec/ + git hooks (additive, never overwrites)
@@ -17,11 +21,11 @@ the rest, you don't hand-author the spec tree or wire the dashboard yourself.
    Serve a different repo by running it from there; two repos at once = two \`spex serve\` on two PORTs.
 
 4. Open the dashboard — the SAME board for every project, pointed per project
-     cd spec-dashboard && npm install                        # once
-     API_URL=http://localhost:<port> npm run dev             # point this board at step 3's backend
-   The board is a viewer: API_URL is how the shared install points at each project (one dev-server
-   per project). "dashboard": { "apiUrl": "..." } in spexcode.json is the default ONLY when the board
-   lives inside the project (the dogfood layout) — for a shared install, use API_URL.
+     spex dashboard                              # serves the bundled board on :5173, proxying /api
+   Point it at another backend with --api-port (pairs with \`spex serve --port\`); one dashboard per
+   project. The board is a viewer — which backend it proxies is the only "which project" knob.
+   (Dogfood/source alternative: API_URL=http://localhost:<port> npm run dev in spec-dashboard —
+   the dev server; "dashboard": { "apiUrl": "..." } in spexcode.json applies only to that layout.)
 
 5. Govern your layout (optional)
      spexcode.json sets lint's governedRoots/sourceExtensions and any non-default worktree layout.

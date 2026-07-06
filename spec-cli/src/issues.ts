@@ -184,7 +184,7 @@ export async function replyIssue(
 // `landed`; forge closes call the driver's close verb and let the forced read-back reveal the closed state.
 export async function closeIssue(id: string): Promise<{ store: string; status: string; url?: string }> {
   const forge = /^([A-Za-z0-9-]+)#(\d+)$/.exec(id)
-  if (!forge) return { store: 'local', status: resolve(id, 'landed') }
+  if (!forge) return { store: 'local', status: resolve(id, 'landed').as }   // resolve() returns {as, already} since the idempotent-write change; status stays the plain string
   const { githubDriver } = await import('../../spec-forge/src/drivers/github.js')
   if (forge[1] !== githubDriver.host) throw new Error(`unknown forge host '${forge[1]}' — this repo's driver is '${githubDriver.host}'`)
   const { url } = await githubDriver.closeIssue({ number: parseInt(forge[2], 10) })

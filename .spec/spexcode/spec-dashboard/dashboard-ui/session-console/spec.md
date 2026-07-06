@@ -28,7 +28,9 @@ The interface is a **routed page** (`#/sessions`, [[side-nav]]) — it fills the
 navigation rail as a peer of the graph, with no backdrop, no lift, no pop: Enter (from the graph) or the
 global ⌥2 navigates to it, leaving it is likewise navigation (the rail, ⌥1/⌥3/⌥4, history — never Esc,
 which stays inside the console's own stack), and its selected tab echoes into the URL (`#/sessions/<sel>`)
-so a tab can be deep-linked.
+so a tab can be deep-linked. Selection validity is the real board session set, not only the currently
+visible rows: a session hidden under a collapsed nesting parent can still be opened by URL, search, or an
+originator chip, while ↑/↓ navigation continues to walk only the visible forest rows.
 Leaving the page never unmounts it — the terminals keep their sockets and scroll warm. The console **follows
 the app theme**: its chrome — the session list, the right frame, the docked input — uses the same palette tokens as
 the rest of the dashboard, so re-theming the app re-themes the console with it (no console-scoped palette

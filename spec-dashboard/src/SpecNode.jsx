@@ -34,19 +34,19 @@ function Editors({ data }) {
   const shown = editors.slice(0, MAX_AVATARS)
   const extra = editors.length - shown.length
   return (
-    <span className="node-editors" title={t('specNode.liveEditors', { n: editors.length })}>
+    <span className="node-editors" data-tip={t('specNode.liveEditors', { n: editors.length })}>
       {shown.map((e) => (
         <Avatar key={e.id} seed={e.id} status={e.status}
           title={t('specNode.editorTitle', { node: e.node || t('common.session'), status: t(`status.${e.status}`), id: e.id.slice(0, 8) })} />
       ))}
-      {extra > 0 && <span className="av-more" title={t('specNode.more', { n: extra })}>+{extra}</span>}
+      {extra > 0 && <span className="av-more" data-tip={t('specNode.more', { n: extra })}>+{extra}</span>}
     </span>
   )
 }
 
 function IssueBadge({ issues, t }) {
   if (!issues || issues.length === 0) return null
-  return <span className="issue-badge" title={t('specNode.openIssues', { n: issues.length })}>◆{issues.length}</span>
+  return <span className="issue-badge" data-tip={t('specNode.openIssues', { n: issues.length })}>◆{issues.length}</span>
 }
 
 export default function SpecNode({ data, selected }) {
@@ -76,7 +76,7 @@ export default function SpecNode({ data, selected }) {
         <span className="node-title">{data.title}</span>
         {/* pending ops replace the age — an overlay means the node is being touched NOW */}
         {ops.length > 0 ? (
-          <span className="ov-marks" title={overlays.map((o) => t('specNode.opTitle', { op: t(`legend.opRows.${o.op}`), label: o.label, uncommitted: !o.committed })).join('\n')}>
+          <span className="ov-marks" data-tip={overlays.map((o) => t('specNode.opTitle', { op: t(`legend.opRows.${o.op}`), label: o.label, uncommitted: !o.committed })).join('\n')}>
             {ops.map((op) => <span key={op} className={`ov-mark ov-${op}`}>{GLYPH[op]}</span>)}
           </span>
         ) : ago ? <span className="node-ago">{ago}</span> : null}
@@ -84,7 +84,7 @@ export default function SpecNode({ data, selected }) {
       <div className="node-row2">
         <span className="node-ver">{data.version ? `v${data.version}` : ''}</span>
         {data.drift > 0 && (
-          <span className="drift-badge" title={(data.driftFiles || []).map((d) => `${d.file}: ${t('specNode.driftAhead', { n: d.behind })}`).join('\n')}>
+          <span className="drift-badge" data-tip={(data.driftFiles || []).map((d) => `${d.file}: ${t('specNode.driftAhead', { n: d.behind })}`).join('\n')}>
             ⚠{data.drift}
           </span>
         )}
@@ -94,7 +94,7 @@ export default function SpecNode({ data, selected }) {
       </div>
       {/* collapsed node gets a ▸N tab naming its hidden child count (App sets data.collapsed/childCount). */}
       {data.collapsed && (
-        <span className="node-expand" title={t('specNode.expandable', { n: data.childCount })}>▸{data.childCount}</span>
+        <span className="node-expand" data-tip={t('specNode.expandable', { n: data.childCount })}>▸{data.childCount}</span>
       )}
       <Handle type="source" position={Position.Right} />
     </div>

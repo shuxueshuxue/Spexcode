@@ -541,6 +541,23 @@ export function nudge(node: string): string {
   ].join('\n')
 }
 
+// @@@ close-time issue closeout ([[local-issues]] / [[state]]) — the DATA half of the propose-close nudge:
+// appended to the `done --propose close` declaration BESIDE the resource-cleanup reminder (cli.ts, same
+// insertion point, same semantics — a nudge, never a gate). Data-driven so it earns its line: it lists the
+// still-open local threads THIS session touched (authored or replied; eval `eval: <node> · <scenario>`
+// containers excluded — they host remarks and outlive every session by design) and prints NOTHING when the
+// session owes nothing, when the feature is OFF, or when there is no session identity. Some issues rightly
+// outlive their session (a taste concern waiting for the drain), so the ask is resolve OR say why it stays
+// open — never a forced close.
+export function closeoutNudge(sessionId: string | null | undefined): string {
+  if (!sessionId || sessionId === 'unknown' || !issuesEnabled()) return ''
+  const mine = loadLocalIssues().filter((t) =>
+    t.status === 'open' && !EVAL_CONCERN_RE.test(t.concern) &&
+    (t.by === sessionId || t.replies.some((r) => r.by === sessionId)))
+  if (!mine.length) return ''
+  return `\n\nIssue closeout — ${mine.length} still-open local issue(s) you touched (opened or replied): ${mine.map((t) => t.id).join(', ')}. For each, resolve it now if its work is finished (\`spex issues resolve <id> --as landed|rejected|accepted\`), or reply why it should stay open past this session (\`spex issues reply <id> --body "<why>"\`). Some issues rightly outlive their session — this is a reminder to sweep, not a gate.`
+}
+
 // ───────────────────────── CLI ─────────────────────────
 const fl = (args: string[], name: string): string | undefined => {
   const i = args.indexOf(`--${name}`)

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Avatar } from './avatar.jsx'
-import { STATUS, GLYPH } from './SpecNode.jsx'
+import { STATUS, GLYPH } from './specMeta.js'
 import { SpecPane, HistoryPane, IssuesPane, EditPane, useHistory, panesFor } from './NodeView.jsx'
 import { SessionRow } from './SessionWindow.jsx'
 import { sessionHandle, STATUS_COLOR } from './session.js'
@@ -42,7 +42,6 @@ function NodeRow({ node, kids, editors, onTap }) {
 // useHistory re-fetches and the tab resets per node.
 function MobileNode({ node, childrenOf, sessions, onOpenChild }) {
   const t = useT()
-  const rows = useHistory(node.id)
   const kids = childrenOf(node.id)
   const base = panesFor(node)   // [edit?, spec, history, issues] — edit leads only when a change is in flight
   const tabs = [
@@ -52,6 +51,8 @@ function MobileNode({ node, childrenOf, sessions, onOpenChild }) {
   const [pane, setPane] = useState(null)
   useEffect(() => { setPane(null) }, [node.id])   // a fresh screen always opens on its first tab
   const active = pane && tabs.some((p) => p.key === pane) ? pane : tabs[0].key
+  // fetch the version log only when the history tab is actually up (same gate as the desktop popup)
+  const rows = useHistory(node.id, active === 'history')
   const editors = editorsOf(node, sessions)
   return (
     <div className="m-node">

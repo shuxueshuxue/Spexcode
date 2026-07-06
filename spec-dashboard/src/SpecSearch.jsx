@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { STATUS } from './SpecNode.jsx'
+import { STATUS } from './specMeta.js'
 import { scenarioStates, TagChips } from './score.jsx'
 import { STATUS_COLOR, sessionHandle, sessionHeadline } from './session.js'
 import { useT } from './i18n/index.jsx'
@@ -113,12 +113,21 @@ export default function SpecSearch({ specs, sessions, onPick, onClose, boost = n
   // the palette opens (a fresh mount revalidates), seeded instantly from the shared module cache.
   const corpus = useSpecCorpus()
   const [q, setQ] = useState('')
+  // the RANKED query trails the typed one by a short debounce: rank() runs BM25 once per plane, so ranking
+  // on every keystroke of a fast typist burns four rankDocs per keypress for results the next key discards.
+  // 120ms is under the perceive-as-instant line; an emptied query resets immediately (the jump-list is cheap).
+  const [dq, setDq] = useState('')
+  useEffect(() => {
+    if (!q.trim()) { setDq(q); return }
+    const id = setTimeout(() => setDq(q), 120)
+    return () => clearTimeout(id)
+  }, [q])
   const [sel, setSel] = useState(0)
   const inputRef = useRef(null)
   const listRef = useRef(null)
   const planes = useMemo(() => planeOrder(boost), [boost])
   const entries = useMemo(() => buildEntries(specs, sessions, corpus), [specs, sessions, corpus])
-  const results = useMemo(() => rank(entries, q, planes), [entries, q, planes])
+  const results = useMemo(() => rank(entries, dq, planes), [entries, dq, planes])
 
   useEffect(() => { inputRef.current?.focus() }, [])
   useEffect(() => { setSel(0) }, [q])  // a fresh query always re-aims the highlight at the top result

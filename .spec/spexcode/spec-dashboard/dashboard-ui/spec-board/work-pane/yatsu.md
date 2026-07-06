@@ -41,6 +41,21 @@ scenarios:
       pushed to the right — the same signal vocabulary the node tile speaks. Below it the governed files
       render as a `// governs N` count over a wrapping row of file chips. The filed reading carries the
       screenshot and a pass verdict.
+  - name: history-expand-all
+    tags: [frontend-e2e, desktop]
+    description: >-
+      Open the dashboard, jump to a node with a long version history (several versions — e.g. the root
+      spexcode node or node-graph), press `i` and open the history tab. Only the latest version is
+      expanded; the older ones sit collapsed. An "expand all N" control must be visible at the top of
+      the timeline; click it. Every version row expands (each lazily fetching its diff), so an old
+      version is reachable by one click and find-in-page can see the whole log. Screenshot the fully
+      expanded timeline and file it with
+      `spex yatsu eval work-pane --scenario history-expand-all --image <png> --pass`.
+    expected: >-
+      The history tab shows the expand-all control whenever any row is collapsed; clicking it opens
+      every version row at once (control disappears when nothing is left to expand), and the one-at-a-
+      time down-gesture reveal still works when it isn't used. The filed reading carries the screenshot
+      and a pass verdict.
 ---
 # yatsu.md — work-pane
 

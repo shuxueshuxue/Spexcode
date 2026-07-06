@@ -20,18 +20,11 @@ function timeAgo(iso, t) {
 
 const MAX_AVATARS = 4   // beyond this the row shows "+N" rather than overflow the node width
 
-// the four backend-DERIVED states (specs.ts deriveStatus): merged in-sync, active in-flight,
-// drift = governed code ahead of spec, pending = no committed version. The dot takes the colour.
-// Exported so the Legend (Legend.jsx) reads the SAME source as the nodes — it can never drift.
-export const STATUS = {
-  merged:  { color: '#859900' },
-  active:  { color: '#cb4b16' },
-  drift:   { color: '#b58900' },
-  pending: { color: '#93a1a1' },
-}
-
-// the pending-op glyphs an overlay can stamp on a node. Exported alongside STATUS for the Legend.
-export const GLYPH = { added: '+', edited: '~', deleted: '✕', moved: '→' }
+// STATUS/GLYPH live in specMeta.js (dependency-free) so light chunks — the mobile face, the session
+// window rows — read them without pulling this tile (and thus xyflow) into their bundle; re-exported
+// here so the graph side keeps its one import site.
+export { STATUS, GLYPH } from './specMeta.js'
+import { STATUS, GLYPH } from './specMeta.js'
 
 function Editors({ data }) {
   const t = useT()

@@ -503,6 +503,25 @@ if (cmd === 'serve') {
     const r = await c.clientCapture(full)
     if (r.ok) { process.stdout.write(r.pane) }
     else { console.error(`spex capture: ${r.reason}`); process.exit(r.status === 404 ? 2 : 1) }
+  } else if (sub === 'rename') {
+    // set the session's display-name override — the right-click rename ([[session-rename]]) as a verb, so an
+    // agent manager can fix a label without the GUI. An EXPLICIT "" clears back to the derived label; a
+    // MISSING argument is a usage error, never a silent clear. Unknown session → the endpoint's 404, loud.
+    const full = await resolveSelectorOrExit(id)
+    const name = process.argv[5]
+    if (name === undefined) { console.error('usage: spex session rename <SEL> "<name>"   (an explicit "" clears the override)'); process.exit(2) }
+    if (await c.clientRename(full, name)) console.log(name.trim() ? `${full} -> renamed "${name.trim()}"` : `${full} -> name cleared (derived label restored)`)
+    else { console.error(`spex session rename: no such session ${full}`); process.exit(2) }
+  } else if (sub === 'rawkey') {
+    // forward raw nav-mode keystrokes (tmux send-keys, NEVER the prompt socket) — how a manager drives a
+    // worker wedged in an interactive TUI dialog the prompt channel can't reach (a select menu wanting one
+    // Enter/arrow). Tokens = named keys, single chars, C-/M-/S- combos; whitespace-separated, delivered as
+    // ONE ordered batch ([[nav-mode-key-ordering]]). Fail-loud: nothing delivered exits non-zero.
+    const full = await resolveSelectorOrExit(id)
+    const keys = process.argv.slice(5).flatMap((s) => s.split(/\s+/)).filter(Boolean)
+    if (keys.length === 0) { console.error('usage: spex session rawkey <SEL> "<keys>"   (e.g. "Up Up Enter", "C-r", single chars)'); process.exit(2) }
+    if (await c.clientRawkey(full, keys)) console.log(`sent ${keys.length} key${keys.length === 1 ? '' : 's'} -> ${full}`)
+    else { console.error(`spex session rawkey: nothing delivered to ${full} (offline, unknown session, or no valid key token)`); process.exit(1) }
   } else if (sub === 'prompt') {
     // print the session's full ORIGINATING prompt (what it was asked to do), captured at launch.
     const full = await resolveSelectorOrExit(id)
@@ -510,7 +529,7 @@ if (cmd === 'serve') {
     if (!r.ok) { console.error(`no prompt recorded for ${full}`); process.exit(1) }
     process.stdout.write(r.prompt.endsWith('\n') ? r.prompt : r.prompt + '\n')
   } else {
-    console.error('spex session: new|reopen|done|park|ask|idle|exit|close|send|capture|prompt'); process.exit(2)
+    console.error('spex session: new|reopen|done|park|ask|idle|exit|close|send|capture|rename|rawkey|prompt'); process.exit(2)
   }
 } else if (cmd === 'internal') {
   // @@@ internal - the machine-plumbing namespace: verbs only generated hooks and launch scripts call,

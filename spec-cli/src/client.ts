@@ -95,6 +95,21 @@ export async function clientClose(id: string): Promise<boolean> {
   return !!(await r.json().catch(() => ({ ok: false })))?.ok
 }
 
+// POST /api/sessions/:id/rename — set (or clear, with a blank) the session's display-name override
+// ([[session-rename]] as a CLI verb). {ok:false} = no such session (404).
+export async function clientRename(id: string, name: string): Promise<boolean> {
+  const r = await apiFetch(`/api/sessions/${seg(id)}/rename`, post({ name }))
+  return !!(await r.json().catch(() => ({ ok: false })))?.ok
+}
+
+// POST /api/sessions/:id/rawkey — the raw nav-key channel (tmux send-keys, NEVER the prompt socket): an
+// ordered token batch drives an interactive TUI menu ([[nav-mode-key-ordering]]). {ok:false} = unknown
+// session, no live pane, or no valid token delivered.
+export async function clientRawkey(id: string, keys: string[]): Promise<boolean> {
+  const r = await apiFetch(`/api/sessions/${seg(id)}/rawkey`, post({ keys }))
+  return !!(await r.json().catch(() => ({ ok: false })))?.ok
+}
+
 // GET /api/sessions/:id/prompt — the session's originating prompt (404 if none recorded).
 export type PromptResult = { ok: true; prompt: string } | { ok: false; status: number }
 export async function clientPrompt(id: string): Promise<PromptResult> {

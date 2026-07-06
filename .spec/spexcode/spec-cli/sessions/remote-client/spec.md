@@ -19,8 +19,8 @@ backend is the single broker, and which machine you point at is just a URL.
 
 ## expanded spec
 
-The read/control commands — `ls`, `watch`, `wait`, `capture`, `send`, `review`, `merge`, `reopen`, `exit`,
-`close`, `prompt` — call the backend over HTTP (`SPEXCODE_API_URL`, else the local default). They hold **no**
+The read/control commands — `ls`, `watch`, `wait`, `capture`, `send`, `rename`, `rawkey`, `review`, `merge`,
+`reopen`, `exit`, `close`, `prompt` — call the backend over HTTP (`SPEXCODE_API_URL`, else the local default). They hold **no**
 in-process tmux/git path, so the backend is the **single actor** on the tmux socket and the single source of
 derived state, and pointing `SPEXCODE_API_URL` at another machine's backend monitors and drives THAT
 machine's sessions with no code change — the dashboard's viewer-points-anywhere model, extended to the CLI.
@@ -50,3 +50,15 @@ reporting a false timeout.
 "the screen is blank": `capture` returns a genuinely empty pane as success, but maps unknown-session,
 offline (no live pane), and a capture error to distinct non-zero outcomes — a blank screen that exits 0 is
 never confused with a read that failed.
+
+**Parity with the dashboard's session gestures.** Anything a human can do to a session by pointing at the
+board, an agent manager must be able to do by typing — the backend endpoint already exists in each case, so
+the CLI's job is only the thin verb over it. `rename` is the right-click rename ([[session-rename]]) as a
+verb: it sets the display-name override (an explicit `""` clears it back to the derived label; a *missing*
+argument is a usage error, never a silent clear), and an unknown session exits non-zero off the endpoint's
+404. `rawkey` is nav mode as a verb — the raw `tmux send-keys` channel (never the prompt socket), which is
+how a manager un-wedges a worker stuck in an interactive TUI dialog the prompt channel cannot drive (a
+select menu wanting one Enter or arrow). It takes whitespace-separated key tokens in the frontend's own
+vocabulary (named keys, single printable chars, `C-`/`M-`/`S-` combos), delivered as ONE ordered batch so
+strike order survives ([[nav-mode-key-ordering]]); nothing-delivered (unknown session, no live pane, or no
+valid token) exits non-zero — a dead keystroke never reads as a pressed one.

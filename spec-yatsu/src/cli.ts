@@ -274,7 +274,32 @@ async function evalCmd(args: string[]): Promise<number> {
     : 'no evidence'
   console.log(`  ✓ '${id}' scenario '${scenario.name}' → ${verdictText(verdict)} @ ${reading.codeSha.slice(0, 7)} [${reading.evaluator}] (${ev})`)
   console.log(`spex yatsu eval: 1 measurement filed`)
+
+  // @@@mis-anchor guard - a codeSha names a COMMIT, never a working tree: filed over uncommitted governed
+  // edits, this reading claims a verdict at HEAD while HEAD lacks the code actually measured — wrong from
+  // birth, and the stale flag after the next commit is freshness exposing it, not an engine bug. Warn,
+  // never block: the honest order is commit code+spec first, then measure and file.
+  const dirty = dirtyGoverned(root, [...(scenario.code?.length ? scenario.code : node.codeFiles), node.yatsuPath])
+  if (dirty.length) {
+    console.error(`  ⚠ mis-anchored reading: uncommitted changes in governed ${dirty.join(', ')}`)
+    console.error(`    this reading anchors to HEAD ${reading.codeSha.slice(0, 7)}, which does NOT contain those edits — it claims a ${verdict.status} for code that never ran, and the commit that lands them will (correctly) read it stale.`)
+    console.error(`    the honest order: commit code+spec first, then measure and file (retract this reading if it measured the dirty tree).`)
+  }
   return 0
+}
+
+// the governed paths with uncommitted changes (staged, unstaged, or untracked) — the mis-anchor guard's
+// probe. Paths are repo-relative pathspecs, so a governed dir prefix or `*` glob scopes the same way
+// nodeChanged matches it; a rename line reports its new name.
+function dirtyGoverned(root: string, paths: string[]): string[] {
+  if (!paths.length) return []
+  const out = git(['-C', root, 'status', '--porcelain', '--', ...paths])
+  const files = out.split('\n').filter(Boolean).map((l) => {
+    const p = l.slice(3)
+    const i = p.indexOf(' -> ')
+    return i >= 0 ? p.slice(i + 4) : p
+  })
+  return [...new Set(files)]
 }
 
 // the verdict from the flags: --pass or --fail sets the status (pass wins if both given); --note <text> is an

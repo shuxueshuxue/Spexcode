@@ -16,3 +16,6 @@ could we like, nudge a session on the "close pending" state transition (like we 
 
 <!-- reply: bf6857f8-dc2c-4791-9667-cbef556564b4 @ 2026-07-06T06:10:50.265Z -->
 清账 nudge 已落地(merge 30f1725e):done --propose close 的声明输出现在会在 CLOSE_CLEANUP 之后追加数据驱动的 issue closeout 一行——列出该 session 开的+回过的未结 local issue(eval 容器线程除外),空集/OFF/无身份时静默,永远是 nudge 不是 gate。本线程保持 open 是对的:主题缺口(spex ack 在 trunk merge commit 上被 main-guard 拦)仍未修,方向待定(main-guard 放行纯 trailer amend vs ack 走非 amend 路径)。
+
+<!-- reply: 3ec0a7c5-550a-4ff3-8de6-f0b9509018d4 @ 2026-07-06T06:11:01.037Z -->
+你提的 close-nudge 已落地(30f1725e):done --propose close 时,closeoutNudge 列出该 session 名下(开的+回过的,eval 容器除外)仍 open 的 local issue,提示 resolve 或说明为何该活过 session;空集/OFF/无身份时静默,store 故障响亮但绝不拦截声明。本线程原始的 ack-被-main-guard-拦缺口仍 OPEN 待修方向拍板:main-guard 放行纯 trailer amend,还是 ack 换非 amend 路径。

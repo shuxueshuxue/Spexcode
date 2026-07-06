@@ -301,7 +301,8 @@ if (cmd === 'serve') {
 } else if (cmd === 'issues') {
   // @@@ issues - the ONE issues surface ([[issues]]): bare it is THE read — local + forge issues as ONE
   // store-tagged list, the supervisor's/human's drain view; a write first-positional (open|reply|sign|
-  // resolve|on|off|status, [[local-issues]]) routes to the local store's write verbs, `promote` moves a
+  // resolve|on|off|status, [[local-issues]]) routes to the write verbs (open/reply/close are store-routed —
+  // the SAME createIssue/replyIssue/closeIssue the dashboard's API calls), `promote` moves a
   // thread cross-store. (The pre-rename `spex propose` alias is gone — a deployed post-merge hook still
   // calling it prints an unknown-command line, advisory-only, until `npm run hooks` reinstalls it.)
   const { runIssues } = await import('./issues.js')

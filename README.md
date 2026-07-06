@@ -1,149 +1,167 @@
 <img src="docs/sdd-tuxedo-pooh.png" alt="Writing code vs. authoring a living, executable specification artifact" width="420">
 
-English | [中文](./README.zh-CN.md)
+# SpexCode
 
-> Spec-driven development fails two ways: the spec drifts out of sync with the code, or it
-> bloats into stale ceremony. SpexCode keeps each spec short and current: rewritten in place
-> and versioned by git, not an accumulating changelog.
+Spec-driven development with AI agents in the loop. SpexCode keeps a versioned tree of specs inside
+your git repo, links every spec to the code it governs, and runs a session manager that dispatches
+coding agents into isolated worktrees. You review and merge; the tool keeps intent and
+implementation from drifting apart.
 
-**SpexCode** is a spec-driven, self-developing dev tool. Every part of a project becomes a versioned
-*spec node*: a `.spec/**/spec.md` whose body states the part's present intent. Git is the database:
-a node's version is its count of content commits, and "drift" is governed code that moved ahead of
-its spec. The `spex` CLI and the live dashboard read everything straight from git; there is no
-separate store.
+English | [中文](./README.zh-CN.md) · Docs: [spexcode.net](https://spexcode.net) · License: MIT
 
-- **[Using SpexCode](#using-spexcode)** — adopt the `spex` CLI and drive it through your coding agent to govern *your own* project.
-- **[Contributing to SpexCode](#contributing-to-spexcode)** — hack on the tool itself, in this repo.
-- **[Working with agents →](https://spexcode.net/working-with-agents/)** — the longer write-up on the docs site.
+## The model
 
----
+A spec node is a directory under `.spec/` containing a `spec.md`: frontmatter (title, status, a
+`code:` list of the files it governs) plus a prose body stating what that part of the system is
+supposed to do, right now. Nodes nest, so the tree mirrors how you think about the project rather
+than the file layout. The body itself has two owners: a short human-written **raw source** (the
+intent; changing it needs a human), and an agent-written **expanded spec** (the detailed reading of
+that intent; iterates freely, must always match the raw source).
 
-## Using SpexCode
+<img src="docs/readme-node.png" alt="A spec node on the dashboard: human-owned raw source, agent-owned expanded spec, a DRIFT badge, and the files it governs">
 
-You set SpexCode up once (`npm i -g spexcode`, then `spex init` in your repo). After that, the main
-way to use it is by talking to your coding agent. You describe what you want in plain language
-(*"add a spec node for the auth flow", "extract specs for this package", "dispatch a worker to
-implement Y"*) and the agent runs the `spex` CLI for you while you supervise on the board. The
-manual CLI below is the substrate; your agent is the daily interface.
+Three rules make this workable:
 
-That works because a freshly launched agent already knows SpexCode. `spex init` materializes the
-contract (the spec-node ritual, the commit-before-declare gate, the merge style) into a
-`<!-- spexcode -->` managed block in your repo's `CLAUDE.md`/`AGENTS.md`, which
-**[Claude Code](https://www.anthropic.com/claude-code)** and **Codex** auto-discover as always-on
-context. From there the agent self-serves detail on demand from the built-in manual: `spex guide`
-(the workflow), `spex guide spec` / `spex guide yatsu` (the file formats), and `spex guide config`
-(every `spexcode.json` setting). You can tell it *"run `spex guide config` and set me up a
-launcher"*.
+1. **Git is the database.** There is no separate store. A node's version count is the number of
+   commits that touched its `spec.md`; its history view is `git log` on that file; each version is
+   attributed, via a `Session:` commit trailer, to the agent session that wrote it. The dashboard is
+   a read-time aggregator over git.
+2. **The body is a living document.** It always describes present intent and is rewritten in place.
+   Changelog headings are banned from spec bodies (the linter enforces this); git already keeps the
+   history.
+3. **Spec and code land together.** A change is one commit that updates both the `spec.md` and the
+   code it justifies. Code that silently diverges from its spec is the one forbidden move.
 
-The docs site covers this in full: **[working with agents](https://spexcode.net/working-with-agents/)**
-for the agent-driven workflow, **[getting started](https://spexcode.net/getting-started/)** for the
-setup end to end.
+Read as an optimization loop: the spec states the target, yatsu measurements score how far live
+behavior sits from it, and commits move the code toward the target.
 
-> **It's also just plain tooling.** Strip the agent away and the core is still useful on its own:
-> spec files versioned by git, checked by `spex lint` and shown on a read-only dashboard. No AI,
-> nothing to run but Node and git. The vibe-coding path sits on top of that; it doesn't replace it.
+## Quick start
 
-> **Requirements.** Core: **Node ≥ 22** and **git**. Driving SpexCode through an agent (or
-> dispatching workers onto your nodes) also needs **tmux** and an authenticated **Claude Code or
-> Codex** on your PATH. Those agents run commands on your machine, so read
-> [`SECURITY.md`](./docs/SECURITY.md) before exposing the backend.
-
-### Set it up
-
-Install the published CLI once, then adopt it in any project:
+Requires Node ≥ 22 and git. This part is plain tooling — no AI involved yet.
 
 ```sh
-npm i -g spexcode      # installs the `spex` command (needs Node ≥ 22)
-cd ~/my-app
-spex init              # additive — never restructures your code
+npm i -g spexcode        # installs the `spex` command
+cd your-repo
+spex init                # seeds .spec/, installs git hooks, renders the agent contract
+spex serve               # API backend on :8787
+spex dashboard           # board UI on :5173, proxying to the backend
 ```
 
-`spex init` is additive: it seeds a starter **`.spec/`** tree (a root `project` node plus the
-`.config` plugins that define the dev flow), a starter **`spexcode.json`**, and the per-clone
-**git hooks** (a `pre-commit` hook that runs **spec-lint**, blocking on broken spec↔code links, and
-**main-guard**, which blocks direct commits to `main`, plus a `prepare-commit-msg` hook that stamps
-each commit's session attribution). It also **materializes** the harness artifacts that make the
-agent path work: the `<!-- spexcode -->` contract block in `CLAUDE.md`/`AGENTS.md`, and the
-`.claude/` / `.codex/` shims (the `settings.json` hooks) a self-launched agent discovers. Those
-artifacts are generated and gitignored; they are regenerated on each machine, never committed.
+`spex init` is additive. It works on any existing git repo and never overwrites your files: it
+seeds a root `.spec/project/spec.md`, plants a starter `spexcode.json`, installs the pre-commit
+hooks, and writes a managed block into `CLAUDE.md`/`AGENTS.md` so any agent working in the repo
+discovers the workflow on its own.
 
-Then make it yours — either ask your agent to, or do it by hand: edit `.spec/project/spec.md` to
-describe the project, point `spexcode.json`'s `lint.governedRoots` at your real source dir(s), and
-check the graph:
+Then grow the tree:
+
+1. Edit `.spec/project/spec.md` to describe the project.
+2. Add child nodes for the parts you want governed, each with a `code:` list pointing at existing
+   files.
+3. Run `spex lint`. Coverage warnings list the source files no spec claims yet; that list is your
+   adoption TODO.
+
+You are not expected to hand-author all of this. The intended workflow is to have an agent do most
+of the spec writing; `spex guide spec` prints the exact file format it needs.
+[Getting started](https://spexcode.net/getting-started/) on the docs site walks the setup end to
+end.
+
+<img src="docs/readme-board.png" alt="The board: the spec tree as a zoomable graph, live agent sessions top-left, node detail on the right">
+
+*The board of SpexCode's own repo: the spec tree as a zoomable graph, live agent sessions top-left,
+node detail on the right.*
+
+## Working with agents
+
+This part needs tmux and a logged-in [Claude Code](https://www.anthropic.com/claude-code) or Codex
+on the machine.
 
 ```sh
-spex lint              # the "coverage" warnings are your adoption TODO list
+spex new "make the settings page remember the last tab" --node settings
 ```
 
-### Configure it
+launches a worker session in its own worktree on branch `node/settings`. The worker reads the
+governing spec before touching code, makes the change, rewrites the spec body to match, commits
+both (a hook stamps the `Session:` trailer), then proposes a merge and stops. Workers never merge
+themselves.
 
-Two optional JSON files at the repo root hold every setting, split by portability:
-
-- **`spexcode.json`** — *committed, portable*: layout, dashboard identity (`title` + `icon`), lint
-  budgets, and launcher **names**. Facts that are true for the project.
-- **`spexcode.local.json`** — *gitignored, host-specific*: absolute launcher command paths,
-  cert/secret paths, and the private-overlay switch (`private: true`, which makes `spex materialize`
-  leave zero trace in the tracked tree — ignores go to the local git exclude, not the committed
-  `.gitignore` — so you can run SpexCode on a repo you share but don't own). Facts that are true for
-  one machine.
-
-There is no `spex config set` — you (or your agent) edit the files directly. **`spex guide config`**
-is the authoritative manual for every field and which of the two files it belongs in.
-
-### Run it
-
-Start the backend and the dashboard, then open the board:
+You supervise from outside — on the board, or with the same commands your agent uses:
 
 ```sh
-spex serve          # the backend (API + sessions), on :8787
-spex dashboard      # the board UI on :5173, proxying /api to the backend
+spex watch              # stream session transitions: launched / review / done / needs-input ...
+spex review settings    # commits ahead of trunk, merge-base diff, typecheck/lint gates
+spex merge settings     # gated merge into the trunk
+spex session close settings
 ```
 
-Open <http://localhost:5173>.
+Independent tasks run in parallel. Each worker is isolated in its own worktree, git serializes the
+merges, and a pre-commit guard blocks direct commits on the trunk, so everything flows through
+reviewable node branches.
 
-Both ports are flags (`spex serve --port 8788`, `spex dashboard --port 5174 --api-port 8788`), so
-you can run several projects' boards side by side; the working directory picks which project each
-serves. Give each tab its own identity in that project's `spexcode.json`: `dashboard.title` names it
-and `dashboard.icon` sets the favicon — an emoji (`"🔭"`), an Iconify name (`"mdi:rocket-launch"`),
-or a URL.
+The process is enforced by mechanism, not prompt engineering: the backend creates the branch, a
+hook stamps the attribution, the materialized contract block carries the rules. Your dispatch
+prompt stays task-only. [Working with agents](https://spexcode.net/working-with-agents/) on the
+docs site covers this way of driving SpexCode in full.
 
-Day to day (the commands your agent runs for you — and that you can run yourself):
+## Measuring behavior: yatsu
 
-| command | what it does |
-| --- | --- |
-| `spex lint` | check the spec↔code graph — coverage, drift, and the living-body rules |
-| `spex watch` | stream session / board transitions as they happen |
-| `spex guide` | print the full workflow, plus the `spec.md` / `yatsu.md` / `config` manuals |
-| `spex board` | dump the current board state as JSON |
-
----
-
-## Contributing to SpexCode
-
-This repository *is* the SpexCode source, and it dogfoods itself: every change to the tool lands as
-a spec node merged into `main`. Set up a checkout:
+A spec says what a part should do; a `yatsu.md` beside it says how to check. Each scenario is a
+plain description plus an expected result. There is no DSL and yatsu executes nothing: an agent
+runs the scenario however is honest (a test file, a real browser, by hand), compares actual to
+expected, and files the reading with evidence:
 
 ```sh
-git clone https://github.com/shuxueshuxue/spexcode && cd spexcode
-npm --prefix spec-cli install
-npm --prefix spec-dashboard install
-npm run hooks          # install the per-clone git hooks (main-guard + the session-stamp hook)
+spex yatsu eval settings --scenario remembers-tab --pass --image proof.png
 ```
 
-The development loop runs from source, with hot reload (`npm run web`, as opposed to an installed
-user's `spex dashboard`):
+Readings live in a git-tracked ndjson next to the spec, so measurements get the same attribution
+and history as spec versions. Bug fixes are expected to bracket: file a failing reading that
+reproduces the bug, fix, then file a passing reading on the same scenario.
 
-```sh
-npm run api            # backend on :8787, hot-reloads on spec-cli/src changes
-npm run web            # the dashboard via Vite (HMR), proxying /api → :8787
-```
+<img src="docs/readme-eval.png" alt="The eval view: scenario readings on the left, the selected reading's expected result, staleness and recorded video evidence in the middle">
 
----
+*The eval view: scenario readings on the left; the selected reading's expected result, staleness,
+and recorded video evidence in the middle.*
 
-## Credits
+## What's in the repo
 
-SpexCode was first introduced publicly on [LINUX DO](https://linux.do) — thanks to the community
-there for the first round of discussion and feedback.
+| Package | Role |
+|---|---|
+| `spec-cli` | The `spex` CLI and the HTTP backend (Hono, runs via tsx, no build step). Reads `.spec` and git live; owns the session state machine and the linter. |
+| `spec-dashboard` | React board: the node graph, per-node spec/history/issues panes, and a real terminal onto each live agent session. |
+| `spec-yatsu` | The measurement bookkeeping described above. |
+| `spec-forge` | Read-only tracer that resolves a forge's open issues and PRs to the spec nodes they serve (GitHub today). An issue links itself with a `Spec: <node-id>` line in its body; a PR from a `node/<id>` branch links for free. |
+
+## The linter
+
+`spex lint` checks the spec↔code graph and is the real gate (the git hook is fast local feedback):
+
+- **integrity** (error): a `code:` path that doesn't exist
+- **living** (error): a changelog heading in a spec body
+- **altitude** (warn): a body that slid from contract prose into an implementation dump
+- **coverage** (warn): a governed source file no spec claims
+- **drift** (warn): governed code changed after its spec's last version, derived live from git
+
+## Configuration
+
+`spexcode.json` (committed, portable: layout, lint budgets, dashboard identity, launcher names) and
+`spexcode.local.json` (gitignored, host-specific: absolute launcher paths, plus a `private: true`
+overlay for repos you use but don't own) cover every setting. There is no `spex config set`; you or
+your agent edit the files directly, and `spex guide config` documents every field. The other
+manuals are `spex guide` (the workflow), `spex guide spec`, and `spex guide yatsu`; `spex help`
+maps the commands.
+
+## Status
+
+SpexCode develops itself with itself: the `.spec/` tree in this repo is the tool's own spec, every
+change lands through the worker/manager loop above, and the dashboard you install is the one used
+to build it. It is a young tool; expect some sharp edges. The first public write-up was posted on
+the [LINUX DO](https://linux.do) community — thanks for the first round of discussion there.
+
+## Contributing
+
+[`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) gets you from a clone to a first merged change.
+[`docs/AGENT_GUIDE.md`](docs/AGENT_GUIDE.md) has the full mechanics of the node model and the
+reflexive config system.
 
 ## License
 

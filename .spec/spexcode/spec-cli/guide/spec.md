@@ -30,7 +30,9 @@ the agent from one verb, picked by an optional topic:
   / `spexcode.local.json` field (launchers, dashboard icon, lint budgets, layout overrides) with a working
   example — crucially teaching **which of the two files each belongs in**: the committed, portable
   `spexcode.json` vs. the gitignored, host-specific `spexcode.local.json` (absolute launcher paths,
-  secrets). It **mirrors the `Config` type** in `layout.ts` (the single source of truth — the manual
+  secrets). The sessions section names the worker cap's default, precedence, and the important meaning of
+  "active": it counts compute slots, not total session rows, so human-waiting sessions do not block launches.
+  It **mirrors the `Config` type** in `layout.ts` (the single source of truth — the manual
   restates the type's own field comments, it does not invent fields), so an agent can configure SpexCode
   for a user who doesn't know the schema by editing the JSON directly. There is deliberately no imperative
   `spex config set` — the guide + a direct edit is the whole surface.

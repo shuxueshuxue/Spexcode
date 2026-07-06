@@ -11,8 +11,9 @@ scenarios:
       gitignored/host-specific), documents the launcher schema
       (launchers: { <name>: { harness, cmd } } and defaultLauncher), and shows the working split — the
       portable defaultLauncher name in the committed file, the host absolute `cmd` in the local file.
-      Field coverage spans layout, dashboard, sessions, serve, issues, and lint budgets. The unknown
-      topic fails loud, listing `Topics: spec, yatsu, config`.
+      Field coverage spans layout, dashboard, sessions, serve, issues, and lint budgets. The sessions
+      section explains maxActive's default and that it counts compute slots, not total sessions. The
+      unknown topic fails loud, listing `Topics: spec, yatsu, config`.
     tags: cli
     code: spec-cli/src/guide.ts
 ---

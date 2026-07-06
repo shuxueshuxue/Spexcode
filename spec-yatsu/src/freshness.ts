@@ -1,6 +1,7 @@
-import { rowsFor, ancestorsOf, inAncestors, type DriftIndex, type HistoryIndex } from '../../spec-cli/src/git.js'
+import { ancestorsOf, inAncestors, type DriftIndex } from '../../spec-cli/src/git.js'
 import type { Reading } from './sidecar.js'
 import { isEvaluatorStale } from './evaluator.js'
+import { scenarioChangeCommits, type ScenarioIndex } from './scenariofresh.js'
 
 // the CODE axis is touch-based (DriftIndex), so a code-file rename is out of scope — the same blind spot lint's code-drift has
 
@@ -47,11 +48,14 @@ export function codeDrift(idx: DriftIndex, sinceSha: string, codeFiles: string[]
   return out
 }
 
-// scenario freshness uses rowsFor (rename-followed content versions, like a spec node), not touch-based fileCommits, so a bare git-mv reparent isn't a change; off-history codeSha → stale
-function scenarioMoved(hidx: HistoryIndex, didx: DriftIndex, sinceSha: string, yatsuPath: string): boolean {
+// scenario freshness is PER-SCENARIO, not per-file: a reading stales only when ITS OWN scenario block moved
+// (edited/added/removed) in scenarioSha..HEAD, never when a sibling in the same yatsu.md did. Reads exactly
+// like the code axis's changedSince — the per-scenario change-commits ([[scenariofresh]], rename-followed so a
+// bare git-mv reparent isn't a change) tested for ancestry — off-history codeSha → conservatively stale.
+function scenarioMoved(scIdx: ScenarioIndex, didx: DriftIndex, sinceSha: string, yatsuPath: string, scenario: string): boolean {
   const anc = ancestorsOf(didx, sinceSha)
   if (!anc) return true
-  return rowsFor(hidx, yatsuPath).some((v) => !inAncestors(didx, anc, v.hash))
+  return scenarioChangeCommits(scIdx, yatsuPath, scenario).some((h) => !inAncestors(didx, anc, h))
 }
 
 export function staleAxes(
@@ -59,12 +63,12 @@ export function staleAxes(
   codeFiles: string[],
   yatsuPath: string,
   didx: DriftIndex,
-  hidx: HistoryIndex,
+  scIdx: ScenarioIndex,
   remarks: RemarkSignal[] = [],
 ): StaleAxis[] {
   const axes: StaleAxis[] = []
   if (codeFiles.some((f) => changedSince(didx, reading.codeSha, f))) axes.push('code')
-  if (scenarioMoved(hidx, didx, reading.codeSha, yatsuPath)) axes.push('scenario')
+  if (scenarioMoved(scIdx, didx, reading.codeSha, yatsuPath, reading.scenario)) axes.push('scenario')
   if (isEvaluatorStale(reading.evaluator)) axes.push('evaluator')
   if (remarkStale(reading, remarks)) axes.push('remark')
   return axes
@@ -75,8 +79,8 @@ export function isStale(
   codeFiles: string[],
   yatsuPath: string,
   didx: DriftIndex,
-  hidx: HistoryIndex,
+  scIdx: ScenarioIndex,
   remarks: RemarkSignal[] = [],
 ): boolean {
-  return staleAxes(reading, codeFiles, yatsuPath, didx, hidx, remarks).length > 0
+  return staleAxes(reading, codeFiles, yatsuPath, didx, scIdx, remarks).length > 0
 }

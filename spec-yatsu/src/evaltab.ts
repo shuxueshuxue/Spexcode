@@ -5,6 +5,7 @@ import { loadEvalRemarkTracks, trackKey, type RemarkTrack, type Issue, type Repl
 import { yatsuNodes, type YatsuNode } from './yatsu.js'
 import { readReadings, evidenceOf, type Verdict, type EvidenceKind } from './sidecar.js'
 import { staleAxes, codeDrift, type StaleAxis } from './freshness.js'
+import { scenarioIndex, type ScenarioIndex } from './scenariofresh.js'
 import { hasBlob, getBlob, MISS_BLOB } from './cache.js'
 
 // one evidence entry as the tab renders it: the content hash, its kind, and its LIVE blob state (present, or
@@ -107,6 +108,7 @@ export type EvalContext = {
   specs: Awaited<ReturnType<typeof loadSpecs>>
   idx: DriftIndex
   hidx: HistoryIndex
+  scidx: ScenarioIndex   // per-scenario block-change history ([[scenariofresh]]) — the SCENARIO axis, built ONCE per build
   ynodes: YatsuNode[]
   // the trunk remark tracks ([[remark-teeth]]), keyed (node, scenario) — loaded ONCE per board/proof build
   // and reused for every node, so the fold never re-reads the issue store per node.
@@ -117,15 +119,17 @@ export type EvalContext = {
 // HEAD-keyed git indices (drift for the code axis, history for the rename-safe scenario axis — both warm
 // hits, loadSpecs already derived them). The remark tracks are the fourth, non-git freshness input
 // ([[remark-teeth]]); a caller that omits them gets a live load, so a bare evalTimeline still has teeth.
-export function evalContext(
+export async function evalContext(
   root: string,
   specs: Awaited<ReturnType<typeof loadSpecs>>,
   idx: DriftIndex,
   hidx: HistoryIndex,
   remarks?: Map<string, RemarkTrack>,
   ynodes?: YatsuNode[],   // the hot board build precomputes these off the event loop (yatsuNodesAsync); a bare caller walks sync
-): EvalContext {
-  return { root, specs, idx, hidx, ynodes: ynodes ?? yatsuNodes(root), remarks: remarks ?? loadEvalRemarkTracks() }
+): Promise<EvalContext> {
+  const nodes = ynodes ?? yatsuNodes(root)
+  const scidx = await scenarioIndex(root, nodes.map((n) => n.yatsuPath))
+  return { root, specs, idx, hidx, scidx, ynodes: nodes, remarks: remarks ?? loadEvalRemarkTracks() }
 }
 
 export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalTimeline> {
@@ -140,6 +144,9 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
   const codeFiles = specs.find((s) => dirname(s.path) === relative(root, ynode.dir))?.code ?? []
   const idx = ctx?.idx ?? await driftIndex(root)
   const hidx = ctx?.hidx ?? await historyIndex(root)
+  // the SCENARIO axis: per-scenario block-change history, built once per HEAD (cached). A bare call builds it
+  // for the WHOLE yatsu set (not just this node) so the shared HEAD-keyed cache is complete for later callers.
+  const scidx = ctx?.scidx ?? await scenarioIndex(root, (ctx?.ynodes ?? yatsuNodes(root)).map((n) => n.yatsuPath))
   const byName = new Map(ynode.scenarios.map((s) => [s.name, s]))   // join each reading to its scenario's expected + code
   // the trunk remark track per scenario ([[remark-teeth]]) — the non-git freshness input, fed to the teeth.
   const tracks = ctx?.remarks ?? loadEvalRemarkTracks()
@@ -156,7 +163,7 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
     // remark makes it remark-stale (T1). Display attachment (which reading each remark pins to) is a separate
     // read-time overlay below; freshness never depends on that pin.
     const cf = sc?.code?.length ? sc.code : codeFiles
-    const axes = staleAxes(r, cf, ynode.yatsuPath, idx, hidx,
+    const axes = staleAxes(r, cf, ynode.yatsuPath, idx, scidx,
       remarksFor(r.scenario).map((rm) => ({ resolved: !!rm.resolved, resolvedAt: rm.resolvedAt })))
     // when the code axis is stale, explain it: which of THIS reading's governed files moved, by how many commits.
     const drift = axes.includes('code') ? codeDrift(idx, r.codeSha, cf) : []

@@ -55,7 +55,7 @@ function RailButton({ page, Glyph, active, onNav, label }) {
     <button
       type="button"
       className={active ? 'rail-btn on' : 'rail-btn'}
-      title={label}
+      data-tip={label}
       aria-label={label}
       aria-current={active ? 'page' : undefined}
       onClick={() => onNav(page)}

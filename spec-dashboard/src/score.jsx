@@ -43,7 +43,7 @@ export function ScenarioCount({ scenarios, evals }) {
   const satisfied = states.filter((s) => s.state === 'pass').length
   const total = states.length
   const label = t('score.count', { satisfied, total, outstanding: total - satisfied })
-  return <span className={`scenario-count ${state}`} title={label} aria-label={label}>✓{satisfied}/{total}</span>
+  return <span className={`scenario-count ${state}`} data-tip={label} aria-label={label}>✓{satisfied}/{total}</span>
 }
 
 // the scenario's classification tags as a compact, wrapping row of chips — the ONE element used everywhere a
@@ -63,5 +63,5 @@ export function ScoreBadge({ state, title }) {
   const t = useT()
   if (!state) return null
   const label = title ?? t(`score.${state}`)
-  return <span className={`score-badge ${state}`} title={label} aria-label={label}>{GLYPH[state]}</span>
+  return <span className={`score-badge ${state}`} data-tip={label} aria-label={label}>{GLYPH[state]}</span>
 }

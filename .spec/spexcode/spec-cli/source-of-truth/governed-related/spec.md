@@ -31,6 +31,11 @@ scenarios govern and relate):
 - **related** (`related:`) — files referenced but not owned. Carries **coverage**: every code file must be
   reached by some node's related (or govern). No drift, no yatsu, no ack — a pointer, not a verdict.
 
+**`spex owner <path>` reports BOTH relations**, distinctly: governors as the verdict, referencers as an
+"also referenced by … (related: coverage only)" pointer line. A related-only file reads as *covered but
+ungoverned* — the message says nothing tracks its drift — and the per-edit `--actionable` hook stays SILENT
+for it, mirroring lint's coverage rule (only uncovered / over-owned are worth interrupting an edit for).
+
 **too-many-owners** — the file-rotated twin of breadth ([[spec-lint]]): when a file is governed by more than
 `maxOwners` nodes (default 3), one summary warning fires **at `spex lint`** (the commit gate blocks on drift
 only, never on ownership). It blames the file's size, not its ownership, and offers three moves, split first:

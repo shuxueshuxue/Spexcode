@@ -149,17 +149,29 @@ async function rawsAsync(): Promise<Raw[]> {
   return acc
 }
 
-// spec node(s) that GOVERN a file by the claim rule (exact path, dir-prefix, or *-glob); reads only
-// frontmatter `code:` (cheap, no git) so a per-edit hook can call it. See [[governed-related]].
-export function specOwners(file: string): { id: string; desc: string }[] {
+// the claim rule shared by both relations (exact path, dir-prefix, or *-glob). See [[governed-related]].
+function claimMatcher(file: string): (cf: string) => boolean {
   const rel = file.startsWith('/') ? relative(ROOT, file) : file
-  const claims = (cf: string): boolean => {
+  return (cf: string): boolean => {
     if (cf === rel) return true
     if (rel.startsWith(cf.replace(/\/+$/, '') + '/')) return true
     if (cf.includes('*')) return new RegExp('^' + cf.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$').test(rel)
     return false
   }
+}
+
+// spec node(s) that GOVERN a file (frontmatter `code:` — source of truth, drives drift/yatsu); reads only
+// frontmatter (cheap, no git) so a per-edit hook can call it.
+export function specOwners(file: string): { id: string; desc: string }[] {
+  const claims = claimMatcher(file)
   return raws().filter((r) => list(r.fm.code).some(claims)).map((r) => ({ id: r.id, desc: str(r.fm.desc) }))
+}
+
+// spec node(s) that REFERENCE a file (frontmatter `related:` — carries coverage, never drift/yatsu):
+// [[governed-related]]'s other half, same claim rule, same cheap frontmatter-only read.
+export function specRelated(file: string): { id: string; desc: string }[] {
+  const claims = claimMatcher(file)
+  return raws().filter((r) => list(r.fm.related).some(claims)).map((r) => ({ id: r.id, desc: str(r.fm.desc) }))
 }
 
 // memo fileDiffAt by (version sha + spec.md path) — a commit's patch is immutable. Keyed by path too: one

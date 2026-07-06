@@ -204,7 +204,7 @@ ${SEL_NOTE}`,
     see: 'spex review (before) · spex session close (after the merge is confirmed)',
   },
   session: {
-    line: 'session <sub>         the state machine: new·reopen·done·park·ask·exit·close·send·capture·prompt',
+    line: 'session <sub>         the state machine: new·reopen·done·park·ask·exit·close·send·capture·rename·rawkey·prompt',
     body: `Worker verbs (declare YOUR OWN state — a claim the board and your supervisor act on):
   spex session done --propose merge|nothing|close [--note T]   committed and stopping; merge = ready for review
   spex session park --note <what-you-await>                    a real background task will wake you
@@ -213,6 +213,9 @@ ${SEL_NOTE}`,
 Manager verbs (control another session; all take SEL):
   spex session send <SEL> "<msg>"      deliver a message (fail-loud: a dead dispatch exits non-zero)
   spex session capture <SEL>           the live pane as text
+  spex session rename <SEL> "<name>"   set the display name ("" clears; the right-click rename, as a verb)
+  spex session rawkey <SEL> "<keys>"   raw nav keys to a TUI dialog, in strike order (e.g. "Up Up Enter";
+                                       named keys · single chars · C-/M-/S- combos; fail-loud)
   spex session prompt <SEL>            the session's originating prompt
   spex session reopen <SEL> [--force]  relaunch ONLY if confirmed offline (--force for a wedged live one)
   spex session exit <SEL>              soft stop: kill the agent, KEEP the worktree (resumable)

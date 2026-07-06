@@ -34,15 +34,19 @@ scenarios:
       (15) "an injected sub-agent that searches specs for the agent, the spec analog of Explore" → spec-scout.
       (16) "how does a worker declare it is done" → state (regression: a live miss caught 2026-07-06 —
       yatsu-proactive sat #1 off an incidental desc word while the lifecycle governor sat #5).
-      PLUS one non-rank regression: run `spex search "重命名一个会话"` (no --json) — zero results over the
-      English corpus MUST print the corpus-is-English translate-and-retry fact (the harness asserts the
-      output contains "corpus is English").
+      PLUS two non-rank zero-result regressions (the reply must route to a next step, never dead-end):
+      (a) run `spex search "重命名一个会话"` (no --json) — zero results over the English corpus MUST print
+      the corpus-is-English translate-and-retry fact AND the `browse all: spex tree` line (no nearest
+      titles — CJK has nothing to be lexically near); (b) run `spex search "kyeboard"` — zero results MUST
+      print a `nearest titles` list containing `keyboard-nav` (per-word edit-distance fallback) AND the
+      `spex tree` line.
       Cases 4, 10, 12, 13 deliberately hide the keyword OUTSIDE the title/path — they test prose-reach (the
       whole reason spec search beats plain `grep` on titles). Lift recall by GENERALISING the ranking (fielded
       name>desc>body weighting, IDF, BM25 term-frequency, stemming), never by special-casing a question.
     expected: >-
-      recall@3 ≥ 0.875 (14/16) with recall@1 ≥ 0.50, MRR ≥ 0.65, and the cjk-zero-result hint check PASS,
-      achieved WITHOUT any benchmark-specific branch in search.ts/ranker.ts. EXACTLY TWO cases are accepted
+      recall@3 ≥ 0.875 (14/16) with recall@1 ≥ 0.50, MRR ≥ 0.65, and BOTH zero-result checks PASS (cjk:
+      corpus-is-English fact + spex-tree pointer; typo: nearest-titles incl. keyboard-nav + spex-tree
+      pointer), achieved WITHOUT any benchmark-specific branch in search.ts/ranker.ts. EXACTLY TWO cases are accepted
       misses, both label-vs-prose limits no purely-lexical rule can bridge, left as holdouts rather than
       special-cased: (13) the node literally named `supervisor` is the manager-agent prompt preset and
       carries NONE of "reload / zero-downtime / connections" (that mechanism's prose lives in `spec-cli`,
@@ -51,8 +55,8 @@ scenarios:
       indistinguishable). All other 14 cases sit in the top 3 — the few not at #1 (e.g. `api-endpoint`,
       `yatsu-core`, `governed-related` vs its remedy-sibling `regroup`) are canonical-vs-sibling ties the
       spec-scout `--deep` LLM layer is meant to break; being inside the top 3 is the floor doing its job.
-      Measured 2026-07-06 at 150 nodes after the desc length-normalisation + light query stem:
-      recall@1 0.500, recall@3 0.875, MRR 0.674, cjk-hint PASS.
+      Measured 2026-07-06 at 153 nodes after adding the zero-result nearest-titles routing (ranking
+      untouched): recall@1 0.563, recall@3 0.875, MRR 0.705, cjk-hint PASS, typo-route PASS.
   - name: search-compute-budget
     tags: [cli]
     test: spec-cli/src/search.bench.mjs

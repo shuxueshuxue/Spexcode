@@ -40,10 +40,15 @@ returns results sorted by `score` DESC, each `{ id, title, path, score, snippet 
 
 Default output is a pretty terminal list (rank · title · id · path · snippet); `--json` prints exactly the
 array above, verbatim — the machine surface that the [[spec-scout]] agent re-consumes. `--limit`
-caps the count (default 10). A **zero-result** reply always carries one fact: the corpus is English —
-translate and retry if the query isn't (unconditional — no language sniffing, no score threshold; under
-`--json` the hint goes to stderr so the stdout array stays verbatim). `spex help search` states the same
-fact, so a non-English query self-explains at both surfaces instead of dead-ending.
+caps the count (default 10). A **zero-result** reply never dead-ends: it always carries the corpus-is-English
+fact — translate and retry if the query isn't (unconditional — no language sniffing, no score threshold) —
+plus a route to the next step: the nearest node titles (`nearestTitles` — per-word normalised Levenshtein
+over title+id, best-match ≥0.5 per query word then summed, top 3, reusing the same `loadSpecsLite` read, so
+a transposed-`keyboard` typo still points at `keyboard-nav`; omitted when nothing is lexically near, e.g.
+a pure-CJK query) and a closing `browse all: spex tree` line. The nearest-title distance is deliberately
+NOT part of the ranking — it tolerates typos, the ranker must not. Under `--json` the whole zero-result
+message goes to stderr so the stdout array stays verbatim. `spex help search` states the same
+corpus-is-English fact, so a non-English query self-explains at both surfaces.
 
 ### the ranking
 

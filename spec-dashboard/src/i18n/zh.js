@@ -183,12 +183,12 @@ export default {
     renamePlaceholder: '显示名称（留空以重置）',
   },
 
-  // 多选栏 + 批量删除确认（[[session-multi-select]]）。
+  // 多选栏 + 批量关闭确认（[[session-multi-select]]）。动词用「关闭」——与单行菜单相同，不是第三个「删除」词。
   sessionSelect: {
     selected: ({ n }) => `已选 ${n} 个`,
-    delete: '删除',
-    deleteTitle: ({ n }) => `删除 ${n} 个会话？`,
-    deleteConfirm: '这将关闭每个选中的会话并删除其工作树。任何未提交的更改都会丢失。',
+    close: '关闭',
+    closeTitle: ({ n }) => `关闭 ${n} 个会话？`,
+    closeConfirm: '这将关闭每个选中的会话并删除其工作树。任何未提交的更改都会丢失。',
   },
 
   lockHint: {

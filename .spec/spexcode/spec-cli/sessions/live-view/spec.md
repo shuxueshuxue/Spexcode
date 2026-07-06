@@ -2,10 +2,11 @@
 title: live-view
 status: active
 hue: 280
-desc: The dashboard's live terminal — one tmux control-mode client per session, event-driven (timer-free deterministic resize AND first paint, pushed UTF-8 bytes, zero polling), with viewer subscriptions that outlive the client so a pane never freezes.
+desc: The dashboard's live terminal — one tmux control-mode client per session per backend instance, event-driven (timer-free deterministic resize AND first paint, pushed UTF-8 bytes, zero polling), size-vote arbitration so a viewer-less instance can never move a watched window, with viewer subscriptions that outlive the client so a pane never freezes.
 code:
   - spec-cli/src/pty-bridge.ts
   - spec-dashboard/src/SessionTerm.jsx
+  - spec-cli/test/pty-bridge.foreign-instance.ts
   - spec-cli/test/pty-bridge.stress.ts
   - spec-cli/test/pty-bridge.osc8.ts
   - spec-cli/test/pty-bridge.scroll-redraw.ts
@@ -24,8 +25,9 @@ an output tap.
 
 ## the bridge
 
-Behind each session is exactly **one** real tmux client, shared by every viewer, so there is one
-authoritative pane size and never a size-fight. That client is a **control-mode connection**
+Behind each session is exactly **one** real tmux client *per backend instance*, shared by every viewer of
+that instance — one authoritative pane size, never a size-fight (see the size vote below for how that
+survives a second instance on the same socket). That client is a **control-mode connection**
 (`tmux -CC attach-session`): it speaks tmux's line protocol, so the pty↔tmux boundary is an **event stream,
 not a poll loop** — bytes are *pushed* as `%output` events and a resize is announced by a `%layout-change`.
 
@@ -58,10 +60,34 @@ change — another client resized the shared window with no repaint in flight �
 than letting live deltas paint onto stale geometry. No settle-timeout, no geometry poll, no per-repaint
 pull; a repaint whose size already equals the known layout paints at once.
 
+## the size vote — sharing the socket with other instances
+
+The window-size rules above assume every client on the socket is *this* backend's. They aren't: a second
+backend instance (a worktree's test `spex serve` on the same box) attaches its own bridges to the same tmux
+sessions, and its viewer-less clients would assert their cold default on any repaint — collapsing the
+terminal a human is watching on the main instance, unreclaimably (the watched bridge's counter-assert is a
+same-client-size no-op). So window size is a **vote**, arbitrated by tmux's `ignore-size` client flag:
+
+- **Every bridge client starts size-NEUTRAL** (flagged) and **votes only while a viewer has SIZED it** — a
+  visible connect or a resize, never a hidden board-load connect. Last viewer gone → neutral again.
+- The flag means "yield while any unflagged client is attached" — **server-wide**, and **void when all
+  clients are flagged** (then everyone counts again). That fallback is what keeps a lone backend's warm
+  hold working; the server-wide scope is why a warm hold anywhere is *deferred* while anyone votes.
+- The flag rides an **in-stream command**, not an attach-time `-f`, so a pre-3.2 tmux degrades to a
+  harmless `%error` (the old size-fight behaviour) instead of a client that cannot attach.
+- A **suppressed** `refresh-client -C` still receives its one `%layout-change` (measured — announcing the
+  window's real size), so the deterministic wait and the accept-any-announced-size rule hold on both sides
+  of the flag. Two instances with *live sized viewers* on one session still converge latest-wins, as ever.
+
 A supervisor keeps a **warm** client for every *detached* live session — so a tab paints fast — and
 **skips** any session a human is already attached to in their own terminal. It holds the warm client at
 the **last-known viewer size** (per session, then a global/fixed fallback), resizing a stale one off-screen
-toward it, so a warm pane is already roughly right before anyone looks — the guess the handshake makes exact.
+toward it, so a warm pane is already roughly right before anyone looks — the guess the handshake makes
+exact. Warm clients are neutral, so the hold's staleness guard reads the **window's** real size, not the
+client's: while a sized viewer votes anywhere on the socket the hold is suppressed and simply retries each
+tick, landing on the first tick after the socket goes quiet — **deferred, not lost**. A voting client keeps
+the client-size guard, so genuine viewer-vs-viewer contention stays latest-wins instead of a per-tick
+ping-pong.
 
 ## first-visible, not first-connect
 

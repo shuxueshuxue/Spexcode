@@ -6,15 +6,39 @@ scenarios:
       Measure the on-attach reflow through the real bridge surface. Seed two live sessions on a tmux
       socket at the cold default (120x40). Start the supervisor and let it pre-warm both, then have ONE
       viewer attach and fit to a browser size (e.g. 214x57) via the real path (attachViewer + resizeBridge,
-      the same calls the dashboard WebSocket drives). Poll tmux `#{window_width}x#{window_height}` for the
-      OTHER, unwatched session across one supervisor tick. ZERO loss = it converges to the viewer size
-      off-screen, so a later attach to it sends a size that already matches and tmux re-wraps nothing.
+      the same calls the dashboard WebSocket drives). While that viewer stays attached it holds the only
+      size vote on the socket, so the OTHER, unwatched session's warm hold is deferred (its size-neutral
+      client cannot move a window while a sized viewer votes). Then DETACH the viewer and poll tmux
+      `#{window_width}x#{window_height}` for the unwatched session across a supervisor tick. ZERO loss =
+      once the socket is quiet it converges to the last-known viewer size off-screen, so a later attach
+      sends a size that already matches and tmux re-wraps nothing.
       File with `spex yatsu eval live-view --scenario warm-bridge-pre-sized-no-reflow --result <txt>`.
     expected: >-
-      The unwatched warm bridge's tmux window moves from the cold default to the last-known viewer size
-      WITHOUT any viewer ever attaching to it; a viewer opening it afterward finds the pane already at its
-      size — the open-time fit is a no-op, so there is no visible cols/rows reflow. A watched session stays
-      put across ticks (no thrash), since its pre-size equals its own recorded fit.
+      While the viewer is attached, the unwatched session stays at its cold size (the warm hold is
+      suppressed by the live vote — deferred, not lost). Within a tick or two of the viewer detaching, the
+      unwatched warm bridge's tmux window moves to the last-known viewer size WITHOUT any viewer ever
+      attaching to it; a viewer opening it afterward finds the pane already at its size — the open-time fit
+      is a no-op, so there is no visible cols/rows reflow. A watched session stays put across ticks (no
+      thrash), since its pre-size equals its own recorded fit.
+  - name: foreign-instance-size-neutrality
+    tags: [backend-api]
+    description: >-
+      Measure the multi-instance shrink that hit the live deploy: a second backend instance (a worktree's
+      test `spex serve`) shares the tmux socket, its dashboard's board-load opens HIDDEN (never-sized)
+      viewers on every session, and any layout event makes its bridges repaint and assert their own cold
+      size — collapsing the terminal a human is watching on the main instance to 120x40, unreclaimable
+      (the main bridge's counter-assert is a same-client-size no-op). Run
+      `SPEXCODE_TMUX=foreign-$$ npx tsx test/pty-bridge.foreign-instance.ts` (from spec-cli/): TWO real
+      bridge instances in separate processes on one scratch socket — instance A with a sized viewer
+      (221x63), instance B with only a hidden viewer at the cold default — then two layout events, and
+      read the window size tmux reports. File with `spex yatsu eval live-view --scenario
+      foreign-instance-size-neutrality --result <txt>`.
+    expected: >-
+      The watched window stays at the sized viewer's size (the script's final resize, 219x63) — a bridge
+      whose viewers never sized it is size-NEUTRAL: its client carries tmux's ignore-size flag, so its
+      refresh-client -C cannot move a window while a sized viewer votes, and the foreign instance's client
+      list shows the ignore-size flag. The bug path (every bridge client votes, so a viewer-less foreign
+      bridge's cold-size assert wins and sticks) must be absent.
   - name: set-size-to-first-frame-is-event-driven
     tags: [backend-api]
     description: >-

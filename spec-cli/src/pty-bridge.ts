@@ -17,6 +17,11 @@ type Pending = (lines: Buffer[]) => void
 type Bridge = {
   id: string; pty: IPty; cols: number; rows: number; prewarmed: boolean
   repaintToken: number
+  // the size VOTE: whether this client currently asserts window size. Only a bridge some viewer has SIZED
+  // (visible connect / resize — never a hidden board-load connect) votes; all others carry tmux's
+  // ignore-size client flag and are size-NEUTRAL, so a foreign backend instance sharing the socket can
+  // never move a window a human is watching (see setVote).
+  voting: boolean
   // control-mode parser state: an incomplete-line BYTE buffer, the in-flight command block (%begin..%end) with
   // its command number, a FIFO of one resolver per command sent (tmux answers in order), and the last
   // %layout-change size so a repaint knows the pane already converged and needn't wait for the event.
@@ -269,10 +274,15 @@ function ensureBridge(id: string, prewarm = false): Bridge | null {
       env: { ...process.env, LANG: process.env.LANG || 'en_US.UTF-8' } as Record<string, string>,
     })
   } catch { return null }
-  b = { id, pty: p, cols, rows, prewarmed: prewarm, repaintToken: 0, buf: Buffer.alloc(0), block: null, blockNum: '', cmdQ: [], needsFull: true }
+  b = { id, pty: p, cols, rows, prewarmed: prewarm, repaintToken: 0, voting: false, buf: Buffer.alloc(0), block: null, blockNum: '', cmdQ: [], needsFull: true }
   bridges.set(id, b)
   const bx = b
   p.onData((d) => feed(bx, d as unknown as Buffer))   // encoding:null → d is a Buffer (typings say string)
+  // every client starts size-NEUTRAL: flag it before any refresh-client -C can enter the FIFO (a bare
+  // attach asserts nothing — measured: only -C moves a window — so there is no pre-flag race). Sent as a
+  // stream command, not an attach-time `-f`, so a pre-3.2 tmux degrades to a harmless in-stream %error
+  // (old size-fight behaviour) instead of a client that cannot attach at all.
+  void command(b, 'refresh-client -f ignore-size')
   // attach-session exited (session died or we detached): drop the bridge, unblock any awaiting command AND any
   // %layout-change waiter (no timer backs it now, so a bridge that dies mid-convergence MUST resolve its
   // waiter or the awaiting repaint hangs), and if viewers remain kick a reconcile to re-bind fast.
@@ -283,6 +293,19 @@ function ensureBridge(id: string, prewarm = false): Bridge | null {
     if ((subscribers.get(id)?.size ?? 0) > 0) kickSupervisor()
   })
   return b
+}
+
+// flip this client's size vote — the arbitration that makes ANY number of backend instances share one tmux
+// socket without size-fights. tmux's `ignore-size` client flag means "yield while any unflagged client is
+// attached" (server-wide, and void when ALL clients are flagged — then everyone counts again, which is what
+// keeps the single-backend warm hold working). So: a bridge votes (unflags) from the moment a viewer SIZES
+// it, and goes neutral again when its last viewer leaves. A suppressed refresh-client -C still receives its
+// one %layout-change (measured — announcing the window's real size), so the deterministic resize wait and
+// the accept-any-announced-size rule need no change on either side of the flag.
+function setVote(b: Bridge, on: boolean): void {
+  if (b.voting === on) return
+  b.voting = on
+  void command(b, `refresh-client -f ${on ? '!' : ''}ignore-size`)
 }
 
 function killBridge(id: string): void {
@@ -312,6 +335,7 @@ export function attachViewer(id: string, v: Viewer, initialSize?: { cols: number
   if (!b) return false   // spawn failed → caller closes the socket → detachViewer prunes this subscriber
   b.needsFull = true     // a (re)connecting viewer's xterm is blank / just reset → its first frame must be FULL
   if (initialSize && initialSize.cols > 0 && initialSize.rows > 0) {
+    setVote(b, true)                                   // a sized viewer → this client asserts window size
     applySize(b, initialSize.cols, initialSize.rows)   // resize-then-repaint at the client's true size
   }
   // else HIDDEN connect (0×0, no size): paint nothing now — the first frame is driven purely by the client's
@@ -455,6 +479,7 @@ export function detachViewer(id: string, v: Viewer): void {
   subscribers.delete(id)
   const b = bridges.get(id)
   if (b && !b.prewarmed) killBridge(id)
+  else if (b) setVote(b, false)   // kept warm → back to size-neutral: an unwatched client must not out-vote a watched one
 }
 // a viewer fitted xterm → record the size as the last-known fit (even with no bridge yet, for pre-warm)
 // and resize the shared client. Repaints even on an unchanged size (a reconnect needs the frame). `full` (a
@@ -464,7 +489,7 @@ export function resizeBridge(id: string, cols: number, rows: number, full = fals
   if (!(cols > 0 && rows > 0)) return
   lastFit.set(id, { cols, rows }); lastFitAny = { cols, rows }
   const b = bridges.get(id)
-  if (b) { if (full) b.needsFull = true; applySize(b, cols, rows) }
+  if (b) { if (full) b.needsFull = true; setVote(b, true); applySize(b, cols, rows) }
 }
 // resize the client + repaint WITHOUT recording a viewer fit — the primitive both a real resize and the
 // supervisor's pre-sizing share, so the supervisor can't clobber lastFit/lastFitAny with a stale value.
@@ -482,12 +507,22 @@ async function reconcileOnce(): Promise<void> {
     if (!(await alive(s.id))) continue
     live.add(s.id)
     // already ours → keep warm and resize a stale warm bridge to the last-known viewer size off-screen,
-    // so a first open finds the pane already at its size. The size-diff guard makes a converged bridge a no-op.
+    // so a first open finds the pane already at its size. TWO staleness guards, by vote state: a NEUTRAL
+    // client's hold is suppressed while any sized viewer votes on the socket, so its own client size would
+    // read "converged" after one suppressed attempt and wedge the hold forever — compare against the
+    // WINDOW's real size (lastLayout) instead, retrying each tick (one suppressed no-op command) until the
+    // first tick after the socket goes quiet: deferred, not lost. A VOTING client keeps the client-size
+    // guard: its -C lands, and when two voting instances watch ONE session the window is genuinely
+    // contended — latest assert wins and STOPS (a window-truth guard would re-assert every tick and turn
+    // that contention into a visible size ping-pong war).
     const existing = bridges.get(s.id)
     if (existing) {
       existing.prewarmed = true
       const want = prewarmSize(s.id)
-      if (want.cols !== existing.cols || want.rows !== existing.rows) applySize(existing, want.cols, want.rows)
+      const stale = existing.voting
+        ? want.cols !== existing.cols || want.rows !== existing.rows
+        : existing.lastLayout !== `${want.cols}x${want.rows}`
+      if (stale) applySize(existing, want.cols, want.rows)
       continue
     }
     // no bridge for a live session: viewers waiting → re-bind and repaint (nothing else re-arms an idle

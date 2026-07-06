@@ -57,7 +57,7 @@ export function EvalMasterDetail({ rowKeys, sel, onSel, detail, children }) {
 // and every selection echoes back into the hash with replace (tabs replace, pages push — [[side-nav]]),
 // so the shown eval is always shareable. A remark write refreshes the board (the eval thread rides the
 // board overlay, not the issues list).
-export default function EvalsPage({ specs = [], sessions = [], reloadBoard }) {
+export default function EvalsPage({ specs = [], sessions = [], reloadBoard, onOpenSession }) {
   const t = useT()
   const { page, param } = useRoute()
   const [sel, setSel] = useState(null)            // the ONE selection: 'eval:<node>·<scenario>'
@@ -121,7 +121,7 @@ export default function EvalsPage({ specs = [], sessions = [], reloadBoard }) {
       sel={effSel}
       onSel={setSel}
       detail={selEval
-        ? <EventDetail entry={selEval} specs={specs} sessions={sessions} onWrite={async (outcomes) => { flash(outcomes); await reloadBoard?.() }} />
+        ? <EventDetail entry={selEval} specs={specs} sessions={sessions} onOpenSession={onOpenSession} onWrite={async (outcomes) => { flash(outcomes); await reloadBoard?.() }} />
         : <div className="fv-note">{t('evalsFeed.empty')}</div>}
     >
       {notice && <div className="fv-notice">{notice}</div>}

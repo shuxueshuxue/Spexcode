@@ -97,10 +97,8 @@ export default {
     retract: 'retract',
     retractTitle: 'withdraw your own unresolved remark — removes it from the thread',
     anchorDegraded: 'this step is gone from the current reading — the m:ss is the frozen original, not seekable',
-    originatorAlive: 'alive · replies reach it live',
-    originatorOffline: 'offline · replies skip it',
-    originatorIssue: 'session that filed this issue: {by} — un-@’d replies courtesy-deliver to it while alive',
-    originatorEval: 'session that filed this eval: {by} — un-@’d remarks courtesy-deliver to it while alive',
+    originatorIssue: 'open the session that filed this issue: {by}',
+    originatorEval: 'open the session that filed this eval: {by}',
   },
 
 

@@ -16,7 +16,7 @@ import { useT } from './i18n/index.jsx'
 // `entry.thread` (the server overlay), so there is no "no resident issues list" degradation: the composer
 // authors remarks through /api/remarks. Rows are tier-1 JSON; evidence streams lazily on open — nothing is
 // inlined. The self-contained proof HTML remains as the EXPORT artifact behind the ↗ button.
-export default function SessionEvalPane({ sessionId, specs = [], sessions = [] }) {
+export default function SessionEvalPane({ sessionId, specs = [], sessions = [], onOpenSession }) {
   const t = useT()
   const [model, setModel] = useState(null)     // null loading · false none
   const [onlySession, setOnlySession] = useState(false)   // focus filter: only what THIS session measured
@@ -70,7 +70,7 @@ export default function SessionEvalPane({ sessionId, specs = [], sessions = [] }
   if (model === false) return <div className="fv-note">{t('sessionEval.none')}</div>
 
   const detail = selEntry?.kind === 'eval'
-    ? <EventDetail entry={selEntry.item} specs={specs} sessions={sessions} onWrite={loadModel} />
+    ? <EventDetail entry={selEntry.item} specs={specs} sessions={sessions} onOpenSession={onOpenSession} onWrite={loadModel} />
     : selEntry?.kind === 'blind'
       ? (
         <div className="an-detail">

@@ -583,6 +583,7 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
           onSeedConsumed={() => setSeed(null)}
           onClose={() => navigate('graph')}
           onPickSession={onPickSession}
+          onOpenSession={openSession}
           onOpenSearch={() => setSearch('sessions')}
           reload={reload}
         />
@@ -591,7 +592,7 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
       {page === 'evals' && (
         <div className="page-pane page-evals">
           <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
-            <EvalsPage specs={specs} sessions={sessions} reloadBoard={reload} />
+            <EvalsPage specs={specs} sessions={sessions} reloadBoard={reload} onOpenSession={openSession} />
           </Suspense>
         </div>
       )}
@@ -599,7 +600,7 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
       {page === 'issues' && (
         <div className="page-pane page-issues">
           <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
-            <IssuesPage specs={specs} sessions={sessions} issuesData={issuesData} reloadIssues={reloadIssues} onFocusNode={(id) => { setFocusId(id); navigate('graph') }} />
+            <IssuesPage specs={specs} sessions={sessions} issuesData={issuesData} reloadIssues={reloadIssues} onOpenSession={openSession} onFocusNode={(id) => { setFocusId(id); navigate('graph') }} />
           </Suspense>
         </div>
       )}

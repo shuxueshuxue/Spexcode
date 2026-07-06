@@ -1,4 +1,4 @@
-import { apiBase, resolveSession, type Session, type Resolved, type DispatchResult, type ReviewPayload } from './sessions.js'
+import { apiBase, assertProjectMatch, resolveSession, type Session, type Resolved, type DispatchResult, type ReviewPayload } from './sessions.js'
 
 export class BackendError extends Error {
   constructor(message: string, readonly status?: number) {
@@ -7,15 +7,20 @@ export class BackendError extends Error {
   }
 }
 
-// the ONE seam where "no backend" becomes loud. A network failure (nothing listening at apiBase) is the only
-// thing thrown; an HTTP Response of any status is returned for the caller to interpret.
+// the ONE seam where "no backend" becomes loud. A network failure (nothing listening at the resolved base)
+// is the only thing thrown; an HTTP Response of any status is returned for the caller to interpret.
 async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
+  const base = await apiBase()
   try {
-    return await fetch(`${apiBase()}${path}`, init)
+    return await fetch(`${base}${path}`, init)
   } catch (e) {
-    throw new BackendError(`no backend reachable at ${apiBase()} — run \`spex serve\` there, or set SPEXCODE_API_URL (${(e as Error).message})`)
+    throw new BackendError(`no backend reachable at ${base} — run \`spex serve\` in the project, or name one with --api <url> (${(e as Error).message})`)
   }
 }
+// every MUTATING verb is project-bound ([[remote-client]]'s write guard): resolve the backend, compare its
+// served root to the cwd project, refuse loudly on a same-host mismatch — an explicit --api/--port skips it.
+// Reads stay unguarded (viewer-points-anywhere). Guarding HERE (not per cli.ts branch) covers every caller.
+const guarded = (verb: string) => assertProjectMatch(`spex ${verb}`)
 const post = (body: unknown): RequestInit => ({ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
 const seg = (id: string) => encodeURIComponent(id)
 
@@ -43,6 +48,7 @@ export async function clientCapture(id: string): Promise<CaptureResult> {
 // POST /api/sessions/:id/keys — prompt dispatch (the backend routes it through the rendezvous socket,
 // socket-only + fail-loud; a non-accepted prompt comes back ok:false / HTTP 502).
 export async function clientSend(id: string, text: string, from?: string): Promise<DispatchResult> {
+  await guarded('session send')
   // `from` = the sending agent's own session id; the backend logs the comms edge ([[comms-edge]]) only when
   // it's present (an agent send), so a human-shell send stays unrecorded.
   const r = await apiFetch(`/api/sessions/${seg(id)}/keys`, post({ text, ...(from ? { from } : {}) }))
@@ -70,6 +76,7 @@ export async function clientProof(id: string, json = false): Promise<ProofResult
 
 // POST /api/sessions/:id/merge — the cockpit's merge DISPATCH (200 {dispatched:true} / 409 {reason}).
 export async function clientMerge(id: string): Promise<{ dispatched: boolean; reason?: string }> {
+  await guarded('merge')
   const r = await apiFetch(`/api/sessions/${seg(id)}/merge`, post({}))
   return await r.json().catch(() => ({ dispatched: false, reason: `bad backend response (${r.status})` }))
 }
@@ -78,6 +85,7 @@ export async function clientMerge(id: string): Promise<{ dispatched: boolean; re
 // working→idle, keeps any declaration. The RESUME GUARD REFUSES (409 {refused:true}) on a live/unproven agent;
 // `force` overrides for a wedged-but-alive process. {ok:false} otherwise = no such session (404).
 export async function clientReopen(id: string, force = false): Promise<{ ok: boolean; error?: string; refused?: boolean }> {
+  await guarded('session reopen')
   const r = await apiFetch(`/api/sessions/${seg(id)}/resume`, post({ force }))
   return await r.json().catch(() => ({ ok: false, error: `bad backend response (${r.status})` }))
 }
@@ -85,12 +93,14 @@ export async function clientReopen(id: string, force = false): Promise<{ ok: boo
 // POST /api/sessions/:id/exit — the soft stop: kill tmux + socket, KEEP the worktree (session goes offline,
 // resumable). Distinct from close. {ok:false} = no such session.
 export async function clientExit(id: string): Promise<boolean> {
+  await guarded('session exit')
   const r = await apiFetch(`/api/sessions/${seg(id)}/exit`, post({}))
   return !!(await r.json().catch(() => ({ ok: false })))?.ok
 }
 
 // POST /api/sessions/:id/close — the human-only worktree removal. {ok:false} = no such session.
 export async function clientClose(id: string): Promise<boolean> {
+  await guarded('session close')
   const r = await apiFetch(`/api/sessions/${seg(id)}/close`, post({}))
   return !!(await r.json().catch(() => ({ ok: false })))?.ok
 }
@@ -98,6 +108,7 @@ export async function clientClose(id: string): Promise<boolean> {
 // POST /api/sessions/:id/rename — set (or clear, with a blank) the session's display-name override
 // ([[session-rename]] as a CLI verb). {ok:false} = no such session (404).
 export async function clientRename(id: string, name: string): Promise<boolean> {
+  await guarded('session rename')
   const r = await apiFetch(`/api/sessions/${seg(id)}/rename`, post({ name }))
   return !!(await r.json().catch(() => ({ ok: false })))?.ok
 }
@@ -106,6 +117,7 @@ export async function clientRename(id: string, name: string): Promise<boolean> {
 // ordered token batch drives an interactive TUI menu ([[nav-mode-key-ordering]]). {ok:false} = unknown
 // session, no live pane, or no valid token delivered.
 export async function clientRawkey(id: string, keys: string[]): Promise<boolean> {
+  await guarded('session rawkey')
   const r = await apiFetch(`/api/sessions/${seg(id)}/rawkey`, post({ keys }))
   return !!(await r.json().catch(() => ({ ok: false })))?.ok
 }

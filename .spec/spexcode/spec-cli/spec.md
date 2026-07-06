@@ -59,6 +59,13 @@ retries a transient failure with bounded backoff, so a poll landing on the flip 
 child binds a **private** port that changes on every reload, the supervisor hands it a fixed
 `SPEXCODE_API_URL` at the **public** port; every session the child launches inherits it, so a launched
 agent's own `spex` calls reach the stable public endpoint instead of chasing a retired child's port.
+That injected URL is **deterministic — always the supervisor's own loopback face, never the ambient
+`SPEXCODE_API_URL` this serve itself inherited** (which may carry another project's backend): a worker's
+env is its routing lifeline ([[remote-client]]'s ladder), a backend-owned fact rather than an inheritance
+gamble. And once the public bind succeeds, the supervisor **records its endpoint** (`{url,pid}` in the
+per-project runtime tier, removed on a clean stop) — the record a bare human `spex` in this project's
+tree discovers its backend by; readers health-probe it first, so a crashed serve leaves only a dead
+record that is ignored, never followed.
 
 **Owning the public port is the contract: if I cannot bind it, I have failed.** Keeping-serving is for
 *transient* throws once the port is held — never for *failing to acquire* it. So a bind failure (port in

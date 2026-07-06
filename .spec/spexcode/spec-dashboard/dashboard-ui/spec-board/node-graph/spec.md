@@ -34,3 +34,5 @@ A `moved` overlay carrying `toParent` draws a **faint dashed arrow** to the node
 Because this vocabulary is dense, a **floating legend** decodes it on demand (`?` toggles, Esc closes), reading its swatches from the SAME constants the nodes render from so it can never drift. The legend and the [[settings]] popup share one centered-modal chrome (`Modal.jsx`). `styles.css` is the dashboard's **shared stylesheet**: other surfaces add classes to it — the yatsu eval tab's `.eval-verdict`/`.eval-transcript` rules from the measure-and-score reframe are the latest — so its growth is those features, not this tree's rules.
 
 The board and the session console are **bidirectionally linked**: live editors map to live sessions by exact id, driving Row 2's avatars (see [[session-console]]); clicking a session row focuses its first changed node, and nodes with no live editor focus on click.
+
+React Flow handles on these tiles are **edge anchors only**. They may exist in the DOM so parent→child edges attach to the tile edges, but they are never visible connection dots and never interactive hit targets; a click on a tile edge still belongs to the tile.

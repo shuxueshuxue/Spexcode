@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ReactFlow, ReactFlowProvider, MarkerType, useReactFlow } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import SpecNode from './SpecNode.jsx'
@@ -144,7 +144,7 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
   // sel ↔ URL, two one-way syncs that converge: a deep-linked / history-walked `#/sessions/<sel>` applies
   // its param to the selection; a selection made in the UI is ECHOED into the hash with replace (no history
   // entry per tab-hop — pages push, tabs replace, see route.js).
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (page === 'sessions' && param && param !== sessionSel) setSessionSel(param)
   }, [page, param]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {

@@ -5,6 +5,7 @@ import { EvidenceItem } from './Evidence.jsx'
 import { Replies } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
 import { specUrl } from './data.js'
+import IssueCard from './IssueCard.jsx'
 
 export const PANES = [
   { key: 'spec',    label: 'spec' },
@@ -373,23 +374,6 @@ export function HistoryPane({ node, rows }) {
   )
 }
 
-// the unified Issue shape ([[issues]]): id · store · status · concern; a forge issue links out, a local
-// one has no permalink.
-function IssueRow({ i }) {
-  const inner = (
-    <>
-      <span className="issue-card-top">
-        <span className="issue-num">{i.id}</span>
-        <span className={`fv-store fv-store-${i.store === 'local' ? 'local' : 'forge'}`}>{i.store}</span>
-        <span className={`issue-state st-${i.status}`}>{i.status}</span>
-      </span>
-      <span className="issue-card-title">{i.concern}</span>
-    </>
-  )
-  return i.url
-    ? <a className="issue-card" href={i.url} target="_blank" rel="noreferrer">{inner}</a>
-    : <span className="issue-card">{inner}</span>
-}
 // a long pane earns a text filter ([[work-pane]]): substring over concern+id, sticky at the pane top.
 // Short lists (≤5 rows) skip it — the affordance would be chrome, not help.
 function PaneFilter({ q, setQ, placeholder }) {
@@ -416,13 +400,13 @@ export function IssuesPane({ node }) {
       {open.length > 0 && (
         <>
           <div className="issue-group-head">{t('nodeView.openIssues', { n: open.length })}</div>
-          {open.map((i) => <IssueRow key={i.id} i={i} />)}
+          {open.map((i) => <IssueCard key={i.id} issue={i} />)}
         </>
       )}
       {closed.length > 0 && (
         <>
           <div className="issue-group-head closed">{t('nodeView.closedIssues', { n: closed.length })}</div>
-          {closed.map((i) => <IssueRow key={i.id} i={i} />)}
+          {closed.map((i) => <IssueCard key={i.id} issue={i} />)}
         </>
       )}
     </div>

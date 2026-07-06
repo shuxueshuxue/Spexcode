@@ -5,6 +5,7 @@ hue: 200
 desc: The dashboard's Issues page — a top-level route (#/issues, [[side-nav]]) peer to the graph, the session board, and the Evals page, as a MASTER-DETAIL — the merged issue list (local + forge, store-tagged) on the left, a full-height detail pane the selection drives on the right; markdown-rendered bodies and threads, node chips focus the graph, the reply composer — a collapsed auto-growing bar DOCKED at the detail's foot — routes by store (local-store commit or real forge comment).
 code:
   - spec-dashboard/src/IssuesPage.jsx
+  - spec-dashboard/src/IssueCard.jsx
   - spec-dashboard/src/Thread.jsx
   - spec-dashboard/src/textarea.js
 related:
@@ -92,6 +93,13 @@ straight to the trunk.
   login resolving to no session, so it stays a plain author label.
 - **Node chips focus the graph.** An issue's node chips are clickable — a click routes to the graph page
   and **focuses that node**, so the page stays anchored to the graph it discusses.
+- **Issue cards enter this page, never the forge.** Every compact issue card rendered outside the Issues
+  page itself — the focus panel and the node-info Issues tab included — is the SAME `IssueCard` component
+  over the unified Issue shape. Store changes only the muted tag text; local and forge issues get identical
+  card chrome, identical truncation, and the same click target: `#/issues/<issue-id>`, which opens this
+  page and selects that issue in its own detail pane. A forge permalink remains only a detail-meta affordance
+  after selection, not the card's primary route. Long local ids, titles, or bodies must clamp inside the
+  card and never widen the right sidebar or create a bottom scrollbar.
 - **A human writes from here — to the issue's OWN store, from a composer that is ALWAYS on screen.** EVERY
   issue's detail carries a **reply composer**, and it is **DOCKED at the detail pane's foot** — the thread
   region scrolls behind it, so replying to a long thread never needs a scroll to its bottom (the same

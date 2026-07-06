@@ -1,6 +1,7 @@
 import { scenarioStates, aggregateState, TagChips } from './score.jsx'
 import { useT } from './i18n/index.jsx'
 import { useSpecCorpus } from './corpus.js'
+import IssueCard from './IssueCard.jsx'
 
 // the state mark a scenario row leads with — the score vocabulary as a glyph (✓ pass · ✗ fail · ○ blind
 // spot · · never measured). The colour comes from the row's state class (styles.css), so this is shape only.
@@ -25,24 +26,6 @@ function ScenarioRow({ s, prose, t, onOpenEval }) {
       </span>
     </button>
   )
-}
-
-// one issue card, reusing the shared .issue-card vocabulary (id · store · status · full concern) — the
-// unified Issue shape ([[issues]]); a forge issue links out to its permalink, a local one has none.
-function IssueRow({ i }) {
-  const inner = (
-    <>
-      <span className="issue-card-top">
-        <span className="issue-num">{i.id}</span>
-        <span className={`fv-store fv-store-${i.store === 'local' ? 'local' : 'forge'}`}>{i.store}</span>
-        <span className={`issue-state st-${i.status}`}>{i.status}</span>
-      </span>
-      <span className="issue-card-title">{i.concern}</span>
-    </>
-  )
-  return i.url
-    ? <a className="issue-card" href={i.url} target="_blank" rel="noreferrer">{inner}</a>
-    : <span className="issue-card">{inner}</span>
 }
 
 export default function FocusPanel({ node, onOpenEval }) {
@@ -87,9 +70,9 @@ export default function FocusPanel({ node, onOpenEval }) {
         </div>
         {issues.length ? (
           <>
-            {open.map((i) => <IssueRow key={i.id} i={i} />)}
+            {open.map((i) => <IssueCard key={i.id} issue={i} />)}
             {closed.length > 0 && <div className="issue-group-head closed">{t('focusPanel.closed', { n: closed.length })}</div>}
-            {closed.map((i) => <IssueRow key={i.id} i={i} />)}
+            {closed.map((i) => <IssueCard key={i.id} issue={i} />)}
           </>
         ) : <div className="fp-empty">{t('focusPanel.noIssues')}</div>}
       </section>

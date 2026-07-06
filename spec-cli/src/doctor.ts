@@ -1,11 +1,12 @@
-// @@@ spex self - the SELF-DIAGNOSIS surface (spec-cli/self). When a user launches their OWN claude/codex
-// with no SpexCode process in the launch, the workflow reaches that agent only through the files
-// materialize() renders (the manifest in the global store; the in-tree contract blocks + hook shims + codex
-// trust). `self` answers "is this agent actually governed, or silently running free?" — diagnosing that
-// materialized contract per LAYER, looping the same HARNESSES adapter materialize renders through (so claude
-// AND codex are covered with no hardcoded paths). It catches the SILENT failure: a shim whose handler is
-// missing, a PATH that can't resolve `spex`, a contract that never landed. Read-only today: `doctor`,
-// `contract` (print the surface:system text any agent reads), `env`. install/uninstall are STAGED (noteStaged).
+// @@@ spex doctor - the DIAGNOSIS surface ([[doctor]]; command renamed from `self`, which misread as the
+// tool itself / the global install). When a user launches their OWN claude/codex with no SpexCode process
+// in the launch, the workflow reaches that agent only through the files materialize() renders (the manifest
+// in the global store; the in-tree contract blocks + hook shims + codex trust). Bare `spex doctor` answers
+// "is this agent actually governed, or silently running free?" — diagnosing that materialized contract per
+// LAYER, looping the same HARNESSES adapter materialize renders through (so claude AND codex are covered
+// with no hardcoded paths). It catches the SILENT failure: a shim whose handler is missing, a PATH that
+// can't resolve `spex`, a contract that never landed. Read-only today: the bare report, `contract` (print
+// the surface:system text any agent reads), `conflicts`. install/uninstall are STAGED (noteStaged).
 import { existsSync, readFileSync, readdirSync, accessSync, constants } from 'node:fs'
 import { join, dirname, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -171,7 +172,7 @@ async function doubleDeliveryReport(base: string): Promise<{ lines: string[]; co
     L.push('  • remove the independently-installed plugin bundle (delete its dir, or `claude plugin uninstall spexcode`); or')
     L.push('  • if you WANT the plugin, stop the native delivery: set spexcode.json "harnesses" to a plugin target')
     L.push('    (e.g. ["plugin",{"plugin":".claude"}] → {"plugin":".claude"}) so `spex materialize` prunes the loose shim/contract/skills; or')
-    L.push('  • remove the loose copy directly (`spex self uninstall` [staged] / `spex uninstall`).')
+    L.push('  • remove the loose copy directly (`spex doctor uninstall` [staged] / `spex uninstall`).')
   } else {
     L.push('No double-delivery: each harness is reached by at most one spexcode-stamped channel.')
   }
@@ -210,7 +211,7 @@ async function doctor(): Promise<number> {
 
   const L: string[] = []
   const line = (k: string, v: string) => L.push(`  ${k.padEnd(16)}: ${v}`)
-  L.push('spex self doctor — how the SpexCode workflow reaches this agent\n')
+  L.push('spex doctor — how the SpexCode workflow reaches this agent\n')
 
   L.push('Agent')
   line('detected', runningHarness ? `${runningHarness.id}  (${runningHarness.sessionEnvVar}=${process.env[runningHarness.sessionEnvVar]})` : 'none detected (no harness session env var set)')
@@ -244,9 +245,9 @@ async function doctor(): Promise<number> {
   line('nodes', names.length ? names.join(', ') : 'none — contract is empty')
   for (const h of HARNESSES) {
     const present = h.contractFiles(base).every((f) => /<!--\s*spexcode:start\s*-->/.test(read(f)))
-    line(`in ${h.id}`, present ? `block present (${h.contractFiles(base).map((f) => f.replace(base + '/', '')).join(', ')})` : 'NOT landed — run `spex self contract` / materialize')
+    line(`in ${h.id}`, present ? `block present (${h.contractFiles(base).map((f) => f.replace(base + '/', '')).join(', ')})` : 'NOT landed — run `spex doctor contract` / materialize')
   }
-  line('view', 'spex self contract')
+  line('view', 'spex doctor contract')
 
   // --- hooks: the shim → dispatch, the manifest, and EVERY handler readable in the worktree ---
   L.push('\nLayer 3 — hooks (shim → dispatch · manifest · handler-existence)')
@@ -286,7 +287,7 @@ async function doctor(): Promise<number> {
   line('layer 2', body.length === 0 ? 'ABSENT (no contract)' : 'see per-harness above')
   line('layer 3', manifestText ? 'see handler-existence above' : 'ABSENT (no manifest — agent ungoverned)')
   line('layer 4', up ? 'present' : managed ? 'EXPECTED but backend down' : 'absent (normal for bring-your-own-agent)')
-  line('layer 5', dd.conflict ? 'CONFLICT (double-delivery — see Layer 5; `spex self conflicts`)' : 'clean (single channel)')
+  line('layer 5', dd.conflict ? 'CONFLICT (double-delivery — see Layer 5; `spex doctor conflicts`)' : 'clean (single channel)')
 
   // --- footprint: every artifact Spex wrote here, + any slot held by something not ours ---
   L.push('\nFootprint (what Spex wrote into this environment)')
@@ -310,7 +311,7 @@ async function doctor(): Promise<number> {
 // print the layer-2 contract so any agent/harness can be handed exactly what materialize folds in.
 function contract(): number {
   const { body } = contractText()
-  if (!body) { console.error('spex self: no surface:system nodes in this .spec tree — the contract is empty.'); return 0 }
+  if (!body) { console.error('spex doctor: no surface:system nodes in this .spec tree — the contract is empty.'); return 0 }
   console.log(body)
   return 0
 }
@@ -321,7 +322,7 @@ async function conflicts(): Promise<number> {
   const cwd = process.cwd()
   const base = repoRoot(cwd) ?? cwd
   const { lines, conflict } = await doubleDeliveryReport(base)
-  console.log(['spex self conflicts — does SpexCode reach this agent through more than one discovery channel?\n', ...lines].join('\n'))
+  console.log(['spex doctor conflicts — does SpexCode reach this agent through more than one discovery channel?\n', ...lines].join('\n'))
   return conflict ? 1 : 0
 }
 
@@ -329,16 +330,16 @@ async function conflicts(): Promise<number> {
 // install/uninstall are STAGED: wiring layer-3 hooks into a standalone repo is only SAFE once the hooks
 // detect a missing managed session and degrade. So the diagnosis ships first; the installer lands behind it.
 function noteStaged(verb: string): number {
-  console.error(`spex self ${verb} is not available yet — it is staged behind the hook-degradation prerequisite
+  console.error(`spex doctor ${verb} is not available yet — it is staged behind the hook-degradation prerequisite
 (the live hooks must detect a missing managed session and degrade before they can be safely wired into your
-own agent's config). Meanwhile: \`spex self doctor\` reports your coverage, and \`spex self contract\` prints
+own agent's config). Meanwhile: \`spex doctor\` reports your coverage, and \`spex doctor contract\` prints
 the workflow text you can hand any agent.`)
   return 2
 }
 
 function usage(): number {
-  console.error(`spex self — diagnose how the SpexCode workflow reaches your agent
-  doctor       per-layer report: preconditions · git-hook floor · contract · hooks(+handlers) · backend · footprint  (default)
+  console.error(`spex doctor — diagnose how the SpexCode workflow reaches your agent
+  (bare)       per-layer report: preconditions · git-hook floor · contract · hooks(+handlers) · backend · footprint
   contract     print the surface:system contract text (hand it to any agent)
   conflicts    detect double-delivery — the same agent reached via loose native delivery AND a plugin bundle (exits non-zero on conflict)
   install      [staged] wire the materialized contract + hooks into your agent  (--agent claude, --minimal)
@@ -346,14 +347,14 @@ function usage(): number {
   return 0
 }
 
-export async function runSelf(args: string[]): Promise<number> {
-  switch (args[0] ?? 'doctor') {
-    case 'doctor': return await doctor()
+export async function runDoctor(args: string[]): Promise<number> {
+  switch (args[0]) {
+    case undefined: return await doctor()
     case 'contract': return contract()
     case 'conflicts': return await conflicts()
     case 'install': return noteStaged('install')
     case 'uninstall': return noteStaged('uninstall')
     case 'help': case '--help': case '-h': return usage()
-    default: console.error(`spex self: unknown subcommand "${args[0]}"`); usage(); return 2
+    default: console.error(`spex doctor: unknown subcommand "${args[0]}"`); usage(); return 2
   }
 }

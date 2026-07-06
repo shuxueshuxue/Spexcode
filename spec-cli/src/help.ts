@@ -21,7 +21,7 @@ recorded backend / fallback / :8787 (spex guide config → BACKEND ROUTING).`
 // level, so its help probe (`spex send --help`, `spex help send`) must land on the session entry, not dead-end.
 const SESSION_SUB_TOKENS = ['reopen', 'done', 'park', 'ask', 'exit', 'close', 'send', 'capture', 'attach', 'rename', 'rawkey', 'prompt']
 const ALIAS: Record<string, string> = {
-  'review-proof': 'review',
+  'review-proof': 'eval',
   help: 'help',
   ...Object.fromEntries(SESSION_SUB_TOKENS.map((t) => [t, 'session'])),
 }
@@ -221,14 +221,29 @@ ${SEL_NOTE}`,
   review: {
     line: 'review <SEL>          manager cockpit: ahead · merge-base diff · gates · proposal  [--json]',
     body: `Usage: spex review <SEL> [--json]
-       spex review proof <SEL> [--open | --out <path> | --json]
 
 The ONE review payload for a session: commits ahead of the trunk, uncommitted files, its proposal,
 the gates (conflicts with the trunk, lint), and the merge-base diff — decide from this, don't
-hand-run git. \`review proof\` renders the session's proof-of-work as self-contained HTML (diff ·
-measured yatsu loss · gates), fully derived from git + readings.
+hand-run git. The MEASURED side of the decision is \`spex eval <SEL>\`: the changed nodes' eval
+readings, and (--export) the self-contained HTML export.
 ${SEL_NOTE}`,
-    see: 'spex merge (act on an approved review)',
+    see: 'spex eval (the session’s measured loss) · spex merge (act on an approved review)',
+  },
+  eval: {
+    line: 'eval <SEL>            the session’s eval readings: its changed nodes’ measured loss  [--export]',
+    body: `Usage: spex eval <SEL> [--json]
+       spex eval <SEL> --export [--open | --out <path> | --json]
+
+The session's evaluation, read from the backend (the dashboard Eval tab's CLI twin): every spec node
+the session's diff touches, each DECLARED scenario at its CURRENT score (latest reading, rooted at
+the session's worktree). Blind spots lead (declared, never measured — the outstanding loss), then
+the session's OWN measurements ✦-marked, then the inherited baseline (other sessions' latest
+readings) under an explicit divider. A frontend change with no yatsu.md is flagged, never hidden.
+--export writes the evaluation as ONE self-contained HTML artifact instead (diff · evidence
+inlined · gates; --json = the model) for CI/sharing. (\`spex review proof\` is its deprecated alias.)
+This is the READ; filing a reading stays \`spex yatsu eval\`.
+${SEL_NOTE}`,
+    see: 'spex review (gates + diff — the merge decision) · spex yatsu eval (FILE a reading, the write verb)',
   },
   merge: {
     line: 'merge <SEL>           gated merge into the trunk — dispatched to the session’s own agent',
@@ -409,6 +424,7 @@ Dispatch & manage sessions (the manager loop)
   ${ENTRIES.watch.line}
   ${ENTRIES.wait.line}
   ${ENTRIES.review.line}
+  ${ENTRIES.eval.line}
   ${ENTRIES.merge.line}
   ${ENTRIES.session.line}
 

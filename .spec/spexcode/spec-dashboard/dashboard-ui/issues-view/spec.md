@@ -118,8 +118,13 @@ straight to the trunk.
   never a page-local fork): typing `@` lists the live sessions, `[[` lists the nodes (the thread's own
   node leading), a pick inserts the token, and Esc closes the menu without leaving the page. **New opens as a
   centered pop-out over the page, not as an inline row in the list column**: the left column stays a slim
-  picker, the modal carries the same two text surfaces (concern + optional body), its own close affordance,
-  and Esc/backdrop close only that layer. A grammar
+  picker, the modal carries the same two text surfaces (concern + optional body), a single compact store
+  picker (local plus the configured forge issue stores such as github/gitlab), its own close affordance, and
+  Esc/backdrop close only that layer. The picker selects where the new issue is opened: local writes the
+  git-native local store, while a forge choice creates the real forge issue through the same issue port and
+  writes a `Spec:` marker from any `[[node]]` links so the tracer links it back on read. The modal's
+  `@`/`[[` autocomplete opens above the body box, as an overlay, so it never becomes inserted into or clipped
+  by the pop-out; it is positioned outside the modal, above the pop-out itself. A grammar
   that dispatches workers earns discoverability — a bare hint line proved not enough (the human typed
   `@` and got nothing).
   The reply list and reply composer are ONE shared component (`Thread.jsx`), delivery-agnostic

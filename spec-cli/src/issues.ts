@@ -9,8 +9,9 @@
 // (createIssue/createComment/closeIssue — the driver stays the only network toucher; the tracer stays read-only).
 import type { ForgeIssue, ForgePR } from '../../spec-forge/src/port.js'
 import { resolveLinks } from '../../spec-forge/src/links.js'
-import { loadLocalIssues, loadOne, reply, resolve, issuesEnabled, replyLocalIssue, runIssueWrite, ISSUE_WRITE_SUBS } from './localIssues.js'
-import { dispatchMentions, type DispatchOutcome, type LoopIn } from './mentions.js'
+import { DEFAULT_FORGE_HOST, FORGE_DRIVERS, forgeDriverFor, forgeIssueStores } from '../../spec-forge/src/drivers.js'
+import { loadLocalIssues, loadOne, postLocalIssue, reply, resolve, issuesEnabled, replyLocalIssue, runIssueWrite, ISSUE_WRITE_SUBS } from './localIssues.js'
+import { dispatchMentions, parseMentions, type DispatchOutcome, type LoopIn } from './mentions.js'
 import { envSessionId } from './layout.js'
 import { loadSpecsLite } from './specs.js'
 
@@ -47,6 +48,26 @@ export type Issue = {
 
 export type ForgeState = { issues: ForgeIssue[]; prs: ForgePR[] }
 export type ForgeSlice = { host: string; state: ForgeState }
+export type IssueStore = { id: string; label: string; kind: 'local' | 'forge'; writable: true }
+
+export function issueStores(): IssueStore[] {
+  return [
+    { id: 'local', label: 'local', kind: 'local', writable: true },
+    ...forgeIssueStores().map((s) => ({ ...s, writable: true as const })),
+  ]
+}
+
+function inferNodes(concern: string, body: string | undefined, explicit: string[] = []): string[] {
+  return [...new Set([...explicit, ...parseMentions(`${concern}\n${body || ''}`).nodes])]
+}
+
+function forgeIssueBody(concern: string, body: string | undefined, nodes: string[], evidence: string[] = []): string {
+  return [
+    (body || `(no detail given — ${concern})`).trim(),
+    nodes.length ? `Spec: ${nodes.join(', ')}` : '',
+    evidence.length ? `Evidence: ${evidence.join(', ')} (yatsu blob hashes)` : '',
+  ].filter(Boolean).join('\n\n')
+}
 
 // ── the (node, scenario) ↔ eval-thread join ([[remark-teeth]]) ────────────────────────────────────────
 // A scenario's remark track lives ONCE in trunk, keyed by its `eval: <node> · <scenario>` concern thread
@@ -127,6 +148,34 @@ export function mergedIssues(forge: ForgeSlice | null, nodeIds: string[]): Issue
     .sort((a, b) => b.created.localeCompare(a.created))
 }
 
+export async function createIssue(
+  concern: string,
+  opts: { store?: string; nodes?: string[]; body?: string; evidence?: string[]; author?: string } = {},
+): Promise<{ store: string; id: string; url?: string; outcomes: DispatchOutcome[] }> {
+  const store = opts.store || 'local'
+  const author = opts.author || envSessionId() || 'unknown'
+  if (store === 'local') {
+    const { thread, outcomes } = await postLocalIssue(concern, {
+      nodes: opts.nodes,
+      body: opts.body,
+      evidence: opts.evidence,
+      author,
+    })
+    return { store: 'local', id: thread.id, outcomes }
+  }
+
+  const driver = forgeDriverFor(store)
+  if (!driver) throw new Error(`unknown issue store '${store}' (known: ${issueStores().map((s) => s.id).join(', ')})`)
+  const nodes = inferNodes(concern, opts.body, opts.nodes)
+  const { number, url } = await driver.createIssue({
+    title: concern,
+    body: forgeIssueBody(concern, opts.body, nodes, opts.evidence),
+  })
+  const id = `${driver.host}#${number}`
+  const outcomes = await dispatchMentions(opts.body || concern, { threadId: id, node: nodes[0] || null, author, status: 'open' })
+  return { store: driver.host, id, url, outcomes }
+}
+
 // @@@ promote - the ONE cross-store verb ([[issues]]): a local concern that outgrew the repo moves to the
 // forge as one recorded action. The forge issue is composed from the thread itself — concern → title;
 // body + the `Spec: <nodes>` marker (the round-trip: the existing tracer read links it straight back to
@@ -137,17 +186,18 @@ export function mergedIssues(forge: ForgeSlice | null, nodeIds: string[]): Issue
 export async function promote(id: string): Promise<{ url: string; number: number; host: string }> {
   const t = loadOne(id)
   if (t.status !== 'open') throw new Error(`'${id}' is ${t.status} — only an open local issue promotes`)
-  const { githubDriver } = await import('../../spec-forge/src/drivers/github.js')
+  const driver = forgeDriverFor(DEFAULT_FORGE_HOST)
+  if (!driver) throw new Error(`unknown default forge host '${DEFAULT_FORGE_HOST}'`)
   const body = [
     t.body,
     t.nodes.length ? `\nSpec: ${t.nodes.join(', ')}` : '',
     t.evidence.length ? `\nEvidence: ${t.evidence.join(', ')} (yatsu blob hashes)` : '',
     `\n---\nPromoted from the local issue \`${id}\` (opened by ${t.by} @ ${t.created}; promoted by ${envSessionId() || 'unknown'}).`,
   ].filter(Boolean).join('\n')
-  const { number, url } = await githubDriver.createIssue({ title: t.concern, body })
+  const { number, url } = await driver.createIssue({ title: t.concern, body })
   reply(id, `promoted to the forge: ${url}`)
   resolve(id, 'landed')
-  return { url, number, host: githubDriver.host }
+  return { url, number, host: driver.host }
 }
 
 // @@@ replyIssue - ONE reply verb, store-routed ([[issues]]): store is a property of the issue, so
@@ -171,9 +221,9 @@ export async function replyIssue(
     const { thread, outcomes, loopIn } = await replyLocalIssue(id, body, author, opts.evidence)
     return { store: 'local', replies: thread.replies, outcomes, loopIn }
   }
-  const { githubDriver } = await import('../../spec-forge/src/drivers/github.js')
-  if (forge[1] !== githubDriver.host) throw new Error(`unknown forge host '${forge[1]}' — this repo's driver is '${githubDriver.host}'`)
-  const { url } = await githubDriver.createComment({ number: parseInt(forge[2], 10), body })
+  const driver = forgeDriverFor(forge[1])
+  if (!driver) throw new Error(`unknown forge host '${forge[1]}' — known: ${FORGE_DRIVERS.map((d) => d.host).join(', ')}`)
+  const { url } = await driver.createComment({ number: parseInt(forge[2], 10), body })
   const outcomes = await dispatchMentions(body, { threadId: id, node: opts.node ?? null, author })
   // a forge issue's author is a github login, not a live session → no reachable originator to loop in (silent).
   return { store: forge[1], url, outcomes, loopIn: null }
@@ -184,10 +234,10 @@ export async function replyIssue(
 // `landed`; forge closes call the driver's close verb and let the forced read-back reveal the closed state.
 export async function closeIssue(id: string): Promise<{ store: string; status: string; url?: string }> {
   const forge = /^([A-Za-z0-9-]+)#(\d+)$/.exec(id)
-  if (!forge) return { store: 'local', status: resolve(id, 'landed') }
-  const { githubDriver } = await import('../../spec-forge/src/drivers/github.js')
-  if (forge[1] !== githubDriver.host) throw new Error(`unknown forge host '${forge[1]}' — this repo's driver is '${githubDriver.host}'`)
-  const { url } = await githubDriver.closeIssue({ number: parseInt(forge[2], 10) })
+  if (!forge) return { store: 'local', status: resolve(id, 'landed').as }
+  const driver = forgeDriverFor(forge[1])
+  if (!driver) throw new Error(`unknown forge host '${forge[1]}' — known: ${FORGE_DRIVERS.map((d) => d.host).join(', ')}`)
+  const { url } = await driver.closeIssue({ number: parseInt(forge[2], 10) })
   return { store: forge[1], status: 'closed', url }
 }
 
@@ -222,9 +272,10 @@ export async function runIssues(args: string[]): Promise<number> {
   const nodeIds = loadSpecsLite().map((s) => s.id)
   let forge: ForgeSlice | null = null
   try {
-    const { githubDriver } = await import('../../spec-forge/src/drivers/github.js')
-    const [issues, prs] = await Promise.all([githubDriver.listIssues(), githubDriver.listPRs()])
-    forge = { host: githubDriver.host, state: { issues, prs } }
+    const driver = forgeDriverFor(DEFAULT_FORGE_HOST)
+    if (!driver) throw new Error(`unknown default forge host '${DEFAULT_FORGE_HOST}'`)
+    const [issues, prs] = await Promise.all([driver.listIssues(), driver.listPRs()])
+    forge = { host: driver.host, state: { issues, prs } }
   } catch (e) {
     console.error(`spex issues: forge unreachable — listing local only (${e instanceof Error ? e.message.split('\n')[0] : e})`)
   }

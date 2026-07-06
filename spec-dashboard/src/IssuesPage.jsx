@@ -39,6 +39,7 @@ export default function IssuesPage({ onFocusNode, specs = [], sessions = [], iss
   // the store filter's options come from the DATA, not a hardcoded list — a new store (gitlab) appears
   // in the dropdown the day its driver lands. Default 'all' keeps the stores mixed in API order.
   const stores = [...new Set(all.map((i) => i.store).filter(Boolean))]
+  const writeStores = Array.isArray(data?.stores) && data.stores.length ? data.stores : [{ id: 'local', label: 'local', kind: 'local' }]
   const stored = storeFilter === 'all' ? all : all.filter((i) => i.store === storeFilter)
   const issues = showConcluded ? stored : stored.filter((i) => !concluded(i))
   const openCount = stored.filter((i) => i.status === 'open').length
@@ -130,7 +131,7 @@ export default function IssuesPage({ onFocusNode, specs = [], sessions = [], iss
       </div>
       {composing && (
         <Modal title={t('session.issuesNew')} closeLabel={t('common.close')} onClose={() => setComposing(false)} className="fv-new-modal">
-          <NewThreadForm specs={specs} sessions={sessions} onCancel={() => setComposing(false)} onDone={async (outcomes) => { setComposing(false); flash(outcomes); await load() }} />
+          <NewThreadForm specs={specs} sessions={sessions} stores={writeStores} onCancel={() => setComposing(false)} onDone={async (outcomes) => { setComposing(false); flash(outcomes); await load() }} />
         </Modal>
       )}
     </div>
@@ -213,30 +214,44 @@ function IssueDetail({ issue: th, specs, sessions, onFocusNode, onWrite }) {
   )
 }
 
-// the "New" affordance — a concern line and a body. Posts a fresh LOCAL issue as 'human' (a new thread
-// opens local; promotion is what moves one to the forge); an @-mention in the body dispatches, and a
-// `[[node]]` link in the text IS the node link — the store infers the thread's `nodes:` from them, so
-// there is no separate node-ids field to re-type. The body textarea carries the shared
-// `[[node]]`/`@session` autocomplete ([[mentions]]) — the form sits in a centered pop-out, so its menu
-// opens downward.
-function NewThreadForm({ specs, sessions, onCancel, onDone }) {
+const storeGlyph = (s) => s.id === 'local' ? 'L' : s.id === 'github' ? 'GH' : s.id === 'gitlab' ? 'GL' : (s.id || '?').slice(0, 2).toUpperCase()
+
+// the "New" affordance — a concern line, a body, and one compact store picker. Local posts to the
+// git-native local store; a configured forge store posts a REAL forge issue through the same issue port.
+// A `[[node]]` link in the text IS the node link — local infers `nodes:`, forge writes the `Spec:` marker
+// from the same prose. No separate node-ids field exists. The shared `[[node]]`/`@session` autocomplete
+// opens above the pop-out, not as inserted modal content.
+function NewThreadForm({ specs, sessions, stores, onCancel, onDone }) {
   const t = useT()
+  const [store, setStore] = useState(stores[0]?.id || 'local')
   const [concern, setConcern] = useState('')
   const [body, setBody] = useState('')
   const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
   const taRef = useRef(null)
-  const ac = useMentionAutocomplete({ inputRef: taRef, value: body, setValue: setBody, specs, sessions })
+  const ac = useMentionAutocomplete({ inputRef: taRef, value: body, setValue: setBody, specs, sessions, up: true, fixedAbove: '.fv-new-modal' })
+  useEffect(() => {
+    if (!stores.some((s) => s.id === store)) setStore(stores[0]?.id || 'local')
+  }, [stores, store])
   const submit = async () => {
     const c = concern.trim()
     if (!c || busy) return
     setBusy(true)
+    setErr('')
     try {
-      const res = await postIssueThread({ concern: c, body: body.trim() || undefined })
+      const res = await postIssueThread({ concern: c, body: body.trim() || undefined, store })
       if (res?.ok) { setConcern(''); setBody(''); await onDone?.(res.outcomes || '') }
+      else setErr(res?.error || t('session.issuesPostFailed'))
     } finally { setBusy(false) }
   }
   return (
     <div className="fv-new-form">
+      <label className="fv-store-pick">
+        <span>{t('session.issuesStoreLabel')}</span>
+        <select value={store} disabled={busy} onChange={(e) => setStore(e.target.value)}>
+          {stores.map((s) => <option key={s.id} value={s.id}>{storeGlyph(s)} · {s.label || s.id}</option>)}
+        </select>
+      </label>
       <input className="fv-input" value={concern} placeholder={t('session.issuesConcernPlaceholder')}
         disabled={busy} onChange={(e) => setConcern(e.target.value)} />
       <div className="fv-tawrap">
@@ -247,7 +262,7 @@ function NewThreadForm({ specs, sessions, onCancel, onDone }) {
         {ac.menuEl}
       </div>
       <div className="fv-actions">
-        <span className="fv-hint">{t('session.issuesMentionHint')}</span>
+        <span className={err ? 'fv-error' : 'fv-hint'}>{err || t('session.issuesMentionHint')}</span>
         <button type="button" className="fv-cancel" disabled={busy} onClick={onCancel}>{t('common.cancel')}</button>
         <button type="button" className="fv-send" disabled={busy || !concern.trim()} onClick={submit}>
           {busy ? t('session.issuesSending') : t('session.issuesPost')}

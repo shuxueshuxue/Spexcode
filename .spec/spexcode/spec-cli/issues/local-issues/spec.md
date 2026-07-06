@@ -2,7 +2,7 @@
 title: local-issues
 status: active
 hue: 200
-desc: The LOCAL store of the one Issue object ([[issues]]): git-native threads as plain documents under .spec/.issues (NOT spec nodes); others sign/reply; a supervisor drains it. Opening one is nudged post-merge, once the agent's own work has safely landed.
+desc: The LOCAL store of the one Issue object ([[issues]]): git-native threads as plain documents under .spec/.issues (NOT spec nodes); others sign/reply; a supervisor drains it. Opening one is nudged post-merge, once the agent's own work has safely landed; closing yours is nudged at propose-close.
 code:
   - spec-cli/src/localIssues.ts
   - spec-cli/templates/hooks/post-merge
@@ -114,6 +114,16 @@ it to `.spec/.issues` on its first store touch after a toolchain update — the 
   `merge node/<id>:` commit so an ordinary pull never nags; its nudge lands in the agent's own command
   output: read the issues, sign/reply if the concern is already raised, else open a new one. Git-native, so
   it reaches a self-launched agent too and costs no harness block-cap.
+- **Nudged again at close — the session's issue closeout.** The post-merge nudge fires when work lands; a
+  second, **data-driven** nudge fires when the session proposes **close** — appended to the
+  `done --propose close` declaration beside [[state]]'s resource-cleanup reminder, the same insertion point
+  and the same semantics. `closeoutNudge(sessionId)` lists the **still-open local threads that session
+  touched** (authored or replied — eval `eval: <node> · <scenario>` remark containers excluded, they outlive
+  every session by design), asking for each: resolve it now if its work is finished, or reply why it should
+  stay open past this session. Empty set, feature OFF, or no session identity → it prints **nothing**, so a
+  declaration never carries a vacuous reminder — the line is earned by data, never boilerplate. And it is a
+  **nudge, never a gate**: some issues rightly outlive their session (a taste concern awaiting the drain),
+  and a failure in the store check is reported loud while the declaration still lands.
 - **Surface — the write verbs live on the ONE issues command.** `spex issues open "<concern>" [--node <id>…]
   [--evidence <hash>…] [--body -|<text>]` opens a thread; `spex issues reply <id> --body -|<text>
   [--evidence <hash>…]` (the evidence a reply carries accrues onto the thread's `evidence[]`, deduped — an

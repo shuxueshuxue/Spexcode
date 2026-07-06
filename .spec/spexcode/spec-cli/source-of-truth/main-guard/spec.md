@@ -32,7 +32,7 @@ exception here was removed as a redundant special-case once the writer moved to 
 The guard's real question is "am I committing directly onto the trunk?", not "is this branch literally
 named `main`?". It resolves the trunk through the SAME single source of truth the rest of SpexCode
 uses — [[portable-layout]]'s `mainBranch()` (config override → the main checkout's current branch →
-`main`), surfaced to the shell as `spex trunk` — so a repo whose trunk is `master` or any non-`main`
+`main`), surfaced to the shell as `spex internal trunk` — so a repo whose trunk is `master` or any non-`main`
 base is protected, not silently exempt. A hardcoded `main` compare would disagree with the layout side
 and leave a `master`-default repo wide open. When the CLI isn't resolvable (advisory mode, no
 `@spexcode/spec-cli` installed) the hook falls back to a pure-git auto-detect of the main checkout's

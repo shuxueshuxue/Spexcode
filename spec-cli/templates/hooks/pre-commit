@@ -31,18 +31,18 @@ spex_cli() {
 # Reject a direct commit while HEAD is the trunk. Merges pass (MERGE_HEAD present).
 # Escape hatch for seeding / eager topology: SPEXCODE_ALLOW_MAIN=1 git commit …
 #
-# The trunk is resolved the SAME way the rest of SpexCode resolves it — `spex trunk` = layout.ts
+# The trunk is resolved the SAME way the rest of SpexCode resolves it — `spex internal trunk` = layout.ts
 # mainBranch() (config override → the main checkout's current branch → 'main') — so the guard protects
 # whatever the repo's trunk is actually named, NOT a hardcoded 'main' (which gave a `master`/non-`main`
 # trunk zero protection). When the CLI isn't resolvable (advisory mode), fall back to a pure-git
 # auto-detect of the main checkout's current branch, then 'main' — still protecting a non-`main` trunk.
 branch=$(git symbolic-ref --short HEAD 2>/dev/null || echo)
 git_dir=$(git rev-parse --git-dir 2>/dev/null)
-trunk=$(spex_cli trunk 2>/dev/null | head -1)
+trunk=$(spex_cli internal trunk 2>/dev/null | head -1)
 # Fallback auto-detect: the main checkout's current branch. Strip the hook's exported GIT_DIR/
 # GIT_INDEX_FILE first — otherwise they pin discovery to the COMMITTING worktree and `-C "$main_root"`
-# is ignored, so it would read THIS branch and think every node branch is the trunk. (`spex trunk`
-# above is immune: layout.ts mainBranch() resolves through git.ts's env-stripping git().)
+# is ignored, so it would read THIS branch and think every node branch is the trunk. (`spex internal
+# trunk` above is immune: layout.ts mainBranch() resolves through git.ts's env-stripping git().)
 [ -n "$trunk" ] || trunk=$(env -u GIT_DIR -u GIT_INDEX_FILE git -C "$main_root" symbolic-ref --short HEAD 2>/dev/null)
 [ -n "$trunk" ] || trunk=main
 if [ "$branch" = "$trunk" ] && [ ! -f "$git_dir/MERGE_HEAD" ] && [ -z "${SPEXCODE_ALLOW_MAIN:-}" ]; then

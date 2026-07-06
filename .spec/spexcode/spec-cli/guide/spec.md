@@ -35,15 +35,16 @@ the agent from one verb, picked by an optional topic:
   for a user who doesn't know the schema by editing the JSON directly. There is deliberately no imperative
   `spex config set` — the guide + a direct edit is the whole surface.
 
-A **`--help`/`-h` flag after any subcommand is also a request for this surface** — `spex <cmd> --help`
-prints the command summary and EXITS, without ever running `<cmd>`. This is a safety contract, not a
-convenience: the help flag used to be an ignored no-op that fell through to the verb's side effect, so
-probing a STREAMING verb (`spex watch --help` started a watch that never exits and blocked the caller) or a
-MUTATING one (`spex session new --help` created a stray session) detonated the very command the user was
-only asking about. A help probe must never fire a side effect — that footgun belongs at the mechanism, not
-buried in a worker's prompt. So the summary itself must read its own caveats honestly: a verb that blocks
-forever (`watch`) says so and points at the one-shot alternative, so the help an agent reaches for tells it
-how to use the verb safely.
+`guide` is the SKILL layer of the help journey ([[cli-surface]]): **help answers "what do I type",
+guide answers "how do I work".** Command usage — the map (`spex help`) and each command's own page
+(`spex help <cmd>` / `spex <cmd> --help`) — lives in `help.ts`; every guide page footers back to those
+layers and the help layers name the guide's topics, so neither surface dead-ends. The `--help`
+interception's safety contract is unchanged: it prints and EXITS **before** the verb runs — the flag
+used to be an ignored no-op that fell through to the verb's side effect, so probing a STREAMING verb
+(`spex watch --help` started a watch that never exits) or a MUTATING one (`spex session new --help`
+created a stray session) detonated the very command the user was only asking about. A help probe must
+never fire a side effect, and the help it prints must read its own caveats honestly: a verb that blocks
+forever (`watch`) says so and points at the one-shot alternative.
 
 The narration is static help text (the spirit of `printHelp` and `spex init`'s next-steps), now living in
 its own `guide.ts` module rather than the shared `cli.ts` hub — *not* a planted `.spec` template the way

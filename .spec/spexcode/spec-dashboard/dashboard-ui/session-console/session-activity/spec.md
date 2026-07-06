@@ -2,7 +2,7 @@
 title: session-activity
 status: active
 hue: 260
-desc: Each session row's headline IS the worker's own live one-line self-summary (its tmux pane title), overriding the launch-prompt placeholder; the status + op tally ride a quieter second line on the map-side face, or fold to a single inline status glyph on the console's compact terminal sidebar.
+desc: Each session row's headline IS the worker's own live one-line self-summary (its tmux pane title), overriding the launch-prompt placeholder; both desktop lists render the compact one-line face (status folded to an inline colour-coded glyph, the word on hover) — the map-side window keeps the avatar, the console sidebar drops it — and only mobile keeps the two-row face with the status word + op tally on a second line.
 code:
   - spec-cli/src/selfSummary.test.ts
 related:
@@ -92,16 +92,17 @@ this row is the **locked** selection a 🔒 sits at the end of Row 1, and the st
 (locking no longer hides it). This two-row face is now the **mobile** list's; both desktop lists fold the
 same status onto their single compact row as its glyph.
 
-**The console action strip reads the same headline.** The Enter interface's **slim action strip** over the
-terminal's top edge ([[session-console]]'s `si-th-name`) renders the SAME `sessionHeadline`, not the stable
-node name — so the agent's live self-summary that renarrates the rows renarrates it in lock-step, and the
-headline over the terminal never disagrees with the row that opened it. The data source and the content are one
-shared line across both surfaces; the **only** difference is room: the strip is a wide bar, so it gives the
-headline `flex:1` of that width and ellipsises far **later** than the compact rows — less truncation where
-there is space for more.
+**The console repeats no headline over the terminal.** The Enter interface names the session ONCE, in its
+left **sidebar** — the selected row, untruncated ([[session-console]]) — and the slim strip over the
+terminal's top edge carries only the tabs and the lifecycle actions. The strip used to render the shared
+`sessionHeadline` (`si-th-name`), but a bar that reads the sidebar's own line back at it, awkwardly
+anchored between tabs and actions, identified nothing the sidebar didn't already — so it was dropped, and
+"one name, every surface" is honoured by the sidebar row alone: the headline that renarrates the board row
+renarrates the console's row in lock-step, and no console surface ever *disagrees* with it, because none
+repeats it.
 
 **One name, every surface.** The `sessionHeadline` is a session's display name *everywhere a human reads
-which session this is* — rows, window, Enter tabs, console action strip, **the search palette, the
+which session this is* — rows, window, the console sidebar, **the search palette, the
 lock-hint banner, and the [[node-menu]] overlay list** (right-clicking a node lists its live sessions —
 the same live line the board rows show, never the stable label beside it) all show the identical line, so
 wherever a session is named it reads the same. (Pinning any of them to the stable handle bought nothing —
@@ -118,8 +119,7 @@ label by reflex ([[session-label]]).
 
 This node's slice of the shared `styles.css` is the status line (`.sess-meta`, the full-width dimmer wrap)
 and its compact-variant collapse (the `.si-item` one-line overrides that fold `.sess-meta` inline and drop
-the status word for the `.sess-glyph` mark), the Row-1 headline ellipsis, and the console action strip's
-headline room-to-expand (`.si-th-name`'s `flex:1` + ellipsis — the same headline, more width); classes other
+the status word for the `.sess-glyph` mark), and the Row-1 headline ellipsis; classes other
 surfaces add there — like the yatsu eval tab's `.eval-*` verdict/transcript rules from the measure-and-score
 reframe, or the console list's own compact-face overrides ([[session-console]]) — are those features' churn,
 not session-activity's drift.

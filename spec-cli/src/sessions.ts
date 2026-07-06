@@ -371,7 +371,7 @@ async function liveSnapshot(): Promise<LiveSnap> {
 async function paneTitles(): Promise<Map<string, string>> {
   const m = new Map<string, string>()
   let out = ''
-  try { out = await tmux(['list-panes', '-a', '-F', '#{session_name}\t#{pane_title}']) } catch { return m }
+  try { out = await tmux(['list-panes', '-a', '-F', '#{session_name}\t#{pane_title}'], TMUX_PROBE_TIMEOUT_MS) } catch { return m }
   for (const line of out.split('\n')) {
     const tab = line.indexOf('\t'); if (tab < 0) continue
     const id = line.slice(0, tab), title = line.slice(tab + 1)

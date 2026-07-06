@@ -51,6 +51,8 @@ export default {
   hud: {
     helpTitle: 'help — keymap & legend (?)',
     loading: 'loading specs from git…',
+    loadError: 'backend unreachable — the board failed to load.',
+    retry: 'retry',
   },
 
   evalsFeed: {
@@ -210,6 +212,10 @@ export default {
     paneIssues: 'issues',
     paneEval: 'eval',
     paneEdit: 'edit',
+    expandAll: ({ n }) => `expand all ${n}`,
+    filterIssues: 'filter issues…',
+    filterScenarios: 'filter scenarios…',
+    filterNone: 'nothing matches the filter.',
     noEdit: 'no pending change — this node has no live edit in flight.',
     editCommitted: 'committed',
     editDirty: 'uncommitted',

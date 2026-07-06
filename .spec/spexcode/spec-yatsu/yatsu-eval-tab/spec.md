@@ -48,7 +48,9 @@ The **eval tab** ([[spec-dashboard]]) is a fourth face on the node popup beside 
 same `panesFor` registry. It fetches its timeline (readings + declared detail) per node on open, cache keyed
 by the summary's newest reading so a fresh filing refetches; a failed fetch degrades to the board's
 summary. It is a **thin consumer of the chronological-timeline
-scaffold the history tab uses** (see [[work-pane]]): newest expanded, older reveal on the down gesture. Each
+scaffold the history tab uses** (see [[work-pane]]): newest expanded, older reveal on the down gesture, an
+expand-all door for find-in-page, and — on a long timeline — the shared sticky **scenario-name filter**
+(blind-spot rows and dangling tracks filter with the readings, so a filtered view stays one coherent set). Each
 row's header names its scenario, the **verdict badge** (✓ pass / ✗ fail, optional **note**
 beside; *legacy* for a pre-verdict or note-only reading), and the per-reading **score circle**
 ([[yatsu-score-badge]]), then its evaluator, codeSha, and time.

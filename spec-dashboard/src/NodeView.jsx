@@ -202,14 +202,17 @@ export function SpecPane({ node }) {
   )
 }
 
-// the node's version log from git (/api/specs/:id/history), newest first
-export function useHistory(id) {
+// the node's version log from git (/api/specs/:id/history), newest first. `enabled` gates the fetch to the
+// history tab actually showing (every popup open otherwise fires it for a tab most opens never visit); rows
+// persist across tab switches, so only the FIRST visit loads — returns stay instant, same as the other panes.
+export function useHistory(id, enabled = true) {
   const [rows, setRows] = useState(null)
   useEffect(() => {
+    if (!enabled) return
     let on = true
     fetch(specUrl(id, 'history')).then((r) => r.json()).then((d) => { if (on) setRows(d) }).catch(() => on && setRows([]))
     return () => { on = false }
-  }, [id])
+  }, [id, enabled])
   return rows
 }
 
@@ -262,9 +265,13 @@ function DiffEvidence({ diff }) {
   )
 }
 
-function ChronoPane({ items, itemKey, classes, rowClass, renderHeader, renderEvidence, leading, trailing }) {
+function ChronoPane({ items, itemKey, classes, rowClass, renderHeader, renderEvidence, leading, trailing, resetKey }) {
+  const t = useT()
   const scRef = useRef(null)
   const [open, setOpen] = useState(() => new Set([0]))   // latest expanded; the rest reveal on scroll
+  // a caller filtering its items passes the filter as resetKey: the open set is INDEX-keyed, so surviving
+  // rows shift under a stale set — re-anchoring on the latest keeps the open state meaningful.
+  useEffect(() => { if (resetKey !== undefined) setOpen(new Set([0])) }, [resetKey])
   const toggle = useCallback((i) => setOpen((prev) => {
     const next = new Set(prev)
     if (next.has(i)) next.delete(i); else next.add(i)
@@ -304,6 +311,13 @@ function ChronoPane({ items, itemKey, classes, rowClass, renderHeader, renderEvi
   }, [revealNext])
   return (
     <div className={classes.pane} ref={scRef}>
+      {/* expand-all COMPLEMENTS the one-at-a-time down-gesture reveal, never replaces it: collapsed rows
+          aren't mounted, so find-in-page / jump-to-an-old-version can't reach them without this door. */}
+      {items.length > 1 && open.size < items.length && (
+        <div className="chrono-tools">
+          <button className="chrono-all" onClick={() => setOpen(new Set(items.keys()))}>{t('nodeView.expandAll', { n: items.length })}</button>
+        </div>
+      )}
       {leading}
       {items.map((it, i) => {
         const isOpen = open.has(i)
@@ -376,14 +390,29 @@ function IssueRow({ i }) {
     ? <a className="issue-card" href={i.url} target="_blank" rel="noreferrer">{inner}</a>
     : <span className="issue-card">{inner}</span>
 }
+// a long pane earns a text filter ([[work-pane]]): substring over concern+id, sticky at the pane top.
+// Short lists (≤5 rows) skip it — the affordance would be chrome, not help.
+function PaneFilter({ q, setQ, placeholder }) {
+  return (
+    <div className="pane-filter">
+      <input className="pane-filter-input" value={q} placeholder={placeholder} onChange={(e) => setQ(e.target.value)} />
+    </div>
+  )
+}
+
 export function IssuesPane({ node }) {
   const t = useT()
+  const [q, setQ] = useState('')
   const issues = node.issues || []
   if (!issues.length) return <div className="pane-issues empty">{t('nodeView.noIssues')}</div>
-  const open = issues.filter((i) => i.status === 'open')
-  const closed = issues.filter((i) => i.status !== 'open')
+  const needle = q.trim().toLowerCase()
+  const shown = needle ? issues.filter((i) => `${i.id} ${i.concern || ''}`.toLowerCase().includes(needle)) : issues
+  const open = shown.filter((i) => i.status === 'open')
+  const closed = shown.filter((i) => i.status !== 'open')
   return (
     <div className="pane-issues">
+      {issues.length > 5 && <PaneFilter q={q} setQ={setQ} placeholder={t('nodeView.filterIssues')} />}
+      {needle && !shown.length && <div className="pane-filter-none">{t('nodeView.filterNone')}</div>}
       {open.length > 0 && (
         <>
           <div className="issue-group-head">{t('nodeView.openIssues', { n: open.length })}</div>
@@ -510,6 +539,7 @@ function DanglingTrack({ track }) {
 const evalCache = new Map()
 export function EvalPane({ node }) {
   const t = useT()
+  const [q, setQ] = useState('')
   const key = `${node.id}@${node.evals?.[0]?.ts || ''}:${node.evals?.length || 0}`
   const [timeline, setTimeline] = useState(() => evalCache.get(key) ?? null)
   useEffect(() => {
@@ -523,12 +553,22 @@ export function EvalPane({ node }) {
   }, [key, node.id])
   if (!node.evals) return <div className="pane-eval empty">{t('nodeView.eval.noScenarios')}</div>
   if (timeline === null) return <div className="pane-eval pane-loading"><span className="spinner" aria-label={t('common.loading')} /></div>
-  const readings = timeline.readings
-  const dangling = timeline.dangling || []
-  const unmeasured = scenarioStates(timeline.scenarios, readings).filter((s) => !s.reading)
-  if (!readings.length) return (
+  const all = timeline.readings
+  const needle = q.trim().toLowerCase()
+  const byScenario = (name) => !needle || (name || '').toLowerCase().includes(needle)
+  const readings = needle ? all.filter((r) => byScenario(r.scenario)) : all
+  const dangling = (timeline.dangling || []).filter((tr) => byScenario(tr.scenario))
+  const unmeasured = scenarioStates(timeline.scenarios, all).filter((s) => !s.reading && byScenario(s.name))
+  // the filter rides the timeline's own scroller as its sticky first row (the pane root IS the scroll box)
+  const filterEl = (timeline.readings.length + timeline.scenarios.length) > 5
+    ? <PaneFilter key="filter" q={q} setQ={setQ} placeholder={t('nodeView.filterScenarios')} />
+    : null
+  // branch on the UNFILTERED list so typing a no-match needle never flips the tree (a flip would remount
+  // the filter input and drop its focus mid-word) — a filtered-to-empty timeline stays a ChronoPane.
+  if (!all.length) return (
     <div className="pane-eval pane-eval-declared">
-      <div className="eval-todo-note">{t('nodeView.eval.noReadings')}</div>
+      {filterEl}
+      <div className="eval-todo-note">{needle && !unmeasured.length ? t('nodeView.filterNone') : t('nodeView.eval.noReadings')}</div>
       {unmeasured.map((s) => <DeclaredScenario key={s.name} s={s} />)}
       {dangling.map((tr) => <DanglingTrack key={tr.threadId} track={tr} />)}
     </div>
@@ -538,7 +578,14 @@ export function EvalPane({ node }) {
   return (
     <ChronoPane
       items={readings}
-      leading={unmeasured.map((s) => <DeclaredScenario key={s.name} s={s} />)}
+      resetKey={needle}
+      leading={[
+        filterEl,
+        needle && !readings.length && !unmeasured.length && !dangling.length
+          ? <div key="none" className="pane-filter-none">{t('nodeView.filterNone')}</div>
+          : null,
+        ...unmeasured.map((s) => <DeclaredScenario key={s.name} s={s} />),
+      ]}
       trailing={dangling.map((tr) => <DanglingTrack key={tr.threadId} track={tr} />)}
       itemKey={(r, i) => `${r.scenario}-${r.ts}-${i}`}
       classes={{ pane: 'pane-eval', row: 'eval-row', head: 'eval-head', evidence: 'eval-shot' }}
@@ -567,8 +614,6 @@ const PANE_LABEL = { spec: 'nodeView.paneSpec', history: 'nodeView.paneHistory',
 
 export default function NodeView({ node, pane, setPane, onClose }) {
   const t = useT()
-  // one fetch per node, feeding the single history pane (the popup's only data dependency).
-  const rows = useHistory(node.id)
   const issuesAll = node.issues || []
   const issueOpen = issuesAll.filter((i) => i.status === 'open').length
   const issueClosed = issuesAll.length - issueOpen
@@ -577,6 +622,9 @@ export default function NodeView({ node, pane, setPane, onClose }) {
   // render the pane the user picked, but fall back to the first available if it isn't valid for THIS node
   // (e.g. 'edit' is selected, then a node with no overlay opens) — so a tab is always shown, never blank.
   const active = panes.some((p) => p.key === pane) ? pane : panes[0].key
+  // the version log feeds only the history pane, so its fetch waits for that tab (lazy like eval/edit);
+  // once loaded the rows persist, so returning to the tab is instant — no reload flash.
+  const rows = useHistory(node.id, active === 'history')
   return (
     <div className="ov-backdrop" data-focus-overlay onMouseDown={onClose}>
       <div className="ov-panel" onMouseDown={(e) => e.stopPropagation()}>

@@ -1767,3 +1767,23 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* the threads store filter — a small select deriving its options from the stores actually present
    (all · local · github · a future gitlab appears by itself); default = all, mixed in API order. */
 .fv-store-filter { font-family: var(--mono); font-size: 10px; color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 1px 4px; cursor: pointer; }
+
+/* boot fail-loud ([[dashboard-shell]]): the pre-first-board window shows an error + retry instead of an
+   eternal spinner when the backend is unreachable; once a board has landed this surface never returns. */
+.loading { display: flex; align-items: center; justify-content: center; gap: 10px; height: 100%; flex: 1; color: var(--muted); font-family: var(--mono); font-size: 13px; }
+.loading.load-error { color: var(--red); }
+.load-retry { font-family: var(--mono); font-size: 12px; color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 3px 10px; cursor: pointer; }
+.load-retry:hover { border-color: var(--muted); }
+
+/* chrono timeline tools ([[work-pane]]): expand-all complements the down-gesture reveal — collapsed rows
+   aren't mounted, so find-in-page / jump-to-an-old-version needs this door. */
+.chrono-tools { display: flex; justify-content: flex-end; margin: 0 0 6px; }
+.chrono-all { font-family: var(--mono); font-size: 10px; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 4px; padding: 2px 8px; cursor: pointer; }
+.chrono-all:hover { color: var(--ink2); border-color: var(--muted); }
+
+/* the long-pane text filter ([[work-pane]]): sticky at the scroller's top, palette-toned like the search bar. */
+.pane-filter { position: sticky; top: -16px; z-index: 2; margin: -8px 0 8px; padding: 6px 0; background: var(--panel); }
+.pane-filter-input { width: 100%; box-sizing: border-box; background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; outline: none; color: var(--ink2); font-family: var(--mono); font-size: 11px; padding: 4px 8px; }
+.pane-filter-input:focus { border-color: var(--muted); }
+.pane-filter-input::placeholder { color: var(--muted); }
+.pane-filter-none { color: var(--muted); font-family: var(--mono); font-size: 11px; padding: 6px 2px; }

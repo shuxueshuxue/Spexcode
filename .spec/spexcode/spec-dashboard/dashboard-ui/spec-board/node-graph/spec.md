@@ -6,6 +6,7 @@ hue: 280
 desc: A drill-down tidy-tree — only the focused node's spine expands, so the root layer stays a short readable column. Each node shows its identity and its people.
 code:
   - spec-dashboard/src/SpecNode.jsx
+  - spec-dashboard/src/specMeta.js
   - spec-dashboard/src/avatar.jsx
   - spec-dashboard/src/color.js
   - spec-dashboard/src/Legend.jsx

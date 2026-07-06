@@ -5,6 +5,7 @@ hue: 200
 desc: The desktop dashboard's root shell + shared substrate — the App.jsx root/router, the data.js polled-board layer, and the global styles.css — that every dashboard feature renders within.
 code:
   - spec-dashboard/src/App.jsx
+  - spec-dashboard/src/Dashboard.jsx
   - spec-dashboard/src/data.js
   - spec-dashboard/src/styles.css
   - spec-dashboard/src/theme.js
@@ -20,10 +21,16 @@ foundation node; features REFERENCE what they touch via `related:` instead of co
 
 ## expanded spec
 
-dashboard-shell owns the three cross-cutting dashboard files: `App.jsx` (the desktop root — it mounts the
-[[side-nav]] rail and swaps the routed page into the main area beside it, keeping the warm pages — the
-graph, the session board — mounted across switches), `data.js` (the shared polled board data every view
-reads), and `styles.css` (the global stylesheet). A feature node lists whichever of these it touches under
+dashboard-shell owns the cross-cutting dashboard files: `App.jsx` (the entry — it boots the one shared data
+layer, owns the fail-loud boot below, and picks the face by viewport width), `Dashboard.jsx` (the desktop
+root — it mounts the [[side-nav]] rail and swaps the routed page into the main area beside it, keeping the
+warm pages — the graph, the session board — mounted across switches), `data.js` (the shared polled board
+data every view reads), and `styles.css` (the global stylesheet). **Each face is its own lazy chunk**, and
+the desktop root lazy-loads its heavy leaves (the session console with xterm, the evals/issues pages with
+the annotator) the same way — so the phone face ([[mobile-ui]]) never downloads the graph or terminal
+libraries, and the first graph paint doesn't wait on them either; the split moves bytes only, never
+behaviour. The board **focus survives a reload or a mobile↔desktop breakpoint remount within its tab**
+(session-scoped, so a fresh tab still opens on the root). A feature node lists whichever of these it touches under
 `related:`, so editing the shell or the stylesheet attributes its drift/yatsu here rather than to every
 feature (see [[governed-related]]). This is the dashboard twin of [[sessions-core]]: one owner for the
 substrate, references everywhere else.
@@ -49,6 +56,10 @@ spexcode.theme`) else the system preference (`prefers-color-scheme`), and `apply
 language pick. To avoid a light-flash before the module boots, `index.html` runs a tiny inline script
 in `<head>` that applies the same choice to `<html data-theme>` before first paint. The [[settings]]
 page carries the live toggle.
+
+**Fail-loud boot.** A board that never arrives (backend down, proxy dead) shows an **error + retry panel**,
+never an eternal spinner — the pre-first-board window is the only reader; once a board has landed, a failed
+refetch keeps the last good board and the stream/poll below keep retrying on their own.
 
 **Push-first board — freshest-issued wins.** The shell keeps the board fresh through three paths. The
 primary is the **delta subscription** ([[board-stream]]/[[board-delta]]): whole boards arrive over the push

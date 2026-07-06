@@ -13,6 +13,18 @@ scenarios:
       reads #/graph / #/sessions/… as they switch; the console shows no errors. Zero loss = the shell,
       its polled data layer, and the global styles all load and render.
     code: [spec-dashboard/src/App.jsx, spec-dashboard/src/data.js, spec-dashboard/src/styles.css]
+  - name: board-unreachable-shows-retry
+    tags: [frontend-e2e, desktop]
+    description: >
+      Open the dashboard with its /api proxy pointed at a DEAD backend port (no spex serve). Wait past
+      the first board fetch. The page must show the fail-loud boot panel — an error message plus a retry
+      button — instead of sitting on the "loading…" spinner forever. Then bring a backend up on that
+      port (or repoint) and click retry: the board loads.
+    expected: >
+      With no reachable backend the shell renders the load-error panel (error text + a retry button),
+      never an eternal spinner; a retry once the backend is reachable lands the board. Zero loss = a
+      dead backend is legible at a glance and recoverable without a manual page reload.
+    code: [spec-dashboard/src/App.jsx]
 ---
 # dashboard-shell — measurement
 

@@ -133,6 +133,10 @@ The verdict is \`--pass\` or \`--fail\` (a measurement must commit to one — an
 not a hedged fail). \`--note <text>\` is an OPTIONAL one-line annotation on either (why it failed, how far a
 pass sits from ideal); it does NOT replace evidence — the image/transcript is the captured actual behaviour.
 Frontend → \`--image <png>\` (visual evidence); backend → \`--result <txt>\` (a transcript; \`-\` reads stdin).
+ANCHOR DISCIPLINE: a reading's \`codeSha\` is HEAD at filing time, and a git sha names only a COMMIT — an
+uncommitted change has none. So measure the tree you are about to commit, COMMIT it, then file; confidence
+is earned on the working tree, but the anchor can only land after the commit. Filing from a dirty tree
+mis-anchors the reading (its sha lacks the change it measured) and it goes stale the moment you commit.
 
 A botched filing (a junk e2e/smoke run, a wrong verdict) is undone through the SAME surface:
   spex yatsu retract <node> [--scenario <name>] [--last | --ts <iso>] [--note <why>]

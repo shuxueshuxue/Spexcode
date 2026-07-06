@@ -4,6 +4,7 @@ import { evidenceList } from './EvalsFeed.jsx'
 import { EvidenceItem, FullscreenButton } from './Evidence.jsx'
 import { Replies, ReplyComposer, OriginatorLiveness, mmss, anchorLine, parseAnchor, resolveAnchor } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
+import { Icon, IconButton } from './icons.jsx'
 
 // EventDetail ([[event-detail]], U1): the ONE evidence+reply detail pane, store-agnostic, reused in every
 // home — the Evals page AND the session eval tab. It renders a selected READING (an "event") as a
@@ -367,8 +368,8 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite,
             reading to flip between; a fresh scenario is just its single reading. */}
         {history && history.length > 1 && (
           <div className="an-ab">
-            <button type="button" className="an-ab-nav" disabled={histIdx >= history.length - 1}
-              onClick={() => setHistIdx((i) => Math.min(history.length - 1, i + 1))} data-tip={t('annotator.abOlder')}>‹</button>
+            <IconButton icon="chevron-left" size={13} className="an-ab-nav" disabled={histIdx >= history.length - 1}
+              onClick={() => setHistIdx((i) => Math.min(history.length - 1, i + 1))} label={t('annotator.abOlder')} />
             <div className="an-ab-track">
               {history.slice().reverse().map((r, p) => {
                 const idx = history.length - 1 - p
@@ -382,8 +383,8 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite,
                 )
               })}
             </div>
-            <button type="button" className="an-ab-nav" disabled={histIdx <= 0}
-              onClick={() => setHistIdx((i) => Math.max(0, i - 1))} data-tip={t('annotator.abNewer')}>›</button>
+            <IconButton icon="chevron-right" size={13} className="an-ab-nav" disabled={histIdx <= 0}
+              onClick={() => setHistIdx((i) => Math.max(0, i - 1))} label={t('annotator.abNewer')} />
             <span className="an-ab-pos">{histIdx === 0 ? t('annotator.abLatest') : t('annotator.abPos', { i: history.length - histIdx, n: history.length })}</span>
           </div>
         )}
@@ -415,12 +416,12 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite,
               <div className={`an-stage ${playing ? 'playing' : 'paused'}`} ref={box} onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp}>
                 <video className="an-video" ref={vid} src={`/api/yatsu/blob/${videoEntry.hash}`} preload="metadata" playsInline />
                 {liveRect && <div className="an-rect live" style={{ left: `${liveRect.x}%`, top: `${liveRect.y}%`, width: `${liveRect.w}%`, height: `${liveRect.h}%` }} />}
-                {!playing && !drag && <div className="an-bigplay" aria-hidden>▶</div>}
+                {!playing && !drag && <div className="an-bigplay" aria-hidden><Icon name="play" size={22} /></div>}
               </div>
 
               {/* the custom control bar — play/pause · review-track scrubber (comment markers + step bands) · time · live step · fullscreen */}
               <div className="an-bar">
-                <button className="an-play" onClick={togglePlay} data-tip={playing ? t('annotator.pause') : t('annotator.play')}>{playing ? '⏸' : '▶'}</button>
+                <IconButton icon={playing ? 'pause' : 'play'} size={14} className="an-play" label={playing ? t('annotator.pause') : t('annotator.play')} onClick={togglePlay} />
                 <div className="an-seek" ref={seekRef} onMouseDown={onSeekDown} onMouseMove={onSeekHover} onMouseLeave={() => setHoverPct(null)}>
                   <div className="an-seek-trk" />
                   {durMs > 0 && events.map((e, i) => <div key={`band-${i}`} className="an-band" style={{ left: `${(e.tMs / durMs) * 100}%` }} data-tip={e.step} />)}

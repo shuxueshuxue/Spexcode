@@ -4,14 +4,11 @@ import { labelColor } from './color.js'
 import { GLYPH } from './specMeta.js'
 import { sessionHandle, sessionHeadline, STATUS_COLOR, STATUS_GLYPH, sessionForest } from './session.js'
 import { useT } from './i18n/index.jsx'
+import { Icon } from './icons.jsx'
 
-// the "locked / claimed by another session" indicator — a monochrome inline-SVG padlock in the dashboard's
-// own glyph vocabulary (currentColor, no color emoji). Shared by the session row and App's lock-hint banner.
-export const LockGlyph = ({ size = 12 }) => (
-  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <rect x="3.5" y="7" width="9" height="6.5" rx="1.2" /><path d="M5.5 7 V5 a2.5 2.5 0 0 1 5 0 V7" />
-  </svg>
-)
+// the "locked / claimed by another session" indicator — the shared `lock` glyph ([[icon-system]]),
+// monochrome currentColor, no color emoji. Shared by the session row and App's lock-hint banner.
+export const LockGlyph = ({ size = 12 }) => <Icon name="lock" size={size} />
 
 export function opSummary(ops) {
   if (!ops.length) return null

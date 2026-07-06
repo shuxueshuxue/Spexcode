@@ -1,5 +1,7 @@
 // CSS classes are named `legend-*` for history (the legend was the first such modal); shared verbatim by every popup.
 // Backdrop click closes; the inner panel stops propagation so a click inside doesn't.
+import { IconButton } from './icons.jsx'
+
 export default function Modal({ title, closeLabel, onClose, className, children }) {
   return (
     <div className="legend-backdrop" data-focus-overlay onClick={onClose}>
@@ -12,7 +14,7 @@ export default function Modal({ title, closeLabel, onClose, className, children 
       >
         <div className="legend-head">
           <span className="legend-title">{title}</span>
-          <button className="legend-close" onClick={onClose} data-tip={closeLabel} aria-label={closeLabel}>×</button>
+          <IconButton icon="x" size={13} className="legend-close" label={closeLabel} onClick={onClose} />
         </div>
         <div className="legend-body">{children}</div>
       </div>

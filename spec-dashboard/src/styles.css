@@ -774,7 +774,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .legend-title { color: var(--muted); font-size: 11px; letter-spacing: .5px; }
 .legend-close {
   background: none; border: none; color: var(--muted); cursor: pointer;
-  font-family: var(--mono); font-size: 15px; line-height: 1; padding: 0 2px;
+  display: inline-flex; align-items: center; line-height: 1; padding: 2px;
 }
 .legend-close:hover { color: var(--orange); }
 .legend-body { padding: 4px 10px 10px; }
@@ -1158,7 +1158,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .fv-frames { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
 .fv-frames .an-image, .fv-frames .eval-video { height: 48px; width: auto; max-width: none; }
 /* ⏱ — stamp the current frame's anchor onto the comment (only over a clip). */
-.fv-anchor-btn { font-family: var(--mono); font-size: 10.5px; color: var(--orange); background: var(--panel2);
+.fv-anchor-btn { display: inline-flex; align-items: center; gap: 4px; font-family: var(--mono); font-size: 10.5px; color: var(--orange); background: var(--panel2);
   border: 1px solid color-mix(in srgb, var(--orange) 35%, var(--line)); border-radius: 4px; padding: 3px 10px; cursor: pointer; }
 .fv-anchor-btn:hover { background: var(--orange); color: var(--paper); }
 
@@ -1166,7 +1166,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* New shares the chip HEIGHT + radius so the filter row is one even control cluster, but wears a faint accent
    fill so it reads as the row's primary action rather than another toggle. */
 .fv-new-btn {
-  font-family: var(--mono); font-size: 11px; line-height: 1.35; color: var(--blue);
+  display: inline-flex; align-items: center; justify-content: center; color: var(--blue);
   background: color-mix(in srgb, var(--blue) 10%, var(--panel2));
   border: 1px solid color-mix(in srgb, var(--blue) 32%, var(--line)); padding: 3px 12px; border-radius: 6px; cursor: pointer;
   transition: color .12s, background .12s, border-color .12s;
@@ -1715,7 +1715,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 
 /* the custom control bar — replaces native chrome so the scrubber can carry the review track. */
 .an-bar { display: flex; align-items: center; gap: 10px; padding: 6px 8px; background: var(--panel2); border: 1px solid var(--line); border-top: none; border-radius: 0 0 6px 6px; }
-.an-play { flex: 0 0 auto; font: inherit; font-size: 13px; width: 30px; height: 26px; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 5px; cursor: pointer; }
+.an-play { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 26px; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 5px; cursor: pointer; }
 .an-play:hover { border-color: var(--blue); }
 /* the fullscreen control ([[event-detail]]) — the only door to fullscreen once native chrome is suppressed. */
 .an-fs { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 26px; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 5px; cursor: pointer; }
@@ -1763,7 +1763,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
    oldest→newest left-to-right, with ‹ › to walk it. The ✗→✓ progression IS the A/B — it rides the slim
    header band, right-aligned. ---- */
 .an-ab { display: flex; align-items: center; gap: 8px; margin-left: auto; }
-.an-ab-nav { font: inherit; font-size: 13px; line-height: 1; color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 1px 7px; cursor: pointer; }
+.an-ab-nav { display: inline-flex; align-items: center; justify-content: center; line-height: 1; color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 2px 6px; cursor: pointer; }
 .an-ab-nav:disabled { opacity: .35; cursor: default; }
 .an-ab-track { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; }
 .an-ab-pip { font: inherit; font-size: 11px; font-weight: 700; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; cursor: pointer; color: var(--muted); }
@@ -1779,8 +1779,8 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .se-gate { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--line); border-radius: 3px; padding: 1px 7px; color: var(--muted); }
 .se-gate.ok { color: var(--green); border-color: color-mix(in srgb, var(--green) 40%, var(--line)); }
 .se-gate.bad { color: var(--red); border-color: color-mix(in srgb, var(--red) 40%, var(--line)); }
-.se-export { margin-left: auto; font-family: var(--mono); font-size: 10.5px; color: var(--blue); text-decoration: none; }
-.se-export:hover { text-decoration: underline; }
+.se-export { margin-left: auto; display: inline-flex; align-items: center; color: var(--blue); text-decoration: none; }
+.se-export:hover { color: color-mix(in srgb, var(--blue) 72%, var(--ink)); }
 /* the master-detail below the gates is the SHARED shell (.fv-master, [[evals-view]]) — no session-only clone. */
 .se-blind .ef-scenario { color: var(--muted); }
 .se-warn { font-family: var(--mono); font-size: 10px; color: var(--orange); }

@@ -7,6 +7,7 @@ import { useT } from './i18n/index.jsx'
 import FoldToggle from './FoldToggle.jsx'
 import FilterSelect from './FilterSelect.jsx'
 import Modal from './Modal.jsx'
+import { IconButton } from './icons.jsx'
 import { useEscLayer } from './escStack.js'
 
 // The Issues page ([[issues-view]]): a top-level page (#/issues, [[side-nav]]), peer of the graph, the
@@ -115,9 +116,7 @@ export default function IssuesPage({ onFocusNode, onOpenSession, specs = [], ses
               </span>
             )}
             <span className="fv-head-row">
-              <button type="button" className="fv-new-btn" onClick={() => setComposing(true)}>
-                {t('session.issuesNew')}
-              </button>
+              <IconButton icon="plus" size={12} className="fv-new-btn" label={t('session.issuesNew')} onClick={() => setComposing(true)} />
               <span className="fv-group-meta">{t('session.issuesThreadsSummary', { open: openCount, total: stored.length })}</span>
             </span>
           </header>

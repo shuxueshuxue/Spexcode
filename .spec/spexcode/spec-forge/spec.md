@@ -20,7 +20,7 @@ PRs; per-host drivers sit behind it (`github` via `gh` today; gitlab/bitbucket l
 exposes it on the real CLI as `spex forge links`. Downstream, this read also feeds the **unified Issue
 port** (spec-cli's [[issues]]), where a forge issue and a local issue thread are the same object behind
 per-issue storage; that Issue port is also the only caller allowed to use [[port]]'s narrow write verbs
-(promotion, reply, close). The tracer path here stays read-only.
+(direct forge create, promotion, reply, close). The tracer path here stays read-only.
 
 **How a forge object names its node — three sources, no datastore of our own:**
 

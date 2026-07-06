@@ -59,8 +59,12 @@ network. The board fold attaches each node's merged issues (`issues` / open subs
 per-node surface — tile badge, focus panel, node-info Issues tab, the [[issues-view]] page — reads the
 same mixed set with no second path.
 
-**Writes stay where they're owned — and the reply/close verbs route by store.** Opening, signing, and resolving
-(`spex issues open` / `sign` / `resolve`, and the dashboard's New) stay local-store writes. **Replying is ONE
+**Writes stay where they're owned — and store-routed verbs stay one port.** `spex issues open`, signing, and resolving
+stay local-store writes. The dashboard's New form is the human creation surface over the unified issue port:
+it defaults to local, but a compact store picker can choose any configured writable forge store, and a forge
+choice creates the real forge issue through that store's driver. The created forge issue body carries the same
+`Spec: <nodes>` marker used by promotion, derived from the author's `[[node]]` prose links, so the tracer links
+it back on the next read; no dashboard-only node field appears. **Replying is ONE
 verb over both stores** (`replyIssue` — `spex issues reply <id>` and `POST /api/issues/:id/reply` are the
 same routing): a local id goes through the local issue store's committed write, a forge id (`<host>#<n>`) posts a
 **real comment** through the driver's `createComment` — the [[port]]'s second write verb, the same seam
@@ -76,7 +80,7 @@ thread's author, or an eval-comment thread's reading-filer, and a forge issue's 
 to nobody, so a forge reply loops in no one. Freshness after a forge write
 stays caller-owned: the server forces its resident slice's read-back before answering (the comment shown
 is the read-back, never a local echo); the CLI's next read is a live pull anyway.
-The one cross-store verb is **promotion** —
+The explicit local→forge migration verb is **promotion** —
 `spex issues promote <id>`: a local concern that outgrows the repo (needs CI or external visibility) moves
 to the forge as one recorded action instead of a lossy hand-copy. It composes the forge issue from the
 thread itself — concern → title; body + the `Spec: <nodes>` marker + the evidence hashes + a provenance

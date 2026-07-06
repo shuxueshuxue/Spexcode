@@ -1143,7 +1143,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   border: 1px solid color-mix(in srgb, var(--blue) 30%, var(--line)); padding: 4px 12px; border-radius: 4px; cursor: pointer;
 }
 .fv-new-btn:hover { background: var(--blue); color: var(--paper); border-color: var(--blue); }
-.fv-new-modal { width: min(520px, 92vw); }
+.fv-new-modal { width: min(520px, 92vw); overflow: visible; }
 .fv-new-modal .legend-body { padding: 0; }
 .fv-hint { font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
 /* a brief @-dispatch summary echoed after a write. */
@@ -1156,6 +1156,14 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .fv-compose { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line); }
 .fv-compose .fv-textarea { resize: none; max-height: 38vh; }
 .fv-new-form { display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--panel2); }
+.fv-store-pick {
+  display: flex; align-items: center; gap: 8px; align-self: flex-start;
+  font-family: var(--mono); font-size: 10.5px; color: var(--muted);
+}
+.fv-store-pick select {
+  font-family: var(--mono); font-size: 11px; color: var(--ink2); background: var(--paper);
+  border: 1px solid var(--line); border-radius: 4px; padding: 3px 7px;
+}
 .fv-input, .fv-textarea {
   width: 100%; box-sizing: border-box; font-family: var(--mono); font-size: 12px; color: var(--ink);
   background: var(--paper); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; resize: vertical;
@@ -1201,6 +1209,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 }
 /* the session ❯ inbox is docked at the bottom of the panel, so its slash menu opens UPWARD instead. */
 .mention-menu.up { top: auto; bottom: calc(100% + 4px); }
+.mention-menu.fixed { position: fixed; top: auto; z-index: 70; }
 .mention-head {
   padding: 3px 8px 5px; font-size: 10.5px; color: var(--muted); letter-spacing: .02em;
   border-bottom: 1px solid var(--line); margin-bottom: 3px; white-space: nowrap;

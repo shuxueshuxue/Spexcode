@@ -436,7 +436,11 @@ const port = Number(process.env.PORT || 8787)
 // so they MUST ride `serverOptions` (setting them post-`serve()` leaves the sweep on its 30s default and the
 // change under-effective); a 10s sweep makes reaping land within timeout+10s, well under the multi-minute
 // defaults (requestTimeout 300s) that let the conns accumulate. headersTimeout > keepAliveTimeout (Node's rule).
-const server = serve({ fetch: app.fetch, port, serverOptions: {
+// @@@ loopback bind ([[public-mode]]) - this child is NEVER the internet face: the supervisor (and in public
+// mode the gateway) fronts it, and dials it only via 127.0.0.1. Binding loopback is what makes "loopback is
+// the trust boundary" true — without a hostname Node binds all interfaces and the child is reachable from
+// the LAN with no password, bypassing the gate entirely (measured: yatsu auth-boundary).
+const server = serve({ fetch: app.fetch, port, hostname: '127.0.0.1', serverOptions: {
   keepAliveTimeout: 10000, headersTimeout: 20000, requestTimeout: 60000, connectionsCheckingInterval: 10000,
 } })
 injectWebSocket(server)

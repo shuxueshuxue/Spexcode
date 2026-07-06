@@ -175,11 +175,20 @@ export default {
     emptyBefore: '没有活动的工作树——按 ',
     emptyAfter: ' 开始一个',
     rename: '重命名',
+    select: '多选…',
     close: '关闭',
     closeTitle: '关闭“{name}”？',
     closeConfirm: '这将关闭会话并删除其工作树。任何未提交的更改都会丢失。',
     renameTitle: '重命名“{name}”',
     renamePlaceholder: '显示名称（留空以重置）',
+  },
+
+  // 多选栏 + 批量删除确认（[[session-multi-select]]）。
+  sessionSelect: {
+    selected: ({ n }) => `已选 ${n} 个`,
+    delete: '删除',
+    deleteTitle: ({ n }) => `删除 ${n} 个会话？`,
+    deleteConfirm: '这将关闭每个选中的会话并删除其工作树。任何未提交的更改都会丢失。',
   },
 
   lockHint: {

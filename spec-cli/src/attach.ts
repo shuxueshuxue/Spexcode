@@ -12,17 +12,19 @@ import { alive, apiBase, TMUX_SOCK } from './sessions.js'
 const AGENT_ALTERNATIVES = 'read the pane with `spex session capture`, drive it with `session send` / `session rawkey`'
 
 // attach only makes sense on the machine that runs the tmux server — the backend's. The board the selector
-// resolved against IS that backend, so the test is: does SPEXCODE_API_URL point at this machine? Loopback and
-// any address this host owns count as local; anything else (a tailnet/LAN IP of another box, a hostname we
-// can't claim) fails loud with the reason and the remote-capable alternatives, never a silent local fallback
-// onto a tmux socket that holds no sessions.
-export function assertLocalBackend(): void {
+// resolved against IS that backend, so the test is: does the RESOLVED backend (see [[remote-client]]'s
+// ladder — flag / worker env / cwd record / fallback) point at this machine? Loopback and any address this
+// host owns count as local; anything else (a tailnet/LAN IP of another box, a hostname we can't claim)
+// fails loud with the reason and the remote-capable alternatives, never a silent local fallback onto a
+// tmux socket that holds no sessions.
+export async function assertLocalBackend(): Promise<void> {
+  const base = await apiBase()
   let host: string
-  try { host = new URL(apiBase()).hostname } catch { host = '' }
+  try { host = new URL(base).hostname } catch { host = '' }
   const mine = new Set(['localhost', '127.0.0.1', '::1', '[::1]'])
   for (const addrs of Object.values(networkInterfaces())) for (const a of addrs ?? []) mine.add(a.address)
   if (mine.has(host)) return
-  console.error(`spex session attach: attach is LOCAL-only, and SPEXCODE_API_URL points at another machine (${apiBase()}).
+  console.error(`spex session attach: attach is LOCAL-only, and the resolved backend is another machine (${base}).
 The tmux session lives on THAT machine — a terminal can't be attached over HTTP. Either run attach there
 (e.g. over ssh), or ${AGENT_ALTERNATIVES} — those work remotely.`)
   process.exit(2)

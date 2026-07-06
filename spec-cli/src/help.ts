@@ -12,6 +12,10 @@ type Entry = { line: string; body: string; see?: string }
 const SEL_NOTE = `SEL = session id (or unique id-prefix) | node id | branch — every session read/control verb
 accepts any of the three; none (or @all) means every session.`
 
+const ROUTING_NOTE = `Backend routing: every session verb accepts --api <url> (--port <n> = localhost sugar) to name its
+backend explicitly — the flag always wins. Bare, it resolves: worker env / the cwd project's live
+recorded backend / fallback / :8787 (spex guide config → BACKEND ROUTING).`
+
 // aliases resolve to a canonical entry so `spex help session` and `spex session new --help` meet the same text.
 const ALIAS: Record<string, string> = { 'review-proof': 'review', help: 'help' }
 
@@ -170,11 +174,13 @@ Then MONITOR it: background \`spex wait <id>\`, or \`spex watch\` for the whole 
     see: 'spex wait / spex watch (monitor) · spex review (when it proposes) · ' + SEL_NOTE.split('\n')[0],
   },
   ls: {
-    line: 'ls [SEL…]             living-sessions table  [--status a,b] [--json]',
-    body: `Usage: spex ls [SEL…] [--status a,b] [--json]
+    line: 'ls [SEL…]             living-sessions table  [--status a,b] [--json] [--api URL]',
+    body: `Usage: spex ls [SEL…] [--status a,b] [--json] [--api <url> | --port <n>]
 
-One-shot table of living sessions and their states, from whatever backend SPEXCODE_API_URL points
-at (including a remote machine's). ${SEL_NOTE}`,
+One-shot table of living sessions and their states, from the resolved backend — bare \`spex ls\` in a
+project's tree hits THAT project's live backend; --api <url> (or --port <n>) points it anywhere,
+including a remote machine's. ${SEL_NOTE}
+${ROUTING_NOTE}`,
     see: 'spex watch (the live stream) · spex wait (block on one session)',
   },
   watch: {
@@ -218,6 +224,8 @@ ${SEL_NOTE}`,
 Dispatches the merge to the session's OWN agent (it knows the work's intent and resolves conflicts);
 the server never touches the trunk's tree. Gates re-check first. After it lands, confirm HEAD
 advanced before closing the session — closing an unmerged branch discards the work.
+Mutating verbs are PROJECT-BOUND: a backend serving another project's repo refuses the write loudly
+(name the target with --api <url> to write cross-project on purpose).
 ${SEL_NOTE}`,
     see: 'spex review (before) · spex session close (after the merge is confirmed)',
   },
@@ -245,10 +253,13 @@ Human escape hatch:
                                        running). INTERACTIVE AND BLOCKING — like watch, an agent must
                                        NEVER run it in a turn (it freezes you): use capture/send/rawkey.
                                        LOCAL-only — the tmux server is the backend machine's, so it fails
-                                       loud when SPEXCODE_API_URL points elsewhere. Offline session → loud.
+                                       loud when the resolved backend is remote. Offline session → loud.
 
 (state · fail · idle · commit-gate also exist but are hook-driven — the lifecycle hooks call them;
-never type them.) ${SEL_NOTE}`,
+never type them.) ${SEL_NOTE}
+Manager verbs that WRITE (send/rename/rawkey/reopen/exit/close) are PROJECT-BOUND: a backend serving
+another project's repo refuses loudly — name the target with --api <url> to drive it on purpose.
+${ROUTING_NOTE}`,
     see: 'spex new (launch) · spex wait/watch (monitor) · spex review/merge (land)',
   },
 
@@ -299,8 +310,10 @@ repair, instead of you diffing materialized files by hand.`,
 
 Runs the backend for the repo at cwd behind a zero-downtime supervisor (hot-reloads on source
 change; the public port never gaps). --port pairs with \`spex dashboard --api-port\`, so many
-projects coexist on one host. --public exposes it on a public IP behind a password + self-signed
-TLS (own cert via --tls-cert/--tls-key; --http drops TLS).`,
+projects coexist on one host. On a successful bind it RECORDS its endpoint in the per-project
+runtime tier — that's how a bare \`spex\` run from this project's tree finds this backend (see
+spex guide config → BACKEND ROUTING). --public exposes it on a public IP behind a password +
+self-signed TLS (own cert via --tls-cert/--tls-key; --http drops TLS).`,
     see: 'spex dashboard (the UI on top) · GET /health (liveness probe)',
   },
   dashboard: {
@@ -386,6 +399,8 @@ Install & serve (the operator loop)
   ${ENTRIES.dashboard.line}
 
 ${SEL_NOTE}
+
+${ROUTING_NOTE}
 
 Concepts & best practice live in the guide: spex guide (setup) · guide spec · guide yatsu · guide config.
 Machine plumbing (hook/launch-script callees) lives under \`spex internal\` — not part of your vocabulary.`

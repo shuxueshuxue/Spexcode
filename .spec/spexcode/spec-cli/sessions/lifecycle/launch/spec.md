@@ -73,13 +73,14 @@ fall through to allow, so legit cross-machine dispatch and the viewer-points-any
 is the same FAIL-LOUD-never-silent-fallback rule [[remote-client]] states, applied to launch: a mutating verb
 must never silently act on the wrong project.
 
-**Resilient bring-up.** A launcher can lose a transient startup race — the `reclaude` daemon flapping on a
-version skew — and exit within seconds, before the rendezvous socket ever appears: a fast exit that is the
-race, not the work. The launch script therefore **retries a bounded number of times on a fast exit** and
-stops the instant the agent has run past the boot window, so a normal long-lived session is never relaunched
-on its eventual exit. The boot grace and the ready-wait both span this retry window, so liveness reads
-`starting` and the concurrency slot stays held until the worker is genuinely online — or truly dead. This
-only closes the startup race; it adds no fallback and never masks a dead agent.
+**Resilient bring-up.** A launcher can fail before the agent becomes addressable — for example a wrapper or
+daemon exits within seconds, before the rendezvous socket ever appears. That fast exit is enough evidence to
+retry, but not enough evidence to name the cause. The launch script therefore **retries a bounded number of
+times on a fast exit** and reports the observed fact (fast launcher exit before readiness), without calling it
+a daemon race. It stops the instant the agent has run past the boot window, so a normal long-lived session is
+never relaunched on its eventual exit. The boot grace and the ready-wait both span this retry window, so
+liveness reads `starting` and the concurrency slot stays held until the worker is genuinely online — or truly
+dead. This only closes startup unready failures; it adds no fallback and never masks a dead agent.
 
 ### Concurrency cap (bounded working set)
 

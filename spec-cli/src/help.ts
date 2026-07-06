@@ -38,13 +38,27 @@ governed (read/honor that spec), or over-owned (> maxOwners — split the file).
 prints NOTHING unless action is needed (hook use): only uncovered / over-owned fire.`,
     see: 'spex search (topic → node) · spex lint (coverage over the whole tree)',
   },
+  tree: {
+    line: 'tree                  the graph as a human-readable tree (status-coloured, badges)',
+    body: `Usage: spex tree [--node <id>] [--depth N] [--json]
+
+Prints the assembled spec graph as an indented tree — the CLI twin of the dashboard's tidy-tree,
+built from the same board (merged tree + worktree overlay). One line per node: id, derived status
+(coloured when stdout is a tty; NO_COLOR respected — the status word always prints), title, and
+attention badges: drift:N (drifted files), stale:N (yatsu scenarios whose latest reading aged),
+issues:N (open issues), ghost (being added by a worktree).
+  --node <id>   render just that subtree (unknown id fails loud)
+  --depth N     limit levels below the shown root; prunes are counted, never silent
+  --json        the same filtered subtree as nested objects, badge counts precomputed`,
+    see: 'spex board (the full flat JSON payload) · spex search (find one node by intent)',
+  },
   board: {
     line: 'board                 dump the assembled board as JSON (tree · overlay · sessions)',
     body: `Usage: spex board
 
 Prints the full dashboard board state as JSON — the merged spec tree, per-worktree overlay, and the
 session list. Identical to GET /api/board; needs the backend (spex serve) reachable.`,
-    see: 'spex ls (just the sessions, as a table) · spex search (find one node instead of dumping all)',
+    see: 'spex tree (the same graph, human-readable) · spex ls (just the sessions, as a table) · spex search (find one node instead of dumping all)',
   },
   guide: {
     line: 'guide [topic]         the manuals: setup workflow · spec/yatsu file formats · spexcode.json',
@@ -334,6 +348,7 @@ Usage: spex <command> [args]      one command's usage: spex help <command>  (or 
 Find & read the graph
   ${ENTRIES.search.line}
   ${ENTRIES.owner.line}
+  ${ENTRIES.tree.line}
   ${ENTRIES.board.line}
   ${ENTRIES.guide.line}
 

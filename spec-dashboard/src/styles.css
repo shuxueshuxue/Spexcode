@@ -1038,6 +1038,8 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .fv-group-head { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; row-gap: 5px; padding: 9px 12px; background: var(--panel2); border-bottom: 1px solid var(--line); }
 .fv-group-title { font-size: 9px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--ink2); }
 .fv-group-meta { font-size: 10px; color: var(--muted); margin-left: auto; }
+/* the filter bar's second row: the action (New) beside the open/total meta — never a lone first row. */
+.fv-head-row { flex-basis: 100%; display: flex; align-items: center; gap: 6px; }
 /* ONE row grammar for BOTH tabs: a compact SINGLE-LINE button (the title truncates, never wraps, so the
    two pickers keep an identical, uniform rhythm) with unhurried vertical air and a hairline-soft divider
    (the old full-strength border on every row read as a dense ledger). `.sel` is the page's one selection. */
@@ -1282,19 +1284,9 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .si-hint { font-size: 11px; color: var(--muted); }
 .si-hint code { color: var(--blue); background: var(--panel2); padding: 0 4px; border-radius: 3px; }
 
-/* agent picker under the New Session box — icon-only radios in the panel's pill idiom. */
-.si-agent-picker { display: flex; align-items: center; gap: 7px; }
-.si-agent-opt {
-  width: 32px; height: 28px; padding: 0; cursor: pointer;
-  display: inline-flex; align-items: center; justify-content: center; color: var(--ink);
-  background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
-  transition: border-color .12s ease, color .12s ease, background .12s ease, box-shadow .12s ease;
-}
-.si-agent-opt:hover:not(.on):not(:disabled) { border-color: var(--blue); color: var(--ink2); }
-.si-agent-opt.on { color: var(--paper); background: var(--blue); border-color: var(--blue); box-shadow: 0 2px 8px rgba(38, 139, 210, .22); }
-.si-agent-opt:disabled { opacity: .5; cursor: default; }
+/* vendor glyph shared by launcher-derived harness adornments. */
 .si-agent-glyph { width: 16px; height: 16px; display: block; fill: currentColor; }
-/* launcher picker — a name dropdown that stands in for the harness radios when launchers are configured. */
+/* launcher picker — the sole launch choice; harness is a derived glyph, not an input. */
 .si-launcher-picker { display: inline-flex; align-items: center; gap: 6px; }
 .si-launcher-label { font-size: 11px; color: var(--ink2); text-transform: lowercase; }
 /* the selected launcher's harness shown as an icon (the vendor mark the harness radios use) beside the
@@ -1797,10 +1789,10 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .se-divider { display: flex; align-items: center; gap: 8px; padding: 5px 10px 3px; font-family: var(--mono); font-size: 9px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); }
 .se-divider::before, .se-divider::after { content: ''; flex: 1; border-top: 1px dashed var(--line); }
 
-/* the threads store filter — a small select deriving its options from the stores actually present
-   (all · local · github · a future gitlab appears by itself); default = all, mixed in API order. */
-.fv-store-filter { font-family: var(--mono); font-size: 11px; line-height: 1.35; color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; cursor: pointer; transition: border-color .12s; }
-.fv-store-filter:hover { border-color: color-mix(in srgb, var(--blue) 45%, var(--line)); }
+/* the ONE shared dropdown filter (FilterSelect) both pickers wear — the issues drain's store filter and
+   the evals feed's kind filter; one control, one look. */
+.fv-filter { font-family: var(--mono); font-size: 11px; line-height: 1.35; color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; cursor: pointer; transition: border-color .12s; }
+.fv-filter:hover { border-color: color-mix(in srgb, var(--blue) 45%, var(--line)); }
 
 /* boot fail-loud ([[dashboard-shell]]): the pre-first-board window shows an error + retry instead of an
    eternal spinner when the backend is unreachable; once a board has landed this surface never returns. */

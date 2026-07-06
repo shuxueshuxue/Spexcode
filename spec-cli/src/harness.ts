@@ -18,8 +18,8 @@ import { runtimeRoot, mainCheckout, readConfig } from './layout.js'
 // DETECTION. There is no payload-sniffing: each adapter OWNS its shim, and the shim bakes the harness id as
 // dispatch.sh's first argument (`bash <dispatch> <id> <Event>`). dispatch.sh exports SPEXCODE_HARNESS, so a
 // hook subprocess learns its harness deterministically from the shim that wired it — never from guessing the
-// payload shape. On the TS side the harness is the launcher's choice (the dashboard launches `defaultHarness`)
-// or ALL adapters at once (materialize renders every harness's artifacts).
+// payload shape. On the TS side the harness is derived from the selected launcher or ALL adapters at once
+// (materialize renders every harness's artifacts).
 
 export type HarnessId = 'claude' | 'codex'
 export type HarnessLivenessRecord = { session: string; harnessSessionId?: string | null }
@@ -52,7 +52,7 @@ export interface Harness {
   // visible TUI with `--remote` pointed at it. `cmd`, when given, is the SESSION's persisted launcher command
   // ([[launcher-select]]) and OVERRIDES the ambient env→config→default resolution — so a session created under a
   // named launcher keeps that exact command (and auth) on resume, never silently reverting to the global
-  // default. Omitted → the unnamed default resolution (env-overridable, for tests + old records).
+  // default. Omitted is only for tests and old records before launch_cmd was pinned.
   launchCmd(id: string, runtimeDir?: string, cmd?: string): string
   // the RESOLVED base launcher command alone — the wrapper/binary that carries the agent's config-dir env
   // (claude `CLAUDE_CONFIG_DIR`, codex `CODEX_HOME`), WITHOUT the per-launch script built around it. `cmd`,
@@ -1031,8 +1031,7 @@ export const codexHarness: Harness = {
 // every adapter — materialize iterates this to render each harness's artifacts in one pass.
 export const HARNESSES: readonly Harness[] = [claudeHarness, codexHarness]
 
-// the harness the dashboard/CLI launcher drives today (Claude). The single place a future codex launcher
-// would flip; product code reads this rather than naming Claude.
+// the legacy/default adapter for old records and config defaults. New launches derive harness from a launcher.
 export const defaultHarness: Harness = claudeHarness
 
 // resolve an adapter by id (the detector). Throws on an unknown id — fail loud, never silently default.
@@ -1048,23 +1047,38 @@ export function harnessById(id: string): Harness {
 // silently launch under the wrong auth) and validates the harness id.
 export type Launcher = { name: string; harness: string; cmd: string }
 
-// the configured launchers, as a stable name-sorted list (for the dashboard dropdown + the CLI). Empty when a
-// project configured none — the caller then falls back to the unnamed harness pick.
+function builtinLauncher(name: string, root = mainCheckout()): Launcher | null {
+  const cfg = readConfig(root).sessions
+  if (name === 'claude') return { name: 'claude', harness: 'claude', cmd: process.env.SPEXCODE_CLAUDE_CMD || cfg?.claudeCmd || 'claude --dangerously-skip-permissions' }
+  if (name === 'codex') return { name: 'codex', harness: 'codex', cmd: process.env.SPEXCODE_CODEX_CMD || cfg?.codexCmd || 'codex --yolo' }
+  return null
+}
+
+// the configured launchers plus the built-in `claude`/`codex` profiles, as a stable name-sorted list (for the
+// dashboard dropdown + the CLI). There is always a launcher choice; the old separate harness pick is gone.
 export function launcherList(root = mainCheckout()): Launcher[] {
   const m = readConfig(root).sessions?.launchers || {}
-  return Object.keys(m).sort().map((name) => ({ name, harness: m[name].harness || defaultHarness.id, cmd: m[name].cmd }))
+  const out = new Map<string, Launcher>([
+    ['claude', builtinLauncher('claude', root)!],
+    ['codex', builtinLauncher('codex', root)!],
+  ])
+  for (const name of Object.keys(m)) out.set(name, { name, harness: m[name].harness || defaultHarness.id, cmd: m[name].cmd })
+  return [...out.values()].sort((a, b) => a.name.localeCompare(b.name))
 }
 
 // the configured default launcher NAME ([[launcher-select]]) — the profile `spex new`/a dropdown pick with no
-// explicit choice resolves. '' when none configured. The dashboard reads this to PRE-SELECT its New-Session
-// dropdown to match the CLI/config default, so the two surfaces agree on which launcher a bare create uses.
+// explicit choice resolves. Defaults to `claude`, the built-in Claude launcher. The dashboard reads this to
+// PRE-SELECT its New-Session dropdown to match the CLI/config default, so the two surfaces agree on which
+// launcher a bare create uses.
 export function defaultLauncher(root = mainCheckout()): string {
-  return readConfig(root).sessions?.defaultLauncher || ''
+  return readConfig(root).sessions?.defaultLauncher || 'claude'
 }
 
 export function resolveLauncher(name: string, root = mainCheckout()): Launcher {
   const l = readConfig(root).sessions?.launchers?.[name]
-  if (!l || !l.cmd) throw new Error(`unknown launcher '${name}' (configured: ${launcherList(root).map((x) => x.name).join(', ') || 'none'})`)
-  harnessById(l.harness || defaultHarness.id)   // validate the harness id fail-loud
-  return { name, harness: l.harness || defaultHarness.id, cmd: l.cmd }
+  if (l && !l.cmd) throw new Error(`launcher '${name}' is missing cmd`)
+  const resolved = l ? { name, harness: l.harness || defaultHarness.id, cmd: l.cmd } : builtinLauncher(name, root)
+  if (!resolved) throw new Error(`unknown launcher '${name}' (configured: ${launcherList(root).map((x) => x.name).join(', ') || 'none'})`)
+  harnessById(resolved.harness)   // validate the harness id fail-loud
+  return resolved
 }

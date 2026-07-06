@@ -497,9 +497,10 @@ if (cmd === 'serve') {
   // createSession POSTs to the running backend so the launch runs in the backend's process (auth env + cap);
   // it falls back to an in-process launch only when no backend answers.
   const { createSession } = await import('./sessions.js')
+  if (has('harness')) { console.error('spex new: --harness was removed; use --launcher <name> (for example --launcher codex)'); process.exit(2) }
   const prompt = flag('prompt') ?? positionals(3)[0] ?? ''
   const nodeArg = flag('node')
-  const created = await createSession(nodeArg ? stripRefSigil(nodeArg) : null, prompt, flag('harness') ?? undefined, flag('launcher') ?? undefined)
+  const created = await createSession(nodeArg ? stripRefSigil(nodeArg) : null, prompt, flag('launcher') ?? undefined)
   console.log(JSON.stringify(created, null, 2))
   await launchMonitorReminder(created.id)
 } else if (cmd === 'session') {

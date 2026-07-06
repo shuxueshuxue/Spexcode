@@ -39,8 +39,19 @@ undefined and fails visibly. The wire-shape unit test is the executable half of 
 the derived fields exist, the precedences hold, and the bare fields are ABSENT — a future field
 "helpfully" re-exposed fails the test before any surface can grow a bypass chain on it.
 
-**The frontend has two doors and no windows.** `session.js`'s `sessionName`/`sessionHeadline` read the
+**The frontend has two doors and no windows.** `session.js`'s `sessionHandle`/`sessionHeadline` read the
 wire fields; the legacy client-side chain survives only INSIDE those two functions as the old-backend
 fallback, so during a mixed-version window labels degrade gracefully instead of blanking. Every component
 imports the doors — none re-derives. The backend keeps `sessionLabel`/`sessionHeadline` as the same two
 doors over the precomputed fields for its own display sites.
+
+**The two doors are named for their ROLE, so the wrong one can't be grabbed by reflex.** The stable-handle
+door is `sessionHandle`, deliberately NOT `sessionName`: a "name" reads like "the thing to display", and a
+dev reaching for it by intuition kept wiring the stable label into a visible one-line title — the divergence
+that recurred (the node-menu overlay list showed the label while the board beside it showed the live
+headline). Renaming the door removes the trap at its source: `sessionHeadline` is now the only intuitively
+"the name" door, so every human-visible one-line title lands on it, and `sessionHandle` is confined to its
+three real jobs — the avatar/hover **tooltip**, mobile's handle-line, and search **matching** (search still
+matches node/branch/id even where it shows the headline). Which surface reads which is [[session-activity]]'s
+"one name, every surface"; naming the doors for their role is what makes that guarantee hold instead of
+relying on every author to remember it.

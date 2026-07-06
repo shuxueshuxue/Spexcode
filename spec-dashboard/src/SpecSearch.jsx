@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { STATUS } from './SpecNode.jsx'
 import { scenarioStates, TagChips } from './score.jsx'
-import { STATUS_COLOR, sessionName, sessionHeadline } from './session.js'
+import { STATUS_COLOR, sessionHandle, sessionHeadline } from './session.js'
 import { useT } from './i18n/index.jsx'
 import { rankDocs } from '../../spec-cli/src/ranker.ts'
 import { useSpecCorpus } from './corpus.js'
@@ -67,7 +67,7 @@ function buildEntries(specs, sessions, corpus) {
     // session differently from the board it was searched from. The stable handle still rides in `body` so
     // search-by-node/branch/id keeps working even when the live self-summary has replaced it on screen.
     const headline = sessionHeadline(s)
-    const handle = sessionName(s)
+    const handle = sessionHandle(s)
     const sub = s.status || s.promptPreview || s.note || ''
     entries.push({
       kind: 'session', key: `session:${s.id}`, target: s.id,

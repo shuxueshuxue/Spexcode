@@ -222,7 +222,7 @@ ${SEL_NOTE}`,
     see: 'spex review (before) · spex session close (after the merge is confirmed)',
   },
   session: {
-    line: 'session <sub>         the state machine: new·reopen·done·park·ask·exit·close·send·capture·rename·rawkey·prompt',
+    line: 'session <sub>         the state machine: new·reopen·done·park·ask·exit·close·send·capture·attach·rename·rawkey·prompt',
     body: `Worker verbs (declare YOUR OWN state — a claim the board and your supervisor act on):
   spex session done --propose merge|nothing|close [--note T]   committed and stopping; merge = ready for review
   spex session park --note <what-you-await>                    a real background task will wake you
@@ -239,6 +239,13 @@ Manager verbs (control another session; all take SEL):
   spex session exit <SEL>              soft stop: kill the agent, KEEP the worktree (resumable)
   spex session close <SEL>             retire the session and its worktree
   spex session new "<prompt>"          = spex new
+
+Human escape hatch:
+  spex session attach <SEL>            sit in the worker's REAL tmux (detach: C-b d; the session keeps
+                                       running). INTERACTIVE AND BLOCKING — like watch, an agent must
+                                       NEVER run it in a turn (it freezes you): use capture/send/rawkey.
+                                       LOCAL-only — the tmux server is the backend machine's, so it fails
+                                       loud when SPEXCODE_API_URL points elsewhere. Offline session → loud.
 
 (state · fail · idle · commit-gate also exist but are hook-driven — the lifecycle hooks call them;
 never type them.) ${SEL_NOTE}`,

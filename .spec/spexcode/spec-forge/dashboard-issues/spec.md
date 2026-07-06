@@ -70,5 +70,6 @@ through the shared translator `t` ([[settings]]); each issue's own number/state/
 
 Out of scope (future siblings, per node granularity): surfacing open **PRs** the same way (PRs already
 read on the board as session/overlay state); any live push of forge deltas (that is [[freshness]]'s
-deferred source layer). Frontend behaviour here is asserted by contract, not visually verified — there is
-no browser/e2e harness yet.
+deferred source layer). Frontend behaviour here is **measured by looking**, not merely asserted: the node
+carries a `frontend-e2e` yatsu scenario (`open-count-badge-on-tile`) whose readings screenshot the rendered
+board — the ◆N badge on a tile with open issues, no on-node popover — and file with image evidence.

@@ -437,8 +437,8 @@ export function selfSummary(paneTitle: string): string | null {
 const launchedAt = new Map<string, number>()
 const BOOT_GRACE_MS = 45000   // > SOCKET_READY_TIMEOUT_MS, and spans launchScript's bounded fast-fail retry
                               // window (~3 attempts) so a relaunching session reads 'starting', not 'offline'
-const LAUNCH_FAST_FAIL_S = 12 // launchScript retries the agent command when it exits faster than this — the
-                              // launcher daemon-not-ready race fails in ~8s; a real session runs far longer
+const LAUNCH_FAST_FAIL_S = 12 // launchScript retries the agent command when it exits faster than this: fast
+                              // exit before readiness is retryable, but it is not proof of one specific cause
 
 // @@@ liveness - the orthogonal axis ([[state]]): is the agent process up, for ANY session regardless of
 // lifecycle, from a prebuilt runtime snapshot (no per-call spawn — see liveSnapshot) + the adapter's own channel
@@ -769,7 +769,7 @@ export function launcherCmd(rec: SessRec): string | undefined {
   if (rec.launchCmd) return rec.launchCmd
   return rec.launcher ? resolveLauncher(rec.launcher).cmd : undefined
 }
-function launchScript(id: string, tail: string, harness: Harness = HARNESS, cmd?: string): string {
+export function launchScript(id: string, tail: string, harness: Harness = HARNESS, cmd?: string): string {
   const file = join(storeDir(id), 'launch.sh')
   // NO --append-system-prompt / --settings: the contract + hooks are materialized into the worktree at
   // createSession ([[harness-delivery]]) and the agent auto-discovers them — the SAME path as a self-launched
@@ -777,20 +777,20 @@ function launchScript(id: string, tail: string, harness: Harness = HARNESS, cmd?
   // `cmd` is the session's persisted launcher command ([[launcher-select]]); when set it OVERRIDES the harness's
   // ambient default so resume reuses the same auth, else undefined → the unnamed global resolution.
   const invocation = `${rvEnv(id, harness)} ${harness.launchCmd(id, runtimeRoot(), cmd)} ${tail}`
-  // Bounded relaunch on a FAST exit: the agent launcher (e.g. the reclaude daemon) can lose a startup
-  // race ("daemon did not become ready") and exit within seconds before the rendezvous socket ever
-  // appears — a fast exit is the race, not real work, so retry a few times. Once the agent has run past
-  // LAUNCH_FAST_FAIL_S it has genuinely started; its eventual (much later) exit is a normal session end
-  // and is NEVER retried — the loop exits. BOOT_GRACE_MS and SOCKET_READY_TIMEOUT_MS both span this retry
-  // window, so liveness stays 'starting' and waitForReady keeps holding the slot across retries. This only
-  // closes the startup race — it adds no fallback and never masks a genuinely dead agent (3 attempts, then give up).
+  // Bounded relaunch on a FAST exit: the agent launcher can exit within seconds before the rendezvous socket
+  // ever appears. That is enough evidence to retry, but not enough evidence to name the cause. Once the agent
+  // has run past LAUNCH_FAST_FAIL_S it has genuinely started; its eventual (much later) exit is a normal
+  // session end and is NEVER retried — the loop exits. BOOT_GRACE_MS and SOCKET_READY_TIMEOUT_MS both span this
+  // retry window, so liveness stays 'starting' and waitForReady keeps holding the slot across retries. This
+  // only closes startup unready failures — it adds no fallback and never masks a genuinely dead agent (3
+  // attempts, then give up).
   writeFileSync(file, [
     `for __spex_try in 1 2 3; do`,
     `  __spex_t0=$SECONDS`,
     `  ${invocation}`,
     `  __spex_rc=$?`,
     `  [ $(( SECONDS - __spex_t0 )) -ge ${LAUNCH_FAST_FAIL_S} ] && exit $__spex_rc`,
-    `  printf '[spex launch] attempt %s exited in %ss (rc=%s) — likely a launcher daemon race; retrying\\n' "$__spex_try" "$(( SECONDS - __spex_t0 ))" "$__spex_rc" >&2`,
+    `  printf '[spex launch] attempt %s exited in %ss (rc=%s) - fast launcher exit before readiness; retrying\\n' "$__spex_try" "$(( SECONDS - __spex_t0 ))" "$__spex_rc" >&2`,
     `  sleep 2`,
     `done`,
     `exit $__spex_rc`,

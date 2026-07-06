@@ -31,11 +31,26 @@ scenarios:
       simply stops further launches (running agents keep their slots). The cap value is never baked into the
       toolchain.
     code: spec-cli/src/sessions.ts, spec-cli/src/layout.ts
+  - name: fast-exit-retry-log-is-cause-neutral
+    tags: [backend-api]
+    description: >
+      Measure the launch retry diagnostic at the same backend-owned launch script surface that a worker runs:
+      generate a real `launch.sh` for a launcher command that exits quickly before readiness, run that script,
+      and inspect stderr. The script may retry because the exit was fast, but the diagnostic must not claim a
+      specific unproven cause such as a launcher daemon race.
+    expected: |
+      The retry line reports only the observed condition: an attempt exited quickly before readiness and is
+      being retried. It does NOT contain "likely a launcher daemon race" or otherwise name a daemon race
+      unless that cause was actually proven. Bounded fast-exit retry remains intact.
+    code: spec-cli/src/sessions.ts
+    test: spec-cli/src/sessions.test.ts
 ---
 
 # launch — yatsu
 
 Measured through the **real backend board** (`/api/board` = `spex board`), the same status source the
-dashboard renders — never an internal counter. The loss being scored is the cap contract: a slot is
-**compute** pressure, so only live `working`/`parked` agents hold one (everything waiting-on-the-human frees
-it), and the cap **value lives in `spexcode.json`**, read live so it tunes without a restart.
+dashboard renders — never an internal counter. The launch script itself is also a backend-owned surface: it
+is the exact file the worker pane runs. The loss being scored is the cap contract and launch bring-up
+honesty: a slot is **compute** pressure, so only live `working`/`parked` agents hold one (everything
+waiting-on-the-human frees it), the cap **value lives in `spexcode.json`**, read live so it tunes without a
+restart, and a retryable fast launch exit reports the observed condition without inventing a cause.

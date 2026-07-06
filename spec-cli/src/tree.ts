@@ -73,9 +73,12 @@ export function renderTree(nodes: TreeNode[], opts: TreeOpts = {}): string {
 
   const line = (n: TreeNode, prefix: string, branch: string) => {
     const code = STATUS_ANSI[n.status] ?? '0'
-    // without colour the status word IS the signal, so it always prints — colour only reinforces it.
+    // base state is invisible: merged (~80% of nodes) is the healthy ground state, already carried by
+    // the dot's colour — only deviations get a text label. Without colour the word IS the signal, so
+    // every status (merged included) prints in plain-text mode.
+    const label = color && n.status === 'merged' ? '' : ' ' + c(code, `[${n.status}]`)
     const title = n.title && n.title !== n.id ? ' ' + c('90', '· ' + n.title) : ''
-    lines.push(`${prefix}${branch}${c(code, '●')} ${n.id} ${c(code, `[${n.status}]`)}${title}${badges(n)}`)
+    lines.push(`${prefix}${branch}${c(code, '●')} ${n.id}${label}${title}${badges(n)}`)
   }
 
   const walk = (n: TreeNode, prefix: string, branch: string, childPrefix: string, depth: number) => {

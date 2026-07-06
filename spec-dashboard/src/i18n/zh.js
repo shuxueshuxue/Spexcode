@@ -105,7 +105,7 @@ export default {
     none: '此会话暂无评测',
     sessionN: ({ n }) => `✦ 本会话 ${n} 条`,
     inherited: '继承基线 · 其他会话的最新读数',
-    export: '导出 ↗',
+    export: '导出',
     exportTitle: '导出本次评测为自包含的 HTML 报告',
     empty: '该会话尚无测量。',
     blindHint: '已声明但从未测量 —— 这就是未清的 loss；用 spex yatsu eval 测一次。',

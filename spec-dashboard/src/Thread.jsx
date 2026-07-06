@@ -6,6 +6,7 @@ import { fitTextarea } from './textarea.js'
 import { postRemarkAction } from './data.js'
 import { STATUS_COLOR, sessionZone } from './session.js'
 import { useT } from './i18n/index.jsx'
+import { Icon } from './icons.jsx'
 
 // The ONE thread UI ([[issues-view]]): the reply list + the reply composer, shared by every home an
 // Issue thread renders in — the issue detail (BOTH stores: a forge issue's GitHub comments are the same
@@ -243,7 +244,7 @@ export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = nul
           collapse the row before the click could land, unless a host lifecycle action pins it visible). */}
       {showActions && (
         <div className="fv-actions">
-          {anchorNow && <button type="button" className="fv-anchor-btn" data-tip={t('thread.anchorTitle')} onMouseDown={(e) => e.preventDefault()} onClick={stampAnchor}>⏱ {t('thread.anchorNow')}</button>}
+          {anchorNow && <button type="button" className="fv-anchor-btn" data-tip={t('thread.anchorTitle')} onMouseDown={(e) => e.preventDefault()} onClick={stampAnchor}><Icon name="clock" size={11} /> {t('thread.anchorNow')}</button>}
           <span className="fv-hint">{err || t('session.issuesMentionHint')}</span>
           <button type="button" className="fv-send" disabled={busy || !body.trim()} onMouseDown={(e) => e.preventDefault()} onClick={send}>
             {busy ? t('session.issuesSending') : t('session.issuesSend')}

@@ -368,7 +368,7 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite,
         {history && history.length > 1 && (
           <div className="an-ab">
             <button type="button" className="an-ab-nav" disabled={histIdx >= history.length - 1}
-              onClick={() => setHistIdx((i) => Math.min(history.length - 1, i + 1))} title={t('annotator.abOlder')}>‹</button>
+              onClick={() => setHistIdx((i) => Math.min(history.length - 1, i + 1))} data-tip={t('annotator.abOlder')}>‹</button>
             <div className="an-ab-track">
               {history.slice().reverse().map((r, p) => {
                 const idx = history.length - 1 - p
@@ -376,14 +376,14 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite,
                   <button type="button" key={`${r.ts}-${idx}`}
                     className={`an-ab-pip ${verdictCls(r)} ${idx === histIdx ? 'on' : ''}`}
                     onClick={() => setHistIdx(idx)}
-                    title={`${verdictMark(r)} ${new Date(r.ts).toLocaleString()}`}>
+                    data-tip={`${verdictMark(r)} ${new Date(r.ts).toLocaleString()}`}>
                     {verdictMark(r)}
                   </button>
                 )
               })}
             </div>
             <button type="button" className="an-ab-nav" disabled={histIdx <= 0}
-              onClick={() => setHistIdx((i) => Math.max(0, i - 1))} title={t('annotator.abNewer')}>›</button>
+              onClick={() => setHistIdx((i) => Math.max(0, i - 1))} data-tip={t('annotator.abNewer')}>›</button>
             <span className="an-ab-pos">{histIdx === 0 ? t('annotator.abLatest') : t('annotator.abPos', { i: history.length - histIdx, n: history.length })}</span>
           </div>
         )}
@@ -399,7 +399,7 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite,
           {/* a stale reading is shown, not hidden — so the detail EXPLAINS how far it's fallen behind: which
               axes moved, and (for the code axis) which governed files drifted + by how many commits. */}
           {!viewing.fresh && (viewing.staleAxes?.length ?? 0) > 0 && (
-            <div className="an-expected an-stale" title={t('nodeView.eval.staleReadoutTitle')}>
+            <div className="an-expected an-stale" data-tip={t('nodeView.eval.staleReadoutTitle')}>
               <b>{t('nodeView.eval.staleLabel')}</b> {viewing.staleAxes.join(' · ')}
               {(viewing.codeDrift?.length ?? 0) > 0 &&
                 <span className="an-stale-files"> — {viewing.codeDrift.map((d) => `${d.file.split('/').pop()} +${d.behind}`).join(', ')}</span>}
@@ -420,16 +420,16 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite,
 
               {/* the custom control bar — play/pause · review-track scrubber (comment markers + step bands) · time · live step · fullscreen */}
               <div className="an-bar">
-                <button className="an-play" onClick={togglePlay} title={playing ? t('annotator.pause') : t('annotator.play')}>{playing ? '⏸' : '▶'}</button>
+                <button className="an-play" onClick={togglePlay} data-tip={playing ? t('annotator.pause') : t('annotator.play')}>{playing ? '⏸' : '▶'}</button>
                 <div className="an-seek" ref={seekRef} onMouseDown={onSeekDown} onMouseMove={onSeekHover} onMouseLeave={() => setHoverPct(null)}>
                   <div className="an-seek-trk" />
-                  {durMs > 0 && events.map((e, i) => <div key={`band-${i}`} className="an-band" style={{ left: `${(e.tMs / durMs) * 100}%` }} title={e.step} />)}
+                  {durMs > 0 && events.map((e, i) => <div key={`band-${i}`} className="an-band" style={{ left: `${(e.tMs / durMs) * 100}%` }} data-tip={e.step} />)}
                   {/* fill/knob carry NO React-managed position style — the media paint owns them via refs */}
                   <div className="an-seek-play" ref={fillRef} />
                   {durMs > 0 && anchored.map((a) => (
                     <button key={`mk-${a.i}`} type="button"
                       className={`an-mk ${selIdx === a.i ? 'on' : ''} ${activeIdx === a.i ? 'active' : ''}`}
-                      style={{ left: `${(a.tMs / durMs) * 100}%` }} title={a.label}
+                      style={{ left: `${(a.tMs / durMs) * 100}%` }} data-tip={a.label}
                       onMouseDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); selectComment(a.i, a.tMs) }} />
                   ))}
                   <div className="an-knob" ref={knobRef} />
@@ -437,7 +437,7 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite,
                 </div>
                 {/* text owned by the media paint (ref) — constant-empty children so React never overwrites it */}
                 <span className="an-time" ref={timeRef} />
-                {activeStep && <span className="an-curstep" title={activeStep.node ? `→ ${activeStep.node}` : undefined}>{activeStep.step}</span>}
+                {activeStep && <span className="an-curstep" data-tip={activeStep.node ? `→ ${activeStep.node}` : undefined}>{activeStep.step}</span>}
                 <FullscreenButton target={playerRef} />
               </div>
               </div>
@@ -447,7 +447,7 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite,
                   {events.map((e, i) => (
                     <button key={i} className={`an-step ${activeStepIdx === i ? 'on' : ''}`}
                       onClick={() => seekMs(e.tMs)}
-                      title={e.node ? `→ ${e.node}` : undefined}>
+                      data-tip={e.node ? `→ ${e.node}` : undefined}>
                       {mmss(e.tMs)} {e.step}
                     </button>
                   ))}

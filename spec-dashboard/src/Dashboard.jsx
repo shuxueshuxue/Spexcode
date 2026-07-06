@@ -10,6 +10,7 @@ import Legend from './Legend.jsx'
 import SpecSearch from './SpecSearch.jsx'
 import BoardStats from './BoardStats.jsx'
 import SideBar from './SideBar.jsx'
+import TooltipLayer from './Tooltip.jsx'
 import { useRoute, navigate } from './route.js'
 import { useResizable } from './useResizable.js'
 import { layout, X_GAP, Y_GAP } from './data.js'
@@ -501,6 +502,7 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
 
   return (
     <div className={kbdMode ? 'app kbd-mode' : 'app'}>
+      <TooltipLayer />
       <SideBar page={page} onNav={navigate} />
       <div className="app-main">
       <div className="page-graph" style={{ '--fp-w': `${fpW}px`, display: page === 'graph' ? undefined : 'none' }}>
@@ -524,7 +526,7 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
         {/* HUD: brand + a discreet `?` that opens the keymap/legend modal */}
         <div className="hud">
           <span className="brand">$ {project || 'spec-dashboard'}</span>
-          <button className="hud-help" onClick={() => setLegend((v) => !v)} title={t('hud.helpTitle')}>?</button>
+          <button className="hud-help" onClick={() => setLegend((v) => !v)} data-tip={t('hud.helpTitle')}>?</button>
         </div>
 
         <SessionWindow sessions={sessions} activeId={highlightId} onPick={onPickSession} onOpenSession={openSession} />
@@ -551,7 +553,7 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
             ) : (
               <span className="lock-hint-body">{t('lockHint.empty')}</span>
             )}
-            <button className="lock-hint-release" onClick={() => setHighlightId(null)} title={t('lockHint.releaseTitle')}>
+            <button className="lock-hint-release" onClick={() => setHighlightId(null)} data-tip={t('lockHint.releaseTitle')}>
               {t('lockHint.release')}
             </button>
           </div>

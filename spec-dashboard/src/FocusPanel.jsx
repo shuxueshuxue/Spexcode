@@ -16,8 +16,8 @@ function ScenarioRow({ s, prose, t, onOpenEval }) {
   const expected = prose?.expected ?? s.expected
   const code = prose?.code ?? s.code
   return (
-    <button type="button" className={`fp-scenario ${s.state}`} onClick={onOpenEval} title={t('focusPanel.openEval')}>
-      <span className="fp-sc-mark" title={t(`score.${s.state}`)}>{MARK[s.state]}</span>
+    <button type="button" className={`fp-scenario ${s.state}`} onClick={onOpenEval} data-tip={t('focusPanel.openEval')}>
+      <span className="fp-sc-mark" data-tip={t(`score.${s.state}`)}>{MARK[s.state]}</span>
       <span className="fp-sc-body">
         <span className="fp-sc-name">{s.name}</span>
         <TagChips tags={s.tags} />
@@ -43,7 +43,7 @@ export default function FocusPanel({ node, onOpenEval }) {
     <aside className="focus-panel">
       <div className="fp-head">
         <span className="fp-title">{node ? node.title : t('focusPanel.noFocus')}</span>
-        {node?.desc && <span className="fp-desc" title={node.desc}>{node.desc}</span>}
+        {node?.desc && <span className="fp-desc" data-tip={node.desc}>{node.desc}</span>}
       </div>
 
       <section className="fp-sec">

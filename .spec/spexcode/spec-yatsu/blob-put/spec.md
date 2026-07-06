@@ -18,7 +18,7 @@ the two: you could not cache a clip without also filing a reading. `spex blob pu
 transport half — put the bytes ([[yatsu-core]]'s `putBlob`, the same cache every surface reads via
 `/api/yatsu/blob`), print the 64-hex content hash, file nothing. The hash is then citable anywhere a bare
 hash is accepted: an issue reply's `--evidence`, a `![…](/api/yatsu/blob/<hash>)` body link the thread
-renders ([[issues-view]]), a later reading.
+renders ([[issues-view]]), a later reading. Its symmetric read twin is [[blob-get]] — hash back to bytes.
 
 Because `putBlob` is idempotent by content, the same command is also the **repair verb** for a checkout
 whose cache lacks a blob some thread already references by hash (a fresh clone 404s on inherited

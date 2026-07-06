@@ -44,6 +44,8 @@ The subsystem divides into governed concerns:
   outlive it, and the warm-bridge prewarm.
 - **[[remote-client]]** — the `spex` CLI as a thin backend client, so one install monitors any machine's
   sessions and the backend stays the single tmux actor.
+- **[[session-attach]]** — the human escape hatch: foreground `tmux attach` into a worker's real session,
+  the one deliberately LOCAL verb (a terminal can't be brokered over HTTP).
 
 ### Surface
 

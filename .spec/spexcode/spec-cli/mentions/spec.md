@@ -27,7 +27,12 @@ grammar is uniform, the logic is tiny.
 - **`@session` — an actor reference, and a HANDLE.** Resolves to a **live board session** and carries *what
   you can do to it*: watch it, or send it a prompt. **`@new`** is the special actor — dispatch a **fresh
   worker** (on the surface's node / the thread's node), optionally with a preset. So an `@` in text is a
-  contact you hand to a reader; what happens next is a **dispatch**, never a new datastore.
+  contact you hand to a reader; what happens next is a **dispatch**, never a new datastore. **Any spawn's
+  parent = its originator**: the `@new` worker records the mentioning author as its `parent`
+  ([[session-nesting]]) so it folds under the session that summoned it — but only when that author IS a
+  real board session id; a dashboard `human`, an `unknown` CLI author, or a forge login is no session →
+  null parent, a top-level worker, never a phantom nest (the same no-sender rule `spex new` from a plain
+  shell follows).
 - **The two never collide** because topic is `[[]]` and actor is `@` — no weighting, no third symbol, and no
   reserved verbs. Every legacy `@<node>` usage was **migrated to `[[node]]`**: the composer autocomplete + the
   board fresh-session key ([[session-console]] / [[term-input]]) and the server's node-derivation (`MENTION`).

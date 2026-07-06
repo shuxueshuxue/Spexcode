@@ -47,6 +47,15 @@ export function resolveActors(tokens: string[], sessions: ActorSession[]): Resol
   })
 }
 
+// Any spawn's parent = its originator ([[session-nesting]]): the `@new` worker nests under the session that
+// wrote the mention — but ONLY when the author IS a real board session id. A dashboard 'human', a CLI
+// 'unknown', or a forge login resolves to no session → null → a top-level worker, never a phantom nest.
+// Exact id match only (lineage is provenance, not addressing — no prefix/name resolution), any liveness:
+// a parent that later closes is auto-promoted at read time by the derived tree.
+export function spawnParent(author: string, sessions: { id: string }[]): string | null {
+  return sessions.some((s) => s.id === author) ? author : null
+}
+
 // ── dispatch (integration) ─────────────────────────────────────────────────────────────────────────────
 export type DispatchOutcome = { token: string; result: 'sent' | 'spawned' | 'offline' | 'unresolved' | 'failed'; detail?: string; note?: string }
 
@@ -92,7 +101,7 @@ export async function dispatchMentions(
       // deliberate audit/re-measure), but the worker prompt carries the status and the outcome line warns.
       const settled = ctx.status && ctx.status !== 'open' ? ctx.status : undefined
       try {
-        const s = await newSession(ctx.node, newWorkerPrompt(ctx.threadId, ctx.node, ctx.author, text, ctx.status))
+        const s = await newSession(ctx.node, newWorkerPrompt(ctx.threadId, ctx.node, ctx.author, text, ctx.status), undefined, spawnParent(ctx.author, sessions))
         out.push({ token: r.token, result: 'spawned', detail: s.id, ...(settled ? { note: `thread ${settled}` } : {}) })
       } catch (e) { out.push({ token: r.token, result: 'failed', detail: e instanceof Error ? e.message : String(e) }) }
       continue

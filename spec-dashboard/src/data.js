@@ -153,19 +153,8 @@ export async function postIssueClose(id) {
   const res = await apiFetch(`/api/issues/${encodeURIComponent(id)}/close`, { method: 'POST' })
   return res.json()
 }
-// the LOCAL lifecycle write-parity verbs ([[issues-view]]): sign / resolve-as / promote — everything
-// `spex issues sign|resolve|promote` can do, POSTed to the thin store-routed endpoints (author 'human',
-// server-derived). Local-store verbs only; the server 400s a forge id.
-export async function postIssueSign(id) {
-  const res = await apiFetch(`/api/issues/${encodeURIComponent(id)}/sign`, { method: 'POST' })
-  return res.json()
-}
-export async function postIssueResolve(id, as) {
-  const res = await apiFetch(`/api/issues/${encodeURIComponent(id)}/resolve`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ as }),
-  })
-  return res.json()
-}
+// Promote is the one local lifecycle action besides close: it creates the real forge issue first, then
+// closes out the local thread with the permalink trail.
 export async function postIssuePromote(id) {
   const res = await apiFetch(`/api/issues/${encodeURIComponent(id)}/promote`, { method: 'POST' })
   return res.json()

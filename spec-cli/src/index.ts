@@ -4,7 +4,7 @@ import { cors } from 'hono/cors'
 import { etag } from 'hono/etag'
 import { createNodeWebSocket } from '@hono/node-ws'
 import { loadSpecs, loadSpecsLite, specContent, specHistory, specDiffAt, loadConfig } from './specs.js'
-import { issuesEnabled, remarkOnHost, resolveRemark, retractRemark, sign, resolve as resolveLocalIssue } from './localIssues.js'
+import { issuesEnabled, remarkOnHost, resolveRemark, retractRemark } from './localIssues.js'
 import { closeIssue, createIssue, issueStores, mergedIssues, promote, replyIssue } from './issues.js'
 import { residentForgeState, refreshForgeNow } from '../../spec-forge/src/resident.js'
 import { summarize } from './mentions.js'
@@ -224,37 +224,8 @@ app.post('/api/issues', async (c) => {
   }
 })
 
-// the LIFECYCLE write-parity routes ([[issues-view]] / [[local-issues]]): sign, resolve-as, and promote —
-// everything `spex issues sign|resolve|promote` can do, callable by the human through the SAME store
-// functions, author `'human'` (server-derived, never the request body — the same identity rule as every
-// human write here). These are LOCAL-store verbs (a forge issue's lifecycle is its host's — close is the
-// one forge lifecycle write), so a forge id (`<host>#<n>`) is a 400, an unknown local thread a 404.
-app.post('/api/issues/:id/sign', async (c) => {
-  if (!issuesEnabled()) return c.json({ error: 'issues workflow is off' }, 403)
-  const id = c.req.param('id')
-  if (id.includes('#')) return c.json({ error: 'sign is a local-store verb' }, 400)
-  try {
-    return c.json({ ok: true, signers: sign(id, 'human') })
-  } catch (e) {
-    return c.json({ error: String((e as Error).message || e) }, 404)
-  }
-})
-app.post('/api/issues/:id/resolve', async (c) => {
-  if (!issuesEnabled()) return c.json({ error: 'issues workflow is off' }, 403)
-  const id = c.req.param('id')
-  if (id.includes('#')) return c.json({ error: 'resolve is a local-store verb — close a forge issue instead' }, 400)
-  const body = await c.req.json().catch(() => ({}))
-  const as = typeof body?.as === 'string' ? body.as : ''
-  try {
-    const r = resolveLocalIssue(id, as)
-    return c.json({ ok: true, status: r.as, already: r.already })
-  } catch (e) {
-    const msg = String((e as Error).message || e)
-    return c.json({ error: msg }, /^no local issue/.test(msg) ? 404 : 400)
-  }
-})
 // promotion moves an open local thread to the forge as one recorded action ([[issues]]'s promote verb,
-// verbatim: forge issue first, then the permalink reply + landed resolve). The forced forge read-back means
+// verbatim: forge issue first, then the permalink reply + local close. The forced forge read-back means
 // the reload that follows shows the promoted issue in the merged list. Fail loud: an unreachable forge is a
 // 502 with the local thread untouched.
 app.post('/api/issues/:id/promote', async (c) => {

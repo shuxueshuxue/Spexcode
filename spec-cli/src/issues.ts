@@ -10,7 +10,7 @@
 import type { ForgeIssue, ForgePR } from '../../spec-forge/src/port.js'
 import { resolveLinks } from '../../spec-forge/src/links.js'
 import { DEFAULT_FORGE_HOST, FORGE_DRIVERS, forgeDriverFor, forgeIssueStores } from '../../spec-forge/src/drivers.js'
-import { loadLocalIssues, loadOne, postLocalIssue, reply, resolve, issuesEnabled, replyLocalIssue, runIssueWrite, ISSUE_WRITE_SUBS } from './localIssues.js'
+import { closeLocalIssue, loadLocalIssues, loadOne, postLocalIssue, reply, issuesEnabled, replyLocalIssue, runIssueWrite, ISSUE_WRITE_SUBS } from './localIssues.js'
 import { dispatchMentions, parseMentions, type DispatchOutcome, type LoopIn } from './mentions.js'
 import { envSessionId } from './layout.js'
 import { loadSpecsLite } from './specs.js'
@@ -36,9 +36,8 @@ export type Issue = {
   store: string      // 'local' | a forge host ('github') — the adapter that holds it
   concern: string
   by: string
-  status: string     // its own lifecycle: local open|accepted|rejected|landed; forge open|closed
+  status: string     // its own lifecycle: local open|landed; forge open|closed
   nodes: string[]
-  signers: string[]
   created: string
   body: string
   replies: Reply[]
@@ -122,7 +121,6 @@ export function fromForge(slice: ForgeSlice, nodeIds: string[]): Issue[] {
     by: i.author,
     status: (i.state || '').toLowerCase(),
     nodes: nodesByNumber.get(i.number) ?? [],
-    signers: [],
     created: i.createdAt,
     body: i.body,
     // the forge comments ARE the thread — the same Reply shape a local thread carries, so nothing
@@ -186,7 +184,7 @@ export async function createIssue(
 // body + the `Spec: <nodes>` marker (the round-trip: the existing tracer read links it straight back to
 // the same nodes, no new linking code) + the evidence hashes + a provenance footer — and created through
 // the driver (the only network toucher). ORDER makes failure safe: create the forge issue FIRST; only
-// then close the local thread out (a reply carrying the permalink, then resolve `landed`) — an
+// then close the local thread out (a reply carrying the permalink, then status `landed`) — an
 // unreachable forge throws with the local thread untouched, and only an `open` thread promotes.
 // `author` mirrors the other write verbs: the effective session id by default, `'human'` from the dashboard.
 export async function promote(id: string, opts: { author?: string } = {}): Promise<{ url: string; number: number; host: string }> {
@@ -203,7 +201,7 @@ export async function promote(id: string, opts: { author?: string } = {}): Promi
   ].filter(Boolean).join('\n')
   const { number, url } = await driver.createIssue({ title: t.concern, body })
   reply(id, `promoted to the forge: ${url}`, author)
-  resolve(id, 'landed')
+  closeLocalIssue(id)
   return { url, number, host: driver.host }
 }
 
@@ -237,11 +235,11 @@ export async function replyIssue(
 }
 
 // @@@ closeIssue - ONE lifecycle close over every store ([[issues]]): the issue owns its status, so the
-// dashboard Close button routes by id and never writes node state. Local closes resolve the local thread
+// dashboard Close button routes by id and never writes node state. Local closes mark the local thread
 // `landed`; forge closes call the driver's close verb and let the forced read-back reveal the closed state.
 export async function closeIssue(id: string): Promise<{ store: string; status: string; url?: string }> {
   const forge = /^([A-Za-z0-9-]+)#(\d+)$/.exec(id)
-  if (!forge) return { store: 'local', status: resolve(id, 'landed').as }   // resolve() returns {as, already} since the idempotent-write change; status stays the plain string
+  if (!forge) return { store: 'local', status: closeLocalIssue(id).status }
   const driver = forgeDriverFor(forge[1])
   if (!driver) throw new Error(`unknown forge host '${forge[1]}' — known: ${FORGE_DRIVERS.map((d) => d.host).join(', ')}`)
   const { url } = await driver.closeIssue({ number: parseInt(forge[2], 10) })
@@ -257,11 +255,11 @@ const hasFlag = (args: string[], name: string) => args.includes(`--${name}`)
 
 // `spex issues …` — the ONE issues surface. Bare (with filters) it is THE read over every store: the
 // drain view a supervisor/human works from, `[--node id] [--store local|<host>] [--all] [--json]`. A write
-// first-positional (open|reply|sign|resolve|on|off|status|nudge — localIssues.ts) routes to the store's
+// first-positional (open|reply|on|off|status|nudge — localIssues.ts) routes to the store's
 // write verbs (open and reply are themselves store-routed: `open --store <host>` / a `<host>#<n>` id go
 // through the driver); `close` is the store-routed lifecycle verb (the SAME closeIssue the dashboard's
 // Close button calls); `promote` is the one cross-store verb. The list imposes NO salience ranking —
-// recurrence (signers, replies) is a signal the drain WEIGHS by judgment, never an automatic priority
+// replies are a signal the drain WEIGHS by judgment, never an automatic priority
 // order. The forge slice is a LIVE pull; an unreachable forge degrades loudly to local-only (one stderr
 // note) — local reading never hostages on a network.
 export async function runIssues(args: string[]): Promise<number> {
@@ -275,7 +273,7 @@ export async function runIssues(args: string[]): Promise<number> {
     try {
       const r = await closeIssue(id)
       console.log(r.store === 'local'
-        ? `closed '${id}' — local thread resolved landed`
+        ? `closed '${id}' — local thread landed`
         : `closed '${id}' on ${r.store}${r.url ? `  ${r.url}` : ''}`)
       return 0
     } catch (e) {
@@ -288,12 +286,16 @@ export async function runIssues(args: string[]): Promise<number> {
     if (!id || id.startsWith('--')) { console.error('usage: spex issues promote <local-issue-id>'); return 2 }
     try {
       const r = await promote(id)
-      console.log(`promoted '${id}' → ${r.host}#${r.number}  ${r.url}\n  local thread resolved landed (permalink recorded in its reply trail)`)
+      console.log(`promoted '${id}' → ${r.host}#${r.number}  ${r.url}\n  local thread closed landed (permalink recorded in its reply trail)`)
       return 0
     } catch (e) {
       console.error(`spex issues promote: ${e instanceof Error ? e.message : e}`)
       return 1
     }
+  }
+  if (args[0] && !args[0].startsWith('--')) {
+    console.error(`spex issues: unknown subcommand '${args[0]}'`)
+    return 2
   }
   const nodeIds = loadSpecsLite().map((s) => s.id)
   let forge: ForgeSlice | null = null
@@ -318,7 +320,6 @@ export async function runIssues(args: string[]): Promise<number> {
     const tags = [p.store, p.status !== 'open' ? `[${p.status}]` : '', p.nodes.length ? `re: ${p.nodes.join(', ')}` : '', p.by ? `by ${p.by}` : ''].filter(Boolean).join('  ·  ')
     console.log(`• ${p.concern}  [${p.id}]`)
     console.log(`    ${tags}`)
-    if (p.signers.length) console.log(`    +${p.signers.length} signed: ${p.signers.join(', ')}`)
     if (p.replies.length) console.log(`    ${p.replies.length} reply(ies) in thread`)
     if (p.url) console.log(`    ${p.url}`)
   }

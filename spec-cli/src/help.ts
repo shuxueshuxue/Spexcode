@@ -126,9 +126,7 @@ restores a pruned or cloned-away blob.`,
                   [--node <id>] [--store local|github] [--all] [--json]
        spex issues open "<concern>" [--store local|<host>] [--node <id>…] [--evidence <hash>…] [--body -|<text>]
        spex issues reply <id> --body -|<text> [--evidence <hash>…]     (routes by the issue's store)
-       spex issues close <id>             close by the issue's store: local resolves landed, forge closes remote
-       spex issues sign <id>              co-sign a local issue
-       spex issues resolve <id> --as accepted|rejected|landed
+       spex issues close <id>             close by the issue's store: local lands, forge closes remote
        spex issues promote <id>           move an OPEN local issue to the forge (one recorded action)
        spex issues on|off|status          toggle/inspect the local-issue workflow
 

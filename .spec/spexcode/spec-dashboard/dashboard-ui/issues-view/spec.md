@@ -57,10 +57,10 @@ straight to the trunk.
   no-change refetch costs headers only. A write forces the refetch so it shows up where it lands. The view
   renders each issue **in the order the API returns** — [[issues]]'s one time line, stores interleaved
   newest first: the frontend never re-sorts, and **shows no salience/priority ranking** (recurrence is the
-  drain's judgment, per [[local-issues]], never an automatic order); signer and reply counts appear as raw
-  data, not a rank. **Concluded issues hide by default** — closed / rejected / landed are the archive, not
-  the open work, and mixing them in only confuses review; a count chip reveals them on demand (open and
-  accepted stay: accepted is approved-but-not-landed, still live). The filter bar carries a **store
+  drain's judgment, per [[local-issues]], never an automatic order); reply counts appear as raw data, not a
+  rank. **Concluded issues hide by default** — any non-open issue is archive (local `landed`, forge
+  `closed`), not open work, and mixing them in only confuses review; a count chip reveals them on demand.
+  The filter bar carries a **store
   filter** — a small dropdown whose options are DERIVED from the stores actually present in the data plus
   "all" (never a hardcoded list: a new store's driver landing puts it in the menu for free), defaulting to
   "all" so the stores stay mixed; picking one narrows rows AND the counts to that store, and the control
@@ -70,13 +70,13 @@ straight to the trunk.
   **store mini-tag** (borderless, muted, and rendered only while stores are actually mixed — a single-store
   list carries no tags, mirroring the filter's own self-hiding). **The store is metadata, never identity: it
   never leads a row and never sits on a title** (the human called the leading boxed chip). The DETAIL opens
-  with the concern ALONE as its title; everything else — status, store, ORIGINATOR + its liveness, signer
-  count, node chips, permalink — is the meta strip under it, over the **markdown-rendered body and
+  with the concern ALONE as its title; everything else — status, store, ORIGINATOR + its liveness, node
+  chips, permalink — is the meta strip under it, over the **markdown-rendered body and
   replies** — the same SpecBody renderer the spec
   panes use, so local-issue markdown and spec markdown read as one dialect (raw `##`/table pipes never show),
   and a forge issue's GitHub comments render as the SAME reply thread a local issue thread gets ([[issues]]
   maps them into `replies[]` — one thread type, one renderer). Store never changes the shape; the only
-  store-specific affordances are metadata (a local issue's signer count, a forge issue's permalink) — the
+  store-specific affordances are metadata (a forge issue's permalink) — the
   thread itself reads and writes identically.
 - **The originator's liveness is on the header — because an un-@'d reply defaults to it.** A committed reply
   gets an implicit originator loop-in ([[mentions]]): a courtesy copy to whoever raised the thread, delivered
@@ -86,9 +86,7 @@ straight to the trunk.
   the dot in the board's four-hue `STATUS_COLOR`, [[state]]), **offline** otherwise. It is a thin read-time
   join of the id against the board sessions the page already holds — no new query, no second palette. A forge
   issue's `by` is a github login resolving to no session, so it stays a plain author label (the loop-in is
-  silent there by construction). The **signer count renders only when someone actually signed** — a "+0
-  signed" is noise, so the badge is suppressed at zero (mirroring the CLI's own nonzero guard); the sign
-  feature is unchanged.
+  silent there by construction).
 - **Node chips focus the graph.** An issue's node chips are clickable — a click routes to the graph page
   and **focuses that node**, so the page stays anchored to the graph it discusses.
 - **A human writes from here — to the issue's OWN store, from a composer that is ALWAYS on screen.** EVERY
@@ -137,15 +135,12 @@ straight to the trunk.
   detail pane. Every non-concluded issue, local or remote, gets the same affordance there; the click goes
   through ONE store-routed close verb, then the resident issue list reloads so the issue disappears under
   the default concluded-hidden filter. The frontend does not branch on store beyond rendering metadata;
-  local close resolves the local thread, and remote close asks the forge driver to close its issue.
-  The same action row carries the issue's whole human-reachable LOCAL lifecycle at **CLI parity** — the
-  dashboard hides no verb the CLI has: **Sign** (`spex issues sign`; hides once `human` signed — the signed
-  badge reflects it), **Accept** / **Reject** (`spex issues resolve --as accepted|rejected`), and
-  **Promote** (`spex issues promote` — the [[issues]] verb verbatim: the real forge issue first, then the
-  local thread resolved landed with the permalink). Each is a thin POST to the store-routed endpoint
-  wrapping the SAME store function its CLI verb calls, author `'human'` server-derived; the buttons render
-  only where the verb applies (an OPEN local issue — a forge issue's lifecycle stays its host's, Close
-  only), and a refused write surfaces its server message in the row, never swallowed. A reply that is a
+  local close marks the local thread landed, and remote close asks the forge driver to close its issue.
+  **Promote** is the only extra local action in this row: an open local thread can move to the forge through
+  the [[issues]] verb verbatim — the real forge issue first, then the local thread closes with the
+  permalink. Sign / accept / reject are not product verbs; the dashboard should not offer them and the CLI
+  should not keep parallel local lifecycle verbs for them. A refused write surfaces its server message in
+  the row, never swallowed. A reply that is a
   REMARK renders its resolve/retract affordance here too — the shared thread UI's remark verbs
   ([[remark-substrate]] LAW L), the same rows the eval rail gets. A reply
   is TIME-ANCHORED by a prose convention (same

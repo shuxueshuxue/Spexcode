@@ -4,17 +4,17 @@ scenarios:
     tags: [frontend-e2e]
     code: spec-dashboard/src/IssuesPage.jsx
     description: >-
-      Run the dashboard against a backend whose issues span both stores (a local thread with a signer +
-      reply, forge issues). Open #/issues and read the rendered DOM: the issue group's rows, then select
+      Run the dashboard against a backend whose issues span both stores (a local thread with a reply,
+      forge issues). Open #/issues and read the rendered DOM: the issue group's rows, then select
       the local thread and read the detail pane; check for raw markdown syntax in the detail.
     expected: >-
       The issue group renders the non-concluded rows in the API's order (no re-sort/rank): one compact
       line each, LEADING with the issue itself — a status-colored dot, then the concern; the trailing
       edge carries only quiet meta (a compact reply-count pill, and a borderless muted store mini-tag
       present only because the stores are mixed). NO boxed store chip leads any row. Concluded issues
-      (closed/rejected/landed) are hidden behind a count chip that reveals them. Selecting the local
+      (any non-open issue: local landed or forge closed) are hidden behind a count chip that reveals them. Selecting the local
       thread opens it in the RIGHT detail pane: the title is the concern ALONE (no store chip on the
-      title); the meta strip under it carries status, the store tag, author, "+N signed", clickable node
+      title); the meta strip under it carries status, the store tag, author, clickable node
       chips; the body and replies MARKDOWN-RENDERED (headings/tables/lists — no raw `##` or `|` pipes
       visible), and a reply composer. A forge selection renders the SAME way — its GitHub comments as
       the reply thread, its permalink in the meta strip, and the SAME composer (no read-only note
@@ -123,21 +123,10 @@ scenarios:
       Each non-concluded issue detail shows one Close issue action in the thread composer's action row
       beside Send, GitHub-style, and no close action in the title's top-right chrome or a separate row.
       Clicking it posts to the same dashboard close route, disables while pending, then reloads the
-      resident issue list. The local issue is resolved in the disposable local store; with the default
+      resident issue list. The local issue is marked landed in the disposable local store; with the default
       concluded-hidden filter, it disappears from the visible list after the write. The same button renders
       for a forge issue because the frontend does not branch by store; the remote write path is the
       store-routed backend route. A concluded issue shows no Close button. No page errors.
-  - name: signed-badge-only-when-nonzero
-    tags: [frontend-e2e]
-    code: spec-dashboard/src/IssuesPage.jsx
-    description: >-
-      Run the dashboard against a backend with two LOCAL issues: one with ZERO signers, one with ≥1
-      signers. Open #/issues, select each, and read the detail meta strip (`.fvd-meta`) — look for the
-      signed badge (`.fv-count` reading "+N signed").
-    expected: >-
-      The zero-signer issue's detail shows NO signed badge at all (a "+0 signed" is noise — suppressed,
-      mirroring the CLI's own nonzero guard). The signed issue shows "+N signed" with the true count. The
-      sign feature is otherwise unchanged. No page errors.
   - name: originator-liveness-shown
     tags: [frontend-e2e]
     code: spec-dashboard/src/Thread.jsx
@@ -158,19 +147,15 @@ scenarios:
     description: >-
       Run the dashboard against a backend on a DISPOSABLE local store (SPEXCODE_ISSUES_DIR) seeded with
       agent-authored OPEN local issues. Open #/issues, select one, and read the composer action row:
-      which lifecycle buttons render (Sign / Accept / Reject / Promote / Close issue). Click Sign and
-      re-read the meta strip and the action row; click Accept on one issue and Reject on another and
-      re-read status + list membership. Verify Promote renders on an open local issue but do NOT click
-      it through (a real forge issue would be created); select a non-open issue and re-read its row.
+      which lifecycle buttons render. Verify Promote renders on an open local issue but do NOT click
+      it through (a real forge issue would be created); click Close issue on another local issue and
+      re-read status + list membership.
     expected: >-
-      An OPEN local issue's composer action row carries the whole human-reachable local lifecycle at CLI
-      parity beside Send: Sign, Accept, Reject, Promote, Close issue. Sign POSTs the store-routed sign
-      (author 'human'): the "+N signed" badge appears/increments and the Sign button hides (human is
-      already a signer). Accept resolves accepted — the status chip flips and the issue STAYS listed
-      (approved-not-landed), the open-only verbs (Accept/Reject/Promote) gone. Reject resolves rejected —
-      the issue disappears under the default concluded-hidden filter into the archive chip's count.
-      Promote renders only on an open LOCAL issue. A concluded issue never grows the lifecycle verbs
-      (and a forge issue keeps Close only). A refused write surfaces its server message in the row.
+      An OPEN local issue's composer action row carries Promote and Close issue beside Send. It never
+      renders Sign, Accept, or Reject. Promote renders only on an open LOCAL issue. Close posts the
+      store-routed close; the issue disappears under the default concluded-hidden filter into the archive
+      chip's count. A concluded issue never grows lifecycle verbs, and a forge issue keeps Close only. A
+      refused write surfaces its server message in the row.
       No page errors.
 ---
 

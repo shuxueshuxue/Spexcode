@@ -41,6 +41,20 @@ scenarios:
       whose reading has a real image blob (blob-less count under it: zero); `note` claims exactly the
       blob-less rows. Selecting a note row renders its verdict note as TEXT in the detail pane — no
       <video>/<img> element and no empty media box.
+  - name: chip-click-is-never-overridden
+    tags: [frontend-e2e, desktop]
+    description: >
+      Open #/evals with a media reading selected (the default selection). Click a kind chip that HIDES
+      the selected row (e.g. `note` while a video reading is selected; `video` while a note reading is
+      selected). Read the chip state and the row set immediately after, and again over the next seconds.
+      Then separately deep-load a canonical #/evals/<node>/<scenario> address whose eval the default
+      filter hides, and read the chip state.
+    expected: >
+      A human's chip click always wins: the clicked chip stays ON and the list narrows to its kind — the
+      selection falls to the first visible row; the filter is NEVER snapped back to `all` because the
+      previous selection went hidden (the mustShow widen is one-shot, for a deep-link ARRIVAL only). The
+      deep-link case still widens: loading an address the filter would hide flips the chip to `all` and
+      renders that eval.
 ---
 # evals-feed loss
 

@@ -198,13 +198,19 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite 
     v.addEventListener('durationchange', onMeta)
     v.addEventListener('play', onPlay)
     v.addEventListener('pause', onPause)
-    paint()   // sync the bar to wherever the element already is (a remount, an A/B flip)
+    // sync catch-up: a cached clip can reach readyState≥1 BEFORE these listeners attach, so the
+    // loadedmetadata we rely on for `dur` may never be heard — read the element's current state
+    // directly (onMeta also paints), instead of only waiting to be told.
+    onMeta()
     return () => {
       v.removeEventListener('timeupdate', paint); v.removeEventListener('seeked', paint)
       v.removeEventListener('loadedmetadata', onMeta); v.removeEventListener('durationchange', onMeta)
       v.removeEventListener('play', onPlay); v.removeEventListener('pause', onPause)
     }
-  }, [videoEntry?.hash, deriveActive])
+    // keyed on the VIEWED READING, not just the clip hash: readings routinely share one video blob, so a
+    // same-hash selection switch (or A/B flip) must still re-run this — the reset effect above just
+    // blanked the bar, and only this paint rewrites it (declaration order makes it the last writer).
+  }, [videoEntry?.hash, entry.node, entry.scenario, histIdx, deriveActive])
 
   const durMs = Math.round(dur * 1000)
   const activeStep = events[activeStepIdx] || null

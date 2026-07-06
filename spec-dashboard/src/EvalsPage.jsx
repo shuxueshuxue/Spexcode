@@ -77,7 +77,14 @@ export default function EvalsPage({ specs = [], sessions = [], reloadBoard }) {
     const i = param.indexOf('/')
     return i > 0 ? `eval:${param.slice(0, i)}·${param.slice(i + 1)}` : null
   }, [param])
-  useEffect(() => { if (page === 'evals' && urlSel) setSel(urlSel) }, [page, urlSel])
+  // the widen handshake is ONE-SHOT per arrival: `deepWant` carries the address to the feed's mustShow
+  // only until the entry is visible, then clears. A later chip click that hides the selection is a filter
+  // decision the human just made — never a reason to snap the filter back ([[evals-feed]]: the chips are
+  // the group's own state; the page widens only for a deep-link ARRIVAL). The hidden selection instead
+  // falls to the first visible row (below), and the URL re-canonicalizes to it.
+  const [deepWant, setDeepWant] = useState(null)
+  useEffect(() => { if (page === 'evals' && urlSel) { setSel(urlSel); setDeepWant(urlSel) } }, [page, urlSel])
+  useEffect(() => { if (deepWant && evalByKey.has(deepWant)) setDeepWant(null) }, [deepWant, evalByKey])
   // selection → URL echo with replace (no history entry per row-hop). While a deep-linked selection is
   // still pending (its row not yet in the visible list), hold the echo — never canonicalize AWAY from an
   // address the user just arrived on before the feed has had the chance to show it. An address naming an
@@ -88,7 +95,12 @@ export default function EvalsPage({ specs = [], sessions = [], reloadBoard }) {
     () => !pending || currentEntries(specs).some((e) => entryKey(e) === sel),
     [pending, specs, sel],
   )
-  useEffect(() => { if (pending && !selExists) setSel(null) }, [pending, selExists])
+  useEffect(() => { if (pending && !selExists) { setSel(null); setDeepWant(null) } }, [pending, selExists])
+  // a selection hidden by the human's OWN filtering (no deep-link in flight): drop it so effSel + the echo
+  // re-anchor on the first visible row instead of freezing the URL on a hidden entry.
+  useEffect(() => {
+    if (sel && !deepWant && evalRows.length && !evalByKey.has(sel)) setSel(null)
+  }, [sel, deepWant, evalRows, evalByKey])
   useEffect(() => {
     if (page !== 'evals' || !effSel || pending) return
     const m = /^eval:([^·]+)·(.+)$/.exec(effSel)
@@ -113,7 +125,7 @@ export default function EvalsPage({ specs = [], sessions = [], reloadBoard }) {
         : <div className="fv-note">{t('evalsFeed.empty')}</div>}
     >
       {notice && <div className="fv-notice">{notice}</div>}
-      <EvalsGroup nodes={specs} sel={effSel} onSel={(k) => setSel(k)} onRows={onRows} mustShow={pending ? sel : null} />
+      <EvalsGroup nodes={specs} sel={effSel} onSel={(k) => setSel(k)} onRows={onRows} mustShow={deepWant} />
     </EvalMasterDetail>
   )
 }

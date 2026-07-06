@@ -37,7 +37,9 @@ deliberate exception rides that ownership the RIGHT way round: a **deep-linked e
 would hide** ([[evals-view]]'s canonical `#/evals/<node>/<scenario>` address) is handed down as a
 `mustShow` key, and the group widens **its own** filter to `all` (dropping the stale narrowing) so the
 address always renders its eval — the page never reaches into the group's filter state, and an address
-naming no real eval changes nothing.
+naming no real eval changes nothing. The widen is **one-shot per arrival**: once the target is visible the
+key clears, so a chip click that hides the *current selection* is the human's filter decision and always
+wins — the selection falls to the first visible row instead of the filter snapping back.
 
 **Kinds are honest — and a reading now carries a SET of them.** Evidence is a LIST, so a reading's kinds are
 every entry it holds: `video`/`image`/`transcript` (a legacy scalar blob with no recorded kind is an image —

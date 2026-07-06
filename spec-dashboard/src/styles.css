@@ -264,12 +264,14 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .av-st-idle     { box-shadow: 0 0 0 1.5px var(--panel), 0 0 0 3px var(--muted); }
 .av-st-offline  { box-shadow: 0 0 0 1.5px var(--panel), 0 0 0 3px var(--line); opacity: .55; }
 
-.react-flow__handle { background: var(--muted); border: none; width: 5px; height: 5px; border-radius: 1px; }
-/* spec-tree handles route edges but need no visible square (no manual edge-drawing, nodes aren't
-   draggable) — hiding them de-clutters and frees the right edge for the ▸N expandable tab. The handles
-   stay in place (transparent) so edges still attach at the node's mid-sides. (SessionGraph carries no
-   handles at all — its monitor gesture is left-click then right-click, not a drag.) */
-.spec-node .react-flow__handle { background: transparent; }
+/* handles are pure edge anchors — nodes on this board are never interactively connectable, so no
+   dot/circle renders on a tile edge. The 2-class selector outranks xyflow's base .react-flow__handle
+   whatever order the lazy graph chunk injects its stylesheet in (same-specificity overrides lose that
+   race — the old flatten style did, resurfacing the dot). Keep the 5px box so edges anchor where they
+   always did; opacity (not display) so xyflow's edge geometry still measures it. */
+.react-flow .react-flow__handle { opacity: 0; pointer-events: none; background: transparent; border: none; width: 5px; height: 5px; min-width: 0; min-height: 0; border-radius: 1px; }
+/* (the spec-node handle flatten folded into the global rule above — one order-proof hider, no per-tile
+   special case; SessionGraph still carries no handles at all.) */
 
 /* ---- sidebar ---- */
 .side { padding: 18px 18px 24px; overflow-y: auto; background: var(--panel); border-left: 1px solid var(--line); }

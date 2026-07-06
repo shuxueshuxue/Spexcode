@@ -16,6 +16,20 @@ scenarios:
       sibling subtrees collapsed to `▸N` tiles, and each node a two-row tile showing its identity and
       recency (Row 1) and its marks/people (Row 2). Arrow keys re-plot the tree and the camera stays
       centred on focus. The filed reading carries the screenshot as image evidence and a pass verdict.
+  - name: tiles-carry-no-handle-dots
+    tags: [frontend-e2e, desktop]
+    description: >-
+      Open the dashboard on the graph and inspect a tile's react-flow connection handles (the
+      `.react-flow__handle` elements on its left/right edges) — read their computed style in the real
+      browser, and zoom a screenshot on a tile edge. The handles exist only as edge anchors: nodes on
+      this board are never interactively connectable, so no dot/circle may render on the tile edge (the
+      `▸N` collapsed-count tab is unrelated and stays). The edges themselves must still draw. This must
+      hold regardless of stylesheet load ORDER — the graph chunk is lazy, so xyflow's base stylesheet
+      can inject after the app's, and a same-specificity override silently loses that race.
+    expected: >-
+      A tile's handles are fully invisible (computed style transparent/zero-opacity, no border ring) and
+      non-interactive, while the parent→child edges still render anchored at the tile edges. Zero loss =
+      no butt-circle on any tile edge, `▸N` tabs intact, edge count unchanged.
 ---
 # yatsu.md — node-graph
 

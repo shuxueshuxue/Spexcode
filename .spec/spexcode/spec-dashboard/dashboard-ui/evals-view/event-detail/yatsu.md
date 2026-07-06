@@ -148,6 +148,23 @@ scenarios:
       shared `OriginatorLiveness` the issues header uses, distinct only in wording. A legacy reading with
       no `by` resolves to nobody and the header simply shows no filer pill — exactly the case where the
       loop-in chain runs dry silently. No second palette, no page errors.
+  - name: remark-resolve-retract
+    tags: [frontend-e2e]
+    code: [spec-dashboard/src/Thread.jsx, spec-dashboard/src/EventDetail.jsx]
+    description: >-
+      Against a backend on a disposable store, seed one AGENT-authored remark (CLI `spex remark`, a real
+      session id) and one HUMAN-authored remark (POST /api/remarks) on the SAME (node, scenario). Open
+      #/evals, select that scenario's reading, and read the rail's remark rows: which verb button each
+      carries. Click resolve on the agent's remark and re-read its row; click retract on the human's own
+      and re-read the thread.
+    expected: >-
+      Each unresolved remark row carries exactly ONE verb, mirroring the server's teeth: the agent's
+      remark a `resolve` button (the human's second-party judgment — never offered on the human's own),
+      the human's own a `retract`. Resolve flips the row in place to settled (dimmed, "✓ resolved", the
+      resolver in its title) and the verb disappears — monotonic, a resolved remark is immutable. Retract
+      REMOVES the human's own row from the thread. Both writes ride the CLI-parity
+      /api/remarks/resolve|retract with the `<thread-id>#<rid>` ref in the BODY; a refused action
+      surfaces its server message on the row, never swallowed. No page errors.
 ---
 # event-detail loss
 

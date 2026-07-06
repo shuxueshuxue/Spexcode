@@ -113,7 +113,7 @@ export async function dispatchMentions(
       // deliberate audit/re-measure), but the worker prompt carries the status and the outcome line warns.
       const settled = ctx.status && ctx.status !== 'open' ? ctx.status : undefined
       try {
-        const s = await newSession(ctx.node, newWorkerPrompt(ctx.threadId, ctx.node, ctx.author, text, ctx.status), undefined, spawnParent(ctx.author, sessions))
+        const s = await newSession(ctx.node, newWorkerPrompt(ctx.threadId, ctx.node, ctx.author, text, ctx.status), spawnParent(ctx.author, sessions))
         out.push({ token: r.token, result: 'spawned', detail: s.id, ...(settled ? { note: `thread ${settled}` } : {}) })
       } catch (e) { out.push({ token: r.token, result: 'failed', detail: e instanceof Error ? e.message : String(e) }) }
       continue

@@ -1,5 +1,5 @@
 // The launch harnesses' vendor marks ([[harness-adapter]] / [[launcher-select]]) — the SINGLE source for the
-// glyphs the New-Session agent picker, the launcher picker, AND a session row's launcher badge all draw, so
+// glyphs the launcher picker and any session launcher display draw, so
 // which harness/launcher a session runs under reads as the SAME mark everywhere. Kept in its own module (not
 // SessionInterface) because SessionWindow's shared SessionRow needs it and SessionInterface imports SessionWindow
 // — a shared leaf avoids the cycle. `claude` is the default harness.

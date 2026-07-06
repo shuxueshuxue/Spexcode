@@ -35,8 +35,8 @@ third baked id beyond the native two: `plugin`, written by the [[plugin-harness]
 no `Harness` adapter of its own (it is a DELIVERY form, not a runtime) — `dispatch.sh` accepts it and `harness.sh`
 routes it through the **claude family** (a plugin host like z-code/Claude shares Claude's payload shape) via the
 default case, so the shell side needs no separate `plugin)` arm. On the TS
-side the harness is the launcher's choice (the dashboard launches `defaultHarness`) or ALL adapters at once
-(materialize renders every harness's artifacts). The Adapter owns exactly these divergence points — its whole
+side the harness is derived from the selected launcher or ALL adapters at once (materialize renders every
+harness's artifacts). The Adapter owns exactly these divergence points — its whole
 surface:
 
 - **slashCommands()** — the `/` menu, computed the way THAT harness computes its own (Claude: a captured
@@ -217,8 +217,8 @@ surface:
 Most of this was **consolidation**: the event/snake maps, the Codex trust writer, and the shim writers were
 scattered in [[harness-delivery]]'s materialize; `CLAUDE_CMD` in [[sessions-core]]; the Claude `/` menu in
 [[slash-commands]]. They now live in `harness.ts` (`claudeHarness` / `codexHarness`, gathered in `HARNESSES`),
-which materialize loops over and sessions reads through `defaultHarness` — there is no `if (codex)` left in
-product code. The genuinely NEW Codex pieces: the Codex `/` menu (taken from the pinned codex-rs source the
+which materialize loops over and sessions resolves by the selected launcher's `harness` — there is no
+`if (codex)` left in product code. The genuinely NEW Codex pieces: the Codex `/` menu (taken from the pinned codex-rs source the
 same discovered-not-guessed way), and the **tool mapping** that closes the inert-on-codex gap.
 
 Because the hook handlers are pure shell, they cannot import `harness.ts`; `hooks/harness.sh` is its **shell

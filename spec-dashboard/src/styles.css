@@ -901,6 +901,15 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   flex: 0 0 240px; border-right: 1px solid var(--line); background: var(--panel);
   display: flex; flex-direction: column; overflow-y: auto;
 }
+/* folded session list (Eval tab) — a thin full-height strip that is itself the unfold affordance, mirroring
+   the Evals page's master-list fold (.fv-unfold): 22px wide (the .fv-master.folded column width), muted at
+   rest, inking blue on hover. */
+.si-list-unfold {
+  flex: 0 0 22px; font: inherit; font-size: 11px; color: var(--muted);
+  background: var(--panel); border: none; border-right: 1px solid var(--line);
+  cursor: pointer; padding: 0; min-height: 0;
+}
+.si-list-unfold:hover { color: var(--blue); background: var(--panel2); }
 .si-item {
   display: flex; flex-wrap: wrap; align-items: center; column-gap: 7px; row-gap: 2px; width: 100%;
   padding: 9px 12px; background: none; border: none; border-bottom: 1px solid var(--line);

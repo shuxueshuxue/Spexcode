@@ -23,7 +23,8 @@ const ENTRIES: Record<string, Entry> = {
 
 Finds the spec node(s) whose INTENT matches your topic — ranked by user-story relevance, which
 surfaces user-facing behaviour a code-grep misses. Run it BEFORE touching code: the returned node's
-spec.md body is the current contract for that area. Prints title, id, path, snippet per hit.`,
+spec.md body is the current contract for that area. Prints title, id, path, snippet per hit.
+The corpus is English — query in English (translate first if your question isn't).`,
     see: 'spex owner (file → node, the reverse edge) · spex guide spec (what a node is)',
   },
   owner: {

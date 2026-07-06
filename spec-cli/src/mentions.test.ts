@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { parseMentions, resolveActors, newWorkerPrompt, summarize, deliveredIds, notifyOriginator, pickLoopIn, type ActorSession } from './mentions.js'
+import { parseMentions, resolveActors, newWorkerPrompt, summarize, deliveredIds, notifyOriginator, pickLoopIn, stripRefSigil, type ActorSession } from './mentions.js'
 
 // ---- parseMentions: the pure grammar ----
 
@@ -112,4 +112,18 @@ test('notifyOriginator: an empty fallback chain (nulls, or only the replier) →
   assert.equal(await notifyOriginator([null], 'alice', 'hi', { threadId: 't1', node: null }), null)
   assert.equal(await notifyOriginator(['alice'], 'alice', 'hi', { threadId: 't1', node: null }), null)
   assert.equal(await notifyOriginator(['alice', null, 'alice'], 'alice', 'hi', { threadId: 't1', node: null }), null)
+})
+
+// ---- stripRefSigil: CLI args tolerate the reference sigils ----
+
+test('stripRefSigil: sheds a leading @ or a [[ ]] wrapper; bare tokens pass through', () => {
+  assert.equal(stripRefSigil('@graph'), 'graph')
+  assert.equal(stripRefSigil('[[cli-surface]]'), 'cli-surface')
+  assert.equal(stripRefSigil('cli-surface'), 'cli-surface')
+  assert.equal(stripRefSigil('node/graph-abcd'), 'node/graph-abcd')   // a branch selector is untouched
+})
+
+test('stripRefSigil: only a FULL wrapper counts; a lone @ strips to empty (→ treated as missing)', () => {
+  assert.equal(stripRefSigil('[[x]]y'), '[[x]]y')   // not a pure wrapper — left alone
+  assert.equal(stripRefSigil('@'), '')
 })

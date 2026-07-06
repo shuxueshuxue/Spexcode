@@ -34,6 +34,18 @@ scenarios:
       an unresolved/offline actor is reported ("no live session; stored"), never failing the committed post;
       the `[[node]]` ref is passive (parsed, never dispatched). Live delivery (sendKeys to an online session,
       `@new` spawning a worker) reuses [[dispatch]]/[[launch]] and is measured on a real backend deployment.
+  - name: cli-sigil-tolerance
+    tags: [cli]
+    code: spec-cli/src/mentions.ts
+    related: [spec-cli/src/sessions.ts, spec-yatsu/src/cli.ts]
+    description: >-
+      Through the real CLI, name the same referent with and without its sigil: a session selector as
+      `<sel>`, `@<sel>`, and `[[<sel>]]` (a list verb like `spex ls` AND a control verb through the
+      single-target resolver), and a node arg as `<node>` and `[[<node>]]` (`spex yatsu show`/`eval`).
+    expected: >-
+      Identical output for every pair — a sigiled CLI argument resolves to exactly what the bare token
+      resolves to, never widening a match (a wrong sigiled token errors the same as the bare one). Sigils
+      stay REQUIRED in free text; the tolerance is CLI-argument-only.
 ---
 
 # measuring mentions

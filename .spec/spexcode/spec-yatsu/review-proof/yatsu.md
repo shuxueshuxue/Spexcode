@@ -47,7 +47,7 @@ scenarios:
       --json = the model). `spex review proof` still works but echoes the canonical `spex eval <SEL>
       --export` deprecation line on stderr. Help: the map lists eval beside review, `spex help review` no
       longer carries a proof sub-noun, and an --help probe never fires the verb.
-
+  - name: eval-tab-shared-shell
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/SessionEval.jsx, spec-dashboard/src/EvalsPage.jsx]
     description: >

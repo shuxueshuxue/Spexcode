@@ -103,7 +103,10 @@ it to `.spec/.issues` on its first store touch after a toolchain update — the 
   impossible — each read is under the lock). The commit itself is **`--no-verify`**: the file is data,
   structurally invisible to lint, and the commit is provably a single `.spec/.issues/` path, so running the
   seconds-long pre-commit gate would only pass anyway — pure overhead that would hold the lock. The id is
-  minted under the lock too, so two racing posts can't claim it.
+  minted under the lock too, so two racing posts can't claim it. And a **no-change write is idempotent
+  success**: when the requested state already IS the stored state (a duplicate resolve, a repeat sign), the
+  write detects the no-op after staging and skips the commit — the verb reports "already <state>" and exits
+  0, never surfacing git's nothing-to-commit failure as an error for a store that is exactly as asked.
 - **Nudged AFTER the work lands, not during it.** The agent's own task is what matters most, so the local issue store is
   never raised while it is still finishing — it is raised the moment the work **merges**. A **`post-merge`
   git hook** (harness-side gates live in [[state]]; this one is git-side) fires in the doer's dispatched

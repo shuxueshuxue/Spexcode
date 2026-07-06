@@ -7,6 +7,7 @@ import { MENTION_RE, specPath, highlight, nodeMentionAt, actorMentionAt, Mention
 import { SessionRow, RowLead, useFold } from './SessionWindow.jsx'
 import { HARNESSES, HARNESS_BY_ID } from './harness.jsx'
 import SessionContextMenu from './SessionContextMenu.jsx'
+import SessionSelectBar from './SessionSelectBar.jsx'
 import SessionEvalPane from './SessionEval.jsx'
 import { useResizable } from './useResizable.js'
 import { boardCommandsFor } from './sessionCommands.js'
@@ -118,6 +119,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [prompt, setPrompt] = useState('')    // the New Session tab's own draft (its boarding-switch cache)
   const [menu, setMenu] = useState(null)      // completion dropdown: { kind:'mention'|'config'|'slash', items, index, start, end, query }
   const [ctxMenu, setCtxMenu] = useState(null) // session-row right-click menu { x, y, session } — the RENAME gesture lives here, on the board's session list
+  const [selecting, setSelecting] = useState(false)  // multi-select mode ([[session-multi-select]]): rows become checkboxes, not tabs
+  const [picked, setPicked] = useState(() => new Set()) // the ids ticked for bulk delete while `selecting`
   const [slashCmds, setSlashCmds] = useState([])   // the `/` command list (built-in + user/project/skill), fetched once
   const [presets, setPresets] = useState([])       // the config presets (GET /api/config) — the New Session box's `/` palette
   // bottom-input drafts, keyed by session id — each session tab keeps its OWN typed-but-unsent line, never
@@ -563,6 +566,18 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     await reload?.()
   }
 
+  // multi-select mode ([[session-multi-select]]): the right-click "select" enters it, pre-ticking the row that
+  // was clicked; leaving clears both the mode and the picks.
+  const enterSelect = (session) => { setSelecting(true); setPicked(new Set([session.id])) }
+  const exitSelect = () => { setSelecting(false); setPicked(new Set()) }
+  const togglePick = (id) => setPicked((prev) => {
+    const next = new Set(prev)
+    if (next.has(id)) next.delete(id); else next.add(id)
+    return next
+  })
+  // after a bulk delete: leave the mode and re-read the board so the removed rows drop off every surface.
+  const onBulkDeleted = () => { exitSelect(); reload?.() }
+
   // `runners` binds each board-command name to the closure that DOES it — the SAME closure the header
   // button's onClick fires; `boardCmds` narrows the registry to the current session state. See [[term-input]].
   const runners = {
@@ -703,6 +718,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           onChange={(e) => { attachFiles(e.target.files, fileTargetRef.current); e.target.value = '' }}
         />
         <aside className="si-list" style={{ flex: `0 0 ${listW}px` }}>
+          {/* while multi-selecting ([[session-multi-select]]) the New/Search pills give way to the select bar —
+              a pick count + bulk delete + cancel; the rows below toggle picks instead of switching tabs. */}
+          {selecting ? (
+            <SessionSelectBar ids={[...picked]} onCancel={exitSelect} onDeleted={onBulkDeleted} />
+          ) : (
           <div className="si-toprow">
             <button className={active === 'new' ? 'si-pill new on' : 'si-pill new'} title={t('session.newSessionTitle')} onClick={() => setSel('new')}>
               <span className="si-pill-glyph">＋</span>
@@ -718,6 +738,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               </span>
             </button>
           </div>
+          )}
           {forest.map((it) => {
             // group into two triage zones ([[session-console]], a dim header per zone) AND fold nested sessions
             // under their spawner ([[session-nesting]]): the forest emits zone headers and rows (children present
@@ -729,17 +750,21 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               : null
             // single click switches tab; double-click locks the session (needs an overlay to focus, else a
             // no-op beyond the switch). The face is the shared SessionRow, compact + avatar-less here.
+            // In multi-select mode ([[session-multi-select]]) the row is a checkbox instead: a click toggles
+            // its pick (never switches the pane), and the rename/lock gestures are suppressed.
+            const isPicked = selecting && picked.has(s.id)
             return (
               <button
                 key={s.id}
                 data-sid={s.id}
-                className={`si-item${active === s.id ? ' on' : ''}`}
+                className={`si-item${!selecting && active === s.id ? ' on' : ''}${isPicked ? ' picked' : ''}`}
                 style={{ '--ov': labelColor(s.id) }}
-                onClick={() => setSel(s.id)}
-                onDoubleClick={() => { if (s.ops?.length && onPickSession) { onPickSession(s, false); onClose() } }}
-                onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, session: s }) }}
+                onClick={() => (selecting ? togglePick(s.id) : setSel(s.id))}
+                onDoubleClick={() => { if (!selecting && s.ops?.length && onPickSession) { onPickSession(s, false); onClose() } }}
+                onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); if (!selecting) setCtxMenu({ x: e.clientX, y: e.clientY, session: s }) }}
                 title={s.ops?.length ? t('session.opsTitle') : undefined}
               >
+                {selecting && <span className={`si-check${isPicked ? ' on' : ''}`} aria-hidden="true" />}
                 <SessionRow s={s} locked={false} showAvatar={false} compact lead={lead} />
               </button>
             )
@@ -945,7 +970,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         </section>
       </div>
     </div>
-    <SessionContextMenu menu={ctxMenu} onClose={() => setCtxMenu(null)} onChanged={reload} />
+    <SessionContextMenu menu={ctxMenu} onClose={() => setCtxMenu(null)} onChanged={reload} onMultiSelect={enterSelect} />
     </>
   )
 }

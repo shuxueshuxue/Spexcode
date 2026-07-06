@@ -176,11 +176,20 @@ export default {
     emptyBefore: 'no live worktrees — press ',
     emptyAfter: ' to start one',
     rename: 'rename',
+    select: 'select…',
     close: 'close',
     closeTitle: 'close “{name}”?',
     closeConfirm: 'This closes the session and removes its worktree. Any uncommitted changes are lost.',
     renameTitle: 'rename “{name}”',
     renamePlaceholder: 'display name (blank to reset)',
+  },
+
+  // the multi-select bar + bulk-delete confirm ([[session-multi-select]]).
+  sessionSelect: {
+    selected: ({ n }) => `${n} selected`,
+    delete: 'delete',
+    deleteTitle: ({ n }) => (n === 1 ? 'delete 1 session?' : `delete ${n} sessions?`),
+    deleteConfirm: 'This closes every selected session and removes its worktree. Any uncommitted changes are lost.',
   },
 
   // top-of-screen banner shown while a session owns the graph (locked). It names the grip and tells

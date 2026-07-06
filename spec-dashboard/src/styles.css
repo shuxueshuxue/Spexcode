@@ -1079,6 +1079,13 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .fvd-compose .fv-compose { margin-top: 0; padding-top: 0; border-top: none; max-width: 860px; }
 .fvd-head { margin-bottom: 4px; }
 .fvd-concern { font-size: 16px; font-weight: 700; color: var(--ink); line-height: 1.35; }
+.fv-close-issue {
+  flex: none; font-family: var(--mono); font-size: 11px; color: var(--orange);
+  background: var(--paper); border: 1px solid color-mix(in srgb, var(--orange) 35%, var(--line));
+  padding: 4px 12px; border-radius: 4px; cursor: pointer;
+}
+.fv-close-issue:hover { background: var(--orange); color: var(--paper); border-color: var(--orange); }
+.fv-close-issue:disabled { opacity: .5; cursor: default; }
 .fvd-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
 .fvd-body { font-size: 13px; }
 
@@ -1130,18 +1137,22 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   border: 1px solid color-mix(in srgb, var(--orange) 35%, var(--line)); border-radius: 4px; padding: 3px 10px; cursor: pointer; }
 .fv-anchor-btn:hover { background: var(--orange); color: var(--paper); }
 
-/* the human write path ([[issues-view]]): the New form in the group head + a reply composer in the detail. */
+/* the human write path ([[issues-view]]): New opens a centered pop-out; replies compose in the detail. */
 .fv-new-btn {
   font-family: var(--mono); font-size: 11px; color: var(--blue); background: var(--panel2);
   border: 1px solid color-mix(in srgb, var(--blue) 30%, var(--line)); padding: 4px 12px; border-radius: 4px; cursor: pointer;
 }
 .fv-new-btn:hover { background: var(--blue); color: var(--paper); border-color: var(--blue); }
+.fv-new-modal { width: min(520px, 92vw); }
+.fv-new-modal .legend-body { padding: 0; }
 .fv-hint { font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
 /* a brief @-dispatch summary echoed after a write. */
 .fv-notice { padding: 6px 16px; font-family: var(--mono); font-size: 11px; color: var(--green); background: color-mix(in srgb, var(--green) 8%, var(--paper)); border-bottom: 1px solid var(--line); }
+.fv-error { margin: 4px 0 8px; font-family: var(--mono); font-size: 11px; color: var(--red); }
+.fv-actions .fv-error { margin: 0; }
 /* the compose blocks — the docked reply composer and the New-thread form. The reply composer is the
    console-❯-shaped bar: a SINGLE collapsed line while idle that auto-grows with the draft (fitTextarea,
-   capped below) and reveals its actions row only while engaged. */
+   capped below) and reveals its actions row when engaged or when a host lifecycle action pins it visible. */
 .fv-compose { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line); }
 .fv-compose .fv-textarea { resize: none; max-height: 38vh; }
 .fv-new-form { display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--panel2); }
@@ -1154,10 +1165,17 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .fv-tawrap { position: relative; }
 .fv-tawrap .fv-textarea { display: block; }
 .fv-actions { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+.fv-cancel {
+  margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--muted); background: var(--paper);
+  border: 1px solid var(--line); padding: 4px 12px; border-radius: 4px; cursor: pointer;
+}
+.fv-cancel:hover { color: var(--orange); border-color: var(--orange); }
+.fv-cancel:disabled { opacity: .5; cursor: default; }
 .fv-send {
   margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--paper); background: var(--blue);
   border: 1px solid var(--blue); padding: 4px 14px; border-radius: 4px; cursor: pointer;
 }
+.fv-cancel + .fv-send { margin-left: 0; }
 .fv-send:disabled { opacity: 0.5; cursor: default; }
 
 .si-content { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--paper); }

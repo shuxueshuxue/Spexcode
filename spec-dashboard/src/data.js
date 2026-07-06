@@ -143,6 +143,10 @@ export async function postIssueReply(id, body, evidence) {
   })
   return res.json()
 }
+export async function postIssueClose(id) {
+  const res = await apiFetch(`/api/issues/${encodeURIComponent(id)}/close`, { method: 'POST' })
+  return res.json()
+}
 export async function postIssueThread({ concern, body, evidence }) {
   const res = await apiFetch('/api/issues', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -167,4 +171,3 @@ export async function putFrameBlob(blob) {
   const res = await apiFetch('/api/yatsu/blob', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: blob })
   return res.json()
 }
-

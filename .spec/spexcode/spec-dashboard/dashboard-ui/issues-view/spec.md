@@ -98,8 +98,9 @@ straight to the trunk.
   the review surfaces). The composer is the console-❯-box SHAPE: a **single collapsed line while idle** that
   **auto-grows with the draft** (the shared `textarea.js` fitTextarea — one grow routine for the console's
   boxes and the thread composers, capped so it never eats the pane) and reveals its actions row (hint + Send,
-  the ⏱ where a clip supplies one) only while **engaged** — focused, carrying a draft or staged frames, or
-  showing a send error (an error must never collapse out of view). It is **keyed to the selected issue**, so
+  the ⏱ where a clip supplies one, plus any host lifecycle action such as Close issue) while **engaged** —
+  focused, carrying a draft or staged frames, showing a send error (an error must never collapse out of view),
+  or carrying a lifecycle action that must stay visible. It is **keyed to the selected issue**, so
   a half-typed draft dies with its selection instead of leaking onto another issue's thread. The POST goes
   to the one store-routed reply verb ([[issues]]'s
   `replyIssue`, author `'human'`) — a local issue's reply git-commits to the trunk store, a forge issue's
@@ -115,14 +116,24 @@ straight to the trunk.
   dispatch summary is echoed briefly. Both composers carry the SAME `@session` / `[[node]]`
   **autocomplete dropdown** the console's inputs use ([[mentions]]'s shared menu — one implementation,
   never a page-local fork): typing `@` lists the live sessions, `[[` lists the nodes (the thread's own
-  node leading), a pick inserts the token, and Esc closes the menu without leaving the page. A grammar
+  node leading), a pick inserts the token, and Esc closes the menu without leaving the page. **New opens as a
+  centered pop-out over the page, not as an inline row in the list column**: the left column stays a slim
+  picker, the modal carries the same two text surfaces (concern + optional body), its own close affordance,
+  and Esc/backdrop close only that layer. A grammar
   that dispatches workers earns discoverability — a bare hint line proved not enough (the human typed
   `@` and got nothing).
   The reply list and reply composer are ONE shared component (`Thread.jsx`), delivery-agnostic
   (`onSend(text, evidence)`): the issue detail replies to its thread — both stores, the server routing the
   delivery — and the eval detail on the Evals page ([[event-detail]]) renders the SAME thread UI —
   autocomplete included — over its lazily-bound eval remark thread; one thread UI, every home, the store
-  just another delivery behind the same seam. A reply is TIME-ANCHORED by a prose convention (same
+  just another delivery behind the same seam. Following GitHub's issue page grammar, the **Close issue**
+  affordance lives in the composer action row beside Send at the end of the thread, never in the
+  title's top-right chrome and never as a separate row: closing is a lifecycle action on the conversation, not a way to dismiss the
+  detail pane. Every non-concluded issue, local or remote, gets the same affordance there; the click goes
+  through ONE store-routed close verb, then the resident issue list reloads so the issue disappears under
+  the default concluded-hidden filter. The frontend does not branch on store beyond rendering metadata;
+  local close resolves the local thread, and remote close asks the forge driver to close its issue. A reply
+  is TIME-ANCHORED by a prose convention (same
   philosophy as `Spec:`/`[[node]]`): a body whose first line reads `▶m:ss · <step>` IS anchored to a video
   moment — `Thread` linkifies it (click = seek, when the home supplies the clip) and, over a clip, the
   composer grows a ⏱ affordance that stamps the current frame; a circled frame — or ANY attached blob, a

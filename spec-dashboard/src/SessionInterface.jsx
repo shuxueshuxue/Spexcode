@@ -691,6 +691,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     if (t.closest && t.closest('select')) return
     // the terminal owns its own text selection — preventing default on it would break the drag-select.
     if (t.closest && t.closest('.si-term-body')) return
+    // The Eval tab is an inspection workspace, not inert console chrome; its text must select just like the
+    // top-level Evals page that renders the same components.
+    if (t.closest && t.closest('.se-pane')) return
     e.preventDefault()
   }
 

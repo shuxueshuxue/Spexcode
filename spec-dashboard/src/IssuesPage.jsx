@@ -1,9 +1,11 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
-import { postIssueReply, postIssueThread } from './data.js'
+import { postIssueClose, postIssueReply, postIssueThread } from './data.js'
 import { useMentionAutocomplete } from './mentions.jsx'
 import { SpecBody } from './NodeView.jsx'
 import { Replies, ReplyComposer, OriginatorLiveness } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
+import Modal from './Modal.jsx'
+import { useEscLayer } from './escStack.js'
 
 // The Issues page ([[issues-view]]): a top-level page (#/issues, [[side-nav]]), peer of the graph, the
 // session board, and the Evals page. MASTER-DETAIL over one full routed page — the LEFT column is the
@@ -11,7 +13,7 @@ import { useT } from './i18n/index.jsx'
 // issues hidden behind a count chip) under its own filter bar, foldable to a thin strip so the detail
 // owns the width; the RIGHT pane is the full-height DETAIL of the selection — selection IS the detail,
 // no in-place expansion in a small box: an issue renders its markdown body (SpecBody — the spec dialect),
-// its replies, and the reply composer — BOTH stores ([[issues]]: the reply verb routes by store). j/k
+// its replies, and the reply composer — BOTH stores ([[issues]]: the reply/close verbs route by store). j/k
 // walk the issue list even while folded, the detail follows; writes post as 'human'. The evals are their
 // OWN top-level page now ([[evals-view]]) — no in-page switcher here.
 export default function IssuesPage({ onFocusNode, specs = [], sessions = [], issuesData = null, reloadIssues }) {
@@ -52,6 +54,7 @@ export default function IssuesPage({ onFocusNode, specs = [], sessions = [], iss
   // never ours.
   const stateRef = useRef({})
   stateRef.current = { effSel }
+  useEscLayer(composing, () => setComposing(false))
   useEffect(() => {
     const onKey = (e) => {
       const tag = e.target?.tagName
@@ -93,8 +96,8 @@ export default function IssuesPage({ onFocusNode, specs = [], sessions = [], iss
                   {stores.map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
               )}
-              <button type="button" className="fv-new-btn" onClick={() => setComposing((v) => !v)}>
-                {composing ? t('session.issuesCancel') : t('session.issuesNew')}
+              <button type="button" className="fv-new-btn" onClick={() => setComposing(true)}>
+                {t('session.issuesNew')}
               </button>
               {concludedCount > 0 && (
                 <button type="button" className={`ef-chip fv-concluded ${showConcluded ? 'on' : ''}`} onClick={() => setShowConcluded((v) => !v)}>
@@ -104,7 +107,6 @@ export default function IssuesPage({ onFocusNode, specs = [], sessions = [], iss
             </span>
             <span className="fv-group-meta">{t('session.issuesThreadsSummary', { open: openCount, total: stored.length })}</span>
           </header>
-          {composing && <NewThreadForm specs={specs} sessions={sessions} onDone={async (outcomes) => { setComposing(false); flash(outcomes); await load() }} />}
           {!issues.length && <div className="fv-note">{t('session.issuesEmpty')}</div>}
           {/* a row leads with the ISSUE (status dot + concern); store/replies are trailing quiet meta —
               the store mini-tag renders only while stores are actually mixed ([[issues-view]]). */}
@@ -126,6 +128,11 @@ export default function IssuesPage({ onFocusNode, specs = [], sessions = [], iss
           ? <IssueDetail issue={selIssue} specs={specs} sessions={sessions} onFocusNode={onFocusNode} onWrite={async (outcomes) => { flash(outcomes); await load() }} />
           : <div className="fv-note">{t('session.issuesEmpty')}</div>}
       </div>
+      {composing && (
+        <Modal title={t('session.issuesNew')} closeLabel={t('common.close')} onClose={() => setComposing(false)} className="fv-new-modal">
+          <NewThreadForm specs={specs} sessions={sessions} onCancel={() => setComposing(false)} onDone={async (outcomes) => { setComposing(false); flash(outcomes); await load() }} />
+        </Modal>
+      )}
     </div>
   )
 }
@@ -136,9 +143,23 @@ export default function IssuesPage({ onFocusNode, specs = [], sessions = [], iss
 function IssueDetail({ issue: th, specs, sessions, onFocusNode, onWrite }) {
   const t = useT()
   const local = th.store === 'local'
+  const concluded = th.status === 'closed' || th.status === 'rejected' || th.status === 'landed'
+  const [closing, setClosing] = useState(false)
+  const [closeErr, setCloseErr] = useState('')
   const nodes = Array.isArray(th.nodes) ? th.nodes : []
   const signers = Array.isArray(th.signers) ? th.signers : []
   const replies = Array.isArray(th.replies) ? th.replies : []
+  const close = async () => {
+    if (closing) return
+    setClosing(true)
+    try {
+      const res = await postIssueClose(th.id)
+      if (res?.ok) { setCloseErr(''); await onWrite?.('') }
+      else setCloseErr(res?.error || 'close failed')
+    } finally {
+      setClosing(false)
+    }
+  }
   return (
     <div className="fvd">
       <div className="fvd-scroll">
@@ -171,7 +192,22 @@ function IssueDetail({ issue: th, specs, sessions, onFocusNode, onWrite }) {
           scrolls behind it (no scroll-to-the-bottom to reply); keyed to the issue so a half-typed draft
           dies with its selection instead of leaking onto another issue's thread. */}
       <div className="fvd-compose">
-        <ReplyComposer key={th.id} onSend={(text, evidence) => postIssueReply(th.id, text, evidence)} specs={specs} sessions={sessions} focusId={nodes[0] || null} onDone={onWrite} />
+        <ReplyComposer
+          key={th.id}
+          onSend={(text, evidence) => postIssueReply(th.id, text, evidence)}
+          specs={specs}
+          sessions={sessions}
+          focusId={nodes[0] || null}
+          onDone={onWrite}
+          actionsEnd={!concluded && (
+            <>
+              {closeErr && <span className="fv-error">{closeErr}</span>}
+              <button type="button" className="fv-close-issue" disabled={closing} onMouseDown={(e) => e.preventDefault()} onClick={close}>
+                {closing ? t('session.issuesClosing') : t('session.issuesCloseIssue')}
+              </button>
+            </>
+          )}
+        />
       </div>
     </div>
   )
@@ -181,9 +217,9 @@ function IssueDetail({ issue: th, specs, sessions, onFocusNode, onWrite }) {
 // opens local; promotion is what moves one to the forge); an @-mention in the body dispatches, and a
 // `[[node]]` link in the text IS the node link — the store infers the thread's `nodes:` from them, so
 // there is no separate node-ids field to re-type. The body textarea carries the shared
-// `[[node]]`/`@session` autocomplete ([[mentions]]) — the form sits at the top of the list column, so its
-// menu opens downward.
-function NewThreadForm({ specs, sessions, onDone }) {
+// `[[node]]`/`@session` autocomplete ([[mentions]]) — the form sits in a centered pop-out, so its menu
+// opens downward.
+function NewThreadForm({ specs, sessions, onCancel, onDone }) {
   const t = useT()
   const [concern, setConcern] = useState('')
   const [body, setBody] = useState('')
@@ -212,6 +248,7 @@ function NewThreadForm({ specs, sessions, onDone }) {
       </div>
       <div className="fv-actions">
         <span className="fv-hint">{t('session.issuesMentionHint')}</span>
+        <button type="button" className="fv-cancel" disabled={busy} onClick={onCancel}>{t('common.cancel')}</button>
         <button type="button" className="fv-send" disabled={busy || !concern.trim()} onClick={submit}>
           {busy ? t('session.issuesSending') : t('session.issuesPost')}
         </button>

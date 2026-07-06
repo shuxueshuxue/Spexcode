@@ -339,6 +339,8 @@ export default {
     issuesSend: 'Send',
     issuesPost: 'Post',
     issuesSending: 'sending…',
+    issuesClosing: 'closing…',
+    issuesCloseIssue: 'Close issue',
     issuesMentionHint: '@session to summon · [[node]] to link',
     issuesReplyPlaceholder: 'reply…',
     issuesConcernPlaceholder: 'concern — one line',

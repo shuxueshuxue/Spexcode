@@ -107,6 +107,15 @@ export const githubDriver: ForgeDriver = {
     if (!url.startsWith('http')) throw new Error(`gh issue comment returned an unexpected result: ${stdout.trim()}`)
     return { url }
   },
+
+  // the lifecycle write verb (see port.ts). `gh issue close` does not reliably print a permalink, so read
+  // the issue URL back through gh's JSON surface after the close succeeds.
+  async closeIssue({ number }: { number: number }): Promise<{ url: string }> {
+    await run('gh', ['issue', 'close', String(number)], { maxBuffer: 1024 * 1024 })
+    const r = await gh<{ url: string }>(['issue', 'view', String(number), '--json', 'url'])
+    if (!r.url?.startsWith('http')) throw new Error(`gh issue view returned an unexpected url after close: ${JSON.stringify(r)}`)
+    return { url: r.url }
+  },
 }
 
 // one commented issue's thread, REST (the incremental window's companion read).

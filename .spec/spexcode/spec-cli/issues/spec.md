@@ -59,7 +59,7 @@ network. The board fold attaches each node's merged issues (`issues` / open subs
 per-node surface — tile badge, focus panel, node-info Issues tab, the [[issues-view]] page — reads the
 same mixed set with no second path.
 
-**Writes stay where they're owned — and the reply verb routes by store.** Opening, signing, and resolving
+**Writes stay where they're owned — and the reply/close verbs route by store.** Opening, signing, and resolving
 (`spex issues open` / `sign` / `resolve`, and the dashboard's New) stay local-store writes. **Replying is ONE
 verb over both stores** (`replyIssue` — `spex issues reply <id>` and `POST /api/issues/:id/reply` are the
 same routing): a local id goes through the local issue store's committed write, a forge id (`<host>#<n>`) posts a
@@ -87,3 +87,8 @@ the forge issue is created FIRST, and only then is the local thread closed out �
 reply carrying the permalink (its file remains as the recorded trail); an unreachable forge fails loud
 with the local thread untouched, and only an `open` thread promotes. The two-plane contract is untouched
 throughout: a forge issue is execution, never node state.
+The dashboard's Close button uses the same seam discipline: **closing is ONE verb over both stores**
+(`closeIssue` / `POST /api/issues/:id/close`). A local id resolves the thread `landed` through the local
+store; a forge id (`<host>#<n>`) calls the driver's `closeIssue`. The server forces a forge refresh before
+answering, so the follow-up read shows the store-authored closed state. Closing is lifecycle on the issue
+object, not graph state; it never writes a spec node's status.

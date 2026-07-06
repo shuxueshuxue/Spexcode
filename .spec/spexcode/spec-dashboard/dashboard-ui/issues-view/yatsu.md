@@ -66,11 +66,13 @@ scenarios:
       The composer is DOCKED at the detail pane's foot — visible in the viewport immediately on
       selection, no scrolling needed even on a long thread; the thread scrolls in its own region
       (`.fvd-scroll`) behind it and the composer never moves. Idle, it is COLLAPSED: a single-line
-      textarea, no actions row. Focusing reveals the actions row (hint + Send); typing grows the
-      textarea line by line (capped — it never eats the pane), and deleting shrinks it back. An
-      emptied, blurred composer collapses back to one line. Switching to another issue clears the
-      draft (keyed to the selection). The eval detail's rail composer shows the SAME collapsed→engaged
-      shape — one shared composer, every home. No page errors.
+      textarea. For a non-concluded issue, the lifecycle action pins the action row visible even while
+      idle: disabled Send and Close issue sit beside each other in that same row; focusing/typing keeps
+      the row and typing grows the textarea line by line (capped — it never eats the pane). For a home
+      with no lifecycle action, such as the eval detail rail composer, idle still has no actions row and
+      focus reveals hint + Send. An emptied, blurred composer collapses back to one line. Switching to
+      another issue clears the draft (keyed to the selection). One shared composer, every home. No page
+      errors.
   - name: panel-skeleton
     tags: [frontend-e2e]
     code: spec-dashboard/src/IssuesPage.jsx
@@ -100,10 +102,28 @@ scenarios:
       concern is plain prose and whose body links a real node with `[[<id>]]`. After the post lands,
       select the new thread and read its detail meta strip (`.fvd-meta`).
     expected: >-
+      The New action opens a centered pop-out over the Issues page, not an inline form in the left list.
       The form carries exactly TWO text surfaces — the concern input and the body textarea; NO node-ids
       field exists (nothing placeholder-labelled "node ids"). The posted thread's detail header shows the
       linked node as a clickable chip — the store inferred `nodes:` from the body's `[[…]]` link
       ([[local-issues]]), the writer never re-typed an id into a separate field. No page errors.
+  - name: close-issue-button
+    tags: [frontend-e2e]
+    code: [spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/Thread.jsx, spec-cli/src/issues.ts]
+    description: >-
+      Run the issues page against a backend with a disposable LOCAL issue store. Select an open issue,
+      read the detail's Close issue action beside Send in the thread composer action row, click it, and
+      read the subsequent issue list plus the network response. When a non-disposable forge fixture is
+      present, only inspect that the same detail affordance renders for the forge issue; do not close a
+      real remote issue as evidence.
+    expected: >-
+      Each non-concluded issue detail shows one Close issue action in the thread composer's action row
+      beside Send, GitHub-style, and no close action in the title's top-right chrome or a separate row.
+      Clicking it posts to the same dashboard close route, disables while pending, then reloads the
+      resident issue list. The local issue is resolved in the disposable local store; with the default
+      concluded-hidden filter, it disappears from the visible list after the write. The same button renders
+      for a forge issue because the frontend does not branch by store; the remote write path is the
+      store-routed backend route. A concluded issue shows no Close button. No page errors.
   - name: signed-badge-only-when-nonzero
     tags: [frontend-e2e]
     code: spec-dashboard/src/IssuesPage.jsx

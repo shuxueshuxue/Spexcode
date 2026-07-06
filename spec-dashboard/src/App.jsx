@@ -36,24 +36,24 @@ export default function App() {
   const reload = useCallback(() => {
     const mine = ++reqSeq.current
     return loadBoard()
-      .then((b) => { if (mine === reqSeq.current) { setLoadFailed(false); setBoard(b) } })
+      .then((b) => { if (mine === reqSeq.current && b) { setLoadFailed(false); setBoard(b) } })
       .catch(() => { if (mine === reqSeq.current) setLoadFailed(true) })
   }, [])
   // push-first freshness ([[board-stream]]/[[board-delta]]): the delta stream carries whole boards (a full on
   // connect, then applied patches) straight into setBoard — no refetch per change. A pushed board is the
   // freshest by channel order, so it bumps the seq to invalidate any older in-flight fetch. The interval is
-  // the cold FALLBACK: it stands down while push is proven alive (the server cold-ticks for us then) and
-  // stands back up the moment the stream errors or an old backend downgrades us to legacy board-changed.
-  const pushLive = useRef(false)
+  // the cold FALLBACK and it ALWAYS runs — the client keeps no push-liveness detector, because a silently
+  // dead stream (half-open tunnel, sleep-resume) looks exactly like a healthy quiet one and a detector that
+  // trusts it freezes the board. The poll's cost is zeroed instead: loadBoard sends If-None-Match and an
+  // unchanged board answers 304 → null → no repaint. Push dead in ANY mode = at most one poll period stale.
   useEffect(() => {
     reload()
     reloadIssues(true)
     const unsub = subscribeBoardLive({
       onBoard: (b) => { reqSeq.current++; setLoadFailed(false); setBoard(b); reloadIssues() },
       onLegacyChange: () => { reload(); reloadIssues() },
-      onLive: (v) => { pushLive.current = v },
     })
-    const id = setInterval(() => { if (!pushLive.current) reload(); reloadIssues() }, 15000)
+    const id = setInterval(() => { reload(); reloadIssues() }, 15000)
     return () => { unsub(); clearInterval(id) }
   }, [reload, reloadIssues])
   useEffect(() => {

@@ -34,7 +34,7 @@ dir's refs (loose refs recursively, `packed-refs`/`HEAD` beside them) — a comm
 moment it lands, so tree reshapes push instead of waiting out a poll. (3) A subscriber-gated ~2s poll of the
 CHEAP tmux session signature ([[sessions]]) for the two signals that never touch a file: liveness (a crash /
 going offline) and activity (the live self-summary headline). (4) A delta-gated ~15s cold tick — the
-server-side replacement for every client's slow fallback poll — that rebuilds and diffs so what no watcher
+server-side twin of each client's slow fallback poll — that rebuilds and diffs so what no watcher
 sees (an uncommitted worktree spec edit, a forge refresh, a watch blind spot like a recursively-deleted
 store dir) still lands, once per tick total instead of once per open dashboard. And (0) an **exported
 explicit nudge** (`notifyBoardChanged`) for a server-side mutation the watchers structurally cannot see —
@@ -54,10 +54,15 @@ the route's cache never lags a change the stream would push. Every source and
 watch is best-effort and never throws: a source that can't start just leaves that path to the cold tick or
 the client's own fallback.
 
-**Reconnect is free.** A backend hot-reload replaces the child and drops the stream; `EventSource`
-auto-reconnects to the fresh child — and in delta mode the reconnect's `board-full` re-anchors the patch
-chain with no client-side repair logic. An old backend without this route, a proxy that strips SSE, or a
-server that ignores `?mode=delta` all degrade to the plain protocol or the fallback poll — never to a stale
-board. What stays deliberately unshrunk here is the full snapshot itself (first paint, resync): slimming
-that payload is [[board-lean]]'s ongoing cut (tracked as issue #26), composing with — not replaced by — the
-delta path.
+**Reconnect is free — and undetectable death is survivable.** A backend hot-reload replaces the child and
+drops the stream; `EventSource` auto-reconnects to the fresh child — and in delta mode the reconnect's
+`board-full` re-anchors the patch chain with no client-side repair logic. But a stream can also die
+*silently* — a half-open tunnel, a sleep-resume, a network switch — delivering no data, no FIN, no `error`
+event, indistinguishable client-side from a healthy quiet stream. The client deliberately does NOT try to
+detect that (there is no liveness window to tune): its fallback poll never stands down, riding
+`/api/board`'s ETag/304 so a quiet board costs headers only ([[dashboard-shell]]). The stream's `ping`
+keep-alive exists for the *proxies* on the path, not as a client-side liveness proof. So an old backend
+without this route, a proxy that strips SSE, a server that ignores `?mode=delta`, or an undetectably dead
+connection all degrade to the plain protocol or the poll — never to a frozen board. What stays deliberately
+unshrunk here is the full snapshot itself (first paint, resync): slimming that payload is [[board-lean]]'s
+ongoing cut (tracked as issue #26), composing with — not replaced by — the delta path.

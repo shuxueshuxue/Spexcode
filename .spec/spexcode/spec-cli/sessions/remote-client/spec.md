@@ -20,7 +20,9 @@ backend is the single broker, and which machine you point at is just a URL.
 ## expanded spec
 
 The read/control commands — `ls`, `watch`, `wait`, `capture`, `send`, `rename`, `rawkey`, `review`, `merge`,
-`reopen`, `exit`, `close`, `prompt` — call the backend over HTTP (`SPEXCODE_API_URL`, else the local default). They hold **no**
+`reopen`, `exit`, `close`, `prompt` — call the backend over HTTP (`SPEXCODE_API_URL`, else the local default).
+(`session attach` is the ONE deliberate exception — a foreground terminal can't be brokered over HTTP, so it
+stays local and guards that premise loudly; see [[session-attach]].) They hold **no**
 in-process tmux/git path, so the backend is the **single actor** on the tmux socket and the single source of
 derived state, and pointing `SPEXCODE_API_URL` at another machine's backend monitors and drives THAT
 machine's sessions with no code change — the dashboard's viewer-points-anywhere model, extended to the CLI.

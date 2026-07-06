@@ -547,6 +547,13 @@ if (cmd === 'serve') {
     if (keys.length === 0) { console.error('usage: spex session rawkey <SEL> "<keys>"   (e.g. "Up Up Enter", "C-r", single chars)'); process.exit(2) }
     if (await c.clientRawkey(full, keys)) console.log(`sent ${keys.length} key${keys.length === 1 ? '' : 's'} -> ${full}`)
     else { console.error(`spex session rawkey: nothing delivered to ${full} (offline, unknown session, or no valid key token)`); process.exit(1) }
+  } else if (sub === 'attach') {
+    // the HUMAN escape hatch (attach.ts, [[session-attach]]): foreground `tmux attach` into the worker's
+    // real session. Guards fail loud BEFORE resolving: local-only (the tmux server is the backend
+    // machine's) and terminal-only (an agent must never block its turn on it — capture/send/rawkey).
+    const { assertLocalBackend, attachSession } = await import('./attach.js')
+    assertLocalBackend()
+    await attachSession(await resolveSelectorOrExit(id))
   } else if (sub === 'prompt') {
     // print the session's full ORIGINATING prompt (what it was asked to do), captured at launch.
     const full = await resolveSelectorOrExit(id)
@@ -554,7 +561,7 @@ if (cmd === 'serve') {
     if (!r.ok) { console.error(`no prompt recorded for ${full}`); process.exit(1) }
     process.stdout.write(r.prompt.endsWith('\n') ? r.prompt : r.prompt + '\n')
   } else {
-    console.error('spex session: new|reopen|done|park|ask|idle|exit|close|send|capture|rename|rawkey|prompt'); process.exit(2)
+    console.error('spex session: new|reopen|done|park|ask|idle|exit|close|send|capture|attach|rename|rawkey|prompt'); process.exit(2)
   }
 } else if (cmd === 'internal') {
   // @@@ internal - the machine-plumbing namespace: verbs only generated hooks and launch scripts call,

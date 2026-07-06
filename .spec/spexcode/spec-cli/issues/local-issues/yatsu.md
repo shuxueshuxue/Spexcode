@@ -20,13 +20,13 @@ scenarios:
     description: >-
       Through the real CLI, open a local issue (`spex issues open "<concern>" --node <id> --evidence <hash>
       --body <text>`), then read it (`spex issues` — the one read over every store), then have another
-      session sign it, reply to it, and resolve it (`spex issues sign|reply|resolve <id>`). Read back with
+      session reply to it and close it (`spex issues reply|close <id>`). Read back with
       `spex issues --all --store local --json`.
     expected: >-
       open prints the minted id and commits the thread; `spex issues` lists the open concern store-tagged
-      `local` with its author + linked node; sign/reply/resolve each report success; the final `--json` shows
-      the concern with store=local, by=author, status=accepted, the evidence hash, the signer, and the reply
-      (by/at/body) — every write round-trips faithfully through the unified read.
+      `local` with its author + linked node; reply and close each report success; the final `--json` shows
+      the concern with store=local, by=author, status=landed, the evidence hash, and the reply (by/at/body)
+      — every write round-trips faithfully through the unified read.
   - name: data-not-contract
     tags: [cli]
     code: spec-cli/src/localIssues.ts
@@ -68,13 +68,12 @@ scenarios:
     tags: [cli]
     code: spec-cli/src/localIssues.ts
     description: >-
-      Through the real CLI, resolve an ALREADY-resolved thread to the same state
-      (`spex issues resolve <landed-id> --as landed`) and sign a thread twice from the same session —
-      both are no-change store writes (the serialized bytes equal the stored state). Then make a
-      genuinely new write to confirm the normal path still commits.
+      Through the real CLI, close an ALREADY-closed local thread again (`spex issues close <landed-id>`) —
+      a no-change store write (the serialized bytes equal the stored state). Then make a genuinely new
+      write to confirm the normal path still commits.
     expected: >-
       A no-change write is idempotent SUCCESS: the CLI reports the store already holds the requested
-      state (e.g. 'already landed') and exits 0, committing nothing — never a failing `git commit`
+      state and exits 0, committing nothing — never a failing `git commit`
       hitting nothing-to-commit that mistakes a landed state for an error. The store file and trunk
       history are untouched by the no-op; the subsequent genuine write still lands as one commit.
   - name: post-merge-nudge
@@ -94,12 +93,12 @@ scenarios:
       With a disposable store (SPEXCODE_ISSUES_DIR) and an isolated session record (SPEXCODE_HOME), declare
       `spex session done --propose close --session <id>` for a session that (a) opened one still-open issue
       and replied to another session's open issue, while a third open issue it never touched and an
-      `eval: <node> · <scenario>` container it remarked on also exist; then (b) resolve both touched issues
+      `eval: <node> · <scenario>` container it remarked on also exist; then (b) close both touched issues
       and declare close again; and (c) with issues switched OFF, declare close once more. Also declare
       `--propose merge` and bare done.
     expected: >-
       (a) the close declaration appends ONE issue-closeout line naming exactly the two touched open ids —
-      never the untouched one, never the eval container — asking resolve-or-say-why, appended beside the
+      never the untouched one, never the eval container — asking close-or-say-why, appended beside the
       resource-cleanup reminder, and the declaration itself still lands (a nudge, never a gate). (b) with
       nothing owed the closeout line is absent entirely (no vacuous reminder). (c) OFF silences it.
       `--propose merge` and bare done never carry it.
@@ -121,7 +120,7 @@ scenarios:
 
 YATU through the real `spex` CLI and real `git`, never an internal helper. The store's whole value is that
 an agent's taste survives session end, so the measurement drives the same surface an agent touches: `spex
-issues open`/`reply`/`sign`/`resolve` for the round-trip, `spex lint` + the board for the data-not-contract
+issues open`/`reply`/`close` for the round-trip, `spex lint` + the board for the data-not-contract
 invariant, a real `git commit` on the trunk for the main-guard exception, and a real `git merge --no-ff`
 for the post-merge nudge. Backend evidence is the command transcript (`--result`), captured in a throwaway
 repo so a measurement never writes to the live trunk.

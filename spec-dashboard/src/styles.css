@@ -1041,8 +1041,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
    vocabulary as color (a boxed word on every row was noise)… */
 .fv-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
 .fv-dot.st-open { background: var(--blue); }
-.fv-dot.st-accepted, .fv-dot.st-landed { background: var(--green); }
-.fv-dot.st-rejected { background: var(--red); }
+.fv-dot.st-landed { background: var(--green); }
 .fv-dot.st-closed { background: color-mix(in srgb, var(--muted) 55%, transparent); }
 /* …and the reply count is a compact trailing pill, not a phrase. */
 .fv-replies { flex: none; font-family: var(--mono); font-size: 9px; color: var(--muted); background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 0 5px; line-height: 1.6; }
@@ -1058,9 +1057,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   flex: none; font-family: var(--mono); font-size: 9px; border: 1px solid var(--line); border-radius: 3px; padding: 1px 6px; color: var(--muted);
 }
 .fv-st-open     { color: var(--blue);  border-color: color-mix(in srgb, var(--blue) 40%, var(--line)); }
-.fv-st-accepted { color: var(--green); border-color: color-mix(in srgb, var(--green) 40%, var(--line)); }
 .fv-st-landed   { color: var(--green); border-color: color-mix(in srgb, var(--green) 40%, var(--line)); }
-.fv-st-rejected { color: var(--red);   border-color: color-mix(in srgb, var(--red) 40%, var(--line)); }
 .fv-by { flex: none; color: var(--muted); font-size: 11px; }
 /* the originator liveness pill ([[mentions]] loop-in): who filed + whether their session is alive. The dot
    takes the board's live STATUS_COLOR (inline style); the reach phrase reads muted, greened when alive. */
@@ -1088,10 +1085,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 }
 .fv-close-issue:hover { background: var(--orange); color: var(--paper); border-color: var(--orange); }
 .fv-close-issue:disabled { opacity: .5; cursor: default; }
-/* the lifecycle verbs ([[issues-view]] write parity) ride the close-button shape, each keeping its semantic
-   hue: sign/accept green (approval), reject/close orange (conclusion), promote blue (a move to the forge). */
-.fv-close-issue.fv-life-sign, .fv-close-issue.fv-life-accept { color: var(--green); border-color: color-mix(in srgb, var(--green) 35%, var(--line)); }
-.fv-close-issue.fv-life-sign:hover, .fv-close-issue.fv-life-accept:hover { background: var(--green); color: var(--paper); border-color: var(--green); }
+/* promote is a move to the forge; close keeps the default conclusion hue. */
 .fv-close-issue.fv-life-promote { color: var(--blue); border-color: color-mix(in srgb, var(--blue) 35%, var(--line)); }
 .fv-close-issue.fv-life-promote:hover { background: var(--blue); color: var(--paper); border-color: var(--blue); }
 .fvd-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }

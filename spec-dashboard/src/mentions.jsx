@@ -112,14 +112,14 @@ export function actorMentionAt(value, caret, sessions) {
 // `up` above a docked one. `menu` is the descriptor a trigger scanner built; onPick/onHover are the accept
 // and index-follow callbacks. Rows: node = status dot + id + breadcrumb; actor = @handle + hint (the
 // synthetic `@new` row wears a subtle distinct style). No emoji.
-export function MentionMenu({ menu, up, onPick, onHover }) {
+export function MentionMenu({ menu, up, fixedStyle, onPick, onHover }) {
   const t = useT()
   const actor = menu.kind === 'actor'
   const head = menu.query
     ? (actor ? `@${menu.query}` : `[[${menu.query}]]`)
     : t(actor ? 'session.menuSessions' : 'session.menuSpecNodes')
   return (
-    <ul className={up ? 'mention-menu up' : 'mention-menu'} role="listbox">
+    <ul className={`${up ? 'mention-menu up' : 'mention-menu'}${fixedStyle ? ' fixed' : ''}`} style={fixedStyle || undefined} role="listbox">
       <li className="mention-head">// {head} — {t('session.menuHint')}</li>
       {menu.items.map((it, i) => (
         <li
@@ -144,12 +144,24 @@ export function MentionMenu({ menu, up, onPick, onHover }) {
 // and drops the caret after it, and claims ↑/↓/Enter/Tab/Esc WHILE the menu is open (onKeyDown returns true
 // when it consumed the key — Esc closes the menu only, never the page). The console keeps its own window-
 // level state machine (it also multiplexes `/` menus) but builds from the SAME scanners and MentionMenu.
-export function useMentionAutocomplete({ inputRef, value, setValue, specs = [], sessions = [], focusId = null, up = false }) {
+export function useMentionAutocomplete({ inputRef, value, setValue, specs = [], sessions = [], focusId = null, up = false, fixedAbove = null }) {
   const [menu, setMenu] = useState(null)
+  const [fixedStyle, setFixedStyle] = useState(null)
   const sync = (el) => {
-    if (!el) return setMenu(null)
+    if (!el) { setMenu(null); setFixedStyle(null); return }
     const caret = el.selectionStart
-    setMenu(nodeMentionAt(el.value, caret, specs, focusId) || actorMentionAt(el.value, caret, sessions))
+    const next = nodeMentionAt(el.value, caret, specs, focusId) || actorMentionAt(el.value, caret, sessions)
+    setMenu(next)
+    if (!next || !fixedAbove) { setFixedStyle(null); return }
+    const input = el.getBoundingClientRect()
+    const boundary = el.closest(fixedAbove)?.getBoundingClientRect()
+    const above = boundary?.top ?? input.top
+    setFixedStyle({
+      left: `${input.left}px`,
+      width: `${input.width}px`,
+      right: 'auto',
+      bottom: `${Math.max(8, window.innerHeight - above + 8)}px`,
+    })
   }
   const navBy = (dir) => setMenu((m) => (m ? { ...m, index: (m.index + dir + m.items.length) % m.items.length } : m))
   const accept = (item) => {
@@ -158,6 +170,7 @@ export function useMentionAutocomplete({ inputRef, value, setValue, specs = [], 
     const before = value.slice(0, menu.start)
     setValue(before + insert + value.slice(menu.end))
     setMenu(null)
+    setFixedStyle(null)
     const caret = before.length + insert.length
     requestAnimationFrame(() => { const el = inputRef.current; if (el) { el.focus(); el.setSelectionRange(caret, caret) } })
   }
@@ -166,12 +179,12 @@ export function useMentionAutocomplete({ inputRef, value, setValue, specs = [], 
     if (e.key === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); navBy(1); return true }
     if (e.key === 'ArrowUp') { e.preventDefault(); e.stopPropagation(); navBy(-1); return true }
     if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); e.stopPropagation(); accept(menu.items[menu.index]); return true }
-    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setMenu(null); return true }
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setMenu(null); setFixedStyle(null); return true }
     return false
   }
-  const close = () => setMenu(null)
+  const close = () => { setMenu(null); setFixedStyle(null) }
   const menuEl = menu
-    ? <MentionMenu menu={menu} up={up} onPick={accept} onHover={(i) => setMenu((m) => (m ? { ...m, index: i } : m))} />
+    ? <MentionMenu menu={menu} up={up} fixedStyle={fixedStyle} onPick={accept} onHover={(i) => setMenu((m) => (m ? { ...m, index: i } : m))} />
     : null
   return { menu, sync, onKeyDown, close, menuEl }
 }

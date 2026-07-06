@@ -4,8 +4,8 @@ import { cors } from 'hono/cors'
 import { etag } from 'hono/etag'
 import { createNodeWebSocket } from '@hono/node-ws'
 import { loadSpecs, loadSpecsLite, specContent, specHistory, specDiffAt, loadConfig } from './specs.js'
-import { issuesEnabled, postLocalIssue, remarkOnHost, resolveRemark, retractRemark } from './localIssues.js'
-import { closeIssue, mergedIssues, replyIssue } from './issues.js'
+import { issuesEnabled, remarkOnHost, resolveRemark, retractRemark } from './localIssues.js'
+import { closeIssue, createIssue, issueStores, mergedIssues, replyIssue } from './issues.js'
 import { residentForgeState, refreshForgeNow } from '../../spec-forge/src/resident.js'
 import { summarize } from './mentions.js'
 import { resolveLayout, mainBranch } from './layout.js'
@@ -159,6 +159,7 @@ app.get('/api/launchers', (c) => c.json({
 app.get('/api/issues', etag(), (c) =>
   c.json({
     enabled: issuesEnabled(),
+    stores: issueStores(),
     issues: mergedIssues({ host: 'github', state: residentForgeState() }, loadSpecsLite().map((s) => s.id)),
   }))
 // the WRITE surface ([[local-issues]] / [[issues-view]]) — the human reply path, STORE-ROUTED through the one
@@ -211,10 +212,16 @@ app.post('/api/issues', async (c) => {
   if (!concern) return c.json({ error: 'empty concern' }, 400)
   const nodes = Array.isArray(body?.nodes) ? (body.nodes as unknown[]).filter((n): n is string => typeof n === 'string') : []
   const postBody = typeof body?.body === 'string' ? body.body : undefined
+  const store = typeof body?.store === 'string' && body.store.trim() ? body.store.trim() : 'local'
   // typed evidence[] — yatsu content-addressed hashes (the annotator's clip reference rides here, not prose)
   const evidence = Array.isArray(body?.evidence) ? (body.evidence as unknown[]).filter((h): h is string => typeof h === 'string' && /^[0-9a-f]{64}$/.test(h)) : []
-  const { thread, outcomes } = await postLocalIssue(concern, { nodes, body: postBody, evidence, author: 'human' })
-  return c.json({ ok: true, id: thread.id, outcomes: summarize(outcomes) }, 201)
+  try {
+    const r = await createIssue(concern, { store, nodes, body: postBody, evidence, author: 'human' })
+    if (r.store !== 'local') await refreshForgeNow()
+    return c.json({ ok: true, id: r.id, store: r.store, url: r.url, outcomes: summarize(r.outcomes) }, 201)
+  } catch (e) {
+    return c.json({ error: String((e as Error).message || e) }, store === 'local' ? 500 : 502)
+  }
 })
 
 // the REMARK write surface ([[remark-substrate]]) — server PARITY with the CLI: the dashboard can author /

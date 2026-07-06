@@ -89,7 +89,7 @@ export function FullscreenButton({ target, className = '' }) {
   }
   return (
     <button type="button" className={`an-fs ${className}`} onClick={toggle}
-      title={fs ? t('annotator.exitFullscreen') : t('annotator.fullscreen')}
+      data-tip={fs ? t('annotator.exitFullscreen') : t('annotator.fullscreen')}
       aria-label={fs ? t('annotator.exitFullscreen') : t('annotator.fullscreen')}>
       <FullscreenIcon exit={fs} />
     </button>

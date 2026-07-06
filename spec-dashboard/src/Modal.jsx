@@ -12,7 +12,7 @@ export default function Modal({ title, closeLabel, onClose, className, children 
       >
         <div className="legend-head">
           <span className="legend-title">{title}</span>
-          <button className="legend-close" onClick={onClose} title={closeLabel}>×</button>
+          <button className="legend-close" onClick={onClose} data-tip={closeLabel} aria-label={closeLabel}>×</button>
         </div>
         <div className="legend-body">{children}</div>
       </div>

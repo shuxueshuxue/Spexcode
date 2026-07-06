@@ -121,7 +121,14 @@ time + the ≤T step name from the timeline). Sorted by their anchor, the anchor
 track over the clip — the Frame.io/YouTube-time-comment shape, literally the markers on the scrubber, the
 active one lit as it plays. A remark's **`resolved` state renders in place** ([[remark-teeth]]): an open
 remark is prominent (the loss the eval scoreboard is still carrying), a resolved one is visually settled
-(dimmed, ✓) — the eval's outstanding loss is legible at a glance, not hidden in a badge.
+(dimmed, ✓) — the eval's outstanding loss is legible at a glance, not hidden in a badge. The bit is also
+**writable in place, at CLI parity** ([[remark-substrate]] LAW L): an unresolved remark row carries its one
+applicable verb — **resolve** on an agent's remark (the human's deliberate second-party judgment, the same
+`/api/remarks/resolve` an agent's `spex resolve` parallels; never on the human's own, mirroring the
+server's self-resolve rejection) or **retract** on the human's own (author-only withdrawal). A resolved
+remark is settled and immutable — monotonic, no verb — and a refused action surfaces its server message on
+the row. The reload rides the host's existing write path, so the teeth clear on the same signal a filed
+remark fires.
 
 **A circle is a remark with a frame.** Drag-circling a region on the paused frame captures that frame to
 the blob store (the rect burned in) and **prefills an anchored remark** carrying it: the `▶m:ss · step`

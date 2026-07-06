@@ -3,6 +3,7 @@ import { SpecBody } from './NodeView.jsx'
 import { BlobMedia } from './Evidence.jsx'
 import { useMentionAutocomplete } from './mentions.jsx'
 import { fitTextarea } from './textarea.js'
+import { postRemarkAction } from './data.js'
 import { STATUS_COLOR, sessionZone } from './session.js'
 import { useT } from './i18n/index.jsx'
 
@@ -95,8 +96,25 @@ export function OriginatorLiveness({ originator, sessions = [], kind = 'issue' }
 // re-measure, degrading to a readable-not-seekable chip when the step is gone. A reply that is a REMARK
 // ([[remark-substrate]] — it carries `rid`) shows its `resolved` bit: a resolved remark renders settled
 // (dimmed, ✓), an open one prominent — the loss the eval scoreboard is still carrying, made visible in place.
-export function Replies({ replies, onSeek, selIdx = null, activeIdx = null, onSelect = null, events = null }) {
+// The bit is also WRITABLE here at CLI parity ([[remark-substrate]] LAW L): when the home passes `threadId`
+// + `onRemarkChange`, an unresolved remark carries its one applicable verb — RESOLVE on an agent's remark
+// (the human's second-party judgment; never on the human's own, mirroring the server's self-resolve
+// rejection) or RETRACT on the human's own (author-only withdrawal) — POSTing the `<threadId>#<rid>` ref to
+// the same endpoints `spex resolve`/`spex retract` parallel. A resolved remark is settled and immutable
+// (monotonic — no un-resolve, no retract past a resolve), so it renders no verb.
+export function Replies({ replies, onSeek, selIdx = null, activeIdx = null, onSelect = null, events = null, threadId = null, onRemarkChange = null }) {
   const t = useT()
+  const [acting, setActing] = useState(null)   // the ref in flight — one action at a time
+  const [actErr, setActErr] = useState(null)   // { ref, msg } — a refused action surfaces on its row, never swallows
+  const act = async (action, ref) => {
+    if (acting) return
+    setActing(ref); setActErr(null)
+    try {
+      const res = await postRemarkAction(action, ref)
+      if (res?.ok) await onRemarkChange?.()
+      else setActErr({ ref, msg: res?.error || `${action} failed` })
+    } finally { setActing(null) }
+  }
   return replies.map((r, i) => {
     const parsed = parseAnchor(r.body)
     const a = resolveAnchor(parsed, events)              // E2: canonical step → the current clip's live tMs
@@ -107,6 +125,7 @@ export function Replies({ replies, onSeek, selIdx = null, activeIdx = null, onSe
     const remarkCls = isRemark ? (r.resolved ? ' remark resolved' : ' remark open') : ''
     const cls = `fv-reply${selIdx === i ? ' sel' : ''}${activeIdx === i ? ' active' : ''}${remarkCls}`
     const seek = a && a.seekable && onSeek ? () => (onSelect ? onSelect(i, a.tMs) : onSeek(a.tMs)) : null
+    const ref = isRemark && threadId ? `${threadId}#${r.rid}` : null
     return (
       <div className={cls} key={i}>
         <div className="fv-reply-meta">
@@ -118,7 +137,11 @@ export function Replies({ replies, onSeek, selIdx = null, activeIdx = null, onSe
           {isRemark && (r.resolved
             ? <span className="fv-remark-state resolved" title={r.resolvedBy ? t('thread.resolvedBy', { by: r.resolvedBy }) : t('thread.resolved')}>✓ {t('thread.resolved')}</span>
             : <span className="fv-remark-state open" title={t('thread.openRemark')}>● {t('thread.openRemark')}</span>)}
+          {ref && onRemarkChange && !r.resolved && (r.by === 'human'
+            ? <button type="button" className="fv-remark-act retract" disabled={!!acting} title={t('thread.retractTitle')} onClick={() => act('retract', ref)}>{t('thread.retract')}</button>
+            : <button type="button" className="fv-remark-act resolve" disabled={!!acting} title={t('thread.resolveTitle')} onClick={() => act('resolve', ref)}>{t('thread.resolve')}</button>)}
         </div>
+        {actErr && actErr.ref === ref && <div className="fv-error">{actErr.msg}</div>}
         {prose && <div className="fvd-body"><SpecBody body={prose} /></div>}
         {media.length > 0 && (
           <div className="fv-reply-media">

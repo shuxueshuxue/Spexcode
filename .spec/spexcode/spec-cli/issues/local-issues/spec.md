@@ -147,7 +147,9 @@ it to `.spec/.issues` on its first store touch after a toolchain update — the 
   loops in no one. Each returns `{ thread, outcomes, loopIn }`. Because the local issue store is the programmatic surface, a
   human's `@`-mention in a reply **does** summon the agent — that is the point. The dashboard's write path
   ([[issues-view]]) is a thin caller: `POST /api/issues/:id/reply` and `POST /api/issues` (author `'human'`),
-  both gated by the same on/off switch (403 when OFF).
+  plus the lifecycle parity routes `POST /api/issues/:id/sign|resolve|promote` — thin wrappers over the SAME
+  `sign`/`resolve`/`promote` the CLI verbs call (`sign` takes the same optional `author`), local-store only
+  (a forge id is refused). All gated by the same on/off switch (403 when OFF).
 - **Opt-outable, default ON.** The issues workflow is a feature you can switch off: `spex issues on|off`
   flips `spexcode.json`'s `issues.enabled` (the shared settings file every other toggle lives in),
   effective immediately with no commit (config is read from the working tree). OFF silences the post-merge

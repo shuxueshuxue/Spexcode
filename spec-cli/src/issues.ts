@@ -183,7 +183,9 @@ export async function createIssue(
 // the driver (the only network toucher). ORDER makes failure safe: create the forge issue FIRST; only
 // then close the local thread out (a reply carrying the permalink, then resolve `landed`) — an
 // unreachable forge throws with the local thread untouched, and only an `open` thread promotes.
-export async function promote(id: string): Promise<{ url: string; number: number; host: string }> {
+// `author` mirrors the other write verbs: the effective session id by default, `'human'` from the dashboard.
+export async function promote(id: string, opts: { author?: string } = {}): Promise<{ url: string; number: number; host: string }> {
+  const author = opts.author || envSessionId() || 'unknown'
   const t = loadOne(id)
   if (t.status !== 'open') throw new Error(`'${id}' is ${t.status} — only an open local issue promotes`)
   const driver = forgeDriverFor(DEFAULT_FORGE_HOST)
@@ -192,10 +194,10 @@ export async function promote(id: string): Promise<{ url: string; number: number
     t.body,
     t.nodes.length ? `\nSpec: ${t.nodes.join(', ')}` : '',
     t.evidence.length ? `\nEvidence: ${t.evidence.join(', ')} (yatsu blob hashes)` : '',
-    `\n---\nPromoted from the local issue \`${id}\` (opened by ${t.by} @ ${t.created}; promoted by ${envSessionId() || 'unknown'}).`,
+    `\n---\nPromoted from the local issue \`${id}\` (opened by ${t.by} @ ${t.created}; promoted by ${author}).`,
   ].filter(Boolean).join('\n')
   const { number, url } = await driver.createIssue({ title: t.concern, body })
-  reply(id, `promoted to the forge: ${url}`)
+  reply(id, `promoted to the forge: ${url}`, author)
   resolve(id, 'landed')
   return { url, number, host: driver.host }
 }

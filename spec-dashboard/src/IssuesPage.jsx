@@ -4,6 +4,7 @@ import { useMentionAutocomplete } from './mentions.jsx'
 import { SpecBody } from './NodeView.jsx'
 import { Replies, ReplyComposer, OriginatorLiveness } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
+import FilterSelect from './FilterSelect.jsx'
 import Modal from './Modal.jsx'
 import { useEscLayer } from './escStack.js'
 
@@ -97,23 +98,27 @@ export default function IssuesPage({ onFocusNode, onOpenSession, specs = [], ses
         {notice && <div className="fv-notice">{notice}</div>}
         <section className="fv-group">
           <header className="fv-group-head">
-            <span className="ef-chipbar">
-              {stores.length > 1 && (
-                <select className="fv-store-filter" value={storeFilter} onChange={(e) => setStoreFilter(e.target.value)}>
-                  <option value="all">{t('session.issuesStoreAll')}</option>
-                  {stores.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
-              )}
+            {/* first row: the filters (the shared dropdown + the concluded chip); the SECOND row carries
+                New beside the open/total meta — the action never occupies the bar's head on its own. */}
+            {(stores.length > 1 || concludedCount > 0) && (
+              <span className="ef-chipbar">
+                {stores.length > 1 && (
+                  <FilterSelect value={storeFilter} onChange={setStoreFilter}
+                    options={[{ value: 'all', label: t('session.issuesStoreAll') }, ...stores.map((s) => ({ value: s, label: s }))]} />
+                )}
+                {concludedCount > 0 && (
+                  <button type="button" className={`ef-chip fv-concluded ${showConcluded ? 'on' : ''}`} onClick={() => setShowConcluded((v) => !v)}>
+                    {t('nodeView.closedIssues', { n: concludedCount })}
+                  </button>
+                )}
+              </span>
+            )}
+            <span className="fv-head-row">
               <button type="button" className="fv-new-btn" onClick={() => setComposing(true)}>
                 {t('session.issuesNew')}
               </button>
-              {concludedCount > 0 && (
-                <button type="button" className={`ef-chip fv-concluded ${showConcluded ? 'on' : ''}`} onClick={() => setShowConcluded((v) => !v)}>
-                  {t('nodeView.closedIssues', { n: concludedCount })}
-                </button>
-              )}
+              <span className="fv-group-meta">{t('session.issuesThreadsSummary', { open: openCount, total: stored.length })}</span>
             </span>
-            <span className="fv-group-meta">{t('session.issuesThreadsSummary', { open: openCount, total: stored.length })}</span>
           </header>
           {!issues.length && <div className="fv-note">{t('session.issuesEmpty')}</div>}
           {/* a row leads with the ISSUE (status dot + concern); store/replies are trailing quiet meta —

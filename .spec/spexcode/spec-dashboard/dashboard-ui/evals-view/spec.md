@@ -38,7 +38,7 @@ surfaces (`f`, ⌥F) land here.
   shown it.
 - **A MASTER-DETAIL — a full page deserves a full-height detail, and the DETAIL is the protagonist.** The
   **left column** is the [[evals-feed]] list — the latest reading per (node, scenario), fresh leading, video
-  first — under its own filter chipbar (that bar is the feed's own state; this node owns the page shell,
+  first — under its own kind dropdown (that filter is the feed's own state; this node owns the page shell,
   never the filters). Its rows are title-only, so the column stays **SLIM** — it never crowds the detail
   (the human called the wide sidebar: the list is a picker, not a reading surface) — and a **fold toggle**
   collapses it to a thin strip, giving the whole width to the detail workspace once a human is working one
@@ -53,9 +53,9 @@ surfaces (`f`, ⌥F) land here.
   component (`EvalMasterDetail`), and it is deliberately SHARED: the session console's Eval tab
   ([[review-proof]]) renders the same shell around its own worktree-rooted list, so the two eval
   master-detail homes cannot drift apart on geometry, fold, or keys. The list CHROME is one grammar too:
-  the feed and the [[issues-view]] drain wear the SAME filter-control language (one segmented pill set, the
-  accent filling the active filter; a New/action button and any store control sharing that height and
-  radius; the count-meta pushed to the bar's end), the SAME uniform single-line rows (the title truncates,
+  the feed and the [[issues-view]] drain wear the SAME filter-control language (ONE shared dropdown filter
+  component — the feed's kind filter and the drain's store filter are literally one control; chips and any
+  New/action button sharing that height and radius; the count-meta pushed to its row's end), the SAME uniform single-line rows (the title truncates,
   it never wraps — both pickers keep one even rhythm), and the SAME unhurried spacing over a hairline-soft
   row divider — so the two top-level pages read as ONE surface, never two dialects of a picker.
 - **One data path — the feed rides the app's one board poll.** The list fetches nothing of its own: the

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ScoreBadge, scenarioStates } from './score.jsx'
+import FilterSelect from './FilterSelect.jsx'
 import { useT } from './i18n/index.jsx'
 
 // The evals feed ([[evals-feed]]): the LEFT list of the Evals page (master-detail, [[evals-view]]) — the
@@ -12,7 +13,7 @@ import { useT } from './i18n/index.jsx'
 // and latest-per-scenario is score.jsx's scenarioStates — the same vocabulary the node badge, the focus
 // panel, and the eval tab use.
 
-const KIND_TAG = { video: 'vid', image: 'img', transcript: 'txt', note: 'note' }
+const KIND_TAG = { video: 'vid', image: 'img', transcript: 'txt' }
 
 // normalize a reading to its evidence LIST (each {hash, kind, state}): the backend's `evidence` list when
 // present, else the legacy scalar (blob + blobKind, absent kind → image) as a one-entry list, else empty —
@@ -24,7 +25,8 @@ export const evidenceList = (r) =>
 
 // a reading's evidence kinds as a SET (video-first), or ['note'] when it carries no blob at all. Kinds stay
 // HONEST: a MIXED reading (images + a video) belongs to EVERY kind it contains — it advertises all its media
-// and none it lacks; a blob-less verdict is a 'note', never a media kind.
+// and none it lacks; a blob-less verdict is a 'note', never a media kind. 'note' is a data-level kind only —
+// it is not a filter option and carries no row tag; such readings surface under the 'all' filter.
 export const kindsOf = (r) => {
   const ev = evidenceList(r)
   if (!ev.length) return ['note']
@@ -56,7 +58,7 @@ export function EvalRow({ e, selected, onClick }) {
       {e.inSession && <span className="ef-insession" title="measured by this session">✦</span>}
       <span className="ef-scenario" title={e.scenario}>{e.scenario}</span>
       <span className="ef-node" style={{ color: `hsl(${e.hue ?? 210} 60% 70%)` }}>{e.node}</span>
-      <span className="ef-kind">{kindsOf(e).map((k) => KIND_TAG[k]).join('·')}</span>
+      <span className="ef-kind">{kindsOf(e).map((k) => KIND_TAG[k]).filter(Boolean).join('·')}</span>
       <span className="ef-time">{rel(e.ts)}</span>
     </button>
   )
@@ -75,51 +77,38 @@ const rel = (ts) => {
 // visible ([[evals-view]]'s canonical URL) — if the entry exists but the kind filter hides it, the group
 // widens ITS OWN filter to 'all' (the filter stays this group's state; the page never reaches in). The
 // group carries no title of its own — the [[side-nav]] rail names the Evals page; this list renders just
-// its filter chipbar.
+// its one kind dropdown (the SAME shared control as the issues drain's store filter).
 export default function EvalsGroup({ nodes = [], sel, onSel, onRows, mustShow = null }) {
   const t = useT()
   const [kind, setKind] = useState(null)          // null = the default: video → image → all, first kind present
-  const [staleOnly, setStaleOnly] = useState(false)   // opt-in NARROWING, never a default hide
 
-  // latest reading per scenario, already newest-first (currentEntries) — fresh AND stale MIXED. Freshness is
-  // not a default filter: a stale reading is real measured loss and stays in the time-ordered feed (its row
-  // carries the muted ✓/✗ that marks it stale, so it reads as stale without being hidden).
+  // latest reading per scenario, already newest-first (currentEntries) — fresh AND stale MIXED, always.
+  // Freshness is never a filter here: a stale reading is real measured loss and stays in the time-ordered
+  // feed; its row's muted ✓/✗ is the only stale signal.
   const all = useMemo(() => currentEntries(nodes), [nodes])
   const hasVideo = all.some((e) => kindsOf(e).includes('video'))
   const hasImage = all.some((e) => kindsOf(e).includes('image'))
   const effKind = kind ?? (hasVideo ? 'video' : hasImage ? 'image' : 'all')
-  // the stale chip is the INVERSE of a hide: off = everything, on = ONLY stale (drill into outstanding drift).
-  const pool = useMemo(() => (staleOnly ? all.filter((e) => !e.fresh) : all), [all, staleOnly])
-  // a mixed reading matches EVERY kind it contains, so images+video shows under both the video and image chips.
-  const rows = useMemo(() => pool.filter((e) => effKind === 'all' || kindsOf(e).includes(effKind)), [pool, effKind])
-  const staleN = all.filter((e) => !e.fresh).length
+  // a mixed reading matches EVERY kind it contains; non-media readings (transcript-only, blob-less notes)
+  // match no media option and surface under 'all' only.
+  const rows = useMemo(() => all.filter((e) => effKind === 'all' || kindsOf(e).includes(effKind)), [all, effKind])
 
   useEffect(() => { onRows?.(rows) }, [rows, onRows])
 
-  // a deep-linked eval hidden by the current filters un-hides itself: widen the kind chip to 'all' (and
-  // drop the stale narrowing) so the canonical URL always renders its eval — but only when the entry
-  // actually exists; a bad address changes nothing.
+  // a deep-linked eval hidden by the current filter un-hides itself: widen the kind dropdown to 'all' so
+  // the canonical URL always renders its eval — but only when the entry actually exists; a bad address
+  // changes nothing.
   useEffect(() => {
     if (!mustShow) return
     if (rows.some((e) => entryKey(e) === mustShow)) return
-    if (all.some((e) => entryKey(e) === mustShow)) { setKind('all'); setStaleOnly(false) }
+    if (all.some((e) => entryKey(e) === mustShow)) setKind('all')
   }, [mustShow, rows, all])
 
   return (
     <section className="fv-group">
       <header className="fv-group-head">
-        <span className="ef-chipbar">
-          {['video', 'image', 'note', 'all'].map((k) => (
-            <button key={k} className={`ef-chip ${effKind === k ? 'on' : ''}`} onClick={() => setKind(k)}>
-              {t(`evalsFeed.kind.${k}`)}
-            </button>
-          ))}
-          {staleN > 0 && (
-            <button className={`ef-chip ef-stale ${staleOnly ? 'on' : ''}`} onClick={() => setStaleOnly((v) => !v)} title={t('evalsFeed.staleOnlyTitle')}>
-              {t('evalsFeed.staleN', { n: staleN })}
-            </button>
-          )}
-        </span>
+        <FilterSelect value={effKind} onChange={setKind}
+          options={['video', 'image', 'all'].map((k) => ({ value: k, label: t(`evalsFeed.kind.${k}`) }))} />
       </header>
       {rows.length === 0 && <div className="ef-empty">{t('evalsFeed.empty')}</div>}
       {rows.map((e) => (

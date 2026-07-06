@@ -5,7 +5,7 @@ import { sessionHeadline } from './session.js'
 import { useEscLayer } from './escStack.js'
 import { useT } from './i18n/index.jsx'
 
-export default function SessionContextMenu({ menu, onClose, onChanged }) {
+export default function SessionContextMenu({ menu, onClose, onChanged, onMultiSelect }) {
   const t = useT()
   const [renaming, setRenaming] = useState(null)   // the session whose rename prompt is open | null
   const [closing, setClosing] = useState(null)     // the session whose close-confirm prompt is open | null
@@ -35,6 +35,14 @@ export default function SessionContextMenu({ menu, onClose, onChanged }) {
     e.stopPropagation()
     setValue((menu.session.raw?.name ?? menu.session.name) || '')   // prefill the current OVERRIDE (blank if none) — the one legit raw consumer ([[session-label]]); never the derived label
     setRenaming(menu.session)
+    onClose()
+  }
+
+  // select flips the whole list into multi-select mode ([[session-multi-select]]), pre-ticking the row that
+  // was right-clicked. The mode itself lives in the list; the menu item only turns it on and dismisses.
+  const startSelect = (e) => {
+    e.stopPropagation()
+    onMultiSelect?.(menu.session)
     onClose()
   }
 
@@ -76,6 +84,7 @@ export default function SessionContextMenu({ menu, onClose, onChanged }) {
       {menu && (
         <div className="sess-menu" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()}>
           <button className="sess-menu-item" onClick={startRename}>{t('sessionWindow.rename')}</button>
+          <button className="sess-menu-item" onClick={startSelect}>{t('sessionWindow.select')}</button>
           <button className="sess-menu-item danger" onClick={startClose}>{t('sessionWindow.close')}</button>
         </div>
       )}

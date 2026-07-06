@@ -109,15 +109,18 @@ restores a pruned or cloned-away blob.`,
     line: 'issues …              THE issue surface: one merged local+forge list, plus all write verbs',
     body: `Usage: spex issues                                        the merged read (local + forge, store-tagged)
                   [--node <id>] [--store local|github] [--all] [--json]
-       spex issues open "<concern>" [--node <id>…] [--evidence <hash>…] [--body -|<text>]
+       spex issues open "<concern>" [--store local|<host>] [--node <id>…] [--evidence <hash>…] [--body -|<text>]
        spex issues reply <id> --body -|<text> [--evidence <hash>…]     (routes by the issue's store)
+       spex issues close <id>             close by the issue's store: local resolves landed, forge closes remote
        spex issues sign <id>              co-sign a local issue
        spex issues resolve <id> --as accepted|rejected|landed
        spex issues promote <id>           move an OPEN local issue to the forge (one recorded action)
        spex issues on|off|status          toggle/inspect the local-issue workflow
 
 Bare \`spex issues\` is the drain view a supervisor reads. \`open\` welcomes taste, annotations, and
-off-mainline smells — not only bugs. (\`nudge\` exists but is fired by the post-merge hook, not typed.)`,
+off-mainline smells — not only bugs; \`--store <host>\` opens straight on the forge (the same port the
+dashboard's New form uses). \`close\` and \`reply\` route by the issue's store — one verb, local or forge,
+the same routing as the dashboard. (\`nudge\` exists but is fired by the post-merge hook, not typed.)`,
     see: 'spex remark (pin a resolvable concern to an issue or scenario) · spex forge (trace forge → nodes)',
   },
   remark: {

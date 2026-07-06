@@ -125,7 +125,9 @@ it to `.spec/.issues` on its first store touch after a toolchain update — the 
   **nudge, never a gate**: some issues rightly outlive their session (a taste concern awaiting the drain),
   and a failure in the store check is reported loud while the declaration still lands.
 - **Surface — the write verbs live on the ONE issues command.** `spex issues open "<concern>" [--node <id>…]
-  [--evidence <hash>…] [--body -|<text>]` opens a thread; `spex issues reply <id> --body -|<text>
+  [--evidence <hash>…] [--body -|<text>]` opens a thread (open is store-routed by [[issues]]'s creation
+  port — its local default lands here; `--store <host>` bypasses this store for the forge driver);
+  `spex issues reply <id> --body -|<text>
   [--evidence <hash>…]` (the evidence a reply carries accrues onto the thread's `evidence[]`, deduped — an
   anchored annotation's frame blob), `sign`, and `resolve` act on any local thread. A new thread's `nodes:`
   are **inferred from the `[[node]]` topic links in its own text** (concern + body, [[mentions]]'s one

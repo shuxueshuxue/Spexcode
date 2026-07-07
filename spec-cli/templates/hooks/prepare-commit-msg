@@ -33,5 +33,12 @@ if [ -z "$sid" ] && [ -n "${CODEX_THREAD_ID:-}" ]; then # codex: alias the threa
 fi
 
 [ -z "$sid" ] && exit 0
-printf '\nSession: %s\n' "$sid" >> "$msg_file"
+# Stamp via interpret-trailers (git's own sample-hook mechanism), NOT a raw printf append: appending after a
+# message that already carries a trailer block (e.g. `spex ack`'s Spec-OK) opens a new paragraph, and git then
+# parses ONLY the last paragraph as trailers — the earlier trailers silently become body prose. interpret-trailers
+# appends into the existing block, keeping ONE parseable block. It needs the file newline-terminated first:
+# on an unterminated message (git merge -m writes MERGE_MSG without one) it folds the trailer into the subject
+# paragraph, where git's trailer parser never looks — the reason merge commits' Session: never parsed.
+[ -n "$(tail -c1 "$msg_file")" ] && echo >> "$msg_file"
+git interpret-trailers --in-place --trailer "Session: $sid" "$msg_file"
 exit 0

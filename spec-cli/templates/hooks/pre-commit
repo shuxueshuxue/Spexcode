@@ -27,9 +27,21 @@ spex_cli() {
   esac
 }
 
+# @@@ tree-unchanged stamp - a commit whose tree EQUALS HEAD's tree (`git write-tree` over the commit's own
+# index — the hook's GIT_INDEX_FILE, a temp HEAD-tree index for `commit --only --allow-empty`) adds NO
+# content: it cannot smuggle code past the main-guard below and cannot introduce spec↔code drift, so the
+# whole hook passes it. This is `spex ack`'s empty Spec-OK stamp — the reason ack works on a trunk merge
+# commit (amending it would re-author the merge after MERGE_HEAD is gone and read as direct authoring) and
+# with a DIRTY real index (the lint shim below reads the real index via git.ts's env-strip, which would
+# otherwise block the stamp on the very drift it acknowledges). Deliberately a one-line tree compare, not an
+# "is this an amend?" heuristic (undecidable at pre-commit time).
+if [ "$(git write-tree 2>/dev/null)" = "$(git rev-parse 'HEAD^{tree}' 2>/dev/null || echo none)" ]; then
+  exit 0
+fi
+
 # @@@ main-guard - the worktree model: never author directly on the trunk; the trunk only RECEIVES merges.
-# Reject a direct commit while HEAD is the trunk. Merges pass (MERGE_HEAD present).
-# Escape hatch for seeding / eager topology: SPEXCODE_ALLOW_MAIN=1 git commit …
+# Reject a direct commit while HEAD is the trunk. Merges pass (MERGE_HEAD present), and a tree-unchanged
+# stamp already passed above. Escape hatch for seeding / eager topology: SPEXCODE_ALLOW_MAIN=1 git commit …
 #
 # The trunk is resolved the SAME way the rest of SpexCode resolves it — `spex internal trunk` = layout.ts
 # mainBranch() (config override → the main checkout's current branch → 'main') — so the guard protects
@@ -48,7 +60,7 @@ trunk=$(spex_cli internal trunk 2>/dev/null | head -1)
 if [ "$branch" = "$trunk" ] && [ ! -f "$git_dir/MERGE_HEAD" ] && [ -z "${SPEXCODE_ALLOW_MAIN:-}" ]; then
   echo "✗ SpexCode: direct commits on $trunk (the trunk) are blocked." >&2
   echo "  Work in a worktree (.worktrees/<node>, branch node/<id>) and merge back." >&2
-  echo "  Merges pass automatically; for seeding/topology: SPEXCODE_ALLOW_MAIN=1 git commit …" >&2
+  echo "  Merges and tree-unchanged stamps (spex ack) pass automatically; for seeding/topology: SPEXCODE_ALLOW_MAIN=1 git commit …" >&2
   exit 1
 fi
 

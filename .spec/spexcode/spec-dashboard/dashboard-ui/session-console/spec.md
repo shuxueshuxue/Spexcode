@@ -196,7 +196,10 @@ always stopping short of the bottom **stats strip**), and a long session list **
 than extending down over the board's stats bar. A single click **locks** the board onto
 that session (overlays light, rest grey, focus jumps to its first changed node, see [[keyboard-nav]]); a
 no-overlay session still locks un-greyed; a second click releases; **double-click opens** its board (mouse-side `⏎`). The **interface's own tabs** render the same `SessionRow` with those gestures **inverted**:
-single click switches tab, double-click locks — but in its **compact, avatar-less** variant
+single click switches tab, double-click locks **and returns to the graph** (the console is a routed page,
+so the lock is only visible back on the board) — with **no pending-ops precondition**: an ops-less session
+still locks, the banner explaining the empty grip, exactly like the window's single-click; a silent no-op
+here is the bug, not the contract — but in its **compact, avatar-less** variant
 (`showAvatar={false} compact`): the console's own left list is a dense one-line-per-session list, the status a
 single colour glyph not a word. The avatar is dropped ONLY here — its cross-referencing job (matching a
 session to the avatars on the nodes it edits) belongs to the map-side SessionWindow, which keeps it. The

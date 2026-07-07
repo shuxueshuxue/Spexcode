@@ -7,7 +7,7 @@ related:
   - spec-dashboard/src/SpecSearch.jsx
   - spec-dashboard/src/App.jsx
   - spec-dashboard/src/Dashboard.jsx
-  - spec-dashboard/src/route.js
+  - spec-dashboard/src/address.js
   - spec-dashboard/src/SessionInterface.jsx
   - spec-dashboard/src/styles.css
 ---
@@ -25,8 +25,8 @@ pressed state.
 **Deliberate reuse, not a fork.** The pop-out IS the one [[shared-ranker]] palette component — same open/close, same keyboard, same four-plane matcher. Exactly two things differ, and each is a single knob the caller turns:
 
 - **Lead weight.** You searched *from the session board*, so **sessions lead**: the palette boosts the session plane to the front of its plane interleave, spec nodes and the rest below. (The board's plain `/` still leads with nodes.) This is one `boost` parameter that reorders which plane leads each interleave round — the scoring maths and the keep-every-plane-visible interleave are untouched, so a session always tops the list while nodes/issues/scenarios stay reachable below.
-- **Select target.** A result selects the product surface that owns that kind of thing, through ONE app
-  address helper shared by both entry points. Picking a **session** opens (or switches to) that session's
+- **Select target.** A result selects the product surface that owns that kind of thing, through the shared
+  [[address-routing]] vocabulary. Picking a **session** opens (or switches to) that session's
   tab. Picking a **spec node** routes to the graph and focuses that node. Picking an **issue** routes to
   the Issues page's own detail address (`#/issues/<issue-id>`). Picking a **scenario** routes to the Evals
   page's own detail address (`#/evals/<node>/<scenario>`). The palette no longer collapses every non-session

@@ -1,4 +1,4 @@
-import { addressHash, issueAddress } from './route.js'
+import { addressHash, issueAddress } from './address.js'
 
 // Compact per-node issue entry. It always opens SpexCode's own Issues page; forge permalinks stay in the
 // selected issue detail where they are secondary metadata.

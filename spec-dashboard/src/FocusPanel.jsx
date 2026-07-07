@@ -2,7 +2,7 @@ import { scenarioStates, aggregateState, TagChips } from './score.jsx'
 import { useT } from './i18n/index.jsx'
 import { useSpecCorpus } from './corpus.js'
 import IssueCard from './IssueCard.jsx'
-import { evalAddress } from './route.js'
+import { evalAddress } from './address.js'
 
 // the state mark a scenario row leads with — the score vocabulary as a glyph (✓ pass · ✗ fail · ○ blind
 // spot · · never measured). The colour comes from the row's state class (styles.css), so this is shape only.

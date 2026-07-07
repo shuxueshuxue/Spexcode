@@ -5,9 +5,14 @@ import { readFileSync, appendFileSync, existsSync } from 'node:fs'
 // on disk with status:'note'; render stays tolerant of them, the CLI no longer mints them.)
 export type Verdict = { status: 'pass' | 'fail'; note?: string }
 
-export type EvidenceKind = 'image' | 'transcript' | 'video'
-// one piece of a reading's evidence: a content-addressed blob (`hash`) tagged by `kind`. `video` is a
-// screenshot with a time axis — the same content-addressed blob, distinguished only by this tag.
+// The evidence-kind taxonomy ([[evidence-kind-taxonomy]]) is a MEDIA/RENDER type — how a blob's bytes are
+// shown — kept ORTHOGONAL to the step-map AXIS (which is derived from the kind, not welded to it): `image`
+// (a still), `transcript` (free-form text), `video` (a screenshot with a time axis), `data` (a structured
+// machine export — a JSON/metrics dump — rendered as a validatable data block, not flattened into scrolling
+// transcript text). A `data` reading is honest about being structured: it can be parsed and checked, and it
+// is derived from CONTENT (isJsonBlob), never from which filing flag was used.
+export type EvidenceKind = 'image' | 'transcript' | 'video' | 'data'
+// one piece of a reading's evidence: a content-addressed blob (`hash`) tagged by `kind`.
 export type Evidence = { hash: string; kind: EvidenceKind }
 
 // A reading's evidence is a LIST of typed entries — N images and/or a video (with its step-timeline) and/or
@@ -39,6 +44,23 @@ export function evidenceOf(r: { evidence?: Evidence[]; blob?: string | null; blo
   if (r.evidence?.length) return r.evidence
   if (r.blob) return [{ hash: r.blob, kind: r.blobKind ?? 'image' }]
   return []
+}
+
+// Is this blob STRUCTURED DATA (a machine export — a JSON object/array) rather than free-form transcript
+// text? The `data` evidence kind ([[evidence-kind-taxonomy]]) is derived from CONTENT, never from which
+// filing flag was used: a hyperfine `--export-json`, an API payload, a metrics dump is data, and flattening
+// it into a scrolling transcript loses that it can be structurally validated and rendered as a data block.
+// Sniffed cheaply and self-contained (no deps): a text blob (no NUL) whose trimmed body brackets as an
+// object/array AND parses to one; anything else (plain logs, terminal text) is not data. This is the ONE
+// predicate both the blob MIME sniff (application/json) and the CLI `--result` kind derive from, so the
+// stored kind and the served Content-Type always agree.
+export function isJsonBlob(b: Buffer): boolean {
+  if (!b.length || b.includes(0)) return false           // empty or binary → not JSON text
+  if (b.length > 4_000_000) return false                 // don't parse an unbounded blob just to sniff a type
+  const s = b.toString('utf8').trim()
+  const open = s[0], close = s[s.length - 1]
+  if (!((open === '{' && close === '}') || (open === '[' && close === ']'))) return false
+  try { const v = JSON.parse(s); return v !== null && typeof v === 'object' } catch { return false }
 }
 
 // a RETRACTION is the sanctioned inverse of a filing — itself an appended event, never a deleted line

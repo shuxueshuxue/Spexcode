@@ -155,7 +155,10 @@ PICK THE EVIDENCE KIND BY WHAT THE BEHAVIOUR DOES OVER TIME:
                       skip it for a short single-step artefact. (Legacy \`{ "v": 1, "events": [{ "tMs" }] }\` — the
                       time axis with \`tMs\` — is still accepted, read as \`axis: "time"\`.)
   STATIC end state  → \`--image <png>\` (repeatable — N stills). Layout, an icon, copy, one rendered frame.
-  backend / CLI     → \`--result <txt>\` (a transcript; \`-\` reads stdin).
+  backend / CLI     → \`--result <txt>\` (a transcript; \`-\` reads stdin). A STRUCTURED export (a JSON
+                      \`--export-json\`, an API payload, a metrics dump) is recognized BY CONTENT and kept as
+                      \`data\` — rendered as a validatable data block, not flattened into scrolling transcript
+                      text; free-form output stays a transcript. You pick the flag; the KIND follows the bytes.
 The flags combine in ONE filing — several stills can ride beside the clip of the same run.
 ANCHOR DISCIPLINE: a reading's \`codeSha\` is HEAD at filing time, and a git sha names only a COMMIT — an
 uncommitted change has none. So measure the tree you are about to commit, COMMIT it, then file; confidence

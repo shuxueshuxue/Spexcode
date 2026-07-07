@@ -5,7 +5,7 @@ import { loadSpecs } from '../../spec-cli/src/specs.js'
 import { loadConfig, sourceExtRe } from '../../spec-cli/src/lint.js'
 import { mainBranch, envSessionId, readRawRecord } from '../../spec-cli/src/layout.js'
 import { yatsuNodes, validateScenarios, YATSU_FILE, type YatsuNode } from './yatsu.js'
-import { readReadings, readSidecar, appendReading, appendRetraction, latestPerScenario, evidenceOf, type Reading, type Verdict, type Evidence, type EvidenceKind, type Retraction } from './sidecar.js'
+import { readReadings, readSidecar, appendReading, appendRetraction, latestPerScenario, evidenceOf, isJsonBlob, type Reading, type Verdict, type Evidence, type EvidenceKind, type Retraction } from './sidecar.js'
 import { staleAxes } from './freshness.js'
 import { scenarioIndex } from './scenariofresh.js'
 import { loadEvalRemarkTracks, trackKey } from '../../spec-cli/src/issues.js'
@@ -196,9 +196,10 @@ const EVAL_VALUE_FLAGS = new Set(['scenario', 'note', 'image', 'result', 'video'
 
 // which axis each evidence kind carries — a step-map ([[step-timeline]]) anchors to ONE of them, so its
 // `axis` must match a present entry's kind. A video is time (ms), a transcript is line-numbered, a still
-// SEQUENCE is frame-indexed. (The 'index' axis — a bare action ordinal — has no evidence kind of its own
-// yet; the schema still supports it, so an emitter that grows one just adds a row here.)
-const AXIS_FOR_KIND: Record<EvidenceKind, string> = { video: 'time', transcript: 'line', image: 'frame' }
+// SEQUENCE is frame-indexed, and structured `data`'s positions are record ordinals — the `index` axis (a
+// bare ordinal). Render kind and step-map axis stay ORTHOGONAL ([[evidence-kind-taxonomy]]): this map is
+// the one seam between them, one row per kind.
+const AXIS_FOR_KIND: Record<EvidenceKind, string> = { video: 'time', transcript: 'line', image: 'frame', data: 'index' }
 const EVAL_BOOL_FLAGS = new Set(['pass', 'fail'])
 function rejectUnknownEvalFlag(args: string[]): string | null {
   for (let i = 0; i < args.length; i++) {
@@ -249,7 +250,12 @@ async function evalCmd(args: string[]): Promise<number> {
   const video = flag(args, 'video')
   const evidence: Evidence[] = []
   for (const p of images) evidence.push({ hash: putBlob(readFileSync(p)), kind: 'image' })
-  if (result !== undefined) evidence.push({ hash: putBlob(readFileSync(result === '-' ? 0 : result)), kind: 'transcript' })
+  if (result !== undefined) {
+    // --result's kind is DERIVED FROM CONTENT ([[evidence-kind-taxonomy]]), not welded to the flag: a
+    // structured export (JSON) files as `data` (a validatable data block), free-form output as `transcript`.
+    const bytes = readFileSync(result === '-' ? 0 : result)
+    evidence.push({ hash: putBlob(bytes), kind: isJsonBlob(bytes) ? 'data' : 'transcript' })
+  }
   if (video !== undefined) evidence.push({ hash: putBlob(readFileSync(video)), kind: 'video' })
 
   // --timeline: the evidence's step map (timeline.ts) — steps anchored to a POSITION on the evidence's OWN

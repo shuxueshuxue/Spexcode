@@ -43,6 +43,34 @@ export function Transcript({ hash }) {
   return <pre className="eval-transcript">{text}</pre>
 }
 
+// structured DATA evidence ([[evidence-kind-taxonomy]]) — a machine export (JSON) rendered as a validatable
+// data block, not scrolling transcript text: pretty-print when it parses, show the raw bytes with an
+// "invalid JSON" marker when it doesn't (the honesty is that the structure is checkable, so a broken export
+// is visibly broken, never silently a wall of text).
+export function DataBlock({ hash }) {
+  const t = useT()
+  const [state, setState] = useState(null)
+  useEffect(() => {
+    let live = true
+    fetch(blobUrl(hash))
+      .then((r) => (r.ok ? r.text() : Promise.reject(new Error('miss'))))
+      .then((raw) => {
+        let text = raw, valid = true
+        try { text = JSON.stringify(JSON.parse(raw), null, 2) } catch { valid = false }
+        if (live) setState({ text, valid })
+      })
+      .catch(() => { if (live) setState({ text: '', valid: false }) })
+    return () => { live = false }
+  }, [hash])
+  if (state === null) return <pre className="eval-data loading">{t('nodeView.eval.loadingData')}</pre>
+  return (
+    <div className="eval-datawrap">
+      <div className="eval-datahead">{state.valid ? t('nodeView.eval.data') : t('nodeView.eval.dataInvalid')}</div>
+      <pre className="eval-data">{state.text}</pre>
+    </div>
+  )
+}
+
 // an evidence image owns its own enlarge loop — every home gets click-to-zoom without holding zoom state.
 function EvidenceImage({ hash, alt }) {
   const [zoom, setZoom] = useState(false)
@@ -98,6 +126,7 @@ export function EvidenceItem({ e, alt = '' }) {
   const t = useT()
   if (e.state === 'miss') return <div className="eval-noimg">{t('nodeView.eval.miss')}</div>
   if (e.kind === 'transcript') return <Transcript hash={e.hash} />
+  if (e.kind === 'data') return <DataBlock hash={e.hash} />
   if (e.kind === 'video') return <video className="eval-video" src={blobUrl(e.hash)} controls preload="metadata" playsInline />
   return <EvidenceImage hash={e.hash} alt={alt} />
 }
@@ -114,7 +143,7 @@ function useBlobKind(hash) {
       .then((r) => {
         const ct = r.headers.get('content-type') || ''
         const k = !r.ok ? { kind: 'image', state: 'miss' }
-          : { kind: ct.startsWith('video/') ? 'video' : ct.startsWith('image/') ? 'image' : 'transcript', state: 'present' }
+          : { kind: ct.startsWith('video/') ? 'video' : ct.startsWith('image/') ? 'image' : ct.startsWith('application/json') ? 'data' : 'transcript', state: 'present' }
         kindCache.set(hash, k)
         if (live) setKnown(k)
       })

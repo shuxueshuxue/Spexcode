@@ -37,7 +37,9 @@ head, on its **control row** beside the shell's fold toggle — [[evals-view]] o
 the anchored button in as `lead`, so the head wears the same control-row grammar as the issues drain and
 nothing floats over the list — and the filter is this group's own state — [[evals-view]] owns the page shell
 (split, selection, j/k), never this
-group's filter. One deliberate exception rides that ownership the RIGHT way round: a **deep-linked eval the
+group's filter. The head's chip row carries the [[live-session-filter]] "N live" toggle (this feed is that
+feature's second surface: it narrows to readings whose filer session is alive, the same one-judgment join the
+originator chip renders). One deliberate exception rides that ownership the RIGHT way round: a **deep-linked eval the
 current filter would hide** ([[evals-view]]'s canonical `#/evals/<node>/<scenario>` address) is handed down
 as a `mustShow` key, and the group widens **its own** dropdown to `all` so the address always renders its
 eval — the page never reaches into the group's filter state, and an address naming no real eval changes

@@ -31,6 +31,14 @@ export const sessionZone = (s) => {
   return NEED_STATUS.has(s?.status) ? 'need' : 'run'
 }
 export const ZONE_ORDER = ['need', 'run', 'offline']
+// the ONE liveness join ([[live-session-filter]]): resolve an id against the board sessions and return the
+// session only while it is ALIVE (listed and not offline) — the same alive/offline judgment the originator
+// chip renders (Thread.jsx) and the issues/evals live chips filter by. A non-session id ('human', a github
+// login) resolves to null, honestly.
+export const liveSession = (sessions, id) => {
+  const s = id ? (sessions || []).find((x) => x.id === id) : null
+  return s && sessionZone(s) !== 'offline' ? s : null
+}
 // zone-partition the list: needs-you first, self-running next, offline (dormant) at the bottom; and WITHIN
 // each zone the NEWEST session on top (descending effective time) — the fresh, recently-touched work you
 // actually reach for, not the oldest.

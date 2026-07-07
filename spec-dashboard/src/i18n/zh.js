@@ -65,6 +65,8 @@ export default {
   masterList: {
     fold: '折叠列表 — 让详情占满宽度',
     unfold: '展开列表',
+    liveChip: ({ n }) => `${n} 活跃`,
+    liveChipTitle: '只看背后 session 还活着的条目',
   },
 
   annotator: {

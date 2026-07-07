@@ -66,6 +66,8 @@ export default {
   masterList: {
     fold: 'fold the list — the detail owns the width',
     unfold: 'unfold the list',
+    liveChip: ({ n }) => `${n} live`,
+    liveChipTitle: 'only issues/readings a LIVE session is behind',
   },
 
   annotator: {

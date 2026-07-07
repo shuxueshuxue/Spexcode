@@ -41,7 +41,8 @@ straight to the trunk.
   **left column** is ONE box — the merged issue list under its own filter bar, a two-row cluster: the
   **CONTROL row** first (the fold toggle, the store filter, and **New** — every one an anchored flex member
   of the row, nothing floating over the list or its scrollbar), then a **CHIP row** carrying the small
-  count/toggle chips (the concluded-count chip), rendered only while it has chips. The bar carries **no
+  count/toggle chips — the concluded-count chip and the [[live-session-filter]] "N live" chip — rendered
+  only while it has chips. The bar carries **no
   open/total count meta** — the human removed the count as noise; the list itself is the count. The bar
   stays sticky over the full-height list, which scrolls itself. The rows are one compact line each, so the
   column stays **SLIM** — a picker, never a reading surface that starves the detail (the human called the

@@ -4,7 +4,7 @@ import { BlobMedia } from './Evidence.jsx'
 import { useMentionAutocomplete } from './mentions.jsx'
 import { fitTextarea } from './textarea.js'
 import { postRemarkAction } from './data.js'
-import { STATUS_COLOR, sessionZone } from './session.js'
+import { STATUS_COLOR, liveSession } from './session.js'
 import { useT } from './i18n/index.jsx'
 import { Icon } from './icons.jsx'
 
@@ -66,8 +66,9 @@ export function resolveAnchor(anchor, events) {
 
 // The thread's ORIGINATOR liveness ([[mentions]] loop-in) — WHO filed this issue/eval, and whether their
 // session is still ALIVE. This is a thin join of the originator id against the live board sessions the page
-// already holds — alive = the session is listed and not offline (a closed session isn't listed at all;
-// sessionZone folds both). A live originator is a direct door to its session-board tab; offline remains a
+// already holds — session.js's liveSession, the SAME judgment the issues/evals live chips filter by
+// ([[live-session-filter]]), so a chip-filtered list and these dots can never disagree. A live originator is
+// a direct door to its session-board tab; offline remains a
 // static identity chip. Reuses the board's four-hue STATUS_COLOR (the live status paints the dot), never a
 // second palette. `kind` ('issue' | 'eval') only picks the label wording. A missing/unresolvable originator
 // renders nothing — exactly the case where the loop-in chain runs dry silently (a forge github login, a
@@ -75,8 +76,8 @@ export function resolveAnchor(anchor, events) {
 export function OriginatorLiveness({ originator, sessions = [], kind = 'issue', onOpenSession = null }) {
   const t = useT()
   if (!originator) return null
-  const s = (sessions || []).find((x) => x.id === originator)
-  const alive = !!s && sessionZone(s) !== 'offline'
+  const s = liveSession(sessions, originator)
+  const alive = !!s
   const color = alive ? (STATUS_COLOR[s.status] || STATUS_COLOR.working) : STATUS_COLOR.offline
   const title = t(kind === 'eval' ? 'thread.originatorEval' : 'thread.originatorIssue', { by: originator })
   const body = (

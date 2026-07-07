@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ScoreBadge, scenarioStates } from './score.jsx'
+import { liveSession } from './session.js'
 import FilterSelect from './FilterSelect.jsx'
 import { useT } from './i18n/index.jsx'
 
@@ -79,9 +80,10 @@ const rel = (ts) => {
 // group carries no title of its own — the [[side-nav]] rail names the Evals page; this list's head is the
 // shared two-row cluster: the CONTROL row (`lead` — the shell's anchored fold toggle — beside the kind
 // dropdown, the SAME shared control as the issues drain's store filter) over the chip row.
-export default function EvalsGroup({ nodes = [], sel, onSel, onRows, mustShow = null, lead = null }) {
+export default function EvalsGroup({ nodes = [], sessions = [], sel, onSel, onRows, mustShow = null, lead = null }) {
   const t = useT()
   const [kind, setKind] = useState(null)          // null = the default: video → image → all, first kind present
+  const [liveOnly, setLiveOnly] = useState(false) // [[live-session-filter]]: only readings whose filer is alive
 
   // latest reading per scenario, already newest-first (currentEntries) — fresh AND stale MIXED, always.
   // Freshness is never a filter here: a stale reading is real measured loss and stays in the time-ordered
@@ -92,17 +94,22 @@ export default function EvalsGroup({ nodes = [], sel, onSel, onRows, mustShow = 
   const effKind = kind ?? (hasVideo ? 'video' : hasImage ? 'image' : 'all')
   // a mixed reading matches EVERY kind it contains; non-media readings (transcript-only, blob-less notes)
   // match no media option and surface under 'all' only.
-  const rows = useMemo(() => all.filter((e) => effKind === 'all' || kindsOf(e).includes(effKind)), [all, effKind])
+  const kindRows = useMemo(() => all.filter((e) => effKind === 'all' || kindsOf(e).includes(effKind)), [all, effKind])
+  // [[live-session-filter]]: a reading is LIVE while its filer session (e.by) is still alive — the same
+  // liveSession join the originator chip renders, so the chip and the dots can never disagree.
+  const isLive = (e) => !!liveSession(sessions, e.by)
+  const liveCount = useMemo(() => kindRows.filter(isLive).length, [kindRows, sessions])
+  const rows = useMemo(() => (liveOnly ? kindRows.filter(isLive) : kindRows), [kindRows, liveOnly, sessions])
 
   useEffect(() => { onRows?.(rows) }, [rows, onRows])
 
-  // a deep-linked eval hidden by the current filter un-hides itself: widen the kind dropdown to 'all' so
-  // the canonical URL always renders its eval — but only when the entry actually exists; a bad address
-  // changes nothing.
+  // a deep-linked eval hidden by the current filters un-hides itself: widen the kind dropdown to 'all'
+  // (and release the live chip) so the canonical URL always renders its eval — but only when the entry
+  // actually exists; a bad address changes nothing.
   useEffect(() => {
     if (!mustShow) return
     if (rows.some((e) => entryKey(e) === mustShow)) return
-    if (all.some((e) => entryKey(e) === mustShow)) setKind('all')
+    if (all.some((e) => entryKey(e) === mustShow)) { setKind('all'); setLiveOnly(false) }
   }, [mustShow, rows, all])
 
   return (
@@ -113,6 +120,14 @@ export default function EvalsGroup({ nodes = [], sel, onSel, onRows, mustShow = 
           <FilterSelect value={effKind} onChange={setKind}
             options={['video', 'image', 'all'].map((k) => ({ value: k, label: t(`evalsFeed.kind.${k}`) }))} />
         </span>
+        {liveCount > 0 && (
+          <span className="ef-chipbar">
+            <button type="button" className={`ef-chip fv-live ${liveOnly ? 'on' : ''}`} onClick={() => setLiveOnly((v) => !v)}
+              data-tip={t('masterList.liveChipTitle')}>
+              {t('masterList.liveChip', { n: liveCount })}
+            </button>
+          </span>
+        )}
       </header>
       {rows.length === 0 && <div className="ef-empty">{t('evalsFeed.empty')}</div>}
       {rows.map((e) => (

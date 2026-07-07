@@ -133,7 +133,7 @@ export default function EvalsPage({ specs = [], sessions = [], reloadBoard, onOp
       {(foldBtn) => (
         <>
           {notice && <div className="fv-notice">{notice}</div>}
-          <EvalsGroup nodes={specs} sel={effSel} onSel={(k) => setSel(k)} onRows={onRows} mustShow={deepWant} lead={foldBtn} />
+          <EvalsGroup nodes={specs} sessions={sessions} sel={effSel} onSel={(k) => setSel(k)} onRows={onRows} mustShow={deepWant} lead={foldBtn} />
         </>
       )}
     </EvalMasterDetail>

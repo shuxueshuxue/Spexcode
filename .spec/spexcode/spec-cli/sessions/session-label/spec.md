@@ -31,6 +31,17 @@ the LIVE line a human reads (name > activity > promptPreview > node > title > br
 on liveness; see [[session-activity]]). Both ride every session on the wire; every surface — CLI tables,
 watch/notify lines, the reply-channel footer, board rows, the @-mention dropdown, search — reads them.
 
+The narrower payloads that are NOT a full session on the wire carry the derived identity too, from the
+same seam: the review/merge `ReviewPayload` includes a precomputed `label` (`deriveLabel` over the record's
+name/node/title/branch/id), so `spex review` renders THAT — not a re-inlined `node||branch||id` chain that
+would skip the rename and the prompt title. This was a real divergence: a node-less session showed its
+prompt-derived `name` under `spex ls` but its `branch` under `spex review` — two identities for one session.
+The rule is a single seam, not a shared convention: any surface naming who a session is reads a
+`deriveLabel`-produced field; none re-derives from the raw parts. The @-mention `sub` line and the board's
+worktree-overlay attribution are a different concept (a spec-op source badge, not the session's identity),
+and the eval/proof headline is deliberately node-spec-title anchored with no agent-authored claim — those
+stay as they are.
+
 **The bare parts don't ride the wire.** There is no top-level `title` or `name` on a session: the parts
 live under `raw: { name, title }`, whose only sanctioned consumer is an explicitly raw surface (the rename
 prefill must edit the override itself, [[session-rename]] — a derived value there would freeze as a fake

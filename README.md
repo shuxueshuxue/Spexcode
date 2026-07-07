@@ -1,6 +1,17 @@
-<img src="docs/sdd-tuxedo-pooh.png" alt="tuxedo pooh meme" width="420">
+<div align="center">
 
-# SpexCode
+<img src="docs/banner.png" alt="SpexCode" width="720">
+
+<p>
+  <a href="https://www.npmjs.com/package/spexcode"><img alt="npm" src="https://img.shields.io/npm/v/spexcode?logo=npm&logoColor=white&color=cb3837"></a>
+  <img alt="license: MIT" src="https://img.shields.io/badge/license-MIT-2f81f7">
+  <img alt="node &ge; 22" src="https://img.shields.io/badge/node-%E2%89%A5%2022-3fb950?logo=nodedotjs&logoColor=white">
+  <a href="https://spexcode.net"><img alt="docs" src="https://img.shields.io/badge/docs-spexcode.net-8957e5"></a>
+</p>
+
+<img src="docs/sdd-tuxedo-pooh.png" alt="spec-driven development meme" width="240">
+
+</div>
 
 Spec-driven development with AI agents in the loop. SpexCode keeps a versioned tree of specs inside
 your git repo, links every spec to the code it governs, and runs a session manager that dispatches

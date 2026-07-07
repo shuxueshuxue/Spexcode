@@ -1,6 +1,17 @@
-<img src="sdd-tuxedo-pooh.png" alt="tuxedo pooh 梗图" width="420">
+<div align="center">
 
-# SpexCode
+<img src="banner.png" alt="SpexCode" width="720">
+
+<p>
+  <a href="https://www.npmjs.com/package/spexcode"><img alt="npm" src="https://img.shields.io/npm/v/spexcode?logo=npm&logoColor=white&color=cb3837"></a>
+  <img alt="license: MIT" src="https://img.shields.io/badge/license-MIT-2f81f7">
+  <img alt="node &ge; 22" src="https://img.shields.io/badge/node-%E2%89%A5%2022-3fb950?logo=nodedotjs&logoColor=white">
+  <a href="https://spexcode.net"><img alt="docs" src="https://img.shields.io/badge/docs-spexcode.net-8957e5"></a>
+</p>
+
+<img src="sdd-tuxedo-pooh.png" alt="spec 驱动开发梗图" width="240">
+
+</div>
 
 把 AI agent 纳入回路的 spec 驱动开发。SpexCode 在你的 git 仓库里维护一棵带版本的 spec 树,把每个
 spec 和它管辖的代码链接起来,并运行一个会话管理器,把 coding agent 派进相互隔离的 worktree。你负责

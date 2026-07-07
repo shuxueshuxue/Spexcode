@@ -755,8 +755,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             const lead = (it.expandable || it.depth)
               ? <RowLead guides={it.guides} expandable={it.expandable} expanded={it.expanded} rollup={it.rollup} kin={it.kin} onToggle={() => toggleFold(s.id)} />
               : null
-            // single click switches tab; double-click locks the session (needs an overlay to focus, else a
-            // no-op beyond the switch). The face is the shared SessionRow, compact + avatar-less here.
+            // single click switches tab; double-click locks the session and returns to the graph — no
+            // pending-ops precondition: an ops-less session still locks (the banner explains the empty
+            // grip), the console-side twin of the board window's single-click lock.
+            // The face is the shared SessionRow, compact + avatar-less here.
             // In multi-select mode ([[session-multi-select]]) the row is a checkbox instead: a click toggles
             // its pick (never switches the pane), and the rename/lock gestures are suppressed.
             const isPicked = selecting && picked.has(s.id)
@@ -767,9 +769,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 className={`si-item${!selecting && active === s.id ? ' on' : ''}${isPicked ? ' picked' : ''}`}
                 style={{ '--ov': labelColor(s.id) }}
                 onClick={() => (selecting ? togglePick(s.id) : setSel(s.id))}
-                onDoubleClick={() => { if (!selecting && s.ops?.length && onPickSession) { onPickSession(s, false); onClose() } }}
+                onDoubleClick={() => { if (!selecting && onPickSession) { onPickSession(s, false); onClose() } }}
                 onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); if (!selecting) setCtxMenu({ x: e.clientX, y: e.clientY, session: s }) }}
-                data-tip={s.ops?.length ? t('session.opsTitle') : undefined}
+                data-tip={s.ops?.length ? t('session.opsTitle') : t('session.lockTitle')}
               >
                 {selecting && <span className={`si-check${isPicked ? ' on' : ''}`} aria-hidden="true" />}
                 <SessionRow s={s} locked={false} showAvatar={false} compact lead={lead} />

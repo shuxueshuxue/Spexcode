@@ -21,8 +21,14 @@ aspirational — the cheap mechanism the [[portable-layout]] convention was rely
 
 A `pre-commit` hook rejects a direct commit while `HEAD` is the **trunk**. Merges must pass (the
 `--no-ff` gate onto the trunk sets `MERGE_HEAD`), so the worktree → merge flow is unaffected, and
-node-branch commits pass because they aren't on the trunk. Escape hatch for seeding / eager topology:
-`SPEXCODE_ALLOW_MAIN=1`.
+node-branch commits pass because they aren't on the trunk. A **tree-unchanged** commit also passes:
+when the tree being committed (`git write-tree` over the commit's index) equals `HEAD`'s tree, the
+commit adds no content and cannot smuggle code onto the trunk — this is the narrow door through which
+`spex ack` ([[spec-lint]]) lands its empty `Spec-OK:` stamp above a trunk merge commit. That pass is an
+early exit for the whole hook (a no-content commit can't introduce drift either, so the lint shim is
+waived with it — which also lets an ack land while the real index holds unrelated staged work). The
+check is a one-line tree compare, deliberately NOT an "is this an amend?" heuristic (undecidable at
+pre-commit time). Escape hatch for seeding / eager topology: `SPEXCODE_ALLOW_MAIN=1`.
 
 (The [[local-issues]] store also lands its data commits on the trunk, but it does NOT need a guard exception:
 its programmatic writer commits with `--no-verify` — the commit is provably a single `.spec/.issues/` data

@@ -376,6 +376,25 @@ scenarios:
       SVG path change), so the icon always tracks the current selection. The native `<select>` still opens and
       operates on click (the launcher-picker-opens-on-click contract is unaffected).
     related: spec-dashboard/src/SessionInterface.jsx
+  - name: tab-dblclick-locks-graph
+    tags: [frontend-e2e, desktop]
+    description: >
+      Through the running dashboard in a real browser, open the session interface (#/sessions) with at
+      least two sessions available: one WITH pending ops (its tab carries the ops tooltip / op tally) and
+      one WITHOUT any pending ops (a freshly dispatched worker, or one whose spec edits are already
+      committed — the common resting state). Double-click each tab in turn (expanding any nesting fold
+      first so the tab is visible). After each double-click, read `location.hash`, whether the graph page
+      is the visible page, and whether the session-lock banner (`.lock-hint`) is up. Record the whole
+      interaction as a video.
+    expected: |
+      BOTH double-clicks leave the console and land on the graph page (`#/graph`) with the board LOCKED
+      onto that session (the lock banner is up; rest of the board greys where overlays exist). The
+      with-ops session additionally auto-focuses its first changed node. The ops-less session still
+      locks — the banner explains the empty grip ([[keyboard-nav]]'s lock contract: "a no-overlay session
+      still locks") — it is NEVER a silent no-op that leaves you sitting on the sessions page. Single
+      click still only switches tabs; the double-click gesture is the console-side twin of the board
+      window's single-click lock, with no pending-ops precondition.
+    related: spec-dashboard/src/SessionInterface.jsx
 ---
 
 # session-console — yatsu

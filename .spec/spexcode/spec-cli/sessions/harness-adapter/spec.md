@@ -258,7 +258,10 @@ interactive-CLI path share one precedence rule. The **commit-attribution** hook 
 `Session:` trailer) is a THIRD consumer of this same rule: a codex worker's `git commit` runs in the shared
 app-server shell (contaminated `SPEXCODE_SESSION_ID`) but carries the acting `CODEX_THREAD_ID`, so the hook
 resolves the RECORD id through the SAME `harness_session_id` alias grep AT COMMIT TIME (the record is swept on
-close, so read-time aliasing would fail) — never the raw thread id, never the contaminated env var. Claude is
+close, so read-time aliasing would fail) — never the raw thread id, never the contaminated env var. The stamp
+lands via `git interpret-trailers`, never a raw append: git parses only the LAST paragraph as trailers, so an
+appended `Session:` paragraph would silently demote any trailer block the message already carries (e.g. `spex
+ack`'s `Spec-OK:`) to body prose; interpret-trailers joins the existing block instead. Claude is
 unaffected on all paths: its exported `CLAUDE_CODE_SESSION_ID` equals both its payload id and the record key, so
 the direct hit always wins and the alias step never runs.
 

@@ -14,7 +14,7 @@ import { useT } from './i18n/index.jsx'
 // and latest-per-scenario is score.jsx's scenarioStates — the same vocabulary the node badge, the focus
 // panel, and the eval tab use.
 
-const KIND_TAG = { video: 'vid', image: 'img', transcript: 'txt' }
+const KIND_TAG = { video: 'vid', image: 'img', transcript: 'txt', data: 'data' }
 
 // normalize a reading to its evidence LIST (each {hash, kind, state}): the backend's `evidence` list when
 // present, else the legacy scalar (blob + blobKind, absent kind → image) as a one-entry list, else empty —
@@ -31,7 +31,7 @@ export const evidenceList = (r) =>
 export const kindsOf = (r) => {
   const ev = evidenceList(r)
   if (!ev.length) return ['note']
-  return ['video', 'image', 'transcript'].filter((k) => ev.some((e) => e.kind === k))
+  return ['video', 'image', 'transcript', 'data'].filter((k) => ev.some((e) => e.kind === k))
 }
 
 // flatten board nodes → feed entries via the ONE latest-per-scenario computation (scenarioStates).

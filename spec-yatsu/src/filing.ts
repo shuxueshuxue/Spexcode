@@ -1,6 +1,6 @@
 import { repoRoot, headSha } from '../../spec-cli/src/git.js'
 import { yatsuNodes } from './yatsu.js'
-import { appendReading, readReadings, type Reading } from './sidecar.js'
+import { appendReading, readReadings, isJsonBlob, type Reading, type EvidenceKind } from './sidecar.js'
 import { putBlob } from './cache.js'
 
 export type FileResult = { ok: true; reading: Reading } | { ok: false; error: string }
@@ -20,11 +20,14 @@ export function fileHumanReading(
   const sc = node.scenarios.find((s) => s.name === input.scenario)
   if (!sc) return { ok: false, error: `'${nodeId}' has no scenario '${input.scenario}'` }
   if (input.status !== 'pass' && input.status !== 'fail') return { ok: false, error: 'status must be pass or fail' }
-  const blob = input.transcript ? putBlob(Buffer.from(input.transcript)) : null
+  // the evidence bytes; its kind is derived from CONTENT ([[evidence-kind-taxonomy]]) — a structured JSON
+  // export files as `data`, free-form text as `transcript` — so the HTTP filer agrees with the CLI.
+  const buf = input.transcript ? Buffer.from(input.transcript) : null
+  const blob = buf ? putBlob(buf) : null
   const reading: Reading = {
     scenario: sc.name,
     codeSha: headSha(root),
-    ...(blob ? { evidence: [{ hash: blob, kind: 'transcript' as const }] } : {}),
+    ...(blob ? { evidence: [{ hash: blob, kind: (buf && isJsonBlob(buf) ? 'data' : 'transcript') as EvidenceKind }] } : {}),
     evaluator: 'manual@1',
     // the filing session (caller-passed — the human annotator has no reachable session, so it stays absent
     // there and the eval-comment loop-in is silent, per [[mentions]])

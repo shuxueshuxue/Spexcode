@@ -14,9 +14,9 @@ related:
 ---
 # video-evidence
 
-A yatsu reading's evidence is a **list** of content-addressed entries, each typed by its `kind` ([[yatsu-core]]) —
-`image` | `transcript` | `video`. A video is a screenshot with a time axis: the **same** primitive, one more
-kind of entry. For a scenario whose loss is a *temporal user loop* (a UI surface), a recording of the loop is
+A yatsu reading's evidence is a **list** of content-addressed entries, each typed by its `kind` ([[yatsu-core]],
+[[evidence-kind-taxonomy]]) — `image` | `transcript` | `video` | `data`. A video is a screenshot with a time
+axis: the **same** primitive, one more kind of entry. For a scenario whose loss is a *temporal user loop* (a UI surface), a recording of the loop is
 the truest evidence — the author's choice per scenario, routed by its tag, not a forced default — and it can
 ride in the same reading as N stills of the same run.
 

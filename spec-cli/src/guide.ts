@@ -137,7 +137,21 @@ PICK THE EVIDENCE KIND BY WHAT THE BEHAVIOUR DOES OVER TIME:
   MOVES / is timed  → \`--video <webm|mp4>\`. Terminal scroll or redraw, an animation or transition, media
                       playback, a multi-step interaction flow, keyboard timing — a still of a moving thing
                       proves the wrong thing; RECORD the run (e.g. playwright \`recordVideo\` on the context).
-                      \`--timeline <json>\` optionally anchors named steps to moments in the clip.
+                      STEP EVIDENCE gets a STEP-MAP: when the evidence unfolds in steps, carry named steps
+                      anchored to the evidence's OWN axis, EXPORTED BY THE RUN that produced it — never a
+                      value the agent eyeballs off the finished artefact afterwards (that's misaligned and
+                      dishonest, worse than none). The axis is the evidence's: a video's is TIME. Today's
+                      \`--timeline <json>\` implements exactly that time axis, so a multi-step VIDEO carries one
+                      (skip it for a short single-action clip); copy this shape:
+                        { "v": 1, "events": [ { "tMs": 0, "step": "open board" },
+                                              { "tMs": 1200, "step": "type query" } ] }
+                      \`tMs\` = ms from video start, \`step\` = a short name for that moment. The run exports it:
+                      in whatever drives the recording — Playwright is ONE example, equally a computer-use hand
+                      or any UI-automation/screenshot script — take \`start\` when recording opens and at EACH
+                      real action push \`{ tMs: now - start, step: "…" }\`; dump that array as \`--timeline\`.
+                      (Non-time-axis step evidence — a screenshot SEQUENCE by frame index, a CLI transcript by
+                      line — is the same idea on a different axis, but the schema is tMs-only for now; see the
+                      open issue to generalize \`tMs\` → \`position\`. Don't force a non-time axis into \`tMs\`.)
   STATIC end state  → \`--image <png>\` (repeatable — N stills). Layout, an icon, copy, one rendered frame.
   backend / CLI     → \`--result <txt>\` (a transcript; \`-\` reads stdin).
 The flags combine in ONE filing — several stills can ride beside the clip of the same run.

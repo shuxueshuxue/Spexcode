@@ -34,7 +34,10 @@ when the package is installed outside the dogfood repo — never a hardcoded rep
   dirs; absent in the adopter's tree, lint would silently govern nothing and read falsely-clean. The
   starter ships `governedRoots: ["."]` — the zero-config safe default: `.` governs the *whole* project,
   but only git-**tracked** source (so node_modules/build/nested worktrees never count) minus tests, so a
-  fresh repo just works and a mature one can still curate explicit roots.
+  fresh repo just works and a mature one can still curate explicit roots. It also seeds the default
+  [[launcher-select]] launchers — `claude` and `codex` as ordinary `sessions.launchers` entries plus
+  `sessions.defaultLauncher: "claude"` — so session-create works out of the box without any env var; a host
+  that needs an auth-wrapper command edits that launcher's `cmd` in `spexcode.local.json`.
 
 **An illegal harness-target set fails loud, up front.** Before rendering, `init` validates the project's
 [[harness-select]] `harnesses` set (from the just-planted/existing `spexcode.json`) and aborts with a stated

@@ -186,8 +186,8 @@ PORTABILITY, and picking the right one is the whole discipline:
                         identity, lint budgets, launcher NAMES. "Git is the database": tracked so the
                         team shares ONE configuration.
   spexcode.local.json   GITIGNORED — host-specific, never committed. Absolute launcher paths, cert/secret
-                        paths, private-overlay mode. Layered OVER spexcode.json (see MERGE below); an env
-                        var (SPEXCODE_CLAUDE_CMD, …) still overrides both at its read site.
+                        paths, private-overlay mode. Layered OVER spexcode.json (see MERGE below); a
+                        targeted env override (SPEXCODE_CODEX_SERVER_CMD, …) still wins at its read site.
 
 Rule of thumb — is the value TRUE FOR THE PROJECT or TRUE FOR THIS MACHINE? A branch name, a dashboard
 icon, a lint budget, a launcher's name+harness are project facts → committed spexcode.json. The ABSOLUTE
@@ -222,23 +222,24 @@ Example:
                             Counts compute slots, not total sessions: idle/asking/review/done do not
                             occupy one. A policy number → committed spexcode.json; omit it to use the
                             default, or tune higher/lower for the project's usual host.
-  sessions.claudeCmd        command used by the built-in "claude" launcher (default
-                            'claude --dangerously-skip-permissions'); env SPEXCODE_CLAUDE_CMD overrides.
-  sessions.codexCmd         command used by the built-in "codex" launcher (default 'codex --yolo'); env
-                            SPEXCODE_CODEX_CMD overrides.
-  sessions.launchers        additional NAMED launcher profiles (see LAUNCHERS).
+  sessions.launchers        the NAMED launcher profiles (see LAUNCHERS). \`spex init\` seeds "claude" and
+                            "codex" here as ordinary entries; edit/add more like any other.
   sessions.defaultLauncher  the launcher name a create with no explicit --launcher/dropdown pick uses
                             (required for no-choice creates). A portable NAME → committed.
-A claudeCmd/codexCmd or a launcher \`cmd\` that is a HOST-SPECIFIC ABSOLUTE PATH belongs in
-spexcode.local.json — the committed file must stay free of machine paths.
+A launcher \`cmd\` that is a HOST-SPECIFIC ABSOLUTE PATH belongs in spexcode.local.json — the committed file
+must stay free of machine paths.
 
 ── LAUNCHERS (the profile block, split across the two files) ──
 A named launcher profile fixes BOTH a session's harness AND its exact launch command; a create picks one
 by name with --launcher/the dashboard dropdown, and the chosen name is persisted on the record so a resume
-reuses the same auth. Built-in profiles always exist:
-  "claude" → { "harness": "claude", "cmd": sessions.claudeCmd or SPEXCODE_CLAUDE_CMD }
-  "codex"  → { "harness": "codex",  "cmd": sessions.codexCmd or SPEXCODE_CODEX_CMD }
-Add more profiles when a project needs named auth/config-dir variants. Shape:
+reuses the same auth. There are NO magic built-ins: \`spex init\` SEEDS "claude" and "codex" as ordinary
+named launchers,
+  "claude" → { "harness": "claude", "cmd": "claude --dangerously-skip-permissions" }
+  "codex"  → { "harness": "codex",  "cmd": "codex --yolo" }
+after which they are edited (or removed) exactly like any launcher you add. To run workers under an auth
+wrapper (e.g. reclaude), point a launcher's \`cmd\` at it in spexcode.local.json — there is no environment
+override that rewrites a launcher's command. Add more profiles when a project needs named auth/config-dir
+variants. Shape:
   "launchers": { "<name>": { "harness": "claude" | "codex", "cmd": "<launch command>" } }
 \`harness\` defaults to "claude"; \`cmd\` is required. Because \`cmd\` is a machine fact (an abs wrapper path),
 the DEFINITION lives in the gitignored spexcode.local.json, while the portable defaultLauncher NAME sits

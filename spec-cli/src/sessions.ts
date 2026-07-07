@@ -43,7 +43,8 @@ import { stripRefSigil } from './mentions.js'
 // deliberately does NOT touch it. `merges` is METADATA (how many times merged), shown as a badge, not a state.
 //
 // Launch rules (CLAUDE.md / memory): private `tmux -L <label>` socket + `--dangerously-skip-permissions`.
-// SPEXCODE_TMUX / SPEXCODE_CLAUDE_CMD override both for tests.
+// SPEXCODE_TMUX overrides the tmux socket for tests; the launch COMMAND comes from the session's pinned
+// launcher ([[launcher-select]]), not an env var.
 
 const pexec = promisify(execFile)
 export const TMUX_SOCK = process.env.SPEXCODE_TMUX || 'spexcode'
@@ -1001,12 +1002,13 @@ export async function assertProjectMatch(verb: string): Promise<void> {
 }
 
 // @@@ createSession (dispatch via backend) - `spex new` / `spex session new` must launch the worker in the
-// BACKEND's process, not the caller's. The backend owns the launch env (notably SPEXCODE_CLAUDE_CMD, which
-// reclaude strips from agent envs) AND the concurrency cap. An agent that runs `spex new` (e.g. a supervisor)
-// has a stripped env, so an in-process launch would spawn workers under plain `claude` and 401 at boot. So
-// the CLI POSTs to the running backend whenever one answers, making the backend the single owner of session
-// launching. Only when NO backend is reachable do we fall back to launching in this process (with a stderr
-// warning) — the backend's own POST handler calls newSession directly, so it never re-enters this path.
+// BACKEND's process, not the caller's, because the backend is the single owner of the concurrency cap and the
+// launch QUEUE (drainQueue). An in-process launch by an agent that runs `spex new` (e.g. a supervisor) would
+// bypass that queue and the maxActive gate. (The launch COMMAND is not a process-env concern anymore — it
+// comes from the session's pinned launcher, resolved from project config [[launcher-select]], identical in
+// either process.) So the CLI POSTs to the running backend whenever one answers. Only when NO backend is
+// reachable do we fall back to launching in this process (with a stderr warning) — the backend's own POST
+// handler calls newSession directly, so it never re-enters this path.
 export async function createSession(node: string | null, prompt: string, launcher?: string): Promise<Session> {
   await assertProjectMatch('spex new')
   // @@@ parent = the CALLER's own session ([[session-nesting]]). Resolve it HERE, in the caller's process,

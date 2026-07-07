@@ -9,7 +9,12 @@
     "scenarioTags": ["frontend-e2e", "backend-api", "cli", "desktop", "mobile"]
   },
   "sessions": {
-    "maxActive": 8
+    "maxActive": 8,
+    "launchers": {
+      "claude": { "harness": "claude", "cmd": "claude --dangerously-skip-permissions" },
+      "codex": { "harness": "codex", "cmd": "codex --yolo" }
+    },
+    "defaultLauncher": "claude"
   },
   "dashboard": {
     "icon": "lucide:terminal"

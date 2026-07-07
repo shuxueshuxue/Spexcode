@@ -248,7 +248,12 @@ if (cmd === 'serve') {
   if (blocked.length) console.error(`\n✗ SpexCode: ${blocked.join(', ')} ${blocked.length === 1 ? 'is' : 'are'} ≥ ${threshold} commit(s) behind. Reconcile (above) or bypass with SPEXCODE_SKIP_LINT=1.`)
   process.exit(errors.length || blocked.length ? 1 : 0)
 } else if (cmd === 'ack') {
-  // --amend stamps the Spec-OK trailers in the same block as Session:; git de-dupes adjacent trailers, so re-acking is harmless.
+  // An EMPTY stamp commit on top of HEAD, never an amend: driftFor (git.ts) quiets every drift commit
+  // REACHABLE from an ack, so a child stamp covers exactly what amending HEAD would — and it works where
+  // amend can't: on a trunk merge commit, re-authoring it after MERGE_HEAD is gone reads to main-guard as
+  // a direct trunk commit. The guard passes the stamp through its tree-unchanged gate instead. `--only`
+  // with no paths pins the commit to HEAD's tree even when the index is dirty — an ack must never sweep
+  // staged files along. git de-dupes adjacent trailers, so re-acking is harmless.
   const { git } = await import('./git.js')
   const nodes = positionals(3)
   const reason = (flag('reason') ?? '').trim()
@@ -258,8 +263,9 @@ if (cmd === 'serve') {
     process.exit(2)
   }
   try {
-    git(['commit', '--amend', '--no-edit', ...nodes.flatMap((n) => ['--trailer', `Spec-OK: ${n}`])])
-    console.log(`Spec-OK: ${nodes.join(', ')} → ${git(['rev-parse', '--short', 'HEAD']).trim()}  (reason required, not stored)`)
+    git(['commit', '--only', '--allow-empty', '-m', `ack: Spec-OK ${nodes.join(', ')}`,
+      ...nodes.flatMap((n) => ['--trailer', `Spec-OK: ${n}`])])
+    console.log(`Spec-OK: ${nodes.join(', ')} → ${git(['rev-parse', '--short', 'HEAD']).trim()}  (empty stamp commit; reason required, not stored)`)
   } catch (e: any) {
     console.error(`ack failed: ${e?.message ?? e}`); process.exit(1)
   }

@@ -113,9 +113,13 @@ straight to the trunk.
   issue's detail carries a **reply composer**, and it is **DOCKED at the detail pane's foot** — the thread
   region scrolls behind it, so replying to a long thread never needs a scroll to its bottom (the same
   docked-bar shape as the eval rail's composer and the console's ❯ box, one write-affordance geometry across
-  the review surfaces). The composer is the console-❯-box SHAPE: a **single collapsed line while idle** that
-  **auto-grows with the draft** (the shared `textarea.js` fitTextarea — one grow routine for the console's
-  boxes and the thread composers, capped so it never eats the pane) and reveals its actions row (hint + Send,
+  the review surfaces). The composer is the console-❯-box SHAPE, but its **writing surface is already usable at idle** — a
+  **multi-line textarea (a few lines tall), never a one-line sliver you must click to expand**: the box you
+  land on is the box you can write in, and focus changes nothing about its height. It still
+  **auto-grows with the draft** ABOVE that idle floor (the shared `textarea.js` fitTextarea — one grow
+  routine for the console's boxes and the thread composers, floored at the composer's usable height and
+  capped so it never eats the pane; the console's own ❯/prompt boxes keep the single-line floor, this is the
+  thread composer's own geometry) and reveals its actions row (hint + Send,
   the ⏱ where a clip supplies one, plus any host lifecycle action such as Close issue) while **engaged** —
   focused, carrying a draft or staged frames, showing a send error (an error must never collapse out of view),
   or carrying a lifecycle action that must stay visible. It is **keyed to the selected issue**, so

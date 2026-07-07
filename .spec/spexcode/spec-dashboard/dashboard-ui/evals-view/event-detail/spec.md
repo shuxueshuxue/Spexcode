@@ -40,9 +40,10 @@ band** (scenario · node · the verdict badge · evaluator/timestamp · the FILE
 right-aligned), a center
 **MEDIA STAGE**, and an always-visible **RIGHT RAIL** carrying the remark track with the composer **docked
 at the rail's foot**. The docked composer is the console-❯-box SHAPE ([[issues-view]]'s shared thread
-composer): a single collapsed line while idle — the rail's height belongs to the remarks — that auto-grows
-with the draft and reveals its actions row (⏱ / Send) only while engaged, so the write affordance is
-permanent but never bulky. Stage and rail scroll *independently* — the media never scrolls out of view while
+composer): its writing surface is already usable at idle — a multi-line box a few lines tall, never a
+one-line sliver you must click to expand (the box you land on is the box you write in) — that auto-grows
+with the draft above that floor and reveals its actions row (⏱ / Send) only while engaged, so the write
+affordance is permanent, usable on sight, but never bulky. Stage and rail scroll *independently* — the media never scrolls out of view while
 remarking, and the composer is never below the fold: circle→remark→circle→remark without moving anything.
 At narrow widths the workspace degrades gracefully back to one stacked column (the rail folds under the
 stage), and the composer stays a **sticky bar at the column's foot** — the one-column mode keeps the

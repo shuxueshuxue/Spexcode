@@ -328,7 +328,7 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
     const onKey = (e) => {
       // the GLOBAL ⌥ page vocabulary ([[side-nav]]): ⌥1..⌥5 jump straight to a page in rail order, ⌥N to the
       // New Session composer, ⌥F to the Evals page (the leading loss surface) — from ANY page, matched by
-      // e.code (⌥-digit/letter on a mac emits dead-key glyphs for e.key). The console's nav mode yields these
+      // e.code (⌥-digit/letter on a mac emits dead-key glyphs for e.key). The console's type mode yields these
       // on purpose (its earlier capture listener falls through the ⌥ command family instead of forwarding it
       // to tmux). Firing one also dismisses the search palette — the navigation intent wins over the modal.
       if (e.altKey && !e.metaKey && !e.ctrlKey) {

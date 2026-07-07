@@ -5,7 +5,7 @@
 // and swallows the event (stopImmediatePropagation) so the surface BEHIND never also closes. Esc therefore
 // peels exactly one layer per press, in reverse open order (the confirm peels while the panel stays; the
 // proof peels while the panel stays). When the stack is empty it does nothing, so the board's own
-// single-handler Esc — a locked-session release, the help/settings modals, the panel's menu / nav-mode — is
+// single-handler Esc — a locked-session release, the help/settings modals, the panel's menu / type-mode — is
 // untouched (and a page-level Esc with nothing open routes nowhere — pages are peers, not layers). This owns only the cross-component overlay layers: the ones that used to RACE the panel's
 // always-on window listener (whoever registered first won; proof papered over it by stealing iframe focus).
 import { useEffect, useRef } from 'react'

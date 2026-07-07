@@ -79,7 +79,7 @@ board, an agent manager must be able to do by typing — the backend endpoint al
 the CLI's job is only the thin verb over it. `rename` is the right-click rename ([[session-rename]]) as a
 verb: it sets the display-name override (an explicit `""` clears it back to the derived label; a *missing*
 argument is a usage error, never a silent clear), and an unknown session exits non-zero off the endpoint's
-404. `rawkey` is nav mode as a verb — the raw `tmux send-keys` channel (never the prompt socket), which is
+404. `rawkey` is type mode as a verb — the raw `tmux send-keys` channel (never the prompt socket), which is
 how a manager un-wedges a worker stuck in an interactive TUI dialog the prompt channel cannot drive (a
 select menu wanting one Enter or arrow). It takes whitespace-separated key tokens in the frontend's own
 vocabulary (named keys, single printable chars, `C-`/`M-`/`S-` combos), delivered as ONE ordered batch so

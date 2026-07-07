@@ -369,8 +369,8 @@ export default {
     launcherLabel: 'launcher',
     tabTerminal: 'terminal',
     tabEval: 'eval',
-    navBtn: 'nav',
-    navTitle: "nav mode — forward raw keystrokes incl. ⌃/⌥/⌘ combos to drive the agent's terminal (⌥/⌘+I)",
+    typeBtn: 'type',
+    typeTitle: "type mode — type raw keystrokes incl. ⌃/⌥/⌘ combos straight into the agent's terminal (⌥/⌘+I)",
     relaunch: 'relaunch',
     merge: 'merge',
     relaunchResume: '⏵ relaunch & resume',
@@ -379,9 +379,9 @@ export default {
     offlineMsg: '⏻ offline — no live process for this worktree.',
     offlineSubBefore: 'the worktree and its session ',
     offlineSubAfter: ' are intact. relaunch to resume the same conversation.',
-    navInd: '⌨ nav mode',
-    navHelp: 'keys (incl. ⌃/⌥/⌘ combos) go to the session · ⌥/⌘+I, Esc-Esc, or click to exit',
-    navExit: 'click to exit nav mode',
+    typeInd: '⌨ type mode',
+    typeHelp: 'keys (incl. ⌃/⌥/⌘ combos) go to the session · ⌥/⌘+I, Esc-Esc, or click to exit',
+    typeExit: 'click to exit type mode',
     msgOffline: 'relaunch to message this session',
     msgPlaceholder: 'message this session · ⏎ to send',
     msgError: '⚠ not delivered — retry',
@@ -390,7 +390,7 @@ export default {
     // board commands — the `/` commands the ❯ inbox runs HERE (not in the agent), each the typed twin of a
     // header button. `*Desc` is the `/` menu row's description; `*Title` is a button's hover tooltip.
     cmd: {
-      navDesc: 'nav mode — forward raw keystrokes to the agent',
+      typeDesc: "type mode — type raw keystrokes straight into the agent's terminal",
       evalDesc: "switch to this session's eval tab — yatsu evidence, diff, merge gates",
       mergeTitle: 'merge this session to main',
       mergeDesc: 'merge this session to main',

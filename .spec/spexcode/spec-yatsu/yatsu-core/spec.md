@@ -111,7 +111,9 @@ stale readout). It is derived, never stored, and never feeds the stale/fresh dec
 The surface mirrors the code-drift report:
 - **scan [--changed]** — the loss signal's blind spots: a malformed yatsu.md (`yatsu-schema` — missing field,
   unknown key, dup name, ghost `code`/`related` path, out-of-library tag), a stale reading (`yatsu-drift`), a scenario never
-  measured (`yatsu-missing`), a **frontend surface** with **no yatsu.md** (`yatsu-uncovered`), and a whole-repo
+  measured (`yatsu-missing`), a node governing **source code** with **no yatsu.md** (`yatsu-uncovered` — keyed off
+  the SAME configurable `sourceExtensions` knob as [[spec-lint]]'s coverage, so a backend/CLI/Rust/Go/Python
+  project's own sources are held to the loss discipline too, not just web files; no second web-only allowlist), and a whole-repo
   summary — a file governed by > `maxOwners` scenarios (`yatsu-owners`, split it). A `drift`/`missing` line
   carries the scenario's **tags**, so a reader (and [[yatsu-proactive]]'s Stop nudge) sees the gap's SURFACE —
   e.g. a browser-measured `frontend-e2e` scenario needs a real product run to refresh, not a desk check.

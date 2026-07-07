@@ -30,8 +30,10 @@ rules:
   block is sample text, not a violation.
 - **coverage** (warn): every source file is claimed by ≥1 spec via `code:` **or** `related:`. Source is
   enumerated from **git-tracked** files (`git ls-files`), so `governedRoots: ["."]` safely means the whole
-  project (node_modules/build/nested-worktrees are never in the index). **`lint.testGlobs`** (default
-  `**/*.test.*`) drops tests; roots matching no tracked file warn "governing nothing".
+  project (node_modules/build/nested-worktrees are never in the index). What counts as source is the
+  **`lint.sourceExtensions`** knob (default ts/tsx/js/jsx) — the SAME setting yatsu's `yatsu-uncovered` reuses
+  (one knob, both coverage axes: a Rust/Go/Python tree sets it once), so there is no second web-only allowlist.
+  **`lint.testGlobs`** (default `**/*.test.*`) drops tests; roots matching no tracked file warn "governing nothing".
 - **drift** (warn): a governed file has commits not reachable from its spec's latest version — true git
   ancestry ([[drift-by-ancestry]]), never a log-position/date guess → maybe stale. A file
   governed by several nodes drifts **every** owner — shared governance is ordinary, and each has a stake.

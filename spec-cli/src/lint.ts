@@ -35,6 +35,12 @@ export function loadConfig(root: string): LintConfig {
   return { ...DEFAULT_CONFIG, ...c, altitude: { ...DEFAULT_CONFIG.altitude, ...(c.altitude ?? {}) } }
 }
 
+// the source-file matcher, built from the configurable `sourceExtensions` knob. Coverage uses it to decide
+// which tracked files must be governed; yatsu's `yatsu-uncovered` reuses THE SAME knob so ONE setting
+// defines "source" for both coverage axes — a non-web project (Rust/Go/Python .rs/.go/.py) sets it once and
+// both the coverage warning and the loss-signal blind-spot check follow, with no second web-only allowlist.
+export const sourceExtRe = (extensions: string[]) => new RegExp(`\\.(${extensions.join('|')})$`)
+
 // a minimal glob → RegExp anchored to the full repo-relative path: `**` = any dirs, `*` = within a segment.
 function globToRe(glob: string): RegExp {
   const body = glob.split(/(\*\*\/|\*\*|\*|\?)/).map((seg) => {
@@ -103,7 +109,7 @@ export async function specLint(): Promise<Finding[]> {
   const root = repoRoot()
   const cfg = loadConfig(root)
   const ident = identRe(cfg.identifierExtensions)
-  const srcRe = new RegExp(`\\.(${cfg.sourceExtensions.join('|')})$`)
+  const srcRe = sourceExtRe(cfg.sourceExtensions)
   const specs = await loadSpecs()
   const out: Finding[] = []
 

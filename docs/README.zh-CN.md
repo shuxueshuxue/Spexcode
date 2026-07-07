@@ -6,6 +6,10 @@
 spec 和它管辖的代码链接起来,并运行一个会话管理器,把 coding agent 派进相互隔离的 worktree。你负责
 review 和 merge;工具负责让意图和实现不分家。(下面所有截图都是这个仓库自己跑在自己看板上的样子。)
 
+[![这个仓库自己的 spec 树,从它的 git 历史里长出来](https://spexcode.net/assets/spec-tree-growth.gif)](https://spexcode.net/assets/spec-tree-growth.mp4)
+
+<sub>▶ 这个仓库自己的 spec 树,从它的 git 历史里回放出来——三周里长出的 160 个 spec 节点。点击看[完整视频](https://spexcode.net/assets/spec-tree-growth.mp4)。</sub>
+
 [English](../README.md) | 中文 · 文档:[spexcode.net](https://spexcode.net) · License: MIT
 
 快捷入口:[模型](#模型) · [快速开始](#快速开始) · [agent](#和-agent-一起工作) ·

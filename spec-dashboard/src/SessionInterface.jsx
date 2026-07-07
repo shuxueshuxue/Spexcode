@@ -22,7 +22,7 @@ import { useT } from './i18n/index.jsx'
 const AttachGlyph = () => <Icon name="paperclip" size={15} />
 const BusyGlyph = () => <Icon name="loader" size={15} className="si-attach-busy" />
 const LAUNCHER_CONFIG_ERROR = 'Set sessions.defaultLauncher in spexcode.json or spexcode.local.json before launching.'
-const LAUNCHER_SELECT_PLACEHOLDER = 'set default'
+const LAUNCHER_SELECT_PLACEHOLDER = 'no default configured'
 
 // Window-level (capture) key handling, not panel onKeyDown: arrowing off the New Session tab unmounts its
 // textarea, so a panel listener would lose focus and kill nav; a window listener is focus-independent.

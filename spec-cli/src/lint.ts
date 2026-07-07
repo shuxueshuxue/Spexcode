@@ -32,7 +32,26 @@ export function loadConfig(root: string): LintConfig {
   // Absent spexcode.json → tuned defaults; a MALFORMED one throws LOUD (readJsonConfig) rather than
   // silently reverting the author's budgets to defaults and green-washing the very warnings they tuned.
   const c = readJsonConfig(join(root, 'spexcode.json'))?.lint ?? {}
-  return { ...DEFAULT_CONFIG, ...c, altitude: { ...DEFAULT_CONFIG.altitude, ...(c.altitude ?? {}) } }
+  const merged = { ...DEFAULT_CONFIG, ...c, altitude: { ...DEFAULT_CONFIG.altitude, ...(c.altitude ?? {}) } }
+  return normalizeConfig(merged)
+}
+
+// canonicalize two adopter-input footguns that would otherwise SILENTLY match ZERO files (the same failure
+// class as an unset governedRoots — a green board that governs nothing). Both are natural mistakes a non-web
+// adopter makes reading the prose, so we accept-what-they-meant rather than reject:
+//  - a LEADING DOT on an extension: the matcher is `\.(ext)$`, so a literal ".ts" becomes `\..ts$` and never
+//    matches. Strip leading dots → ["ts"] and [".ts"] both work (prose historically showed ".ts").
+//  - a testGlob with NO "/": globs anchor to the full repo-relative path, so a bare "*.test.ts" matches only
+//    ROOT-level files and leaks every nested test into coverage. A slash-less glob is a basename intent →
+//    prepend "**/" so it matches that basename at any depth (the default "**/*.test.*" already does).
+export function normalizeConfig(cfg: LintConfig): LintConfig {
+  const dedot = (xs: string[]) => xs.map((x) => x.replace(/^\.+/, ''))
+  return {
+    ...cfg,
+    sourceExtensions: dedot(cfg.sourceExtensions),
+    identifierExtensions: dedot(cfg.identifierExtensions),
+    testGlobs: cfg.testGlobs.map((g) => (g.includes('/') ? g : `**/${g}`)),
+  }
 }
 
 // the source-file matcher, built from the configurable `sourceExtensions` knob. Coverage uses it to decide
@@ -165,10 +184,14 @@ export async function specLint(): Promise<Finding[]> {
 
   // coverage: every governed source file must be claimed by at least one spec.
   const governed = trackedSourceFiles(root, cfg.governedRoots, srcRe, cfg.testGlobs)
-  // no governed source found at all → the defaults name this repo's own dirs, so an adopter who never set
-  // lint.governedRoots would otherwise see a falsely-clean board. Make it loud and point at the knob.
+  // no governed source found at all → make it a SELF-EXPLANATORY repair entrypoint, not a dead end. The two
+  // knobs governing this are BOTH web-tuned by default (extensions ts/tsx/js/jsx; roots this repo's own dirs),
+  // so a non-web adopter (Rust/Go/Python) hits zero source two ways: right dir but wrong extension, or an
+  // unset root. Naming BOTH knobs, echoing their CURRENT values (so the mismatch is visible — "searching .ts
+  // in a .py tree"), and stating the `lint`-key nesting (a top-level key silently no-ops) turns the warning
+  // into the fix. Concrete non-web extension examples so the repair is copy-pasteable, not a schema hunt.
   if (governed.length === 0)
-    out.push({ level: 'warn', rule: 'coverage', msg: `governing NOTHING — no source files under governedRoots [${cfg.governedRoots.join(', ')}]. Set lint.governedRoots in spexcode.json to your project's source dirs.` })
+    out.push({ level: 'warn', rule: 'coverage', msg: `governing NOTHING — 0 source files matched extensions [${cfg.sourceExtensions.join(', ')}] under governedRoots [${cfg.governedRoots.join(', ')}]. Both knobs live under the "lint" key in spexcode.json (a top-level key is ignored): set governedRoots to your source dir(s) (e.g. ["src"]) AND sourceExtensions to your language (e.g. ["rs"] / ["go"] / ["py"]).` })
   for (const f of governed)
     if (!claimed.has(f)) out.push({ level: 'warn', rule: 'coverage', file: f, msg: `no spec governs: ${f}` })
 

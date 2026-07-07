@@ -320,6 +320,7 @@ export default {
 
   session: {
     opsTitle: '此会话正在改动的节点 —— 双击标签锁定并聚焦它们',
+    lockTitle: '双击标签锁定该会话并返回图谱',
     newSession: '新建会话',
     newSessionTitle: '新建会话（⌥+N）',
     searchTitle: '搜索（⌘+/）',

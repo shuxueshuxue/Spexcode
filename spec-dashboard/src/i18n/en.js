@@ -327,6 +327,7 @@ export default {
 
   session: {
     opsTitle: 'nodes this session is changing — double-click the tab to lock + focus them',
+    lockTitle: 'double-click the tab to lock this session on the graph',
     newSession: 'New Session',
     newSessionTitle: 'New Session (⌥+N)',
     searchTitle: 'Search (⌘+/)',

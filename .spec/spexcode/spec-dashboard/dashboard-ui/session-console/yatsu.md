@@ -91,37 +91,37 @@ scenarios:
     tags: [frontend-e2e, desktop]
     description: >
       Through the running dashboard in a real browser, open the session interface (Enter) on a session in the
-      REVIEW state (so nav + merge apply). (1) Read the tab bar: on the LEFT two tabs — Terminal (default) and
-      Eval; on the RIGHT the action row shows two small TEXT buttons — nav, merge — with NO leading glyph/emoji
+      REVIEW state (so type + merge apply). (1) Read the tab bar: on the LEFT two tabs — Terminal (default) and
+      Eval; on the RIGHT the action row shows two small TEXT buttons — type, merge — with NO leading glyph/emoji
       (no ⌨ keyboard, no ◆ diamond), each in a distinct colour, and NO eval button (the eval is a TAB, not an
       action) — and the word "proof" appears nowhere in the UI. (2) On the Terminal tab, in the `❯` inbox type
       `/` and read the completion menu: the board's own
-      commands (`/nav`, `/eval`, `/merge`, `/exit`, `/close`) lead the list, each `/name` and its `[board]` tag
+      commands (`/type`, `/eval`, `/merge`, `/exit`, `/close`) lead the list, each `/name` and its `[board]` tag
       painted its identity colour, visibly apart from Claude Code's blue command rows. Now narrow the query —
       type `/exit`, a name Claude Code ALSO ships: confirm the menu shows `/exit` exactly ONCE (the board's
       coloured row), not a duplicate pair, and that each row's description reads as a sentence (first letter
       capitalised, e.g. "Exit — stop the agent…", not "exit — …").
       (3) Type `/eval` and Enter: the view switches to the Eval tab and the evaluation renders inline — identical
       to clicking the Eval tab; switch back to Terminal and click the Eval tab to confirm the SAME inline
-      view. (4) Type `/nav` and Enter: nav mode engages (the `❯` box becomes the nav indicator AND the nav
-      button shows its active `.on` state); click the nav button to toggle it back off. Screenshot the tab bar
+      view. (4) Type `/type` and Enter: type mode engages (the `❯` box becomes the type-mode indicator AND the type
+      button shows its active `.on` state); click the type button to toggle it back off. Screenshot the tab bar
       and the `/` menu.
     expected: |
-      The action-row buttons are text-only (no glyphs/emoji) and colour-coded — nav yellow (var --yellow =
+      The action-row buttons are text-only (no glyphs/emoji) and colour-coded — type yellow (var --yellow =
       rgb(181,137,0)) and merge green (var --green = rgb(133,153,0)); there is NO eval button — Eval is a
       permanent TAB (blue underline when active), always available, not a review-gated action — and no UI
       surface says "proof" (the tab, the command, and its menu description all say eval).
       In the `/` menu the five board commands lead, each name + `[board]` tag in its identity colour — the
-      SAME hue as its button where it has one (nav yellow, merge green), with `/eval` still cyan (var --cyan =
+      SAME hue as its button where it has one (type yellow, merge green), with `/eval` still cyan (var --cyan =
       rgb(42,161,152)) even though it now drives a TAB, not a button; the two button-less terminal verbs split
       by destructiveness — exit muted grey (var --muted = rgb(147,161,161), the dormant/offline hue it sends the
       session to) and close red (var --red = rgb(220,50,47), the worktree removal) — while CC's commands stay
       blue (rgb(38,139,210)); one element, one colour in both places. A name the board owns that Claude Code
       also ships (`/exit`) appears exactly ONCE — the board's row overrides CC's twin, never a duplicate pair —
       and every row's description reads as a capitalised sentence. Typing `/eval` switches to the Eval tab and
-      shows the same inline view the tab click does (one shared tab-state); typing `/nav` toggles nav mode
-      exactly as the nav button does, and the button reflects that same state. A board command is never
-      dispatched to the agent — its line is intercepted and the draft cleared — so no `/eval`/`/nav` text reaches the pane.
+      shows the same inline view the tab click does (one shared tab-state); typing `/type` toggles type mode
+      exactly as the type button does, and the button reflects that same state. A board command is never
+      dispatched to the agent — its line is intercepted and the draft cleared — so no `/eval`/`/type` text reaches the pane.
   - name: status-word-colour
     tags: [frontend-e2e, desktop]
     description: >
@@ -145,18 +145,18 @@ scenarios:
   - name: nav-mode-modifier-combos-reach-the-terminal
     tags: [frontend-e2e, desktop]
     description: >
-      Measure nav mode's raw-key channel end to end. Stand up a live tmux pane running a key-echo program
+      Measure type mode's raw-key channel end to end. Stand up a live tmux pane running a key-echo program
       that renders control bytes visibly (`cat -v`), then exercise the REAL product path the dashboard
       uses — `POST /api/sessions/:id/rawkey` with `{key}` (the same body sendRawKey posts) — for the tokens
-      navKeyToken produces: a control combo `C-r`, a meta combo `M-b`, the named modified key `S-Tab`, a
+      typeKeyToken produces: a control combo `C-r`, a meta combo `M-b`, the named modified key `S-Tab`, a
       meta-uppercase `M-B`, a shift-arrow `S-Up`, an interrupt `C-c`, and a malformed `C-C-x`. After each,
       capture the pane to read what the program actually received. (Browser variant: open the console on a
-      live session, enter nav mode, press ⌃R / ⌥B / Shift+Tab and watch the agent's TUI respond.)
+      live session, enter type mode, press ⌃R / ⌥B / Shift+Tab and watch the agent's TUI respond.)
     expected: |
       Each modifier combo arrives as the correct terminal bytes — `C-r` → `^R` (0x12), `M-b` → `ESC b`,
       `S-Tab` → the back-tab `^[[Z` (what Claude Code's mode-cycle reads), `M-B` → `ESC B`, `S-Up` →
       `^[[1;2A`, `C-c` → 0x03 (interrupts the program). tmux accepts every encoded token; a malformed
-      token is rejected (HTTP 404 / `ok:false`), never sent as junk. Nav mode can therefore drive Claude
+      token is rejected (HTTP 404 / `ok:false`), never sent as junk. Type mode can therefore drive Claude
       Code's modifier bindings, not just arrows.
     code: spec-cli/src/sessions.ts, spec-cli/src/index.ts
   - name: nav-mode-alt-i-and-cmd-i-stay-reserved
@@ -164,16 +164,16 @@ scenarios:
     description: >
       Through the running dashboard in a real browser, open the session interface on a LIVE session and
       confirm the reserved-toggle contract. Intercept `/rawkey` so no keystroke can reach a real agent,
-      recording only WHICH keys attempt a forward. With nav mode OFF, press ⌥+I (Option+I — note ⌥I emits a
-      dead-key glyph on a mac, so this also proves the e.code match) then ⌘+I; then enter nav mode and
-      press an ordinary key (`x`); then ⌥+I again. Then, with nav mode OFF, press ⌥+⌘+I (all three keys
-      held together — the browser's own devtools chord) and confirm the app does NOT toggle nav mode and
-      does NOT preventDefault it. Watch the bottom-bar nav indicator and the recorded forwards.
+      recording only WHICH keys attempt a forward. With type mode OFF, press ⌥+I (Option+I — note ⌥I emits a
+      dead-key glyph on a mac, so this also proves the e.code match) then ⌘+I; then enter type mode and
+      press an ordinary key (`x`); then ⌥+I again. Then, with type mode OFF, press ⌥+⌘+I (all three keys
+      held together — the browser's own devtools chord) and confirm the app does NOT toggle type mode and
+      does NOT preventDefault it. Watch the bottom-bar type-mode indicator and the recorded forwards.
     expected: |
-      ⌥+I and ⌘+I (a SINGLE modifier + I) toggle nav mode on and off every time (the bottom-bar nav
+      ⌥+I and ⌘+I (a SINGLE modifier + I) toggle type mode on and off every time (the bottom-bar type-mode
       indicator appears/disappears) and forward NOTHING — no `/rawkey` attempt is recorded for either. An
-      ordinary key pressed while nav mode is ON DOES forward (recorded), so the carve-out is exactly the two
-      reserved chords, not a blanket block. ⌥+⌘+I held TOGETHER is left alone: the nav indicator does not
+      ordinary key pressed while type mode is ON DOES forward (recorded), so the carve-out is exactly the two
+      reserved chords, not a blanket block. ⌥+⌘+I held TOGETHER is left alone: the type-mode indicator does not
       change and the app does not cancel the event, so the browser's devtools accelerator opens normally
       (the two-modifier chord is the browser's, not the app's). The browser/app takes no other action on
       ⌥/⌘+I.
@@ -183,7 +183,7 @@ scenarios:
       Through the running dashboard in a real browser, open the session interface (Enter) with at least
       three live sessions so the tab list has several rows. Exercise the modifier switch from the states
       where a PLAIN arrow would NOT switch the tab: (1) caret parked in the middle of a multi-line draft in
-      the New Session prompt; (2) on a live session with the `❯` inbox focused mid-text; (3) in nav mode (so
+      the New Session prompt; (2) on a live session with the `❯` inbox focused mid-text; (3) in type mode (so
       plain keys forward raw to the pane). From each, press ⌘+↓
       (or ⌥+↓) then ⌘+↑ (or ⌥+↑) and read which tab is selected after each. Separately, from any tab press
       ⌥+N (Option+N — note ⌥N emits a dead-key `˜` glyph on a mac, so this also proves the e.code match) and
@@ -192,10 +192,10 @@ scenarios:
       press a plain ↓, and read whether the selected tab moved. Screenshot the tab list before and after each press.
     expected: |
       ⌘/⌥/⌃+↑/↓ ALWAYS step the selected tab one row up/down the session list, no matter which input holds
-      focus — mid-word in a textarea or while nav mode forwards raw keys — and the
+      focus — mid-word in a textarea or while type mode forwards raw keys — and the
       modifier never moves the textarea caret nor reaches the agent's pane instead. ⌥/⌘+↑ no longer jumps to
       New Session; it simply steps up the list. ⌥+N snaps the selection to
-      New Session from any tab, nav mode included — ⌘+N (mac) / ⌃+N (win/linux) are the browser's
+      New Session from any tab, type mode included — ⌘+N (mac) / ⌃+N (win/linux) are the browser's
       reserved new-window chord a web page can't cancel, so they are not claimed. A plain ↑/↓ pressed inside a
       text input NEVER switches tabs — at the first line a plain ↑ and at the last line a plain ↓ both stay in
       the box (caret keys only), so typing never jerks the selection; plain ↑/↓ walk the list only when focus is

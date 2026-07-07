@@ -1651,7 +1651,7 @@ export async function sendKeys(id: string, text: string, from?: string): Promise
 // socket. Two channels, two jobs: the socket INJECTS a whole prompt (text + submit), which can drive the
 // agent's normal prompt but CANNOT navigate an interactive TUI select menu (e.g. `/model`'s list — ↑/↓ to
 // move, ←/→ to adjust, Enter to set, `s` for this-session, Esc to cancel). When the agent is in that
-// keystroke-navigation state its input box is replaced by the menu, so the dashboard's nav mode forwards
+// keystroke-navigation state its input box is replaced by the menu, so the dashboard's type mode forwards
 // each key here in real time. send-keys is exactly right for single raw keys: named keys map to tmux's own
 // key names; a single printable char is sent literally (`-l`) so tmux doesn't reinterpret it. The dashboard
 // also drives the agent with MODIFIER COMBOS — a terminal's three modifiers carried as a `C-`/`M-`/`S-`

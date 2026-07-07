@@ -2,11 +2,12 @@
 title: nav-mode-key-ordering
 status: active
 hue: 290
-desc: Nav-mode keystrokes reach the pane in the order they were struck — no scrambling under fast typing.
+desc: Type-mode keystrokes reach the pane in the order they were struck — no scrambling under fast typing.
 ---
 # nav-mode-key-ordering
 
-In [[session-console]]'s **nav mode** every keystroke forwards raw to the live pane. When those forwards
+In [[session-console]]'s **type mode** (the raw-keystroke takeover; this node's id keeps the channel's
+older internal "nav" name) every keystroke forwards raw to the live pane. When those forwards
 are independent, fire-and-forget requests, fast typing **scrambles**: the browser fires the POSTs in
 parallel, the server handles them in parallel, and each `tmux send-keys` execs on its own — so nothing
 orders `a b c` against `a c b` by the time they hit the pane. Order is not incidental here; it is the
@@ -30,8 +31,8 @@ without dropping the rest.
 ## why not the control socket
 
 This stays on the raw `tmux send-keys` path, never the rendezvous prompt socket — the socket injects a
-*whole prompt* and cannot drive an interactive TUI select menu, which is exactly what nav mode exists for
-(see `rawKey` in [[sessions-core]]). Ordering is fixed *within* the raw channel; it does not move nav keys
+*whole prompt* and cannot drive an interactive TUI select menu, which is exactly what type mode exists for
+(see `rawKey` in [[sessions-core]]). Ordering is fixed *within* the raw channel; it does not move raw keys
 onto the prompt channel or touch the read-only terminal socket's semantics.
 
 ## no source of its own

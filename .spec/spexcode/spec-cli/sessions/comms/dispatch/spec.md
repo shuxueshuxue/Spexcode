@@ -60,6 +60,6 @@ work. The server never mutates the spec tree; it only launches. This holds [[men
 issue store, a reference expands to prompt text, never a programmatic flow — the issue store is the sole
 surface where the system itself dispatches.
 
-The **separate raw nav-key channel** (`rawKey`) keeps its own `tmux send-keys` path — the per-keystroke
+The **separate raw-key channel** (`rawKey`) keeps its own `tmux send-keys` path — the per-keystroke
 channel for driving the agent's TUI menus, carrying named keys, printable chars, and `⌃`/`⌥`/`⌘` modifier
-combos (as `C-`/`M-`/`S-` tokens) so nav mode drives the terminal, **not** a prompt fallback.
+combos (as `C-`/`M-`/`S-` tokens) so type mode drives the terminal, **not** a prompt fallback.

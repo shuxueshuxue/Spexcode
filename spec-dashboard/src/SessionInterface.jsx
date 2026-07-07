@@ -26,13 +26,13 @@ const BusyGlyph = () => <Icon name="loader" size={15} className="si-attach-busy"
 // textarea, so a panel listener would lose focus and kill nav; a window listener is focus-independent.
 
 // DOM KeyboardEvent.key → the base key name /rawkey feeds tmux send-keys (non-printables only; modifier
-// combos are encoded by navKeyToken). Escape is intentionally absent — handled separately.
+// combos are encoded by typeKeyToken). Escape is intentionally absent — handled separately.
 const RAWKEY = { ArrowUp: 'Up', ArrowDown: 'Down', ArrowLeft: 'Left', ArrowRight: 'Right', Enter: 'Enter', Tab: 'Tab', Backspace: 'Backspace', Delete: 'Delete', Home: 'Home', End: 'End', ' ': 'Space' }
 
 // Encode a keydown into a tmux token (⌃→`C-`, ⌥/⌘→`M-`, Shift→`S-` on named keys). The base of a
 // modified letter/digit comes from e.code, not e.key: a held modifier makes e.key unreliable (⌥B prints
 // '∫' on a mac), but the physical KeyB/Digit3 code is stable. null = nothing sendable → key swallowed.
-function navKeyToken(e) {
+function typeKeyToken(e) {
   const named = RAWKEY[e.key]
   const mod = e.ctrlKey || e.altKey || e.metaKey
   let base = null
@@ -97,7 +97,7 @@ function matchConfig(presets, query) {
 }
 
 // the row's trailing source tag, mirroring CC: `(user)` / `(project)` / `[skill]` / `built-in`. `[board]`
-// flags one of OUR commands (close/merge/nav/eval) — it runs HERE, not in the agent (see boardCommandsFor).
+// flags one of OUR commands (close/merge/type/eval) — it runs HERE, not in the agent (see boardCommandsFor).
 const SRC_TAG = { user: '(user)', project: '(project)', skill: '[skill]', 'built-in': 'built-in', board: '[board]' }
 
 
@@ -120,8 +120,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const pickLauncher = (name) => { setLauncher(name); try { localStorage.setItem('si.launcher', name) } catch {} }
   const [sendErr, setSendErr] = useState(false)   // last /keys dispatch failed — surfaced under the ❯ box
   const [actErr, setActErr] = useState(null)      // last lifecycle action refused/failed (e.g. the resume guard: relaunching a LIVE agent) — surfaced by the relaunch panel
-  const [navMode, setNavMode] = useState(false)
-  const [menuById, setMenuById] = useState({})   // per-pane menu-sniff flag from each SessionTerm; drives the nav button's `.suggest` pulse
+  const [typeMode, setTypeMode] = useState(false)
+  const [menuById, setMenuById] = useState({})   // per-pane menu-sniff flag from each SessionTerm; drives the type button's `.suggest` pulse
   // which of the right pane's two tabs is showing: the live terminal (default) or the always-available eval.
   const [rightTab, setRightTab] = useState('terminal')
   // the Eval tab auto-collapses the session list to a thin strip ([[session-console]] / [[evals-view]]'s
@@ -210,28 +210,28 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // /api/config returns only command-surface nodes, so the presets ARE the launchable set — no client filter.
   const commandPresets = presets
 
-  // nav mode binds to ONE live session's menu — leaving the tab (or it going offline) exits it, so raw
+  // type mode binds to ONE live session's menu — leaving the tab (or it going offline) exits it, so raw
   // keystrokes can never leak into the wrong pane.
-  useEffect(() => { setNavMode(false); setSendErr(false); setMenu(null); setRightTab('terminal') }, [active])
+  useEffect(() => { setTypeMode(false); setSendErr(false); setMenu(null); setRightTab('terminal') }, [active])
   // fold the session list on the Eval tab, unfold on Terminal. Keyed on the tab TRANSITION (not held
   // continuously), so a manual unfold on the Eval tab sticks — it only re-folds when you re-enter the tab.
   useEffect(() => { setListFolded(rightTab === 'eval') }, [rightTab])
   // returning to the Terminal tab re-focuses the ❯ input — switching to Proof and back must not strand the
-  // caret. Only when live and not in nav mode; rAF waits for the input to (re)mount under the Terminal tab.
+  // caret. Only when live and not in type mode; rAF waits for the input to (re)mount under the Terminal tab.
   useEffect(() => {
-    if (rightTab === 'terminal' && active !== 'new' && !navMode && selSession && selSession.liveness !== 'offline') {
+    if (rightTab === 'terminal' && active !== 'new' && !typeMode && selSession && selSession.liveness !== 'offline') {
       requestAnimationFrame(() => msgRef.current?.focus())
     }
   }, [rightTab])
-  useEffect(() => { if (selSession?.liveness === 'offline') setNavMode(false) }, [selSession?.liveness])
+  useEffect(() => { if (selSession?.liveness === 'offline') setTypeMode(false) }, [selSession?.liveness])
   useEffect(() => { setActErr(null) }, [active])   // a stale action error must not bleed onto the next session's panel
-  // leaving nav mode hands focus back to the ❯ box. Guarded to the on→off edge for a live tab — a tab
-  // switch or going offline exits nav too, but the tab-focus effect owns focus there.
-  const wasNavRef = useRef(false)
+  // leaving type mode hands focus back to the ❯ box. Guarded to the on→off edge for a live tab — a tab
+  // switch or going offline exits type mode too, but the tab-focus effect owns focus there.
+  const wasTypeRef = useRef(false)
   useEffect(() => {
-    if (wasNavRef.current && !navMode && active !== 'new' && selSession?.liveness !== 'offline') msgRef.current?.focus()
-    wasNavRef.current = navMode
-  }, [navMode])
+    if (wasTypeRef.current && !typeMode && active !== 'new' && selSession?.liveness !== 'offline') msgRef.current?.focus()
+    wasTypeRef.current = typeMode
+  }, [typeMode])
   // forward raw keys to the active session's pane IN TAP ORDER ([[nav-mode-key-ordering]]). Naive per-key
   // fire-and-forget POSTs raced (browser + server + send-keys all parallel), scrambling fast typing. So per
   // session keep ONE request in flight and COALESCE: the first key flushes at once (typing stays跟手), keys
@@ -302,7 +302,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
 
   // the ❯ box auto-grows UPWARD (anchored to the wrap's bottom). Its cap is dynamic — half the terminal
   // height — so we set max-height in JS, then hand the same value to fitTextarea. The box UNMOUNTS while
-  // the Eval tab or nav mode replaces it and remounts at rows=1, so those flips must re-fit it too — the
+  // the Eval tab or type mode replaces it and remounts at rows=1, so those flips must re-fit it too — the
   // draft survives the round-trip and the grown height must survive with it.
   useEffect(() => {
     const ta = msgRef.current
@@ -310,7 +310,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     const maxH = Math.round((termRef.current?.clientHeight || 360) * 0.5)
     ta.style.maxHeight = `${maxH}px`
     fitTextarea(ta, maxH)
-  }, [msg, active, open, rightTab, navMode])
+  }, [msg, active, open, rightTab, typeMode])
 
   // assemble the `/<preset> [[<node>]]… <free text>` launch grammar into one prompt: the preset body with its
   // {{targets}} placeholder filled from the mentions (the server later derives the node from the first
@@ -577,7 +577,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // `runners` binds each board-command name to the closure that DOES it — the SAME closure the header
   // button's onClick fires; `boardCmds` narrows the registry to the current session state. See [[term-input]].
   const runners = {
-    nav: () => setNavMode((v) => !v),
+    type: () => setTypeMode((v) => !v),
     eval: () => setRightTab('eval'),
     merge: () => act('merge'),
     exit: () => act('exit'),     // soft stop: kill tmux + socket, KEEP the worktree → session goes offline + relaunch panel
@@ -586,26 +586,26 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const boardCmds = boardCommandsFor(selSession?.status, runners)
   // window-level key router: ↑/↓ walk the list regardless of focus; Enter on New launches.
   const stateRef = useRef({})
-  stateRef.current = { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, searchOpen, navMode, setNavMode, sendRawKey }
+  stateRef.current = { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, searchOpen, typeMode, setTypeMode, sendRawKey }
   useEffect(() => {
     const onKey = (e) => {
-      const { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, searchOpen, navMode, setNavMode, sendRawKey } = stateRef.current
+      const { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, searchOpen, typeMode, setTypeMode, sendRawKey } = stateRef.current
       if (!open || searchOpen) return   // panel hidden, OR the search palette modal is open above us and owns the keys: nothing here listens
-      // reserved ⌥/⌘+I toggles nav mode: handled before everything else, never forwarded to tmux. Matched by
+      // reserved ⌥/⌘+I toggles type mode: handled before everything else, never forwarded to tmux. Matched by
       // e.code (the physical I key) because ⌥I on a mac prints a dead-key glyph, not 'i'. The chord is a
       // SINGLE modifier + I: ⌥+I XOR ⌘+I. Both held together (⌥⌘I) is the browser's own devtools accelerator —
-      // let it through so the console opens rather than toggling nav mode.
+      // let it through so the console opens rather than toggling type mode.
       const isI = e.code === 'KeyI' || e.key === 'i' || e.key === 'I'
       if ((e.altKey !== e.metaKey) && isI && active !== 'new') {
-        e.preventDefault(); e.stopPropagation(); setNavMode((v) => !v); return
+        e.preventDefault(); e.stopPropagation(); setTypeMode((v) => !v); return
       }
       // the app's GLOBAL ⌥ command family — ⌥N (New Session composer), ⌥F (evals), ⌥1..⌥4 (pages) — is
-      // reserved over the console too, nav mode included (the same standing as ⌥/⌘+I above): fall through
+      // reserved over the console too, type mode included (the same standing as ⌥/⌘+I above): fall through
       // UNHANDLED so the App-level window listener (registered after this child's, so next in the capture
       // chain) routes it — never forwarded to tmux. Matched by e.code for the same mac ⌥-dead-key reason as
       // ⌥I. ⌘/⌃ variants stay with the browser (⌘N/⌃N are its hard-reserved new-window accelerator anyway).
       if (e.altKey && !e.metaKey && !e.ctrlKey && ['KeyN', 'KeyF', 'Digit1', 'Digit2', 'Digit3', 'Digit4'].includes(e.code)) return
-      // ⌘/⌥/⌃+↑/↓ walk the session list — kept ABOVE the nav-mode passthrough so they fire even while
+      // ⌘/⌥/⌃+↑/↓ walk the session list — kept ABOVE the type-mode passthrough so they fire even while
       // raw-key mode forwards to a pane, and the modifier frees ↑/↓ from any caret/typing conflict.
       if (e.metaKey || e.altKey || e.ctrlKey) {
         if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
@@ -615,17 +615,17 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           setSel(order[ni]); return
         }
       }
-      // nav mode: forward EVERY key raw to the pane (⌃/⌥/⌘ combos encoded by navKeyToken), nothing else fires.
-      if (navMode && active !== 'new') {
+      // type mode: forward EVERY key raw to the pane (⌃/⌥/⌘ combos encoded by typeKeyToken), nothing else fires.
+      if (typeMode && active !== 'new') {
         e.preventDefault(); e.stopPropagation()
         if (e.key === 'Escape') {
           sendRawKey('Escape')
           const now = Date.now()
-          if (now - lastEscRef.current < 600) setNavMode(false)
+          if (now - lastEscRef.current < 600) setTypeMode(false)
           lastEscRef.current = now
           return
         }
-        const token = navKeyToken(e)
+        const token = typeKeyToken(e)
         if (token) sendRawKey(token)
         return
       }
@@ -638,7 +638,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); e.stopPropagation(); accept(menu.items[menu.index]); return }
         if (e.key === 'Escape')    { e.preventDefault(); e.stopPropagation(); setMenu(null); return }
       }
-      // (no bottom Esc rung: Esc never leaves a page — [[side-nav]]. Menus/nav-mode claimed theirs above;
+      // (no bottom Esc rung: Esc never leaves a page — [[side-nav]]. Menus/type-mode claimed theirs above;
       // leaving the console is navigation: the rail, ⌥1/⌥3/⌥4, or history.)
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         // a text input keeps plain ↑/↓ ENTIRELY — they're its own caret keys and never switch tabs, even at
@@ -659,7 +659,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const isTextField = (t) => t && (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT' || t.isContentEditable)
 
   // focus the docked input — whichever box is currently mounted (the New-tab prompt when it's up, else the
-  // session ❯ box; both null in nav mode / offline, where there's no input to land in).
+  // session ❯ box; both null in type mode / offline, where there's no input to land in).
   const refocusInput = () => {
     const el = taRef.current || msgRef.current
     if (el) requestAnimationFrame(() => el.focus())
@@ -868,9 +868,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   {showRelaunch
                     ? <button className="si-act go" onClick={() => act('resume')}>{t('session.relaunch')}</button>
                     : boardCmds.filter((c) => c.button).map((c) => {
-                        // nav alone carries extra state: `.on` while active, `.suggest` while the pane sniff
-                        // thinks a select menu is up (the pulse that invites nav mode).
-                        const state = c.name === 'nav' ? (navMode ? ' on' : (menuById[active] ? ' suggest' : '')) : ''
+                        // type alone carries extra state: `.on` while active, `.suggest` while the pane sniff
+                        // thinks a select menu is up (the pulse that invites type mode).
+                        const state = c.name === 'type' ? (typeMode ? ' on' : (menuById[active] ? ' suggest' : '')) : ''
                         return (
                           <button
                             key={c.name}
@@ -902,11 +902,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 )}
               </div>
               {/* the docked ❯ input belongs to the Terminal tab only (the Eval tab has nothing to type at). */}
-              {rightTab === 'terminal' && (navMode ? (
-                // nav mode replaces the prompt box: keys go straight to the pane (handled at the window level).
-                <div className="si-bottom nav" onClick={() => setNavMode(false)} data-tip={t('session.navExit')}>
-                  <span className="si-nav-ind">{t('session.navInd')}</span>
-                  <span className="si-nav-help">{t('session.navHelp')}</span>
+              {rightTab === 'terminal' && (typeMode ? (
+                // type mode replaces the prompt box: keys go straight to the pane (handled at the window level).
+                <div className="si-bottom type" onClick={() => setTypeMode(false)} data-tip={t('session.typeExit')}>
+                  <span className="si-type-ind">{t('session.typeInd')}</span>
+                  <span className="si-type-help">{t('session.typeHelp')}</span>
                 </div>
               ) : (
                 <div

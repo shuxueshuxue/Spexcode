@@ -1,8 +1,8 @@
 // `run` is bound in SessionInterface (it needs the live closures); here we hold only the static identity.
 // `button:false` = no header twin (exit/close live as typed commands + the right-click menu). `when` gates by state.
 export const BOARD_COMMANDS = [
-  { name: 'nav',   color: 'yellow', button: true,  when: (st) => !!st && st !== 'offline',
-    labelKey: 'session.navBtn', titleKey: 'session.navTitle', descKey: 'session.cmd.navDesc' },
+  { name: 'type',  color: 'yellow', button: true,  when: (st) => !!st && st !== 'offline',
+    labelKey: 'session.typeBtn', titleKey: 'session.typeTitle', descKey: 'session.cmd.typeDesc' },
   // eval's surface is the console's always-on Eval TAB, not a header button — the typed `/eval` just jumps
   // to that tab (`button: false`, available for any live session, not only review).
   { name: 'eval', color: 'cyan',   button: false, when: (st) => !!st && st !== 'offline',

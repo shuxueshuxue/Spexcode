@@ -21,7 +21,10 @@ sessions-core owns `sessions.ts` — the common session layer: the global per-se
 (`session.json` keyed by session_id, [[runtime]]), session↔worktree↔node resolution, the launch-script
 assembly (the rendezvous env + the harness's own command + the spec-pointer/prompt tail — carrying NO
 `--append-system-prompt`/`--settings` flag, since the contract and hooks reach the agent by worktree
-auto-discovery, see [[harness-delivery]]), and the poll loop the watch/wait subscriptions share. The
+auto-discovery, see [[harness-delivery]]), and the poll loop the watch/wait subscriptions share. Worktree
+prep also links the untracked spec sources from the main checkout into every fresh session worktree — the
+seam that keeps a [[private-overlay]] repo's dispatched agents spec-sighted and hook-alive (the policy and
+its helper module belong to private-overlay; here it is the one call after `worktree add`). The
 session objects it assembles carry their display strings pre-derived (`label`/`headline`) and hide the
 bare name parts under `raw` — that naming seam's contract (chains, wire shape, enforcement) is
 [[session-label]]'s. Cross-feature defaults that must be read by the backend at runtime live here as the

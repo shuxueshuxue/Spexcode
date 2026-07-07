@@ -1,0 +1,20 @@
+Reproduction — private-mode repo, dispatched session worktree (live gugu deployment, spexcode 0.2.3, 2026-07-07)
+
+Repo: gugu (private mode since Jul 3: spexcode.local.json {"private":true}; .spec + spexcode.json untracked).
+Fresh worker worktree created by newSession (.worktrees/smoke-hooks-0707-fbe2):
+
+1) Rendered artifacts present (materialize worked):
+   .claude/settings.json — 7 dispatch.sh entries; .codex/hooks.json present; CLAUDE.md contract block identical to main's.
+
+2) Spec sources ABSENT (git checkout carries only tracked content):
+   hooks-manifest (global store) lists 7 handlers, e.g. Stop -> .spec/project/.config/core/stop-gate/stop-gate.sh
+   checked each against the worktree: ALL 6 script paths MISSING (no .spec at all).
+
+3) Consequences measured through the product:
+   - echo '{}' | dispatch.sh claude Stop   (worktree cwd, undeclared session) -> exit 0, silent pass.
+     Control on a default-mode repo, same probe -> {"decision":"block", ...stop-gate reason...} exit 2.
+   - spex board from worktree cwd -> 0 nodes (main checkout: 104).
+   - dispatch gate thrash: worktree hp_config_hash = e3b0… (empty-input hash) vs main-stamped store hash ->
+     every alternating-context event re-ran materialize; a live worker's Stop hook ran 1m8s+ (screenshot,
+     session f8ec1108) into Claude Code's 60s hook timeout.
+   - live worker behaviour: smoke worker replied and stopped UNGATED, stuck in `working`, never declared.

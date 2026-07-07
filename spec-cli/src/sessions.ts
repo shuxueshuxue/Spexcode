@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { readFileSync, writeFileSync, appendFileSync, existsSync, renameSync, mkdirSync, rmSync, readdirSync, realpathSync, statSync } from 'node:fs'
 import { join, dirname, relative, isAbsolute } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { linkUntrackedSpecSources } from './worktree-sources.js'
 import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, type ReviewDiffFile } from './git.js'
 import { loadSpecs } from './specs.js'
 import { defaultHarness, defaultLauncher, harnessById, resolveLauncher, rvSock, rendezvousListening, type Harness, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
@@ -1061,6 +1062,9 @@ export async function newSession(node: string | null, prompt: string, parent: st
   const branch = `node/${slug}`
   const path = join(mainRoot(), '.worktrees', slug)
   await gitA(['-C', mainRoot(), 'worktree', 'add', '-b', branch, path, mainBranch()])
+  // a private-overlay repo keeps the spec sources out of git, so the checkout alone leaves this worktree
+  // spec-blind and hook-dead — link them from main ([[private-overlay]]; no-op on a default-mode repo).
+  linkUntrackedSpecSources(mainRoot(), path)
   // prepared but NOT launched: enters the queue as `queued`. drainQueue() below launches it at once when a
   // slot is free, else it waits — durable as a global record (+ its worktree), so it survives a backend
   // restart and is still findable. governed:true — this is a DASHBOARD/CLI-launched session, so it feeds the

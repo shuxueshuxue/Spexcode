@@ -94,9 +94,10 @@ before merge. \`spex init\` seeds the first tree; \`spex guide yatsu\` covers th
 const YATSU = `spex guide yatsu — the yatsu.md file format
 
 A yatsu.md sits BESIDE a node's spec.md and says how to MEASURE the node's loss — the gap between live
-behaviour and the spec. It is optional, but a FRONTEND node (its code: includes a UI file —
-.jsx/.tsx/.vue/.svelte/.css, or the dashboard) with no yatsu.md is a blind spot: \`spex yatsu scan\` flags
-it \`yatsu-uncovered\`. yatsu defines no DSL and RUNS NOTHING — the agent measures; yatsu keeps score.
+behaviour and the spec. It is optional, but a node that governs SOURCE code (its code: includes a file whose extension is in
+\`lint.sourceExtensions\` — default .ts/.tsx/.js/.jsx, set it for a Rust/Go/Python tree) with no yatsu.md is
+a blind spot: \`spex yatsu scan\` flags it \`yatsu-uncovered\`. yatsu defines no DSL and RUNS NOTHING — the
+agent measures; yatsu keeps score.
 
 FRONTMATTER: a \`scenarios:\` list (a YAML block sequence of mappings). Each scenario:
   name         REQUIRED. Unique within the file — it keys the sidecar and \`--scenario <name>\`.
@@ -171,7 +172,7 @@ THE SCOREBOARD: readings live in yatsu.evals.ndjson beside the yatsu.md — one 
 (a second git-as-database axis). Freshness is derived live from git: a reading goes STALE when a governed
 code file, the scenario (the yatsu.md), or the evaluator moves since it was filed.
   spex yatsu scan [--changed]   blind spots: yatsu-schema (malformed) · yatsu-drift (stale) ·
-                                yatsu-missing (never measured) · yatsu-uncovered (frontend, no yatsu.md) ·
+                                yatsu-missing (never measured) · yatsu-uncovered (governed source, no yatsu.md) ·
                                 yatsu-owners (a file governed by > maxOwners scenarios — split it)
   spex yatsu show <node>        the reading timeline (verdict · freshness · evidence), newest first
   spex yatsu clean              GC the content-addressed evidence cache`

@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { join, relative, dirname } from 'node:path'
 import { repoRoot, headSha, driftIndex, stagedFiles, git } from '../../spec-cli/src/git.js'
 import { loadSpecs } from '../../spec-cli/src/specs.js'
-import { loadConfig } from '../../spec-cli/src/lint.js'
+import { loadConfig, sourceExtRe } from '../../spec-cli/src/lint.js'
 import { mainBranch, envSessionId, readRawRecord } from '../../spec-cli/src/layout.js'
 import { yatsuNodes, validateScenarios, YATSU_FILE, type YatsuNode } from './yatsu.js'
 import { readReadings, readSidecar, appendReading, appendRetraction, latestPerScenario, evidenceOf, type Reading, type Verdict, type Evidence, type Retraction } from './sidecar.js'
@@ -53,6 +53,10 @@ function currentNodeId(root: string): string | null {
   return null
 }
 
+// isUiPath answers a FRONTEND-specific question — "does this node need a real BROWSER reading?" — and is
+// consumed by the review-proof's `uncoveredFrontend` blindspot, NOT by scan's uncovered check. Scan keys off
+// the general `sourceExtensions` knob instead (see the `yatsu-uncovered` branch below), so a non-web project's
+// sources are held to the loss discipline too; this stays web-shaped on purpose.
 const UI_FILE = /\.(jsx|tsx|vue|svelte|css)$/
 export const isUiPath = (p: string) => UI_FILE.test(p) || p.includes('spec-dashboard/')
 
@@ -84,6 +88,9 @@ export function nodeChanged(dirRel: string, codeFiles: string[], changed: Set<st
 async function scan(args: string[] = []): Promise<number> {
   const root = repoRoot()
   const cfg = loadConfig(root)
+  // yatsu-uncovered fires on ANY governed source file (per the shared `sourceExtensions` knob), not just
+  // frontend — so a backend/CLI/non-web project's sources are held to the loss discipline too, not exempted.
+  const srcRe = sourceExtRe(cfg.sourceExtensions)
   const changedOnly = has(args, 'changed')
   const changed = changedOnly ? changedSinceBase(root) : null
   const idx = await driftIndex(root)
@@ -153,9 +160,9 @@ async function scan(args: string[] = []): Promise<number> {
         const names = orphans.map((o) => `'${o.scenario}' (${o.threadId}, ${o.remarks.length} remark${o.remarks.length > 1 ? 's' : ''})`).join(', ')
         findings.push(`  • yatsu-dangling: '${s.id}' has ${orphans.length} orphaned remark track(s) — scenario ${names} renamed/deleted; resolve/retract via \`spex resolve <ref>\` / \`spex retract <ref>\` or restore the scenario name`)
       }
-    } else if (s.code.some(isUiPath)) {
+    } else if (s.code.some((p) => srcRe.test(p))) {
       uncovered++
-      findings.push(`  • yatsu-uncovered: '${s.id}' governs frontend code but has no yatsu.md — give it a scenario (description + expected) so its loss can be measured`)
+      findings.push(`  • yatsu-uncovered: '${s.id}' governs source code but has no yatsu.md — give it a scenario (description + expected) so its loss can be measured`)
     }
     if (!findings.length) continue
     flaggedNodes++

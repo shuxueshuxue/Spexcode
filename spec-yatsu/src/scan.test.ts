@@ -2,8 +2,20 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
 import { isUiPath, nodeChanged } from './cli.js'
+import { sourceExtRe } from '../../spec-cli/src/lint.js'
 
-// ---- the loss-signal coverage classifiers scan uses (isUiPath → uncovered-frontend; nodeChanged → --changed scope) ----
+// ---- the loss-signal classifiers: sourceExtRe → scan's yatsu-uncovered (any governed source, per the
+// configurable sourceExtensions knob); isUiPath → the review-proof's FRONTEND blindspot; nodeChanged → --changed scope ----
+
+test('sourceExtRe: yatsu-uncovered keys off the configurable sourceExtensions, not a hardcoded web allowlist', () => {
+  const web = sourceExtRe(['ts', 'tsx', 'js', 'jsx'])   // the default knob
+  assert.equal(web.test('spec-cli/src/sessions.ts'), true, 'backend .ts is source under the default knob')
+  assert.equal(web.test('spec-dashboard/src/NodeView.jsx'), true, 'frontend still counts')
+  assert.equal(web.test('crates/engine/src/lib.rs'), false, 'a .rs file is NOT source under the default knob')
+  const rust = sourceExtRe(['rs'])                       // a non-web project reconfigures it
+  assert.equal(rust.test('crates/engine/src/lib.rs'), true, 'configuring sourceExtensions=[rs] makes .rs source')
+  assert.equal(rust.test('spec-cli/src/sessions.ts'), false, 'and .ts stops counting for that project')
+})
 
 test('isUiPath: a UI file (component/style anywhere, or anything in the dashboard package) is a frontend surface', () => {
   for (const p of [

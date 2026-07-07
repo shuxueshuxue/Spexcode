@@ -8,16 +8,16 @@ scenarios:
       claude, `codex` → codex) with a `defaultLauncher`. Load the dashboard, open the New-Session box, and
       read the DOM: assert a launcher `<select class="si-launcher-select">` is present, one `<option>` per
       available profile, and that the `.si-agent-picker` harness radiogroup is ABSENT. Cross-check the source
-      data at `GET /api/launchers`. Then, on a project with NO custom launchers configured, confirm the same
-      select still renders with the built-in `claude` and `codex` options and the harness radios are still
-      absent. Screenshot the New box.
+      data at `GET /api/launchers`. Then, on a project with no custom launchers but an explicit
+      `sessions.defaultLauncher: "claude"`, confirm the same select still renders with the built-in `claude`
+      and `codex` options and the harness radios are still absent. Screenshot the New box.
     expected: >-
       Launchers configured → the New box shows the `.si-launcher-select` dropdown with exactly one option
       per profile, the harness radiogroup is gone, and the chosen launcher name is what the New-Session POST
-      sends (backend derives the harness from it). No custom launchers → the same dropdown is still present
-      with built-in `claude`/`codex` options, and no plain harness radios render. `GET /api/launchers` returns
-      the same `{name, harness}` list the dropdown renders. A launcher subsumes the harness axis; picking one
-      is the single choice the human makes.
+      sends (backend derives the harness from it). No custom launchers but an explicit default → the same
+      dropdown is still present with built-in `claude`/`codex` options, and no plain harness radios render.
+      `GET /api/launchers` returns the same `{name, harness}` list the dropdown renders. A launcher subsumes
+      the harness axis; picking one is the single choice the human makes.
     code: spec-dashboard/src/SessionInterface.jsx
     related: spec-cli/src/index.ts
   - name: dropdown-honors-default-launcher
@@ -38,11 +38,28 @@ scenarios:
       default (`spex new` with no `--launcher` also uses `reclaude`). `GET /api/launchers` returns
       `{ launchers, default }` with `default:"reclaude"`. When a still-valid launcher is remembered in
       localStorage that remembered pick wins instead; only when nothing is remembered (or the remembered one
-      no longer exists) does the configured default drive the initial selection — falling back to the first
-      launcher only when no default is configured. The old behaviour (silently selecting `d[0]`, disagreeing
-      with the config default) is gone.
+      no longer exists) does the configured default drive the initial selection. When no valid configured
+      default exists, the dropdown falls through to the first real launcher as a visible selected choice that
+      will be sent explicitly. The old behaviour (silently selecting `d[0]` even when a different config
+      default existed, disagreeing with the CLI default) is gone.
     code: spec-dashboard/src/SessionInterface.jsx
     related: spec-cli/src/index.ts, spec-cli/src/harness.ts
+  - name: missing-default-launcher-refuses-create
+    tags: [backend-api, cli]
+    description: >-
+      Through the real create surfaces that can omit a launcher, measure a project whose config exposes
+      launcher profiles but omits `sessions.defaultLauncher`. Run `spex new "probe"` with no `--launcher`,
+      POST `/api/sessions` with no `launcher`, and trigger the `@new` dispatch path, which naturally calls
+      create without a launcher. Then repeat with a configured `sessions.defaultLauncher`, and with an
+      explicit `--launcher <name>`.
+    expected: >-
+      With no configured default, every no-choice create fails with an actionable error telling the human to
+      write `sessions.defaultLauncher` in `spexcode.json` or `spexcode.local.json`, creates no session/worktree,
+      and does not fall back to the built-in `claude` launcher. With a configured default, `spex new` without
+      `--launcher` and `@new` use that configured profile. With an explicit `--launcher <name>`, create succeeds
+      by that visible named choice regardless of the configured default.
+    code: spec-cli/src/sessions.ts
+    related: spec-cli/src/index.ts, spec-cli/src/harness.ts, spec-cli/src/mentions.ts
   - name: launcher-persisted-not-badged-on-board
     tags: [frontend-e2e, desktop]
     description: >-
@@ -86,10 +103,10 @@ scenarios:
 ---
 # yatsu.md — launcher-select
 
-Measured YATU-style through the running dashboard, not by reading the JSX: drive a real browser at a
-deployment whose `spexcode.local.json` configures named launchers (the gugu board — `reclaude` + `codex`)
-and read the live New-Session DOM, then contrast it against a no-custom-launcher board for the built-in
-`claude`/`codex` options. The loss watched is the launcher pick failing to be the ONLY launch choice — either
-the dropdown missing (the human can't pick their auth path, silently gets the global default), the harness
-radios lingering beside it (two controls for one decision), or a zero-config project regressing to the removed
-plain harness radios instead of the built-in launcher select.
+Measured YATU-style through the real product surfaces, not by reading the JSX. Frontend scenarios drive a real
+browser only for the dashboard behaviours the dashboard actually owns: the launcher dropdown exists, replaces
+the old harness radios, honors remembered/default/first visible selection order, and keeps launcher data off
+the board rows. Backend scenarios drive the CLI/API/session-create paths directly. The missing-default
+fail-loud scenario is backend-only: it covers `spex new` without `--launcher`, `POST /api/sessions` without
+`launcher`, and `@new`, because those are the surfaces that can omit a launcher. Dashboard missing-default is
+not a fail-loud scenario; the dropdown has a visible selected launcher and submits that explicit pick.

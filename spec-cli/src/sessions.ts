@@ -1025,7 +1025,14 @@ export async function createSession(node: string | null, prompt: string, launche
     console.error('spex: no backend reachable — launching in-process (caller env owns auth, no concurrency cap)')
     return newSession(node, prompt, parent, launcher)
   }
-  if (!res.ok) throw new Error(`backend rejected session (${res.status}): ${await res.text().catch(() => '')}`)
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    let msg = text
+    try { msg = JSON.parse(text).error || text } catch {}
+    const err = new Error(`backend rejected session (${res.status}): ${msg}`)
+    err.name = 'BackendError'
+    throw err
+  }
   return await res.json() as Session
 }
 
@@ -1039,8 +1046,8 @@ export async function createSession(node: string | null, prompt: string, launche
 export async function newSession(node: string | null, prompt: string, parent: string | null = null, launcher?: string): Promise<Session> {
   const id = randomUUID()
   // a launcher ([[launcher-select]]) fixes BOTH the launch command (persisted below) AND the harness — so
-  // picking one is the ONLY launch choice. Explicit --launcher wins, else the configured defaultLauncher (or
-  // built-in `claude`). Unknown names throw fail-loud; there is no separate user-supplied harness fallback.
+  // picking one is the ONLY launch choice. Explicit --launcher wins, else the configured defaultLauncher.
+  // A missing/unknown default throws fail-loud; there is no built-in-claude or harness fallback.
   const lname = launcher ?? defaultLauncher(mainRoot())
   const chosen = resolveLauncher(lname)
   const h = harnessById(chosen.harness)

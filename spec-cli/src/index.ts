@@ -13,7 +13,7 @@ import { getBoardJson } from './boardCache.js'
 import { boardStream, notifyBoardChanged } from './boardStream.js'
 import { gitA, gitTry, repoRoot } from './git.js'
 import { newSession, listSessions, sendKeys, rawKey, exitSession, closeSession, reopen, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, superviseQueue } from './sessions.js'
-import { defaultHarness, HARNESSES, launcherList, defaultLauncher } from './harness.js'
+import { defaultHarness, HARNESSES, launcherList, launcherDefault } from './harness.js'
 import { evalTimeline, readBlobByHash } from '../../spec-yatsu/src/evaltab.js'
 import { putBlob } from '../../spec-yatsu/src/cache.js'
 import { yatsuNodes } from '../../spec-yatsu/src/yatsu.js'
@@ -146,10 +146,11 @@ app.get('/api/config', (c) => c.json(loadConfig()))
 // the named launcher profiles ([[launcher-select]]) the New-Session form's dropdown offers — `{ name, harness }`
 // only (the `cmd` is a host secret, never shipped to the browser) — plus the configured `default` NAME so the
 // dropdown pre-selects the SAME launcher a bare `spex new` uses (the CLI/config default), instead of the
-// alphabetically-first one. Built-in `claude`/`codex` launchers mean the form always has one launch control.
+// alphabetically-first one. Missing defaultLauncher is returned as an actionable config error, not hidden by
+// falling through to the built-in `claude` launcher.
 app.get('/api/launchers', (c) => c.json({
   launchers: launcherList().map(({ name, harness }) => ({ name, harness })),
-  default: defaultLauncher(),
+  ...launcherDefault(),
 }))
 // the ISSUES read surface ([[issues]]) for the dashboard's issues page — the merged list over every store
 // (local threads + the resident forge slice), the SAME mergedIssues() the CLI drain reads, verbatim

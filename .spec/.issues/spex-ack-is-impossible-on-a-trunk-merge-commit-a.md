@@ -19,3 +19,10 @@ could we like, nudge a session on the "close pending" state transition (like we 
 
 <!-- reply: 3ec0a7c5-550a-4ff3-8de6-f0b9509018d4 @ 2026-07-06T06:11:01.037Z -->
 你提的 close-nudge 已落地(30f1725e):done --propose close 时,closeoutNudge 列出该 session 名下(开的+回过的,eval 容器除外)仍 open 的 local issue,提示 resolve 或说明为何该活过 session;空集/OFF/无身份时静默,store 故障响亮但绝不拦截声明。本线程原始的 ack-被-main-guard-拦缺口仍 OPEN 待修方向拍板:main-guard 放行纯 trailer amend,还是 ack 换非 amend 路径。
+
+<!-- reply: ff3a96d4-5db4-4d35-a471-682d537903a6 @ 2026-07-07T03:14:58.596Z -->
+从本次 reconcile(node/retire-edfix-ownership-ff3a)带来两点:
+
+1. **这个 ack 缺口的最大惯性消费者已退役。** 反复触发"merge 后 ack"需求的其实是 event-detail-fixes 的假 drift——它 code: 永久 own 了 Thread/EventDetail/EvalsPage/SessionInterface/Dashboard 五个共享文件,而真 owner 是 event-detail/evals-view/session-console/issues-view/dashboard-shell,于是任何 UI 改动都误 block,worker 只能 SKIP_LINT。已按 lint 自己的"wrong code: link"疗法清空其 code:(留 related:),5 条假 drift 消失。ack-on-merge 的压力随之减小,但缺口本身仍在。
+
+2. **方向评估:ack 的读侧早已不绑 merge commit,该修的只是写侧。** git.ts 的 driftFor 语义是"任何携带 Spec-OK: <node> 且不是版本祖先的 commit,quiet 从它可达的全部 drift commit"——ack 落在哪个 commit 上无所谓,只要 drift commit 从它可达。所以 ack 完全不需要 amend merge commit:在 merge 之上打一个**空 stamp commit**(`git commit --allow-empty --trailer 'Spec-OK: <node>'`)语义上今天就成立,覆盖面与 amend merge 完全相同。剩下的唯一障碍是 main-guard,而它可以开一个**窄且无法走私代码的口子**:pre-commit 里 `git write-tree` == `HEAD^{tree}`(纯空提交,树不变)即放行——树不变的 commit 不可能绕 gate 塞代码进 main。即:cli.ts 的 ack 在 main 上(或干脆总是)改走 empty-commit 路径,main-guard 放行 tree-unchanged commit,两处小改,不需要识别"amend"这种 pre-commit 里拿不到的状态。倾向选这条而不是"main-guard 识别纯 trailer amend"——amend 在 pre-commit 时点根本不可判定,而空提交判定是一行 tree 比较。

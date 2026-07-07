@@ -49,14 +49,15 @@ export interface Harness {
 
   // --- launch / sessionId ---
   // the base agent command. Claude: `claude …`; Codex starts a project-scoped app-server and launches the
-  // visible TUI with `--remote` pointed at it. `cmd`, when given, is the SESSION's persisted launcher command
-  // ([[launcher-select]]) and OVERRIDES the ambient env→config→default resolution — so a session created under a
-  // named launcher keeps that exact command (and auth) on resume, never silently reverting to the global
-  // default. Omitted is only for tests and old records before launch_cmd was pinned.
+  // visible TUI with `--remote` pointed at it. `cmd` is the SESSION's persisted launcher command
+  // ([[launcher-select]]) — the resolved `cmd` of the named launcher it was created under. A session always
+  // carries one (pinned at creation), so resume keeps that exact command (and auth), never reverting to a
+  // global default. Omitted is only for tests and old records before launch_cmd was pinned (→ the bare default).
   launchCmd(id: string, runtimeDir?: string, cmd?: string): string
   // the RESOLVED base launcher command alone — the wrapper/binary that carries the agent's config-dir env
   // (claude `CLAUDE_CONFIG_DIR`, codex `CODEX_HOME`), WITHOUT the per-launch script built around it. `cmd`,
-  // when given, wins; else the ambient env→config→default resolution. The launch owner PINS this on the record
+  // when given (the named launcher's `cmd`), IS the answer; else the harness's bare built-in default — there is
+  // no env/config-field resolution (claude/codex are ordinary named launchers). The launch owner PINS this on the record
   // at creation so a resume replays the EXACT launcher that created the conversation — never re-resolving
   // against a since-changed default, which would point `--resume` at the wrong config dir and lose the
   // transcript ([[launcher-select]], the resume-launcher-pin). launchCmd builds its invocation ON TOP of this.
@@ -359,7 +360,7 @@ export function codexSupportsBypassHookTrust(binary: string): boolean {
   bypassProbe.set(binary, ok)
   return ok
 }
-export function codexLaunchCommand(_id: string, codexCmd = process.env.SPEXCODE_CODEX_CMD || 'codex --yolo', serverCmd?: string, dir = runtimeRoot()): string {
+export function codexLaunchCommand(_id: string, codexCmd = 'codex --yolo', serverCmd?: string, dir = runtimeRoot()): string {
   const server = process.env.SPEXCODE_CODEX_SERVER_CMD || serverCmd || codexBinary(codexCmd)
   // The bypass flag ONLY reaches a thread's hook trust as a per-request `config` override, NOT as a CLI flag on
   // the shared `app-server` process (the app-server never reads its own `--dangerously-bypass-hook-trust` for a
@@ -934,9 +935,11 @@ const CLAUDE_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostTo
 const CODEX_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop'] as const
 
 // the resolved base launcher command per harness (the wrapper that sets the config-dir env), shared by
-// launchCmd and baseCmd so the two never diverge: `cmd` override wins, else ambient env→config→default.
-const claudeBaseCmd = (cmd?: string) => cmd || process.env.SPEXCODE_CLAUDE_CMD || readConfig(mainCheckout()).sessions?.claudeCmd || 'claude --dangerously-skip-permissions'
-const codexBaseCmd = (cmd?: string) => cmd || process.env.SPEXCODE_CODEX_CMD || readConfig(mainCheckout()).sessions?.codexCmd || 'codex --yolo'
+// launchCmd and baseCmd so the two never diverge: the launcher's pinned `cmd` wins. The bare default is only
+// the fallback for a truly-old record with NO pinned cmd and NO launcher name — there is no env/config-field
+// resolution, because claude/codex are ordinary named launchers now ([[launcher-select]]), resolved by name.
+const claudeBaseCmd = (cmd?: string) => cmd || 'claude --dangerously-skip-permissions'
+const codexBaseCmd = (cmd?: string) => cmd || 'codex --yolo'
 
 export const claudeHarness: Harness = {
   id: 'claude',
@@ -1043,36 +1046,28 @@ export function harnessById(id: string): Harness {
 
 // --- named launcher profiles ([[launcher-select]]) ----------------------------------------------------------
 // a launcher = a `{ harness, cmd }` pair in spexcode.json's `sessions.launchers`, keyed by a human-chosen name.
-// harness defaults to claude. resolveLauncher throws fail-loud on an unknown name (a session must never
-// silently launch under the wrong auth) and validates the harness id.
+// `claude` and `codex` are NOT special built-ins — `spex init` SEEDS them as ordinary named launchers (with the
+// regular command path), so they are edited like any other. harness defaults to claude. resolveLauncher throws
+// fail-loud on an unknown name (a session must never silently launch under the wrong auth) and validates the
+// harness id. There is NO env-derived built-in fallback: the dropdown lists exactly the config's real launchers.
 export type Launcher = { name: string; harness: string; cmd: string }
 export type LauncherDefault = { default: string | null; error: string | null }
 
-function builtinLauncher(name: string, root = mainCheckout()): Launcher | null {
-  const cfg = readConfig(root).sessions
-  if (name === 'claude') return { name: 'claude', harness: 'claude', cmd: process.env.SPEXCODE_CLAUDE_CMD || cfg?.claudeCmd || 'claude --dangerously-skip-permissions' }
-  if (name === 'codex') return { name: 'codex', harness: 'codex', cmd: process.env.SPEXCODE_CODEX_CMD || cfg?.codexCmd || 'codex --yolo' }
-  return null
-}
-
-// the configured launchers plus the built-in `claude`/`codex` profiles, as a stable name-sorted list (for the
-// dashboard dropdown + the CLI). There is always a launcher choice; the old separate harness pick is gone.
+// the configured named launchers from spexcode.json, as a stable name-sorted list (for the dashboard dropdown +
+// the CLI). Picking a launcher is the ONLY launch choice; the old separate harness pick is gone.
 export function launcherList(root = mainCheckout()): Launcher[] {
   const m = readConfig(root).sessions?.launchers || {}
-  const out = new Map<string, Launcher>([
-    ['claude', builtinLauncher('claude', root)!],
-    ['codex', builtinLauncher('codex', root)!],
-  ])
-  for (const name of Object.keys(m)) out.set(name, { name, harness: m[name].harness || defaultHarness.id, cmd: m[name].cmd })
-  return [...out.values()].sort((a, b) => a.name.localeCompare(b.name))
+  return Object.keys(m)
+    .map((name) => ({ name, harness: m[name].harness || defaultHarness.id, cmd: m[name].cmd }))
+    .sort((a, b) => a.name.localeCompare(b.name))
 }
 
 export const MISSING_DEFAULT_LAUNCHER_ERROR =
   'sessions.defaultLauncher is required for a launch without --launcher; set it in spexcode.json or spexcode.local.json (for example {"sessions":{"defaultLauncher":"claude"}})'
 
 // the configured default launcher NAME ([[launcher-select]]) — the profile `spex new`/a dropdown pick with no
-// explicit choice resolves. Missing config is a fail-loud setup error, never an implicit fallthrough to the
-// built-in `claude` launcher.
+// explicit choice resolves. Missing config is a fail-loud setup error, never an implicit fallthrough to a
+// `claude` launcher (which `spex init` seeds by name, so a default can point at it explicitly).
 export function defaultLauncher(root = mainCheckout()): string {
   const name = readConfig(root).sessions?.defaultLauncher?.trim()
   if (!name) throw new Error(MISSING_DEFAULT_LAUNCHER_ERROR)
@@ -1091,9 +1086,9 @@ export function launcherDefault(root = mainCheckout()): LauncherDefault {
 
 export function resolveLauncher(name: string, root = mainCheckout()): Launcher {
   const l = readConfig(root).sessions?.launchers?.[name]
-  if (l && !l.cmd) throw new Error(`launcher '${name}' is missing cmd`)
-  const resolved = l ? { name, harness: l.harness || defaultHarness.id, cmd: l.cmd } : builtinLauncher(name, root)
-  if (!resolved) throw new Error(`unknown launcher '${name}' (configured: ${launcherList(root).map((x) => x.name).join(', ') || 'none'})`)
+  if (!l) throw new Error(`unknown launcher '${name}' (configured: ${launcherList(root).map((x) => x.name).join(', ') || 'none'})`)
+  if (!l.cmd) throw new Error(`launcher '${name}' is missing cmd`)
+  const resolved = { name, harness: l.harness || defaultHarness.id, cmd: l.cmd }
   harnessById(resolved.harness)   // validate the harness id fail-loud
   return resolved
 }

@@ -196,16 +196,18 @@ test('launchCmd cmd override wins over the ambient default (claude + codex) — 
 })
 
 test('launcherList + resolveLauncher read the named profiles from spexcode.json, fail loud on an unknown name', () => {
-  const oldClaude = process.env.SPEXCODE_CLAUDE_CMD
-  const oldCodex = process.env.SPEXCODE_CODEX_CMD
-  delete process.env.SPEXCODE_CLAUDE_CMD
-  delete process.env.SPEXCODE_CODEX_CMD
-  try {
   const root = mkdtempSync(join(tmpdir(), 'spex-launchers-'))
+  // claude/codex are ORDINARY seeded entries (as `spex init` plants them), NOT env-derived built-ins — alongside
+  // two custom profiles. harness defaults to claude when omitted; cmd is carried through verbatim.
   writeFileSync(join(root, 'spexcode.json'), JSON.stringify({
-    sessions: { launchers: { reclaude: { cmd: 'reclaude --dangerously-skip-permissions' }, 'claude-glm': { harness: 'claude', cmd: 'claude-glm --dangerously-skip-permissions' } } },
+    sessions: { launchers: {
+      claude: { harness: 'claude', cmd: 'claude --dangerously-skip-permissions' },
+      codex: { harness: 'codex', cmd: 'codex --yolo' },
+      reclaude: { cmd: 'reclaude --dangerously-skip-permissions' },
+      'claude-glm': { harness: 'claude', cmd: 'claude-glm --dangerously-skip-permissions' },
+    } },
   }))
-  // name-sorted, built-ins present, harness defaults to claude when omitted, cmd carried through.
+  // name-sorted, exactly the config's real launchers — no ghost duplicates.
   assert.deepEqual(launcherList(root), [
     { name: 'claude', harness: 'claude', cmd: 'claude --dangerously-skip-permissions' },
     { name: 'claude-glm', harness: 'claude', cmd: 'claude-glm --dangerously-skip-permissions' },
@@ -215,40 +217,25 @@ test('launcherList + resolveLauncher read the named profiles from spexcode.json,
   assert.equal(resolveLauncher('claude-glm', root).cmd, 'claude-glm --dangerously-skip-permissions')
   assert.equal(resolveLauncher('codex', root).harness, 'codex')
   assert.throws(() => resolveLauncher('nope', root), /unknown launcher 'nope'/)
-  } finally {
-    if (oldClaude === undefined) delete process.env.SPEXCODE_CLAUDE_CMD
-    else process.env.SPEXCODE_CLAUDE_CMD = oldClaude
-    if (oldCodex === undefined) delete process.env.SPEXCODE_CODEX_CMD
-    else process.env.SPEXCODE_CODEX_CMD = oldCodex
-  }
 })
 
-test('built-in launchers are explicit choices, but no-choice creates require sessions.defaultLauncher', () => {
-  const oldClaude = process.env.SPEXCODE_CLAUDE_CMD
-  const oldCodex = process.env.SPEXCODE_CODEX_CMD
-  delete process.env.SPEXCODE_CLAUDE_CMD
-  delete process.env.SPEXCODE_CODEX_CMD
-  try {
+test('no built-in ghosts: an unseeded config lists NO launchers, and claude/codex are not implicitly resolvable', () => {
   const root = mkdtempSync(join(tmpdir(), 'spex-nolaunchers-'))
   writeFileSync(join(root, 'spexcode.json'), JSON.stringify({ sessions: { maxActive: 4 } }))
-  assert.deepEqual(launcherList(root), [
-    { name: 'claude', harness: 'claude', cmd: 'claude --dangerously-skip-permissions' },
-    { name: 'codex', harness: 'codex', cmd: 'codex --yolo' },
-  ])
+  // with no seeded launchers there is nothing to list — the old env-derived built-in claude/codex are gone.
+  assert.deepEqual(launcherList(root), [])
+  // and `claude`/`codex` are just names like any other: unconfigured → fail loud, never a silent built-in.
+  assert.throws(() => resolveLauncher('claude', root), /unknown launcher 'claude'/)
+  assert.throws(() => resolveLauncher('codex', root), /unknown launcher 'codex'/)
   assert.throws(() => defaultLauncher(root), /sessions\.defaultLauncher is required/)
   assert.deepEqual(launcherDefault(root), {
     default: null,
     error: 'sessions.defaultLauncher is required for a launch without --launcher; set it in spexcode.json or spexcode.local.json (for example {"sessions":{"defaultLauncher":"claude"}})',
   })
-  writeFileSync(join(root, 'spexcode.json'), JSON.stringify({ sessions: { maxActive: 4, defaultLauncher: 'claude' } }))
+  // seed a claude launcher + name it the default (the shape `spex init` plants) → resolves.
+  writeFileSync(join(root, 'spexcode.json'), JSON.stringify({ sessions: { maxActive: 4, launchers: { claude: { harness: 'claude', cmd: 'claude --dangerously-skip-permissions' } }, defaultLauncher: 'claude' } }))
   assert.equal(defaultLauncher(root), 'claude')
   assert.deepEqual(launcherDefault(root), { default: 'claude', error: null })
-  } finally {
-    if (oldClaude === undefined) delete process.env.SPEXCODE_CLAUDE_CMD
-    else process.env.SPEXCODE_CLAUDE_CMD = oldClaude
-    if (oldCodex === undefined) delete process.env.SPEXCODE_CODEX_CMD
-    else process.env.SPEXCODE_CODEX_CMD = oldCodex
-  }
 })
 
 test('removeManagedBlock strips ONLY the sentinel block, preserving the user bytes', () => {
@@ -356,15 +343,13 @@ test('claude liveness verifies a LISTENER, not the socket file — tmux up AND s
   assert.equal(claudeHarness.liveness(rec, true, undefined, undefined, undefined), 'offline') // socketLive unknown/absent → not live
 })
 
-test('baseCmd resolves the launcher command the pin freezes: explicit cmd wins, else the ambient env', () => {
-  const prev = process.env.SPEXCODE_CLAUDE_CMD
-  process.env.SPEXCODE_CLAUDE_CMD = 'ambient-claude'
-  try {
-    assert.equal(claudeHarness.baseCmd('reclaude --pinned'), 'reclaude --pinned')   // an explicit (named-launcher) cmd wins
-    assert.equal(claudeHarness.baseCmd(undefined), 'ambient-claude')                // else the ambient default — captured at creation, then frozen
-  } finally {
-    if (prev === undefined) delete process.env.SPEXCODE_CLAUDE_CMD; else process.env.SPEXCODE_CLAUDE_CMD = prev
-  }
+test('baseCmd resolves the launcher command the pin freezes: the named-launcher cmd wins, else the bare default', () => {
+  // A session's pinned launcher cmd is what baseCmd freezes; there is NO env/config-field resolution anymore
+  // (claude/codex are ordinary named launchers). The bare default only backstops a truly-old record with no pin.
+  assert.equal(claudeHarness.baseCmd('reclaude --pinned'), 'reclaude --pinned')
+  assert.equal(claudeHarness.baseCmd(undefined), 'claude --dangerously-skip-permissions')
+  assert.equal(codexHarness.baseCmd('codex-glm --yolo'), 'codex-glm --yolo')
+  assert.equal(codexHarness.baseCmd(undefined), 'codex --yolo')
 })
 
 test('rendezvousListening: a live listener reads true; a stale socket file / absent path reads false', async () => {

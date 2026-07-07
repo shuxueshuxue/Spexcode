@@ -35,15 +35,9 @@ test('claude online requires a live listener, not just a tmux window (listener-v
 })
 
 test('resume replays the PINNED launcher command, immune to a since-changed default (resume-launcher-pin)', () => {
-  // the pinned resolved command wins — a backend now running under a DIFFERENT ambient default cannot change
+  // the pinned resolved command wins — a backend now running under a DIFFERENT configured default cannot change
   // which launcher (and config dir) a resume replays. This is the seam reopen/drain read at every (re)launch.
-  const prev = process.env.SPEXCODE_CLAUDE_CMD
-  process.env.SPEXCODE_CLAUDE_CMD = 'claude-glm --different-config-dir'   // the drifted default that broke the victims
-  try {
-    assert.equal(launcherCmd(rec({ launchCmd: 'reclaude --original-config-dir', launcher: null })), 'reclaude --original-config-dir')
-    // an old record with neither a pin nor a name falls back to the ambient default (best-effort, unchanged behavior)
-    assert.equal(launcherCmd(rec({ launchCmd: null, launcher: null })), undefined)
-  } finally {
-    if (prev === undefined) delete process.env.SPEXCODE_CLAUDE_CMD; else process.env.SPEXCODE_CLAUDE_CMD = prev
-  }
+  assert.equal(launcherCmd(rec({ launchCmd: 'reclaude --original-config-dir', launcher: null })), 'reclaude --original-config-dir')
+  // an old record with neither a pin nor a name has nothing to replay → undefined (best-effort ambient default).
+  assert.equal(launcherCmd(rec({ launchCmd: null, launcher: null })), undefined)
 })

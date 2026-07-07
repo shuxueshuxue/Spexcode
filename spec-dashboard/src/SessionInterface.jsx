@@ -21,8 +21,6 @@ import { useT } from './i18n/index.jsx'
 // state, the spinning `loader` ring.
 const AttachGlyph = () => <Icon name="paperclip" size={15} />
 const BusyGlyph = () => <Icon name="loader" size={15} className="si-attach-busy" />
-const LAUNCHER_CONFIG_ERROR = 'Set sessions.defaultLauncher in spexcode.json or spexcode.local.json before launching.'
-const LAUNCHER_SELECT_PLACEHOLDER = 'no default configured'
 
 // Window-level (capture) key handling, not panel onKeyDown: arrowing off the New Session tab unmounts its
 // textarea, so a panel listener would lose focus and kill nav; a window listener is focus-independent.
@@ -119,7 +117,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // choice. Fetched from /api/launchers; built-in claude/codex profiles mean the list is never intentionally empty.
   const [launchers, setLaunchers] = useState([])
   const [launcher, setLauncher] = useState(() => { try { return localStorage.getItem('si.launcher') || '' } catch { return '' } })
-  const [launcherErr, setLauncherErr] = useState('')
   const pickLauncher = (name) => { setLauncher(name); try { localStorage.setItem('si.launcher', name) } catch {} }
   const [sendErr, setSendErr] = useState(false)   // last /keys dispatch failed — surfaced under the ❯ box
   const [actErr, setActErr] = useState(null)      // last lifecycle action refused/failed (e.g. the resume guard: relaunching a LIVE agent) — surfaced by the relaunch panel
@@ -196,19 +193,19 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // fetch the configured launcher profiles once; if a project has any, the New box picks one by name (the pick
   // rides in the POST body as `launcher`). Initial selection HONORS the config default so the dashboard agrees
   // with the CLI (`spex new` with no --launcher uses `defaultLauncher`): remembered localStorage pick (if still
-  // valid) → configured `default`; missing/invalid default is a config error, never first/built-in fallback.
+  // valid) → configured `default` → first. Without this the dropdown silently pre-selected the alphabetically
+  // first launcher, disagreeing with the config default — a user "testing claude-glm" could get another launcher.
   useEffect(() => {
     loadLaunchers().then((d) => {
       const list = d?.launchers
       if (!Array.isArray(list) || !list.length) return
       setLaunchers(list)
-      setLauncherErr(typeof d?.error === 'string' && d.error ? d.error : '')
       setLauncher((cur) => {
         if (list.some((l) => l.name === cur)) return cur   // a still-valid remembered pick wins
         if (d.default && list.some((l) => l.name === d.default)) return d.default   // else the configured default
-        return ''
+        return list[0].name   // else the first
       })
-    }).catch((e) => setLauncherErr(String(e?.message || e || LAUNCHER_CONFIG_ERROR)))
+    }).catch(() => {})
   }, [])
   // /api/config returns only command-surface nodes, so the presets ARE the launchable set — no client filter.
   const commandPresets = presets
@@ -354,15 +351,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const submit = () => {
     const raw = prompt.trim()
     if (!raw) return
-    if (launcherErr || !launcher) {
-      setLauncherErr(launcherErr || LAUNCHER_CONFIG_ERROR)
-      return
-    }
     const text = composeLaunch(raw)
     setPrompt('')
     // a launcher SUBSUMES the harness ([[launcher-select]]): send only the chosen launcher; the backend derives
-    // harness from that profile. Missing launcher config is blocked above, never omitted as a fallback.
-    const body = { prompt: text, launcher }
+    // harness from that profile. If the picker has not loaded yet, omit it and let the backend use its default.
+    const body = launcher ? { prompt: text, launcher } : { prompt: text }
     fetch('/api/sessions', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -844,7 +837,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   <span className="si-launcher-label">{t('session.launcherLabel')}</span>
                   <span className="si-launcher-harness" data-tip={selHarness.label} aria-hidden="true"><HarnessGlyph /></span>
                   <select className="si-launcher-select" value={launcher} onChange={(e) => pickLauncher(e.target.value)} aria-label={t('session.launcherLabel')}>
-                    {!launcher && <option value="" disabled>{LAUNCHER_SELECT_PLACEHOLDER}</option>}
                     {launchers.map((l) => (
                       <option key={l.name} value={l.name}>{l.name}</option>
                     ))}
@@ -852,7 +844,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 </label>
                 )
               })() : null}
-              {launcherErr && <div className="si-send-err" role="alert" style={{ whiteSpace: 'normal', overflowWrap: 'anywhere', maxWidth: 'min(560px, 100%)' }}>{launcherErr}</div>}
               <div className="si-hint">
                 {t('session.hint.before')}<code>[[</code>{t('session.hint.mid')}<code>/</code>{t('session.hint.after')}
               </div>

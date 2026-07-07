@@ -14,7 +14,7 @@
 Spec-driven development with AI agents in the loop. SpexCode keeps a versioned tree of specs inside
 your git repo, links every spec to the code it governs, and runs a session manager that dispatches
 coding agents into isolated worktrees. You review and merge; the tool keeps intent and
-implementation from drifting apart. (All screenshots below are this very repo on its own board.)
+implementation from drifting apart.
 
 [![Watch: this repo's spec tree grow from its git history](docs/spec-tree-poster.jpg)](https://spexcode.net/assets/spec-tree-growth.mp4)
 

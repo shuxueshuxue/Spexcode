@@ -66,6 +66,14 @@ block; bypass with `SPEXCODE_SKIP_LINT=1`.
 
 A commit ahead of a spec isn't always staleness — a refactor can change a governed file while the spec
 stays true. Such a commit carries a **`Spec-OK: <node-id>`** trailer; drift skips the node it acknowledges
-(`Spec-OK: A` quiets only A). `spex ack <node>… --reason "<why>"` stamps it onto HEAD (`--amend`); the
-reason is **required but not stored** — it forces the agent to articulate why the spec still holds before
-quieting it. A shared file drifts every governor, so `Spec-OK:` accepts several ids — one ack per co-owner.
+(`Spec-OK: A` quiets only A). `spex ack <node>… --reason "<why>"` stamps the trailer on an **empty commit
+above HEAD** (`--allow-empty --only`, so a dirty index never rides along) — never an amend: drift's read
+side quiets every drift commit *reachable* from an ack, so a child stamp covers exactly what amending
+would, and it works on a trunk merge commit, where an amend re-authors the merge after `MERGE_HEAD` is
+gone and [[main-guard]] rightly rejects it (the guard passes the stamp through its tree-unchanged door;
+the same door waives this node's commit-local drift gate for the stamp — a no-content commit can't
+introduce drift, and gating it on the REAL index would block an ack on the very drift it acknowledges
+whenever unrelated work is staged).
+The reason is **required but not stored** — it forces the agent to articulate why the spec still holds
+before quieting it. A shared file drifts every governor, so `Spec-OK:` accepts several ids — one ack per
+co-owner.

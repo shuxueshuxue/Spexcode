@@ -119,10 +119,10 @@ straight to the trunk.
   **auto-grows with the draft** ABOVE that idle floor (the shared `textarea.js` fitTextarea — one grow
   routine for the console's boxes and the thread composers, floored at the composer's usable height and
   capped so it never eats the pane; the console's own ❯/prompt boxes keep the single-line floor, this is the
-  thread composer's own geometry) and reveals its actions row (hint + Send,
-  the ⏱ where a clip supplies one, plus any host lifecycle action such as Close issue) while **engaged** —
-  focused, carrying a draft or staged frames, showing a send error (an error must never collapse out of view),
-  or carrying a lifecycle action that must stay visible. It is **keyed to the selected issue**, so
+  thread composer's own geometry) and **always displays its actions row** (hint + Send,
+  the ⏱ where a clip supplies one, plus any host lifecycle action such as Close issue) even while idle —
+  the human should never have to click the textarea just to discover or reach the buttons. A failed send
+  still replaces the hint in that visible row (an error must never collapse out of view). It is **keyed to the selected issue**, so
   a half-typed draft dies with its selection instead of leaking onto another issue's thread. The POST goes
   to the one store-routed reply verb ([[issues]]'s
   `replyIssue`, author `'human'`) — a local issue's reply git-commits to the trunk store, a forge issue's

@@ -69,14 +69,14 @@ scenarios:
       (`.fvd-scroll`) behind it and the composer never moves. IDLE, the writing surface is ALREADY
       USABLE — a multi-line textarea (a few lines tall, ~3), never a one-line ~26px sliver, and it needs
       NO click/focus to reach that height: the box you land on is the box you can write in. Focus does
-      not change the textarea's height (there is no click-to-expand). Typing still AUTO-GROWS it beyond
+      not change the textarea's height (there is no click-to-expand), and the actions row is already
+      visible with a disabled Send button plus any clip/lifecycle action supplied by the host. Typing still AUTO-GROWS it beyond
       that idle floor, line by line, capped so it never eats the pane; an emptied, blurred composer
-      settles back to the same usable idle floor, never collapsing to a hairline line. For a
-      non-concluded issue the lifecycle action pins the action row visible even while idle (disabled Send
-      + Close issue side by side); for a home with no lifecycle action, such as the eval rail composer,
-      idle has no actions row and focus reveals hint + Send — but in BOTH homes the textarea itself is
-      already the usable multi-line height at idle. Switching to another issue clears the draft (keyed to
-      the selection). One shared composer, every home. No page errors.
+      settles back to the same usable idle floor, never collapsing to a hairline line, and the action row
+      stays visible throughout; for a non-concluded issue it shows disabled Send + Close issue side by
+      side, and for a home with no lifecycle action, such as the eval rail composer, idle still shows hint
+      + disabled Send. Switching to another issue clears the draft (keyed to the selection). One shared
+      composer, every home. No page errors.
   - name: panel-skeleton
     tags: [frontend-e2e]
     code: spec-dashboard/src/IssuesPage.jsx

@@ -122,11 +122,12 @@ async function withWatchEdge<T>(selectors: string[], intervalMs: number, body: (
 async function resolveSelectorOrExit(selector: string): Promise<string> {
   if (!selector) { console.error('spex: missing session selector (id | id-prefix | node | branch)'); process.exit(2) }
   const { resolveClientSession } = await import('./client.js')
+  const { sessionLabel } = await import('./sessions.js')
   const r = await resolveClientSession(selector)
   if ('ok' in r) return r.ok.id
   if ('none' in r) { console.error(`spex: no such session: ${selector}`); process.exit(2) }
   console.error(`spex: ambiguous selector "${selector}" matches ${r.ambiguous.length} sessions — be more specific:`)
-  for (const s of r.ambiguous) console.error(`  ${s.id.slice(0, 8)}  ${s.node || s.branch || s.id}`)
+  for (const s of r.ambiguous) console.error(`  ${s.id.slice(0, 8)}  ${sessionLabel(s)}`)
   process.exit(2)
 }
 
@@ -342,7 +343,7 @@ if (cmd === 'serve') {
   if (has('json')) { console.log(JSON.stringify(r, null, 2)) }
   else {
     const g = r.gates
-    console.log(`review ${r.node || r.branch || r.id}  [${r.id}]`)
+    console.log(`review ${r.label}  [${r.id}]`)
     console.log(`  ahead of main : ${r.ahead} commit(s)`)
     console.log(`  uncommitted   : ${r.dirtyNonRuntime} non-runtime file(s)`)
     console.log(`  proposal      : ${r.proposal.kind ?? '—'}${r.proposal.note ? ` — ${r.proposal.note}` : ''}`)

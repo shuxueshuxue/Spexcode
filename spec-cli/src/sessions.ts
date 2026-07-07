@@ -1268,6 +1268,7 @@ export type ReviewGates = {
 }
 export type ReviewPayload = {
   id: string; node: string | null; branch: string | null
+  label: string              // the session's identity, derived ONCE via deriveLabel — the review surface renders THIS, never its own node||branch||id chain
   ahead: number              // commits the node branch is ahead of main
   dirtyNonRuntime: number    // uncommitted files excluding SpexCode's own runtime files
   diff: ReviewDiffFile[]     // the worker's real changes, anchored at the merge-base
@@ -1334,6 +1335,7 @@ export async function reviewPayload(id: string): Promise<ReviewPayload | null> {
   const dirtyNonRuntime = statusOut.split('\n').filter(Boolean).map(porcelainPath).length
   return {
     id, node: wt.rec.node, branch: wt.branch,
+    label: deriveLabel({ id, name: wt.rec.name, node: wt.rec.node, title: wt.rec.title, branch: wt.branch }),
     ahead: Number(aheadOut.trim()) || 0,
     dirtyNonRuntime, diff,
     gates: { conflictsWithMain, lint },

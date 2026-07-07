@@ -3,7 +3,7 @@ import { repoRoot, driftIndex, historyIndex, type DriftIndex, type HistoryIndex 
 import { loadSpecs } from '../../spec-cli/src/specs.js'
 import { loadEvalRemarkTracks, trackKey, type RemarkTrack, type Issue, type Reply } from '../../spec-cli/src/issues.js'
 import { yatsuNodes, type YatsuNode } from './yatsu.js'
-import { readSidecar, applyRetractions, evidenceOf, type Verdict, type EvidenceKind, type Retraction } from './sidecar.js'
+import { readSidecar, applyRetractions, evidenceOf, isJsonBlob, type Verdict, type EvidenceKind, type Retraction } from './sidecar.js'
 import { staleAxes, codeDrift, type StaleAxis } from './freshness.js'
 import { scenarioIndex, type ScenarioIndex } from './scenariofresh.js'
 import { hasBlob, getBlob, MISS_BLOB } from './cache.js'
@@ -245,10 +245,11 @@ export function readBlobByHash(hash: string, dir?: string): BlobResult {
 }
 
 // PNG/JPEG/GIF/WebP cover every screenshot (a manual --image); MP4/WebM cover a recorded clip (--video), so
-// the blob route serves it with a playable Content-Type; a transcript (--result) is text, so bytes with no
-// NUL and no known header sniff to text/plain; anything else falls back to a generic binary type so it still
-// downloads rather than being mislabeled.
-function sniffBlobMime(b: Buffer): string {
+// the blob route serves it with a playable Content-Type. Text bytes (no NUL, no known header) split by
+// CONTENT ([[evidence-kind-taxonomy]]): a structured export (JSON) sniffs to application/json — so the
+// `data` renderer knows to validate/pretty-print it — while free-form terminal text stays text/plain;
+// anything else falls back to a generic binary type so it still downloads rather than being mislabeled.
+export function sniffBlobMime(b: Buffer): string {
   if (b.length >= 4 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return 'image/png'
   if (b.length >= 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'image/jpeg'
   if (b.length >= 4 && b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) return 'image/gif'
@@ -257,6 +258,6 @@ function sniffBlobMime(b: Buffer): string {
   // ISO-BMFF (MP4/MOV): a `ftyp` box type at bytes 4..8, after its 4-byte size.
   if (b.length >= 12 && b.toString('ascii', 4, 8) === 'ftyp') return 'video/mp4'
   if (b.length >= 12 && b.toString('ascii', 0, 4) === 'RIFF' && b.toString('ascii', 8, 12) === 'WEBP') return 'image/webp'
-  if (b.length && !b.includes(0)) return 'text/plain; charset=utf-8'
+  if (b.length && !b.includes(0)) return isJsonBlob(b) ? 'application/json' : 'text/plain; charset=utf-8'
   return 'application/octet-stream'
 }

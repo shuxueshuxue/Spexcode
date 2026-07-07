@@ -25,6 +25,7 @@ export type ProofReading = {
     | { kind: 'image'; dataUri: string }
     | { kind: 'video'; dataUri: string }
     | { kind: 'transcript'; text: string }
+    | { kind: 'data'; text: string }
     | { kind: 'miss' }
     | { kind: 'none' }
 }
@@ -200,6 +201,13 @@ async function toProofReading(r: EvalEntry): Promise<ProofReading> {
   if (!blob.ok) return { ...base, evidence: { kind: 'miss' } }
   if (blob.mime.startsWith('image/')) return { ...base, evidence: { kind: 'image', dataUri: `data:${blob.mime};base64,${blob.bytes.toString('base64')}` } }
   if (blob.mime.startsWith('video/')) return { ...base, evidence: { kind: 'video', dataUri: `data:${blob.mime};base64,${blob.bytes.toString('base64')}` } }
+  // structured data ([[evidence-kind-taxonomy]]): pretty-print so the self-contained proof shows a
+  // validatable data block, not one flat line; invalid JSON falls back to the raw bytes rather than hiding.
+  if (blob.mime.startsWith('application/json')) {
+    let text = blob.bytes.toString('utf8')
+    try { text = JSON.stringify(JSON.parse(text), null, 2) } catch { /* keep raw — invalid JSON still shows */ }
+    return { ...base, evidence: { kind: 'data', text } }
+  }
   return { ...base, evidence: { kind: 'transcript', text: blob.bytes.toString('utf8') } }
 }
 
@@ -310,6 +318,7 @@ function renderReading(r: ProofReading): string {
     ev.kind === 'image' ? `<img class="shot" src="${ev.dataUri}" alt="${esc(r.scenario)}">`
     : ev.kind === 'video' ? `<video class="shot" src="${ev.dataUri}" controls preload="metadata"></video>`
     : ev.kind === 'transcript' ? `<pre class="transcript">${esc(ev.text)}</pre>`
+    : ev.kind === 'data' ? `<pre class="transcript data">${esc(ev.text)}</pre>`
     : ev.kind === 'miss' ? `<div class="noev">⌀ miss original file — the evidence bytes were pruned</div>`
     : `<div class="noev">attested without a capture</div>`
   const stale = r.fresh ? '' : `<span class="stale" title="${esc(r.staleAxes.join(', '))} changed since the reading">stale</span>`
@@ -483,6 +492,7 @@ h2{margin:42px 0 16px;font-size:14px;letter-spacing:.14em;text-transform:upperca
 .evidence{margin:12px 0 0}
 .shot{max-width:100%;border:1px solid var(--line);border-radius:8px;box-shadow:0 14px 40px -24px #000;display:block}
 .transcript{max-height:420px;overflow:auto;margin:0;padding:12px 14px;background:#05080d;border:1px solid var(--line);border-radius:8px;font-size:12px;color:#9fdcc6;white-space:pre-wrap;word-break:break-word}
+.transcript.data{color:#cbb6ff;border-left:3px solid #6b46c1}
 .noev,.blindspot{margin-top:10px;padding:10px 12px;border-radius:8px;font-size:13px;color:var(--dim);background:#0a0e15;border:1px dashed var(--line)}
 .blindspot{color:var(--amber);border-color:#3a3320}
 .gates{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:12px;overflow:hidden}

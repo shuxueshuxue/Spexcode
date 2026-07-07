@@ -1640,6 +1640,12 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .eval-expected-label { color: var(--muted); font-weight: 600; }
 .eval-transcript { font-family: var(--mono); font-size: 11px; color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px; margin: 0; max-height: 360px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
 .eval-transcript.loading { color: var(--muted); }
+/* structured data ([[evidence-kind-taxonomy]]) — a JSON/metrics block: the transcript's monospace frame with
+   a labelled header and an accent border, so a machine export reads as validatable data, not scrolling text. */
+.eval-datawrap { border: 1px solid var(--line); border-left: 3px solid var(--acc, #6b46c1); border-radius: 4px; overflow: hidden; }
+.eval-datahead { font-family: var(--mono); font-size: 10px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); background: var(--panel); padding: 4px 10px; border-bottom: 1px solid var(--line); }
+.eval-data { font-family: var(--mono); font-size: 11px; color: var(--ink2); background: var(--panel2); padding: 8px 10px; margin: 0; max-height: 360px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
+.eval-data.loading { color: var(--muted); }
 
 /* ---- review proof pane ([[review-proof]]'s slice of the shared stylesheet) ----
    The backend-rendered proof of work (self-contained HTML over /api/sessions/:id/proof) rendered INLINE as the

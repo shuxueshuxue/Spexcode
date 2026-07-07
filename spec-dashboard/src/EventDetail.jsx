@@ -144,7 +144,9 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite,
   const ev = evidenceList(viewing)
   const videoEntry = ev.find((e) => e.kind === 'video' && e.state === 'present')
   const images = ev.filter((e) => e.kind === 'image')
-  const transcripts = ev.filter((e) => e.kind === 'transcript')
+  // every non-clip, non-still entry — a transcript or a structured `data` block ([[evidence-kind-taxonomy]]) —
+  // renders through the ONE shared EvidenceItem, which picks the element by kind; nothing is left behind.
+  const docs = ev.filter((e) => e.kind !== 'video' && e.kind !== 'image')
   const hasVideo = !!videoEntry
 
   // the eval's remark track rides the reading as `entry.thread` — the ONE server-side (node,scenario)↔thread
@@ -513,7 +515,7 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite,
             </div>
           )}
 
-          {transcripts.map((e, i) => <EvidenceItem e={e} alt={entry.scenario} key={`${e.hash}-${i}`} />)}
+          {docs.map((e, i) => <EvidenceItem e={e} alt={entry.scenario} key={`${e.hash}-${i}`} />)}
 
           {ev.length === 0 && (viewing.verdict?.note
             ? <pre className="eval-transcript">{viewing.verdict.note}</pre>

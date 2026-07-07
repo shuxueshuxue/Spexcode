@@ -49,7 +49,8 @@ independently — one node's loss is many signals, not one. A file governed by m
 is the `yatsu-owners` smell (split it). Measurements live apart in a flat
 **yatsu.evals.ndjson** sidecar — **append-only, one JSON line per EVENT**. A filing appends a *reading*
 (scenario, codeSha, an **evidence LIST** (each entry
-a typed `{hash, kind ∈ image|video|transcript}`), the video entry's optional timelineBlob ([[step-timeline]]),
+a typed `{hash, kind ∈ image|video|transcript|data}` — the render taxonomy ([[evidence-kind-taxonomy]])),
+the video entry's optional timelineBlob ([[step-timeline]]),
 evaluator, an optional **`by`** (the SESSION that filed
 it, from envSessionId), **verdict**, ts) — the second git-as-database axis: a reading commit is a *measurement
 event*, not a spec version, so history and attribution apply unchanged. `by` is a different axis than
@@ -75,7 +76,7 @@ The **verdict** is the loss against `expected`: `pass` or `fail`. Either may car
 one-line annotation (why it failed, how far a pass sits from ideal). A note is an annotation *on* the verdict,
 not a third status: a measurement must commit to pass or fail, and a scenario you haven't actually measured is
 `yatsu-missing`, never a hedged note-as-verdict. The **evidence** is a **LIST** of content-addressed entries —
-N `image`s and/or a `video` (with its step-timeline) and/or a `transcript`, each typed by its `kind` (the
+N `image`s and/or a `video` (with its step-timeline) and/or a `transcript` and/or a `data` block ([[evidence-kind-taxonomy]]), each typed by its `kind` (the
 captured actual behaviour — the *why* lives there, the note only summarises it). One filing can carry a whole
 run: several stills beside the recorded clip. Backward-compatible: a legacy **scalar** reading (one `blob` +
 `blobKind`) reads as a one-entry list, so old readings still render; one filed before verdicts existed — or a

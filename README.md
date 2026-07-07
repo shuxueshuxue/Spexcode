@@ -9,8 +9,6 @@
   <a href="https://spexcode.net"><img alt="docs" src="https://img.shields.io/badge/docs-spexcode.net-8957e5"></a>
 </p>
 
-<img src="docs/sdd-tuxedo-pooh.png" alt="spec-driven development meme" width="240">
-
 </div>
 
 Spec-driven development with AI agents in the loop. SpexCode keeps a versioned tree of specs inside
@@ -28,6 +26,8 @@ Quick links: [the model](#the-model) · [quick start](#quick-start) ·
 [agents](#working-with-agents) · [yatsu](#measuring-behavior-yatsu) · [config](#configuration)
 
 ## The model
+
+<div align="center"><img src="docs/sdd-tuxedo-pooh.png" alt="spec-driven development meme" width="260"></div>
 
 A spec node is a directory under `.spec/` containing a `spec.md`: frontmatter (title, status, a
 `code:` list of the files it governs) plus a prose body stating what that part of the system is

@@ -25,22 +25,24 @@ human chooses (`claude-glm`, `reclaude`, …); `harness` defaults to `claude`. B
 harness, picking a launcher is the ONLY user-facing launch selection. The old free-standing harness pick is
 gone.
 
-`sessions.defaultLauncher` names the profile a session with no explicit choice uses; when omitted it is the
-built-in `claude` launcher. Host-specific absolute commands belong in the gitignored `spexcode.local.json`,
-never in the committed file — a launcher name is portable, its `cmd` is a machine fact.
+`sessions.defaultLauncher` names the profile a session with no explicit choice uses; it is required for any
+no-choice create. Omitting it is a configuration error for those create paths, reported with the repair: write
+`sessions.defaultLauncher` in `spexcode.json` or `spexcode.local.json`. There is no ambient fallback to the
+built-in `claude` launcher, because that silently chooses an auth/config-dir path the human did not name.
+Host-specific absolute commands belong in the gitignored `spexcode.local.json`, never in the committed file —
+a launcher name is portable, its `cmd` is a machine fact.
 
 **Selection at create time.** `spex new "…" --launcher <name>` picks it on the CLI (threaded through
 `createSession`/`newSession` and the `POST /api/sessions` body); the dashboard New-Session form shows a
 launcher dropdown sourced from `GET /api/launchers`, with the selected launcher's harness shown only as a
-derived vendor glyph beside the select. That endpoint reports
-BOTH the `{ name, harness }` list AND the configured `default` name (`{ launchers, default }`) — because the
-dropdown must AGREE with the CLI on which launcher a no-choice create uses. So the dropdown's INITIAL
-selection honors `defaultLauncher`: a still-valid remembered (per-browser) pick wins, else the configured
-`default`, else the first — never the bare alphabetically-first, which would silently disagree with the config
-default (the confusion this closes: a human "testing claude-glm" who is quietly handed another launcher). A
-zero-config project still gets the built-in `claude`/`codex` options, so the UI never needs a second harness
-input. A resolved launcher fixes the session's harness; an unknown launcher name is rejected fail-loud (a 400
-from the create path), never silently defaulted. `--harness` and `POST /api/sessions { harness }` are not
+derived vendor glyph beside the select. That endpoint reports BOTH the `{ name, harness }` list AND the
+configured `default` name (`{ launchers, default }`). The dropdown's INITIAL selection is always a visible
+launcher choice: a still-valid remembered (per-browser) pick wins, else the configured `default`, else the
+first real launcher in the list. That last case is not an implicit backend fallback — the dashboard sends the
+selected launcher name explicitly. Built-in `claude`/`codex` profiles still exist for explicit selection and
+for projects whose default names one of them, but they are never an implicit no-choice default.
+A resolved launcher fixes the session's harness; an unknown launcher name is rejected fail-loud (a 400 from
+the create path), never silently defaulted. `--harness` and `POST /api/sessions { harness }` are not
 create-session inputs; callers use `--launcher <name>` / `{ launcher }`.
 
 **Persisted and API-exposed, not badged on the board.** A session's chosen launcher NAME is durable data: it

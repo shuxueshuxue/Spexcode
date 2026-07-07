@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readFileSync, statSy
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createServer } from 'node:net'
-import { activeTurnIdFromThread, codexAppServerSock, codexBinary, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, codexLaunchCommand, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, resolveLauncher, defaultLauncher, writeCodexTrust, rendezvousListening, rvSock } from './harness.js'
+import { activeTurnIdFromThread, codexAppServerSock, codexBinary, codexHandshakeMessages, codexInjectMessage, codexHarness, claudeHarness, codexLaunchCommand, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock } from './harness.js'
 
 test('codex handshake initializes, confirms the loaded thread, then reads it to decide steer-vs-start', () => {
   const msgs = codexHandshakeMessages('thr_1')
@@ -223,7 +223,7 @@ test('launcherList + resolveLauncher read the named profiles from spexcode.json,
   }
 })
 
-test('zero-config projects still expose built-in launchers, with claude as the default', () => {
+test('built-in launchers are explicit choices, but no-choice creates require sessions.defaultLauncher', () => {
   const oldClaude = process.env.SPEXCODE_CLAUDE_CMD
   const oldCodex = process.env.SPEXCODE_CODEX_CMD
   delete process.env.SPEXCODE_CLAUDE_CMD
@@ -235,7 +235,14 @@ test('zero-config projects still expose built-in launchers, with claude as the d
     { name: 'claude', harness: 'claude', cmd: 'claude --dangerously-skip-permissions' },
     { name: 'codex', harness: 'codex', cmd: 'codex --yolo' },
   ])
+  assert.throws(() => defaultLauncher(root), /sessions\.defaultLauncher is required/)
+  assert.deepEqual(launcherDefault(root), {
+    default: null,
+    error: 'sessions.defaultLauncher is required for a launch without --launcher; set it in spexcode.json or spexcode.local.json (for example {"sessions":{"defaultLauncher":"claude"}})',
+  })
+  writeFileSync(join(root, 'spexcode.json'), JSON.stringify({ sessions: { maxActive: 4, defaultLauncher: 'claude' } }))
   assert.equal(defaultLauncher(root), 'claude')
+  assert.deepEqual(launcherDefault(root), { default: 'claude', error: null })
   } finally {
     if (oldClaude === undefined) delete process.env.SPEXCODE_CLAUDE_CMD
     else process.env.SPEXCODE_CLAUDE_CMD = oldClaude

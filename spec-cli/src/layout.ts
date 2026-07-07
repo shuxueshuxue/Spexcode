@@ -34,7 +34,7 @@ type Config = {
     // same auth. `harness` defaults to 'claude'. Host-specific `cmd`s (abs wrapper paths) belong in the
     // gitignored spexcode.local.json — the name is portable, the cmd is a machine fact.
     launchers?: { [name: string]: { harness?: 'claude' | 'codex'; cmd: string } }
-    defaultLauncher?: string       // the launcher a create with no explicit --launcher/dropdown pick uses (default: built-in `claude`)
+    defaultLauncher?: string       // the launcher a create with no explicit --launcher/dropdown pick uses; required for no-choice creates
   }
   serve?: {
     // public-exposure config for `spex serve --public` (resolved gateway-side; see [[public-mode]] / gateway.ts).

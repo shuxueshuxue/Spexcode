@@ -1046,6 +1046,7 @@ export function harnessById(id: string): Harness {
 // harness defaults to claude. resolveLauncher throws fail-loud on an unknown name (a session must never
 // silently launch under the wrong auth) and validates the harness id.
 export type Launcher = { name: string; harness: string; cmd: string }
+export type LauncherDefault = { default: string | null; error: string | null }
 
 function builtinLauncher(name: string, root = mainCheckout()): Launcher | null {
   const cfg = readConfig(root).sessions
@@ -1066,12 +1067,26 @@ export function launcherList(root = mainCheckout()): Launcher[] {
   return [...out.values()].sort((a, b) => a.name.localeCompare(b.name))
 }
 
+export const MISSING_DEFAULT_LAUNCHER_ERROR =
+  'sessions.defaultLauncher is required for a launch without --launcher; set it in spexcode.json or spexcode.local.json (for example {"sessions":{"defaultLauncher":"claude"}})'
+
 // the configured default launcher NAME ([[launcher-select]]) — the profile `spex new`/a dropdown pick with no
-// explicit choice resolves. Defaults to `claude`, the built-in Claude launcher. The dashboard reads this to
-// PRE-SELECT its New-Session dropdown to match the CLI/config default, so the two surfaces agree on which
-// launcher a bare create uses.
+// explicit choice resolves. Missing config is a fail-loud setup error, never an implicit fallthrough to the
+// built-in `claude` launcher.
 export function defaultLauncher(root = mainCheckout()): string {
-  return readConfig(root).sessions?.defaultLauncher || 'claude'
+  const name = readConfig(root).sessions?.defaultLauncher?.trim()
+  if (!name) throw new Error(MISSING_DEFAULT_LAUNCHER_ERROR)
+  return name
+}
+
+export function launcherDefault(root = mainCheckout()): LauncherDefault {
+  try {
+    const name = defaultLauncher(root)
+    resolveLauncher(name, root)
+    return { default: name, error: null }
+  } catch (e) {
+    return { default: null, error: String((e as Error).message || e) }
+  }
 }
 
 export function resolveLauncher(name: string, root = mainCheckout()): Launcher {

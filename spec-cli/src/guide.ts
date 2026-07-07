@@ -178,7 +178,8 @@ PORTABILITY, and picking the right one is the whole discipline:
 Rule of thumb — is the value TRUE FOR THE PROJECT or TRUE FOR THIS MACHINE? A branch name, a dashboard
 icon, a lint budget, a launcher's name+harness are project facts → committed spexcode.json. The ABSOLUTE
 PATH of a launcher wrapper, a TLS cert path, private mode are machine facts → gitignored spexcode.local.json.
-Both files are optional; omit any field to take its default.
+Both files are optional; omit any field to take its default, except \`sessions.defaultLauncher\` when using
+\`spex new\` or the dashboard without an explicit launcher choice.
 
 MERGE: spexcode.local.json is layered over spexcode.json ONE LEVEL DEEP — per top-level section (dashboard,
 sessions, …), the two objects are shallow-merged with LOCAL WINNING per key; sections only one file names
@@ -213,7 +214,7 @@ Example:
                             SPEXCODE_CODEX_CMD overrides.
   sessions.launchers        additional NAMED launcher profiles (see LAUNCHERS).
   sessions.defaultLauncher  the launcher name a create with no explicit --launcher/dropdown pick uses
-                            (default: "claude"). A portable NAME → committed.
+                            (required for no-choice creates). A portable NAME → committed.
 A claudeCmd/codexCmd or a launcher \`cmd\` that is a HOST-SPECIFIC ABSOLUTE PATH belongs in
 spexcode.local.json — the committed file must stay free of machine paths.
 

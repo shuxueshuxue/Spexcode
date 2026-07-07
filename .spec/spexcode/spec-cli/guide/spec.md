@@ -27,8 +27,12 @@ the agent from one verb, picked by an optional topic:
 - **`spec` / `yatsu` → the agent-facing FILE-FORMAT manual.** The whole detail of the two authored
   artifacts — spec.md (frontmatter, body, the rules lint enforces) and yatsu.md (the scenario schema, how
   loss is measured and filed) — so an agent looks the format up on demand instead of reverse-engineering
-  it. The always-on system prompt is the **clue** that the format exists; this manual carries the detail.
-  An unknown topic fails loud (names the real topics), never a silent setup dump.
+  it. The yatsu page is **prescriptive about evidence**: step-unfolding evidence carries a step-map — named
+  steps on the evidence's own axis, emitted by the run that produced it, never eyeballed off the artefact.
+  The concept is tool-neutral (Playwright is one emitter); the page scopes the tool honestly — `--timeline`
+  covers the video TIME axis (`tMs`) today, the frame/line generalization named as an open gap, not faked.
+  The always-on system prompt is the **clue** that the format exists; this manual carries the detail. An
+  unknown topic fails loud (names the real topics), never a silent setup dump.
 - **`config` → the agent-facing RUNTIME-SETTINGS manual.** SpexCode's own settings are self-documenting
   through this same primitive rather than a new mechanism: `spex guide config` prints every `spexcode.json`
   / `spexcode.local.json` field (launchers, dashboard icon, lint budgets, layout overrides) with a working

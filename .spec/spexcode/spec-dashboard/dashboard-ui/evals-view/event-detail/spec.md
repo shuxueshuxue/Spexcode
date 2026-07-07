@@ -79,11 +79,13 @@ the evidence, and the stage's width is not its ceiling). A transcript entry rend
 text, a missing blob as the honest sentinel per entry, a blob-less (`note`) reading its verdict note as the text
 body (never an empty media box). When the reading
 carries a [[step-timeline]]
-sidecar, the scrubber **bands its step boundaries** and a **step ruler** renders under it (bound to the
-**video entry**) — click a step to seek to its `tMs`, and a live chip names the step the playhead is in; a remark at
-moment T names its step by the last-boundary-≤T lookup, and a step's optional owning-node routes the
-finding to the node it actually belongs to. Without a sidecar it is a plain player with
-remarks — degraded gracefully, never blocked.
+sidecar, a **step ruler** renders naming each step at its position — labels keyed by the map's **axis**
+(time→m:ss, frame→#123, line→L42, index→3/N), so the rail is no longer welded to the clip: a **non-video**
+reading (a transcript's `line` steps) shows its rail too. On a **video** (the `time` axis) the scrubber also
+**bands its step boundaries** and a live chip names the step the playhead is in, and clicking a ruler step
+seeks to its position; a remark at position P names its step by the last-boundary-≤P lookup, and a step's
+optional owning-node routes the finding to the node it actually belongs to. Without a sidecar it is a plain
+player/evidence view with remarks — degraded gracefully, never blocked.
 
 **The A/B strip — a scenario's fail→pass lifecycle, walkable in place.** A bug fix leaves a *pair* of
 readings on one scenario — the **A** (the reproduced failure) and the **B** (the verified fix), the

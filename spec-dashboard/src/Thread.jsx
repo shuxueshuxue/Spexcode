@@ -47,7 +47,7 @@ export const bodyEvidence = (body) => [...(body || '').matchAll(BLOB_URL)].map((
 
 // E2 — the STEP-NAME is the anchor's canonical form; the m:ss is DERIVED from the CURRENT clip at render
 // time, never trusted frozen. Resolve a parsed anchor against the viewed reading's step timeline (`events`,
-// the {tMs, step} sidecar): if its step is in THIS reading's timeline, the moment is that step's live tMs, so
+// the {at, step} sidecar): if its step is in THIS reading's timeline, the moment is that step's live position, so
 // the anchor seeks to the right frame even after a re-measure moved the step (the label's m:ss re-derives to
 // match). If the step is gone from a PRESENT timeline, the frozen m:ss would seek to the wrong moment, so the
 // anchor degrades to readable-not-seekable (shown, never silently wrong). With no timeline (or a step-less
@@ -57,7 +57,7 @@ export function resolveAnchor(anchor, events) {
   if (!anchor) return null
   if (anchor.step && events?.length) {
     const hit = events.find((e) => e.step === anchor.step)
-    if (hit) return { tMs: hit.tMs, step: anchor.step, label: anchorLine(hit.tMs, anchor.step), seekable: true, degraded: false }
+    if (hit) return { tMs: hit.at, step: anchor.step, label: anchorLine(hit.at, anchor.step), seekable: true, degraded: false }
     // the step named at author time is absent from this reading's timeline — readable, not seekable.
     return { tMs: anchor.tMs, step: anchor.step, label: anchor.label, seekable: false, degraded: true }
   }

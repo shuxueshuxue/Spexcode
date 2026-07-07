@@ -16,7 +16,7 @@ your git repo, links every spec to the code it governs, and runs a session manag
 coding agents into isolated worktrees. You review and merge; the tool keeps intent and
 implementation from drifting apart. (All screenshots below are this very repo on its own board.)
 
-[![This repo's spec tree, grown from its own git history](docs/spec-tree-hero.gif)](https://spexcode.net/assets/spec-tree-growth.mp4)
+[![Watch: this repo's spec tree grow from its git history](docs/spec-tree-poster.jpg)](https://spexcode.net/assets/spec-tree-growth.mp4)
 
 <sub>▶ This repo's own spec tree, replayed from its git history — 160 spec nodes growing over three weeks. Click for the [full video](https://spexcode.net/assets/spec-tree-growth.mp4).</sub>
 

@@ -1,10 +1,11 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, lstatSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
+import { linkUntrackedSpecSources } from './worktree-sources.js'
 
 // [[private-overlay]] — the private-mode render is a state-machine edge (DEFAULT ⇄ PRIVATE) that must fully
 // reverse, so it is proven end-to-end through the REAL cli in a throwaway git repo. A subprocess per step is
@@ -111,4 +112,32 @@ test('codex worktree materialize plants the .codex anchor + unconditional projec
   assert.ok(cfg.includes(`[projects."${proj}"]`) && cfg.includes('trust_level = "trusted"'), 'main-checkout project trusted')
   for (const snake of ['session_start', 'user_prompt_submit', 'pre_tool_use', 'post_tool_use', 'stop'])
     assert.match(cfg, new RegExp(`hooks.state."[^"]*:${snake}:0:0"\\]\\s*\\ntrusted_hash = "sha256:`), `per-hook trusted_hash for ${snake}`)
+})
+
+// [[private-overlay]] — the session-worktree seam: git worktree add checks out only tracked content, so a
+// private-mode repo (untracked .spec + spexcode.json) would hand a dispatched agent a spec-blind, hook-dead
+// worktree. linkUntrackedSpecSources closes it by linking from main; on a default-shaped worktree that
+// already carries its own .spec the guard must no-op (one mechanism, no mode branch).
+test('private-overlay: a session worktree receives the untracked spec sources by link (and a default-mode worktree is untouched)', () => {
+  const main = mkdtempSync(join(tmpdir(), 'spex-priv-main-'))
+  mkdirSync(join(main, '.spec'))
+  writeFileSync(join(main, '.spec', 'x.md'), 'x')
+  writeFileSync(join(main, 'spexcode.json'), '{}')
+  writeFileSync(join(main, 'spexcode.local.json'), '{"private":true}\n')
+
+  // private shape: worktree checkout carries none of the three → all linked, content readable through the link
+  const wt = mkdtempSync(join(tmpdir(), 'spex-priv-wt-'))
+  linkUntrackedSpecSources(main, wt)
+  assert.ok(lstatSync(join(wt, '.spec')).isSymbolicLink(), '.spec arrives as a link')
+  assert.equal(readFileSync(join(wt, '.spec', 'x.md'), 'utf8'), 'x', 'worktree reads the main spec tree through the link')
+  assert.ok(lstatSync(join(wt, 'spexcode.json')).isSymbolicLink() && lstatSync(join(wt, 'spexcode.local.json')).isSymbolicLink(), 'both configs linked')
+
+  // default shape: the worktree already has its own .spec (git provided it) → never clobbered, gaps still filled
+  const wt2 = mkdtempSync(join(tmpdir(), 'spex-def-wt-'))
+  mkdirSync(join(wt2, '.spec'))
+  writeFileSync(join(wt2, '.spec', 'own.md'), 'own')
+  linkUntrackedSpecSources(main, wt2)
+  assert.ok(!lstatSync(join(wt2, '.spec')).isSymbolicLink(), 'an existing .spec is untouched')
+  assert.equal(readFileSync(join(wt2, '.spec', 'own.md'), 'utf8'), 'own', 'its content is intact')
+  assert.ok(lstatSync(join(wt2, 'spexcode.local.json')).isSymbolicLink(), 'a genuinely missing file is still linked')
 })

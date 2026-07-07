@@ -5,6 +5,7 @@ hue: 200
 desc: A private dogfood mode — run SpexCode on a repo you share but don't own, leaving ZERO trace in its tracked files or shared history, so collaborators see an untouched repo.
 code:
   - spec-cli/src/materialize.test.ts
+  - spec-cli/src/worktree-sources.ts
 ---
 # private-overlay
 
@@ -41,7 +42,21 @@ whitespace (a global collapse there once left a one-line `.gitignore` diff on th
 the render cannot undo for the user: `.git/info/exclude` hides UNTRACKED paths only, so a `.spec`/`spexcode.json`
 already committed under default mode must be un-tracked once by hand — materialize PRINTS that `git rm --cached`
 instruction when it detects the state, and `spex guide config` documents the mode switch + this step, since an
-agent does the setup. The deliberate trade is history: with `.spec` kept out of the host's commits there is no
+agent does the setup.
+
+A dispatched **session worktree** is the third seam. `git worktree add` checks out only TRACKED content, and
+`.spec` + `spexcode.json` are exactly what this mode keeps untracked — so a fresh worktree carries the rendered
+shims and contract block ([[harness-delivery]]) but NO spec tree: every hook handler script is absent (the
+dispatcher [[hook-dispatch]] silently runs nothing — no gates, no stop discipline), `spex` inside the worktree
+sees zero nodes, and the dispatch gate re-renders on every event because the worktree hashes empty config
+roots (in the wild that per-event render, under worktree-shared git-lock contention, hung a worker's Stop hook
+past the harness's 60s timeout). Git cannot deliver what it does not track, so session creation
+(`worktree-sources.ts`, called from [[launch]]'s worktree prep) **links** the main checkout's `.spec`,
+`spexcode.json` and `spexcode.local.json` into every fresh worktree that lacks them. On a default-mode repo the
+checkout already carries the first two, so each link guard no-ops — one mechanism, never a mode branch — and
+`spexcode.local.json` (machine-local, untracked in BOTH modes) riding along is what keeps a worktree render in
+the same mode as the main checkout's. Spec writes from inside a private worktree therefore land directly in the
+shared main tree, coherent with this mode's trade: git is not carrying the spec data either way. The deliberate trade is history: with `.spec` kept out of the host's commits there is no
 git-derived version timeline ([[source-of-truth]]) — current-state governance, lint, and yatsu still measure,
 but the recent/history tabs go quiet. Regaining full history invisibly (a detached spec repo) is a larger,
 separate concern this mode does not attempt.

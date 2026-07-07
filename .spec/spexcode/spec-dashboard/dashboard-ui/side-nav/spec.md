@@ -35,7 +35,9 @@ pages**, side by side with the graph and the board.
   `#/settings`. Hash,
   deliberately not the History API: the dashboard ships as a static dist behind plain gateways with no
   index.html fallback, and a hash route needs nothing from any server. Five pages need no router
-  dependency — `route.js` is the whole layer (parse, navigate, one hashchange hook).
+  dependency — `route.js` is the whole layer (parse, navigate, one hashchange hook, and the shared internal
+  address executor that jump-list surfaces use to land graph nodes, sessions, issues, and evals on their
+  owning pages).
 - **Pages push, details replace.** Switching pages pushes a history entry (back walks pages); an
   in-page detail echo — the session board's selected tab, the evals page's selected eval — replaces, so
   detail-hopping never buries

@@ -9,6 +9,8 @@ related:
   - spec-yatsu/src/evaltab.ts
   - spec-yatsu/src/proof.ts
   - spec-dashboard/src/Evidence.jsx
+  - spec-cli/src/guide.ts
+  - spec-cli/src/help.ts
 ---
 # video-evidence
 
@@ -17,6 +19,18 @@ A yatsu reading's evidence is a **list** of content-addressed entries, each type
 kind of entry. For a scenario whose loss is a *temporal user loop* (a UI surface), a recording of the loop is
 the truest evidence — the author's choice per scenario, routed by its tag, not a forced default — and it can
 ride in the same reading as N stills of the same run.
+
+**When to record is taught, not left to taste** — a capability nobody is told to use decays into a dead
+enum (every re-measure quietly files an `--image`, and the video pipeline starves). The routing rule is
+one sentence, stated where every measuring agent actually reads: *behaviour that MOVES or is timed*
+(terminal scroll/redraw, an animation or transition, media playback, a multi-step interaction flow,
+keyboard timing) *records a `--video`* — a still of a moving thing proves the wrong thing; a *static end
+state* (layout, an icon, copy, one frame) screenshots `--image`; *backend/CLI* files a `--result`
+transcript. The rule lives on three surfaces that must agree: `spex guide yatsu`'s MEASURING AND FILING
+section (the manual, with the full flag row — repeatable `--image`, `--result`, `--video [--timeline]`),
+`spex help yatsu`'s usage block (the map), and the `.config/core` system prompt's yatsu paragraph (the
+always-on clue every dispatched or self-launched agent carries). Guide and help must show `--video` in
+the eval usage they print — a manual that only teaches `--image` is how the gap happened.
 
 The whole point is that almost nothing is new. `spex yatsu eval --video <clip>` stores the bytes in the same
 shared cache and pushes one `video` entry onto the reading's evidence list (`spex blob put` is the same

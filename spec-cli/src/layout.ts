@@ -27,8 +27,6 @@ type Config = {
   }
   sessions?: {
     maxActive?: number             // concurrency cap: max agents AUTONOMOUSLY PROGRESSING at once (default 8; see sessions.ts maxActive)
-    claudeCmd?: string             // the built-in `claude` launcher command (default 'claude --dangerously-skip-permissions'); env SPEXCODE_CLAUDE_CMD overrides. A host-specific ABS path belongs in the gitignored spexcode.local.json, not here.
-    codexCmd?: string              // the built-in `codex` launcher command (default 'codex --yolo'); env SPEXCODE_CODEX_CMD overrides. Same host-path rule.
     // named launcher profiles: a session picks ONE by name at create time ([[launcher-select]]), fixing both
     // its harness AND its exact launch command; the chosen NAME is persisted on the record so resume reuses the
     // same auth. `harness` defaults to 'claude'. Host-specific `cmd`s (abs wrapper paths) belong in the
@@ -78,7 +76,7 @@ export function readJsonConfig(p: string): any {
 // committed `spexcode.json` with an OPTIONAL machine-local `spexcode.local.json` layered on top (gitignored).
 // The local layer is the durable home for HOST-SPECIFIC values that must never be committed — e.g. an
 // absolute worker-launcher path (the host-path leak the repo otherwise warns against). Precedence per field:
-// local over committed; an env var (e.g. SPEXCODE_CLAUDE_CMD) still overrides both at its read site.
+// local over committed; a targeted env override (e.g. SPEXCODE_CODEX_SERVER_CMD) still wins at its read site.
 export function readConfig(root: string): Config {
   const committed = readJsonConfig(join(root, 'spexcode.json'))
   const local = readJsonConfig(join(root, 'spexcode.local.json'))

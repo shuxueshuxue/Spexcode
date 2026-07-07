@@ -103,10 +103,10 @@ scenarios:
 ---
 # yatsu.md — launcher-select
 
-Measured YATU-style through the real product surfaces, not by reading the JSX. Dashboard scenarios drive a
-real browser at a deployment whose config exposes named launchers and read the live New-Session DOM. Backend
-scenarios drive the CLI/API/session-create paths directly. The loss watched is the launcher pick failing to be
-the ONLY launch choice: either the dropdown missing (the human can't pick their auth path), the harness radios
-lingering beside it (two controls for one decision), resume re-resolving against a changed ambient launcher, or
-a no-choice create silently falling through to built-in `claude` instead of producing an actionable
-configuration error.
+Measured YATU-style through the real product surfaces, not by reading the JSX. Frontend scenarios drive a real
+browser only for the dashboard behaviours the dashboard actually owns: the launcher dropdown exists, replaces
+the old harness radios, honors remembered/default/first visible selection order, and keeps launcher data off
+the board rows. Backend scenarios drive the CLI/API/session-create paths directly. The missing-default
+fail-loud scenario is backend-only: it covers `spex new` without `--launcher`, `POST /api/sessions` without
+`launcher`, and `@new`, because those are the surfaces that can omit a launcher. Dashboard missing-default is
+not a fail-loud scenario; the dropdown has a visible selected launcher and submits that explicit pick.

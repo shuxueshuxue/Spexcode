@@ -301,7 +301,7 @@ export default {
     noScenarios: 'no scenarios — this node declares no yatsu.md to measure.',
     noIssues: 'no issues linked to this node.',
     noFocus: 'no node focused.',
-    openEval: 'open this node’s eval tab — the full reading timeline',
+    openEval: 'open this eval detail — the full reading timeline',
     open: ({ n }) => `${n} open`,
     closed: ({ n }) => `${n} closed`,
     tracks: ({ files }) => `tracks ${files}`,

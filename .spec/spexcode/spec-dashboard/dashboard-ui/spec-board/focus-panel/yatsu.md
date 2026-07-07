@@ -8,7 +8,7 @@ scenarios:
       listing each declared scenario with a state mark, its name, and its `expected`, headed by a
       ✓ satisfied/total count; then an ISSUES section listing the open (and closed) issues as cards.
       Focusing a node with no yatsu.md shows a clean "no scenarios" empty state. Screenshot it and file
-      with `spex yatsu eval focus-panel --image <png> --pass`.
+      with `spex yatsu eval focus-panel --scenario panel-shows-issues-and-scenarios --image <png> --pass`.
     expected: >-
       The right panel renders the focused node's Scenarios (per-scenario state + expected, with a
       ✓X/Y count) AND its Issues (open/closed cards) together, with equal weight — the two stateful
@@ -22,5 +22,5 @@ scenarios:
 Product surface, measured by **looking** (YATU): the agent opens the dashboard, focuses a node, and
 screenshots the right panel showing that node's Issues and Scenarios side by side, filing it as a reading
 with image evidence and a verdict. The scenario scopes its freshness `code:` to `FocusPanel.jsx` and its
-stylesheet slice — not `App.jsx` (only the mount lives there) — so an unrelated App.jsx edit doesn't make
-this reading stale. (This dogfoods the per-scenario `code:` axis it is itself measuring.)
+stylesheet slice; clicking those rows into their canonical review pages is the [[address-routing]] contract,
+not this display scenario's job. (This dogfoods the per-scenario `code:` axis it is itself measuring.)

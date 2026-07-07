@@ -8,6 +8,7 @@ code:
 related:
   - spec-dashboard/src/App.jsx
   - spec-dashboard/src/IssueCard.jsx
+  - spec-dashboard/src/address.js
   - spec-dashboard/src/styles.css
 ---
 # focus-panel
@@ -48,22 +49,23 @@ node — never per poll — so a row renders name/state/tags instantly and prose
 loss, not an absence. Each row leads with a state mark in the score colour vocabulary, then the name, a
 **clamped preview** of its `expected` (long prose never blows out the column), and — when the scenario
 scopes its own freshness — the **files it tracks** (per-scenario `code`, [[yatsu-core]]). The whole row is a
-**button that drills into the focused node's eval tab**, so the glance is the entry point to the full
-reading timeline, not a dead end. The section header carries the **✓ satisfied / total** count, the same
-tally the tile shows, coloured by the worst-first aggregate.
+**button that emits the scenario's [[address-routing]] target** (`eval(node, scenario)`), so the glance is an
+entry point to the full reading timeline without owning the routing vocabulary itself. The section header
+carries the **✓ satisfied / total** count, the same tally the tile shows, coloured by the worst-first
+aggregate.
 
 **Issues, open and closed.** The full bound set, grouped open-first then closed, each rendered through the
-same compact `IssueCard` the node-info Issues tab uses (id · store · state · clamped concern). The card is
-a route into SpexCode's own Issues page (`#/issues/<issue-id>`) and selects that issue's detail there;
-forge permalinks stay secondary metadata in the Issues detail, never this glance's primary route. Long ids
-and concerns truncate inside the column, so the right sidebar never grows a bottom scrollbar. The on-tile
-**count badge** (◆N) stays as the glance; the LIST now lives here, not in a popover.
+same compact `IssueCard` the node-info Issues tab uses (id · store · state · clamped concern). The card emits
+the issue [[address-routing]] target and preserves a canonical href; forge permalinks stay secondary metadata
+in the Issues detail, never this glance's primary route. Long ids and concerns truncate inside the column, so
+the right sidebar never grows a bottom scrollbar. The on-tile **count badge** (◆N) stays as the glance; the
+LIST now lives here, not in a popover.
 
 **Where it mounts.** It is the board shell's right grid column (`App.jsx`, the shared `.app` layout), beside
 the graph pane — desktop only (the phone keeps its own drill-down, [[mobile-ui]]). It owns `FocusPanel.jsx`, its `.focus-panel`
 stylesheet slice, and the one-to-two-column `.app` grid change, on [[node-graph]]'s shared-shell contract —
 a co-owner's churn in App.jsx or styles.css is that feature, not this node's drift.
 
-Out of scope: the node-info popup's own Issues/Eval tabs ([[yatsu-eval-tab]]) stay as the deep timeline view
-this panel **drills into** (the always-on glance, not a replacement for it). Editing or creating scenarios is
-a workflow, not a view — that lives in the `/extract` config flow, not here.
+Out of scope: address execution belongs to [[address-routing]], and the node-info popup's own Issues/Eval
+tabs ([[yatsu-eval-tab]]) remain reference panes for the focused node. Editing or creating scenarios is a
+workflow, not a view — that lives in the `/extract` config flow, not here.

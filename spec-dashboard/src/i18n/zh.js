@@ -294,7 +294,7 @@ export default {
     noScenarios: '无场景 —— 该节点没有用于测量的 yatsu.md。',
     noIssues: '该节点暂无关联 issue。',
     noFocus: '未聚焦任何节点。',
-    openEval: '打开该节点的 eval 标签页 —— 完整的读数时间线',
+    openEval: '打开该 eval 详情 —— 完整的读数时间线',
     open: ({ n }) => `${n} 个待办`,
     closed: ({ n }) => `${n} 个已关闭`,
     tracks: ({ files }) => `跟踪 ${files}`,

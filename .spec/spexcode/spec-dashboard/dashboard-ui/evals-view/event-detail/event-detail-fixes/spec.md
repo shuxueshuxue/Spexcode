@@ -3,13 +3,12 @@ title: event-detail-fixes
 status: active
 hue: 200
 desc: Event detail regression guardrails: eval remark drafts are scoped to the selected (node, scenario), filer/originator chips route to their live session, and eval-page mention outcomes echo like issue replies.
-code:
+related:
   - spec-dashboard/src/Dashboard.jsx
   - spec-dashboard/src/EventDetail.jsx
   - spec-dashboard/src/EvalsPage.jsx
   - spec-dashboard/src/SessionInterface.jsx
   - spec-dashboard/src/Thread.jsx
-related:
   - spec-dashboard/src/IssuesPage.jsx
 ---
 # event-detail-fixes

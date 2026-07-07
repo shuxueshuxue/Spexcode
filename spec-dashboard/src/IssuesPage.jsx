@@ -52,7 +52,6 @@ export default function IssuesPage({ onFocusNode, onOpenSession, specs = [], ses
   }, [issueId, all, storeFilter])
   const stored = storeFilter === 'all' ? all : all.filter((i) => i.store === storeFilter)
   const issues = showConcluded ? stored : stored.filter((i) => !concluded(i))
-  const openCount = stored.filter((i) => i.status === 'open').length
   const concludedCount = stored.filter(concluded).length
 
   const issueByKey = useMemo(() => new Map(issues.map((i) => [`issue:${i.id}`, i])), [issues])
@@ -96,29 +95,27 @@ export default function IssuesPage({ onFocusNode, onOpenSession, specs = [], ses
           CSS; the thin strip is the unfold affordance. */}
       {folded && <FoldToggle className="fv-unfold" folded onToggle={() => setFolded(false)} />}
       <div className="fv-list-col" style={folded ? { display: 'none' } : undefined}>
-        <FoldToggle className="fv-fold" onToggle={() => setFolded(true)} />
         {notice && <div className="fv-notice">{notice}</div>}
         <section className="fv-group">
           <header className="fv-group-head">
-            {/* first row: the filters (the shared dropdown + the concluded chip); the SECOND row carries
-                New beside the open/total meta — the action never occupies the bar's head on its own. */}
-            {(stores.length > 1 || concludedCount > 0) && (
+            {/* the bar is a two-row cluster: the CONTROL row (fold / store filter / New — anchored flex
+                members, nothing floats over the list or its scrollbar) over the CHIP row (the small
+                count/toggle chips). No open/total count meta — the list itself is the count. */}
+            <span className="fv-head-row">
+              <FoldToggle className="fv-fold-inline" onToggle={() => setFolded(true)} />
+              {stores.length > 1 && (
+                <FilterSelect value={storeFilter} onChange={setStoreFilter}
+                  options={[{ value: 'all', label: t('session.issuesStoreAll') }, ...stores.map((s) => ({ value: s, label: s }))]} />
+              )}
+              <IconButton icon="plus" size={12} className="fv-new-btn" label={t('session.issuesNew')} onClick={() => setComposing(true)} />
+            </span>
+            {concludedCount > 0 && (
               <span className="ef-chipbar">
-                {stores.length > 1 && (
-                  <FilterSelect value={storeFilter} onChange={setStoreFilter}
-                    options={[{ value: 'all', label: t('session.issuesStoreAll') }, ...stores.map((s) => ({ value: s, label: s }))]} />
-                )}
-                {concludedCount > 0 && (
-                  <button type="button" className={`ef-chip fv-concluded ${showConcluded ? 'on' : ''}`} onClick={() => setShowConcluded((v) => !v)}>
-                    {t('nodeView.closedIssues', { n: concludedCount })}
-                  </button>
-                )}
+                <button type="button" className={`ef-chip fv-concluded ${showConcluded ? 'on' : ''}`} onClick={() => setShowConcluded((v) => !v)}>
+                  {t('nodeView.closedIssues', { n: concludedCount })}
+                </button>
               </span>
             )}
-            <span className="fv-head-row">
-              <IconButton icon="plus" size={12} className="fv-new-btn" label={t('session.issuesNew')} onClick={() => setComposing(true)} />
-              <span className="fv-group-meta">{t('session.issuesThreadsSummary', { open: openCount, total: stored.length })}</span>
-            </span>
           </header>
           {!issues.length && <div className="fv-note">{t('session.issuesEmpty')}</div>}
           {/* a row leads with the ISSUE (status dot + concern); store/replies are trailing quiet meta —

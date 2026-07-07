@@ -76,9 +76,10 @@ const rel = (ts) => {
 // j/k walks this list — filter state stays this group's own. `mustShow`: an entryKey a deep link needs
 // visible ([[evals-view]]'s canonical URL) — if the entry exists but the kind filter hides it, the group
 // widens ITS OWN filter to 'all' (the filter stays this group's state; the page never reaches in). The
-// group carries no title of its own — the [[side-nav]] rail names the Evals page; this list renders just
-// its one kind dropdown (the SAME shared control as the issues drain's store filter).
-export default function EvalsGroup({ nodes = [], sel, onSel, onRows, mustShow = null }) {
+// group carries no title of its own — the [[side-nav]] rail names the Evals page; this list's head is the
+// shared two-row cluster: the CONTROL row (`lead` — the shell's anchored fold toggle — beside the kind
+// dropdown, the SAME shared control as the issues drain's store filter) over the chip row.
+export default function EvalsGroup({ nodes = [], sel, onSel, onRows, mustShow = null, lead = null }) {
   const t = useT()
   const [kind, setKind] = useState(null)          // null = the default: video → image → all, first kind present
 
@@ -107,8 +108,11 @@ export default function EvalsGroup({ nodes = [], sel, onSel, onRows, mustShow = 
   return (
     <section className="fv-group">
       <header className="fv-group-head">
-        <FilterSelect value={effKind} onChange={setKind}
-          options={['video', 'image', 'all'].map((k) => ({ value: k, label: t(`evalsFeed.kind.${k}`) }))} />
+        <span className="fv-head-row">
+          {lead}
+          <FilterSelect value={effKind} onChange={setKind}
+            options={['video', 'image', 'all'].map((k) => ({ value: k, label: t(`evalsFeed.kind.${k}`) }))} />
+        </span>
       </header>
       {rows.length === 0 && <div className="ef-empty">{t('evalsFeed.empty')}</div>}
       {rows.map((e) => (

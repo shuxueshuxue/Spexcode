@@ -38,19 +38,22 @@ straight to the trunk.
 - **The page is a MASTER-DETAIL — a full page deserves a full-height detail, never an expansion inside a
   box.** (The earlier pinned-two-region form was conceived for a height-starved overlay; on a routed full
   page it collapsed content into a small scrolling box — the human called it, and the form changed.) The
-  **left column** is ONE box — the merged issue list under its own filter bar (first row: the store filter +
-  the concluded-count chip; second row: **New beside the open/total meta, the meta at that row's END — the
-  action never occupies the bar's head alone and the meta never leads**); the bar
+  **left column** is ONE box — the merged issue list under its own filter bar, a two-row cluster: the
+  **CONTROL row** first (the fold toggle, the store filter, and **New** — every one an anchored flex member
+  of the row, nothing floating over the list or its scrollbar), then a **CHIP row** carrying the small
+  count/toggle chips (the concluded-count chip), rendered only while it has chips. The bar carries **no
+  open/total count meta** — the human removed the count as noise; the list itself is the count. The bar
   stays sticky over the full-height list, which scrolls itself. The rows are one compact line each, so the
   column stays **SLIM** — a picker, never a reading surface that starves the detail (the human called the
-  wide sidebar) — and a **fold toggle** (the shared [[fold-toggle]] icon button) collapses it to a thin
-  strip so the detail owns the width while one
+  wide sidebar) — and a **fold toggle** (the shared [[fold-toggle]] icon button, anchored at the control
+  row's head — its earlier absolutely-positioned badge floated over the scrollbar and the human called it)
+  collapses it to a thin strip so the detail owns the width while one
   issue is being worked; the strip is the unfold affordance, and the folded list keeps its state (filters,
   selection, j/k) — the fold is pure geometry. The [[side-nav]] rail names the page, so the
   column carries no title of its own. The list CHROME is not this page's own dialect — it is the SAME
   grammar the [[evals-view]] picker wears: one filter-control language (ONE shared dropdown filter
   component — this store filter and the evals feed's kind filter are literally one control — with chips and
-  New sharing that height and radius, the open/total meta at its row's end), uniform single-line rows that truncate rather than wrap, and the same
+  New sharing that height and radius, the same two-row control/chip cluster on both heads), uniform single-line rows that truncate rather than wrap, and the same
   unhurried spacing over a hairline-soft divider — so the two top-level pages read as ONE surface. The **right pane** is the full-height DETAIL of the one selection —
   **selection IS detail** (email-style, no Enter, no in-place expansion): an issue renders its markdown
   body. **j/k walk the issue list** (folded or not) and the detail follows; a key typed into an input is

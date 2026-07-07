@@ -1015,12 +1015,19 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* a multi-section list (the session Eval tab's per-node groups) scrolls as ONE box under the col. */
 .fv-list-col > .fv-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 .fv-list-col > .fv-scroll .fv-group { border-top: 0; }
-/* the fold toggle rides the sticky filter bar's right edge; the bar reserves room for it. */
-.fv-list-col .fv-group-head { padding-right: 34px; }
+/* the session Eval tab's multi-group list has no single head row, so its fold badge still floats on the
+   sticky bar's right edge; the bar reserves room for it. The issues/evals pages anchor theirs instead. */
+.fv-list-col > .fv-scroll .fv-group-head { padding-right: 34px; }
 .fv-fold { position: absolute; top: 8px; right: 6px; z-index: 3; display: grid; place-items: center; padding: 0;
   color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
   width: 22px; height: 22px; cursor: pointer; }
 .fv-fold:hover { color: var(--blue); border-color: var(--blue); }
+/* the ANCHORED fold toggle ([[issues-view]]/[[evals-view]] control row): a normal flex member of the
+   bar's first row — same badge look, no absolute positioning over the list's scrollbar. */
+.fv-fold-inline { display: inline-flex; align-items: center; justify-content: center; flex: none; padding: 0;
+  color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  width: 22px; height: 22px; cursor: pointer; }
+.fv-fold-inline:hover { color: var(--blue); border-color: var(--blue); }
 /* folded: the whole strip is the unfold affordance — a full-height slim button; the icon sits at the
    top, where the fold badge lived, so the toggle never moves under the pointer. */
 .fv-unfold { display: flex; align-items: flex-start; justify-content: center; padding: 9px 0 0;
@@ -1033,12 +1040,12 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .fv-detail { min-height: 0; min-width: 0; overflow-y: auto; background: var(--paper); }
 .fv-group { display: flex; flex-direction: column; }
 .fv-group + .fv-group { border-top: 1px solid var(--line); }
-/* the filter bar reads as ONE control cluster on both tabs: the controls left, the count-meta at the far
-   right ([[issues-view]]). Unhurried padding + a gentle row-gap so a wrap on the slim column looks intentional. */
+/* the filter bar reads as ONE two-row cluster on both pages: the CONTROL row (fold / filter dropdown /
+   New) over the small toggle chips ([[issues-view]]). Unhurried padding + a gentle row-gap so the wrap
+   on the slim column looks intentional. */
 .fv-group-head { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; row-gap: 5px; padding: 9px 12px; background: var(--panel2); border-bottom: 1px solid var(--line); }
 .fv-group-title { font-size: 9px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--ink2); }
-.fv-group-meta { font-size: 10px; color: var(--muted); margin-left: auto; }
-/* the filter bar's second row: the action (New) beside the open/total meta — never a lone first row. */
+/* the bar's CONTROL row: full-basis so the chip bar always wraps beneath it. */
 .fv-head-row { flex-basis: 100%; display: flex; align-items: center; gap: 6px; }
 /* ONE row grammar for BOTH tabs: a compact SINGLE-LINE button (the title truncates, never wraps, so the
    two pickers keep an identical, uniform rhythm) with unhurried vertical air and a hairline-soft divider

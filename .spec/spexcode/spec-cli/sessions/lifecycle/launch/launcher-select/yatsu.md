@@ -38,27 +38,28 @@ scenarios:
       default (`spex new` with no `--launcher` also uses `reclaude`). `GET /api/launchers` returns
       `{ launchers, default }` with `default:"reclaude"`. When a still-valid launcher is remembered in
       localStorage that remembered pick wins instead; only when nothing is remembered (or the remembered one
-      no longer exists) does the configured default drive the initial selection. It never falls back to the
-      first launcher when no default is configured; that state is a configuration error. The old behaviour
-      (silently selecting `d[0]`, disagreeing with the config default) is gone.
+      no longer exists) does the configured default drive the initial selection. When no valid configured
+      default exists, the dropdown falls through to the first real launcher as a visible selected choice that
+      will be sent explicitly. The old behaviour (silently selecting `d[0]` even when a different config
+      default existed, disagreeing with the CLI default) is gone.
     code: spec-dashboard/src/SessionInterface.jsx
     related: spec-cli/src/index.ts, spec-cli/src/harness.ts
   - name: missing-default-launcher-refuses-create
-    tags: [backend-api, frontend-e2e]
+    tags: [backend-api, cli]
     description: >-
-      Through the real create surfaces, measure a project whose config exposes launcher profiles but omits
-      `sessions.defaultLauncher`. Run `spex new "probe"` with no `--launcher`, POST `/api/sessions` with no
-      `launcher`, and load the dashboard New-Session box from the same backend. Cross-check `GET
-      /api/launchers`.
+      Through the real create surfaces that can omit a launcher, measure a project whose config exposes
+      launcher profiles but omits `sessions.defaultLauncher`. Run `spex new "probe"` with no `--launcher`,
+      POST `/api/sessions` with no `launcher`, and trigger the `@new` dispatch path, which naturally calls
+      create without a launcher. Then repeat with a configured `sessions.defaultLauncher`, and with an
+      explicit `--launcher <name>`.
     expected: >-
-      `GET /api/launchers` still returns the available `{name, harness}` profiles, but its `default` is null
-      and it carries a configuration error telling the human to write `sessions.defaultLauncher` in
-      `spexcode.json` or `spexcode.local.json`. The CLI/API create with no launcher fails with that same
-      actionable error, without creating a worktree and without falling back to the built-in `claude` launcher.
-      The dashboard surfaces the error under the launcher picker and refuses to submit while the default is
-      missing. An explicit `--launcher <name>` remains a named choice, not a fallback.
-    code: spec-dashboard/src/SessionInterface.jsx
-    related: spec-cli/src/index.ts, spec-cli/src/harness.ts
+      With no configured default, every no-choice create fails with an actionable error telling the human to
+      write `sessions.defaultLauncher` in `spexcode.json` or `spexcode.local.json`, creates no session/worktree,
+      and does not fall back to the built-in `claude` launcher. With a configured default, `spex new` without
+      `--launcher` and `@new` use that configured profile. With an explicit `--launcher <name>`, create succeeds
+      by that visible named choice regardless of the configured default.
+    code: spec-cli/src/sessions.ts
+    related: spec-cli/src/index.ts, spec-cli/src/harness.ts, spec-cli/src/mentions.ts
   - name: launcher-persisted-not-badged-on-board
     tags: [frontend-e2e, desktop]
     description: >-
@@ -102,11 +103,10 @@ scenarios:
 ---
 # yatsu.md — launcher-select
 
-Measured YATU-style through the running dashboard, not by reading the JSX: drive a real browser at a
-deployment whose `spexcode.local.json` configures named launchers (the gugu board — `reclaude` + `codex`)
-and read the live New-Session DOM, then contrast it against a no-custom-launcher board whose
-`defaultLauncher` explicitly names a built-in `claude`/`codex` option. The loss watched is the launcher pick
-failing to be the ONLY launch choice — either the dropdown missing (the human can't pick their auth path,
-silently gets the global default), the harness radios lingering beside it (two controls for one decision), or
-a missing `defaultLauncher` silently falling through to built-in `claude` instead of producing an actionable
+Measured YATU-style through the real product surfaces, not by reading the JSX. Dashboard scenarios drive a
+real browser at a deployment whose config exposes named launchers and read the live New-Session DOM. Backend
+scenarios drive the CLI/API/session-create paths directly. The loss watched is the launcher pick failing to be
+the ONLY launch choice: either the dropdown missing (the human can't pick their auth path), the harness radios
+lingering beside it (two controls for one decision), resume re-resolving against a changed ambient launcher, or
+a no-choice create silently falling through to built-in `claude` instead of producing an actionable
 configuration error.

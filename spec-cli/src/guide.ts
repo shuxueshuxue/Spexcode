@@ -126,13 +126,21 @@ pre-commit \`yatsu check-staged\` BLOCKS the commit.
 BODY (after the frontmatter): prose naming the measurement method — YATU ("You As The User"): the agent
 looks at / calls the real product surface, not an internal helper chosen to make the proof easy.
 
-MEASURING AND FILING: the agent runs the scenario however it likes (a browser screenshot, an API
+MEASURING AND FILING: the agent runs the scenario however it likes (a browser run, an API
 transcript, a by-hand pass), compares the result to \`expected\`, and files it:
-  spex yatsu eval <node> --scenario <name> (--pass | --fail) [--note <text>] [--image <png> | --result <txt>|-]
+  spex yatsu eval <node> --scenario <name> (--pass | --fail) [--note <text>]
+                 [--image <png> …repeatable] [--result <txt>|-] [--video <webm|mp4> [--timeline <json>]]
 The verdict is \`--pass\` or \`--fail\` (a measurement must commit to one — an unmeasured scenario is \`missing\`,
 not a hedged fail). \`--note <text>\` is an OPTIONAL one-line annotation on either (why it failed, how far a
-pass sits from ideal); it does NOT replace evidence — the image/transcript is the captured actual behaviour.
-Frontend → \`--image <png>\` (visual evidence); backend → \`--result <txt>\` (a transcript; \`-\` reads stdin).
+pass sits from ideal); it does NOT replace evidence — the image/video/transcript is the captured actual behaviour.
+PICK THE EVIDENCE KIND BY WHAT THE BEHAVIOUR DOES OVER TIME:
+  MOVES / is timed  → \`--video <webm|mp4>\`. Terminal scroll or redraw, an animation or transition, media
+                      playback, a multi-step interaction flow, keyboard timing — a still of a moving thing
+                      proves the wrong thing; RECORD the run (e.g. playwright \`recordVideo\` on the context).
+                      \`--timeline <json>\` optionally anchors named steps to moments in the clip.
+  STATIC end state  → \`--image <png>\` (repeatable — N stills). Layout, an icon, copy, one rendered frame.
+  backend / CLI     → \`--result <txt>\` (a transcript; \`-\` reads stdin).
+The flags combine in ONE filing — several stills can ride beside the clip of the same run.
 ANCHOR DISCIPLINE: a reading's \`codeSha\` is HEAD at filing time, and a git sha names only a COMMIT — an
 uncommitted change has none. So measure the tree you are about to commit, COMMIT it, then file; confidence
 is earned on the working tree, but the anchor can only land after the commit. Filing from a dirty tree

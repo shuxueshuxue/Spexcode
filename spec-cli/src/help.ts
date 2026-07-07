@@ -110,16 +110,19 @@ only the trailer. If the intent DID change, edit the spec instead — same commi
   yatsu: {
     line: 'yatsu <sub>           measure a node’s scenarios & file the loss signal: scan | eval | retract | show | clean',
     body: `Usage: spex yatsu scan [--changed]                       list nodes/scenarios missing readings
-       spex yatsu eval [.|<node>] [--scenario <name>] (--pass|--fail)
-                       [--note <text>] [--image <png> | --result <path|->]
+       spex yatsu eval [.|<node>] [--scenario <name>] (--pass|--fail) [--note <text>]
+                       [--image <png> …] [--result <path|->] [--video <webm|mp4> [--timeline <json>]]
        spex yatsu retract [.|<node>] [--scenario <name>] [--last | --ts <iso>] [--note <why>]
        spex yatsu show [.|<node>] [--json]              readings history for a node
        spex yatsu clean [--keep-latest | --all]         prune stored readings
 
 Files a reading of a scenario against its expected — the loss signal the optimizer reads. Measure
-through the REAL product surface (run it, drive a browser, screenshot), never by reasoning about
-the code. A fix's proof is a fail→pass pair on the SAME scenario. \`retract\` is the sanctioned
-undo for a botched filing: it APPENDS a retraction event (traceable, never deletes a line).`,
+through the REAL product surface (run it, drive a browser, capture), never by reasoning about
+the code. Evidence kind follows the behaviour: MOVING/timed behaviour (scroll, animation,
+playback, a multi-step flow) records a \`--video\`; a STATIC end state screenshots \`--image\`;
+backend/CLI files a \`--result\` transcript. A fix's proof is a fail→pass pair on the SAME
+scenario. \`retract\` is the sanctioned undo for a botched filing: it APPENDS a retraction
+event (traceable, never deletes a line).`,
     see: 'spex guide yatsu (yatsu.md format + evidence rules) · spex blob (stash evidence bytes)',
   },
   blob: {

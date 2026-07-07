@@ -4,6 +4,7 @@ import { useMentionAutocomplete } from './mentions.jsx'
 import { SpecBody } from './NodeView.jsx'
 import { Replies, ReplyComposer, OriginatorLiveness } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
+import { liveSession } from './session.js'
 import FoldToggle from './FoldToggle.jsx'
 import FilterSelect from './FilterSelect.jsx'
 import Modal from './Modal.jsx'
@@ -25,6 +26,7 @@ export default function IssuesPage({ onFocusNode, onOpenSession, specs = [], ses
   const [composing, setComposing] = useState(false)
   const [folded, setFolded] = useState(false)      // the master list folded to a strip — the detail owns the width
   const [showConcluded, setShowConcluded] = useState(false)
+  const [liveOnly, setLiveOnly] = useState(false)  // [[live-session-filter]]: only issues a live session is behind
   const [storeFilter, setStoreFilter] = useState('all')  // 'all' | a store present in the data (local/github/…)
   const [notice, setNotice] = useState('')
   const [sel, setSel] = useState(null)            // the ONE selection: 'issue:<id>'
@@ -48,11 +50,17 @@ export default function IssuesPage({ onFocusNode, onOpenSession, specs = [], ses
     if (!hit) return
     if (storeFilter !== 'all' && hit.store !== storeFilter) setStoreFilter('all')
     if (concluded(hit)) setShowConcluded(true)
+    if (!isLive(hit)) setLiveOnly(false)   // a deep link must render: widen past the live chip too
     setSel(`issue:${hit.id}`)
   }, [issueId, all, storeFilter])
   const stored = storeFilter === 'all' ? all : all.filter((i) => i.store === storeFilter)
-  const issues = showConcluded ? stored : stored.filter((i) => !concluded(i))
-  const openCount = stored.filter((i) => i.status === 'open').length
+  // [[live-session-filter]]: an issue is LIVE while a session behind it is still alive — its originator
+  // (i.by) or any reply author; the join is session.js's liveSession, the same judgment the originator
+  // chip's dot renders, so the chip-filtered list and the dots can never disagree.
+  const isLive = (i) => !!liveSession(sessions, i.by) || (Array.isArray(i.replies) && i.replies.some((r) => liveSession(sessions, r.by)))
+  const shown = showConcluded ? stored : stored.filter((i) => !concluded(i))
+  const issues = liveOnly ? shown.filter(isLive) : shown
+  const liveCount = shown.filter(isLive).length
   const concludedCount = stored.filter(concluded).length
 
   const issueByKey = useMemo(() => new Map(issues.map((i) => [`issue:${i.id}`, i])), [issues])
@@ -96,17 +104,27 @@ export default function IssuesPage({ onFocusNode, onOpenSession, specs = [], ses
           CSS; the thin strip is the unfold affordance. */}
       {folded && <FoldToggle className="fv-unfold" folded onToggle={() => setFolded(false)} />}
       <div className="fv-list-col" style={folded ? { display: 'none' } : undefined}>
-        <FoldToggle className="fv-fold" onToggle={() => setFolded(true)} />
         {notice && <div className="fv-notice">{notice}</div>}
         <section className="fv-group">
           <header className="fv-group-head">
-            {/* first row: the filters (the shared dropdown + the concluded chip); the SECOND row carries
-                New beside the open/total meta — the action never occupies the bar's head on its own. */}
-            {(stores.length > 1 || concludedCount > 0) && (
+            {/* the bar is a two-row cluster: the CONTROL row (fold / store filter / New — anchored flex
+                members, nothing floats over the list or its scrollbar) over the CHIP row (the small
+                count/toggle chips). No open/total count meta — the list itself is the count. */}
+            <span className="fv-head-row">
+              <FoldToggle className="fv-fold-inline" onToggle={() => setFolded(true)} />
+              {stores.length > 1 && (
+                <FilterSelect value={storeFilter} onChange={setStoreFilter}
+                  options={[{ value: 'all', label: t('session.issuesStoreAll') }, ...stores.map((s) => ({ value: s, label: s }))]} />
+              )}
+              <IconButton icon="plus" size={12} className="fv-new-btn" label={t('session.issuesNew')} onClick={() => setComposing(true)} />
+            </span>
+            {(liveCount > 0 || concludedCount > 0) && (
               <span className="ef-chipbar">
-                {stores.length > 1 && (
-                  <FilterSelect value={storeFilter} onChange={setStoreFilter}
-                    options={[{ value: 'all', label: t('session.issuesStoreAll') }, ...stores.map((s) => ({ value: s, label: s }))]} />
+                {liveCount > 0 && (
+                  <button type="button" className={`ef-chip fv-live ${liveOnly ? 'on' : ''}`} onClick={() => setLiveOnly((v) => !v)}
+                    data-tip={t('masterList.liveChipTitle')}>
+                    {t('masterList.liveChip', { n: liveCount })}
+                  </button>
                 )}
                 {concludedCount > 0 && (
                   <button type="button" className={`ef-chip fv-concluded ${showConcluded ? 'on' : ''}`} onClick={() => setShowConcluded((v) => !v)}>
@@ -115,10 +133,6 @@ export default function IssuesPage({ onFocusNode, onOpenSession, specs = [], ses
                 )}
               </span>
             )}
-            <span className="fv-head-row">
-              <IconButton icon="plus" size={12} className="fv-new-btn" label={t('session.issuesNew')} onClick={() => setComposing(true)} />
-              <span className="fv-group-meta">{t('session.issuesThreadsSummary', { open: openCount, total: stored.length })}</span>
-            </span>
           </header>
           {!issues.length && <div className="fv-note">{t('session.issuesEmpty')}</div>}
           {/* a row leads with the ISSUE (status dot + concern); store/replies are trailing quiet meta —

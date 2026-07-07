@@ -66,6 +66,8 @@ export default {
   masterList: {
     fold: 'fold the list — the detail owns the width',
     unfold: 'unfold the list',
+    liveChip: ({ n }) => `${n} live`,
+    liveChipTitle: 'only issues/readings a LIVE session is behind',
   },
 
   annotator: {
@@ -337,7 +339,6 @@ export default {
     issuesOpenOnForge: 'open on forge ↗',
     // the human write path ([[issues-view]]) — a reply composer + a New local-issue affordance.
     issuesThreadsTitle: 'threads',
-    issuesThreadsSummary: ({ open, total }) => `${open} open · ${total} total`,
     issuesStoreAll: 'all',
     issuesStoreLabel: 'store',
     issuesNew: 'New',

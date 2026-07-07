@@ -33,14 +33,20 @@ export function EvalMasterDetail({ rowKeys, sel, onSel, detail, children }) {
   useEffect(() => {
     document.querySelector('.fv-list-col .sel')?.scrollIntoView({ block: 'nearest' })
   }, [sel])
+  // the fold toggle is an ANCHORED control, not a floating badge: the shell owns the fold state, but the
+  // button renders inside the list's own head row (function children receive it as `foldBtn`), a normal
+  // flex sibling of the filters — never absolutely positioned over the list's scrollbar. A plain-children
+  // home (the session Eval tab's multi-group list, which has no single head row) keeps the floating badge.
+  const foldBtn = <FoldToggle className="fv-fold-inline" onToggle={() => setFolded(true)} />
   return (
     <div className={`fv-master ${folded ? 'folded' : ''}`}>
       {/* the list column stays MOUNTED while folded (its filter state + the j/k row report live in it) —
           the fold is pure CSS; the thin strip is the unfold affordance. */}
       {folded && <FoldToggle className="fv-unfold" folded onToggle={() => setFolded(false)} />}
       <div className="fv-list-col" style={folded ? { display: 'none' } : undefined}>
-        <FoldToggle className="fv-fold" onToggle={() => setFolded(true)} />
-        {children}
+        {typeof children === 'function'
+          ? children(foldBtn)
+          : <><FoldToggle className="fv-fold" onToggle={() => setFolded(true)} />{children}</>}
       </div>
       <div className="fv-detail">{detail}</div>
     </div>
@@ -124,8 +130,12 @@ export default function EvalsPage({ specs = [], sessions = [], reloadBoard, onOp
         ? <EventDetail entry={selEval} specs={specs} sessions={sessions} onOpenSession={onOpenSession} onWrite={async (outcomes) => { flash(outcomes); await reloadBoard?.() }} />
         : <div className="fv-note">{t('evalsFeed.empty')}</div>}
     >
-      {notice && <div className="fv-notice">{notice}</div>}
-      <EvalsGroup nodes={specs} sel={effSel} onSel={(k) => setSel(k)} onRows={onRows} mustShow={deepWant} />
+      {(foldBtn) => (
+        <>
+          {notice && <div className="fv-notice">{notice}</div>}
+          <EvalsGroup nodes={specs} sessions={sessions} sel={effSel} onSel={(k) => setSel(k)} onRows={onRows} mustShow={deepWant} lead={foldBtn} />
+        </>
+      )}
     </EvalMasterDetail>
   )
 }

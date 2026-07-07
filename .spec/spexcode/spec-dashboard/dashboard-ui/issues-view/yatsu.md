@@ -86,8 +86,9 @@ scenarios:
     expected: >-
       The page is a two-column grid whose LEFT column is SLIM (compact one-line rows, at most ~280px —
       the detail is the protagonist): ONE box — the merged issue list under its own
-      sticky filter bar (first row: the store filter + the concluded chip; second row: New beside the
-      open/total meta, the meta at that row's END), NO Evals|Threads tab switcher present; its list gets
+      sticky filter bar (the CONTROL row: the fold toggle + the store filter + New, the fold toggle a
+      normal in-row member — NOT absolutely positioned over the scrollbar; the small toggle chips on a
+      second CHIP row; NO open/total count meta anywhere), NO Evals|Threads tab switcher present; its list gets
       the full column height, scrolling
       itself; the RIGHT detail pane scrolls independently, the page itself never scrolls. The fold
       toggle collapses the list to a thin strip (the detail takes essentially the full width) and the
@@ -131,15 +132,17 @@ scenarios:
     code: [spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/FilterSelect.jsx]
     description: >-
       With issues spanning both stores on the running dashboard, open #/issues and read the filter bar's
-      real DOM: the store dropdown's options and their labels, the bar's row structure (which row New and
-      the open/total meta sit on), and the dropdown's element/class compared with the evals feed's kind
-      dropdown on #/evals.
+      real DOM: the store dropdown's options and their labels, the bar's row structure (which row the fold
+      toggle, the dropdown, New, and the chips sit on; the fold toggle's computed position), and the
+      dropdown's element/class compared with the evals feed's kind dropdown on #/evals.
     expected: >-
       The store dropdown is the SAME shared control as the evals feed's kind filter — one component, the
       same select element and `fv-filter` class on both pages. Its options are the stores present plus a
-      first option labelled exactly "all" (the bare word — never "all stores"). The bar's FIRST row
-      carries the store dropdown (+ the concluded chip when present); New sits on the SECOND row beside
-      the open/total meta, the meta pushed to that row's end — New never occupies the first row alone.
+      first option labelled exactly "all" (the bare word — never "all stores"). The bar's FIRST row is the
+      CONTROL row — the fold toggle (a normal static flex member, never position:absolute over the
+      scrollbar), the store dropdown, and New together; the small toggle chips (concluded count) sit on the
+      SECOND row. No open/total count meta exists anywhere in the bar. The evals feed's head wears the
+      same control-row grammar (its fold toggle anchored beside the kind dropdown).
       No page errors.
   - name: close-issue-button
     tags: [frontend-e2e]

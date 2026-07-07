@@ -65,6 +65,8 @@ export default {
   masterList: {
     fold: '折叠列表 — 让详情占满宽度',
     unfold: '展开列表',
+    liveChip: ({ n }) => `${n} 活跃`,
+    liveChipTitle: '只看背后 session 还活着的条目',
   },
 
   annotator: {
@@ -330,7 +332,6 @@ export default {
     issuesOpenOnForge: '在 forge 上打开 ↗',
     // 人工写入路径（[[issues-view]]）—— 回复输入框 + 新建本地 issue。
     issuesThreadsTitle: '讨论帖',
-    issuesThreadsSummary: ({ open, total }) => `${open} 开放 · 共 ${total}`,
     issuesStoreAll: '全部',
     issuesStoreLabel: '来源',
     issuesNew: '新建',

@@ -42,9 +42,13 @@ renderer ([[event-detail]]'s `Evidence.jsx` — the eval tab [[yatsu-eval-tab]],
 expand, with the same *miss original file* when the blob is pruned; `spex yatsu show` labels it. A clip is
 heavier bytes, so [[yatsu-core]]'s `clean` (which walks every evidence entry) is the intended prune.
 
-An optional refinement — anchoring named steps to moments in the clip so an annotation can land on a step —
-is [[step-timeline]], a separate format built only when a real annotation workflow needs it. yatsu still
-runs nothing: it records a clip something else recorded, and the measuring hand stays a metadata tag.
+An optional refinement — anchoring named steps to positions on the evidence so an annotation can land on a
+step — is [[step-timeline]], a separate format built only when a real annotation workflow needs it. It
+OUTGREW this node: a step-map anchors to the evidence's own axis, and a video is merely its `time`-axis
+instance — the same map rides a transcript (`line`) or a still sequence (`frame`) just as well, so
+step-timeline is modality-neutral and no longer welded to the clip (a video step-map's legacy `{ tMs }` shape
+still reads losslessly as the time axis). yatsu still runs nothing: it records a clip something else
+recorded, and the measuring hand stays a metadata tag.
 
 A human who disagrees with **this** node's verdict simply files their own `manual@1` reading — the existing
 supersede-by-a-newer-reading path, not a new lifecycle. A finding that is *not* this node's clean fail — a

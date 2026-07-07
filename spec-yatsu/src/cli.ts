@@ -5,14 +5,14 @@ import { loadSpecs } from '../../spec-cli/src/specs.js'
 import { loadConfig } from '../../spec-cli/src/lint.js'
 import { mainBranch, envSessionId, readRawRecord } from '../../spec-cli/src/layout.js'
 import { yatsuNodes, validateScenarios, YATSU_FILE, type YatsuNode } from './yatsu.js'
-import { readReadings, readSidecar, appendReading, appendRetraction, latestPerScenario, evidenceOf, type Reading, type Verdict, type Evidence, type Retraction } from './sidecar.js'
+import { readReadings, readSidecar, appendReading, appendRetraction, latestPerScenario, evidenceOf, type Reading, type Verdict, type Evidence, type EvidenceKind, type Retraction } from './sidecar.js'
 import { staleAxes } from './freshness.js'
 import { scenarioIndex } from './scenariofresh.js'
 import { loadEvalRemarkTracks, trackKey } from '../../spec-cli/src/issues.js'
 import { stripRefSigil } from '../../spec-cli/src/mentions.js'
 import { evaluatorTag } from './evaluator.js'
 import { putBlob, blobPath, listBlobs, gc, isStrayBlob } from './cache.js'
-import { validateTimeline } from './timeline.js'
+import { validateTimeline, normalizeTimeline } from './timeline.js'
 import { evalTimeline, readBlobByHash, type EvalTimeline } from './evaltab.js'
 
 function flag(args: string[], name: string): string | undefined {
@@ -186,6 +186,12 @@ async function scan(args: string[] = []): Promise<number> {
 // `--image`, and a misfiled reading is worse than none (it reads as proof). Value-flags consume the next
 // token, so a path/note that itself starts with `--` is never mistaken for a flag.
 const EVAL_VALUE_FLAGS = new Set(['scenario', 'note', 'image', 'result', 'video', 'timeline'])
+
+// which axis each evidence kind carries — a step-map ([[step-timeline]]) anchors to ONE of them, so its
+// `axis` must match a present entry's kind. A video is time (ms), a transcript is line-numbered, a still
+// SEQUENCE is frame-indexed. (The 'index' axis — a bare action ordinal — has no evidence kind of its own
+// yet; the schema still supports it, so an emitter that grows one just adds a row here.)
+const AXIS_FOR_KIND: Record<EvidenceKind, string> = { video: 'time', transcript: 'line', image: 'frame' }
 const EVAL_BOOL_FLAGS = new Set(['pass', 'fail'])
 function rejectUnknownEvalFlag(args: string[]): string | null {
   for (let i = 0; i < args.length; i++) {
@@ -239,19 +245,28 @@ async function evalCmd(args: string[]): Promise<number> {
   if (result !== undefined) evidence.push({ hash: putBlob(readFileSync(result === '-' ? 0 : result)), kind: 'transcript' })
   if (video !== undefined) evidence.push({ hash: putBlob(readFileSync(video)), kind: 'video' })
 
-  // --timeline: the clip's step map (timeline.ts) — only meaningful beside a --video entry. Validated LOUD at
-  // filing (a malformed map is rejected, never silently reshaped); stored canonicalized so identical
-  // timelines share one blob. It anchors the reading's video evidence entry.
+  // --timeline: the evidence's step map (timeline.ts) — steps anchored to a POSITION on the evidence's OWN
+  // axis, no longer video-welded. It accompanies ANY axis-bearing evidence, and its `axis` must MATCH a
+  // present entry's kind (a video is time, a transcript is line, a still sequence is frame — AXIS_FOR_KIND):
+  // a step-map for an axis nothing here carries is misfiled. Validated LOUD at filing (a malformed map is
+  // rejected, never silently reshaped); stored canonicalized so identical timelines share one blob.
   const timeline = flag(args, 'timeline')
   let timelineBlob: string | undefined
   if (timeline !== undefined) {
-    if (!evidence.some((e) => e.kind === 'video')) { console.error('spex yatsu eval: --timeline accompanies --video (it maps moments in the clip to steps)'); return 2 }
+    if (!evidence.length) { console.error('spex yatsu eval: --timeline needs axis-bearing evidence — attach the --video/--image/--result whose axis its steps anchor to'); return 2 }
     let parsed: unknown
     try { parsed = JSON.parse(readFileSync(timeline, 'utf8')) } catch { console.error(`spex yatsu eval: --timeline ${timeline} is not readable JSON`); return 2 }
     const terrs = validateTimeline(parsed)
     if (terrs.length) {
       console.error('spex yatsu eval: invalid step-timeline:')
       for (const e of terrs) console.error(`    ${e}`)
+      return 2
+    }
+    const { axis } = normalizeTimeline(parsed)
+    const present = new Set(evidence.map((e) => AXIS_FOR_KIND[e.kind]))
+    if (!present.has(axis)) {
+      const have = evidence.map((e) => `${e.kind}→${AXIS_FOR_KIND[e.kind]}`).join(', ')
+      console.error(`spex yatsu eval: --timeline axis '${axis}' matches none of this reading's evidence (${have}) — a step-map's axis must be the axis of an attached evidence entry`)
       return 2
     }
     timelineBlob = putBlob(Buffer.from(JSON.stringify(parsed)))
@@ -486,7 +501,7 @@ export async function runYatsu(args: string[]): Promise<number> {
   if (sub === 'clean') return clean(args.slice(1))
   if (sub === 'show') return show(args.slice(1))
   if (sub === 'check-staged') return checkStaged()
-  console.error('spex yatsu: scan [--changed] | eval [.|<node>] [--scenario <name>] (--pass|--fail) [--note <text>] [--image <path> …repeatable] [--result <path|->] [--video <path> [--timeline <json>]] | retract [.|<node>] [--scenario <name>] [--last | --ts <iso>] [--note <why>] | show [.|<node>] [--json] | clean [--keep-latest|--all]')
+  console.error('spex yatsu: scan [--changed] | eval [.|<node>] [--scenario <name>] (--pass|--fail) [--note <text>] [--image <path> …repeatable] [--result <path|->] [--video <path>] [--timeline <json>] | retract [.|<node>] [--scenario <name>] [--last | --ts <iso>] [--note <why>] | show [.|<node>] [--json] | clean [--keep-latest|--all]')
   return 2
 }
 

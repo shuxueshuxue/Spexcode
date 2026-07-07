@@ -5,6 +5,7 @@ import { STATUS_COLOR, sessionHandle, sessionHeadline } from './session.js'
 import { useT } from './i18n/index.jsx'
 import { rankDocs } from '../../spec-cli/src/ranker.ts'
 import { useSpecCorpus } from './corpus.js'
+import { evalAddress, graphNodeAddress, issueAddress, sessionAddress } from './route.js'
 
 // a scenario row's dot reads its satisfaction the way the tile/panel do (score.jsx): green fresh pass · red
 // fresh fail · grey stale / never-measured.
@@ -30,6 +31,7 @@ function buildEntries(specs, sessions, corpus) {
     const path = specPath(s.path)
     entries.push({
       kind: 'spec', key: `spec:${s.id}`, target: s.id,
+      address: graphNodeAddress(s.id),
       color: (STATUS[s.status] || STATUS.pending).color,
       title: s.title || s.id, sub: path,
       // the shared ranker's three fields, the SAME map the floor uses for a node: name = title+id, desc = the
@@ -43,7 +45,8 @@ function buildEntries(specs, sessions, corpus) {
     for (const i of s.issues || []) {
       const open = i.status === 'open'
       entries.push({
-        kind: 'issue', key: `issue:${s.id}:${i.id}`, target: s.id,
+        kind: 'issue', key: `issue:${s.id}:${i.id}`, target: i.id, nodeId: s.id,
+        address: issueAddress(i.id),
         color: open ? 'var(--green)' : 'var(--muted)',
         title: i.concern, sub: `${i.id} · ${path}`,
         name: i.concern || '', desc: i.id, body: '',
@@ -54,7 +57,8 @@ function buildEntries(specs, sessions, corpus) {
       // description+expected from the same corpus fetch, falling back to any prose still on the node.
       const prose = corpus?.scenarios?.[s.id]?.[sc.name]
       entries.push({
-        kind: 'scenario', key: `scenario:${s.id}:${sc.name}`, target: s.id,
+        kind: 'scenario', key: `scenario:${s.id}:${sc.name}`, target: sc.name, nodeId: s.id,
+        address: evalAddress(s.id, sc.name),
         color: SCEN_COLOR[sc.state] || 'var(--cyan)',
         title: sc.name, sub: path, tags: sc.tags,
         name: sc.name || '', desc: '', body: prose ? `${prose.description || ''} ${prose.expected || ''}`.trim() : sc.expected || '',
@@ -71,6 +75,7 @@ function buildEntries(specs, sessions, corpus) {
     const sub = s.status || s.promptPreview || s.note || ''
     entries.push({
       kind: 'session', key: `session:${s.id}`, target: s.id,
+      address: sessionAddress(s.id),
       color: STATUS_COLOR[s.status] || STATUS_COLOR.offline,
       title: headline, sub,
       name: headline || '', desc: s.status || '', body: `${s.promptPreview || s.note || ''} ${handle}`.trim(),
@@ -134,7 +139,7 @@ export default function SpecSearch({ specs, sessions, onPick, onClose, boost = n
   // keep the highlighted row in view as ↑/↓ walk past the visible window.
   useEffect(() => { listRef.current?.querySelector('.search-item.on')?.scrollIntoView({ block: 'nearest' }) }, [sel, results])
 
-  // hand the whole entry back; App routes by kind (spec/issue → focus its node, session → its board tab).
+  // hand the whole entry back; App executes the entry's app address (graph node, session, issue, or eval).
   const pick = (e) => { if (e) { onPick(e); onClose() } }
 
   // the input OWNS its keys (App returns early while search is open — see onKey there), so ↑/↓ walk the

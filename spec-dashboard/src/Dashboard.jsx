@@ -11,7 +11,7 @@ import SpecSearch from './SpecSearch.jsx'
 import BoardStats from './BoardStats.jsx'
 import SideBar from './SideBar.jsx'
 import TooltipLayer from './Tooltip.jsx'
-import { useRoute, navigate } from './route.js'
+import { useRoute, navigate, navigateAddress } from './route.js'
 import { useResizable } from './useResizable.js'
 import { layout, X_GAP, Y_GAP } from './data.js'
 import { createMomentumScroll } from './scroll.js'
@@ -133,12 +133,11 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
     const srcs = [...new Set(node.overlays.map((o) => o.source))]
     return srcs.map((src) => sessions.find((s) => s.source === src)).filter(Boolean)
   }, [nodeMenu, specs, sessions])
-  // one routing for BOTH palettes (board `/` and session-board ⌘/Ctrl+/): a session opens/switches to its
-  // tab; a non-session routes back to the graph (a no-op when already there) and jumps to the node.
-  // The select-target branch is shared, not forked — only the lead weight differs by entry point.
+  // one routing for BOTH palettes (board `/` and session-board ⌘/Ctrl+/): each row carries an app address
+  // (graph node, session tab, issue detail, or eval detail). The palette's caller supplies only the view
+  // callbacks needed for non-hash state; the address helper owns the route shape.
   const onSearchPick = useCallback((e) => {
-    if (e.kind === 'session') openSession(e.target)
-    else { navigate('graph'); setFocusId(e.target) }
+    navigateAddress(e.address, { onFocusNode: setFocusId, onOpenSession: openSession })
   }, [openSession])
 
   // sel ↔ URL, two one-way syncs that converge: a deep-linked / history-walked `#/sessions/<sel>` applies

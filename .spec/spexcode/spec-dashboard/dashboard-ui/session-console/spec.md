@@ -109,7 +109,7 @@ colour**, never two codepaths. The two terminal verbs split by what they destroy
 session (`act('exit')`, **muted grey**) — it kills the agent + tmux but **keeps the worktree**, so the session
 goes `offline` and offers **relaunch** (the same resumable stop a crash produces, see [[state]]); **`/close`**
 removes it (`act('close')`, **red**) — worktree + branch gone, the work discarded, the row's right-click Close's
-twin. `/merge` merges (green), `/nav` toggles nav mode (yellow), `/eval` jumps to the **Eval tab** (cyan). In the inbox
+twin. `/merge` merges (green), `/type` toggles type mode (yellow), `/eval` jumps to the **Eval tab** (cyan). In the inbox
 `/` menu they **lead** the list, coloured, tagged `[board]`, apart from CC's blue command rows; accepting one
 **runs** it (the one row that acts, not inserts — see [[term-input]]). A board command **overrides** a
 same-named CC command (CC ships its own `/exit`), so that name shows **once** — as the board's, never a
@@ -125,21 +125,22 @@ that owns its own mousedown — a native `<select>` *opens* on that default acti
 leave the control dead to the pointer. The launcher picker ([[launcher-select]]) is such a control; keeping
 the input focused must not cost the picker its click, so the two concerns coexist — focus stays, and the
 native dropdown still opens. It **auto-grows upward**, **capped at half** the terminal height, and the grown size **survives a
-round-trip away from the Terminal tab** — the box unmounts while Eval or nav mode replaces it, but its height is
+round-trip away from the Terminal tab** — the box unmounts while Eval or type mode replaces it, but its height is
 derived from the per-session draft (which persists), so on return it re-fits to that draft instead of collapsing
 back to one line. It carries the same **completion** menus
 the New prompt does ([[term-input]]): the inbox `/` lists the board+CC commands, and `[[` opens the spec-node
 dropdown — one menu shared with New, not a second copy. A `[[node]]` here **resolves at send**, expanding to
-a pointer at the node's live `spec.md` so the running agent is aimed at that contract. The second channel is **nav mode** — entered by the `/nav` board command, the header
+a pointer at the node's live `spec.md` so the running agent is aimed at that contract. The second channel is **type mode** — the human-takeover channel, named for
+what the user reaches for ("I want to type into the terminal myself") — entered by the `/type` board command, the header
 button, or the reserved `⌥/⌘+I`: the `❯` box disables and **every keystroke — `⌃`/`⌥`/`⌘` combos included —
 forwards raw** to the pane, so a human drives the agent's terminal, not just its arrows. Those **reserved
-`⌥/⌘+I`** keys toggle nav mode and are **never forwarded to tmux nor overridable by the app**; entry is
+`⌥/⌘+I`** keys toggle type mode and are **never forwarded to tmux nor overridable by the app**; entry is
 otherwise **manual**, and leaving the tab or going offline exits — as does a **second `Esc` within 600 ms**
 (the first `Esc` still forwards to the pane to cancel the agent's own menu). The reserved chord is a **single**
 modifier + I — `⌥+I` *or* `⌘+I`, never both: **`⌥⌘I` held together is the browser's own devtools accelerator**,
 so the app lets that three-key combo pass straight through to open the console rather than swallowing it as a
-nav-mode toggle. A best-effort pane sniff — a
-select-caret line beside an `Esc`/Enter hint line — only ever **suggests** nav mode by pulsing the nav
+type-mode toggle. A best-effort pane sniff — a
+select-caret line beside an `Esc`/Enter hint line — only ever **suggests** type mode by pulsing the type
 button, a non-authoritative nudge that never seizes keys.
 
 A **right-click on a session row** opens its context menu — rename or close ([[session-rename]]) — coexisting
@@ -160,14 +161,14 @@ stays stable; the old visual-edge fall-through to the list is gone). Plain ↑/�
 focus is **outside** any text input. To switch tabs while typing, use the modifier combos:
 **⌘/⌥/⌃+↑/↓** are an **unconditional** switch — they step the selection up/down the list from anywhere, no
 matter which input has focus or what mode you're in (the guaranteed up/down switch a chat app gives you), even
-while nav mode forwards raw keys. **⌥+N** reaching the New Session composer is no longer this console's own
+while type mode forwards raw keys. **⌥+N** reaching the New Session composer is no longer this console's own
 chord — it belongs to [[side-nav]]'s app-global ⌥ command family (⌥N / ⌥F / ⌥1..⌥5), which the console's
-key handling deliberately **falls through unhandled** — nav mode included — so the window-level handler
+key handling deliberately **falls through unhandled** — type mode included — so the window-level handler
 routes it and tmux never sees `M-n`/`M-f`/`M-digit`. (The family is ⌥-based for the same hard browser limit
 that shaped the old chord: **⌘+N/⌃+N are the browser's reserved new-window accelerator** whose keydown never
 reaches the page to be cancelled — ⌥ is the modifier the app can actually own.) The **tab bar's
 right side** holds the same board-command registry as action buttons, narrowed to the current state:
-**nav** whenever live and **merge** at review/done — each a small **text** button (no glyphs) in its
+**type** whenever live and **merge** at review/done — each a small **text** button (no glyphs) in its
 identity colour; an `offline` liveness (any lifecycle) swaps them for a relaunch button, and review is
 **agent-proposed** at the stop-gate. **The evaluation is no longer one of these buttons** — it is a
 permanent **Eval tab**, always available for any selected session (see [[review-proof]]), reached by

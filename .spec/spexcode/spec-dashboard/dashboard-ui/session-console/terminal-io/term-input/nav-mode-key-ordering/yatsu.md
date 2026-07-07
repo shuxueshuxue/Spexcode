@@ -3,8 +3,8 @@ scenarios:
   - name: rawkey-batch-preserves-strike-order
     tags: [backend-api]
     description: >-
-      Measure the ordering contract of the raw nav-key channel through the REAL product surface: the
-      `POST /api/sessions/:id/rawkey` route the dashboard's nav mode drives. Start the real backend against a
+      Measure the ordering contract of the raw-key channel through the REAL product surface: the
+      `POST /api/sessions/:id/rawkey` route the dashboard's type mode drives. Start the real backend against a
       tmux socket, create a session running a shell, then send a long run of known distinct printable
       characters (e.g. the 26 lowercase letters `abcdefghijklmnopqrstuvwxyz`) the way the client coalescer
       hands them over — as ONE ordered `keys` batch in strike order — over the real HTTP route. The backend
@@ -23,7 +23,7 @@ scenarios:
 ---
 # yatsu.md — nav-mode-key-ordering
 
-The contract is measured through the **real raw-key channel** the dashboard's nav mode uses —
+The contract is measured through the **real raw-key channel** the dashboard's type mode uses —
 `POST /api/sessions/:id/rawkey` into a live tmux pane — not an internal probe or a stubbed sender. YATU: fire
 a known character sequence the way the client coalescer sends it (one ordered batch / a coalesced burst), then
 read the pane back with `tmux capture-pane` and check the received order against the struck order.

@@ -17,3 +17,6 @@ Today `--timeline` attaches only to `--video` and holds only `tMs`, so those kin
 Direction: generalize the event key from `tMs` to a neutral `position` with a `unit`/axis tag (`ms` | `frame` | `line`); keep `stepAt` as "last event at or before position"; let the annotator bind the axis to whichever evidence entry it rules. `validateTimeline` stays LOUD and closed-key.
 
 Spec: step-timeline, guide
+
+<!-- reply: 7a814313-645a-443b-ba11-5b83ec919230 @ 2026-07-07T04:40:52.523Z -->
+HARD CONSTRAINT — subsume + extend, never lose the existing capability. The generalized step-map MUST subsume the video time-axis case: `tMs` stays a first-class, fully-expressible `position` (axis = time/`ms`), so today's video step-rail — which already renders well in the annotator ([[event-detail]]) — keeps working unchanged. The generalization only EXTENDS outward, letting screenshot-sequence (frame) and CLI (line) evidence also get a step-rail. Refactor freely, but the video step-rail's capability is a floor, not something the rework is allowed to drop or regress.

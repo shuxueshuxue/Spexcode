@@ -2,21 +2,22 @@ import { scenarioStates, aggregateState, TagChips } from './score.jsx'
 import { useT } from './i18n/index.jsx'
 import { useSpecCorpus } from './corpus.js'
 import IssueCard from './IssueCard.jsx'
+import { evalAddress } from './address.js'
 
 // the state mark a scenario row leads with — the score vocabulary as a glyph (✓ pass · ✗ fail · ○ blind
 // spot · · never measured). The colour comes from the row's state class (styles.css), so this is shape only.
 const MARK = { pass: '✓', fail: '✗', stalePass: '✓', staleFail: '✗', empty: '○', missing: '·' }
 
-// a scenario row — a BUTTON that drills into the focused node's eval tab (the deep reading timeline), so the
-// glance is an entry point, not a dead end. The `expected` is a clamped preview (the full prose lives in the
-// eval tab), so a long scenario never blows out the narrow column. The board's scenario fold is slim
+// a scenario row — a BUTTON that drills into the eval's routed detail address, so the glance is an entry
+// point, not a dead end. The `expected` is a clamped preview (the full prose lives in the eval detail), so a
+// long scenario never blows out the narrow column. The board's scenario fold is slim
 // ([[board-lean]]), so `prose` (expected + per-scenario code) joins from the lazily-fetched corpus — until it
 // lands the row shows name/state/tags, then fills in.
-function ScenarioRow({ s, prose, t, onOpenEval }) {
+function ScenarioRow({ nodeId, s, prose, t, onNavigateAddress }) {
   const expected = prose?.expected ?? s.expected
   const code = prose?.code ?? s.code
   return (
-    <button type="button" className={`fp-scenario ${s.state}`} onClick={onOpenEval} data-tip={t('focusPanel.openEval')}>
+    <button type="button" className={`fp-scenario ${s.state}`} onClick={() => onNavigateAddress?.(evalAddress(nodeId, s.name))} data-tip={t('focusPanel.openEval')}>
       <span className="fp-sc-mark" data-tip={t(`score.${s.state}`)}>{MARK[s.state]}</span>
       <span className="fp-sc-body">
         <span className="fp-sc-name">{s.name}</span>
@@ -28,7 +29,7 @@ function ScenarioRow({ s, prose, t, onOpenEval }) {
   )
 }
 
-export default function FocusPanel({ node, onOpenEval }) {
+export default function FocusPanel({ node, onNavigateAddress }) {
   const t = useT()
   const states = scenarioStates(node?.scenarios, node?.evals)
   // scenario prose for the previews — fetched once, on the FIRST focus of a node that has scenarios (the
@@ -54,7 +55,7 @@ export default function FocusPanel({ node, onOpenEval }) {
           )}
         </div>
         {states.length
-          ? states.map((s) => <ScenarioRow key={s.name} s={s} prose={proseByName?.[s.name]} t={t} onOpenEval={onOpenEval} />)
+          ? states.map((s) => <ScenarioRow key={s.name} nodeId={node.id} s={s} prose={proseByName?.[s.name]} t={t} onNavigateAddress={onNavigateAddress} />)
           : <div className="fp-empty">{t('focusPanel.noScenarios')}</div>}
       </section>
 
@@ -70,9 +71,9 @@ export default function FocusPanel({ node, onOpenEval }) {
         </div>
         {issues.length ? (
           <>
-            {open.map((i) => <IssueCard key={i.id} issue={i} />)}
+            {open.map((i) => <IssueCard key={i.id} issue={i} onNavigateAddress={onNavigateAddress} />)}
             {closed.length > 0 && <div className="issue-group-head closed">{t('focusPanel.closed', { n: closed.length })}</div>}
-            {closed.map((i) => <IssueCard key={i.id} issue={i} />)}
+            {closed.map((i) => <IssueCard key={i.id} issue={i} onNavigateAddress={onNavigateAddress} />)}
           </>
         ) : <div className="fp-empty">{t('focusPanel.noIssues')}</div>}
       </section>

@@ -69,13 +69,12 @@ scenarios:
     description: >-
       Open the dashboard, press `/` to open the search palette, and type a fragment that matches across
       planes (e.g. "renders"). The results list rows each tagged by plane — node / session / issue /
-      scenario — with a coloured dot and the path/context; picking a node, issue, or scenario focuses its
-      host node, a session jumps to its tab. Screenshot the palette showing the scenario rows and file with
+      scenario — with a coloured dot and the path/context. Screenshot the palette showing the scenario rows and file with
       `spex yatsu eval keyboard-nav --image <png> --pass`.
     expected: >-
       The `/` palette returns matches across all FOUR planes (spec nodes, sessions, issues, scenarios),
-      each row tagged with its plane; scenario rows read SCENARIO and carry their node path; picking a
-      scenario focuses its host node.
+      each row tagged with its plane; scenario rows read SCENARIO and carry their node path. Selecting those
+      review rows routes through [[address-routing]], which owns the round-trip proof.
     code:
       - spec-dashboard/src/SpecSearch.jsx
   - name: slash-search-reaches-node-prose
@@ -84,7 +83,7 @@ scenarios:
       Open the dashboard, press `/`, and type a distinctive word that lives ONLY in some node's spec
       prose — not in any title, id, or path (e.g. "hatch", which sits in keyboard-nav's own body
       "Slash-to-search is the escape hatch"). The node whose body holds the word appears in the results
-      tagged NODE, even though its name/path don't contain the query; picking it focuses that node.
+      tagged NODE, even though its name/path don't contain the query.
       Screenshot the palette showing the prose-only match and file with
       `spex yatsu eval keyboard-nav --image <png> --pass`.
     expected: >-

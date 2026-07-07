@@ -104,10 +104,11 @@ straight to the trunk.
 - **Issue cards enter this page, never the forge.** Every compact issue card rendered outside the Issues
   page itself — the focus panel and the node-info Issues tab included — is the SAME `IssueCard` component
   over the unified Issue shape. Store changes only the muted tag text; local and forge issues get identical
-  card chrome, identical truncation, and the same click target: `#/issues/<issue-id>`, which opens this
-  page and selects that issue in its own detail pane. A forge permalink remains only a detail-meta affordance
-  after selection, not the card's primary route. Long local ids, titles, or bodies must clamp inside the
-  card and never widen the right sidebar or create a bottom scrollbar.
+  card chrome, identical truncation, and the same [[address-routing]] issue target, whose canonical href is
+  `#/issues/<issue-id>` and whose SPA click opens this page and selects that issue in its own detail pane. A
+  forge permalink remains only a detail-meta affordance after selection, not the card's primary route. Long
+  local ids, titles, or bodies must clamp inside the card and never widen the right sidebar or create a
+  bottom scrollbar.
 - **A human writes from here — to the issue's OWN store, from a composer that is ALWAYS on screen.** EVERY
   issue's detail carries a **reply composer**, and it is **DOCKED at the detail pane's foot** — the thread
   region scrolls behind it, so replying to a long thread never needs a scroll to its bottom (the same

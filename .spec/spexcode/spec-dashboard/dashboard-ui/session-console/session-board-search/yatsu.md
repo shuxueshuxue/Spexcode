@@ -40,14 +40,15 @@ scenarios:
     tags: [frontend-e2e, desktop]
     description: >
       With the ⌘/Ctrl+/ palette open over the session board, first pick a SESSION result (click or Enter on a
-      highlighted session row) and watch where you land. Reopen the palette and this time pick a NON-session
-      result (a spec node). Watch whether the session view stays or closes and where focus lands. Screenshot
+      highlighted session row) and watch where you land. Reopen the palette and this time pick a SPEC NODE
+      result. Watch whether the session view stays or closes and where focus lands. Screenshot
       after each pick.
     expected: |
       Picking a SESSION opens/switches to that session's tab in the console — you stay on the session board,
-      now on the chosen session. Picking a NON-session (spec node / issue / scenario) CLOSES the session view
-      and jumps to that node on the node graph, focused and revealed. The same routing also works from the
-      board's `/` (where closing the session view is simply a no-op), so the branch is shared, not forked.
+      now on the chosen session. Picking a SPEC NODE closes the session view and jumps to that node on the
+      graph, focused and revealed. Issue/scenario result routing belongs to [[address-routing]]; this
+      session-board scenario proves only the session boost and the session-vs-node select target that differ
+      from the graph palette.
     related:
       - spec-dashboard/src/App.jsx
       - spec-dashboard/src/SessionInterface.jsx
@@ -59,7 +60,7 @@ Measure through the **real running dashboard in a browser**, YATU-style: open th
 `Enter`, fire the actual ⌘/Ctrl+/ chord, and drive the real palette — never a direct call into `SpecSearch`'s
 `rank`/`onPick` and never an internal helper chosen to make the proof easy. The loss is the two contracts
 this node owns on top of the shared [[shared-ranker]] palette: **sessions lead** the ranking when opened from
-the session board (while every other plane stays visible below), and a **pick routes by kind** — a session to
-its tab, a non-session by closing the board and jumping to the node on the graph. The matcher, open/close, and
-keyboard belong to the shared component and are measured by [[keyboard-nav]] / [[shared-ranker]], not re-proved
-here; this node proves only the lead-weight and the select-target that differ.
+the session board (while every other plane stays visible below), and the **session-vs-node** select target
+differs from the graph palette. Issue/scenario review-object selection is the cross-cutting
+[[address-routing]] contract. The matcher, open/close, and keyboard belong to the shared component and are
+measured by [[keyboard-nav]] / [[shared-ranker]], not re-proved here.

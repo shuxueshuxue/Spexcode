@@ -1187,10 +1187,12 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .fv-error { margin: 4px 0 8px; font-family: var(--mono); font-size: 11px; color: var(--red); }
 .fv-actions .fv-error { margin: 0; }
 /* the compose blocks — the docked reply composer and the New-thread form. The reply composer is the
-   console-❯-shaped bar: a SINGLE collapsed line while idle that auto-grows with the draft (fitTextarea,
-   capped below) and reveals its actions row when engaged or when a host lifecycle action pins it visible. */
+   console-❯-shaped bar whose writing surface is ALREADY USABLE at idle: min-height floors it at ~3 lines
+   (no click-to-expand — the box you land on is the box you write in), fitTextarea auto-grows it above that
+   floor and caps it at max-height, and its actions row reveals when engaged or when a host lifecycle
+   action pins it visible. */
 .fv-compose { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line); }
-.fv-compose .fv-textarea { resize: none; max-height: 38vh; }
+.fv-compose .fv-textarea { resize: none; min-height: 56px; max-height: 38vh; }
 .fv-new-form { display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--panel2); }
 .fv-store-pick {
   display: flex; align-items: center; gap: 8px; align-self: flex-start;

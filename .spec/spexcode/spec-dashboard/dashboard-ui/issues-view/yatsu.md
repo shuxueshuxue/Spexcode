@@ -58,22 +58,25 @@ scenarios:
     description: >-
       On the running issues page, select an issue whose thread is LONG (body + replies overflow the
       detail pane). WITHOUT scrolling, read the reply composer's geometry (getBoundingClientRect on
-      `.fvd-compose` and its textarea) against the viewport; read the collapsed textarea's height and
-      whether the actions row (`.fv-actions`) is present. Focus the textarea and re-read; type several
-      lines and read the height after each; clear and blur and re-read. Then scroll the thread region
-      and read whether the composer moved. Repeat the collapsed/engaged reading on an eval detail's
-      rail composer (#/evals).
+      `.fvd-compose` and its textarea) against the viewport; read the IDLE textarea's height (before any
+      click/focus) and whether the actions row (`.fv-actions`) is present. Focus the textarea and
+      re-read; type several lines and read the height after each; clear and blur and re-read. Then scroll
+      the thread region and read whether the composer moved. Repeat the idle/engaged reading on an eval
+      detail's rail composer (#/evals).
     expected: >-
       The composer is DOCKED at the detail pane's foot — visible in the viewport immediately on
       selection, no scrolling needed even on a long thread; the thread scrolls in its own region
-      (`.fvd-scroll`) behind it and the composer never moves. Idle, it is COLLAPSED: a single-line
-      textarea. For a non-concluded issue, the lifecycle action pins the action row visible even while
-      idle: disabled Send and Close issue sit beside each other in that same row; focusing/typing keeps
-      the row and typing grows the textarea line by line (capped — it never eats the pane). For a home
-      with no lifecycle action, such as the eval detail rail composer, idle still has no actions row and
-      focus reveals hint + Send. An emptied, blurred composer collapses back to one line. Switching to
-      another issue clears the draft (keyed to the selection). One shared composer, every home. No page
-      errors.
+      (`.fvd-scroll`) behind it and the composer never moves. IDLE, the writing surface is ALREADY
+      USABLE — a multi-line textarea (a few lines tall, ~3), never a one-line ~26px sliver, and it needs
+      NO click/focus to reach that height: the box you land on is the box you can write in. Focus does
+      not change the textarea's height (there is no click-to-expand). Typing still AUTO-GROWS it beyond
+      that idle floor, line by line, capped so it never eats the pane; an emptied, blurred composer
+      settles back to the same usable idle floor, never collapsing to a hairline line. For a
+      non-concluded issue the lifecycle action pins the action row visible even while idle (disabled Send
+      + Close issue side by side); for a home with no lifecycle action, such as the eval rail composer,
+      idle has no actions row and focus reveals hint + Send — but in BOTH homes the textarea itself is
+      already the usable multi-line height at idle. Switching to another issue clears the draft (keyed to
+      the selection). One shared composer, every home. No page errors.
   - name: panel-skeleton
     tags: [frontend-e2e]
     code: spec-dashboard/src/IssuesPage.jsx

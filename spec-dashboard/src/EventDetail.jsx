@@ -33,7 +33,46 @@ import { Icon, IconButton } from './icons.jsx'
 // per-scenario history (verdict pips + ‹ › nav), swapping the media in place, so the error→correct
 // transition is right here, not just the latest reading.
 
-const stepAt = (events, tMs) => { let hit = null; for (const e of events) { if (e.tMs <= tMs) hit = e; else break } return hit }
+const stepAt = (events, pos) => { let hit = null; for (const e of events) { if (e.at <= pos) hit = e; else break } return hit }
+
+// a step map is anchored to its evidence's OWN axis ([[step-timeline]]). Normalize either schema to the
+// axis-tagged shape the pane reads: legacy v1 IS the time axis with `tMs` as the position (tMs → at), so an
+// old video step-map and a new `{ v: 2, axis: 'time' }` render byte-for-byte identically.
+const normalizeTimeline = (j) => {
+  if (!j || !Array.isArray(j.events)) return null
+  const axis = j.v === 1 ? 'time' : (typeof j.axis === 'string' ? j.axis : 'time')
+  const at = j.v === 1 ? (e) => e.tMs : (e) => e.at
+  return { axis, events: j.events.map((e) => ({ at: at(e), step: e.step, ...(e.node ? { node: e.node } : {}) })) }
+}
+
+// the label for a position on the step map's axis — the ONE axis-aware surface (the moment/position is
+// otherwise a bare number in the layout math). time → m:ss, frame → #123, line → L42, index → 3/N (the
+// scrubber's extent supplies the denominator, read from the evidence at render time, never stored). An
+// unknown axis is legal ([[step-timeline]] is open by convention) and renders as a bare number.
+const axisLabel = (axis, pos, extent) =>
+  axis === 'time' ? mmss(pos)
+    : axis === 'frame' ? `#${pos}`
+      : axis === 'line' ? `L${pos}`
+        : axis === 'index' ? (extent ? `${pos}/${extent}` : `${pos}`)
+          : String(pos)
+
+// the named-step RAIL — the axis-general step ruler under any step-bearing evidence (a video's time bands, a
+// transcript's line steps, a still sequence's frames). Click a step to seek (a no-op without a media
+// element); the live step (the video playhead's) highlights. This is the capability that used to live only
+// on the video: a non-video reading with a step-map now shows its rail too.
+function StepRail({ events, axis, extent, activeStepIdx, onSeek }) {
+  return (
+    <div className="an-ruler">
+      {events.map((e, i) => (
+        <button key={i} className={`an-step ${activeStepIdx === i ? 'on' : ''}`}
+          onClick={() => onSeek(e.at)}
+          data-tip={e.node ? `→ ${e.node}` : undefined}>
+          {axisLabel(axis, e.at, extent)} {e.step}
+        </button>
+      ))}
+    </div>
+  )
+}
 
 // verdict pip for the A/B history strip: ✓ pass (a B pole) / ✗ fail (an A pole) / · a pre-verdict legacy
 // reading. The verdict is an object `{status, note}` (never a bare string), so read `.status`.
@@ -53,6 +92,7 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite,
   const playerRef = useRef(null)   // the video+controls wrapper — the fullscreen target (controls stay usable)
   const seq = useRef(0)
   const [events, setEvents] = useState([])
+  const [axis, setAxis] = useState('time')       // the step map's evidence axis ([[step-timeline]])
   const [drag, setDrag] = useState(null)
   const [flash, setFlash] = useState('')         // circle-capture feedback (capturing… / failed)
   const [busy, setBusy] = useState(false)       // capturing a circled frame
@@ -141,7 +181,7 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite,
     const ms = curMsRef.current
     const evs = eventsRef.current
     let sIdx = -1
-    for (let i = 0; i < evs.length; i++) { if (evs[i].tMs <= ms) sIdx = i; else break }
+    for (let i = 0; i < evs.length; i++) { if (evs[i].at <= ms) sIdx = i; else break }
     setActiveStepIdx((prev) => (prev === sIdx ? prev : sIdx))
     let aIdx = null
     for (const a of anchoredRef.current) { if (a.tMs <= ms) aIdx = a.i; else break }
@@ -161,17 +201,18 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite,
   }, [entry.blob, entry.scenario, entry.node])
 
   // the step map arrives lazily from the same blob cache the clip streams from; reset then (re)load on the
-  // viewed reading — absent timeline/video → plain player.
+  // viewed reading. No longer video-gated — a step-map rides ANY axis-bearing evidence, so a transcript's
+  // line steps load the same way; absent timeline → plain evidence, no rail.
   useEffect(() => {
-    setEvents([])
-    if (!viewing.timelineBlob || !hasVideo) return
+    setEvents([]); setAxis('time')
+    if (!viewing.timelineBlob) return
     let on = true
     fetch(`/api/yatsu/blob/${viewing.timelineBlob}`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((j) => { if (on && Array.isArray(j?.events)) setEvents(j.events) })
+      .then((j) => { const n = on && normalizeTimeline(j); if (n) { setEvents(n.events); setAxis(n.axis) } })
       .catch(() => {})
     return () => { on = false }
-  }, [viewing.timelineBlob, hasVideo])
+  }, [viewing.timelineBlob])
 
   // the playhead follows the media element — timeupdate (~4Hz) + seeked keep the track live; play/pause keep
   // the toggle honest. The fill/knob CSS transition smooths the coarse ticks. Position paints straight to
@@ -215,6 +256,10 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite,
 
   const durMs = Math.round(dur * 1000)
   const activeStep = events[activeStepIdx] || null
+  // the axis EXTENT (the label denominator / scrubber span) is read from the EVIDENCE at render time, never
+  // stored on the reading: time is the clip duration, frame the still count, index the step count. Only the
+  // 'index' label uses it (3/N); the rest are self-describing.
+  const axisExtent = axis === 'time' ? durMs : axis === 'frame' ? images.length : axis === 'index' ? events.length : 0
 
   const seekMs = useCallback((tMs) => { const v = vid.current; if (v) v.currentTime = tMs / 1000 }, [])
   const togglePlay = useCallback(() => { const v = vid.current; if (v) (v.paused ? v.play() : v.pause()) }, [])
@@ -424,7 +469,7 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite,
                 <IconButton icon={playing ? 'pause' : 'play'} size={14} className="an-play" label={playing ? t('annotator.pause') : t('annotator.play')} onClick={togglePlay} />
                 <div className="an-seek" ref={seekRef} onMouseDown={onSeekDown} onMouseMove={onSeekHover} onMouseLeave={() => setHoverPct(null)}>
                   <div className="an-seek-trk" />
-                  {durMs > 0 && events.map((e, i) => <div key={`band-${i}`} className="an-band" style={{ left: `${(e.tMs / durMs) * 100}%` }} data-tip={e.step} />)}
+                  {durMs > 0 && axis === 'time' && events.map((e, i) => <div key={`band-${i}`} className="an-band" style={{ left: `${(e.at / durMs) * 100}%` }} data-tip={e.step} />)}
                   {/* fill/knob carry NO React-managed position style — the media paint owns them via refs */}
                   <div className="an-seek-play" ref={fillRef} />
                   {durMs > 0 && anchored.map((a) => (
@@ -444,20 +489,19 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite,
               </div>
 
               {events.length > 0 && (
-                <div className="an-ruler">
-                  {events.map((e, i) => (
-                    <button key={i} className={`an-step ${activeStepIdx === i ? 'on' : ''}`}
-                      onClick={() => seekMs(e.tMs)}
-                      data-tip={e.node ? `→ ${e.node}` : undefined}>
-                      {mmss(e.tMs)} {e.step}
-                    </button>
-                  ))}
-                </div>
+                <StepRail events={events} axis={axis} extent={axisExtent} activeStepIdx={activeStepIdx} onSeek={seekMs} />
               )}
               <div className="an-hint">{t('annotator.hint')}</div>
               <div className="an-keys">{t('annotator.keys')}</div>
               {flash && <div className="an-flash">{flash}</div>}
             </>
+          )}
+
+          {/* a NON-video reading with a step-map (a transcript's line steps, a still sequence's frames) still
+              gets its named-step rail — the axis-general capability, no longer welded to the clip. The video
+              case renders its own rail inside the player above; this is only for evidence with no clip. */}
+          {!videoEntry && events.length > 0 && (
+            <StepRail events={events} axis={axis} extent={axisExtent} activeStepIdx={activeStepIdx} onSeek={seekMs} />
           )}
 
           {/* the still gallery + transcripts — every non-clip entry renders through the ONE shared

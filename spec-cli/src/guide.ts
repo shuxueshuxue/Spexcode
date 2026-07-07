@@ -139,20 +139,21 @@ PICK THE EVIDENCE KIND BY WHAT THE BEHAVIOUR DOES OVER TIME:
                       playback, a multi-step interaction flow, keyboard timing — a still of a moving thing
                       proves the wrong thing; RECORD the run (e.g. playwright \`recordVideo\` on the context).
                       STEP EVIDENCE gets a STEP-MAP: when the evidence unfolds in steps, carry named steps
-                      anchored to the evidence's OWN axis, EXPORTED BY THE RUN that produced it — never a
-                      value the agent eyeballs off the finished artefact afterwards (that's misaligned and
-                      dishonest, worse than none). The axis is the evidence's: a video's is TIME. Today's
-                      \`--timeline <json>\` implements exactly that time axis, so a multi-step VIDEO carries one
-                      (skip it for a short single-action clip); copy this shape:
-                        { "v": 1, "events": [ { "tMs": 0, "step": "open board" },
-                                              { "tMs": 1200, "step": "type query" } ] }
-                      \`tMs\` = ms from video start, \`step\` = a short name for that moment. The run exports it:
-                      in whatever drives the recording — Playwright is ONE example, equally a computer-use hand
-                      or any UI-automation/screenshot script — take \`start\` when recording opens and at EACH
-                      real action push \`{ tMs: now - start, step: "…" }\`; dump that array as \`--timeline\`.
-                      (Non-time-axis step evidence — a screenshot SEQUENCE by frame index, a CLI transcript by
-                      line — is the same idea on a different axis, but the schema is tMs-only for now; see the
-                      open issue to generalize \`tMs\` → \`position\`. Don't force a non-time axis into \`tMs\`.)
+                      anchored to a POSITION on the evidence's OWN axis, EXPORTED BY THE RUN that produced it
+                      — never a value the agent eyeballs off the finished artefact afterwards (that's
+                      misaligned and dishonest, worse than none). \`--timeline <json>\` carries one; its \`axis\`
+                      is the evidence's: a video is \`time\` (ms), a transcript \`line\`, a still SEQUENCE \`frame\`,
+                      an action trace \`index\` (the set is OPEN — an unknown axis just renders as a bare number).
+                      \`at\` = the position on that axis, \`step\` = a short name for that moment; copy this shape:
+                        { "v": 2, "axis": "time",
+                          "events": [ { "at": 0, "step": "open board" },
+                                      { "at": 1200, "step": "type query" } ] }
+                      The run exports it: in whatever drives the evidence — Playwright, a computer-use hand, a
+                      CLI harness stamping line numbers — take a baseline and at EACH real step push
+                      \`{ at: <position>, step: "…" }\`; dump that array as \`--timeline\`. Its \`axis\` MUST match the
+                      evidence it rides (a \`line\` map needs a \`--result\` transcript, a \`time\` map a \`--video\`);
+                      skip it for a short single-step artefact. (Legacy \`{ "v": 1, "events": [{ "tMs" }] }\` — the
+                      time axis with \`tMs\` — is still accepted, read as \`axis: "time"\`.)
   STATIC end state  → \`--image <png>\` (repeatable — N stills). Layout, an icon, copy, one rendered frame.
   backend / CLI     → \`--result <txt>\` (a transcript; \`-\` reads stdin).
 The flags combine in ONE filing — several stills can ride beside the clip of the same run.

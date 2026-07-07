@@ -111,7 +111,7 @@ only the trailer. If the intent DID change, edit the spec instead — same commi
     line: 'yatsu <sub>           measure a node’s scenarios & file the loss signal: scan | eval | retract | show | clean',
     body: `Usage: spex yatsu scan [--changed]                       list nodes/scenarios missing readings
        spex yatsu eval [.|<node>] [--scenario <name>] (--pass|--fail) [--note <text>]
-                       [--image <png> …] [--result <path|->] [--video <webm|mp4> [--timeline <json>]]
+                       [--image <png> …] [--result <path|->] [--video <webm|mp4>] [--timeline <json>]
        spex yatsu retract [.|<node>] [--scenario <name>] [--last | --ts <iso>] [--note <why>]
        spex yatsu show [.|<node>] [--json]              readings history for a node
        spex yatsu clean [--keep-latest | --all]         prune stored readings

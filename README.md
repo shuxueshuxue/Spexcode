@@ -7,7 +7,7 @@ your git repo, links every spec to the code it governs, and runs a session manag
 coding agents into isolated worktrees. You review and merge; the tool keeps intent and
 implementation from drifting apart. (All screenshots below are this very repo on its own board.)
 
-[![This repo's spec tree, grown from its own git history](https://spexcode.net/assets/spec-tree-hero.gif)](https://spexcode.net/assets/spec-tree-growth.mp4)
+[![This repo's spec tree, grown from its own git history](docs/spec-tree-hero.gif)](https://spexcode.net/assets/spec-tree-growth.mp4)
 
 <sub>▶ This repo's own spec tree, replayed from its git history — 160 spec nodes growing over three weeks. Click for the [full video](https://spexcode.net/assets/spec-tree-growth.mp4).</sub>
 
@@ -179,22 +179,15 @@ to), and `spex guide config` documents every field. The other
 manuals are `spex guide` (the workflow), `spex guide spec`, and `spex guide yatsu`; `spex help`
 maps the commands.
 
-## Status
-
-SpexCode develops itself with itself: the `.spec/` tree in this repo is the tool's own spec, and
-every change to the tool lands through the same worker/manager loop it implements. The dashboard
-you install is the one it was built on. Known warts: `spex session new --help`
-doesn't print help, it creates a session named `--help` (dispatch with `spex new`). And the
-altitude lint currently reports forty-odd warnings against this repo's own specs; I haven't had
-time to pay that down.
-The first public write-up was posted on the [LINUX DO](https://linux.do) community — thanks for
-the first round of discussion there.
-
 ## Contributing
 
 [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) gets you from a clone to a first merged change.
 [`docs/AGENT_GUIDE.md`](docs/AGENT_GUIDE.md) has the full mechanics of the node model and the
 reflexive config system.
+
+## Credit
+
+First introduced on the [LINUX DO](https://linux.do) community — thanks to everyone there for the first round of discussion.
 
 ## License
 

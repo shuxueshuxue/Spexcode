@@ -6,7 +6,7 @@
 spec 和它管辖的代码链接起来,并运行一个会话管理器,把 coding agent 派进相互隔离的 worktree。你负责
 review 和 merge;工具负责让意图和实现不分家。(下面所有截图都是这个仓库自己跑在自己看板上的样子。)
 
-[![这个仓库自己的 spec 树,从它的 git 历史里长出来](https://spexcode.net/assets/spec-tree-hero.gif)](https://spexcode.net/assets/spec-tree-growth.mp4)
+[![这个仓库自己的 spec 树,从它的 git 历史里长出来](spec-tree-hero.gif)](https://spexcode.net/assets/spec-tree-growth.mp4)
 
 <sub>▶ 这个仓库自己的 spec 树,从它的 git 历史里回放出来——三周里长出的 160 个 spec 节点。点击看[完整视频](https://spexcode.net/assets/spec-tree-growth.mp4)。</sub>
 
@@ -158,18 +158,14 @@ spex yatsu eval settings --scenario remembers-tab --pass --image proof.png
 `spex guide config`。其他手册:`spex guide`(工作流)、`spex guide spec`、
 `spex guide yatsu`;`spex help` 列出全部命令。
 
-## 现状
-
-SpexCode 用它自己开发自己:这个仓库的 `.spec/` 树就是工具自身的 spec,对工具的每个改动都走它
-自己实现的那套 worker/manager 循环落地。你装到的看板就是造它用的那块。已知的坑:`spex session new --help`
-不会打印帮助,而是真的创建一个叫 `--help` 的会话(派工请用 `spex new`)。另外 altitude lint 现在
-对这个仓库自己的 spec 报着四十多条警告,我还没腾出手来清。首次公开介绍发在
-[LINUX DO](https://linux.do) 社区,感谢佬友们的第一轮讨论。
-
 ## 参与开发
 
 [`docs/CONTRIBUTING.md`](./CONTRIBUTING.md) 带你从 clone 到第一个合入的改动。
 [`docs/AGENT_GUIDE.md`](./AGENT_GUIDE.md) 有节点模型和反身配置系统的完整机制。
+
+## 致谢
+
+首次公开介绍发在 [LINUX DO](https://linux.do) 社区,感谢佬友们的第一轮讨论。
 
 ## License
 

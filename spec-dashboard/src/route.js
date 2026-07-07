@@ -42,6 +42,15 @@ export const sessionAddress = (sessionId) => ({ kind: 'session', sessionId })
 export const issueAddress = (issueId) => ({ kind: 'issue', issueId })
 export const evalAddress = (nodeId, scenario) => ({ kind: 'eval', nodeId, scenario })
 
+export function addressHash(address) {
+  if (!address) return routeHash('graph')
+  if (address.kind === 'graph-node') return routeHash('graph')
+  if (address.kind === 'session') return routeHash('sessions', address.sessionId)
+  if (address.kind === 'issue') return routeHash('issues', address.issueId)
+  if (address.kind === 'eval') return routeHash('evals', `${address.nodeId}/${address.scenario}`)
+  return routeHash('graph')
+}
+
 // One app-internal address executor for jump-list style surfaces. Graph focus is the one route whose
 // address carries view state outside the hash, so the caller supplies the focus/open callbacks.
 export function navigateAddress(address, { onFocusNode, onOpenSession } = {}) {
@@ -52,10 +61,9 @@ export function navigateAddress(address, { onFocusNode, onOpenSession } = {}) {
   } else if (address.kind === 'session') {
     if (onOpenSession) onOpenSession(address.sessionId)
     else navigate('sessions', address.sessionId)
-  } else if (address.kind === 'issue') {
-    navigate('issues', address.issueId)
-  } else if (address.kind === 'eval') {
-    navigate('evals', `${address.nodeId}/${address.scenario}`)
+  } else {
+    const { page, param } = parseRoute(addressHash(address))
+    navigate(page, param)
   }
 }
 

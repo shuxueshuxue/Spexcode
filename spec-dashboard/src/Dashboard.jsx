@@ -119,9 +119,11 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
     [sessions],
   )
 
-  const openEval = useCallback(() => { setPane('eval'); setOverlay(true) }, [])
   const openSession = useCallback((id) => { setSessionSel(id); navigate('sessions', id) }, [])
   const startNew = useCallback((text) => { setSessionSel('new'); setSeed(text); navigate('sessions', 'new') }, [])
+  const onNavigateAddress = useCallback((address) => {
+    navigateAddress(address, { onFocusNode: setFocusId, onOpenSession: openSession })
+  }, [openSession])
 
   // sessions overlaying the right-clicked node — its live worktrees (overlay.source === session.source).
   // The node-menu appends one item per session below its verbs, the one mouse path into an existing
@@ -137,8 +139,8 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
   // (graph node, session tab, issue detail, or eval detail). The palette's caller supplies only the view
   // callbacks needed for non-hash state; the address helper owns the route shape.
   const onSearchPick = useCallback((e) => {
-    navigateAddress(e.address, { onFocusNode: setFocusId, onOpenSession: openSession })
-  }, [openSession])
+    onNavigateAddress(e.address)
+  }, [onNavigateAddress])
 
   // sel ↔ URL, two one-way syncs that converge: a deep-linked / history-walked `#/sessions/<sel>` applies
   // its param to the selection; a selection made in the UI is ECHOED into the hash with replace (no history
@@ -568,7 +570,7 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
 
       {/* the divider the focus panel hangs on — an 8px col-resize hit strip straddling the pane border */}
       <div className="pane-resizer" onMouseDown={fpDrag} role="separator" aria-orientation="vertical" />
-      <FocusPanel node={focus} onOpenEval={openEval} />
+      <FocusPanel node={focus} onNavigateAddress={onNavigateAddress} />
       </div>
 
       {/* key on focus.id: remount when the open overlay switches nodes, so the lazily-fetched body ([[board-lean]])

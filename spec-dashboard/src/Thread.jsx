@@ -166,9 +166,11 @@ export function Replies({ replies, onSeek, selIdx = null, activeIdx = null, onSe
   })
 }
 
-// the docked composer bar — the console-❯-box shape, shared by every home: COLLAPSED to a single line
-// while idle, it auto-grows with the draft (the shared fitTextarea, capped by its CSS max-height) and
-// reveals its actions row (⏱ / hint / Send, plus any host-supplied lifecycle action) while engaged — focused,
+// the docked composer bar — the console-❯-box shape, shared by every home: its writing surface is
+// ALREADY USABLE at idle — a multi-line textarea floored at ~3 lines, never a hairline one-line sliver and
+// never a click-to-expand — and it auto-grows with the draft ABOVE that floor (the shared fitTextarea,
+// floored by CSS min-height, capped by CSS max-height). It reveals its actions row (⏱ / hint / Send, plus
+// any host-supplied lifecycle action) while engaged — focused,
 // carrying a draft or staged frames, showing a send error, or carrying a host action that must stay visible.
 // Posts through the caller's `onSend(text, evidence)` as 'human'. An @-mention in the text summons a worker; the returned outcomes
 // string surfaces via onDone. The textarea carries the SAME `[[node]]`/`@session` autocomplete as the
@@ -189,12 +191,16 @@ export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = nul
   const engaged = focused || !!body || frames.length > 0 || !!err
   const showActions = engaged || !!actionsEnd
 
-  // auto-grow like the ❯ box: refit on every draft change AND on the engage flip (the actions row
-  // mounting shifts the layout, and a collapsed remount must land back at one line). The cap is the
-  // textarea's CSS max-height.
+  // auto-grow like the ❯ box, but floored at a USABLE idle height: refit on every draft change AND on the
+  // engage flip (the actions row mounting shifts the layout). The floor (CSS min-height) is the idle
+  // writing surface — a few lines tall, already usable with no click-to-expand; autogrow lives above it,
+  // capped by CSS max-height so it never eats the pane. Both bounds are read from the textarea's own CSS,
+  // so the composer's geometry stays one source of truth.
   useEffect(() => {
     const ta = taRef.current
-    if (ta) fitTextarea(ta, parseFloat(getComputedStyle(ta).maxHeight) || Infinity)
+    if (!ta) return
+    const cs = getComputedStyle(ta)
+    fitTextarea(ta, parseFloat(cs.maxHeight) || Infinity, parseFloat(cs.minHeight) || 0)
   }, [body, showActions])
 
   // a circle prefills this composer: replace the draft with its anchored body + frame link, then focus for

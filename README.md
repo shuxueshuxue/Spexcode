@@ -7,7 +7,7 @@ your git repo, links every spec to the code it governs, and runs a session manag
 coding agents into isolated worktrees. You review and merge; the tool keeps intent and
 implementation from drifting apart. (All screenshots below are this very repo on its own board.)
 
-English | [中文](./README.zh-CN.md) · Docs: [spexcode.net](https://spexcode.net) · License: MIT
+English | [中文](./docs/README.zh-CN.md) · Docs: [spexcode.net](https://spexcode.net) · License: MIT
 
 Quick links: [the model](#the-model) · [quick start](#quick-start) ·
 [agents](#working-with-agents) · [yatsu](#measuring-behavior-yatsu) · [config](#configuration)
@@ -123,7 +123,10 @@ prompt stays task-only. More on this mode of working:
 
 ## Measuring behavior: yatsu
 
-yatsu is the measuring half of [the loop](#the-optimization-loop). A spec says what a part should do; a
+yatsu — short for **You As The Stupid User** — is the measuring half of
+[the loop](#the-optimization-loop): you measure behavior from the product's real surface, the way a
+clueless real end user would touch it, not through an internal helper or shortcut that makes the
+proof easy. A spec says what a part should do; a
 `yatsu.md` beside it says how to check. Each scenario is a plain description plus an expected
 result. yatsu itself runs nothing (no DSL, no runner). An agent runs the scenario however it can:
 a test file, a real browser, or just clicking through by hand and screenshotting. It compares

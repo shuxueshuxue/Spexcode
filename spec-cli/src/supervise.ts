@@ -17,7 +17,7 @@ import { runtimeRoot } from './layout.js'
 installProcessGuards()
 
 const here = dirname(fileURLToPath(import.meta.url))
-const tsx = tsxBin(join(here, '..'))   // this package's own tsx — spec-cli/node_modules (dev) or pkg root (published)
+const tsx = tsxBin(join(here, '..'))   // tsx's JS entry (dist/cli.mjs), run via `node` below — dev or published
 const entry = join(here, 'index.ts')                          // the real Hono server
 const publicPort = Number(process.env.PORT || 8787)
 
@@ -79,7 +79,7 @@ async function boot(): Promise<Backend | null> {
   // process.env.SPEXCODE_API_URL: the env this serve itself inherited may carry ANOTHER project's backend
   // (the exact misroute [[remote-client]]'s ladder exists to kill), and a worker's env is its routing
   // LIFELINE — it must be a deterministic backend-injected fact, not an inheritance gamble.
-  const child = spawn(tsx, [entry], { stdio: 'inherit', env: { ...process.env, PORT: String(port), SPEXCODE_API_URL: childApiBase } })
+  const child = spawn(process.execPath, [tsx, entry], { stdio: 'inherit', env: { ...process.env, PORT: String(port), SPEXCODE_API_URL: childApiBase } })
   // if the ACTIVE backend dies unexpectedly (crash, OOM), restart it so the public port keeps serving.
   // Planned retirement sets current to the NEW child first, so the old child's exit fails this identity
   // check and is ignored. boot()'s ~5s health budget rate-limits any crash loop.

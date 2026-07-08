@@ -118,9 +118,12 @@ export default function IssuesPage({ onFocusNode, onOpenSession, specs = [], ses
               )}
               <IconButton icon="plus" size={12} className="fv-new-btn" label={t('session.issuesNew')} onClick={() => setComposing(true)} />
             </span>
-            {(liveCount > 0 || concludedCount > 0) && (
+            {(liveOnly || liveCount > 0 || concludedCount > 0) && (
               <span className="ef-chipbar">
-                {liveCount > 0 && (
+                {/* [[live-session-filter]]: the live chip self-hides at N=0 ONLY while the filter is OFF; once
+                    liveOnly is on it stays mounted as liveCount → 0 (the originating sessions close), so the
+                    filter is always releasable and the issues list never dead-ends empty. */}
+                {(liveOnly || liveCount > 0) && (
                   <button type="button" className={`ef-chip fv-live ${liveOnly ? 'on' : ''}`} onClick={() => setLiveOnly((v) => !v)}
                     data-tip={t('masterList.liveChipTitle')}>
                     {t('masterList.liveChip', { n: liveCount })}

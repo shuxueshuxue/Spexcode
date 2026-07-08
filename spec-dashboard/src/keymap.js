@@ -46,4 +46,4 @@ export const ACT = [
 
 // KeyboardEvent.key → display glyph for the keymap chips (shared by the legend and the settings editor).
 export const KEY_GLYPH = { ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Enter: '⏎', Escape: 'esc', ' ': '␣', '-': '−' }
-export const keyCap = (k) => KEY_GLYPH[k] || k
+export const keyCap = (k) => KEY_GLYPH[k] || (/^[A-Z]$/.test(k) ? `⇧ ${k}` : k)

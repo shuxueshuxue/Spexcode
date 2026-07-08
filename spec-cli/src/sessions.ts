@@ -1515,7 +1515,41 @@ export function resolveSession(selector: string, sessions: Session[]): Resolved 
   return hits.length ? { ambiguous: hits } : { none: true }
 }
 
-const trunc = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + '\u2026' : s)
+// @@@ display width - the table aligns by TERMINAL CELLS, not code units. CJK/fullwidth glyphs render
+// two cells wide, so `slice`/`padEnd` (which count code units) shear a wide glyph mid-cut and under-pad
+// the column, misaligning everything after it. A small wcwidth-style range check covers the wide blocks
+// that actually reach session labels/prompts \u2014 no dependency needed.
+const isWideCp = (cp: number): boolean =>
+  (cp >= 0x1100 && cp <= 0x115f) ||                   // Hangul Jamo
+  (cp >= 0x2e80 && cp <= 0xa4cf && cp !== 0x303f) ||  // CJK radicals \u2026 kana \u2026 CJK ideographs \u2026 Yi
+  (cp >= 0xac00 && cp <= 0xd7a3) ||                   // Hangul syllables
+  (cp >= 0xf900 && cp <= 0xfaff) ||                   // CJK compatibility ideographs
+  (cp >= 0xfe30 && cp <= 0xfe4f) ||                   // CJK compatibility forms
+  (cp >= 0xff00 && cp <= 0xff60) ||                   // fullwidth forms
+  (cp >= 0xffe0 && cp <= 0xffe6) ||                   // fullwidth signs
+  (cp >= 0x1f300 && cp <= 0x1faff) ||                 // emoji
+  (cp >= 0x20000 && cp <= 0x3fffd)                    // CJK extensions B+
+export function displayWidth(s: string): number {
+  let w = 0
+  for (const ch of s) w += isWideCp(ch.codePointAt(0)!) ? 2 : 1
+  return w
+}
+// truncate to a display width (the ellipsis occupies its own cell); never cuts a wide glyph in half.
+export function truncWidth(s: string, max: number): string {
+  if (displayWidth(s) <= max) return s
+  let w = 0
+  let out = ''
+  for (const ch of s) {
+    const cw = isWideCp(ch.codePointAt(0)!) ? 2 : 1
+    if (w + cw > max - 1) break
+    out += ch
+    w += cw
+  }
+  return out + '\u2026'
+}
+// pad to a display width \u2014 `padEnd` would count a double-cell glyph as one and under-pad the column.
+export const padWidth = (s: string, w: number): string => s + ' '.repeat(Math.max(0, w - displayWidth(s)))
+const trunc = truncWidth
 // the board table's NOTE display cap \u2014 exported so the declaration echo (cli.ts) can tell an author
 // exactly where their note gets cut, instead of the cap living as an anonymous magic number here.
 export const NOTE_BOARD_LIMIT = 50
@@ -1541,10 +1575,10 @@ export function formatTable(sessions: Session[], color = true): string {
   const rows = sessions.map((s) => {
     const g = STATUS_GLYPH[s.status] ?? '\u00b7'
     const code = ANSI[s.status] ?? '0'
-    const name = sessionLabel(s).slice(0, 22).padEnd(22)
+    const name = padWidth(truncWidth(sessionLabel(s), 22), 22)
     const st = s.status.padEnd(13)
     const merges = (s.merges ? `\u00d7${s.merges}` : '').padEnd(4)
-    const prompt = c('90', (s.promptPreview ? trunc(s.promptPreview, 40) : '').padEnd(42))   // what it was asked to do
+    const prompt = c('90', padWidth(s.promptPreview ? trunc(s.promptPreview, 40) : '', 42))   // what it was asked to do
     const note = s.note ? c('90', trunc(s.note, NOTE_BOARD_LIMIT)) : ''
     return `  ${c(code, g)} ${c(code, st)} ${name} ${c('90', s.id.slice(0, 8))} ${merges}${prompt}${note}`
   })

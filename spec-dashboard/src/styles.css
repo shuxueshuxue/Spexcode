@@ -88,7 +88,7 @@ body {
 /* ---- routed page containers (evals, issues, settings) ---- */
 .page-pane { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--paper); }
 /* the evals + issues pages keep the master-detail iron rule: the outer page never scrolls, each region scrolls internally */
-.page-evals, .page-issues { overflow: hidden; padding: 10px 14px 10px 0; }
+.page-evals, .page-issues { overflow: hidden; padding: 0 14px 10px 0; }
 .page-settings { overflow: auto; flex-direction: row; justify-content: center; }
 .settings-body { width: min(720px, 94%); padding: 26px 0 60px; }
 .page-title { font-size: 17px; font-weight: 700; color: var(--ink2); margin: 6px 2px 14px; }
@@ -1312,10 +1312,9 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* Active session: FLAT — the terminal fills the pane directly (no inner box, no title bar). A slim action
    strip sits above it, and the ❯ input docks at the bottom as an upward-growing overlay. */
 .si-content.is-session .si-term-body { animation: si-expand .22s ease; }
-/* --si-dock-h: the fixed strip reserved at the pane bottom for the RESTING single-line ❯ box (its 12px
-   bottom offset + the ~38px box + a hair of gap). The terminal ends ABOVE this strip; the box's upward
+/* --si-dock-h: the fixed strip reserved at the pane bottom for the RESTING single-line ❯ box. The terminal ends ABOVE this strip; the box's upward
    multi-line growth overlays past it (see .si-term-body's margin-bottom and .si-bottom below). */
-.si-content.is-session { --si-dock-h: 54px; }
+.si-content.is-session { --si-dock-h: 44px; }
 /* horizontal TAB BAR in place of the old title/action strip: the two tabs (Terminal | Proof) on the left,
    the state-narrowed lifecycle actions on the right. It wears the app-chrome `--panel` background + a bottom
    separator so it reads VISIBLY APART from the dark terminal below it, in both light and dark themes (the old
@@ -1343,9 +1342,10 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* the ❯ box is a bottom-anchored OVERLAY (not in flow): at rest its single line sits in the strip the
    terminal reserved for it (--si-dock-h, above), so the two abut without overlapping. As its textarea wraps
    it grows UPWARD, floating over the terminal's lower edge — its opaque panel background occludes what it
-   covers — without pushing the terminal or moving any sibling. flex-end keeps the ❯ on the bottom line. */
-.si-bottom { position: absolute; left: 12px; right: 12px; bottom: 12px; z-index: 2; display: flex; align-items: flex-end; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
-.si-prompt { color: var(--blue); flex: none; }
+   covers — without pushing the terminal or moving any sibling. The resting single-line state centers every
+   control on one visual line inside the docked footer. */
+.si-bottom { position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; display: flex; align-items: center; gap: 8px; min-height: 44px; box-sizing: border-box; padding: 7px 14px; border: 1px solid var(--line); border-left: 0; border-right: 0; border-bottom: 0; border-radius: 0; background: var(--panel); }
+.si-prompt { color: var(--blue); flex: none; line-height: 20px; }
 .si-bottom .si-input:disabled { color: var(--muted); }
 /* fail-loud: /keys dispatch failed — outline red and show the message wasn't delivered (draft restored). */
 .si-bottom.err { border-color: var(--orange); }
@@ -1411,7 +1411,8 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   overflow-y: auto !important; overflow-x: hidden !important;
   background: var(--term-bg) !important;
 }
-.si-bottom .si-input { color: var(--ink2); }
+.si-bottom .si-input { color: var(--ink2); min-height: 20px; line-height: 20px; padding: 0; }
+.si-bottom .si-attach { align-self: center; height: 20px; line-height: 20px; }
 
 /* the action strip's headline ([[session-activity]]): the SAME sessionHeadline the rows show, dim, taking the
    free width (flex:1) and only ellipsising when it overflows this wide strip — far more room than the compact

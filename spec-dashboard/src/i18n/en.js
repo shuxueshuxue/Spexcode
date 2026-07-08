@@ -202,7 +202,10 @@ export default {
   // the user the key to walk that session's changed nodes — or that the session has none to show.
   lockHint: {
     cycleBefore: 'press ',
-    cycleAfter: ({ n }) => ` to cycle its ${n} changed node${n === 1 ? '' : 's'}`,
+    cycleNext: ' next',
+    cyclePrev: ' previous',
+    cycleAfter: ({ n }) => ` through this session's ${n} changed nodes`,
+    singleChanged: 'this session changed 1 node',
     empty: 'this session has no pending spec changes',
     release: 'release',
     releaseTitle: 'release the lock (or click the session again)',

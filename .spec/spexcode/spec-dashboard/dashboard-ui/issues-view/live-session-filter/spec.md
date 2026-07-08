@@ -26,7 +26,12 @@ the evals feed — to exactly those entries, using the aliveness the originator 
   **"N live"** toggle chip on their head's CHIP row (second row — the control row is for fold/filter/New).
   Same `ef-chip` grammar and toggle interaction as the concluded-count chip: click narrows, click again
   releases; the chip hides itself when nothing is live (N = 0), like every self-hiding filter control on
-  these bars.
+  these bars — **but self-hiding is gated on the filter being OFF**. A live filter drives its own liveness
+  count toward zero (the very sessions it keeps close normally right after their merge), so a chip that
+  vanished at N = 0 *while the filter was on* would strand the surface empty with no way to release it —
+  the one control that clears the filter is the chip itself. So while the filter is on the chip stays
+  mounted even at N = 0 (it may read "0 live"), always releasable; it only disappears once the filter is
+  off. A filter must never be able to hide its own off-switch.
 - **Live means: a session behind the entry is still alive.** For an issue, that is its originator
   (`issue.by`) or any reply author; for a reading, its filer (`by`). Aliveness is the ONE join the
   originator chip already renders — `session.js`'s `liveSession` (listed on the board and not offline,

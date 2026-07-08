@@ -120,7 +120,10 @@ export default function EvalsGroup({ nodes = [], sessions = [], sel, onSel, onRo
           <FilterSelect value={effKind} onChange={setKind}
             options={['video', 'image', 'all'].map((k) => ({ value: k, label: t(`evalsFeed.kind.${k}`) }))} />
         </span>
-        {liveCount > 0 && (
+        {/* [[live-session-filter]]: the chip self-hides at N=0 ONLY while the filter is OFF. Once liveOnly
+            is on it stays mounted even as liveCount → 0 (the routine case: the live filer worker closes
+            after its merge), so the filter is always releasable and the feed never dead-ends empty. */}
+        {(liveOnly || liveCount > 0) && (
           <span className="ef-chipbar">
             <button type="button" className={`ef-chip fv-live ${liveOnly ? 'on' : ''}`} onClick={() => setLiveOnly((v) => !v)}
               data-tip={t('masterList.liveChipTitle')}>

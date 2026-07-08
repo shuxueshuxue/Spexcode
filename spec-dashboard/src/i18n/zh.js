@@ -197,7 +197,10 @@ export default {
 
   lockHint: {
     cycleBefore: '按 ',
-    cycleAfter: ({ n }) => ` 循环浏览它更改的 ${n} 个节点`,
+    cycleNext: ' 下一个',
+    cyclePrev: ' 上一个',
+    cycleAfter: ({ n }) => `，浏览此会话更改的 ${n} 个节点`,
+    singleChanged: '此会话更改了 1 个节点',
     empty: '此会话没有待处理的规格更改',
     release: '解除',
     releaseTitle: '解除锁定（或再次单击该会话）',
@@ -366,8 +369,8 @@ export default {
     launcherLabel: '启动器',
     tabTerminal: '终端',
     tabEval: '评测',
-    typeBtn: '打字',
-    typeTitle: '打字模式——把原始按键（含 ⌃/⌥/⌘ 组合键）直接敲进智能体的终端（⌥/⌘+I）',
+    typeBtn: '终端交互',
+    typeTitle: '终端交互模式——把原始按键（含 ⌃/⌥/⌘ 组合键）直接发送到智能体的终端（⌥/⌘+I）',
     relaunch: '重新启动',
     merge: '合并',
     relaunchResume: '⏵ 重新启动并恢复',
@@ -376,9 +379,9 @@ export default {
     offlineMsg: '⏻ 离线——此工作树没有活动进程。',
     offlineSubBefore: '工作树及其会话 ',
     offlineSubAfter: ' 仍然完好。重新启动以恢复同一对话。',
-    typeInd: '⌨ 打字模式',
-    typeHelp: '按键（含 ⌃/⌥/⌘ 组合键）将发送给会话 · ⌥/⌘+I、Esc-Esc 或点击退出',
-    typeExit: '点击退出打字模式',
+    typeInd: '⌨ 终端交互模式',
+    typeHelp: '按键（含 ⌃/⌥/⌘ 组合键）将发送到终端 · ⌥/⌘+I、Esc-Esc 或点击退出',
+    typeExit: '点击退出终端交互模式',
     msgOffline: '重新启动以向此会话发送消息',
     msgPlaceholder: '向此会话发送消息 · ⏎ 发送',
     msgError: '⚠ 未送达 — 重试',
@@ -387,7 +390,7 @@ export default {
     // 面板命令 —— ❯ 输入框在本地执行（不发送给智能体）的 `/` 命令，每条都是某个顶栏按钮的“打字版”。
     // `*Desc` 是 `/` 菜单行的说明；`*Title` 是按钮的悬停提示。
     cmd: {
-      typeDesc: '打字模式 —— 把原始按键直接敲进智能体的终端',
+      typeDesc: '终端交互模式 —— 把原始按键直接发送到智能体的终端',
       evalDesc: '切换到此会话的评测页 —— yatsu 证据、改动、合并门禁',
       mergeTitle: '将此会话合并到 main',
       mergeDesc: '将此会话合并到 main',

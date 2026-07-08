@@ -17,10 +17,11 @@ import { useResizable } from './useResizable.js'
 import { layout, X_GAP, Y_GAP } from './data.js'
 import { createMomentumScroll } from './scroll.js'
 import { cycleNext } from './cycle.js'
-import { firesKey } from './bindings.js'
+import { firesKey, keysOf } from './bindings.js'
 import { returnFocus } from './focus.js'
 import { labelColor } from './color.js'
 import { sessionHeadline } from './session.js'
+import { lockCycleKeyLabels, showLockCycleKeys } from './lockHint.js'
 import { useT } from './i18n/index.jsx'
 
 // code-split the heavy leaves off the desktop entry chunk: the session console drags in xterm (+addons),
@@ -114,6 +115,7 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
     [specs, highlightId],
   )
   const cycleNodes = useMemo(() => (highlightId ? lockedNodes : overlayNodes), [highlightId, lockedNodes, overlayNodes])
+  const lockCycleKeys = lockCycleKeyLabels(keysOf)
 
   const liveEditorsOf = useCallback(
     (node) => (node ? sessions.filter((s) => s.ops?.some((op) => op.nodeId === node.id)) : []),
@@ -555,7 +557,13 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
             <span className="lock-hint-lead"><LockGlyph /> {sessionHeadline(lockedSession)}</span>
             {lockedNodes.length ? (
               <span className="lock-hint-body">
-                {t('lockHint.cycleBefore')}<kbd>o</kbd><kbd>O</kbd>{t('lockHint.cycleAfter', { n: lockedNodes.length })}
+                {showLockCycleKeys(lockedNodes.length) ? (
+                  <>
+                    {t('lockHint.cycleBefore')}<kbd>{lockCycleKeys.next}</kbd>{t('lockHint.cycleNext')}
+                    <span className="lock-hint-sep"> / </span>
+                    <kbd>{lockCycleKeys.prev}</kbd>{t('lockHint.cyclePrev')}{t('lockHint.cycleAfter', { n: lockedNodes.length })}
+                  </>
+                ) : t('lockHint.singleChanged')}
               </span>
             ) : (
               <span className="lock-hint-body">{t('lockHint.empty')}</span>

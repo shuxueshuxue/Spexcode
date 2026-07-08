@@ -802,7 +802,13 @@ export const isBackendDown = (e: unknown): boolean => e instanceof Error && e.na
 export const isBackendUnreachable = (e: unknown): boolean =>
   isBackendDown(e) && (e as { status?: number }).status === undefined
 
-const slugify = (s: string | null) => (s || 'session').replace(/[^a-zA-Z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'session'
+// @@@ slugify - the branch/worktree-safe slug. Keeps ANY unicode letter/number (git refs and the filesystem
+// take unicode), so a CJK prompt survives as the readable name its author typed instead of being stripped to
+// nothing — transliteration would buy ASCII at the cost of a dependency and a name nobody wrote. NFC pins one
+// canonical byte form across IME/OS variants. Non-empty is guaranteed by the 'session' fallback; uniqueness
+// is the caller's job (newSession suffixes the session short-id).
+export const slugify = (s: string | null) =>
+  (s || 'session').normalize('NFC').replace(/[^\p{L}\p{N}_-]+/gu, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '') || 'session'
 
 // @@@ node + title from the prompt - the spec node a session works on is whatever it @-mentions, NOT a UI
 // "focused node": the dashboard prefills `@<focused> ` as a deletable convenience, so the node the user
@@ -813,8 +819,14 @@ const slugify = (s: string | null) => (s || 'session').replace(/[^a-zA-Z0-9_-]/g
 // (`.config`) keeps the dot — without `\.?` here `[[.config]]` captures nothing and never resolves to a node.
 const MENTION = /\[\[(\.?[A-Za-z0-9_-]+)\]\]/
 const mentionedNode = (prompt: string): string | null => prompt.match(MENTION)?.[1] ?? null
-function titleFromPrompt(prompt: string): string | null {
-  const first = (prompt || '').trim().split('\n')[0].trim()
+// @@@ identity-token strip - an `@session` actor mention ([[mentions]]) or a bare UUID-shaped token in the
+// prompt is ANOTHER session's identity, never this one's name. A title/slug wearing it misleads every
+// board/git surface — and a worker tasked with cleaning that session can match its OWN worktree and delete
+// it from under itself. Strip both before deriving; whatever prose remains names the session.
+const UUID_TOKEN = /\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b/g
+const stripIdentityTokens = (s: string) => s.replace(/(^|\s)@[A-Za-z0-9_-]+/g, '$1').replace(UUID_TOKEN, ' ')
+export function titleFromPrompt(prompt: string): string | null {
+  const first = stripIdentityTokens(prompt || '').split('\n').map((l) => l.trim()).find(Boolean) || ''
   const words = first.split(/\s+/).filter(Boolean).slice(0, 7).join(' ')
   if (!words) return null
   return words.length > 50 ? words.slice(0, 49).trimEnd() + '…' : words

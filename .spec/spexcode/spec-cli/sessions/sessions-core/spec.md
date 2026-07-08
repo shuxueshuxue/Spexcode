@@ -5,6 +5,7 @@ hue: 280
 desc: The shared session module every session feature builds on — the global per-session record I/O, worktree/branch/node resolution, and the launch/state/dispatch/poll plumbing the lifecycle and comms nodes each specialize.
 code:
   - spec-cli/src/sessions.ts
+  - spec-cli/src/sessionSlug.test.ts
 ---
 # sessions-core
 
@@ -21,7 +22,13 @@ sessions-core owns `sessions.ts` — the common session layer: the global per-se
 (`session.json` keyed by session_id, [[runtime]]), session↔worktree↔node resolution, the launch-script
 assembly (the rendezvous env + the harness's own command + the spec-pointer/prompt tail — carrying NO
 `--append-system-prompt`/`--settings` flag, since the contract and hooks reach the agent by worktree
-auto-discovery, see [[harness-delivery]]), and the poll loop the watch/wait subscriptions share. Worktree
+auto-discovery, see [[harness-delivery]]), and the poll loop the watch/wait subscriptions share. The branch/worktree slug and the prompt-derived
+title are the session's OWN identity: derivation strips actor mentions (`@session`, [[mentions]]) and
+UUID-shaped tokens first — a prompt that mentions another session must never name this one after it, or a
+worker sent to clean that session can match its own worktree — and the slug keeps unicode letters/numbers,
+so a CJK prompt survives as the readable name its author typed (git refs take unicode; transliteration
+would trade that for a dependency and a name nobody wrote). Worst case the slug falls back to `session`,
+kept unique by the session short-id suffix. Worktree
 prep also links the untracked spec sources from the main checkout into every fresh session worktree — the
 seam that keeps a [[private-overlay]] repo's dispatched agents spec-sighted and hook-alive (the policy and
 its helper module belong to private-overlay; here it is the one call after `worktree add`). The

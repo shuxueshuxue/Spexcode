@@ -3,7 +3,7 @@ import { git, gitA, repoRoot, driftIndex, historyIndex, type ReviewDiffFile } fr
 import { loadSpecs } from '../../spec-cli/src/specs.js'
 import { mainBranch } from '../../spec-cli/src/layout.js'
 import { reviewPayload } from '../../spec-cli/src/sessions.js'
-import { evalTimeline, evalContext, readBlobByHash, type EvalEntry } from './evaltab.js'
+import { evalTimeline, evalContext, readBlobByHash, type EvalEntry, type EvalTimeline } from './evaltab.js'
 import { isUiPath } from './cli.js'
 
 // ---- the model ----
@@ -112,7 +112,7 @@ export async function buildProofModel(id: string): Promise<ProofModel | null> {
   for (const [nid, files] of byNode) {
     const spec = specById.get(nid)
     const tl = await evalTimeline(nid, ctx)
-    const latest = latestPerScenario(tl.readings)
+    const latest = declaredLatest(tl)
     const readings = await Promise.all(latest.map(toProofReading))
     for (const r of latest) {
       total++
@@ -220,6 +220,17 @@ function latestPerScenario(readings: EvalEntry[]): EvalEntry[] {
   return out
 }
 
+// the DECLARED scenarios' latest reading — the SAME declared-bounded computation every other eval face reads
+// (score.jsx's scenarioStates for the node badge and the eval tab). A reading whose scenario is no longer in
+// yatsu.md is residual: the append-only sidecar still carries it, but it is not current loss, so it must not
+// become a proof reading card, a passed/total tick, or a node score. The proof was the one face driven by the
+// readings that happen to exist rather than the scenarios that are declared — this bounds it like the rest, so
+// a retired scenario's stale reading can't make the proof disagree with the dashboard (phantom card, off ribbon).
+export function declaredLatest(tl: EvalTimeline): EvalEntry[] {
+  const declared = new Set(tl.scenarios.map((s) => s.name))
+  return latestPerScenario(tl.readings).filter((r) => declared.has(r.scenario))
+}
+
 // ---- scoring (mirrors the dashboard's score.jsx vocabulary, on the EvalEntry shape) ----
 
 const verdictMark = (r: { verdict?: EvalEntry['verdict'] }) =>
@@ -234,7 +245,7 @@ function readingScore(r: EvalEntry): ScoreState {
 
 // worst-first aggregate over the latest reading per scenario: any fresh fail → fail; else any stale → grey
 // (✗ if any stale last-failed, else ✓); else any unscored scenario → empty; else every scenario fresh-passes.
-function nodeScore(hasYatsu: boolean, latest: EvalEntry[]): ScoreState {
+export function nodeScore(hasYatsu: boolean, latest: EvalEntry[]): ScoreState {
   if (!hasYatsu) return null
   if (!latest.length) return 'empty'
   if (latest.some((r) => r.fresh && verdictMark(r) === 'cross')) return 'fail'

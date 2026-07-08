@@ -1,5 +1,23 @@
 ---
 scenarios:
+  - name: proof-bounds-declared
+    tags: [backend-api]
+    code: [spec-yatsu/src/proof.ts, spec-yatsu/src/proof.test.ts]
+    description: >
+      Score a node that declares ONE passing scenario while its append-only yatsu.evals.ndjson still carries
+      a second, RETIRED scenario's stale reading (removed from yatsu.md but never deleted from the sidecar).
+      Read the proof model's node score, its passed/total ribbon, and the reading cards it renders, and put
+      them beside the dashboard's own reading of the same node (score.jsx scenarioStates → aggregateState /
+      ScenarioCount). The two must agree.
+    expected: >
+      The proof scores ONLY the declared scenario, exactly like every other eval face: one reading card (the
+      retired scenario's residual reading produces NO phantom card), the node reads a fresh pass, and the
+      ribbon counts 1/1 — never 1/2, never a grey stalePass dragged in by the retired reading. This matches
+      the dashboard's ScenarioCount (✓1/1) and aggregateState (pass) byte-for-byte: a reading whose scenario
+      is no longer declared is residual, not current loss, so it flows into neither the score, the ribbon,
+      nor the cards. The proof and the dashboard read one declared-bounded latest-per-scenario, so a merge
+      reviewer can never see the proof claim a deleted scenario as outstanding loss the board has already
+      dropped.
   - name: proof-renders
     tags: [frontend-e2e, desktop]
     description: >

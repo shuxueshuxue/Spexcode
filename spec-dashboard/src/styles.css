@@ -163,6 +163,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   border: 1px solid var(--line); border-radius: 3px; padding: 0 5px; margin: 0 1px;
   color: var(--blue); font-family: var(--mono); font-size: 11px;
 }
+.lock-hint-sep { color: var(--muted); }
 .lock-hint-release {
   flex: none; cursor: pointer; padding: 1px 8px;
   background: var(--paper); border: 1px solid var(--line); border-radius: 4px;

@@ -35,20 +35,23 @@ if (conflicted.length) {
   console.error('spex executes this TypeScript directly (no build step); resolve the merge, then retry. (exit 75)')
   process.exit(75)
 }
-// tsx lives in spec-cli/node_modules in the dev monorepo, but npm may hoist it above the installed
-// `spexcode` package in a real consumer project. Try local candidates first, then let Node resolve upward
-// from spec-cli so project-local and global installs work the same way.
-const tsxCandidates = [join(pkg, 'node_modules', '.bin', 'tsx'), join(pkg, '..', 'node_modules', '.bin', 'tsx')]
-function resolveTsx() {
-  const local = tsxCandidates.find(existsSync)
-  if (local) return local
+// @@@ cross-platform tsx resolution ([[platform-support]]) - resolve tsx's JS ENTRY (dist/cli.mjs) with
+// Node's own resolver from spec-cli, then run it through THIS node binary (process.execPath). tsx may live
+// in spec-cli/node_modules (dev) or be hoisted above the installed `spexcode` package (a real consumer
+// project) — one resolver covers both without hardcoded consumer paths. We deliberately never spawn the
+// `.bin/tsx` shim, nor a `.mjs` directly: on Windows the shim is an extensionless sh script and the `.mjs`
+// leans on a shebang, neither of which `child_process.spawn` can execute — that is the #37 crash
+// (`spawn …\node_modules\.bin\tsx ENOENT`) of `spex init`. `node dist/cli.mjs …` is shell-free and identical
+// on every OS.
+function resolveTsxCli() {
   try {
     const req = createRequire(join(pkg, 'package.json'))
     return join(dirname(req.resolve('tsx/package.json')), 'dist', 'cli.mjs')
   } catch {
-    return tsxCandidates[0]
+    console.error('spex: cannot find the `tsx` runtime this package needs — run `npm install` in the SpexCode package, then retry.')
+    process.exit(69)
   }
 }
-const tsx = resolveTsx()
-spawn(tsx, [cli, ...process.argv.slice(2)], { stdio: 'inherit' })
+const tsxCli = resolveTsxCli()
+spawn(process.execPath, [tsxCli, cli, ...process.argv.slice(2)], { stdio: 'inherit' })
   .on('exit', (code) => process.exit(code ?? 0))

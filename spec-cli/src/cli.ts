@@ -163,6 +163,11 @@ if (cmd && cmd !== 'help' && (has('help') || process.argv.includes('-h'))) {
 }
 
 if (cmd === 'serve') {
+  // fail loud, not cryptic ([[platform-support]]): serve IS the entry to the session runtime, which needs a
+  // POSIX host (tmux/bash/unix-sockets). On a non-POSIX host (native Windows) point at WSL2 and exit here,
+  // before importing the supervisor spawns tsx into a downstream ENOENT.
+  const { assertSessionRuntime } = await import('./runtime-guard.js')
+  assertSessionRuntime()
   // the supervisor owns the public port and runs index.ts as a child for zero-downtime reloads; it
   // (not `tsx watch`) is what watches spec-cli/src, so the package `serve` script must NOT use --watch.
   // --port is sugar over the PORT env supervise.ts reads — set BEFORE importing so it takes effect. This

@@ -9,6 +9,7 @@ code:
   - spec-cli/package.json
   - spec-cli/bin/spex.mjs
   - spec-cli/src/tsx-bin.ts
+  - spec-cli/src/launcher-tsx.test.ts
 related:
   - spec-cli/src/cli.ts
 ---
@@ -34,9 +35,12 @@ rewriting**. The bin and all entry source stay under `spec-cli/src`, so each mod
 at `spec-cli/` and its asset lookups (templates, hooks, dist) are unchanged. The one thing that moves is
 tsx: spec-cli is now a subdir, and a real npm install may hoist the dependency outside the `spexcode`
 package into the consuming project's `node_modules`. So the launcher and every baked `tsx + cli.ts`
-callback resolve it by one shared rule: try the dev/package-local `.bin/tsx` candidates first, then use
-Node's own package resolver from `spec-cli` to find `tsx/package.json` and run its CLI. That covers the dev
-monorepo, a global install, and a project-local install without hardcoded consumer paths. The repo-root
+callback resolve it by one shared rule: use Node's own package resolver from `spec-cli` to find tsx's JS
+entry (`tsx/dist/cli.mjs`), then run it through the current Node binary (`process.execPath`). That covers the
+dev monorepo, a global install, and a project-local install without hardcoded consumer paths — and stays
+cross-platform ([[platform-support]]): it never spawns the `.bin/tsx` shim (an extensionless sh script
+`child_process.spawn` cannot execute on Windows) nor a `.mjs` by its shebang, the crash that broke
+`spex init` on native Windows. The repo-root
 `README.md` ships too, so the npm page reads the same as GitHub. The internal `spec-cli` package stays
 private — the one public name belongs to the tool a user installs.
 

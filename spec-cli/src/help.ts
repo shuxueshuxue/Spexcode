@@ -180,16 +180,21 @@ a node/<id> branch links its PR for free). Read-only — git/.spec stays the sin
   },
   // ── dispatch & manage sessions (manager loop) ─────────────────────────────
   new: {
-    line: 'new "<prompt>"        launch a worker session in its own node worktree  [--node <id>] [--launcher <name>]',
+    line: 'new "<prompt>"        launch a worker session in its own node worktree  [--prompt-file <path>|-] [--node <id>] [--launcher <name>]',
     body: `Usage: spex new "<task prompt>" [--node <id>] [--launcher <name>]
+       spex new --prompt-file <path>|- [--node <id>] [--launcher <name>]
 
 Creates a session: node branch + worktree + a launched agent carrying your prompt (= session new).
 Give it ONLY its task — the dev-flow contract reaches it through the materialized system prompt.
+--prompt-file <path> reads the prompt from a file (- = stdin), so a long multi-paragraph prompt never
+fights shell quoting; it is exclusive with the inline prompt (both given = error), and an unreadable
+or empty file refuses the launch.
 The launcher name selects both the agent harness and the command/auth profile (built-ins: claude, codex);
 omitting it requires sessions.defaultLauncher in spexcode.json or spexcode.local.json.
 Routes through the running backend (auth env + concurrency cap); prints the created session JSON.
-Then MONITOR it: background \`spex wait <id>\`, or \`spex watch\` for the whole stream.`,
-    see: 'spex wait / spex watch (monitor) · spex review (when it proposes) · ' + SEL_NOTE.split('\n')[0],
+Then MONITOR it: background \`spex wait <id>\`, or \`spex watch\` for the whole stream.
+Talk to it with \`spex send <id> "<msg>"\` — never raw tmux keystrokes.`,
+    see: 'spex wait / spex watch (monitor) · spex send (talk to it) · spex review (when it proposes) · ' + SEL_NOTE.split('\n')[0],
   },
   ls: {
     line: 'ls [SEL…]             living-sessions table  [--status a,b] [--json] [--api URL]',

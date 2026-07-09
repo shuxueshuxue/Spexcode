@@ -9,7 +9,7 @@
 // (createIssue/createComment/closeIssue — the driver stays the only network toucher; the tracer stays read-only).
 import type { ForgeIssue, ForgePR } from '../../spec-forge/src/port.js'
 import { resolveLinks } from '../../spec-forge/src/links.js'
-import { DEFAULT_FORGE_HOST, FORGE_DRIVERS, forgeDriverFor, forgeIssueStores } from '../../spec-forge/src/drivers.js'
+import { FORGE_DRIVERS, forgeDriverFor, forgeIssueStores, resolveForgeHost } from '../../spec-forge/src/drivers.js'
 import { closeLocalIssue, loadLocalIssues, loadOne, postLocalIssue, reply, issuesEnabled, replyLocalIssue, runIssueWrite, ISSUE_WRITE_SUBS } from './localIssues.js'
 import { dispatchMentions, parseMentions, type DispatchOutcome, type LoopIn } from './mentions.js'
 import { envSessionId } from './layout.js'
@@ -191,8 +191,9 @@ export async function promote(id: string, opts: { author?: string } = {}): Promi
   const author = opts.author || envSessionId() || 'unknown'
   const t = loadOne(id)
   if (t.status !== 'open') throw new Error(`'${id}' is ${t.status} — only an open local issue promotes`)
-  const driver = forgeDriverFor(DEFAULT_FORGE_HOST)
-  if (!driver) throw new Error(`unknown default forge host '${DEFAULT_FORGE_HOST}'`)
+  const host = resolveForgeHost()
+  const driver = forgeDriverFor(host)
+  if (!driver) throw new Error(`no driver for this repo's forge host '${host}' (known: ${FORGE_DRIVERS.map((d) => d.host).join(', ')}) — promotion needs one`)
   const body = [
     t.body,
     t.nodes.length ? `\nSpec: ${t.nodes.join(', ')}` : '',
@@ -300,8 +301,9 @@ export async function runIssues(args: string[]): Promise<number> {
   const nodeIds = loadSpecsLite().map((s) => s.id)
   let forge: ForgeSlice | null = null
   try {
-    const driver = forgeDriverFor(DEFAULT_FORGE_HOST)
-    if (!driver) throw new Error(`unknown default forge host '${DEFAULT_FORGE_HOST}'`)
+    const host = resolveForgeHost()
+    const driver = forgeDriverFor(host)
+    if (!driver) throw new Error(`no driver for this repo's forge host '${host}' (known: ${FORGE_DRIVERS.map((d) => d.host).join(', ')})`)
     const [issues, prs] = await Promise.all([driver.listIssues(), driver.listPRs()])
     forge = { host: driver.host, state: { issues, prs } }
   } catch (e) {

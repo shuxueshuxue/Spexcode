@@ -292,6 +292,13 @@ the guard (the flag is the proof of intent). Reads point anywhere.
   issues.enabled      the issues-workflow on/off switch (default ON). OFF silences the post-merge nudge and
                       hides the dashboard view; the CLI toggle is \`spex issues on|off\`.
 
+── FORGE (spexcode.json — which forge this repo's remote is; a project fact, so committed) ──
+  forge.host          explicit forge host id ('github' | 'gitlab' | …) overriding the automatic derivation.
+                      Normally OMIT it: spec-forge resolves the host from the origin remote's hostname —
+                      github.com → github, a gitlab/self-hosted remote → gitlab — and only an ambiguous
+                      self-hosted domain the heuristic misreads needs the override. A resolved host with no
+                      registered driver degrades to an EMPTY forge slice (local issues still work, no error).
+
 ── LINT (spexcode.json — a top-level "lint" key; budgets are portable, so committed only) ──
   lint.governedRoots       dirs whose source files must each be governed by a spec (coverage).
                            '.' = the whole project (only git-TRACKED files). Default

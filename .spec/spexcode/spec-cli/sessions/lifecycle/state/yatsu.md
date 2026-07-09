@@ -100,11 +100,27 @@ scenarios:
       (3) the `spex ls` NOTE column. Repeat with a short note under the cap.
     expected: >-
       The note reaches the record IN FULL for all three verbs (done included — it must not silently drop its
-      --note). The board table still truncates for display, but the truncation is TRANSPARENT to the author:
-      a long note's declaration echo states the note's length, how many chars the board table shows, and
-      where the full text is readable (the session record / `spex ls --json` / `spex review`). A short note
-      gets no such line. The echo is a nudge riding the confirmation — the declaration lands regardless,
+      --note). The board table still truncates for display, but the truncation is TRANSPARENT to the author
+      — taught ONCE per session: the FIRST overflowing note's declaration echo states the note's length, how
+      many chars the board table shows, and where the full text is readable (the session record / `spex ls
+      --json` / `spex review`); SUBSEQUENT overflowing declarations in the same session carry NO repeat of
+      that notice (the rule was taught; repeating it verbatim on every park/ask is noise). A short note gets
+      no such line ever. The echo is a nudge riding the confirmation — the declaration lands regardless,
       nothing gates.
+  - name: no-record-diagnosis-self-explains
+    tags: [backend-api]
+    description: >-
+      From a governed worker shell (session env var present), cd OUTSIDE the session's project and declare —
+      (1) from a directory that is not a git repository at all (e.g. /tmp), (2) from a DIFFERENT git repo —
+      `spex session park --note <x>` each time. Then (3) from inside the project, declare with a bogus
+      `--session` id, and (4) from a plain shell with no session env and no --session.
+    expected: >-
+      No case crashes with a raw git stack trace, and no case answers a bare "no session record". Each
+      failure SAYS WHY in terms of the actual cause: the store resolves from the CURRENT directory, so (1)
+      and (2) name the cwd, state that it is not inside the session's project (a non-repo says so), and route
+      the fix — cd back into the session's worktree and re-declare; (3) states the store WAS found here but
+      holds no such session id (wrong --session); (4) states no session id is resolvable (no harness env) and
+      points at --session <id>. The declaration still writes nothing — only the diagnosis changed.
   - name: probe-failure-reads-unknown-not-offline
     tags: [backend-api]
     description: >-

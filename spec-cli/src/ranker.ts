@@ -5,7 +5,7 @@
 // is why they sit in flat plateaus rather than being fitted to any case.
 const W_NAME_PREFIX = 8
 const W_NAME_SUBSTR = 5
-const W_DESC = 3
+const W_DESC = 2
 const W_BODY = 1
 
 // a tiny stoplist of question scaffolding + length-1 tokens, dropped so "how does the … is it …" can't drown

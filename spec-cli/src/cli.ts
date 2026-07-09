@@ -52,7 +52,7 @@ function flushExit(code = 0): Promise<never> {
 }
 const has = (name: string) => process.argv.includes(`--${name}`)
 // bare positionals after argv index `from`, skipping flags and their values (selectors for ls/watch).
-const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--timeout', '--reason', '--out', '--password', '--tls-cert', '--tls-key', '--harness', '--launcher', '--harness-session', '--port', '--api', '--api-port', '--host', '--preset', '--limit', '--session', '--depth'])
+const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--prompt-file', '--timeout', '--reason', '--out', '--password', '--tls-cert', '--tls-key', '--harness', '--launcher', '--harness-session', '--port', '--api', '--api-port', '--host', '--preset', '--limit', '--session', '--depth'])
 function positionals(from: number): string[] {
   const out: string[] = []
   for (let i = from; i < process.argv.length; i++) {
@@ -505,12 +505,23 @@ if (cmd === 'serve') {
   console.error(`spex wait: timeout — ${id} did not reach an actionable status within ${timeoutSec}s`)
   process.exit(1)
 } else if (cmd === 'new') {
-  // shorthand for `spex session new`: spex new "<prompt>" [--node X]  (prompt = first positional or --prompt)
+  // shorthand for `spex session new`: spex new "<prompt>" [--node X]  (prompt = first positional or --prompt,
+  // or --prompt-file <path>|- so a long multi-paragraph prompt never fights shell quoting — [[prompt-file]]).
   // createSession POSTs to the running backend so the launch runs in the backend's process (auth env + cap);
   // it falls back to an in-process launch only when no backend answers.
   const { createSession } = await import('./sessions.js')
   if (has('harness')) { console.error('spex new: --harness was removed; use --launcher <name> (for example --launcher codex)'); process.exit(2) }
-  const prompt = flag('prompt') ?? positionals(3)[0] ?? ''
+  const promptFile = flag('prompt-file')
+  const inline = flag('prompt') ?? positionals(3)[0]
+  let prompt = inline ?? ''
+  if (promptFile !== undefined) {
+    // fail-loud exclusive: never silently pick one of two prompt sources.
+    if (inline !== undefined) { console.error('spex new: give the prompt either inline or via --prompt-file, not both'); process.exit(2) }
+    const { readFileSync } = await import('node:fs')
+    try { prompt = promptFile === '-' ? readFileSync(0, 'utf8') : readFileSync(promptFile, 'utf8') }
+    catch (e) { console.error(`spex new: --prompt-file ${promptFile}: ${e instanceof Error ? e.message : e}`); process.exit(2) }
+    if (!prompt.trim()) { console.error(`spex new: --prompt-file ${promptFile === '-' ? 'stdin' : promptFile} is empty — refusing a promptless launch`); process.exit(2) }
+  }
   const nodeArg = flag('node')
   const created = await createSession(nodeArg ? stripRefSigil(nodeArg) : null, prompt, flag('launcher') ?? undefined)
   console.log(JSON.stringify(created, null, 2))

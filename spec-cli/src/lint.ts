@@ -140,6 +140,11 @@ export async function specLint(): Promise<Finding[]> {
         out.push({ level: 'error', rule: 'integrity', spec: s.id, file: f, msg: `spec '${s.id}' lists a missing file: ${f}` })
       owners.set(f, [...(owners.get(f) ?? []), s.id])
     }
+    // one-govern: a node is source of truth for at most ONE file, so drift/yatsu/ack have a single
+    // unambiguous subject (see [[governed-related]]). >1 is a defect — pick the true subject, demote the
+    // rest to related. ERROR (the node-side twin of too-many-owners' file-side bound). 0 is fine.
+    if (s.code.length > 1)
+      out.push({ level: 'error', rule: 'one-govern', spec: s.id, msg: `'${s.id}' governs ${s.code.length} files [${s.code.join(', ')}] — a node is source of truth for at most ONE. Keep the true subject in code:, move the rest to related:` })
   }
   // a file is COVERED if any node GOVERNS (code:) or merely REFERENCES (related:) it; integrity covers both.
   // `related:` is the coverage net: govern is a sharp ideally-one-file pointer, so most files are reached by
@@ -215,6 +220,20 @@ export async function specLint(): Promise<Finding[]> {
   for (const s of specs) {
     for (const d of s.driftFiles)
       out.push({ level: 'warn', rule: 'drift', spec: s.id, file: d.file, msg: `${d.file} is ${d.behind} commit(s) ahead of spec '${s.id}' (v${s.version}) — may be stale` })
+  }
+
+  // related drift: the SOFT tier ([[governed-related]]). A referenced file moved ahead of the node's
+  // version — a nudge that a dependency shifted. Same ancestry basis as govern drift, but WARN-only,
+  // never reaching the commit gate (driftGate reads govern) or yatsu. It is COMMON (shared substrate and
+  // faces change often without re-versioning every referrer), so per-file it is a wall; like
+  // too-many-owners it collapses to ONE summary line, with the per-file detail riding the board
+  // (relatedDriftFiles). It stays a soft edge, never a per-file interruption.
+  const rd = specs.flatMap((s) => s.relatedDriftFiles.map((d) => ({ id: s.id, behind: d.behind })))
+  if (rd.length) {
+    const byNode = new Map<string, number>()
+    for (const d of rd) byNode.set(d.id, (byNode.get(d.id) ?? 0) + 1)
+    const worst = [...byNode].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([id, n]) => `${id}(${n})`).join(', ')
+    out.push({ level: 'warn', rule: 'related-drift', msg: `${rd.length} related file(s) across ${byNode.size} node(s) drifted ahead of their spec (SOFT — a dependency shifted, worth a glance; never blocks, no ack, no yatsu). Most: ${worst}` })
   }
 
   return out

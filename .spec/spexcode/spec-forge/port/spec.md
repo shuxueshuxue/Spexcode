@@ -5,6 +5,7 @@ hue: 280
 desc: The host-agnostic forge port (ForgeDriver) that READS a host's issues (open + closed, comments included) and open PRs, and WRITES through issue verbs (createIssue for promotion, createComment for replies, closeIssue for lifecycle close), plus its first real driver — github via the gh CLI.
 code:
   - spec-forge/src/port.ts
+related:
   - spec-forge/src/drivers.ts
   - spec-forge/src/drivers/github.ts
 ---

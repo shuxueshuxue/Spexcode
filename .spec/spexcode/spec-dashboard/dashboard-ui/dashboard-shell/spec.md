@@ -5,6 +5,7 @@ hue: 200
 desc: The desktop dashboard's root shell + shared substrate — the App.jsx root/router, the data.js polled-board layer, and the global styles.css — that every dashboard feature renders within.
 code:
   - spec-dashboard/src/App.jsx
+related:
   - spec-dashboard/src/Dashboard.jsx
   - spec-dashboard/src/data.js
   - spec-dashboard/src/styles.css

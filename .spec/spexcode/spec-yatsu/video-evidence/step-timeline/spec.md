@@ -5,11 +5,11 @@ hue: 140
 desc: An optional, framework-neutral sidecar that maps a position on a piece of evidence's own axis to a named step, so an annotation can land on a step. Modality-agnostic — a video is just the time axis. SpexCode owns the tiny format; any emitter writes it.
 code:
   - spec-yatsu/src/timeline.ts
-  - spec-yatsu/src/timeline.test.ts
 related:
   - spec-yatsu/src/sidecar.ts
   - spec-yatsu/src/cli.ts
   - spec-yatsu/src/evaltab.ts
+  - spec-yatsu/src/timeline.test.ts
 ---
 # step-timeline
 

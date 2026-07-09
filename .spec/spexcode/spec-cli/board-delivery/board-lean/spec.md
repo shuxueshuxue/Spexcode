@@ -5,6 +5,7 @@ hue: 175
 desc: The board payload is a lean summary — per-node detail that the graph overview never shows is dropped from every fetch and reconstructed or lazy-loaded where it's actually viewed.
 code:
   - spec-cli/src/board.ts
+related:
   - spec-cli/src/board.test.ts
   - spec-dashboard/src/NodeView.jsx
   - spec-dashboard/src/SpecSearch.jsx

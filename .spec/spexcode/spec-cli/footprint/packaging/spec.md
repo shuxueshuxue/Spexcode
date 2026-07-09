@@ -4,13 +4,13 @@ status: active
 hue: 280
 desc: SpexCode installs as one npm package (`npm i -g spexcode` → `spex`); the tarball is the monorepo's runtime subset with the layout preserved, and the natural post-install startup is two commands on two ports.
 code:
-  - package.json
   - scripts/prepack.mjs
+related:
+  - spec-cli/src/cli.ts
+  - package.json
   - spec-cli/package.json
   - spec-cli/bin/spex.mjs
   - spec-cli/src/tsx-bin.ts
-related:
-  - spec-cli/src/cli.ts
 ---
 # packaging
 

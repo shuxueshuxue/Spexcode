@@ -4,8 +4,9 @@ status: active
 hue: 200
 desc: A private dogfood mode — run SpexCode on a repo you share but don't own, leaving ZERO trace in its tracked files or shared history, so collaborators see an untouched repo.
 code:
-  - spec-cli/src/materialize.test.ts
   - spec-cli/src/worktree-sources.ts
+related:
+  - spec-cli/src/materialize.test.ts
 ---
 # private-overlay
 

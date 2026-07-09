@@ -1,7 +1,8 @@
 import type { ForgeDriver } from './port.js'
 import { githubDriver } from './drivers/github.js'
+import { gitlabDriver } from './drivers/gitlab.js'
 
-export const FORGE_DRIVERS: ForgeDriver[] = [githubDriver]
+export const FORGE_DRIVERS: ForgeDriver[] = [githubDriver, gitlabDriver]
 export const DEFAULT_FORGE_HOST = 'github'
 
 export function forgeDriverFor(host: string): ForgeDriver | undefined {

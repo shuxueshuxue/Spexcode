@@ -69,6 +69,11 @@ parent-qualified suffix when that name collides — always a single URL-safe tok
 ([[id-url-safe]]). The git layer exposes three call shapes by how
 failure should behave: a sync read that throws (`git`, stderr piped so
 a fail-soft probe stays quiet from a non-repo dir); an async read that hides failure as `''` (`gitA`); and a
-fail-loud runner where the exit code IS the verdict (`gitTry`, returns ok + stderr). It also scopes the pre-commit drift gate to the commit's own staged
+fail-loud runner where the exit code IS the verdict (`gitTry`, returns ok + stderr). All three BOUND their
+child: a git process that never exits (a wedged filesystem, a hijacked PATH git) is SIGKILLed after a
+generous timeout (`SPEXCODE_GIT_TIMEOUT_MS`, sized far above the slowest legitimate full-history walk) and
+the call fails like any other git failure — with a loud warning, since `gitA`'s `''` would otherwise
+disguise the pathology as an innocently-empty result. A caller's awaited promise therefore always settles;
+[[board-cache]]'s settle guarantee leans on this. It also scopes the pre-commit drift gate to the commit's own staged
 paths. All three strip an inherited `GIT_DIR`/work-tree env so a hook can't misdirect the op. The HTTP
 entrypoint that serves the results belongs to [[spec-cli]].

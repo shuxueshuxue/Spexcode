@@ -5,11 +5,24 @@ import { join, isAbsolute, resolve } from 'node:path'
 
 const US = '\x1f', RS = '\x1e'
 
+// @@@ bounded git children - a git child that never exits (wedged fs, a hijacked PATH git, a dead network
+// mount) must not pin its awaiter forever: [[board-cache]]'s settle guarantee starts at this seam. Every
+// shared helper passes a generous timeout (an order of magnitude above the slowest legitimate full-history
+// walk) with SIGKILL — same pattern sessions.ts's tmux/ps probes already use — so a hung child dies and the
+// call fails like any other git failure instead of hanging its caller's promise. The kill is warned loudly:
+// gitA maps failure to '', which would otherwise hide the pathology as an innocently-empty result.
+const GIT_TIMEOUT_MS = Number(process.env.SPEXCODE_GIT_TIMEOUT_MS || 120000)
+function warnIfTimedOut(e: any, args: string[]): void {
+  if (e?.signal === 'SIGKILL') console.warn(`spec-cli: git ${args.slice(0, 6).join(' ')}… killed after ${GIT_TIMEOUT_MS}ms — child never exited`)
+}
+
 // strip git's hook-exported env (GIT_DIR etc.) so every call discovers the repo from the filesystem.
 export function git(args: string[]): string {
   const env = { ...process.env }
   delete env.GIT_DIR; delete env.GIT_WORK_TREE; delete env.GIT_INDEX_FILE; delete env.GIT_OBJECT_DIRECTORY
-  return execFileSync('git', args, { encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'pipe'] })
+  try {
+    return execFileSync('git', args, { encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'pipe'], timeout: GIT_TIMEOUT_MS, killSignal: 'SIGKILL' })
+  } catch (e: any) { warnIfTimedOut(e, args); throw e }
 }
 
 const pexecFile = promisify(execFile)
@@ -17,18 +30,19 @@ export async function gitA(args: string[]): Promise<string> {
   const env = { ...process.env }
   delete env.GIT_DIR; delete env.GIT_WORK_TREE; delete env.GIT_INDEX_FILE; delete env.GIT_OBJECT_DIRECTORY
   try {
-    const { stdout } = await pexecFile('git', args, { encoding: 'utf8', env, maxBuffer: 1 << 24 })
+    const { stdout } = await pexecFile('git', args, { encoding: 'utf8', env, maxBuffer: 1 << 24, timeout: GIT_TIMEOUT_MS, killSignal: 'SIGKILL' })
     return stdout
-  } catch { return '' }
+  } catch (e: any) { warnIfTimedOut(e, args); return '' }
 }
 
 export async function gitTry(args: string[]): Promise<{ ok: boolean; stdout: string; stderr: string }> {
   const env = { ...process.env }
   delete env.GIT_DIR; delete env.GIT_WORK_TREE; delete env.GIT_INDEX_FILE; delete env.GIT_OBJECT_DIRECTORY
   try {
-    const { stdout, stderr } = await pexecFile('git', args, { encoding: 'utf8', env, maxBuffer: 1 << 24 })
+    const { stdout, stderr } = await pexecFile('git', args, { encoding: 'utf8', env, maxBuffer: 1 << 24, timeout: GIT_TIMEOUT_MS, killSignal: 'SIGKILL' })
     return { ok: true, stdout, stderr }
   } catch (e: any) {
+    warnIfTimedOut(e, args)
     return { ok: false, stdout: e?.stdout ?? '', stderr: e?.stderr ?? String(e?.message ?? e) }
   }
 }

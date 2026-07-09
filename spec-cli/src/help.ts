@@ -192,8 +192,9 @@ or empty file refuses the launch.
 The launcher name selects both the agent harness and the command/auth profile (built-ins: claude, codex);
 omitting it requires sessions.defaultLauncher in spexcode.json or spexcode.local.json.
 Routes through the running backend (auth env + concurrency cap); prints the created session JSON.
-Then MONITOR it: background \`spex wait <id>\`, or \`spex watch\` for the whole stream.`,
-    see: 'spex wait / spex watch (monitor) · spex review (when it proposes) · ' + SEL_NOTE.split('\n')[0],
+Then MONITOR it: background \`spex wait <id>\`, or \`spex watch\` for the whole stream.
+Talk to it with \`spex send <id> "<msg>"\` — never raw tmux keystrokes.`,
+    see: 'spex wait / spex watch (monitor) · spex send (talk to it) · spex review (when it proposes) · ' + SEL_NOTE.split('\n')[0],
   },
   ls: {
     line: 'ls [SEL…]             living-sessions table  [--status a,b] [--json] [--api URL]',

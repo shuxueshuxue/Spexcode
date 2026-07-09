@@ -66,7 +66,8 @@ function positionals(from: number): string[] {
 // After a successful launch, nudge the caller to actually MONITOR the session — launch-then-forget is a real
 // gap (a supervisor or human launches and then never watches, so a review/failure goes unnoticed). Goes to
 // STDERR so the JSON on stdout (which callers parse) stays clean; keyed to whoever's calling — a supervising
-// agent has an own-session id, a human at a terminal does not.
+// agent has an own-session id, a human at a terminal does not. The hint also names the COMM channel
+// (`spex send`) — field-tested gap: callers who couldn't find it reached for raw tmux keystrokes instead.
 async function launchMonitorReminder(id: string): Promise<void> {
   const { ownSessionId } = await import('./sessions.js')
   const agent = ownSessionId()
@@ -78,6 +79,7 @@ async function launchMonitorReminder(id: string): Promise<void> {
   } else {
     console.error(`  \`spex watch\` — the live stream of actionable session transitions (or \`spex wait ${id}\` to block on this one)`)
   }
+  console.error(`  talk to it: \`spex send ${id} "<msg>"\` — never raw tmux keystrokes`)
 }
 
 const greeted = new Set<string>()

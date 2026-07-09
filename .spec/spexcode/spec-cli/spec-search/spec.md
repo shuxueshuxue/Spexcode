@@ -41,15 +41,19 @@ returns results sorted by `score` DESC, each `{ id, title, path, score, snippet 
 
 Default output is a pretty terminal list (rank · title · id · path · snippet); `--json` prints exactly the
 array above, verbatim — the machine surface that the [[spec-scout]] agent re-consumes. `--limit`
-caps the count (default 10). A **zero-result** reply never dead-ends: it always carries the corpus-is-English
-fact — translate and retry if the query isn't (unconditional — no language sniffing, no score threshold) —
-plus a route to the next step: the nearest node titles (`nearestTitles` — per-word normalised Levenshtein
-over title+id, best-match ≥0.5 per query word then summed, top 3, reusing the same `loadSpecsLite` read, so
-a transposed-`keyboard` typo still points at `keyboard-nav`; omitted when nothing is lexically near, e.g.
-a pure-CJK query) and a closing `browse all: spex tree` line. The nearest-title distance is deliberately
-NOT part of the ranking — it tolerates typos, the ranker must not. Under `--json` the whole zero-result
-message goes to stderr so the stdout array stays verbatim. `spex help search` states the same
-corpus-is-English fact, so a non-English query self-explains at both surfaces.
+caps the count (default 10). The scorer is CJK-aware — its tokenizer ([[shared-ranker]]) makes each Chinese
+character a token, so a Chinese query reaches the CJK prose a few nodes carry (the root node's body is a whole
+Chinese paragraph) with the same fielded ranking English gets, no per-language branch. A **zero-result** reply
+never dead-ends: it carries the corpus-is-English fact — the corpus is overwhelmingly English, so a query in
+another language that matches nothing most often just needs translating (a *hint*, not a claim that CJK is
+unsupported — CJK that DOES hit corpus prose returns results, unconditional, no language sniffing) — plus a
+route to the next step: the nearest node titles (`nearestTitles` — per-word normalised Levenshtein over
+title+id, best-match ≥0.5 per query word then summed, top 3, reusing the same `loadSpecsLite` read, so a
+transposed-`keyboard` typo still points at `keyboard-nav`; omitted when nothing is lexically near, e.g. a
+pure-CJK query, whose titles are English kebab-case) and a closing `browse all: spex tree` line. The
+nearest-title distance is deliberately NOT part of the ranking — it tolerates typos, the ranker must not.
+Under `--json` the whole zero-result message goes to stderr so the stdout array stays verbatim. `spex help
+search` states the same corpus-is-English hint, so a query that matches nothing self-explains at both surfaces.
 
 ### the ranking
 

@@ -19,19 +19,34 @@ const STOP = new Set([
   'be', 'can', 'just', 'them', 'they', 'their', 'so', 'if', 'not', 'no', 'but', 'vs', 'us', 'we', 'you',
 ])
 
-// split on non-alphanumeric, lowercase, drop stopwords + length-1 tokens, de-dup.
+// The corpus is mostly English but not only — some nodes carry CJK prose (the root spexcode node is a whole
+// Chinese paragraph), and the dashboard palette ([[shared-ranker]]) ranks session/issue titles that are
+// frequently Chinese. CJK has no spaces, so a whitespace/`[^a-z0-9]` split silently discards ALL of it. We
+// tokenize the SAME way on both sides: an ASCII alphanumeric run is one token; each CJK character is its own
+// token (a unigram). Unigrams — not bigrams — keep the shared prefix-match/IDF/BM25 machinery untouched (a
+// single-char query still matches, no bigram edge cases) and stay BLUNT & ROBUST, the floor's whole stance.
+// Han (incl. Ext-A + compat) plus Japanese kana; enough to cover the CJK a spec body or a session title carries.
+const CJK = '\\u3400-\\u4dbf\\u4e00-\\u9fff\\uf900-\\ufaff\\u3040-\\u30ff' // Ext-A · Unified · Compat · kana
+const TOKEN_RE = new RegExp(`[a-z0-9]+|[${CJK}]`, 'g')
+const CJK_RE = new RegExp(`[${CJK}]`)
+function isCjk(t: string): boolean { return CJK_RE.test(t) }
+function tokenize(text: string): string[] {
+  return text.toLowerCase().match(TOKEN_RE) ?? []
+}
+
+// tokenize, lowercase, drop stopwords + length-1 ASCII tokens (a length-1 CJK token is a real word — keep it), de-dup.
 export function terms(query: string): string[] {
   const seen = new Set<string>()
-  for (const w of query.toLowerCase().split(/[^a-z0-9]+/)) {
-    if (w.length > 1 && !STOP.has(w)) seen.add(w)
+  for (const w of tokenize(query)) {
+    if (isCjk(w) || (w.length > 1 && !STOP.has(w))) seen.add(w)
   }
   return [...seen]
 }
 
 // the words of a field, lowercased — used for word-boundary (prefix-of-a-word) matching, which kills
-// short-token pollution (`main` must not match inside `domain`).
+// short-token pollution (`main` must not match inside `domain`); CJK chars are single-char words.
 function words(text: string): string[] {
-  return text.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean)
+  return tokenize(text)
 }
 
 // light query-side stem for prefix matching: drop a trailing plural 's' (len≥4, not 'ss') then a mute 'e'
@@ -87,8 +102,10 @@ function snippetFor(text: string, desc: string, qterms: string[], window = 140):
   const lower = flat.toLowerCase()
   let at = -1
   for (const t of qterms) {
-    const m = lower.match(new RegExp('\\b' + t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
-    if (m && m.index !== undefined && (at < 0 || m.index < at)) at = m.index
+    // ASCII terms locate at a word boundary (so `main` doesn't hit inside `domain`); a CJK term has no
+    // `\b` around it (JS `\b` is ASCII-only), so locate it by plain substring.
+    const i = isCjk(t) ? lower.indexOf(t) : lower.search(new RegExp('\\b' + t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+    if (i >= 0 && (at < 0 || i < at)) at = i
   }
   if (at < 0) {
     const fb = (desc || flat).replace(/\s+/g, ' ').trim()

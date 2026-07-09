@@ -23,12 +23,24 @@ and its query intent.
 
 ## expanded spec
 
-`ranker.ts` is the **pure, I/O-free scoring core** ([[spec-search]]'s scorer, lifted out): `terms` · a light
-query-side `stem` (plural-`s`/mute-`e` drop) · `nameMatch`/`textMatch` · `tierWeight` (name > desc > body;
-desc is presence × BM25 length-norm, body full BM25 term-frequency) · corpus IDF ·
-`snippetFor`, all behind one entrypoint `rankDocs(query, docs)` over a generic `{ ref, name, desc, body }`
-shape. No fs, no git, no DOM — so **tsx runs it server-side and vite bundles it for the browser** (verified:
-a cross-package import from the dashboard builds clean).
+`ranker.ts` is the **pure, I/O-free scoring core** ([[spec-search]]'s scorer, lifted out): a CJK-aware
+`tokenize` · `terms` · a light query-side `stem` (plural-`s`/mute-`e` drop) · `nameMatch`/`textMatch` ·
+`tierWeight` (name > desc > body; desc is presence × BM25 length-norm, body full BM25 term-frequency) ·
+corpus IDF · `snippetFor`, all behind one entrypoint `rankDocs(query, docs)` over a generic
+`{ ref, name, desc, body }` shape. No fs, no git, no DOM — so **tsx runs it server-side and vite bundles it
+for the browser** (verified: a cross-package import from the dashboard builds clean).
+
+**Both callers tokenize CJK.** A whitespace/`[^a-z0-9]` split silently discards every CJK character, which
+blinded BOTH surfaces to Chinese: `spex search` couldn't reach the CJK prose a few nodes carry (the root
+node's body is a Chinese paragraph), and the palette couldn't find the frequently-Chinese session/issue
+titles it ranks. So `tokenize` treats an ASCII alphanumeric run as one token AND each CJK character
+(Han + kana) as its own token (a **unigram**) — the SAME split on query and doc, so the existing
+prefix-match/IDF/BM25 machinery scores CJK with zero new cases: a single-char query still matches (no bigram
+gap), a length-1 CJK token survives the length-1 ASCII drop (`terms` exempts CJK), and `snippetFor` locates
+a CJK term by substring since JS `\b` is ASCII-only. Unigrams over bigrams is the deliberate choice — BLUNT &
+ROBUST, the floor's whole stance, and precision is a non-issue on this overwhelmingly-English corpus where
+any CJK content word carries a high IDF. The English recall/MRR is unchanged by the change (the bench is the
+guard).
 
 - **floor caller** — `search.ts`'s `searchSpecs` maps each spec node (`loadSpecsLite`) to one doc and ranks.
 - **palette caller** — `SpecSearch.jsx` ranks **each plane separately** with `rankDocs`, then **interleaves**

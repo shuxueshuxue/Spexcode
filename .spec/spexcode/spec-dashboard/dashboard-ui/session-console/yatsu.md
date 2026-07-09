@@ -395,6 +395,24 @@ scenarios:
       click still only switches tabs; the double-click gesture is the console-side twin of the board
       window's single-click lock, with no pending-ops precondition.
     related: spec-dashboard/src/SessionInterface.jsx
+  - name: ime-enter-composes-not-sends
+    tags: [frontend-e2e, desktop]
+    description: >
+      Through the running dashboard in a real browser, open the session interface (Enter) on the New Session
+      prompt (the same Enter-to-dispatch input the running session's `❯` inbox shares). Focus the box and type
+      pinyin letters as an IME shows them mid-composition (e.g. `nihao`). Then fire the Enter that COMMITS the
+      IME composition — a keydown carrying the browser's compose flag (`isComposing = true` / keyCode 229),
+      which pinyin/かな/한글 IMEs emit when you press Enter to pick a candidate. Intercept `POST /api/sessions`
+      to see whether a launch was dispatched (fulfil it locally so no real worker spawns). Then press a NORMAL
+      Enter (isComposing = false) and confirm the now-composed line dispatches. Record the run as video.
+    expected: |
+      The IME-committing Enter (isComposing) COMPOSES only — the box KEEPS its text and NO `POST /api/sessions`
+      fires: pressing Enter to choose a pinyin candidate must never dispatch the line. Only the following real
+      Enter (not composing) submits — the box clears and exactly one launch POST fires. The same guard holds
+      for a running session's `❯` inbox (sendMsg) and the completion-menu Enter/Tab accept: an Enter that ends
+      an IME composition is swallowed by the compose, never read as send. Baseline bug: the IME Enter cleared
+      the box and fired the launch POST, sending the half-composed word instead of composing it.
+    code: spec-dashboard/src/SessionInterface.jsx
 ---
 
 # session-console — yatsu

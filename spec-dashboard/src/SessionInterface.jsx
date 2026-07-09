@@ -29,6 +29,12 @@ const BusyGlyph = () => <Icon name="loader" size={15} className="si-attach-busy"
 // combos are encoded by typeKeyToken). Escape is intentionally absent — handled separately.
 const RAWKEY = { ArrowUp: 'Up', ArrowDown: 'Down', ArrowLeft: 'Left', ArrowRight: 'Right', Enter: 'Enter', Tab: 'Tab', Backspace: 'Backspace', Delete: 'Delete', Home: 'Home', End: 'End', ' ': 'Space' }
 
+// @@@ composing — an Enter (or Tab) that COMMITS an IME composition (pinyin, かな, 한글…) belongs to the
+// input: it picks a candidate and composes the word, and must NEVER be read as dispatch/accept. The browser
+// flags such a key event with `isComposing` / legacy keyCode 229. Works for both a native window event
+// (isComposing/keyCode direct) and a React synthetic (nativeEvent.isComposing).
+const composingKey = (e) => e.isComposing || e.nativeEvent?.isComposing || e.keyCode === 229
+
 // Encode a keydown into a tmux token (⌃→`C-`, ⌥/⌘→`M-`, Shift→`S-` on named keys). The base of a
 // modified letter/digit comes from e.code, not e.key: a held modifier makes e.key unreliable (⌥B prints
 // '∫' on a mac), but the physical KeyB/Digit3 code is stable. null = nothing sendable → key swallowed.
@@ -635,7 +641,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       if (menu) {
         if (e.key === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); navMenu(1); return }
         if (e.key === 'ArrowUp')   { e.preventDefault(); e.stopPropagation(); navMenu(-1); return }
-        if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); e.stopPropagation(); accept(menu.items[menu.index]); return }
+        if ((e.key === 'Enter' || e.key === 'Tab') && !composingKey(e)) { e.preventDefault(); e.stopPropagation(); accept(menu.items[menu.index]); return }
         if (e.key === 'Escape')    { e.preventDefault(); e.stopPropagation(); setMenu(null); return }
       }
       // (no bottom Esc rung: Esc never leaves a page — [[side-nav]]. Menus/type-mode claimed theirs above;
@@ -650,7 +656,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         const ni = Math.max(0, Math.min(order.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))
         setSel(order[ni]); return
       }
-      if (e.key === 'Enter' && !e.shiftKey && active === 'new') { e.preventDefault(); e.stopPropagation(); submit() }
+      if (e.key === 'Enter' && !e.shiftKey && !composingKey(e) && active === 'new') { e.preventDefault(); e.stopPropagation(); submit() }
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
@@ -928,7 +934,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                     onSelect={(e) => syncMenu(e.target)}
                     onPaste={(e) => { if (!noLivePane) onPasteFiles(e, 'msg') }}
                     onBlur={() => setMenu(null)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); sendMsg() } }}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !composingKey(e)) { e.preventDefault(); e.stopPropagation(); sendMsg() } }}
                     placeholder={noLivePane ? t('session.msgOffline') : t('session.msgPlaceholder')}
                     spellCheck={false}
                     disabled={noLivePane}

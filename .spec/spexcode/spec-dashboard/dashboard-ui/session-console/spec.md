@@ -101,7 +101,11 @@ scrollbar competing with tmux — a drag selects even under mouse-reporting, and
 or plain HTTP** (past the secure-context-only Clipboard API).
 
 Input has **two channels**. The **`❯` box** is the prompt channel: submitting dispatches through the **control
-socket** (never typed into the pane), so it lands even in copy-mode. The exception is the **board commands** —
+socket** (never typed into the pane), so it lands even in copy-mode. An **Enter that commits an IME
+composition** (pinyin/かな/한글 — the browser flags it `isComposing` / legacy keyCode 229) belongs to the
+input: it picks the candidate and composes the word, and is **never** read as dispatch — the same guard covers
+the running session's send, the New Session launch Enter, and a completion menu's Enter/Tab accept, so choosing
+a candidate never fires the line. Only a plain Enter that ends no composition sends. The exception is the **board commands** —
 a `/` line the box intercepts client-side and runs HERE instead of sending to the agent (where the word would
 only drive the agent's own process, not the board). They come from **one registry** (`sessionCommands.js`) that
 ALSO renders the header buttons, so each command is the **typed twin of a button** — one action, one **identity

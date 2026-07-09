@@ -5,10 +5,10 @@ hue: 200
 desc: The spex command surface — porcelain-only top level grouped by loop, machine plumbing under `internal`, and a three-layer help journey (help → per-command help → guide).
 code:
   - spec-cli/src/cli.ts
-  - spec-cli/src/help.ts
 related:
   - spec-cli/src/guide.ts
   - docs/AGENT_GUIDE.md
+  - spec-cli/src/help.ts
 ---
 # cli-surface
 

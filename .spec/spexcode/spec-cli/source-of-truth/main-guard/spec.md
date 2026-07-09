@@ -6,6 +6,7 @@ hue: 145
 desc: Enforce the invariant — main only RECEIVES merges; all authoring happens in worktrees.
 code:
   - spec-cli/templates/hooks/pre-commit
+related:
   - scripts/install-hooks.sh
 ---
 # main-guard

@@ -5,11 +5,11 @@ hue: 185
 desc: The board's incremental push — snapshots decompose into keyed units and changes ship as hash-chained patches, provably equivalent to a full refetch and never bigger than one.
 code:
   - spec-cli/src/boardDelta.ts
-  - spec-cli/src/boardDelta.test.ts
 related:
   - spec-cli/src/boardStream.ts
   - spec-dashboard/src/data.js
   - spec-dashboard/src/App.jsx
+  - spec-cli/src/boardDelta.test.ts
 ---
 
 # board-delta

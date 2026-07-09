@@ -5,6 +5,7 @@ hue: 200
 desc: Two universal in-text reference primitives — [[node]] (a topic) and @session (an actor that carries dispatch) — parsed the same way in EVERY input box. CLI-first; the dashboard is a thin autocomplete over the same resolver. First consumer is the issue store; adopted on more surfaces incrementally.
 code:
   - spec-cli/src/mentions.ts
+related:
   - spec-cli/src/mentions.test.ts
   - spec-dashboard/src/mentions.jsx
 ---

@@ -5,6 +5,7 @@ hue: 20
 desc: `spex uninstall [dir]` — the surgical inverse of `spex init`/`materialize`: remove every SpexCode-generated artifact (harness shims/contract/trust, the .gitignore block, the global store, any plugin bundle) while NEVER touching the user's `.spec`/`.config` data or their own prose.
 code:
   - spec-cli/src/uninstall.ts
+related:
   - spec-cli/src/uninstall.test.ts
 ---
 

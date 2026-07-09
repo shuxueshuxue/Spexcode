@@ -99,8 +99,17 @@ never first-parent-simplified, so a block edit that landed on a node branch and 
 never silently read as fresh. Both git axes then judge
 "changed since" by the SAME true ancestry ([[drift-by-ancestry]]) — the code axis over a governed file's
 commits, the scenario axis over that one scenario's block-change commits: a commit stales the reading iff it
-is *not an ancestor* of its codeSha, and an off-history codeSha — orphaned by a rebase or on a never-merged
-branch alike — reads conservatively stale. No hashes kept; an
+is *not an ancestor* of its codeSha. An **off-history codeSha** — orphaned by a fold, rebase, squash-merge or
+cherry-pick, or sitting on a never-merged branch — is where ancestry stops testifying, but the trees still
+do: while the anchor commit object exists locally, freshness **falls back to content** — the anchor's tree
+diffed against HEAD, scoped to the reading's governed files on the code axis and to that ONE scenario's
+canonical block on the scenario axis (the same per-scenario granularity, so a sibling's edit still can't
+stale it). Byte-identical content reads fresh; a real difference stales exactly the moved axis — so a
+routine history rewrite no longer sprays false stale across readings whose governed content never moved.
+Only when the anchor commit object is truly gone (pruned) does the conservative stale remain, surfaced as
+its own **anchor** axis so "anchor lost" never masquerades as "content changed". The fallback is fed to the
+pure decision functions at the call sites (a content probe, exactly like the remark track) and the
+in-history fast path pays no extra git call. No hashes kept; an
 ack vindicates a *spec*, not a reading. `freshness.ts` stays a pure computation — the remark track is fed in
 at the call sites, never read from the issue store here.
 

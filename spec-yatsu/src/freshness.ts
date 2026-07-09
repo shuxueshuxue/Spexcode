@@ -1,11 +1,67 @@
-import { ancestorsOf, inAncestors, type DriftIndex } from '../../spec-cli/src/git.js'
+import { git, headSha, ancestorsOf, inAncestors, type DriftIndex } from '../../spec-cli/src/git.js'
 import type { Reading } from './sidecar.js'
 import { isEvaluatorStale } from './evaluator.js'
-import { scenarioChangeCommits, type ScenarioIndex } from './scenariofresh.js'
+import { scenarioChangeCommits, scenarioBlocksAt, type ScenarioIndex } from './scenariofresh.js'
 
 // the CODE axis is touch-based (DriftIndex), so a code-file rename is out of scope — the same blind spot lint's code-drift has
 
-export type StaleAxis = 'code' | 'scenario' | 'evaluator' | 'remark'
+export type StaleAxis = 'code' | 'scenario' | 'evaluator' | 'remark' | 'anchor'
+
+// @@@ off-history content fallback - ancestry can't testify for a codeSha that isn't reachable from HEAD
+// (fold/rebase/squash-merge/cherry-pick all orphan the anchor), but the TREES still can: while the anchor
+// commit object exists locally, `git diff <anchor> HEAD` names exactly the paths whose content differs, so
+// a history rewrite that left governed content byte-identical reads FRESH instead of false-positive stale.
+// The probe is fed at the call sites (like the remark track) so the decision functions stay pure over their
+// inputs and the in-history fast path pays no extra git call; only when the commit object is truly gone
+// (gc'd orphan) does the conservative rule remain — surfaced as the 'anchor' axis, so "anchor lost" reads
+// differently from "content moved". No probe fed → the old always-conservative rule.
+export type ContentProbe = {
+  // paths whose content differs between the anchor commit's tree and HEAD's; null = anchor object gone
+  changedPaths(anchorSha: string): Set<string> | null
+  // did THIS scenario's canonical block move between anchor and HEAD (per-scenario, like [[scenariofresh]])
+  scenarioDiffers(anchorSha: string, yatsuPath: string, scenario: string): boolean
+  // codeDrift's display detail: commits in anchor..HEAD touching path (floored at 1 — the content differs)
+  behind(anchorSha: string, path: string): number
+}
+
+// (anchor, HEAD) name two immutable trees, so entries never invalidate; the LRU only bounds memory.
+const diffMemo = new Map<string, Set<string> | null>()
+const behindMemo = new Map<string, number>()
+function memo<V>(m: Map<string, V>, k: string, build: () => V): V {
+  if (m.has(k)) { const v = m.get(k)!; m.delete(k); m.set(k, v); return v }
+  const v = build()
+  m.set(k, v)
+  if (m.size > 512) m.delete(m.keys().next().value!)
+  return v
+}
+
+export function contentProbeFor(root: string): ContentProbe {
+  let head: string | undefined
+  const headOf = () => (head ??= headSha(root))
+  return {
+    changedPaths(sha) {
+      return memo(diffMemo, `${root}\x1f${sha}\x1f${headOf()}`, () => {
+        try {
+          return new Set(git(['-C', root, '-c', 'core.quotePath=false', 'diff', '--name-only', '--no-renames', sha, headOf()])
+            .split('\n').map((s) => s.trim()).filter(Boolean))
+        } catch { return null }   // the anchor commit object is gone — content can't testify
+      })
+    },
+    scenarioDiffers(sha, yatsuPath, scenario) {
+      const a = scenarioBlocksAt(root, sha, yatsuPath)
+      if (!a) return true   // yatsu.md unreadable at the anchor (renamed/absent) → can't prove → stale
+      return a.get(scenario) !== scenarioBlocksAt(root, headOf(), yatsuPath)?.get(scenario)
+    },
+    behind(sha, path) {
+      return memo(behindMemo, `${root}\x1f${sha}\x1f${headOf()}\x1f${path}`, () => {
+        try {
+          const n = Number(git(['-C', root, 'rev-list', '--count', `${sha}..${headOf()}`, '--', path]).trim())
+          return Number.isFinite(n) && n > 0 ? n : 1
+        } catch { return 1 }
+      })
+    },
+  }
+}
 
 // the REMARK axis's input ([[remark-teeth]]): the teeth read only the resolvable bit + when it was resolved,
 // not the whole remark — so freshness stays a PURE function, fed the scenario's remark track at the call
@@ -23,26 +79,31 @@ export function remarkStale(reading: { ts: string }, remarks: RemarkSignal[]): b
 
 // true iff some commit touched `path` that is NOT an ancestor of `sinceSha` — i.e. it lies in
 // `sinceSha..HEAD` by true DAG reachability, never a log-position/date compare (which under-reports on
-// branchy history). ONE conservative rule for an off-history `sinceSha` — whether rebased away (orphan)
-// or on a reachable-but-unmerged branch: we can't prove freshness from HEAD's history, so it reads
-// stale rather than silently pass.
-export function changedSince(idx: DriftIndex, sinceSha: string, path: string): boolean {
+// branchy history). An off-history `sinceSha` falls back to the content probe when one is fed (see
+// ContentProbe above); without a probe — or when the anchor object is gone — freshness can't be proven
+// from HEAD's history, so it reads stale rather than silently pass.
+export function changedSince(idx: DriftIndex, sinceSha: string, path: string, probe?: ContentProbe): boolean {
   const anc = ancestorsOf(idx, sinceSha)
-  if (!anc) return true
-  return (idx.fileCommits.get(path) ?? []).some((h) => !inAncestors(idx, anc, h))
+  if (anc) return (idx.fileCommits.get(path) ?? []).some((h) => !inAncestors(idx, anc, h))
+  const diff = probe?.changedPaths(sinceSha)
+  return diff ? diff.has(path) : true
 }
 
 // the code axis's DISPLAY detail: which governed files drifted since a reading, and by HOW MANY commits — so
 // a stale eval can say "EvalsFeed.jsx +3" instead of a bare "code moved". Same DAG reachability as
 // changedSince (a commit touching the file that is NOT an ancestor of the reading's sha lies in sinceSha..HEAD);
-// an off-history sinceSha counts every touch (conservative, matching changedSince's stale-rather-than-pass rule).
+// an off-history sinceSha reports through the same content fallback (only files whose content differs, counted
+// by rev-list); with no probe or a gone anchor it counts every touch (conservative, matching changedSince).
 // Reporting only — it never decides freshness (staleAxes does); it explains a decision already made.
-export function codeDrift(idx: DriftIndex, sinceSha: string, codeFiles: string[]): { file: string; behind: number }[] {
+export function codeDrift(idx: DriftIndex, sinceSha: string, codeFiles: string[], probe?: ContentProbe): { file: string; behind: number }[] {
   const anc = ancestorsOf(idx, sinceSha)
+  const diff = anc ? undefined : probe?.changedPaths(sinceSha)
   const out: { file: string; behind: number }[] = []
   for (const f of codeFiles) {
     const commits = idx.fileCommits.get(f) ?? []
-    const behind = anc ? commits.filter((h) => !inAncestors(idx, anc, h)).length : commits.length
+    const behind = anc ? commits.filter((h) => !inAncestors(idx, anc, h)).length
+      : diff ? (diff.has(f) ? probe!.behind(sinceSha, f) : 0)
+      : commits.length
     if (behind > 0) out.push({ file: f, behind })
   }
   return out
@@ -51,11 +112,16 @@ export function codeDrift(idx: DriftIndex, sinceSha: string, codeFiles: string[]
 // scenario freshness is PER-SCENARIO, not per-file: a reading stales only when ITS OWN scenario block moved
 // (edited/added/removed) in scenarioSha..HEAD, never when a sibling in the same yatsu.md did. Reads exactly
 // like the code axis's changedSince — the per-scenario change-commits ([[scenariofresh]], rename-followed so a
-// bare git-mv reparent isn't a change) tested for ancestry — off-history codeSha → conservatively stale.
-function scenarioMoved(scIdx: ScenarioIndex, didx: DriftIndex, sinceSha: string, yatsuPath: string, scenario: string): boolean {
+// bare git-mv reparent isn't a change) tested for ancestry — and an off-history codeSha takes the same content
+// fallback at the same granularity: an unchanged yatsu.md clears it outright, a changed one stales only if
+// THIS scenario's canonical block differs between the anchor and HEAD.
+function scenarioMoved(scIdx: ScenarioIndex, didx: DriftIndex, sinceSha: string, yatsuPath: string, scenario: string, probe?: ContentProbe): boolean {
   const anc = ancestorsOf(didx, sinceSha)
-  if (!anc) return true
-  return scenarioChangeCommits(scIdx, yatsuPath, scenario).some((h) => !inAncestors(didx, anc, h))
+  if (anc) return scenarioChangeCommits(scIdx, yatsuPath, scenario).some((h) => !inAncestors(didx, anc, h))
+  const diff = probe?.changedPaths(sinceSha)
+  if (!diff) return true
+  if (!diff.has(yatsuPath)) return false   // whole file byte-identical → this block too
+  return probe!.scenarioDiffers(sinceSha, yatsuPath, scenario)
 }
 
 export function staleAxes(
@@ -65,10 +131,16 @@ export function staleAxes(
   didx: DriftIndex,
   scIdx: ScenarioIndex,
   remarks: RemarkSignal[] = [],
+  probe?: ContentProbe,
 ): StaleAxis[] {
   const axes: StaleAxis[] = []
-  if (codeFiles.some((f) => changedSince(didx, reading.codeSha, f))) axes.push('code')
-  if (scenarioMoved(scIdx, didx, reading.codeSha, yatsuPath, reading.scenario)) axes.push('scenario')
+  if (probe && !ancestorsOf(didx, reading.codeSha) && probe.changedPaths(reading.codeSha) === null) {
+    // the anchor commit object is GONE — neither git axis can testify; say that, not "content changed"
+    axes.push('anchor')
+  } else {
+    if (codeFiles.some((f) => changedSince(didx, reading.codeSha, f, probe))) axes.push('code')
+    if (scenarioMoved(scIdx, didx, reading.codeSha, yatsuPath, reading.scenario, probe)) axes.push('scenario')
+  }
   if (isEvaluatorStale(reading.evaluator)) axes.push('evaluator')
   if (remarkStale(reading, remarks)) axes.push('remark')
   return axes
@@ -81,6 +153,7 @@ export function isStale(
   didx: DriftIndex,
   scIdx: ScenarioIndex,
   remarks: RemarkSignal[] = [],
+  probe?: ContentProbe,
 ): boolean {
-  return staleAxes(reading, codeFiles, yatsuPath, didx, scIdx, remarks).length > 0
+  return staleAxes(reading, codeFiles, yatsuPath, didx, scIdx, remarks, probe).length > 0
 }

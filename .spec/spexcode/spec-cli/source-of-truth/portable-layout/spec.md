@@ -84,9 +84,10 @@ it an adopter's `loadSystemConfig` finds nothing — the `.config/core` contract
 get no system prompt — so portability is only real when the config root travels with the rename.
 
 The reproducibility contract is concrete: `.nvmrc` pins Node (22) and both package-locks are tracked, so
-installs are deterministic. Machine-local artifacts never enter the tree: the worker launcher resolves
-env `SPEXCODE_CLAUDE_CMD` → a gitignored `spexcode.local.json` (`readConfig` overlays it on committed
-`spexcode.json`) → the default, so a host-specific launcher path has a *durable* home surviving restarts,
+installs are deterministic. Machine-local artifacts never enter the tree: a host-specific launcher `cmd`
+lives in the gitignored `spexcode.local.json`'s `sessions.launchers` entry (`readConfig` overlays it on
+committed `spexcode.json`; no env override — [[launcher-select]]), so a host-specific launcher path has a
+*durable* home surviving restarts,
 never committed. That same gitignored overlay carries the `private` toggle ([[private-overlay]]): machine-local
 by construction, it lets a solo dogfooder on a repo they don't own keep SpexCode's whole presence out of the
 host's shared history. A launch generates NO per-session SpexCode files in the worktree: the

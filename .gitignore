@@ -30,8 +30,8 @@ CLAUDE.spexhidden.md
 # whole dir is ignored, exactly like the skill SKILL.md and the shims (the managed block below lists each).
 .claude/*
 
-# machine-local claude binary symlink (points into a per-machine install); the session
-# launcher resolves `claude` from PATH (SPEXCODE_CLAUDE_CMD), so this is never vendored
+# machine-local claude binary symlink (points into a per-machine install); a launcher cmd comes from
+# config (sessions.launchers) and resolves `claude` from PATH, so this is never vendored
 spec-cli/bin/claude
 
 # generated review artifacts at the worktree root — a one-off harness-adapter review report (machine-emitted,

@@ -22,8 +22,8 @@ threat model follows from that. Two properties matter:
 
 SpexCode's self-developing feature dispatches AI workers that drive a coding-agent harness — **Claude
 Code or Codex**. By default the agent runs with permission prompts disabled (Claude
-`--dangerously-skip-permissions`, Codex `--yolo`; the Claude launcher is overridable via
-`SPEXCODE_CLAUDE_CMD`): it can **read, write, and execute** in its git worktree without per-action
+`--dangerously-skip-permissions`, Codex `--yolo`; the launch command comes from the named launcher
+profiles in `spexcode.json`/`spexcode.local.json`): it can **read, write, and execute** in its git worktree without per-action
 prompts. The board's live "Sessions" console is a **real terminal** over a WebSocket — i.e. shell access
 to the host.
 

@@ -18,6 +18,18 @@ export type Board = Awaited<ReturnType<typeof buildBoard>>
 // genuinely-degraded hot path shouts while an ordinary cold start stays quiet-ish.
 const BUDGET_MS = Number(process.env.SPEXCODE_BOARD_BUDGET_MS || 1500)
 
+// a build that NEVER settles is a different animal from a slow one: `inflight` clears only in the finally
+// below, so a never-settling buildBoard() would pin the single-flight forever — every later read (even of a
+// perfectly good cached board) short-circuits into the pinned promise before `valid` is consulted,
+// invalidation can't help, no log ever fires, and only a restart cures it (the live wedge: hung git
+// children → /api/board 503 forever, silently). So the build races a generous watchdog that REJECTS loudly;
+// the rejection flows through the SAME finally → inflight clears → the next read retries fresh. Sitting at
+// the single-flight boundary, this one wall bounds every never-settle cause — including ones with no child
+// process at all (fs/promises under libuv threadpool starvation); git.ts's per-child timeouts merely make
+// the common cause die sooner. Generous: well above the slowest legitimate cold build, so it only ever
+// fires on a genuine wedge.
+const BUILD_TIMEOUT_MS = Number(process.env.SPEXCODE_BOARD_BUILD_TIMEOUT_MS || 120000)
+
 let cached: Board | null = null   // last completed build; served while `valid`
 let cachedJson: string | null = null   // JSON.stringify(cached), serialized ONCE per build (see getBoardJson)
 let valid = false
@@ -42,13 +54,27 @@ export function getBoard(): Promise<Board> {
   const startGen = gen
   const p = (async () => {
     const t0 = Date.now()
+    let watchdog: ReturnType<typeof setTimeout> | undefined
     try {
-      const board = await buildBoard()
+      const board = await Promise.race([
+        buildBoard(),
+        // the race consumes the loser's eventual settlement, so an abandoned build that fails later
+        // can't surface as an unhandled rejection; unref'd so a pending watchdog never holds a one-shot
+        // CLI process open.
+        new Promise<never>((_, reject) => {
+          watchdog = setTimeout(() => {
+            console.warn(`spec-cli: /api/board build did not settle within ${BUILD_TIMEOUT_MS}ms — wedged build abandoned so the next read can retry`)
+            reject(new Error(`board build did not settle within ${BUILD_TIMEOUT_MS}ms`))
+          }, BUILD_TIMEOUT_MS)
+          watchdog.unref?.()
+        }),
+      ])
       cached = board
       cachedJson = null   // invalidate the memoized serialization; re-serialized lazily on first read
       valid = gen === startGen
       return board
     } finally {
+      clearTimeout(watchdog)
       const ms = Date.now() - t0
       if (ms > BUDGET_MS) console.warn(`spec-cli: /api/board build took ${ms}ms (budget ${BUDGET_MS}ms) — hot path is slow`)
       inflight = null

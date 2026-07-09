@@ -56,8 +56,11 @@ scenarios:
       indistinguishable). All other 14 cases sit in the top 3 — the few not at #1 (e.g. `api-endpoint`,
       `yatsu-core`, `governed-related` vs its remedy-sibling `regroup`) are canonical-vs-sibling ties the
       spec-scout `--deep` LLM layer is meant to break; being inside the top 3 is the floor doing its job.
-      Measured 2026-07-06 at 153 nodes after adding the zero-result nearest-titles routing (ranking
-      untouched): recall@1 0.563, recall@3 0.875, MRR 0.705, cjk-hint PASS, typo-route PASS.
+      Measured 2026-07-09 at 164 nodes after re-calibrating the desc tier weight (W_DESC 3 → 2) — the
+      recall@3 had drifted to 0.813 (below this floor) as the corpus grew and incidental desc mentions began
+      outranking body concentration; lowering the desc tier restored it: recall@1 0.625, recall@3 0.875,
+      MRR 0.747, cjk-positive PASS, cjk-hint PASS, typo-route PASS. (Prior: recall@1 0.563, recall@3 0.875,
+      MRR 0.705 at 153 nodes / W_DESC 3, before the corpus-growth drift.)
   - name: search-compute-budget
     tags: [cli]
     test: spec-cli/src/search.bench.mjs

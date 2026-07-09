@@ -25,7 +25,9 @@ and its query intent.
 
 `ranker.ts` is the **pure, I/O-free scoring core** ([[spec-search]]'s scorer, lifted out): a CJK-aware
 `tokenize` · `terms` · a light query-side `stem` (plural-`s`/mute-`e` drop) · `nameMatch`/`textMatch` ·
-`tierWeight` (name > desc > body; desc is presence × BM25 length-norm, body full BM25 term-frequency) ·
+`tierWeight` (name > desc > body; desc is presence × BM25 length-norm, body full BM25 term-frequency — the
+tier weights are read FROM the corpus and re-calibratable as it grows: the desc weight was lowered 3 → 2 when
+sibling desc-word collisions at ~164 nodes started outranking body concentration, see [[spec-search]]) ·
 corpus IDF · `snippetFor`, all behind one entrypoint `rankDocs(query, docs)` over a generic
 `{ ref, name, desc, body }` shape. No fs, no git, no DOM — so **tsx runs it server-side and vite bundles it
 for the browser** (verified: a cross-package import from the dashboard builds clean).

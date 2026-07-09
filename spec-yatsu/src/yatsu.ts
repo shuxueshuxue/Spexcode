@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { readFile, readdir } from 'node:fs/promises'
 import { join, relative, basename } from 'node:path'
+import { mintIds } from '../../spec-cli/src/specs.js'
 
 export const YATSU_FILE = 'yatsu.md'
 export const SIDECAR_FILE = 'yatsu.evals.ndjson'
@@ -16,7 +17,7 @@ export type Scenario = {
 }
 
 export type YatsuNode = {
-  id: string            // the node's leaf dir name (its spec-node id)
+  id: string            // the node's CANONICAL spec id (leaf name, '_'-disambiguated on a leaf collision)
   dir: string           // absolute node directory
   yatsuPath: string     // repo-relative path to yatsu.md — the SCENARIO freshness axis
   sidecarPath: string   // absolute path to yatsu.evals.ndjson
@@ -173,53 +174,76 @@ export function validateScenarios(src: string, tagLibrary: string[] = []): strin
   return errs
 }
 
-// walk `.spec` for every dir holding a yatsu.md; a node's id is its leaf dir name (the same its spec.md carries)
+// walk `.spec` for every dir holding a yatsu.md; the node id is its CANONICAL spec id ([[id-url-safe]]) —
+// minted by the SAME rule as specs.ts's loader (mintIds: the leaf dir name, or on a leaf collision the
+// shortest globally-unique '_'-joined trailing suffix) over the SAME universe (every dir holding a spec.md,
+// not just the yatsu subset — a leaf that collides among spec nodes is disambiguated even when only one of
+// them measures). So the id yatsu answers to is exactly the id board/scan/search already print — never a
+// second, diverging bare-leaf scheme. A yatsu.md beside no spec.md keeps its leaf name (no spec id to align with).
+function assembleNodes(root: string, specDirs: string[], hits: { dir: string; src: string }[]): YatsuNode[] {
+  const specBase = join(root, '.spec')
+  const ids = mintIds(specDirs.map((d) => relative(specBase, d).split(/[/\\]/)))
+  const idByDir = new Map(specDirs.map((d, i) => [d, ids[i]]))
+  return hits
+    .map(({ dir, src }) => ({
+      id: idByDir.get(dir) ?? basename(dir),
+      dir,
+      yatsuPath: relative(root, join(dir, YATSU_FILE)),
+      sidecarPath: join(dir, SIDECAR_FILE),
+      scenarios: parseScenarios(src),
+    }))
+    .sort((a, b) => a.id.localeCompare(b.id))
+}
+
 export function yatsuNodes(root: string): YatsuNode[] {
   const specDir = join(root, '.spec')
-  const out: YatsuNode[] = []
+  const specDirs: string[] = []
+  const hits: { dir: string; src: string }[] = []
   const stack = existsSync(specDir) ? [specDir] : []
   while (stack.length) {
     const dir = stack.pop()!
     let ents
     try { ents = readdirSync(dir, { withFileTypes: true }) } catch { continue }
-    if (existsSync(join(dir, YATSU_FILE))) {
-      const yatsuPath = relative(root, join(dir, YATSU_FILE))
-      out.push({
-        id: basename(dir),
-        dir,
-        yatsuPath,
-        sidecarPath: join(dir, SIDECAR_FILE),
-        scenarios: parseScenarios(readFileSync(join(dir, YATSU_FILE), 'utf8')),
-      })
-    }
+    if (existsSync(join(dir, 'spec.md'))) specDirs.push(dir)
+    if (existsSync(join(dir, YATSU_FILE))) hits.push({ dir, src: readFileSync(join(dir, YATSU_FILE), 'utf8') })
     for (const e of ents) if (e.isDirectory()) stack.push(join(dir, e.name))
   }
-  return out.sort((a, b) => a.id.localeCompare(b.id))
+  return assembleNodes(root, specDirs, hits)
 }
 
 // async twin of yatsuNodes for the HOT board build ([[board-cache]]): reading each yatsu.md through
 // fs/promises YIELDS the event loop between files, so the walk no longer stalls a `/health` probe in one
-// ~600ms uninterrupted stretch. Same output (id-sorted) as yatsuNodes; only buildBoard uses it, other
-// callers keep the sync form.
+// ~600ms uninterrupted stretch. Same output (canonical ids, id-sorted) as yatsuNodes; only buildBoard uses
+// it, other callers keep the sync form.
 export async function yatsuNodesAsync(root: string): Promise<YatsuNode[]> {
   const specDir = join(root, '.spec')
-  const out: YatsuNode[] = []
+  const specDirs: string[] = []
+  const hits: { dir: string; src: string }[] = []
   const stack = existsSync(specDir) ? [specDir] : []
   while (stack.length) {
     const dir = stack.pop()!
     let ents
     try { ents = await readdir(dir, { withFileTypes: true }) } catch { continue }
-    if (existsSync(join(dir, YATSU_FILE))) {
-      const yatsuPath = relative(root, join(dir, YATSU_FILE))
-      out.push({
-        id: basename(dir),
-        dir,
-        yatsuPath,
-        sidecarPath: join(dir, SIDECAR_FILE),
-        scenarios: parseScenarios(await readFile(join(dir, YATSU_FILE), 'utf8')),
-      })
-    }
+    if (existsSync(join(dir, 'spec.md'))) specDirs.push(dir)
+    if (existsSync(join(dir, YATSU_FILE))) hits.push({ dir, src: await readFile(join(dir, YATSU_FILE), 'utf8') })
     for (const e of ents) if (e.isDirectory()) stack.push(join(dir, e.name))
   }
-  return out.sort((a, b) => a.id.localeCompare(b.id))
+  return assembleNodes(root, specDirs, hits)
+}
+
+export type YatsuResolution<T> = { ok: true; node: T } | { ok: false; ambiguous: boolean; error: string }
+
+// resolve a user-supplied node ref against the yatsu set: an EXACT canonical id always wins; a bare leaf
+// name stays the convenience it always was while it names exactly ONE yatsu node; a leaf several nodes
+// share fails LOUD listing the candidate canonical ids — never an arbitrary first hit, so a reading can
+// only land on the node the caller actually named.
+export function resolveYatsuNode<T extends Pick<YatsuNode, 'id' | 'dir'>>(nodes: T[], ref: string): YatsuResolution<T> {
+  const exact = nodes.find((n) => n.id === ref)
+  if (exact) return { ok: true, node: exact }
+  const byLeaf = nodes.filter((n) => basename(n.dir) === ref)
+  if (byLeaf.length === 1) return { ok: true, node: byLeaf[0] }
+  if (byLeaf.length > 1) {
+    return { ok: false, ambiguous: true, error: `'${ref}' is ambiguous — ${byLeaf.length} yatsu nodes share that leaf name; use a canonical id: ${byLeaf.map((n) => n.id).sort().join(', ')}` }
+  }
+  return { ok: false, ambiguous: false, error: `no yatsu node '${ref}' (a node needs a yatsu.md)` }
 }

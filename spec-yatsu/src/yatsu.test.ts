@@ -1,10 +1,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
-import { parseScenarios, validateScenarios } from './yatsu.js'
+import { parseScenarios, validateScenarios, yatsuNodes, yatsuNodesAsync, resolveYatsuNode } from './yatsu.js'
 import { readReadings, readSidecar, appendReading, appendRetraction, latestPerScenario, evidenceOf, type Reading } from './sidecar.js'
 import { changedSince, staleAxes } from './freshness.js'
 import { putBlob, listBlobs, gc, resolveBlob, MISS_BLOB, isStrayBlob } from './cache.js'
@@ -488,4 +488,70 @@ test('cache: isStrayBlob recognises a 64-hex basename or a yatsu-blobs path', ()
   assert.equal(isStrayBlob('some/yatsu-blobs/whatever.png'), true)
   assert.equal(isStrayBlob('spec-yatsu/src/cache.ts'), false)
   assert.equal(isStrayBlob('.spec/n/yatsu.evals.ndjson'), false)
+})
+
+// ---- canonical ids on a leaf collision + the loud resolver ([[yatsu-core]] / [[id-url-safe]]) ----
+
+const YMD = `---
+scenarios:
+  - name: loop
+    tags: [cli]
+    description: d
+    expected: e
+---
+`
+const SPEC = '---\ntitle: t\n---\n# t\n'
+
+// a .spec tree where three nodes share the leaf 'web-remote-control'; only some carry a yatsu.md
+function collisionTree(): string {
+  const root = tmp()
+  const mk = (rel: string, yatsu: boolean) => {
+    const dir = join(root, '.spec', rel)
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, 'spec.md'), SPEC)
+    if (yatsu) writeFileSync(join(dir, 'yatsu.md'), YMD)
+  }
+  mk('proj', false)
+  mk('proj/shared/remote/web-remote-control', true)
+  mk('proj/desktop/web-remote-control', true)
+  mk('proj/mobile/web-remote-control', true)
+  mk('proj/solo-node', true)
+  return root
+}
+
+test('yatsuNodes: leaf-colliding nodes carry the CANONICAL disambiguated id, not the bare leaf', async () => {
+  const root = collisionTree()
+  const ids = yatsuNodes(root).map((n) => n.id)
+  assert.deepEqual(ids, ['desktop_web-remote-control', 'mobile_web-remote-control', 'remote_web-remote-control', 'solo-node'])
+  // async twin mints identically
+  assert.deepEqual((await yatsuNodesAsync(root)).map((n) => n.id), ids)
+})
+
+test('yatsuNodes: the mint universe is ALL spec nodes — a colliding leaf disambiguates even when only ONE of them measures', () => {
+  const root = tmp()
+  const mk = (rel: string, yatsu: boolean) => {
+    const dir = join(root, '.spec', rel)
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, 'spec.md'), SPEC)
+    if (yatsu) writeFileSync(join(dir, 'yatsu.md'), YMD)
+  }
+  mk('proj', false)
+  mk('proj/a/thing', true)    // measures
+  mk('proj/b/thing', false)   // collides but has no yatsu.md
+  assert.deepEqual(yatsuNodes(root).map((n) => n.id), ['a_thing'])
+})
+
+test('resolveYatsuNode: exact canonical id wins; unique bare leaf is a convenience; ambiguous leaf fails LOUD listing candidates', () => {
+  const nodes = yatsuNodes(collisionTree())
+  const exact = resolveYatsuNode(nodes, 'desktop_web-remote-control')
+  assert.ok(exact.ok && exact.node.dir.endsWith('desktop/web-remote-control'))
+  const solo = resolveYatsuNode(nodes, 'solo-node')   // non-colliding leaf IS its id
+  assert.ok(solo.ok)
+  const amb = resolveYatsuNode(nodes, 'web-remote-control')
+  assert.ok(!amb.ok && amb.ambiguous)
+  for (const c of ['desktop_web-remote-control', 'mobile_web-remote-control', 'remote_web-remote-control']) {
+    assert.ok(!amb.ok && amb.error.includes(c), `candidates list ${c}`)
+  }
+  const missing = resolveYatsuNode(nodes, 'nope')
+  assert.ok(!missing.ok && !missing.ambiguous)
 })

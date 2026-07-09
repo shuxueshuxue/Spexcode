@@ -14,14 +14,16 @@ test('evals and issues pages sit flush against the side rail and top edge', () =
   )
 })
 
-test('terminal composer keeps its single-line controls centered in the input box', () => {
+test('terminal composer docks flush at the bottom and keeps ❯ on the active line', () => {
   assert.match(
     css,
     /\.si-content\.is-session\s*\{[^}]*--si-dock-h:\s*44px;/s,
   )
+  // flush-bottom footer (no float/inset/radius) with controls anchored to the bottom (active) line —
+  // flex-end, so a grown multi-line box keeps ❯ tracking the caret instead of floating mid-box.
   assert.match(
     css,
-    /\.si-bottom\s*\{[^}]*left:\s*0;[^}]*right:\s*0;[^}]*bottom:\s*0;[^}]*align-items:\s*center;[^}]*min-height:\s*44px;[^}]*box-sizing:\s*border-box;[^}]*border-radius:\s*0;/s,
+    /\.si-bottom\s*\{[^}]*left:\s*0;[^}]*right:\s*0;[^}]*bottom:\s*0;[^}]*align-items:\s*flex-end;[^}]*min-height:\s*44px;[^}]*box-sizing:\s*border-box;[^}]*border-radius:\s*0;/s,
   )
   assert.match(
     css,

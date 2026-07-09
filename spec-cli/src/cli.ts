@@ -486,10 +486,16 @@ if (cmd === 'serve') {
     intervalMs,
   }), true)   // greet=true: a stream watch greets its specific targets once; `wait` (one-shot) does not
 } else if (cmd === 'wait') {
-  const { watchSessions } = await import('./sessions.js')
+  const { watchSessions, ownSessionId } = await import('./sessions.js')
   const { clientListSessions } = await import('./client.js')
   const [id] = positionals(3)
   if (!id) { console.error('usage: spex wait <id> [--timeout SECONDS] [--interval SECONDS] [--idle]'); process.exit(2) }
+  // point-of-use turn-freeze warning ([[graph]]): a managed agent that runs this wait in the FOREGROUND
+  // freezes its whole turn until the target turns actionable — a warning that used to live only in help
+  // prose, now said where it matters. Foreground vs background is invisible from here, so the hint prints
+  // for ANY managed-agent shell (harmless in a background transcript), on stderr, and changes nothing else.
+  const own = ownSessionId()
+  if (own) console.error(`spex wait: heads-up (managed agent ${own.slice(0, 8)}) — this command BLOCKS until ${id} turns actionable; run it in the BACKGROUND or it freezes your whole turn (its exit is your wake-up). Proceeding.`)
   const intervalMs = (Number(flag('interval')) || 2) * 1000
   const timeoutSec = Number(flag('timeout')) || 1200
   const r = await withWatchEdge([id], intervalMs, () => watchSessions(() => {}, {
@@ -522,11 +528,34 @@ if (cmd === 'serve') {
   // launch path). `c` (client.ts) backs the read/control subs that route through the backend. Lazily imported.
   const s = await import('./sessions.js')
   const c = await import('./client.js')
+  const l = await import('./layout.js')
+  const { existsSync, writeFileSync } = await import('node:fs')
   const id = process.argv[4]
   // the agent-authored state writers resolve WHICH session by id: a `--session <id>` flag (the lifecycle
   // hooks pass it, parsed from the payload, since they no longer have a cwd `.session`) wins, else the
   // harness env var (ownSessionId — the agent's own `spex session …` carries the harness session id).
   const sess = flag('session')
+  // @@@ no-record diagnosis ([[state]]) - the session store resolves from the CURRENT directory (runtimeRoot
+  // ← the cwd's git common dir), so the classic declaration failure is a cd OUTSIDE the session's project —
+  // and a bare "no session record" told the author none of that (field-reported). Name the actual cause and
+  // route the fix; each branch is a distinct situation, distinguished by probing the same store the writer used.
+  const noRecord = (): string => {
+    // cwd probe FIRST: outside a git repo nothing below can resolve — not the store, and not even the env
+    // id (ownSessionId's alias walk reads the store too) — so diagnose the cwd before touching either.
+    let ids: string[] | null
+    try { ids = l.listSessionIds() } catch { ids = null }
+    if (ids === null) return `no session record — declarations resolve the session store from the CURRENT directory, and ${process.cwd()} is not inside a git repository. cd back into the session's worktree and re-declare.`
+    const wid = sess || s.ownSessionId()   // safe now: the store just resolved, so the alias walk cannot throw
+    if (!wid) return 'no session record — no session id to write: this shell carries no harness session env (SPEXCODE_SESSION_ID / CLAUDE_CODE_SESSION_ID) and no --session was given. Pass --session <id> (spex ls lists ids).'
+    if (ids.length === 0) return `no session record for ${wid.slice(0, 8)} — declarations resolve the session store from the CURRENT directory, and the project at ${process.cwd()} has no sessions at all: you are in a different project's checkout. cd back into the session's worktree and re-declare.`
+    return `no session record for ${wid.slice(0, 8)} — this project's store (resolved from ${process.cwd()}) holds ${ids.length} session(s) but not this one: a wrong --session id, or you are declaring from a different project's checkout. cd back into the session's worktree and re-declare, or pass a valid --session <id> (spex ls).`
+  }
+  // a state writer from a non-repo cwd throws git's not-a-repo before it can return false — map exactly
+  // that throw to the no-record path (noRecord re-probes and names the cwd); anything else stays loud.
+  const mark = (fn: () => boolean): boolean => {
+    try { return fn() }
+    catch (e) { if (/not a git repository/i.test(String((e as any)?.stderr ?? e))) return false; throw e }
+  }
   // appended to a done/ask/block declaration: states (not commands) that the next tool call's mark-active hook re-flips the global record to active, so a re-read won't show this.
   const DECLARED = ' — recorded; the human sees it in the dashboard. This state lives in your session\'s global record; your next tool call flips that record back to active (the mark-active hook, by design), so it is normal for this declaration not to persist.'
   // appended ONLY to a propose-close declaration: a worktree about to be discarded may still own ephemeral things the agent started to test this change; nudge (not gate) it to reclaim them before the worktree goes, keyed on whether the thing should outlive the task — never on who started it (a deliberately long-running service / a production build is started-by-you yet must be left alone). Project-agnostic on purpose.
@@ -534,10 +563,22 @@ if (cmd === 'serve') {
   // truncation transparency ([[state]]): the board table shows only the first NOTE_BOARD_LIMIT chars of a
   // note. When a declared note overflows that cap, the confirmation says so — length, what the board shows,
   // where the full text is readable — so the cut is visible to the author instead of silently eaten.
-  // A nudge riding the echo, never a gate: the declaration has already landed.
-  const noteEcho = (note?: string) => (note && note.length > s.NOTE_BOARD_LIMIT)
-    ? `\nyour note is ${note.length} chars; the board table shows only the first ${s.NOTE_BOARD_LIMIT} — the full text IS recorded, and readable via spex review ${(sess || s.ownSessionId() || '<your-session>').slice(0, 8)} / spex ls --json.`
-    : ''
+  // Taught ONCE per session: the first overflowing note prints the full notice and drops a sentinel beside
+  // the record; later overflows stay silent (the rule was taught — a verbatim repeat on every park/ask is
+  // noise, field-reported). A nudge riding the echo, never a gate: the declaration has already landed.
+  const noteEcho = (note?: string): string => {
+    if (!note || note.length <= s.NOTE_BOARD_LIMIT) return ''
+    const wid = sess || s.ownSessionId()
+    const rid = wid ? (l.readAliasedRawRecord(wid)?.session_id ?? wid) : null   // sentinel lives in the RECORD's dir, so an aliased codex id lands on the same file
+    if (rid) {
+      const sentinel = l.sessionArtifactPath(rid, 'note-echo-taught')
+      try {
+        if (existsSync(sentinel)) return ''
+        writeFileSync(sentinel, `${new Date().toISOString()}\n`)   // only reached on a successful declaration (the echo rides the success branch)
+      } catch { /* unreadable/unwritable store dir → fall through and teach again; never block the echo */ }
+    }
+    return `\nyour note is ${note.length} chars; the board table shows only the first ${s.NOTE_BOARD_LIMIT} — the full text IS recorded, and readable via spex review ${(wid || '<your-session>').slice(0, 8)} / spex ls --json. (said once — later long notes won't repeat this.)`
+  }
   if (sub === 'reopen') {
     // bring the agent back up (relaunch ONLY if confirmed offline, the backend owns it); demotes a working
     // `active` to idle but leaves a standing declaration/proposal untouched (see sessions.ts reopen()). The
@@ -550,8 +591,8 @@ if (cmd === 'serve') {
   } else if (sub === 'state') {
     // the agent authors ITS OWN state: active|awaiting|parked|error  [--propose] [--note] [--session]
     const st = process.argv[4] as any
-    const ok = s.markState(st, { proposal: flag('propose') as any, note: flag('note'), sessionId: sess })
-    console.log(ok ? `state -> ${st}${noteEcho(flag('note'))}` : 'no session record (unknown --session / no CLAUDE_CODE_SESSION_ID, or bad status)')
+    const ok = mark(() => s.markState(st, { proposal: flag('propose') as any, note: flag('note'), sessionId: sess }))
+    console.log(ok ? `state -> ${st}${noteEcho(flag('note'))}` : noRecord())
   } else if (sub === 'done') {
     // sugar for awaiting; --propose merge|nothing|close, optional --note
     const p = (flag('propose') as any) || 'nothing'
@@ -563,18 +604,18 @@ if (cmd === 'serve') {
       try { closeNote += (await import('./localIssues.js')).closeoutNudge(sess ?? s.ownSessionId()) }
       catch (e) { console.error(`issue closeout check failed (declaration unaffected): ${e instanceof Error ? e.message : e}`) }
     }
-    console.log(s.markDone(p, sess, flag('note')) ? `done (${p})${DECLARED}${noteEcho(flag('note'))}${closeNote}` : 'no session record')
+    console.log(mark(() => s.markDone(p, sess, flag('note'))) ? `done (${p})${DECLARED}${noteEcho(flag('note'))}${closeNote}` : noRecord())
   } else if (sub === 'park') {
     // sugar: the agent is waiting on a background task; it will self-resume (NOT idle/awaiting)
-    console.log(s.markState('parked', { note: flag('note'), sessionId: sess }) ? `parked${DECLARED}${noteEcho(flag('note'))}` : 'no session record')
+    console.log(mark(() => s.markState('parked', { note: flag('note'), sessionId: sess })) ? `parked${DECLARED}${noteEcho(flag('note'))}` : noRecord())
   } else if (sub === 'fail') {
     // the StopFailure hook marks its session (--session from the payload) as error (turn died on an API error)
-    console.log(s.markError(sess) ? 'marked error' : 'no session record')
+    console.log(mark(() => s.markError(sess)) ? 'marked error' : noRecord())
   } else if (sub === 'ask') {
     // the agent DELIBERATELY declares it is pausing to ask the human a question (like `done`/`park`, an
     // authored state — NOT guarded active-only). The --note carries the question. Distinct from `park`
     // (waiting on a background task, self-resumes): an asking agent resumes only when the human replies.
-    console.log(s.markState('asking', { note: flag('note'), sessionId: sess }) ? `asking${DECLARED}${noteEcho(flag('note'))}` : 'no session record')
+    console.log(mark(() => s.markState('asking', { note: flag('note'), sessionId: sess })) ? `asking${DECLARED}${noteEcho(flag('note'))}` : noRecord())
   } else if (sub === 'commit-gate') {
     // the Stop gate's deterministic commit check (from cwd = the worktree): exit 0 if the node branch is
     // ready to declare done/merge (work committed + ahead of main), else print the reason and exit 1. Uses

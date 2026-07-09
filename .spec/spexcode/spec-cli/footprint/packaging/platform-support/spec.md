@@ -2,7 +2,7 @@
 title: platform-support
 status: active
 hue: 330
-desc: SpexCode's supported runtime is POSIX — Linux, macOS, or Windows via WSL2. The session runtime rests on tmux/bash/AF_UNIX with no native-Windows analog, so a non-POSIX host is detected and fails loudly toward WSL2 instead of crashing cryptically.
+desc: SpexCode's supported runtime is POSIX — Linux, macOS, or Windows via WSL2, the recommended zero-effort path today. Native Windows is deferred, not impossible: native tmux-like multiplexers now exist, and the one real remaining gap is the control-mode live-terminal bridge. A non-POSIX host is detected and fails loudly toward WSL2 instead of crashing cryptically.
 code:
   - spec-cli/src/runtime-guard.ts
   - spec-cli/src/runtime-guard.test.ts
@@ -14,36 +14,46 @@ related:
 ---
 # platform-support
 
-SpexCode's supported runtime is **POSIX**: Linux, macOS, or Windows **via WSL2**. Native Windows is out of
-scope for the **session runtime** — deliberately, not a gap waiting to be filled. The whole posture is one
-honest line: *on a non-POSIX host, run under WSL2 — and say so, instead of crashing.*
+SpexCode's supported runtime is **POSIX**: Linux, macOS, or Windows **via WSL2** — the recommended path, and
+today the only one. Native Windows is **deferred, not impossible**: not built yet, and the paragraphs below
+name what decides it. The posture: *on a non-POSIX host, run under WSL2 — and say so, instead of crashing.*
 
-## why native Windows is out of scope
+## native Windows is deferred, not out of scope
 
 The read-only half of the tool (the spec↔code graph, lint, the board) is pure Node and runs anywhere the
-launcher does. What does not port is the **session runtime**, because its substrate is Unix primitives with
-no native-Windows analog:
+launcher does. The **session runtime** is built on Unix primitives — but the old claim that those have *no
+native-Windows analog* is no longer true. Native terminal multiplexers now exist: psmux (native ConPTY,
+PowerShell/cmd, flag-compatible with most of the tmux commands the session runtime issues), Zellij-native,
+wmux (a ConPTY agent-terminal daemon for Claude Code/Codex), and wezterm-mux. The bulk of the tmux substrate
+now has a real native candidate.
 
-- **tmux is load-bearing for four roles at once** — the durable detached process holder, the PTY, the
-  capture-pane scrollback source, and the multi-client reattach fabric. Windows ConPTY offers only a PTY
-  bound to one owning process; it is not a session store you can list, re-probe, and reattach to.
-- **every agent launch and harness event runs through hand-written bash** — the launch scripts, the dispatch
-  and Stop hooks, the materialized settings commands — a dialect no native Windows shell speaks.
-- **the control channel is filesystem-path AF_UNIX sockets** — the rendezvous socket, the codex app-server —
-  a Unix address family, not a Windows named pipe.
+What keeps native Windows deferred is **one deciding fidelity gap**, plus two lesser costs a mux swap does
+not pay:
 
-A half-working native port would have to re-implement all three behind product code that today rightly does
-not know whether its transport is a socket. That is a large, lossy port for a platform that already has a
-genuine Linux kernel one command away.
+- **The deciding gap — the live-terminal bridge rides tmux control mode.** The browser Sessions console
+  ([[dashboard]]) streams over `tmux -CC`, tmux's structured control-mode protocol. No native multiplexer is
+  confirmed to speak it, so a native port must **rewrite that live streaming** — poll capture-pane, or attach
+  another way. That rewrite, not a config swap, is the real cost.
+- **The two lesser costs.** A mux swap keeps the hand-written bash launchers and hooks (native Windows still
+  needs git-bash on PATH or a Node rewrite), and the filesystem-path AF_UNIX rendezvous socket becomes a
+  Windows named pipe — an adaptation, not a wall.
+
+Deferral is a considered call, not neglect: Anthropic's own Claude Code declined the identical request
+(native Windows tmux agent-teams via psmux) as *not planned* and hit harness-level Windows quirks — this is
+a real project to land, not a switch to flip.
+
+The clean path, **if and when** native is pursued, is to extract a **session-holder** interface (hold /
+list / capture / send / attach) so tmux, psmux, or wmux become pluggable backends — turning "port to Windows"
+from a scattered rewrite into "write one backend." The intended direction; no code implements it now.
 
 ## WSL2 is the Windows path (proven on real hardware)
 
-WSL2 is not an emulation shim — it is a real Linux kernel, so all three blockers simply disappear inside it.
+WSL2 is not an emulation shim — it is a real Linux kernel, so every blocker above disappears inside it.
 Proven live on the fleet's Windows box (windows-chole, kernel `6.18-microsoft-standard-WSL2`): tmux, bash,
 git, and AF_UNIX sockets all work, and `nvm install 22` supplies the pinned Node the distro's own package is
-too old to give. WSL2's mirrored networking makes the dashboard's ports reachable at `localhost` from the
-Windows browser. So the supported Windows story is: **install WSL2, run SpexCode inside it** — the same POSIX
-runtime as Linux, not a second codepath.
+too old to give. Mirrored networking makes the dashboard reachable at `localhost` from the Windows browser.
+So the supported Windows story is: **install WSL2, run SpexCode inside it** — the same POSIX runtime as
+Linux, not a second codepath.
 
 ## fail loudly, never cryptically
 

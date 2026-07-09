@@ -60,7 +60,11 @@ under two **consumption policies**; only how they consume transitions differs:
 - **`spex wait <id>`** — *take-one-and-exit*, an agent's event-loop primitive. Polls until `<id>` is
   actionable, prints that status, and **exits** — an agent backgrounds it and the harness re-invokes when
   the command exits, so the exit IS the wake-up. (Emit is silent: a backgrounded wait wants one clean status
-  line, not the stream.)
+  line, not the stream.) Because a FOREGROUND wait freezes the calling agent's whole turn, that warning
+  lives at the point of use, not only in help prose: when the shell carries a managed-session env
+  (`ownSessionId` resolves), the wait prints one prominent stderr line at start — background this; the exit
+  is your wake-up — then proceeds unchanged (foreground vs background is indistinguishable from inside, so
+  the hint rides every managed-agent wait; a human shell gets none).
 
 **Edge-drawing belongs to the subscription, not to `watch`** (`withWatchEdge` in `cli.ts`): BOTH commands
 report the `watcher→targets` edge (register + TTL heartbeat) for as long as they run and clear it on exit.

@@ -174,10 +174,20 @@ the dashboard, after which the next tool call (via mark-active) flips the record
 that re-flip as a lost proposal. Every note-carrying declaration (`done`/`ask`/`park`/`state`, all of which
 accept `--note` — done included, its note reaches the record like the others') stores the note **in full**;
 display surfaces may cap it (the board table shows only the first `NOTE_BOARD_LIMIT` chars), but a cut must be
-**transparent to the author**: when the declared note overflows that cap, the confirmation states the note's
-length, how much the board shows, and where the full text is readable (`spex review <id>` / `spex ls --json`),
-so trimming is the author's informed choice — never a silent loss. Like every echo addendum it is a nudge
-riding the confirmation, not a gate. A **propose-close** declaration additionally carries a plain reminder to reclaim
+**transparent to the author** — and taught **once per session**: the first time a declared note overflows that
+cap, the confirmation states the note's length, how much the board shows, and where the full text is readable
+(`spex review <id>` / `spex ls --json`), then drops a sentinel beside the record so later overflowing notes in
+the same session repeat none of it (the rule was taught; a verbatim repeat on every park/ask is noise — a
+field-reported irritation). Trimming stays the author's informed choice — never a silent loss — and like every
+echo addendum the notice is a nudge riding the confirmation, not a gate.
+
+A declaration that cannot find its record **diagnoses itself** instead of answering a bare "no session
+record". The store resolves from the **current directory** (the cwd's git common dir), so the classic failure
+is declaring from outside the session's project — and the message must say so: it names the cwd, distinguishes
+the actual situations (cwd not a git repository at all — which must never surface as a raw git stack trace —
+cwd in a project with no sessions, a store found here that lacks the id, or no session id resolvable from env
+at all), and routes the fix for each — cd back into the session's worktree and re-declare, or pass/correct
+`--session <id>`. The diagnosis changes only the message; nothing is written either way. A **propose-close** declaration additionally carries a plain reminder to reclaim
 the ephemeral things the agent started to test this change — a stray process, a dev/preview server, a bound port,
 a scratch session — before the worktree is discarded and they orphan (the leak the shared tmux socket made
 visible: a torn-down worktree's own backend outliving it). It is **advisory, a nudge and never a gate** (the agent

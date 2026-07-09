@@ -4,7 +4,7 @@ import { repoRoot, headSha, driftIndex, stagedFiles, git } from '../../spec-cli/
 import { loadSpecs } from '../../spec-cli/src/specs.js'
 import { loadConfig, sourceExtRe } from '../../spec-cli/src/lint.js'
 import { mainBranch, envSessionId, readRawRecord } from '../../spec-cli/src/layout.js'
-import { yatsuNodes, validateScenarios, YATSU_FILE, type YatsuNode } from './yatsu.js'
+import { yatsuNodes, validateScenarios, resolveYatsuNode, YATSU_FILE, type YatsuNode } from './yatsu.js'
 import { readReadings, readSidecar, appendReading, appendRetraction, latestPerScenario, evidenceOf, isJsonBlob, type Reading, type Verdict, type Evidence, type EvidenceKind, type Retraction } from './sidecar.js'
 import { staleAxes, contentProbeFor } from './freshness.js'
 import { scenarioIndex } from './scenariofresh.js'
@@ -230,10 +230,14 @@ async function evalCmd(args: string[]): Promise<number> {
     return 2
   }
   const sel = positional(args)
-  const id = !sel || sel === '.' ? currentNodeId(root) : stripRefSigil(sel)   // node args tolerate @/[[ ]] sigils ([[mentions]])
-  if (!id) { console.error('spex yatsu eval .: no current node (no .session/node-branch here) — name a node'); return 2 }
-  const node = (await gatherNodes(root)).find((n) => n.id === id)
-  if (!node) { console.error(`spex yatsu eval: no yatsu node '${id}' (a node needs a yatsu.md)`); return 1 }
+  const ref = !sel || sel === '.' ? currentNodeId(root) : stripRefSigil(sel)   // node args tolerate @/[[ ]] sigils ([[mentions]])
+  if (!ref) { console.error('spex yatsu eval .: no current node (no .session/node-branch here) — name a node'); return 2 }
+  // resolve LOUD ([[yatsu-core]]): exact canonical id, else a unique bare leaf; an ambiguous leaf lists its
+  // candidate canonical ids instead of filing against an arbitrary node.
+  const res = resolveYatsuNode(await gatherNodes(root), ref)
+  if (!res.ok) { console.error(`spex yatsu eval: ${res.error}`); return 1 }
+  const node = res.node
+  const id = node.id
   if (!node.scenarios.length) { console.error(`spex yatsu eval: '${id}' declares no scenarios in its yatsu.md`); return 1 }
 
   // which scenario this measurement is OF: --scenario, or the sole scenario when there is exactly one.
@@ -372,10 +376,13 @@ async function retractCmd(args: string[]): Promise<number> {
     return 2
   }
   const sel = positional(args)
-  const id = !sel || sel === '.' ? currentNodeId(root) : stripRefSigil(sel)
-  if (!id) { console.error('spex yatsu retract .: no current node (no .session/node-branch here) — name a node'); return 2 }
-  const node = yatsuNodes(root).find((n) => n.id === id)
-  if (!node) { console.error(`spex yatsu retract: no yatsu node '${id}' (a node needs a yatsu.md)`); return 1 }
+  const ref = !sel || sel === '.' ? currentNodeId(root) : stripRefSigil(sel)
+  if (!ref) { console.error('spex yatsu retract .: no current node (no .session/node-branch here) — name a node'); return 2 }
+  // node resolution mirrors eval's: exact canonical id, else a unique bare leaf, ambiguous fails loud.
+  const res = resolveYatsuNode(yatsuNodes(root), ref)
+  if (!res.ok) { console.error(`spex yatsu retract: ${res.error}`); return 1 }
+  const node = res.node
+  const id = node.id
 
   // which scenario, resolved exactly as eval resolves it: --scenario, or the sole declared scenario. A
   // reading for a since-deleted scenario is still retractable by naming it — the sidecar knows names the
@@ -473,9 +480,14 @@ function checkStaged(): number {
 async function show(args: string[]): Promise<number> {
   const root = repoRoot()
   const sel = positional(args)
-  const id = !sel || sel === '.' ? currentNodeId(root) : stripRefSigil(sel)
-  if (!id) { console.error('spex yatsu show .: no current node (no .session/node-branch here) — name a node'); return 2 }
-  const tl = await evalTimeline(id)   // no ctx → evalTimeline derives specs + driftIndex itself for this one id
+  const ref = !sel || sel === '.' ? currentNodeId(root) : stripRefSigil(sel)
+  if (!ref) { console.error('spex yatsu show .: no current node (no .session/node-branch here) — name a node'); return 2 }
+  // resolve LOUD before the timeline: an ambiguous bare leaf must list its candidate canonical ids, never
+  // fall through to a false "declares no scenarios". A ref matching NO yatsu node still renders the honest
+  // hasYatsu:false line — a spec node without a yatsu.md is not an error to look at.
+  const res = resolveYatsuNode(yatsuNodes(root), ref)
+  if (!res.ok && res.ambiguous) { console.error(`spex yatsu show: ${res.error}`); return 1 }
+  const tl = await evalTimeline(res.ok ? res.node.id : ref)   // no ctx → evalTimeline derives specs + driftIndex itself for this one id
   if (has(args, 'json')) { console.log(JSON.stringify(tl, null, 2)); return 0 }
   console.log(formatTimeline(tl))
   return 0

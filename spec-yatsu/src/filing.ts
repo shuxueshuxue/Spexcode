@@ -1,5 +1,5 @@
 import { repoRoot, headSha } from '../../spec-cli/src/git.js'
-import { yatsuNodes } from './yatsu.js'
+import { yatsuNodes, resolveYatsuNode } from './yatsu.js'
 import { appendReading, readReadings, isJsonBlob, type Reading, type EvidenceKind } from './sidecar.js'
 import { putBlob } from './cache.js'
 
@@ -15,8 +15,11 @@ export function fileHumanReading(
   input: { scenario: string; status: 'pass' | 'fail'; note?: string; transcript?: string; by?: string },
 ): FileResult {
   const root = repoRoot()
-  const node = yatsuNodes(root).find((n) => n.id === nodeId)
-  if (!node) return { ok: false, error: `no yatsu node '${nodeId}' (a node needs a yatsu.md)` }
+  // the same loud resolution the CLI applies ([[yatsu-core]]): exact canonical id, else a unique bare
+  // leaf; an ambiguous leaf returns the candidate list instead of filing against an arbitrary node.
+  const res = resolveYatsuNode(yatsuNodes(root), nodeId)
+  if (!res.ok) return { ok: false, error: res.error }
+  const node = res.node
   const sc = node.scenarios.find((s) => s.name === input.scenario)
   if (!sc) return { ok: false, error: `'${nodeId}' has no scenario '${input.scenario}'` }
   if (input.status !== 'pass' && input.status !== 'fail') return { ok: false, error: 'status must be pass or fail' }
@@ -44,8 +47,8 @@ export function fileHumanReading(
 // latest reading is legacy (no `by`). Store-agnostic: the caller resolves this id to a live session or nobody.
 export function evalReadingFiler(nodeId: string, scenario: string): string | null {
   const root = repoRoot()
-  const node = yatsuNodes(root).find((n) => n.id === nodeId)
-  if (!node) return null
-  const forScenario = readReadings(node.sidecarPath).filter((r) => r.scenario === scenario)
+  const res = resolveYatsuNode(yatsuNodes(root), nodeId)
+  if (!res.ok) return null
+  const forScenario = readReadings(res.node.sidecarPath).filter((r) => r.scenario === scenario)
   return forScenario.length ? forScenario[forScenario.length - 1].by ?? null : null
 }

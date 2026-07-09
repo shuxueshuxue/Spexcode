@@ -164,6 +164,15 @@ The **evaluator** is metadata only — a tag `<name>@<version>` (e.g. `manual@1`
 evaluator freshness axis. No executor seam: a measuring hand (human or future computer-use) is a tag, never
 code yatsu calls.
 
+**A yatsu node's id IS its canonical spec id** — minted by the same rule, over the same universe, as the
+spec loader ([[id-url-safe]]'s exported mint: the leaf dir name, or on a leaf collision the shortest
+globally-unique `_`-joined trailing suffix, computed over ALL spec nodes, not just the yatsu subset). There
+is no second, yatsu-local id scheme: the id `eval`/`show`/`retract` answer to is exactly the id the board,
+scan and search already print, so a reading always lands on the node every other surface means by that id.
+A node ref resolves LOUD: an exact canonical id always wins; a bare leaf name stays the convenience it
+always was while it names exactly one yatsu node; a leaf several nodes share is an error listing the
+candidate canonical ids — never an arbitrary first hit in walk order.
+
 Evidence is content-addressed under the **shared git common dir** ([[portable-layout]]) — one copy per repo,
 outside the tree, uncommittable (no .gitignore). A gone blob renders as `miss original file`; a pre-commit
 backstop rejects a stray blob or a malformed yatsu.md. `spec-cli/src/cli.ts` carries only a thin

@@ -92,22 +92,30 @@ function walk(dir: string, parent: string | null, acc: Raw[]) {
   }
 }
 
-// re-key each node to the shortest globally-unique trailing path-suffix (overrides walk's placeholder
-// basename id/parent); the second loop recomputes parent by path-ancestry.
-// A node id is a URL-safe single token ([[id-url-safe]]) — never a '/'-joined path, which would break
-// every `:id` route and fetch that treats an id as one path segment. So the disambiguation separator is
-// '_': like '/' it never occurs inside a dir basename (so the join stays unambiguous), but unlike '/' it
-// is a URL/wikilink/DOM-safe unreserved char, so a collision-qualified id (e.g. `.config_spec-scout`)
-// stays a single token everywhere it is resolved.
-function reId(acc: Raw[]): void {
-  const segs = acc.map((r) => r.relPath.split(/[/\\]/).slice(1, -1))   // path under .spec, minus 'spec.md'
+// the id MINT ([[id-url-safe]]): key each node — given its path segments under .spec — to its leaf dir
+// name, or on a leaf collision the shortest globally-unique trailing path-suffix. A node id is a URL-safe
+// single token — never a '/'-joined path, which would break every `:id` route and fetch that treats an id
+// as one path segment. So the disambiguation separator is '_': like '/' it never occurs inside a dir
+// basename (so the join stays unambiguous), but unlike '/' it is a URL/wikilink/DOM-safe unreserved char,
+// so a collision-qualified id (e.g. `.config_spec-scout`) stays a single token everywhere it is resolved.
+// Exported as the ONE mint every id producer shares: spec-yatsu mints its node ids through this same
+// function over this same universe (every spec node), so a colliding leaf carries one canonical id
+// system-wide instead of a second, diverging bare-leaf scheme.
+export function mintIds(segs: string[][]): string[] {
   const suffix = (s: string[], k: number) => s.slice(s.length - k).join('_')
-  for (let i = 0; i < acc.length; i++) {
-    const s = segs[i]
+  return segs.map((s, i) => {
     let k = 1
     while (k < s.length && segs.some((o, j) => j !== i && o.length >= k && suffix(o, k) === suffix(s, k))) k++
-    acc[i].id = suffix(s, k)
-  }
+    return suffix(s, k)
+  })
+}
+
+// re-key each node via the mint (overrides walk's placeholder basename id/parent); the second loop
+// recomputes parent by path-ancestry.
+function reId(acc: Raw[]): void {
+  const segs = acc.map((r) => r.relPath.split(/[/\\]/).slice(1, -1))   // path under .spec, minus 'spec.md'
+  const ids = mintIds(segs)
+  for (let i = 0; i < acc.length; i++) acc[i].id = ids[i]
   for (let i = 0; i < acc.length; i++) {
     let best = -1
     for (let j = 0; j < acc.length; j++) {

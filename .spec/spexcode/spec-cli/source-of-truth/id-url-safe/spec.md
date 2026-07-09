@@ -8,6 +8,7 @@ code:
   - spec-cli/src/specs.ts
 related:
   - spec-dashboard/src/data.js
+  - spec-yatsu/src/yatsu.ts
 ---
 # id-url-safe
 
@@ -21,12 +22,19 @@ one token, resolvable the same way everywhere.
 
 ## expanded spec
 
-The invariant is guaranteed at the MINT, not patched at each use. [[source-of-truth]]'s loader (`reId`
-in `specs.ts`) keys each node to its leaf dir name, or — when that leaf collides — the shortest
-parent-qualified suffix that disambiguates. That suffix joins its path segments with `_`, never `/`:
-like `/` the underscore never occurs inside a dir basename, so the join stays unambiguous, but unlike
-`/` it is a URL-unreserved, wikilink-, and DOM-safe char. So a disambiguated id like `.config_spec-scout`
-is still one token — the same shape a non-colliding id already wears.
+The invariant is guaranteed at the MINT, not patched at each use. [[source-of-truth]]'s loader keys each
+node through the exported mint (`mintIds` in `specs.ts`): its leaf dir name, or — when that leaf
+collides — the shortest parent-qualified suffix that disambiguates. That suffix joins its path segments
+with `_`, never `/`: like `/` the underscore never occurs inside a dir basename, so the join stays
+unambiguous, but unlike `/` it is a URL-unreserved, wikilink-, and DOM-safe char. So a disambiguated id
+like `.config_spec-scout` is still one token — the same shape a non-colliding id already wears.
+
+The mint is ONE, and every id producer shares it. `spec-yatsu`'s node walk mints its ids through the same
+exported function, over the same universe (every spec node — a leaf that collides among spec nodes is
+disambiguated even when only one of them carries a yatsu.md), so `spex yatsu eval/show` answer to exactly
+the id the board and scan print. Before this, yatsu keyed nodes to the bare leaf name — a second id scheme
+that diverged on every collision: the canonical id read as "no yatsu node" while the bare leaf silently hit
+whichever colliding node the walk met first, so no colliding node could reliably take a reading.
 
 Because the mint guarantees it, every RESOLVE site is uniform and needs no special-casing:
 

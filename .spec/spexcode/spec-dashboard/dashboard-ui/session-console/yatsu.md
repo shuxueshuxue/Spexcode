@@ -238,6 +238,21 @@ scenarios:
       they scroll behind it. On the MAIN baseline the resting input floats over the terminal and hides its
       bottom status line.
     related: spec-dashboard/src/styles.css
+  - name: dock-prompt-stays-on-active-line
+    tags: [frontend-e2e, desktop]
+    description: >
+      Through the running dashboard in a real browser, open the session interface (Enter) on a LIVE session and
+      focus the docked `❯` box. At REST (single line) read the bounding rects of the prompt (`.si-prompt`), the
+      textarea (`.si-input`) and the paperclip (`.si-attach`) and confirm the three align on the one line. Then
+      grow the box multi-line (paste several newlines, below the half-terminal cap) and RE-READ the `❯` prompt's
+      rect against the box (`.si-bottom`): where does `❯` sit vertically — on the bottom (active) line where the
+      caret is, or floating in the box's vertical middle? Screenshot the grown box.
+    expected: |
+      The `❯` prompt and the paperclip stay pinned to the BOTTOM line of the box in every state (`.si-bottom` is
+      `align-items: flex-end`). At rest the single line's three controls align. As the box grows UPWARD, `❯`
+      tracks the active bottom line — the line the caret is on — never drifting to the vertical centre. A `❯`
+      floating mid-box, beside an inert middle line, is the bug (the `align-items: center` regression).
+    related: spec-dashboard/src/styles.css
   - name: inbox-mention-dropdown-and-resolution
     tags: [frontend-e2e, desktop]
     description: >

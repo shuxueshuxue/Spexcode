@@ -44,7 +44,8 @@ app.get('/health', (c) => c.text('ok'))
 // shares ONE build instead of each running its own — the poll-frequency cut (push channel) and the
 // build-coalescing cut compound. A hard timeout bounds a wedged build to a loud 503 rather than an
 // unboundedly-held connection (the wall sits well above the legitimately-several-seconds cold first build);
-// the underlying single-flight build keeps running and caches for the next poll.
+// a merely-slow single-flight build keeps running and caches for the next poll, while a NEVER-settling one
+// is bounded by [[board-cache]]'s own build watchdog, so the next poll retries a fresh build.
 const BOARD_TIMEOUT_MS = Number(process.env.SPEXCODE_BOARD_TIMEOUT_MS || 20000)
 app.get('/api/board', etag(), async (c) => {
   const timeout = Symbol('timeout')

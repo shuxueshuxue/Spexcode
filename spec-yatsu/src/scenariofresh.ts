@@ -100,11 +100,14 @@ function catFileBatch(root: string, oids: string[]): Promise<Map<string, string>
   return new Promise((resolve, reject) => {
     const env = { ...process.env }
     delete env.GIT_DIR; delete env.GIT_WORK_TREE; delete env.GIT_INDEX_FILE; delete env.GIT_OBJECT_DIRECTORY
-    const p = spawn('git', ['-C', root, 'cat-file', '--batch'], { env })
+    const p = spawn('git', ['-C', root, 'cat-file', '--batch'], { env, timeout: Number(process.env.SPEXCODE_GIT_TIMEOUT_MS || 120000), killSignal: 'SIGKILL' })
     const chunks: Buffer[] = []
     p.stdout.on('data', (c: Buffer) => chunks.push(c))
     p.on('error', reject)
-    p.on('close', () => {
+    p.on('close', (_code, signal) => {
+      // a child that never exited was SIGKILLed at the timeout (a hung git must not pin this promise —
+      // same bound as git.ts's helpers); warn loudly and parse whatever arrived.
+      if (signal === 'SIGKILL') console.warn(`spec-yatsu: git cat-file --batch killed after timeout — child never exited`)
       const buf = Buffer.concat(chunks)
       let i = 0
       while (i < buf.length) {

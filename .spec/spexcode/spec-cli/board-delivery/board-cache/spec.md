@@ -51,11 +51,20 @@ so `/health` answers *during* a build instead of behind it. The git walks were a
 HEAD-cached (they never re-fork per node — [[board-lean]]/source-of-truth), so async fs closed the last
 sync gap. Only the hot board path uses the async twins; the light one-shot callers keep the sync forms.
 
-**Degrade loudly, never pile up.** A build slower than a budget logs one warning (the fail-loud regression
-alarm — a silent slow board is how this returned). The route races the build against a hard timeout: a
-genuinely-wedged build answers a 503 instead of holding a connection open unboundedly, while the
-underlying single-flight build keeps running and caches for the next poll. Budget and timeout are env-
-overridable (`SPEXCODE_BOARD_BUDGET_MS` / `SPEXCODE_BOARD_TIMEOUT_MS`).
+**Degrade loudly, never pile up — and the build NECESSARILY settles.** A build slower than a budget logs
+one warning (the fail-loud regression alarm — a silent slow board is how this returned). The route races
+the build against a hard timeout: a genuinely-wedged build answers a 503 instead of holding a connection
+open unboundedly. But "slow" and "never" are different failures: the single-flight promise is released
+only when the build settles, so a build that never settles (a hung git child, fs/promises under a starved
+libuv threadpool) would otherwise pin `inflight` forever — every later read short-circuits into the pinned
+promise before the cache's validity is even consulted, invalidation can't help, no log ever fires, and
+only a restart cures it. So the build itself races a build-level watchdog at the single-flight boundary:
+far above the slowest legitimate cold build, it REJECTS loudly (a warning names the wedge), and the
+rejection flows through the same release path as success — `inflight` clears and the very next read
+retries fresh. This one wall guarantees settlement for every cause, child process or not; the git layer's
+own child timeouts ([[source-of-truth]]) merely make the common cause die sooner and reap the hung
+children. Budget, route timeout, and watchdog are env-overridable (`SPEXCODE_BOARD_BUDGET_MS` /
+`SPEXCODE_BOARD_TIMEOUT_MS` / `SPEXCODE_BOARD_BUILD_TIMEOUT_MS`).
 
 This is the third half of [[board-delivery]]'s one budget: [[board-lean]] decides *how much* rides the
 wire, [[board-stream]] decides *when* the wire is paid, and board-cache decides *how often the board is

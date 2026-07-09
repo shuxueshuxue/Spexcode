@@ -38,7 +38,7 @@ scenarios:
     tags: [cli]
     code: spec-cli/src/mentions.ts
     description: >-
-      In an isolated store (SPEXCODE_HOME + SPEXCODE_TMUX + SPEXCODE_CLAUDE_CMD pointed at an inert command),
+      In an isolated store (SPEXCODE_HOME + SPEXCODE_TMUX isolated, the configured launcher `cmd` pointed at an inert command),
       seed one governed session record, then through the real CLI post `spex issues open … --body "@new …"`
       twice: once authored BY that session (SPEXCODE_SESSION_ID = its id), once authored by a non-session
       identity (`human`/`unknown`/a forge login). Read each spawned worker's session.json `parent` field.

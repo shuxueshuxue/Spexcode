@@ -32,8 +32,9 @@ profile derives the [[harness-adapter]] and owns the actual agent command. Claud
 the rendezvous socket, and the commit attribution, so the conversation `--resume`s after death, the board maps
 it to its worktree, and a spec node links to it. Codex launches a visible TUI attached to the project's shared
 `codex app-server --listen unix://<runtimeRoot>/codex-app-server.sock`; its Codex thread id is captured later
-into `harness_session_id` because Codex does not let the launcher pin a new thread id. Workers run through the **`reclaude` wrapper**
-(`SPEXCODE_CLAUDE_CMD`), which runs claude as a **child** rather than exec'ing it, so the pane's foreground
+into `harness_session_id` because Codex does not let the launcher pin a new thread id. A launcher `cmd` may be a
+**wrapper** (e.g. `reclaude`, configured as a [[launcher-select]] profile) that runs claude as a **child** rather
+than exec'ing it, so the pane's foreground
 command is the wrapper/shell — **not** a liveness signal ([[state]] reads the socket instead). The spawned
 command alone carries `CLAUDE_BG_BACKEND=daemon` and a `CLAUDE_BG_RENDEZVOUS_SOCK` path **derived from the
 session id** as an env prefix (never global, never a plugin), so [[dispatch]] addresses only our sockets.
@@ -55,9 +56,9 @@ hits the ~2KB tmux send-keys limit. Every path that file and its hooks reference
 package's **own** on-disk location, never a hardcoded `<repoRoot>/spec-cli`, so relocating it can't break launch.
 
 **The backend is the single launch owner.** `spex new` / `spex session new` **POST to the running backend**,
-so the launch always runs where the launch env and cap live. The caller can be **another agent** whose env
-was stripped of `SPEXCODE_CLAUDE_CMD`, so an in-process launch there spawns bare-`claude` workers that
-**401 at boot**. The CLI falls back to in-process **only when no backend answers** (warning that it then
+so the launch always runs where the launch env and cap live. The caller can be **another agent** running in a
+stripped or divergent environment, so an in-process launch there would bring workers up in the caller's context
+rather than the backend's. The CLI falls back to in-process **only when no backend answers** (warning that it then
 carries the caller's env, no cap).
 
 **The launch is project-bound; the route is not — so the launch guards its project.** A launch builds the

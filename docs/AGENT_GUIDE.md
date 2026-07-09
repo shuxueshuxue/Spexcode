@@ -234,28 +234,43 @@ real DOM (`document.querySelector("link[rel~='icon']").href`, `document.title`) 
 with `spex yatsu eval <node> --scenario <name> --pass --image <png>`. A headless Chromium is available on the
 box; where its binary and the driver package live is a machine fact kept in local notes, not here.
 
-### Worker auth — dispatched sessions use `SPEXCODE_CLAUDE_CMD`
+### Worker auth — dispatched sessions launch via named launchers (config, not env)
 
-The backend launches every dispatched worker via `process.env.SPEXCODE_CLAUDE_CMD` (default
-`claude --dangerously-skip-permissions`). In a **non-interactive** shell `claude` can resolve to an
-expired binary instead of your interactive login, so **workers 401 (`Please run /login · API Error:
-401 Invalid bearer token`) even when your own Claude Code is perfectly healthy** — the dispatched
-process is on a different credential path than your shell alias. Fix: start the backend with
-`SPEXCODE_CLAUDE_CMD` pointing at a **known-good launcher** (here, the `reclaude` wrapper):
+The backend launches every dispatched worker with the session's **launcher** — a named `{ harness, cmd }`
+profile from `sessions.launchers` in `spexcode.json` / `spexcode.local.json`, picked at create time
+(`--launcher <name>` / the dashboard dropdown, else `sessions.defaultLauncher`). `spex guide config`'s
+LAUNCHERS section is the authoritative manual. The old `SPEXCODE_CLAUDE_CMD` env override is **retired**:
+the product ignores it entirely, setting it is a no-op. Config is read live at create time, so a JSON edit
+takes effect on the very next dispatch — **no backend restart needed**.
+
+In a **non-interactive** shell the seeded default `claude` cmd can resolve to an expired binary instead of
+your interactive login, so **workers 401 (`Please run /login · API Error: 401 Invalid bearer token`) even
+when your own Claude Code is perfectly healthy** — the dispatched process is on a different credential
+path than your shell alias. Fix: point a launcher at a **known-good wrapper** (e.g. `reclaude`) and make
+it the default. The wrapper's absolute path is a machine fact → the gitignored `spexcode.local.json`; the
+portable default NAME → the committed `spexcode.json`:
 
 ```
-SPEXCODE_CLAUDE_CMD='/abs/path/to/reclaude --dangerously-skip-permissions' npm run api
+// spexcode.local.json (gitignored, host-specific)
+{ "sessions": { "launchers": {
+    "reclaude": { "harness": "claude", "cmd": "/abs/path/to/reclaude --dangerously-skip-permissions" } } } }
+
+// spexcode.json (committed, portable)
+{ "sessions": { "defaultLauncher": "reclaude" } }
 ```
 
-run inside the dedicated `spex-backend` tmux. Gotchas worth knowing:
-- The var is **not persisted**. Restart the backend (or let a watchdog restart it) *without* it and
-  every **new** worker 401s, while already-running workers keep their good launch. Bake it into the
-  launch command / watchdog, not an ad-hoc export — losing it is the usual cause of a sudden 401 wave.
-- An already-401'd worker does **not** recover via `resume` (that re-attaches to the still-broken
-  process). **Close it, kill its tmux session (`tmux -L spexcode kill-session -t <id>`), then
-  re-dispatch.**
+Gotchas worth knowing:
+- **Losing the local launcher config is the usual cause of a sudden 401 wave.** `spexcode.local.json` is
+  gitignored, so anything that clobbers the checkout's untracked files (a wiped worktree, a fresh clone, an
+  overzealous cleanup) silently drops the wrapper definitions — every **new** worker falls back to whatever
+  the committed default resolves to (bare `claude`) and 401s, while already-running workers keep their good
+  launch. Restore the JSON and the next dispatch is healthy — no restart.
+- An already-401'd worker does **not** recover via `resume` — the launcher command is **pinned on the
+  session record at creation**, so resume replays the same broken command even after you fix the config.
+  **Close it, kill its tmux session (`tmux -L spexcode kill-session -t <id>`), then re-dispatch.**
 - This is distinct from a *genuine* token expiry (which needs **you** to re-login). The tell: your
-  interactive Claude Code works and only dispatched workers fail → wrong launcher, not a dead token.
+  interactive Claude Code works and only dispatched workers fail → launcher config wrong or missing, not a
+  dead token.
 
 ## Setup / onboarding
 

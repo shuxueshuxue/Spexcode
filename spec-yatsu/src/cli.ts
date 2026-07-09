@@ -6,7 +6,7 @@ import { loadConfig, sourceExtRe } from '../../spec-cli/src/lint.js'
 import { mainBranch, envSessionId, readRawRecord } from '../../spec-cli/src/layout.js'
 import { yatsuNodes, validateScenarios, YATSU_FILE, type YatsuNode } from './yatsu.js'
 import { readReadings, readSidecar, appendReading, appendRetraction, latestPerScenario, evidenceOf, isJsonBlob, type Reading, type Verdict, type Evidence, type EvidenceKind, type Retraction } from './sidecar.js'
-import { staleAxes } from './freshness.js'
+import { staleAxes, contentProbeFor } from './freshness.js'
 import { scenarioIndex } from './scenariofresh.js'
 import { loadEvalRemarkTracks, trackKey } from '../../spec-cli/src/issues.js'
 import { stripRefSigil } from '../../spec-cli/src/mentions.js'
@@ -94,6 +94,9 @@ async function scan(args: string[] = []): Promise<number> {
   const changedOnly = has(args, 'changed')
   const changed = changedOnly ? changedSinceBase(root) : null
   const idx = await driftIndex(root)
+  // the off-history content fallback ([[yatsu-core]]): a rebased/folded-away anchor with byte-identical
+  // governed content reads fresh instead of false-positive stale. Lazy — in-history readings never probe.
+  const probe = contentProbeFor(root)
   const scidx = await scenarioIndex(root, yatsuNodes(root).map((n) => n.yatsuPath))
   const specs = await loadSpecs()
   // the non-git REMARK freshness axis ([[remark-teeth]]): the trunk remark track, read ONCE — the CLI is the
@@ -141,12 +144,18 @@ async function scan(args: string[] = []): Promise<number> {
           continue
         }
         const remSignals = (remarkTracks.get(trackKey(s.id, sc.name))?.remarks ?? []).map((rm) => ({ resolved: !!rm.resolved, resolvedAt: rm.resolvedAt }))
-        const axes = staleAxes(r, codeFiles, y.yatsuPath, idx, scidx, remSignals)
+        const axes = staleAxes(r, codeFiles, y.yatsuPath, idx, scidx, remSignals, probe)
         if (axes.length) {
           staleScores++
           // a remark-stale scenario is unlocked by a second-party resolve, then a fresh reading; the git axes
-          // by a re-measure. Both read the same word: "re-measure with spex yatsu eval".
-          findings.push(`  • yatsu-drift: '${s.id}' scenario '${sc.name}'${tagStr} is stale (${axes.join(', ')} changed since ${r.codeSha.slice(0, 7)}) — re-measure with \`spex yatsu eval ${s.id}\``)
+          // by a re-measure. Both read the same word: "re-measure with spex yatsu eval". The anchor axis is
+          // a LOSS, not a change — the reading's commit object no longer exists, so content can't testify.
+          const others = axes.filter((a) => a !== 'anchor')
+          const why = [
+            ...(axes.includes('anchor') ? [`anchor commit ${r.codeSha.slice(0, 7)} is gone — history rewritten and pruned`] : []),
+            ...(others.length ? [`${others.join(', ')} changed since ${r.codeSha.slice(0, 7)}`] : []),
+          ].join('; ')
+          findings.push(`  • yatsu-drift: '${s.id}' scenario '${sc.name}'${tagStr} is stale (${why}) — re-measure with \`spex yatsu eval ${s.id}\``)
         }
       }
       // DANGLING remark tracks (directive 5): a (node, scenario) remark track whose scenario is gone from

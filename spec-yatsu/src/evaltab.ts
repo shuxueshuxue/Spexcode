@@ -4,7 +4,7 @@ import { loadSpecs } from '../../spec-cli/src/specs.js'
 import { loadEvalRemarkTracks, trackKey, type RemarkTrack, type Issue, type Reply } from '../../spec-cli/src/issues.js'
 import { yatsuNodes, type YatsuNode } from './yatsu.js'
 import { readSidecar, applyRetractions, evidenceOf, isJsonBlob, type Verdict, type EvidenceKind, type Retraction } from './sidecar.js'
-import { staleAxes, codeDrift, type StaleAxis } from './freshness.js'
+import { staleAxes, codeDrift, contentProbeFor, type StaleAxis } from './freshness.js'
 import { scenarioIndex, type ScenarioIndex } from './scenariofresh.js'
 import { hasBlob, getBlob, MISS_BLOB } from './cache.js'
 
@@ -164,6 +164,9 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
   // one raw sidecar read: the effective readings feed the scoreboard rows below; the retraction events ride
   // along as the undo trace (newest-first, like the readings).
   const { readings: rawReadings, retractions } = readSidecar(ynode.sidecarPath)
+  // the off-history content fallback ([[yatsu-core]]): fed to both git axes so a rebased/folded-away
+  // anchor with byte-identical governed content reads fresh. Lazy — an in-history reading never probes.
+  const probe = contentProbeFor(root)
   const readings: EvalEntry[] = applyRetractions(rawReadings, retractions).map((r) => {
     // a scenario's own `code` is its freshness code axis when it declares one; else the whole node's list.
     const sc = byName.get(r.scenario)
@@ -172,9 +175,9 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
     // read-time overlay below; freshness never depends on that pin.
     const cf = sc?.code?.length ? sc.code : codeFiles
     const axes = staleAxes(r, cf, ynode.yatsuPath, idx, scidx,
-      remarksFor(r.scenario).map((rm) => ({ resolved: !!rm.resolved, resolvedAt: rm.resolvedAt })))
+      remarksFor(r.scenario).map((rm) => ({ resolved: !!rm.resolved, resolvedAt: rm.resolvedAt })), probe)
     // when the code axis is stale, explain it: which of THIS reading's governed files moved, by how many commits.
-    const drift = axes.includes('code') ? codeDrift(idx, r.codeSha, cf) : []
+    const drift = axes.includes('code') ? codeDrift(idx, r.codeSha, cf, probe) : []
     // the reading's evidence list, each entry resolved to its live blob state; the primary (video-first, else
     // first) drives the scalar compat fields for single-evidence consumers.
     const evidence: EvidenceView[] = evidenceOf(r).map((e) => ({ hash: e.hash, kind: e.kind, state: hasBlob(e.hash) ? 'present' : 'miss' }))

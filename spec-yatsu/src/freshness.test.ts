@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { changedSince, remarkStale, type RemarkSignal } from './freshness.js'
+import { changedSince, codeDrift, staleAxes, remarkStale, type ContentProbe, type RemarkSignal } from './freshness.js'
 import type { DriftIndex } from '../../spec-cli/src/git.js'
 
 // The teeth ([[remark-teeth]] T1) as a pure state machine — the five transitions the CLI verification walks,
@@ -66,4 +66,66 @@ test('changedSince: only ancestors of the codeSha count as already-measured', ()
 test('changedSince: an off-history codeSha (rebased away or never merged) is conservatively stale', () => {
   const i = didx({ TIP: ['BASE'], BASE: [] }, [['f.ts', ['BASE']]])
   assert.equal(changedSince(i, 'GONE', 'f.ts'), true)
+})
+
+// ---- the off-history CONTENT fallback: trees testify when ancestry can't ----
+
+// a hand-built probe: `diff` = the changed-paths set (null = anchor commit object gone), `blocks` answers
+// scenarioDiffers. Also asserts the in-history fast path NEVER consults the probe.
+function probeOf(diff: Set<string> | null, scenarioDiffers = false): ContentProbe {
+  return {
+    changedPaths: () => diff,
+    scenarioDiffers: () => scenarioDiffers,
+    behind: () => 7,
+  }
+}
+const throwingProbe: ContentProbe = {
+  changedPaths: () => { throw new Error('probe consulted on the in-history fast path') },
+  scenarioDiffers: () => { throw new Error('probe consulted on the in-history fast path') },
+  behind: () => { throw new Error('probe consulted on the in-history fast path') },
+}
+const READING = { scenario: 's1', codeSha: 'GONE', evaluator: 'manual@1', ts: '2026-07-09T00:00:00Z' }
+
+test('content fallback: off-history anchor with byte-identical governed content reads FRESH', () => {
+  const i = didx({ TIP: ['BASE'], BASE: [] }, [['f.ts', ['BASE']], ['y/yatsu.md', ['BASE']]])
+  // the tree diff names only an unrelated path — governed file and yatsu.md are byte-identical
+  const probe = probeOf(new Set(['other.txt']))
+  assert.equal(changedSince(i, 'GONE', 'f.ts', probe), false)
+  assert.deepEqual(staleAxes(READING, ['f.ts'], 'y/yatsu.md', i, new Map(), [], probe), [])
+})
+
+test('content fallback: a genuinely changed governed file still stales the code axis', () => {
+  const i = didx({ TIP: ['BASE'], BASE: [] }, [['f.ts', ['BASE']]])
+  const probe = probeOf(new Set(['f.ts']))
+  assert.equal(changedSince(i, 'GONE', 'f.ts', probe), true)
+  assert.deepEqual(staleAxes(READING, ['f.ts'], 'y/yatsu.md', i, new Map(), [], probe), ['code'])
+})
+
+test('content fallback: scenario axis is per-scenario — a changed yatsu.md stales only if THIS block moved', () => {
+  const i = didx({ TIP: ['BASE'], BASE: [] }, [])
+  // yatsu.md changed but this scenario's block did not (a sibling moved) → fresh
+  assert.deepEqual(staleAxes(READING, [], 'y/yatsu.md', i, new Map(), [], probeOf(new Set(['y/yatsu.md']), false)), [])
+  // this scenario's own block moved → stale
+  assert.deepEqual(staleAxes(READING, [], 'y/yatsu.md', i, new Map(), [], probeOf(new Set(['y/yatsu.md']), true)), ['scenario'])
+})
+
+test('content fallback: a truly GONE anchor commit stays conservatively stale, named as the anchor axis', () => {
+  const i = didx({ TIP: ['BASE'], BASE: [] }, [['f.ts', ['BASE']]])
+  assert.deepEqual(staleAxes(READING, ['f.ts'], 'y/yatsu.md', i, new Map(), [], probeOf(null)), ['anchor'])
+  // without a probe the old conservative rule holds unchanged
+  assert.deepEqual(staleAxes(READING, ['f.ts'], 'y/yatsu.md', i, new Map(), []), ['code', 'scenario'])
+})
+
+test('content fallback: the in-history fast path never consults the probe', () => {
+  const i = didx({ TIP: ['B'], B: ['A'], A: ['BASE'], BASE: [] }, [['f.ts', ['A', 'BASE']], ['y/yatsu.md', ['BASE']]])
+  assert.equal(changedSince(i, 'B', 'f.ts', throwingProbe), false)
+  assert.deepEqual(staleAxes({ ...READING, codeSha: 'B' }, ['f.ts'], 'y/yatsu.md', i, new Map([['y/yatsu.md', new Map()]]), [], throwingProbe), [])
+})
+
+test('codeDrift: off-history fallback reports only content-changed files, by the probe count', () => {
+  const i = didx({ TIP: ['BASE'], BASE: [] }, [['a.ts', ['BASE']], ['b.ts', ['BASE']]])
+  const probe = probeOf(new Set(['a.ts']))
+  assert.deepEqual(codeDrift(i, 'GONE', ['a.ts', 'b.ts'], probe), [{ file: 'a.ts', behind: 7 }])
+  // no probe → the old conservative every-touch count
+  assert.deepEqual(codeDrift(i, 'GONE', ['a.ts', 'b.ts']), [{ file: 'a.ts', behind: 1 }, { file: 'b.ts', behind: 1 }])
 })

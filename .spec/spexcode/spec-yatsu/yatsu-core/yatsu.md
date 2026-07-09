@@ -83,6 +83,22 @@ scenarios:
       is the latest again (scan quiet), and retracting every reading returns the scenario to
       yatsu-missing. A retract with no un-retracted reading left fails loud, as does an unknown
       flag.
+  - name: off-history-anchor-content-fallback
+    tags: [cli]
+    code: [spec-yatsu/src/freshness.ts]
+    description: >-
+      Through the real `spex yatsu scan` in a scratch repo: file a reading, commit the sidecar, then
+      squash the history so the reading's codeSha is orphaned (off-history) while the governed code
+      file and the scenario's yatsu.md block stay byte-identical; re-run scan. Then squash again WITH
+      a real governed edit and scan. Finally expire the reflog and `git gc --prune=now` so the
+      orphaned anchor commit object is truly gone, and scan once more.
+    expected: >-
+      An off-history codeSha alone is not stale: while the orphaned commit object still exists, scan
+      falls back to comparing content — byte-identical governed files and an unchanged scenario block
+      read fresh, so a fold/rebase/squash/cherry-pick that rewrites history without touching governed
+      content raises no yatsu-drift. A genuine governed change still flags the moved axis. Only when
+      the anchor commit object is truly gone does the conservative stale remain, reported as the
+      anchor axis so it reads as "anchor lost", not "content changed".
 ---
 # yatsu.md — yatsu-core
 

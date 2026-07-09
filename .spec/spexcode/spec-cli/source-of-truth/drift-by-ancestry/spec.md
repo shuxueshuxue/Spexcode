@@ -32,13 +32,16 @@ no per-query git fork, so "scale with history, not node count" still holds. The 
 every consumer of the signal — the [[spec-lint]] drift warning, the board's drift counts, and yatsu's
 code/scenario freshness axes ([[yatsu-core]]) — with no parallel heuristic beside it.
 
-A sha the walk never met — not reachable from HEAD — gets a single conservative rule: drift measured
-*from* it reads 0 (no basis on HEAD to measure from), and a reading stamped *with* it reads stale
-(freshness can't be proven). That rule deliberately folds two different cases — a genuine orphan
-(rebased away, never on any ref) and a commit on a reachable-but-unmerged branch that will land later;
-distinguishing them would need ref-scanning beyond the one HEAD walk for marginal value, and the
-conservative reading is honest for both. Among *parallel* version commits of one node (two branches
-each re-versioning it), the base stays the walk-newest row — an ambiguity only a merge resolves.
+A sha the walk never met — not reachable from HEAD — keeps a conservative rule on the drift side:
+drift measured *from* it reads 0 (no basis on HEAD to measure from). A reading stamped *with* it no
+longer folds into a blanket stale: where ancestry can't testify, yatsu falls back to comparing
+CONTENT between the anchor's tree and HEAD ([[yatsu-core]]'s content fallback) — a fold, rebase,
+squash-merge or cherry-pick that left governed content byte-identical reads fresh, and only an
+anchor whose commit object is truly gone stays conservatively stale (named as such). Distinguishing
+a genuine orphan from a reachable-but-unmerged branch is still never attempted — the content compare
+is honest for both without ref-scanning beyond the one HEAD walk. Among *parallel* version commits
+of one node (two branches each re-versioning it), the base stays the walk-newest row — an ambiguity
+only a merge resolves.
 
 Correcting the under-report legitimately surfaces previously-hidden drift on existing boards — a
 re-baseline, not a regression.

@@ -17,6 +17,27 @@ scenarios:
       tens-of-seconds a per-request rebuild causes. The baseline (route calling buildBoard() inline, no
       cache) fails this: warm /api/board rebuilds every time (~5s) and worst /health under the storm blows
       past 50s as the git-free liveness probe starves behind N concurrent full builds.
+  - name: wedged-build-settles-and-recovers
+    tags: [backend-api]
+    description: >-
+      Prove the build NECESSARILY settles: a buildBoard() whose awaited git children never exit must not
+      pin the single-flight forever. Recipe (deterministic, external injection only): make a throwaway
+      fixture git repo with a 2-node .spec tree and one commit; put a PATH shim `git` ahead of the real
+      one that, iff a trigger file exists and a positional arg (before `--`) is `log`/`rev-list`, hangs
+      forever (`sleep 3600` loop), else `exec`s the real git. Touch the trigger, start the backend from
+      the fixture dir on a pinned FREE port (`env -u SPEXCODE_API_URL PORT=<free>`; lower the walls for
+      test speed: SPEXCODE_GIT_TIMEOUT_MS≈8000, SPEXCODE_BOARD_BUILD_TIMEOUT_MS≈15000), issue one
+      `curl /api/board` to start the cold build (both history walks wedge), then REMOVE the trigger (git
+      is instantly healthy; the already-spawned children stay hung). Now measure, with NO restart:
+      /api/board and /api/specs over the next watchdog window, the server log, and the hung children.
+    expected: >-
+      Without any restart, /api/board answers 200 within the build-watchdog window after the hang is
+      removed (the wedged children are SIGKILLed at the git timeout, the wedged build settles, the next
+      read retries fresh), a LOUD console warning naming the wedge appears in the server log, and
+      /api/specs answers 200 again too — no route left hanging connections. The pre-fix baseline fails
+      every clause: inflight stays pinned (finally never runs), /api/board 503s forever with ZERO log
+      lines even minutes after git recovered (restart the only cure), /api/specs holds connections open
+      indefinitely (http=000) while HEAD is stationary, and the hung git children accumulate unkilled.
 ---
 # yatsu.md — board-cache
 

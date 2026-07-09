@@ -53,10 +53,20 @@ for (const row of rows) {
   console.log(`${mark} ${row.name.padEnd(20)} want=${row.expect.padEnd(22)} rank=${String(row.rank).padStart(2)}  top3: ${row.top}`)
 }
 
-// zero-result fail-loud regression: a CJK query over the English corpus returns nothing, and the
-// zero-result message must carry the corpus-is-English translate-and-retry fact (fail-loud, unconditional)
-// plus the browse-all next step (no nearest titles — a CJK query has nothing to be lexically near).
-const cjk = execFileSync('node', [BIN, 'search', '重命名一个会话'], { encoding: 'utf8' })
+// CJK-positive: the corpus is mostly English but a few nodes carry Chinese prose — the root `spexcode`
+// node's body repeats 节点 throughout. A per-CJK-character tokenizer must let a Chinese content word reach
+// that node; `spex search "节点"` MUST return `spexcode` in results (the bug: the old tokenizer split on
+// [^a-z0-9]+ and discarded all CJK, so every Chinese query dead-ended at zero results).
+const cjkPos = JSON.parse(execFileSync('node', [BIN, 'search', '节点', '--json', '--limit', '10'], { encoding: 'utf8' }))
+const cjkPosRank = cjkPos.map((x) => x.id).findIndex((id) => matches(id, 'spexcode')) + 1
+const cjkPosPass = cjkPosRank >= 1
+console.log(`${cjkPosPass ? `✓${cjkPosRank}` : '✗ '} cjk-positive          want=spexcode(节点)                rank=${cjkPosRank || '—'}  top3: ${cjkPos.slice(0, 3).map((x) => x.id).join(', ')}`)
+
+// zero-result fail-loud regression: a CJK query whose characters appear NOWHERE in the corpus (会/话) returns
+// nothing, and the zero-result message must still carry the corpus-is-English translate-and-retry fact
+// (fail-loud) plus the browse-all next step — CJK support does not suppress the honest zero-result route.
+// (No nearest titles: a CJK query has nothing to be lexically near.)
+const cjk = execFileSync('node', [BIN, 'search', '会话'], { encoding: 'utf8' })
 const cjkPass = cjk.includes('corpus is English') && cjk.includes('spex tree')
 console.log(`${cjkPass ? '✓ ' : '✗ '} cjk-zero-result       want=corpus-is-English + spex-tree  ${cjkPass ? 'both present' : 'MISSING: ' + cjk.trim()}`)
 
@@ -67,4 +77,4 @@ const typoPass = typo.includes('nearest titles') && typo.includes('keyboard-nav'
 console.log(`${typoPass ? '✓ ' : '✗ '} typo-zero-result      want=nearest-titles(keyboard-nav) + spex-tree  ${typoPass ? 'both present' : 'MISSING: ' + typo.trim()}`)
 
 console.log('—'.repeat(72))
-console.log(`recall@1 = ${r1}/${n} = ${(r1 / n).toFixed(3)}   recall@3 = ${r3}/${n} = ${(r3 / n).toFixed(3)}   MRR = ${(mrr / n).toFixed(3)}   cjk-hint = ${cjkPass ? 'PASS' : 'FAIL'}   typo-route = ${typoPass ? 'PASS' : 'FAIL'}`)
+console.log(`recall@1 = ${r1}/${n} = ${(r1 / n).toFixed(3)}   recall@3 = ${r3}/${n} = ${(r3 / n).toFixed(3)}   MRR = ${(mrr / n).toFixed(3)}   cjk-positive = ${cjkPosPass ? 'PASS' : 'FAIL'}   cjk-hint = ${cjkPass ? 'PASS' : 'FAIL'}   typo-route = ${typoPass ? 'PASS' : 'FAIL'}`)

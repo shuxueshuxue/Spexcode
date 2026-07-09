@@ -4,6 +4,7 @@ import { resolveLayout, readConfig } from './layout.js'
 import { listSessions } from './sessions.js'
 import { repoRoot, driftIndex, historyIndex } from './git.js'
 import { residentForgeState } from '../../spec-forge/src/resident.js'
+import { resolveForgeHost } from '../../spec-forge/src/drivers.js'
 import { mergedIssues } from './issues.js'
 import { evalContext, evalTimeline } from '../../spec-yatsu/src/evaltab.js'
 import { yatsuNodesAsync } from '../../spec-yatsu/src/yatsu.js'
@@ -109,7 +110,7 @@ export async function buildBoard() {
   // empty absent a forge, so the fold then carries the local slice alone. Sorted open-first, newest first.
   const isOpen = (i: { status: string }) => i.status === 'open'
   const issuesByNode: Record<string, ReturnType<typeof mergedIssues>> = {}
-  for (const issue of mergedIssues({ host: 'github', state: residentForgeState() }, nodes.map((n) => n.id)))
+  for (const issue of mergedIssues({ host: resolveForgeHost(), state: residentForgeState() }, nodes.map((n) => n.id)))
     for (const nid of issue.nodes) (issuesByNode[nid] ??= []).push(issue)
   for (const n of nodes) {
     const issues = issuesByNode[n.id]

@@ -41,15 +41,19 @@ returns results sorted by `score` DESC, each `{ id, title, path, score, snippet 
 
 Default output is a pretty terminal list (rank · title · id · path · snippet); `--json` prints exactly the
 array above, verbatim — the machine surface that the [[spec-scout]] agent re-consumes. `--limit`
-caps the count (default 10). A **zero-result** reply never dead-ends: it always carries the corpus-is-English
-fact — translate and retry if the query isn't (unconditional — no language sniffing, no score threshold) —
-plus a route to the next step: the nearest node titles (`nearestTitles` — per-word normalised Levenshtein
-over title+id, best-match ≥0.5 per query word then summed, top 3, reusing the same `loadSpecsLite` read, so
-a transposed-`keyboard` typo still points at `keyboard-nav`; omitted when nothing is lexically near, e.g.
-a pure-CJK query) and a closing `browse all: spex tree` line. The nearest-title distance is deliberately
-NOT part of the ranking — it tolerates typos, the ranker must not. Under `--json` the whole zero-result
-message goes to stderr so the stdout array stays verbatim. `spex help search` states the same
-corpus-is-English fact, so a non-English query self-explains at both surfaces.
+caps the count (default 10). The scorer is CJK-aware — its tokenizer ([[shared-ranker]]) makes each Chinese
+character a token, so a Chinese query reaches the CJK prose a few nodes carry (the root node's body is a whole
+Chinese paragraph) with the same fielded ranking English gets, no per-language branch. A **zero-result** reply
+never dead-ends: it carries the corpus-is-English fact — the corpus is overwhelmingly English, so a query in
+another language that matches nothing most often just needs translating (a *hint*, not a claim that CJK is
+unsupported — CJK that DOES hit corpus prose returns results, unconditional, no language sniffing) — plus a
+route to the next step: the nearest node titles (`nearestTitles` — per-word normalised Levenshtein over
+title+id, best-match ≥0.5 per query word then summed, top 3, reusing the same `loadSpecsLite` read, so a
+transposed-`keyboard` typo still points at `keyboard-nav`; omitted when nothing is lexically near, e.g. a
+pure-CJK query, whose titles are English kebab-case) and a closing `browse all: spex tree` line. The
+nearest-title distance is deliberately NOT part of the ranking — it tolerates typos, the ranker must not.
+Under `--json` the whole zero-result message goes to stderr so the stdout array stays verbatim. `spex help
+search` states the same corpus-is-English hint, so a query that matches nothing self-explains at both surfaces.
 
 ### the ranking
 
@@ -74,7 +78,12 @@ repetition inside a one-line summary is stuffing, not evidence, and without the 
 60-word desc catches every query term a curated one-liner can't — the cheat code that degraded recall as the
 corpus grew. Together with the desc boost they reach the floor's reason to exist: the keyword in a node's
 body or summary, not its title. The constants (field weights, BM25 `K1`/`B`) sit in flat plateaus, the tell
-that recall is earned by the general rule, not fitted.
+that recall is earned by the general rule, not fitted — and because they are read FROM the corpus, a plateau
+can DRIFT as the tree grows: the desc weight was re-read downward (3 → 2) once the corpus reached ~164 nodes,
+where more sibling nodes collide on a curated desc word and an incidental desc mention was outranking a node
+that genuinely concentrates the term in its BODY. Lowering the desc tier toward the BM25 body term-frequency
+lets the concentrating node win; the new value sits at the CENTRE of a flat recall@3=0.875 band (W_DESC ∈
+[1.85, 2.4] at the current `K1`), so it is a re-calibration to the grown corpus, not a fit to the benchmark.
 
 It reads the spec tree from the **filesystem only** (no git walk), so a cold `spex search` is cheap to call
 as freely as `grep`. `cli.ts`'s `search` verb is a thin router over `searchSpecs`; all scoring lives there so

@@ -35,9 +35,10 @@ scenarios:
       (16) "how does a worker declare it is done" → state (regression: a live miss caught 2026-07-06 —
       yatsu-proactive sat #1 off an incidental desc word while the lifecycle governor sat #5).
       PLUS two non-rank zero-result regressions (the reply must route to a next step, never dead-end):
-      (a) run `spex search "重命名一个会话"` (no --json) — zero results over the English corpus MUST print
+      (a) run `spex search "会话"` (会/话 appear NOWHERE in the corpus — no --json) — zero results MUST print
       the corpus-is-English translate-and-retry fact AND the `browse all: spex tree` line (no nearest
-      titles — CJK has nothing to be lexically near); (b) run `spex search "kyeboard"` — zero results MUST
+      titles — CJK has nothing to be lexically near); a Chinese query that DOES hit corpus prose is the
+      separate [[cjk-retrieval]] scenario; (b) run `spex search "kyeboard"` — zero results MUST
       print a `nearest titles` list containing `keyboard-nav` (per-word edit-distance fallback) AND the
       `spex tree` line.
       Cases 4, 10, 12, 13 deliberately hide the keyword OUTSIDE the title/path — they test prose-reach (the
@@ -55,8 +56,11 @@ scenarios:
       indistinguishable). All other 14 cases sit in the top 3 — the few not at #1 (e.g. `api-endpoint`,
       `yatsu-core`, `governed-related` vs its remedy-sibling `regroup`) are canonical-vs-sibling ties the
       spec-scout `--deep` LLM layer is meant to break; being inside the top 3 is the floor doing its job.
-      Measured 2026-07-06 at 153 nodes after adding the zero-result nearest-titles routing (ranking
-      untouched): recall@1 0.563, recall@3 0.875, MRR 0.705, cjk-hint PASS, typo-route PASS.
+      Measured 2026-07-09 at 164 nodes after re-calibrating the desc tier weight (W_DESC 3 → 2) — the
+      recall@3 had drifted to 0.813 (below this floor) as the corpus grew and incidental desc mentions began
+      outranking body concentration; lowering the desc tier restored it: recall@1 0.625, recall@3 0.875,
+      MRR 0.747, cjk-positive PASS, cjk-hint PASS, typo-route PASS. (Prior: recall@1 0.563, recall@3 0.875,
+      MRR 0.705 at 153 nodes / W_DESC 3, before the corpus-growth drift.)
   - name: search-compute-budget
     tags: [cli]
     test: spec-cli/src/search.bench.mjs
@@ -74,6 +78,27 @@ scenarios:
       Because the cost is O(corpus) with no index, the alarm is the day it nears ~1s: that is when a cached
       parse / inverted index is overdue (the spec names this). A regression at fixed node count (say 2× the
       baseline) means the recompute or the FS read grew — investigate before it reaches the wall.
+  - name: cjk-retrieval
+    tags: [cli]
+    test: spec-cli/src/search.bench.mjs
+    description: >-
+      Chinese-language retrieval. The corpus is overwhelmingly English, but a handful of nodes carry CJK
+      prose — the root `spexcode` node's body is a full Chinese paragraph describing the node-graph. The
+      tokenizer must therefore treat CJK, not only `[a-z0-9]`: each Han/kana character is its own token (a
+      unigram), so a Chinese query reaches the CJK content the same fielded name>desc>body + IDF + BM25
+      machinery ranks English with — one shared rule, no per-language branch. Two checks through the REAL
+      `spex search`: (a) `spex search "节点" --json` must return `spexcode` (the root node repeats 节点
+      throughout its body) in the top results — a Chinese content word finds the node whose prose carries it;
+      (b) `spex search "会话"` (会/话 appear NOWHERE in the corpus) must still return zero results and print
+      the corpus-is-English translate-and-retry fact + the `browse all: spex tree` line — CJK support does
+      NOT suppress the honest zero-result route when a query genuinely matches nothing. This same tokenizer
+      lives in the shared [[shared-ranker]] core, so the dashboard search palette gains CJK over its
+      (often-Chinese) session/issue planes for free.
+    expected: >-
+      (a) `spex search "节点"` returns `spexcode` at rank 1 (its body concentrates 节/点 and the CJK IDF is
+      high because few nodes carry any CJK); (b) `spex search "会话"` returns zero results WITH the
+      corpus-is-English hint + `spex tree` pointer. Both achieved by the general per-CJK-character tokenizer,
+      no benchmark-specific branch. Filed via search.bench.mjs's cjk-positive + cjk-zero-result checks.
 ---
 # yatsu.md — spec-search
 

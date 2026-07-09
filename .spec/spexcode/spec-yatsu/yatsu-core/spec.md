@@ -4,16 +4,16 @@ status: active
 hue: 140
 desc: The scoreboard slice of spec-yatsu — yatsu.md scenarios (how to measure loss), the readings sidecar with verdicts, git-derived freshness, scan/eval/clean, and a content-addressed evidence cache. yatsu runs nothing; the agent measures.
 code:
-  - spec-yatsu/src/cli.ts
   - spec-yatsu/src/yatsu.ts
+related:
+  - spec-cli/src/cli.ts
+  - spec-yatsu/src/cli.ts
   - spec-yatsu/src/sidecar.ts
   - spec-yatsu/src/freshness.ts
   - spec-yatsu/src/scenariofresh.ts
   - spec-yatsu/src/cache.ts
   - spec-yatsu/src/evaluator.ts
   - spec-yatsu/src/filing.ts
-related:
-  - spec-cli/src/cli.ts
 ---
 # yatsu-core
 

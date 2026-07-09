@@ -5,7 +5,6 @@ hue: 205
 desc: The teeth of the remark — an unresolved remark ages its scenario like a drift event (the 4th, non-git freshness axis), and clearing it needs BOTH a second-party resolve AND a fresh reading after that resolve. Plus the server-side overlay that lifts the (node,scenario)↔eval-thread join out of the dashboard: one join, keyed in trunk, overlaid read-time onto every surface.
 code:
   - spec-yatsu/src/freshness.ts
-  - spec-yatsu/src/freshness.test.ts
 related:
   - spec-cli/src/issues.ts
   - spec-yatsu/src/evaltab.ts
@@ -14,6 +13,7 @@ related:
   - spec-cli/src/board.ts
   - spec-dashboard/src/EventDetail.jsx
   - spec-dashboard/src/SessionEval.jsx
+  - spec-yatsu/src/freshness.test.ts
 ---
 # remark-teeth
 

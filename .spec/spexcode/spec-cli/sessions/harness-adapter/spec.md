@@ -5,13 +5,13 @@ hue: 280
 desc: One seam between SpexCode and the coding-agent harness (Claude Code, Codex, …). Every harness-specific fact lives behind a single Adapter interface with one impl per harness; product code never branches on which harness it is.
 code:
   - spec-cli/src/harness.ts
-  - spec-cli/src/harness.test.ts
-  - spec-cli/hooks/harness.sh
-  - spec-cli/templates/hooks/prepare-commit-msg
 related:
   - spec-cli/src/slash-commands.ts
   - spec-cli/src/materialize.ts
   - spec-cli/src/sessions.ts
+  - spec-cli/src/harness.test.ts
+  - spec-cli/hooks/harness.sh
+  - spec-cli/templates/hooks/prepare-commit-msg
 ---
 
 # harness-adapter

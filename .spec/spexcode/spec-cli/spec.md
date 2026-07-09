@@ -6,6 +6,7 @@ hue: 200
 desc: The server + CLI — reads .spec and git, serves the API, and houses the source-of-truth guards.
 code:
   - spec-cli/src/index.ts
+related:
   - spec-cli/src/supervise.ts
   - spec-cli/src/listen.ts
   - spec-cli/src/slash-commands.ts

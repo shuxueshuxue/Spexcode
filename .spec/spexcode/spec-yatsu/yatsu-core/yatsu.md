@@ -99,6 +99,19 @@ scenarios:
       content raises no yatsu-drift. A genuine governed change still flags the moved axis. Only when
       the anchor commit object is truly gone does the conservative stale remain, reported as the
       anchor axis so it reads as "anchor lost", not "content changed".
+  - name: leaf-collision-canonical-id
+    tags: [cli]
+    description: >-
+      Through the real `spex yatsu` CLI in a scratch repo whose .spec tree holds THREE nodes sharing
+      one leaf dir name (each with its own yatsu.md): run `spex yatsu show`/`spex yatsu eval` first
+      with a node's canonical disambiguated id (the `_`-joined suffix the board/scan print, e.g.
+      `a_web-remote-control`), then with the bare colliding leaf name.
+    expected: >-
+      The canonical disambiguated id — the id every other surface (board, scan, search) speaks —
+      resolves to its node: show renders that node's readings and eval files against exactly it,
+      never hasYatsu:false. The bare leaf name, ambiguous across several yatsu nodes, fails LOUD
+      listing the candidate canonical ids — it never silently picks the first node in walk order.
+      A non-colliding leaf keeps working bare, as the convenience it always was.
 ---
 # yatsu.md — yatsu-core
 

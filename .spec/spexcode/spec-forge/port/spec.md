@@ -51,8 +51,9 @@ the degrade is that narrow field-version case alone, never a blanket swallow.
 The port carries three **write verbs**, existing solely so the unified Issue port's cross-store actions
 (spec-cli's [[issues]]) go through this same seam — the driver stays the ONLY thing that touches the
 network, writes included, rather than a second vendor call-site growing in product code. A tiny driver
-registry exposes the configured forge issue stores to callers as store ids (`github`, later `gitlab`, ...),
-so product code chooses by store id and then talks to one host-agnostic driver shape:
+registry exposes the forge issue store to callers as a store id (`github`, later `gitlab`, ...) — scoped
+to the repo's **resolved** host ([[forge-host]] picks which; a resolved host without a driver offers no
+forge store) — so product code chooses by store id and then talks to one host-agnostic driver shape:
 `createIssue({title, body}) → {number, url}` (promotion OR a dashboard New issue opened directly on the
 forge; gh wraps `gh issue create`) and `createComment({number, body}) → {url}` (the store-routed reply: commenting on a
 forge issue from any SpexCode surface; gh wraps `gh issue comment`) and

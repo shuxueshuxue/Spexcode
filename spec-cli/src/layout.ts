@@ -46,12 +46,15 @@ type Config = {
   issues?: {
     enabled?: boolean                // the [[local-issues]] issues-workflow on/off switch (default ON). OFF silences the post-merge nudge + hides the dashboard view; flip with `spex issues on|off`. (Pre-rename `proposals.enabled` still reads — localIssues.ts issuesEnabled.)
   }
+  forge?: {
+    host?: string                    // explicit forge host id ('github'|'gitlab'|…) overriding the origin-remote derivation ([[forge-host]] — read by spec-forge drivers.ts resolveForgeHost, not here). A project fact → committed spexcode.json.
+  }
 }
 // the resolved LAYOUT convention — main/mainBranch/branchPrefix filled to defaults. `dashboard`, `sessions`,
 // `serve`, `harnesses`, and `preset` are frontend/runtime/policy concerns (read separately via readConfig —
 // preset by init.ts at seed time, harnesses by [[harness-select]]; see api-endpoint / sessions.ts maxActive /
 // gateway.ts), NOT layout fields, so they stay out of the convention rather than forcing a default.
-type Convention = Required<Omit<Config, 'dashboard' | 'sessions' | 'serve' | 'harnesses' | 'preset' | 'issues' | 'private'>>
+type Convention = Required<Omit<Config, 'dashboard' | 'sessions' | 'serve' | 'harnesses' | 'preset' | 'issues' | 'forge' | 'private'>>
 
 export type Worktree = {
   path: string; branch: string | null; node: string | null

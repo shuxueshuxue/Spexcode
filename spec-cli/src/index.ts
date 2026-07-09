@@ -7,6 +7,7 @@ import { loadSpecs, loadSpecsLite, specContent, specHistory, specDiffAt, loadCon
 import { issuesEnabled, remarkOnHost, resolveRemark, retractRemark } from './localIssues.js'
 import { closeIssue, createIssue, issueStores, mergedIssues, promote, replyIssue } from './issues.js'
 import { residentForgeState, refreshForgeNow } from '../../spec-forge/src/resident.js'
+import { resolveForgeHost } from '../../spec-forge/src/drivers.js'
 import { summarize } from './mentions.js'
 import { resolveLayout, mainBranch } from './layout.js'
 import { getBoardJson } from './boardCache.js'
@@ -161,7 +162,7 @@ app.get('/api/issues', etag(), (c) =>
   c.json({
     enabled: issuesEnabled(),
     stores: issueStores(),
-    issues: mergedIssues({ host: 'github', state: residentForgeState() }, loadSpecsLite().map((s) => s.id)),
+    issues: mergedIssues({ host: resolveForgeHost(), state: residentForgeState() }, loadSpecsLite().map((s) => s.id)),
   }))
 // the WRITE surface ([[local-issues]] / [[issues-view]]) — the human reply path, STORE-ROUTED through the one
 // reply verb ([[issues]] replyIssue): a local id git-commits to the trunk store, a forge id ('github#N')
@@ -182,7 +183,7 @@ app.post('/api/issues/:id/reply', async (c) => {
   try {
     // the mention prompt's node context, from the same resident merge the GET serves
     const node = id.includes('#')
-      ? mergedIssues({ host: 'github', state: residentForgeState() }, loadSpecsLite().map((s) => s.id)).find((i) => i.id === id)?.nodes[0] ?? null
+      ? mergedIssues({ host: resolveForgeHost(), state: residentForgeState() }, loadSpecsLite().map((s) => s.id)).find((i) => i.id === id)?.nodes[0] ?? null
       : null
     const r = await replyIssue(id, text, { author: 'human', node, evidence })
     if (r.store !== 'local') await refreshForgeNow()

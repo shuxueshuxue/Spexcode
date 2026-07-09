@@ -1,6 +1,6 @@
 import { loadSpecs } from '../../spec-cli/src/specs.js'
 import type { ForgeDriver, ForgeIssue, ForgePR } from './port.js'
-import { DEFAULT_FORGE_HOST, FORGE_DRIVERS, forgeDriverFor } from './drivers.js'
+import { FORGE_DRIVERS, forgeDriverFor, resolveForgeHost } from './drivers.js'
 import { resolveLinks, type NodeLinks } from './links.js'
 import { resolveEvalPending, type NodeEvalPending } from './needs-yatsu-eval.js'
 
@@ -14,7 +14,7 @@ const has = (args: string[], name: string) => args.includes(`--${name}`)
 async function readForge(
   args: string[],
 ): Promise<{ driver: ForgeDriver; nodeIds: string[]; issues: ForgeIssue[]; prs: ForgePR[] } | null> {
-  const host = flag(args, 'host') ?? DEFAULT_FORGE_HOST
+  const host = flag(args, 'host') ?? resolveForgeHost()
   const driver = forgeDriverFor(host)
   if (!driver) {
     console.error(`forge: unknown host '${host}' (known: ${FORGE_DRIVERS.map((d) => d.host).join(', ')})`)

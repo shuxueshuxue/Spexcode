@@ -5,6 +5,7 @@ hue: 100
 desc: The preset system — default preset = the live .config instance set; non-default presets (careful) are cumulative template packages selection stacks on at `spex init`; selection only matters at seed time.
 code:
   - spec-cli/templates/presets
+related:
   - spec-cli/templates/spec/project/.config
 ---
 # init-preset

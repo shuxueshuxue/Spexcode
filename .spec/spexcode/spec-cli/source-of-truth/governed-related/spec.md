@@ -2,7 +2,7 @@
 title: governed-related
 status: active
 hue: 200
-desc: Two relations on a node — GOVERN (source of truth, ideally one file; drives drift/yatsu; many nodes MAY share a file) and RELATED (referenced, carries coverage). A file governed by more than maxOwners nodes warns "split it". No hub-exclusion.
+desc: Two relations on a node — GOVERN (the ONE source of truth; drives drift/yatsu/ack; ≤1 file, >1 errors) and RELATED (everything referenced; carries coverage AND a soft drift warn). Three signal tiers govern > related > uncovered. A file governed by more than maxOwners nodes warns "split it".
 related:
   - spec-cli/src/specs.ts
   - spec-cli/src/lint.ts
@@ -13,41 +13,45 @@ related:
 
 ## raw source
 
-A node's link to code carries two relations the old single `code:` list conflated. **govern** is what the
-node is the SOURCE OF TRUTH for — sharp, ideally one file, so drift and yatsu have an unambiguous subject.
-**related** is everything it merely references — many, and it is what carries coverage. A file owned by
-several nodes is NOT a defect to stamp out; it is ordinary composition. The real defect is a file owned by
-TOO MANY nodes — it has accreted more independently-specified functionality than one file should hold. Read
-the count as a smell on the FILE, not on its ownership.
+A node's link to code carries two relations, told apart by one question: **does a change to this file
+force me to re-examine this node's intent?** If yes, the file is what the node is the SOURCE OF TRUTH
+for — that is **govern**, and there is exactly **one** of it, so drift, yatsu and ack have a single
+unambiguous subject and the author is forced to decide what this node is really the truth *of*. If no —
+the file realizes or is referenced by the intent, but moving it does not move the intent — it is
+**related**: the coverage net, many, carrying a *soft* liveness signal, never the verdict.
 
 ## expanded spec
 
-Two relations, one shape for spec nodes and yatsu scenarios alike (a yatsu.md owns nothing — only its
-scenarios govern and relate):
+Three signal tiers, strongest to none — **govern > related > uncovered**:
 
-- **govern** (`code:`) — the file the node is source of truth for, ideally one. Drives drift and yatsu
-  attribution. **Many nodes may govern the same file** — a change fans drift to each, which is correct:
-  every owner has a stake. There is no hub-exclusion; no owner's signal is suppressed.
-- **related** (`related:`) — files referenced but not owned. Carries **coverage**: every code file must be
-  reached by some node's related (or govern). No drift, no yatsu, no ack — a pointer, not a verdict.
+- **govern** (`code:`) — the **one** file the node is source of truth for. **At most one**: `spex lint`
+  ERRORS on a node governing more than one file — pick the true subject, demote the rest to related.
+  Zero is fine (a grouping, config or scenario-only node is source of truth for no source file). Govern
+  drives the HARD signals: drift that counts to the commit gate, the `Spec-OK` ack floor, and yatsu
+  attribution. **Many nodes may still govern the same file** — a change fans drift to each, which is
+  correct; ownership is many-to-one on the file side, bounded only by too-many-owners below.
+- **related** (`related:`) — every file referenced but not the single truth: the full-stack **face** (a
+  thin frontend over a CLI/backend engine — restyle it and the intent does not move), shared substrate,
+  and plain dependencies. It carries **coverage** (most files are reached here, not by govern) and a
+  **soft drift warn**: when a related file moves ahead of the node's version, lint WARNS — a nudge that a
+  dependency shifted, worth a glance — but it NEVER blocks a commit, needs no ack, and feeds no yatsu.
+  This soft signal is why related is worth maintaining: it is a live-but-quiet dependency edge, not a
+  dead pointer.
 
-**`spex owner <path>` reports BOTH relations**, distinctly: governors as the verdict, referencers as an
-"also referenced by … (related: coverage only)" pointer line. A related-only file reads as *covered but
-ungoverned* — the message says nothing tracks its drift — and the per-edit `--actionable` hook stays SILENT
-for it, mirroring lint's coverage rule (only uncovered / over-owned are worth interrupting an edit for).
+**`spex owner <path>` reports both**, distinctly: the governor as the verdict, referencers as an "also
+referenced by … (related)" line. The per-edit `--actionable` hook still stays SILENT for a related-only
+file — a soft edge is not worth interrupting an edit for.
 
-**too-many-owners** — the file-rotated twin of breadth ([[spec-lint]]): when a file is governed by more than
-`maxOwners` nodes (default 3), one summary warning fires **at `spex lint`** (the commit gate blocks on drift
-only, never on ownership). It blames the file's size, not its ownership, and offers three moves, split first:
+**too-many-owners** — the file-rotated bound (the twin of [[spec-lint]]'s breadth): a file governed by
+more than `maxOwners` nodes (default 3) fires one summary warning at `spex lint` (the commit gate blocks
+on drift only, never on ownership). It blames the file's size, not its ownership — three moves, split first:
 
-- **split the file** so each governing node reclaims its own module — the honest fix the [[sessions-core]]
-  monolith still awaits;
+- **split the file** so each governing node reclaims its own module — the honest fix a monolith awaits;
 - **merge the nodes** when the separate specs are really one concern;
 - **single foundation owner** + relate the rest, when the file is a genuine shared substrate.
 
-This inverts the earlier "one owner per file" rule: ownership is many-to-one BY DESIGN now, bounded only at
-the high end. The model holds on **both** axes — spec nodes and yatsu scenarios (a yatsu.md owns nothing;
-only its scenarios `code`-govern ≤1 file and `related`-reference the rest, and a file governed by too many
-scenarios is the `yatsu-owners` smell). Still ahead: the foundation nodes the old single-owner migration
-created to absorb monoliths ([[sessions-core]], [[dashboard-shell]]) become split-the-file candidates, not
-permanent owners — the tree migration that splits those files so each governor reclaims its own module.
+The model holds on **both** axes — spec nodes and yatsu scenarios (a yatsu.md owns nothing; only its
+scenarios `code`-govern ≤1 file and `related`-reference the rest, and a file governed by too many
+scenarios is the `yatsu-owners` smell). A node whose intent genuinely spans several source files is a
+**split-the-file candidate** ([[sessions-core]], [[dashboard-shell]]): its one truth stays govern, the
+rest sit in related until each reclaims its own node.

@@ -5,11 +5,11 @@ hue: 330
 desc: SpexCode's supported runtime is POSIX — Linux, macOS, or Windows via WSL2, the recommended zero-effort path today. Native Windows is deferred, not impossible: native tmux-like multiplexers now exist, and the one real remaining gap is the control-mode live-terminal bridge. A non-POSIX host is detected and fails loudly toward WSL2 instead of crashing cryptically.
 code:
   - spec-cli/src/runtime-guard.ts
-  - spec-cli/src/runtime-guard.test.ts
 related:
   - spec-cli/bin/spex.mjs
   - spec-cli/src/cli.ts
   - spec-cli/src/sessions.ts
+  - spec-cli/src/runtime-guard.test.ts
   - spec-cli/src/harness.ts
 ---
 # platform-support

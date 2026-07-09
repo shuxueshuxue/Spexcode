@@ -5,6 +5,7 @@ hue: 200
 desc: The LOCAL store of the one Issue object ([[issues]]): git-native threads as plain documents under .spec/.issues (NOT spec nodes); others reply; a supervisor drains it. Opening one is nudged post-merge, once the agent's own work has safely landed; closing yours is nudged at propose-close.
 code:
   - spec-cli/src/localIssues.ts
+related:
   - spec-cli/templates/hooks/post-merge
 ---
 

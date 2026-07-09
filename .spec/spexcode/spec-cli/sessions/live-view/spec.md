@@ -5,6 +5,7 @@ hue: 280
 desc: The dashboard's live terminal — one tmux control-mode client per session per backend instance, event-driven (timer-free deterministic resize AND first paint, pushed UTF-8 bytes, zero polling), size-vote arbitration so a viewer-less instance can never move a watched window, with viewer subscriptions that outlive the client so a pane never freezes.
 code:
   - spec-cli/src/pty-bridge.ts
+related:
   - spec-dashboard/src/SessionTerm.jsx
   - spec-cli/test/pty-bridge.foreign-instance.ts
   - spec-cli/test/pty-bridge.stress.ts

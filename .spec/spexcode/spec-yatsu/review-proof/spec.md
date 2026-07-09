@@ -4,13 +4,13 @@ hue: 150
 desc: A session's fully-derived evaluation — the console's Eval tab (the shared eval components, session-scoped, tiered loading) and its CLI twin `spex eval <SEL>`, over the same worktree-rooted engine that renders the self-contained HTML as an EXPORT artifact (`--export`). No agent authoring.
 code:
   - spec-yatsu/src/proof.ts
-  - spec-yatsu/src/proof.test.ts
-  - spec-dashboard/src/SessionEval.jsx
 related:
   - spec-cli/src/index.ts
   - spec-cli/src/cli.ts
   - spec-cli/src/client.ts
   - spec-dashboard/src/SessionInterface.jsx
+  - spec-yatsu/src/proof.test.ts
+  - spec-dashboard/src/SessionEval.jsx
 ---
 # review-proof
 

@@ -217,11 +217,17 @@ export async function loadSpecs() {
     const fmSession = str(r.fm.session)
     const session = h[0]?.session || (fmSession && fmSession !== 'null' ? fmSession : null)
     const code = list(r.fm.code)
+    const related = list(r.fm.related)
     const S = h[0]?.hash || ''
     const driftFiles = code
       .map((f) => ({ file: f, behind: driftFor(didx, S, f) }))
       .filter((d) => d.behind > 0)
     const drift = driftFiles.reduce((a, d) => a + d.behind, 0)
+    // related drift is the SOFT tier ([[governed-related]]): same ancestry basis, but it stays OUT of
+    // `drift` — it never feeds status, the commit gate, or yatsu. It surfaces only as a lint warn nudge.
+    const relatedDriftFiles = related
+      .map((f) => ({ file: f, behind: driftFor(didx, S, f) }))
+      .filter((d) => d.behind > 0)
     const fmStatus = str(r.fm.status, '') || null
     return {
       id: r.id,
@@ -234,13 +240,14 @@ export async function loadSpecs() {
       hue: Number(str(r.fm.hue, '210')),
       desc: str(r.fm.desc),
       code,
-      related: list(r.fm.related),
+      related,
       version: h.length,
       reason: h[0]?.reason || '',
       // ISO date of the node's latest version commit (h is newest-first), or null if unversioned.
       lastEdited: h[0]?.date || null,
       drift,
       driftFiles,
+      relatedDriftFiles,
       // the latest version's spec.md patch is NOT precomputed here (it cost 2 git show forks per node on
       // cold load); the history tab fetches it lazily via specDiffAt. See [[work-pane]].
       body: r.body.trim(),

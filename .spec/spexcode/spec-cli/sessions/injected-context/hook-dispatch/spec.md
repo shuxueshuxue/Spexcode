@@ -5,6 +5,7 @@ hue: 280
 desc: The harness-agnostic hook delivery layer — discover surface:hook nodes, compile them into a PERSISTENT flat manifest, and run them deterministically through one pure-shell dispatcher whose cheap content-hash gate re-renders only when the editable .config moves.
 code:
   - spec-cli/src/hooks.ts
+related:
   - spec-cli/src/hook-dispatch.test.ts
   - spec-cli/hooks/dispatch.sh
 ---

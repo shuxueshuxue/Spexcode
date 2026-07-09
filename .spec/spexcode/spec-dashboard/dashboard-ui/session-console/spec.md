@@ -5,12 +5,12 @@ hue: 280
 desc: The Enter surface — two-pane session interface with a live tmux terminal.
 code:
   - spec-dashboard/src/SessionInterface.jsx
+related:
+  - spec-dashboard/src/SessionTerm.jsx
   - spec-dashboard/src/SessionWindow.jsx
   - spec-dashboard/src/session.js
   - spec-dashboard/src/sessionCommands.js
   - spec-dashboard/src/harness.jsx
-related:
-  - spec-dashboard/src/SessionTerm.jsx
 ---
 
 # session-console

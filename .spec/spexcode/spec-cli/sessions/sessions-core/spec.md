@@ -5,6 +5,7 @@ hue: 280
 desc: The shared session module every session feature builds on — the global per-session record I/O, worktree/branch/node resolution, and the launch/state/dispatch/poll plumbing the lifecycle and comms nodes each specialize.
 code:
   - spec-cli/src/sessions.ts
+related:
   - spec-cli/src/sessionSlug.test.ts
 ---
 # sessions-core

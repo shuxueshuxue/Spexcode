@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { gitA, headSha } from '../../spec-cli/src/git.js'
+import { git, gitA, headSha } from '../../spec-cli/src/git.js'
 import { parseScenarios } from './yatsu.js'
 
 // @@@ per-scenario content freshness — the SCENARIO axis, sub-file
@@ -162,4 +162,20 @@ export function scenarioIndex(root: string, yatsuPaths: string[]): Promise<Scena
 
 export function scenarioChangeCommits(idx: ScenarioIndex, yatsuPath: string, scenario: string): string[] {
   return idx.get(yatsuPath)?.get(scenario) ?? []
+}
+
+// canonical per-scenario blocks of `rev:path`, for the off-history content fallback ([[yatsu-core]]'s
+// ContentProbe): resolve the blob oid first — oids are content-addressed, so an unchanged file usually hits
+// blockByOid straight from the index build — and parse only on a genuine miss. null = the path is
+// unreadable at that rev (absent, renamed since, or the rev itself is gone).
+export function scenarioBlocksAt(root: string, rev: string, path: string): Map<string, string> | null {
+  let oid: string
+  try { oid = git(['-C', root, 'rev-parse', `${rev}:${path}`]).trim() } catch { return null }
+  const hit = blockByOid.get(oid)
+  if (hit) return hit
+  try {
+    const m = blockContent(git(['-C', root, 'cat-file', 'blob', oid]))
+    blockByOid.set(oid, m)
+    return m
+  } catch { return null }
 }

@@ -1345,7 +1345,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
    covers — without pushing the terminal or moving any sibling. flex-end keeps the ❯ (and the paperclip) on
    the bottom line: at rest the single line's controls align there; as the box grows multi-line they track the
    active bottom line where the caret sits, never floating into the box's vertical middle. */
-.si-bottom { position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; display: flex; align-items: flex-end; gap: 8px; min-height: 44px; box-sizing: border-box; padding: 7px 14px; border: 1px solid var(--line); border-left: 0; border-right: 0; border-bottom: 0; border-radius: 0; background: var(--panel); }
+.si-bottom { position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; display: flex; align-items: flex-end; gap: 8px; min-height: 44px; box-sizing: border-box; padding: 7px 14px; border-top: 1px solid var(--line); background: var(--panel); }
 .si-prompt { color: var(--blue); flex: none; line-height: 20px; }
 .si-bottom .si-input:disabled { color: var(--muted); }
 /* fail-loud: /keys dispatch failed — outline red and show the message wasn't delivered (draft restored). */
@@ -1413,7 +1413,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   background: var(--term-bg) !important;
 }
 .si-bottom .si-input { color: var(--ink2); min-height: 20px; line-height: 20px; padding: 0; }
-.si-bottom .si-attach { align-self: center; height: 20px; line-height: 20px; }
+.si-bottom .si-attach { height: 20px; line-height: 20px; }
 
 /* the action strip's headline ([[session-activity]]): the SAME sessionHeadline the rows show, dim, taking the
    free width (flex:1) and only ellipsising when it overflows this wide strip — far more room than the compact

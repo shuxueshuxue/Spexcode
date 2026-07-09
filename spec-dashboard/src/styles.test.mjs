@@ -19,18 +19,20 @@ test('terminal composer docks flush at the bottom and keeps ❯ on the active li
     css,
     /\.si-content\.is-session\s*\{[^}]*--si-dock-h:\s*44px;/s,
   )
-  // flush-bottom footer (no float/inset/radius) with controls anchored to the bottom (active) line —
-  // flex-end, so a grown multi-line box keeps ❯ tracking the caret instead of floating mid-box.
+  // flush-bottom footer: only a top border (no float/inset/radius/side borders), controls anchored to the
+  // bottom (active) line via flex-end, so a grown multi-line box keeps ❯ tracking the caret, not mid-box.
   assert.match(
     css,
-    /\.si-bottom\s*\{[^}]*left:\s*0;[^}]*right:\s*0;[^}]*bottom:\s*0;[^}]*align-items:\s*flex-end;[^}]*min-height:\s*44px;[^}]*box-sizing:\s*border-box;[^}]*border-radius:\s*0;/s,
+    /\.si-bottom\s*\{[^}]*left:\s*0;[^}]*right:\s*0;[^}]*bottom:\s*0;[^}]*align-items:\s*flex-end;[^}]*min-height:\s*44px;[^}]*box-sizing:\s*border-box;[^}]*border-top:\s*1px solid var\(--line\);/s,
   )
   assert.match(
     css,
     /\.si-bottom\s+\.si-input\s*\{[^}]*min-height:\s*20px;[^}]*line-height:\s*20px;/s,
   )
-  assert.match(
+  // the paperclip carries NO align-self override, so it inherits the base .si-attach flex-end and tracks
+  // the same bottom line as ❯ (the align-items:center override that stranded it mid-box is gone).
+  assert.doesNotMatch(
     css,
-    /\.si-bottom\s+\.si-attach\s*\{[^}]*align-self:\s*center;/s,
+    /\.si-bottom\s+\.si-attach\s*\{[^}]*align-self:/s,
   )
 })

@@ -448,9 +448,10 @@ app.post('/api/sessions/:id/rawkey', async (c) => {
 // removes the worktree. {ok:false} = no such session.
 app.post('/api/sessions/:id/exit', async (c) => c.json({ ok: await exitSession(c.req.param('id')) }))
 app.post('/api/sessions/:id/close', async (c) => c.json({ ok: await closeSession(c.req.param('id')) }))
-// set (or clear, with a blank) a session's display-name override; persists to the worktree's `.session` so
-// it survives a restart. Unknown id → 404. The worktree file is OUTSIDE the store the board watchers see,
-// so the route nudges the stream explicitly ([[board-stream]]) — the rename shows in ~150ms, not a cold tick.
+// set (or clear, with a blank) a session's display-name override; persists to the session's global record
+// (`session.json`) so it survives a restart. Unknown id → 404. That record sits INSIDE the watched store, but
+// the store watch is best-effort (it can fail to attach), so the route still nudges the stream explicitly
+// ([[board-stream]]) — the rename shows in ~150ms deterministically, never waiting out a cold tick.
 app.post('/api/sessions/:id/rename', async (c) => {
   const body = await c.req.json().catch(() => ({}))
   const ok = await renameSession(c.req.param('id'), typeof body?.name === 'string' ? body.name : '')

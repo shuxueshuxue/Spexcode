@@ -48,8 +48,9 @@ only: `SPEXCODE_ALLOW_MAIN=1 git commit …`. Install/repair the hook with `npm 
 after the hook source (`spec-cli/templates/hooks/pre-commit`) changes**, since `.git/hooks/pre-commit`
 is a copy. That `templates/hooks/` dir is the single canonical source `spex init` plants too.
 
-Convention for live work: worktrees in `.worktrees/`, branch `node/<id>`, plus an untracked `.session`
-file (`node:` / `session:` / `status:` lines) that the layout linker reads.
+Convention for live work: worktrees in `.worktrees/`, branch `node/<id>`. Session state lives in the
+global per-project store (`session.json` under `~/.spexcode/projects/<enc>/sessions/<id>/`), never as
+a file inside the worktree.
 
 ## Supervising — the manager loop
 

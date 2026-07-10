@@ -210,11 +210,14 @@ export function materialize(proj = process.cwd()): string {
   // SPEX path), so its dir joins the same managed block — regenerated per clone/launch, never committed.
   const bundlePaths = curFolders.map((f) => pluginBundleDir(proj, f))
   // SpexCode's own SESSION artifacts also join the managed block: a launch creates a worktree under
-  // `.worktrees/` (hardcoded in sessions.ts) plus a per-worktree `.session` state file the layout linker
-  // reads. Neither is the adopter's code, both are per-clone/never-committed — but until now materialize
-  // never ignored them, so an ADOPTED project leaked its session worktrees into `git status` (a `git add -A`
-  // would commit them). Static strings, so they stay checkout-invariant. The dogfood hand-lists these; every
-  // other repo gets them here, in the default `.gitignore` block AND (widened) the private `.git/info/exclude`.
+  // `.worktrees/` (hardcoded in sessions.ts). Session state itself lives in the GLOBAL per-project store
+  // (`session.json` under runtimeRoot — nothing per-worktree any more); the `.session` entry below is a
+  // legacy sweep kept so worktrees created by an OLD backend, which still carry the retired per-worktree
+  // state file, stay hidden. Neither is the adopter's code, both are per-clone/never-committed — but until now
+  // materialize never ignored them, so an ADOPTED project leaked its session worktrees into `git status` (a
+  // `git add -A` would commit them). Static strings, so they stay checkout-invariant. The dogfood hand-lists
+  // these; every other repo gets them here, in the default `.gitignore` block AND (widened) the private
+  // `.git/info/exclude`.
   const sessionIgnores = ['.worktrees/', '.session']
   const ignorable = [...[...shimPaths, ...bundlePaths].map(anchor).filter((p): p is string => p !== null), 'spexcode.local.json', ...sessionIgnores]
   const gitignore = join(proj, '.gitignore')

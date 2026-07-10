@@ -57,8 +57,8 @@ Each story names the mechanism that satisfies it, or the deferred design that wi
 **D — sub-granularity.**
 10. *"Readings bloat the tracked tree."* DEFERRED — evidence already lives in `.git/spexcode` blobs; moving
     the reading LOG toward the global store is a named successor, not this change.
-11. *".config should be votable separately from .spec."* The taxonomy names `.config` a DISTINCT votable
-    class — a future knob costs no new mechanism; today it carries none and rides always-tracked.
+11. *".config should be votable separately from .spec."* DEFERRED — naming it a separate class later costs
+    no new mechanism; today it rides inside always-tracked spec data.
 12. *"Commit one render, hide another."* Refused by design: the vote is per-CLASS, never per-file.
 
 **E — migration and reversibility.**

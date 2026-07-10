@@ -5,23 +5,31 @@ import { parseScenarios } from './yatsu.js'
 // @@@ per-scenario content freshness — the SCENARIO axis, sub-file
 // A yatsu.md holds many scenarios, but a reading measures ONE. yatsu-core's contract says "a scenario is the
 // unit of measurement, so its freshness is its OWN — two scenarios stale independently." Git has no sub-file
-// history, so we build it: for each scenario NAME in a yatsu.md, the commits where THAT scenario's block
-// content changed (added / removed / edited), rename-followed. `scenarioMoved` then reads exactly like the
-// code axis's `changedSince` — a pure ancestry lookup over this per-scenario commit list — so editing one
-// scenario never re-stales its siblings (the file-granular bug this replaces).
+// history, so we build it: for each scenario NAME in a yatsu.md, the commits where THAT scenario's SEMANTIC
+// block content (description + expected — see blockContent) changed (added / removed / edited),
+// rename-followed. `scenarioMoved` then reads exactly like the code axis's `changedSince` — a pure ancestry
+// lookup over this per-scenario commit list — so editing one scenario never re-stales its siblings (the
+// file-granular bug this replaces), and retagging one never re-stales itself.
 
 const RS = '\x1e'
 
 // yatsuPath (head path) -> scenario name -> commit hashes that changed that scenario's block (newest-first)
 export type ScenarioIndex = Map<string, Map<string, string[]>>
 
-// the block content that stales a reading: everything a measurement is taken AGAINST, minus the name (the
-// join key — a renamed scenario is a remove+add, surfaced as a change-commit on each name). parseScenarios
-// already folds YAML block scalars, so a pure prose re-wrap yields the same string and does NOT stale.
+// the block content that stales a reading: the scenario's SEMANTIC fields only — description (what to
+// measure) + expected (what zero loss looks like), the contract a measurement is taken AGAINST. The name is
+// the join key (a renamed scenario is a remove+add, surfaced as a change-commit on each name), and the
+// metadata fields are OUT: tags route a scenario to a measuring hand, test/code/related point at files —
+// none of them changes what an already-taken reading proved, so a tags sweep or a coverage retune must not
+// re-stale every reading in the tree. Both freshness paths (the in-history change-commits and the
+// off-history scenarioDiffers probe) read THIS one projection — narrowing it here narrows both at once, and
+// because freshness is derived live from git, historical metadata-only commits stop registering as scenario
+// changes with no migration. parseScenarios already folds YAML block scalars, so a pure prose re-wrap
+// yields the same string and does NOT stale.
 function blockContent(src: string): Map<string, string> {
   const m = new Map<string, string>()
   for (const s of parseScenarios(src)) {
-    m.set(s.name, JSON.stringify({ d: s.description, e: s.expected, t: s.tags ?? [], c: s.code ?? [], r: s.related ?? [], x: s.test ?? '' }))
+    m.set(s.name, JSON.stringify({ d: s.description, e: s.expected }))
   }
   return m
 }
@@ -164,10 +172,10 @@ export function scenarioChangeCommits(idx: ScenarioIndex, yatsuPath: string, sce
   return idx.get(yatsuPath)?.get(scenario) ?? []
 }
 
-// canonical per-scenario blocks of `rev:path`, for the off-history content fallback ([[yatsu-core]]'s
-// ContentProbe): resolve the blob oid first — oids are content-addressed, so an unchanged file usually hits
-// blockByOid straight from the index build — and parse only on a genuine miss. null = the path is
-// unreadable at that rev (absent, renamed since, or the rev itself is gone).
+// canonical per-scenario SEMANTIC blocks of `rev:path` (the blockContent projection), for the off-history
+// content fallback ([[yatsu-core]]'s ContentProbe): resolve the blob oid first — oids are content-addressed,
+// so an unchanged file usually hits blockByOid straight from the index build — and parse only on a genuine
+// miss. null = the path is unreadable at that rev (absent, renamed since, or the rev itself is gone).
 export function scenarioBlocksAt(root: string, rev: string, path: string): Map<string, string> | null {
   let oid: string
   try { oid = git(['-C', root, 'rev-parse', `${rev}:${path}`]).trim() } catch { return null }

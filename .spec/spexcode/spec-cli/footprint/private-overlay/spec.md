@@ -52,12 +52,21 @@ dispatcher [[hook-dispatch]] silently runs nothing — no gates, no stop discipl
 sees zero nodes, and the dispatch gate re-renders on every event because the worktree hashes empty config
 roots (in the wild that per-event render, under worktree-shared git-lock contention, hung a worker's Stop hook
 past the harness's 60s timeout). Git cannot deliver what it does not track, so session creation
-(`worktree-sources.ts`, called from [[launch]]'s worktree prep) **links** the main checkout's `.spec`,
-`spexcode.json` and `spexcode.local.json` into every fresh worktree that lacks them. On a default-mode repo the
-checkout already carries the first two, so each link guard no-ops — one mechanism, never a mode branch — and
-`spexcode.local.json` (machine-local, untracked in BOTH modes) riding along is what keeps a worktree render in
-the same mode as the main checkout's. Spec writes from inside a private worktree therefore land directly in the
-shared main tree, coherent with this mode's trade: git is not carrying the spec data either way. The deliberate trade is history: with `.spec` kept out of the host's commits there is no
+(`worktree-sources.ts`, called from [[launch]]'s worktree prep) **seeds** every fresh worktree that lacks the
+sources — each by what the source IS. PROJECT state (`.spec`, `spexcode.json`) is **linked**: shared
+write-through is the point, so a spec write from inside a private worktree lands directly in the shared main
+tree (coherent with this mode's trade — git is not carrying the spec data either way). HOST state
+(`spexcode.local.json`, machine-local and untracked in BOTH modes) is **copied** at creation: the worker reads
+the same mode/launcher snapshot — what keeps a worktree render in the main checkout's mode — but its writes
+land on its own copy and die with the worktree, never on the host's real config (a worker once wrote "its"
+test config through a link and wiped the host's launchers — every later dispatch 401'd). And what it seeds it
+**hides**: any seeded entry `git check-ignore` still reports visible is appended to `.git/info/exclude`, which
+lives in the COMMON git dir and so reaches the main checkout and every linked worktree at once — no bait for a
+worker's `git add -A` (a real PR once carried `.spec` into a product repo), idempotent across dispatches, and
+self-healing for a half-configured repo (the private render's `.spec/` dir-pattern can never match a
+worktree's .spec SYMLINK — this seam writes the shape it actually planted). On a default-mode repo the
+checkout already carries the tracked sources, so the seed guards no-op and nothing is hidden — one mechanism,
+never a mode branch, no residue. The guest stays a guest even from inside its own worktrees ([[footprint]]). The deliberate trade is history: with `.spec` kept out of the host's commits there is no
 git-derived version timeline ([[source-of-truth]]) — current-state governance, lint, and yatsu still measure,
 but the recent/history tabs go quiet. Regaining full history invisibly (a detached spec repo) is a larger,
 separate concern this mode does not attempt.

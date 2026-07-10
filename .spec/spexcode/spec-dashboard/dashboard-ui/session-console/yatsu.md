@@ -177,6 +177,21 @@ scenarios:
       change and the app does not cancel the event, so the browser's devtools accelerator opens normally
       (the two-modifier chord is the browser's, not the app's). The browser/app takes no other action on
       ⌥/⌘+I.
+  - name: type-mode-esc-always-forwards-never-exits
+    tags: [frontend-e2e, desktop]
+    description: >
+      Through the running dashboard in a real browser, open the session interface on a LIVE session and
+      enter type mode (⌥/⌘+I or the type button). Intercept `/rawkey` so no keystroke reaches a real agent,
+      recording WHICH keys attempt a forward. Press Esc once, then press Esc twice in rapid succession
+      (well under a second apart — the cadence that used to be the double-Esc exit), then a third burst of
+      several fast Escs. After each burst read the bottom-bar type-mode indicator and the recorded forwards.
+      Finally exit via ⌥/⌘+I (or the click) to confirm the sanctioned exits still work.
+    expected: |
+      Every Esc press — single, paired, or rapid-fire — forwards to the pane as a `/rawkey` Escape and
+      type mode STAYS ON: the bottom-bar indicator never disappears on any Esc cadence, because Esc belongs
+      to the agent's own menus and a human cancelling something in the terminal must never be bounced out of
+      the mode. There is no double-Esc exit. Type mode leaves only by the reserved ⌥/⌘+I toggle, the type
+      button/indicator click, `/type`, switching tabs, or the session going offline.
   - name: modifier-arrow-switches-regardless-of-focus
     tags: [frontend-e2e, desktop]
     description: >

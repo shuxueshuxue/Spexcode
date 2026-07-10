@@ -145,8 +145,10 @@ what the user reaches for ("I want to type into the terminal myself") — entere
 button, or the reserved `⌥/⌘+I`: the `❯` box disables and **every keystroke — `⌃`/`⌥`/`⌘` combos included —
 forwards raw** to the pane, so a human drives the agent's terminal, not just its arrows. Those **reserved
 `⌥/⌘+I`** keys toggle type mode and are **never forwarded to tmux nor overridable by the app**; entry is
-otherwise **manual**, and leaving the tab or going offline exits — as does a **second `Esc` within 600 ms**
-(the first `Esc` still forwards to the pane to cancel the agent's own menu). The reserved chord is a **single**
+otherwise **manual**, and leaving the tab or going offline exits. **`Esc` is not an exit** — it always
+forwards to the pane like any other key, because Esc belongs to the agent's own menus and dialogs; a human
+cancelling something *in* the terminal must never be bounced out of the mode mid-gesture (the old
+double-Esc-within-600ms escape hatch is gone for exactly that reason). The reserved chord is a **single**
 modifier + I — `⌥+I` *or* `⌘+I`, never both: **`⌥⌘I` held together is the browser's own devtools accelerator**,
 so the app lets that three-key combo pass straight through to open the console rather than swallowing it as a
 type-mode toggle. A best-effort pane sniff — a

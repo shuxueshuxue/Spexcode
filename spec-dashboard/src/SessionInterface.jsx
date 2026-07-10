@@ -145,7 +145,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [uploadErr, setUploadErr] = useState(false)
   const [dragTarget, setDragTarget] = useState(null)
   const [attachAt, setAttachAt] = useState(null)  // surface the in-flight/last upload targets — drives the spinner + error placement
-  const lastEscRef = useRef(0)
   const taRef = useRef(null)
   const msgRef = useRef(null)
   const panelRef = useRef(null)
@@ -624,13 +623,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       // type mode: forward EVERY key raw to the pane (⌃/⌥/⌘ combos encoded by typeKeyToken), nothing else fires.
       if (typeMode && active !== 'new') {
         e.preventDefault(); e.stopPropagation()
-        if (e.key === 'Escape') {
-          sendRawKey('Escape')
-          const now = Date.now()
-          if (now - lastEscRef.current < 600) setTypeMode(false)
-          lastEscRef.current = now
-          return
-        }
+        // Escape always forwards — it belongs to the agent's own menus; exiting type mode is the
+        // toggle chord / button / /type only, never a keystroke the pane also wants.
+        if (e.key === 'Escape') { sendRawKey('Escape'); return }
         const token = typeKeyToken(e)
         if (token) sendRawKey(token)
         return

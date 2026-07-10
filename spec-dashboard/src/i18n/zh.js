@@ -380,7 +380,7 @@ export default {
     offlineSubBefore: '工作树及其会话 ',
     offlineSubAfter: ' 仍然完好。重新启动以恢复同一对话。',
     typeInd: '⌨ 终端交互模式',
-    typeHelp: '按键（含 ⌃/⌥/⌘ 组合键）将发送到终端 · ⌥/⌘+I、Esc-Esc 或点击退出',
+    typeHelp: '按键（含 ⌃/⌥/⌘ 组合键）将发送到终端 · ⌥/⌘+I 或点击退出',
     typeExit: '点击退出终端交互模式',
     msgOffline: '重新启动以向此会话发送消息',
     msgPlaceholder: '向此会话发送消息 · ⏎ 发送',

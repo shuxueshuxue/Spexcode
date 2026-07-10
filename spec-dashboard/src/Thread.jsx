@@ -27,6 +27,7 @@ import { Icon } from './icons.jsx'
 // plain `{ by, at, body }`; no schema grows.
 
 const ANCHOR_RE = /^▶\s*(\d+):([0-5]?\d)(?:\s*·\s*([^\n]*))?/
+const HEAD_FRAME_RE = /^!\[frame\]\(\/api\/yatsu\/blob\/[0-9a-f]{64}\)\n?/   // the anchor's OWN frame, riding right under its line
 const BLOB_URL = /\/api\/yatsu\/blob\/([0-9a-f]{64})/g
 const BLOB_MD = /!\[[^\]]*\]\(\/api\/yatsu\/blob\/([0-9a-f]{64})\)/g   // an inline evidence link (frame, clip, …)
 export const mmss = (tMs) => { const s = Math.floor(tMs / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` }
@@ -176,9 +177,10 @@ export function Replies({ replies, onSeek, selIdx = null, activeIdx = null, onSe
 // string surfaces via onDone. The textarea carries the SAME `[[node]]`/`@session` autocomplete as the
 // console ([[mentions]], one shared menu, never a fork); the composer is docked at the detail's bottom,
 // so its menu opens UPWARD. The thread's own node leads the `[[` list. Over a clip the home passes
-// `anchorNow()` → a ⏱ button stamps the current frame's `▶m:ss · step` at the body's head; a circle
-// pushes a `draft` (prefilled anchored body + a frame image link), so a mark is thereafter an ordinary —
-// replyable, @-able — reply, its frame indexed as the thread's evidence[].
+// `anchorNow()` (async → { tMs, step, frame }) → a ⏱ button stamps the current moment's `▶m:ss · step`
+// AND its captured frame at the body's head; a circle pushes a `draft` (prefilled anchored body + the
+// rect-burned frame link) — either way a mark is thereafter an ordinary — replyable, @-able — reply,
+// its frame indexed as the thread's evidence[].
 export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = null, onDone, anchorNow = null, draft = null, actionsEnd = null }) {
   const t = useT()
   const [body, setBody] = useState('')
@@ -213,12 +215,21 @@ export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = nul
     taRef.current?.focus()
   }, [draft?.seq])
 
-  // ⏱ — stamp (or re-stamp) the current frame as this comment's anchor line, keeping the prose below it.
-  const stampAnchor = () => {
-    const a = anchorNow?.()
+  // ⏱ — stamp (or re-stamp) the current moment as this comment's anchor: the `▶m:ss · step` line PLUS the
+  // frame image itself ([[event-detail]]: an anchored mark carries its moment's frame), keeping the prose
+  // below. A frame link riding at the HEAD of the prose (right under the anchor line) is the anchor's OWN
+  // frame — a re-stamp replaces it along with the line, so an anchor and its frame never disagree; frames
+  // the author placed deeper in the prose are theirs, untouched. A capture miss (frame: null) degrades to
+  // the text-only line, never a blocked stamp.
+  const stampAnchor = async () => {
+    const a = await anchorNow?.()
     if (!a) return
-    const line = anchorLine(a.tMs, a.step)
-    setBody((b) => { const ex = parseAnchor(b); return ex ? `${line}\n${ex.rest}` : (b ? `${line}\n${b}` : `${line}\n`) })
+    const head = anchorLine(a.tMs, a.step) + (a.frame ? `\n![frame](/api/yatsu/blob/${a.frame})` : '')
+    setBody((b) => {
+      const ex = parseAnchor(b)
+      const rest = (ex ? ex.rest : b).replace(HEAD_FRAME_RE, '')
+      return rest ? `${head}\n${rest}` : `${head}\n`
+    })
     taRef.current?.focus()
   }
 

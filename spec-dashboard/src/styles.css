@@ -1344,8 +1344,11 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
    it grows UPWARD, floating over the terminal's lower edge — its opaque panel background occludes what it
    covers — without pushing the terminal or moving any sibling. flex-end keeps the ❯ (and the paperclip) on
    the bottom line: at rest the single line's controls align there; as the box grows multi-line they track the
-   active bottom line where the caret sits, never floating into the box's vertical middle. */
-.si-bottom { position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; display: flex; align-items: flex-end; gap: 8px; min-height: 44px; box-sizing: border-box; padding: 7px 14px; border-top: 1px solid var(--line); background: var(--panel); }
+   active bottom line where the caret sits, never floating into the box's vertical middle. The vertical padding
+   makes the resting box EXACTLY filled (1px border + 11 + 20px line + 12 = 44px = --si-dock-h, no 1px spill
+   over the terminal's reserved strip), so at one line flex-end and vertical centring coincide — the single
+   line sits centred in the strip (12px visual gap each side), not sunk toward its bottom edge. */
+.si-bottom { position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; display: flex; align-items: flex-end; gap: 8px; min-height: 44px; box-sizing: border-box; padding: 11px 14px 12px; border-top: 1px solid var(--line); background: var(--panel); }
 .si-prompt { color: var(--blue); flex: none; line-height: 20px; }
 .si-bottom .si-input:disabled { color: var(--muted); }
 /* fail-loud: /keys dispatch failed — outline red and show the message wasn't delivered (draft restored). */

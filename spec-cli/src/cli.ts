@@ -204,7 +204,7 @@ if (cmd === 'serve') {
   const { guideText } = await import('./guide.js')
   const text = guideText(process.argv[3])
   if (text === null) {
-    console.error(`spex guide: no topic '${process.argv[3]}'. Topics: spec, yatsu, config. Run \`spex guide\` (no topic) for the setup workflow, \`spex help\` for the command map.`)
+    console.error(`spex guide: no topic '${process.argv[3]}'. Topics: spec, yatsu, config, footprint. Run \`spex guide\` (no topic) for the setup workflow, \`spex help\` for the command map.`)
     process.exit(2)
   }
   console.log(text)

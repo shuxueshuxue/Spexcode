@@ -62,6 +62,23 @@ scenarios:
       with the anchor in its prompt. The pane carries NO verdict-filing controls — no pass/fail bar, no
       verdict-note input, no file-reading button (readings are filed by agents via `spex yatsu eval`; the
       human judges through the remark composer). Switching selection resets the working draft.
+  - name: anchor-carries-frame
+    tags: [frontend-e2e]
+    code: [spec-dashboard/src/EventDetail.jsx, spec-dashboard/src/Thread.jsx]
+    description: >
+      On a video reading's detail workspace, make one mark per gesture: drag-circle a region on the paused
+      frame, stamp an anchor with the composer's ⏱ button (type a note, send), and press 'a'. Read each
+      prefilled/stamped composer draft and, after sending, read the review track's rows (anchor chip,
+      prose, media count) and screenshot the rail.
+    expected: |
+      Every anchored mark carries the FRAME of its moment, whichever gesture made it: the circle burns its
+      rect into the captured frame; ⏱ and 'a' capture the clean current frame — all three stamp
+      `▶m:ss · step` plus a `![frame](/api/yatsu/blob/<hash>)` link (the frame doubling as the remark's
+      typed evidence[]). Re-stamping ⏱ at a new moment replaces both the anchor line AND its riding frame,
+      so an anchor and its frame never disagree. In the track every anchored remark renders uniformly —
+      chip + frame thumbnail (+ prose) — a ⏱/'a' remark is indistinguishable in shape from a circle
+      remark. A failed capture degrades to the text-only anchor (the capture flash reports it), never a
+      blocked mark.
   - name: fullscreen-control-present
     tags: [frontend-e2e]
     code: [spec-dashboard/src/EventDetail.jsx, spec-dashboard/src/Evidence.jsx]

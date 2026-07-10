@@ -8,7 +8,7 @@ created: 2026-07-10T07:20:26.394Z
 
 Remarks on the `anchor-carries-frame` eval of [[event-detail]].
 
-<!-- reply: human @ 2026-07-10T07:20:26.444Z :: rid=r6kup sha=837964611049c3d14123c83384382f4d3b420232 -->
+<!-- reply: human @ 2026-07-10T07:20:26.444Z :: rid=r6kup sha=837964611049c3d14123c83384382f4d3b420232 resolved=7aaac700-95b2-4e45-bdea-c6bd5e4f19d5@2026-07-10T07:28:59.261Z -->
 ▶0:15 · send the anchored remark
 这里的 13 秒等待很诡异
 

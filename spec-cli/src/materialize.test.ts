@@ -143,6 +143,29 @@ test('content-filter edges: missing shim degrades to cat; a contract change re-r
   assert.ok(existsSync(join(proj, '.spec')) && existsSync(join(proj, 'spexcode.json')), 'the spec ASSET is never touched')
 })
 
+test('a HOST-TRACKED wholly-ours .gitignore survives the backout (same authorship guard)', { skip: !gitAvailable() && 'git not available' }, () => {
+  // a plain adopter with NO .gitignore of its own: init generates one that is nothing but our block —
+  // then the team commits it (ignored mode, block tracked). Backout must strip it, never delete it.
+  const proj = mkdtempSync(join(tmpdir(), 'spex-gi-'))
+  const home = mkdtempSync(join(tmpdir(), 'spex-home-'))
+  const codex = mkdtempSync(join(tmpdir(), 'spex-codex-'))
+  const env = { ...process.env, SPEXCODE_HOME: home, CODEX_HOME: codex }
+  const g = (...args: string[]) => execFileSync('git', ['-C', proj, ...args], { encoding: 'utf8', env })
+  const spex = (...args: string[]) =>
+    execFileSync(TSX, [CLI, ...args], { cwd: proj, encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'pipe'] })
+  g('init', '-q', '-b', 'main')
+  g('config', 'user.email', 't@t.co'); g('config', 'user.name', 't')
+  writeFileSync(join(proj, 'README.md'), '# app\n')
+  g('add', '-A'); g('commit', '-qm', 'init')
+  spex('init', '.')
+  assert.ok(readFileSync(join(proj, '.gitignore'), 'utf8').includes('spexcode:start'), 'init generated a wholly-ours .gitignore')
+  g('add', '.spec', 'spexcode.json', '.gitignore'); g('commit', '-qm', 'adopt (block committed)', '--no-verify')
+  spex('uninstall', '.')
+  assert.ok(existsSync(join(proj, '.gitignore')), 'the tracked .gitignore is stripped, never deleted')
+  assert.ok(!/^.?D /m.test(g('status', '--short')), `no deletion in status: ${status(g)}`)
+  assert.equal(readFileSync(join(proj, '.gitignore'), 'utf8').trim(), '', 'stripped clean — no block residue')
+})
+
 test('a HOST-TRACKED empty contract file survives the backout (deleteIfEmpty guards on tracked-ness)', { skip: !gitAvailable() && 'git not available' }, () => {
   const { proj, g, spex } = makeHost()
   // the extreme host: a committed EMPTY CLAUDE.md the render folded a block into

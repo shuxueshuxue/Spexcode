@@ -142,7 +142,9 @@ export function dematerialize(proj = process.cwd(), arts: HarnessArtifacts = { s
     sweepGeneratedSkills(h.skillDir(proj))
     sweepGeneratedAgents(h.agentDir(proj))
   }
-  removeManagedBlock(join(proj, '.gitignore'), ['# ', ''], true)
+  // same authorship rule as the contract files: deleteIfEmpty only when .gitignore is UNTRACKED (wholly-ours
+  // generated file); a HOST-TRACKED .gitignore that carried nothing but our block is stripped, never deleted.
+  removeManagedBlock(join(proj, '.gitignore'), ['# ', ''], !isTracked(proj, '.gitignore'))
   try { removeManagedBlock(infoExcludePath(proj), ['# ', ''], false) } catch { /* not a git repo */ }
   removeContractFilter(proj)                                            // AFTER the blocks left the working files
   // the block-strip left tracked contract files stat-dirty (under a filter git NEVER content-verifies them,

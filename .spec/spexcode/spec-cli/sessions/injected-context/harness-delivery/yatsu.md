@@ -46,6 +46,18 @@ scenarios:
       Only this project's `[projects."<path>"]` + per-hook `[hooks.state."…"]` block (between the spexcode
       sentinels) is added/replaced; the user's other keys and the other project's trust are untouched. The
       trusted_hash values match codex's own computation (codex accepts them with no re-prompt).
+  - name: gate-key-covers-renderer
+    tags: [cli]
+    description: >-
+      The rendered artifacts are a function of (config content, renderer). Simulate a TOOLCHAIN update with
+      the .config unchanged: source the shipped harness.sh from a package root, compute hp_config_hash,
+      change the package's content (a version bump / source change), and compute it again; then also edit a
+      .config body and compute a third time.
+    expected: >-
+      The gate key MOVES on the toolchain change alone (so the next dispatch gate re-runs materialize and
+      the deploy self-heals its stale contract/shims/manifest), moves again on the config edit, and is
+      byte-stable when neither input changed. A key that ignores the renderer is the field failure: an
+      updated toolchain leaves every rendered artifact stale until someone happens to edit .config.
   - name: pay-per-change-render
     tags: [backend-api]
     description: >-

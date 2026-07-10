@@ -8,6 +8,7 @@ import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import { claudeSlashCommands, codexSlashCommands, type SlashCommand } from './slash-commands.js'
 import { runtimeRoot, mainCheckout, readConfig } from './layout.js'
+import { git } from './git.js'
 
 // @@@ harness-adapter - the ONE seam between SpexCode and the coding-agent harness (Claude Code, Codex, …).
 // Every harness-specific fact lives behind THIS interface with one implementation per harness; product code
@@ -770,9 +771,14 @@ export function removeManagedBlock(file: string, comment: readonly [string, stri
   // remove ONLY our block plus the blank lines writeManagedBlock inserted around it; do NOT normalize the
   // user's OWN whitespace elsewhere — this must leave every other byte intact so it is a faithful INVERSE of
   // writeManagedBlock's append. A global `\n{3,}→\n\n` collapse used to sit here and mutated pre-existing
-  // blank-line runs in the user's file, which broke the private⇄default round-trip ([[private-overlay]]):
-  // default→private→default left a spurious one-line diff on a .gitignore that had internal blank lines.
-  const out = cur.replace(re, '\n').replace(/^\n+/, '')
+  // blank-line runs in the user's file, which broke the policy round-trip ([[render-policy]]): a mode flip
+  // and back left a spurious one-line diff on a .gitignore that had internal blank lines. The leading-newline
+  // strip is GUARDED the same way: it exists only for a block sitting at the TOP of the file (whose '\n'
+  // replacement would otherwise become a leading blank) — a host file that BEGINS with its own blank lines
+  // keeps them ([[content-filter]]'s invariant, same bug class as the shim's old unconditional strip).
+  const atTop = (re.exec(cur)?.index ?? -1) === 0
+  const replaced = cur.replace(re, '\n')
+  const out = atTop ? replaced.replace(/^\n+/, '') : replaced
   if (deleteIfEmpty && !out.trim()) { rmSync(file, { force: true }); return }
   writeFileSync(file, out)
 }
@@ -874,6 +880,11 @@ function removeCodexTrust(proj: string): void {
   writeFileSync(file, cleaned ? `${cleaned}\n` : '')
 }
 
+// is this file git-tracked in proj? (guards cleanHarness's deleteIfEmpty; env-stripped git, never throws)
+function isTrackedFile(proj: string, f: string): boolean {
+  try { git(['-C', proj, 'ls-files', '--error-unmatch', f]); return true } catch { return false }
+}
+
 // @@@ cleanHarness - the shared clean: the inverse of materialize's per-harness write, expressed PURELY
 // through the adapter's own path methods so it can never drift from what write put there. Each step is
 // surgical, gated on a SpexCode identity stamp: the contract files carry the managed-block sentinels; the shim
@@ -882,7 +893,10 @@ function removeCodexTrust(proj: string): void {
 // blocks and our own named products — never a user's CLAUDE.md/AGENTS.md prose, a hand-made settings.json, or
 // a sibling skill/agent the user added, and NEVER any .spec data.
 function cleanHarness(h: Harness, proj: string, arts: HarnessArtifacts): void {
-  for (const f of h.contractFiles(proj)) removeManagedBlock(f, ['<!-- ', ' -->'], true)
+  // deleteIfEmpty ONLY for an UNTRACKED contract file: a wholly-ours generated file goes; a HOST-TRACKED file
+  // that carried nothing but our block (an empty committed CLAUDE.md we folded into) is stripped back to its
+  // pristine emptiness but never deleted — deleting a tracked file would surface as a `D` in the host's status.
+  for (const f of h.contractFiles(proj)) removeManagedBlock(f, ['<!-- ', ' -->'], !isTrackedFile(proj, f))
   const shim = h.shimFile(proj)
   if (existsSync(shim) && readFileSync(shim, 'utf8').includes('dispatch.sh')) rmSync(shim, { force: true })
   const anchor = h.worktreeHookAnchor(proj)   // the linked-worktree anchor copy, same identity gate as the shim

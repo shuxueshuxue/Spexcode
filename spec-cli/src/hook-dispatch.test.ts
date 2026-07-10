@@ -38,7 +38,11 @@ test('codex mark-active resolves by payload thread id despite contaminated SPEXC
   const hook = join(repo, '.spec', 'spexcode', '.config', 'core', 'mark-active', 'mark-active.sh')
   writeFileSync(join(dir, 'hooks', 'mark-active.sh'), `#!/usr/bin/env bash\nbash ${JSON.stringify(hook)}\n`)
   writeFileSync(join(runtime, 'hooks-manifest'), 'PreToolUse\t10\tfalse\thooks/mark-active.sh\n')
-  writeFileSync(join(runtime, 'content-hash'), 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\n')
+  // pin the LIVE gate key (config content + renderer version — hp_config_hash) so the dispatch gate no-ops:
+  // this test exercises the alias resolution, not the gate, and a stale key would make the gate re-render
+  // the handcrafted manifest away (correct product behaviour, wrong test fixture).
+  const hash = execFileSync('bash', ['-c', `cd ${JSON.stringify(dir)} && . ${JSON.stringify(join(repo, 'spec-cli', 'hooks', 'harness.sh'))} && hp_config_hash`], { encoding: 'utf8' }).trim()
+  writeFileSync(join(runtime, 'content-hash'), `${hash}\n`)
   writeFileSync(join(runtime, 'sessions', 'id_A', 'session.json'), JSON.stringify({
     session_id: 'id_A', governed: true, status: 'asking', proposal: 'old', note: 'wrong',
   }, null, 2))

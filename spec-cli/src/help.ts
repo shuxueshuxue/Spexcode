@@ -72,11 +72,12 @@ session list. Identical to GET /api/board; needs the backend (spex serve) reacha
     see: 'spex tree (the same graph, human-readable) · spex ls (just the sessions, as a table) · spex search (find one node instead of dumping all)',
   },
   guide: {
-    line: 'guide [topic]         the manuals: setup workflow · spec/yatsu file formats · spexcode.json',
+    line: 'guide [topic]         the manuals: setup workflow · spec/yatsu file formats · spexcode.json · footprint',
     body: `Usage: spex guide            the human setup workflow (install once, adopt a repo, serve)
        spex guide spec       the spec.md file format + every lint rule
        spex guide yatsu      the yatsu.md scenario format + how loss is measured and filed
        spex guide config     every spexcode.json / spexcode.local.json field, and which file it belongs in
+       spex guide footprint  the share-axis model: the render vote (committed|ignored|hidden) + migrations
 
 guide is the SKILL layer — workflows and formats. Command usage lives here in help
 (\`spex help <cmd>\`); guide carries what the commands assume you know.`,

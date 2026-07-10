@@ -1,17 +1,20 @@
 import { existsSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { join, resolve, relative } from 'node:path'
 import { execFileSync } from 'node:child_process'
-import { HARNESSES, removeManagedBlock, type HarnessArtifacts } from './harness.js'
+import { HARNESSES, type HarnessArtifacts } from './harness.js'
 import { runtimeRoot, readConfig, mainCheckout } from './layout.js'
 import { resolveHarnessTargets } from './harness-select.js'
 import { loadSkillConfig, loadAgentConfig } from './specs.js'
+import { dematerialize } from './materialize.js'
 
-// @@@ spex-uninstall - the surgical inverse of spex-init/materialize. init + harness-delivery WRITE the
-// SpexCode footprint into a repo; this REMOVES it, so a project can fully back out. EVERY removal is gated on a
-// SpexCode IDENTITY STAMP (the managed-block sentinels, the shim's own dispatch.sh command line, the trust
-// sentinels, the name-scoped on-demand paths, the plugin name stamp), so it can only ever delete what SpexCode
-// itself generated. The one inviolable rule: the user's spec ASSET (.spec/.config) is NEVER touched — uninstall
-// removes only generated WIRING, not the spec graph that wiring served.
+// @@@ spex-uninstall - materialize(∅) plus the store: the in-tree/global-config backout IS dematerialize (the
+// same identity-stamped erase phase every render runs first — the forgetting law's empty policy), and this
+// command adds only what a render never owns per-run: the global per-project store, the plugin-bundle sweep,
+// and the optional git hooks. EVERY removal is gated on a SpexCode IDENTITY STAMP (the managed-block
+// sentinels, the shim's own dispatch.sh command line, the trust sentinels, the generated mark / name-scoped
+// on-demand paths, the plugin name stamp), so it can only ever delete what SpexCode itself generated. The one
+// inviolable rule: the user's spec ASSET (.spec/.config) is NEVER touched — uninstall removes only generated
+// WIRING, not the spec graph that wiring served.
 
 // the standard plugin-host folders a host agent scans (in addition to any named in spexcode.json's `harnesses`).
 const DEFAULT_PLUGIN_HOSTS = ['.claude', '.codex'] as const
@@ -95,14 +98,10 @@ export function uninstall(targetArg: string | undefined, opts: { hooks?: boolean
     process.chdir(prevCwd)
   }
 
-  // 1. every harness's own artifacts — clean() is the adapter's surgical inverse (managed contract block w/
-  //    deleteIfEmpty, generated shim, trust block, named skill/agent files). materialize cleans only UNSELECTED
-  //    harnesses; uninstall cleans EVERY one. clean() already calls removeTrust, so it is the full inverse.
-  for (const h of HARNESSES) h.clean(proj, arts)
-
-  // 2. the shared .gitignore block — the one in-tree artifact no adapter owns (materialize writes it directly),
-  //    so strip it directly too: the managed `#` block, deleteIfEmpty so a wholly-ours .gitignore is removed.
-  removeManagedBlock(join(proj, '.gitignore'), ['# ', ''], true)
+  // 1+2. materialize(∅): every harness's artifacts (contract block, shim, trust, skills/agents), the managed
+  //    .gitignore + info/exclude blocks, any legacy skip-worktree bit, and the content filter — the SAME
+  //    erase phase every render runs, asserted against the empty policy. One inverse, never a parallel one.
+  dematerialize(proj, arts)
 
   // 3. the global per-project store — manifest + content-hash marker + gate lock + session records. This is the
   //    runtime tier, not the user's spec asset, so the whole dir is ours.
@@ -124,8 +123,7 @@ export function uninstall(targetArg: string | undefined, opts: { hooks?: boolean
   }
   const bundles = sweepPluginBundles(proj, pluginHosts)
 
-  console.log(`✓ pruned harness artifacts (CLAUDE.md/AGENTS.md block, shims, Codex trust, skills, sub-agents) for ${HARNESSES.map((h) => h.id).join(', ')}`)
-  console.log('✓ stripped the .gitignore spexcode block')
+  console.log(`✓ dematerialized (contract blocks, shims, Codex trust, skills, sub-agents, ignore blocks, content filter) for ${HARNESSES.map((h) => h.id).join(', ')}`)
   if (store) console.log(`✓ removed the global per-project store (${store})`)
   if (bundles.length) console.log(`✓ removed plugin bundle(s): ${bundles.join(', ')}`)
 

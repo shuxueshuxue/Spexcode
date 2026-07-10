@@ -1,8 +1,8 @@
-import { existsSync, mkdirSync, copyFileSync, readdirSync, statSync, chmodSync } from 'node:fs'
+import { existsSync, mkdirSync, copyFileSync, readdirSync, statSync, chmodSync, writeFileSync } from 'node:fs'
 import { join, resolve, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
-import { readConfig } from './layout.js'
+import { readConfig, readJsonConfig } from './layout.js'
 import { resolveHarnessTargets } from './harness-select.js'
 
 // this file lives at <pkgRoot>/src/init.ts, so `..` is the package root — the same derivation the
@@ -53,8 +53,26 @@ function resolveHooksDir(dir: string): string | null {
   }
 }
 
-export async function specInit(targetArg: string | undefined, presetArg?: string): Promise<void> {
+export async function specInit(targetArg: string | undefined, presetArg?: string, renderArg?: string): Promise<void> {
   const targetDir = resolve(targetArg ?? process.cwd())
+
+  // the one-step render vote (`--render <committed|ignored|hidden>`, see [[render-policy]]): validated up
+  // front against the same vocabulary materialize enforces (resolveRenderPolicy — an unknown word fails loud
+  // BEFORE anything is written), applied to the config files below, and honored by this run's materialize.
+  const render = renderArg?.trim()
+  if (renderArg !== undefined) {
+    if (!render) {
+      console.error('spex init: --render needs a value — the render axis has three words: committed | ignored | hidden (see `spex guide footprint`)')
+      process.exit(1)
+    }
+    try {
+      const { resolveRenderPolicy } = await import('./materialize.js')
+      resolveRenderPolicy({ render })
+    } catch (e) {
+      console.error(`spex init: ${(e as Error).message}`)
+      process.exit(1)
+    }
+  }
 
   // the preset the NEW adopter gets — `--preset <name>` wins, else an existing target spexcode.json's
   // `preset` field, else the lean `default`. Validated loudly against the chain (an unknown name would
@@ -99,13 +117,29 @@ export async function specInit(targetArg: string | undefined, presetArg?: string
     }
   }
 
-  // 1b. plant a starter spexcode.json (the lint/layout knob), pointing governedRoots at `src/`.
+  // 1b. plant a starter spexcode.json (the lint/layout knob). The success message reports the value the
+  // template ACTUALLY ships (read from the planted file, never restated as a string literal here — the two
+  // once drifted: the message claimed ["src"] while the template seeded ["."]).
   const cfgDest = join(targetDir, 'spexcode.json')
   if (existsSync(cfgDest)) {
     console.warn(`• spexcode.json already exists at ${cfgDest} — left untouched.`)
   } else {
     copyFileSync(join(TEMPLATES, 'spexcode.json'), cfgDest)
-    console.log(`✓ planted spexcode.json — set lint.governedRoots to YOUR source dirs (starter: ["src"])`)
+    const roots = JSON.stringify(readJsonConfig(cfgDest)?.lint?.governedRoots ?? null)
+    console.log(`✓ planted spexcode.json — lint.governedRoots starts as ${roots} (the whole git-tracked tree, tests excluded); curate explicit roots later if you want a narrower graph`)
+  }
+
+  // 1c. apply the --render vote where the axis says each word lives ([[render-policy]]): committed/ignored
+  // are project facts → the committed spexcode.json; hidden is a host/person fact → the gitignored
+  // spexcode.local.json. An explicit flag is an explicit instruction, so it sets the field even in a
+  // pre-existing config file (the ONE deliberate exception to "existing files are left untouched").
+  if (render) {
+    const home = render === 'hidden' ? 'spexcode.local.json' : 'spexcode.json'
+    const p = join(targetDir, home)
+    const cur = readJsonConfig(p)   // fails loud on a malformed existing file, {} when absent
+    cur.render = render
+    writeFileSync(p, JSON.stringify(cur, null, 2) + '\n')
+    console.log(`✓ render policy voted: "${render}" → ${home}`)
   }
 
   // validate the harness DELIVERY TARGET set ([[harness-select]]) up front: a bad `harnesses` set (plugin +
@@ -149,21 +183,29 @@ export async function specInit(targetArg: string | undefined, presetArg?: string
   const prevCwd = process.cwd()
   try {
     process.chdir(targetDir)
-    const { materialize } = await import('./materialize.js')
+    const { materialize, renderVoteHint } = await import('./materialize.js')
     materialize(targetDir)
-    console.log('✓ materialized harness artifacts (global hook manifest, AGENTS.md/CLAUDE.md block, .claude/.codex shims, Codex trust)')
+    console.log('✓ materialized harness artifacts (global hook manifest, AGENTS.md/CLAUDE.md block, harness shims, Codex trust)')
+    // the adoption vote hint ([[render-policy]]): a host-TRACKED contract file now carries the generated
+    // block and shows honestly dirty under the default policy — print the one-time decision guidance while
+    // the vote is open (an explicit `render`, including --render on this very run, retires it).
+    const hint = renderVoteHint(targetDir)
+    if (hint) console.log(`\n${hint}`)
   } catch (e) {
     console.warn(`• materialize skipped (${(e as Error).message}) — run \`spex materialize\` once the packages are installed.`)
   } finally {
     process.chdir(prevCwd)
   }
 
-  // 3. next steps — what the human must do to bring the instance to life.
+  // 3. next steps — what the human must do to bring the instance to life. The governedRoots line reads the
+  // LIVE value (the planted starter's, or a pre-existing config's) so it can never drift from what's on disk.
+  const rootsNow = JSON.stringify(readJsonConfig(cfgDest)?.lint?.governedRoots ?? null)
   console.log(`
 Next steps:
   1. Edit .spec/project/spec.md to describe YOUR project, then grow child nodes beneath it.
-  2. Set lint.governedRoots in spexcode.json to your source dir(s) — until you do, \`spex lint\`
-     warns it is governing nothing (it ships pointing at "src").
+  2. lint.governedRoots in spexcode.json (currently ${rootsNow}) names what \`spex lint\` governs —
+     ["."] governs the whole git-tracked tree (tests excluded); narrow it to explicit source roots
+     when you want a curated graph.
   3. Start the backend and open the board:
        spex serve                       # http://localhost:8787
   4. \`spex lint\` should report 0 errors. Coverage warnings are your adoption TODO (source files no

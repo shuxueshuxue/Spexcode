@@ -82,7 +82,9 @@ Each story names the mechanism that satisfies it, or the deferred design that wi
 
 **G — ergonomics.**
 21. *"How do I choose and migrate?"* `spex guide footprint` is the model manual; `spex guide config`
-    documents the `render` field.
+    documents the `render` field; the adoption-time vote hint (expanded spec below) surfaces the decision
+    exactly when a tracked host contract file first turns dirty, and `spex init --render <word>` makes the
+    choice one step.
 22. *"Show me my current footprint / set it up for me."* DEFERRED — a policy-aware footprint inspect +
     scaffold wizard ([[doctor]] audits the artifacts today).
 
@@ -106,7 +108,17 @@ Concretely: `committed` writes the renders as ordinary committable files and REM
 ignore block (machine facts stay ignored); `ignored` keeps renders generated with the managed block in the
 tracked `.gitignore`; `hidden` moves the whole block to `.git/info/exclude` and covers a host-TRACKED
 contract file with [[content-filter]]. A host-tracked contract file under `ignored` stays honestly dirty in
-status — the visible prompt to choose `committed` or `hidden`, never silently swallowed.
+status — the visible prompt to choose `committed` or `hidden`, never silently swallowed. And the prompt is
+EXPLAINED at first sight, not left as a mystery `M`: while the vote is open (no explicit `render` set) and a
+SELECTED harness's contract file is host-tracked, the HUMAN surfaces — `spex init` and the manual `spex
+materialize` verb, never the silent gate/bootstrap renders — print a one-time decision hint naming the three
+words, their consequences, where each vote lives, and `spex guide footprint`; any explicit vote (any word,
+including `ignored` made explicit) retires it. Adoption can skip the open-vote state entirely: `spex init
+--render <word>` casts the vote in one step ([[spex-init]]), landing `committed`/`ignored` in `spexcode.json`
+and `hidden` in `spexcode.local.json`, with an unknown word failing loud. Plain stdout throughout — init is
+routinely run by agents, so there is no interactive prompt to hang on. A policy edit also needs no manual
+follow-up: the dispatch gate's key covers the persisted policy files ([[harness-delivery]]), so the next
+harness event re-renders under the new vote.
 
 **Worktree seeding — no links.** A fresh session worktree is fed by three transports, and the KIND decides
 the transport: tracked data arrives by GIT CHECKOUT; renders are DERIVED and travel by RE-RENDER

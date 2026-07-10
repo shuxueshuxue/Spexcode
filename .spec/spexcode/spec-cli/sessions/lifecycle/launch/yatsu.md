@@ -44,6 +44,21 @@ scenarios:
       unless that cause was actually proven. Bounded fast-exit retry remains intact.
     code: spec-cli/src/sessions.ts
     test: spec-cli/src/sessions.test.ts
+  - name: creation-materialize-failure-is-loud
+    tags: [backend-api]
+    description: >
+      Measure the creation-time materialize failure path at the session-creation seam: make the worktree
+      render (`materialize`) throw during session creation and inspect (a) the backend's stderr and (b) the
+      session's global `session.json` record. The creation-time render is bootstrap — it wires the very hooks
+      the dispatch re-render gate rides on — so a swallowed failure means the worker launches ungoverned with
+      nothing anywhere saying so.
+    expected: |
+      The failure is loud and durable: stderr names the failed materialize, the worktree path, and the
+      underlying cause, and the session record's `note` field carries the same failure (so the board/watch
+      surface the degraded worker). The launch itself still proceeds — degraded but visible, never refused —
+      and no inferred `error` status is written (status stays agent-authored).
+    code: spec-cli/src/sessions.ts
+    test: spec-cli/src/sessions.test.ts
 ---
 
 # launch — yatsu

@@ -47,6 +47,19 @@ scenarios:
       worker's record carries it as `parent` (so the dashboard folds the worker under the session that
       summoned it, [[session-nesting]]); an author that is NOT a session — human, unknown, a forge login —
       yields an empty parent, a top-level worker, never a phantom nest.
+  - name: cjk-node-id
+    tags: [frontend-e2e]
+    code: spec-cli/src/mentions.ts
+    related: [spec-cli/src/sessions.ts, spec-dashboard/src/mentions.jsx]
+    description: >-
+      Against a project holding a CJK-id node (中文测试节点) and an ASCII-id control (cjk-control), drive the
+      REAL dashboard composer in a browser: type `[[` (dropdown lists both), filter the dropdown by a CJK
+      char, pick the CJK node from the dropdown, launch; repeat with the ASCII control. Read each launched
+      session's record (node binding, branch).
+    expected: >-
+      One grammar regardless of the id's script: a CJK query filters the dropdown exactly like an ASCII one;
+      the picked `[[<cjk-id>]]` mention binds the launched session to that node (record.node = the id) just
+      as the ASCII control does — never a silently node-agnostic launch.
   - name: cli-sigil-tolerance
     tags: [cli]
     code: spec-cli/src/mentions.ts

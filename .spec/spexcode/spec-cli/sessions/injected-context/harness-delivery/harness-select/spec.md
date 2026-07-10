@@ -2,11 +2,12 @@
 title: harness-select
 status: active
 hue: 280
-desc: Declarative choice of WHICH harness targets `spex materialize` delivers into — spexcode.json's `harnesses` set (native ids, or one plugin), validated fail-loud; deselecting a harness prunes its artifacts.
+desc: Declarative choice of WHICH harness targets `spex materialize` delivers into — spexcode.json's `harnesses` set (native ids, or one plugin), validated fail-loud, honored on every render leg, self-healing through the gate; deselecting a harness prunes its artifacts.
 code:
   - spec-cli/src/harness-select.ts
 related:
   - spec-cli/src/harness-select.test.ts
+  - spec-cli/src/materialize.test.ts
 ---
 
 # harness-select
@@ -34,7 +35,19 @@ This node owns ONLY the vocabulary + validation (`resolveHarnessTargets`) and th
 bundles — that is [[plugin-harness]], which materialize drives off `partitionHarnesses`'s `plugins`; here a
 plugin target only validates (and, being exclusive, leaves every native harness UNSELECTED → pruned).
 
-Selection has a back-edge. `materialize` write()s the SELECTED harnesses and clean()s the UNSELECTED ones (the
-[[harness-adapter]]'s clean primitive), so NARROWING `harnesses` prunes the dropped harness's products on the
-next re-materialize — its managed contract block, generated shim, trust, and named skill/agent files — while
-the user's own prose and `.spec` data are never touched.
+**The chain contract — every render leg honors the persisted selection.** materialize is reached by four
+distinct legs, and ALL of them read the same `spexcode.json` set (via `readConfig(mainCheckout)`), never a
+default full set: `spex init`'s adoption render, a manual `spex materialize`, the dispatch gate's automatic
+re-render, and the worktree render at session creation (`bootstrapMaterialize`). Concretely: a codex-only
+repo (`"harnesses": ["codex"]`) never grows a `.claude/` or a CLAUDE.md block through ANY leg. Proven
+end-to-end (through the real CLI + dispatch.sh) in `materialize.test.ts`.
+
+Selection has a back-edge, and it is part of policy P under the forgetting law ([[harness-delivery]]).
+`materialize` write()s the SELECTED harnesses, and the erase phase (which sweeps ALL harnesses by identity
+stamp) forgets the rest — so NARROWING `harnesses` prunes the dropped harness's products on the next render:
+its managed contract block, generated shim, trust, skill/agent files, and the emptied dirs themselves — while
+the user's own prose and `.spec` data are never touched. And that next render needs no human: the gate key
+(`hp_config_hash`, [[harness-delivery]]) covers the persisted policy files (the main checkout's
+`spexcode.json` + `spexcode.local.json`), so a selection edit alone moves the key and the very next harness
+lifecycle event re-renders under the new set — a selection change SELF-HEALS through the product path,
+never waiting for an unrelated `.config` edit or a manual materialize.

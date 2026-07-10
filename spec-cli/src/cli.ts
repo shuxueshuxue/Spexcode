@@ -52,7 +52,7 @@ function flushExit(code = 0): Promise<never> {
 }
 const has = (name: string) => process.argv.includes(`--${name}`)
 // bare positionals after argv index `from`, skipping flags and their values (selectors for ls/watch).
-const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--prompt-file', '--timeout', '--reason', '--out', '--password', '--tls-cert', '--tls-key', '--harness', '--launcher', '--harness-session', '--port', '--api', '--api-port', '--host', '--preset', '--limit', '--session', '--depth'])
+const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--prompt-file', '--timeout', '--reason', '--out', '--password', '--tls-cert', '--tls-key', '--harness', '--launcher', '--harness-session', '--port', '--api', '--api-port', '--host', '--preset', '--render', '--limit', '--session', '--depth'])
 function positionals(from: number): string[] {
   const out: string[] = []
   for (let i = from; i < process.argv.length; i++) {
@@ -279,9 +279,9 @@ if (cmd === 'serve') {
   }
 } else if (cmd === 'init') {
   // scaffold a repo to adopt SpexCode: copy the shipped DATA templates (seed spec tree + git hooks)
-  // into <targetDir> (default cwd). spex init [targetDir]
+  // into <targetDir> (default cwd). spex init [targetDir] [--preset <tier>] [--render <word>]
   const { specInit } = await import('./init.js')
-  await specInit(positionals(3)[0], flag('preset'))
+  await specInit(positionals(3)[0], flag('preset'), flag('render'))
 } else if (cmd === 'uninstall') {
   // the surgical inverse of init: remove every SpexCode-generated artifact (harness shims/contract/trust, the
   // .gitignore block, the global store, any plugin bundle) — NEVER the user's .spec/.config data or their own
@@ -403,8 +403,12 @@ if (cmd === 'serve') {
 } else if (cmd === 'materialize') {
   // @@@ materialize - the pay-per-change render: surface nodes → manifest + AGENTS.md/CLAUDE.md block +
   // shims + Codex trust, for cwd's project. The cheap shell gate (dispatch.sh) invokes it only on change.
-  const { materialize } = await import('./materialize.js')
+  // The adoption vote hint ([[render-policy]]) prints only here and on init — the human surfaces — never
+  // from the silent gate/bootstrap renders of the same function.
+  const { materialize, renderVoteHint } = await import('./materialize.js')
   console.log(`materialized — content-hash ${materialize()}`)
+  const hint = renderVoteHint()
+  if (hint) console.log(`\n${hint}`)
 } else if (cmd === 'doctor') {
   // @@@ doctor - the diagnosis surface ([[doctor]], né `self` — renamed: "self" read as the tool itself /
   // the global install, while the report is about THIS agent's wiring): does the materialized workflow

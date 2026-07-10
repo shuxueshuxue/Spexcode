@@ -113,15 +113,24 @@ hp_renderer_version() {
     || echo unversioned
 }
 
-# the deterministic content fingerprint of the EDITABLE config roots (.config + config md/sh) PLUS the
-# renderer version above — the gate's "did anything the render depends on move?" signal. Run with cwd = the
-# project. ONE definition: the dispatch.sh gate sources this and materialize.ts shells to it, so the gate and
-# the renderer can NEVER disagree on what "changed" means (the two used to inline this pipeline verbatim,
-# each commenting the other "MUST match").
+# the deterministic content fingerprint of EVERYTHING the render is a function of: the EDITABLE config
+# roots (.config + config md/sh), the PERSISTED POLICY files (the MAIN checkout's spexcode.json +
+# spexcode.local.json — the `harnesses` set and `render` vote materialize reads via readConfig(mainCheckout)),
+# and the renderer version above — the gate's "did anything the render depends on move?" signal. The policy
+# files are in the key so a harness-selection or render-policy edit SELF-HEALS on the very next hook event
+# (before this, narrowing `harnesses` left the deselected harness's stale artifacts in place until an
+# unrelated .config edit happened to fire the gate — [[harness-select]]). Run with cwd = the project. ONE
+# definition: the dispatch.sh gate sources this and materialize.ts shells to it, so the gate and the renderer
+# can NEVER disagree on what "changed" means (the two used to inline this pipeline verbatim, each commenting
+# the other "MUST match"). env-stripped git, same rule as hp_renderer_version.
 hp_config_hash() {
+  local gcd
+  gcd=$(env -u GIT_DIR -u GIT_INDEX_FILE git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) \
+    || gcd=$(realpath "$(env -u GIT_DIR -u GIT_INDEX_FILE git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null)
   { hp_renderer_version
     find .spec/*/.config .spec/*/config \( -name '*.md' -o -name '*.sh' \) -type f -print0 2>/dev/null \
       | sort -z | xargs -0 cat 2>/dev/null
+    [ -n "$gcd" ] && cat "$(dirname "$gcd")/spexcode.json" "$(dirname "$gcd")/spexcode.local.json" 2>/dev/null
   } | sha256sum | cut -d' ' -f1
 }
 

@@ -45,8 +45,10 @@ export function fileHumanReading(
 // The session that filed the LATEST reading for (node, scenario) — the ORIGINATOR an eval-comment thread
 // loops in on a reply ([[mentions]] implicit loop-in). Null when the node/scenario has no reading, or the
 // latest reading is legacy (no `by`). Store-agnostic: the caller resolves this id to a live session or nobody.
-export function evalReadingFiler(nodeId: string, scenario: string): string | null {
-  const root = repoRoot()
+// `root` defaults to the trunk; the loop-in chain also passes each LIVE session's worktree here, because an
+// in-flight reading (filed on an unmerged branch) is invisible to the trunk sidecar — exactly the
+// review-time case where the remark must still reach its filer ([[remark-polish]] strand 2).
+export function evalReadingFiler(nodeId: string, scenario: string, root: string = repoRoot()): string | null {
   const res = resolveYatsuNode(yatsuNodes(root), nodeId)
   if (!res.ok) return null
   const forScenario = readReadings(res.node.sidecarPath).filter((r) => r.scenario === scenario)

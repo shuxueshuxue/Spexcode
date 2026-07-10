@@ -954,8 +954,13 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 </div>
               ))}
               {/* Eval tab — the session's derived evaluation rendered INLINE (always available, not
-                  review-gated). Mounts on each visit so it reflects the live diff/loss/gates ([[review-proof]]). */}
-              {rightTab === 'eval' && <SessionEvalPane sessionId={active} specs={specs} sessions={sessions} onOpenSession={onOpenSession} />}
+                  review-gated). Mounts on each visit so it reflects the live diff/loss/gates ([[review-proof]]).
+                  "Open a session" from inside this tab means SHOW ITS CONSOLE: the eval detail's filer chip
+                  routinely names the session already being viewed (its own filed readings), where the plain
+                  openSession would no-op (selection unchanged, hash identical) and leave a dead button —
+                  so flip the right pane to the terminal, and only navigate when the filer is another session. */}
+              {rightTab === 'eval' && <SessionEvalPane sessionId={active} specs={specs} sessions={sessions}
+                onOpenSession={(id) => { setRightTab('terminal'); if (id !== active) onOpenSession?.(id) }} />}
           </div>
         </section>
       </div>

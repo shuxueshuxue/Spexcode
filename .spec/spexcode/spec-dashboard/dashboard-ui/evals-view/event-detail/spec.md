@@ -49,8 +49,10 @@ At narrow widths the workspace degrades gracefully back to one stacked column (t
 stage), and the composer stays a **sticky bar at the column's foot** — the one-column mode keeps the
 docked-writer geometry instead of burying the composer under the thread. The header's **filer chip** names the session that FILED this scenario's reading, with a liveness dot
 (alive = the session is on the board and not offline, its live `STATUS_COLOR` painting the dot, [[state]];
-offline otherwise). A live filer chip is the direct door back to the session board: click it and the
-dashboard opens `#/sessions/<id>`, selecting that session's tab. Offline filers stay static, and the header
+offline otherwise). A live filer chip is the direct door to the session's CONSOLE: click it and the
+dashboard opens `#/sessions/<id>` with the terminal showing. On the session eval tab — where the filer is
+routinely the very session being viewed — the host makes that meaning real by flipping its right pane to
+the terminal ([[session-console]]), so a same-session click is never a dead no-op. Offline filers stay static, and the header
 does not spell out the courtesy-delivery mechanics in a reach phrase. The filer is the LATEST reading's
 `by` (the chain's first link; the reading carries it from the eval seam via `evalTimeline`); a legacy reading
 without `by` resolves to nobody and the header simply shows no filer.

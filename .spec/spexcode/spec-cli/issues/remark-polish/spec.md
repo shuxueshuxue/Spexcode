@@ -41,9 +41,12 @@ review-track markers and the thread chips both call, so the scrubber and the rep
 
 Authoring a remark should **reach an agent who can act on it**. The implicit loop-in ([[mentions]]) already
 notifies a thread's originator when online; M4 makes it a **fallback chain**: for an eval-remark the
-candidates are, in order, the **reading's filer** session, then the **node's governing session**, then
-**nobody** (the remark still surfaces on the board through the teeth). Delivery walks the chain and stops at
-the first ONLINE link; an offline/absent link falls through to the next. This is **notification only** — it
+candidates are, in order, the **reading's filer** session — resolved from the trunk sidecar first, then from
+each **live session's worktree**, because an in-flight reading (filed on an unmerged branch) is invisible to
+the trunk and reviewing in-flight work is exactly when the loop-in matters most (the filer sits online
+awaiting review) — then the **node's governing session**, then **nobody** (the remark still surfaces on the
+board through the teeth). Delivery walks the chain and stops at the first ONLINE link; an offline/absent
+link — a broken worktree sidecar included — falls through to the next, never failing the remark write. This is **notification only** — it
 **resolves nothing** (R3: resolve is a deliberate second-party call — `spex resolve`, or the dashboard's resolve — never from
 dispatch/delivery),
 never spawns a worker (only an explicit `@new` spawns), and stays silent when the chain runs dry. It is one

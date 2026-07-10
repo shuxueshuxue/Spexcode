@@ -49,8 +49,10 @@ At narrow widths the workspace degrades gracefully back to one stacked column (t
 stage), and the composer stays a **sticky bar at the column's foot** — the one-column mode keeps the
 docked-writer geometry instead of burying the composer under the thread. The header's **filer chip** names the session that FILED this scenario's reading, with a liveness dot
 (alive = the session is on the board and not offline, its live `STATUS_COLOR` painting the dot, [[state]];
-offline otherwise). A live filer chip is the direct door back to the session board: click it and the
-dashboard opens `#/sessions/<id>`, selecting that session's tab. Offline filers stay static, and the header
+offline otherwise). A live filer chip is the direct door to the session's CONSOLE: click it and the
+dashboard opens `#/sessions/<id>` with the terminal showing. On the session eval tab — where the filer is
+routinely the very session being viewed — the host makes that meaning real by flipping its right pane to
+the terminal ([[session-console]]), so a same-session click is never a dead no-op. Offline filers stay static, and the header
 does not spell out the courtesy-delivery mechanics in a reach phrase. The filer is the LATEST reading's
 `by` (the chain's first link; the reading carries it from the eval seam via `evalTimeline`); a legacy reading
 without `by` resolves to nobody and the header simply shows no filer.
@@ -66,7 +68,7 @@ wherever it appears. The ONE deliberate specialization is this pane's **clip pla
 carry the review: anchored remarks are **markers** on it, the playhead **lights the remark it is inside**,
 and clicking a marker (or a remark in the rail) **seeks** there. The surface is **keyboard-driven** — play/pause,
 coarse and frame-fine scrubbing, jump between remarks, and **annotate the current frame** (its
-`▶m:ss · step` stamped into the composer). Because that custom bar **replaces** native chrome — its
+`▶m:ss · step` and the captured frame itself stamped into the composer). Because that custom bar **replaces** native chrome — its
 built-in fullscreen included — the bar carries an explicit **fullscreen control**: the ONE shared
 `FullscreenButton` ([[video-evidence]]'s `Evidence.jsx`), `requestFullscreen` on the whole player wrapper
 (stage + bar, so the review-track controls stay usable large). It exists on every media home a *video*
@@ -119,8 +121,8 @@ is never an issue (I1: else the loss signal could be bypassed). The rail renders
 ([[issues-view]]'s shared `Thread`), and every mark is a remark on it, carrying the mutable `resolved` bit.
 A remark is **anchored** by a prose convention — the same philosophy as `Spec:` and `[[node]]` — a body
 whose first line reads `▶m:ss · <step>` IS anchored to that video moment: the renderer linkifies it (click
-seeks the clip), and the composer over a clip gains a **⏱** affordance that stamps the current frame (its
-time + the ≤T step name from the timeline). Sorted by their anchor, the anchored remarks **are** the review
+seeks the clip), and the composer over a clip gains a **⏱** affordance that stamps the current frame — its
+time + the ≤T step name from the timeline, AND the frame itself as the mark's image. Sorted by their anchor, the anchored remarks **are** the review
 track over the clip — the Frame.io/YouTube-time-comment shape, literally the markers on the scrubber, the
 active one lit as it plays. A remark's **`resolved` state renders in place** ([[remark-teeth]]): an open
 remark is prominent (the loss the eval scoreboard is still carrying), a resolved one is visually settled
@@ -133,13 +135,21 @@ remark is settled and immutable — monotonic, no verb — and a refused action 
 the row. The reload rides the host's existing write path, so the teeth clear on the same signal a filed
 remark fires.
 
-**A circle is a remark with a frame.** Drag-circling a region on the paused frame captures that frame to
-the blob store (the rect burned in) and **prefills an anchored remark** carrying it: the `▶m:ss · step`
-line, the frame as a `![frame](/api/yatsu/blob/<hash>)` image link in the body, and — when the step's
-owning node differs — a `[[node]]` routing line. The frame's hash, derived from that body link, is the
-remark's typed `evidence[]` on the thread; the body is the one raw-readable source. A mark is thereafter
-an ordinary reply — replyable, `@`-able: `circle + @new fix this` is a timestamped, framed assign, the
-anchor riding into the dispatched worker's prompt verbatim.
+**An anchored mark carries its moment's frame — whichever gesture made it.** The three mark gestures
+(a drag-**circle** on the paused frame, the composer's **⏱** stamp, the keyboard's **`a`**) are ONE act
+through one capture: grab the current frame to the blob store (the circle burns its rect in; ⏱/`a` take
+the clean frame) and anchor a remark carrying it — the `▶m:ss · step` line, the frame as a
+`![frame](/api/yatsu/blob/<hash>)` image link in the body, and — when the step's owning node differs — a
+`[[node]]` routing line (circle/`a` prefill the composer; ⏱ stamps the head of the draft in place,
+keeping the prose, and a re-stamp at a new moment replaces the anchor line AND its riding frame together,
+so an anchor and its frame never disagree — only a frame sitting right under the anchor line is the
+anchor's own; frames deeper in the prose are the author's). So the review track renders uniformly: every
+anchored remark is chip + frame thumbnail (+ prose), a ⏱/`a` mark indistinguishable in shape from a
+circle mark. A failed capture degrades to the text-only anchor (the capture flash reports it), never a
+blocked mark. The frame's hash, derived from that body link, is the remark's typed `evidence[]` on the
+thread; the body is the one raw-readable source. A mark is thereafter an ordinary reply — replyable,
+`@`-able: `circle + @new fix this` is a timestamped, framed assign, the anchor riding into the dispatched
+worker's prompt verbatim.
 
 **The pane is READ-side on readings — it files none.** A reading's verdict renders (the header badge, the
 A/B pips, the note) but is never authored here: readings are filed by AGENTS through the eval seam's CLI

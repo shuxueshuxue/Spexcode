@@ -38,6 +38,21 @@ scenarios:
       `spex yatsu scan` prints a `yatsu-dangling` line for the node and counts it in the summary. The dangling
       track ages NOTHING: it stays out of latestPerScenario / the board scoreboard, and no other scenario is
       staled by it. A still-declared-but-unmeasured scenario is NOT flagged dangling (it is a blind spot).
+  - name: chain-reaches-inflight-filer
+    tags: [backend-api]
+    related: [spec-cli/src/localIssues.ts, spec-cli/src/mentions.ts, spec-yatsu/src/filing.ts]
+    description: >-
+      File a reading for a (node, scenario) ONLY on a live session's unmerged branch (its worktree sidecar —
+      the trunk sidecar has no such reading), keep that session online, then author a human remark on that
+      eval track through POST /api/remarks and read the response's outcomes summary.
+    expected: >-
+      The loop-in fallback chain resolves the filer from the LIVE SESSIONS' WORKTREES when the trunk sidecar
+      has no reading for the scenario — the review-of-in-flight-work case, exactly when the loop-in matters
+      most. The response's outcomes reads `↩ looped in originator @<filer-session> (online)` and the courtesy
+      copy lands in that session's console. Trunk readings keep primacy (an online trunk filer is still first);
+      a broken/absent worktree sidecar falls through silently to the next link, never failing the remark write.
+      Baseline bug: the chain read only the trunk sidecar, so a remark on an unmerged reading ran dry silently
+      while its filer sat online awaiting review.
 ---
 
 # measuring remark-polish

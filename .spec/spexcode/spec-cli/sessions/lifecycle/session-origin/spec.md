@@ -20,8 +20,8 @@ never had, a way to *receive* outside contributions.
 
 ## expanded spec
 
-**Origin is one polymorphic field, seeded once then forgotten.** `.session` gains `origin` (and its source
-ref); the [[portable-layout]] linker reads it. Two origins to start:
+**Origin is one polymorphic field, seeded once then forgotten.** The session's global record
+(`session.json`) gains `origin` (and its source ref); the [[portable-layout]] linker reads it. Two origins to start:
 
 - **fresh** — a new `node/<id>` branch off the trunk. The default; today's behaviour, byte-for-byte.
 - **pr** — fetch the pull request's head into the worktree (GitHub `refs/pull/<n>/head`, GitLab
@@ -43,5 +43,5 @@ by default ([[deliver-port]]); it authors a node only if a maintainer retargets 
 
 This also names an accident already in the tree: a session whose branch was a raw forge URL had to make
 the node id **double as the origin** (the URL stood in as the node name), which is why its `spex ls` label
-read as a URL. With origin a first-class `.session` field, the node id goes back to being purely a
+read as a URL. With origin a first-class session-record field, the node id goes back to being purely a
 [[source-of-truth|spec-tree name]] — the neighbouring scenario the fix also explains.

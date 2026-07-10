@@ -2,9 +2,11 @@
 title: spex-init
 status: active
 hue: 200
-desc: `spex init [dir]` scaffolds a repo to adopt SpexCode by copying shipped DATA templates, never code-embedded strings.
+desc: `spex init [dir]` scaffolds a repo to adopt SpexCode by copying shipped DATA templates, never code-embedded strings; its messages report what was actually planted, and `--render` casts the footprint vote in one step.
 code:
   - spec-cli/src/init.ts
+related:
+  - spec-cli/src/init.test.ts
 ---
 # spex-init
 
@@ -38,6 +40,21 @@ when the package is installed outside the dogfood repo — never a hardcoded rep
   [[launcher-select]] launchers — `claude` and `codex` as ordinary `sessions.launchers` entries plus
   `sessions.defaultLauncher: "claude"` — so session-create works out of the box without any env var; a host
   that needs an auth-wrapper command edits that launcher's `cmd` in `spexcode.local.json`.
+
+**What init prints is TRUE of what it planted.** The success message and the next-steps read the
+`governedRoots` value back from the just-planted (or pre-existing) file and interpolate it — never a string
+literal restated in the code, which is how the message once claimed a `["src"]` starter while the template
+seeded `["."]` (the first-minute lie a real field adoption hit).
+
+**`--render <committed|ignored|hidden>` casts the [[render-policy]] vote at adoption, one step.** The word
+is validated up front against the same vocabulary materialize enforces (an unknown word fails loud BEFORE
+anything is written), then lands where the axis says that word lives — `committed`/`ignored` in the
+committed `spexcode.json`, `hidden` in the gitignored `spexcode.local.json` — so this run's own materialize
+already renders under the vote. An explicit flag is an explicit instruction: it sets the field even in a
+pre-existing config file, the ONE deliberate exception to "existing files are left untouched". Without the
+flag, adoption onto a host that already TRACKS its contract file (CLAUDE.md/AGENTS.md) prints the one-time
+decision hint instead ([[render-policy]] owns its content): plain stdout naming the three words and their
+consequences — mechanism, not a TUI prompt, because init is routinely run by agents.
 
 **An illegal harness-target set fails loud, up front.** Before rendering, `init` validates the project's
 [[harness-select]] `harnesses` set (from the just-planted/existing `spexcode.json`) and aborts with a stated

@@ -323,7 +323,9 @@ Example — govern your own source dir and loosen the altitude budget:
   preset      the SELECTED init preset — which cumulative .config tier \`spex init\` seeds (default
               'default'; seed-time only, read by init.ts).
   harnesses   which harness targets \`spex materialize\` delivers into — native ids ("claude"|"codex") or a
-              { "plugin": "<folder>" } bundle. Default (omitted): all native harnesses.
+              { "plugin": "<folder>" } bundle. Default (omitted): all native harnesses. PERSISTENT and
+              self-healing: an edit moves the hook gate's key, so the next harness event re-renders under
+              the new set (a deselected harness's artifacts are pruned) — no manual materialize needed.
   render      the footprint vote: where the machine-independent RENDERS (CLAUDE.md/AGENTS.md contract
               blocks, .claude/.codex skills + agents) sit relative to the shared repo. One of
               "committed" | "ignored" (default) | "hidden". "committed" is a PROJECT fact → spexcode.json;
@@ -364,6 +366,9 @@ ONE axis — "who sees this artifact in the shared repo?" — is answered per KI
               and git status stays clean. Pick to dogfood on a repo you don't own. → spexcode.local.json.
 The ignore rules are themselves a render artifact, so their HOME follows the same vote — one axis, no
 second mechanism. TRACK ≠ PUSH: the vote never touches remotes; where commits GO is branch/remote policy.
+Vote at adoption in one step: \`spex init --render <word>\` (committed/ignored → spexcode.json, hidden →
+spexcode.local.json). Until an explicit vote is set, init/materialize print a one-time decision hint
+whenever a host-TRACKED contract file carries the block — the "mystery M" explained at first sight.
 
 ── GUARANTEES (the forgetting law) ──
 materialize(P₂) ∘ materialize(P₁) = materialize(P₂): every render first ERASES all landing points by
@@ -386,8 +391,10 @@ own edits to the file's prose still show as real modifications; only the block i
   (untrack-private)             git add .spec spexcode.json     # then commit on your branch
                             WARNING: tracking is not retroactive secrecy — history already pushed
                             elsewhere cannot be recalled.
-  hidden → committed/ignored  just edit \`render\` and run \`spex materialize\` (or let the hook gate) —
-                            the erase phase unplants the filter/exclude block in the same pass.
+  hidden → committed/ignored  just edit \`render\` — the hook gate re-renders on the very next harness
+                            event (the gate key covers spexcode.json/.local), or run \`spex materialize\`
+                            to apply immediately; the erase phase unplants the filter/exclude block in
+                            the same pass. Narrowing \`harnesses\` self-heals the same way.
   back out entirely         \`spex uninstall\` (add --hooks to also remove the spexcode git hooks).`
 
 const TOPICS: Record<string, string> = { spec: SPEC, yatsu: YATSU, config: CONFIG, footprint: FOOTPRINT }

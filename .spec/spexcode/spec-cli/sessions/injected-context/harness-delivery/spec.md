@@ -29,11 +29,15 @@ loads its CLAUDE.md + memory normally ([[sessions-core]] launch).
 `spex materialize` is the **pay-per-change render**: a pure function of the spec tree's [[surface]] nodes
 into the flat artifacts each consumer reads cheaply. It is invoked by `spex init` once and thereafter ONLY
 when the render's inputs actually moved — the cheap content-hash gate lives in the dispatcher
-([[hook-dispatch]]), not a daemon, and its key covers BOTH inputs: the config content AND the **renderer's
-own version** (a toolchain-side content fingerprint — a source checkout's package tree-hash, an npm
-install's package version). The artifacts are a function of (config, renderer), so a toolchain update moves
-the key and the next gate self-heals the stale contract/shims/manifest — previously an updated deploy
-stayed stale until someone happened to edit `.config`. It renders into the harness targets
+([[hook-dispatch]]), not a daemon, and its key covers EVERY input the render is a function of: the config
+content, the **persisted policy files** (the main checkout's `spexcode.json` + `spexcode.local.json` — the
+[[harness-select]] set and the [[render-policy]] vote), and the **renderer's own version** (a toolchain-side
+content fingerprint — a source checkout's package tree-hash, an npm install's package version). Each
+coverage closes a real "changed but nothing re-materialized" hole: a toolchain update moves the key so an
+updated deploy self-heals (previously it stayed stale until someone happened to edit `.config`), and a
+policy edit — narrowing `harnesses`, switching `render` — moves it too, so the very next harness event
+re-renders under the new policy (previously a deselected harness's stale artifacts lingered until an
+unrelated `.config` edit). It renders into the harness targets
 [[harness-select]] resolves from `spexcode.json` (default: every native harness), writing, idempotently and
 scoped per project, for each SELECTED harness:
 

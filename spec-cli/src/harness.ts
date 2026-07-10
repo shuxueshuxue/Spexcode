@@ -770,9 +770,14 @@ export function removeManagedBlock(file: string, comment: readonly [string, stri
   // remove ONLY our block plus the blank lines writeManagedBlock inserted around it; do NOT normalize the
   // user's OWN whitespace elsewhere — this must leave every other byte intact so it is a faithful INVERSE of
   // writeManagedBlock's append. A global `\n{3,}→\n\n` collapse used to sit here and mutated pre-existing
-  // blank-line runs in the user's file, which broke the private⇄default round-trip ([[private-overlay]]):
-  // default→private→default left a spurious one-line diff on a .gitignore that had internal blank lines.
-  const out = cur.replace(re, '\n').replace(/^\n+/, '')
+  // blank-line runs in the user's file, which broke the policy round-trip ([[render-policy]]): a mode flip
+  // and back left a spurious one-line diff on a .gitignore that had internal blank lines. The leading-newline
+  // strip is GUARDED the same way: it exists only for a block sitting at the TOP of the file (whose '\n'
+  // replacement would otherwise become a leading blank) — a host file that BEGINS with its own blank lines
+  // keeps them ([[content-filter]]'s invariant, same bug class as the shim's old unconditional strip).
+  const atTop = (re.exec(cur)?.index ?? -1) === 0
+  const replaced = cur.replace(re, '\n')
+  const out = atTop ? replaced.replace(/^\n+/, '') : replaced
   if (deleteIfEmpty && !out.trim()) { rmSync(file, { force: true }); return }
   writeFileSync(file, out)
 }

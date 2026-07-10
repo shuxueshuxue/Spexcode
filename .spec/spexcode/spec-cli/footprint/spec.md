@@ -32,7 +32,7 @@ The lifecycle's stations, each owning its own detail:
   facts never, run residue out-of-tree; the machine-independent renders carry the single vote —
   `committed` | `ignored` | `hidden` — and every planted artifact's visibility follows its KIND, never a
   usage mode.
-- **[[self]]** — the audit of delivery to an *agent*: is this agent actually governed, or silently running
+- **[[doctor]]** — the audit of delivery to an *agent*: is this agent actually governed, or silently running
   free? Under-delivery and double-delivery both caught, with the repair printed.
 - **[[spex-uninstall]]** — departure: materialize(∅) plus the store — every generated artifact removed by
   its identity stamp, the user's own `.spec`/`.config` data and prose never touched.

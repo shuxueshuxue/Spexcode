@@ -99,6 +99,37 @@ function infoExcludePath(proj: string): string {
 function isTracked(proj: string, file: string): boolean {
   try { git(['-C', proj, 'ls-files', '--error-unmatch', file]); return true } catch { return false }
 }
+
+// @@@ adoption vote hint ([[render-policy]] story 4 + 21) - the one-time decision guidance for the "mystery M"
+// moment: under the DEFAULT policy a host-TRACKED contract file (a team's own CLAUDE.md/AGENTS.md) carries the
+// generated block and shows honestly dirty in status — deliberate, but a first-minute adopter just sees an
+// unexplained modification. So the HUMAN surfaces (spex init + the manual `spex materialize` verb — never the
+// silent gate/bootstrap renders) print this guidance exactly while the vote is still open: only when (a) no
+// explicit `render` is set (the default `ignored` is in effect by omission, not by choice — an explicit vote,
+// any word, retires the hint) and (b) a SELECTED harness's contract file is actually host-tracked. Mechanism,
+// not interaction: plain stdout naming the three words, their consequences, and where the vote lives — init is
+// routinely run by agents, so there is no TUI prompt to hang on.
+export function renderVoteHint(proj = process.cwd()): string | null {
+  const cfg = readConfig(mainCheckout(proj))
+  if (cfg.render?.trim() || cfg.private) return null            // an explicit vote (or the legacy mapping) — decided
+  const { selected } = partitionHarnesses(resolveHarnessTargets(cfg.harnesses))
+  const tracked = selected.flatMap((h) => h.contractFiles(proj)).filter((f) => isTracked(proj, f))
+  if (!tracked.length) return null
+  const names = tracked.map((f) => relative(proj, f)).join(' + ')
+  const [be, carry] = tracked.length > 1 ? ['are', 'carry'] : ['is', 'carries']
+  return [
+    `note: ${names} ${be} tracked by this repo and now ${carry} the generated <!-- spexcode --> block — the`,
+    `modification you see in git status. That dirtiness is HONEST under the current default (render: ignored),`,
+    `kept visible on purpose until you vote where the generated renders should live:`,
+    `  committed   renders become ordinary committed files — teammates/CI get the contract natively`,
+    `  ignored     (current default) renders stay generated+gitignored; a tracked contract file stays dirty`,
+    `  hidden      zero repo footprint — ignore rules live in .git/info/exclude and the tracked file is`,
+    `              covered by the clean/smudge filter (index stays pristine, status clean)`,
+    `Vote once and this note retires: "render": "committed" | "ignored" in spexcode.json (a project fact) or`,
+    `"render": "hidden" in spexcode.local.json (a host fact) — or adopt in one step: spex init --render <word>.`,
+    `Full model: spex guide footprint.`,
+  ].join('\n')
+}
 // clear a legacy skip-worktree bit (the retired private-overlay mechanism; erase-only now — nothing asserts
 // it). Best-effort: an index race or a non-repo must not fail the render.
 function clearSkipWorktree(proj: string, file: string): void {

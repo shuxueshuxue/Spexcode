@@ -26,6 +26,17 @@ scenarios:
       Codex's products are PRUNED — its AGENTS.md <spexcode> block stripped, its .codex/hooks.json shim and
       .codex/skills removed, its global trust block gone — while Claude's artifacts stay intact. Any user prose
       outside the AGENTS.md managed block is preserved; no .spec data is touched.
+  - name: selection-edit-self-heals
+    tags: [cli]
+    description: >-
+      Adopt with the default set (both natives delivered), then narrow spexcode.json `harnesses` to ["codex"]
+      and — WITHOUT any manual `spex materialize` — fire a harness lifecycle event through dispatch.sh (the
+      auto re-render gate). Inspect the gate's content-hash and the .claude artifacts afterwards.
+    expected: >-
+      The gate key covers the persisted policy files (spexcode.json + spexcode.local.json, main checkout), so
+      the selection edit MOVES the key: the very next hook event re-renders under the narrowed set and prunes
+      claude's artifacts (.claude gone, CLAUDE.md block stripped). A selection change self-heals through the
+      product path — never waiting for an unrelated .config edit or a manual materialize.
 ---
 # yatsu.md — harness-select
 

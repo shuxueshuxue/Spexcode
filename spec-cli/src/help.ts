@@ -313,12 +313,15 @@ ${ROUTING_NOTE}`,
 
   // ── install & serve (operator) ────────────────────────────────────────────
   init: {
-    line: 'init [dir]            adopt SpexCode on a repo: seed .spec + hooks + materialize  [--preset name]',
-    body: `Usage: spex init [dir=cwd] [--preset default|careful]
+    line: 'init [dir]            adopt SpexCode on a repo: seed .spec + hooks + materialize  [--preset name] [--render word]',
+    body: `Usage: spex init [dir=cwd] [--preset default|careful] [--render committed|ignored|hidden]
 
 Scaffolds adoption in one shot: seeds a starter .spec tree (project root + .config plugins), plants
 spexcode.json, installs the git hooks, and materializes the harness artifacts (contract block +
-shims). Additive — never overwrites your files. --preset picks the .config plugin tier (cumulative).`,
+shims). Additive — never overwrites your files. --preset picks the .config plugin tier (cumulative).
+--render casts the one-time render-policy vote at adoption (committed → spexcode.json, hidden →
+spexcode.local.json; an unknown word fails loud) — without it, a host-tracked CLAUDE.md/AGENTS.md
+prints a one-time decision hint instead (see spex guide footprint).`,
     see: 'spex guide (the full setup workflow) · spex uninstall (the inverse) · spex lint (adoption TODO)',
   },
   uninstall: {

@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, lstatSync, rmSync, cpSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, lstatSync, rmSync, cpSync, readdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
@@ -294,4 +294,87 @@ test('worktree seeding: tracked data via checkout (never a link), host state cop
   g('worktree', 'add', '-q', wt2, '-b', 'node/wt2')
   seedWorktreeHostState(main, wt2)
   assert.equal(readFileSync(join(main, '.git', 'info', 'exclude'), 'utf8'), exclude, 'idempotent — no duplicate exclude entries')
+})
+
+// [[harness-select]] — the SELECTION CHAIN, every leg a real adopter rides: the persisted spexcode.json
+// `harnesses` set must be honored by init, by a manual materialize, by the dispatch gate's auto re-render,
+// AND by a worktree render (the bootstrapMaterialize path) — never falling back to the default full set.
+const DISPATCH = join(SRC, '..', 'hooks', 'dispatch.sh')
+
+function makeBareRepo(prefix: string) {
+  const proj = mkdtempSync(join(tmpdir(), prefix))
+  const home = mkdtempSync(join(tmpdir(), 'spex-home-'))
+  const codex = mkdtempSync(join(tmpdir(), 'spex-codex-'))
+  const env = { ...process.env, SPEXCODE_HOME: home, CODEX_HOME: codex }
+  const g = (...args: string[]) => execFileSync('git', ['-C', proj, ...args], { encoding: 'utf8', env })
+  const spex = (cwd: string, ...args: string[]) =>
+    execFileSync(TSX, [CLI, ...args], { cwd, encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'pipe'] })
+  // fire ONE harness lifecycle event through the real dispatcher — the auto re-render gate's product path.
+  const fireGate = (cwd: string) =>
+    execFileSync('bash', [DISPATCH, 'codex', 'SessionStart'], { cwd, encoding: 'utf8', env: { ...env, SPEX: `${TSX} ${CLI}` }, input: '{}' })
+  const runtimeHash = () => {
+    const projects = join(home, 'projects')
+    const enc = readdirSync(projects)[0]
+    return readFileSync(join(projects, enc, 'content-hash'), 'utf8').trim()
+  }
+  g('init', '-q', '-b', 'main')
+  g('config', 'user.email', 't@t.co'); g('config', 'user.name', 't')
+  writeFileSync(join(proj, 'README.md'), '# app\n')
+  return { proj, env, g, spex, fireGate, runtimeHash }
+}
+
+test('harness selection chain: a codex-only repo NEVER grows .claude — init, manual materialize, the dispatch gate, a worktree render', { skip: !gitAvailable() && 'git not available' }, () => {
+  const { proj, g, spex, fireGate, runtimeHash } = makeBareRepo('spex-cxonly-')
+  // the adopter declares codex-only BEFORE init (init leaves an existing spexcode.json untouched)
+  writeFileSync(join(proj, 'spexcode.json'), '{"harnesses":["codex"],"lint":{"governedRoots":["."]}}\n')
+  g('add', '-A'); g('commit', '-qm', 'init')
+  const noClaude = (dir: string, leg: string) => {
+    assert.ok(!existsSync(join(dir, '.claude')), `${leg}: no .claude dir`)
+    assert.ok(!existsSync(join(dir, 'CLAUDE.md')), `${leg}: no CLAUDE.md`)
+  }
+  // leg 1 — spex init
+  spex(proj, 'init', '.')
+  noClaude(proj, 'init')
+  assert.ok(existsSync(join(proj, '.codex', 'hooks.json')) && readFileSync(join(proj, 'AGENTS.md'), 'utf8').includes('spexcode:start'), 'init: codex delivered')
+  // leg 2 — manual spex materialize
+  spex(proj, 'materialize')
+  noClaude(proj, 'manual materialize')
+  // leg 3 — the dispatch gate's auto re-render (move the key via a .config edit, then fire one event)
+  const cfgNode = execFileSync('bash', ['-c', `ls '${join(proj, '.spec', 'project', '.config')}'/*/spec.md | head -1`], { encoding: 'utf8' }).trim()
+  writeFileSync(cfgNode, readFileSync(cfgNode, 'utf8') + '\nGATE-LEG\n')
+  const before = runtimeHash()
+  fireGate(proj)
+  assert.notEqual(runtimeHash(), before, 'gate: the .config edit moved the key and the gate re-rendered')
+  noClaude(proj, 'dispatch gate')
+  // leg 4 — a worktree render (what bootstrapMaterialize runs at session creation)
+  g('add', '-A'); g('commit', '-qm', 'adopt', '--no-verify')
+  const wt = join(proj, '.worktrees', 'wt')
+  g('worktree', 'add', '-q', wt, '-b', 'node/wt')
+  spex(wt, 'materialize')
+  noClaude(wt, 'worktree render')
+  assert.ok(existsSync(join(wt, '.codex', 'hooks.json')) && readFileSync(join(wt, 'AGENTS.md'), 'utf8').includes('spexcode:start'), 'worktree: codex delivered')
+})
+
+test('harness selection is persistent + self-healing: narrowing `harnesses` prunes the dropped harness on the NEXT GATE EVENT — no manual materialize', { skip: !gitAvailable() && 'git not available' }, () => {
+  const { proj, g, spex, fireGate, runtimeHash } = makeBareRepo('spex-narrow-')
+  g('add', '-A'); g('commit', '-qm', 'init')
+  spex(proj, 'init', '.')                                     // default set: both natives delivered
+  assert.ok(existsSync(join(proj, '.claude', 'settings.json')) && existsSync(join(proj, 'CLAUDE.md')), 'baseline: claude delivered')
+  // narrow the PERSISTED selection — a bare config edit, exactly what an adopter does
+  const cfg = JSON.parse(readFileSync(join(proj, 'spexcode.json'), 'utf8'))
+  cfg.harnesses = ['codex']
+  writeFileSync(join(proj, 'spexcode.json'), JSON.stringify(cfg, null, 2))
+  const before = runtimeHash()
+  fireGate(proj)                                              // ONE hook event; nothing else
+  assert.notEqual(runtimeHash(), before, 'the spexcode.json edit alone moves the gate key (policy files are in hp_config_hash)')
+  assert.ok(!existsSync(join(proj, '.claude')), 'the gate render pruned .claude entirely (shim, skills, agents, the dir itself)')
+  assert.ok(!existsSync(join(proj, 'CLAUDE.md')), 'the wholly-ours untracked CLAUDE.md is gone')
+  assert.ok(!readFileSync(join(proj, '.gitignore'), 'utf8').includes('.claude'), 'no .claude entries left in the ignore block')
+  assert.ok(existsSync(join(proj, '.codex', 'hooks.json')) && readFileSync(join(proj, 'AGENTS.md'), 'utf8').includes('spexcode:start'), 'codex untouched')
+  // idempotence over the harness dimension: a second event no-ops, a manual render changes nothing
+  const settled = runtimeHash()
+  fireGate(proj)
+  assert.equal(runtimeHash(), settled, 'second event: the gate no-ops on an unmoved key')
+  spex(proj, 'materialize')
+  assert.ok(!existsSync(join(proj, '.claude')) && !existsSync(join(proj, 'CLAUDE.md')), 'manual re-render is byte-stable on the narrowed set')
 })

@@ -56,6 +56,29 @@ scenarios:
       WARN. The run itself succeeds — the deployment keeps working until migrated.
     tags: [backend-api, cli]
     code: spec-cli/src/materialize.ts
+  - name: real-project-field-adoption
+    description: >
+      YATU on a REAL open-source project (a fresh honojs/hono clone carrying its own team CLAUDE.md), three
+      parties simulated as a bare team.git remote plus adopter and teammate clones. Walk the full adoption
+      loop through user surfaces only (spex verbs + bare git, config learned from `spex guide footprint`):
+      A adopt with the default ignored (init, commit spec data, push, teammate pulls); B switch to hidden
+      (exclude home, content filter on the tracked CLAUDE.md, a real prose edit pushed through the filtered
+      file); C switch to committed (renders enter the repo, teammate discovers natively); D the forgetting
+      law committed→hidden→ignored→initial and a final spex uninstall; E legacy {"private":true} through
+      materialize.
+    expected: >
+      A: spec data + .gitignore block reach the teammate, renders don't, teammate status clean, the tracked
+      host CLAUDE.md honestly dirty on the adopter. B: block migrates to .git/info/exclude, adopter status
+      clean via the guarded renormalize, HEAD pristine, and the teammate receives the prose edit without
+      ever seeing the block. C: the block reaches the teammate's CLAUDE.md/AGENTS.md natively. D: every
+      switch converges to that policy's exact state (the return to ignored equals the step-A state) and
+      uninstall leaves zero residue — no empty .claude/.codex, host CLAUDE.md byte-identical to its own
+      prose, the whole teammate-side adoption diff reduced to the spec data plus the team's own edit.
+      E: private:true maps to hidden with a loud, non-fatal stderr migration notice. All five, with no
+      contract deviation.
+    tags: [backend-api, cli]
+    code: spec-cli/src/worktree-sources.ts
+    related: [spec-cli/src/materialize.ts, spec-cli/src/contract-filter.ts]
 ---
 
 Measure through the real product surface, not by reading the code: a throwaway git repo shaped like the

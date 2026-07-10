@@ -1,4 +1,4 @@
-import { writeFileSync, mkdirSync, readFileSync, existsSync, readdirSync, rmSync } from 'node:fs'
+import { writeFileSync, mkdirSync, readFileSync, existsSync, readdirSync, rmSync, rmdirSync } from 'node:fs'
 import { join, dirname, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
@@ -149,6 +149,14 @@ export function dematerialize(proj = process.cwd(), arts: HarnessArtifacts = { s
   // and even unfiltered the phantom-`M` lingers) — settle the index stat, content-guarded so a user's real
   // unstaged edit is never staged ([[content-filter]] edge 2).
   try { settleIndexStat(proj, HARNESSES.flatMap((h) => h.contractFiles(proj))) } catch { /* not a git repo */ }
+  // leaving nothing behind: drop the now-EMPTY dirs the assert phase mkdir'ed (.claude/.codex and their
+  // skills/agents subdirs — children listed before parents). rmdirSync is NON-recursive, so a dir holding
+  // any user file survives untouched; `.git/spexcode/` is deliberately NOT swept (shared per-clone home).
+  for (const h of HARNESSES) {
+    const anchor = h.worktreeHookAnchor(proj)
+    for (const d of [h.skillDir(proj), h.agentDir(proj), dirname(h.shimFile(proj)), anchor ? dirname(anchor) : null])
+      if (d) { try { rmdirSync(d) } catch { /* non-empty or absent — keep */ } }
+  }
 }
 
 // the whole pay-per-change render. proj defaults to cwd. Returns the new content-hash it stamped.

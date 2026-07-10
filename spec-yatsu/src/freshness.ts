@@ -18,7 +18,7 @@ export type StaleAxis = 'code' | 'scenario' | 'evaluator' | 'remark' | 'anchor'
 export type ContentProbe = {
   // paths whose content differs between the anchor commit's tree and HEAD's; null = anchor object gone
   changedPaths(anchorSha: string): Set<string> | null
-  // did THIS scenario's canonical block move between anchor and HEAD (per-scenario, like [[scenariofresh]])
+  // did THIS scenario's semantic block (description+expected) move between anchor and HEAD ([[scenariofresh]])
   scenarioDiffers(anchorSha: string, yatsuPath: string, scenario: string): boolean
   // codeDrift's display detail: commits in anchor..HEAD touching path (floored at 1 — the content differs)
   behind(anchorSha: string, path: string): number
@@ -109,12 +109,14 @@ export function codeDrift(idx: DriftIndex, sinceSha: string, codeFiles: string[]
   return out
 }
 
-// scenario freshness is PER-SCENARIO, not per-file: a reading stales only when ITS OWN scenario block moved
-// (edited/added/removed) in scenarioSha..HEAD, never when a sibling in the same yatsu.md did. Reads exactly
-// like the code axis's changedSince — the per-scenario change-commits ([[scenariofresh]], rename-followed so a
-// bare git-mv reparent isn't a change) tested for ancestry — and an off-history codeSha takes the same content
-// fallback at the same granularity: an unchanged yatsu.md clears it outright, a changed one stales only if
-// THIS scenario's canonical block differs between the anchor and HEAD.
+// scenario freshness is PER-SCENARIO and SEMANTIC, not per-file: a reading stales only when ITS OWN
+// scenario's semantic block (description+expected — [[scenariofresh]]'s blockContent projection) moved in
+// scenarioSha..HEAD — never when a sibling in the same yatsu.md did, and never on a metadata-only edit
+// (tags/test/code/related). Reads exactly like the code axis's changedSince — the per-scenario
+// change-commits ([[scenariofresh]], rename-followed so a bare git-mv reparent isn't a change) tested for
+// ancestry — and an off-history codeSha takes the same content fallback at the same granularity and the
+// same projection: an unchanged yatsu.md clears it outright, a changed one stales only if THIS scenario's
+// semantic block differs between the anchor and HEAD.
 function scenarioMoved(scIdx: ScenarioIndex, didx: DriftIndex, sinceSha: string, yatsuPath: string, scenario: string, probe?: ContentProbe): boolean {
   const anc = ancestorsOf(didx, sinceSha)
   if (anc) return scenarioChangeCommits(scIdx, yatsuPath, scenario).some((h) => !inAncestors(didx, anc, h))

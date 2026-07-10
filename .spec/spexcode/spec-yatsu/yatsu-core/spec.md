@@ -11,6 +11,7 @@ related:
   - spec-yatsu/src/sidecar.ts
   - spec-yatsu/src/freshness.ts
   - spec-yatsu/src/scenariofresh.ts
+  - spec-yatsu/src/scenariofresh.test.ts
   - spec-yatsu/src/cache.ts
   - spec-yatsu/src/evaluator.ts
   - spec-yatsu/src/filing.ts
@@ -86,14 +87,28 @@ legacy note-only reading — renders as *legacy*.
 three git-derived (a governed `code:` file changed, its scenario's *content* changed, or the evaluator
 version moved) plus a fourth, **non-git** axis, the REMARK ([[remark-teeth]]): an unresolved remark on the
 scenario ages it like a drift event, and a resolved one keeps it stale until a reading taken *after* the
-resolve exists. The scenario-content axis is **per-scenario, not per-file**: because a scenario is the unit
-of measurement, a reading stales only when ITS OWN block (name/description/expected/tags/code) moved, never
-when a *sibling* scenario sharing the same yatsu.md did — so one file's routine growth (an added scenario, a
-neighbour's reword) can't spray false stale scores across every reading it holds. Git has no sub-file
-history, so this is built ([[scenariofresh]]): per scenario NAME, the commits where that block's content
+resolve exists. The scenario-content axis is **per-scenario and semantic, not per-file**: because a scenario is the unit of
+measurement, a reading stales only when ITS OWN measurement contract moved — the **semantic fields,
+description + expected** (what to measure, what zero loss looks like) — never when a *sibling* scenario
+sharing the same yatsu.md did, and never on a **metadata-only edit**: tags (routing — which surface/hand
+measures), and the file pointers test/code/related, change nothing about what an already-taken reading
+proved, so one file's routine growth (an added scenario, a neighbour's reword) AND a tree-wide hygiene
+sweep (a schema-clean retag, a coverage retune) both leave untouched contracts fresh instead of spraying
+false stale across every reading they hold. (A renamed scenario is not an edit but a remove+add — a new
+key, honestly unmeasured; a `code`/`related` retune reaches freshness anyway, because the code axis reads
+the CURRENT governed set live.) Because freshness is derived live from git and never stored, narrowing the
+projection **self-heals retroactively by design, not as a side effect**: historical metadata-only commits
+simply stop registering as scenario changes the moment the engine reads them — no migration, no stored
+hashes to rebuild. The deliberate tradeoff: a wrong→right retag means an old reading may have been measured
+through the wrong modality, and it still reads fresh — accepted because the reading's **evidence kind**
+(image/video/transcript/data) already records how it was ACTUALLY measured, so a modality mismatch stays
+visible to a human and to review, while the false-positive cost of staling a whole tree on a tags sweep is
+paid instantly and everywhere. Git has no
+sub-file history, so this is built ([[scenariofresh]]): per scenario NAME, the commits where that block's
+**semantic projection**
 changed, rename-followed — a bare `git mv` reparent leaves the block byte-identical, so it records no change
 and never stales (the same content-not-path rule a reparented spec node follows). A block version is keyed by
-its **content hash**, so a scenario's freshness is identical in every checkout that shares the history — a
+its **projection hash**, so a scenario's freshness is identical in every checkout that shares the history — a
 worktree reads the same score as the main line, without a per-branch rebuild — and the walk is **whole-history**,
 never first-parent-simplified, so a block edit that landed on a node branch and merged in still counts and is
 never silently read as fresh. Both git axes then judge
@@ -103,7 +118,8 @@ is *not an ancestor* of its codeSha. An **off-history codeSha** — orphaned by 
 cherry-pick, or sitting on a never-merged branch — is where ancestry stops testifying, but the trees still
 do: while the anchor commit object exists locally, freshness **falls back to content** — the anchor's tree
 diffed against HEAD, scoped to the reading's governed files on the code axis and to that ONE scenario's
-canonical block on the scenario axis (the same per-scenario granularity, so a sibling's edit still can't
+semantic projection on the scenario axis (the same per-scenario granularity and the same projection, so a
+sibling's edit or a metadata sweep still can't
 stale it). Byte-identical content reads fresh; a real difference stales exactly the moved axis — so a
 routine history rewrite no longer sprays false stale across readings whose governed content never moved.
 Only when the anchor commit object is truly gone (pruned) does the conservative stale remain, surfaced as

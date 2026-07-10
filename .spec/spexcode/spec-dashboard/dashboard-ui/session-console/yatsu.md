@@ -253,6 +253,22 @@ scenarios:
       tracks the active bottom line — the line the caret is on — never drifting to the vertical centre. A `❯`
       floating mid-box, beside an inert middle line, is the bug (the `align-items: center` regression).
     related: spec-dashboard/src/styles.css
+  - name: dock-rest-line-vertically-centred
+    tags: [frontend-e2e, desktop]
+    description: >
+      Through the running dashboard in a real browser, open the session interface (Enter) on a LIVE session
+      and look at the docked `❯` box AT REST (empty, single line). Read the bounding rects of the box
+      (`.si-bottom`) and the prompt/input row (`.si-prompt`, `.si-input`) and compute the two gaps: row top
+      to box top, and box bottom to row bottom. Then grow the draft multi-line (below the cap) and re-read
+      the prompt's position to confirm the growth contract still holds. Screenshot the resting strip.
+    expected: |
+      At rest the single line sits in the VERTICAL CENTRE of the 44px strip: the gap above the `❯`/text row
+      equals the gap below it (within a pixel) — the resting box is exactly filled, so the deliberate
+      `align-items: flex-end` has nothing to push against. A row visibly low in the strip (top gap ≫ bottom
+      gap, e.g. 17px vs 7px) is the bug. Growing the box multi-line is UNCHANGED by this contract: `❯` and
+      the paperclip still track the active bottom line ([[dock-prompt-stays-on-active-line]]), never the
+      box's vertical middle.
+    related: spec-dashboard/src/styles.css
   - name: inbox-mention-dropdown-and-resolution
     tags: [frontend-e2e, desktop]
     description: >

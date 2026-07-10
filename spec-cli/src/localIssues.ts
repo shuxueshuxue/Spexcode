@@ -362,16 +362,28 @@ export async function replyLocalIssue(id: string, body: string, author: string, 
 // The FALLBACK CHAIN of candidates a reply loops in ([[mentions]] loop-in / [[remark-substrate]] R3's dispatch
 // clause), tried in order until one is online. A plain thread's only candidate is its author (`by`). An
 // EVAL-COMMENT thread (concern `eval: <node> · <scenario>`, the eval-remark track) chains: the agent who FILED
-// the reading the remark judges FIRST, then — when that filer is offline/absent — the NODE's governing session,
-// so an unresolved remark still REACHES an agent who can act on it. This is notification only; it resolves
-// nothing (R3: resolve is a deliberate `spex resolve`). Non-eval threads pay nothing (no yatsu/specs import).
+// the reading the remark judges FIRST — resolved from the TRUNK sidecar, then from each LIVE session's
+// WORKTREE (an in-flight reading, filed on an unmerged branch, is invisible to the trunk — exactly the
+// review-time case, when the filer sits online awaiting review and the remark must reach them) — then, when
+// every filer is offline/absent, the NODE's governing session, so an unresolved remark still REACHES an agent
+// who can act on it. A broken/absent worktree sidecar falls through silently — one bad worktree never fails
+// the remark write. This is notification only; it resolves nothing (R3: resolve is a deliberate
+// `spex resolve`). Non-eval threads pay nothing (no yatsu/specs/sessions import).
 const EVAL_CONCERN_RE = /^eval: (.+?) · (.+)$/   // node first (never contains ' · '), then the scenario (may)
 async function threadOriginators(thread: Issue): Promise<(string | null)[]> {
   const m = EVAL_CONCERN_RE.exec(thread.concern)
   if (!m) return [thread.by]
   const node = m[1].trim(), scenario = m[2].trim()
   const { evalReadingFiler } = await import('../../spec-yatsu/src/filing.js')
-  return [evalReadingFiler(node, scenario), await nodeGoverningSession(node)]
+  const chain: (string | null)[] = [evalReadingFiler(node, scenario)]
+  try {
+    const { listSessions } = await import('./sessions.js')
+    for (const s of await listSessions()) {
+      try { if (s.path) chain.push(evalReadingFiler(node, scenario, s.path)) } catch { /* one unreadable worktree → next link */ }
+    }
+  } catch { /* sessions unavailable (bare store, no tmux) → trunk-only chain, as before */ }
+  chain.push(await nodeGoverningSession(node))
+  return chain
 }
 
 // A node's governing session — the `session` its spec resolves to (the Session: trailer of its latest version,

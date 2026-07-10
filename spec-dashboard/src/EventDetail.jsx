@@ -21,8 +21,9 @@ import { Icon, IconButton } from './icons.jsx'
 //
 // There is ONE reply primitive: a REMARK on the eval's own (node, scenario) thread ([[remark-substrate]]) —
 // a scenario-scoped concern is a remark, never an issue (I1). It is time-anchored by the `▶m:ss · step`
-// prose convention ([[issues-view]]'s Thread); ⏱/a stamps the current frame onto a note; a drag-circle
-// captures the paused frame and prefills an anchored remark carrying it. A remark's `resolved` bit renders in
+// prose convention ([[issues-view]]'s Thread), and an anchored mark CARRIES ITS MOMENT'S FRAME whichever
+// gesture made it — ⏱/`a` capture the clean current frame, a drag-circle the same frame with its rect
+// burned in — so every mark renders uniformly in the track. A remark's `resolved` bit renders in
 // the thread (settled when resolved, prominent while open). The composer authors through the CLI-parity
 // /api/remarks (L: the dashboard is a thin wrapper, no dashboard-only write). The pane READS readings and
 // hosts remarks — it never files a reading: verdicts land through the CLI eval seam (`spex yatsu eval`,
@@ -266,22 +267,65 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite,
   const seekMs = useCallback((tMs) => { const v = vid.current; if (v) v.currentTime = tMs / 1000 }, [])
   const togglePlay = useCallback(() => { const v = vid.current; if (v) (v.paused ? v.play() : v.pause()) }, [])
   const selectComment = (i, tMs) => { setSelIdx(i); if (tMs != null) seekMs(tMs) }
-  // ⏱ stamps the frame the playhead is on — the current time + the step it is inside.
-  const anchorNow = useCallback(() => { const tMs = Math.round((vid.current?.currentTime ?? 0) * 1000); return { tMs, step: stepAt(events, tMs)?.step ?? null } }, [events])
+  // the ONE frame grab all three mark gestures share (circle / ⏱ / `a`): capture the current frame at
+  // natural resolution (a circle burns its rect in), stash it in the blob store, return the hash — null
+  // when there is no decodable frame or the store refuses, so callers degrade to a text-only anchor
+  // (the flash reports the miss).
+  const grabFrame = useCallback(async (rect) => {
+    const v = vid.current
+    if (!v?.videoWidth) return null
+    setBusy(true)
+    setFlash(t('annotator.capturing'))
+    try {
+      // a capture mid-seek would draw the stale pre-seek frame — wait for the decode to land first
+      if (v.seeking) await new Promise((res) => v.addEventListener('seeked', res, { once: true }))
+      const cv = document.createElement('canvas')
+      cv.width = v.videoWidth; cv.height = v.videoHeight
+      const ctx = cv.getContext('2d')
+      ctx.drawImage(v, 0, 0, cv.width, cv.height)
+      if (rect) {
+        ctx.strokeStyle = '#ff9a3c'; ctx.lineWidth = Math.max(2, cv.width / 300)
+        ctx.strokeRect(rect.x / 100 * cv.width, rect.y / 100 * cv.height, rect.w / 100 * cv.width, rect.h / 100 * cv.height)
+      }
+      const blob = await new Promise((res) => cv.toBlob(res, 'image/png'))
+      const { hash } = await putFrameBlob(blob)
+      if (!hash) throw new Error('no hash')
+      setFlash('')
+      return hash
+    } catch {
+      setFlash(t('annotator.failed'))
+      return null
+    } finally { setBusy(false) }
+  }, [t])
 
-  // annotate the current frame from the keyboard (`a`): stamp its anchor into the composer, ready to type —
-  // the same start-a-comment path a circle takes, minus the frame image. Routes to the step's node when set.
-  const annotateFrame = useCallback(() => {
+  // ⏱ stamps the moment the playhead is on — pause, the time + the step it is inside, AND the frame
+  // itself (an anchored mark carries its moment's frame), so the composer's stamp makes the same mark a
+  // circle or `a` does, minus the rect.
+  const anchorNow = useCallback(async () => {
+    const v = vid.current
+    if (!v) return null
+    v.pause()
+    const tMs = Math.round((v.currentTime ?? 0) * 1000)
+    return { tMs, step: stepAt(events, tMs)?.step ?? null, frame: await grabFrame(null) }
+  }, [events, grabFrame])
+
+  // mark the current moment (`a` = the clean frame, a drag = the circled rect): pause, capture, and
+  // prefill the review-track composer with an anchored comment carrying the frame — the mark becomes a
+  // reply. A step whose owning node differs routes the finding there (a `[[node]]` line the reviewer
+  // sees); a failed capture degrades to the text-only anchor, never a blocked mark.
+  const annotate = useCallback(async (rect) => {
     const v = vid.current
     if (!v) return
     v.pause()
     const tMs = Math.round((v.currentTime || 0) * 1000)
     const st = stepAt(events, tMs)
+    const hash = await grabFrame(rect)
     const lines = [anchorLine(tMs, st?.step)]
+    if (hash) lines.push(`![frame](/api/yatsu/blob/${hash})`)
     if (st?.node && st.node !== entry.node) lines.push(`re: [[${st.node}]]`)
     lines.push('')
     setDraft({ seq: ++seq.current, body: lines.join('\n') })
-  }, [events, entry.node])
+  }, [events, entry.node, grabFrame])
 
   // ↑/↓ jump to the previous/next anchored comment (seek + select); with none selected, seed from the
   // comment the playhead is currently inside so the walk starts where the reviewer is looking.
@@ -312,11 +356,11 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite,
       else if (e.key === '.') { e.preventDefault(); if (v.duration) v.currentTime = Math.min(v.duration, v.currentTime + 1 / 30) }
       else if (e.key === 'ArrowDown') { e.preventDefault(); jumpAnchor(1) }
       else if (e.key === 'ArrowUp') { e.preventDefault(); jumpAnchor(-1) }
-      else if (e.key === 'a' || e.key === 'A') { e.preventDefault(); annotateFrame() }
+      else if (e.key === 'a' || e.key === 'A') { e.preventDefault(); annotate(null) }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [hasVideo, togglePlay, jumpAnchor, annotateFrame])
+  }, [hasVideo, togglePlay, jumpAnchor, annotate])
 
   // scrubber: click / drag anywhere to seek; hovering previews the moment under the cursor.
   const seekToX = (clientX) => {
@@ -352,36 +396,6 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite,
     setDrag({ ...drag, x: p.x, y: p.y })
   }
 
-  // burn the circled rect into a PNG of the paused frame at natural resolution, stash it in the blob store,
-  // and prefill the review-track composer with an anchored comment carrying that frame — the mark becomes a
-  // reply. A step whose owning node differs routes the finding there (a `[[node]]` line the reviewer sees).
-  const captureCircle = async (rect) => {
-    const v = vid.current
-    if (!v?.videoWidth) return
-    const tMs = Math.round((v.currentTime ?? 0) * 1000)
-    const st = stepAt(events, tMs)
-    setBusy(true)
-    setFlash(t('annotator.capturing'))
-    try {
-      const cv = document.createElement('canvas')
-      cv.width = v.videoWidth; cv.height = v.videoHeight
-      const ctx = cv.getContext('2d')
-      ctx.drawImage(v, 0, 0, cv.width, cv.height)
-      ctx.strokeStyle = '#ff9a3c'; ctx.lineWidth = Math.max(2, cv.width / 300)
-      ctx.strokeRect(rect.x / 100 * cv.width, rect.y / 100 * cv.height, rect.w / 100 * cv.width, rect.h / 100 * cv.height)
-      const blob = await new Promise((res) => cv.toBlob(res, 'image/png'))
-      const { hash } = await putFrameBlob(blob)
-      if (!hash) throw new Error('no hash')
-      const lines = [anchorLine(tMs, st?.step), `![frame](/api/yatsu/blob/${hash})`]
-      if (st?.node && st.node !== entry.node) lines.push(`re: [[${st.node}]]`)
-      lines.push('')
-      setDraft({ seq: ++seq.current, body: lines.join('\n') })
-      setFlash('')
-    } catch {
-      setFlash(t('annotator.failed'))
-    } finally { setBusy(false) }
-  }
-
   const onUp = () => {
     if (!drag) return
     const rect = {
@@ -390,7 +404,7 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite,
     }
     setDrag(null)
     if (rect.w < 1 && rect.h < 1) { togglePlay(); return }   // a click, not a circle → play/pause
-    captureCircle(rect)
+    annotate(rect)
   }
   const liveRect = drag && {
     x: Math.min(drag.x0, drag.x), y: Math.min(drag.y0, drag.y),

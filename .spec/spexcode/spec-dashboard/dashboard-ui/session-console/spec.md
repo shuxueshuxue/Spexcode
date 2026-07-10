@@ -82,7 +82,11 @@ does it **overlay** the terminal, expanding
 reserves space — growth overlays). Above the pane a **horizontal tab bar** replaces the old title/action
 strip, carrying **two tabs on the left** — **Terminal** (the default) and **Eval**: Terminal shows the live
 pane with the docked `❯` input; Eval shows this session's measured evaluation **inline** (an always-available
-view — the shared eval components, session-scoped; below and [[review-proof]]). **Opening the Eval tab
+view — the shared eval components, session-scoped; below and [[review-proof]]). Inside the Eval tab,
+"open a session" (the eval detail's filer chip, [[event-detail]]) means SHOW ITS CONSOLE: the chip routinely
+names the session already being viewed, where a plain navigate would no-op (selection unchanged, identical
+hash — a dead button), so the host flips the right pane back to Terminal and navigates only when the filer
+is a different session. **Opening the Eval tab
 auto-collapses the left session list to a thin strip** — the same fold-to-strip geometry the Evals page's
 master list uses ([[evals-view]]), and for the same reason: the Eval tab is itself a master-detail whose own
 scenario list ([[review-proof]]) needs room, so leaving the console's full-width session list beside it would

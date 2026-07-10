@@ -444,6 +444,20 @@ scenarios:
       an IME composition is swallowed by the compose, never read as send. Baseline bug: the IME Enter cleared
       the box and fired the launch POST, sending the half-composed word instead of composing it.
     code: spec-dashboard/src/SessionInterface.jsx
+  - name: filer-chip-opens-console
+    tags: [frontend-e2e]
+    code: spec-dashboard/src/SessionInterface.jsx
+    related: [spec-dashboard/src/SessionEval.jsx, spec-dashboard/src/EventDetail.jsx]
+    description: >-
+      On a session's Eval tab, select a reading THAT SESSION filed (the header's filer chip names the
+      session you are already viewing) and click the live filer chip. Read the right pane's tab state and
+      the hash before and after. Then, on an eval whose filer is a DIFFERENT live session, click its chip.
+    expected: >-
+      The chip is never a dead button. Clicking the filer chip of the session you are already viewing flips
+      the right pane to the TERMINAL tab (the console — "open this session" made real; the hash may stay
+      put since the session is already selected). Clicking a different live session's chip navigates to
+      #/sessions/<id> and lands on that session's console. Baseline bug: same-session clicks did nothing —
+      setSessionSel was already set and navigate() saw an identical hash, so the openable chip was a no-op.
 ---
 
 # session-console — yatsu

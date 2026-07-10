@@ -109,12 +109,30 @@ if [ "$cont" = true ]; then
   exit 0
 fi
 
-# first stop in an undeclared state -> nudge exactly once. The reason names the PATH-independent CLI ($S)
-# ONCE as a shared `<CLI> session <choice>` prefix, then lists the five choices as a compact newline menu of
-# bare subcommands — so the terminal output stays legible instead of repeating the long abs path per option.
-# It EMPHASIZES that each state is a CLAIM others act on (not a box to tick to end the turn) and gives the
-# precise APPLICATION CONDITION for each — so the agent picks the TRUE one. park is policed hardest because
-# a false park (no real background task) reads on the board as "fine, self-resuming" when the agent actually
-# needs the human, which is the most damaging mislabel.
-printf '{"decision":"block","reason":"Your session state is a CLAIM the board, your supervisor, and other agents act on — not a box to tick to end the turn. Stopping undeclared makes your outcome a guess. Pick the ONE that is TRUE right now and run `%s session <choice>`, choosing the <choice> whose condition holds:\\n  • done --propose merge  — spec+code COMMITTED on the branch and genuinely ready for a human to review/merge (not just probably-done).\\n  • done --propose nothing — committed, but you are NOT proposing a merge; paused for the human to look.\\n  • park --note <what-you-await> — ONLY when a real BACKGROUND TASK will wake you (a spex wait you backgrounded, a running build/job). If nothing is actually running to resume you, you are NOT parked — you are waiting on the human, so use ask; never use park as a default to clear this gate.\\n  • done --propose close — you propose discarding this worktree.\\n  • ask --note <your-question> — you need the human: a real question, or you are simply stopped awaiting direction; you resume only when they reply."}\n' "$S"
+# first stop in an undeclared state -> block. The FULL teaching text prints ONCE per session; every later
+# undeclared stop gets a ONE-LINE version (a heavy session hits this gate 15-20x a night — re-printing the
+# full menu each time is pure token noise). The once-sentinel is a plain file beside session.json in the
+# session's global store dir — the same per-session-sentinel mechanism as the CLI's note-echo-taught; $sdir
+# is already alias-resolved here, so a codex thread id lands on the same file, and an unwritable dir just
+# teaches again (never blocks the block). The terse line must stay SELF-EXPLANATORY: an agent whose context
+# was compacted may never have seen the full text, so the line carries the whole command menu, the
+# declare-LAST discipline, and the `help session` entry that re-explains each choice's condition — every bit
+# of the full-to-terse information gap is recoverable from the entry, none of it from memory.
+taught="$sdir/stop-gate-taught"
+if [ -f "$taught" ]; then
+  printf '{"decision":"block","reason":"undeclared stop — pick the ONE true state and declare it as the LAST call of your turn: `%s session <done --propose merge|nothing|close / park --note <what-you-await> / ask --note <your-question>>`. Which choice is true (and why park is never a default): `%s help session`."}\n' "$S" "$S"
+  exit 0
+fi
+touch "$taught" 2>/dev/null || true
+# The full reason names the PATH-independent CLI ($S) ONCE as a shared `<CLI> session <choice>` prefix, then
+# lists the five choices as a compact newline menu of bare subcommands — so the terminal output stays legible
+# instead of repeating the long abs path per option. It EMPHASIZES that each state is a CLAIM others act on
+# (not a box to tick to end the turn) and gives the precise APPLICATION CONDITION for each — so the agent
+# picks the TRUE one. park is policed hardest because a false park (no real background task) reads on the
+# board as "fine, self-resuming" when the agent actually needs the human, which is the most damaging mislabel.
+# It ends with the ORDERING discipline — declare LAST, then stop — because a declaration followed by more
+# tool calls honestly re-flips the record to active (mark-active, by design) and re-blocks the next stop;
+# this block text is the one place every undeclared stopper is guaranteed to read, so the teaching that
+# kills the park->block->re-park loop at its source lives here.
+printf '{"decision":"block","reason":"Your session state is a CLAIM the board, your supervisor, and other agents act on — not a box to tick to end the turn. Stopping undeclared makes your outcome a guess. Pick the ONE that is TRUE right now and run `%s session <choice>`, choosing the <choice> whose condition holds:\\n  • done --propose merge  — spec+code COMMITTED on the branch and genuinely ready for a human to review/merge (not just probably-done).\\n  • done --propose nothing — committed, but you are NOT proposing a merge; paused for the human to look.\\n  • park --note <what-you-await> — ONLY when a real BACKGROUND TASK will wake you (a spex wait you backgrounded, a running build/job). If nothing is actually running to resume you, you are NOT parked — you are waiting on the human, so use ask; never use park as a default to clear this gate.\\n  • done --propose close — you propose discarding this worktree.\\n  • ask --note <your-question> — you need the human: a real question, or you are simply stopped awaiting direction; you resume only when they reply.\\n\\nDECLARE LAST, THEN STOP: finish everything else in the turn first — speak, send your messages, arm your background waits — and make the declaration your FINAL call. Any tool call AFTER it flips your record back to active (mark-active, by design: activity is activity), so the next stop re-blocks and demands a fresh declaration; declaring last kills that loop at its source.\\n\\n(This full explanation shows once per session; later undeclared stops get a one-line reminder. `%s help session` re-explains the choices any time.)"}\n' "$S" "$S"
 exit 0

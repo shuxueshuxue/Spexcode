@@ -83,6 +83,20 @@ scenarios:
       is the latest again (scan quiet), and retracting every reading returns the scenario to
       yatsu-missing. A retract with no un-retracted reading left fails loud, as does an unknown
       flag.
+  - name: metadata-sweep-doesnt-stale
+    tags: [cli]
+    code: [spec-yatsu/src/scenariofresh.ts]
+    description: >-
+      Through the real `spex yatsu scan` in a scratch repo: file a reading, then commit a
+      TAGS-ONLY change to that scenario's block (add/reorder tags — the schema-clean sweep a
+      real tree gets), leaving description and expected byte-identical; re-run scan. Then, as
+      the control, commit an edit to the same scenario's `expected` and scan again.
+    expected: >-
+      The tags-only commit records NO scenario change — the reading stays fresh, scan stays
+      quiet: routing metadata (tags, and the other non-semantic fields) is outside the
+      scenario-freshness projection, so a metadata sweep can't spray false yatsu-drift across
+      readings whose measurement contract (description + expected) never moved. The `expected`
+      edit still flags yatsu-drift on the scenario axis — the semantic fields keep their teeth.
   - name: off-history-anchor-content-fallback
     tags: [cli]
     code: [spec-yatsu/src/freshness.ts]

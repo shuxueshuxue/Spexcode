@@ -99,13 +99,30 @@ hp_store_dir() {
   printf '%s' "$direct"
 }
 
-# the deterministic content fingerprint of the EDITABLE config roots (.config + config md/sh) — the gate's
-# "did the .config move?" signal. Run with cwd = the project. ONE definition: the dispatch.sh gate sources this
-# and materialize.ts shells to it, so the gate and the renderer can NEVER disagree on what "changed" means (the
-# two used to inline this pipeline verbatim, each commenting the other "MUST match").
+# the RENDERER's own version fingerprint — the toolchain side of the gate key. The rendered artifacts are a
+# function of (config content, renderer), so a TOOLCHAIN update must move the key too, or an updated deploy
+# never self-heals its stale contract/shims/manifest until someone happens to edit .config (the field lesson:
+# a toolchain update does NOT self-heal). A source checkout answers with the git TREE hash of the package dir
+# (moves exactly when the toolchain's content moves, not on every repo commit); an npm install (no .git)
+# answers with the package.json hash (npm bumps the version). env-stripped git — a git hook's exported
+# GIT_DIR must not misdirect repo discovery (same rule as git.ts's git()).
+SPEXCODE_HP_PKG="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd)"
+hp_renderer_version() {
+  ( cd "$SPEXCODE_HP_PKG" 2>/dev/null && env -u GIT_DIR -u GIT_INDEX_FILE git rev-parse 'HEAD:./' 2>/dev/null ) \
+    || sha256sum "$SPEXCODE_HP_PKG/package.json" 2>/dev/null | cut -d' ' -f1 \
+    || echo unversioned
+}
+
+# the deterministic content fingerprint of the EDITABLE config roots (.config + config md/sh) PLUS the
+# renderer version above — the gate's "did anything the render depends on move?" signal. Run with cwd = the
+# project. ONE definition: the dispatch.sh gate sources this and materialize.ts shells to it, so the gate and
+# the renderer can NEVER disagree on what "changed" means (the two used to inline this pipeline verbatim,
+# each commenting the other "MUST match").
 hp_config_hash() {
-  find .spec/*/.config .spec/*/config \( -name '*.md' -o -name '*.sh' \) -type f -print0 2>/dev/null \
-    | sort -z | xargs -0 cat 2>/dev/null | sha256sum | cut -d' ' -f1
+  { hp_renderer_version
+    find .spec/*/.config .spec/*/config \( -name '*.md' -o -name '*.sh' \) -type f -print0 2>/dev/null \
+      | sort -z | xargs -0 cat 2>/dev/null
+  } | sha256sum | cut -d' ' -f1
 }
 
 # the tool a payload is about to run / just ran (harness-agnostic field name).

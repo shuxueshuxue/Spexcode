@@ -73,9 +73,11 @@ conversation (the transcript and the session's global record survive — see [[r
 has intentionally not launched, so it shows neither a terminal nor a relaunch, and self-starts as a slot
 frees. The terminal pane is **flat**: it fills the right area directly — no inner bordered box, no title bar,
 no nested levels — the dark terminal edge-to-edge above a **fixed input strip reserved at the pane's bottom**.
-At rest the single-line `❯` box occupies that strip and the terminal **ends above it** (the resting input
-reserves real layout height, so the terminal does not stretch under it) — the terminal's own bottom status
-line is therefore never hidden. Only when the box grows multi-line does it **overlay** the terminal, expanding
+At rest the single-line `❯` box occupies that strip **exactly** — the `❯` and its line sit **vertically
+centred** in the strip (equal space above and below), never sunk toward its bottom edge — and the terminal
+**ends above it** (the resting input reserves real layout height, so the terminal does not stretch under
+it) — the terminal's own bottom status line is therefore never hidden. Only when the box grows multi-line
+does it **overlay** the terminal, expanding
 **upward** over its lower edge; growth never pushes the terminal's content up (only the resting single line
 reserves space — growth overlays). Above the pane a **horizontal tab bar** replaces the old title/action
 strip, carrying **two tabs on the left** — **Terminal** (the default) and **Eval**: Terminal shows the live

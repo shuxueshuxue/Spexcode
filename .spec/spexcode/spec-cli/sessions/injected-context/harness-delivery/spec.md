@@ -74,8 +74,9 @@ Placement is harness-fact, not preference (verified): Codex auto-discovers ONLY 
 (never `.codex/AGENTS.md`); Claude discovers `./CLAUDE.md` or `./.claude/CLAUDE.md`. Every in-tree artifact this
 render writes is generated, so materialize gitignores it — a managed `#` block in `<repo>/.gitignore` whose
 entries are the adapters' own `contractFiles()` + `shimFile()`s + skill `SKILL.md`s, plus SpexCode's own
-per-clone SESSION artifacts (`.worktrees/` — where a launch plants its worktrees — and the `.session` state
-file), never the adopter's code (the user's existing .gitignore is preserved), all re-rendered per clone/
+per-clone SESSION artifacts (`.worktrees/` — where a launch plants its worktrees — plus a legacy `.session`
+entry for worktrees an old backend labeled with the retired per-worktree state file; live session state is
+the global store's `session.json`), never the adopter's code (the user's existing .gitignore is preserved), all re-rendered per clone/
 machine, never committed. The
 **contract files** join that block precisely because their whole content is generated (the docs guide + the
 system block) — they carry no committed prose of their own; only the guide SOURCE (`docs/AGENT_GUIDE.md`) is

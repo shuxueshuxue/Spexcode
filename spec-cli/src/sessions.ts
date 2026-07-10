@@ -502,9 +502,9 @@ export function toSession(rec: SessRec, status: DisplayStatus, lv: Liveness, act
 }
 
 // @@@ renameSession - set (or clear) a session's human display NAME: the user-chosen override that wins
-// over the derived label (node/title/branch/id) on every surface. Persisted to the worktree's `.session`
-// — the only writer of that file — so the name survives backend restarts and is read back like any other
-// field. A blank name CLEARS the override, reverting the row to its derived label. Works for a session in
+// over the derived label (node/title/branch/id) on every surface. Persisted to the session's global
+// record (`session.json` in the store, like every other field) so the name survives backend restarts
+// and is read back like any other field. A blank name CLEARS the override, reverting the row to its derived label. Works for a session in
 // any state (queued/live/offline) since it edits the on-disk record, not the live tmux. Unknown id → false
 // (the route answers 404). The frontend's right-click rename is the sole caller today.
 export async function renameSession(id: string, name: string): Promise<boolean> {
@@ -966,7 +966,7 @@ export async function drainQueue(): Promise<void> {
 
 // @@@ superviseQueue - the periodic drainer. Started once at serve(). The explicit drainQueue() calls on
 // newSession/close/propose cover the slot-freeing events the SERVER handles, but an agent proposing done or
-// going parked writes its .session from a hook subprocess the server never sees, and a crash just makes a
+// going parked writes its global session.json record from a hook subprocess the server never sees, and a crash just makes a
 // socket vanish — so a timer is what turns those into freed slots. Cheap: one worktree+tmux snapshot per tick,
 // and a no-op when nothing is queued. Idempotent (guarded), so a second call is harmless.
 let supervisingQueue = false
@@ -1051,7 +1051,7 @@ export async function createSession(node: string | null, prompt: string, launche
   return await res.json() as Session
 }
 
-// @@@ newSession - durable worktree (branch node/<slug> off main) + .session label. The agent does NOT
+// @@@ newSession - durable worktree (branch node/<slug> off main) + a global session.json record. The agent does NOT
 // launch inline any more: the worktree is prepared and parked as `queued`, then drainQueue() launches it
 // immediately if we're under the concurrency cap, else it waits its turn. Backs both the dashboard POST and
 // `spex session new`. Creating or deleting a spec node is NOT a server op — it is prompt-driven work the

@@ -89,10 +89,11 @@ function fireChanged(): void {
 }
 
 // ---- event source 0: an EXPLICIT server-side nudge ----
-// for the one mutation the watchers structurally cannot see: /rename writes the worktree's `.session`
-// (the name's ONE home, outside the watched store — [[session-rename]]). The route calls this instead of
-// double-writing the name into the store: a notification problem gets a notification solution, never a
-// second data home. Same debounced funnel as every other source.
+// for a server-side mutation that must show instantly regardless of watcher health: /rename writes the
+// session's global record (`session.json` — [[session-rename]]), which lives INSIDE the watched store, so
+// source 1 normally sees the write too. The explicit route call stays because that fs watch is best-effort
+// (it can fail to attach), and the nudge makes the sub-second rename guarantee deterministic. Same
+// debounced funnel as every other source.
 export const notifyBoardChanged = (): void => fireChanged()
 
 // ---- event source 1: the session store (lifecycle status writes) ----

@@ -37,10 +37,11 @@ going offline) and activity (the live self-summary headline). (4) A delta-gated 
 server-side twin of each client's slow fallback poll — that rebuilds and diffs so what no watcher
 sees (an uncommitted worktree spec edit, a forge refresh, a watch blind spot like a recursively-deleted
 store dir) still lands, once per tick total instead of once per open dashboard. And (0) an **exported
-explicit nudge** (`notifyBoardChanged`) for a server-side mutation the watchers structurally cannot see —
-today just `/rename`, which writes the worktree's `.session`, the name's ONE home outside the watched
-store ([[session-rename]]); the route nudges the stream instead of double-writing the name into the store,
-so a notification problem gets a notification solution, never a second data home. All of them funnel into
+explicit nudge** (`notifyBoardChanged`) for a server-side mutation that must show instantly regardless of
+watcher health — today just `/rename`, which writes the session's global record (`session.json`, inside
+the watched store — [[session-rename]]); source 1 normally sees that write too, but its fs watch is
+best-effort (it can fail to attach), so the route nudges the stream explicitly, making the sub-second
+rename guarantee deterministic instead of watcher-dependent. All of them funnel into
 one debounced fire that collapses a burst (a merge touches many records) into one signal.
 
 **Rebuilds are gated on someone listening.** With no delta subscriber the pipeline never builds — plain

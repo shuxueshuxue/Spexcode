@@ -139,7 +139,20 @@ test('content-filter edges: missing shim degrades to cat; a contract change re-r
   const attrs = join(proj, '.git', 'info', 'attributes')
   assert.ok(!existsSync(attrs) || !readFileSync(attrs, 'utf8').includes('spexcode'), 'attributes clean')
   assert.ok(!existsSync(join(proj, '.claude', 'settings.json')) && !existsSync(join(proj, '.codex', 'hooks.json')), 'shims removed')
+  assert.ok(!existsSync(join(proj, '.claude')) && !existsSync(join(proj, '.codex')), 'the emptied harness dirs themselves are gone — nothing left behind')
   assert.ok(existsSync(join(proj, '.spec')) && existsSync(join(proj, 'spexcode.json')), 'the spec ASSET is never touched')
+})
+
+test('a HOST-TRACKED empty contract file survives the backout (deleteIfEmpty guards on tracked-ness)', { skip: !gitAvailable() && 'git not available' }, () => {
+  const { proj, g, spex } = makeHost()
+  // the extreme host: a committed EMPTY CLAUDE.md the render folded a block into
+  writeFileSync(join(proj, 'CLAUDE.md'), '')
+  g('add', 'CLAUDE.md'); g('commit', '-qm', 'empty tracked contract file', '--no-verify')
+  spex('materialize')
+  assert.ok(readFileSync(join(proj, 'CLAUDE.md'), 'utf8').includes('spexcode:start'), 'block folded into the empty tracked file')
+  spex('uninstall', '.')
+  assert.ok(existsSync(join(proj, 'CLAUDE.md')), 'the tracked file is stripped, never deleted')
+  assert.ok(!status(g).includes('D '), `no deletion in status: ${status(g)}`)
 })
 
 test('content-filter invariant: a host file that BEGINS with blank lines round-trips byte-exactly', { skip: !gitAvailable() && 'git not available' }, () => {

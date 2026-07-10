@@ -10,12 +10,21 @@ type Config = {
   mainBranch?: string              // source-of-truth BRANCH worktrees fork from (default: auto-detected — see mainBranch())
   branchPrefix?: string            // how a branch names its node (default: "node/")
   preset?: string                  // the SELECTED init preset — which cumulative .config tier `spex init` seeds (default 'default'; seed-time only, no launcher gate; read by init.ts; see [[init-preset]])
-  // PRIVATE-OVERLAY mode ([[private-overlay]]) — belongs in the gitignored spexcode.local.json, NEVER the
-  // committed spexcode.json. When true, `spex materialize` leaves ZERO trace in the host's TRACKED files /
-  // shared history: the managed ignore entries (incl .spec + spexcode.json, which the DEFAULT mode commits —
-  // "git is the database") go to the per-clone `.git/info/exclude`, and any host-tracked contract file
-  // (CLAUDE.md/AGENTS.md) the system block folds into is marked `skip-worktree` so that block never stages.
-  // The dogfood becomes invisible to collaborators, trading away git-derived spec version history ([[source-of-truth]]).
+  // the RENDER POLICY ([[render-policy]]) — the ONE voted footprint knob: where the machine-independent
+  // RENDERS (the CLAUDE.md/AGENTS.md contract blocks, the .claude/.codex skills + agents) sit relative to the
+  // shared repo. Three words, validated fail-loud by materialize's resolveRenderPolicy:
+  //   'committed'  the renders are ordinary committed files (their entries leave the ignore block) — the
+  //                contract reaches un-adopted teammates/CI through the harness's native discovery, for free;
+  //   'ignored'    (default) the renders are generated + gitignored via the managed block in the TRACKED
+  //                .gitignore — the team sees the rule, never the products;
+  //   'hidden'     zero repo footprint — the ignore rules live in the per-clone .git/info/exclude, and a
+  //                HOST-TRACKED contract file is handled by the clean/smudge content filter ([[content-filter]]).
+  // `committed` is a project fact → spexcode.json; `hidden` is a host/person fact → spexcode.local.json.
+  // The schema deliberately has NO knob for the spec DATA: `.spec` + spexcode.json are ALWAYS tracked
+  // ("git is the database") — the vocabulary itself makes "untrack the spec" unsayable.
+  render?: 'committed' | 'ignored' | 'hidden'
+  // DEPRECATED ([[render-policy]] compat): the retired private-overlay toggle. Read as render:'hidden' (with a
+  // loud, non-fatal migration notice); its old data-untrack semantics are gone — see `spex guide footprint`.
   private?: boolean
   // which harness targets `spex materialize` delivers into — native ids ('claude'|'codex') or a {plugin:"<folder>"}
   // bundle; resolved + validated by [[harness-select]] (harness-select.ts). Default (omitted): all native harnesses.
@@ -51,10 +60,10 @@ type Config = {
   }
 }
 // the resolved LAYOUT convention — main/mainBranch/branchPrefix filled to defaults. `dashboard`, `sessions`,
-// `serve`, `harnesses`, and `preset` are frontend/runtime/policy concerns (read separately via readConfig —
+// `serve`, `harnesses`, `render`, and `preset` are frontend/runtime/policy concerns (read separately via readConfig —
 // preset by init.ts at seed time, harnesses by [[harness-select]]; see api-endpoint / sessions.ts maxActive /
 // gateway.ts), NOT layout fields, so they stay out of the convention rather than forcing a default.
-type Convention = Required<Omit<Config, 'dashboard' | 'sessions' | 'serve' | 'harnesses' | 'preset' | 'issues' | 'forge' | 'private'>>
+type Convention = Required<Omit<Config, 'dashboard' | 'sessions' | 'serve' | 'harnesses' | 'preset' | 'issues' | 'forge' | 'private' | 'render'>>
 
 export type Worktree = {
   path: string; branch: string | null; node: string | null

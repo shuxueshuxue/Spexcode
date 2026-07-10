@@ -1102,7 +1102,7 @@ export async function newSession(node: string | null, prompt: string, parent: st
   // self-launched one does — by auto-discovery, not CLI injection. This is why the launch line below carries no
   // --append-system-prompt / --settings, and why we no longer hide CLAUDE.md: hiding it suppressed the agent's
   // own memory load too. One delivery path for both launch modes ([[harness-delivery]]).
-  try { materialize(path) } catch { /* best-effort; the dispatch.sh gate re-renders on the first event anyway */ }
+  bootstrapMaterialize(rec)
   let launchPrompt = prompt
   if (ref) {
     // @@@ spec pointer - the ref (explicit --node, else the prompt's first [[id]] ref) named an EXISTING node.
@@ -1119,6 +1119,24 @@ export async function newSession(node: string | null, prompt: string, parent: st
   // queued → no process yet (offline liveness); just-launched → its socket is still booting (starting).
   const queued = after.status === 'queued'
   return toSession(after, queued ? 'queued' : 'working', queued ? 'offline' : 'starting')
+}
+
+// @@@ bootstrapMaterialize - the creation-time materialize is BOOTSTRAP, not best-effort: it is what renders
+// the worktree's .claude/.codex shims (the settings.json hook wiring) in the first place, and the dispatch.sh
+// re-render gate RIDES ON those hooks — so when this render fails, no hook ever fires, the gate never runs,
+// and the worker comes up ungoverned (no contract block, no stop-gate) with nothing saying so. Fail loud
+// instead: log the cause + worktree, and stamp the failure on the record's `note` so the board/watch surface
+// it. The launch still proceeds — a visibly degraded worker the human can close + re-dispatch beats a refused
+// launch, and status stays agent-authored ([[state]]): we stamp the note, never an inferred `error` state.
+// `doMaterialize` is injectable only so tests can simulate the failure.
+export function bootstrapMaterialize(rec: SessRec, doMaterialize: (proj: string) => unknown = materialize): void {
+  try {
+    doMaterialize(rec.worktreePath)
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error(`spex: materialize failed for worktree ${rec.worktreePath} — hooks/contract not rendered, worker launches UNGOVERNED: ${msg}`)
+    writeRecord({ ...rec, note: `materialize failed at creation — worker ungoverned (no hooks/contract): ${msg}` })
+  }
 }
 
 // @@@ waitForReady - after a launch/relaunch, the agent needs SEVERAL SECONDS to come up; launch() only TYPES

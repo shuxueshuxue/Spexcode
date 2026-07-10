@@ -116,28 +116,81 @@ test('codex worktree materialize plants the .codex anchor + unconditional projec
 
 // [[private-overlay]] — the session-worktree seam: git worktree add checks out only tracked content, so a
 // private-mode repo (untracked .spec + spexcode.json) would hand a dispatched agent a spec-blind, hook-dead
-// worktree. linkUntrackedSpecSources closes it by linking from main; on a default-shaped worktree that
-// already carries its own .spec the guard must no-op (one mechanism, no mode branch).
-test('private-overlay: a session worktree receives the untracked spec sources by link (and a default-mode worktree is untouched)', () => {
+// worktree. linkUntrackedSpecSources seeds each source by its semantics: PROJECT state (.spec, spexcode.json)
+// links (shared write-through is the point), HOST state (spexcode.local.json) copies (a worker's config write
+// must die with the worktree, not clobber the host's launchers), and whatever it seeds it hides in the SHARED
+// .git/info/exclude so nothing sits as force-add bait in the worktree's git status.
+test('private-overlay worktree seeding: project state links, host state copies (writes stay local), seeded entries hidden via shared info/exclude', { skip: !gitAvailable() && 'git not available' }, () => {
   const main = mkdtempSync(join(tmpdir(), 'spex-priv-main-'))
+  const g = (...args: string[]) => execFileSync('git', ['-C', main, ...args], { encoding: 'utf8' })
+  g('init', '-q', '-b', 'main')
+  g('config', 'user.email', 't@t.co'); g('config', 'user.name', 't')
+  writeFileSync(join(main, 'README.md'), '# app\n')
+  g('add', '-A'); g('commit', '-qm', 'init')
+  // private HALF-configured shape (the wild incident shape): untracked sources, NO exclude entries
   mkdirSync(join(main, '.spec'))
   writeFileSync(join(main, '.spec', 'x.md'), 'x')
   writeFileSync(join(main, 'spexcode.json'), '{}')
-  writeFileSync(join(main, 'spexcode.local.json'), '{"private":true}\n')
+  const hostLocal = '{"sessions":{"defaultLauncher":"reclaude"}}\n'
+  writeFileSync(join(main, 'spexcode.local.json'), hostLocal)
 
-  // private shape: worktree checkout carries none of the three → all linked, content readable through the link
-  const wt = mkdtempSync(join(tmpdir(), 'spex-priv-wt-'))
+  const wt = join(main, '.worktrees', 'wt')
+  g('worktree', 'add', '-q', wt, '-b', 'node/wt')
   linkUntrackedSpecSources(main, wt)
+
+  // project state arrives as LINKS (spec writes land in the main tree); host state as a COPY snapshot
   assert.ok(lstatSync(join(wt, '.spec')).isSymbolicLink(), '.spec arrives as a link')
   assert.equal(readFileSync(join(wt, '.spec', 'x.md'), 'utf8'), 'x', 'worktree reads the main spec tree through the link')
-  assert.ok(lstatSync(join(wt, 'spexcode.json')).isSymbolicLink() && lstatSync(join(wt, 'spexcode.local.json')).isSymbolicLink(), 'both configs linked')
+  assert.ok(lstatSync(join(wt, 'spexcode.json')).isSymbolicLink(), 'spexcode.json arrives as a link')
+  assert.ok(!lstatSync(join(wt, 'spexcode.local.json')).isSymbolicLink(), 'spexcode.local.json is a COPY, not a link')
+  assert.equal(readFileSync(join(wt, 'spexcode.local.json'), 'utf8'), hostLocal, 'the copy is a faithful snapshot (same mode/launchers)')
 
-  // default shape: the worktree already has its own .spec (git provided it) → never clobbered, gaps still filled
-  const wt2 = mkdtempSync(join(tmpdir(), 'spex-def-wt-'))
-  mkdirSync(join(wt2, '.spec'))
-  writeFileSync(join(wt2, '.spec', 'own.md'), 'own')
+  // a worker overwriting "its" local config must NOT write through to the host's real config
+  writeFileSync(join(wt, 'spexcode.local.json'), '{"forge":{"host":"gitlab"}}\n')
+  assert.equal(readFileSync(join(main, 'spexcode.local.json'), 'utf8'), hostLocal, 'the main checkout config survives the worker write')
+
+  // seeded entries are hidden in the COMMON info/exclude → invisible in the worktree AND the main checkout
+  const st = (dir: string) => execFileSync('git', ['-C', dir, 'status', '--porcelain'], { encoding: 'utf8' }).trim()
+  assert.equal(st(wt), '', 'worktree git status shows no seeded entry (no force-add bait)')
+  // main sees the rig's own `.worktrees/` (materialize's block ignores it in a real repo) but no seeded entry
+  assert.ok(!/\.spec|spexcode/.test(st(main)), 'main checkout no longer shows the sources (the shared exclude self-heals the half-configured repo)')
+  const exclude = readFileSync(join(main, '.git', 'info', 'exclude'), 'utf8')
+  for (const f of ['.spec', 'spexcode.json', 'spexcode.local.json'])
+    assert.ok(exclude.includes(`${f}\n`), `${f} written into the shared exclude`)
+
+  // idempotent: a second dispatch seeds its own worktree but appends nothing (check-ignore already says hidden)
+  const wt2 = join(main, '.worktrees', 'wt2')
+  g('worktree', 'add', '-q', wt2, '-b', 'node/wt2')
   linkUntrackedSpecSources(main, wt2)
-  assert.ok(!lstatSync(join(wt2, '.spec')).isSymbolicLink(), 'an existing .spec is untouched')
-  assert.equal(readFileSync(join(wt2, '.spec', 'own.md'), 'utf8'), 'own', 'its content is intact')
-  assert.ok(lstatSync(join(wt2, 'spexcode.local.json')).isSymbolicLink(), 'a genuinely missing file is still linked')
+  assert.equal(st(wt2), '', 'second worktree is clean as well')
+  assert.equal(readFileSync(join(main, '.git', 'info', 'exclude'), 'utf8'), exclude, 'no duplicate exclude entries on re-seed')
+})
+
+// default-mode shape: git already delivers the tracked sources, so the seed guards no-op (one mechanism, no
+// mode branch) — and since nothing git-visible was seeded, NO exclude residue is left behind.
+test('private-overlay worktree seeding: on a default-mode repo the guards no-op and leave no exclude residue', { skip: !gitAvailable() && 'git not available' }, () => {
+  const main = mkdtempSync(join(tmpdir(), 'spex-def-main-'))
+  const g = (...args: string[]) => execFileSync('git', ['-C', main, ...args], { encoding: 'utf8' })
+  g('init', '-q', '-b', 'main')
+  g('config', 'user.email', 't@t.co'); g('config', 'user.name', 't')
+  mkdirSync(join(main, '.spec'))
+  writeFileSync(join(main, '.spec', 'own.md'), 'own')
+  writeFileSync(join(main, 'spexcode.json'), '{}')
+  writeFileSync(join(main, '.gitignore'), 'spexcode.local.json\n')   // default render gitignores the local overlay
+  g('add', '-A'); g('commit', '-qm', 'init')
+  writeFileSync(join(main, 'spexcode.local.json'), '{"private":false}\n')
+
+  const wt = join(main, '.worktrees', 'wt')
+  g('worktree', 'add', '-q', wt, '-b', 'node/wt')
+  linkUntrackedSpecSources(main, wt)
+
+  // tracked sources came from the checkout — never clobbered; only the genuinely missing local overlay is seeded
+  assert.ok(!lstatSync(join(wt, '.spec')).isSymbolicLink(), 'the checked-out .spec is untouched')
+  assert.equal(readFileSync(join(wt, '.spec', 'own.md'), 'utf8'), 'own', 'its content is intact')
+  assert.ok(!lstatSync(join(wt, 'spexcode.local.json')).isSymbolicLink(), 'the local overlay is seeded as a copy')
+  // gitignored already → check-ignore short-circuits → no exclude write, no residue
+  const excludePath = join(main, '.git', 'info', 'exclude')
+  const exclude = existsSync(excludePath) ? readFileSync(excludePath, 'utf8') : ''
+  assert.ok(!exclude.includes('spexcode.local.json'), 'no exclude residue on a default-mode repo')
+  assert.equal(execFileSync('git', ['-C', wt, 'status', '--porcelain'], { encoding: 'utf8' }).trim(), '', 'worktree clean')
 })

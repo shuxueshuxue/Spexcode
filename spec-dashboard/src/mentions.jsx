@@ -11,8 +11,9 @@ import { useT } from './i18n/index.jsx'
 
 // a `[[<id>]]` (Obsidian double-bracket) node-mention token. Optional leading dot so `[[.config]]` resolves
 // (a node id is its dir basename — see [[spec-pointer]]). Group 1 = the id. Used for both the New Session
-// launch grammar and the running-session send-time resolution — one pattern.
-export const MENTION_RE = /\[\[(\.?[A-Za-z0-9_-]+)\]\]/g
+// launch grammar and the running-session send-time resolution — one pattern. Token chars are any unicode
+// letter/number (a CJK dir name is a legal node id), mirroring the server's MENTION.
+export const MENTION_RE = /\[\[(\.?[\p{L}\p{N}_-]+)\]\]/gu
 
 // the menu's spec path, minus the `.spec/` shell and `/spec.md` leaf, so a row reads like a breadcrumb.
 export const specPath = (p) => (p || '').replace(/^\.spec\//, '').replace(/\/spec\.md$/, '')
@@ -80,7 +81,7 @@ export function highlight(text, q) {
 // text between the `[[` and the caret. Returns the menu descriptor, or null when the caret isn't in a token.
 export function nodeMentionAt(value, caret, specs, focusId) {
   let i = caret - 1
-  while (i >= 0 && /[A-Za-z0-9_.\-]/.test(value[i])) i--
+  while (i >= 0 && /[\p{L}\p{N}_.\-]/u.test(value[i])) i--
   // i now points just left of the id run; the id starts at i+1. `[[` must occupy value[i-1] and value[i].
   if (i >= 1 && value[i - 1] === '[' && value[i] === '[') {
     const query = value.slice(i + 1, caret)
@@ -97,7 +98,7 @@ export function nodeMentionAt(value, caret, specs, focusId) {
 // collide (a bare `@` mid-word, e.g. an email, is not a boundary and stays inert).
 export function actorMentionAt(value, caret, sessions) {
   let i = caret - 1
-  while (i >= 0 && /[A-Za-z0-9_.\-]/.test(value[i])) i--
+  while (i >= 0 && /[\p{L}\p{N}_.\-]/u.test(value[i])) i--
   // i now points at the char just left of the handle run — the `@` sigil for an actor token.
   if (i >= 0 && value[i] === '@' && (i === 0 || /\s/.test(value[i - 1]))) {
     const query = value.slice(i + 1, caret)

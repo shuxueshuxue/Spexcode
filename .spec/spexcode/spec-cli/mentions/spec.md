@@ -34,6 +34,12 @@ grammar is uniform, the logic is tiny.
   real board session id; a dashboard `human`, an `unknown` CLI author, or a forge login is no session →
   null parent, a top-level worker, never a phantom nest (the same no-sender rule `spex new` from a plain
   shell follows).
+- **The grammar is script-agnostic.** A reference token is any run of unicode letters/numbers plus `-_`
+  (NFC), the same charset slugify already grants branch/worktree names — so a CJK dir name is a legal node
+  id and `[[中文节点]]` binds a launch exactly like an ASCII id, in the parser, the autocomplete's trigger
+  scan, and the server's node derivation alike. An ASCII-only charset at ANY of those entrances breaks "one
+  grammar, everywhere" in the worst way: the dropdown offers the node, the insert looks right, and the
+  session silently launches node-agnostic.
 - **The two never collide** because topic is `[[]]` and actor is `@` — no weighting, no third symbol, and no
   reserved verbs. Every legacy `@<node>` usage was **migrated to `[[node]]`**: the composer autocomplete + the
   board fresh-session key ([[session-console]] / [[term-input]]) and the server's node-derivation (`MENTION`).

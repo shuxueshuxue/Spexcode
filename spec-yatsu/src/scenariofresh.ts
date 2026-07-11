@@ -172,13 +172,35 @@ export function scenarioChangeCommits(idx: ScenarioIndex, yatsuPath: string, sce
   return idx.get(yatsuPath)?.get(scenario) ?? []
 }
 
+// (root, sha, path) -> the blob oid at that commit ('' = unresolvable: path absent there, or the commit
+// object gone). A FULL sha names an immutable tree, so entries never invalidate (freshness.ts's diffMemo
+// reasoning); the LRU only bounds memory, sized above the largest adopter reading corpus — one entry per
+// (reading, path) worst case — so a repeat board build never thrashes back into forking. This memo is what
+// keeps a fully off-history corpus (an adopter history rewrite) cheap on REPEAT builds: without it every
+// scenarioDiffers call re-forked `git rev-parse` for BOTH sides, per reading, per build (spexcode#39). A
+// symbolic rev (HEAD, a branch) moves, so it resolves live and is never cached.
+const FULL_SHA = /^[0-9a-f]{40}$/
+const oidMemo = new Map<string, string>()
+function oidAt(root: string, rev: string, path: string): string {
+  const resolve = () => { try { return git(['-C', root, 'rev-parse', `${rev}:${path}`]).trim() } catch { return '' } }
+  if (!FULL_SHA.test(rev)) return resolve()
+  const k = `${root}\x1f${rev}\x1f${path}`
+  const hit = oidMemo.get(k)
+  if (hit !== undefined) { oidMemo.delete(k); oidMemo.set(k, hit); return hit }
+  const v = resolve()
+  oidMemo.set(k, v)
+  if (oidMemo.size > 4096) oidMemo.delete(oidMemo.keys().next().value!)
+  return v
+}
+
 // canonical per-scenario SEMANTIC blocks of `rev:path` (the blockContent projection), for the off-history
-// content fallback ([[yatsu-core]]'s ContentProbe): resolve the blob oid first — oids are content-addressed,
-// so an unchanged file usually hits blockByOid straight from the index build — and parse only on a genuine
-// miss. null = the path is unreadable at that rev (absent, renamed since, or the rev itself is gone).
+// content fallback ([[yatsu-core]]'s ContentProbe): resolve the blob oid first (memoized above for a full
+// sha) — oids are content-addressed, so an unchanged file usually hits blockByOid straight from the index
+// build — and parse only on a genuine miss. null = the path is unreadable at that rev (absent, renamed
+// since, or the rev itself is gone).
 export function scenarioBlocksAt(root: string, rev: string, path: string): Map<string, string> | null {
-  let oid: string
-  try { oid = git(['-C', root, 'rev-parse', `${rev}:${path}`]).trim() } catch { return null }
+  const oid = oidAt(root, rev, path)
+  if (!oid) return null
   const hit = blockByOid.get(oid)
   if (hit) return hit
   try {

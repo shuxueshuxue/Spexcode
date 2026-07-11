@@ -25,7 +25,7 @@ that says the whole-tree figures at a glance. Keep it honest and cheap: it **cou
 
 A strip pinned to the **bottom-left** of the [[node-graph]], always on, sharing the minimal-HUD chrome. It
 reads the **same `specs` the graph plots**, so it stays in lock-step with the tiles, and it is **pure
-frontend derivation** — every figure folds from the `/api/board` poll, no new endpoint and no new vocabulary.
+frontend derivation** — every figure folds from the `/api/graph` poll, no new endpoint and no new vocabulary.
 The composition and attention figures are a **count of distinct things**, never a sum of badges: summing
 per-node badges double-counts whatever spans nodes (an issue linked to several nodes; a shared file that
 drifts under all its owners), so the strip counts the underlying things once. Coverage is the deliberate

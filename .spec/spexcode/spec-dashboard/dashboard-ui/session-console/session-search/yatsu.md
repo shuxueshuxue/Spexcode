@@ -54,7 +54,7 @@ scenarios:
       - spec-dashboard/src/SessionInterface.jsx
 ---
 
-# session-board-search — yatsu
+# session-search — yatsu
 
 Measure through the **real running dashboard in a browser**, YATU-style: open the session console with
 `Enter`, fire the actual ⌘/Ctrl+/ chord, and drive the real palette — never a direct call into `SpecSearch`'s

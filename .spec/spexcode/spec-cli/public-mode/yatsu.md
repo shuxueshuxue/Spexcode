@@ -8,9 +8,9 @@ scenarios:
       protected surface, a wrong password, the correct password, and the terminal socket with and without
       the minted auth cookie.
     expected: |
-      Unauthenticated: GET /api/board → 401; GET / → 302 to /login. POST /login with a wrong password → 401
+      Unauthenticated: GET /api/graph → 401; GET / → 302 to /login. POST /login with a wrong password → 401
       (the login page re-rendered with the error). POST /login with the correct password → 302 to / with an
-      httpOnly, Secure auth cookie. With that cookie: GET / serves the dashboard index, GET /api/board returns
+      httpOnly, Secure auth cookie. With that cookie: GET / serves the dashboard index, GET /api/graph returns
       the proxied board JSON (200, application/json). A WebSocket upgrade to /api/sessions/:id/socket is
       destroyed with no response when the cookie is absent and completes (101 Switching Protocols) when it is
       present. A forged cookie value → 401. Only the public port listens externally; the supervisor and child
@@ -30,10 +30,10 @@ scenarios:
     tags: [backend-api]
     description: >
       Run `spex serve --public` with NO password (no --password / SPEXCODE_PASSWORD) and drive the public
-      endpoint: the startup line, an unauthenticated GET /, GET /api/board, and whether any /login gate exists.
+      endpoint: the startup line, an unauthenticated GET /, GET /api/graph, and whether any /login gate exists.
     expected: |
       Startup prints a loud "OPEN — no password" warning and the gateway logs "OPEN (no password)". With no
-      cookie: GET / returns the dashboard (200, NOT a 302 to /login), GET /api/board returns the proxied board
+      cookie: GET / returns the dashboard (200, NOT a 302 to /login), GET /api/graph returns the proxied board
       JSON (200), and there is no /login gate — the login layer is absent entirely. The operator chose open
       access and was warned; nothing is silently gated or silently exposed.
     code: spec-cli/src/gateway.ts
@@ -41,8 +41,8 @@ scenarios:
     tags: [backend-api]
     code: spec-cli/src/gateway.ts
     description: >-
-      Against a real running gateway (authenticated), fetch /api/board and a dist JS asset twice — with and
-      without `Accept-Encoding: gzip` — and subscribe to /api/board/stream WITH gzip accepted, then trigger
+      Against a real running gateway (authenticated), fetch /api/graph and a dist JS asset twice — with and
+      without `Accept-Encoding: gzip` — and subscribe to /api/graph/stream WITH gzip accepted, then trigger
       a board change and time the event.
     expected: >-
       Compressible bodies come back `Content-Encoding: gzip` at a fraction of the plain size (board JSON

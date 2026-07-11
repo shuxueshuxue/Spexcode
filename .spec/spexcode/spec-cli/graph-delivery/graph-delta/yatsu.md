@@ -3,17 +3,17 @@ scenarios:
   - name: push-renders-without-refetch
     description: >
       Open the dashboard in a real browser (worktree vite over a worktree backend), open the session
-      panel, and count network requests to /api/board (excluding the stream). Inject a real board change
+      panel, and count network requests to /api/graph (excluding the stream). Inject a real board change
       server-side: a session record appearing in the per-user store with a distinct name and an
       awaiting/merge state. Watch for the name to render on the panel, and count refetches while it does.
     expected: >
       The injected session renders on the panel within a few seconds, delivered by the delta stream —
-      the /api/board refetch count during the change is exactly zero, and the board shows the change
+      the /api/graph refetch count during the change is exactly zero, and the board shows the change
       whole (name + review status), never a partial or mixed state.
     tags: [frontend-e2e]
   - name: delta-beats-snapshot
     description: >
-      Subscribe to /api/board/stream?mode=delta directly, read the board-full size, then make a small
+      Subscribe to /api/graph/stream?mode=delta directly, read the board-full size, then make a small
       real change (add/remove one session record in the store) and read the next event's size and its
       from/to chain against the held tag.
     expected: >

@@ -733,7 +733,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             <button className={active === 'new' ? 'si-pill new on' : 'si-pill new'} data-tip={t('session.newSessionTitle')} aria-label={t('session.newSessionTitle')} onClick={() => setSel('new')}>
               <span className="si-pill-glyph"><Icon name="plus" size={15} strokeWidth={2} /></span>
             </button>
-            {/* the click twin of ⌘/Ctrl+/ ([[session-board-search]]) — same palette open, the tooltip
+            {/* the click twin of ⌘/Ctrl+/ ([[session-search]]) — same palette open, the tooltip
                 teaches the chord. Momentary (no .on state): the palette floats above, no tab switches. */}
             <button className="si-pill search" data-tip={t('session.searchTitle')} aria-label={t('session.searchTitle')} onClick={onOpenSearch}>
               <span className="si-pill-glyph"><Icon name="search" size={15} /></span>

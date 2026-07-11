@@ -20,7 +20,7 @@ function resolveParent(path: string, byDir: Record<string, string>): string | nu
   return null
 }
 
-// the board's eval summary ([[board-lean]]): the LATEST reading per scenario, each kept as the VERBATIM
+// the board's eval summary ([[graph-lean]]): the LATEST reading per scenario, each kept as the VERBATIM
 // reading object — a filter, never a projection. Consumers hang optional fields off a reading (the
 // annotator's timelineBlob rides only video readings), so dropping a field here is a SILENT downstream
 // degradation no error would surface; the field-preservation unit test pins this contract.
@@ -29,7 +29,7 @@ export function latestPerScenario<T extends { scenario: string }>(readings: T[])
   return readings.filter((r) => !seen.has(r.scenario) && (seen.add(r.scenario), true))
 }
 
-// the board's scenario fold ([[board-lean]]): the declared set rides SLIM — {name, tags} is everything an
+// the board's scenario fold ([[graph-lean]]): the declared set rides SLIM — {name, tags} is everything an
 // overview surface joins state onto (badge, stats, focus rows, search rows); the prose (description/
 // expected) and per-scenario code stay off the hot poll, carried by `/api/specs/lite` and `/api/specs/:id/evals`.
 export function slimScenarios(scenarios: { name: string; tags?: string[] }[]): { name: string; tags?: string[] }[] {
@@ -96,7 +96,7 @@ export async function buildBoard() {
   const nodes = [
     ...specs.map((n: any) => {
       const overlays = overlaysByNode[n.id] || []
-      // `body` and its derivation `parts` are DROPPED from the board payload ([[board-lean]]): together ~56% of
+      // `body` and its derivation `parts` are DROPPED from the board payload ([[graph-lean]]): together ~56% of
       // the bytes, and detail the graph overview never renders. The detail view fetches them per node from
       // `/api/specs/:id/content` on open, and the search palette fetches the body corpus from `/api/specs/lite`
       // once on open — both off this hot poll. `undefined` makes JSON.stringify omit the keys.
@@ -122,7 +122,7 @@ export async function buildBoard() {
     if (open.length) n.openIssues = open
   }
 
-  // fold each yatsu node's eval state onto it — as the LEAN summary ([[board-lean]]): `evals` carries only
+  // fold each yatsu node's eval state onto it — as the LEAN summary ([[graph-lean]]): `evals` carries only
   // the LATEST reading per scenario (newest-first), which is all any overview surface consumes (the score
   // badge, stats, search all reduce to latest-per-scenario anyway); the full timeline stays off the board
   // and is lazy-loaded by the eval tab from `/api/specs/:id/evals`. `scenarios` (the declared set) rides
@@ -130,7 +130,7 @@ export async function buildBoard() {
   // (description/expected) and per-scenario code off the hot poll: they ride the `/api/specs/lite` corpus
   // (search palette, focus-panel preview) and the `/api/specs/:id/evals` timeline (eval tab).
   // evalContext reuses the specs + driftIndex above; evalTimeline short-circuits non-yatsu nodes. The
-  // yatsu walk rides fs/promises ([[board-cache]]) so it yields the event loop instead of stalling /health.
+  // yatsu walk rides fs/promises ([[graph-cache]]) so it yields the event loop instead of stalling /health.
   const ynodes = await yatsuNodesAsync(root)
   const ectx = await evalContext(root, specs, idx, hidx, undefined, ynodes)
   await Promise.all(nodes.map(async (n) => {
@@ -144,6 +144,6 @@ export async function buildBoard() {
 
   const dash = readConfig(root).dashboard
   // project names the tab ([[tab-title]]); projectIcon is the tab favicon ([[tab-icon]]) — both ride the
-  // /api/board poll so they re-derive from whichever backend the viewer reached. Empty icon → frontend default.
+  // /api/graph poll so they re-derive from whichever backend the viewer reached. Empty icon → frontend default.
   return { nodes, sessions: sess, project: dash?.title || basename(root), projectIcon: dash?.icon || '' }
 }

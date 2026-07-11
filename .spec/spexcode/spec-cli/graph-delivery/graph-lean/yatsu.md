@@ -3,7 +3,7 @@ scenarios:
   - name: lean-board-detail-and-search-intact
     tags: [frontend-e2e, backend-api]
     description: >
-      Measure through the running dashboard against a live backend. Confirm `/api/board` no longer carries any
+      Measure through the running dashboard against a live backend. Confirm `/api/graph` no longer carries any
       node's `body` or `parts` (payload trimmed >50%), yet the two consumers of that prose still work off the
       hot poll: opening a node's detail lazily fetches `/api/specs/:id/content` and renders the two labelled
       cards — raw source (human) · expanded spec (agent); and the search palette, after fetching the body
@@ -30,7 +30,7 @@ scenarios:
   - name: eval-history-off-the-board
     tags: [frontend-e2e, backend-api]
     description: >
-      Confirm `/api/board` carries only the latest reading per scenario (a node's `evals` length equals its
+      Confirm `/api/graph` carries only the latest reading per scenario (a node's `evals` length equals its
       scenario count, not its filing count), then open a node with real reading history and switch to its
       eval tab in a real browser: the tab must lazy-load the FULL timeline from `/api/specs/:id/evals` and
       render more rows than the board summary shipped, with no stuck spinner and a clean console. Score
@@ -44,7 +44,7 @@ scenarios:
   - name: scenario-prose-off-the-board
     tags: [frontend-e2e, backend-api]
     description: >
-      Confirm the board's `scenarios` fold is slim — every declared scenario on `/api/board` carries only
+      Confirm the board's `scenarios` fold is slim — every declared scenario on `/api/graph` carries only
       `name` (+ `tags`), never `description`/`expected`/`code` — and that the prose still reaches its three
       viewers off the hot poll: `/api/specs/lite` rows for yatsu nodes carry the declared scenarios whole;
       the `/` palette, after its corpus fetch, surfaces a scenario row by a phrase that exists ONLY in that
@@ -58,10 +58,10 @@ scenarios:
       prose while every prose surface still shows it.
     code: [spec-cli/src/board.ts, spec-cli/src/index.ts, spec-dashboard/src/corpus.js, spec-dashboard/src/SpecSearch.jsx, spec-dashboard/src/FocusPanel.jsx]
 ---
-# board-lean — measurement
+# graph-lean — measurement
 
 YATU: measure through the running dashboard in a real browser (dev server → a live backend), not a unit
-test. The loss is only visible end-to-end: the backend must actually omit `body`+`parts` from `/api/board`,
+test. The loss is only visible end-to-end: the backend must actually omit `body`+`parts` from `/api/graph`,
 the `NodeView` must lazily fetch and render the two-part cards, and the search palette must still rank nodes
 over their prose via the lazily-fetched corpus — no regression to the overview. File the two-part detail
 screenshot with `spex yatsu eval board-lean --scenario lean-board-detail-and-search-intact --image <png> --pass`.

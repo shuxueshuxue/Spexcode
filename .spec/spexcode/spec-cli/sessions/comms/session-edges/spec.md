@@ -1,50 +1,51 @@
 ---
-title: graph
+title: session-edges
 status: active
 hue: 280
-desc: The live session-monitor network — edge A→B iff A subscribes to B (`spex watch` stream or `spex wait` one-shot) — over one shared poll + edge lifecycle.
+desc: The live session-monitor network — edge A→B iff A subscribes to B (`spex session watch` stream or `spex session wait` one-shot) — over one shared poll + edge lifecycle.
 related:
   - spec-cli/src/sessions.ts
 ---
 
-# graph
+# session-edges
 
 ## raw source
 
-Sessions form a **directed monitor network** — one of the two ties the graph draws (the *talking* tie is
-[[comms-edge]]'s). A **monitor** edge means exactly one thing: **A→B iff agent A is right now running `spex
-watch`/`spex wait` on B**. The monitor network is **derived from live watches, never persisted** — no
-subscription store, no datastore, no file; a monitor edge exists **only while that watch runs**.
+Sessions form a **directed monitor network** — one of the two ties the edges payload carries (the *talking*
+tie is [[comms-edge]]'s). A **monitor** edge means exactly one thing: **A→B iff agent A is right now running
+`spex session watch`/`spex session wait` on B**. The monitor network is **derived from live watches, never
+persisted** — no subscription store, no datastore, no file; a monitor edge exists **only while that watch
+runs**.
 
 ## expanded spec
 
-When a `spex watch` starts it **registers with the backend** — reporting its own session id
+When a `spex session watch` starts it **registers with the backend** — reporting its own session id
 (`ownSessionId` — the harness env var, e.g. `CLAUDE_CODE_SESSION_ID`; no worktree fallback) as the watcher plus its target selectors —
 **heartbeats** while it runs, and **deregisters on exit**; a missed heartbeat drops the registration as a
 backstop. Registrations are **in-memory in the server** (its single owner); the watch reports over HTTP
-(`POST …/graph/watch` register+heartbeat, `…/unwatch`). A restart starts empty and live watches re-register
-on their next beat. **Best-effort on the watch side** — a down backend delays only the edge, never the
-event stream.
+(`POST …/edges/watch` register+heartbeat, `…/edges/unwatch`). A restart starts empty and live watches
+re-register on their next beat. **Best-effort on the watch side** — a down backend delays only the edge,
+never the event stream.
 
-`GET /api/sessions/graph` returns `{ nodes, edges }`: live sessions as nodes. This node owns the **monitor**
+`GET /api/sessions/edges` returns `{ nodes, edges }`: live sessions as nodes. This node owns the **monitor**
 edges, **computed at read time** from the registrations (the persisted **comms** edges on the same payload
-are [[comms-edge]]'s). Each watcher's **selectors are resolved live** with the same matcher `spex
-ls`/`watch` use, so a **global** watcher links to **every** session (incl. ones launched after the watch
+are [[comms-edge]]'s). Each watcher's **selectors are resolved live** with the same matcher `spex session
+ls`/`session watch` use, so a **global** watcher links to **every** session (incl. ones launched after the watch
 started) and a node/branch selector picks up future matches too. Self-edges, edges touching a non-live
-session, and duplicate A→B all drop out. This stays **isolated from the board assembler** — nothing here
+session, and duplicate A→B all drop out. This stays **isolated from the graph assembler** — nothing here
 touches `buildBoard` or the spec tree; the dashboard's [[session-graph]] is its observational surface.
 
-### `spex watch` — the lifecycle event stream
+### `spex session watch` — the lifecycle event stream
 
-`spex watch [SEL…]` is also the event source for Claude Code's Monitor tool (`watchSessions`), emitting
+`spex session watch [SEL…]` is also the event source for Claude Code's Monitor tool (`watchSessions`), emitting
 the **complete session lifecycle**, not only actionable transitions. A session's **first sighting** emits a
 `launched` event (once per id, never re-fired, so working/idle toggles don't flap); then each actionable
-transition (review / done / close-pending / offline / error / asking) and the removal (`closed`). `closed` fires the moment a session's id is **absent from the board**, a **definitive**
-removal: the board lists every worktree that exists (a flaky detail read degrades a row, never drops it; a
+transition (review / done / close-pending / offline / error / asking) and the removal (`closed`). `closed` fires the moment a session's id is **absent from the graph payload**, a **definitive**
+removal: the payload lists every worktree that exists (a flaky detail read degrades a row, never drops it; a
 failed enumeration skips the poll — see [[worktree-resilience]]), so absence means the directory is actually
 gone — no flicker debounce needed. Presence is tracked across **all** statuses (the
 `--status` filter governs only which transitions are *emitted*, never presence), so a status leaving the
-filter is never misread as a removal. The board it polls is an injected **`source`** (the backend client),
+filter is never misread as a removal. The payload it polls is an injected **`source`** (the backend client),
 so a watch streams whatever backend `SPEXCODE_API_URL` names — even a **remote** one — and a backend-down
 poll warns **once** and keeps the stream alive (never a phantom mass-`closed`). The net feed `launched →
 [actionable transitions] → closed` is a true "subscribe to all session changes" stream — each watch process
@@ -52,12 +53,12 @@ one subscriber, the selector its subscription.
 
 ### Two consumption policies, one subscription: `watch` (stream) and `wait` (one-shot)
 
-`watch` and `wait` are the SAME subscription — poll the board `source`, draw the `watcher→targets` edge —
+`watch` and `wait` are the SAME subscription — poll the graph `source`, draw the `watcher→targets` edge —
 under two **consumption policies**; only how they consume transitions differs:
 
-- **`spex watch [SEL…]`** — *stream forever*, for a human monitoring the board. Emits every actionable
+- **`spex session watch [SEL…]`** — *stream forever*, for a human monitoring the sessions. Emits every actionable
   transition; never exits (so a turn must never block on it).
-- **`spex wait <id>`** — *take-one-and-exit*, an agent's event-loop primitive. Polls until `<id>` is
+- **`spex session wait <id>`** — *take-one-and-exit*, an agent's event-loop primitive. Polls until `<id>` is
   actionable, prints that status, and **exits** — an agent backgrounds it and the harness re-invokes when
   the command exits, so the exit IS the wake-up. (Emit is silent: a backgrounded wait wants one clean status
   line, not the stream.) Because a FOREGROUND wait freezes the calling agent's whole turn, that warning
@@ -68,10 +69,10 @@ under two **consumption policies**; only how they consume transitions differs:
 
 **Edge-drawing belongs to the subscription, not to `watch`** (`withWatchEdge` in `cli.ts`): BOTH commands
 report the `watcher→targets` edge (register + TTL heartbeat) for as long as they run and clear it on exit.
-So a supervisor backgrounding `spex wait <worker>` is **visible on the graph** for the whole wait — N waits
-draw N independent edges — and each clears the instant its wait resolves (supervision ended). Edge writes
-are **best-effort**: the edge is cosmetic, so an unreachable backend never fails the wait (and a killed
-process's edge expires by TTL), even though the poll itself does need the backend.
+So a supervisor backgrounding `spex session wait <worker>` is **visible on the monitor network** for the whole
+wait — N waits draw N independent edges — and each clears the instant its wait resolves (supervision ended).
+Edge writes are **best-effort**: the edge is cosmetic, so an unreachable backend never fails the wait (and a
+killed process's edge expires by TTL), even though the poll itself does need the backend.
 
 `wait` is **guaranteed to terminate** — the one invariant that matters for an event loop. A `--timeout`
 (default 1200s) sets a deadline checked **every poll, before every sleep, even after a thrown poll**, so a
@@ -95,5 +96,5 @@ tmux/agent is genuinely gone — while a **backend failure** exits with its own 
 **outside** that vocabulary: `backend-unreachable` (the whole budget spent retrying an unreachable backend)
 or `backend-error` (reachable but broken, immediate), each with the failure detail on stderr. The exit codes
 keep the outcomes machine-distinct: `0` actionable status, `1` plain timeout (backend fine, session never
-actionable), `2` target gone, `3` backend failure. A slow or dead board can therefore delay a wait's answer,
+actionable), `2` target gone, `3` backend failure. A slow or dead backend can therefore delay a wait's answer,
 but can never make it *claim* anything about the session (the false-`offline` supervisor trap, issue #40).

@@ -21,7 +21,7 @@ status stays git-derived — the two authorities never cross.
 ## raw source
 
 Surface each spec node's bound open issues on the dashboard. Backend: fold each node's open-issue
-count + list into the board via a resident `ForgeCache`, served on the existing `/api/board` nodes —
+count + list into the board via a resident `ForgeCache`, served on the existing `/api/graph` nodes —
 non-blocking (serve the last reconcile, refresh in the background) and silent when there's no forge/`gh`
 (no badge, no error). Frontend: one glance badge on the tile (count, hue distinct from the status dot, like
 the drift-badge), only when > 0; the issue LIST is read in the [[focus-panel]] for the focused node

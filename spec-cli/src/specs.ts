@@ -98,7 +98,7 @@ function walk(dir: string, parent: string | null, acc: Raw[]) {
 // as one path segment. So the disambiguation separator is '_': like '/' it never occurs inside a dir
 // basename (so the join stays unambiguous), but unlike '/' it is a URL/wikilink/DOM-safe unreserved char,
 // so a collision-qualified id (e.g. `.config_spec-scout`) stays a single token everywhere it is resolved.
-// Exported as the ONE mint every id producer shares: spec-yatsu mints its node ids through this same
+// Exported as the ONE mint every id producer shares: spec-eval mints its node ids through this same
 // function over this same universe (every spec node), so a colliding leaf carries one canonical id
 // system-wide instead of a second, diverging bare-leaf scheme.
 export function mintIds(segs: string[][]): string[] {
@@ -170,14 +170,14 @@ function claimMatcher(file: string): (cf: string) => boolean {
   }
 }
 
-// spec node(s) that GOVERN a file (frontmatter `code:` — source of truth, drives drift/yatsu); reads only
+// spec node(s) that GOVERN a file (frontmatter `code:` — source of truth, drives drift + eval freshness); reads only
 // frontmatter (cheap, no git) so a per-edit hook can call it.
 export function specOwners(file: string): { id: string; desc: string }[] {
   const claims = claimMatcher(file)
   return raws().filter((r) => list(r.fm.code).some(claims)).map((r) => ({ id: r.id, desc: str(r.fm.desc) }))
 }
 
-// spec node(s) that REFERENCE a file (frontmatter `related:` — carries coverage, never drift/yatsu):
+// spec node(s) that REFERENCE a file (frontmatter `related:` — carries coverage, never drift, never eval freshness):
 // [[governed-related]]'s other half, same claim rule, same cheap frontmatter-only read.
 export function specRelated(file: string): { id: string; desc: string }[] {
   const claims = claimMatcher(file)
@@ -234,7 +234,7 @@ export async function loadSpecs() {
       .filter((d) => d.behind > 0)
     const drift = driftFiles.reduce((a, d) => a + d.behind, 0)
     // related drift is the SOFT tier ([[governed-related]]): same ancestry basis, but it stays OUT of
-    // `drift` — it never feeds status, the commit gate, or yatsu. It surfaces only as a lint warn nudge.
+    // `drift` — it never feeds status, the commit gate, or eval freshness. It surfaces only as a lint warn nudge.
     const relatedDriftFiles = related
       .map((f) => ({ file: f, behind: driftFor(didx, S, f) }))
       .filter((d) => d.behind > 0)

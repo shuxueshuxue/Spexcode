@@ -2,7 +2,7 @@
 title: spex graph (tree render)
 status: active
 hue: 200
-desc: The CLI's human-readable graph view — the assembled board as an indented, status-coloured terminal tree with drift/stale-yatsu/open-issues badges.
+desc: The CLI's human-readable graph view — the assembled board as an indented, status-coloured terminal tree with drift/stale-eval/open-issues badges.
 code:
   - spec-cli/src/tree.ts
 ---
@@ -13,7 +13,7 @@ pure-CLI user had `spex graph --json`'s raw payload and no way to *see* the tree
 the SAME assembled board the dashboard's tidy-tree draws (merged tree + overlay + eval fold, via
 `buildBoard()` — no new read path, so CLI and dashboard can never disagree about the graph), printed
 as an indented terminal tree, one node per line: id, derived status, title, and the attention
-badges the dashboard puts on a node — drifted-file count, stale-yatsu count (declared scenarios
+badges the dashboard puts on a node — drifted-file count, stale-eval count (declared scenarios
 whose latest reading has aged), and open-issue count. A ghost node (being added by a worktree)
 says so.
 

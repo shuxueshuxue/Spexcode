@@ -6,7 +6,7 @@ desc: Drift is judged by true git ancestry — a governed commit counts iff it i
 code:
   - spec-cli/src/git.ts
 related:
-  - spec-yatsu/src/freshness.ts
+  - spec-eval/src/freshness.ts
 ---
 # drift-by-ancestry
 
@@ -29,13 +29,13 @@ walk therefore carries the DAG itself: the one cached `git log HEAD` is enriched
 parent edges, and "newer than the spec" is answered by in-memory reachability (memoized per queried
 sha as a bitset over the walk) — the exact equivalent of `git rev-list version..HEAD -- <file>`, with
 no per-query git fork, so "scale with history, not node count" still holds. The same one rule feeds
-every consumer of the signal — the [[spec-lint]] drift warning, the board's drift counts, and yatsu's
-code/scenario freshness axes ([[yatsu-core]]) — with no parallel heuristic beside it.
+every consumer of the signal — the [[spec-lint]] drift warning, the board's drift counts, and the eval engine's
+code/scenario freshness axes ([[eval-core]]) — with no parallel heuristic beside it.
 
 A sha the walk never met — not reachable from HEAD — keeps a conservative rule on the drift side:
 drift measured *from* it reads 0 (no basis on HEAD to measure from). A reading stamped *with* it no
-longer folds into a blanket stale: where ancestry can't testify, yatsu falls back to comparing
-CONTENT between the anchor's tree and HEAD ([[yatsu-core]]'s content fallback) — a fold, rebase,
+longer folds into a blanket stale: where ancestry can't testify, eval freshness falls back to comparing
+CONTENT between the anchor's tree and HEAD ([[eval-core]]'s content fallback) — a fold, rebase,
 squash-merge or cherry-pick that left governed content byte-identical reads fresh, and only an
 anchor whose commit object is truly gone stays conservatively stale (named as such). Distinguishing
 a genuine orphan from a reachable-but-unmerged branch is still never attempted — the content compare

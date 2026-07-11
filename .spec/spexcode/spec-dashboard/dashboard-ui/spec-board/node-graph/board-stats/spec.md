@@ -3,7 +3,7 @@ title: board-stats
 status: active
 hue: 210
 session: 89e4d64b-8dde-4bd1-b60c-a3825caaba67
-desc: A glanceable bottom-left strip that tallies the tree's badges — composition (status dots) and attention (drift nodes + distinct open issues) counted per node, coverage (yatsu circles) counted per scenario — and walks focus through the nodes behind any chip, one per click.
+desc: A glanceable bottom-left strip that tallies the tree's badges — composition (status dots) and attention (drift nodes + distinct open issues) counted per node, coverage (eval circles) counted per scenario — and walks focus through the nodes behind any chip, one per click.
 code:
   - spec-dashboard/src/BoardStats.jsx
 related:
@@ -29,7 +29,7 @@ frontend derivation** — every figure folds from the `/api/board` poll, no new 
 The composition and attention figures are a **count of distinct things**, never a sum of badges: summing
 per-node badges double-counts whatever spans nodes (an issue linked to several nodes; a shared file that
 drifts under all its owners), so the strip counts the underlying things once. Coverage is the deliberate
-exception — it counts **scenarios**, the real unit of yatsu loss (see below), so its base is larger and more
+exception — it counts **scenarios**, the real unit of eval loss (see below), so its base is larger and more
 honest than a node roll-up.
 
 Three clusters, each answering one question:
@@ -39,14 +39,14 @@ Three clusters, each answering one question:
 - **Attention — what NEEDS a human.** `⚠N` counts **nodes whose code is ahead of their spec**; `◆N` counts
   **distinct open issues** linked to the tree (deduped by number). Both count distinct things — an issue on
   three nodes is one issue. The board only knows node-linked issues, so `◆` is the *linked* open set.
-- **Coverage — how well-MEASURED the tree is.** The yatsu **score circles**, drawn through the very
-  `ScoreBadge` the tiles render ([[yatsu-score-badge]]) — ONE vocabulary: green `✓` fresh pass, red `✗` fresh
+- **Coverage — how well-MEASURED the tree is.** The eval **score circles**, drawn through the very
+  `ScoreBadge` the tiles render ([[eval-score-badge]]) — ONE vocabulary: green `✓` fresh pass, red `✗` fresh
   fail, a **stale** verdict as the **greyed mark inside the ring** (never an invented glyph), and a faint
   empty ring for a *blind spot* (declares scenarios, no current verdict). Here the count is per **scenario**,
   not per node: a node owns several scenarios, each in its own state, so each adds to its state's bucket (a
   never-measured scenario folds into the blind-spot empty). This is the honest unit of loss and gives the row
   a larger, truer base than collapsing every node to one worst-first verdict. It counts only what the frontend
-  can see — not a "should have a scenario" census, which lives in `spex yatsu scan`.
+  can see — not a "should have a scenario" census, which lives in `spex eval lint`.
 
 Every chip is a **walk**, always at **node** granularity: clicking steps focus to the **next** node it counts,
 entering at the first when focus is outside the ring and **wrapping** — so repeated clicks cycle through them
@@ -58,7 +58,7 @@ the scenario is the unit COUNTED, the node stays the unit WALKED. A **zero-count
 Desktop-only — it mounts in the graph shell the phone never renders ([[mobile-ui]]).
 
 `BoardStats.jsx` is this node's only owned source: mounted by the shared App shell, **reusing** `cycleNext`
-([[keyboard-nav]]) and `ScoreBadge` ([[yatsu-score-badge]]) rather than re-implementing them, and adding a
+([[keyboard-nav]]) and `ScoreBadge` ([[eval-score-badge]]) rather than re-implementing them, and adding a
 `.board-stats` block to the shared stylesheet ([[node-graph]] keeps `styles.css`) plus a `stats` i18n section
 it owns. So a later change to the shell, the cycle primitive, or the graph is *their* node's drift, not this
 strip's.

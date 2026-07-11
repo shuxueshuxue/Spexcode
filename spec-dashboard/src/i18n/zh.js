@@ -103,16 +103,16 @@ export default {
 
   sessionEval: {
     btn: '评测',
-    btnTitle: '切换到此会话的评测页 —— 测得的 yatsu 证据、改动与合并门禁',
+    btnTitle: '切换到此会话的评测页 —— 测得的评测证据、改动与合并门禁',
     none: '此会话暂无评测',
     sessionN: ({ n }) => `✦ 本会话 ${n} 条`,
     inherited: '继承基线 · 其他会话的最新读数',
     export: '导出',
     exportTitle: '导出本次评测为自包含的 HTML 报告',
     empty: '该会话尚无测量。',
-    blindHint: '已声明但从未测量 —— 这就是未清的 loss；用 spex yatsu eval 测一次。',
+    blindHint: '已声明但从未测量 —— 这就是未清的 loss；用 spex eval add 测一次。',
     unmeasured: '未测量',
-    noYatsu: 'UI 代码 · 无 yatsu.md',
+    noEvalFile: 'UI 代码 · 无 eval.md',
   },
 
   time: {
@@ -242,8 +242,8 @@ export default {
     diffLabel: '规格行差异',
     loadingHistory: '正在加载历史…',
     eval: {
-      noScenarios: '尚未声明场景 —— 此节点没有可测量的 yatsu.md。',
-      noReadings: '尚无测量 —— 运行 `spex yatsu eval` 归档一次。已声明的场景：',
+      noScenarios: '尚未声明场景 —— 此节点没有可测量的 eval.md。',
+      noReadings: '尚无测量 —— 运行 `spex eval add` 归档一次。已声明的场景：',
       staleAxes: ({ axes }) => `已过期：自本次读取以来 ${axes} 已变动`,
       staleLabel: '已过期：',
       staleReadoutTitle: '这条读取已落后——列出自它以来变动的轴；对于 code 轴，还显示是哪些受管文件漂移了、以及落后了几个提交（+N）',
@@ -265,7 +265,7 @@ export default {
     },
   },
 
-  // 左下角的看板统计条 —— 把节点徽章在整棵树上「计数」（去重的不同对象，而非徽章求和），唯独覆盖度按「场景」计数（yatsu 损失的真实单位）。每个小块的悬停说明标明它统计什么；点击会沿其背后的节点逐个走查（每点一次走到下一个）。
+  // 左下角的看板统计条 —— 把节点徽章在整棵树上「计数」（去重的不同对象，而非徽章求和），唯独覆盖度按「场景」计数（评测损失的真实单位）。每个小块的悬停说明标明它统计什么；点击会沿其背后的节点逐个走查（每点一次走到下一个）。
   stats: {
     aria: '看板统计',
     totalTitle: ({ n }) => `树中共有 ${n} 个规格节点`,
@@ -279,7 +279,7 @@ export default {
     scoreEmpty: ({ n }) => `${n} 个场景未测量或未评分（盲点）—— 点击逐个走查承载它们的节点`,
   },
 
-  // yatsu 评分词汇 —— 节点卡片计数、聚焦面板与 eval 标签页共用一套词汇。count 是卡片/状态栏的计数；
+  // 评测评分词汇 —— 节点卡片计数、聚焦面板与 eval 标签页共用一套词汇。count 是卡片/状态栏的计数；
   // missing 是已声明但从未测量的场景。
   score: {
     pass: '当前通过 —— 已测量、最新且通过',
@@ -298,7 +298,7 @@ export default {
   focusPanel: {
     scenarios: '场景',
     issues: 'issue',
-    noScenarios: '无场景 —— 该节点没有用于测量的 yatsu.md。',
+    noScenarios: '无场景 —— 该节点没有用于测量的 eval.md。',
     noIssues: '该节点暂无关联 issue。',
     noFocus: '未聚焦任何节点。',
     openEval: '打开该 eval 详情 —— 完整的读数时间线',
@@ -392,7 +392,7 @@ export default {
     // `*Desc` 是 `/` 菜单行的说明；`*Title` 是按钮的悬停提示。
     cmd: {
       typeDesc: '终端交互模式 —— 把原始按键直接发送到智能体的终端',
-      evalDesc: '切换到此会话的评测页 —— yatsu 证据、改动、合并门禁',
+      evalDesc: '切换到此会话的评测页 —— 评测证据、改动、合并门禁',
       mergeTitle: '将此会话合并到 main',
       mergeDesc: '将此会话合并到 main',
       exitTitle: '退出此会话（停止智能体，保留工作树 —— 可恢复）',

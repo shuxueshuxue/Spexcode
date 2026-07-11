@@ -30,8 +30,8 @@ on the pane being read, and only when it lacks that pane does the popup fall bac
 default — the first of its real tabs — which is exactly what keeps the edit-leads rule below intact (a
 mid-change node greets with its edit tab even if the previous node was showing spec). The intent half is
 the **spec doc** — an information board. A **stat bar** carries the
-node's at-a-glance signals, the same the tile speaks: derived **status**, **version**, the aggregate **yatsu
-score** ([[yatsu-score-badge]]), and the **drift** count when a governed file outran the spec
+node's at-a-glance signals, the same the tile speaks: derived **status**, **version**, the aggregate **eval
+score** ([[eval-score-badge]]), and the **drift** count when a governed file outran the spec
 ([[source-of-truth]]) — so score and drift live in the popup now, not only on the tile. Below it the governed
 files, then the body as a living current-state document (the two
 labelled parts — raw source / expanded spec — when authored that way, else the flat body). Neither part is
@@ -44,7 +44,7 @@ the data already rides the board fold (`node.issues`), so the tab is a no-fetch 
 Each entry is the shared compact `IssueCard`, clamped inside the popup and routed to the internal Issues
 page selection (`#/issues/<issue-id>`), not directly to the forge. A **long pane earns a
 small sticky text filter** (substring, over id + concern) — short lists skip it, the affordance would be
-chrome; the eval timeline mounts the same control ([[yatsu-eval-tab]]). An **edit** tab makes a
+chrome; the eval timeline mounts the same control ([[eval-tab]]). An **edit** tab makes a
 node's in-flight change reviewable from the board: it exists **only** while the node has a pending overlay,
 and when it does it **leads** (first tab, editing-session count on its face), so a node mid-change — a
 freshly-added ghost most of all, otherwise near-empty on spec/history — opens with its change front-and-
@@ -55,7 +55,7 @@ last diff at once, not a reload — but **revalidated** each open, since a pendi
 `panesFor(node)` is the single source of which tabs exist and their order — both the tab bar and App's
 keyboard pane-nav read it, so number/Tab keys never cycle to a tab that isn't there. `panesFor` also
 registers an **eval** pane (a fourth reference face), but that pane's component and data contract — it
-rides `node.evals`, the board fold — belong to [[yatsu-eval-tab]], just as the issues tab's content is
+rides `node.evals`, the board fold — belong to [[eval-tab]], just as the issues tab's content is
 [[dashboard-issues]]'; this node owns the popup shell and the spec/history/issues/edit panes, so the eval pane's
 reframe into a verdict-over-evidence timeline is that node's evolution, never work-pane drift. The **history** tab is
 the one merged version log: the latest version sits expanded with its proof, older ones start collapsed and
@@ -70,7 +70,7 @@ persists after, so returning to the tab stays instant. A version's proof is
 the **spec.md line diff** it introduced, fetched lazily on expand — every version, memoised by hash (the
 latest no longer shipped precomputed); a version with no recorded change says so plainly. That scaffold — scroll container,
 latest-expanded reveal, click-toggle, and the per-row header-over-evidence shape — is **data-agnostic and
-shared**: the eval pane ([[yatsu-eval-tab]]) rides the same component (version rows + diff here, reading rows
+shared**: the eval pane ([[eval-tab]]) rides the same component (version rows + diff here, reading rows
 + screenshot there).
 
 The "change it in place" surface — the live terminal — relocated to the *session* that does the changing

@@ -6,7 +6,7 @@ desc: The Evals page's feed — the project's current measured loss as a feed, t
 code:
   - spec-dashboard/src/EvalsFeed.jsx
 related:
-  - spec-yatsu/src/evaltab.ts
+  - spec-eval/src/evaltab.ts
   - spec-cli/src/board.ts
   - spec-dashboard/src/App.jsx
 ---
@@ -18,7 +18,7 @@ The Evals page ([[evals-view]]) is where a human reads the project's current mea
 review surface, a top-level page of its own (evals outrank issues, so they get the leading page and the
 `f` / ⌥F doors). This feed is its left list, and its outer container never scrolls — the list scrolls
 internally. A feed of every reading ever filed grows without bound; a feed of the project's *current* loss
-does not. The unit of this feed is the **scenario, not the reading**: yatsu already defines the latest
+does not. The unit of this feed is the **scenario, not the reading**: the eval engine already defines the latest
 reading per scenario as the current score, so the feed is bounded by declared scenarios (structural,
 slow-growing), never by measurement count. Review attends to what still counts.
 
@@ -60,7 +60,7 @@ options**: the dropdown stays video | image | all, so a transcript-only or blob-
 no media request of any kind in the list. Selecting a row opens it in the page's DETAIL pane as the
 [[event-detail]] — media loads there, a `<video>` element exists only there. The group reports its visible
 rows upward so the page's j/k walk the feed; history drills down per scenario
-(the node's [[yatsu-eval-tab]] scaffold), not in the list.
+(the node's [[eval-tab]] scaffold), not in the list.
 
 **One data path, one computation.** The board nodes arrive as a prop from the app's single board
 poll + SSE subscription — the section fetches nothing of its own — and latest-per-scenario is

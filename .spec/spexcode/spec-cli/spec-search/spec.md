@@ -89,8 +89,8 @@ It reads the spec tree from the **filesystem only** (no git walk), so a cold `sp
 as freely as `grep`. `cli.ts`'s `search` verb is a thin router over `searchSpecs`; all scoring lives there so
 every consumer shares one implementation. There is NO index or cache — every call re-reads and re-ranks the
 whole tree (`O(Q×D)` in corpus tokens) — so it emits its pure-compute time (`nodes·tokens·ms`, excl. process
-start) to stderr per call and `yatsu.md` tracks a baseline; nearing ~1s means an index is overdue.
+start) to stderr per call and `eval.md` tracks a baseline; nearing ~1s means an index is overdue.
 
-Loss is the [[yatsu-core]]-measured recall of a held-out question→node benchmark (this node's `yatsu.md`), run
+Loss is the [[eval-core]]-measured recall of a held-out question→node benchmark (this node's `eval.md`), run
 through the REAL `spex search --json`. It guards robustness — the ranking is iterated to lift recall WITHOUT
 special-casing.

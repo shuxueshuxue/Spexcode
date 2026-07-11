@@ -18,7 +18,7 @@ related:
 
 The push channel ([[board-stream]]) cut *when* the dashboard refetches, but every `board-changed` still cost
 a whole `/api/board` round trip — measured at ~570KB and a ~0.7s server-side rebuild, of which a typical
-session flip actually changes a few KB (the payload is ~82% yatsu eval history that only moves when a
+session flip actually changes a few KB (the payload is ~82% eval history that only moves when a
 reading is filed). Ship the change, not the snapshot: the server that already knows *that* the board changed
 should say *what* changed, and the claim that the dashboard still renders exactly what a full refetch would
 must be an argument, not a hope.

@@ -2,10 +2,10 @@
 title: forge-gate
 status: pending
 hue: 280
-desc: PENDING — the capstone. `spex forge gate <PR>` orchestrates Tier 0 → 0.5 → 1, then publishes the verdict; the CI workflow runs it on every PR. Also the one change that generalizes the review-proof evidence root from a session worktree to any PR ref. No code yet.
+desc: PENDING — the capstone. `spex forge gate <PR>` orchestrates Tier 0 → 0.5 → 1, then publishes the verdict; the CI workflow runs it on every PR. Also the one change that generalizes the session-eval evidence root from a session worktree to any PR ref. No code yet.
 related:
   - spec-cli/src/cli.ts
-  - spec-yatsu/src/proof.ts
+  - spec-eval/src/sessioneval.ts
   - spec-cli/src/sessions.ts
   - .github/workflows/ci.yml
 ---
@@ -23,7 +23,7 @@ The capstone of [[CI-Gate-Spex-forge]] — the entrypoint that makes the gate *r
 short-circuits: a red Tier 0 fails the gate before any judge runs. It is **host-agnostic** — it names no
 vendor, only the seam.
 
-**The one engine change it requires.** [[review-proof]] and [[manager-cockpit]]'s `reviewPayload` build
+**The one engine change it requires.** [[session-eval]] and [[manager-cockpit]]'s `reviewPayload` build
 their evidence rooted at a **session worktree**. The gate needs the same model rooted at an **arbitrary PR
 ref** (checked out in CI), so a PR with no SpexCode session is still a first-class review object. That is a
 small, honest generalization of the evidence root — the model, faces, and gates are otherwise reused

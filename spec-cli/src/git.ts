@@ -154,7 +154,7 @@ function parseStatPath(token: string): { from: string; to: string } {
 }
 
 // Both bulk indices are pure functions of a checkout's HEAD, and they are read for SEVERAL roots at
-// once — the backend checkout (board, loadSpecs) plus every session worktree ([[review-proof]]'s eval
+// once — the backend checkout (board, loadSpecs) plus every session worktree ([[session-eval]]'s eval
 // tab roots its readings at the session's branch). A single-slot cache thrashes between those roots:
 // each eval-tab request evicts the board's entry and vice versa, so every request re-runs a full-history
 // `git log` and re-parses it on the event loop — which is what starves every other request (the board,

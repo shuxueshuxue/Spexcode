@@ -17,9 +17,9 @@ const cli = join(pkg, 'src', 'cli.ts')
 // while a merge conflict is being resolved in the checkout that hosts it, the source holds conflict
 // markers and tsx dies with a raw esbuild stacktrace — on EVERY call, including the Stop hook and an
 // agent's `spex session done`. Catch that one transient state up front: scan the source trees the CLI
-// imports (spec-cli ←→ spec-yatsu ←→ spec-forge), and if any file carries a marker, print one actionable
+// imports (spec-cli ←→ spec-eval ←→ spec-forge), and if any file carries a marker, print one actionable
 // line and exit 75 (EX_TEMPFAIL: transient, retry) instead of spawning tsx into the stacktrace.
-const srcRoots = [join(pkg, 'src'), join(pkg, '..', 'spec-yatsu', 'src'), join(pkg, '..', 'spec-forge', 'src')]
+const srcRoots = [join(pkg, 'src'), join(pkg, '..', 'spec-eval', 'src'), join(pkg, '..', 'spec-forge', 'src')]
 const conflicted = srcRoots.flatMap((root) => {
   if (!existsSync(root)) return []
   return readdirSync(root, { recursive: true })

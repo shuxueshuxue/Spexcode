@@ -15,11 +15,11 @@ import { boardStream, notifyBoardChanged } from './boardStream.js'
 import { gitA, gitTry, repoRoot } from './git.js'
 import { newSession, listSessions, sendKeys, rawKey, exitSession, closeSession, reopen, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, superviseQueue } from './sessions.js'
 import { defaultHarness, HARNESSES, launcherList, launcherDefault } from './harness.js'
-import { evalTimeline, readBlobByHash } from '../../spec-yatsu/src/evaltab.js'
-import { putBlob } from '../../spec-yatsu/src/cache.js'
-import { yatsuNodes } from '../../spec-yatsu/src/yatsu.js'
-import { fileHumanReading } from '../../spec-yatsu/src/filing.js'
-import { buildProofModel, renderProofHtml, buildSessionEvals } from '../../spec-yatsu/src/proof.js'
+import { evalTimeline, readBlobByHash } from '../../spec-eval/src/evaltab.js'
+import { putBlob } from '../../spec-eval/src/cache.js'
+import { evalNodes } from '../../spec-eval/src/scenarios.js'
+import { fileHumanReading } from '../../spec-eval/src/filing.js'
+import { buildExportModel, renderExportHtml, buildSessionEvals } from '../../spec-eval/src/sessioneval.js'
 import { saveUpload, MAX_UPLOAD_BYTES } from './uploads.js'
 import { attachViewer, detachViewer, resizeBridge, forwardWheel, superviseBridges, type Viewer } from './pty-bridge.js'
 import { installProcessGuards } from './resilience.js'
@@ -61,11 +61,11 @@ app.get('/api/specs', async (c) => c.json(await loadSpecs()))
 // the search corpus ([[board-lean]]): a filesystem-only {id,title,path,desc,body} for every node, NO git. The
 // board omits `body` to stay lean, so the search palette fetches this ONCE when it opens (cached client-side)
 // to rank nodes over their prose — off the board's hot poll. A literal segment, before the `:id` routes.
-// Scenario prose rides the same corpus: the board's `scenarios` fold is slim ({name, tags}), so a yatsu
+// Scenario prose rides the same corpus: the board's `scenarios` fold is slim ({name, tags}), so a measurable
 // node's row here carries its declared scenarios' description/expected (+ per-scenario code) — one fetch
 // serves both the palette's scenario plane and the focus-panel preview.
 app.get('/api/specs/lite', (c) => {
-  const scByNode = new Map(yatsuNodes(repoRoot()).map((y) => [y.id, y.scenarios]))
+  const scByNode = new Map(evalNodes(repoRoot()).map((y) => [y.id, y.scenarios]))
   return c.json(loadSpecsLite().map((row) => {
     const sc = scByNode.get(row.id)
     return sc?.length
@@ -99,13 +99,13 @@ app.get('/api/edit', async (c) => {
   }
   return c.json({ patch })
 })
-// a node's eval timeline (read half of `spex eval`): yatsu-sidecar readings joined with a live freshness
-// flag, newest-first; `hasYatsu:false` when none declared. Contract belongs to [[spec-yatsu]].
+// a node's eval timeline (read half of `spex eval`): eval-sidecar readings joined with a live freshness
+// flag, newest-first; `hasEvalFile:false` when none declared. Contract belongs to [[spec-eval]].
 app.get('/api/specs/:id/evals', async (c) => c.json(await evalTimeline(c.req.param('id'))))
-// the eval seam's WRITE half over HTTP ([[spec-yatsu]] filing.ts): a programmatic caller files a manual@1
-// reading (verdict + optional transcript) through the SAME append the CLI uses. The dashboard does not
-// call this — [[event-detail]] reads readings and hosts remarks, never files.
-app.post('/api/specs/:id/yatsu/eval', async (c) => {
+// the eval seam's WRITE half over HTTP ([[spec-eval]] filing.ts) — the REST pair of the GET above: a
+// programmatic caller files a reading (verdict + optional transcript) through the SAME append the CLI
+// uses. The dashboard does not call this — [[event-detail]] reads readings and hosts remarks, never files.
+app.post('/api/specs/:id/evals', async (c) => {
   const b = await c.req.json().catch(() => null)
   if (!b || typeof b.scenario !== 'string') return c.json({ error: 'body needs { scenario, status, note?, transcript? }' }, 400)
   const r = fileHumanReading(c.req.param('id'), b)
@@ -116,7 +116,7 @@ app.post('/api/specs/:id/yatsu/eval', async (c) => {
 // HTTP Range is honored — a <video> can only SEEK when the server answers byte ranges (a browser clamps
 // currentTime to the seekable window, which stays [0,0] without them); one general mechanism at the
 // transport, so every evidence kind streams the same way.
-app.get('/api/yatsu/blob/:hash', (c) => {
+app.get('/api/evidence/:hash', (c) => {
   const r = readBlobByHash(c.req.param('hash'))
   if (!r.ok) return c.text(r.message, r.reason === 'invalid' ? 400 : 404)
   const total = r.bytes.length
@@ -131,10 +131,10 @@ app.get('/api/yatsu/blob/:hash', (c) => {
   return c.body(new Uint8Array(r.bytes), 200, base)
 })
 // the WRITE half of the blob store ([[annotator]]): the annotator captures a circled video frame to a PNG
-// and stashes the bytes here, content-addressed (same putBlob the yatsu cache uses). The returned hash is
+// and stashes the bytes here, content-addressed (same putBlob the eval cache uses). The returned hash is
 // what an anchored comment references (image link in the body, and the typed evidence[] on its thread) —
 // bytes never enter git. Raw body, sniffed by the same content-addressed name. Empty → 400, over cap → 413.
-app.post('/api/yatsu/blob', async (c) => {
+app.post('/api/evidence', async (c) => {
   const buf = Buffer.from(await c.req.arrayBuffer())
   if (buf.length === 0) return c.json({ error: 'empty blob' }, 400)
   if (buf.length > MAX_UPLOAD_BYTES) return c.json({ error: 'blob too large' }, 413)
@@ -215,7 +215,7 @@ app.post('/api/issues', async (c) => {
   const nodes = Array.isArray(body?.nodes) ? (body.nodes as unknown[]).filter((n): n is string => typeof n === 'string') : []
   const postBody = typeof body?.body === 'string' ? body.body : undefined
   const store = typeof body?.store === 'string' && body.store.trim() ? body.store.trim() : 'local'
-  // typed evidence[] — yatsu content-addressed hashes (the annotator's clip reference rides here, not prose)
+  // typed evidence[] — content-addressed evidence hashes (the annotator's clip reference rides here, not prose)
   const evidence = Array.isArray(body?.evidence) ? (body.evidence as unknown[]).filter((h): h is string => typeof h === 'string' && /^[0-9a-f]{64}$/.test(h)) : []
   try {
     const r = await createIssue(concern, { store, nodes, body: postBody, evidence, author: 'human' })
@@ -344,19 +344,16 @@ app.get('/api/sessions/:id/review', async (c) => {
   const r = await reviewPayload(c.req.param('id'))
   return r ? c.json(r) : c.json({ error: 'no such session' }, 404)
 })
-// the [[review-proof]] EXPORT artifact: one self-contained HTML (diff + gates + evidence inlined as
-// data-URIs) for CI/share/bare-browser. `?format=json` returns the model; default = rendered HTML. The
-// dashboard's interactive face is the lean route below, never this. 404 unknown id.
-app.get('/api/sessions/:id/proof', async (c) => {
-  const m = await buildProofModel(c.req.param('id'))
-  if (!m) return c.text('no such session', 404)
-  if (c.req.query('format') === 'json') return c.json(m)
-  return c.html(renderProofHtml(m))
-})
-// the session EVAL model ([[review-proof]]'s interactive face): worktree-rooted rows only — no diff
-// enrichment, no inlined bytes; evidence streams lazily from /api/yatsu/blob. Each reading carries
-// `inSession` so the tab leads with what THIS session measured.
+// the ONE session eval read ([[session-eval]]): default = the lean interactive model — worktree-rooted
+// rows only, no diff enrichment, no inlined bytes (evidence streams lazily from /api/evidence), each
+// reading carrying `inSession` so the tab leads with what THIS session measured. `?format=html` = the
+// EXPORT artifact: one self-contained HTML (diff + gates + evidence inlined as data-URIs) for
+// CI/share/bare-browser — a heavier REPRESENTATION of the same read, not a second route. 404 unknown id.
 app.get('/api/sessions/:id/evals', async (c) => {
+  if (c.req.query('format') === 'html') {
+    const m = await buildExportModel(c.req.param('id'))
+    return m ? c.html(renderExportHtml(m)) : c.text('no such session', 404)
+  }
   const m = await buildSessionEvals(c.req.param('id'))
   return m ? c.json(m) : c.json({ error: 'no such session' }, 404)
 })
@@ -483,7 +480,7 @@ const port = Number(process.env.PORT || 8787)
 // @@@ loopback bind ([[public-mode]]) - this child is NEVER the internet face: the supervisor (and in public
 // mode the gateway) fronts it, and dials it only via 127.0.0.1. Binding loopback is what makes "loopback is
 // the trust boundary" true — without a hostname Node binds all interfaces and the child is reachable from
-// the LAN with no password, bypassing the gate entirely (measured: yatsu auth-boundary).
+// the LAN with no password, bypassing the gate entirely (measured: eval auth-boundary).
 const server = serve({ fetch: app.fetch, port, hostname: '127.0.0.1', serverOptions: {
   keepAliveTimeout: 10000, headersTimeout: 20000, requestTimeout: 60000, connectionsCheckingInterval: 10000,
 } })

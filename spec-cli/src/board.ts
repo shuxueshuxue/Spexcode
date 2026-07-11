@@ -6,8 +6,8 @@ import { repoRoot, driftIndex, historyIndex } from './git.js'
 import { residentForgeState } from '../../spec-forge/src/resident.js'
 import { resolveForgeHost } from '../../spec-forge/src/drivers.js'
 import { mergedIssues } from './issues.js'
-import { evalContext, evalTimeline } from '../../spec-yatsu/src/evaltab.js'
-import { yatsuNodesAsync } from '../../spec-yatsu/src/yatsu.js'
+import { evalContext, evalTimeline } from '../../spec-eval/src/evaltab.js'
+import { evalNodesAsync } from '../../spec-eval/src/scenarios.js'
 
 // a ghost (added) node's parent: the existing node whose directory is the longest prefix of the new one.
 function resolveParent(path: string, byDir: Record<string, string>): string | null {
@@ -44,7 +44,7 @@ export async function buildBoard() {
   const root = repoRoot()
   const [layout, sessions, specs] = await Promise.all([resolveLayout(), listSessions(), loadSpecs()])
   // the eval fold's freshness axes: WARM hits — loadSpecs already computed this HEAD's drift + history
-  // indices, so these are the same cached walks, fetched once and reused for every yatsu node (the history
+  // indices, so these are the same cached walks, fetched once and reused for every measurable node (the history
   // index drives the rename-safe scenario axis, mirroring a spec node's own freshness).
   const idx = await driftIndex(root)
   const hidx = await historyIndex(root)
@@ -122,20 +122,20 @@ export async function buildBoard() {
     if (open.length) n.openIssues = open
   }
 
-  // fold each yatsu node's eval state onto it — as the LEAN summary ([[board-lean]]): `evals` carries only
+  // fold each measurable node's eval state onto it — as the LEAN summary ([[board-lean]]): `evals` carries only
   // the LATEST reading per scenario (newest-first), which is all any overview surface consumes (the score
   // badge, stats, search all reduce to latest-per-scenario anyway); the full timeline stays off the board
   // and is lazy-loaded by the eval tab from `/api/specs/:id/evals`. `scenarios` (the declared set) rides
   // SLIM — {name, tags} only, the fields every overview surface joins state onto — with its prose
   // (description/expected) and per-scenario code off the hot poll: they ride the `/api/specs/lite` corpus
   // (search palette, focus-panel preview) and the `/api/specs/:id/evals` timeline (eval tab).
-  // evalContext reuses the specs + driftIndex above; evalTimeline short-circuits non-yatsu nodes. The
-  // yatsu walk rides fs/promises ([[board-cache]]) so it yields the event loop instead of stalling /health.
-  const ynodes = await yatsuNodesAsync(root)
+  // evalContext reuses the specs + driftIndex above; evalTimeline short-circuits non-measurable nodes. The
+  // eval-file walk rides fs/promises ([[board-cache]]) so it yields the event loop instead of stalling /health.
+  const ynodes = await evalNodesAsync(root)
   const ectx = await evalContext(root, specs, idx, hidx, undefined, ynodes)
   await Promise.all(nodes.map(async (n) => {
     const tl = await evalTimeline(n.id, ectx)
-    if (tl.hasYatsu) { n.evals = latestPerScenario(tl.readings); n.scenarios = slimScenarios(tl.scenarios) }
+    if (tl.hasEvalFile) { n.evals = latestPerScenario(tl.readings); n.scenarios = slimScenarios(tl.scenarios) }
   }))
 
   const opsByPath: Record<string, any[]> = {}

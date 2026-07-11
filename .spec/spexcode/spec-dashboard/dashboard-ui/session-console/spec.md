@@ -82,14 +82,14 @@ does it **overlay** the terminal, expanding
 reserves space — growth overlays). Above the pane a **horizontal tab bar** replaces the old title/action
 strip, carrying **two tabs on the left** — **Terminal** (the default) and **Eval**: Terminal shows the live
 pane with the docked `❯` input; Eval shows this session's measured evaluation **inline** (an always-available
-view — the shared eval components, session-scoped; below and [[review-proof]]). Inside the Eval tab,
+view — the shared eval components, session-scoped; below and [[session-eval]]). Inside the Eval tab,
 "open a session" (the eval detail's filer chip, [[event-detail]]) means SHOW ITS CONSOLE: the chip routinely
 names the session already being viewed, where a plain navigate would no-op (selection unchanged, identical
 hash — a dead button), so the host flips the right pane back to Terminal and navigates only when the filer
 is a different session. **Opening the Eval tab
 auto-collapses the left session list to a thin strip** — the same fold-to-strip geometry the Evals page's
 master list uses ([[evals-view]]), and for the same reason: the Eval tab is itself a master-detail whose own
-scenario list ([[review-proof]]) needs room, so leaving the console's full-width session list beside it would
+scenario list ([[session-eval]]) needs room, so leaving the console's full-width session list beside it would
 crowd two lists into the width one deserves. The collapse is **automatic on entering the tab and reverts on
 returning to Terminal**; the strip is the unfold affordance (click to bring the list back, which then stays
 until you leave the tab), and the list stays **mounted** behind it — the fold is pure geometry, so its zone
@@ -183,7 +183,7 @@ right side** holds the same board-command registry as action buttons, narrowed t
 **type** whenever live and **merge** at review/done — each a small **text** button (no glyphs) in its
 identity colour; an `offline` liveness (any lifecycle) swaps them for a relaunch button, and review is
 **agent-proposed** at the stop-gate. **The evaluation is no longer one of these buttons** — it is a
-permanent **Eval tab**, always available for any selected session (see [[review-proof]]), reached by
+permanent **Eval tab**, always available for any selected session (see [[session-eval]]), reached by
 clicking the tab or the typed `/eval`. There is
 **no close/exit button** here (neither has a button twin — a strip "close" misreads as "close the panel"
 while it discards the worktree): the destructive **close** (worktree removal) lives only on the row's

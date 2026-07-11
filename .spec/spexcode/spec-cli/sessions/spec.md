@@ -54,6 +54,6 @@ merged spec tree, the per-worktree overlay (a ghost/added node nests by director
 introducing a whole new subtree renders as one tree, not a flat scatter), the session list, and the
 backend's own project identity (the browser-tab name) — in one module, served identically at HTTP
 `/api/board` and `spex board` (the frontend only adds x/y pixels). It is also the shared hub where sibling
-features fold their per-node sidecars onto these nodes ([[dashboard-issues]] issues, [[yatsu-eval-tab]]
+features fold their per-node sidecars onto these nodes ([[dashboard-issues]] issues, [[eval-tab]]
 evals) and behind which the live pane is read as text at `…/capture` (which [[remote-client]]'s `spex
 capture` reads) — so such a fold is that feature's stake, not `sessions`' drift.

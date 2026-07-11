@@ -37,7 +37,7 @@ the annotator) the same way — so the phone face ([[mobile-ui]]) never download
 libraries, and the first graph paint doesn't wait on them either; the split moves bytes only, never
 behaviour. The board **focus survives a reload or a mobile↔desktop breakpoint remount within its tab**
 (session-scoped, so a fresh tab still opens on the root). A feature node lists whichever of these it touches under
-`related:`, so editing the shell or the stylesheet attributes its drift/yatsu here rather than to every
+`related:`, so editing the shell or the stylesheet attributes its drift and eval staleness here rather than to every
 feature (see [[governed-related]]). This is the dashboard twin of [[sessions-core]]: one owner for the
 substrate, references everywhere else.
 

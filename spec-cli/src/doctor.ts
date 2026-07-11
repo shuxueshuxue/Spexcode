@@ -323,7 +323,7 @@ function contract(): number {
 }
 
 // the focused double-delivery check: JUST Layer 5, exit non-zero when a conflict is live so it gates a script
-// / yatsu. Anchors at the repo root like doctor (the shims + contract + skills live there).
+// / eval. Anchors at the repo root like doctor (the shims + contract + skills live there).
 async function conflicts(): Promise<number> {
   const cwd = process.cwd()
   const base = repoRoot(cwd) ?? cwd

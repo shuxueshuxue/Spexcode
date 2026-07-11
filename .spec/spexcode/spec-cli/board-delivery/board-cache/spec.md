@@ -45,8 +45,8 @@ object — it decomposes it into delta units ([[board-delta]]).
 
 **The build itself must not block the liveness probe.** Even coalesced to one, a build with a long
 *synchronous* stretch freezes `/health`. The two dominant stretches were full-tree fs walks — `raws()`
-(the spec.md walk) and `yatsuNodes()` (the yatsu.md walk), ~1s of uninterrupted `readFileSync`. Their hot
-twins `rawsAsync()`/`yatsuNodesAsync()` read through `fs/promises`, yielding the event loop between files,
+(the spec.md walk) and `evalNodes()` (the eval.md walk), ~1s of uninterrupted `readFileSync`. Their hot
+twins `rawsAsync()`/`evalNodesAsync()` read through `fs/promises`, yielding the event loop between files,
 so `/health` answers *during* a build instead of behind it. The git walks were already async+parallel and
 HEAD-cached (they never re-fork per node — [[board-lean]]/source-of-truth), so async fs closed the last
 sync gap. Only the hot board path uses the async twins; the light one-shot callers keep the sync forms.

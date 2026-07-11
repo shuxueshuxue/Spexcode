@@ -1,5 +1,5 @@
 // throwaway benchmark harness for spec-search — drives the REAL `spex spec search --json` over the holdout
-// cases and reports recall@1, recall@3, MRR. The cases live in the node's yatsu.md.
+// cases and reports recall@1, recall@3, MRR. The cases live in the node's eval.md.
 //
 // Labels are node LEAF names, matched with the same de-collision rule the loader applies (specs.ts reId):
 // a returned id matches a label if it IS the label or ends with `_<label>` — so a bare leaf keeps matching
@@ -21,7 +21,7 @@ const CASES = [
   ['session-order', 'how is the order of sessions in the session list decided?', ['session-console']],
   ['node-status', 'what makes a node show as pending vs active vs merged vs drift?', ['spec-node-states']],
   ['dashboard-backend', 'how does the dashboard reach the backend API and on which port?', ['api-endpoint']],
-  ['loss-measured', "how is a node's loss measured and its scenarios scored?", ['yatsu-core']],
+  ['loss-measured', "how is a node's loss measured and its scenarios scored?", ['eval-core']],
   ['launch-injection', "what context gets injected into a freshly launched agent's prompt?", ['injected-context']],
   ['read-before-code', 'the one-shot nudge that makes an agent read its spec before touching code', ['spec-first']],
   ['hot-reload', 'zero-downtime backend reload without dropping connections', ['supervisor']],

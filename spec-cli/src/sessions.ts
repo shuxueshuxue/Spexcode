@@ -1312,7 +1312,7 @@ function porcelainPath(line: string): string {
 // whether uncommitted non-runtime work remains, the merge/lint gates, and the agent's standing proposal.
 // ahead/dirty/diff/conflicts are computed against the SESSION's worktree (per id); lint reflects the CLI
 // package's OWN location (where this runs) — the spec-cli that's actually live. There is deliberately NO
-// build/typecheck/test gate: whether a change is SOUND is proven by the node's yatsu (measured through the
+// build/typecheck/test gate: whether a change is SOUND is proven by the node's eval scenarios (measured through the
 // real product), not by a language-specific automated checker — so the gates stay language-agnostic (git +
 // the spec↔code graph, which every governed project has, TS or Python or otherwise). null when no session
 // has that id.
@@ -1332,7 +1332,7 @@ export type ReviewPayload = {
 
 // @@@ lintGate - the spec↔code graph lint is a LOCATION gate: a function of the backend checkout's tree ALONE
 // (its .spec graph + governed files), not of which session is reviewed, and it costs a few seconds. Re-running
-// it on every reviewPayload — i.e. on every [[review-proof]] Proof-tab open, and once per session — is
+// it on every reviewPayload — i.e. on every [[session-eval]] Proof-tab open, and once per session — is
 // wasteful, so memoize it on a whole-repo fingerprint: `rev-parse HEAD` + `status --porcelain` + the mtimes of
 // the changed paths (covers committed state, the dirty SET, and dirty-file CONTENT). An identical fingerprint
 // reuses the last (in-flight) result — a re-open or a second session's proof is instant — while any commit or

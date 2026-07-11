@@ -9,7 +9,7 @@ code:
 ---
 # spec-dashboard
 
-One of three SpexCode packages (alongside spec-cli and spec-yatsu). The front end: a
+One of three SpexCode packages (alongside spec-cli and spec-eval). The front end: a
 node-graph where every node is a spec, navigated by logic. It reads `main` (the ground
 truth) and overlays in-progress worktrees; each version change is attributed to a
 Claude Code session.
@@ -21,4 +21,4 @@ global statistics and focused-node information. The whole UI is rendered through
 than hardcoded strings. The tool is named **SpexCode**: npm packages are scoped
 `@spexcode/*`, the main-guard escape hatch is `SPEXCODE_ALLOW_MAIN`, and the optional
 layout override is `spexcode.json` — the package directory names (spec-cli,
-spec-dashboard, spec-yatsu) stay as components, not the brand.
+spec-dashboard, spec-eval) stay as components, not the brand.

@@ -10,7 +10,7 @@ related:
 ---
 # needs-yatsu-eval
 
-The seam where [[spec-forge]] feeds [[spec-yatsu]]. Read the system as one optimization: a spec is a
+The seam where [[spec-forge]] feeds [[spec-eval]]. Read the system as one optimization: a spec is a
 loss-function design, an issue/PR is the optimizer, and yatsu is the evaluator that re-reads the loss. An
 OPEN issue can therefore carry one fact beyond *which node it serves* — that the node **owes a fresh
 evaluation**: a fix is landing, a behavior moved, a repro wants re-reading. This node recognizes that flag
@@ -32,15 +32,15 @@ so routing can never be smuggled in beside the predicate.
 
 **Only OPEN, only flagged.** `resolveEvalPending` narrows each resolved node's issues to the **open** and
 **flagged** ones: open because a closed issue's eval is no longer owed (its A→B step is already bracketed by
-the closing PR — the [[spec-yatsu]] keystone), flagged because that is the whole signal. Each surviving
+the closing PR — the [[spec-eval]] keystone), flagged because that is the whole signal. Each surviving
 entry is the `LinkedIssue` [[links]] already produced, so it keeps `via` (marker vs the inferred PR).
 
 **The shape, two consumers.** `NodeEvalPending[]` — the eval-pending list keyed by node — is the single
 output. `spec-forge/src/needs-yatsu-eval.ts` is pure and host-agnostic (it consumes whatever a driver
-fetched and writes nothing), so [[spec-yatsu]]'s `scan` can later import `resolveEvalPending` directly. The
+fetched and writes nothing), so [[spec-eval]]'s `scan` can later import `resolveEvalPending` directly. The
 [[forge-cli]] exposes the same shape on the real surface as `spex forge eval-pending [--host github]
 [--node <id>] [--json]` (the `--json` is exactly that list). Read-only end to end — git/`.spec` stays the
 single source of truth; this never writes a node's version or status.
 
-Out of scope (later/sibling): wiring `spex yatsu scan` to actually call this (a [[spec-yatsu]] concern),
+Out of scope (later/sibling): wiring `spex yatsu scan` to actually call this (a [[spec-eval]] concern),
 and surfacing eval-pending in the dashboard.

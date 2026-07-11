@@ -190,6 +190,6 @@ export async function postRemark({ node, scenario, issue, body, codeSha, evidenc
 // stash a captured video frame (PNG bytes) in the content-addressed blob store; returns { hash } — what an
 // anchored annotation references (image link in its body, and the typed evidence[] on its thread).
 export async function putFrameBlob(blob) {
-  const res = await apiFetch('/api/yatsu/blob', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: blob })
+  const res = await apiFetch('/api/evidence', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: blob })
   return res.json()
 }

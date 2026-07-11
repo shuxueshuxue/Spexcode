@@ -23,14 +23,18 @@ export type ContentProbe = {
   behind(anchorSha: string, path: string): number
 }
 
-// (anchor, HEAD) name two immutable trees, so entries never invalidate; the LRU only bounds memory.
+// (anchor, HEAD) name two immutable trees, so entries never invalidate; the LRU only bounds memory,
+// sized above the largest adopter reading corpus — one entry per (reading, path) worst case — so a
+// repeat board build never thrashes back into forking (a bound below the corpus's distinct key count
+// turns a fixed-order rebuild into sequential thrash: every pass evicts the whole memo before cycling
+// back, re-forking one git child per key forever — scenariofresh's oidMemo sizing rule).
 const diffMemo = new Map<string, Set<string> | null>()
 const behindMemo = new Map<string, number>()
 function memo<V>(m: Map<string, V>, k: string, build: () => V): V {
   if (m.has(k)) { const v = m.get(k)!; m.delete(k); m.set(k, v); return v }
   const v = build()
   m.set(k, v)
-  if (m.size > 512) m.delete(m.keys().next().value!)
+  if (m.size > 4096) m.delete(m.keys().next().value!)
   return v
 }
 

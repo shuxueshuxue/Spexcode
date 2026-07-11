@@ -28,22 +28,12 @@ const LEGACY_STORE_REL = '.spec/.forum'
 // truth is `spexcode.json`'s `issues.enabled` (the same settings file that carries every other toggle),
 // read via readConfig so a machine-local `spexcode.local.json` can override it. OFF silences the post-merge
 // nudge (and, in the dashboard, hides the issues view); the raw write verbs stay usable, since running one
-// is explicit consent. `spex issue on|off` flips the flag on disk — effective immediately, no commit
-// needed, because readConfig reads the working tree. The dashboard toggle is a thin wrapper over this same
-// switch. (The key was historically `proposals.enabled`; a pre-rename value still reads, and the next
-// toggle write rewrites it under `issues` — the same self-heal-on-touch discipline as the store-dir rename.)
-export const issuesEnabled = (): boolean => {
-  const cfg = readConfig(mainCheckout())
-  return cfg.issues?.enabled ?? (cfg as { proposals?: { enabled?: boolean } }).proposals?.enabled ?? true
-}
-
-function setEnabled(on: boolean): void {
-  const f = join(mainCheckout(), 'spexcode.json')
-  const cfg = existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : {}
-  cfg.issues = { ...(cfg.issues || {}), enabled: on }
-  delete cfg.proposals   // the pre-rename key, superseded by `issues` on this write
-  writeFileSync(f, JSON.stringify(cfg, null, 2) + '\n')
-}
+// is explicit consent. There is deliberately NO CLI toggle verb (v0.3.0 — "no `spex config set`" is this
+// project's standing rule): flip the key by editing the JSON, effective immediately because readConfig
+// reads the working tree. A legacy pre-rename `proposals.enabled` key is NOT read (no fallback — fail
+// toward the default); `spex doctor` reports it so an old settings file gets repaired, not silently obeyed.
+export const issuesEnabled = (): boolean =>
+  readConfig(mainCheckout()).issues?.enabled ?? true
 
 const list = (v: string | undefined): string[] =>
   v ? v.split(',').map((s) => s.trim()).filter(Boolean) : []
@@ -583,18 +573,11 @@ const repeated = (args: string[], name: string): string[] =>
   args.flatMap((a, i) => (a === `--${name}` ? [args[i + 1]] : [])).filter(Boolean) as string[]
 
 // the local-issue WRITE verbs of the issue drawer (`spex issue <verb>`): open "<concern>" [--store local|<host>] [--node id…]
-// [--evidence hash…] [--body -|text], the id-based reply, and the feature toggle
-// on | off | status. Store is a property of the issue,
+// [--evidence hash…] [--body -|text], and the id-based reply. Store is a property of the issue,
 // never a second command — open and reply route by it (issues.ts createIssue/replyIssue).
 export async function runIssueWrite(args: string[]): Promise<number> {
   const sub = args[0]
   try {
-    if (sub === 'on' || sub === 'off') {
-      setEnabled(sub === 'on')
-      console.log(`issues workflow ${sub.toUpperCase()} — spexcode.json issues.enabled = ${sub === 'on'}${sub === 'on' ? '' : ' (post-merge nudge silenced; dashboard issues view hidden)'}`)
-      return 0
-    }
-    if (sub === 'status') { console.log(`issues workflow is ${issuesEnabled() ? 'ON' : 'OFF'}`); return 0 }
     if (sub === 'reply') {
       const id = bare(args.slice(1))[0]
       const body = readBody(args)
@@ -615,7 +598,7 @@ export async function runIssueWrite(args: string[]): Promise<number> {
     // born forge-visible). The concern is the bare positional(s) after the sub.
     const concern = sub === 'open' ? bare(args.slice(1)).join(' ').trim() : ''
     if (!concern) {
-      console.error('usage: spex issue open "<concern>" [--store local|<host>] [--node <id>…] [--evidence <hash>…] [--body -|<text>]\n       spex issue reply|close|promote <issue-id> …  |  on|off|status')
+      console.error('usage: spex issue open "<concern>" [--store local|<host>] [--node <id>…] [--evidence <hash>…] [--body -|<text>]\n       spex issue reply|close|promote <issue-id> …')
       return 2
     }
     const r = await (await import('./issues.js')).createIssue(concern, {
@@ -639,11 +622,12 @@ export async function runIssueWrite(args: string[]): Promise<number> {
 
 // the first positionals runIssueWrite handles — the issue drawer routes these to it. Exported so the
 // router and the runner can never drift. (`nudge` is not here: it is machine plumbing, called only by the
-// post-merge hook as `spex internal nudge`.)
-export const ISSUE_WRITE_SUBS = new Set(['open', 'reply', 'on', 'off', 'status'])
+// post-merge hook as `spex internal nudge`; the on|off|status toggle verbs died in v0.3.0 — the switch is
+// the `issues.enabled` settings key.)
+export const ISSUE_WRITE_SUBS = new Set(['open', 'reply'])
 
 // ── remark CLI ([[remark-substrate]]) — CLI-first: the whole author→resolve→retract loop, no server needed ──
-// `spex remark <host> --body -|<text> [--code-sha <sha>] [--scenario <name>] [--evidence <hash>…]`
+// `spex remark add <issue-id | <node> --scenario <name>> --body -|<text> [--code-sha <sha>] [--evidence <hash>…]`
 // host = a local issue id, OR a <node> with --scenario <name>. Records targetCodeSha (default: worktree HEAD).
 export async function runRemark(args: string[]): Promise<number> {
   try {
@@ -654,6 +638,10 @@ export async function runRemark(args: string[]): Promise<number> {
       console.error('usage: spex remark add <issue-id | node --scenario name> --body -|<text> [--code-sha <sha>] [--evidence <hash>…]')
       return 2
     }
+    // THE FLAG DECIDES THE PARSE ([[cli-surface]] §1): `--scenario` present ⇒ the positional is a NODE id
+    // (the remark pins to that node's scenario track); absent ⇒ it is an ISSUE id. Never type-sniffed —
+    // a node id and an issue id are both bare slugs, so any "looks like" guess would misroute; the flag
+    // is the one unambiguous discriminator, and a wrong host fails loud downstream (unknown issue/node).
     const host = scenario ? { node: positional, scenario } : { issue: positional }
     const r = await remarkOnHost(host, body, { codeSha: fl(args, 'code-sha'), evidence: repeated(args, 'evidence') })
     console.log(`remark ${r.ref}  (against ${r.codeSha.slice(0, 7) || 'HEAD'}) — read it with \`spex issue ls --all\``)

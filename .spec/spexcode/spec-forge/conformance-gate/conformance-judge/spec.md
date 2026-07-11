@@ -9,7 +9,7 @@ related:
 ---
 # conformance-judge
 
-The agentic core of the [[deliver-port]] **verdict driver** ([[CI-Gate-Spex-forge]]) — and the LLM judge
+The agentic core of the [[deliver-port]] **verdict driver** ([[conformance-gate]]) — and the LLM judge
 [[spec-lint]] explicitly deferred ("whether the code still matches what the spec *says* is the LLM judge's
 job, async, not in the commit path").
 

@@ -54,8 +54,8 @@ scenarios:
       ↑↓ jump to the prev/next comment (seek + select), 'a' stamps a `▶m:ss · <step>` anchor into the
       rail's docked composer (+ a `[[node]]` line when the step routes elsewhere) and focuses it. The
       named-step ruler still click-seeks. A drag circles a region: the paused frame (rect burned in) is
-      POSTed to /api/yatsu/blob and the composer is prefilled with an anchored comment — the anchor line,
-      a `![frame](/api/yatsu/blob/<hash>)` link, and the routing line — with the stage still on screen.
+      POSTed to /api/evidence and the composer is prefilled with an anchored comment — the anchor line,
+      a `![frame](/api/evidence/<hash>)` link, and the routing line — with the stage still on screen.
       Sending it creates/appends the eval's local Issue thread ('eval: <node> · <scenario>') with that
       frame in the body AND on the thread's typed evidence[]; the sent comment shows an anchor chip that
       SEEKS + selects on click and renders the circled frame inline. '@new' dispatches a fresh worker
@@ -73,7 +73,7 @@ scenarios:
     expected: |
       Every anchored mark carries the FRAME of its moment, whichever gesture made it: the circle burns its
       rect into the captured frame; ⏱ and 'a' capture the clean current frame — all three stamp
-      `▶m:ss · step` plus a `![frame](/api/yatsu/blob/<hash>)` link (the frame doubling as the remark's
+      `▶m:ss · step` plus a `![frame](/api/evidence/<hash>)` link (the frame doubling as the remark's
       typed evidence[]). Re-stamping ⏱ at a new moment replaces both the anchor line AND its riding frame,
       so an anchor and its frame never disagree. In the track every anchored remark renders uniformly —
       chip + frame thumbnail (+ prose) — a ⏱/'a' remark is indistinguishable in shape from a circle
@@ -186,7 +186,7 @@ scenarios:
 # event-detail loss
 
 YATU through the real browser over a real backend: the workspace geometry (stage + rail both on screen,
-no ping-pong), the seek, the ⏱ anchor, the circled-frame comment (its frame on /api/yatsu/blob and the
+no ping-pong), the seek, the ⏱ anchor, the circled-frame comment (its frame on /api/evidence and the
 thread's evidence[]), the anchor-chip seek, the @new dispatch, and the absence of verdict-filing controls
 are all read from live surfaces (DOM, /api/issues) — never asserted from the component code. There is ONE
 annotation primitive (an anchored comment on the eval's thread); the pane reads readings, it files none.

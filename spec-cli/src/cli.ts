@@ -72,7 +72,7 @@ const SIGNPOSTS: Record<string, string> = {
   board: 'spex graph --json',
   yatsu: 'spex eval — add (was: yatsu eval) · ls (was: show) · lint (was: scan) · retract · clean; `yatsu check-staged` → spex internal check-staged',
   blob: 'spex evidence put|get',
-  issues: 'spex issue — ls (was: bare issues) · open · reply · close · promote · on · off · status; `issues nudge` → spex internal nudge',
+  issues: 'spex issue — ls (was: bare issues) · show · open · reply · close · promote; on|off|status → the `issues.enabled` key in spexcode.json; `issues nudge` → spex internal nudge',
   forge: 'spex issue links [--pending] [--store <host>]  (--host is now --store)',
   dashboard: 'spex serve ui',
   new: 'spex session new',
@@ -537,7 +537,7 @@ if (cmd === 'serve') {
     process.exit(2)
   }
 } else if (cmd === 'evidence') {
-  // @@@ evidence drawer - the bare content-addressed transport pair ([[blob-put]], [[blob-get]]): put bytes
+  // @@@ evidence drawer - the bare content-addressed transport pair ([[evidence-put]], [[evidence-get]]): put bytes
   // in the shared evidence cache / read them back by hash, decoupled from filing a reading. Thin route — the
   // cache lives in spec-eval. flushExit matters here: `get` pipes raw blob bytes to stdout.
   if (process.argv[3] === undefined) {
@@ -548,7 +548,8 @@ if (cmd === 'serve') {
   }
 } else if (cmd === 'issue') {
   // @@@ issue drawer - the ONE issue surface ([[issues]]): `ls` is THE read — local + forge issues as ONE
-  // store-tagged list, the supervisor's/human's drain view; open/reply/close are store-routed (the SAME
+  // store-tagged list, the supervisor's/human's drain view; `show <id>` the single-thread detail (the same
+  // read GET /api/issues/:id serves); open/reply/close are store-routed (the SAME
   // createIssue/replyIssue/closeIssue the dashboard's API calls); `promote` moves a thread cross-store;
   // `links` traces forge issues/PRs onto spec nodes (read-only, spec-forge).
   if (process.argv[3] === undefined) {

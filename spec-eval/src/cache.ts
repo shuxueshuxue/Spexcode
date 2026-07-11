@@ -6,7 +6,9 @@ import { gitCommonDir } from '../../spec-cli/src/layout.js'
 export const MISS_BLOB = 'miss original file'
 
 // every cache fn takes an optional `dir` (defaulting to the live cache dir) so the logic is testable
-// against a temp dir without a git repo.
+// against a temp dir without a git repo. The dir is a PER-CLONE cache (never tracked): renaming it
+// (yatsu-blobs → evidence, v0.3.0) migrated no bytes — a missing blob re-fills via `spex evidence put`
+// (putBlob is idempotent by content) or streams from the backend on a `get` miss.
 export function cacheDir(): string {
   return join(gitCommonDir(), 'spexcode', 'evidence')
 }

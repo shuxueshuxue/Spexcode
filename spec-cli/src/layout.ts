@@ -47,7 +47,7 @@ type Config = {
     }
   }
   issues?: {
-    enabled?: boolean                // the [[local-issues]] issues-workflow on/off switch (default ON). OFF silences the post-merge nudge + hides the dashboard view; flip with `spex issue on|off`. (Pre-rename `proposals.enabled` still reads — localIssues.ts issuesEnabled.)
+    enabled?: boolean                // the [[local-issues]] issues-workflow on/off switch (default ON). OFF silences the post-merge nudge + hides the dashboard view; flip by editing this key (no CLI toggle verb — v0.3.0). A legacy `proposals.enabled` is NOT read; `spex doctor` reports it.
   }
   forge?: {
     host?: string                    // explicit forge host id ('github'|'gitlab'|…) overriding the origin-remote derivation ([[forge-host]] — read by spec-forge drivers.ts resolveForgeHost, not here). A project fact → committed spexcode.json.

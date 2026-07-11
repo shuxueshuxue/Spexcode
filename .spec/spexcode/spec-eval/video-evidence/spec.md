@@ -34,7 +34,7 @@ the eval usage they print — a manual that only teaches `--image` is how the ga
 
 The whole point is that almost nothing is new. `spex eval add --video <clip>` stores the bytes in the same
 shared cache and pushes one `video` entry onto the reading's evidence list (`spex blob put` is the same
-transport WITHOUT a reading, [[blob-put]]); the MIME is sniffed from content
+transport WITHOUT a reading, [[evidence-put]]); the MIME is sniffed from content
 (WebM / MP4) so `/api/evidence` streams a playable type — and answers **byte ranges**, without which a browser
 clamps every seek to 0; every dashboard home renders the `<video>` inline through the ONE shared evidence
 renderer ([[event-detail]]'s `Evidence.jsx` — the eval tab [[eval-tab]], the session proof

@@ -209,5 +209,5 @@ outside the tree, uncommittable (no .gitignore). A gone blob renders as `miss or
 backstop rejects a stray blob or a malformed eval.md. `spec-cli/src/cli.ts` carries only a thin
 `eval` drawer route ([[forge-cli]] shape) — eval-core's sole stake in that shared hub.
 
-Out of scope (sibling nodes): the dashboard eval-tab read side and the forge `needs-yatsu-eval` half of
+Out of scope (sibling nodes): the dashboard eval-tab read side and the forge `needs-eval` half of
 lint. Computer-use and backend measurement are future measuring hands, not code paths here.

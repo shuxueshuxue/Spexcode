@@ -457,6 +457,7 @@ test('cache: isStrayBlob recognises a 64-hex basename, the evidence cache dir, o
   assert.equal(isStrayBlob('.spec/n/' + 'a'.repeat(64)), true)
   assert.equal(isStrayBlob('some/yatsu-blobs/whatever.png'), true)   // archived cache-dir name — same mistake
   assert.equal(isStrayBlob('x/spexcode/evidence/whatever.png'), true)
+  assert.equal(isStrayBlob('docs/evidence/report.png'), false)   // a bare `evidence/` dir is a legit repo path
   assert.equal(isStrayBlob('spec-eval/src/cache.ts'), false)
   assert.equal(isStrayBlob('.spec/n/evals.ndjson'), false)
 })

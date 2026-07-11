@@ -5,7 +5,7 @@ import { etag } from 'hono/etag'
 import { createNodeWebSocket } from '@hono/node-ws'
 import { loadSpecs, loadSpecsLite, specContent, specHistory, specDiffAt, loadConfig } from './specs.js'
 import { issuesEnabled, remarkOnHost, resolveRemark, retractRemark } from './localIssues.js'
-import { closeIssue, createIssue, issueStores, mergedIssues, promote, replyIssue } from './issues.js'
+import { closeIssue, createIssue, findIssue, issueStores, mergedIssues, promote, replyIssue } from './issues.js'
 import { residentForgeState, refreshForgeNow } from '../../spec-forge/src/resident.js'
 import { resolveForgeHost } from '../../spec-forge/src/drivers.js'
 import { summarize } from './mentions.js'
@@ -164,6 +164,13 @@ app.get('/api/issues', etag(), (c) =>
     stores: issueStores(),
     issues: mergedIssues({ host: resolveForgeHost(), state: residentForgeState() }, loadSpecsLite().map((s) => s.id)),
   }))
+// the single-thread read ([[issues]]) behind `spex issue show <id>` — the SAME findIssue lookup, from the
+// resident forge slice (instant view, background reconcile — the list route's freshness contract). A local
+// id, or a forge id (`<host>#<n>`); unknown → 404 (eval-remark threads are not issues, so they 404 here too).
+app.get('/api/issues/:id', (c) => {
+  const t = findIssue(c.req.param('id'), { host: resolveForgeHost(), state: residentForgeState() }, loadSpecsLite().map((s) => s.id))
+  return t ? c.json(t) : c.json({ error: `no issue '${c.req.param('id')}'` }, 404)
+})
 // the WRITE surface ([[local-issues]] / [[issues-view]]) — the human reply path, STORE-ROUTED through the one
 // reply verb ([[issues]] replyIssue): a local id git-commits to the trunk store, a forge id ('github#N')
 // posts a REAL comment through the driver; either way the text's @-mentions dispatch (a human summons an

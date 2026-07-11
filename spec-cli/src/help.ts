@@ -219,22 +219,24 @@ ${DOT_NOTE}`,
     see: 'spex guide eval (the eval.md scenario format + evidence rules) · spex evidence (bare byte transport)',
   },
   issue: {
-    line: 'issue <verb>          concern threads, local + forge merged: ls · open · reply · close · promote · links',
+    line: 'issue <verb>          concern threads, local + forge merged: ls · show · open · reply · close · promote · links',
     body: `Usage: spex issue ls [--node <id>] [--store local|<host>] [--all] [--json]
+       spex issue show <id> [--json]
        spex issue open "<concern>" [--store local|<host>] [--node <id>…] [--evidence <hash>…] [--body -|<text>]
        spex issue reply <id> --body -|<text> [--evidence <hash>…]
        spex issue close <id>
        spex issue promote <id>
        spex issue links [--pending] [--store <host>] [--node <id>] [--json]
-       spex issue on|off|status
 
 ls is the drain view a supervisor reads: ONE store-tagged list, local + forge interleaved by
-creation time. \`open\` welcomes taste, annotations, and off-mainline smells — not only bugs;
---store <host> opens straight on the forge. \`reply\` and \`close\` route by the issue's store — one
-verb, local or forge. \`promote\` moves an OPEN local issue to the forge as one recorded action.
-\`links\` is the read-only forge trace: which open forge issues/PRs serve which spec node (--pending
-narrows to threads still awaiting an eval reading). \`on|off|status\` toggles the local-issue
-workflow (spexcode.json issues.enabled).
+creation time. \`show <id>\` is the single-thread detail — the whole thread with its replies (a local
+id, or a forge id like github#12). \`open\` welcomes taste, annotations, and off-mainline smells —
+not only bugs; --store <host> opens straight on the forge. \`reply\` and \`close\` route by the
+issue's store — one verb, local or forge. \`promote\` moves an OPEN local issue to the forge as one
+recorded action. \`links\` is the read-only forge trace: which open forge issues/PRs serve which
+spec node (--pending narrows to threads still awaiting an eval reading). The issues workflow's
+on/off switch is the \`issues.enabled\` key in spexcode.json (no CLI toggle verb — edit the JSON;
+\`spex doctor\` reports its state).
 ${MENTION_NOTE}`,
     see: 'spex remark (pin a resolvable concern to an issue or scenario) · spex evidence put (stash evidence bytes)',
   },

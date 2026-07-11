@@ -296,7 +296,9 @@ the guard (the flag is the proof of intent). Reads point anywhere.
 
 ── ISSUES (spexcode.json — portable policy) ──
   issues.enabled      the issues-workflow on/off switch (default ON). OFF silences the post-merge nudge and
-                      hides the dashboard view; the CLI toggle is \`spex issue on|off\`.
+                      hides the dashboard view. Flip it by editing the JSON — there is no CLI toggle verb;
+                      \`spex doctor\` reports the current state (and flags a legacy \`proposals.enabled\` key,
+                      which is no longer read).
 
 ── FORGE (spexcode.json — which forge this repo's remote is; a project fact, so committed) ──
   forge.host          explicit forge host id ('github' | 'gitlab' | …) overriding the automatic derivation.

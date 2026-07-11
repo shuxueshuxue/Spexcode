@@ -41,7 +41,7 @@ the driver rebuilds both, thinly:
   closes-lines itself.
 - Comments are **notes** minus system notes (lifecycle noise isn't discussion). GitLab's list read
   can't embed threads, so each *commented* issue's notes are fetched alongside — the note count
-  gates it, so the common uncommented issue costs nothing and [[freshness]]'s TTL covers the rest.
+  gates it, so the common uncommented issue costs nothing and [[forge-cache]]'s TTL covers the rest.
 - The **incremental window** rides GitLab's updated-after filter, the direct analog of GitHub's
   since-window; GitLab's issue list never mixes MRs in, so nothing needs filtering out.
 

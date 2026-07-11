@@ -604,7 +604,7 @@ export async function runEval(args: string[]): Promise<number> {
 
 export { checkStaged }
 
-// `spex evidence put <file|->` / `spex evidence get <hash> [-o <file>]` ([[blob-put]], [[blob-get]]) — the bare
+// `spex evidence put <file|->` / `spex evidence get <hash> [-o <file>]` ([[evidence-put]], [[evidence-get]]) — the bare
 // evidence-transport pair: put stashes bytes in the shared content-addressed cache and prints the hash,
 // WITHOUT filing a reading (`eval add --video` couples the two); get is its symmetric read — hash in,
 // bytes out. putBlob is idempotent by content, so re-putting re-seeds a checkout whose cache lacks a blob

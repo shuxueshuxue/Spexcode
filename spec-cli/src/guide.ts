@@ -176,7 +176,7 @@ reading (\`--last\` makes that explicit; repeat to peel junk back one filing at 
 
 THE SCOREBOARD: readings live in yatsu.evals.ndjson beside the yatsu.md — one JSON line per measurement
 (a second git-as-database axis). Freshness is derived live from git: a reading goes STALE when a governed
-code file, the scenario (the yatsu.md), or the evaluator moves since it was filed.
+code file or the scenario (the yatsu.md) moves since it was filed.
   spex yatsu scan [--changed]   blind spots: yatsu-schema (malformed) · yatsu-drift (stale) ·
                                 yatsu-missing (never measured) · yatsu-uncovered (governed source, no yatsu.md) ·
                                 yatsu-owners (a file governed by > maxOwners scenarios — split it)

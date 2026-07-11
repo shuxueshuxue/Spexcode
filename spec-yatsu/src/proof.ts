@@ -19,7 +19,8 @@ export type ProofReading = {
   fresh: boolean
   staleAxes: string[]
   score: ScoreState
-  evaluator: string
+  // legacy instrument tag ('manual@1') — present on old readings only.
+  evaluator?: string
   ts: string
   evidence:
     | { kind: 'image'; dataUri: string }
@@ -340,7 +341,7 @@ function renderReading(r: ProofReading): string {
       <span class="scenario">${esc(r.scenario)}</span>
       ${verdictBadge(r.verdict)}
       ${stale}
-      <span class="rmeta">${esc(r.evaluator)} · ${esc(r.ts)}</span>
+      <span class="rmeta">${r.evaluator ? `${esc(r.evaluator)} · ` : ''}${esc(r.ts)}</span>
     </div>
     ${r.expected ? `<div class="expected"><b>expected</b> ${esc(r.expected)}</div>` : ''}
     ${note}

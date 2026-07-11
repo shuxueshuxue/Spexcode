@@ -1,11 +1,10 @@
 import { git, headSha, ancestorsOf, inAncestors, type DriftIndex } from '../../spec-cli/src/git.js'
 import type { Reading } from './sidecar.js'
-import { isEvaluatorStale } from './evaluator.js'
 import { scenarioChangeCommits, scenarioBlocksAt, type ScenarioIndex } from './scenariofresh.js'
 
 // the CODE axis is touch-based (DriftIndex), so a code-file rename is out of scope — the same blind spot lint's code-drift has
 
-export type StaleAxis = 'code' | 'scenario' | 'evaluator' | 'remark' | 'anchor'
+export type StaleAxis = 'code' | 'scenario' | 'remark' | 'anchor'
 
 // @@@ off-history content fallback - ancestry can't testify for a codeSha that isn't reachable from HEAD
 // (fold/rebase/squash-merge/cherry-pick all orphan the anchor), but the TREES still can: while the anchor
@@ -143,7 +142,6 @@ export function staleAxes(
     if (codeFiles.some((f) => changedSince(didx, reading.codeSha, f, probe))) axes.push('code')
     if (scenarioMoved(scIdx, didx, reading.codeSha, yatsuPath, reading.scenario, probe)) axes.push('scenario')
   }
-  if (isEvaluatorStale(reading.evaluator)) axes.push('evaluator')
   if (remarkStale(reading, remarks)) axes.push('remark')
   return axes
 }

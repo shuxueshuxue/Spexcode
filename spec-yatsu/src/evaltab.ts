@@ -41,7 +41,8 @@ export type EvalEntry = {
   blob: string | null
   blobKind?: EvidenceKind
   timelineBlob?: string
-  evaluator: string
+  // legacy instrument tag ('manual@1') — surfaced for old readings only, never written by new filings.
+  evaluator?: string
   // the SESSION that filed this reading ([[event-detail]] originator liveness / [[mentions]] loop-in): the
   // reachable actor an un-@'d eval remark courtesy-delivers to (the latest reading's filer is the chain's
   // first link). Surfaced so the eval detail can show whether that session is still alive. Absent on a legacy
@@ -190,7 +191,7 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
       blob: primary?.hash ?? null,
       ...(primary ? { blobKind: primary.kind } : {}),
       ...(r.timelineBlob ? { timelineBlob: r.timelineBlob } : {}),
-      evaluator: r.evaluator,
+      ...(r.evaluator ? { evaluator: r.evaluator } : {}),
       ...(r.by ? { by: r.by } : {}),
       ...(r.verdict ? { verdict: r.verdict } : {}),
       ts: r.ts,

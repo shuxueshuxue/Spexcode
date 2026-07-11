@@ -582,7 +582,7 @@ export function EvalPane({ node }) {
             <ScoreBadge state={readingScore(r)} title={r.fresh ? undefined : t('nodeView.eval.staleAxes', { axes: r.staleAxes.join(', ') })} />
           </span>
           <span className="eval-meta">
-            <span className="eval-evaluator">{r.evaluator}</span>
+            {r.evaluator && <span className="eval-evaluator">{r.evaluator}</span>}
             <code className="eval-sha">{r.codeSha.slice(0, 7)}</code>
             <span className="eval-ts">{r.ts.replace('T', ' ').slice(0, 16)}</span>
           </span>

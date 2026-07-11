@@ -28,7 +28,7 @@ a **verdict** (met expected, or how far off). yatsu executes nothing; it only re
 
 yatsu **keeps score.** Measurements live in a flat git-tracked `yatsu.evals.ndjson` beside the spec — a
 *second git-as-database axis*: a measurement commit is an evaluation event, so history / attribution /
-drift apply unchanged. A score is **stale** when its governed `code:`, its scenario, or the evaluator
+drift apply unchanged. A score is **stale** when its governed `code:` or its scenario
 moved since — derived live from git, no stored hashes. Evidence bytes are content-addressed under the
 shared git common dir (one blob per content, shared by every worktree, never committed; gone → "miss
 original file").

@@ -26,10 +26,10 @@ sibling; leave a clean seam for it.
 
 Two halves behind one tab. The **read engine** ([[spec-cli]], in `evaltab.ts`) computes what only a live
 read knows. A node's measurement timeline is every reading from its `yatsu.evals.ndjson` sidecar (scenario,
-the read's codeSha, an evidence LIST — each `{hash, kind}` resolved to its live blob state — evaluator, **verdict**, ts) joined with the scenario's **expected**
+the read's codeSha, an evidence LIST — each `{hash, kind}` resolved to its live blob state — **verdict**, ts) joined with the scenario's **expected**
 (from the live yatsu.md — what zero loss looks like) and a **freshness flag**, derived live from git by the
-same [[freshness]] machinery scan uses: a reading is *current* until its governed code, its scenario, or the
-evaluator version moved past the sha it was taken at, otherwise *stale* (and which axis moved); a code-stale
+same [[freshness]] machinery scan uses: a reading is *current* until its governed code or its scenario
+moved past the sha it was taken at, otherwise *stale* (and which axis moved); a code-stale
 reading also carries the code axis's per-file drift detail (`codeDrift` — which governed files moved, +how many
 commits) so the [[event-detail]] stale readout can name it, never re-deriving git in the browser;
 newest-first.
@@ -53,7 +53,7 @@ expand-all door for find-in-page, and — on a long timeline — the shared stic
 (blind-spot rows and dangling tracks filter with the readings, so a filtered view stays one coherent set). Each
 row's header names its scenario, the **verdict badge** (✓ pass / ✗ fail, optional **note**
 beside; *legacy* for a pre-verdict or note-only reading), and the per-reading **score circle**
-([[yatsu-score-badge]]), then its evaluator, codeSha, and time.
+([[yatsu-score-badge]]), then its codeSha and time.
 Its evidence is the scenario's **expected** over the captured proof — a **gallery** mapping the reading's
 evidence list (N screenshots, a video, a transcript), each entry showing *miss original file* when its blob
 was pruned.
@@ -69,5 +69,5 @@ rows lead the timeline. The one presence-distinct empty state survives: a node w
 
 **The seam / out of scope:** the **forge issue-events** half of the timeline — each tracked issue appearing
 twice (open, close) and linking out to its forge-hosted image rather than a local blob — arrives with the
-needs-yatsu-eval forge node; the tab joins it at read time then. Backend and computer-use evaluators, and
+needs-yatsu-eval forge node; the tab joins it at read time then. Backend and computer-use measuring hands, and
 the cache cleanup surface, stay with their own nodes.

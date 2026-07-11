@@ -8,7 +8,6 @@ import { parseScenarios, validateScenarios, yatsuNodes, yatsuNodesAsync, resolve
 import { readReadings, readSidecar, appendReading, appendRetraction, latestPerScenario, evidenceOf, type Reading } from './sidecar.js'
 import { changedSince, staleAxes } from './freshness.js'
 import { putBlob, listBlobs, gc, resolveBlob, MISS_BLOB, isStrayBlob } from './cache.js'
-import { evaluatorTag, parseEvaluator, isEvaluatorStale } from './evaluator.js'
 import type { DriftIndex } from '../../spec-cli/src/git.js'
 import type { ScenarioIndex } from './scenariofresh.js'
 
@@ -311,15 +310,15 @@ test('sidecar: a retraction is scoped by (scenario, ts) — a same-ts reading in
   assert.equal(eff[0].scenario, 'b')
 })
 
-test('sidecar: a retraction line has no evaluator, so a legacy reader treats it as neither reading nor poison', () => {
-  // an old readReadings required an `evaluator` string per line — a retraction (deliberately without one)
-  // must never surface as a reading there. The new raw parser routes it by its `retracts` field instead.
+test('sidecar: events are told apart positively — a retraction by `retracts`, a reading by `codeSha`', () => {
+  // neither event kind is recognized by a field's ABSENCE: a retraction (no codeSha) never surfaces as a
+  // reading, a reading (no retracts) never surfaces as a retraction, and a line with neither is skipped.
   const f = join(tmp(), 'y.ndjson')
   appendRetraction(f, { retracts: 't0', scenario: 's', ts: 't1' })
+  writeFileSync(f, '{"scenario":"s","ts":"t2"}\n', { flag: 'a' })   // neither kind → skipped whole
   const raw = readSidecar(f)
   assert.equal(raw.readings.length, 0)
   assert.equal(raw.retractions.length, 1)
-  assert.ok(!('evaluator' in raw.retractions[0]))
 })
 
 // ---- multi-evidence: the evidence LIST + its scalar→list bridge ----
@@ -415,40 +414,11 @@ test('staleAxes: scenario axis is per-scenario — a sibling\'s edit never stale
   assert.deepEqual(staleAxes(reading, ['src/x.ts'], '.spec/n/yatsu.md', idx, siblingEdit), [])
 })
 
-test('staleAxes: evaluator axis — the evaluator version moved since the reading', () => {
-  const idx = fakeIndex({ 'src/x.ts': ['c1'] })
-  const scidx = fakeScenario({ '.spec/n/yatsu.md': { s: [] } })
-  const reading: Reading = { scenario: 's', codeSha: 'c1', blob: null, evaluator: 'manual@0', ts: 't' }  // manual is version 1 ⇒ manual@1 ≠ manual@0
-  assert.deepEqual(staleAxes(reading, ['src/x.ts'], '.spec/n/yatsu.md', idx, scidx), ['evaluator'])
-})
-
 test('staleAxes: fully fresh reading → no axes', () => {
   const idx = fakeIndex({ 'src/x.ts': ['c1'] })
   const scidx = fakeScenario({ '.spec/n/yatsu.md': { s: [] } })
-  const reading: Reading = { scenario: 's', codeSha: 'c1', blob: null, evaluator: evaluatorTag(), ts: 't' }
+  const reading: Reading = { scenario: 's', codeSha: 'c1', blob: null, ts: 't' }
   assert.deepEqual(staleAxes(reading, ['src/x.ts'], '.spec/n/yatsu.md', idx, scidx), [])
-})
-
-test('staleAxes: unknown evaluator invents no staleness on the evaluator axis', () => {
-  const idx = fakeIndex({ 'src/x.ts': ['c1'] })
-  const scidx = fakeScenario({ '.spec/n/yatsu.md': { s: [] } })
-  const reading: Reading = { scenario: 's', codeSha: 'c1', blob: null, evaluator: 'ghost@9', ts: 't' }  // no such evaluator
-  assert.deepEqual(staleAxes(reading, ['src/x.ts'], '.spec/n/yatsu.md', idx, scidx), [])
-})
-
-// ---- evaluator tag (metadata only — no executor) ----
-
-test('evaluator: tag round-trips, defaults to manual, version tracks the registry', () => {
-  assert.equal(evaluatorTag(), 'manual@1')
-  assert.equal(evaluatorTag('manual'), 'manual@1')
-  assert.equal(evaluatorTag('stranger'), 'stranger@1')   // unknown name still tags (version 1)
-  assert.deepEqual(parseEvaluator('manual@2'), { name: 'manual', version: 2 })
-})
-
-test('evaluator: isEvaluatorStale — behind version is stale, current is fresh, unknown invents none', () => {
-  assert.equal(isEvaluatorStale('manual@0'), true)     // behind the current manual version
-  assert.equal(isEvaluatorStale('manual@1'), false)    // current
-  assert.equal(isEvaluatorStale('ghost@9'), false)     // unknown evaluator — no invented staleness
 })
 
 // ---- cache (content-addressed blob store + GC) ----

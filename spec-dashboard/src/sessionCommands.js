@@ -1,5 +1,5 @@
 // `run` is bound in SessionInterface (it needs the live closures); here we hold only the static identity.
-// `button:false` = no header twin (exit/close live as typed commands + the right-click menu). `when` gates by state.
+// `button:false` = no header twin (stop/close live as typed commands + the right-click menu). `when` gates by state.
 export const BOARD_COMMANDS = [
   { name: 'type',  color: 'yellow', button: true,  when: (st) => !!st && st !== 'offline',
     labelKey: 'session.typeBtn', titleKey: 'session.typeTitle', descKey: 'session.cmd.typeDesc' },
@@ -9,8 +9,8 @@ export const BOARD_COMMANDS = [
     labelKey: 'sessionEval.btn', titleKey: 'sessionEval.btnTitle', descKey: 'session.cmd.evalDesc' },
   { name: 'merge', color: 'green',  button: true,  when: (st) => st === 'review' || st === 'done',
     labelKey: 'session.merge', titleKey: 'session.cmd.mergeTitle', descKey: 'session.cmd.mergeDesc' },
-  { name: 'exit',  color: 'muted',  button: false, when: (st) => !!st && st !== 'offline',
-    titleKey: 'session.cmd.exitTitle', descKey: 'session.cmd.exitDesc' },
+  { name: 'stop',  color: 'muted',  button: false, when: (st) => !!st && st !== 'offline',
+    titleKey: 'session.cmd.stopTitle', descKey: 'session.cmd.stopDesc' },
   { name: 'close', color: 'red',    button: false, when: (st) => !!st && st !== 'offline',
     titleKey: 'session.cmd.closeTitle', descKey: 'session.cmd.closeDesc' },
 ]

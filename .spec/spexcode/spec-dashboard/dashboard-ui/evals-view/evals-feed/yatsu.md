@@ -5,13 +5,13 @@ scenarios:
     description: >
       With at least one fresh video reading filed (spex yatsu eval --video … --timeline …), open #/evals
       in a real browser (board `f` or the URL). Read the real DOM: the evals feed IS the LEFT list,
-      its kind dropdown's default value, the rows' media-element count; count /api/board requests fired by
+      its kind dropdown's default value, the rows' media-element count; count /api/graph requests fired by
       opening the page; select a video row and read where its media renders.
     expected: |
       The evals feed is the page's LEFT list with its kind dropdown in a sticky head; the dropdown's
       default value is `video` (falling back to `image` when no video reading exists). Rows are the LATEST
       reading per (node, scenario), newest first — title-only ALWAYS: zero <video>/<img>
-      elements in the list. Opening the page fires ZERO extra /api/board fetches (the group rides the
+      elements in the list. Opening the page fires ZERO extra /api/graph fetches (the group rides the
       app's one poll via props). Selecting a video row renders it in the RIGHT detail pane as the
       annotator — the only place its <video> exists.
   - name: stale-not-hidden-mixed-by-time
@@ -34,7 +34,7 @@ scenarios:
       Open #/evals in a real browser against a board that also holds non-media readings (blob-less
       note-only verdicts and/or transcript-only readings). Read the kind dropdown's options from the real
       DOM and compare its element/class with the Issues page's store filter. Pick `image`, recount rows
-      against /api/board; pick `all` and recount; read a blob-less row's kind tag.
+      against /api/graph; pick `all` and recount; read a blob-less row's kind tag.
     expected: |
       The dropdown offers EXACTLY three options — video · image · all — never note, never transcript; and
       it is the SAME shared control as the issues store filter (one component, same select element and

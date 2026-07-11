@@ -19,7 +19,7 @@ The dashboard is a project-agnostic viewer pointed at **one** backend per dev-se
 otherwise indistinguishable. The tab carries its backend's identity instead: the board
 payload exposes `project`, and the frontend sets `document.title` to `<project> · SpexCode`
 whenever the board loads. The name re-derives from whichever backend the viewer actually
-reached (it rides the same `/api/board` poll), so pointing the same board at a different
+reached (it rides the same `/api/graph` poll), so pointing the same board at a different
 `API_URL` re-names the tab.
 
 `project` defaults to the basename of the backend's repo root — its launch folder — which

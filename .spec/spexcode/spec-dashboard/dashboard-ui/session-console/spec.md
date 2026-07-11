@@ -18,7 +18,7 @@ related:
 ## raw source
 
 `Enter` on the board opens the session interface; the always-on top-left window (SessionWindow) is the
-at-a-glance summary. Both are **thin views of `/api/board`** (i.e. `spex board`): the dashboard renders only
+at-a-glance summary. Both are **thin views of `/api/graph`** (i.e. `spex graph --json`): the dashboard renders only
 what the backend reports and never invents session state, so a human watching the dashboard and an agent
 driving the same sessions through the CLI see identical state.
 
@@ -38,7 +38,7 @@ remap). The one surface that stays dark on its own is the **embedded terminal** 
 dark terminal, whatever the app theme. Two panes: a left session list (its width user-draggable, [[resizable-panes]]) and a right area that
 **morphs** by what's focused. The list's **top button row** holds two compact pills above the session rows —
 the `＋` New Session button and a **Search** button, the click twin of the ⌘/Ctrl+/ palette
-([[session-board-search]] owns that contract) — kept out of the `↑/↓` path down to a session.
+([[session-search]] owns that contract) — kept out of the `↑/↓` path down to a session.
 
 **New Session** is a centred avatar + auto-growing input. Nothing is prefilled; typing **`[[`** opens the
 node dropdown (the focused node leads it) — a topic reference ([[mentions]]). A leading **`/`** opens the

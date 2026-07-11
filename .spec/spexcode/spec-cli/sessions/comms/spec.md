@@ -28,7 +28,7 @@ The mesh divides into the delivery path and the relationships drawn over it:
 - **[[comms-edge]]** — recording each send into the recipient's per-worktree log so direct agent-to-agent
   talk becomes a first-class, restart-surviving relationship the graph draws, plus the one-shot watch-start
   handshake that tells a watched agent who now supervises it.
-- **[[graph]]** — the live monitor network (edge A→B iff A runs `spex watch`/`spex wait` on B) and the
+- **[[session-edges]]** — the live monitor network (edge A→B iff A runs `spex watch`/`spex wait` on B) and the
   `spex watch` lifecycle event stream.
 
 So the graph reads two relationships at a glance — the directed **monitor** arrow (watching) and the

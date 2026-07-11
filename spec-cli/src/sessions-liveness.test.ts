@@ -46,7 +46,7 @@ test('an UNPROVEN listener probe reads unknown, never a false offline (issue #40
 
 test('resume replays the PINNED launcher command, immune to a since-changed default (resume-launcher-pin)', () => {
   // the pinned resolved command wins — a backend now running under a DIFFERENT configured default cannot change
-  // which launcher (and config dir) a resume replays. This is the seam reopen/drain read at every (re)launch.
+  // which launcher (and config dir) a resume replays. This is the seam resumeSession/drain read at every (re)launch.
   assert.equal(launcherCmd(rec({ launchCmd: 'reclaude --original-config-dir', launcher: null })), 'reclaude --original-config-dir')
   // an old record with neither a pin nor a name has nothing to replay → undefined (best-effort ambient default).
   assert.equal(launcherCmd(rec({ launchCmd: null, launcher: null })), undefined)

@@ -46,13 +46,13 @@ export async function clientCapture(id: string): Promise<CaptureResult> {
   return { ok: false, status: r.status, reason: (await r.text().catch(() => '')) || `status ${r.status}` }
 }
 
-// POST /api/sessions/:id/keys — prompt dispatch (the backend routes it through the rendezvous socket,
-// socket-only + fail-loud; a non-accepted prompt comes back ok:false / HTTP 502).
+// POST /api/sessions/:id/input {kind:"text"} — prompt dispatch (the backend routes it through the rendezvous
+// socket, socket-only + fail-loud; a non-accepted prompt comes back ok:false / HTTP 502).
 export async function clientSend(id: string, text: string, from?: string): Promise<DispatchResult> {
   await guarded('session send')
   // `from` = the sending agent's own session id; the backend logs the comms edge ([[comms-edge]]) only when
   // it's present (an agent send), so a human-shell send stays unrecorded.
-  const r = await apiFetch(`/api/sessions/${seg(id)}/keys`, post({ text, ...(from ? { from } : {}) }))
+  const r = await apiFetch(`/api/sessions/${seg(id)}/input`, post({ kind: 'text', text, ...(from ? { from } : {}) }))
   return await r.json().catch(() => ({ ok: false, error: `bad backend response (${r.status})` })) as DispatchResult
 }
 
@@ -95,17 +95,17 @@ export async function clientMerge(id: string): Promise<{ dispatched: boolean; re
 // POST /api/sessions/:id/resume — bring the agent back (relaunch ONLY if confirmed offline); demotes
 // working→idle, keeps any declaration. The RESUME GUARD REFUSES (409 {refused:true}) on a live/unproven agent;
 // `force` overrides for a wedged-but-alive process. {ok:false} otherwise = no such session (404).
-export async function clientReopen(id: string, force = false): Promise<{ ok: boolean; error?: string; refused?: boolean }> {
-  await guarded('session reopen')
+export async function clientResume(id: string, force = false): Promise<{ ok: boolean; error?: string; refused?: boolean }> {
+  await guarded('session resume')
   const r = await apiFetch(`/api/sessions/${seg(id)}/resume`, post({ force }))
   return await r.json().catch(() => ({ ok: false, error: `bad backend response (${r.status})` }))
 }
 
-// POST /api/sessions/:id/exit — the soft stop: kill tmux + socket, KEEP the worktree (session goes offline,
+// POST /api/sessions/:id/stop — the soft stop: kill tmux + socket, KEEP the worktree (session goes offline,
 // resumable). Distinct from close. {ok:false} = no such session.
-export async function clientExit(id: string): Promise<boolean> {
-  await guarded('session exit')
-  const r = await apiFetch(`/api/sessions/${seg(id)}/exit`, post({}))
+export async function clientStop(id: string): Promise<boolean> {
+  await guarded('session stop')
+  const r = await apiFetch(`/api/sessions/${seg(id)}/stop`, post({}))
   return !!(await r.json().catch(() => ({ ok: false })))?.ok
 }
 
@@ -124,19 +124,20 @@ export async function clientRename(id: string, name: string): Promise<boolean> {
   return !!(await r.json().catch(() => ({ ok: false })))?.ok
 }
 
-// POST /api/sessions/:id/rawkey — the raw nav-key channel (tmux send-keys, NEVER the prompt socket): an
-// ordered token batch drives an interactive TUI menu ([[nav-mode-key-ordering]]). {ok:false} = unknown
-// session, no live pane, or no valid token delivered.
-export async function clientRawkey(id: string, keys: string[]): Promise<boolean> {
-  await guarded('session rawkey')
-  const r = await apiFetch(`/api/sessions/${seg(id)}/rawkey`, post({ keys }))
+// POST /api/sessions/:id/input {kind:"keys"} — the LAST-RESORT raw nav-key face of send (tmux send-keys,
+// NEVER the prompt socket): an ordered token batch drives an interactive TUI menu
+// ([[nav-mode-key-ordering]]). {ok:false} = unknown session, no live pane, or no valid token delivered.
+export async function clientSendRawKeys(id: string, keys: string[]): Promise<boolean> {
+  await guarded('session send')
+  const r = await apiFetch(`/api/sessions/${seg(id)}/input`, post({ kind: 'keys', keys }))
   return !!(await r.json().catch(() => ({ ok: false })))?.ok
 }
 
-// GET /api/sessions/:id/prompt — the session's originating prompt (404 if none recorded).
-export type PromptResult = { ok: true; prompt: string } | { ok: false; status: number }
-export async function clientPrompt(id: string): Promise<PromptResult> {
-  const r = await apiFetch(`/api/sessions/${seg(id)}/prompt`)
-  if (r.ok) return { ok: true, prompt: await r.text() }
+// GET /api/sessions/:id — the session RECORD detail (`spex session show`): the board row plus the full
+// originating prompt. 404 → no such session.
+export type ShowResult = { ok: true; session: Session & { prompt: string | null } } | { ok: false; status: number }
+export async function clientShow(id: string): Promise<ShowResult> {
+  const r = await apiFetch(`/api/sessions/${seg(id)}`)
+  if (r.ok) return { ok: true, session: await r.json() as Session & { prompt: string | null } }
   return { ok: false, status: r.status }
 }

@@ -141,7 +141,7 @@ function TwoPart({ parts }) {
   )
 }
 
-// body + parts are NOT on the board ([[board-lean]]); fetch them when a node opens. `/api/specs/:id/content`
+// body + parts are NOT on the board ([[graph-lean]]); fetch them when a node opens. `/api/specs/:id/content`
 // returns both (the backend does the parse), so there is no client-side parser to keep in sync. Cached per
 // (id, version) so re-opening is instant, but a NEW version (the board carries the live version) misses the
 // stale entry and refetches — the detail prose can never lag the version badge above it. A non-OK response is
@@ -189,7 +189,7 @@ export function SpecPane({ node }) {
         <div className="doc-gov prose"><span className="doc-gov-h">{t('nodeView.proseNode')}</span></div>
       )}
       {(() => {
-        // body/parts are lazy-loaded ([[board-lean]]); `node.* ??` keeps a fixture (or a fuller payload) working.
+        // body/parts are lazy-loaded ([[graph-lean]]); `node.* ??` keeps a fixture (or a fuller payload) working.
         // While the fetch is in flight (content still null, nothing on the node) show a spinner rather than an
         // empty pane, so a slow/remote /content read reads as loading, not as a bodyless node. A FAILED fetch
         // resolves content to `{body:'',parts:null}` (not null), so it lands on the empty body, never a spinner
@@ -513,7 +513,7 @@ function DanglingTrack({ track }) {
   )
 }
 
-// the full reading history is NOT on the board ([[board-lean]]): the board's `evals` is only the latest
+// the full reading history is NOT on the board ([[graph-lean]]): the board's `evals` is only the latest
 // reading per scenario, so this tab lazy-loads the whole timeline from `/api/specs/:id/evals` when opened.
 // The board's `scenarios` fold is slim too ({name, tags}), so the declared set — with each scenario's
 // expected and tracked files for the blind-spot rows — comes from the SAME fetch, which carries it whole.

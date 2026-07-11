@@ -180,7 +180,7 @@ ${MENTION_NOTE}`,
     see: 'spex eval ls --session <SEL> (the session’s measured loss) · spex help eval',
   },
   eval: {
-    line: 'eval <verb>           the measurement system: add · ls · lint · retract · clean',
+    line: 'eval <verb>           the measurement system: add · ls · scenario ls · lint · retract · clean',
     body: `Usage: spex eval add [<node>|.] [--scenario <name>] (--pass|--fail) [--note <text>]
                     [--image <png> …repeatable] [--result <path|->] [--video <webm|mp4>] [--timeline <json>]
        spex eval ls [<node>|.] [--json]                a node's reading timeline, newest first

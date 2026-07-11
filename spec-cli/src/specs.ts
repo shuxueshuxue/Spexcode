@@ -102,7 +102,9 @@ function walk(dir: string, parent: string | null, acc: Raw[]) {
 // function over this same universe (every spec node), so a colliding leaf carries one canonical id
 // system-wide instead of a second, diverging bare-leaf scheme.
 export function mintIds(segs: string[][]): string[] {
-  const suffix = (s: string[], k: number) => s.slice(s.length - k).join('_')
+  // NFC pins one canonical byte form for a non-ASCII dir name (macOS hands out NFD basenames), so a typed
+  // `[[中文节点]]` (NFC, what an IME emits) string-matches the minted id on every platform.
+  const suffix = (s: string[], k: number) => s.slice(s.length - k).join('_').normalize('NFC')
   return segs.map((s, i) => {
     let k = 1
     while (k < s.length && segs.some((o, j) => j !== i && o.length >= k && suffix(o, k) === suffix(s, k))) k++

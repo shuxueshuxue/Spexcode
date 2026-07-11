@@ -817,14 +817,17 @@ export const slugify = (s: string | null) =>
 // When there is none, the session is node-agnostic and we label it by the first few words of the prompt.
 // The OPTIONAL leading dot is load-bearing: a node id is its dir basename, so a dot-prefixed config root
 // (`.config`) keeps the dot — without `\.?` here `[[.config]]` captures nothing and never resolves to a node.
-const MENTION = /\[\[(\.?[A-Za-z0-9_-]+)\]\]/
+// Token chars are ANY unicode letter/number (slugify's already-made choice): a CJK dir name is a legal node
+// id, so `[[中文节点]]` must bind the session exactly like an ASCII id — ASCII-only here silently launched
+// node-agnostic.
+const MENTION = /\[\[(\.?[\p{L}\p{N}_-]+)\]\]/u
 const mentionedNode = (prompt: string): string | null => prompt.match(MENTION)?.[1] ?? null
 // @@@ identity-token strip - an `@session` actor mention ([[mentions]]) or a bare UUID-shaped token in the
 // prompt is ANOTHER session's identity, never this one's name. A title/slug wearing it misleads every
 // board/git surface — and a worker tasked with cleaning that session can match its OWN worktree and delete
 // it from under itself. Strip both before deriving; whatever prose remains names the session.
 const UUID_TOKEN = /\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b/g
-const stripIdentityTokens = (s: string) => s.replace(/(^|\s)@[A-Za-z0-9_-]+/g, '$1').replace(UUID_TOKEN, ' ')
+const stripIdentityTokens = (s: string) => s.replace(/(^|\s)@[\p{L}\p{N}_-]+/gu, '$1').replace(UUID_TOKEN, ' ')
 export function titleFromPrompt(prompt: string): string | null {
   const first = stripIdentityTokens(prompt || '').split('\n').map((l) => l.trim()).find(Boolean) || ''
   const words = first.split(/\s+/).filter(Boolean).slice(0, 7).join(' ')

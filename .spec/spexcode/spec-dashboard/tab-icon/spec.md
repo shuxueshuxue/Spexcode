@@ -25,7 +25,7 @@ A project sets `dashboard.icon` in its `spexcode.json` (the same per-project blo
   `api.iconify.design` (200k+ icons across 150+ sets: Material, Lucide, Tabler, Phosphor, Simple Icons…);
 - a **full URL** — used as-is.
 
-Like the title, it rides the `/api/board` poll: `board.projectIcon` carries the configured value, so it
+Like the title, it rides the `/api/graph` poll: `board.projectIcon` carries the configured value, so it
 re-derives from whichever backend the viewer actually reached, and pointing the same board at a different
 backend re-icons the tab. The frontend resolves the value through one helper (`faviconHref`) and sets a
 `<link rel="icon">` at runtime. With no `dashboard.icon` configured the field is empty and the runtime leaves

@@ -2,7 +2,7 @@
 concern: GET /api/sessions/graph is write-only — wait/watch diligently register edges nobody reads
 by: f45d649c-0ef4-4a52-a3fc-223fc0da6e43
 status: open
-nodes: graph
+nodes: session-edges
 created: 2026-07-02T16:55:31.084Z
 ---
 

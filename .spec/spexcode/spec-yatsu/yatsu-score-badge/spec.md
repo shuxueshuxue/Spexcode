@@ -11,7 +11,7 @@ related:
 # yatsu-score-badge
 
 The board carries every node's eval readings AND its declared scenarios ([[yatsu-eval-tab]] folds both onto
-`/api/board`). This node spends that data on a **glance**: a small **count** on the node tile — ✓ *satisfied
+`/api/graph`). This node spends that data on a **glance**: a small **count** on the node tile — ✓ *satisfied
 of total* — that says, without opening anything, **how many** of a node's scenarios are measured-and-passing
 and how many are still **outstanding** (failing, stale, or never measured). A score is execution, like an
 issue count — so it rides **beside** the node, never *as* node state: the git-derived status dot keeps its own
@@ -41,7 +41,7 @@ list; the eval tab ([[yatsu-eval-tab]]) renders the per-reading circle.
 **Tags are the second at-a-glance adornment.** Beside the satisfaction count, a scenario carries
 classification [[yatsu-core]] tags; `score.jsx` exports the one shared **`TagChips`** element that renders
 them as a compact wrapping row of chips. It is the SAME element wherever a scenario surfaces — the
-[[focus-panel]] row, the search palette ([[session-board-search]]), the eval tab's declared-scenario row —
+[[focus-panel]] row, the search palette ([[session-search]]), the eval tab's declared-scenario row —
 so a tag looks identical everywhere and reads off the same `.tag-chip` vocabulary the other chips use.
 `scenarioStates` already threads each scenario's `tags` through (it spreads the scenario), so the consumers
 need no extra wiring. This node owns `TagChips` + its `.tag-chip` style slice; it does NOT own the tag

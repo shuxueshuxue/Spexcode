@@ -120,7 +120,7 @@ session (`act('exit')`, **muted grey**) — it kills the agent + tmux but **keep
 goes `offline` and offers **relaunch** (the same resumable stop a crash produces, see [[state]]); **`/close`**
 removes it (`act('close')`, **red**) — worktree + branch gone, the work discarded, the row's right-click Close's
 twin. `/merge` merges (green), `/type` toggles type mode (yellow), `/eval` jumps to the **Eval tab** (cyan). In the inbox
-`/` menu they **lead** the list, coloured, tagged `[board]`, apart from CC's blue command rows; accepting one
+`/` menu they **lead** the list, coloured, tagged `[ui]`, apart from CC's blue command rows; accepting one
 **runs** it (the one row that acts, not inserts — see [[term-input]]). A board command **overrides** a
 same-named CC command (CC ships its own `/exit`), so that name shows **once** — as the board's, never a
 duplicate row: one command, one identity. Row descriptions render as sentences (first letter capitalised).

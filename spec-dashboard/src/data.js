@@ -50,17 +50,17 @@ export const specUrl = (id, ...parts) =>
   `/api/specs/${encodeURIComponent(id)}${parts.map((p) => '/' + p).join('')}`
 
 // subscribe to the graph's push channel in DELTA mode ([[graph-stream]]/[[graph-delta]]): the server sends a
-// full snapshot on connect (`board-full {to, board}`), then hash-chained patches (`board-delta {from, to,
+// full snapshot on connect (`graph-full {to, graph}`), then hash-chained patches (`graph-delta {from, to,
 // set, del}`) — a few KB per change instead of a full refetch. This is the client mirror of the server's
 // unit decomposition: the board is held as a keyed map (node:<id> / sess:<id> / #order lists / meta), a
 // patch applies only when its `from` tag matches ours (a mismatch reopens the stream, which re-anchors on a
-// fresh board-full — bounded, explicit recovery), and the rendered board is reconstructed from the map after
-// every apply. An OLD backend ignores `?mode=delta` and emits bare `board-changed` — that flips us to legacy
+// fresh graph-full — bounded, explicit recovery), and the rendered board is reconstructed from the map after
+// every apply. An OLD backend ignores `?mode=delta` and emits bare `graph-changed` — that flips us to legacy
 // mode: `onLegacyChange` fires and the caller refetches, exactly the pre-delta protocol. The stream makes NO
 // liveness promise to its caller — a silently dead EventSource (half-open tunnel, sleep-resume) is
 // indistinguishable from a healthy quiet one, so the caller's fallback poll never stands down; it just rides
 // loadGraph's conditional request. EventSource auto-reconnects on drop (a backend hot-reload); every
-// reconnect gets a fresh board-full, so a lost stream self-heals with no client repair logic. Returns an
+// reconnect gets a fresh graph-full, so a lost stream self-heals with no client repair logic. Returns an
 // unsubscribe.
 export function subscribeBoardLive({ onBoard, onLegacyChange }) {
   let es = null
@@ -82,13 +82,13 @@ export function subscribeBoardLive({ onBoard, onLegacyChange }) {
   const open = () => {
     if (closed) return
     try { es = new EventSource('/api/graph/stream?mode=delta') } catch { es = null; return }
-    es.addEventListener('board-full', (e) => {
-      const { to, board } = JSON.parse(e.data)
-      values = unitize(board)
+    es.addEventListener('graph-full', (e) => {
+      const { to, graph } = JSON.parse(e.data)
+      values = unitize(graph)
       tag = to
-      onBoard(board)
+      onBoard(graph)
     })
-    es.addEventListener('board-delta', (e) => {
+    es.addEventListener('graph-delta', (e) => {
       const d = JSON.parse(e.data)
       if (!values || tag !== d.from) { reopen(); return }
       for (const k of d.del || []) values.delete(k)
@@ -96,7 +96,7 @@ export function subscribeBoardLive({ onBoard, onLegacyChange }) {
       tag = d.to
       onBoard(boardFrom(values))
     })
-    es.addEventListener('board-changed', () => onLegacyChange?.())
+    es.addEventListener('graph-changed', () => onLegacyChange?.())
   }
   open()
   return () => { closed = true; try { es?.close() } catch { /* already closed */ } }

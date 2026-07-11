@@ -2,7 +2,7 @@
 scenarios:
   - name: rename-nudge
     tags: [backend-api]
-    code: spec-cli/src/boardStream.ts
+    code: spec-cli/src/graphStream.ts
     related: [spec-cli/src/index.ts]
     description: >-
       Subscribe to `/api/graph/stream` (plain mode), then POST a rename to `/api/sessions/:id/rename`

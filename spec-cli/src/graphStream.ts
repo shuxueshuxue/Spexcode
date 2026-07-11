@@ -4,13 +4,13 @@ import { watch, mkdirSync, type FSWatcher } from 'node:fs'
 import { join } from 'node:path'
 import { sessionsRoot, gitCommonDir } from './layout.js'
 import { sessionSignature } from './sessions.js'
-import { getBoard, invalidateBoard } from './boardCache.js'
-import { unitize, tagOf, diffUnits, type Units } from './boardDelta.js'
+import { getBoard, invalidateBoard } from './graphCache.js'
+import { unitize, tagOf, diffUnits, type Units } from './graphDelta.js'
 
 // @@@ board-stream — the board's freshness is PUSHED, not polled. A dashboard subscribes here ONCE; in
-// plain mode it gets a bare `board-changed` and refetches /api/graph (the legacy protocol, kept verbatim
+// plain mode it gets a bare `graph-changed` and refetches /api/graph (the legacy protocol, kept verbatim
 // for old clients); in DELTA mode (`?mode=delta`) the server itself rebuilds on change and streams the
-// hash-chained patch ([[graph-delta]]): a `board-full {to, board}` on connect, then `board-delta
+// hash-chained patch ([[graph-delta]]): a `graph-full {to, graph}` on connect, then `graph-delta
 // {from, to, set, del}` per change — a few KB against the ~600KB snapshot, with a full-snapshot send
 // whenever the patch wouldn't win (bigger than the board, or the unit decomposition's id-uniqueness
 // precondition failed), so a delta subscriber is NEVER worse off than a full refetch.
@@ -22,7 +22,7 @@ import { unitize, tagOf, diffUnits, type Units } from './boardDelta.js'
 // for liveness/activity, which never touch a file; (4) a delta-gated ~15s cold tick that rebuilds and
 // diffs server-side, catching what no watcher sees (uncommitted worktree spec edits, forge issues) — ONE
 // rebuild per tick total, replacing every open dashboard's own 15s full refetch. Plain mode without delta
-// subscribers keeps its zero-build behavior: sources just fan out `board-changed`.
+// subscribers keeps its zero-build behavior: sources just fan out `graph-changed`.
 
 type Notify = () => void
 type Frame = { event: string; data: string }
@@ -55,13 +55,13 @@ async function rebuildAndBroadcast(): Promise<void> {
       const { units, ok } = unitize(board as Record<string, unknown>)
       const tag = tagOf(units)
       if (tag === lastTag) continue
-      const fullFrame: Frame = { event: 'board-full', data: `{"to":"${tag}","board":${boardJson}}` }
+      const fullFrame: Frame = { event: 'graph-full', data: `{"to":"${tag}","graph":${boardJson}}` }
       let frame = fullFrame
       if (lastUnits && ok) {
         const { set, del } = diffUnits(lastUnits, units)
         const deltaData = JSON.stringify({ from: lastTag, to: tag, set, del })
         // guaranteed win: ship the patch only when it actually beats the snapshot
-        if (deltaData.length < fullFrame.data.length) frame = { event: 'board-delta', data: deltaData }
+        if (deltaData.length < fullFrame.data.length) frame = { event: 'graph-delta', data: deltaData }
       }
       lastUnits = ok ? units : null
       lastTag = tag
@@ -147,7 +147,7 @@ function stopSourcesIfIdle(): void {
 
 // GET /api/graph/stream — one SSE per dashboard tab, server→client only, with a periodic `ping` so an
 // idle proxy never times the connection out. On a backend hot-reload the stream drops and EventSource
-// auto-reconnects to the fresh child; a delta subscriber's reconnect lands a fresh `board-full`, so the
+// auto-reconnects to the fresh child; a delta subscriber's reconnect lands a fresh `graph-full`, so the
 // chain re-anchors with no client-side repair logic.
 export function boardStream(c: Context) {
   const delta = c.req.query('mode') === 'delta'
@@ -156,7 +156,7 @@ export function boardStream(c: Context) {
   return streamSSE(c, async (stream) => {
     let aborted = false
     const send: DeltaSend = (frame) => { void stream.writeSSE(frame).catch(() => {}) }
-    const notify: Notify = () => { void stream.writeSSE({ event: 'board-changed', data: 'x' }).catch(() => {}) }
+    const notify: Notify = () => { void stream.writeSSE({ event: 'graph-changed', data: 'x' }).catch(() => {}) }
     if (delta) { deltaSubs.add(send); ensureColdTick() } else { plainSubs.add(notify) }
     ensureLivePoll()
     const unsub = (): void => { deltaSubs.delete(send); plainSubs.delete(notify); stopSourcesIfIdle() }

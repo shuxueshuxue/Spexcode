@@ -4,7 +4,7 @@ status: active
 hue: 190
 desc: The graph's push channel — an SSE with two modes (bare change signals, or hash-chained incremental patches) fed by every freshness source the backend can see.
 code:
-  - spec-cli/src/boardStream.ts
+  - spec-cli/src/graphStream.ts
 ---
 
 # graph-stream
@@ -21,9 +21,9 @@ the backend pushes and the dashboard follows, so status flips as fast as the cha
 graph-stream is the graph's live-delivery channel: `GET /api/graph/stream`, a server-sent-events stream a
 dashboard opens once, server→client only, with a periodic keep-alive `ping` so an idle proxy never times it
 out. It speaks two protocols on one route. **Plain mode** (no query) is the legacy contract, kept verbatim
-for old clients: a bare `board-changed` signal, the client refetches `/api/graph` on its ETag/304 path.
+for old clients: a bare `graph-changed` signal, the client refetches `/api/graph` on its ETag/304 path.
 **Delta mode** (`?mode=delta`) inverts who fetches: the server sends a full snapshot on every (re)connect
-(`board-full {to, board}`), then per change either the hash-chained patch (`board-delta {from, to, set,
+(`graph-full {to, graph}`), then per change either the hash-chained patch (`graph-delta {from, to, set,
 del}`) or a fresh full when the patch wouldn't win — the algebra, and the proof that this renders exactly
 what refetching would, is [[graph-delta]]'s contract.
 
@@ -57,7 +57,7 @@ the client's own fallback.
 
 **Reconnect is free — and undetectable death is survivable.** A backend hot-reload replaces the child and
 drops the stream; `EventSource` auto-reconnects to the fresh child — and in delta mode the reconnect's
-`board-full` re-anchors the patch chain with no client-side repair logic. But a stream can also die
+`graph-full` re-anchors the patch chain with no client-side repair logic. But a stream can also die
 *silently* — a half-open tunnel, a sleep-resume, a network switch — delivering no data, no FIN, no `error`
 event, indistinguishable client-side from a healthy quiet stream. The client deliberately does NOT try to
 detect that (there is no liveness window to tune): its fallback poll never stands down, riding

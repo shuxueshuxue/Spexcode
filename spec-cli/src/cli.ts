@@ -70,7 +70,7 @@ const SIGNPOSTS: Record<string, string> = {
   ack: 'spex spec ack <node>… --reason "<why>"',
   tree: 'spex graph',
   board: 'spex graph --json',
-  yatsu: 'spex eval — add (was: yatsu eval) · ls (was: show) · lint (was: scan) · retract · clean; `yatsu check-staged` → spex internal check-staged',
+  yatsu: 'spex eval — add (was: yatsu eval) · ls (was: show) · lint (was: scan) · retract · clean; `yatsu check-staged` → spex internal check-staged', // dead-words-ok: signpost — one-version tombstone teaching the renamed spelling (0.4.0 removes it)
   blob: 'spex evidence put|get',
   issues: 'spex issue — ls (was: bare issues) · show · open · reply · close · promote; on|off|status → the `issues.enabled` key in spexcode.json; `issues nudge` → spex internal nudge',
   forge: 'spex issue links [--pending] [--store <host>]  (--host is now --store)',
@@ -242,7 +242,7 @@ async function stateKit() {
     try { return fn() }
     catch (e) { if (/not a git repository/i.test(String((e as any)?.stderr ?? e))) return false; throw e }
   }
-  // truncation transparency ([[state]]): the board table shows only the first NOTE_BOARD_LIMIT chars of a
+  // truncation transparency ([[state]]): the session table shows only the first NOTE_BOARD_LIMIT chars of a
   // note. When a declared note overflows that cap, the confirmation says so — length, what the board shows,
   // where the full text is readable — so the cut is visible to the author instead of silently eaten.
   // Taught ONCE per session: the first overflowing note prints the full notice and drops a sentinel beside
@@ -259,7 +259,7 @@ async function stateKit() {
         writeFileSync(sentinel, `${new Date().toISOString()}\n`)   // only reached on a successful declaration (the echo rides the success branch)
       } catch { /* unreadable/unwritable store dir → fall through and teach again; never block the echo */ }
     }
-    return `\nyour note is ${note.length} chars; the board table shows only the first ${s.NOTE_BOARD_LIMIT} — the full text IS recorded, and readable via spex session review ${(wid || '<your-session>').slice(0, 8)} / spex session ls --json. (said once — later long notes won't repeat this.)`
+    return `\nyour note is ${note.length} chars; the session table shows only the first ${s.NOTE_BOARD_LIMIT} — the full text IS recorded, and readable via spex session review ${(wid || '<your-session>').slice(0, 8)} / spex session ls --json. (said once — later long notes won't repeat this.)`
   }
   return { s, l, sess, noRecord, mark, noteEcho }
 }
@@ -335,7 +335,7 @@ if (cmd === 'serve') {
   // identical to GET /api/graph, machine food. Colour degrades cleanly: off unless stdout is a tty, and
   // NO_COLOR always wins.
   if (flag('node') !== undefined) { console.error('spex graph: --node was renamed — use --focus <id>'); process.exit(2) }
-  const { buildBoard } = await import('./board.js')
+  const { buildBoard } = await import('./graph.js')
   const focusRaw = flag('focus')
   const depthRaw = flag('depth')
   const depth = depthRaw === undefined ? undefined : Number(depthRaw)
@@ -520,7 +520,7 @@ if (cmd === 'serve') {
       for (const s of blind) console.log(`      ∅ unmeasured  ${s.name}  — declared, never measured (blind spot)`)
       let divided = false
       for (const e of rows) {
-        if (!e.inSession && !divided && rows.some((x) => x.inSession)) { console.log(`      ── inherited baseline (other sessions' latest readings) ──`); divided = true }
+        if (!e.inSession && !divided && rows.some((x) => x.inSession)) { console.log(`      ── inherited baseline (other sessions' latest evals) ──`); divided = true }
         const verdict = e.verdict?.status === 'pass' ? '✓ pass' : e.verdict?.status === 'fail' ? '✗ fail' : '· unscored'
         const stale = e.fresh ? '' : ` (stale: ${e.staleAxes.join(',')})`
         console.log(`    ${e.inSession ? '✦' : ' '} ${verdict}${stale}  ${e.scenario}  — ${e.ts}${e.evaluator ? ` · ${e.evaluator}` : ''}`)
@@ -534,7 +534,7 @@ if (cmd === 'serve') {
     await flushExit(await runEval(process.argv.slice(3)))
   } else {
     console.error(`spex eval: unknown verb '${sub}' — add | ls | scenario ls | lint | retract | clean  (spex help eval)`)
-    if (!sub.startsWith('--')) console.error(`  (the old \`spex eval <SEL>\` session read is now \`spex eval ls --session <SEL>\` [--export]; the \`spex yatsu\` verbs moved into this drawer)`)
+    if (!sub.startsWith('--')) console.error(`  (the old \`spex eval <SEL>\` session read is now \`spex eval ls --session <SEL>\` [--export]; the \`spex yatsu\` verbs moved into this drawer)`) // dead-words-ok: signpost — one-version tombstone teaching the renamed spelling (0.4.0 removes it)
     process.exit(2)
   }
 } else if (cmd === 'evidence') {
@@ -677,7 +677,7 @@ if (cmd === 'serve') {
     process.exit(1)
   } else if (sub === 'review') {
     const first = positionals(4)[0]
-    if (first === 'proof') signpost('spex review proof', 'spex eval ls --session <SEL> --export')
+    if (first === 'proof') signpost('spex review proof', 'spex eval ls --session <SEL> --export') // dead-words-ok: signpost — one-version tombstone teaching the renamed spelling (0.4.0 removes it)
     const { clientReview } = await import('./client.js')
     if (!first) { console.error('usage: spex session review <SEL>  (id | id-prefix | node | branch)'); process.exit(2) }
     const id = await resolveSelectorOrExit(first)

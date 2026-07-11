@@ -31,7 +31,7 @@ What keeps native Windows deferred is **one deciding fidelity gap**, plus two le
 not pay:
 
 - **The deciding gap — the live-terminal bridge rides tmux control mode.** The browser Sessions console
-  ([[dashboard]]) streams over `tmux -CC`, tmux's structured control-mode protocol. No native multiplexer is
+  ([[session-console]]) streams over `tmux -CC`, tmux's structured control-mode protocol. No native multiplexer is
   confirmed to speak it, so a native port must **rewrite that live streaming** — poll capture-pane, or attach
   another way. That rewrite, not a config swap, is the real cost.
 - **The two lesser costs.** A mux swap keeps the hand-written bash launchers and hooks (native Windows still

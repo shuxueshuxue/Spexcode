@@ -139,7 +139,7 @@ async function scan(args: string[] = []): Promise<number> {
         const r = latest.get(sc.name)
         if (!r) {
           missingScores++
-          findings.push(`  • eval-missing: '${s.id}' scenario '${sc.name}'${tagStr} has no reading yet — measure with \`spex eval add ${s.id}\``)
+          findings.push(`  • eval-missing: '${s.id}' scenario '${sc.name}'${tagStr} has no eval yet — measure with \`spex eval add ${s.id}\``)
           continue
         }
         const remSignals = (remarkTracks.get(trackKey(s.id, sc.name))?.remarks ?? []).map((rm) => ({ resolved: !!rm.resolved, resolvedAt: rm.resolvedAt }))
@@ -291,7 +291,7 @@ async function evalCmd(args: string[]): Promise<number> {
     const present = new Set(evidence.map((e) => AXIS_FOR_KIND[e.kind]))
     if (!present.has(axis)) {
       const have = evidence.map((e) => `${e.kind}→${AXIS_FOR_KIND[e.kind]}`).join(', ')
-      console.error(`spex eval add: --timeline axis '${axis}' matches none of this reading's evidence (${have}) — a step-map's axis must be the axis of an attached evidence entry`)
+      console.error(`spex eval add: --timeline axis '${axis}' matches none of this eval's evidence (${have}) — a step-map's axis must be the axis of an attached evidence entry`)
       return 2
     }
     timelineBlob = putBlob(Buffer.from(JSON.stringify(parsed)))
@@ -320,9 +320,9 @@ async function evalCmd(args: string[]): Promise<number> {
   // never block: the honest flow is measure on the tree until green → commit that tested tree → file.
   const dirty = dirtyGoverned(root, [...(scenario.code?.length ? scenario.code : node.codeFiles), node.evalPath])
   if (dirty.length) {
-    console.error(`  ⚠ mis-anchored reading: uncommitted changes in governed ${dirty.join(', ')}`)
-    console.error(`    this reading anchors to HEAD ${reading.codeSha.slice(0, 7)}, which does NOT contain those edits — it claims a ${verdict.status} for code that never ran, and the commit that lands them will (correctly) read it stale.`)
-    console.error(`    the honest flow: measure on the tree until green → commit that just-tested tree (code+spec) → THEN file the reading against the clean HEAD (retract this one if it recorded the dirty run).`)
+    console.error(`  ⚠ mis-anchored eval: uncommitted changes in governed ${dirty.join(', ')}`)
+    console.error(`    this eval anchors to HEAD ${reading.codeSha.slice(0, 7)}, which does NOT contain those edits — it claims a ${verdict.status} for code that never ran, and the commit that lands them will (correctly) read it stale.`)
+    console.error(`    the honest flow: measure on the tree until green → commit that just-tested tree (code+spec) → THEN file the eval against the clean HEAD (retract this one if it recorded the dirty run).`)
   }
   return 0
 }
@@ -394,17 +394,17 @@ async function retractCmd(args: string[]): Promise<number> {
   }
 
   const ts = flag(args, 'ts')
-  if (ts !== undefined && has(args, 'last')) { console.error('spex eval retract: --ts and --last conflict — pin one reading or take the latest, not both'); return 2 }
+  if (ts !== undefined && has(args, 'last')) { console.error('spex eval retract: --ts and --last conflict — pin one eval or take the latest, not both'); return 2 }
   const effective = readReadings(node.sidecarPath).filter((r) => r.scenario === scenario)
   if (!effective.length) {
     const { readings } = readSidecar(node.sidecarPath)
     const had = readings.some((r) => r.scenario === scenario)
-    console.error(`spex eval retract: '${id}' scenario '${scenario}' has no ${had ? 'un-retracted ' : ''}reading${had ? ' left' : ''} — nothing to retract`)
+    console.error(`spex eval retract: '${id}' scenario '${scenario}' has no ${had ? 'un-retracted ' : ''}eval${had ? ' left' : ''} — nothing to retract`)
     return 1
   }
   const target = ts !== undefined ? effective.find((r) => r.ts === ts) : effective[effective.length - 1]
   if (!target) {
-    console.error(`spex eval retract: '${id}' scenario '${scenario}' has no un-retracted reading @ ${ts} — readings: ${effective.map((r) => r.ts).join(', ')}`)
+    console.error(`spex eval retract: '${id}' scenario '${scenario}' has no un-retracted eval @ ${ts} — evals: ${effective.map((r) => r.ts).join(', ')}`)
     return 1
   }
 
@@ -421,8 +421,8 @@ async function retractCmd(args: string[]): Promise<number> {
   const now = left.length
     ? `latest is now ${left[left.length - 1].ts} (${verdictText(left[left.length - 1].verdict)})`
     : 'the scenario is unmeasured again (eval-missing)'
-  console.log(`  ⟲ '${id}' scenario '${scenario}' reading @ ${target.ts} (${verdictText(target.verdict)}) retracted — ${now}`)
-  console.log('spex eval retract: 1 reading retracted (an appended event — commit the sidecar so the retraction is attributed)')
+  console.log(`  ⟲ '${id}' scenario '${scenario}' eval @ ${target.ts} (${verdictText(target.verdict)}) retracted — ${now}`)
+  console.log('spex eval retract: 1 eval retracted (an appended event — commit the sidecar so the retraction is attributed)')
   return 0
 }
 
@@ -444,7 +444,7 @@ async function clean(args: string[]): Promise<number> {
   const before = listBlobs().length
   const removed = gc(referenced)
   const mode = all ? 'all' : keepLatest ? 'keep-latest' : 'unreferenced'
-  console.log(`spex eval clean: removed ${removed.length} blob(s), kept ${before - removed.length} (${mode})`)
+  console.log(`spex eval clean: removed ${removed.length} evidence file(s), kept ${before - removed.length} (${mode})`)
   return 0
 }
 
@@ -457,9 +457,9 @@ function checkStaged(): number {
   const blobs = staged.filter(isStrayBlob)
   if (blobs.length) {
     bad = true
-    console.error('✗ SpexCode eval: stray evidence blob(s) staged — blobs live in the shared git common dir, never in the tree:')
+    console.error('✗ SpexCode eval: stray evidence file(s) staged — evidence lives in the shared git common dir, never in the tree:')
     for (const o of blobs) console.error(`    ${o}`)
-    console.error('  Unstage them (git rm --cached <path>); a reading references its blob by hash, it never commits the bytes.')
+    console.error('  Unstage them (git rm --cached <path>); an eval references its evidence by hash, it never commits the bytes.')
   }
 
   for (const rel of staged.filter((p) => p === EVAL_FILE || p.endsWith('/' + EVAL_FILE))) {
@@ -504,9 +504,9 @@ export function formatTimeline(tl: EvalTimeline): string {
   if (!tl.hasEvalFile) return `spex eval ls: '${tl.node}' declares no scenarios (no eval.md)`
   // the retraction trace, newest first — the undo stays visible through the same surface that shows readings.
   const retractLines = (tl.retractions ?? []).map((x) =>
-    `  ⟲ retracted: scenario '${x.scenario}' reading @ ${x.retracts}${x.note ? ` — ${x.note}` : ''}${x.by ? `  by ${x.by}` : ''}  ${x.ts}`)
+    `  ⟲ retracted: scenario '${x.scenario}' eval @ ${x.retracts}${x.note ? ` — ${x.note}` : ''}${x.by ? `  by ${x.by}` : ''}  ${x.ts}`)
   if (!tl.readings.length) {
-    const head = `spex eval ls: '${tl.node}' has scenarios but no reading yet — run \`spex eval add ${tl.node}\``
+    const head = `spex eval ls: '${tl.node}' has scenarios but no eval yet — run \`spex eval add ${tl.node}\``
     return retractLines.length ? [head, '', ...retractLines].join('\n') : head
   }
   const w = Math.max(...tl.readings.map((r) => r.scenario.length))
@@ -522,7 +522,7 @@ export function formatTimeline(tl: EvalTimeline): string {
     const head = `  ${r.scenario.padEnd(w)}  ${verdictText(r.verdict)}  ${badge}  ${r.codeSha.slice(0, 7)}  ${ev}  ${r.ts}`
     return r.expected ? [head, `  ${' '.repeat(w)}  expected: ${r.expected}`] : [head]
   })
-  return [`spex eval ls: '${tl.node}' — ${tl.readings.length} reading(s), newest first`, '', ...lines, ...retractLines].join('\n')
+  return [`spex eval ls: '${tl.node}' — ${tl.readings.length} eval(s), newest first`, '', ...lines, ...retractLines].join('\n')
 }
 
 // `spex eval scenario ls [<node>|.] [--unmeasured] [--json]` — the DECLARED half of the scoreboard: list
@@ -613,7 +613,7 @@ export async function runEvidence(args: string[]): Promise<number> {
   if (args[0] === 'put' && args[1] !== undefined) return blobPut(args[1])
   if (args[0] === 'get') return blobGet(args.slice(1))
   console.error('spex evidence: put <file|-> — stash bytes in the shared evidence cache, print the content hash')
-  console.error('           get <hash> [-o <file>] — read a blob back: local cache first, backend fallback')
+  console.error('           get <hash> [-o <file>] — read evidence back: local cache first, backend fallback')
   return 2
 }
 
@@ -623,7 +623,7 @@ function blobPut(file: string): number {
     console.error(`spex evidence put: cannot read ${file}: ${(e as Error).message}`)
     return 2
   }
-  if (bytes.length === 0) { console.error('spex evidence put: refusing an empty blob'); return 2 }
+  if (bytes.length === 0) { console.error('spex evidence put: refusing empty evidence'); return 2 }
   console.log(putBlob(bytes))
   return 0
 }
@@ -640,7 +640,7 @@ async function blobGet(args: string[]): Promise<number> {
   if (!hash) { console.error('spex evidence get: usage: spex evidence get <hash> [-o <file>]'); return 2 }
   const local = readBlobByHash(hash)   // validates 64-hex before touching the fs, then reads the shared cache
   if (local.ok) return emitBlob(local.bytes, out)
-  if (local.reason === 'invalid') { console.error(`spex evidence get: bad hash '${hash}' — a blob hash is 64 hex chars`); return 2 }
+  if (local.reason === 'invalid') { console.error(`spex evidence get: bad hash '${hash}' — an evidence hash is 64 hex chars`); return 2 }
   const { apiBase } = await import('../../spec-cli/src/sessions.js')
   const url = `${await apiBase()}/api/evidence/${hash}`
   let backendMiss: string
@@ -652,7 +652,7 @@ async function blobGet(args: string[]): Promise<number> {
     backendMiss = `unreachable (${(e as Error).message})`
   }
   console.error(`spex evidence get: ${hash} — not found on either path:`)
-  console.error(`  local cache: ${blobPath(hash)} — no such blob (pruned, or put on another machine)`)
+  console.error(`  local cache: ${blobPath(hash)} — no such evidence (pruned, or put on another machine)`)
   console.error(`  backend:     ${url} — ${backendMiss}`)
   return 1
 }

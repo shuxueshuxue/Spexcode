@@ -67,5 +67,5 @@ export function getBlob(sha: string | null, dir = cacheDir()): Buffer | null {
 // the same mistake). The pre-commit backstop rejects these so pixels never leak into git history.
 export function isStrayBlob(path: string): boolean {
   const base = path.slice(path.lastIndexOf('/') + 1)
-  return BLOB_NAME.test(base) || path.includes('spexcode/evidence/') || path.includes('/yatsu-blobs/')
+  return BLOB_NAME.test(base) || path.includes('spexcode/evidence/') || path.includes('/yatsu-blobs/') // dead-words-ok: archived cache dir name — a stray copy of the retired cache is still rejected
 }

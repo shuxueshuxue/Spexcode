@@ -1,4 +1,4 @@
-import { buildBoard } from './board.js'
+import { buildBoard } from './graph.js'
 
 // @@@ graph-cache — single-flight + cache for the hot /api/graph build ([[graph-lean]]). Assembling the
 // board is expensive (two full-history git-log walks cold, a full `.spec` fs walk every build), so the
@@ -64,7 +64,7 @@ export function getBoard(): Promise<Board> {
         new Promise<never>((_, reject) => {
           watchdog = setTimeout(() => {
             console.warn(`spec-cli: /api/graph build did not settle within ${BUILD_TIMEOUT_MS}ms — wedged build abandoned so the next read can retry`)
-            reject(new Error(`board build did not settle within ${BUILD_TIMEOUT_MS}ms`))
+            reject(new Error(`graph build did not settle within ${BUILD_TIMEOUT_MS}ms`))
           }, BUILD_TIMEOUT_MS)
           watchdog.unref?.()
         }),

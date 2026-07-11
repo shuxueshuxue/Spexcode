@@ -43,5 +43,5 @@ reads before the first board arrives, and if the backend is unreachable.
 
 The `project` field is tab-title's only stake in `board.ts`: it is produced by the shared `buildBoard`
 ([[sessions]]), which also assembles the tree and the session list and carries sibling per-node folds
-([[dashboard-issues]] issues, [[yatsu-eval-tab]] evals). A change there that leaves the `project`
+([[dashboard-issues]] issues, [[eval-tab]] evals). A change there that leaves the `project`
 derivation untouched — e.g. adding the eval fold — is that feature's stake, not tab-title's drift.

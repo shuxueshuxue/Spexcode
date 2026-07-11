@@ -37,7 +37,7 @@ the rest, you don't hand-author the spec tree or wire the dashboard yourself.
 
 Look these up on demand — the formats an agent authors, and the settings it configures:
   spex guide spec       the spec.md format (frontmatter + body + the rules lint enforces)
-  spex guide yatsu      the yatsu.md format (scenario schema + how loss is measured and filed)
+  spex guide eval       the eval.md format (scenario schema + how loss is measured and filed)
   spex guide config     the spexcode.json / spexcode.local.json settings (launchers, dashboard icon, lint
                         budgets, layout) — every field, and which of the two files it belongs in
   spex guide footprint  the footprint model — what SpexCode plants in a repo, and who sees it
@@ -57,11 +57,11 @@ FRONTMATTER (YAML between the opening and closing --- lines; every field optiona
   hue      board colour, 0–360. Default 210.
   status   pending | active | merged | drift. Usually DERIVED from git state — rarely hand-set.
   code:    files this node GOVERNS (is source of truth for) — ideally ONE, a YAML list of repo-relative
-           paths/dirs/*-globs. Drives drift + yatsu. Many nodes MAY govern the same file (ordinary
+           paths/dirs/*-globs. Drives drift + eval freshness. Many nodes MAY govern the same file (ordinary
            composition); a file governed by > maxOwners nodes warns (the \`owners\` rule — split it). Omit
            for a pure-prose node: a cross-cutting contract no file owns.
   related: files this node REFERENCES but does not own — a YAML list, same path forms. Carries coverage
-           (never drift, never yatsu, nothing to ack); it is the many-to-many net that claims the files
+           (never drift, never eval freshness, nothing to ack); it is the many-to-many net that claims the files
            govern doesn't. Every listed path must exist (lint integrity error otherwise).
   surface  config/.config nodes only: system (folded into every agent's prompt) | command (a /command) |
            hook (a lifecycle hook handler — a co-located script the dispatcher runs on the harness events
@@ -91,15 +91,15 @@ WHAT lint CHECKS (spex spec lint; the pre-commit hook gates on errors):
                      governor owns its own module (or merge the nodes, or give it one foundation owner).
 
 LIFECYCLE: author each node on a node/<id> branch, one node per commit; \`spex spec lint\` must reach 0 errors
-before merge. \`spex init\` seeds the first tree; \`spex guide yatsu\` covers the sibling loss-signal file.`
+before merge. \`spex init\` seeds the first tree; \`spex guide eval\` covers the sibling loss-signal file.`
 
-const YATSU = `spex guide yatsu — the yatsu.md file format
+const EVAL = `spex guide eval — the eval.md file format
 
-A yatsu.md sits BESIDE a node's spec.md and says how to MEASURE the node's loss — the gap between live
+An eval.md sits BESIDE a node's spec.md and says how to MEASURE the node's loss — the gap between live
 behaviour and the spec. It is optional, but a node that governs SOURCE code (its code: includes a file whose extension is in
-\`lint.sourceExtensions\` — default .ts/.tsx/.js/.jsx, set it for a Rust/Go/Python tree) with no yatsu.md is
-a blind spot: \`spex eval lint\` flags it \`yatsu-uncovered\`. yatsu defines no DSL and RUNS NOTHING — the
-agent measures; yatsu keeps score.
+\`lint.sourceExtensions\` — default .ts/.tsx/.js/.jsx, set it for a Rust/Go/Python tree) with no eval.md is
+a blind spot: \`spex eval lint\` flags it \`eval-coverage\`. The eval system defines no DSL and RUNS
+NOTHING — the agent measures; eval keeps score.
 
 FRONTMATTER: a \`scenarios:\` list (a YAML block sequence of mappings). Each scenario:
   name         REQUIRED. Unique within the file — it keys the sidecar and \`--scenario <name>\`.
@@ -111,19 +111,19 @@ FRONTMATTER: a \`scenarios:\` list (a YAML block sequence of mappings). Each sce
                use an existing one, or add it to the library to mint it. Tags classify a scenario (surface,
                device) so it can be filtered and, later, routed to the right driver.
   test         optional. A repo path to a co-located runnable file (a playwright.spec.ts, a script)
-               the agent MAY run by hand. Not a driver — yatsu never executes it.
+               the agent MAY run by hand. Not a driver — eval never executes it.
   code         optional. The file THIS scenario GOVERNS, ideally one (a comma list / flow list \`[a, b]\` is
                allowed) — its own slice of the code freshness axis, so scenarios on one node go stale
                independently. Absent → it inherits the node's \`code:\` list. A file governed by > maxOwners
-               scenarios warns \`yatsu-owners\` (split it). Each path must exist (a ghost → \`yatsu-schema\`).
+               scenarios warns \`eval-owners\` (split it). Each path must exist (a ghost → \`eval-schema\`).
   related      optional. Files this scenario REFERENCES but does not govern — same path forms. They do NOT
                stale it (the freshness mirror of a spec node's govern/related). Each path must exist.
 Multi-line prose uses YAML block scalars: \`|\` keeps newlines, \`>\` folds wrapped lines to spaces.
-A yatsu.md OWNS nothing — only its scenarios govern and relate (see governed-related).
+An eval.md OWNS nothing — only its scenarios govern and relate (see governed-related).
 
 THE SCHEMA IS ENFORCED (closed field set, four required fields, unique names, tags within the library). A
 missing required field, an unknown key (a typo like \`descripton:\`), a duplicate name, an out-of-library
-tag, or no scenarios at all is rejected LOUD: \`spex eval lint\` reports it as \`yatsu-schema\`, and the
+tag, or no scenarios at all is rejected LOUD: \`spex eval lint\` reports it as \`eval-schema\`, and the
 pre-commit \`internal check-staged\` BLOCKS the commit.
 
 BODY (after the frontmatter): prose naming the measurement method — YATU ("You As The User"): the agent
@@ -174,14 +174,18 @@ who/when/why); the scoreboard then drops the retracted reading everywhere: the p
 the latest again, or the scenario honestly returns to \`missing\`. Default target is the scenario's latest
 reading (\`--last\` makes that explicit; repeat to peel junk back one filing at a time); \`--ts\` pins one.
 
-THE SCOREBOARD: readings live in yatsu.evals.ndjson beside the yatsu.md — one JSON line per measurement
+THE SCOREBOARD: readings live in evals.ndjson beside the eval.md — one JSON line per measurement
 (a second git-as-database axis). Freshness is derived live from git: a reading goes STALE when a governed
-code file or the scenario (the yatsu.md) moves since it was filed.
-  spex eval lint [--changed]   blind spots: yatsu-schema (malformed) · yatsu-drift (stale) ·
-                                yatsu-missing (never measured) · yatsu-uncovered (governed source, no yatsu.md) ·
-                                yatsu-owners (a file governed by > maxOwners scenarios — split it)
-  spex eval ls <node>        the reading timeline (verdict · freshness · evidence), newest first
-  spex eval clean              GC the content-addressed evidence cache`
+code file or the scenario (the eval.md) moves since it was filed.
+  spex eval lint [--changed]     the measurement layer's findings — PURE ADVISORY, always exit 0 (spec
+                                 lint's errors block commits; a measurement gap never blocks anyone):
+                                 eval-schema (malformed) · eval-drift (stale) · eval-missing (never
+                                 measured) · eval-dangling (orphaned remark track) · eval-coverage
+                                 (governed source, no eval.md — spec lint's coverage, one rule per layer) ·
+                                 eval-owners (a file governed by > maxOwners scenarios — split it)
+  spex eval ls <node>            the reading timeline (verdict · freshness · evidence), newest first
+  spex eval scenario ls [<node>] the declared contracts; --unmeasured = the blind-spot worklist
+  spex eval clean                GC the content-addressed evidence cache`
 
 const CONFIG = `spex guide config — SpexCode's runtime settings (spexcode.json / spexcode.local.json)
 
@@ -316,7 +320,7 @@ the guard (the flag is the proof of intent). Reads point anywhere.
   lint.driftErrorThreshold commit-local gate HARD-BLOCKS a commit touching a node >= this many commits
                            behind (default 3).
   lint.maxOwners           warn when a file is governed by > this many nodes (default 3).
-  lint.scenarioTags        the closed vocabulary a yatsu scenario's tags: must draw from (default
+  lint.scenarioTags        the closed vocabulary an eval scenario's tags: must draw from (default
                            ["frontend-e2e","backend-api","cli","desktop","mobile"]); extend to mint a tag.
 Example — govern your own source dir and loosen the altitude budget:
   { "lint": { "governedRoots": ["src"], "altitude": { "lineBudget": 70 } } }
@@ -409,7 +413,7 @@ not a flag flip.
                             elsewhere cannot be recalled.
   back out entirely         \`spex uninstall\` (add --hooks to also remove the spexcode git hooks).`
 
-const TOPICS: Record<string, string> = { spec: SPEC, yatsu: YATSU, config: CONFIG, footprint: FOOTPRINT }
+const TOPICS: Record<string, string> = { spec: SPEC, eval: EVAL, config: CONFIG, footprint: FOOTPRINT }
 
 // every guide page ends by naming the OTHER help layer, so a reader never dead-ends here: guide is
 // the skill layer (workflows · formats · settings); command usage lives in help.ts's two layers.

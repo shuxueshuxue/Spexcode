@@ -64,7 +64,7 @@ it to `.spec/.issues` on its first store touch after a toolchain update — the 
   ` :: <k=v>` tail; a plain reply has no tail and parses unchanged, and the remark write verbs
   (`remark`/`resolve`/`retract`) are thin siblings of `reply` over this same committed store. Its frontmatter carries `by`
   (author session), `status`, optional `nodes:` (the product nodes it concerns, linked `[[…]]`), optional
-  `evidence:` (yatsu content-addressed blob hashes — the typed reference a cross-node finding carries, per
+  `evidence:` (content-addressed evidence hashes — the typed reference a cross-node finding carries, per
   [[issues]] / [[video-evidence]]). The sentinel is **unforgeable**: user body text is
   neutralized on write, so a body that itself contains that marker can't spawn a phantom reply or truncate
   the thread.

@@ -18,7 +18,7 @@ related:
 
 `/api/graph` shipped every node's full detail — the spec `body`, its parsed `parts`, and its whole `evals`
 history — on every single fetch. Measured at ~1.2 MB for ~117 nodes, and ~88% of it is detail the tree
-overview never renders (a tile shows a title, a desc, a status, a yatsu score — not prose). The graph is a
+overview never renders (a tile shows a title, a desc, a status, an eval score — not prose). The graph is a
 hot, frequently-fetched surface; it should carry the summary the overview needs and nothing else. Detail
 belongs where a node is actually opened, not on the wire every time.
 
@@ -54,7 +54,7 @@ dogfood graph halved again (~576KB → ~270KB).
 
 **The `scenarios` declarations are the third cut.** Each declared scenario rides the graph **slim** —
 `{name, tags}`, the fields every overview surface joins state onto — while its prose (`description` /
-`expected`) and per-scenario `code` join the **lite corpus**: a yatsu node's `/api/specs/lite` row carries
+`expected`) and per-scenario `code` join the **lite corpus**: a measurable node's `/api/specs/lite` row carries
 its scenarios whole, so the one corpus fetch ranks scenario prose as it ranks node bodies. The shared fetch (`corpus.js`) revalidates at most once per mount, when prose is first needed — the
 palette per open, the always-mounted [[focus-panel]] on its first scenario-bearing focus, whose clamped
 `expected` preview and tracked-files line join from it (rows render name/state/tags instantly;

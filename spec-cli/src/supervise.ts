@@ -37,7 +37,7 @@ const repoRoot = join(here, '..', '..')
 const watchRoots = [
   here,                                  // spec-cli/src — the backend's own source
   join(repoRoot, 'spec-forge', 'src'),
-  join(repoRoot, 'spec-yatsu', 'src'),
+  join(repoRoot, 'spec-eval', 'src'),
 ]
 
 type Backend = { port: number; child: ChildProcess }

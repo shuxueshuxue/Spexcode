@@ -1,8 +1,8 @@
 ---
-concern: yatsu eval: unknown flags degrade SILENTLY — an old CLI filed --video as image [[yatsu-core]]
+concern: yatsu eval: unknown flags degrade SILENTLY — an old CLI filed --video as image [[eval-core]]
 by: 60b8fd9a-08c5-4d8e-9139-84d75c065a8c
 status: landed
-nodes: yatsu-core
+nodes: eval-core
 created: 2026-07-03T01:31:50.456Z
 ---
 

@@ -46,7 +46,7 @@ wholesale. The invariant the whole design rests on, and the one this node proves
 So any number of live sources can only ever leave the cache *temporarily ahead* of the last reconcile,
 never durably wrong — the invariant holds **by construction**: a delta stream representing a set of changes
 leaves the cache identical to a reconcile of that final state, and `reconcile()` makes `view()` equal a cold
-full pull. (Verifying this is the job of the test framework — see [[spec-yatsu]] — not an ad-hoc script.)
+full pull. (Verifying this is the job of the test framework — see [[spec-eval]] — not an ad-hoc script.)
 
 The read-only contract holds unchanged: the cache caches a *read* of the forge; it never writes a node's
 version or status (that stays git-derived — see [[spec-forge]]).

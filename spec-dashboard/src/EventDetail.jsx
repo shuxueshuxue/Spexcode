@@ -26,8 +26,8 @@ import { Icon, IconButton } from './icons.jsx'
 // burned in — so every mark renders uniformly in the track. A remark's `resolved` bit renders in
 // the thread (settled when resolved, prominent while open). The composer authors through the CLI-parity
 // /api/remarks (L: the dashboard is a thin wrapper, no dashboard-only write). The pane READS readings and
-// hosts remarks — it never files a reading: verdicts land through the CLI eval seam (`spex yatsu eval`,
-// [[yatsu-core]]) with evidence, and render here as the header badge + A/B pips.
+// hosts remarks — it never files a reading: verdicts land through the CLI eval seam (`spex eval add`,
+// [[eval-core]]) with evidence, and render here as the header badge + A/B pips.
 //
 // A/B history ([[reproduce-before-fix]]): a scenario's readings are its lifecycle, and a bug fix leaves a
 // fail→pass PAIR — the A (reproduced bug) and the B (verified fix). The pane flips through that whole

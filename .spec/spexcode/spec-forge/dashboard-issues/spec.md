@@ -48,7 +48,7 @@ the TTL and AWAITS it (`refreshForgeNow`), so the next read carries the real rea
 a FULL re-list, never the incremental window — a since-read can lag a just-posted write, advancing the
 watermark past it. Read-only throughout — the resident module never writes the forge (writes are the
 [[port]] driver's) and never touches a node's git-derived status. Sibling folds ride the same pattern
-(the [[yatsu-eval-tab]] eval timeline); this node owns only the issues slice.
+(the [[eval-tab]] eval timeline); this node owns only the issues slice.
 
 **Frontend — one glance badge; the list lives in the focus panel.** When a node carries open issues, its
 first row gains one badge — the **count**, hue distinct from the status dot and drift-badge (the three
@@ -63,6 +63,6 @@ never the card's primary destination. The badge renders in the node tile
 number/state/title stay raw forge data.
 
 Out of scope (future siblings): surfacing open **PRs** the same way; any live push of forge deltas
-([[forge-cache]]'s deferred source layer). Frontend behaviour is **measured by looking**: the `frontend-e2e` yatsu scenario
+([[forge-cache]]'s deferred source layer). Frontend behaviour is **measured by looking**: the `frontend-e2e` eval scenario
 `open-count-badge-on-tile` screenshots the rendered board — the ◆N badge on a tile with open issues, no
 on-node popover — and files image-evidenced readings.

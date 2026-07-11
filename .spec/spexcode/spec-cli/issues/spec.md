@@ -27,7 +27,7 @@ no mechanical work (nothing branches on it) is a label, not structure — what a
 suggestion, an annotation, a question) is what its prose says.
 `nodes[]` is the binding to the graph; `status` is the issue's OWN lifecycle,
 authored in its store, never git-derived (a node *defines*, an issue *does* — [[spec-forge]]'s two-plane
-contract holds here unchanged). `evidence[]` is a list of yatsu content-addressed blob hashes — the typed
+contract holds here unchanged). `evidence[]` is a list of content-addressed evidence hashes — the typed
 target [[video-evidence]] points at when a video finding routes to the responsible node's concern. A reply
 may itself be a **remark** ([[remark-substrate]]) — the same `{by, at, body}` shape plus a mutable
 `resolved` bit and the reading it was authored against — but that is one reply carrying extra state, not a

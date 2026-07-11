@@ -41,7 +41,7 @@ export type Issue = {
   created: string
   body: string
   replies: Reply[]
-  evidence: string[] // yatsu content-addressed blob hashes — the typed cross-node finding reference
+  evidence: string[] // content-addressed evidence hashes — the typed cross-node finding reference
   url?: string       // a forge permalink; a local issue has none
 }
 
@@ -64,7 +64,7 @@ function forgeIssueBody(concern: string, body: string | undefined, nodes: string
   return [
     (body || `(no detail given — ${concern})`).trim(),
     nodes.length ? `Spec: ${nodes.join(', ')}` : '',
-    evidence.length ? `Evidence: ${evidence.join(', ')} (yatsu blob hashes)` : '',
+    evidence.length ? `Evidence: ${evidence.join(', ')} (evidence content hashes)` : '',
   ].filter(Boolean).join('\n\n')
 }
 
@@ -197,7 +197,7 @@ export async function promote(id: string, opts: { author?: string } = {}): Promi
   const body = [
     t.body,
     t.nodes.length ? `\nSpec: ${t.nodes.join(', ')}` : '',
-    t.evidence.length ? `\nEvidence: ${t.evidence.join(', ')} (yatsu blob hashes)` : '',
+    t.evidence.length ? `\nEvidence: ${t.evidence.join(', ')} (evidence content hashes)` : '',
     `\n---\nPromoted from the local issue \`${id}\` (opened by ${t.by} @ ${t.created}; promoted by ${author}).`,
   ].filter(Boolean).join('\n')
   const { number, url } = await driver.createIssue({ title: t.concern, body })

@@ -38,9 +38,9 @@ branch (`mainBranch()`, auto-detected — never a hardcoded `main`). The payload
   --write-tree` — no checkout, nothing to abort, the SAFE form of "would this conflict"); `lint` (the
   [[spec-lint]] module's error / warning counts). conflict/ahead/dirty are session-specific; the lint gate
   reflects the CLI package's own tree, where the command runs, so it is memoized on that tree's fingerprint
-  (an unchanged tree skips the re-lint on repeated reviews / [[review-proof]] opens). There is deliberately
-  NO build/typecheck/test gate here: whether a change is SOUND is proven by the node's yatsu, measured
-  through the real product ([[review-proof]] shows that evidence) — not by a language-specific automated
+  (an unchanged tree skips the re-lint on repeated reviews / [[session-eval]] opens). There is deliberately
+  NO build/typecheck/test gate here: whether a change is SOUND is proven by the node's eval scenarios, measured
+  through the real product ([[session-eval]] shows that evidence) — not by a language-specific automated
   checker baked into the cockpit. So the gates stay language-agnostic (git + the spec↔code graph), correct
   for any governed project, TS or Python or otherwise, rather than a `tsc` that only ever spoke TypeScript.
 - **proposal** — the session's standing proposal kind + note, read from its global record.
@@ -64,5 +64,5 @@ from "blank pane" — empty pane → 200, unknown id → 404, offline → 409, c
 (`GET …/prompt`) returns a session's originating ask (404 if none). Paths resolve from the CLI package's OWN
 location, never a hardcoded layout, so the cockpit works wherever the package lives. Every cockpit verb only
 READS or DISPATCHES — none mutates main directly. The cockpit's stake in the shared `cli.ts`/`index.ts` hubs is just the thin
-`review`/`merge`/`capture`/`prompt` routes; the yatsu reframe's churn there — its rewritten verb line and
+`review`/`merge`/`capture`/`prompt` routes; the eval reframe's churn there — its rewritten verb line and
 its eval-blob comment — is that feature's, not the cockpit's drift.

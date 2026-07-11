@@ -44,7 +44,7 @@ Then grow nodes under that spine:
   dignifying it with a confident spec.
 
 **Give every frontend node a loss signal.** A node that governs UI or visual code (`.tsx`/`.jsx`/`.vue`/
-`.svelte`/`.css`, or the dashboard) is a blind spot until it carries a `yatsu.md` — so write one as you
+`.svelte`/`.css`, or the dashboard) is a blind spot until it carries a `eval.md` — so write one as you
 extract it: a **real user-path** scenario — a goal and the steps to reach it through the running app (never a
 bare render-check), covering a failure/empty/edge state — with a **description** of those steps, the
 **expected** zero-loss result, and **≥1 `tags`** classifying it (a surface like `frontend-e2e`/`backend-api`/
@@ -52,7 +52,7 @@ bare render-check), covering a failure/empty/edge state — with a **description
 outside the library fails `scan`, so use an existing one or extend the library. Frontend scenarios are measured by looking (YATU) — a screenshot filed with
 `spex eval add <node> --image <png> --pass`. Backend nodes don't need one yet; run `spex eval lint` to
 list the frontend nodes still uncovered. On a **re-run** this is also where you sharpen — give an uncovered
-node its first scenario, tighten a thin one (a bare render-check, or a stale `expected`); `spex guide yatsu`
+node its first scenario, tighten a thin one (a bare render-check, or a stale `expected`); `spex guide eval`
 has the schema.
 
 **Extract incrementally — don't plan the whole tree before writing.** For a large area (hundreds of files),

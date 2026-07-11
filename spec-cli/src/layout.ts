@@ -198,7 +198,7 @@ export type RawRecord = {
 //       `SPEXCODE_SESSION_ID`.
 // Claude is UNCHANGED: its `sessionEnvVar` (CLAUDE_CODE_SESSION_ID) already EQUALS its record id, so tier (1)
 // resolves to that very id — the same value `SPEXCODE_SESSION_ID` would have returned; there is no shared
-// app-server to contaminate it. No worktree fallback. (sessions.ts's `ownSessionId` delegates here; spec-yatsu
+// app-server to contaminate it. No worktree fallback. (sessions.ts's `ownSessionId` delegates here; spec-eval
 // reads it to resolve the current node.)
 export function envSessionId(): string | null {
   for (const h of HARNESSES) {

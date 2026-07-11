@@ -3,7 +3,7 @@ import { useT } from './i18n/index.jsx'
 import { Icon } from './icons.jsx'
 
 // The ONE evidence renderer ([[event-detail]], U1): a content-addressed blob → the right media element,
-// identical in EVERY home evidence appears — the node eval tab's gallery ([[yatsu-eval-tab]]), the eval
+// identical in EVERY home evidence appears — the node eval tab's gallery ([[eval-tab]]), the eval
 // detail's stage ([[event-detail]] — whose annotate-a-loop CLIP player is the one deliberate
 // specialization; everything else on the stage renders here), and an issue/eval reply's inline links
 // ([[issues-view]]'s Thread). A typed entry ({hash, kind, state}) renders via EvidenceItem; a BARE hash

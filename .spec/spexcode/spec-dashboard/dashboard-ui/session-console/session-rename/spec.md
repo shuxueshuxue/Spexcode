@@ -78,5 +78,5 @@ list's empty space below the rows is simply that block with no pop-over — the 
 and the docked input keeps focus, never a stolen-focus gap.
 
 This node's slices of the shared files are the context-menu/rename-modal styling in `styles.css` and the
-rename route in `index.ts`; the yatsu eval tab's `.eval-*` styles and its eval-blob endpoint, reworked in
-the measure-and-score reframe, are [[spec-yatsu]]'s churn, not session-rename's drift.
+rename route in `index.ts`; the eval tab's `.eval-*` styles and its eval-blob endpoint, reworked in
+the measure-and-score reframe, are [[spec-eval]]'s churn, not session-rename's drift.

@@ -18,7 +18,7 @@ const KIND_TAG = { video: 'vid', image: 'img', transcript: 'txt', data: 'data' }
 
 // normalize a reading to its evidence LIST (each {hash, kind, state}): the backend's `evidence` list when
 // present, else the legacy scalar (blob + blobKind, absent kind → image) as a one-entry list, else empty —
-// the same scalar→list bridge yatsu's evidenceOf does, so a legacy reading still renders.
+// the same scalar→list bridge the eval sidecar's evidenceOf does, so a legacy reading still renders.
 export const evidenceList = (r) =>
   r.evidence?.length ? r.evidence
   : r.blob != null ? [{ hash: r.blob, kind: r.blobKind || 'image', state: r.blobState || 'present' }]

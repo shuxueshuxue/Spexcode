@@ -1,7 +1,7 @@
 // @@@ prepack - runs before npm BUILDS A TARBALL: both `npm pack` and `npm publish` fire prepack (never on
 // a plain `npm install`), so pack and publish produce the IDENTICAL complete tarball. The published
 // `spexcode` package is the monorepo ROOT's runtime subset, shipped with the layout PRESERVED (spec-cli/ +
-// spec-yatsu/src + spec-forge/src + spec-dashboard/dist) so the cross-package `../../spec-*` imports resolve
+// spec-eval/src + spec-forge/src + spec-dashboard/dist) so the cross-package `../../spec-*` imports resolve
 // in-package with zero import rewriting. The one thing not in git is the dashboard build, so build it here →
 // spec-dashboard/dist, which the `files` allowlist ships. A build failure is loud and aborts the pack/publish.
 import { existsSync } from 'node:fs'

@@ -27,9 +27,12 @@ import { Icon } from './icons.jsx'
 // plain `{ by, at, body }`; no schema grows.
 
 const ANCHOR_RE = /^▶\s*(\d+):([0-5]?\d)(?:\s*·\s*([^\n]*))?/
-const HEAD_FRAME_RE = /^!\[frame\]\(\/api\/yatsu\/blob\/[0-9a-f]{64}\)\n?/   // the anchor's OWN frame, riding right under its line
-const BLOB_URL = /\/api\/yatsu\/blob\/([0-9a-f]{64})/g
-const BLOB_MD = /!\[[^\]]*\]\(\/api\/yatsu\/blob\/([0-9a-f]{64})\)/g   // an inline evidence link (frame, clip, …)
+// READ regexes accept the archived `/api/yatsu/blob/…` shape beside the live `/api/evidence/…` one:
+// committed thread bodies are immutable archives, and an archive keeps its archive name — extraction
+// yields the bare hash, so rendering/fetching always goes through the live route. Writes emit only the new shape.
+const HEAD_FRAME_RE = /^!\[frame\]\(\/api\/(?:evidence|yatsu\/blob)\/[0-9a-f]{64}\)\n?/   // the anchor's OWN frame, riding right under its line
+const BLOB_URL = /\/api\/(?:evidence|yatsu\/blob)\/([0-9a-f]{64})/g
+const BLOB_MD = /!\[[^\]]*\]\(\/api\/(?:evidence|yatsu\/blob)\/([0-9a-f]{64})\)/g   // an inline evidence link (frame, clip, …)
 export const mmss = (tMs) => { const s = Math.floor(tMs / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` }
 // the first line of a body, parsed as an anchor: { tMs, step, label, rest } or null. `rest` is the body
 // with the anchor line stripped, so the moment renders as a chip and the prose renders below it.

@@ -2,7 +2,7 @@
 title: guide
 status: active
 hue: 200
-desc: `spex guide` is the reference surface as a command — no topic prints the setup workflow; `spec`/`yatsu` print the file-format manual, `config` the runtime-settings manual, `footprint` the residence-model manual.
+desc: `spex guide` is the reference surface as a command — no topic prints the setup workflow; `spec`/`eval` print the file-format manual, `config` the runtime-settings manual, `footprint` the residence-model manual.
 code:
   - spec-cli/src/guide.ts
 related:
@@ -24,10 +24,10 @@ the agent from one verb, picked by an optional topic:
   its real footguns (shared `spex` bin — uninstall before switching; no prebuilt dist under a source link),
   never the headline: teaching the maintainer's path as the install was exactly the drift the packaging
   node's arrival made stale.
-- **`spec` / `yatsu` → the agent-facing FILE-FORMAT manual.** The whole detail of the two authored
-  artifacts — spec.md (frontmatter, body, the rules lint enforces) and yatsu.md (the scenario schema, how
+- **`spec` / `eval` → the agent-facing FILE-FORMAT manual.** The whole detail of the two authored
+  artifacts — spec.md (frontmatter, body, the rules lint enforces) and eval.md (the scenario schema, how
   loss is measured and filed) — so an agent looks the format up on demand instead of reverse-engineering
-  it. The yatsu page is **prescriptive about evidence**: step-unfolding evidence carries a step-map — named
+  it. The eval page is **prescriptive about evidence**: step-unfolding evidence carries a step-map — named
   steps on the evidence's own axis, emitted by the run that produced it, never eyeballed off the artefact.
   The concept is tool-neutral (Playwright is one emitter); the page scopes the tool honestly — `--timeline`
   covers the video TIME axis (`tMs`) today, the frame/line generalization named as an open gap, not faked.

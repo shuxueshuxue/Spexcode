@@ -35,33 +35,33 @@ proposal=$(jget proposal)
 # BSD sed has no \| alternation.)
 cont=$(printf '%s' "$input" | sed -n 's/.*"stop_hook_active"[[:space:]]*:[[:space:]]*\([a-z]*\).*/\1/p')
 
-# @@@ yatsu advisory - a nudge (never a gate) emitted when a session stops CLEAN-DONE (committed work + a
-# done/awaiting declaration): the agent IS yatsu's evaluator, so a yatsu gap in what it just changed is a
+# @@@ eval advisory - a nudge (never a gate) emitted when a session stops CLEAN-DONE (committed work + a
+# done/awaiting declaration): the agent IS the measuring hand, so an eval gap in what it just changed is a
 # blind spot to flag the moment work lands. SCOPED via `spex eval lint --changed` to the nodes THIS branch
 # touched — so an agent is never nagged about a score that went stale in a node it never opened (the bug
-# that made three workers ask "is this mine?"). Three gap classes it surfaces: yatsu-drift / yatsu-missing
-# (a node with a yatsu.md whose score is stale / unmeasured) and yatsu-uncovered (a FRONTEND node with no
-# yatsu.md — an obvious UI change carrying no loss signal). Delivered via the Stop hook's additionalContext
+# that made three workers ask "is this mine?"). Three gap classes it surfaces: eval-drift / eval-missing
+# (a node with an eval.md whose score is stale / unmeasured) and eval-coverage (a FRONTEND node with no
+# eval.md — an obvious UI change carrying no loss signal). Delivered via the Stop hook's additionalContext
 # (NEVER a block decision: a gap is a heads-up, not a wall). FIRES ONCE: the additionalContext itself forces
 # one continuation, so the CALLER guards it on stop_hook_active — re-emitting on the forced re-stop is what
 # looped 31 turns and tripped the Stop-hook block cap. Called only on ALLOW paths, never alongside a block.
 #
 # SURFACE-NEUTRAL: a stale/unmeasured score is refreshed only by PRODUCING the measurement on the scenario's
 # OWN surface — a real run, never a desk check and never deferring to review a recording after the fact. The
-# nudge privileges NO surface: `scan --changed` carries each drift/missing scenario's tag on its finding line
-# ([[yatsu-core]]'s lint.scenarioTags — frontend-e2e / backend-api / cli / desktop / mobile), so the agent
+# nudge privileges NO surface: `eval lint --changed` carries each drift/missing scenario's tag on its finding line
+# ([[eval-core]]'s lint.scenarioTags — frontend-e2e / backend-api / cli / desktop / mobile), so the agent
 # reads there WHICH surface to run. One line covers all five surfaces; there is no per-surface branch.
-yatsu_advisory() {
+eval_advisory() {
   local out ids n msg esc
   # Codex Stop hooks reject the Claude-family `hookSpecificOutput.additionalContext` shape on allow paths.
   # Keep Codex Stop stdout empty unless it is a real block decision; the dispatcher still bridges block
   # reasons to Codex stderr.
   [ "${SPEXCODE_HARNESS:-claude}" = codex ] && return 0
   out=$($S eval lint --changed 2>&1)
-  n=$(printf '%s\n' "$out" | grep -cE 'yatsu-(drift|missing|uncovered):')
-  [ "${n:-0}" -gt 0 ] || return 0   # no gap in what you changed (or scan unavailable) -> nothing to nudge
-  ids=$(printf '%s\n' "$out" | sed -n "s/.*yatsu-[a-z]*: '\([^']*\)'.*/\1/p" | awk '!seen[$0]++' | head -6 | paste -sd' ' -)
-  msg="yatsu — the loss signal the optimizer reads — flags ${n} gap(s) in nodes you changed: ${ids}. A node whose score went stale/unmeasured: re-measure it — PRODUCE the measurement YOURSELF with a real run of the scenario's actual surface (its tag on the \`spex eval lint --changed\` line tells you WHICH surface to run), compare to expected, and file it with \`spex eval add <node>\`; don't desk-check it, and don't defer to reviewing a recording after the fact. A FRONTEND node with no yatsu.md: give it one (a scenario — description + expected), since an obvious UI change should carry a loss signal. \`spex eval lint --changed\` lists them. (Advisory — fires once, not a gate.)"
+  n=$(printf '%s\n' "$out" | grep -cE 'eval-(drift|missing|coverage):')
+  [ "${n:-0}" -gt 0 ] || return 0   # no gap in what you changed (or eval lint unavailable) -> nothing to nudge
+  ids=$(printf '%s\n' "$out" | sed -n "s/.*eval-[a-z]*: '\([^']*\)'.*/\1/p" | awk '!seen[$0]++' | head -6 | paste -sd' ' -)
+  msg="eval — the loss signal the optimizer reads — flags ${n} gap(s) in nodes you changed: ${ids}. A node whose score went stale/unmeasured: re-measure it — PRODUCE the measurement YOURSELF with a real run of the scenario's actual surface (its tag on the \`spex eval lint --changed\` line tells you WHICH surface to run), compare to expected, and file it with \`spex eval add <node>\`; don't desk-check it, and don't defer to reviewing a recording after the fact. A FRONTEND node with no eval.md: give it one (a scenario — description + expected), since an obvious UI change should carry a loss signal. \`spex eval lint --changed\` lists them. (Advisory — fires once, not a gate.)"
   esc=$(printf '%s' "$msg" | sed 's/\\/\\\\/g; s/"/\\"/g')
   printf '{"hookSpecificOutput":{"hookEventName":"Stop","additionalContext":"%s"}}\n' "$esc"
 }
@@ -79,7 +79,7 @@ if [ "${status:-active}" = awaiting ] && { [ "$proposal" = merge ] || [ "$propos
     # nudge ONCE: emit on the natural stop, but STAY SILENT on the forced re-stop the additionalContext
     # itself causes (stop_hook_active=true). Without this guard the advisory re-fired every clean-done stop
     # and looped — the bug a prior change DESCRIBED in a comment but never actually implemented at the call.
-    [ "$cont" != true ] && yatsu_advisory
+    [ "$cont" != true ] && eval_advisory
     exit 0   # work is committed and ahead of main -> the proposal is honest, let it stop.
   fi
   if [ "$cont" = true ]; then
@@ -100,7 +100,7 @@ if [ "$cont" = true ]; then
   # undeclared stop with uncommitted work becomes `asking` (needs the human), never a false awaiting/done.
   if $S internal commit-gate >/dev/null 2>&1; then
     $S internal session-state awaiting --session "$sid" --propose nothing --note "auto: stopped without declaring" >/dev/null 2>&1 || true
-    # NOTE: no yatsu nudge on the auto-declare path. It only runs on the forced continuation (cont=true),
+    # NOTE: no eval nudge on the auto-declare path. It only runs on the forced continuation (cont=true),
     # where a guarded advisory could never fire anyway, and an unguarded one was a second loop vector (a
     # mark-active tool call could re-enter this branch). The clean-done path above is the single nudge site.
   else

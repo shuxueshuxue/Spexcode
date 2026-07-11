@@ -39,7 +39,11 @@ CONTENT between the anchor's tree and HEAD ([[yatsu-core]]'s content fallback) �
 squash-merge or cherry-pick that left governed content byte-identical reads fresh, and only an
 anchor whose commit object is truly gone stays conservatively stale (named as such). Distinguishing
 a genuine orphan from a reachable-but-unmerged branch is still never attempted — the content compare
-is honest for both without ref-scanning beyond the one HEAD walk. Among *parallel* version commits
+is honest for both without ref-scanning beyond the one HEAD walk. The fallback keeps the walk's cost
+promise too: its git lookups are memoized over immutable objects — a full sha names a fixed tree
+forever, so a (sha, path) resolution never invalidates — and a rebuild over a fully-orphaned corpus
+(an adopter history rewrite) pays in-memory lookups, scaling with distinct anchors, never with
+readings × rebuilds. Among *parallel* version commits
 of one node (two branches each re-versioning it), the base stays the walk-newest row — an ambiguity
 only a merge resolves.
 

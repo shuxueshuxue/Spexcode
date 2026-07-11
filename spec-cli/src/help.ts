@@ -187,10 +187,9 @@ a node/<id> branch links its PR for free). Read-only — git/.spec stays the sin
 
 Creates a session: node branch + worktree + a launched agent carrying your prompt (= session new).
 Give it ONLY its task — the dev-flow contract reaches it through the materialized system prompt.
---node <id> only BINDS the session to a node — pure metadata: the branch name (node/<id>-<shortid>),
-the board's attribution display, and a one-line pointer to the node's spec.md when the node exists
-(never the spec body). The prompt's first [[id]] mention binds identically and is the more common
-path; with neither, the session launches node-agnostic.
+--node <id> (or the prompt's first [[id]] mention, same effect) binds the session to that node:
+branch name node/<id>-<shortid>, board attribution, and one appended line with the node's spec.md
+path when the node exists. With neither, the session is bound to no node.
 --prompt-file <path> reads the prompt from a file (- = stdin), so a long multi-paragraph prompt never
 fights shell quoting; it is exclusive with the inline prompt (both given = error), and an unreadable
 or empty file refuses the launch.

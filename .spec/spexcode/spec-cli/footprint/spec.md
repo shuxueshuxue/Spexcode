@@ -2,7 +2,7 @@
 title: footprint
 status: active
 hue: 200
-desc: SpexCode's presence on a host it does not own — shipped as one package, planted into a repo, governed by one share axis, audited for real delivery to the agent, and removed without a trace.
+desc: SpexCode's presence on a host it does not own — shipped as one package, planted into a repo, never tracked where derived, audited for real delivery to the agent, and removed without a trace.
 ---
 # footprint
 
@@ -28,10 +28,11 @@ The lifecycle's stations, each owning its own detail:
   runtime subset with the monorepo layout preserved, no build step on the user's box.
 - **[[spex-init]]** — adoption by a *repo*: the seed spec tree, git hooks, and starter config, planted as
   copied data (never code-embedded strings), additive and never destructive.
-- **[[render-policy]]** — residence in the repo: the ONE share axis. Spec data always tracked, machine
-  facts never, run residue out-of-tree; the machine-independent renders carry the single vote —
-  `committed` | `ignored` | `hidden` — and every planted artifact's visibility follows its KIND, never a
-  usage mode.
+- **[[render-policy]]** — residence in the repo, vote-less: spec data always tracked, machine facts
+  never, run residue out-of-tree, renders NEVER tracked (per-clone exclude; the clean/smudge filter for a
+  mixed contract file). Every planted artifact's visibility follows its KIND — and a contract file's kind
+  is a live content fact. History is guarded and freshness anchored by [[commit-surgery]]'s git-native
+  hooks; no harness event ever triggers a render.
 - **[[doctor]]** — the audit of delivery to an *agent*: is this agent actually governed, or silently running
   free? Under-delivery and double-delivery both caught, with the repair printed.
 - **[[spex-uninstall]]** — departure: materialize(∅) plus the store — every generated artifact removed by

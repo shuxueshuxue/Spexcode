@@ -4,18 +4,19 @@ import { execFileSync } from 'node:child_process'
 import { git } from './git.js'
 import { writeManagedBlock, removeManagedBlock } from './harness.js'
 
-// @@@ contract-filter ([[content-filter]]) - the render=hidden answer for a MIXED-CONTENT contract file: a
-// CLAUDE.md/AGENTS.md the HOST ALREADY TRACKS, where "generate + ignore" is a no-op (git ignores only
-// untracked paths) and the folded-in block would ride the tracked file into every teammate's diff. A git
-// clean/smudge content filter keeps the two contents on their own sides of the index: the REPO stores the
+// @@@ contract-filter ([[content-filter]]) - the answer for a MIXED-CONTENT contract file: a
+// CLAUDE.md/AGENTS.md the HOST TRACKS — or has begun writing its OWN prose into — where "generate + ignore"
+// is either a no-op (git ignores only untracked paths) or would hide USER content. A git clean/smudge
+// content filter keeps the two contents on their own sides of the index: the REPO stores the
 // pristine host prose (clean strips our sentinel block on stage/diff), the WORKING TREE carries prose + block
 // (smudge re-injects it on checkout). Everything the filter needs is PER-CLONE — `git config
 // filter.spexcode.*` + a managed block in `.git/info/attributes` + two files under `<common>/spexcode/` —
-// zero repo footprint, exactly the hidden contract. The sentinels are the load-bearing anchor: the invariant
+// zero repo footprint. The sentinels are the load-bearing anchor: the invariant
 // is clean(smudge(x)) == x (for text ending in one newline — see the shim), so `git status` stays clean.
-// Planted ONLY for a file the host tracks (the weakest sufficient tool: an untracked contract file is wholly
-// ours and plain generate+ignore already hides it — no filter). materialize plants/refreshes it under
-// render=hidden and erases it under every other policy ([[render-policy]] / the forgetting law).
+// Planted only where mixed content EXISTS or is imminent (a tracked contract file, or an untracked one the
+// user's prose entered — pre-armed so their eventual `git add` strips the block; a wholly-ours file needs
+// only the exclude). materialize plants/refreshes/erases it per that live kind detection ([[render-policy]]
+// / the forgetting law).
 
 // the three field-sharpened edges this module owes ([[content-filter]]):
 //   ① the configured command points at a STABLE shim path and degrades to `cat` (identity) when the shim is
@@ -93,9 +94,10 @@ esac
 const filterCmd = (shim: string, mode: 'smudge' | 'clean') =>
   `sh -c 'test -r "$0" && exec bash "$0" ${mode} || exec cat' '${shim.replace(/'/g, `'\\''`)}'`
 
-// plant (or refresh) the filter for the given TRACKED contract files: the shim + the block content it
-// smudges, the per-clone git config, and the attribute lines binding each file to the filter. Idempotent —
-// every write is a full replace. `contract` is the assembled block body (guide + surface:system).
+// plant (or refresh) the filter for the given contract files (tracked, or untracked-with-host-content —
+// pre-armed): the shim + the block content it smudges, the per-clone git config, and the attribute lines
+// binding each file to the filter. Idempotent — every write is a full replace. `contract` is the assembled
+// block body (guide + surface:system). settleIndexStat skips untracked entries (no index blob) by design.
 export function plantContractFilter(proj: string, trackedFiles: string[], contract: string): void {
   const common = commonDirOf(proj)
   mkdirSync(filterDir(common), { recursive: true })

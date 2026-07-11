@@ -56,5 +56,6 @@ installing is a per-clone onboarding step, re-run whenever the source changes (t
 snapshot, not a symlink). The hook is advisory and bypassable; the non-bypassable backstop is [[ci-gate]].
 
 This node owns **only** the main-authoring guard. The same `pre-commit` file also carries the
-[[spec-lint]] shim (it runs `spex lint` after this gate), but that block is that node's contract, not
+[[commit-surgery]] footprint station (unconditional materialize + staged-index repair, after this gate)
+and the [[spec-lint]] shim (it runs `spex lint` last), but those blocks are those nodes' contracts, not
 this one's — they share a file, not a concern.

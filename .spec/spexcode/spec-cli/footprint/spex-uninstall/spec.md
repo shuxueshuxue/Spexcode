@@ -14,7 +14,7 @@ related:
 `spex uninstall [dir]` (default: cwd) is the clean inverse of [[spex-init]] — and it is not a parallel
 implementation of one: the in-tree/global-config backout **is dematerialize, the render's own erase phase
 asserted against the empty policy** (the forgetting law's materialize(∅), [[harness-delivery]]). Whatever
-any policy — harness set, [[render-policy]] vote, or a retired legacy mode — ever wrote, the same
+any policy — harness set, the retired render vote, or an older legacy mode — ever wrote, the same
 identity-stamped erase forgets it; uninstall adds only what a per-run render never owns. It is **surgical,
 never destructive**: every removal is gated on a SpexCode **identity stamp** (the managed-block sentinels,
 the shim's own `dispatch.sh` command line, the trust sentinels, the generated mark / name-scoped on-demand

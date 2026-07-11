@@ -1,9 +1,10 @@
 ---
 scenarios:
-  - name: hidden-tracked-contract
+  - name: tracked-contract
     description: >
-      On a host repo that TRACKS its own CLAUDE.md/AGENTS.md, set render=hidden and materialize through the
-      real CLI. Read git's own verdicts: `git status --porcelain`, the worktree file, `git show :CLAUDE.md`
+      On a host repo that TRACKS its own CLAUDE.md/AGENTS.md, adopt and materialize through the real CLI
+      (no configuration — the filter is the tracked-file residence, not a mode). Read git's own verdicts:
+      `git status --porcelain`, the worktree file, `git show :CLAUDE.md`
       (the index), `git config filter.spexcode.*`, and .git/info/attributes. Include a host file that
       BEGINS with blank lines.
     expected: >

@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# @@@ footprint refresh (post-checkout) ([[commit-surgery]]) - a branch checkout is one of the three git
+# transitions that can move the render's inputs: .spec/.config content changes across branches, and a
+# contract file's TRACKEDNESS can flip (switching to a branch that tracks CLAUDE.md checks out the pristine
+# index prose — the re-render here writes the block back into the working file, binds the clean/smudge
+# filter, and withdraws the exclude entry; the kind-transition heals itself). Git-native anchors only —
+# never a harness event. Quiet, best-effort: a failed refresh self-heals at the next anchor (pre-commit's
+# unconditional materialize is the correctness backstop).
+#
+# args: <prev-HEAD> <new-HEAD> <flag>; flag=1 is a branch checkout, flag=0 a file checkout (git checkout --
+# <path> restores files and moves nothing the render depends on — skip those).
+[ "${3:-0}" = "1" ] || exit 0
+main_root=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)")
+repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
+if command -v spex >/dev/null 2>&1; then
+  spex internal refresh-footprint >/dev/null 2>&1 || true
+elif [ -x "$repo_root/node_modules/.bin/spex" ]; then
+  "$repo_root/node_modules/.bin/spex" internal refresh-footprint >/dev/null 2>&1 || true
+elif [ -x "$main_root/spec-cli/bin/spex.mjs" ]; then
+  "$main_root/spec-cli/bin/spex.mjs" internal refresh-footprint >/dev/null 2>&1 || true
+fi
+exit 0

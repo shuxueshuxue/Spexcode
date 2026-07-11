@@ -29,56 +29,64 @@ scenarios:
     tags: [backend-api, cli]
     code: spec-cli/src/worktree-sources.ts
     related: [spec-cli/src/sessions.ts]
-  - name: policy-round-trip
+  - name: vote-less-residence
     description: >
-      On a host repo that already tracks its own CLAUDE.md/AGENTS.md/.gitignore (with an internal
-      blank-line run), adopt SpexCode and walk the render policies through the real CLI:
-      ignored → hidden → committed → ignored, then render the final policy twice. At each stop inspect
-      git status, the .gitignore bytes, .git/info/exclude, and the contract files.
+      On a host repo that already tracks its own CLAUDE.md/AGENTS.md/.gitignore (internal blank-line run
+      included), adopt SpexCode through the real CLI (`spex init`) and read git's own verdicts: status,
+      the .gitignore bytes, .git/info/exclude, the index blob of CLAUDE.md, the filter config/attributes.
+      Then materialize a second time.
     expected: >
-      Each policy renders its own contract exactly (ignored: block in tracked .gitignore; hidden: clean
-      status, block in exclude, index pristine via the content filter; committed: render entries leave the
-      block, machine facts stay). The final return to ignored converges BYTE-FOR-BYTE with the first
-      ignored render (the forgetting law), and the doubled render changes nothing (idempotence). The user's
-      blank-line run survives every hop.
+      No vote, no hint, no mystery-M: status is clean immediately (tracked contracts covered by the
+      clean/smudge filter, index pristine, working tree carries the block), the host .gitignore is
+      byte-untouched, the managed ignore block lives ONLY in per-clone .git/info/exclude (machine facts +
+      run residue + wholly-ours renders; never a tracked contract file's name), and the second render is
+      byte-stable (idempotence).
     tags: [backend-api, cli]
     code: spec-cli/src/materialize.ts
     related: [spec-cli/src/materialize.test.ts]
-  - name: legacy-private-compat
+  - name: retired-axis-compat
     description: >
-      On a legacy untrack-private-shaped repo (spexcode.local.json {"private":true}, .spec + spexcode.json
-      present but untracked), run `spex materialize` through the real CLI and capture stderr and the
-      resulting ignore homes.
+      On an adopted host, set every legacy footprint field a real deployment might still carry —
+      render:"committed", render:"hidden", an unknown word, private:true — and run `spex materialize`
+      through the real CLI, capturing stderr and the resulting residence state each time. Also plant a
+      legacy managed block in the TRACKED .gitignore (the old ignored-mode home) and re-render.
     expected: >
-      The render behaves as render=hidden (managed block in .git/info/exclude, none in a tracked
-      .gitignore) and stderr carries the loud, non-fatal migration notice: the private→render:"hidden"
-      mapping, the one-time `git add .spec spexcode.json` recipe, and the pushed-history-is-not-recallable
-      WARN. The run itself succeeds — the deployment keeps working until migrated.
+      Every value is IGNORED with a loud, non-fatal stderr notice naming the removal recipe and `spex
+      guide footprint` — never a failure, and the residence state is byte-identical to the no-field render
+      (one behavior). The legacy .gitignore block is erased by the next render (forgetting law), leaving
+      an honest one-time `M .gitignore` migration diff and the host's own rules intact.
     tags: [backend-api, cli]
     code: spec-cli/src/materialize.ts
+  - name: user-prose-kind-transition
+    description: >
+      The common adoption path: init on a repo with NO contract file (CLAUDE.md is generated, wholly ours,
+      excluded), then the user (or their agent) writes their own prose into CLAUDE.md. Re-render, read
+      check-ignore/status/attributes, then run the user's own `git add CLAUDE.md` and read the index.
+    expected: >
+      Wholly-ours: excluded, invisible in status. The moment user prose enters, the next render WITHDRAWS
+      the exclude entry (user content is never hidden) and pre-arms the clean filter; the file surfaces as
+      honestly untracked (??). Their add succeeds — the staged blob carries their prose and NO sentinel
+      block; the working tree keeps prose + block. SpexCode never staged or committed anything itself.
+    tags: [backend-api, cli]
+    code: spec-cli/src/materialize.ts
+    related: [spec-cli/src/contract-filter.ts]
   - name: real-project-field-adoption
     description: >
-      YATU on a REAL open-source project (a fresh honojs/hono clone carrying its own team CLAUDE.md), three
-      parties simulated as a bare team.git remote plus adopter and teammate clones. Walk the full adoption
-      loop through user surfaces only (spex verbs + bare git, config learned from `spex guide footprint`):
-      A adopt with the default ignored (init, commit spec data, push, teammate pulls); B switch to hidden
-      (exclude home, content filter on the tracked CLAUDE.md, a real prose edit pushed through the filtered
-      file); C switch to committed (renders enter the repo, teammate discovers natively); D the forgetting
-      law committed→hidden→ignored→initial and a final spex uninstall; E legacy {"private":true} through
-      materialize.
+      YATU on a REAL open-source project (a fresh clone carrying its own team CLAUDE.md), three parties
+      simulated as a bare team.git remote plus adopter and teammate clones. Walk the full adoption loop
+      through user surfaces only (spex verbs + bare git): A adopt (init, commit spec data, push, teammate
+      pulls); B a real prose edit pushed through the filtered tracked CLAUDE.md; C a leak attempt — force-
+      stage an artifact and a block-carrying blob, then commit with the planted hooks; D `spex uninstall`.
     expected: >
-      A: spec data + .gitignore block reach the teammate, renders don't, teammate status clean, the tracked
-      host CLAUDE.md honestly dirty on the adopter. B: block migrates to .git/info/exclude, adopter status
-      clean via the guarded renormalize, HEAD pristine, and the teammate receives the prose edit without
-      ever seeing the block. C: the block reaches the teammate's CLAUDE.md/AGENTS.md natively. D: every
-      switch converges to that policy's exact state (the return to ignored equals the step-A state) and
-      uninstall leaves zero residue — no empty .claude/.codex, host CLAUDE.md byte-identical to its own
-      prose, the whole teammate-side adoption diff reduced to the spec data plus the team's own edit.
-      E: private:true maps to hidden with a loud, non-fatal stderr migration notice. All five, with no
-      contract deviation.
+      A: spec data reaches the teammate, renders don't (no ignore-block in any tracked file, no render in
+      the push), adopter AND teammate status clean, no decision hint anywhere. B: the teammate receives
+      the prose edit without ever seeing the block; HEAD stays pristine. C: the pre-commit surgery strips
+      the block from the staged blob and evicts the artifact — the commit lands clean with a printed note,
+      no rejection. D: uninstall leaves zero residue — host CLAUDE.md byte-identical to its own prose, the
+      whole teammate-visible adoption diff reduced to the spec data plus the team's own edits.
     tags: [backend-api, cli]
     code: spec-cli/src/worktree-sources.ts
-    related: [spec-cli/src/materialize.ts, spec-cli/src/contract-filter.ts]
+    related: [spec-cli/src/materialize.ts, spec-cli/src/contract-filter.ts, spec-cli/src/commit-surgery.ts]
 ---
 
 Measure through the real product surface, not by reading the code: a throwaway git repo shaped like the

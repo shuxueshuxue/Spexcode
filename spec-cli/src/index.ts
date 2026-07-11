@@ -32,33 +32,33 @@ const app = new Hono()
 app.use('/api/*', cors())
 const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app })
 
-app.get('/', (c) => c.text('spec-cli — GET /api/board · /api/specs · /api/specs/:id/history · /api/layout · /api/sessions · /api/slash-commands'))
+app.get('/', (c) => c.text('spec-cli — GET /api/graph · /api/specs · /api/specs/:id/history · /api/layout · /api/sessions · /api/slash-commands'))
 // the supervisor's readiness gate (supervise.ts): a bare git-free 200 so a booting child reports ready the
 // instant Hono is listening. Not under /api/* — loopback-only (supervisor→child), no CORS needed.
 app.get('/health', (c) => c.text('ok'))
-// the assembled board (merged tree + overlay + sessions) — the dashboard's single source. Same data
-// as `spex graph --json`; the frontend only adds x/y pixels on top. Freshness is PUSH-first ([[board-stream]]): the
-// dashboard reloads on a `/api/board/stream` event, not a tight poll, so the route is a conditional-request
+// the assembled graph (merged tree + overlay + sessions) — the dashboard's single source. Same data
+// as `spex graph --json`; the frontend only adds x/y pixels on top. Freshness is PUSH-first ([[graph-stream]]): the
+// dashboard reloads on a `/api/graph/stream` event, not a tight poll, so the route is a conditional-request
 // endpoint: `etag()` hashes the serialized body, and a reload whose `If-None-Match` matches gets a bodyless 304
 // instead of the full transfer (~1 MB on the dogfood board — it scales with the node count). The 304 saves the
-// WIRE only; the COMPUTE is saved by [[board-cache]]: getBoard() is single-flight + cached, so a poll storm
+// WIRE only; the COMPUTE is saved by [[graph-cache]]: getBoard() is single-flight + cached, so a poll storm
 // shares ONE build instead of each running its own — the poll-frequency cut (push channel) and the
 // build-coalescing cut compound. A hard timeout bounds a wedged build to a loud 503 rather than an
 // unboundedly-held connection (the wall sits well above the legitimately-several-seconds cold first build);
 // a merely-slow single-flight build keeps running and caches for the next poll, while a NEVER-settling one
-// is bounded by [[board-cache]]'s own build watchdog, so the next poll retries a fresh build.
+// is bounded by [[graph-cache]]'s own build watchdog, so the next poll retries a fresh build.
 const BOARD_TIMEOUT_MS = Number(process.env.SPEXCODE_BOARD_TIMEOUT_MS || 20000)
-app.get('/api/board', etag(), async (c) => {
+app.get('/api/graph', etag(), async (c) => {
   const timeout = Symbol('timeout')
   const json = await Promise.race([getBoardJson(), new Promise<typeof timeout>((r) => setTimeout(() => r(timeout), BOARD_TIMEOUT_MS))])
-  if (json === timeout) return c.json({ error: 'board build timed out' }, 503)
+  if (json === timeout) return c.json({ error: 'graph build timed out' }, 503)
   return c.body(json as string, 200, { 'content-type': 'application/json; charset=UTF-8' })
 })
-// the board's push channel: an SSE that fires `board-changed` on any session-store write, so the dashboard
-// reloads the instant status moves instead of waiting for its slow fallback poll ([[board-stream]]).
-app.get('/api/board/stream', (c) => boardStream(c))
+// the graph's push channel: an SSE that fires `board-changed` on any session-store write, so the dashboard
+// reloads the instant status moves instead of waiting for its slow fallback poll ([[graph-stream]]).
+app.get('/api/graph/stream', (c) => boardStream(c))
 app.get('/api/specs', async (c) => c.json(await loadSpecs()))
-// the search corpus ([[board-lean]]): a filesystem-only {id,title,path,desc,body} for every node, NO git. The
+// the search corpus ([[graph-lean]]): a filesystem-only {id,title,path,desc,body} for every node, NO git. The
 // board omits `body` to stay lean, so the search palette fetches this ONCE when it opens (cached client-side)
 // to rank nodes over their prose — off the board's hot poll. A literal segment, before the `:id` routes.
 // Scenario prose rides the same corpus: the board's `scenarios` fold is slim ({name, tags}), so a yatsu
@@ -73,7 +73,7 @@ app.get('/api/specs/lite', (c) => {
       : row
   }))
 })
-// one node's body + parsed parts ([[board-lean]]): the board no longer ships either, so the detail view
+// one node's body + parsed parts ([[graph-lean]]): the board no longer ships either, so the detail view
 // fetches this when a node opens. 404 for an unknown id.
 app.get('/api/specs/:id/content', (c) => {
   const x = specContent(c.req.param('id'))
@@ -311,15 +311,15 @@ app.post('/api/uploads', async (c) => {
 // forward keystrokes, and close.
 app.get('/api/sessions', async (c) => c.json(await listSessions()))
 // edges derived live from `spex session watch` monitors (A→B = agent A is watching B), not a stored subscription;
-// watch/unwatch register + heartbeat. A literal `graph` segment so it never collides with the `:id` routes.
-app.get('/api/sessions/graph', async (c) => c.json(await sessionGraph()))
-app.post('/api/sessions/graph/watch', async (c) => {
+// watch/unwatch register + heartbeat. A literal `edges` segment so it never collides with the `:id` routes.
+app.get('/api/sessions/edges', async (c) => c.json(await sessionGraph()))
+app.post('/api/sessions/edges/watch', async (c) => {
   const b = await c.req.json().catch(() => ({}))
   const selectors = Array.isArray(b?.selectors) ? b.selectors.map(String) : []
   const ok = registerWatch(String(b?.token || ''), String(b?.watcher || ''), selectors, Number(b?.ttlMs) || undefined)
   return c.json({ ok }, ok ? 200 : 400)
 })
-app.post('/api/sessions/graph/unwatch', async (c) => {
+app.post('/api/sessions/edges/unwatch', async (c) => {
   const b = await c.req.json().catch(() => ({}))
   const ok = deregisterWatch(String(b?.token || ''))
   return c.json({ ok }, ok ? 200 : 404)
@@ -451,7 +451,7 @@ app.post('/api/sessions/:id/close', async (c) => c.json({ ok: await closeSession
 // set (or clear, with a blank) a session's display-name override; persists to the session's global record
 // (`session.json`) so it survives a restart. Unknown id → 404. That record sits INSIDE the watched store, but
 // the store watch is best-effort (it can fail to attach), so the route still nudges the stream explicitly
-// ([[board-stream]]) — the rename shows in ~150ms deterministically, never waiting out a cold tick.
+// ([[graph-stream]]) — the rename shows in ~150ms deterministically, never waiting out a cold tick.
 app.post('/api/sessions/:id/rename', async (c) => {
   const body = await c.req.json().catch(() => ({}))
   const ok = await renameSession(c.req.param('id'), typeof body?.name === 'string' ? body.name : '')

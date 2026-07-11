@@ -394,7 +394,7 @@ async function paneTitles(): Promise<Map<string, string>> {
 
 // @@@ sessionSignature - a CHEAP fingerprint of the two live board signals the session-store fs-watch can't
 // see, because they are tmux-derived, not file writes: LIVENESS (which sessions exist — a crash/offline) and
-// ACTIVITY (each pane's self-summary title). Two tmux calls, NO git and NO store walk, so [[board-stream]] can
+// ACTIVITY (each pane's self-summary title). Two tmux calls, NO git and NO store walk, so [[graph-stream]] can
 // poll this to push a `board-changed` the instant a worker dies or updates its headline, instead of the
 // dashboard waiting for its slow cold-path fallback. Sorted so it only moves on a real change.
 export async function sessionSignature(): Promise<string> {
@@ -601,7 +601,7 @@ function guardSession(id: string, primary: () => Session | null, degraded: () =>
 // persisted subscription. When a `spex session watch` process starts it registers here and heartbeats; the edge
 // exists ONLY while that watch runs (deregistered on exit, dropped on a missed heartbeat). Single owner:
 // this in-memory map in the SERVER process — the watch process (a separate `spex session watch`) talks to it over
-// HTTP (POST /api/sessions/graph/watch + …/unwatch). No datastore, no file: a backend restart starts
+// HTTP (POST /api/sessions/edges/watch + …/unwatch). No datastore, no file: a backend restart starts
 // empty and live watches re-register on their next heartbeat. Kept isolated from the board assembler.
 // an edge is either a LIVE monitor arrow (A→B = A watches B, directed) or a recorded comms link (A↔B =
 // they have exchanged `count` direct messages, undirected). The dashboard renders the two kinds apart.
@@ -798,8 +798,8 @@ async function postJSON(path: string, body: unknown): Promise<void> {
   } catch { /* best-effort: backend may be down; the next heartbeat / TTL reconciles */ }
 }
 export const reportWatch = (token: string, watcher: string, selectors: string[], ttlMs: number): Promise<void> =>
-  postJSON('/api/sessions/graph/watch', { token, watcher, selectors, ttlMs })
-export const reportUnwatch = (token: string): Promise<void> => postJSON('/api/sessions/graph/unwatch', { token })
+  postJSON('/api/sessions/edges/watch', { token, watcher, selectors, ttlMs })
+export const reportUnwatch = (token: string): Promise<void> => postJSON('/api/sessions/edges/unwatch', { token })
 
 // @@@ isBackendDown - a `client.ts` BackendError surfacing in the watch poll loop (whose session
 // `source` is the HTTP backend client). Matched by NAME, not `instanceof`, so sessions.ts never imports

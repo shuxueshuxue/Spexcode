@@ -7,7 +7,7 @@ scenarios:
       the resolved backend), confirm the three-source precedence by starting the dev server three ways and
       sending a request through its `/api` proxy each time: (1) with `API_URL=<backend A>` set; (2) with NO
       `API_URL` but a `spexcode.json` carrying `dashboard.apiUrl=<backend B>` reachable by walking up from
-      cwd; (3) with neither set. Observe which backend actually answers the proxied `/api/board` (run a tiny
+      cwd; (3) with neither set. Observe which backend actually answers the proxied `/api/graph` (run a tiny
       identifiable backend on A and B), and read the resolved proxy `target` for case (3).
     expected: >-
       `API_URL` wins whenever it is set (case 1 → backend A answers). With no env, the per-project

@@ -38,7 +38,7 @@ status-coloured tree (coloured when stdout is a tty; NO_COLOR respected), one li
 derived status, title, and attention badges (drift:N · stale:N · issues:N · ghost).
   --focus <id>  render just that subtree (unknown id fails loud)
   --depth N     limit levels below the shown root; prunes are counted, never silent
-  --json        the full payload (tree · overlay · sessions), identical to GET /api/board — machine
+  --json        the full payload (tree · overlay · sessions), identical to GET /api/graph — machine
                 food; with --focus/--depth it is that filtered subtree as nested objects instead`,
     see: 'spex spec search (find one node by intent) · spex session ls (just the sessions, as a table)',
   },

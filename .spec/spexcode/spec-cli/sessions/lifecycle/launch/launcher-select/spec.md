@@ -52,7 +52,7 @@ the create path), never silently defaulted. `--harness` and `POST /api/sessions 
 create-session inputs; callers use `--launcher <name>` / `{ launcher }`.
 
 **Persisted and API-exposed, not badged on the board.** A session's chosen launcher NAME is durable data: it
-is stored on the record and rides the session payload (`/api/sessions` + `/api/board`) alongside its
+is stored on the record and rides the session payload (`/api/sessions` + `/api/graph`) alongside its
 `harness`, so any surface that needs the launch identity can read it. It is deliberately NOT rendered as a
 per-session board badge — a harness glyph + name on every session row read as visual clutter, so the board
 stays clean. The wrong-launcher confusion (a human "testing claude-glm" quietly handed another launcher) is

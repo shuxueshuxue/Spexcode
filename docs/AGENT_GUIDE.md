@@ -56,14 +56,23 @@ a file inside the worktree.
 
 If you're the **managing session** (you read this file), you're a **manager**, not a worker. Don't
 write feature code and don't deep-read source — that's what workers are for. Read the goal node and
-this loop, then **dispatch immediately**: decompose the goal into spec-node-sized tasks and delegate
+this loop, then **dispatch immediately**: decompose the goal into worker-sized tasks and delegate
 each. There is no discovery phase.
 
-- **DISPATCH** — `spex new "<task>" --node <id>` launches one worker. Give it **only its task**; the
-  whole contract (the dogfood ritual, the commit-before-declare gate, the merge style) reaches it
-  through its own system prompt and the product mechanism — don't restate any of it. One independent
-  feature per node.
-- **PARALLELIZE** — dispatch independent nodes **concurrently**. That parallelism is the core payoff
+- **DISPATCH** — `spex new "<task>"` launches one worker. The unit of dispatch is a **task**, never a
+  node: a session is node-agnostic by default, and no mechanism feeds any spec's content to a session
+  — the worker finds and reads its governing spec itself. When the task concerns one specific node,
+  mention it as `[[<id>]]` in the prompt (or pass `--node <id>` — same effect): that *binds* the
+  session to the node, which is pure metadata — the branch name (`node/<id>-<shortid>`), the board's
+  attribution display, and (when the node exists) one appended line pointing at its `spec.md` path,
+  never the body. The *live* node↔session link is earned, not declared: the edit overlay (the nodes
+  a session actually changes) and the commits' `Session:` trailers — a node never belongs to a
+  session, nor a session to a node. One trap: the prompt's **first `[[…]]` literal** is the binding,
+  even a passing prose mention of an unrelated or nonexistent id (it becomes the branch name), so
+  write dispatch prompts with that in mind. Give the worker **only its task**; the whole contract
+  (the dogfood ritual, the commit-before-declare gate, the merge style) reaches it through its own
+  system prompt and the product mechanism — don't restate any of it.
+- **PARALLELIZE** — dispatch independent tasks **concurrently**. That parallelism is the core payoff
   of spec-driven dev, so reach for it; don't serialize out of caution. Contention on `main` is fine —
   git serializes the merges, and a conflict just means you re-merge. Never throttle parallel work to
   avoid conflicts.

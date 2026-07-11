@@ -949,7 +949,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 </div>
               ))}
               {/* Eval tab — the session's derived evaluation rendered INLINE (always available, not
-                  review-gated). Mounts on each visit so it reflects the live diff/loss/gates ([[review-proof]]).
+                  review-gated). Mounts on each visit so it reflects the live diff/loss/gates ([[session-eval]]).
                   "Open a session" from inside this tab means SHOW ITS CONSOLE: the eval detail's filer chip
                   routinely names the session already being viewed (its own filed readings), where the plain
                   openSession would no-op (selection unchanged, hash identical) and leave a dead button —

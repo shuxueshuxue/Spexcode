@@ -174,7 +174,7 @@ session concern; spec-awareness is universal.
 `asking` resumes only on a human prompt (unlike self-resuming `parked`); `idle` is its inferred opposite,
 a stop with no declaration. Surfacing an `asking` is the manager's job (see [[session-edges]]). The lifecycle
 writers live in `sessions.ts`; state's only stake in the shared `cli.ts` hub is the `spex session`
-declaration commands and the `spex ls` table — a sibling verb's churn there, like the `yatsu` usage line
+declaration commands and the `spex ls` table — a sibling verb's churn there, like the `eval` usage line
 rewritten in the measure-and-score reframe, moves the file but is not state's drift. A declaration echoes a one-line confirmation — recorded for
 the dashboard, after which the next tool call (via mark-active) flips the record back to `active`, so an agent never reads
 that re-flip as a lost proposal. Every note-carrying declaration (`done`/`ask`/`park`/`state`, all of which

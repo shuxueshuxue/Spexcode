@@ -6,7 +6,7 @@ desc: The ONE evidence+reply detail pane (U1), store-agnostic, reused in EVERY h
 code:
   - spec-dashboard/src/EventDetail.jsx
 related:
-  - spec-yatsu/src/evaltab.ts
+  - spec-eval/src/evaltab.ts
   - spec-cli/src/index.ts
   - spec-dashboard/src/NodeView.jsx
   - spec-dashboard/src/Thread.jsx
@@ -18,7 +18,7 @@ related:
 
 The human's measuring hand on a recorded user loop: watch the clip, point at the moment something is
 wrong, say what — and have that judgment land where it belongs, as one durable, conversable thing. This is
-an authoring surface over an **already-captured** reading; yatsu still runs nothing, and no new ledger
+an authoring surface over an **already-captured** reading; eval still runs nothing, and no new ledger
 structure exists for its sake. "Annotator" was never a real concept (U1): an annotation is just an anchored
 **remark** on a video host, and the pane that shows it is just **the** evidence+reply detail. So there is ONE
 `EventDetail` component, store-agnostic, reused in every home a reading is inspected — the Evals page
@@ -61,7 +61,7 @@ A reading's evidence is a **LIST**, so every entry renders on the ONE stage — 
 detail" is literal code: the per-entry renderer is the extracted **`Evidence.jsx`**, this node's second
 file — one kind-dispatch (`EvidenceItem`: video → an inline player, image → click-to-enlarge, transcript →
 text, a pruned blob → the honest miss sentinel) reused verbatim by the node eval tab's gallery
-([[yatsu-eval-tab]]'s `NodeView`) and by a reply's inline blob links ([[issues-view]]'s `Thread`, which
+([[eval-tab]]'s `NodeView`) and by a reply's inline blob links ([[issues-view]]'s `Thread`, which
 resolves a bare hash's kind from the blob route's served Content-Type), so a blob renders identically
 wherever it appears. The ONE deliberate specialization is this pane's **clip player**: on this stage the
 **video** plays under a **custom review-track scrubber** — native chrome replaced so the timeline can
@@ -103,16 +103,16 @@ expected, the verdict note, and the header's verdict badge all re-render for the
 readings ([[evals-feed]]), a stale one is routinely the viewed reading — and a bare "stale" is not enough to
 act on. So the stage carries a small **stale readout** for a non-fresh viewed reading: the freshness axes that
 moved since it (`code · scenario · remark`), and for the **code** axis which governed files drifted
-and by **how many commits** (`EvalsFeed.jsx +3`) — the per-file drift count is [[yatsu-core]]'s `codeDrift`,
+and by **how many commits** (`EvalsFeed.jsx +3`) — the per-file drift count is [[eval-core]]'s `codeDrift`,
 attached to the reading by `evalTimeline` (the frontend has no git). It is reporting only: it never decides
 freshness, it names a decision already made, so a reviewer sees *why* a reading is behind and by how far. Every
 other affordance is freshness-blind — a remark is authored on a stale reading exactly as on a fresh one (the
 composer never consults freshness); staleness changes what the loss signal *says*, never what the human can *do*. The board folds only the latest reading per scenario
 ([[graph-lean]]), so the full history is lazily fetched from the SAME `/api/specs/:id/evals` timeline the
-[[yatsu-eval-tab]] uses (no new endpoint, no board bloat); the strip shows only when a scenario has more
+[[eval-tab]] uses (no new endpoint, no board bloat); the strip shows only when a scenario has more
 than one reading (a fresh scenario is just its single reading). The remark track in the rail is
 per-SCENARIO, not per-reading, so it stays stable as you flip — it spans the whole A/B. New readings
-arrive only from the eval seam's CLI ([[yatsu-core]]'s `spex yatsu eval`) and surface here on the next
+arrive only from the eval seam's CLI ([[eval-core]]'s `spex eval add`) and surface here on the next
 refresh; the pane never mutates or appends the scenario's history itself.
 
 **One reply primitive — a REMARK on the eval's own (node, scenario) thread.** Discussion and annotation are
@@ -139,7 +139,7 @@ remark fires.
 (a drag-**circle** on the paused frame, the composer's **⏱** stamp, the keyboard's **`a`**) are ONE act
 through one capture: grab the current frame to the blob store (the circle burns its rect in; ⏱/`a` take
 the clean frame) and anchor a remark carrying it — the `▶m:ss · step` line, the frame as a
-`![frame](/api/yatsu/blob/<hash>)` image link in the body, and — when the step's owning node differs — a
+`![frame](/api/evidence/<hash>)` image link in the body, and — when the step's owning node differs — a
 `[[node]]` routing line (circle/`a` prefill the composer; ⏱ stamps the head of the draft in place,
 keeping the prose, and a re-stamp at a new moment replaces the anchor line AND its riding frame together,
 so an anchor and its frame never disagree — only a frame sitting right under the anchor line is the
@@ -153,7 +153,7 @@ worker's prompt verbatim.
 
 **The pane is READ-side on readings — it files none.** A reading's verdict renders (the header badge, the
 A/B pips, the note) but is never authored here: readings are filed by AGENTS through the eval seam's CLI
-(`spex yatsu eval`, [[yatsu-core]]) *with evidence* — a human pass/fail click would file an evidence-less
+(`spex eval add`, [[eval-core]]) *with evidence* — a human pass/fail click would file an evidence-less
 `manual@1` hand-vote, ruled useless, so the pane carries no verdict footer. The human's judgment speaks
 through the REMARK composer: an open remark ages the scenario like a drift event ([[remark-teeth]]), so a
 human "this is wrong" reaches the loss signal without minting a blind reading. A finding belonging to

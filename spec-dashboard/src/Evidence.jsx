@@ -3,7 +3,7 @@ import { useT } from './i18n/index.jsx'
 import { Icon } from './icons.jsx'
 
 // The ONE evidence renderer ([[event-detail]], U1): a content-addressed blob → the right media element,
-// identical in EVERY home evidence appears — the node eval tab's gallery ([[yatsu-eval-tab]]), the eval
+// identical in EVERY home evidence appears — the node eval tab's gallery ([[eval-tab]]), the eval
 // detail's stage ([[event-detail]] — whose annotate-a-loop CLIP player is the one deliberate
 // specialization; everything else on the stage renders here), and an issue/eval reply's inline links
 // ([[issues-view]]'s Thread). A typed entry ({hash, kind, state}) renders via EvidenceItem; a BARE hash
@@ -11,7 +11,7 @@ import { Icon } from './icons.jsx'
 // from the Content-Type the blob route already serves (one sniff at the server, [[video-evidence]] —
 // the client never grows a parallel magic-number table, and the reply schema never grows a type field).
 
-const blobUrl = (hash) => `/api/yatsu/blob/${hash}`
+const blobUrl = (hash) => `/api/evidence/${hash}`
 
 // click-to-enlarge for an evidence image: a fixed overlay showing the same blob at viewport size —
 // click anywhere or Esc closes; Esc is swallowed in capture so the page's own Esc stack never fires.
@@ -153,7 +153,7 @@ function useBlobKind(hash) {
   return known
 }
 
-// a blob referenced by hash alone (a reply body's `![…](/api/yatsu/blob/<hash>)` link): sniff, then render
+// a blob referenced by hash alone (a reply body's `![…](/api/evidence/<hash>)` link): sniff, then render
 // through the same EvidenceItem — a video plays, an image shows, wherever the link appears.
 export function BlobMedia({ hash, alt = '' }) {
   const known = useBlobKind(hash)

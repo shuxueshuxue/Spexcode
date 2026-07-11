@@ -55,7 +55,7 @@ PR's intent + pass conformance, *then* dispatch-merge) applies to every author i
 **A repair delivery carries its A/B as proof-of-work.** A trunk delivery changes ownership, so it should
 land with the evidence that the change is real — and for a **bug fix**, that evidence already has a shape:
 the fail→pass **A/B pair** the [[reproduce-before-fix]] contract requires (the reproduced failure, then the
-verified fix, two readings on one [[yatsu-core]] scenario). So the trunk driver's admission does not invent
+verified fix, two readings on one [[eval-core]] scenario). So the trunk driver's admission does not invent
 a new proof artifact; it points at the one the eval timeline already holds — the delivered work references
 the governing node whose scenario carries the pair, and the pair rides along as the loss signal that
 justifies the merge (the [[event-detail]] is where a reviewer flips A↔B). This stays a *reference*, not a copy:

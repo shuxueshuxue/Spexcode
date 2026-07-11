@@ -368,13 +368,13 @@ export async function replyLocalIssue(id: string, body: string, author: string, 
 // every filer is offline/absent, the NODE's governing session, so an unresolved remark still REACHES an agent
 // who can act on it. A broken/absent worktree sidecar falls through silently — one bad worktree never fails
 // the remark write. This is notification only; it resolves nothing (R3: resolve is a deliberate
-// `spex remark resolve`). Non-eval threads pay nothing (no yatsu/specs/sessions import).
+// `spex remark resolve`). Non-eval threads pay nothing (no eval/specs/sessions import).
 const EVAL_CONCERN_RE = /^eval: (.+?) · (.+)$/   // node first (never contains ' · '), then the scenario (may)
 async function threadOriginators(thread: Issue): Promise<(string | null)[]> {
   const m = EVAL_CONCERN_RE.exec(thread.concern)
   if (!m) return [thread.by]
   const node = m[1].trim(), scenario = m[2].trim()
-  const { evalReadingFiler } = await import('../../spec-yatsu/src/filing.js')
+  const { evalReadingFiler } = await import('../../spec-eval/src/filing.js')
   const chain: (string | null)[] = [evalReadingFiler(node, scenario)]
   try {
     const { listSessions } = await import('./sessions.js')

@@ -15,7 +15,7 @@ related:
 
 ## raw source
 
-One of three SpexCode packages (with spec-dashboard and spec-yatsu). It is the server + CLI: read the
+One of three SpexCode packages (with spec-dashboard and spec-eval). It is the server + CLI: read the
 `.spec` tree and its git history, serve them over an API, ship the `spex` CLI, and house the
 **source-of-truth** guards (git-as-database, the worktree linker, the guards, the linter) here — under
 the CLI where they belong, not under the dashboard. Hono + tsx, **no build step**.
@@ -25,19 +25,19 @@ the CLI where they belong, not under the dashboard. Hono + tsx, **no build step*
 `spec-cli` is the backend. It owns the read path (turn `.spec` + git into JSON) and the write path
 (the `spex` CLI driving worktrees/sessions); the dashboard is a thin HTTP caller. `index.ts` is the
 HTTP entrypoint — a Hono app that wires the loaders and the session state machine to routes — and is
-the file this node governs (the deeper mechanism lives in its [[source-of-truth]] subtree; the yatsu
-eval endpoints' contract belongs to [[spec-yatsu]], so their churn — the eval-blob comment reframed to
+the file this node governs (the deeper mechanism lives in its [[source-of-truth]] subtree; the
+eval endpoints' contract belongs to [[spec-eval]], so their churn — the eval-blob comment reframed to
 serve a transcript or image, not just pixels — is that subtree's evolution, not spec-cli's drift).
 
 A CLI output contract, in the same fail-loud spirit: a verb with unbounded stdout (`issues --json`,
-`board`, `review --json`, `yatsu show --json`, …) must FULLY reach a pipe. `process.exit()` force-quits
+`board`, `review --json`, `eval ls --json`, …) must FULLY reach a pipe. `process.exit()` force-quits
 without draining buffered pipe writes, silently truncating a large dump at the ~64KB pipe buffer, so those
 verbs exit through a shared **flush-then-exit** helper that waits for stdout to drain first — a >64KB piped
 board or issue dump arrives whole, never a JSON cut off mid-object that reads as complete.
 
 The `serve` script (the `npm run api` entry) hot-reloads the backend on changes to **any source tree the
 child actually imports** — its own `spec-cli/src/**` plus the sibling packages it loads at runtime
-(`spec-forge`, `spec-yatsu`) — never on `.spec/**/spec.md` or `spec-dashboard` edits, which it reads via fs
+(`spec-forge`, `spec-eval`) — never on `.spec/**/spec.md` or `spec-dashboard` edits, which it reads via fs
 or never imports (the frontend is a separate vite server with its own HMR). Watching only its own dir was a
 real gap: a merge touching `spec-forge` reached disk while the running child kept the stale code, so a fix
 could ship to `main` yet stay invisible on the live dashboard. **The reload must be zero-downtime: port 8787

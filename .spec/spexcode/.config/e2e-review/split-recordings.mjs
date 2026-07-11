@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// split-recordings — cut whole-session e2e recordings into per-scenario clips + spec-yatsu step
+// split-recordings — cut whole-session e2e recordings into per-scenario clips + spec-eval step
 // timelines, ready for `spex eval add … --video --timeline` (the [[e2e-review]] skill's step 1).
 //
 // INPUT: a directory scanned recursively for pairs of one `.webm` + one `*.timeline.json` in the same
@@ -10,7 +10,7 @@
 //
 // OUTPUT: `<out>/<scenario>.mp4` (h264 faststart — browser-seekable) + `<out>/<scenario>.timeline.json`
 // in SpexCode's step-timeline format `{ v: 1, events: [{ tMs, step }] }` (clip-relative, validated by
-// spec-yatsu at filing time). No title cards, no burned-in captions, no metadata table: the dashboard
+// spec-eval at filing time). No title cards, no burned-in captions, no metadata table: the dashboard
 // annotator renders scenario context live from the spec tree, so pixels stay evidence.
 //
 // usage: node split-recordings.mjs <recordings-dir> <out-dir> [--ffmpeg <path>]

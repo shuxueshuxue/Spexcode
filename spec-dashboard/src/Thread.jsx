@@ -20,16 +20,19 @@ import { Icon } from './icons.jsx'
 // first line reads `▶m:ss · <step>` IS anchored to that video moment. The renderer linkifies it (click =
 // seek the clip); the composer over a clip grows a ⏱ affordance that stamps the current frame, and a
 // circled frame — or any attached blob, a clip included — rides the body as a
-// `![…](/api/yatsu/blob/<hash>)` link — the SAME hash the send derives as the thread's typed
+// `![…](/api/evidence/<hash>)` link — the SAME hash the send derives as the thread's typed
 // `evidence[]`, so the body is the one raw-readable source. Each linked blob renders through the ONE
 // shared evidence renderer ([[event-detail]]'s Evidence.jsx, kind sniffed from the served Content-Type):
 // a video PLAYS in the thread, an image shows, a pruned blob is the honest sentinel. The reply stays
 // plain `{ by, at, body }`; no schema grows.
 
 const ANCHOR_RE = /^▶\s*(\d+):([0-5]?\d)(?:\s*·\s*([^\n]*))?/
-const HEAD_FRAME_RE = /^!\[frame\]\(\/api\/yatsu\/blob\/[0-9a-f]{64}\)\n?/   // the anchor's OWN frame, riding right under its line
-const BLOB_URL = /\/api\/yatsu\/blob\/([0-9a-f]{64})/g
-const BLOB_MD = /!\[[^\]]*\]\(\/api\/yatsu\/blob\/([0-9a-f]{64})\)/g   // an inline evidence link (frame, clip, …)
+// READ regexes accept the archived `/api/yatsu/blob/…` shape beside the live `/api/evidence/…` one:
+// committed thread bodies are immutable archives, and an archive keeps its archive name — extraction
+// yields the bare hash, so rendering/fetching always goes through the live route. Writes emit only the new shape.
+const HEAD_FRAME_RE = /^!\[frame\]\(\/api\/(?:evidence|yatsu\/blob)\/[0-9a-f]{64}\)\n?/   // the anchor's OWN frame, riding right under its line
+const BLOB_URL = /\/api\/(?:evidence|yatsu\/blob)\/([0-9a-f]{64})/g
+const BLOB_MD = /!\[[^\]]*\]\(\/api\/(?:evidence|yatsu\/blob)\/([0-9a-f]{64})\)/g   // an inline evidence link (frame, clip, …)
 export const mmss = (tMs) => { const s = Math.floor(tMs / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` }
 // the first line of a body, parsed as an anchor: { tMs, step, label, rest } or null. `rest` is the body
 // with the anchor line stripped, so the moment renders as a chip and the prose renders below it.
@@ -224,7 +227,7 @@ export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = nul
   const stampAnchor = async () => {
     const a = await anchorNow?.()
     if (!a) return
-    const head = anchorLine(a.tMs, a.step) + (a.frame ? `\n![frame](/api/yatsu/blob/${a.frame})` : '')
+    const head = anchorLine(a.tMs, a.step) + (a.frame ? `\n![frame](/api/evidence/${a.frame})` : '')
     setBody((b) => {
       const ex = parseAnchor(b)
       const rest = (ex ? ex.rest : b).replace(HEAD_FRAME_RE, '')

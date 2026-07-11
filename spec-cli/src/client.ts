@@ -1,5 +1,5 @@
 import { apiBase, assertProjectMatch, resolveSession, type Session, type Resolved, type DispatchResult, type ReviewPayload } from './sessions.js'
-import type { SessionEvals } from '../../spec-yatsu/src/proof.js'
+import type { SessionEvals } from '../../spec-eval/src/sessioneval.js'
 
 export class BackendError extends Error {
   constructor(message: string, readonly status?: number) {
@@ -64,18 +64,18 @@ export async function clientReview(id: string): Promise<ReviewPayload | null> {
   return await r.json() as ReviewPayload
 }
 
-// GET /api/sessions/:id/proof — the rendered proof EXPORT artifact ([[review-proof]]): the self-contained
-// HTML the backend builds (default), or the model JSON (`json:true` → ?format=json). The engine runs on the
-// backend, so the CLI is a thin fetcher that writes/opens these bytes — works against a remote backend
-// unchanged. 404 → no such session.
-export type ProofResult = { ok: true; body: string } | { ok: false; status: number }
-export async function clientProof(id: string, json = false): Promise<ProofResult> {
-  const r = await apiFetch(`/api/sessions/${seg(id)}/proof${json ? '?format=json' : ''}`)
+// GET /api/sessions/:id/evals?format=html — the rendered EXPORT artifact ([[session-eval]]): the
+// self-contained HTML the backend builds. The engine runs on the backend, so the CLI is a thin fetcher
+// that writes/opens these bytes — works against a remote backend unchanged. 404 → no such session.
+export type ExportResult = { ok: true; body: string } | { ok: false; status: number }
+export async function clientEvalExport(id: string): Promise<ExportResult> {
+  const r = await apiFetch(`/api/sessions/${seg(id)}/evals?format=html`)
   if (r.ok) return { ok: true, body: await r.text() }
   return { ok: false, status: r.status }
 }
 
-// GET /api/sessions/:id/evals — the session EVAL model ([[review-proof]]'s interactive face): the changed
+// GET /api/sessions/:id/evals — the session EVAL model ([[session-eval]]'s interactive face, the same
+// route's default JSON representation): the changed
 // nodes' worktree-rooted reading rows (each carrying `inSession`), no diff enrichment, no inlined evidence
 // bytes — what `spex eval` renders, the dashboard Eval tab's source. 404 → no such session.
 export type EvalsResult = { ok: true; model: SessionEvals } | { ok: false; status: number }

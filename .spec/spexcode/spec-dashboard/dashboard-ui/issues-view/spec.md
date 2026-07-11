@@ -171,7 +171,7 @@ straight to the trunk.
   philosophy as `Spec:`/`[[node]]`): a body whose first line reads `▶m:ss · <step>` IS anchored to a video
   moment — `Thread` linkifies it (click = seek, when the home supplies the clip) and, over a clip, the
   composer grows a ⏱ affordance that stamps the current frame; a circled frame — or ANY attached blob, a
-  video clip included — rides the body as a `![…](/api/yatsu/blob/<hash>)` link whose hash the send derives
+  video clip included — rides the body as a `![…](/api/evidence/<hash>)` link whose hash the send derives
   as the thread's typed `evidence[]` (the frame-blob write is [[event-detail]]'s; a clip enters the cache
   via `spex blob put`, [[blob-put]]). Each linked blob renders through the ONE shared evidence renderer
   ([[event-detail]]'s `Evidence.jsx`): the blob's kind is resolved from the Content-Type the blob route

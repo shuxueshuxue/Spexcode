@@ -8,8 +8,8 @@ related:
   - spec-dashboard/src/EventDetail.jsx
   - spec-cli/src/mentions.ts
   - spec-cli/src/localIssues.ts
-  - spec-yatsu/src/evaltab.ts
-  - spec-yatsu/src/cli.ts
+  - spec-eval/src/evaltab.ts
+  - spec-eval/src/cli.ts
   - spec-dashboard/src/NodeView.jsx
 ---
 # remark-polish
@@ -59,9 +59,9 @@ A remark whose scenario was **renamed or deleted** keys a `(node, scenario)` tha
 loads ([[remark-teeth]]'s dangling clause) but, until now, appeared *nowhere*. M4 surfaces it: the node's
 eval timeline (`evaltab.ts`) emits a synthetic **dangling** row per orphaned track — the scenario name struck
 through / marked gone, its remarks listed and **resolvable/retractable via their normal refs**
-(`spex resolve` / `spex retract`). A track is dangling only when its scenario is BOTH gone from `yatsu.md`
+(`spex resolve` / `spex retract`). A track is dangling only when its scenario is BOTH gone from `eval.md`
 AND has no reading; a still-declared-but-unmeasured scenario is a blind spot, not an orphan. The dangling row
 is kept **separate** from `readings` so it never flows into `latestPerScenario` / the board scoreboard: it
-**ages nothing** (there is no reading for the teeth to stale), it is only made *visible*. `spex yatsu scan`
-notes orphaned tracks (one `yatsu-dangling` line per node plus a count in the summary), so the gap is legible
+**ages nothing** (there is no reading for the teeth to stale), it is only made *visible*. `spex eval lint`
+notes orphaned tracks (one `eval-dangling` line per node plus a count in the summary), so the gap is legible
 from the CLI with no server running.

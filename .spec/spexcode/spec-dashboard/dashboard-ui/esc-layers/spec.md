@@ -27,7 +27,7 @@ surface registers itself as the top layer while open; a single Escape press **cl
 only** and is **swallowed there**, so the surface beneath it never also closes on the same press. Close that
 layer and the next press reaches the one below. This is the mechanism behind the layering other nodes
 already promise in z-order terms — [[session-rename]]'s confirm that "renders above the board," the row
-context-menu, the issues page's floating overlays. (The [[review-proof]] overlay that once floated over the
+context-menu, the issues page's floating overlays. (The [[session-eval]] overlay that once floated over the
 [[session-console]] panel is gone — proof is an always-available inline right-pane tab now, so it no longer
 holds a stack layer.)
 

@@ -64,7 +64,7 @@ writeFileSync(join(SCRATCH, NODE_DIR, 'yatsu.evals.ndjson'), readings.join('\n')
 
 process.chdir(SCRATCH)
 // the engine under measurement — this repo's evaltab, resolved relative to this co-located script
-const { evalTimeline } = await import(new URL('../../../../../spec-yatsu/src/evaltab.js', import.meta.url).href)
+const { evalTimeline } = await import(new URL('../../../../../spec-eval/src/evaltab.js', import.meta.url).href)
 
 function tracePass(label: string): { file: string } {
   const file = `/tmp/spexcode-39-${label}.trace`

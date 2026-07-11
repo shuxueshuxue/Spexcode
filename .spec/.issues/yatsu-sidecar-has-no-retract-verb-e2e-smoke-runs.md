@@ -2,7 +2,7 @@
 concern: yatsu sidecar has no retract verb — e2e/smoke runs pollute readings with no undo
 by: f45d649c-0ef4-4a52-a3fc-223fc0da6e43
 status: landed
-nodes: yatsu-core
+nodes: eval-core
 created: 2026-07-02T16:27:05.265Z
 ---
 

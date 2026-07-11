@@ -116,7 +116,7 @@ search — which spec node GOVERNS a topic, ranked by user-story relevance (whic
 behaviour a code-grep misses). Run it BEFORE touching code: the node's spec.md body is the current
 contract. The corpus is English — query in English.
 
-owner — the reverse edge: a file's GOVERNORS (code: — drives drift/yatsu) and REFERENCERS (related:
+owner — the reverse edge: a file's GOVERNORS (code: — drives drift + eval freshness) and REFERENCERS (related:
 — coverage only), with the verdict spelled out (uncovered / related-only / sanely governed /
 over-owned → split the file). --actionable prints NOTHING unless action is needed (hook use).
 
@@ -181,13 +181,14 @@ ${MENTION_NOTE}`,
     see: 'spex eval ls --session <SEL> (the session’s measured loss) · spex help eval',
   },
   eval: {
-    line: 'eval <verb>           the measurement system: add · ls · lint · retract · clean',
+    line: 'eval <verb>           the measurement system: add · ls · scenario ls · lint · retract · clean',
     body: `Usage: spex eval add [<node>|.] [--scenario <name>] (--pass|--fail) [--note <text>]
                     [--image <png> …repeatable] [--result <path|->] [--video <webm|mp4>] [--timeline <json>]
        spex eval ls [<node>|.] [--json]                a node's reading timeline, newest first
        spex eval ls --session <SEL> [--json]           a session's aggregate: its changed nodes' scores
-       spex eval ls --session <SEL> --export [--open | --out <path> | --json]
-       spex eval lint [--changed]                      measurement-layer gaps (advisory, always exit 0)
+       spex eval ls --session <SEL> --export [--open | --out <path>]
+       spex eval scenario ls [<node>|.] [--unmeasured] [--json]   declared scenarios; bare = every node
+       spex eval lint [--changed]                      measurement-layer findings (advisory, always exit 0)
        spex eval retract [<node>|.] [--scenario <name>] [--last | --ts <iso>] [--note <why>]
        spex eval clean [--keep-latest | --all]         GC the content-addressed evidence cache
 
@@ -201,17 +202,21 @@ ls — node-scoped bare (its per-scenario reading history); session-scoped with 
 ✦-marked ahead of the inherited baseline. --export writes that evaluation as ONE self-contained
 HTML artifact (diff · evidence inlined · gates) for CI/sharing.
 
-lint — the measurement layer's gaps: malformed yatsu.md (schema) · unmeasured (missing) · stale
-(drift) · orphaned remark tracks (dangling) · source with no scenarios (uncovered) · over-owned
-files (owners). --changed scopes to the nodes THIS branch touched. spec lint's errors block
-commits; eval lint is PURE ADVISORY — a measurement gap never blocks anyone.
+scenario ls — the DECLARED contracts (name · tags · latest verdict), no readings: bare lists every
+measurable node's scenarios; --unmeasured keeps only the never-measured — the blind-spot worklist.
+
+lint — the measurement layer's findings: malformed eval.md (eval-schema) · unmeasured (eval-missing) ·
+stale (eval-drift) · orphaned remark tracks (eval-dangling) · governed source with no eval.md
+(eval-coverage — the same name and shape as spec lint's coverage, one rule per layer) · over-owned
+files (eval-owners). --changed scopes to the nodes THIS branch touched. spec lint's errors block
+commits; eval lint is PURE ADVISORY, always exit 0 — a measurement gap never blocks anyone.
 
 retract — the sanctioned undo for a botched filing: APPENDS a retraction event (traceable, never
 deletes a line); the previous reading becomes latest again, or the scenario honestly returns to
 unmeasured.
 
 ${DOT_NOTE}`,
-    see: 'spex guide yatsu (the scenario file format + evidence rules) · spex evidence (bare byte transport)',
+    see: 'spex guide eval (the eval.md scenario format + evidence rules) · spex evidence (bare byte transport)',
   },
   issue: {
     line: 'issue <verb>          concern threads, local + forge merged: ls · open · reply · close · promote · links',
@@ -262,10 +267,10 @@ path. Bytes go to stdout by default (pipe-friendly); -o writes a file.`,
 
   // ── help & guide ──────────────────────────────────────────────────────────
   guide: {
-    line: 'guide [topic]         the manuals: setup workflow · spec/yatsu file formats · spexcode.json · footprint',
+    line: 'guide [topic]         the manuals: setup workflow · spec/eval file formats · spexcode.json · footprint',
     body: `Usage: spex guide            the human setup workflow (install once, adopt a repo, serve)
        spex guide spec       the spec.md file format + every lint rule
-       spex guide yatsu      the scenario file format + how loss is measured and filed
+       spex guide eval       the eval.md scenario format + how loss is measured and filed
        spex guide config     every spexcode.json / spexcode.local.json field, and which file it belongs in
        spex guide footprint  the footprint model: never-tracked artifacts, exclude + content filter, anchors
 
@@ -282,7 +287,7 @@ Machine plumbing — called by generated hooks and launch scripts, never typed b
   trunk             print the resolved source-of-truth branch (the pre-commit main-guard captures it)
   commit-surgery    pre-commit footprint anchor: unconditional materialize + staged-index repair
   refresh-footprint quiet materialize — the post-checkout/post-merge freshness anchor
-  check-staged      pre-commit yatsu backstop: reject staged stray blobs / malformed yatsu.md
+  check-staged      pre-commit eval backstop: reject staged stray blobs / malformed eval.md
   session-state <st> --session <id>   a lifecycle hook authors the session's state
   session-fail  --session <id>        the StopFailure hook marks the session errored
   session-idle  --session <id>        the idle-prompt hook marks an active session idle
@@ -347,6 +352,6 @@ Conventions (stated once, hold everywhere)
   ${ROUTING_NOTE.split('\n').join('\n  ')}
   ${MENTION_NOTE.split('\n').join('\n  ')}
 
-Concepts & best practice live in the guide: spex guide (setup) · guide spec · guide yatsu · guide config.
+Concepts & best practice live in the guide: spex guide (setup) · guide spec · guide eval · guide config.
 Machine plumbing (hook/launch-script callees) lives under \`spex internal\` — not part of your vocabulary.`
 }

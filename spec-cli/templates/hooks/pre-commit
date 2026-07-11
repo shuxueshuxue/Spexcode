@@ -90,9 +90,9 @@ if [ -z "${SPEXCODE_SKIP_LINT:-}" ]; then
       echo "✗ SpexCode: spec-lint failed — fix the spec↔code links or bypass with SPEXCODE_SKIP_LINT=1." >&2
       exit 1
     else
-      # @@@ yatsu backstop - reject a staged yatsu offender: a stray pixel blob copied into the tree (blobs
-      # belong in the shared git common dir, never committed) OR a malformed yatsu.md (a scenario schema
-      # violation). Logic lives in spec-yatsu; this is the lint-shim's twin. (this node's contract)
+      # @@@ eval backstop - reject a staged eval offender: a stray evidence blob copied into the tree (blobs
+      # belong in the shared git common dir, never committed) OR a malformed eval.md (a scenario schema
+      # violation). Logic lives in spec-eval; this is the lint-shim's twin. (this node's contract)
       if ! spex_cli internal check-staged >&2; then
         echo "✗ SpexCode: internal check-staged failed (see above) — fix it or bypass with SPEXCODE_SKIP_LINT=1." >&2
         exit 1

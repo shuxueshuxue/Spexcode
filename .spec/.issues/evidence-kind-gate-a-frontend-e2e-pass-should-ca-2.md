@@ -1,8 +1,8 @@
 ---
-concern: evidence-kind gate: a frontend-e2e pass should carry visual evidence [[yatsu-core]]
+concern: evidence-kind gate: a frontend-e2e pass should carry visual evidence [[eval-core]]
 by: 60b8fd9a-08c5-4d8e-9139-84d75c065a8c
 status: open
-nodes: yatsu-core
+nodes: eval-core
 evidence: ddaacebe1eab
 created: 2026-07-03T00:48:44.869Z
 ---

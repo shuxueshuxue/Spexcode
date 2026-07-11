@@ -185,14 +185,12 @@ async function resolveSelectorOrExit(selector: string): Promise<string> {
   process.exit(2)
 }
 
-// the [[review-proof]] EXPORT artifact behind `spex eval ls --session <SEL> --export`: fetch the
-// backend-rendered self-contained HTML (or the model, --json), write it (--out, else a tmp file) or open it
-// (--open). Never returns.
-async function proofExport(id: string): Promise<never> {
-  const { clientProof } = await import('./client.js')
-  const r = await clientProof(id, has('json'))
+// the [[session-eval]] EXPORT artifact behind `spex eval ls --session <SEL> --export`: fetch the
+// backend-rendered self-contained HTML, write it (--out, else a tmp file) or open it (--open). Never returns.
+async function evalExport(id: string): Promise<never> {
+  const { clientEvalExport } = await import('./client.js')
+  const r = await clientEvalExport(id)
   if (!r.ok) { console.error(`no export for ${id} (status ${r.status})`); process.exit(1) }
-  if (has('json')) { console.log(r.body); await flushExit(0) }
   const { writeFileSync } = await import('node:fs')
   const { join } = await import('node:path')
   const { tmpdir } = await import('node:os')
@@ -326,7 +324,7 @@ if (cmd === 'serve') {
   const { guideText } = await import('./guide.js')
   const text = guideText(process.argv[3])
   if (text === null) {
-    console.error(`spex guide: no topic '${process.argv[3]}'. Topics: spec, yatsu, config, footprint. Run \`spex guide\` (no topic) for the setup workflow, \`spex help\` for the command map.`)
+    console.error(`spex guide: no topic '${process.argv[3]}'${process.argv[3] === 'yatsu' ? " — renamed: `spex guide eval`" : ''}. Topics: spec, eval, config, footprint. Run \`spex guide\` (no topic) for the setup workflow, \`spex help\` for the command map.`)
     process.exit(2)
   }
   console.log(text)
@@ -396,7 +394,7 @@ if (cmd === 'serve') {
     process.exit(0)
   } else if (sub === 'owner') {
     // BOTH [[governed-related]] relations, distinctly: governors (code: — the verdict) and referencers
-    // (related: — pointers; coverage only, never drift/yatsu).
+    // (related: — pointers; coverage only, never drift, never eval freshness).
     const { specOwners, specRelated } = await import('./specs.js')
     const { loadConfig } = await import('./lint.js')
     const p0 = positionals(4)[0]
@@ -407,7 +405,7 @@ if (cmd === 'serve') {
     const related = specRelated(p)
     const maxOwners = loadConfig(process.cwd()).maxOwners
     const names = (xs: { id: string }[]) => xs.map((o) => `'${o.id}'`).join(', ')
-    const relLine = related.length ? `\n  also referenced by ${names(related)} (related: coverage only — no drift, no yatsu)` : ''
+    const relLine = related.length ? `\n  also referenced by ${names(related)} (related: coverage only — no drift, no eval freshness)` : ''
     if (owners.length === 0 && related.length === 0) {
       console.log(`${rel} — no spec claims this yet (uncovered). If your change is substantive, give it a home before it drifts.`)
     } else if (owners.length === 0) {
@@ -481,19 +479,19 @@ if (cmd === 'serve') {
 } else if (cmd === 'eval') {
   // @@@ eval drawer - the measurement system's verbs: add (file a reading) · ls (read a node's timeline, or
   // — with an explicit --session, never type-sniffed — a session's aggregate) · lint (the measurement-layer
-  // lint, pure advisory) · retract · clean. Node-scoped verbs live in spec-yatsu; the session read lives
+  // lint, pure advisory) · retract · clean. Node-scoped verbs live in spec-eval; the session read lives
   // here (it talks to the backend).
   const sub = process.argv[3]
   if (sub === undefined) {
     console.log((await import('./help.js')).commandHelp('eval'))
   } else if (sub === 'ls' && flag('session') !== undefined) {
-    // the session EVAL read ([[review-proof]]'s interactive face as a CLI verb): the dashboard Eval tab's
+    // the session EVAL read ([[session-eval]]'s interactive face as a CLI verb): the dashboard Eval tab's
     // text twin. Renders the session's changed nodes with each DECLARED scenario at its CURRENT score
     // (latest reading per scenario, worktree-rooted) — blind spots lead, the session's OWN measurements
     // ✦-marked ahead of the inherited baseline under its divider. --export writes the self-contained HTML
     // artifact instead.
     const id = await resolveSelectorOrExit(flag('session')!)
-    if (has('export')) await proofExport(id)
+    if (has('export')) await evalExport(id)
     const { clientEvals } = await import('./client.js')
     const r = await clientEvals(id)
     if (!r.ok) { console.error(`no evals for ${id} (status ${r.status})`); process.exit(1) }
@@ -517,7 +515,7 @@ if (cmd === 'serve') {
     if (own) console.log(`  ✦      : ${own} scenario(s) measured by THIS session (unmarked rows = inherited baseline)`)
     if (!m.nodes.length) console.log('\n  no changed spec nodes — nothing to evaluate yet (empty diff)')
     for (const { n, blind, rows } of groups) {
-      console.log(`\n${n.title}  [${n.id}]${n.uncoveredFrontend ? '  ⚠ frontend change with NO yatsu.md — a blind spot: give it a scenario' : ''}`)
+      console.log(`\n${n.title}  [${n.id}]${n.uncoveredFrontend ? '  ⚠ frontend change with NO eval.md — a blind spot: give it a scenario' : ''}`)
       for (const s of blind) console.log(`      ∅ unmeasured  ${s.name}  — declared, never measured (blind spot)`)
       let divided = false
       for (const e of rows) {
@@ -526,26 +524,26 @@ if (cmd === 'serve') {
         const stale = e.fresh ? '' : ` (stale: ${e.staleAxes.join(',')})`
         console.log(`    ${e.inSession ? '✦' : ' '} ${verdict}${stale}  ${e.scenario}  — ${e.ts}${e.evaluator ? ` · ${e.evaluator}` : ''}`)
       }
-      if (!n.hasYatsu && !n.uncoveredFrontend) console.log('      (no yatsu.md — nothing declared to measure)')
-      else if (n.hasYatsu && !n.scenarios.length) console.log('      (yatsu.md declares no scenarios)')
+      if (!n.hasEvalFile && !n.uncoveredFrontend) console.log('      (no eval.md — nothing declared to measure)')
+      else if (n.hasEvalFile && !n.scenarios.length) console.log('      (eval.md declares no scenarios)')
     }
-  } else if (['add', 'ls', 'lint', 'retract', 'clean'].includes(sub)) {
-    // node-scoped verbs — thin route; the logic lives in spec-yatsu.
-    const { runEval } = await import('../../spec-yatsu/src/cli.js')
+  } else if (['add', 'ls', 'scenario', 'lint', 'retract', 'clean'].includes(sub)) {
+    // node-scoped verbs — thin route; the logic lives in spec-eval.
+    const { runEval } = await import('../../spec-eval/src/cli.js')
     await flushExit(await runEval(process.argv.slice(3)))
   } else {
-    console.error(`spex eval: unknown verb '${sub}' — add | ls | lint | retract | clean  (spex help eval)`)
+    console.error(`spex eval: unknown verb '${sub}' — add | ls | scenario ls | lint | retract | clean  (spex help eval)`)
     if (!sub.startsWith('--')) console.error(`  (the old \`spex eval <SEL>\` session read is now \`spex eval ls --session <SEL>\` [--export]; the \`spex yatsu\` verbs moved into this drawer)`)
     process.exit(2)
   }
 } else if (cmd === 'evidence') {
   // @@@ evidence drawer - the bare content-addressed transport pair ([[blob-put]], [[blob-get]]): put bytes
   // in the shared evidence cache / read them back by hash, decoupled from filing a reading. Thin route — the
-  // cache lives in spec-yatsu. flushExit matters here: `get` pipes raw blob bytes to stdout.
+  // cache lives in spec-eval. flushExit matters here: `get` pipes raw blob bytes to stdout.
   if (process.argv[3] === undefined) {
     console.log((await import('./help.js')).commandHelp('evidence'))
   } else {
-    const { runEvidence } = await import('../../spec-yatsu/src/cli.js')
+    const { runEvidence } = await import('../../spec-eval/src/cli.js')
     await flushExit(await runEvidence(process.argv.slice(3)))
   }
 } else if (cmd === 'issue') {
@@ -899,9 +897,9 @@ if (cmd === 'serve') {
     const r = await codexTurn(sock, tid, text)
     if (r.ok) { console.log('ok') } else { console.error(r.error); process.exit(1) }
   } else if (sub === 'check-staged') {
-    // the pre-commit hook's yatsu backstop: a staged stray evidence blob or malformed yatsu.md rejects the
-    // commit. Logic lives in spec-yatsu; the hook shims here.
-    const { checkStaged } = await import('../../spec-yatsu/src/cli.js')
+    // the pre-commit hook's eval backstop: a staged stray evidence blob or malformed eval.md rejects the
+    // commit. Logic lives in spec-eval; the hook shims here.
+    const { checkStaged } = await import('../../spec-eval/src/cli.js')
     process.exit(checkStaged())
   } else if (sub === 'session-state') {
     // a lifecycle hook authors the session's state: active|awaiting|parked|error|asking

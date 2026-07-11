@@ -8,12 +8,12 @@ desc: A shared content-addressed blob remote — teammates see each other's evid
 
 **Status: pending.** This node is the *intent*; the remote service will be its **own repository** (an
 [[extensions]] satellite — no in-repo code here, link added once the repo exists). The thin client seam it
-plugs into stays in core, governed by [[yatsu-core]].
+plugs into stays in core, governed by [[eval-core]].
 
 ## the gap it closes
 
 SpexCode's evidence architecture is already half of git-lfs: bytes are sha256 content-addressed blobs kept
-**out of git**, while the readings that reference them (by hash) are **committed** ([[yatsu-core]]). That
+**out of git**, while the readings that reference them (by hash) are **committed** ([[eval-core]]). That
 split is correct — and it means the pointers travel to every collaborator through ordinary git sync while
 the bytes stay stranded on the machine that measured them. A teammate pulls the repo, sees every reading,
 and gets "miss original file" for every screenshot and video. Multi-person collaboration is exactly where
@@ -27,7 +27,7 @@ URL; each member keeps running their own local SpexCode as before.
 - **Deliberately dumb remote.** Content-addressed GET/PUT by hash, token-authed, stateless. Because blobs
   are immutable and self-verifying, the remote needs no coordination, no merge logic, no schema.
 - **Local store becomes a cache.** Writes push through to the remote; a local miss tries the remote before
-  declaring "miss original file" ([[yatsu-eval-tab]]'s terminal state becomes a cache miss first). One
+  declaring "miss original file" ([[eval-tab]]'s terminal state becomes a cache miss first). One
   mechanism, two tiers — no separate "upload" concept.
 - **Opt-in and severable.** No `blobRemote` configured → behaviour today, byte-for-byte. The self-launch
   path stays the full experience; the remote only widens who can *see* evidence, never gates a feature.

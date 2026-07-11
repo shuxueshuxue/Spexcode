@@ -104,16 +104,16 @@ export default {
 
   sessionEval: {
     btn: 'eval',
-    btnTitle: "switch to this session's eval tab — the measured yatsu evidence, the diff, and the merge gates",
+    btnTitle: "switch to this session's eval tab — the measured eval evidence, the diff, and the merge gates",
     none: 'no evaluation for this session yet',
     sessionN: ({ n }) => `✦ this session: ${n}`,
     inherited: 'inherited · latest readings by other sessions',
     export: 'export',
     exportTitle: 'export this evaluation as a self-contained HTML report',
     empty: 'nothing measured for this session yet.',
-    blindHint: 'declared but never measured — this is the outstanding loss; measure it with spex yatsu eval.',
+    blindHint: 'declared but never measured — this is the outstanding loss; measure it with spex eval add.',
     unmeasured: 'unmeasured',
-    noYatsu: 'UI code · no yatsu.md',
+    noEvalFile: 'UI code · no eval.md',
   },
 
   time: {
@@ -247,8 +247,8 @@ export default {
     diffLabel: 'spec line diff',
     loadingHistory: 'loading history…',
     eval: {
-      noScenarios: 'no scenarios declared — this node has no yatsu.md to measure.',
-      noReadings: 'no measurements yet — run `spex yatsu eval` to file one. The declared scenarios:',
+      noScenarios: 'no scenarios declared — this node has no eval.md to measure.',
+      noReadings: 'no measurements yet — run `spex eval add` to file one. The declared scenarios:',
       staleAxes: ({ axes }) => `stale: ${axes} moved since this reading`,
       staleLabel: 'stale:',
       staleReadoutTitle: 'this reading is behind — the axes that moved since it, and for the code axis which governed files drifted and by how many commits (+N)',
@@ -271,7 +271,7 @@ export default {
   },
 
   // the bottom-left board-stats strip — the per-node badges COUNTED across the whole tree (distinct things,
-  // never a sum of badges), except coverage which counts SCENARIOS (the unit of yatsu loss). Each chip's
+  // never a sum of badges), except coverage which counts SCENARIOS (the unit of eval loss). Each chip's
   // title says what it counts; clicking WALKS focus through the nodes behind it, one per click.
   stats: {
     aria: 'board statistics',
@@ -286,7 +286,7 @@ export default {
     scoreEmpty: ({ n }) => `${n} unmeasured or unscored scenario${n === 1 ? '' : 's'} (a blind spot) — click to walk the nodes carrying them`,
   },
 
-  // the yatsu SCORE vocabulary — one set of words across the node-tile count, the focus panel, and the eval
+  // the eval SCORE vocabulary — one set of words across the node-tile count, the focus panel, and the eval
   // tab. `count` is the tile/stat-bar tally; `missing` is a declared-but-never-measured scenario.
   score: {
     pass: 'current pass — measured, fresh, and passing',
@@ -305,7 +305,7 @@ export default {
   focusPanel: {
     scenarios: 'scenarios',
     issues: 'issues',
-    noScenarios: 'no scenarios — this node declares no yatsu.md to measure.',
+    noScenarios: 'no scenarios — this node declares no eval.md to measure.',
     noIssues: 'no issues linked to this node.',
     noFocus: 'no node focused.',
     openEval: 'open this eval detail — the full reading timeline',
@@ -399,7 +399,7 @@ export default {
     // header button. `*Desc` is the `/` menu row's description; `*Title` is a button's hover tooltip.
     cmd: {
       typeDesc: "type mode — type raw keystrokes straight into the agent's terminal",
-      evalDesc: "switch to this session's eval tab — yatsu evidence, diff, merge gates",
+      evalDesc: "switch to this session's eval tab — eval evidence, diff, merge gates",
       mergeTitle: 'merge this session to main',
       mergeDesc: 'merge this session to main',
       stopTitle: 'stop this session (kill the agent, keep the worktree — resumable)',

@@ -50,7 +50,7 @@ drives belongs to [[dashboard-shell]].
   the moment it stops being shown: a whole surface removed, **or** a kept surface that sheds a state (a pane
   whose data now arrives with the board no longer flickers a loading line, so its loading key goes). Every
   such add/drop is mirrored across `en.js` and `zh.js`, so the dictionaries churning alongside the product
-  is the invariant working, not drift — the yatsu eval tab's new verdict copy (pass / fail / note, expected,
+  is the invariant working, not drift — the eval tab's new verdict copy (pass / fail / note, expected,
   transcript) from the measure-and-score reframe is the latest such churn, not settings' own drift; the
   picker and resolution mechanism below stay fixed as they grow. Keys may be plain strings
   or `({ n }) => …` interpolators for counted/named copy.

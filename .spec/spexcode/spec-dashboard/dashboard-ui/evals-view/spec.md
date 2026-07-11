@@ -52,7 +52,7 @@ surfaces (`f`, ⌥F) land here.
   is never captured. The section contents are their own nodes ([[evals-feed]], [[event-detail]]) — this node
   owns the page shell: the split, the fold, the selection, and the j/k routing. That shell is ONE exported
   component (`EvalMasterDetail`), and it is deliberately SHARED: the session console's Eval tab
-  ([[review-proof]]) renders the same shell around its own worktree-rooted list, so the two eval
+  ([[session-eval]]) renders the same shell around its own worktree-rooted list, so the two eval
   master-detail homes cannot drift apart on geometry, fold, or keys. The list CHROME is one grammar too:
   the feed and the [[issues-view]] drain wear the SAME filter-control language (ONE shared dropdown filter
   component — the feed's kind filter and the drain's store filter are literally one control; chips and any

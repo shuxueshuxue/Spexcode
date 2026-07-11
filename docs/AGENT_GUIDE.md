@@ -224,11 +224,11 @@ together — that is a project choice, not a git requirement.
 - To configure SpexCode's runtime settings (launchers, dashboard icon, lint budgets, layout), run
   **`spex guide config`** — the authoritative manual for every `spexcode.json` / `spexcode.local.json`
   field and which of the two files it belongs in (committed & portable vs. gitignored & host-specific).
-  Don't reverse-engineer the schema; mirror how `spex guide spec` / `spex guide yatsu` carry the authoring
+  Don't reverse-engineer the schema; mirror how `spex guide spec` / `spex guide eval` carry the authoring
   formats. Then edit the JSON directly — there is no `spex config set`.
 - Toolchain: **npm, not pnpm**; Node is pinned via `.nvmrc` (22).
 
-### Measuring a frontend node's yatsu — drive a real browser
+### Measuring a frontend node's eval scenario — drive a real browser
 
 A frontend scenario (a favicon, a rendered view, a tab title) is measured through the **actual running
 product**, never by reasoning about the code — and you never file a `spex eval add --pass` off anything

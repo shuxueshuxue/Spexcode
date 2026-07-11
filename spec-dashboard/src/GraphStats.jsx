@@ -58,12 +58,12 @@ function Stat({ count, ids, focusId, onJump, title, cls = '', children }) {
   )
 }
 
-export default function BoardStats({ specs, focusId, onJump }) {
+export default function GraphStats({ specs, focusId, onJump }) {
   const t = useT()
   const s = useMemo(() => summarize(specs), [specs])
   const jump = (id) => id && onJump?.(id)
   return (
-    <div className="board-stats" role="group" aria-label={t('stats.aria')}>
+    <div className="graph-stats" role="group" aria-label={t('stats.aria')}>
       {/* composition — the four status dots, counted. The leading number is the whole tree's size. */}
       <span className="bstat-total" data-tip={t('stats.totalTitle', { n: s.total })}>{s.total}</span>
       {STATUS_ORDER.map((k) => (

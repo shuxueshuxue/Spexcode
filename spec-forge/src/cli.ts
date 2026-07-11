@@ -60,7 +60,7 @@ async function links(args: string[]): Promise<number> {
   const nPRs = resolved.reduce((a, n) => a + n.prs.length, 0)
   console.log(
     `spec-forge · ${driver.host} · ${resolved.length} linked node(s) · ${nIssues} issue(s), ${nPRs} pr(s)` +
-      ` · scanned ${issues.length} issue(s), ${prs.length} pr(s)`,
+      ` · traced ${issues.length} issue(s), ${prs.length} pr(s)`,
   )
   if (resolved.length) console.log(render(resolved))
   return 0
@@ -91,7 +91,7 @@ async function evalPending(args: string[]): Promise<number> {
   const nPending = resolved.reduce((a, n) => a + n.pending.length, 0)
   console.log(
     `spec-forge · ${driver.host} · ${resolved.length} node(s) with eval pending · ${nPending} issue(s)` +
-      ` · scanned ${issues.length} issue(s), ${prs.length} pr(s)`,
+      ` · traced ${issues.length} issue(s), ${prs.length} pr(s)`,
   )
   if (resolved.length) console.log(renderPending(resolved))
   return 0

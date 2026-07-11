@@ -121,8 +121,10 @@ owner — the reverse edge: a file's GOVERNORS (code: — drives drift + eval fr
 over-owned → split the file). --actionable prints NOTHING unless action is needed (hook use).
 
 lint — checks the whole spec↔code graph and exits non-zero on errors (or a blocked commit-local
-drift gate): integrity (error) · living (error) · altitude (warn) · coverage (warn) · drift (warn) ·
-owners (warn). spec lint's errors BLOCK commits (the pre-commit shim; bypass SPEXCODE_SKIP_LINT=1);
+drift gate). Errors: integrity (a code:/related: file does not exist) · one-govern (a node governs >1
+file) · living (a "## vN" changelog heading) · id-format (an id not lowercase [a-z0-9-], or a leaf id
+reused) · mention (a [[id]] naming no node). Warns: altitude · breadth · coverage · drift ·
+related-drift · owners · confusable-id (two leaf ids one edit apart). spec lint's errors BLOCK commits (the pre-commit shim; bypass SPEXCODE_SKIP_LINT=1);
 contrast \`spex eval lint\`, which is pure advisory and never blocks anyone.
 
 ack — stamp Spec-OK on HEAD (an empty stamp commit): the drift remedy when only MECHANICS changed
@@ -164,7 +166,7 @@ Control another session (all take SEL):
   spex session stop <SEL>                soft stop: kill the agent, KEEP the worktree (resumable)
   spex session close <SEL>               retire the session and its worktree
 
-Worker verbs (declare YOUR OWN state — a claim the board and your supervisor act on):
+Worker verbs (declare YOUR OWN state — a claim the graph and your supervisor act on):
   spex session done --propose merge|nothing|close [--note T]   committed and stopping
   spex session park --note <what-you-await>                    a real background task will wake you
   spex session ask  --note <your-question>                     stopped on the human; resumes on reply
@@ -184,7 +186,7 @@ ${MENTION_NOTE}`,
     line: 'eval <verb>           the measurement system: add · ls · scenario ls · lint · retract · clean',
     body: `Usage: spex eval add [<node>|.] [--scenario <name>] (--pass|--fail) [--note <text>]
                     [--image <png> …repeatable] [--result <path|->] [--video <webm|mp4>] [--timeline <json>]
-       spex eval ls [<node>|.] [--json]                a node's reading timeline, newest first
+       spex eval ls [<node>|.] [--json]                a node's eval timeline, newest first
        spex eval ls --session <SEL> [--json]           a session's aggregate: its changed nodes' scores
        spex eval ls --session <SEL> --export [--open | --out <path>]
        spex eval scenario ls [<node>|.] [--unmeasured] [--json]   declared scenarios; bare = every node
@@ -192,17 +194,17 @@ ${MENTION_NOTE}`,
        spex eval retract [<node>|.] [--scenario <name>] [--last | --ts <iso>] [--note <why>]
        spex eval clean [--keep-latest | --all]         GC the content-addressed evidence cache
 
-add — file a reading of a scenario against its expected: the loss signal the optimizer reads.
+add — file an eval of a scenario against its expected: the loss signal the optimizer reads.
 Measure through the REAL product surface, never by reasoning about the code. Evidence kind follows
 the behaviour: MOVING/timed behaviour records a --video; a STATIC end state screenshots --image;
-backend/CLI files a --result transcript. A fix's proof is a fail→pass pair on the SAME scenario.
+backend/CLI files a --result transcript. A fix's evidence is a fail→pass pair on the SAME scenario.
 
-ls — node-scoped bare (its per-scenario reading history); session-scoped with an EXPLICIT --session
+ls — node-scoped bare (its per-scenario eval history); session-scoped with an EXPLICIT --session
 (never type-sniffed): every node the session's diff touches, blind spots first, its OWN measurements
 ✦-marked ahead of the inherited baseline. --export writes that evaluation as ONE self-contained
 HTML artifact (diff · evidence inlined · gates) for CI/sharing.
 
-scenario ls — the DECLARED contracts (name · tags · latest verdict), no readings: bare lists every
+scenario ls — the DECLARED contracts (name · tags · latest verdict), no evals: bare lists every
 measurable node's scenarios; --unmeasured keeps only the never-measured — the blind-spot worklist.
 
 lint — the measurement layer's findings: malformed eval.md (eval-schema) · unmeasured (eval-missing) ·
@@ -212,7 +214,7 @@ files (eval-owners). --changed scopes to the nodes THIS branch touched. spec lin
 commits; eval lint is PURE ADVISORY, always exit 0 — a measurement gap never blocks anyone.
 
 retract — the sanctioned undo for a botched filing: APPENDS a retraction event (traceable, never
-deletes a line); the previous reading becomes latest again, or the scenario honestly returns to
+deletes a line); the previous eval becomes latest again, or the scenario honestly returns to
 unmeasured.
 
 ${DOT_NOTE}`,
@@ -234,7 +236,7 @@ id, or a forge id like github#12). \`open\` welcomes taste, annotations, and off
 not only bugs; --store <host> opens straight on the forge. \`reply\` and \`close\` route by the
 issue's store — one verb, local or forge. \`promote\` moves an OPEN local issue to the forge as one
 recorded action. \`links\` is the read-only forge trace: which open forge issues/PRs serve which
-spec node (--pending narrows to threads still awaiting an eval reading). The issues workflow's
+spec node (--pending narrows to threads still awaiting an eval). The issues workflow's
 on/off switch is the \`issues.enabled\` key in spexcode.json (no CLI toggle verb — edit the JSON;
 \`spex doctor\` reports its state).
 ${MENTION_NOTE}`,
@@ -258,13 +260,13 @@ own. The whole loop is CLI-first; the dashboard adds no capability.`,
        spex evidence get <hash> [-o <file>]
 
 put writes bytes into the shared content-addressed evidence cache and prints the hash — transport
-only, no reading filed. Use the hash with --evidence on issues/remarks; re-putting the same content
-restores a pruned or cloned-away blob.
+only, no eval filed. Use the hash with --evidence on issues/remarks; re-putting the same content
+restores pruned or cloned-away evidence.
 
 get is the symmetric read: hash in, bytes out. Local cache first (no backend needed — the evidence
 is usually on this disk), then the backend on a local miss; both missing fails loud naming each
 path. Bytes go to stdout by default (pipe-friendly); -o writes a file.`,
-    see: 'spex eval add (file a reading WITH evidence) · spex issue open --evidence <hash>',
+    see: 'spex eval add (file an eval WITH evidence) · spex issue open --evidence <hash>',
   },
 
   // ── help & guide ──────────────────────────────────────────────────────────
@@ -289,7 +291,7 @@ Machine plumbing — called by generated hooks and launch scripts, never typed b
   trunk             print the resolved source-of-truth branch (the pre-commit main-guard captures it)
   commit-surgery    pre-commit footprint anchor: unconditional materialize + staged-index repair
   refresh-footprint quiet materialize — the post-checkout/post-merge freshness anchor
-  check-staged      pre-commit eval backstop: reject staged stray blobs / malformed eval.md
+  check-staged      pre-commit eval backstop: reject staged stray evidence files / malformed eval.md
   session-state <st> --session <id>   a lifecycle hook authors the session's state
   session-fail  --session <id>        the StopFailure hook marks the session errored
   session-idle  --session <id>        the idle-prompt hook marks an active session idle

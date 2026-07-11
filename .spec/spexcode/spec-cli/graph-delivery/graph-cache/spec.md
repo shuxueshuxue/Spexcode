@@ -4,7 +4,7 @@ status: active
 hue: 185
 desc: The graph is BUILT once per change, not once per poll — a single-flight, change-invalidated cache in front of buildBoard, so a poll storm costs one build and the assembly never blocks the liveness probe.
 code:
-  - spec-cli/src/boardCache.ts
+  - spec-cli/src/graphCache.ts
 ---
 
 # graph-cache

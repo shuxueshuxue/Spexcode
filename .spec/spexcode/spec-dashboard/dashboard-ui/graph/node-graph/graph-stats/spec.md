@@ -1,11 +1,11 @@
 ---
-title: board-stats
+title: graph-stats
 status: active
 hue: 210
 session: 89e4d64b-8dde-4bd1-b60c-a3825caaba67
 desc: A glanceable bottom-left strip that tallies the tree's badges — composition (status dots) and attention (drift nodes + distinct open issues) counted per node, coverage (eval circles) counted per scenario — and walks focus through the nodes behind any chip, one per click.
 code:
-  - spec-dashboard/src/BoardStats.jsx
+  - spec-dashboard/src/GraphStats.jsx
 related:
   - spec-dashboard/src/styles.css
   - spec-dashboard/src/i18n/en.js
@@ -57,7 +57,7 @@ under several coverage chips, and the empty chip walks you to the node carrying 
 the scenario is the unit COUNTED, the node stays the unit WALKED. A **zero-count** chip dims and goes inert.
 Desktop-only — it mounts in the graph shell the phone never renders ([[mobile-ui]]).
 
-`BoardStats.jsx` is this node's only owned source: mounted by the shared App shell, **reusing** `cycleNext`
+`GraphStats.jsx` is this node's only owned source: mounted by the shared App shell, **reusing** `cycleNext`
 ([[keyboard-nav]]) and `ScoreBadge` ([[eval-score-badge]]) rather than re-implementing them, and adding a
 `.board-stats` block to the shared stylesheet ([[node-graph]] keeps `styles.css`) plus a `stats` i18n section
 it owns. So a later change to the shell, the cycle primitive, or the graph is *their* node's drift, not this

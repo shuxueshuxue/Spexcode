@@ -10,8 +10,8 @@ import { residentForgeState, refreshForgeNow } from '../../spec-forge/src/reside
 import { resolveForgeHost } from '../../spec-forge/src/drivers.js'
 import { summarize } from './mentions.js'
 import { resolveLayout, mainBranch } from './layout.js'
-import { getBoardJson } from './boardCache.js'
-import { boardStream, notifyBoardChanged } from './boardStream.js'
+import { getBoardJson } from './graphCache.js'
+import { boardStream, notifyBoardChanged } from './graphStream.js'
 import { gitA, gitTry, repoRoot } from './git.js'
 import { newSession, listSessions, sendText, rawKey, stopSession, closeSession, resumeSession, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, superviseQueue } from './sessions.js'
 import { defaultHarness, HARNESSES, launcherList, launcherDefault } from './harness.js'
@@ -136,8 +136,8 @@ app.get('/api/evidence/:hash', (c) => {
 // bytes never enter git. Raw body, sniffed by the same content-addressed name. Empty → 400, over cap → 413.
 app.post('/api/evidence', async (c) => {
   const buf = Buffer.from(await c.req.arrayBuffer())
-  if (buf.length === 0) return c.json({ error: 'empty blob' }, 400)
-  if (buf.length > MAX_UPLOAD_BYTES) return c.json({ error: 'blob too large' }, 413)
+  if (buf.length === 0) return c.json({ error: 'empty evidence' }, 400)
+  if (buf.length > MAX_UPLOAD_BYTES) return c.json({ error: 'evidence too large' }, 413)
   return c.json({ hash: putBlob(buf) }, 201)
 })
 // the SETTINGS read surface — one route for everything spexcode.json / spexcode.local.json resolves to:

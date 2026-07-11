@@ -96,7 +96,7 @@ export default function SessionEvalPane({ sessionId, specs = [], sessions = [], 
             {t('sessionEval.sessionN', { n: sessionTotal })}
           </button>
         )}
-        <a className="se-export" href={`/api/sessions/${encodeURIComponent(sessionId)}/proof`} target="_blank" rel="noreferrer" data-tip={t('sessionEval.exportTitle')} aria-label={t('sessionEval.export')}>
+        <a className="se-export" href={`/api/sessions/${encodeURIComponent(sessionId)}/evals?format=html`} target="_blank" rel="noreferrer" data-tip={t('sessionEval.exportTitle')} aria-label={t('sessionEval.export')}>
           <Icon name="download" size={13} />
         </a>
       </div>

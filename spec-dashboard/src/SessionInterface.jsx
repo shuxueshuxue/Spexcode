@@ -11,7 +11,7 @@ import SessionContextMenu from './SessionContextMenu.jsx'
 import SessionSelectBar from './SessionSelectBar.jsx'
 import SessionEvalPane from './SessionEval.jsx'
 import { useResizable } from './useResizable.js'
-import { boardCommandsFor } from './sessionCommands.js'
+import { uiCommandsFor } from './sessionCommands.js'
 import { fitTextarea } from './textarea.js'
 import FoldToggle from './FoldToggle.jsx'
 import { useT } from './i18n/index.jsx'
@@ -103,8 +103,8 @@ function matchConfig(presets, query) {
 }
 
 // the row's trailing source tag, mirroring CC: `(user)` / `(project)` / `[skill]` / `built-in`. `[board]`
-// flags one of OUR commands (close/merge/type/eval) — it runs HERE, not in the agent (see boardCommandsFor).
-const SRC_TAG = { user: '(user)', project: '(project)', skill: '[skill]', 'built-in': 'built-in', board: '[board]' }
+// flags one of OUR commands (close/merge/type/eval) — it runs HERE, not in the agent (see uiCommandsFor).
+const SRC_TAG = { user: '(user)', project: '(project)', skill: '[skill]', 'built-in': 'built-in', ui: '[ui]' }
 
 
 export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, onOpenSession, onOpenSearch, reload }) {
@@ -391,10 +391,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     if (sm) {
       // the board's own commands (coloured, run HERE) lead the menu; CC's commands follow. matchSlash is a
       // stable prefix rank, so the board set keeps its lead within each score band.
-      const board = boardCmds.map((c) => ({ name: c.name, description: t(c.descKey), board: true, color: c.color }))
+      const ui = uiCmds.map((c) => ({ name: c.name, description: t(c.descKey), ui: true, color: c.color }))
       // a board command OVERRIDES a same-named CC command — one identity, one row, never a duplicate.
-      const owned = new Set(board.map((c) => c.name))
-      const items = matchSlash([...board, ...slashCmds.filter((c) => !owned.has(c.name))], sm[1])
+      const owned = new Set(ui.map((c) => c.name))
+      const items = matchSlash([...ui, ...slashCmds.filter((c) => !owned.has(c.name))], sm[1])
       if (!items.length) return null
       return { kind: 'slash', items, index: 0, start: 0, end: value.length, query: sm[1] }
     }
@@ -410,7 +410,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     if (!item || !menu) return
     if (menu.kind === 'slash') {
       // a board command RUNS on pick (the typed twin of its button); CC commands only insert text.
-      if (item.board) { const c = boardCmds.find((x) => x.name === item.name); setMsg(''); setMenu(null); c?.run(); return }
+      if (item.ui) { const c = uiCmds.find((x) => x.name === item.name); setMsg(''); setMenu(null); c?.run(); return }
       const insert = `/${item.name} `
       const before = msg.slice(0, menu.start)
       setMsg(before + insert + msg.slice(menu.end))
@@ -443,8 +443,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       <li className="mention-head">// {head} — {t('session.menuHint')}</li>
       {menu.items.map((it, i) => {
         // a board command carries its identity hue (sc-<color>); CC commands → source tag, presets → kind.
-        const tag = it.board ? 'board' : (it.source ?? it.kind)
-        const hue = it.board ? ` sc-${it.color}` : ''
+        const tag = it.ui ? 'ui' : (it.source ?? it.kind)
+        const hue = it.ui ? ` sc-${it.color}` : ''
         return (
           <li
             key={`${tag}:${it.name}`}
@@ -454,7 +454,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             onMouseDown={(e) => { e.preventDefault(); accept(it) }}
             onMouseEnter={() => setMenu((m) => (m ? { ...m, index: i } : m))}
           >
-            <span className={it.board ? 'slash-name board' : 'slash-name'}>/{highlight(it.name, menu.query)}</span>
+            <span className={it.ui ? 'slash-name ui' : 'slash-name'}>/{highlight(it.name, menu.query)}</span>
             <span className="slash-desc">{capDesc(it.description ?? it.desc)}</span>
             <span className={`slash-src src-${tag}`}>{SRC_TAG[tag] || tag}</span>
           </li>
@@ -476,7 +476,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     // a line that is EXACTLY `/<name>` of an available board command runs HERE instead of being sent to the
     // agent (this covers the no-menu submit; accept() handles the menu pick). trim() covers the `/`
     // completion's trailing space and a stray newline.
-    const cmd = boardCmds.find((c) => raw.trim() === `/${c.name}`)
+    const cmd = uiCmds.find((c) => raw.trim() === `/${c.name}`)
     if (cmd) { setMsg(''); setMenu(null); cmd.run(); return }
     // resolve any `[[<node>]]` to a live spec.md pointer before it reaches the agent (the running-session twin
     // of the New Session launch composition — see [[term-input]]).
@@ -580,7 +580,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const onBulkClosed = () => { exitSelect(); reload?.() }
 
   // `runners` binds each board-command name to the closure that DOES it — the SAME closure the header
-  // button's onClick fires; `boardCmds` narrows the registry to the current session state. See [[term-input]].
+  // button's onClick fires; `uiCmds` narrows the registry to the current session state. See [[term-input]].
   const runners = {
     type: () => setTypeMode((v) => !v),
     eval: () => setRightTab('eval'),
@@ -588,7 +588,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     stop: () => act('stop'),     // soft stop: kill tmux + socket, KEEP the worktree → session goes offline + relaunch panel
     close: () => act('close'),   // removal: kill + remove the worktree + branch (the row right-click Close's twin)
   }
-  const boardCmds = boardCommandsFor(selSession?.status, runners)
+  const uiCmds = uiCommandsFor(selSession?.status, runners)
   // window-level key router: ↑/↓ walk the list regardless of focus; Enter on New launches.
   const stateRef = useRef({})
   stateRef.current = { order, active, submit, menu, navMenu, accept, setMenu, onClose, open, searchOpen, typeMode, setTypeMode, sendRawKey }
@@ -870,14 +870,14 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 <div className="si-actions">
                   {showRelaunch
                     ? <button className="si-act go" onClick={() => act('resume')}>{t('session.relaunch')}</button>
-                    : boardCmds.filter((c) => c.button).map((c) => {
+                    : uiCmds.filter((c) => c.button).map((c) => {
                         // type alone carries extra state: `.on` while active, `.suggest` while the pane sniff
                         // thinks a select menu is up (the pulse that invites type mode).
                         const state = c.name === 'type' ? (typeMode ? ' on' : (menuById[active] ? ' suggest' : '')) : ''
                         return (
                           <button
                             key={c.name}
-                            className={`si-act board sc-${c.color} ${c.name}${state}`}
+                            className={`si-act ui sc-${c.color} ${c.name}${state}`}
                             data-tip={t(c.titleKey)}
                             onClick={c.run}
                           >{t(c.labelKey)}</button>

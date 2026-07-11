@@ -80,8 +80,8 @@ export default {
     capturing: '正在截取画面…',
     failed: '失败 — 后端在跑吗？',
     comments: ({ n }) => (n ? `评审轨道（${n}）` : '评审轨道'),
-    abOlder: '更早的 reading（‹ 靠近 A / 复现出的 bug）',
-    abNewer: '更新的 reading（靠近 B / 验证过的修复 ›）',
+    abOlder: '更早的 eval（‹ 靠近 A / 复现出的 bug）',
+    abNewer: '更新的 eval（靠近 B / 验证过的修复 ›）',
     abLatest: '最新',
     abPos: ({ i, n }) => `${i} / ${n}`,
   },
@@ -133,7 +133,7 @@ export default {
     secOpSub: '（工作树的待定改动）',
     secBadges: '徽标',
     secRing: '节点边框',
-    board: {
+    graph: {
       move: '在聚焦列内上/下移动（同级节点）',
       parent: '前往父节点',
       child: '前往最近的子节点',

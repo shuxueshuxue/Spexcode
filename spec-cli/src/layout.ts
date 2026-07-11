@@ -10,21 +10,15 @@ type Config = {
   mainBranch?: string              // source-of-truth BRANCH worktrees fork from (default: auto-detected — see mainBranch())
   branchPrefix?: string            // how a branch names its node (default: "node/")
   preset?: string                  // the SELECTED init preset — which cumulative .config tier `spex init` seeds (default 'default'; seed-time only, no launcher gate; read by init.ts; see [[init-preset]])
-  // the RENDER POLICY ([[render-policy]]) — the ONE voted footprint knob: where the machine-independent
-  // RENDERS (the CLAUDE.md/AGENTS.md contract blocks, the .claude/.codex skills + agents) sit relative to the
-  // shared repo. Three words, validated fail-loud by materialize's resolveRenderPolicy:
-  //   'committed'  the renders are ordinary committed files (their entries leave the ignore block) — the
-  //                contract reaches un-adopted teammates/CI through the harness's native discovery, for free;
-  //   'ignored'    (default) the renders are generated + gitignored via the managed block in the TRACKED
-  //                .gitignore — the team sees the rule, never the products;
-  //   'hidden'     zero repo footprint — the ignore rules live in the per-clone .git/info/exclude, and a
-  //                HOST-TRACKED contract file is handled by the clean/smudge content filter ([[content-filter]]).
-  // `committed` is a project fact → spexcode.json; `hidden` is a host/person fact → spexcode.local.json.
-  // The schema deliberately has NO knob for the spec DATA: `.spec` + spexcode.json are ALWAYS tracked
-  // ("git is the database") — the vocabulary itself makes "untrack the spec" unsayable.
-  render?: 'committed' | 'ignored' | 'hidden'
-  // DEPRECATED ([[render-policy]] compat): the retired private-overlay toggle. Read as render:'hidden' (with a
-  // loud, non-fatal migration notice); its old data-untrack semantics are gone — see `spex guide footprint`.
+  // RETIRED ([[render-policy]]) — the old three-word footprint vote. Renders carry no facts and are never
+  // tracked now (one residence behavior: the per-clone exclude, plus the content filter for a mixed
+  // contract file), so the field is IGNORED with a loud non-fatal notice (materialize's retiredAxisNotice);
+  // it stays in the type only so the notice can read it. The schema deliberately has NO knob for the spec
+  // DATA: `.spec` + spexcode.json are ALWAYS tracked ("git is the database") — the vocabulary itself makes
+  // "untrack the spec" unsayable.
+  render?: string
+  // RETIRED (render-policy compat): the old private-overlay toggle — ignored with the same loud notice;
+  // its data-untrack semantics are long gone. See `spex guide footprint` MIGRATIONS.
   private?: boolean
   // which harness targets `spex materialize` delivers into — native ids ('claude'|'codex') or a {plugin:"<folder>"}
   // bundle; resolved + validated by [[harness-select]] (harness-select.ts). Default (omitted): all native harnesses.

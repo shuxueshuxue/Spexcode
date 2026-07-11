@@ -2,7 +2,7 @@
 title: spex-init
 status: active
 hue: 200
-desc: `spex init [dir]` scaffolds a repo to adopt SpexCode by copying shipped DATA templates, never code-embedded strings; its messages report what was actually planted, and `--render` casts the footprint vote in one step.
+desc: `spex init [dir]` scaffolds a repo to adopt SpexCode by copying shipped DATA templates, never code-embedded strings; its messages report what was actually planted. Footprint needs no vote — one residence behavior, decided by kind.
 code:
   - spec-cli/src/init.ts
 related:
@@ -26,7 +26,8 @@ when the package is installed outside the dogfood repo — never a hardcoded rep
   — cumulative, so `careful` stacks its plugins over the default set. The spexcode-only plugins live only
   in the dogfood `.config`, never in the template, so they are never seeded. [[init-preset]] owns which
   sets exist; this command owns the copy.
-- **The git hooks** — `templates/hooks/*` (the main-guard pre-commit and session-stamp
+- **The git hooks** — `templates/hooks/*` (the main-guard + footprint-surgery pre-commit, the
+  footprint-refresh post-checkout/post-merge anchors ([[commit-surgery]]), and the session-stamp
   prepare-commit-msg) copied into the target's resolved common hooks dir. This is the **one canonical
   hook source**: `scripts/install-hooks.sh` (the monorepo's `npm run hooks`) installs the very same
   files, so the two paths can't drift (see [[main-guard]]). They ship inside the package so a relocated
@@ -46,15 +47,11 @@ when the package is installed outside the dogfood repo — never a hardcoded rep
 literal restated in the code, which is how the message once claimed a `["src"]` starter while the template
 seeded `["."]` (the first-minute lie a real field adoption hit).
 
-**`--render <committed|ignored|hidden>` casts the [[render-policy]] vote at adoption, one step.** The word
-is validated up front against the same vocabulary materialize enforces (an unknown word fails loud BEFORE
-anything is written), then lands where the axis says that word lives — `committed`/`ignored` in the
-committed `spexcode.json`, `hidden` in the gitignored `spexcode.local.json` — so this run's own materialize
-already renders under the vote. An explicit flag is an explicit instruction: it sets the field even in a
-pre-existing config file, the ONE deliberate exception to "existing files are left untouched". Without the
-flag, adoption onto a host that already TRACKS its contract file (CLAUDE.md/AGENTS.md) prints the one-time
-decision hint instead ([[render-policy]] owns its content): plain stdout naming the three words and their
-consequences — mechanism, not a TUI prompt, because init is routinely run by agents.
+**Adoption asks no footprint question.** The retired `--render` vote is gone: renders are never tracked
+([[render-policy]]), so init's own materialize covers a host-TRACKED contract file with the clean/smudge
+filter on the spot — clean status, no "mystery M", no decision hint — and hides wholly-ours artifacts in
+the per-clone exclude without touching the host's `.gitignore`. A lingering `render`/`private` field in a
+pre-existing config is ignored with a loud non-fatal notice; nothing about it is ever fatal to adoption.
 
 **An illegal harness-target set fails loud, up front.** Before rendering, `init` validates the project's
 [[harness-select]] `harnesses` set (from the just-planted/existing `spexcode.json`) and aborts with a stated

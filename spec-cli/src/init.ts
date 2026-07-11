@@ -53,26 +53,8 @@ function resolveHooksDir(dir: string): string | null {
   }
 }
 
-export async function specInit(targetArg: string | undefined, presetArg?: string, renderArg?: string): Promise<void> {
+export async function specInit(targetArg: string | undefined, presetArg?: string): Promise<void> {
   const targetDir = resolve(targetArg ?? process.cwd())
-
-  // the one-step render vote (`--render <committed|ignored|hidden>`, see [[render-policy]]): validated up
-  // front against the same vocabulary materialize enforces (resolveRenderPolicy — an unknown word fails loud
-  // BEFORE anything is written), applied to the config files below, and honored by this run's materialize.
-  const render = renderArg?.trim()
-  if (renderArg !== undefined) {
-    if (!render) {
-      console.error('spex init: --render needs a value — the render axis has three words: committed | ignored | hidden (see `spex guide footprint`)')
-      process.exit(1)
-    }
-    try {
-      const { resolveRenderPolicy } = await import('./materialize.js')
-      resolveRenderPolicy({ render })
-    } catch (e) {
-      console.error(`spex init: ${(e as Error).message}`)
-      process.exit(1)
-    }
-  }
 
   // the preset the NEW adopter gets — `--preset <name>` wins, else an existing target spexcode.json's
   // `preset` field, else the lean `default`. Validated loudly against the chain (an unknown name would
@@ -129,19 +111,6 @@ export async function specInit(targetArg: string | undefined, presetArg?: string
     console.log(`✓ planted spexcode.json — lint.governedRoots starts as ${roots} (the whole git-tracked tree, tests excluded); curate explicit roots later if you want a narrower graph`)
   }
 
-  // 1c. apply the --render vote where the axis says each word lives ([[render-policy]]): committed/ignored
-  // are project facts → the committed spexcode.json; hidden is a host/person fact → the gitignored
-  // spexcode.local.json. An explicit flag is an explicit instruction, so it sets the field even in a
-  // pre-existing config file (the ONE deliberate exception to "existing files are left untouched").
-  if (render) {
-    const home = render === 'hidden' ? 'spexcode.local.json' : 'spexcode.json'
-    const p = join(targetDir, home)
-    const cur = readJsonConfig(p)   // fails loud on a malformed existing file, {} when absent
-    cur.render = render
-    writeFileSync(p, JSON.stringify(cur, null, 2) + '\n')
-    console.log(`✓ render policy voted: "${render}" → ${home}`)
-  }
-
   // validate the harness DELIVERY TARGET set ([[harness-select]]) up front: a bad `harnesses` set (plugin +
   // native, or a plugin with no folder) must fail LOUD here, not be silently swallowed by the materialize
   // try/catch below. A fresh starter spexcode.json omits the field (defaults to all natives), so this only
@@ -179,18 +148,14 @@ export async function specInit(targetArg: string | undefined, presetArg?: string
   // steps: the hook manifest (in the GLOBAL per-project store, not the worktree), the AGENTS.md/CLAUDE.md
   // <spexcode> contract block (user content preserved), the .claude/.codex shims, and the Codex trust (global,
   // scoped) so codex self-launch is prompt-free. Runs with cwd = the target so the loaders read the just-seeded
-  // .config. Idempotent — the dispatch.sh gate keeps it fresh thereafter on every .config edit.
+  // .config. Idempotent — the planted git hooks (pre-commit/post-checkout/post-merge) keep it fresh
+  // thereafter on the git-native anchors ([[commit-surgery]]); no harness event ever triggers a render.
   const prevCwd = process.cwd()
   try {
     process.chdir(targetDir)
-    const { materialize, renderVoteHint } = await import('./materialize.js')
+    const { materialize } = await import('./materialize.js')
     materialize(targetDir)
     console.log('✓ materialized harness artifacts (global hook manifest, AGENTS.md/CLAUDE.md block, harness shims, Codex trust)')
-    // the adoption vote hint ([[render-policy]]): a host-TRACKED contract file now carries the generated
-    // block and shows honestly dirty under the default policy — print the one-time decision guidance while
-    // the vote is open (an explicit `render`, including --render on this very run, retires it).
-    const hint = renderVoteHint(targetDir)
-    if (hint) console.log(`\n${hint}`)
   } catch (e) {
     console.warn(`• materialize skipped (${(e as Error).message}) — run \`spex materialize\` once the packages are installed.`)
   } finally {

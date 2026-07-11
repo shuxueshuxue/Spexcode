@@ -64,6 +64,16 @@ if [ "$branch" = "$trunk" ] && [ ! -f "$git_dir/MERGE_HEAD" ] && [ -z "${SPEXCOD
   exit 1
 fi
 
+# @@@ footprint surgery ([[commit-surgery]]) - the history anchor: an UNCONDITIONAL materialize (masks fresh
+# at the one moment history is written) + staged-index repair — strip the spexcode sentinel block from any
+# staged blob (source = the staged blob, so `git add -p` partial staging survives), unstage HEAD-untracked
+# generated artifacts. REPAIRS AND PROCEEDS, never rejects; one note per repair on stderr. Runs INSIDE the
+# hook env on purpose: the surgery honors GIT_INDEX_FILE so a pathspec/`-a` commit's TEMPORARY index is the
+# one repaired. Advisory when spex is unresolvable or errors (CI lint enforces); never blocks the commit.
+if [ -n "$spex_kind" ]; then
+  spex_cli internal commit-surgery || echo "• SpexCode: footprint surgery skipped (error above) — a generated artifact may be staged; CI still enforces." >&2
+fi
+
 # @@@ spec-lint - the hook is just a thin shim over `spex lint`. It blocks on errors only (broken
 # spec↔code links); coverage/drift are warnings. Bypass with SPEXCODE_SKIP_LINT=1. It shims through the
 # shared spex_cli() resolved above (repoRoot() discovers the cwd's toplevel via git.ts, which strips the

@@ -52,7 +52,7 @@ function flushExit(code = 0): Promise<never> {
 }
 const has = (name: string) => process.argv.includes(`--${name}`)
 // bare positionals after argv index `from`, skipping flags and their values (selectors for ls/watch).
-const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--prompt-file', '--timeout', '--reason', '--out', '--password', '--tls-cert', '--tls-key', '--harness', '--launcher', '--harness-session', '--port', '--api', '--api-port', '--host', '--preset', '--render', '--limit', '--session', '--depth'])
+const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--prompt-file', '--timeout', '--reason', '--out', '--password', '--tls-cert', '--tls-key', '--harness', '--launcher', '--harness-session', '--port', '--api', '--api-port', '--host', '--preset', '--limit', '--session', '--depth'])
 function positionals(from: number): string[] {
   const out: string[] = []
   for (let i = from; i < process.argv.length; i++) {
@@ -279,9 +279,9 @@ if (cmd === 'serve') {
   }
 } else if (cmd === 'init') {
   // scaffold a repo to adopt SpexCode: copy the shipped DATA templates (seed spec tree + git hooks)
-  // into <targetDir> (default cwd). spex init [targetDir] [--preset <tier>] [--render <word>]
+  // into <targetDir> (default cwd). spex init [targetDir] [--preset <tier>]
   const { specInit } = await import('./init.js')
-  await specInit(positionals(3)[0], flag('preset'), flag('render'))
+  await specInit(positionals(3)[0], flag('preset'))
 } else if (cmd === 'uninstall') {
   // the surgical inverse of init: remove every SpexCode-generated artifact (harness shims/contract/trust, the
   // .gitignore block, the global store, any plugin bundle) — NEVER the user's .spec/.config data or their own
@@ -401,14 +401,11 @@ if (cmd === 'serve') {
   const run = cmd === 'remark' ? m.runRemark : cmd === 'resolve' ? m.runResolve : m.runRetract
   await flushExit(await run(process.argv.slice(3)))
 } else if (cmd === 'materialize') {
-  // @@@ materialize - the pay-per-change render: surface nodes → manifest + AGENTS.md/CLAUDE.md block +
-  // shims + Codex trust, for cwd's project. The cheap shell gate (dispatch.sh) invokes it only on change.
-  // The adoption vote hint ([[render-policy]]) prints only here and on init — the human surfaces — never
-  // from the silent gate/bootstrap renders of the same function.
-  const { materialize, renderVoteHint } = await import('./materialize.js')
+  // @@@ materialize - the render: surface nodes → manifest + AGENTS.md/CLAUDE.md block + shims + Codex
+  // trust, for cwd's project. Anchored on git-native events only ([[commit-surgery]]): this verb, init,
+  // session-worktree creation, and the planted pre-commit/post-checkout/post-merge hooks.
+  const { materialize } = await import('./materialize.js')
   console.log(`materialized — content-hash ${materialize()}`)
-  const hint = renderVoteHint()
-  if (hint) console.log(`\n${hint}`)
 } else if (cmd === 'doctor') {
   // @@@ doctor - the diagnosis surface ([[doctor]], né `self` — renamed: "self" read as the tool itself /
   // the global install, while the report is about THIS agent's wiring): does the materialized workflow
@@ -760,6 +757,19 @@ if (cmd === 'serve') {
     const sid = process.env.SPEXCODE_SESSION_ID
     if (sid) markHarnessSessionId(sid, r.threadId)
     console.log(r.threadId)
+  } else if (sub === 'commit-surgery') {
+    // the pre-commit footprint anchor ([[commit-surgery]]): unconditional materialize + staged-index repair
+    // (strip our sentinel block from staged blobs, unstage HEAD-untracked generated artifacts). Called only
+    // by the planted pre-commit hook; repairs and proceeds, never rejects. Exit non-zero only on an internal
+    // error — the hook treats that as advisory (warn + continue), CI lint remains the real gate.
+    const { commitSurgery } = await import('./commit-surgery.js')
+    commitSurgery()
+  } else if (sub === 'refresh-footprint') {
+    // the post-checkout / post-merge freshness anchor ([[commit-surgery]]): a quiet materialize after a git
+    // state transition (the only events that can move the render's inputs — .spec/.config arrive by commit,
+    // merge, or checkout). Best-effort and silent on success; hooks call it fire-and-forget.
+    const { materialize } = await import('./materialize.js')
+    try { materialize() } catch (e) { console.error(`spexcode: footprint refresh failed (${(e as Error).message})`); process.exit(1) }
   } else if (sub === 'codex-turn') {
     // fire a follow-up turn on an OWNED thread over the per-project socket (the delivery channel, exposed for
     // tests / scripts). steer-vs-start is chosen live from the thread read.

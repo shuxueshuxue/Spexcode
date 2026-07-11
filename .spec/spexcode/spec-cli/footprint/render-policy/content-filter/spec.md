@@ -2,7 +2,7 @@
 title: content-filter
 status: active
 hue: 200
-desc: render=hidden for a HOST-TRACKED CLAUDE.md/AGENTS.md — a per-clone git clean/smudge filter keeps the pristine host prose in the index and the injected contract block in the working tree; clean(smudge(x)) == x.
+desc: The mixed-content answer — a per-clone git clean/smudge filter for a contract file the host TRACKS (or has begun writing its own prose into) keeps the pristine host prose in the index and the injected block in the working tree; clean(smudge(x)) == x.
 code:
   - spec-cli/src/contract-filter.ts
 ---
@@ -10,12 +10,13 @@ code:
 
 ## raw source
 
-A mixed-content file is the one place "generate + ignore" cannot reach: the host already TRACKS its own
-CLAUDE.md/AGENTS.md, gitignoring a tracked file is a no-op, so the folded-in contract block would ride the
-tracked file into every teammate's diff — the exact pollution `render: hidden` promises away
-([[render-policy]] story 4). The repo must keep the HOST's pristine prose while the WORKING TREE carries
-prose + block — which is precisely git's content-filter seam: smudge injects on checkout, clean strips on
-stage/diff, and history never sees the block.
+A mixed-content file is the one place exclude cannot reach: the filter chain lives on git's TRACKED
+pipeline (checkout smudges, stage/diff cleans), the ignore family on the untracked namespace, and a
+contract file that carries BOTH host prose and our block needs the tracked-pipeline tool — gitignoring a
+tracked file is a no-op, and the folded-in block would otherwise ride the file into every teammate's diff.
+The filter keeps the two contents on their own sides of the index: the repo stores the HOST's pristine
+prose (clean strips our sentinel block on stage/diff), the WORKING TREE carries prose + block (smudge
+re-injects on checkout), and history never sees the block.
 
 ## expanded spec
 
@@ -31,9 +32,12 @@ a managed block in `.git/info/attributes` binding each covered file, and a shim 
 ours to remove). The block-content file is what smudge injects, so the render and future checkouts always
 agree.
 
-**Weakest sufficient tool:** the filter is planted ONLY for a contract file the host actually tracks. An
-untracked contract file is wholly ours — plain generate + exclude already hides it, and no filter is
-planted (SpexCode's own repo is this case).
+**Where it is planted — mixed content, present or imminent.** The kind detection ([[render-policy]]) binds
+the filter for a contract file that is host-TRACKED, and PRE-ARMS it for an untracked contract file the
+user's own prose has entered: arming costs nothing while the file stays untracked (no pipeline events
+fire), and it makes the user's eventual `git add` — through any route, `-p` included; the block never even
+appears in a hunk, since add/diff compare clean(worktree) against the index — strip the block
+automatically. A wholly-ours contract file gets no filter: exclude is the weakest sufficient tool there.
 
 Three field-verified edges the mechanism must hold:
 
@@ -50,6 +54,10 @@ Three field-verified edges the mechanism must hold:
 3. **Ordered unplant.** Strip the block from the working files FIRST, then remove attributes/config/shim —
    the reverse order leaves the block exposed as an uncommitted modification the moment the clean filter
    disappears ([[harness-delivery]]'s erase order honors this).
+
+The filter guards the ADD path; the index a commit is actually built from is re-checked once more at the
+last gate by [[commit-surgery]] (a blob staged before the filter existed — a `-f`, a pre-arming edit —
+is cleaned there in place). Between the two, no route into history carries the block.
 
 **JSON mixed content is NOT implemented** — the designed successor, recorded here so nobody re-derives it:
 a host-tracked `settings.json` is answered by REDUCING THE DIMENSION, not by merging — claude's

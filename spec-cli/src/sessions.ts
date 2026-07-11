@@ -1125,8 +1125,8 @@ export async function newSession(node: string | null, prompt: string, parent: st
 }
 
 // @@@ bootstrapMaterialize - the creation-time materialize is BOOTSTRAP, not best-effort: it is what renders
-// the worktree's .claude/.codex shims (the settings.json hook wiring) in the first place, and the dispatch.sh
-// re-render gate RIDES ON those hooks — so when this render fails, no hook ever fires, the gate never runs,
+// the worktree's .claude/.codex shims (the settings.json hook wiring) in the first place, and every
+// lifecycle dispatch RIDES ON those hooks — so when this render fails, no hook ever fires,
 // and the worker comes up ungoverned (no contract block, no stop-gate) with nothing saying so. Fail loud
 // instead: log the cause + worktree, and stamp the failure on the record's `note` so the board/watch surface
 // it. The launch still proceeds — a visibly degraded worker the human can close + re-dispatch beats a refused
@@ -1259,8 +1259,8 @@ export function markIdle(sessionId?: string): boolean {
 // done / propose merge. The dogfood ritual lands every change as a COMMIT on the node branch first, so two
 // states block a declaration: (1) any uncommitted working-tree change, or (2) 0 commits ahead of main
 // (nothing committed to merge). Since the global-store refactor, SpexCode writes NO per-session files into
-// the worktree (the runtime lives in ~/.spexcode), and the only in-tree SpexCode artifacts are gitignored
-// (the materialize shims/skills) or tracked-and-committed (the contract block in CLAUDE.md/AGENTS.md), so
+// the worktree (the runtime lives in ~/.spexcode), and the only in-tree SpexCode artifacts are exclude-
+// hidden renders or filter-covered contract blocks ([[render-policy]]), so
 // neither shows as an uncommitted change — the worktree is pristine and EVERY dirty path is genuine spec/code
 // work, no runtime-file filtering needed.
 // Runs from cwd = the session worktree; ALL git goes through git() so the hook's exported GIT_DIR/GIT_INDEX_FILE

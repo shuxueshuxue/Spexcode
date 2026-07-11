@@ -77,7 +77,7 @@ session list. Identical to GET /api/board; needs the backend (spex serve) reacha
        spex guide spec       the spec.md file format + every lint rule
        spex guide yatsu      the yatsu.md scenario format + how loss is measured and filed
        spex guide config     every spexcode.json / spexcode.local.json field, and which file it belongs in
-       spex guide footprint  the share-axis model: the render vote (committed|ignored|hidden) + migrations
+       spex guide footprint  the footprint model: never-tracked renders, exclude + content filter, anchors
 
 guide is the SKILL layer — workflows and formats. Command usage lives here in help
 (\`spex help <cmd>\`); guide carries what the commands assume you know.`,
@@ -313,15 +313,14 @@ ${ROUTING_NOTE}`,
 
   // ── install & serve (operator) ────────────────────────────────────────────
   init: {
-    line: 'init [dir]            adopt SpexCode on a repo: seed .spec + hooks + materialize  [--preset name] [--render word]',
-    body: `Usage: spex init [dir=cwd] [--preset default|careful] [--render committed|ignored|hidden]
+    line: 'init [dir]            adopt SpexCode on a repo: seed .spec + hooks + materialize  [--preset name]',
+    body: `Usage: spex init [dir=cwd] [--preset default|careful]
 
 Scaffolds adoption in one shot: seeds a starter .spec tree (project root + .config plugins), plants
 spexcode.json, installs the git hooks, and materializes the harness artifacts (contract block +
 shims). Additive — never overwrites your files. --preset picks the .config plugin tier (cumulative).
---render casts the one-time render-policy vote at adoption (committed → spexcode.json, hidden →
-spexcode.local.json; an unknown word fails loud) — without it, a host-tracked CLAUDE.md/AGENTS.md
-prints a one-time decision hint instead (see spex guide footprint).`,
+Footprint needs no vote: renders are never tracked — hidden via the per-clone .git/info/exclude, with
+a tracked/mixed CLAUDE.md/AGENTS.md covered by the clean/smudge filter (see spex guide footprint).`,
     see: 'spex guide (the full setup workflow) · spex uninstall (the inverse) · spex lint (adoption TODO)',
   },
   uninstall: {
@@ -329,7 +328,7 @@ prints a one-time decision hint instead (see spex guide footprint).`,
     body: `Usage: spex uninstall [dir=cwd] [--hooks]
 
 Removes every SpexCode-GENERATED artifact (harness shims · contract blocks · trust entries ·
-.gitignore block · global store · plugin bundle) and never your .spec/.config data or your own
+exclude/ignore blocks · global store · plugin bundle) and never your .spec/.config data or your own
 prose. Git hooks are preserved unless --hooks.`,
     see: 'spex init (re-adopt later — your .spec survives)',
   },
@@ -338,9 +337,11 @@ prose. Git hooks are preserved unless --hooks.`,
     body: `Usage: spex materialize
 
 Renders the surface:system config nodes into the managed <!-- spexcode --> block of
-CLAUDE.md/AGENTS.md plus the .claude/.codex shims, and prints the content hash. Run it after a
-toolchain update or any .config edit that the automatic dispatch gate hasn't picked up — these
-artifacts are generated and gitignored, so they never arrive via git.`,
+CLAUDE.md/AGENTS.md plus the .claude/.codex shims, and prints the content hash. The render anchors on
+git-native events only (init · this verb · session-worktree creation · the pre-commit/post-checkout/
+post-merge hooks) — run it by hand after a toolchain update, or in the setup step of any clone that
+has no spex-planted hooks yet (CI, a cloud agent): the artifacts are generated and excluded, so they
+never arrive via git.`,
     see: 'spex doctor (verify the render actually reaches an agent)',
   },
   doctor: {

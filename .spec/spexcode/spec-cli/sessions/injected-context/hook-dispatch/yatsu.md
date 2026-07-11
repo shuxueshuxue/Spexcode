@@ -3,23 +3,33 @@ scenarios:
   - name: manifest-equals-legacy-map
     tags: [backend-api]
     description: >-
-      Compile the surface:hook nodes to the persistent manifest (`spex materialize` / the gate) and compare
-      to the legacy event→script map.
+      Compile the surface:hook nodes to the persistent manifest (`spex materialize`) and compare to the
+      legacy event→script map.
     expected: >-
       The manifest is exactly UserPromptSubmit→mark-active; PreToolUse→mark-active(order 10)+spec-first(order
       20, block) in that order; PostToolUse→spec-of-file; Stop→stop-gate(block); StopFailure→session-fail;
       Notification→idle — one line per (node × event), sorted by event then order.
-  - name: content-hash-gate-catches-every-edit-source
+  - name: per-tree-manifest-isolation
     tags: [backend-api]
     description: >-
-      With artifacts current, change a `.config` file FOUR ways and fire a tool event after each: (a) an
-      editor write, (b) a bash `echo >>`, (c) a `sed -i`, (d) adding a new node file. Also `touch` a file
-      without changing content.
+      Two worktrees of one project diverge in `.config`: tree B adds a `surface: hook` node bound to
+      SessionStart (a marker script), tree A stays stock. Materialize B, then materialize A (A renders LAST),
+      then fire a SessionStart dispatch with cwd = B.
     expected: >-
-      Each of (a)-(d) moves the content hash → the gate re-runs materialize that one time (manifest/contract
-      refresh). The bare `touch` does NOT change the content hash → no re-materialize. The gate is pure-shell
-      (~10ms) on the unchanged hot path; node boots only on a real change. (A tool-payload-path detector would
-      have missed b/c/d — this is why it is content-based.)
+      B's dispatch runs B's OWN compiled hook set — the marker fires — because each tree's manifest lives in
+      its own slot (`<runtime>/trees/<enc-worktree>/hooks-manifest`), keyed by the dispatching tree's
+      `rev-parse --show-toplevel`. A's later render lands in A's slot and can never overwrite what B's
+      sessions dispatch (the old single global slot was last-writer-wins across trees).
+  - name: pre-slot-tree-falls-back-to-legacy-manifest
+    tags: [backend-api]
+    description: >-
+      Simulate a worktree from before the per-tree slots: no `trees/<enc>` slot exists for it, but the legacy
+      global `<runtime>/hooks-manifest` (a pre-migration render) is present. Fire a dispatch from that tree,
+      then run any git-native anchor (`spex materialize`) in it and dispatch again.
+    expected: >-
+      The slot-less dispatch falls back to the legacy global manifest — hooks (Stop gate included) keep
+      firing through the migration window, never silently no-op. After the anchor plants the tree's slot,
+      dispatch reads the slot and the legacy file is dead residue (never rewritten, swept by uninstall).
   - name: block-decision-passes-through
     tags: [backend-api]
     description: >-
@@ -30,18 +40,12 @@ scenarios:
       exits 2 — a block:true handler's JSON decision or its own exit 2 both raise the dispatch exit, the one
       signal both harnesses propagate, with the stdout JSON as the reason payload (per the governing spec).
       mark-active still ran (its side effect happened) regardless of spec-first's block — all handlers run.
-  - name: gate-concurrent-rerender-is-atomic
-    tags: [backend-api]
-    description: >-
-      Trigger two dispatch invocations concurrently right after a `.config` change (two events at once).
-    expected: >-
-      Only ONE re-materialize runs (the portable mkdir lock + re-check inside it), no torn manifest/contract; the second
-      invocation sees the fresh content-hash and skips. Readers never observe a half-written manifest.
 ---
 # yatsu.md — hook-dispatch
 
 The dispatch layer is measured through the real session round-trip (YATU). Invariants: the persistent
-manifest equals the legacy map (so dashboard hooks are unchanged); the content-hash gate is content-based
-(catches bash/sed/new-file/editor edits, ignores touch) and cheap on the hot path; real blocking rides the
-stdout decision JSON the dispatcher passes through verbatim; concurrent re-renders are atomic. Measure the
-manifest by byte-diff; measure the gate by editing `.config` each way and watching for one re-materialize.
+manifest equals the legacy map (so dashboard hooks are unchanged); a dispatch reads the manifest of ITS OWN
+worktree (per-tree slots — two trees with divergent `.config` never trade hook sets), with the legacy
+global manifest as the migration-window fallback for a not-yet-slotted tree; real blocking rides the stdout
+decision JSON the dispatcher passes through verbatim. Measure the manifest by byte-diff; measure isolation
+by rendering two divergent trees and dispatching from each.

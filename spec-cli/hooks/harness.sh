@@ -70,13 +70,26 @@ hp_session_id() {
 
 # the per-PROJECT GLOBAL runtime dir (mirrors spec-cli/src/layout.ts `runtimeRoot`): <store>/projects/<enc>,
 # keyed by the project (dirname of the ABSOLUTE git-common-dir, so the answer is identical from main or any
-# worktree). This is where the materialized hook manifest + content-hash marker live — NOT the worktree.
+# worktree). The per-session dirs and the per-tree render slots (hp_tree_dir) live under it.
 # Echoes the dir; returns non-zero (echoing nothing) when git can't resolve, so a caller can `|| exit 0`.
 hp_runtime_dir() {
   local gcd
   gcd=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || gcd=$(realpath "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null)
   [ -n "$gcd" ] || return 1
   printf '%s/projects/%s' "${SPEXCODE_HOME:-$HOME/.spexcode}" "$(printf '%s' "$(dirname "$gcd")" | sed 's#[/.]#-#g')"
+}
+
+# the per-WORKTREE render slot (mirrors layout.ts `treeSlotDir`): <runtime>/trees/<enc(worktree-toplevel)> —
+# where THIS tree's materialized hook manifest + content-hash marker live. Keyed by the cwd's own
+# `rev-parse --show-toplevel` through the same enc transform, so a dispatch can only ever read the manifest
+# of the tree it fires in ([[hook-dispatch]] — the old single global file let the last-materialized tree's
+# hook set reach every other tree's sessions). Echoes the dir; returns non-zero when git can't resolve.
+hp_tree_dir() {
+  local rd top
+  rd=$(hp_runtime_dir) || return 1
+  top=$(git rev-parse --show-toplevel 2>/dev/null)
+  [ -n "$top" ] || return 1
+  printf '%s/trees/%s' "$rd" "$(printf '%s' "$top" | sed 's#[/.]#-#g')"
 }
 
 # the per-session GLOBAL store dir for a session id — <runtime>/sessions/<id> (sibling of the per-project

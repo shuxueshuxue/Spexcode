@@ -34,10 +34,11 @@ The pieces map from the same [[surface]] nodes the native path renders, but thro
 - **the hooks** reuse the SAME `dispatch.sh` wiring as the natives — `dispatch.sh` + its shell mirror
   `harness.sh` are copied verbatim into `hooks/`, and `hooks/hooks.json` (the Claude/z-code shape
   `{ "hooks": { "<Event>": [...] } }`) binds every lifecycle event to `dispatch.sh`, located via the host's
-  `${CLAUDE_PLUGIN_ROOT}` variable. The dispatcher's first arg is the harness id **`plugin`**, so its gate +
-  manifest dispatch run exactly as for a native; `harness.sh` routes `plugin` through the **claude family**
+  `${CLAUDE_PLUGIN_ROOT}` variable. The dispatcher's first arg is the harness id **`plugin`**, so its
+  manifest dispatch runs exactly as for a native; `harness.sh` routes `plugin` through the **claude family**
   (z-code/Claude share Claude's tool names + `file_path`) via its default case, no separate arm. The per-event
-  command bakes `SPEX` so the content-hash gate can re-materialize (re-emitting this bundle) on a `.config` edit.
+  command bakes `SPEX` for the cli-needing handlers (the bundle re-emits at the git-native render anchors,
+  [[commit-surgery]] — never on a harness event).
 - **skills / commands / agents** ship as files in the Claude-plugin layout, reusing the same skill and agent
   renders the native path uses plus a command render. Commands become real host slash-menu entries here — the
   plugin counterpart of the native path serving its command presets through the dashboard.

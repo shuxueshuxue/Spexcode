@@ -63,7 +63,7 @@ function pluginManifest(version: string): string {
 }
 
 // hooks.json in the Claude/z-code-compatible shape { "hooks": { "<Event>": [{ "hooks": [command…] }] } }. Every
-// event → the SHARED dispatch.sh (`plugin` baked as its harness id, SPEX inherited for the gate); SessionStart
+// event → the SHARED dispatch.sh (`plugin` baked as its harness id, SPEX inherited by handlers); SessionStart
 // ALSO runs inject-contract.sh first, so the contract additionalContext lands alongside the normal dispatch.
 function pluginHooksJson(spex: string): string {
   const dispatch = (e: string) => `SPEX='${spex}' bash "${PLUGIN_ROOT}/hooks/dispatch.sh" plugin ${e}`

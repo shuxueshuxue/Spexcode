@@ -40,7 +40,7 @@ Look these up on demand — the formats an agent authors, and the settings it co
   spex guide yatsu      the yatsu.md format (scenario schema + how loss is measured and filed)
   spex guide config     the spexcode.json / spexcode.local.json settings (launchers, dashboard icon, lint
                         budgets, layout) — every field, and which of the two files it belongs in
-  spex guide footprint  the share-axis model — what SpexCode plants in a repo, the render policy
+  spex guide footprint  the footprint model — what SpexCode plants in a repo, and who sees it
                         (committed | ignored | hidden), and every migration recipe`
 
 const SPEC = `spex guide spec — the spec.md file format
@@ -193,12 +193,12 @@ PORTABILITY, and picking the right one is the whole discipline:
                         identity, lint budgets, launcher NAMES. "Git is the database": tracked so the
                         team shares ONE configuration.
   spexcode.local.json   GITIGNORED — host-specific, never committed. Absolute launcher paths, cert/secret
-                        paths, a personal "render": "hidden" vote. Layered OVER spexcode.json (see MERGE
+                        paths. Layered OVER spexcode.json (see MERGE
                         below); a targeted env override (SPEXCODE_CODEX_SERVER_CMD, …) still wins at its read site.
 
 Rule of thumb — is the value TRUE FOR THE PROJECT or TRUE FOR THIS MACHINE? A branch name, a dashboard
 icon, a lint budget, a launcher's name+harness are project facts → committed spexcode.json. The ABSOLUTE
-PATH of a launcher wrapper, a TLS cert path, a personal render:hidden are machine facts → gitignored spexcode.local.json.
+PATH of a launcher wrapper or a TLS cert path are machine facts → gitignored spexcode.local.json.
 Both files are optional; omit any field to take its default, except \`sessions.defaultLauncher\` when using
 \`spex new\` or the dashboard without an explicit launcher choice.
 
@@ -324,77 +324,79 @@ Example — govern your own source dir and loosen the altitude budget:
               'default'; seed-time only, read by init.ts).
   harnesses   which harness targets \`spex materialize\` delivers into — native ids ("claude"|"codex") or a
               { "plugin": "<folder>" } bundle. Default (omitted): all native harnesses. PERSISTENT and
-              self-healing: an edit moves the hook gate's key, so the next harness event re-renders under
-              the new set (a deselected harness's artifacts are pruned) — no manual materialize needed.
-  render      the footprint vote: where the machine-independent RENDERS (CLAUDE.md/AGENTS.md contract
-              blocks, .claude/.codex skills + agents) sit relative to the shared repo. One of
-              "committed" | "ignored" (default) | "hidden". "committed" is a PROJECT fact → spexcode.json;
-              "hidden" is a HOST/person fact → spexcode.local.json. The spec DATA (.spec, spexcode.json)
-              has NO knob — always tracked. Full model + migration recipes: \`spex guide footprint\`.
-  private     RETIRED (old private-overlay toggle) — read as "render": "hidden" with a loud migration
-              notice; its data-untrack semantics are gone. See \`spex guide footprint\` MIGRATIONS.`
+              git-transactional: the edit takes effect at the next git-native render anchor (the commit
+              that carries it, a checkout/merge that receives it, or a manual \`spex materialize\`) — a
+              deselected harness's artifacts are pruned by that render.
+  render      RETIRED (the old three-word footprint vote) — ignored with a loud notice. Renders are never
+              tracked; there is exactly one residence behavior. Remove the field. \`spex guide footprint\`.
+  private     RETIRED (old private-overlay toggle) — ignored with a loud notice, same as \`render\`; its
+              data-untrack semantics are gone. See \`spex guide footprint\` MIGRATIONS.`
 
-const FOOTPRINT = `spex guide footprint — the share-axis model (what SpexCode plants in a repo, and who sees it)
+const FOOTPRINT = `spex guide footprint — what SpexCode plants in a repo, and who sees it (no vote — one behavior)
 
 SpexCode claims software engineering's HEAD (the recording of intent) and TAIL (the storage of
 measurement) and leaves the MIDDLE — construction — to the harness/agent/test framework; freshness
 stitches the two ends into a closed loop. The footprint follows: the head+tail (.spec, spexcode.json,
 readings) is the ASSET and lives in git like source; everything else is derived wiring or a machine fact.
-ONE axis — "who sees this artifact in the shared repo?" — is answered per KIND, never per usage mode.
+Renders carry no facts, so they are NEVER tracked — the old render vote is retired; there is exactly one
+residence behavior, decided per KIND (and, for a contract file, by its live CONTENT).
 
-── THE FOUR KINDS (three are fixed; one votes) ──
+── THE FOUR KINDS (all fixed) ──
   spec data       .spec/ (incl .config/) + spexcode.json — ALWAYS tracked. Git is the database; there is
                   deliberately NO way to say "untrack the spec" in this schema.
   machine facts   spexcode.local.json, the hook shims (.claude/settings.json, .codex/hooks.json), plugin
-                  bundles — NEVER tracked; always in the ignore rules, whatever those rules' home.
-  renders         the CLAUDE.md/AGENTS.md contract blocks + rendered skills/agents — machine-independent,
-                  derived from the spec tree. THE one voted class: the \`render\` field (see below).
+                  bundles — NEVER tracked; always in the per-clone exclude.
+  renders         the CLAUDE.md/AGENTS.md contract blocks + rendered skills/agents — derived, NEVER
+                  tracked; hidden via .git/info/exclude. The host's tracked .gitignore is never touched.
   run residue     .worktrees/, the global store (~/.spexcode), .git/spexcode blobs — never tracked;
-                  out-of-tree, or ignore-ruled where in-tree.
+                  out-of-tree, or exclude-ruled where in-tree.
 
-── THE VOTE: render = "committed" | "ignored" | "hidden" ──
-  committed   renders are ordinary committed files; their entries LEAVE the ignore block (machine facts
-              stay ignored). The contract reaches teammates/CI who never installed SpexCode — the harness
-              discovers the committed file natively. Pick for a fully-adopted team. → spexcode.json.
-  ignored     (default) renders are generated + gitignored via the managed block in the TRACKED
-              .gitignore — the team sees the RULE, never the products. NOTE: a contract file the host
-              ALREADY TRACKS cannot be ignored — it stays visibly dirty, your prompt to pick committed
-              or hidden.
-  hidden      zero repo footprint: the same managed block lives in the per-clone .git/info/exclude, and a
-              HOST-TRACKED CLAUDE.md/AGENTS.md is covered by a per-clone git clean/smudge content filter —
-              the repo keeps the pristine host prose, your working tree carries prose + contract block,
-              and git status stays clean. Pick to dogfood on a repo you don't own. → spexcode.local.json.
-The ignore rules are themselves a render artifact, so their HOME follows the same vote — one axis, no
-second mechanism. TRACK ≠ PUSH: the vote never touches remotes; where commits GO is branch/remote policy.
-Vote at adoption in one step: \`spex init --render <word>\` (committed/ignored → spexcode.json, hidden →
-spexcode.local.json). Until an explicit vote is set, init/materialize print a one-time decision hint
-whenever a host-TRACKED contract file carries the block — the "mystery M" explained at first sight.
+── A CONTRACT FILE'S RESIDENCE IS A LIVE CONTENT FACT (re-judged at every render) ──
+  host-tracked          → the clean/smudge content filter: the repo keeps the pristine host prose, your
+                          working tree carries prose + block, status stays clean.
+  untracked, wholly ours→ one exclude entry. The exclude is the ignored-bit DECLARATION the rest of git
+                          consults (checkout may overwrite, clean -fd spares, status/add -A/stash silent).
+  untracked, YOUR prose → the exclude entry is withdrawn (hiding user content would be data-loss shaped)
+    entered the file      and the clean filter is pre-armed: the file shows honestly as untracked, and
+                          IF you choose to \`git add\` it, the block is stripped automatically — tracking
+                          is always your act; SpexCode never stages or commits anything for you.
+
+── THE GIT-NATIVE ANCHORS (no harness event ever triggers a render) ──
+  spex init / spex materialize / session-worktree creation — the explicit renders;
+  pre-commit    the correctness anchor: an UNCONDITIONAL materialize (masks provably fresh at the only
+                moment history is written) + staged-index surgery — a staged blob carrying the sentinel
+                block is cleaned IN PLACE (partial staging survives; source is the staged blob), a
+                HEAD-untracked generated artifact is unstaged. Repairs and proceeds, never rejects.
+  post-checkout/post-merge   freshness anchors: .spec/.config edits are git-transactional — they take
+                effect at the commit/checkout/merge that carries them, like any other source change.
+An environment with no spex-planted hooks (CI, a cloud agent's fresh clone, a teammate who hasn't
+installed) simply runs \`spex materialize\` in its setup step — there is no committed-render mode.
+TRACK ≠ PUSH: none of this ever touches remotes; where commits GO is branch/remote policy.
 
 ── GUARANTEES (the forgetting law) ──
 materialize(P₂) ∘ materialize(P₁) = materialize(P₂): every render first ERASES all landing points by
-SpexCode's own identity stamps, then re-asserts the current policy — so switching render values (or
-harness sets) in ANY order, any number of times, converges; running one policy twice changes nothing.
-\`spex uninstall\` is the empty policy plus the global store: a total backout that never touches your
-.spec/.config or prose. Fresh clones and session worktrees are self-sufficient: data by checkout, renders
-by re-render (init/materialize/the hook gate), the machine snapshot (spexcode.local.json) by copy.
+SpexCode's own identity stamps, then re-asserts — legacy states (a .gitignore managed block, a committed
+render, the retired vote's homes) are forgotten by the same pass. \`spex uninstall\` is the empty render
+plus the global store: a total backout that never touches your .spec/.config or prose. Fresh clones and
+session worktrees are self-sufficient: data by checkout, renders by re-render, the machine snapshot
+(spexcode.local.json) by copy.
 
-── THE CONTENT FILTER (hidden + a host-tracked contract file) ──
-Per-clone only — git config filter.spexcode.* + .git/info/attributes + a shim under .git/spexcode/ — and
-planted ONLY when the contract file is actually tracked. clean strips the sentinel block (history never
-sees it); smudge re-injects it on checkout. A missing shim degrades to identity (never a git fatal). Your
-own edits to the file's prose still show as real modifications; only the block is invisible to git.
+── THE CONTENT FILTER (mixed-content contract files) ──
+Per-clone only — git config filter.spexcode.* + .git/info/attributes + a shim under .git/spexcode/ —
+planted where mixed content exists or is imminent (tracked, or untracked with your prose). clean strips
+the sentinel block (history never sees it); smudge re-injects it on checkout. A missing shim degrades to
+identity (never a git fatal). Your own edits to the prose still show as real modifications; only the
+block is invisible to git.
 
 ── MIGRATIONS ──
-  private: true (retired)   → replace with { "render": "hidden" } in spexcode.local.json. materialize
-                            reads the old flag as hidden and prints this recipe until you migrate.
-  legacy untracked spec     the retired mode also untracked .spec + spexcode.json. Track them once:
-  (untrack-private)             git add .spec spexcode.json     # then commit on your branch
+  render: "..." (retired)   remove the field from spexcode.json / spexcode.local.json — it is ignored
+                            with a loud notice. A previously COMMITTED render heals at your next commit
+                            touching it (pre-commit strips the block from the staged blob); or run
+                            \`spex materialize\` + commit the block's removal once.
+  private: true (retired)   same — remove it; its data-untrack semantics are long gone.
+  legacy untracked spec     track the sources once:  git add .spec spexcode.json  (commit on your branch)
                             WARNING: tracking is not retroactive secrecy — history already pushed
                             elsewhere cannot be recalled.
-  hidden → committed/ignored  just edit \`render\` — the hook gate re-renders on the very next harness
-                            event (the gate key covers spexcode.json/.local), or run \`spex materialize\`
-                            to apply immediately; the erase phase unplants the filter/exclude block in
-                            the same pass. Narrowing \`harnesses\` self-heals the same way.
   back out entirely         \`spex uninstall\` (add --hooks to also remove the spexcode git hooks).`
 
 const TOPICS: Record<string, string> = { spec: SPEC, yatsu: YATSU, config: CONFIG, footprint: FOOTPRINT }

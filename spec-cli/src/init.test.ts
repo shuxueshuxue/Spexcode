@@ -8,9 +8,9 @@ import { execFileSync } from 'node:child_process'
 
 // [[spex-init]] / [[render-policy]] — the ADOPTION SURFACE: what `spex init` prints must be TRUE of what it
 // planted (the success message once claimed governedRoots ["src"] while the template seeded ["."] — the
-// first-minute lie a real field e2e hit), the one-step `--render` vote must land in the axis-correct config
-// file and fail loud on an unknown word BEFORE writing anything, and the one-time vote hint must appear
-// exactly while the vote is open on a host-tracked contract file — and retire once any explicit vote is set.
+// first-minute lie a real field e2e hit). Footprint needs NO vote at adoption: a host-tracked contract
+// file goes straight through the content filter (clean status, no decision hint, no mystery M), and a
+// pre-existing retired `render` field is ignored with a loud notice, never a failure.
 
 const SRC = dirname(fileURLToPath(import.meta.url))
 const CLI = join(SRC, 'cli.ts')
@@ -48,52 +48,26 @@ test('init success message reports the governedRoots the template ACTUALLY ships
   assert.ok(!out.includes('["src"]') || TEMPLATE_ROOTS === '["src"]', 'no stale hardcoded ["src"] claim anywhere')
 })
 
-test('init --render: an unknown word fails loud BEFORE anything is written', { skip: !gitAvailable() && 'git not available' }, () => {
-  const { proj, spex } = freshRepo()
-  assert.throws(() => spex('init', '.', '--render', 'invisible'), /committed \| ignored \| hidden/)
-  assert.ok(!existsSync(join(proj, '.spec')), 'nothing was seeded for the bad word')
-  assert.ok(!existsSync(join(proj, 'spexcode.json')), 'no config planted for the bad word')
-})
-
-test('init --render committed: the vote lands in spexcode.json (project fact) and the run renders committed', { skip: !gitAvailable() && 'git not available' }, () => {
-  const { proj, spex } = freshRepo()
-  const out = spex('init', '.', '--render', 'committed')
-  assert.match(out, /render policy voted: "committed" → spexcode\.json/)
-  assert.equal(JSON.parse(readFileSync(join(proj, 'spexcode.json'), 'utf8')).render, 'committed')
-  const gi = readFileSync(join(proj, '.gitignore'), 'utf8')
-  assert.ok(!/^CLAUDE\.md$/m.test(gi), 'committed: render entries are NOT in the ignore block')
-  assert.ok(gi.includes('.claude/settings.json'), 'machine facts still ignored')
-  assert.ok(readFileSync(join(proj, 'CLAUDE.md'), 'utf8').includes('spexcode:start'), 'render present as an ordinary committable file')
-  assert.ok(!out.includes('spex guide footprint.'), 'an explicit vote on the same run means NO hint')
-})
-
-test('init --render hidden: the vote lands in spexcode.local.json (host fact), spexcode.json untouched', { skip: !gitAvailable() && 'git not available' }, () => {
-  const { proj, spex } = freshRepo({ trackedContract: true })
-  spex('init', '.', '--render', 'hidden')
-  assert.equal(JSON.parse(readFileSync(join(proj, 'spexcode.local.json'), 'utf8')).render, 'hidden')
-  assert.equal(JSON.parse(readFileSync(join(proj, 'spexcode.json'), 'utf8')).render, undefined, 'the host fact never enters the committed file')
+test('adoption needs no vote: a host-TRACKED contract file goes straight through the filter — clean status, no hint, no honest-M', { skip: !gitAvailable() && 'git not available' }, () => {
+  const { proj, g, spex } = freshRepo({ trackedContract: true })
+  const out = spex('init', '.')
+  assert.ok(!out.includes('--render') && !/vote/i.test(out), 'no vote vocabulary anywhere in the adoption output')
+  // the tracked contract files are covered immediately: block in the worktree, index pristine, status clean
+  assert.ok(readFileSync(join(proj, 'CLAUDE.md'), 'utf8').includes('spexcode:start'), 'contract delivered into the tracked file')
+  assert.ok(!g('show', ':CLAUDE.md').includes('spexcode:start'), 'index stays pristine (clean filter planted at init)')
+  const dirty = g('status', '--short').trim().split('\n').filter((l) => l && !l.startsWith('??'))
+  assert.deepEqual(dirty, [], `no modified tracked file after adoption (no mystery M): ${dirty}`)
+  // renders + machine facts land in the per-clone exclude; the host has no .gitignore to touch
   const excl = readFileSync(join(proj, '.git', 'info', 'exclude'), 'utf8')
-  assert.ok(excl.includes('spexcode:start'), 'hidden: ignore block lives in info/exclude')
+  assert.ok(excl.includes('spexcode:start') && excl.includes('.claude/settings.json'), 'exclude block planted')
+  assert.ok(!existsSync(join(proj, '.gitignore')), 'init never creates or edits a host .gitignore')
 })
 
-test('the adoption vote hint prints exactly while the vote is open on a host-TRACKED contract file, and retires on an explicit vote', { skip: !gitAvailable() && 'git not available' }, () => {
-  // no tracked contract file → no hint, even without a vote
-  const plain = freshRepo()
-  assert.ok(!plain.spex('init', '.').includes('spex guide footprint.'), 'plain repo: no hint (nothing is host-tracked)')
-
-  // host-tracked CLAUDE.md/AGENTS.md + no vote → the hint prints, naming the three words + the honest M
-  const host = freshRepo({ trackedContract: true })
-  const out = host.spex('init', '.')
-  assert.match(out, /CLAUDE\.md.*tracked by this repo|tracked by this repo/s, 'hint names the tracked file')
-  for (const word of ['committed', 'ignored', 'hidden']) assert.ok(out.includes(word), `hint explains '${word}'`)
-  assert.match(out, /spex guide footprint/, 'hint points at the model manual')
-  assert.match(out, /spex init --render/, 'hint names the one-step flag')
-
-  // the manual materialize surface repeats it while undecided…
-  assert.match(host.spex('materialize'), /spex guide footprint/, 'materialize surface hints while the vote is open')
-  // …and ANY explicit vote retires it (ignored — the default made explicit — counts as a decision)
-  const cfg = JSON.parse(readFileSync(join(host.proj, 'spexcode.json'), 'utf8'))
-  cfg.render = 'ignored'
-  writeFileSync(join(host.proj, 'spexcode.json'), JSON.stringify(cfg, null, 2))
-  assert.ok(!host.spex('materialize').includes('spex guide footprint'), 'an explicit vote retires the hint')
+test('a pre-existing retired render field is ignored with a loud notice — init still succeeds', { skip: !gitAvailable() && 'git not available' }, () => {
+  const { proj, env } = freshRepo()
+  writeFileSync(join(proj, 'spexcode.json'), '{"render":"committed","lint":{"governedRoots":["."]}}\n')
+  const all = execFileSync('bash', ['-c', `cd '${proj}' && '${TSX}' '${CLI}' init . 2>&1`], { encoding: 'utf8', env })
+  assert.match(all, /retired/i, 'the retired-field notice is loud')
+  assert.ok(existsSync(join(proj, '.spec')), 'adoption proceeded — the field is inert, never fatal')
+  assert.ok(readFileSync(join(proj, '.git', 'info', 'exclude'), 'utf8').includes('spexcode:start'), 'one residence behavior regardless of the field')
 })

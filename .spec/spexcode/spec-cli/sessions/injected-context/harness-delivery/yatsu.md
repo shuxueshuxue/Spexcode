@@ -12,31 +12,33 @@ scenarios:
       accepted). The materialized AGENTS.md <spexcode> block is present in codex's model-visible prompt-input
       and carries BOTH the docs/AGENT_GUIDE.md guide AND the surface:system contract bodies (guide first). The
       user performed no step after `spex init`.
-  - name: contract-files-are-gitignored-artifacts
+  - name: contract-files-are-untracked-artifacts
     tags: [backend-api]
     description: >-
       In a fresh git project carrying a docs/AGENT_GUIDE.md, run `spex materialize`. Inspect the generated
-      AGENTS.md/CLAUDE.md, `git check-ignore` them and the managed `.gitignore` block, then edit a
-      surface:system node and run materialize again.
+      AGENTS.md/CLAUDE.md, `git check-ignore` them (the managed block lives in the per-clone
+      .git/info/exclude — the host .gitignore is never touched), then edit a
+      surface:system node, commit or run materialize again.
     expected: >-
-      AGENTS.md and CLAUDE.md are written and BOTH are git-ignored (their relative paths sit in the managed
-      `# spexcode` .gitignore block alongside the shims + skills), so a clone never carries a committed copy —
-      only docs/AGENT_GUIDE.md is tracked. Each file's `<!-- spexcode:start -->…<!-- spexcode:end -->` block
-      equals the AGENT_GUIDE.md guide followed by the surface:system bodies in name order; the second run
+      AGENTS.md and CLAUDE.md are written and BOTH are ignored via the exclude block (alongside the shims +
+      skills), so a clone never carries a committed copy —
+      only docs/AGENT_GUIDE.md is tracked, and no .gitignore is created or edited. Each file's
+      `<!-- spexcode:start -->…<!-- spexcode:end -->` block
+      equals the AGENT_GUIDE.md guide followed by the surface:system bodies in name order; the next render
       reflects the edited body. The writeManagedBlock primitive still preserves any bytes outside the markers.
-  - name: gitignore-block-checkout-invariant
+  - name: exclude-block-checkout-invariant
     tags: [backend-api]
     code: spec-cli/src/materialize.ts
     description: >-
       In a repo with a codex harness, run `spex materialize` from the MAIN checkout and (separately) from a
-      linked WORKTREE, and compare the managed `.gitignore` block each produces; then commit the block and
-      re-run materialize from each to check for a diff.
+      linked WORKTREE, and compare the managed block in the SHARED .git/info/exclude (common git dir) each
+      produces; re-run from each to check for churn.
     expected: >-
       Both checkouts emit the IDENTICAL managed block — in particular the codex hooks shim appears as
       `.codex/hooks.json` from BOTH (a worktree, where that path escapes `proj`, anchors it to the main
-      checkout rather than dropping it). With the committed `.gitignore` matching that block, a re-run from
-      either checkout produces NO diff — materialize never re-dirties a clean tree, so the shared committed
-      file is stable across main and every worktree.
+      checkout rather than dropping it). A re-run from
+      either checkout leaves the shared exclude byte-stable — materialize never churns the common file the
+      two checkouts share.
   - name: codex-trust-is-scoped-and-additive
     tags: [backend-api]
     description: >-
@@ -46,35 +48,35 @@ scenarios:
       Only this project's `[projects."<path>"]` + per-hook `[hooks.state."…"]` block (between the spexcode
       sentinels) is added/replaced; the user's other keys and the other project's trust are untouched. The
       trusted_hash values match codex's own computation (codex accepts them with no re-prompt).
-  - name: gate-key-covers-renderer
+  - name: content-key-covers-renderer
     tags: [cli]
     description: >-
-      The rendered artifacts are a function of (config content, renderer). Simulate a TOOLCHAIN update with
-      the .config unchanged: source the shipped harness.sh from a package root, compute hp_config_hash,
+      The freshness stamp is a function of (config content, renderer). With the .config unchanged: source
+      the shipped harness.sh from a package root, compute hp_config_hash,
       change the package's content (a version bump / source change), and compute it again; then also edit a
       .config body and compute a third time.
     expected: >-
-      The gate key MOVES on the toolchain change alone (so the next dispatch gate re-runs materialize and
-      the deploy self-heals its stale contract/shims/manifest), moves again on the config edit, and is
-      byte-stable when neither input changed. A key that ignores the renderer is the field failure: an
-      updated toolchain leaves every rendered artifact stale until someone happens to edit .config.
-  - name: pay-per-change-render
+      The stamp MOVES on the toolchain change alone and again on the config edit, and is byte-stable when
+      neither input changed — so a stale stamp is a truthful diagnostic ("the last render predates this
+      toolchain/config") that doctor/debugging can trust. A key that ignores the renderer would read an
+      out-of-date deploy as fresh.
+  - name: dispatcher-never-renders
     tags: [backend-api]
     description: >-
-      With artifacts already materialized and the content-hash marker current, fire a tool event (the
-      dispatcher gate runs), then EDIT a surface:system node's body by any means (bash echo / editor) and
-      fire another tool event.
+      With artifacts already materialized, EDIT a surface:system node's body by any means (bash echo /
+      editor) and fire a harness tool event through dispatch.sh; then bring the edit to a git-native anchor
+      (commit it, or run `spex materialize`).
     expected: >-
-      The first event re-renders nothing (hash matches → ~10ms gate, no node boot, no file rewrite). After
-      the edit the next event detects the hash moved and re-runs materialize once, so the AGENTS.md/CLAUDE.md
-      block and the manifest reflect the new content; a third unchanged event again no-ops.
+      The harness event renders NOTHING — the contract file and manifest are byte-unchanged, the hook hot
+      path stays pure bash with zero node boots. The git-native anchor then brings the AGENTS.md/CLAUDE.md
+      block and the manifest current: .config edits are git-transactional ([[commit-surgery]]).
 ---
 # yatsu.md — harness-delivery
 
 Loss is measured through the REAL self-launch surface (YATU): a user-launched codex/claude on a clean,
 isolated home must get the full SpexCode system (the assembled guide + contract + hooks + zero-prompt trust)
 with no step after `spex init`. The contract files (AGENTS.md/CLAUDE.md) are SpexCode-owned GENERATED
-artifacts — gitignored, regenerated per clone/launch — so the only tracked contract prose is the
-docs/AGENT_GUIDE.md source the render folds in. Verify the contract reaches the model via `codex debug
+artifacts — never tracked, exclude-hidden, regenerated per clone/launch — so the only tracked contract
+prose is the docs/AGENT_GUIDE.md source the render folds in. Verify the contract reaches the model via `codex debug
 prompt-input` (no model call needed); verify trust via a real TUI launch (zero prompts). Always use isolated
 SPEXCODE_HOME/CODEX_HOME — never the real user config.

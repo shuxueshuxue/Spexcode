@@ -103,7 +103,7 @@ export function uninstall(targetArg: string | undefined, opts: { hooks?: boolean
   //    erase phase every render runs, asserted against the empty policy. One inverse, never a parallel one.
   dematerialize(proj, arts)
 
-  // 3. the global per-project store — manifest + content-hash marker + gate lock + session records. This is the
+  // 3. the global per-project store — manifest + content-hash marker + session records. This is the
   //    runtime tier, not the user's spec asset, so the whole dir is ours.
   let store: string | null = null
   try {

@@ -8,27 +8,26 @@ scenarios:
     expected: >-
       The printed value IS the planted value (the starter ships ["."]), read back from the file — no message
       may restate a config value as a code literal. No stale ["src"] claim anywhere in the output.
-  - name: one-step-render-vote
+  - name: no-vote-adoption
     tags: [cli]
     description: >-
-      Run `spex init . --render committed` on a fresh repo, `spex init . --render hidden` on a repo that
-      tracks its own CLAUDE.md/AGENTS.md, and `spex init . --render invisible` on a third.
+      Adopt on a host repo that already TRACKS its CLAUDE.md/AGENTS.md, through the real `spex init .`
+      (the retired --render flag must be gone). Read the output, git status, the index blobs, and the
+      host .gitignore.
     expected: >-
-      committed → spexcode.json carries "render": "committed" and the run's own materialize renders committed
-      (render entries out of the ignore block, CLAUDE.md an ordinary file). hidden → the vote lands in
-      spexcode.local.json (a host fact; spexcode.json stays untouched) and the block lives in
-      .git/info/exclude. The unknown word exits non-zero naming the three-word vocabulary BEFORE anything is
-      written — no .spec, no spexcode.json.
-  - name: adoption-vote-hint
+      No vote vocabulary anywhere: init covers the tracked contract files with the clean/smudge filter on
+      the spot — status clean (no mystery M, no decision hint), index pristine, worktree carries the
+      block — and hides wholly-ours artifacts in the per-clone exclude without creating or editing any
+      host .gitignore. Plain stdout only — never an interactive prompt.
+  - name: retired-field-notice
     tags: [cli]
     description: >-
-      Adopt (no --render) on a host repo that already TRACKS its CLAUDE.md/AGENTS.md; then again on a plain
-      repo with nothing tracked; then set an explicit "render" and run `spex materialize`.
+      Put a legacy `"render"` (any word, including garbage) or `"private": true` in a pre-existing config
+      and run `spex init .` / `spex materialize`.
     expected: >-
-      The tracked-host init prints the one-time decision hint — the tracked file named, the three words with
-      consequences, the pointer to `spex guide footprint` and `spex init --render` — and the manual
-      materialize repeats it while the vote is open. The plain repo prints NO hint, and any explicit render
-      (including "ignored" made explicit) retires it. Plain stdout only — never an interactive prompt.
+      Adoption and every render still SUCCEED — the field is inert — with a loud, non-fatal stderr notice
+      naming the retirement, the removal recipe, and `spex guide footprint`. Removing the field retires
+      the notice. Never an exit-nonzero for a retired word.
 ---
 # yatsu.md — spex-init
 

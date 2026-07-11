@@ -29,14 +29,15 @@ scenarios:
   - name: selection-edit-self-heals
     tags: [cli]
     description: >-
-      Adopt with the default set (both natives delivered), then narrow spexcode.json `harnesses` to ["codex"]
-      and — WITHOUT any manual `spex materialize` — fire a harness lifecycle event through dispatch.sh (the
-      auto re-render gate). Inspect the gate's content-hash and the .claude artifacts afterwards.
+      Adopt with the default set (both natives delivered), then narrow spexcode.json `harnesses` to
+      ["codex"]. First fire a harness lifecycle event through dispatch.sh (must render NOTHING — the
+      dispatcher is not a trigger), then bring the edit to a git-native anchor ([[commit-surgery]]): the
+      pre-commit hook's unconditional materialize, or `spex materialize`. Inspect the .claude artifacts.
     expected: >-
-      The gate key covers the persisted policy files (spexcode.json + spexcode.local.json, main checkout), so
-      the selection edit MOVES the key: the very next hook event re-renders under the narrowed set and prunes
-      claude's artifacts (.claude gone, CLAUDE.md block stripped). A selection change self-heals through the
-      product path — never waiting for an unrelated .config edit or a manual materialize.
+      The harness event leaves everything byte-unchanged. The anchor render then prunes claude's artifacts
+      (.claude gone, CLAUDE.md render gone / block stripped) under the narrowed set. A selection change
+      self-heals at the next git transition — never via a harness event, never waiting for an unrelated
+      .config edit.
 ---
 # yatsu.md — harness-select
 

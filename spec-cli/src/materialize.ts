@@ -11,8 +11,10 @@ import { resolveHarnessTargets, partitionHarnesses } from './harness-select.js'
 import { emitPlugin, cleanPlugin, pluginBundleDir, pluginVersion } from './plugin-harness.js'
 import { plantContractFilter, removeContractFilter, settleIndexStat } from './contract-filter.js'
 
-// @@@ materialize - the "pay-per-change" node step (≈0.85s) the cheap shell gate invokes ONLY when the
-// content-hash moved. It renders the spec tree's surface nodes into the flat artifacts each consumer reads
+// @@@ materialize - the render step (≈0.85s), anchored on GIT-NATIVE events only ([[commit-surgery]]):
+// spex verbs (init/materialize), session-worktree creation, and the planted git hooks (pre-commit,
+// post-checkout, post-merge) — never a harness event; the harness is a READER of the rendered files, not a
+// trigger. It renders the spec tree's surface nodes into the flat artifacts each consumer reads
 // cheaply, so a USER-self-launched claude/codex (no SpexCode process in the launch) gets the whole system via
 // harness-auto-discovered files: (1) the hook MANIFEST (our dispatcher reads it), (2) the CONTRACT — the
 // tracked docs guide (docs/AGENT_GUIDE.md) FOLLOWED BY the surface:system bodies — written WHOLE into each
@@ -39,11 +41,10 @@ const SPEX = join(PKG, 'bin', 'spex.mjs')
 // worktree — the worktree keeps zero SpexCode-rendered runtime; only the harness-discovered contract files +
 // shims (which the harness must find in-tree) are written under proj below.
 
-// the deterministic content fingerprint of the config roots + THE RENDERER ITSELF. ONE definition —
-// `hp_config_hash` in the shell mirror (harness.sh) — which the dispatch.sh gate ALSO calls, so the gate and
-// this renderer can never disagree on "changed". It folds in hp_renderer_version (the toolchain-side content
-// hash), so a TOOLCHAIN update moves the key and the next gate self-heals the rendered artifacts — closing
-// the "toolchain updated but nothing re-materialized" hole ([[harness-delivery]]).
+// the deterministic content fingerprint of the config roots + THE RENDERER ITSELF (`hp_config_hash` in the
+// shell mirror, harness.sh). Stamped as a freshness record after every render; it folds in
+// hp_renderer_version (the toolchain-side content hash), so a stale stamp is diagnosable after a toolchain
+// update ([[harness-delivery]]).
 export function contentHash(proj: string): string {
   try {
     const harnessSh = join(PKG, 'hooks', 'harness.sh')
@@ -51,43 +52,23 @@ export function contentHash(proj: string): string {
   } catch { return '' }
 }
 
-// @@@ render policy ([[render-policy]]) - ONE share axis, voted only for the machine-independent RENDERS.
-// `.spec` + `spexcode.json` are ALWAYS tracked (git is the database — no knob can untrack them); machine
-// facts (shims, spexcode.local.json) are ALWAYS ignored; run residue (.worktrees/) is always ignored. The
-// vote decides where the renders (contract blocks, skills, agents) sit — and, recursively, where their
-// ignore rules live: `committed` drops the render entries from the ignore block (the renders are ordinary
-// committed files), `ignored` (default) keeps the block in the TRACKED .gitignore, `hidden` moves the whole
-// block to the per-clone .git/info/exclude and covers a HOST-TRACKED contract file with the clean/smudge
-// content filter ([[content-filter]]) instead of the retired skip-worktree bit.
-export type RenderPolicy = 'committed' | 'ignored' | 'hidden'
-export function resolveRenderPolicy(cfg: { render?: string; private?: boolean }, proj?: string): RenderPolicy {
-  const r = cfg.render?.trim()
-  if (r) {
-    if (r !== 'committed' && r !== 'ignored' && r !== 'hidden') {
-      const err = new Error(`invalid render policy '${r}' — the render axis has three words: committed | ignored | hidden (see \`spex guide footprint\`)`)
-      err.name = 'ConfigError'
-      throw err
-    }
-    return r
-  }
-  if (cfg.private) {
-    // LEGACY private:true — the retired untrack-private mode. Its render half maps to 'hidden'; its
-    // data-untrack half is GONE (the spec sources are always tracked now). Loud, non-fatal: the deployment
-    // keeps working while the notice names the two migration moves.
-    let untracked: string[] = []
-    if (proj) untracked = ['.spec', 'spexcode.json'].filter((p) => existsSync(join(proj, p)) && !isTracked(proj, p))
-    console.error(
-      `spexcode: \`private: true\` is retired — reading it as \`"render": "hidden"\`.\n` +
-      `  → migrate spexcode.local.json: replace "private": true with "render": "hidden".` +
-      (untracked.length
-        ? `\n  → your spec sources are still untracked (${untracked.join(' + ')}); the untrack-private mode is gone, so track them once:\n` +
-          `      git add ${untracked.join(' ')}   (then commit on your branch)\n` +
-          `    WARNING: tracking is not retroactive secrecy — history already pushed elsewhere cannot be recalled.`
-        : ''),
-    )
-    return 'hidden'
-  }
-  return 'ignored'
+// @@@ footprint kinds ([[render-policy]]) - the vote axis is RETIRED: renders carry no facts, so they are
+// NEVER tracked — there is exactly ONE residence behavior, not three. `.spec` + `spexcode.json` are ALWAYS
+// tracked (git is the database — no knob can untrack them); machine facts (shims, spexcode.local.json),
+// run residue (.worktrees/), and wholly-ours renders are hidden by the per-clone .git/info/exclude (the
+// host's tracked .gitignore is never touched); a contract file the host TRACKS — or one the user has begun
+// writing THEIR OWN prose into — is covered by the clean/smudge content filter ([[content-filter]]). An
+// environment without the generator (a teammate's clone, CI, a cloud agent) runs `spex materialize` in its
+// setup step — there is no committed-render delivery mode.
+export function retiredAxisNotice(cfg: { render?: string; private?: boolean }): void {
+  if (!cfg.render?.trim() && !cfg.private) return
+  const field = cfg.render?.trim() ? `"render": "${cfg.render.trim()}"` : '"private": true'
+  console.error(
+    `spexcode: the render vote is retired — ${field} is ignored. Renders are never tracked: ignore rules\n` +
+    `  live in the per-clone .git/info/exclude, a host-tracked contract file is covered by the clean/smudge\n` +
+    `  filter, and a clone without spex runs \`spex materialize\` in its setup step. Remove the field from\n` +
+    `  spexcode.json / spexcode.local.json to retire this notice (see \`spex guide footprint\`).`,
+  )
 }
 
 function gitCommonDirOf(proj: string): string {
@@ -100,35 +81,25 @@ function isTracked(proj: string, file: string): boolean {
   try { git(['-C', proj, 'ls-files', '--error-unmatch', file]); return true } catch { return false }
 }
 
-// @@@ adoption vote hint ([[render-policy]] story 4 + 21) - the one-time decision guidance for the "mystery M"
-// moment: under the DEFAULT policy a host-TRACKED contract file (a team's own CLAUDE.md/AGENTS.md) carries the
-// generated block and shows honestly dirty in status — deliberate, but a first-minute adopter just sees an
-// unexplained modification. So the HUMAN surfaces (spex init + the manual `spex materialize` verb — never the
-// silent gate/bootstrap renders) print this guidance exactly while the vote is still open: only when (a) no
-// explicit `render` is set (the default `ignored` is in effect by omission, not by choice — an explicit vote,
-// any word, retires the hint) and (b) a SELECTED harness's contract file is actually host-tracked. Mechanism,
-// not interaction: plain stdout naming the three words, their consequences, and where the vote lives — init is
-// routinely run by agents, so there is no TUI prompt to hang on.
-export function renderVoteHint(proj = process.cwd()): string | null {
-  const cfg = readConfig(mainCheckout(proj))
-  if (cfg.render?.trim() || cfg.private) return null            // an explicit vote (or the legacy mapping) — decided
-  const { selected } = partitionHarnesses(resolveHarnessTargets(cfg.harnesses))
-  const tracked = selected.flatMap((h) => h.contractFiles(proj)).filter((f) => isTracked(proj, f))
-  if (!tracked.length) return null
-  const names = tracked.map((f) => relative(proj, f)).join(' + ')
-  const [be, carry] = tracked.length > 1 ? ['are', 'carry'] : ['is', 'carries']
-  return [
-    `note: ${names} ${be} tracked by this repo and now ${carry} the generated <!-- spexcode --> block — the`,
-    `modification you see in git status. That dirtiness is HONEST under the current default (render: ignored),`,
-    `kept visible on purpose until you vote where the generated renders should live:`,
-    `  committed   renders become ordinary committed files — teammates/CI get the contract natively`,
-    `  ignored     (current default) renders stay generated+gitignored; a tracked contract file stays dirty`,
-    `  hidden      zero repo footprint — ignore rules live in .git/info/exclude and the tracked file is`,
-    `              covered by the clean/smudge filter (index stays pristine, status clean)`,
-    `Vote once and this note retires: "render": "committed" | "ignored" in spexcode.json (a project fact) or`,
-    `"render": "hidden" in spexcode.local.json (a host fact) — or adopt in one step: spex init --render <word>.`,
-    `Full model: spex guide footprint.`,
-  ].join('\n')
+// @@@ contract kind detection ([[render-policy]]) - a contract file's residence is a LIVE CONTENT FACT, not
+// an install-time choice, re-judged on every render: TRACKED → filter domain; untracked + wholly ours
+// (nothing left after stripping our sentinel block) → exclude domain; untracked + HOST CONTENT present (the
+// user began writing their own prose into it) → neither hidden nor tracked-for-them: the exclude entry is
+// withheld (hiding user content would make their prose invisible to git — data-loss shaped) and the clean
+// filter is pre-armed so their eventual, entirely-their-own `git add` strips our block automatically.
+const SENTINEL_RE = /\n*<!-- spexcode:start -->[\s\S]*?<!-- spexcode:end -->\n*/
+export function stripSpexcodeBlock(text: string): string {
+  const m = SENTINEL_RE.exec(text)
+  if (!m) return text
+  // mirror removeManagedBlock exactly: our block + its surrounding blanks collapse to one '\n', and only a
+  // block sitting at the TOP of the file drops the leading newline (a host file beginning with its own
+  // blank lines keeps them — clean(smudge(x)) == x).
+  const replaced = text.replace(SENTINEL_RE, '\n')
+  return m.index === 0 ? replaced.replace(/^\n+/, '') : replaced
+}
+function hostContentOf(file: string): string {
+  if (!existsSync(file)) return ''
+  return stripSpexcodeBlock(readFileSync(file, 'utf8'))
 }
 // clear a legacy skip-worktree bit (the retired private-overlay mechanism; erase-only now — nothing asserts
 // it). Best-effort: an index race or a non-repo must not fail the render.
@@ -139,7 +110,7 @@ function clearSkipWorktree(proj: string, file: string): void {
 
 // the identity stamp on every generated skill/agent file — what lets the erase phase forget a product whose
 // NODE was renamed or deleted (the name-scoped sweep can only reconstruct paths the LIVE config still names).
-const GENERATED_MARK = '<!-- spexcode:generated -->'
+export const GENERATED_MARK = '<!-- spexcode:generated -->'
 function sweepGeneratedSkills(dir: string | null): void {
   if (!dir || !existsSync(dir)) return
   for (const e of readdirSync(dir, { withFileTypes: true })) {
@@ -209,7 +180,7 @@ export function materialize(proj = process.cwd()): string {
   // native harness). resolveHarnessTargets FAILS LOUD on an illegal set (plugin+native, plugin w/o folder).
   const cfg = readConfig(mainCheckout(proj))
   const targets = resolveHarnessTargets(cfg.harnesses)
-  const policy = resolveRenderPolicy(cfg, proj)                           // [[render-policy]] — committed | ignored | hidden
+  retiredAxisNotice(cfg)                                                  // [[render-policy]] — the vote axis is retired
   const { selected, plugins } = partitionHarnesses(targets)
   const skillNodes = loadSkillConfig()
   const agentNodes = loadAgentConfig()
@@ -236,13 +207,13 @@ export function materialize(proj = process.cwd()): string {
   // the dashboard /api/slash-commands instead).
   const renderCommand = (cm: { desc: string; body: string }) =>
     (cm.desc ? `---\ndescription: ${JSON.stringify(cm.desc)}\n---\n\n` : '') + `${cm.body}\n`
-  // two ignore classes, split because only `committed` treats them differently: RENDERS are machine-
-  // independent products the team may choose to commit; MACHINE paths (shims bake this install's abs path,
-  // bundles too) are never committable under any policy.
+  // renders and machine facts both land in the same per-clone exclude; contract files are kept separate
+  // because their residence is the live three-state kind detection below, not a static entry.
   const renderPaths: string[] = []
   const machinePaths: string[] = []
+  const contractPaths: string[] = []
   for (const h of selected) {
-    if (contract) for (const f of h.contractFiles(proj)) { writeManagedBlock(f, contract); renderPaths.push(f) }
+    if (contract) for (const f of h.contractFiles(proj)) { writeManagedBlock(f, contract); contractPaths.push(f) }
     const shimFile = h.shimFile(proj)
     mkdirSync(dirname(shimFile), { recursive: true })
     const shim = h.shim(DISPATCH, SPEX)
@@ -296,11 +267,12 @@ export function materialize(proj = process.cwd()): string {
     for (const p of plugins) emitPlugin(proj, p.folder, render)
   }
   writeFileSync(ledger, curFolders.join('\n'))
-  // (9) the ignore rules — themselves an artifact whose HOME the same axis decides ([[render-policy]]):
-  //     committed/ignored → a managed `#` block in the TRACKED .gitignore (the team sees the rule);
-  //     hidden → the identical block in the per-clone .git/info/exclude (zero repo footprint).
-  // Entries must be CHECKOUT-INVARIANT: `.gitignore` is ONE tracked file shared by the main checkout and
-  // every worktree, so each entry is anchored to the checkout it LIVES under — proj-relative when inside
+  // (9) the ignore rules — ALWAYS the per-clone .git/info/exclude ([[render-policy]]): the exclude is not a
+  //     history guard (the pre-commit surgery owns history — [[commit-surgery]]) but the ignored-bit
+  //     DECLARATION every other git door consults (checkout may overwrite, clean -fd spares, status/add -A/
+  //     stash stay silent). The host's tracked .gitignore is never touched.
+  // Entries must be CHECKOUT-INVARIANT: the exclude lives in the COMMON git dir shared by the main checkout
+  // and every worktree, so each entry is anchored to the checkout it LIVES under — proj-relative when inside
   // proj, else MAIN-checkout-relative (the codex shim resolves to `.codex/hooks.json` from any checkout; a
   // pattern naming a main-only path is a harmless no-op in a worktree). A path under neither root is dropped.
   const mc = mainCheckout(proj)
@@ -318,23 +290,20 @@ export function materialize(proj = process.cwd()): string {
     ...[...machinePaths, ...bundlePaths].map(anchor).filter((p): p is string => p !== null),
     'spexcode.local.json', '.worktrees/', '.session',
   ]
-  const renderEntries = renderPaths.map(anchor).filter((p): p is string => p !== null)
-  const entries = (list: string[]) => [...new Set(list)].sort().join('\n')
-  if (policy === 'hidden') {
-    writeManagedBlock(infoExcludePath(proj), entries([...machineEntries, ...renderEntries]), ['# ', ''])
-    // a HOST-TRACKED contract file cannot be ignored — cover it with the clean/smudge content filter
-    // ([[content-filter]]) so the block lives in the working tree while the index keeps the pristine prose.
-    // Untracked contract files are wholly ours: generate + exclude suffices, no filter (weakest tool).
-    const trackedContracts = selected
-      .flatMap((h) => h.contractFiles(proj))
-      .filter((f) => contract && isTracked(proj, f))
-    if (trackedContracts.length) plantContractFilter(proj, trackedContracts, contract)
-  } else {
-    // committed: the renders become ordinary committed files — ONLY their entries leave the block.
-    const list = policy === 'committed' ? machineEntries : [...machineEntries, ...renderEntries]
-    if (list.length) writeManagedBlock(join(proj, '.gitignore'), entries(list), ['# ', ''])
+  // the contract three-state ([[render-policy]]): tracked → filter; untracked+wholly-ours → exclude;
+  // untracked+host-content → NO exclude (never hide user prose) + the clean filter pre-armed, so the user's
+  // own eventual `git add` strips our block — tracking stays entirely their act.
+  const filterContracts: string[] = []
+  const oursContracts: string[] = []
+  for (const f of contractPaths) {
+    if (isTracked(proj, f) || hostContentOf(f).trim()) filterContracts.push(f)
+    else oursContracts.push(f)
   }
-  // (5) stamp the content-hash marker LAST (so a crash mid-render leaves it stale → re-renders next gate).
+  if (contract && filterContracts.length) plantContractFilter(proj, filterContracts, contract)
+  const renderEntries = [...renderPaths, ...oursContracts].map(anchor).filter((p): p is string => p !== null)
+  const entries = (list: string[]) => [...new Set(list)].sort().join('\n')
+  writeManagedBlock(infoExcludePath(proj), entries([...machineEntries, ...renderEntries]), ['# ', ''])
+  // (5) stamp the content-hash marker LAST (a diagnostic freshness record; a crash mid-render leaves it stale).
   const h = contentHash(proj)
   writeFileSync(join(rt, 'content-hash'), h)
   return h

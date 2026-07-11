@@ -147,6 +147,20 @@ scenarios:
       B (pass) — liveness verifies a live LISTENER (a `connect()` probe): with claude dead nothing accepts on
       the socket, so it reads `offline` within seconds and surfaces the relaunch panel. The socket FILE merely
       existing is never sufficient; a stale file refuses the connect (ECONNREFUSED) and reads offline.
+  - name: wedged-listener-reads-unknown-not-offline
+    tags: [backend-api]
+    description: >-
+      A governed claude session whose agent process is ALIVE and LISTENING on its rendezvous socket, but
+      whose listener cannot complete a connect right now — the load-thrash condition: the probe's connect
+      times out (blocked event loop) or the kernel backlog is saturated (EAGAIN). tmux window alive
+      throughout. Read the board liveness (/api/sessions), and run `spex wait <id>` against that backend.
+    expected: >-
+      The session reads `unknown` (unproven death), NEVER `offline`: a timed-out or queue-full connect proves
+      nothing about death — EAGAIN in particular proves a LIVE listener whose queue is full. Only a proven
+      refusal (ECONNREFUSED off a stale file / ENOENT with the window gone past boot grace) reads offline.
+      Consequently `spex wait` keeps polling through the wedge (exiting by its own timeout if nothing
+      changes) and never prints a false actionable `offline` verdict off a successful backend answer whose
+      probe merely failed.
   - name: resume-on-alive-refuses-loud
     tags: [backend-api]
     description: >-

@@ -14,6 +14,21 @@ scenarios:
       use. Behavior is otherwise unchanged: the wait still runs, still times out / resolves exactly as
       before, exit codes untouched, and the one-line status on resolution stays the only stdout. A human
       shell (no session env) gets NO hint.
+  - name: wait-transport-verdict-distinct
+    tags: [backend-api]
+    description: >-
+      Run `spex wait <id>` against a backend that is unreachable (stopped or firewalled — e.g. `--api` at a
+      dead port) with a short --timeout, on a project whose session is healthy (tmux alive). Read stdout,
+      stderr, and the exit code. Contrast with the plain-timeout case: backend UP, session alive but never
+      actionable, same --timeout.
+    expected: >-
+      Within its budget the wait RETRIES through the unreachable window (a one-line stderr warn, no verdict).
+      A transport failure is NEVER translated into a session state: exhausting the whole budget still
+      unreachable exits with a DISTINCT transport-scoped outcome — stdout prints `backend-unreachable` (a
+      token outside the session-status vocabulary) and the exit code differs from the plain timeout's — so a
+      supervisor reading the one stdout line + exit code can never confuse "I could not reach the board" with
+      "the session is offline". `offline` on stdout may only ever relay a successful backend answer that says
+      the session's tmux is gone; the plain-timeout contrast case keeps its own distinct exit.
 ---
 # yatsu.md — graph
 

@@ -37,19 +37,23 @@ test('spex wait: a transient connection failure is retried, then the actionable 
 })
 
 // a connection error that never recovers must eventually fail — but only after the WHOLE timeout is spent,
-// reported as backend-down (the honest cause), never a false "no actionable status" timeout.
-test('spex wait: a backend that stays unreachable fails as backend-down at the deadline, not a false timeout', async () => {
+// reported as backend-down of kind 'unreachable' (the honest, TRANSPORT-scoped cause — what the CLI surfaces
+// as the distinct `backend-unreachable` outcome, issue #40), never a false "no actionable status" timeout.
+test('spex wait: a backend that stays unreachable fails as backend-down/unreachable at the deadline, not a false timeout', async () => {
   const source = async (): Promise<Session[]> => { throw new BackendError('no backend reachable at http://x — (fetch failed)') }
   const r = await waitFor(source)
   assert.ok('backendDown' in r, `expected backendDown, got ${JSON.stringify(r)}`)
+  assert.equal(r.kind, 'unreachable')
 })
 
 // a REACHABLE-but-erroring backend (HTTP non-2xx → BackendError WITH a status) is a real terminal condition:
-// a bounded wait fails loud immediately, it does not retry the whole timeout window.
+// a bounded wait fails loud immediately, it does not retry the whole timeout window. Its kind is 'http' —
+// still a transport-layer verdict, distinct from every session state.
 test('spex wait: an HTTP backend error fails loud immediately, without retrying', async () => {
   let call = 0
   const source = async (): Promise<Session[]> => { call++; throw new BackendError('backend error 500 listing sessions', 500) }
   const r = await waitFor(source)
   assert.ok('backendDown' in r, `expected backendDown, got ${JSON.stringify(r)}`)
+  assert.equal(r.kind, 'http')
   assert.equal(call, 1, 'an HTTP error must NOT be retried — it exits on the first probe')
 })

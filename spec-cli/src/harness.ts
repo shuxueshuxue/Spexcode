@@ -179,24 +179,33 @@ export const rvSock = (id: string) => join(tmpdir(), `spexcode-rv-${id}.sock`)
 // A crashed/killed claude can leave its rvSock FILE on disk (a unix-domain socket path is NOT auto-unlinked on
 // an unclean exit), so the old `existsSync(rvSock)` read a DEAD pane as `online` for as long as the stale file
 // lingered — the incident's "dead pane stuck `working` for 30+ min". The honest signal is a live LISTENER:
-// connect() to the socket. A real claude is accepting → connects; a stale file → ECONNREFUSED (instant); an
-// absent file → ENOENT (instant). So the common cases cost no waiting; the short timeout only bounds the
-// pathological file-present-but-listener-wedged case (then treated as not-live). Never throws.
-export function rendezvousListening(id: string, timeoutMs = 800): Promise<boolean> {
+// connect() to the socket. The verdict is TRI-STATE, because only two probe results actually PROVE anything:
+//   'live'  — the connect completed: a real claude is accepting.
+//   'dead'  — ECONNREFUSED (a stale file nothing listens on) / ENOENT (no file): death PROVEN, instantly.
+//   'unproven' — the probe itself failed to conclude: a TIMEOUT (under load the prober's event loop fires the
+//     expired timer before the pending connect event — the thrashed-backend incident where every live worker
+//     read offline in one board answer), or EAGAIN (the listen backlog is FULL, which proves a listener is
+//     alive-but-busy, the opposite of dead). Collapsing these into 'dead' is how a load spike masqueraded as
+//     a graveyard (issue #40); the caller must render unproven death as `unknown`, never `offline`.
+// The common cases cost no waiting (connect/refuse/absent are instant); the short timeout only bounds the
+// wedged/thrashed path. Never throws.
+export type ListenerProbe = 'live' | 'dead' | 'unproven'
+const PROVEN_DEAD = new Set(['ECONNREFUSED', 'ENOENT'])
+export function rendezvousListening(id: string, timeoutMs = 800): Promise<ListenerProbe> {
   return new Promise((resolve) => {
     let settled = false
     let c: ReturnType<typeof createConnection> | undefined
-    const done = (v: boolean) => {
+    const done = (v: ListenerProbe) => {
       if (settled) return
       settled = true
       clearTimeout(timer)
       try { c?.destroy() } catch { /* */ }
       resolve(v)
     }
-    const timer = setTimeout(() => done(false), timeoutMs)
-    try { c = createConnection({ path: rvSock(id) }) } catch { return done(false) }
-    c.on('connect', () => done(true))
-    c.on('error', () => done(false))   // ECONNREFUSED (stale file) / ENOENT (gone) — both mean no live agent
+    const timer = setTimeout(() => done('unproven'), timeoutMs)
+    try { c = createConnection({ path: rvSock(id) }) } catch { return done('unproven') }
+    c.on('connect', () => done('live'))
+    c.on('error', (e) => done(PROVEN_DEAD.has((e as NodeJS.ErrnoException).code ?? '') ? 'dead' : 'unproven'))
   })
 }
 // The app-server Unix socket MUST live on a SHORT, sun_path-safe path — NOT nested under the project runtime

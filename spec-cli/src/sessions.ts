@@ -334,10 +334,13 @@ async function procSnapshot(): Promise<ProcTable> {
 }
 // @@@ LiveSnap - the ONE liveness snapshot the whole session list shares. `windows` = our live tmux windows
 // (id → PaneProbe) + one whole-box process table; `sockets` = the ids whose rendezvous socket has a LIVE
-// LISTENER (connect-probed once here, not the file-exists lie — [[harness-adapter]]); `probeFailed` = the tmux
-// window probe itself FAILED (timed out under load), which is DISTINCT from "tmux up, no sessions" — the former
-// means death is UNPROVEN so those rows read `unknown`, the latter is authoritative and reads `offline`.
-export type LiveSnap = { probeFailed: boolean; windows: Map<string, PaneProbe>; sockets: Set<string> }
+// LISTENER (connect-probed once here, not the file-exists lie — [[harness-adapter]]); `unproven` = the ids whose
+// LISTENER probe could not conclude (timeout under load / EAGAIN off a full-but-alive backlog — see
+// rendezvousListening's tri-state) — death UNPROVEN, so those rows read `unknown`, never `offline`;
+// `probeFailed` = the tmux window probe itself FAILED (timed out under load), which is DISTINCT from "tmux up,
+// no sessions" — the former means death is UNPROVEN so those rows read `unknown`, the latter is authoritative
+// and reads `offline`.
+export type LiveSnap = { probeFailed: boolean; windows: Map<string, PaneProbe>; sockets: Set<string>; unproven: Set<string> }
 async function liveSnapshot(): Promise<LiveSnap> {
   const windows = new Map<string, PaneProbe>()
   let out: string
@@ -346,7 +349,7 @@ async function liveSnapshot(): Promise<LiveSnap> {
   } catch (e) {
     // a TIMEOUT/kill is a probe FAILURE (we can't tell who's alive → unknown, never a false graveyard). A clean
     // non-zero exit ("no server running" — genuinely zero sessions) is authoritative → the empty map = offline.
-    return { probeFailed: probeTimedOut(e), windows, sockets: new Set() }
+    return { probeFailed: probeTimedOut(e), windows, sockets: new Set(), unproven: new Set() }
   }
   const procs = await procSnapshot().catch(() => undefined)   // codex-only, auxiliary; its failure isn't a liveness failure
   for (const line of out.split('\n')) {
@@ -356,12 +359,19 @@ async function liveSnapshot(): Promise<LiveSnap> {
     windows.set(name, { panePid: Number.isFinite(pid) && pid > 0 ? pid : undefined, procs })
   }
   // LISTENER probe for every windowed session, once, in parallel (tooth: a live listener, not a lingering
-  // socket file). A codex session has no rvSock → instant ENOENT → not in the set, and codex ignores it anyway.
+  // socket file). A codex session has no rvSock → instant ENOENT → proven dead for the socket axis (codex
+  // ignores it anyway). The tri-state matters here: 'unproven' (timeout/EAGAIN — a wedged or thrashed but
+  // possibly-alive listener) lands in `unproven`, never silently in the not-live bucket, so liveness() can
+  // render it `unknown` instead of a false `offline` (issue #40's load-spike graveyard).
   const ids = [...windows.keys()]
   const listening = await Promise.all(ids.map((id) => rendezvousListening(id)))
   const sockets = new Set<string>()
-  ids.forEach((id, i) => { if (listening[i]) sockets.add(id) })
-  return { probeFailed: false, windows, sockets }
+  const unproven = new Set<string>()
+  ids.forEach((id, i) => {
+    if (listening[i] === 'live') sockets.add(id)
+    else if (listening[i] === 'unproven') unproven.add(id)
+  })
+  return { probeFailed: false, windows, sockets, unproven }
 }
 
 // @@@ paneTitles - every session pane's RAW tmux title, free from tmux. The worker launches one pane per
@@ -389,10 +399,11 @@ async function paneTitles(): Promise<Map<string, string>> {
 // dashboard waiting for its slow cold-path fallback. Sorted so it only moves on a real change.
 export async function sessionSignature(): Promise<string> {
   const [snap, titles] = await Promise.all([liveSnapshot(), paneTitles()])
-  // fold in probe-failure and the live-listener set so a socket dying (claude exit) OR the probe flipping to
-  // unknown pushes a board-changed immediately, not only on window churn.
+  // fold in probe-failure, the live-listener set AND the unproven set so a socket dying (claude exit), the
+  // probe flipping to unknown, or a listener wedging (unproven) pushes a board-changed immediately, not only
+  // on window churn.
   return (snap.probeFailed ? 'PROBEFAIL|' : '') + [...snap.windows.keys()].sort().join(',') + '#' +
-    [...snap.sockets].sort().join(',') + '|' + [...titles].sort().map(([k, v]) => `${k}=${v}`).join(',')
+    [...snap.sockets].sort().join(',') + '~' + [...snap.unproven].sort().join(',') + '|' + [...titles].sort().map(([k, v]) => `${k}=${v}`).join(',')
 }
 
 // @@@ paneActivity - the harness-aware live self-summary: the SINGLE place a raw pane title becomes (or does
@@ -463,6 +474,10 @@ export function liveness(rec: SessRec, snap: LiveSnap): Liveness {
   // online-signal hasn't appeared yet reads 'starting' for the boot window, only past it 'offline'.
   const h = harnessById(rec.harness || defaultHarness.id)
   if (h.liveness(rec, snap.windows.has(rec.session), runtimeRoot(), snap.windows.get(rec.session), snap.sockets.has(rec.session)) === 'online') return 'online'
+  // not provably online — but if this session's LISTENER probe couldn't conclude (timeout under load / EAGAIN
+  // off a full-but-alive backlog), death is UNPROVEN: `unknown`, never a false `offline` a supervisor would
+  // act on (issue #40 — a wedged-but-alive worker must not read as an actionable corpse).
+  if (snap.unproven.has(rec.session)) return 'unknown'
   const at = launchedAt.get(rec.session)
   return at && Date.now() - at < BOOT_GRACE_MS ? 'starting' : 'offline'
 }
@@ -1647,8 +1662,12 @@ export type WatchOpts = { source: () => Promise<Session[]>; selectors?: string[]
 // "block for a worker, then exit" that is GUARANTEED to return. The deadline is checked EVERY poll, before
 // EVERY sleep (and even when a poll throws), so a target stuck in ANY non-actionable state
 // (`working`/`parked`/`idle`/`queued`/`starting`) can never hang the caller — it exits at the deadline.
-// `reached` = the target hit an actionable status; the rest are the loud exits.
-export type WatchOutcome = { reached: DisplayStatus } | { timedOut: true } | { gone: true } | { backendDown: string }
+// `reached` = the target hit an actionable status; the rest are the loud exits. `backendDown` is a verdict
+// about the TRANSPORT, never the session — `kind` keeps its two shapes distinct for the caller's outcome
+// surface: 'unreachable' (nothing listening, the whole timeout was spent retrying) vs 'http' (reachable but
+// broken, failed loud at once). The caller must surface these OUTSIDE the session-status vocabulary — a
+// supervisor must never be able to read a transport failure as a session state (issue #40).
+export type WatchOutcome = { reached: DisplayStatus } | { timedOut: true } | { gone: true } | { backendDown: string; kind: 'unreachable' | 'http' }
 export async function watchSessions(emit: (line: string) => void, opts: WatchOpts): Promise<WatchOutcome> {
   const { source, selectors = [], statuses, includeIdle = false, intervalMs = 5000, as, until } = opts
   const tag = as ? `[${as}] ` : ''
@@ -1702,7 +1721,7 @@ export async function watchSessions(emit: (line: string) => void, opts: WatchOpt
       //    is rebooting its hot-reloaded child behind the stable port on a sibling merge. This is TRANSIENT:
       //    record it, warn ONCE, and keep polling — the deadline (below) is the only hard wall, so a
       //    backgrounded `spex wait` survives the ~1s restart instead of dying on the interrupted fetch.
-      if (until && isBackendDown(e) && !isBackendUnreachable(e)) return { backendDown: (e as Error).message }
+      if (until && isBackendDown(e) && !isBackendUnreachable(e)) return { backendDown: (e as Error).message, kind: 'http' }
       if (isBackendDown(e)) {
         downMsg = (e as Error).message
         if (!warnedDown) { warnedDown = true; console.error(`${tag}[spex] watch: ${downMsg}; retrying every ${intervalMs / 1000}s…`) }
@@ -1712,7 +1731,7 @@ export async function watchSessions(emit: (line: string) => void, opts: WatchOpt
     // guarantees `spex wait` can never hang on a worker stuck outside WATCH_ACTIONABLE — nor spin forever on a
     // backend that never comes back. Hitting the deadline while still unreachable reports THAT (`backendDown`),
     // not a false "no actionable status" timeout, so the manager sees the honest cause.
-    if (until && Date.now() >= deadline) return downMsg ? { backendDown: downMsg } : { timedOut: true }
+    if (until && Date.now() >= deadline) return downMsg ? { backendDown: downMsg, kind: 'unreachable' } : { timedOut: true }
     await sleep(intervalMs)
   }
 }

@@ -384,6 +384,23 @@ the sentinel block (history never sees it); smudge re-injects it on checkout. A 
 identity (never a git fatal). Your own edits to the prose still show as real modifications; only the
 block is invisible to git.
 
+── PRIVATE LOCAL NODES (manual posture — works today) ──
+Spec data is always tracked, but tracked WHERE is yours to choose: to keep a node off the shared
+remote, give it a different git HOME instead of untracking it. The manual recipe:
+  1. create the node dir under .spec/ as usual (spec.md and friends);
+  2. add the dir's path to .git/info/exclude — per-clone, so the shared repo never sees it;
+  3. inside the dir, \`git init --separate-git-dir\` pointing somewhere under the main repo's .git/
+     (e.g. .git/spexcode/<name>.git) — the dir then holds only a one-line .git pointer file, so the
+     spec loader never walks an object store;
+  4. commit the node's changes through that inner repo.
+The effect, honestly: filesystem-derived surfaces see the node (board, search, lint); git-derived
+views are blind to it (version count, the history tab, drift), and a dispatched worker's worktree
+checkout does not contain it. Those gaps are what the pending spec-local design (a first-class
+private overlay root) closes — not built yet. Cautions: \`git clean -fdx\` in the outer repo deletes
+the inner repo along with the dir, so off-machine backup means giving the INNER repo its own private
+remote; and taking the node public later is a migration (move it into the shared tree and commit),
+not a flag flip.
+
 ── MIGRATIONS ──
   legacy untracked spec     track the sources once:  git add .spec spexcode.json  (commit on your branch)
                             WARNING: tracking is not retroactive secrecy — history already pushed

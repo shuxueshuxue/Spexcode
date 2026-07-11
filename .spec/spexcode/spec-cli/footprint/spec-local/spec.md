@@ -16,9 +16,9 @@ tracked (then the secret is in pushed history, not private) or untracked (then n
 scanner, not physics. A bare gitignore keeps the secret but loses everything git provides — no versions,
 no history tabs, no freshness anchor, not even a backup: the most private content becomes the only
 unprotected content in the project. That is the retired untrack-private mode re-arriving without its
-tooling ([[render-policy]]'s retirement note).
+tooling ([[residence]]'s retirement note).
 
-The resolution follows render-policy's own slogan, track ≠ push: privacy is a question of WHICH GIT HOME
+The resolution follows residence's own slogan, track ≠ push: privacy is a question of WHICH GIT HOME
 holds the data, never of whether the data is in git. So the shape is a second spec root — `.spec-local/`
 beside `.spec/`, ignored by the shared repo, itself a standalone git repository (pushable to a personal
 private remote if the owner wants off-machine backup). Every mechanism that makes spec data first-class —
@@ -31,21 +31,22 @@ what this design refuses is not fine-grained privacy but the bit-flip *represent
 - **Grafting, not a second tree.** Paths under the private root mirror the main tree, so each private
   node grafts into the ONE tree at its intended parent. The board renders one tree; a node's privacy is
   DERIVED from which root holds it (surfaced as a badge), never declared in frontmatter — "a private
-  node tracked publicly" stays unsayable, the same vocabulary-as-guardrail as the render axis. An id
+  node tracked publicly" stays unsayable, the same vocabulary-as-guardrail as the retired `render` vote
+  axis. An id
   collision across roots is a lint error: one node, one home. The public tree stays self-consistent for
   everyone else; private nodes exist only where their root does.
 - **Git routing.** The git layer resolves the repo per root; a private node's versions, history, and
   drift anchor in the private repo. A reading's code anchor still names the MAIN repo's HEAD — that is
   where governed code lives, and a sha is just a name; cross-repo naming is honest.
-- **The ignore entry rides the managed block**, so its home follows the render vote like every other
-  rule — no second mechanism. The dir name is a fixed convention (the `*.local` family, like
+- **The ignore entry rides the managed block**, so its home follows [[residence]]'s one behavior like every
+  other rule — no second mechanism. The dir name is a fixed convention (the `*.local` family, like
   `spexcode.local.json`), so the committed rule leaks nothing personal.
 - **Commits are direct.** The branch/merge ritual governs SHARED intent; a single-person tree needs no
   proposal gate. An auto-commit affordance can come later.
 - **CI blindness is free.** A CI clone never contains the private root, so private coverage claims and
   private nodes simply do not exist there — no per-mode branch anywhere in lint or loader.
 - **Switching is migration, honestly.** private→public = move the node dir into `.spec/` and commit;
-  public→private is the reverse, carrying render-policy's standing WARN that pushed history cannot be
+  public→private is the reverse, carrying residence's standing WARN that pushed history cannot be
   recalled. No bit pretends this is reversible.
 - **Deferred:** worker visibility (a dispatched worktree's checkout has no private root — copy vs
   read-only mount, decided when the pain is measured); materializing private `surface:` config nodes;

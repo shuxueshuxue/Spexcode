@@ -28,11 +28,11 @@ The lifecycle's stations, each owning its own detail:
   runtime subset with the monorepo layout preserved, no build step on the user's box.
 - **[[spex-init]]** — adoption by a *repo*: the seed spec tree, git hooks, and starter config, planted as
   copied data (never code-embedded strings), additive and never destructive.
-- **[[render-policy]]** — residence in the repo, vote-less: spec data always tracked, machine facts
-  never, run residue out-of-tree, renders NEVER tracked (per-clone exclude; the clean/smudge filter for a
-  mixed contract file). Every planted artifact's visibility follows its KIND — and a contract file's kind
-  is a live content fact. History is guarded and freshness anchored by [[commit-surgery]]'s git-native
-  hooks; no harness event ever triggers a render.
+- **[[residence]]** — residence in the repo, vote-less: spec data always tracked, machine facts
+  never, run residue out-of-tree, materialized artifacts NEVER tracked (per-clone exclude; the clean/smudge
+  filter for a mixed contract file). Every planted artifact's visibility follows its KIND — and a contract
+  file's kind is a live content fact. History is guarded and freshness anchored by [[commit-surgery]]'s
+  git-native hooks; no harness event ever triggers a materialize.
 - **[[doctor]]** — the audit of delivery to an *agent*: is this agent actually governed, or silently running
   free? Under-delivery and double-delivery both caught, with the repair printed.
 - **[[spex-uninstall]]** — departure: materialize(∅) plus the store — every generated artifact removed by

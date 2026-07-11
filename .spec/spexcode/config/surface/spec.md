@@ -20,16 +20,16 @@ each — e.g. a plugin that is both an on-demand skill and a new-session command
   the harness events in its `events:` list, in `order:`, blocking when `block: true`. The handler set is
   compiled into a per-session manifest, so adding or retiring a hook is a one-line surface edit, not a code
   change in the launcher.
-- `surface: skill` — an **on-demand skill**: its body is rendered to a `SKILL.md` under each harness's skill
+- `surface: skill` — an **on-demand skill**: its body is materialized to a `SKILL.md` under each harness's skill
   dir (claude `.claude/skills/<name>/`, codex `.codex/skills/<name>/`) that the agent auto-discovers and loads
   **only when the task matches its `description`** (the node's `desc:`) — never folded into the always-on
   contract. Both harnesses ship the same agentskills.io `SKILL.md` primitive, so this is one format, two dirs:
   the divergence is a single [[harness-adapter]] `skillDir` line, nothing scattered.
-- `surface: agent` — an **on-demand sub-agent**: its body is rendered to a `<name>.md` definition under each
+- `surface: agent` — an **on-demand sub-agent**: its body is materialized to a `<name>.md` definition under each
   harness's agent dir (claude `.claude/agents/`) that the harness auto-discovers as a spawnable Agent-tool
   sub-agent, loaded **only when a session needs it** (matched on the node's `desc:` trigger) — like a skill,
   never folded into the always-on contract. Its `tools:` field is the spawned agent's read/write tool
-  allowlist. Same render shape as `skill`, one definition per harness: the divergence is a single
+  allowlist. Same artifact shape as `skill`, one definition per harness: the divergence is a single
   [[harness-adapter]] `agentDir` line, and a harness with NO agent primitive (e.g. Codex today) gets none —
   exactly as a harness with no skill primitive gets no `SKILL.md`. The canonical example is [[spec-scout]].
 
@@ -46,7 +46,7 @@ In [[source-of-truth]]'s `specs.ts`, `loadSurface(s)` walks each root recursivel
 `surface` field lists `s` (membership, not equality): `loadConfig` gathers command ([[spec-cli]]'s `/api/config`, the
 [[session-console]] `/` palette), `loadSystemConfig` gathers system ([[sessions]]'s launcher), and
 `loadHookConfig` gathers hook (compiled into the dispatch manifest), `loadSkillConfig` gathers skill
-(rendered to a per-harness `SKILL.md` by [[harness-delivery]]'s materialize), and `loadAgentConfig` gathers
-agent (rendered to a per-harness `<name>.md` sub-agent definition by that same materialize). Only
+(materialized to a per-harness `SKILL.md` by [[harness-delivery]]'s materialize), and `loadAgentConfig` gathers
+agent (materialized to a per-harness `<name>.md` sub-agent definition by that same materialize). Only
 **built/active** plugins gather — a `status: pending` node is declared intent, so it renders on the board but
 reaches no surface.

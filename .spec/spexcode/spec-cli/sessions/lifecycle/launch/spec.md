@@ -44,16 +44,17 @@ share the runtime socket and take a per-project launch lock before starting the 
 one app-server per session or cross into another project's socket.
 
 **Materialized delivery, not injection:** the spec-discipline contract is NOT pushed on the command line.
-Before the agent starts, the worktree is `materialize`d ([[harness-delivery]]), rendering the `surface: system`
+Before the agent starts, the worktree is `materialize`d ([[harness-delivery]]), writing the `surface: system`
 bodies (name order — the `core` node + rules like `voice-before-ask` alongside it) into the `<spexcode>`
 managed block of the worktree's `CLAUDE.md`/`AGENTS.md`, plus the dispatch shims. The agent then launches
 **plainly** and **auto-discovers** them — the SAME path a user-self-launched agent takes — so editing any
 always-on contract is a spec edit, not a code change. There is **no `--append-system-prompt` and no `--settings`**.
 `CLAUDE.md` is **no longer hidden** (the old rename-to-`CLAUDE.spexhidden.md` isolation is gone): hiding it
 also suppressed the agent's own MEMORY load, so with the contract delivered by discovery the agent loads its
-`CLAUDE.md` + memory normally. This creation-time render is **bootstrap, not best-effort**: it is what wires
-the worktree's hooks in the first place, and every lifecycle dispatch rides ON those hooks — so a failed
-render means no hook ever fires and the worker would come up ungoverned (no contract, no stop-gate) with
+`CLAUDE.md` + memory normally. This creation-time materialize is **bootstrap, not best-effort**: it is what
+wires the worktree's hooks in the first place, and every lifecycle dispatch rides ON those hooks — so a
+failed materialize means no hook ever fires and the worker would come up ungoverned (no contract, no
+stop-gate) with
 nothing saying so. A materialize failure therefore **fails loud**: the cause + worktree path are logged and
 the failure is stamped on the session record's `note` (the board/watch surface it). The launch still proceeds
 — a visibly degraded worker the human can close and re-dispatch beats a refused launch — and status stays

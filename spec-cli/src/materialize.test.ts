@@ -7,8 +7,8 @@ import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 import { seedWorktreeHostState } from './worktree-sources.js'
 
-// [[render-policy]] / [[content-filter]] / [[commit-surgery]] / [[harness-delivery]] — the vote-less
-// footprint engine: renders are NEVER tracked (one residence behavior), a contract file's domain is a LIVE
+// [[residence]] / [[content-filter]] / [[commit-surgery]] / [[harness-delivery]] — the vote-less
+// footprint engine: materialized artifacts are NEVER tracked (one residence behavior), a contract file's domain is a LIVE
 // content fact (tracked → filter; untracked+ours → exclude; untracked+user-prose → un-hidden + clean armed),
 // and history is guarded by the pre-commit surgery, all under the FORGETTING LAW:
 // materialize(P₂) ∘ materialize(P₁) = materialize(P₂). Proven end-to-end through the REAL cli in throwaway
@@ -58,7 +58,7 @@ test('one residence behavior: tracked contracts go through the filter, host .git
   const read = (f: string) => readFileSync(join(proj, f), 'utf8')
   const exclude = () => { const p = join(proj, '.git', 'info', 'exclude'); return existsSync(p) ? readFileSync(p, 'utf8') : '' }
 
-  // no vote, no modes: the adopt render already left the host clean
+  // no vote, no modes: the adoption materialize already left the host clean
   assert.equal(status(g), '', 'clean status straight after adoption — no leak, no phantom-M, no honest-M prompt')
   assert.equal(read('.gitignore'), 'node_modules/\nartifacts/\n\n\ndist/\n', 'the host .gitignore is NEVER touched')
   assert.match(exclude(), /spexcode:start[\s\S]*spexcode:end/, 'the managed ignore block lives in per-clone info/exclude')
@@ -71,11 +71,11 @@ test('one residence behavior: tracked contracts go through the filter, host .git
   assert.ok(g('config', 'filter.spexcode.clean').trim().length > 0, 'filter configured per-clone')
   assert.match(readFileSync(join(proj, '.git', 'info', 'attributes'), 'utf8'), /\/CLAUDE\.md filter=spexcode/, 'attributes bind the tracked file')
 
-  // idempotence: rendering again is byte-stable
+  // idempotence: materializing again is byte-stable
   const snap = () => [read('.gitignore'), read('CLAUDE.md'), read('AGENTS.md'), exclude(), status(g)].join('\0')
   const once = snap()
   spex('materialize')
-  assert.equal(snap(), once, 'idempotence: a second render changes nothing')
+  assert.equal(snap(), once, 'idempotence: a second materialize changes nothing')
 })
 
 test('retired axis: any render/private value is IGNORED with a loud notice — behavior identical, no fail', { skip: !gitAvailable() && 'git not available' }, () => {
@@ -95,7 +95,7 @@ test('retired axis: any render/private value is IGNORED with a loud notice — b
   assert.ok(!/retired/i.test(spexStderr('materialize')), 'removing the field retires the notice')
 })
 
-test('legacy .gitignore managed block is forgotten by the next render (erase phase) — an honest one-time migration diff', { skip: !gitAvailable() && 'git not available' }, () => {
+test('legacy .gitignore managed block is forgotten by the next materialize (erase phase) — an honest one-time migration diff', { skip: !gitAvailable() && 'git not available' }, () => {
   const { proj, g, spex } = makeHost()
   // simulate a pre-collapse deployment: the old ignored-mode block sits in the TRACKED .gitignore
   const legacy = 'node_modules/\nartifacts/\n\n\ndist/\n\n# spexcode:start\nCLAUDE.md\n.claude/settings.json\n# spexcode:end\n'
@@ -109,7 +109,7 @@ test('legacy .gitignore managed block is forgotten by the next render (erase pha
   assert.ok(readFileSync(join(proj, '.git', 'info', 'exclude'), 'utf8').includes('.claude/settings.json'), 'the entries live in exclude now')
 })
 
-test('content-filter edges: missing shim degrades to cat; a contract change re-renders + settles; uninstall leaves no residue', { skip: !gitAvailable() && 'git not available' }, () => {
+test('content-filter edges: missing shim degrades to cat; a contract change re-materializes + settles; uninstall leaves no residue', { skip: !gitAvailable() && 'git not available' }, () => {
   const { proj, g, spex, setLocal } = makeHost()
   setLocal('{}\n')                     // a real host overlay file, so the uninstall reveal below is observable
   spex('materialize')
@@ -123,13 +123,13 @@ test('content-filter edges: missing shim degrades to cat; a contract change re-r
   assert.ok(typeof st === 'string', 'edge ①: git status still works with the shim missing')
   writeFileSync(shim, shimBytes)   // restore
 
-  // edge ②: a surface:system edit must reach the working file on re-render AND leave status clean
+  // edge ②: a surface:system edit must reach the working file on re-materialize AND leave status clean
   const sysNode = execFileSync('bash', ['-c', `grep -l '^surface: system' '${join(proj, '.spec')}'/*/.config/*/spec.md | sort | head -1`], { encoding: 'utf8' }).trim()
   assert.ok(sysNode, 'seeded .config has a surface:system node to edit')
   writeFileSync(sysNode, readFileSync(sysNode, 'utf8') + '\nEDGE-TWO-PROPAGATED\n')
   g('add', '.spec'); g('commit', '-qm', 'config edit (data is tracked — committed like any source)', '--no-verify')
   spex('materialize')
-  assert.ok(readFileSync(join(proj, 'CLAUDE.md'), 'utf8').includes('EDGE-TWO-PROPAGATED'), 'edge ②: the re-render carried the new contract into the working file')
+  assert.ok(readFileSync(join(proj, 'CLAUDE.md'), 'utf8').includes('EDGE-TWO-PROPAGATED'), 'edge ②: the re-materialize carried the new contract into the working file')
   assert.equal(status(g), '', 'edge ②: still clean — the settle refreshed the stat, the index stayed pristine')
   assert.ok(!g('show', ':CLAUDE.md').includes('EDGE-TWO-PROPAGATED'), 'edge ②: index untouched')
 
@@ -145,7 +145,7 @@ test('content-filter edges: missing shim degrades to cat; a contract change re-r
 
   // edge ③: uninstall = materialize(∅) — ordered unplant, zero residue, user bytes restored
   spex('uninstall', '.')
-  // the user's own spexcode.local.json turns visible (its ignore rule left with the render) — the only
+  // the user's own spexcode.local.json turns visible (its ignore rule left with the materialize) — the only
   // acceptable status line; no modified file may remain (no block residue, no phantom-M).
   assert.equal(status(g), '?? spexcode.local.json', 'edge ③: only the now-unignored user overlay shows after uninstall')
   assert.equal(readFileSync(claude, 'utf8'), '# team notes\nkeep me\n', 'CLAUDE.md back to the pristine host bytes')
@@ -160,7 +160,7 @@ test('content-filter edges: missing shim degrades to cat; a contract change re-r
 
 test('a HOST-TRACKED empty contract file survives the backout (deleteIfEmpty guards on tracked-ness)', { skip: !gitAvailable() && 'git not available' }, () => {
   const { proj, g, spex } = makeHost()
-  // the extreme host: a committed EMPTY CLAUDE.md the render folded a block into
+  // the extreme host: a committed EMPTY CLAUDE.md the materialize folded a block into
   writeFileSync(join(proj, 'CLAUDE.md'), '')
   g('add', 'CLAUDE.md'); g('commit', '-qm', 'empty tracked contract file', '--no-verify')
   spex('materialize')
@@ -183,7 +183,7 @@ test('content-filter invariant: a host file that BEGINS with blank lines round-t
   assert.equal(readFileSync(join(proj, 'CLAUDE.md'), 'utf8'), leading, 'uninstall restores the exact bytes (leading blanks survive removeManagedBlock)')
 })
 
-// [[render-policy]] — the contract three-state as a LIVE content fact: wholly-ours stays excluded; the
+// [[residence]] — the contract three-state as a LIVE content fact: wholly-ours stays excluded; the
 // moment USER prose enters the file the exclude entry is withdrawn (hiding user content is data-loss
 // shaped), the clean filter is pre-armed, and the user's own `git add` — the one tracking act, always
 // theirs — stages pristine prose with the block stripped automatically.
@@ -207,7 +207,7 @@ test('contract kind transition: user prose entering a wholly-ours CLAUDE.md un-h
   execFileSync('git', ['-C', proj, 'check-ignore', '-q', 'CLAUDE.md'], { env })   // throws (exit 1) if NOT ignored
   assert.ok(!status(g).includes('CLAUDE.md'), 'wholly-ours: hidden from status')
 
-  // state 2 — user prose enters: the next render un-hides it and pre-arms clean
+  // state 2 — user prose enters: the next materialize un-hides it and pre-arms clean
   writeFileSync(claude, readFileSync(claude, 'utf8') + '\nMY OWN TEAM NOTES\n')
   spex('materialize')
   assert.throws(() => execFileSync('git', ['-C', proj, 'check-ignore', '-q', 'CLAUDE.md'], { env, stdio: 'ignore' }),
@@ -235,7 +235,7 @@ test('commit surgery: strips a leaked block from the staged blob (worktree + par
   const leak = '# team notes\nkeep me — staged edit\n\n<!-- spexcode:start -->\nLEAKED\n<!-- spexcode:end -->\n'
   const sha = execFileSync('git', ['-C', proj, 'hash-object', '-w', '--stdin'], { input: leak, encoding: 'utf8', env }).trim()
   g('update-index', '--cacheinfo', `100644,${sha},CLAUDE.md`)
-  // the worktree meanwhile holds a FURTHER unstaged edit (in the prose region — a render canonicalizes
+  // the worktree meanwhile holds a FURTHER unstaged edit (in the prose region — a materialize canonicalizes
   // the block to EOF, so prose position is the stable part) — surgery must not scoop it
   const wtBefore = readFileSync(join(proj, 'CLAUDE.md'), 'utf8').replace('keep me\n', 'keep me\nUNSTAGED EDIT\n')
   writeFileSync(join(proj, 'CLAUDE.md'), wtBefore)
@@ -294,7 +294,7 @@ test('codex worktree materialize plants the .codex anchor + unconditional projec
 
   const wt = join(proj, '.worktrees', 'wt')
   g('worktree', 'add', '-q', wt, '-b', 'node/wt')
-  spex(wt, 'materialize')                                  // per-worktree render (as sessions.ts does at launch)
+  spex(wt, 'materialize')                                  // per-worktree materialize (as sessions.ts does at launch)
 
   assert.ok(existsSync(join(wt, '.codex', 'hooks.json')), 'worktree has a .codex/hooks.json anchor')
   assert.ok(existsSync(join(proj, '.codex', 'hooks.json')), 'main checkout still has the codex shim')
@@ -304,8 +304,8 @@ test('codex worktree materialize plants the .codex anchor + unconditional projec
     assert.match(cfg, new RegExp(`hooks.state."[^"]*:${snake}:0:0"\\]\\s*\\ntrusted_hash = "sha256:`), `per-hook trusted_hash for ${snake}`)
 })
 
-// [[render-policy]] — worktree seeding by KIND: tracked data arrives by CHECKOUT (no symlinks, ever),
-// renders by re-render, and the ONE thing git cannot deliver — the machine-local spexcode.local.json —
+// [[residence]] — worktree seeding by KIND: tracked data arrives by CHECKOUT (no symlinks, ever),
+// materialized artifacts by re-materialize, and the ONE thing git cannot deliver — the machine-local spexcode.local.json —
 // is COPIED as a snapshot whose writes die with the worktree. What it seeds it hides.
 test('worktree seeding: tracked data via checkout (never a link), host state copied with write isolation, seeded entry hidden', { skip: !gitAvailable() && 'git not available' }, () => {
   const main = mkdtempSync(join(tmpdir(), 'spex-seed-'))
@@ -344,8 +344,8 @@ test('worktree seeding: tracked data via checkout (never a link), host state cop
 
 // [[harness-select]] / [[commit-surgery]] — the SELECTION CHAIN, every leg a real adopter rides: the
 // persisted spexcode.json `harnesses` set must be honored by init, by a manual materialize, by the
-// pre-commit anchor's unconditional materialize, AND by a worktree render — never falling back to the
-// default full set. And the retired dispatch gate must NOT render: a harness event is never a trigger.
+// pre-commit anchor's unconditional materialize, AND by a worktree materialize — never falling back to the
+// default full set. And the retired dispatch gate must NOT materialize: a harness event is never a trigger.
 const DISPATCH = join(SRC, '..', 'hooks', 'dispatch.sh')
 
 function makeBareRepo(prefix: string) {
@@ -356,10 +356,10 @@ function makeBareRepo(prefix: string) {
   const g = (...args: string[]) => execFileSync('git', ['-C', proj, ...args], { encoding: 'utf8', env })
   const spex = (cwd: string, ...args: string[]) =>
     execFileSync(TSX, [CLI, ...args], { cwd, encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'pipe'] })
-  // fire ONE harness lifecycle event through the real dispatcher — must NEVER trigger a render now.
+  // fire ONE harness lifecycle event through the real dispatcher — must NEVER trigger a materialize now.
   const fireEvent = (cwd: string) =>
     execFileSync('bash', [DISPATCH, 'codex', 'SessionStart'], { cwd, encoding: 'utf8', env: { ...env, SPEX: `${TSX} ${CLI}` }, input: '{}' })
-  // the content-hash stamp sits in the RENDERED TREE's slot (trees/<enc(tree)>) — here the main checkout's.
+  // the content-hash stamp sits in the MATERIALIZED TREE's slot (trees/<enc(tree)>) — here the main checkout's.
   const runtimeHash = () => {
     const projects = join(home, 'projects')
     const enc = readdirSync(projects)[0]
@@ -371,7 +371,7 @@ function makeBareRepo(prefix: string) {
   return { proj, env, g, spex, fireEvent, runtimeHash }
 }
 
-test('harness selection chain: a codex-only repo NEVER grows .claude — init, manual materialize, the pre-commit anchor, a worktree render; a harness event renders NOTHING', { skip: !gitAvailable() && 'git not available' }, () => {
+test('harness selection chain: a codex-only repo NEVER grows .claude — init, manual materialize, the pre-commit anchor, a worktree materialize; a harness event materializes NOTHING', { skip: !gitAvailable() && 'git not available' }, () => {
   const { proj, g, spex, fireEvent, runtimeHash } = makeBareRepo('spex-cxonly-')
   // the adopter declares codex-only BEFORE init (init leaves an existing spexcode.json untouched)
   writeFileSync(join(proj, 'spexcode.json'), '{"harnesses":["codex"],"lint":{"governedRoots":["."]}}\n')
@@ -387,26 +387,26 @@ test('harness selection chain: a codex-only repo NEVER grows .claude — init, m
   // leg 2 — manual spex materialize
   spex(proj, 'materialize')
   noClaude(proj, 'manual materialize')
-  // leg 3 — the DE-HARNESSED dispatcher: a .config edit + a harness event must NOT re-render
+  // leg 3 — the DE-HARNESSED dispatcher: a .config edit + a harness event must NOT re-materialize
   const cfgNode = execFileSync('bash', ['-c', `ls '${join(proj, '.spec', 'project', '.config')}'/*/spec.md | head -1`], { encoding: 'utf8' }).trim()
   writeFileSync(cfgNode, readFileSync(cfgNode, 'utf8') + '\nGATE-LEG\n')
   const before = runtimeHash()
   fireEvent(proj)
-  assert.equal(runtimeHash(), before, 'de-harnessed: a harness event never triggers a render (the old gate is retired)')
+  assert.equal(runtimeHash(), before, 'de-harnessed: a harness event never triggers a materialize (the old gate is retired)')
   // leg 4 — the pre-commit anchor's unconditional materialize picks the edit up instead
   spex(proj, 'internal', 'commit-surgery')
-  assert.notEqual(runtimeHash(), before, 'the git-native anchor re-rendered (unconditional materialize)')
+  assert.notEqual(runtimeHash(), before, 'the git-native anchor re-materialized (unconditional materialize)')
   noClaude(proj, 'pre-commit anchor')
-  // leg 5 — a worktree render (what bootstrapMaterialize runs at session creation)
+  // leg 5 — a worktree materialize (what bootstrapMaterialize runs at session creation)
   g('add', '-A'); g('commit', '-qm', 'adopt', '--no-verify')
   const wt = join(proj, '.worktrees', 'wt')
   g('worktree', 'add', '-q', wt, '-b', 'node/wt')
   spex(wt, 'materialize')
-  noClaude(wt, 'worktree render')
+  noClaude(wt, 'worktree materialize')
   assert.ok(existsSync(join(wt, '.codex', 'hooks.json')) && readFileSync(join(wt, 'AGENTS.md'), 'utf8').includes('spexcode:start'), 'worktree: codex delivered')
 })
 
-test('harness selection is persistent + self-healing at the git-native anchors: narrowing `harnesses` prunes on the next anchor render', { skip: !gitAvailable() && 'git not available' }, () => {
+test('harness selection is persistent + self-healing at the git-native anchors: narrowing `harnesses` prunes on the next anchor materialize', { skip: !gitAvailable() && 'git not available' }, () => {
   const { proj, g, spex } = makeBareRepo('spex-narrow-')
   g('add', '-A'); g('commit', '-qm', 'init')
   spex(proj, 'init', '.')                                     // default set: both natives delivered
@@ -415,22 +415,22 @@ test('harness selection is persistent + self-healing at the git-native anchors: 
   const cfg = JSON.parse(readFileSync(join(proj, 'spexcode.json'), 'utf8'))
   cfg.harnesses = ['codex']
   writeFileSync(join(proj, 'spexcode.json'), JSON.stringify(cfg, null, 2))
-  spex(proj, 'internal', 'commit-surgery')                    // the pre-commit anchor is the next render
-  assert.ok(!existsSync(join(proj, '.claude')), 'the anchor render pruned .claude entirely (shim, skills, agents, the dir itself)')
+  spex(proj, 'internal', 'commit-surgery')                    // the pre-commit anchor is the next materialize
+  assert.ok(!existsSync(join(proj, '.claude')), 'the anchor materialize pruned .claude entirely (shim, skills, agents, the dir itself)')
   assert.ok(!existsSync(join(proj, 'CLAUDE.md')), 'the wholly-ours untracked CLAUDE.md is gone')
   const excl = readFileSync(join(proj, '.git', 'info', 'exclude'), 'utf8')
   assert.ok(!excl.includes('.claude'), 'no .claude entries left in the exclude block')
   assert.ok(existsSync(join(proj, '.codex', 'hooks.json')) && readFileSync(join(proj, 'AGENTS.md'), 'utf8').includes('spexcode:start'), 'codex untouched')
-  // idempotence over the harness dimension: a manual render changes nothing
+  // idempotence over the harness dimension: a manual materialize changes nothing
   spex(proj, 'materialize')
-  assert.ok(!existsSync(join(proj, '.claude')) && !existsSync(join(proj, 'CLAUDE.md')), 'manual re-render is byte-stable on the narrowed set')
+  assert.ok(!existsSync(join(proj, '.claude')) && !existsSync(join(proj, 'CLAUDE.md')), 'manual re-materialize is byte-stable on the narrowed set')
 })
 
-// [[hook-dispatch]] / [[runtime]] — per-tree render slots: the manifest (+ content-hash + ledger) is a pure
-// function of ONE tree's .config, so each tree renders into its own trees/<enc(toplevel)> slot. The old
-// single global file was last-writer-wins across worktrees — tree A's render silently replaced the hook set
+// [[hook-dispatch]] / [[runtime]] — per-tree materialize slots: the manifest (+ content-hash + ledger) is a pure
+// function of ONE tree's .config, so each tree materializes into its own trees/<enc(toplevel)> slot. The old
+// single global file was last-writer-wins across worktrees — tree A's materialize silently replaced the hook set
 // tree B's sessions dispatched (cross-tree hook bleed).
-test('per-tree render slots: a divergent worktree renders into its own slot; another tree\'s later render never rewrites it', { skip: !gitAvailable() && 'git not available' }, () => {
+test('per-tree materialize slots: a divergent worktree materializes into its own slot; another tree\'s later materialize never rewrites it', { skip: !gitAvailable() && 'git not available' }, () => {
   const { proj, env, g, spex } = makeBareRepo('spex-slots-')
   g('add', '-A'); g('commit', '-qm', 'init')
   spex(proj, 'init', '.')
@@ -451,10 +451,10 @@ test('per-tree render slots: a divergent worktree renders into its own slot; ano
   assert.ok(wtManifest.includes('probe.sh'), "the worktree's slot compiled the worktree's own .config")
   const mainManifest = readFileSync(join(slotOf(proj), 'hooks-manifest'), 'utf8')
   assert.ok(!mainManifest.includes('probe.sh'), "main's slot (from init) never saw the worktree-only node")
-  // the OTHER tree renders LAST — under the old single slot this was the clobber
+  // the OTHER tree materializes LAST — under the old single slot this was the clobber
   spex(proj, 'materialize')
   assert.equal(readFileSync(join(slotOf(wt), 'hooks-manifest'), 'utf8'), wtManifest,
-    "main's later render lands in main's slot and leaves the worktree's manifest untouched")
+    "main's later materialize lands in main's slot and leaves the worktree's manifest untouched")
   assert.ok(existsSync(join(slotOf(wt), 'content-hash')) && existsSync(join(slotOf(proj), 'content-hash')),
     'each tree carries its own content-hash stamp')
 })

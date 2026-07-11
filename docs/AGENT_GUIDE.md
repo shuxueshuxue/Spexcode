@@ -304,9 +304,9 @@ node + the default `.config` plugins), plants a starter `spexcode.json`, install
 the `.claude`/`.codex` shims (the `settings.json` hooks). Those materialized artifacts are **generated and
 never tracked** (hidden via the per-clone `.git/info/exclude`) — regenerated per clone, kept fresh by the
 git-native anchors (an unconditional materialize in pre-commit, plus post-checkout/post-merge refreshes;
-no harness event ever triggers a render) — so a
+no harness event ever triggers a materialize) — so a
 fresh clone re-runs `spex init`/`spex materialize` rather than pulling them from git. This is the same
-render that makes a self-launched agent already know the whole dev flow; the settings an agent tunes after
+materialize that makes a self-launched agent already know the whole dev flow; the settings an agent tunes after
 adoption (launchers, dashboard icon, lint budgets) all live in those two `spexcode.json` /
 `spexcode.local.json` files, documented in full by **`spex guide config`**.
 

@@ -40,7 +40,7 @@ convention:
 
 The same `spexcode.json` (read through `readConfig`) is also where adjacent project policy is DECLARED rather
 than baked in — including the `harnesses` delivery-target set [[harness-select]] owns (which harnesses `spex
-materialize` renders into; default = every native harness). Layout resolution doesn't consume it, but it rides
+materialize` delivers into; default = every native harness). Layout resolution doesn't consume it, but it rides
 the same committed-config-with-a-`spexcode.local.json`-overlay seam: persistent, re-read on every materialize.
 
 The config read is the ONE fail-loud seam here (`readJsonConfig`): an **absent** file is the legitimate
@@ -89,7 +89,7 @@ lives in the gitignored `spexcode.local.json`'s `sessions.launchers` entry (`rea
 committed `spexcode.json`; no env override — [[launcher-select]]), so a host-specific launcher path has a
 *durable* home surviving restarts,
 never committed. (The old HOST-personal render vote that lived in this overlay is retired with the whole
-axis — [[render-policy]]: renders are never tracked, and a lingering `render`/`private` field is ignored
+axis — [[residence]]: materialized artifacts are never tracked, and a lingering `render`/`private` field is ignored
 with a loud notice.) A launch generates NO per-session SpexCode files in the worktree: the
 record and the launcher products (prompt, launch, launch.sh, recorded comms) live in the per-user global
 store ([[runtime]]), keyed by session_id, outside the tree — so nothing per-session is left to ignore or

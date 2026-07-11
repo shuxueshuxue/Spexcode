@@ -144,12 +144,12 @@ export async function specInit(targetArg: string | undefined, presetArg?: string
     if (installed.length) console.log(`✓ installed git hooks (${installed.join(', ')}) → ${hooksDir}`)
   }
 
-  // 2c. RENDER the harness-discovered artifacts so a USER-self-launched claude/codex works with zero further
+  // 2c. MATERIALIZE the harness-discovered artifacts so a USER-self-launched claude/codex works with zero further
   // steps: the hook manifest (in the GLOBAL per-project store, not the worktree), the AGENTS.md/CLAUDE.md
   // <spexcode> contract block (user content preserved), the .claude/.codex shims, and the Codex trust (global,
   // scoped) so codex self-launch is prompt-free. Runs with cwd = the target so the loaders read the just-seeded
   // .config. Idempotent — the planted git hooks (pre-commit/post-checkout/post-merge) keep it fresh
-  // thereafter on the git-native anchors ([[commit-surgery]]); no harness event ever triggers a render.
+  // thereafter on the git-native anchors ([[commit-surgery]]); no harness event ever triggers a materialize.
   const prevCwd = process.cwd()
   try {
     process.chdir(targetDir)

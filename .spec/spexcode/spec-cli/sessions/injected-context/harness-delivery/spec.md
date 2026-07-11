@@ -2,7 +2,7 @@
 title: harness-delivery
 status: active
 hue: 280
-desc: How SpexCode reaches a USER-self-launched claude/codex (no dashboard, no SpexCode process) — render the spec tree's surface nodes into harness-auto-discovered files, so the contract + hooks arrive with zero friction on both harnesses.
+desc: How SpexCode reaches a USER-self-launched claude/codex (no dashboard, no SpexCode process) — materialize the spec tree's surface nodes into harness-auto-discovered files, so the contract + hooks arrive with zero friction on both harnesses.
 code:
   - spec-cli/src/materialize.ts
 related:
@@ -16,7 +16,7 @@ related:
 SpexCode must work for a user who installs it, runs `spex init`, and then launches **their own**
 `claude`/`codex` — with **no SpexCode process in that launch**, so nothing can pass `--append-system-prompt`
 or `--settings`. Therefore everything SpexCode contributes must arrive through files the harness
-**auto-discovers**, and getting there must cost the user **zero further steps**. The same render also feeds
+**auto-discovers**, and getting there must cost the user **zero further steps**. The same materialize also feeds
 the dashboard path; the dashboard is one consumer, not a prerequisite — the spec engine never needs `spex
 serve` running. Crucially the dashboard launcher uses the **SAME** delivery: it `materialize`s into the new
 worktree and then launches the agent PLAINLY — no `--append-system-prompt`, no `--settings`, no hiding of
@@ -26,28 +26,28 @@ loads its CLAUDE.md + memory normally ([[sessions-core]] launch).
 
 ## expanded spec
 
-`spex materialize` is the **render**: a pure function of the spec tree's [[surface]] nodes into the flat
+`spex materialize` is a pure function of the spec tree's [[surface]] nodes into the flat
 artifacts each consumer reads cheaply. Its anchors are GIT-NATIVE only ([[commit-surgery]]): the explicit
 verbs (`spex init`, `spex materialize`), session-worktree creation, and the planted pre-commit /
-post-checkout / post-merge hooks — pre-commit's materialize is UNCONDITIONAL, so every render input
+post-checkout / post-merge hooks — pre-commit's materialize is UNCONDITIONAL, so every materialize input
 (`.config` content, the persisted `spexcode.json`/`spexcode.local.json`, a contract file's trackedness, a
 toolchain update) is picked up no later than the next commit, and checkout/merge refresh what arrives from
 other branches. A harness event is never a trigger — the old dispatcher content-hash gate is retired, and
 `.config` edits are git-transactional (they take effect at the commit/checkout/merge that carries them,
 like any other source). An environment with no planted hooks (CI, a cloud agent's fresh clone) runs
-`spex materialize` in its setup step. It renders into the harness targets
+`spex materialize` in its setup step. It materializes into the harness targets
 [[harness-select]] resolves from `spexcode.json` (default: every native harness), writing, idempotently and
 scoped per project, for each SELECTED harness:
 
-- **the hook manifest** (persistent; the [[hook-dispatch]] dispatcher reads it) — in the rendered tree's
+- **the hook manifest** (persistent; the [[hook-dispatch]] dispatcher reads it) — in the materialized tree's
   own slot (`trees/<enc-worktree>/` under [[runtime]]'s `runtimeRoot`), NOT the worktree; per-tree because
-  the compile is a function of THAT tree's `.config` (one global slot let the last-rendered tree's hook set
+  the compile is a function of THAT tree's `.config` (one global slot let the last-materialized tree's hook set
   leak into every other tree's dispatch);
 - **the contract** — the tracked **docs guide** (`docs/AGENT_GUIDE.md` — the project's hand-written agent/
   contributor notes, the ONE piece of in-tree contract prose) FOLLOWED BY the `surface: system` bodies (in name
   order), assembled and written as a `<!-- spexcode:start -->…<!-- spexcode:end -->` block into `<repo>/AGENTS.md`
   (Codex) + `<repo>/CLAUDE.md` (Claude). Those contract files are **generated artifacts** — exactly like the
-  shims + skills below: regenerated per clone/launch, never tracked, resident per [[render-policy]]'s live
+  shims + skills below: regenerated per clone/launch, never tracked, resident per [[residence]]'s live
   kind detection (exclude when wholly ours; the content filter when host prose shares the file). The guide
   SOURCE is the only
   tracked contract prose; folding it INTO the generated file is what guarantees a self-launched agent still
@@ -71,10 +71,10 @@ scoped per project, for each SELECTED harness:
   Trust is global-only by codex's security design (a repo cannot declare itself trusted) — the one
   necessary scoped global write; everything else is project-local.
 - **the content-hash marker** (same per-tree slot as the manifest), stamped LAST — a freshness record (a
-  crash mid-render leaves it stale, diagnosably); the unconditional pre-commit render heals regardless.
+  crash mid-materialize leaves it stale, diagnosably); the unconditional pre-commit materialize heals regardless.
 
-The render obeys the **forgetting law**: materialize(P₂) ∘ materialize(P₁) = materialize(P₂) — whatever a
-prior policy (harness set, a retired render-vote mode, or older legacy modes) wrote, one render under the
+The pass obeys the **forgetting law**: materialize(P₂) ∘ materialize(P₁) = materialize(P₂) — whatever a
+prior policy (harness set, a retired render-vote mode, or older legacy modes) wrote, one materialize under the
 current policy fully forgets it; idempotence is the special case P₂ = P₁, and **dematerialize =
 materialize(∅)** is the empty policy [[spex-uninstall]] builds on. The shape is ERASE-THEN-ASSERT over a
 CLOSED set of landing points: each is first erased unconditionally by its IDENTITY STAMP — the sentinel
@@ -90,16 +90,16 @@ arbitrary paths no stamp can enumerate, so they keep the one small ledger of las
 same per-tree slot as the manifest) — the single landing point outside the stamp-erasable set.
 
 Placement is harness-fact, not preference (verified): Codex auto-discovers ONLY the repo-root `./AGENTS.md`
-(never `.codex/AGENTS.md`); Claude discovers `./CLAUDE.md` or `./.claude/CLAUDE.md`. The render's ignore
+(never `.codex/AGENTS.md`); Claude discovers `./CLAUDE.md` or `./.claude/CLAUDE.md`. The materialize's ignore
 rules are one managed `#` block in the per-clone `.git/info/exclude` — the host's tracked `.gitignore` is
-never touched ([[render-policy]]) — carrying the MACHINE facts (the adapters' `shimFile()`s, which bake
+never touched ([[residence]]) — carrying the MACHINE facts (the adapters' `shimFile()`s, which bake
 THIS machine's absolute install path; any plugin bundle dir; `spexcode.local.json`; and the session
 residue: `.worktrees/` — where a launch plants its worktrees — plus a legacy `.session` entry for
 worktrees an old backend labeled with the retired per-worktree state file; live session state is the
-global store's `session.json`), the skill/agent renders, and the wholly-ours contract files; a
+global store's `session.json`), the materialized skills/agents, and the wholly-ours contract files; a
 tracked-or-mixed contract file is the [[content-filter]]'s domain instead, never an exclude entry. The
 block is **checkout-invariant**: the exclude lives in the COMMON git dir shared by the main checkout and
-every worktree, so if the entries differed by where materialize ran the two renders would fight. The only
+every worktree, so if the entries differed by where materialize ran the two passes would fight. The only
 entry that varies is Codex's hooks shim, which an adapter places at the [[harness-adapter|main checkout]]
 (a worktree's codex reads the root's hooks): from main it is `.codex/hooks.json`, from a worktree it
 escapes `proj` (`../…`). So each entry is anchored to the checkout it LIVES under — project-relative when
@@ -110,4 +110,4 @@ identical block. The Codex trust hash is not in-tree at all — it lives in the 
 The net ideal path: `npm install spexcode` → `spex init` → the user launches their own `claude`/`codex`, zero
 further operation, no global pollution beyond the scoped Codex trust. The contract files are SpexCode-owned
 generated artifacts, so a clone never carries a stale committed copy — any
-hand-written contract prose lives in the tracked `docs/AGENT_GUIDE.md` source, which the render folds back in.
+hand-written contract prose lives in the tracked `docs/AGENT_GUIDE.md` source, which the materialize folds back in.

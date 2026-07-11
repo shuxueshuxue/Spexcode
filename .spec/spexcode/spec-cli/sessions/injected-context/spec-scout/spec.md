@@ -56,7 +56,7 @@ shape: agents ALREADY hand-roll spec search (`grep .spec` + `spex board`), so no
   enforcer).
 
 Built as a `surface: agent` config node (the `.config` sibling: agent prompt + `desc:` trigger + read-only
-`tools:`) that [[harness-delivery]]'s materialize renders into each harness's agent dir (Claude
+`tools:`) that [[harness-delivery]]'s materialize writes into each harness's agent dir (Claude
 `.claude/agents/`; a harness lacking the primitive gets none — the [[harness-adapter]] `agentDir`, the
 `skillDir` analog) as a generated, gitignored artifact, not a committed file. **On-demand** (spawned when a
 session needs it), NOT folded into every prompt: it makes the floor + body-reading a first-class "find my

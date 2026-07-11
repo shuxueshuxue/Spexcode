@@ -40,7 +40,7 @@ import { stripRefSigil } from './mentions.js'
 //   queued → a prepared worktree held below the concurrency cap; the drainer launches it as a slot frees.
 //   (closed = the worktree AND the global record are removed; not a stored status)
 // The agent only ever PROPOSES (awaiting); merge/close are human-only. Every proposal is reversible — nothing
-// auto-disappears; to withdraw one you MESSAGE the session (mark-active clears it), and a relaunch (reopen)
+// auto-disappears; to withdraw one you MESSAGE the session (mark-active clears it), and a relaunch (resume)
 // deliberately does NOT touch it. `merges` is METADATA (how many times merged), shown as a badge, not a state.
 //
 // Launch rules (CLAUDE.md / memory): private `tmux -L <label>` socket + `--dangerously-skip-permissions`.
@@ -498,7 +498,7 @@ function reconcile(rec: SessRec, snap: LiveSnap): DisplayStatus {
 
 // resolve a session id to its record + worktree. Now a DIRECT store read (the record carries worktree_path),
 // not a scan of every worktree reading its `.session` — O(1) and exact. null when the id has no governed-or-not
-// record. Shape kept ({path, branch, rec}) so the many callers (rename/propose/reopen/merge/close/…) are unchanged.
+// record. Shape kept ({path, branch, rec}) so the many callers (rename/propose/resume/merge/close/…) are unchanged.
 async function findWorktree(id: string): Promise<{ path: string; branch: string | null; rec: SessRec } | null> {
   const rec = readRecord(id)
   if (!rec) return null
@@ -608,7 +608,7 @@ function guardSession(id: string, primary: () => Session | null, degraded: () =>
 export type Edge = { from: string; to: string; kind: 'monitor' | 'comms'; count?: number }
 
 // @@@ comms log - direct agent talk ([[comms-edge]]), recorded per-worktree. `spex session send` goes
-// THROUGH the backend (sendKeys); on a delivered message that carries a sender, the backend appends one
+// THROUGH the backend (sendText); on a delivered message that carries a sender, the backend appends one
 // {peer, ts} line to the RECIPIENT's comms log — each message counted exactly once, on the side the backend
 // already resolved. Persisted (survives a backend restart, unlike the in-memory monitor registrations) and
 // untracked, in the session's GLOBAL store dir (`comms.ndjson`, keyed by session_id) — it dies with the
@@ -1003,7 +1003,7 @@ export function superviseQueue(intervalMs = 3000): void {
 // the backend it answers acts on ITS OWN mainRoot, so a stale inherited SPEXCODE_API_URL (pointing at
 // another repo's backend) silently lands the write in the WRONG repo. Read/control-READS deliberately
 // point anywhere (viewer-points-anywhere, see remote-client); every MUTATING verb (new/merge/send/close/
-// rename/keys/reopen/exit) is bound to the caller's project. So before writing, compare the caller's
+// rename/input/resume/stop) is bound to the caller's project. So before writing, compare the caller's
 // repo root to the backend's served root and FAIL LOUD on a provable, same-host mismatch — never a silent
 // misroute. An explicit `--api`/`--port` flag SKIPS the guard: the flag is the one provably-deliberate
 // cross-project signal (that's the whole flag-beats-env thesis). The guard fires only on a positive
@@ -1168,7 +1168,7 @@ export function bootstrapMaterialize(rec: SessRec, doMaterialize: (proj: string)
 // genuinely dead/unrecoverable agent never goes online, so after the timeout we return and the caller's own
 // deliver() fails loud exactly as before — this only closes the startup race, it adds no fallback.
 const SOCKET_READY_TIMEOUT_MS = 30000   // spans launchScript's bounded fast-fail relaunch window, so
-                                        // waitForReady (slot-hold + reopen) waits through a daemon-race retry
+                                        // waitForReady (slot-hold + resume) waits through a daemon-race retry
                                         // instead of returning before a recovering socket
 const SOCKET_POLL_MS = 200
 async function waitForReady(id: string, harness: Harness, timeoutMs = SOCKET_READY_TIMEOUT_MS): Promise<boolean> {
@@ -1182,11 +1182,11 @@ async function waitForReady(id: string, harness: Harness, timeoutMs = SOCKET_REA
   }
 }
 
-// @@@ reopen - bring the agent back up and settle its RESTING lifecycle. THREE rules:
+// @@@ resumeSession - bring the agent back up and settle its RESTING lifecycle. THREE rules:
 //   • RESUME GUARD ([[state]]): a relaunch KILLS the running agent (`kill-session` + fresh window), so it is a
 //     data-loss operation the moment the agent is actually ALIVE — the incident's kill-shot was restore-on-alive
-//     (the board LIED offline, the human relaunched, live workers died mid-work). So reopen re-derives the
-//     agent's liveness FRESH and, when the caller is guarding (the human relaunch panel / `spex session reopen`,
+//     (the board LIED offline, the human relaunched, live workers died mid-work). So resume re-derives the
+//     agent's liveness FRESH and, when the caller is guarding (the human relaunch panel / `spex session resume`,
 //     `guard` default true), REFUSES LOUD rather than relaunch a live agent — you steer a live agent by
 //     MESSAGING it, not by restoring it. Death must be PROVEN: an `unknown` probe (tmux timed out under load —
 //     the exact condition that started the incident) also refuses, since a live worker can't be ruled out. A
@@ -1200,11 +1200,11 @@ async function waitForReady(id: string, harness: Harness, timeoutMs = SOCKET_REA
 //     immediately after (mergeSession's merge) addresses a LIVE agent, not a racing boot.
 //   • lifecycle: the SAME active-only guard markIdle uses — a resumed agent that was WORKING (`active`) is now
 //     just sitting at its prompt → `idle`; EVERY deliberate declaration survives untouched (`awaiting` + its
-//     proposal, `asking`, `parked`, `error`, `queued`). reopen does NOT touch the `proposal` — resuming a
+//     proposal, `asking`, `parked`, `error`, `queued`). resume does NOT touch the `proposal` — resuming a
 //     session that is proposing a merge must NOT silently withdraw it. Only applied when we actually relaunch;
 //     a refusal leaves the record wholly untouched.
 // Fail-loud is unchanged: if the agent never comes online, the later deliver() fails loud.
-export async function reopen(id: string, opts: { force?: boolean; guard?: boolean } = {}): Promise<{ ok: boolean; error?: string; refused?: boolean }> {
+export async function resumeSession(id: string, opts: { force?: boolean; guard?: boolean } = {}): Promise<{ ok: boolean; error?: string; refused?: boolean }> {
   const { force = false, guard = true } = opts
   const wt = await findWorktree(id)
   if (!wt) return { ok: false, error: `no such session ${id}` }
@@ -1415,10 +1415,10 @@ function mergePrompt(mainPath: string, branch: string, reason: string): string {
 
 // @@@ mergeSession - the cockpit's ACT verb, the sequel to review — but a DISPATCH, not a server script: the
 // SESSION'S OWN agent lands the merge, never the server (it carries no `git merge` logic and never touches
-// main's tree). It reopens the session (clears the proposal, `--resume`s via reopen if tmux died —
+// main's tree). It resumes the session (clears the proposal, `--resume`s via resumeSession if tmux died —
 // which waits for the rendezvous socket, closing the just-relaunched-no-socket race) and dispatches mergePrompt
-// — that delivered prompt flips the lifecycle to active regardless of reopen's resting state
-// through sendKeys. The reason = the node branch's latest commit subject minus a leading `spec: ` (visible from
+// — that delivered prompt flips the lifecycle to active regardless of resume's resting state
+// through sendText. The reason = the node branch's latest commit subject minus a leading `spec: ` (visible from
 // the main checkout, no worktree path needed). Async + fail-loud: returns {dispatched:true} once the prompt is
 // CONFIRMED accepted, else {dispatched:false, reason} (the loud DispatchResult error). The server no longer
 // re-checks gates, runs git, bumps `merges`, or closes the session — review shows the gates; the agent verifies.
@@ -1428,16 +1428,16 @@ export async function mergeSession(id: string): Promise<{ dispatched: boolean; r
   const branch = wt.branch, main = mainRoot()
   // ensure-live, NOT the guarded human relaunch: an already-online agent is reused (the merge prompt just needs
   // a live socket), and only a confirmed-offline one is relaunched — so merge never refuses on a live agent.
-  const re = await reopen(id, { guard: false })
-  if (!re.ok) return { dispatched: false, reason: re.error || 'could not reopen session' }
+  const re = await resumeSession(id, { guard: false })
+  if (!re.ok) return { dispatched: false, reason: re.error || 'could not resume session' }
   const subject = (await gitA(['-C', main, 'log', '-1', '--format=%s', branch])).trim()
   const reason = subject.replace(/^spec:\s+/, '') || branch
-  const r = await sendKeys(id, mergePrompt(main, branch, reason))
+  const r = await sendText(id, mergePrompt(main, branch, reason))
   if (!r.ok) return { dispatched: false, reason: r.error }
   return { dispatched: true }
 }
 
-// @@@ stopAgentProcess - the shared teardown both exit and close begin with, so there is ONE kill path, not
+// @@@ stopAgentProcess - the shared teardown both stop and close begin with, so there is ONE kill path, not
 // two: kill the agent's tmux client, drop its boot-window stamp (else a just-launched id lingers in the grace
 // window reading `starting` instead of `offline`), and sweep its rendezvous socket. The socket lives in the OS
 // tmpdir (NOT the worktree), so worktree removal alone would leave it behind — closing many sessions over time
@@ -1449,22 +1449,22 @@ async function stopAgentProcess(id: string): Promise<void> {
   try { rmSync(rvSock(id), { force: true }) } catch { /* best-effort sweep; tmpdir socket, claude/OS may already be gone */ }
 }
 
-// @@@ exitSession - the SOFT stop (vs closeSession's removal): stops the agent process but LEAVES the durable
+// @@@ stopSession - the SOFT stop (vs closeSession's removal): stops the agent process but LEAVES the durable
 // worktree + branch + transcript intact. The session stays on the board, now reading `offline` (no tmux window)
-// whatever its lifecycle, so the relaunch panel offers to --resume the SAME conversation (see reopen). This is
+// whatever its lifecycle, so the relaunch panel offers to --resume the SAME conversation (see resumeSession). This is
 // "step away, come back later"; closeSession is "discard this work". An offline session occupies no slot, so
 // the freed capacity drains a queued session next (drainQueue).
-export async function exitSession(id: string): Promise<boolean> {
+export async function stopSession(id: string): Promise<boolean> {
   const wt = await findWorktree(id)
   await stopAgentProcess(id)
-  void drainQueue()   // an exit frees a slot — start the next queued session if any
+  void drainQueue()   // a stop frees a slot — start the next queued session if any
   return !!wt
 }
 
-// @@@ closeSession - the REMOVAL (human-confirmed): exit's soft stop PLUS removing the worktree + branch AND
+// @@@ closeSession - the REMOVAL (human-confirmed): stop's soft kill PLUS removing the worktree + branch AND
 // the session's whole global-store record dir — the work is gone, not just stopped. Same stop primitive as
-// exitSession (no duplicate kill path), then the git worktree/branch teardown that exit deliberately skips,
-// then the store sweep (exit KEEPS the record so the session stays on the board offline; close discards it).
+// stopSession (no duplicate kill path), then the git worktree/branch teardown that stop deliberately skips,
+// then the store sweep (stop KEEPS the record so the session stays on the board offline; close discards it).
 // The tree's materialize slot ([[runtime]] trees/<enc>) retires with the worktree — its key needs the live tree,
 // so it is resolved BEFORE the removal; both sweeps are best-effort (residue is swept at uninstall anyway).
 export async function closeSession(id: string): Promise<boolean> {
@@ -1483,7 +1483,7 @@ export async function closeSession(id: string): Promise<boolean> {
 }
 
 // @@@ captureSessionResult - the session's live pane as a one-shot snapshot (output), the server side of
-// `GET /api/sessions/:id/capture` that `spex session capture` (a backend client) reads. A monitoring read MUST
+// `GET /api/sessions/:id/capture` that `spex session show --capture` (a backend client) reads. A monitoring read MUST
 // distinguish "I failed to read" from "the pane is genuinely empty" — the old captureSession collapsed
 // unknown-id, offline, and capture-error all to `''`, indistinguishable from an empty pane (a blank screen
 // that exits 0 is worse than useless to a manager). So the result is DISCRIMINATED: an empty pane is a
@@ -1543,7 +1543,7 @@ export function selectSessions(all: Session[], selectors: string[], statuses?: s
 }
 
 // @@@ resolveSession - resolve ONE selector to ONE session against a board: the single-target counterpart of
-// selectSessions, for the control verbs (review/send/merge/close/reopen/capture/prompt). The backend matches
+// selectSessions, for the control verbs (review/send/merge/close/resume/show). The backend matches
 // ids EXACTLY, so a verb resolves the selector here first and then calls with the FULL id — a node/branch/
 // prefix selector drives a verb just as it filters `ls`. The result is DISCRIMINATED so a caller can fail
 // precisely: an exact full-id hit wins outright (never reported ambiguous just for prefixing a longer id);
@@ -1633,10 +1633,10 @@ const NEXT: Record<string, string> = {
   review: 'merge | close',
   done: 'merge | close',
   'close-pending': 'close',
-  offline: 'reopen (relaunch & resume)',
-  error: 'reopen (relaunch & retry) | capture | close',
-  asking: 'send "<msg>" | capture',
-  idle: 'send "<msg>" | capture',
+  offline: 'resume (relaunch the same conversation)',
+  error: 'resume (relaunch & retry) | show --capture | close',
+  asking: 'send "<msg>" | show --capture',
+  idle: 'send "<msg>" | show --capture',
   queued: 'waiting for a free slot — starts automatically | close',
 }
 export function sessionEvent(s: Session): string {
@@ -1736,14 +1736,14 @@ export async function watchSessions(emit: (line: string) => void, opts: WatchOpt
   }
 }
 
-// @@@ sendKeys - PROMPT control for a session, delivered through the session's HARNESS ADAPTER
+// @@@ sendText - PROMPT control for a session, delivered through the session's HARNESS ADAPTER
 // ([[harness-adapter]]) — claude the rendezvous control socket (optimistic-after-liveness: the reply line flushes
 // to a live socket), codex app-server JSON-RPC into the visible TUI's thread. Either way there is NO silent
 // fallback: a prompt that can't be delivered — no socket / dead agent (claude), no app-server/thread (codex) — FAILS LOUD, returning
 // ok:false with a reason that propagates to the caller (API non-2xx, `spex session send`, the merge dispatch),
 // instead of reporting a false success. The harness is resolved from the record; an unknown id fails before any
 // harness transport is addressed. (The separate RAW nav-key channel keeps its own `tmux send-keys` path — see rawKey.)
-export async function sendKeys(id: string, text: string, from?: string): Promise<DispatchResult> {
+export async function sendText(id: string, text: string, from?: string): Promise<DispatchResult> {
   if (!text) return { ok: false, error: 'empty prompt — nothing to dispatch' }
   const rec = readRecord(id)
   if (!rec) return { ok: false, error: `no session record for ${id} — prompt NOT delivered` }

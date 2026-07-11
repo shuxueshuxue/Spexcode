@@ -2,7 +2,7 @@
 // node) and `@session` (an ACTOR — a live session, or `@new` for a fresh worker). The same parser resolves
 // them in ANY input box; the resolve+dispatch live HERE (CLI-first) so the issues page, the composer, and an agent's
 // own prompt share one implementation. An `@` "just auto-sends a prompt": resolve it against the live board
-// sessions and dispatch via [[dispatch]]'s sendKeys / [[launch]]'s newSession — storage and delivery stay
+// sessions and dispatch via [[dispatch]]'s sendText / [[launch]]'s newSession — storage and delivery stay
 // separate, and sessions.ts is imported LAZILY so a mention-free post pays nothing.
 
 // ── parse (pure) ──────────────────────────────────────────────────────────────────────────────────────
@@ -104,7 +104,7 @@ export async function dispatchMentions(
 ): Promise<DispatchOutcome[]> {
   const { actors } = parseMentions(text)
   if (!actors.length) return []
-  const { sendKeys, listSessions, newSession } = await import('./sessions.js')
+  const { sendText, listSessions, newSession } = await import('./sessions.js')
   const sessions = await listSessions()
   const resolved = resolveActors(actors, sessions as unknown as ActorSession[])
   const out: DispatchOutcome[] = []
@@ -120,7 +120,7 @@ export async function dispatchMentions(
       } catch (e) { out.push({ token: r.token, result: 'failed', detail: e instanceof Error ? e.message : String(e) }) }
       continue
     }
-    const res = await sendKeys(r.session.id, mentionPrompt(ctx.threadId, ctx.node, ctx.author, text), 'issues')
+    const res = await sendText(r.session.id, mentionPrompt(ctx.threadId, ctx.node, ctx.author, text), 'issues')
     out.push(res.ok ? { token: r.token, result: 'sent', detail: r.session.id }
                     : { token: r.token, result: 'offline', detail: res.error })
   }
@@ -133,7 +133,7 @@ export async function dispatchMentions(
 // filer session, then the node's governing session, then nobody (it still surfaces on the board via the
 // teeth). This is a NOTIFICATION chain only — it resolves NOTHING (resolve stays a deliberate `spex remark resolve`,
 // R3); it just reaches an agent who can act. It is the same delivery pipe as dispatchMentions (one
-// online-resolution + one sendKeys), with the same cuts that keep courtesy ≠ assignment: deliver ONLY to an
+// online-resolution + one sendText), with the same cuts that keep courtesy ≠ assignment: deliver ONLY to an
 // ONLINE session (an unreachable link is skipped for the next, NEVER spawns a worker, NEVER drains — only an
 // explicit @new spawns); SKIP a candidate that is the replier (no self-notify); a candidate already reached by
 // an explicit @-target of this same text counts as delivered, so the chain STOPS (no double-delivery, no
@@ -153,7 +153,7 @@ function originatorPrompt(threadId: string, node: string | null, replier: string
 // pruned) and return the FIRST link that resolves to an online session — that is who the courtesy goes to. A
 // link already reached by an explicit @-target of this same text short-circuits to `reached` (stop, no
 // double-delivery — the actor already has it); an offline/absent link falls through to the next. `none` means
-// the chain ran dry (nobody online). This is the whole fallback logic; delivery is a thin sendKeys around it.
+// the chain ran dry (nobody online). This is the whole fallback logic; delivery is a thin sendText around it.
 export type LoopInPick =
   | { kind: 'deliver'; originator: string; session: ActorSession }
   | { kind: 'reached' }
@@ -186,10 +186,10 @@ export async function notifyOriginator(
 ): Promise<LoopIn | null> {
   const seen = new Set<string>()
   if (!chain.some((c) => c && c !== replier && !seen.has(c) && (seen.add(c), true))) return null   // nothing to do → no session load
-  const { sendKeys, listSessions } = await import('./sessions.js')
+  const { sendText, listSessions } = await import('./sessions.js')
   const pick = pickLoopIn(chain, replier, await listSessions() as unknown as ActorSession[], ctx.alreadyDelivered)
   if (pick.kind !== 'deliver') return null                    // reached via @ / nobody online → silent
-  const res = await sendKeys(pick.session.id, originatorPrompt(ctx.threadId, ctx.node, replier, text), 'issues')
+  const res = await sendText(pick.session.id, originatorPrompt(ctx.threadId, ctx.node, replier, text), 'issues')
   return res.ok ? { originator: pick.originator } : null      // a failed send behaves like offline: silent
 }
 

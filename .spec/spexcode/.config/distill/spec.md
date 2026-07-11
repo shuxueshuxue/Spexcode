@@ -19,7 +19,7 @@ Input: a session id — SpexCode's, a bare harness id (claude / codex thread), o
 - **SpexCode session** (first choice — the join is first-class): its record is
   `~/.spexcode/projects/*/sessions/<id>/session.json` — glob for the id, prefix ok. Take `worktree_path`,
   `branch`, `harness`, `harness_session_id`, `status`, `title`; the originating goal is
-  `spex session prompt <id>`. For a claude-harness session the transcript id IS the SpexCode session id;
+  `spex session show <id>` (the record's prompt). For a claude-harness session the transcript id IS the SpexCode session id;
   for codex it is `harness_session_id`.
 - **Any other session**: treat the arg as the harness's own id. The transcript carries `cwd` (and, unless
   the worktree was detached, a branch) — the digest header surfaces them; that is your join to its desk.

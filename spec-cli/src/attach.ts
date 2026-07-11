@@ -9,7 +9,7 @@ import { spawnSync } from 'node:child_process'
 import { networkInterfaces } from 'node:os'
 import { alive, apiBase, TMUX_SOCK } from './sessions.js'
 
-const AGENT_ALTERNATIVES = 'read the pane with `spex session capture`, drive it with `session send` / `session rawkey`'
+const AGENT_ALTERNATIVES = 'read the pane with `spex session show <SEL> --capture`, drive it with `session send` (plain text first; `--keys` only as a last resort)'
 
 // attach only makes sense on the machine that runs the tmux server — the backend's. The board the selector
 // resolved against IS that backend, so the test is: does the RESOLVED backend (see [[remote-client]]'s
@@ -41,7 +41,7 @@ An agent must not run it inside a turn (it freezes you); ${AGENT_ALTERNATIVES}.`
   }
   if (!(await alive(id))) {
     console.error(`spex session attach: ${id} is offline — no live tmux session to attach.
-Bring it back with \`spex session reopen ${id}\`, or read its record with \`spex ls ${id}\`.`)
+Bring it back with \`spex session resume ${id}\`, or read its record with \`spex session show ${id}\`.`)
     process.exit(1)
   }
   console.log(`attaching to ${id} — detach with C-b d (the session keeps running)`)

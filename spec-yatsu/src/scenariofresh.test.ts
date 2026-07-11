@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, mkdirSync, renameSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -62,4 +62,16 @@ test('off-history probe reads the same projection: blocks equal across a tags-on
   const at = (rev: string) => scenarioBlocksAt(dir, rev, YATSU)!.get('s')
   assert.equal(at(c1), at(c2), 'tags-only: scenarioDiffers\'s comparison must see identical blocks')
   assert.notEqual(at(c2), at(c3), 'expected edit: the blocks must differ')
+})
+
+test('off-history probe memoizes per (sha, path): a repeat query forks no git (spexcode#39)', async () => {
+  const dir = repo()
+  const c1 = commitYatsu(dir, V1, 'add scenario')
+  const first = scenarioBlocksAt(dir, c1, YATSU)
+  assert.ok(first, 'first query resolves through git')
+  // a full sha names an immutable object, so the memo may answer without git at all — prove it by
+  // making the repo unreadable: a repeat query must still answer from the memo, never re-fork.
+  renameSync(join(dir, '.git'), join(dir, '.git-gone'))
+  assert.equal(scenarioBlocksAt(dir, c1, YATSU), first, 'repeat (sha, path) query answers from the memo — no git child')
+  assert.equal(scenarioBlocksAt(dir, 'HEAD', YATSU), null, 'a symbolic rev is never cached — it resolves live (and here fails loudly)')
 })

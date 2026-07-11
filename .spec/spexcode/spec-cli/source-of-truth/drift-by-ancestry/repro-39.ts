@@ -8,8 +8,10 @@ import { mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node
 import { join } from 'node:path'
 
 const SCRATCH = '/tmp/spexcode-39-repro'
-const ANCHORS = 30      // orphaned anchor commits
-const SCENARIOS = 10    // scenarios per yatsu.md → 300 readings
+// defaults reproduce #39 (small corpus); the off-history-probe-memo-scale scenario overrides via env
+// to push the distinct (sha, path) probe-key count past the code-axis memos' bound (SPEX39_ANCHORS=600)
+const ANCHORS = Number(process.env.SPEX39_ANCHORS || 30)      // orphaned anchor commits
+const SCENARIOS = Number(process.env.SPEX39_SCENARIOS || 10)  // scenarios per yatsu.md
 const NODE_DIR = '.spec/proj/thing'
 
 const sh = (args: string[], cwd = SCRATCH) =>
@@ -89,7 +91,7 @@ for (const pass of [1, 2] as const) {
   if (pass === 2) {
     const ok = spawns === 0
     console.log(ok ? 'PASS: repeat pass over unchanged (sha, path) inputs spawned zero git children'
-      : `FAIL: repeat pass re-spawned ${spawns} git children (${revParse} rev-parse) — the scenario-axis content fallback is unmemoized`)
+      : `FAIL: repeat pass re-spawned ${spawns} git children (${revParse} rev-parse) — a content-fallback memo is missing or bounded below the corpus's distinct (sha, path) keys`)
     process.exit(ok ? 0 : 1)
   }
 }

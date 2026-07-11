@@ -31,6 +31,23 @@ scenarios:
       failure this pins is a per-reading re-spawn of `git rev-parse` (anchor side AND head side) on
       every rebuild — hundreds of sync forks per build at an adopter whose anchors all went
       off-history (spexcode#39: ~10s /api/board rebuilds).
+  - name: off-history-probe-memo-scale
+    tags: [cli]
+    test: .spec/spexcode/spec-cli/source-of-truth/drift-by-ancestry/repro-39.ts
+    description: >-
+      Same corpus shape and same measurement as off-history-probe-repeat-cost, but scaled past any
+      probe memo's LRU bound: `SPEX39_ANCHORS=600 SPEX39_SCENARIOS=2 tsx repro-39.ts` builds 600
+      orphaned anchors — 600 distinct changedPaths keys and 600 distinct (sha, path) behind keys,
+      cycled in the same fixed order every build (readings iterate anchor-major each pass).
+    expected: >-
+      The second pass still spawns ZERO git children at this scale: every content-fallback memo is
+      sized above the largest adopter reading corpus — one entry per (reading, path) worst case —
+      so a repeat board build never thrashes back into forking. The failure this pins is an LRU
+      bound BELOW the corpus's distinct key count: a fixed-order sweep over more keys than the
+      bound evicts the whole memo before cycling back (sequential thrash), so every rebuild
+      re-forks one `git diff` + one `git rev-list` per anchor forever — memoized in name, forking
+      in fact (the z-code adopter: 322+ off-history readings, ~22s REPEAT /api/board rebuilds,
+      ~45s of spawnSync under the code-axis probes).
 ---
 # yatsu.md — drift-by-ancestry
 

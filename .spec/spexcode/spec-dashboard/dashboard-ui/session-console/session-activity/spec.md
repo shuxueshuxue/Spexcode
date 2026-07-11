@@ -120,6 +120,6 @@ label by reflex ([[session-label]]).
 This node's slice of the shared `styles.css` is the status line (`.sess-meta`, the full-width dimmer wrap)
 and its compact-variant collapse (the `.si-item` one-line overrides that fold `.sess-meta` inline and drop
 the status word for the `.sess-glyph` mark), and the Row-1 headline ellipsis; classes other
-surfaces add there — like the yatsu eval tab's `.eval-*` verdict/transcript rules from the measure-and-score
+surfaces add there — like the eval tab's `.eval-*` verdict/transcript rules from the measure-and-score
 reframe, or the console list's own compact-face overrides ([[session-console]]) — are those features' churn,
 not session-activity's drift.

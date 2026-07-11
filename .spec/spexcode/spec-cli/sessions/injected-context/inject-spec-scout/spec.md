@@ -32,7 +32,7 @@ sessions, not only for *implement* sessions.
 ## expanded spec
 
 The floor is BUILT and so is the agent that wields it. Evidence from real worker transcripts grounds the
-shape: agents ALREADY hand-roll spec search (`grep .spec` + `spex board`), so none of this is new behaviour
+shape: agents ALREADY hand-roll spec search (`grep .spec` + `spex graph --json`), so none of this is new behaviour
 — it upgrades that reflex into a ranked retriever plus an agent that reads the winning bodies.
 
 - **The floor is a TOOL; spec-scout is the AGENT.** `spex search` ([[spec-search]]) is a pure lexical

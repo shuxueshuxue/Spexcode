@@ -38,7 +38,7 @@ status-coloured tree (coloured when stdout is a tty; NO_COLOR respected), one li
 derived status, title, and attention badges (drift:N · stale:N · issues:N · ghost).
   --focus <id>  render just that subtree (unknown id fails loud)
   --depth N     limit levels below the shown root; prunes are counted, never silent
-  --json        the full payload (tree · overlay · sessions), identical to GET /api/board — machine
+  --json        the full payload (tree · overlay · sessions), identical to GET /api/graph — machine
                 food; with --focus/--depth it is that filtered subtree as nested objects instead`,
     see: 'spex spec search (find one node by intent) · spex session ls (just the sessions, as a table)',
   },
@@ -116,7 +116,7 @@ search — which spec node GOVERNS a topic, ranked by user-story relevance (whic
 behaviour a code-grep misses). Run it BEFORE touching code: the node's spec.md body is the current
 contract. The corpus is English — query in English.
 
-owner — the reverse edge: a file's GOVERNORS (code: — drives drift/yatsu) and REFERENCERS (related:
+owner — the reverse edge: a file's GOVERNORS (code: — drives drift + eval freshness) and REFERENCERS (related:
 — coverage only), with the verdict spelled out (uncovered / related-only / sanely governed /
 over-owned → split the file). --actionable prints NOTHING unless action is needed (hook use).
 
@@ -157,10 +157,11 @@ Control another session (all take SEL):
       key surface is UNSTABLE and can confirm dangerous dialogs — don't reach for it unless a plain
       \`session send\` text provably cannot land.
   spex session rename <SEL> "<name>"     set the display name ("" clears)
-  spex session capture <SEL>             the live pane as text
-  spex session prompt <SEL>              the session's originating prompt
-  spex session reopen <SEL> [--force]    relaunch ONLY if confirmed offline (--force for a wedged one)
-  spex session exit <SEL>                soft stop: kill the agent, KEEP the worktree (resumable)
+  spex session show <SEL> [--capture] [--json]
+      The session record: status · node · branch · launcher · the full originating prompt.
+      --capture prints the LIVE PANE as text instead (empty pane = exit 0; unknown session = exit 2).
+  spex session resume <SEL> [--force]    relaunch ONLY if confirmed offline (--force for a wedged one)
+  spex session stop <SEL>                soft stop: kill the agent, KEEP the worktree (resumable)
   spex session close <SEL>               retire the session and its worktree
 
 Worker verbs (declare YOUR OWN state — a claim the board and your supervisor act on):
@@ -171,22 +172,23 @@ Worker verbs (declare YOUR OWN state — a claim the board and your supervisor a
 Human escape hatch:
   spex session attach <SEL>              sit in the worker's REAL tmux (detach: C-b d). INTERACTIVE
                                          AND BLOCKING — an agent must NEVER run it in a turn: use
-                                         capture/send. LOCAL-only (fails loud on a remote backend).
+                                         show --capture / send. LOCAL-only (fails loud on a remote backend).
 
 ${SEL_NOTE}
-Manager verbs that WRITE (send/rename/reopen/exit/close/merge) are PROJECT-BOUND: a backend serving
+Manager verbs that WRITE (send/rename/resume/stop/close/merge) are PROJECT-BOUND: a backend serving
 another project's repo refuses loudly — name the target with --api <url> to drive it on purpose.
 ${MENTION_NOTE}`,
     see: 'spex eval ls --session <SEL> (the session’s measured loss) · spex help eval',
   },
   eval: {
-    line: 'eval <verb>           the measurement system: add · ls · lint · retract · clean',
+    line: 'eval <verb>           the measurement system: add · ls · scenario ls · lint · retract · clean',
     body: `Usage: spex eval add [<node>|.] [--scenario <name>] (--pass|--fail) [--note <text>]
                     [--image <png> …repeatable] [--result <path|->] [--video <webm|mp4>] [--timeline <json>]
        spex eval ls [<node>|.] [--json]                a node's reading timeline, newest first
        spex eval ls --session <SEL> [--json]           a session's aggregate: its changed nodes' scores
-       spex eval ls --session <SEL> --export [--open | --out <path> | --json]
-       spex eval lint [--changed]                      measurement-layer gaps (advisory, always exit 0)
+       spex eval ls --session <SEL> --export [--open | --out <path>]
+       spex eval scenario ls [<node>|.] [--unmeasured] [--json]   declared scenarios; bare = every node
+       spex eval lint [--changed]                      measurement-layer findings (advisory, always exit 0)
        spex eval retract [<node>|.] [--scenario <name>] [--last | --ts <iso>] [--note <why>]
        spex eval clean [--keep-latest | --all]         GC the content-addressed evidence cache
 
@@ -200,35 +202,41 @@ ls — node-scoped bare (its per-scenario reading history); session-scoped with 
 ✦-marked ahead of the inherited baseline. --export writes that evaluation as ONE self-contained
 HTML artifact (diff · evidence inlined · gates) for CI/sharing.
 
-lint — the measurement layer's gaps: malformed yatsu.md (schema) · unmeasured (missing) · stale
-(drift) · orphaned remark tracks (dangling) · source with no scenarios (uncovered) · over-owned
-files (owners). --changed scopes to the nodes THIS branch touched. spec lint's errors block
-commits; eval lint is PURE ADVISORY — a measurement gap never blocks anyone.
+scenario ls — the DECLARED contracts (name · tags · latest verdict), no readings: bare lists every
+measurable node's scenarios; --unmeasured keeps only the never-measured — the blind-spot worklist.
+
+lint — the measurement layer's findings: malformed eval.md (eval-schema) · unmeasured (eval-missing) ·
+stale (eval-drift) · orphaned remark tracks (eval-dangling) · governed source with no eval.md
+(eval-coverage — the same name and shape as spec lint's coverage, one rule per layer) · over-owned
+files (eval-owners). --changed scopes to the nodes THIS branch touched. spec lint's errors block
+commits; eval lint is PURE ADVISORY, always exit 0 — a measurement gap never blocks anyone.
 
 retract — the sanctioned undo for a botched filing: APPENDS a retraction event (traceable, never
 deletes a line); the previous reading becomes latest again, or the scenario honestly returns to
 unmeasured.
 
 ${DOT_NOTE}`,
-    see: 'spex guide yatsu (the scenario file format + evidence rules) · spex evidence (bare byte transport)',
+    see: 'spex guide eval (the eval.md scenario format + evidence rules) · spex evidence (bare byte transport)',
   },
   issue: {
-    line: 'issue <verb>          concern threads, local + forge merged: ls · open · reply · close · promote · links',
+    line: 'issue <verb>          concern threads, local + forge merged: ls · show · open · reply · close · promote · links',
     body: `Usage: spex issue ls [--node <id>] [--store local|<host>] [--all] [--json]
+       spex issue show <id> [--json]
        spex issue open "<concern>" [--store local|<host>] [--node <id>…] [--evidence <hash>…] [--body -|<text>]
        spex issue reply <id> --body -|<text> [--evidence <hash>…]
        spex issue close <id>
        spex issue promote <id>
        spex issue links [--pending] [--store <host>] [--node <id>] [--json]
-       spex issue on|off|status
 
 ls is the drain view a supervisor reads: ONE store-tagged list, local + forge interleaved by
-creation time. \`open\` welcomes taste, annotations, and off-mainline smells — not only bugs;
---store <host> opens straight on the forge. \`reply\` and \`close\` route by the issue's store — one
-verb, local or forge. \`promote\` moves an OPEN local issue to the forge as one recorded action.
-\`links\` is the read-only forge trace: which open forge issues/PRs serve which spec node (--pending
-narrows to threads still awaiting an eval reading). \`on|off|status\` toggles the local-issue
-workflow (spexcode.json issues.enabled).
+creation time. \`show <id>\` is the single-thread detail — the whole thread with its replies (a local
+id, or a forge id like github#12). \`open\` welcomes taste, annotations, and off-mainline smells —
+not only bugs; --store <host> opens straight on the forge. \`reply\` and \`close\` route by the
+issue's store — one verb, local or forge. \`promote\` moves an OPEN local issue to the forge as one
+recorded action. \`links\` is the read-only forge trace: which open forge issues/PRs serve which
+spec node (--pending narrows to threads still awaiting an eval reading). The issues workflow's
+on/off switch is the \`issues.enabled\` key in spexcode.json (no CLI toggle verb — edit the JSON;
+\`spex doctor\` reports its state).
 ${MENTION_NOTE}`,
     see: 'spex remark (pin a resolvable concern to an issue or scenario) · spex evidence put (stash evidence bytes)',
   },
@@ -261,10 +269,10 @@ path. Bytes go to stdout by default (pipe-friendly); -o writes a file.`,
 
   // ── help & guide ──────────────────────────────────────────────────────────
   guide: {
-    line: 'guide [topic]         the manuals: setup workflow · spec/yatsu file formats · spexcode.json · footprint',
+    line: 'guide [topic]         the manuals: setup workflow · spec/eval file formats · spexcode.json · footprint',
     body: `Usage: spex guide            the human setup workflow (install once, adopt a repo, serve)
        spex guide spec       the spec.md file format + every lint rule
-       spex guide yatsu      the scenario file format + how loss is measured and filed
+       spex guide eval       the eval.md scenario format + how loss is measured and filed
        spex guide settings   every spexcode.json / spexcode.local.json field, and which file it belongs in
        spex guide footprint  the footprint model: never-tracked artifacts, exclude + content filter, anchors
 
@@ -281,7 +289,7 @@ Machine plumbing — called by generated hooks and launch scripts, never typed b
   trunk             print the resolved source-of-truth branch (the pre-commit main-guard captures it)
   commit-surgery    pre-commit footprint anchor: unconditional materialize + staged-index repair
   refresh-footprint quiet materialize — the post-checkout/post-merge freshness anchor
-  check-staged      pre-commit yatsu backstop: reject staged stray blobs / malformed yatsu.md
+  check-staged      pre-commit eval backstop: reject staged stray blobs / malformed eval.md
   session-state <st> --session <id>   a lifecycle hook authors the session's state
   session-fail  --session <id>        the StopFailure hook marks the session errored
   session-idle  --session <id>        the idle-prompt hook marks an active session idle
@@ -346,6 +354,6 @@ Conventions (stated once, hold everywhere)
   ${ROUTING_NOTE.split('\n').join('\n  ')}
   ${MENTION_NOTE.split('\n').join('\n  ')}
 
-Concepts & best practice live in the guide: spex guide (setup) · guide spec · guide yatsu · guide settings.
+Concepts & best practice live in the guide: spex guide (setup) · guide spec · guide eval · guide settings.
 Machine plumbing (hook/launch-script callees) lives under \`spex internal\` — not part of your vocabulary.`
 }

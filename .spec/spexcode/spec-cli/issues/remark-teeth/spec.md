@@ -4,16 +4,16 @@ status: active
 hue: 205
 desc: The teeth of the remark — an unresolved remark ages its scenario like a drift event (the 4th, non-git freshness axis), and clearing it needs BOTH a second-party resolve AND a fresh reading after that resolve. Plus the server-side overlay that lifts the (node,scenario)↔eval-thread join out of the dashboard: one join, keyed in trunk, overlaid read-time onto every surface.
 code:
-  - spec-yatsu/src/freshness.ts
+  - spec-eval/src/freshness.ts
 related:
   - spec-cli/src/issues.ts
-  - spec-yatsu/src/evaltab.ts
-  - spec-yatsu/src/proof.ts
-  - spec-yatsu/src/cli.ts
+  - spec-eval/src/evaltab.ts
+  - spec-eval/src/sessioneval.ts
+  - spec-eval/src/cli.ts
   - spec-cli/src/board.ts
   - spec-dashboard/src/EventDetail.jsx
   - spec-dashboard/src/SessionEval.jsx
-  - spec-yatsu/src/freshness.test.ts
+  - spec-eval/src/freshness.test.ts
 ---
 # remark-teeth
 
@@ -46,8 +46,8 @@ follow, and they are the whole point:
 This is one computation, fed at the call sites — `freshness.ts` stays a **pure** function: it takes the
 scenario's remark track as an explicit parameter (`{resolved, resolvedAt}` signals) alongside the git
 indices, never reaching into the issue store itself. Every surface that scores a reading passes the same track,
-so the axis fires identically in `spex yatsu scan`, the eval tab, the board fold, the session proof, and
-the dashboard score ring. The CLI is the whole model: `spex yatsu scan` shows the `remark` axis with no
+so the axis fires identically in `spex eval lint`, the eval tab, the board fold, the session proof, and
+the dashboard score ring. The CLI is the whole model: `spex eval lint` shows the `remark` axis with no
 server running.
 
 ## The server-side overlay — one join, keyed in trunk

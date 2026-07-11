@@ -26,18 +26,18 @@ control never reaches a Claude Code session outside the product. Writing one `{"
 line injects the text and submits it deterministically, so multi-line prompts and Enters can't be
 corrupted the way `tmux send-keys` could.
 
-`sendKeys` is **socket-only with no send-keys fallback** and confirms the agent actually **accepted** the
+`sendText` is **socket-only with no send-keys fallback** and confirms the agent actually **accepted** the
 prompt, not mere write-success. The daemon acks no accepted reply, so acceptance is an **in-order
 round-trip**: it writes the `reply` line then a `repaint` line; the daemon handles lines strictly in order,
 so a `repaint-done` with no preceding `reply-rejected` proves the reply was taken (`repaint` is auth-exempt,
 a reliable probe even if a future daemon gates `reply`). A missing/socketless session, a connect error, a
 `reply-rejected`/`shutting-down`, or a timeout all return a **loud `DispatchResult {ok,error}`** that
-propagates: `POST …/keys` answers **502**, `spex session send` prints it, `mergeSession` returns it.
+propagates: `POST …/input` answers **502**, `spex session send` prints it, `mergeSession` returns it.
 
 **Merge is a dispatch, not a script.** `mergeSession` carries no `git merge` logic: it reopens the
 session (clears the proposal → active, `--resume`s via `reopen` if tmux died — which waits for the
 rendezvous socket, closing the just-relaunched-no-socket race), then dispatches a **merge prompt**
-through this same `sendKeys`. The prompt tells the **agent** to merge its branch into the base branch
+through this same `sendText`. The prompt tells the **agent** to merge its branch into the base branch
 from the **main checkout** (`-C <main>`, not its node worktree), resolve any conflicts (it knows the
 work's intent), verify the base HEAD advanced with no merge left in progress, `git merge --abort` if
 anything went half-merged, and propose close once verified — so the guarantee lives in the agent's
@@ -60,6 +60,11 @@ work. The server never mutates the spec tree; it only launches. This holds [[men
 issue store, a reference expands to prompt text, never a programmatic flow — the issue store is the sole
 surface where the system itself dispatches.
 
-The **separate raw-key channel** (`rawKey`) keeps its own `tmux send-keys` path — the per-keystroke
-channel for driving the agent's TUI menus, carrying named keys, printable chars, and `⌃`/`⌥`/`⌘` modifier
-combos (as `C-`/`M-`/`S-` tokens) so type mode drives the terminal, **not** a prompt fallback.
+Both faces reach the wire as **one route**, `POST /api/sessions/:id/input`, with `kind` the discriminator:
+`kind:"text"` is the prompt dispatch above; `kind:"keys"` is the **raw-key face** (`rawKey`), which keeps its
+own `tmux send-keys` transport — the per-keystroke channel for driving the agent's TUI menus, carrying named
+keys, printable chars, and `⌃`/`⌥`/`⌘` modifier combos (as `C-`/`M-`/`S-` tokens) so type mode drives the
+terminal, **not** a prompt fallback. The transport split (socket vs send-keys) is an implementation fact the
+API deliberately does not surface; an unknown `kind` is a loud 400, never a guessed channel. The raw face is
+the **last resort** everywhere it is taught (`spex session send <SEL> --keys`, the dashboard's type mode):
+unstable by nature and able to confirm dangerous dialogs, so callers try a plain text send first.

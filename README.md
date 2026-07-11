@@ -23,7 +23,7 @@ implementation from drifting apart.
 English | [中文](./docs/README.zh-CN.md) · Docs: [spexcode.net](https://spexcode.net) · License: MIT
 
 Quick links: [the model](#the-model) · [quick start](#quick-start) ·
-[agents](#working-with-agents) · [yatsu](#measuring-behavior-yatsu) · [config](#configuration)
+[agents](#working-with-agents) · [eval](#measuring-behavior-eval) · [config](#configuration)
 
 ## The model
 
@@ -56,8 +56,8 @@ Two rules make this workable:
 
 ## The optimization loop
 
-Specs, commits, and yatsu readings compose into one loop. The spec is the loss function: it states what you want, and
-it's the half a human signs off on. Commits are the optimizer. **yatsu**, the measurement
+Specs, commits, and eval readings compose into one loop. The spec is the loss function: it states what you want, and
+it's the half a human signs off on. Commits are the optimizer. **eval**, the measurement
 subsystem, is the eval: it scores how far live behavior currently sits from the spec, and the
 score's history lives in git like everything else.
 
@@ -138,19 +138,20 @@ hook stamps the attribution; the materialized contract block carries the rest, s
 prompt stays task-only. More on this mode of working:
 [working with agents](https://spexcode.net/working-with-agents/).
 
-## Measuring behavior: yatsu
+## Measuring behavior: eval
 
-yatsu — short for **You As The Stupid User** — is the measuring half of
-[the loop](#the-optimization-loop): you measure behavior from the product's real surface, the way a
+eval is the measuring half of
+[the loop](#the-optimization-loop), built on the YATU discipline (**You As The User**): you measure
+behavior from the product's real surface, the way a
 clueless real end user would touch it, not through an internal helper or shortcut that makes the
-proof easy. A spec says what a part should do; a
-`yatsu.md` beside it says how to check. Each scenario is a plain description plus an expected
-result. yatsu itself runs nothing (no DSL, no runner). An agent runs the scenario however it can:
+proof easy. A spec says what a part should do; an
+`eval.md` beside it says how to check. Each scenario is a plain description plus an expected
+result. eval itself runs nothing (no DSL, no runner). An agent runs the scenario however it can:
 a test file, a real browser, or just clicking through by hand and screenshotting. It compares
 actual to expected and files the reading with evidence:
 
 ```sh
-spex yatsu eval settings --scenario remembers-tab --pass --image proof.png
+spex eval add settings --scenario remembers-tab --pass --image proof.png
 ```
 
 Readings live in a git-tracked ndjson next to the spec, so measurements get the same attribution
@@ -168,7 +169,7 @@ and recorded video evidence in the middle.*
 |---|---|
 | `spec-cli` | The `spex` CLI and the HTTP backend (Hono, runs via tsx, no build step). Reads `.spec` and git live; owns the session state machine and the linter. |
 | `spec-dashboard` | React board: the node graph, per-node spec/history/issues panes, and a real terminal onto each live agent session. |
-| `spec-yatsu` | Scenario definitions, readings, evidence blobs. |
+| `spec-eval` | Scenario definitions, readings, evidence blobs. |
 | `spec-forge` | Read-only tracer that resolves a forge's open issues and PRs to the spec nodes they serve (GitHub today). An issue links itself with a `Spec: <node-id>` line in its body; a PR from a `node/<id>` branch links for free. |
 
 ## The linter
@@ -189,7 +190,7 @@ and recorded video evidence in the middle.*
 `spexcode.local.json` (gitignored, host-specific: absolute launcher paths, plus a `private: true`
 overlay for repos you use but don't own) cover every setting. No `spex config set` yet: you edit the two files by hand (or ask your agent
 to), and `spex guide config` documents every field. The other
-manuals are `spex guide` (the workflow), `spex guide spec`, and `spex guide yatsu`; `spex help`
+manuals are `spex guide` (the workflow), `spex guide spec`, and `spex guide eval`; `spex help`
 maps the commands.
 
 ## Contributing

@@ -2,7 +2,7 @@ import { loadSpecs } from '../../spec-cli/src/specs.js'
 import type { ForgeDriver, ForgeIssue, ForgePR } from './port.js'
 import { FORGE_DRIVERS, forgeDriverFor, resolveForgeHost } from './drivers.js'
 import { resolveLinks, type NodeLinks } from './links.js'
-import { resolveEvalPending, type NodeEvalPending } from './needs-yatsu-eval.js'
+import { resolveEvalPending, type NodeEvalPending } from './needs-eval.js'
 
 // tiny flag reader over this command's own arg slice (everything after `forge`), so cli.ts stays routing-only.
 function flag(args: string[], name: string): string | undefined {

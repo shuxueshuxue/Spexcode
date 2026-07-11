@@ -27,7 +27,7 @@ no mechanical work (nothing branches on it) is a label, not structure — what a
 suggestion, an annotation, a question) is what its prose says.
 `nodes[]` is the binding to the graph; `status` is the issue's OWN lifecycle,
 authored in its store, never git-derived (a node *defines*, an issue *does* — [[spec-forge]]'s two-plane
-contract holds here unchanged). `evidence[]` is a list of yatsu content-addressed blob hashes — the typed
+contract holds here unchanged). `evidence[]` is a list of content-addressed evidence hashes — the typed
 target [[video-evidence]] points at when a video finding routes to the responsible node's concern. A reply
 may itself be a **remark** ([[remark-substrate]]) — the same `{by, at, body}` shape plus a mutable
 `resolved` bit and the reading it was authored against — but that is one reply carrying extra state, not a
@@ -55,7 +55,11 @@ caller supplies the forge slice at the freshness its surface warrants — the se
 resident cache: instant view, background reconcile) for `GET /api/issues` and the board fold, the CLI
 (`spex issue ls [--node] [--store] [--all] [--json]`) via a live driver pull that **degrades loudly
 to local-only** (one stderr note) when the forge is unreachable — local reading never hostages on a
-network. The board fold attaches each node's merged issues (`issues` / open subset `openIssues`), so every
+network. The **single-thread detail is the same read, narrowed** (`findIssue`): `spex issue show <id>` and
+`GET /api/issues/:id` both find the id inside the merged, eval-remark-free set — never a second lookup
+path, so an eval-remark thread is invisible to `show` exactly as it is to the list — with the same
+per-surface freshness (live pull on the CLI, resident slice on the server; a local id skips the forge
+slice entirely). The board fold attaches each node's merged issues (`issues` / open subset `openIssues`), so every
 per-node surface — tile badge, focus panel, node-info Issues tab, the [[issues-view]] page — reads the
 same mixed set with no second path.
 

@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 import { homedir } from 'node:os'
 import { loadSystemConfig, loadSkillConfig } from './specs.js'
-import { runtimeRoot, treeSlotDir, envSessionId, readAliasedRawRecord } from './layout.js'
+import { runtimeRoot, treeSlotDir, envSessionId, readAliasedRawRecord, mainCheckout } from './layout.js'
 
 // this file lives at <pkgRoot>/src/self.ts, so `..` is the package root — the same derivation init.ts/
 // materialize.ts use (never a hardcoded repo path), so the git-hook template lookup survives a relocated install.
@@ -219,6 +219,21 @@ async function doctor(): Promise<number> {
   line('spex-adopted', adopted ? 'yes (.spec/ + spexcode.json)' : root ? 'no — run `spex init`' : 'not a git repo')
   line('root', base)
   line('mode', managed ? 'managed worktree (backend-launched session)' : 'standalone repo (bring-your-own-agent)')
+  // the issues-workflow switch ([[local-issues]]): its only home is the `issues.enabled` settings key
+  // (v0.3.0 — the on|off|status CLI verbs are gone), so doctor is where its state is READ. A legacy
+  // pre-rename `proposals.enabled` key is no longer consulted at runtime (no fallback) — flag it here so
+  // an old settings file gets repaired instead of silently drifting from what its author believes.
+  if (adopted) {
+    const { issuesEnabled } = await import('./localIssues.js')
+    // probe the SAME files the switch actually reads — the trunk checkout's settings pair, not this
+    // worktree's (readConfig resolves to mainCheckout, so a legacy key only matters there).
+    const cfgHome = (() => { try { return mainCheckout() } catch { return base } })()
+    const legacy = ['spexcode.json', 'spexcode.local.json'].filter((f) => {
+      try { return 'proposals' in JSON.parse(readFileSync(join(cfgHome, f), 'utf8')) } catch { return false }
+    })
+    line('issues workflow', `${issuesEnabled() ? 'ON' : 'OFF'} (spexcode.json issues.enabled)`)
+    if (legacy.length) line('  LEGACY key', `\`proposals\` found in ${legacy.map((f) => join(cfgHome, f)).join(', ')} — no longer read; rename it to "issues": { "enabled": … }`)
+  }
 
   // --- preconditions: nothing downstream fires without these ---
   L.push('\nPreconditions (without these nothing downstream fires)')
@@ -323,7 +338,7 @@ function contract(): number {
 }
 
 // the focused double-delivery check: JUST Layer 5, exit non-zero when a conflict is live so it gates a script
-// / yatsu. Anchors at the repo root like doctor (the shims + contract + skills live there).
+// / eval. Anchors at the repo root like doctor (the shims + contract + skills live there).
 async function conflicts(): Promise<number> {
   const cwd = process.cwd()
   const base = repoRoot(cwd) ?? cwd

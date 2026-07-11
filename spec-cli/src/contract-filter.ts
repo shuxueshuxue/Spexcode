@@ -138,7 +138,7 @@ export function settleIndexStat(proj: string, files: string[]): void {
 
 // the full inverse (edge ③ — call AFTER the managed blocks left the working files): attribute lines out,
 // config keys unset, shim + block content removed. `<common>/spexcode/` may host other spexcode data
-// (yatsu blobs), so only OUR two files go, never the dir.
+// (evidence blobs), so only OUR two files go, never the dir.
 export function removeContractFilter(proj: string): void {
   let common: string
   try { common = commonDirOf(proj) } catch { return }   // not a git repo → nothing was ever planted

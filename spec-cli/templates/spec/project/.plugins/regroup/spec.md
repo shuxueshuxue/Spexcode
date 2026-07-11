@@ -18,7 +18,7 @@ Read before you move: the over-broad node's spec, every child's spec, and the `[
 
 Honor these:
 
-- **Reparent, never rewrite.** Move a node by `git mv`-ing its folder; its id (= folder basename), its `[[links]]`, its `code:` governance, and its `yatsu.md` all ride along untouched. If a child needs its body edited to belong in a group, it doesn't belong.
+- **Reparent, never rewrite.** Move a node by `git mv`-ing its folder; its id (= folder basename), its `[[links]]`, its `code:` governance, and its `eval.md` all ride along untouched. If a child needs its body edited to belong in a group, it doesn't belong.
 - **Fewest, deepest-justified parents.** Don't trade one flat layer for six two-child wrappers — that relocates the sprawl instead of resolving it. Between two passing groupings, take the one that adds fewer nodes.
 - Parent ids name the concept (kebab-case); give the parent a `hue` near its children's family.
 

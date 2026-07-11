@@ -32,7 +32,7 @@ Two rules make the tooling survive it:
   bakes a raw `tsx + cli.ts` pair anymore: the launcher owns tsx resolution AND this guard, so every caller
   inherits both.
 - **Graceful degradation, explicit code.** Before spawning tsx, the launcher scans the source trees the CLI
-  imports (spec-cli ←→ spec-yatsu ←→ spec-forge) for conflict markers. If any file carries one, it prints a
+  imports (spec-cli ←→ spec-eval ←→ spec-forge) for conflict markers. If any file carries one, it prints a
   single actionable message naming the conflicted file(s) — "resolve the merge, then retry" — and exits
   **75** (EX_TEMPFAIL: transient, retry later). No stacktrace ever reaches the caller.
 

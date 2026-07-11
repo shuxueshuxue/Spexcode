@@ -23,9 +23,9 @@ forge is a value (`--store <host>`), never a command drawer ([[cli-surface]]).
   legible: nothing linked vs nothing to scan). `--node` narrows to one node; `--json` emits the raw
   resolved structure.
 - `spex issue links --pending [--store github] [--node <id>] [--json]` — the same read, resolved instead to the
-  open issues flagged `needs-yatsu-eval`, printed as `node → evaluation owed` with the same header and
+  open issues flagged `needs-eval`, printed as `node → evaluation owed` with the same header and
   `--node`/`--json` flags so the two reports read alike. The flag-recognition and node-resolution semantics
-  are [[needs-yatsu-eval]]'s; this is only its CLI exposure. `--json` emits the raw `NodeEvalPending[]` —
+  are [[needs-eval]]'s; this is only its CLI exposure. `--json` emits the raw `NodeEvalPending[]` —
   the shape `spex eval lint` consumes.
 
 Both verbs share one read — select the host's driver **through the `ForgeDriver` port** (a registry keyed by
@@ -37,7 +37,7 @@ Reading the forge is **live** (the driver calls `gh`), but the package is otherw
 writes to the forge and never mutates a node — a node's status stays git-derived. The logic lives **in
 this package**; `spec-cli/src/cli.ts` carries only a thin `forge` route — a lazy `import()` of `runForge`
 to which it hands `argv` — plus the `forge` help-text line, so the main CLI never bundles forge logic it
-isn't using. A neighbouring verb's churn in that shared hub — the `yatsu` usage line rewritten when yatsu
+isn't using. A neighbouring verb's churn in that shared hub — the eval usage line rewritten when the engine
 was reframed to measure-and-score — moves the file but is that feature's, not forge-cli's drift.
 
 Out of scope (sibling node): surfacing the same links in the dashboard — done CLI-first because frontend

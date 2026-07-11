@@ -6,7 +6,7 @@ import { join, isAbsolute, resolve } from 'node:path'
 const US = '\x1f', RS = '\x1e'
 
 // @@@ bounded git children - a git child that never exits (wedged fs, a hijacked PATH git, a dead network
-// mount) must not pin its awaiter forever: [[board-cache]]'s settle guarantee starts at this seam. Every
+// mount) must not pin its awaiter forever: [[graph-cache]]'s settle guarantee starts at this seam. Every
 // shared helper passes a generous timeout (an order of magnitude above the slowest legitimate full-history
 // walk) with SIGKILL — same pattern sessions.ts's tmux/ps probes already use — so a hung child dies and the
 // call fails like any other git failure instead of hanging its caller's promise. The kill is warned loudly:
@@ -154,7 +154,7 @@ function parseStatPath(token: string): { from: string; to: string } {
 }
 
 // Both bulk indices are pure functions of a checkout's HEAD, and they are read for SEVERAL roots at
-// once — the backend checkout (board, loadSpecs) plus every session worktree ([[review-proof]]'s eval
+// once — the backend checkout (board, loadSpecs) plus every session worktree ([[session-eval]]'s eval
 // tab roots its readings at the session's branch). A single-slot cache thrashes between those roots:
 // each eval-tab request evicts the board's entry and vice versa, so every request re-runs a full-history
 // `git log` and re-parses it on the event loop — which is what starves every other request (the board,

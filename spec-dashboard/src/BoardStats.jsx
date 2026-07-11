@@ -34,7 +34,7 @@ function summarize(specs) {
     const open = n.openIssues || []
     if (open.length) { issueIds.push(n.id); for (const i of open) issueNumbers.add(i.id) }
     const seen = new Set()
-    for (const sc of scenarioStates(n.scenarios, n.evals)) {      // [] when no yatsu.md
+    for (const sc of scenarioStates(n.scenarios, n.evals)) {      // [] when no eval.md
       const bucket = sc.state === 'missing' ? 'empty' : sc.state
       if (scoreCount[bucket] === undefined) continue
       scoreCount[bucket]++
@@ -83,7 +83,7 @@ export default function BoardStats({ specs, focusId, onJump }) {
 
       <span className="bstat-sep" />
 
-      {/* coverage — the yatsu score circles, counting SCENARIOS. The number is scoreCount[state] (scenarios in
+      {/* coverage — the eval score circles, counting SCENARIOS. The number is scoreCount[state] (scenarios in
           that state); the walk ring is scoreNodes[state] (the nodes owning them). Same ringed ScoreBadge as the
           tiles (one vocabulary): a stale verdict is the greyed mark INSIDE the ring; the empty ring is a
           declared-but-unmeasured blind spot. pass/fail anchor the row; stale/blind states show only when present. */}

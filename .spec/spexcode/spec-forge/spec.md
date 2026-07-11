@@ -7,7 +7,7 @@ desc: A forge link tracer — reads a forge's open issues/PRs and resolves each 
 ---
 # spec-forge
 
-A sibling package (alongside spec-cli, spec-dashboard, spec-yatsu) that relates an external **forge**'s
+A sibling package (alongside spec-cli, spec-dashboard, spec-eval) that relates an external **forge**'s
 work objects to the spec graph. The two are different *kinds* of thing on different axes: a spec node
 **defines** (the condition/need), while a forge **issue/PR does** (the working process toward it). An
 issue is therefore not a node mirrored out — it is the work spawned by the gap between a node and reality.

@@ -22,7 +22,7 @@ review 和 merge;工具负责让意图和实现不分家。
 [English](../README.md) | 中文 · 文档:[spexcode.net](https://spexcode.net) · License: MIT
 
 快捷入口:[模型](#模型) · [快速开始](#快速开始) · [agent](#和-agent-一起工作) ·
-[yatsu](#测量行为yatsu) · [配置](#配置)
+[eval](#测量行为eval) · [配置](#配置)
 
 ## 模型
 
@@ -53,8 +53,8 @@ review 和 merge;工具负责让意图和实现不分家。
 
 ## 优化循环
 
-spec、commit、yatsu 读数,这几样合起来是一个循环。spec 是损失函数:定义你要什么,这一半由人拍板。commit 是优化器。
-**yatsu** 是测量子系统,负责评估:量出当前行为离 spec 还有多远,分数的历史照样存在 git 里。
+spec、commit、eval 读数,这几样合起来是一个循环。spec 是损失函数:定义你要什么,这一半由人拍板。commit 是优化器。
+**eval** 是测量子系统,负责评估:量出当前行为离 spec 还有多远,分数的历史照样存在 git 里。
 
 <img src="readme-loop.zh.png" alt="优化循环示意">
 
@@ -122,12 +122,12 @@ spex session close settings
 所以派工提示词只需要写任务本身。这套工作方式的长版本:
 [working with agents](https://spexcode.net/working-with-agents/)。
 
-## 测量行为:yatsu
+## 测量行为:eval
 
-yatsu —— 全称 **You As The Stupid User(把你当成啥都不懂的笨用户)** —— 就是[优化循环](#优化循环)里
-负责测量的那一半:像一个啥都不懂的真实终端用户那样,从产品的真实表面去量行为,而不是走内部 helper
-或图省事的捷径。spec 说这部分应该做什么;旁边的 `yatsu.md` 说怎么验。每条
-scenario 就是一段普通描述加一个期望结果。yatsu 自己什么都不跑(没有 DSL,也没有 runner)。agent
+eval 是[优化循环](#优化循环)里负责测量的那一半,遵循 YATU 纪律(**You As The User**,
+把你当成真实用户):像一个啥都不懂的真实终端用户那样,从产品的真实表面去量行为,而不是走内部 helper
+或图省事的捷径。spec 说这部分应该做什么;旁边的 `eval.md` 说怎么验。每条
+scenario 就是一段普通描述加一个期望结果。eval 自己什么都不跑(没有 DSL,也没有 runner)。agent
 用顺手的方式执行场景:测试文件、真实浏览器,或者干脆手点一遍截个图。把实际结果和期望对比,连证据
 一起把读数记档:
 
@@ -148,7 +148,7 @@ spex eval add settings --scenario remembers-tab --pass --image proof.png
 |---|---|
 | `spec-cli` | `spex` CLI 和 HTTP 后端(Hono,tsx 直跑,无构建步骤)。实时读 `.spec` 和 git;会话状态机和 linter 都在这里。 |
 | `spec-dashboard` | React 看板:节点图、每个节点的 spec/history/issues 面板,以及连到每个活跃 agent 会话的真终端。 |
-| `spec-yatsu` | scenario 定义、读数、证据文件。 |
+| `spec-eval` | scenario 定义、读数、证据文件。 |
 | `spec-forge` | 只读追踪器,把 forge 上的 open issue 和 PR 解析到它们服务的 spec 节点(目前支持 GitHub)。issue 在正文里写一行 `Spec: <node-id>` 即完成链接;从 `node/<id>` 分支开的 PR 自动链接。 |
 
 ## linter
@@ -168,7 +168,7 @@ spex eval add settings --scenario remembers-tab --pass --image proof.png
 `spexcode.local.json`(gitignore,单机:launcher 绝对路径,以及给你参与但不拥有的仓库用的
 `private: true` 覆盖)承载全部设置。暂时没有 `spex config set`:两个文件直接手改(或让 agent 改),每个字段的文档在
 `spex guide settings`。其他手册:`spex guide`(工作流)、`spex guide spec`、
-`spex guide yatsu`;`spex help` 列出全部命令。
+`spex guide eval`;`spex help` 列出全部命令。
 
 ## 参与开发
 

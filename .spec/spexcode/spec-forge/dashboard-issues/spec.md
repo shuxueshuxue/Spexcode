@@ -13,7 +13,7 @@ related:
 # dashboard-issues
 
 The dashboard surface [[spec-forge]] deferred: on each node, the **open issues that work toward it**.
-[[links]] inverts a forge's open work into `node → { issues, prs }`, [[freshness]]'s resident `ForgeCache`
+[[links]] inverts a forge's open work into `node → { issues, prs }`, [[forge-cache]]'s resident `ForgeCache`
 keeps it fresh; this node owns the display fold, on the two planes' contract:
 a node *defines*, an issue *does*, so the work appears **beside** the node, never *as* node state. A node's
 status stays git-derived — the two authorities never cross.
@@ -21,7 +21,7 @@ status stays git-derived — the two authorities never cross.
 ## raw source
 
 Surface each spec node's bound open issues on the dashboard. Backend: fold each node's open-issue
-count + list into the board via a resident `ForgeCache`, served on the existing `/api/board` nodes —
+count + list into the board via a resident `ForgeCache`, served on the existing `/api/graph` nodes —
 non-blocking (serve the last reconcile, refresh in the background) and silent when there's no forge/`gh`
 (no badge, no error). Frontend: one glance badge on the tile (count, hue distinct from the status dot, like
 the drift-badge), only when > 0; the issue LIST is read in the [[focus-panel]] for the focused node
@@ -31,7 +31,7 @@ The badge is WORK, distinct from the derived status dot.
 ## expanded spec
 
 **Backend — a resident cache, folded into the board.** A process-lifetime `ForgeCache` (the resident
-wiring around [[freshness]]'s pure cache) serves the dashboard without a blocking forge call on the request
+wiring around [[forge-cache]]'s pure cache) serves the dashboard without a blocking forge call on the request
 path. Its contract: a view is **always instant** (the last successful reconcile), and a stale read triggers
 a **background** reconcile (a TTL backs off both success and failure). The TTL sits **near the dashboard's
 poll cadence** (~15s), so an externally-posted issue surfaces within about one poll — "post a github issue
@@ -48,7 +48,7 @@ the TTL and AWAITS it (`refreshForgeNow`), so the next read carries the real rea
 a FULL re-list, never the incremental window — a since-read can lag a just-posted write, advancing the
 watermark past it. Read-only throughout — the resident module never writes the forge (writes are the
 [[port]] driver's) and never touches a node's git-derived status. Sibling folds ride the same pattern
-(the [[yatsu-eval-tab]] eval timeline); this node owns only the issues slice.
+(the [[eval-tab]] eval timeline); this node owns only the issues slice.
 
 **Frontend — one glance badge; the list lives in the focus panel.** When a node carries open issues, its
 first row gains one badge — the **count**, hue distinct from the status dot and drift-badge (the three
@@ -63,6 +63,6 @@ never the card's primary destination. The badge renders in the node tile
 number/state/title stay raw forge data.
 
 Out of scope (future siblings): surfacing open **PRs** the same way; any live push of forge deltas
-([[freshness]]'s deferred source layer). Frontend behaviour is **measured by looking**: the `frontend-e2e` yatsu scenario
+([[forge-cache]]'s deferred source layer). Frontend behaviour is **measured by looking**: the `frontend-e2e` eval scenario
 `open-count-badge-on-tile` screenshots the rendered board — the ◆N badge on a tile with open issues, no
 on-node popover — and files image-evidenced readings.

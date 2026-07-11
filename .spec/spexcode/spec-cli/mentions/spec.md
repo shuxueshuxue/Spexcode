@@ -58,11 +58,11 @@ grammar is uniform, the logic is tiny.
   grammar by reading the dashboard.
 - **In a CLI argument the sigil is OPTIONAL, never banned.** In free text the sigils are what set a
   reference apart from prose, so they stay required there; but a CLI reference argument IS the reference,
-  so it tolerates the dashboard-learned form: `spex review @graph` ≡ `spex review graph`, `spex yatsu eval
-  [[cli-surface]]` ≡ `spex yatsu eval cli-surface`. One shared `stripRefSigil` (in this module, beside the
+  so it tolerates the dashboard-learned form: `spex review @graph` ≡ `spex review graph`, `spex eval add
+  [[cli-surface]]` ≡ `spex eval add cli-surface`. One shared `stripRefSigil` (in this module, beside the
   parser) sheds a leading `@` or a full `[[…]]` wrapper — the session-selector matcher
   ([[session-selectors]]) applies it per comma-part, so EVERY selector-taking verb tolerates it at once,
-  and each node-arg read site (yatsu eval/retract/show, `owner`, the `--node` flags) passes through it.
+  and each node-arg read site (eval add/retract/ls, `owner`, the `--node` flags) passes through it.
   Tolerance never widens matching: a stripped token matches exactly what the bare token matches, and a
   wrong sigiled token errors exactly like the bare one.
 - **No new delivery pipe.** `@session` → [[dispatch]]'s `sendKeys` (a prompt = the surrounding text + a
@@ -74,7 +74,7 @@ grammar is uniform, the logic is tiny.
   (never a spawn or drain — only `@new` spawns), skipped when the originator is the replier or was already an
   explicit `@`-target. It carries the reply verbatim and is reported distinct from the `@`-dispatch. Who the
   originator is belongs to the *thread*: an issue author, or an eval-comment thread's reading-filer
-  ([[yatsu-core]]) — a forge author is a github login resolving to nobody, silent by construction.
+  ([[eval-core]]) — a forge author is a github login resolving to nobody, silent by construction.
 - **The drain guard: `@new` on a settled thread must not respawn its work.** Dispatch carries the thread's
   lifecycle status from the calling surface (the local store always knows it; a forge reply's state is
   unknown at write time — no guard there). On a non-open thread `@new` still spawns (the summons may be a

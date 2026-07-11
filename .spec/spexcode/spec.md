@@ -13,7 +13,7 @@ intent that started it.
 
 Everything else is a child package: **spec-dashboard** (the node-graph UI), **spec-cli** (the server,
 the git-as-database reader, and the source-of-truth guards), **spec-forge** (a read-only tracer that
-resolves a forge's open issues/PRs to the spec nodes they serve), and **spec-yatsu** (the
+resolves a forge's open issues/PRs to the spec nodes they serve), and **spec-eval** (the
 loss-measurement system — each node's scenarios scored against their expected outcome, the signal the
 optimizer reads).
 

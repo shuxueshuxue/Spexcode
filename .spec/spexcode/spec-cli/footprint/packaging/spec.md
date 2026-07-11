@@ -22,15 +22,15 @@ hooks, and the **prebuilt** dashboard. There is no build step on the user's mach
 the TypeScript directly through tsx (a real dependency, not a dev-only tool), the dogfood's no-build stance.
 
 The published unit is the **monorepo root**, shipping the runtime subset with the **layout preserved**: an
-explicit `files` allowlist of `spec-cli/{src,bin,templates,hooks}`, the siblings `spec-yatsu/src` and
+explicit `files` allowlist of `spec-cli/{src,bin,templates,hooks}`, the siblings `spec-eval/src` and
 `spec-forge/src`, and `spec-dashboard/dist`. The dist is the one shipped artifact not in git, so it is built
 by the **`prepack`** lifecycle hook — the point npm runs *whenever it builds a tarball*, on both `npm pack`
 and `npm publish` (but never on a plain `npm install`). That makes tarball-completeness the contract of
 *producing a tarball at all*, not a publish-only afterthought: pack and publish emit the identical complete
 package, and `npm pack` self-corrects a stale or missing dist instead of silently shipping one. Preserving
-the layout is the whole point: spec-cli, spec-yatsu, and spec-forge import each
+the layout is the whole point: spec-cli, spec-eval, and spec-forge import each
 other by filesystem-relative `../../spec-*` paths (a cycle), so shipping them flat under one package —
-`spexcode/spec-cli/…`, `spexcode/spec-yatsu/…` — makes every such import resolve **in-package, zero import
+`spexcode/spec-cli/…`, `spexcode/spec-eval/…` — makes every such import resolve **in-package, zero import
 rewriting**. The bin and all entry source stay under `spec-cli/src`, so each module's `pkgRoot` still lands
 at `spec-cli/` and its asset lookups (templates, hooks, dist) are unchanged. The one thing that moves is
 tsx: spec-cli is now a subdir, and a real npm install may hoist the dependency outside the `spexcode`

@@ -15,7 +15,7 @@ related:
 
 ## raw source
 
-One of three SpexCode packages (with spec-dashboard and spec-yatsu). It is the server + CLI: read the
+One of three SpexCode packages (with spec-dashboard and spec-eval). It is the server + CLI: read the
 `.spec` tree and its git history, serve them over an API, ship the `spex` CLI, and house the
 **source-of-truth** guards (git-as-database, the worktree linker, the guards, the linter) here — under
 the CLI where they belong, not under the dashboard. Hono + tsx, **no build step**.
@@ -25,19 +25,19 @@ the CLI where they belong, not under the dashboard. Hono + tsx, **no build step*
 `spec-cli` is the backend. It owns the read path (turn `.spec` + git into JSON) and the write path
 (the `spex` CLI driving worktrees/sessions); the dashboard is a thin HTTP caller. `index.ts` is the
 HTTP entrypoint — a Hono app that wires the loaders and the session state machine to routes — and is
-the file this node governs (the deeper mechanism lives in its [[source-of-truth]] subtree; the yatsu
-eval endpoints' contract belongs to [[spec-yatsu]], so their churn — the eval-blob comment reframed to
+the file this node governs (the deeper mechanism lives in its [[source-of-truth]] subtree; the
+eval endpoints' contract belongs to [[spec-eval]], so their churn — the eval-blob comment reframed to
 serve a transcript or image, not just pixels — is that subtree's evolution, not spec-cli's drift).
 
 A CLI output contract, in the same fail-loud spirit: a verb with unbounded stdout (`issues --json`,
-`board`, `review --json`, `yatsu show --json`, …) must FULLY reach a pipe. `process.exit()` force-quits
+`board`, `review --json`, `eval ls --json`, …) must FULLY reach a pipe. `process.exit()` force-quits
 without draining buffered pipe writes, silently truncating a large dump at the ~64KB pipe buffer, so those
 verbs exit through a shared **flush-then-exit** helper that waits for stdout to drain first — a >64KB piped
 board or issue dump arrives whole, never a JSON cut off mid-object that reads as complete.
 
 The `serve` script (the `npm run api` entry) hot-reloads the backend on changes to **any source tree the
 child actually imports** — its own `spec-cli/src/**` plus the sibling packages it loads at runtime
-(`spec-forge`, `spec-yatsu`) — never on `.spec/**/spec.md` or `spec-dashboard` edits, which it reads via fs
+(`spec-forge`, `spec-eval`) — never on `.spec/**/spec.md` or `spec-dashboard` edits, which it reads via fs
 or never imports (the frontend is a separate vite server with its own HMR). Watching only its own dir was a
 real gap: a merge touching `spec-forge` reached disk while the running child kept the stale code, so a fix
 could ship to `main` yet stay invisible on the live dashboard. **The reload must be zero-downtime: port 8787
@@ -94,15 +94,15 @@ the upstream half-open forever (the leak). A truly silent abandon that never sen
 child by its idle timeout, whose close then propagates back through the proxy — so no raw idle timeout is put
 on the proxy itself, which would blind it to a legitimately-idle WS/SSE.
 
-Read routes: `/api/board` (the assembled board — merged tree + per-worktree overlay + session list, the
-dashboard's single source, identical to `spex board`) and its push companion `/api/board/stream`
-([[board-stream]]), an SSE that fires on session-store change so the dashboard reloads on real transitions
-instead of a tight poll. `/api/board` stays a **conditional-request** endpoint: it `ETag`s the body so a
+Read routes: `/api/graph` (the assembled board — merged tree + per-worktree overlay + session list, the
+dashboard's single source, identical to `spex graph --json`) and its push companion `/api/graph/stream`
+([[graph-stream]]), an SSE that fires on session-store change so the dashboard reloads on real transitions
+instead of a tight poll. `/api/graph` stays a **conditional-request** endpoint: it `ETag`s the body so a
 reload that finds nothing changed costs a bodyless `304`, not the whole transfer — a standard HTTP capability,
 not a special case (the board is still rebuilt each request; the cost saved is the wire, not the git read). `/api/specs` (live via `loadSpecs`),
 `/api/specs/:id/history` + `/api/specs/:id/diff/:hash` (a node's timeline and any version's spec.md
 line-diff), `/api/specs/lite` + `/api/specs/:id/content` (filesystem-only body reads the lean board
-([[board-lean]]) offloads: the whole search corpus, and one node's `{body, parts}` on open), `/api/edit`
+([[graph-lean]]) offloads: the whole search corpus, and one node's `{body, parts}` on open), `/api/edit`
 (a node's in-flight working-tree delta vs its fork point, reviewable from the
 board — incl. a **brand-new, still-untracked node** as an all-additions diff, so a just-created uncommitted
 node shows its body not nothing), `/api/settings` (the resolved
@@ -115,11 +115,14 @@ bundle), `capture` (the live pane as text), and `prompt`. `merge` is a **dispatc
 agent**, not a server merge — it returns `{dispatched}` and never touches main's tree. The ❯ box
 (`keys`) dispatches a whole prompt over the rendezvous control socket, fail-loud (an unconfirmed prompt is
 502, never a silent 200); `rawkey` keeps tmux send-keys for nav; `socket` streams pane bytes.
-`/api/sessions/graph` edges are DERIVED from live `spex watch` monitors (`watch`/`unwatch` register +
+`/api/sessions/edges` edges are DERIVED from live `spex watch` monitors (`watch`/`unwatch` register +
 heartbeat), not a stored subscription. `/api/uploads` writes a pasted file to this (worker) machine's
 /tmp and returns its path. At boot the server also runs `superviseQueue()` to launch queued sessions.
 
 Issue routes follow the same thin-port rule: `GET /api/issues` returns the merged issue list plus the
-writable stores (`local` and configured forge drivers), and `POST /api/issues` opens a new issue in the
+writable stores (`local` and configured forge drivers), `GET /api/issues/:id` is the single-thread detail
+(the same `findIssue` read behind `spex issue show`; unknown or eval-remark ids 404), and `POST /api/issues`
+opens a new issue in the
 chosen store. Local writes hit the git-native local store; forge writes call the driver and force a resident
-read-back before the dashboard reloads.
+read-back before the dashboard reloads. Evidence bytes ride `/api/evidence` (`POST` = content-addressed put,
+`GET /:hash` = ranged streaming read — renamed from `/api/yatsu/blob` in v0.3.0).

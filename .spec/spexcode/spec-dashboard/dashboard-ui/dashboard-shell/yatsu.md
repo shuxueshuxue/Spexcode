@@ -40,6 +40,22 @@ scenarios:
       304. Zero loss = no silent-death mode can stall the board past the poll period, and the poll
       that guarantees it is free when the board is quiet.
     code: [spec-dashboard/src/App.jsx, spec-dashboard/src/data.js]
+  - name: hidden-tab-catchup
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/data.js, spec-dashboard/src/App.jsx]
+    description: >-
+      Real browser via CDP: load the dashboard, confirm the board renders, then FREEZE the page
+      (Page.setWebLifecycleState 'frozen' — the background-tab / Memory-Saver state where no JS runs).
+      While frozen, change a session's state server-side (a real rename or lifecycle write). Unfreeze
+      (visible again) and time how long the rendered DOM takes to reflect the change. Separately, kill
+      the SSE connection silently mid-run (half-open, no FIN) with the page visible and verify recovery.
+    expected: >-
+      On becoming visible the board catches up within ~1s: the client holds the server to its HEARTBEAT
+      CONTRACT (a ping on a promised cadence; more than two windows of silence = the stream is dead —
+      tear it down, reopen, refetch once). A frozen tab's overdue watchdog fires immediately on resume,
+      so the catch-up never waits out a 15s poll tick and a silently-dead stream while visible is
+      replaced within one heartbeat window — no indefinite stale board (the measured failure: 73s of
+      frozen DOM while the backend pushed fresh states).
 ---
 # dashboard-shell — measurement
 

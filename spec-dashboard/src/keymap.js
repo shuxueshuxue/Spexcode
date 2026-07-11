@@ -21,11 +21,14 @@
 //              up+down read as a single "move" line while staying two actions for dispatch).
 
 export const ACT = [
-  // relationship walk — structural (the nav IS the tree-walk, not a remappable verb)
-  { id: 'nav.up',      keys: ['ArrowUp', 'k'],    rebind: false, desc: 'legend.board.move' },
-  { id: 'nav.down',    keys: ['ArrowDown', 'j'],  rebind: false, desc: 'legend.board.move' },
-  { id: 'nav.parent',  keys: ['ArrowLeft', 'h'],  rebind: false, desc: 'legend.board.parent' },
-  { id: 'nav.child',   keys: ['ArrowRight', 'l'], rebind: false, desc: 'legend.board.child' },
+  // relationship walk — structural (the nav IS the tree-walk, not a remappable verb). The capitals make
+  // Shift TRANSPARENT to nav (⇧j = j, one global grammar; ⇧arrows match for free — e.key is unchanged);
+  // that same shift-passthrough is what lets nav reach THROUGH the node-info popup, which claims only
+  // unmodified keys ([[keyboard-nav]]'s lens exception — the popup follows the focus).
+  { id: 'nav.up',      keys: ['ArrowUp', 'k', 'K'],    rebind: false, desc: 'legend.board.move' },
+  { id: 'nav.down',    keys: ['ArrowDown', 'j', 'J'],  rebind: false, desc: 'legend.board.move' },
+  { id: 'nav.parent',  keys: ['ArrowLeft', 'h', 'H'],  rebind: false, desc: 'legend.board.parent' },
+  { id: 'nav.child',   keys: ['ArrowRight', 'l', 'L'], rebind: false, desc: 'legend.board.child' },
   // board verbs — rebindable
   { id: 'board.zoomIn',    keys: ['+', '='], rebind: true, desc: 'legend.board.zoom' },
   { id: 'board.zoomOut',   keys: ['-', '_'], rebind: true, desc: 'legend.board.zoom' },

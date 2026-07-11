@@ -13,7 +13,7 @@ import { useT } from './i18n/index.jsx'
 
 // alt keys not worth showing in the legend are dropped (the shift-less zoom variants, the capital of a
 // letter that's already shown). Glyphs come from keymap.js so the legend and the editor read the same.
-const KEY_SKIP = new Set(['=', '_', 'I'])
+const KEY_SKIP = new Set(['=', '_', 'I', 'H', 'J', 'K', 'L'])
 
 // fold the registry into legend rows: consecutive actions sharing a description collapse into one row
 // (so up+down read as a single "move" line) while keeping every key.
@@ -31,6 +31,8 @@ const BOARD_ROWS = (() => {
 const POPUP_KEYS = [
   [['←', '→', 'h', 'l', '⇥', '1', '2'], 'legend.popup.switch'],
   [['j', 'k', '↑', '↓'], 'legend.popup.scroll'],
+  // the lens keys: Shift makes nav pass THROUGH the popup — same walk as the board, popup follows focus
+  [['⇧h', '⇧j', '⇧k', '⇧l', '⇧←↑↓→'], 'legend.popup.lens'],
   [['⏎'], 'legend.popup.enter'],
   [['esc'], 'legend.popup.esc'],
 ]

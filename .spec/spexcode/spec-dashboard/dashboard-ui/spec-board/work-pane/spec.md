@@ -22,7 +22,14 @@ panel that never grows to xterm's measured width.
 
 The node popup is the `i` surface: a fixed pop-out (`min(900px,90vw) × min(600px,84vh)`) with tabs, opened
 over the board and dismissed with `Esc`. It is **reference-only** (`NodeView.jsx`) — no `work` pane, no
-embedded terminal. The intent half is the **spec doc** — an information board. A **stat bar** carries the
+embedded terminal — and it is a **lens on the focus, not a pinned document**: the popup renders whichever
+node currently holds board focus (keyed to it, remounting on change), so a focus move while it is open —
+[[keyboard-nav]]'s Shift+nav walk — swaps the reference in place instead of forcing close-move-reopen; that
+is how a run of sibling docs is read. Across such a move the **pane selection survives**: the new node opens
+on the pane being read, and only when it lacks that pane does the popup fall back to the node's *own*
+default — the first of its real tabs — which is exactly what keeps the edit-leads rule below intact (a
+mid-change node greets with its edit tab even if the previous node was showing spec). The intent half is
+the **spec doc** — an information board. A **stat bar** carries the
 node's at-a-glance signals, the same the tile speaks: derived **status**, **version**, the aggregate **yatsu
 score** ([[yatsu-score-badge]]), and the **drift** count when a governed file outran the spec
 ([[source-of-truth]]) — so score and drift live in the popup now, not only on the tile. Below it the governed

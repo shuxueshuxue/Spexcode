@@ -370,7 +370,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   background: var(--panel2); color: var(--ink); line-height: 1.6; font-size: 13px;
 }
 /* @@@ stat bar - the node's at-a-glance signal line: status (the tile's dot+colour vocabulary) · version
-   · yatsu score · drift, with the last-editing session pushed to the end. A compact panel strip that wraps
+   · eval score · drift, with the last-editing session pushed to the end. A compact panel strip that wraps
    on narrow. Surfaces the score + drift signals that previously lived ONLY on the tile, never in the popup. */
 .pane-doc .doc-stat {
   display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
@@ -400,7 +400,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* the rendered spec.md: lead intent, then each `## vN` revision as a separated, labeled section */
 .doc-body { border-top: 1px solid var(--line); padding-top: 14px; font-size: 13px; line-height: 1.65; color: var(--ink); }
 .doc-body p { margin: 0 0 10px; }
-/* the lazy spec-body loading spinner ([[board-lean]]): a thin ring in the palette, centred where the body will land */
+/* the lazy spec-body loading spinner ([[graph-lean]]): a thin ring in the palette, centred where the body will land */
 .pane-loading { display: flex; align-items: center; justify-content: center; padding: 48px 0; }
 .spinner { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--ink2); animation: si-attach-spin .7s linear infinite; }
 .doc-body ul { margin: 0 0 10px; padding-left: 18px; }
@@ -489,7 +489,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
    Just the glance — the detail card (.issue-popover) is now anchored to the WHOLE node, not this marker. */
 .issue-badge { flex: none; font-size: 10px; font-weight: 700; color: var(--magenta); border: 1px solid var(--magenta); border-radius: 3px; padding: 0 3px; line-height: 1.4; cursor: default; }
 
-/* @@@ score badge - the yatsu SCORE at a glance (score.jsx). A RINGED circle with a centred ✓/✗ glyph, made
+/* @@@ score badge - the eval SCORE at a glance (score.jsx). A RINGED circle with a centred ✓/✗ glyph, made
    round-and-outlined on purpose so it never reads as the filled square status dot. Colour carries freshness
    (green/red = fresh, grey = stale), the glyph carries the verdict, an empty ring = no current score. Shared
    by the node tile here and the eval-tab rows (one vocabulary). Drawn, not unicode-"circled", to stay crisp. */
@@ -991,7 +991,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .si-pill.new { color: var(--blue); }
 .si-pill:hover { background: var(--panel2); border-color: currentColor; }
 .si-pill.new.on { background: color-mix(in srgb, var(--blue) 16%, var(--panel2)); border-color: var(--blue); }
-/* the Search pill is the click twin of ⌘+/ ([[session-board-search]]): a secondary action beside New —
+/* the Search pill is the click twin of ⌘+/ ([[session-search]]): a secondary action beside New —
    muted at rest, inking blue on hover. Momentary (opens the palette), so it never wears an .on state. */
 .si-pill.search { color: var(--ink2); }
 .si-pill.search:hover { color: var(--blue); }
@@ -1597,7 +1597,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .m-empty { padding: 18px 14px; color: var(--muted); font-size: 13px; }
 .m-empty.big { flex: 1; display: flex; align-items: center; justify-content: center; text-align: center; }
 
-/* @@@ eval tab - the node's evaluation timeline (see [[yatsu-eval-tab]]). Each reading is an expandable
+/* @@@ eval tab - the node's evaluation timeline (see [[eval-tab]]). Each reading is an expandable
    card: a header (scenario + freshness badge mirroring code-drift + evaluator/sha/time), then the captured
    pixels on expand. Same scroller shape as the other popup panes (.ov-body is overflow:hidden; the pane
    scrolls itself, and App's bumpScroll targets .pane-eval). */
@@ -1605,7 +1605,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .pane-eval.empty { color: var(--muted); font-size: 13px; }
 /* the eval tab surfaces the WHOLE declared set in ONE list: readings ride the timeline, and an unmeasured
    scenario leads it as a blind-spot row — the empty score ring is the only distinction, no fenced-off band
-   ([[yatsu-eval-tab]]). */
+   ([[eval-tab]]). */
 .eval-todo-note { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
 .eval-declared-row .eval-expected { padding-left: 23px; margin: 4px 0 0; }
 .eval-tracks { color: var(--muted); font-family: var(--mono); font-size: 10px; opacity: .85; }
@@ -1653,7 +1653,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .eval-data { font-family: var(--mono); font-size: 11px; color: var(--ink2); background: var(--panel2); padding: 8px 10px; margin: 0; max-height: 360px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
 .eval-data.loading { color: var(--muted); }
 
-/* ---- review proof pane ([[review-proof]]'s slice of the shared stylesheet) ----
+/* ---- review proof pane ([[session-eval]]'s slice of the shared stylesheet) ----
    The backend-rendered proof of work (self-contained HTML over /api/sessions/:id/proof) rendered INLINE as the
    console's Proof TAB — always available for any selected session, no longer a review-only floating overlay.
    It fills the right pane below the tab bar: a slim label row over the self-contained (dark) proof iframe. */
@@ -1793,7 +1793,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .an-ab-pip.on { outline: 2px solid var(--blue); outline-offset: 0; border-color: var(--blue); }
 .an-ab-pos { font-size: 10.5px; color: var(--muted); margin-left: 2px; }
 
-/* ---- the session Eval tab ([[review-proof]]'s interactive face) — gates strip + the shared eval
+/* ---- the session Eval tab ([[session-eval]]'s interactive face) — gates strip + the shared eval
    master-detail, session-scoped. Rows are tier-1; evidence streams on open. ---- */
 .se-pane { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--paper); }
 .se-gates { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--panel2); }

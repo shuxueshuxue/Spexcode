@@ -5,7 +5,7 @@ import { etag } from 'hono/etag'
 import { createNodeWebSocket } from '@hono/node-ws'
 import { loadSpecs, loadSpecsLite, specContent, specHistory, specDiffAt, loadConfig } from './specs.js'
 import { issuesEnabled, remarkOnHost, resolveRemark, retractRemark } from './localIssues.js'
-import { closeIssue, createIssue, issueStores, mergedIssues, promote, replyIssue } from './issues.js'
+import { closeIssue, createIssue, findIssue, issueStores, mergedIssues, promote, replyIssue } from './issues.js'
 import { residentForgeState, refreshForgeNow } from '../../spec-forge/src/resident.js'
 import { resolveForgeHost } from '../../spec-forge/src/drivers.js'
 import { summarize } from './mentions.js'
@@ -13,13 +13,13 @@ import { resolveLayout, mainBranch } from './layout.js'
 import { getBoardJson } from './boardCache.js'
 import { boardStream, notifyBoardChanged } from './boardStream.js'
 import { gitA, gitTry, repoRoot } from './git.js'
-import { newSession, listSessions, sendKeys, rawKey, exitSession, closeSession, reopen, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, superviseQueue } from './sessions.js'
+import { newSession, listSessions, sendText, rawKey, stopSession, closeSession, resumeSession, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, superviseQueue } from './sessions.js'
 import { defaultHarness, HARNESSES, launcherList, launcherDefault } from './harness.js'
-import { evalTimeline, readBlobByHash } from '../../spec-yatsu/src/evaltab.js'
-import { putBlob } from '../../spec-yatsu/src/cache.js'
-import { yatsuNodes } from '../../spec-yatsu/src/yatsu.js'
-import { fileHumanReading } from '../../spec-yatsu/src/filing.js'
-import { buildProofModel, renderProofHtml, buildSessionEvals } from '../../spec-yatsu/src/proof.js'
+import { evalTimeline, readBlobByHash } from '../../spec-eval/src/evaltab.js'
+import { putBlob } from '../../spec-eval/src/cache.js'
+import { evalNodes } from '../../spec-eval/src/scenarios.js'
+import { fileHumanReading } from '../../spec-eval/src/filing.js'
+import { buildExportModel, renderExportHtml, buildSessionEvals } from '../../spec-eval/src/sessioneval.js'
 import { saveUpload, MAX_UPLOAD_BYTES } from './uploads.js'
 import { attachViewer, detachViewer, resizeBridge, forwardWheel, superviseBridges, type Viewer } from './pty-bridge.js'
 import { installProcessGuards } from './resilience.js'
@@ -32,40 +32,40 @@ const app = new Hono()
 app.use('/api/*', cors())
 const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app })
 
-app.get('/', (c) => c.text('spec-cli — GET /api/board · /api/specs · /api/specs/:id/history · /api/layout · /api/sessions · /api/slash-commands'))
+app.get('/', (c) => c.text('spec-cli — GET /api/graph · /api/specs · /api/specs/:id/history · /api/layout · /api/sessions · /api/slash-commands'))
 // the supervisor's readiness gate (supervise.ts): a bare git-free 200 so a booting child reports ready the
 // instant Hono is listening. Not under /api/* — loopback-only (supervisor→child), no CORS needed.
 app.get('/health', (c) => c.text('ok'))
-// the assembled board (merged tree + overlay + sessions) — the dashboard's single source. Same data
-// as `spex board`; the frontend only adds x/y pixels on top. Freshness is PUSH-first ([[board-stream]]): the
-// dashboard reloads on a `/api/board/stream` event, not a tight poll, so the route is a conditional-request
+// the assembled graph (merged tree + overlay + sessions) — the dashboard's single source. Same data
+// as `spex graph --json`; the frontend only adds x/y pixels on top. Freshness is PUSH-first ([[graph-stream]]): the
+// dashboard reloads on a `/api/graph/stream` event, not a tight poll, so the route is a conditional-request
 // endpoint: `etag()` hashes the serialized body, and a reload whose `If-None-Match` matches gets a bodyless 304
 // instead of the full transfer (~1 MB on the dogfood board — it scales with the node count). The 304 saves the
-// WIRE only; the COMPUTE is saved by [[board-cache]]: getBoard() is single-flight + cached, so a poll storm
+// WIRE only; the COMPUTE is saved by [[graph-cache]]: getBoard() is single-flight + cached, so a poll storm
 // shares ONE build instead of each running its own — the poll-frequency cut (push channel) and the
 // build-coalescing cut compound. A hard timeout bounds a wedged build to a loud 503 rather than an
 // unboundedly-held connection (the wall sits well above the legitimately-several-seconds cold first build);
 // a merely-slow single-flight build keeps running and caches for the next poll, while a NEVER-settling one
-// is bounded by [[board-cache]]'s own build watchdog, so the next poll retries a fresh build.
+// is bounded by [[graph-cache]]'s own build watchdog, so the next poll retries a fresh build.
 const BOARD_TIMEOUT_MS = Number(process.env.SPEXCODE_BOARD_TIMEOUT_MS || 20000)
-app.get('/api/board', etag(), async (c) => {
+app.get('/api/graph', etag(), async (c) => {
   const timeout = Symbol('timeout')
   const json = await Promise.race([getBoardJson(), new Promise<typeof timeout>((r) => setTimeout(() => r(timeout), BOARD_TIMEOUT_MS))])
-  if (json === timeout) return c.json({ error: 'board build timed out' }, 503)
+  if (json === timeout) return c.json({ error: 'graph build timed out' }, 503)
   return c.body(json as string, 200, { 'content-type': 'application/json; charset=UTF-8' })
 })
-// the board's push channel: an SSE that fires `board-changed` on any session-store write, so the dashboard
-// reloads the instant status moves instead of waiting for its slow fallback poll ([[board-stream]]).
-app.get('/api/board/stream', (c) => boardStream(c))
+// the graph's push channel: an SSE that fires `board-changed` on any session-store write, so the dashboard
+// reloads the instant status moves instead of waiting for its slow fallback poll ([[graph-stream]]).
+app.get('/api/graph/stream', (c) => boardStream(c))
 app.get('/api/specs', async (c) => c.json(await loadSpecs()))
-// the search corpus ([[board-lean]]): a filesystem-only {id,title,path,desc,body} for every node, NO git. The
+// the search corpus ([[graph-lean]]): a filesystem-only {id,title,path,desc,body} for every node, NO git. The
 // board omits `body` to stay lean, so the search palette fetches this ONCE when it opens (cached client-side)
 // to rank nodes over their prose — off the board's hot poll. A literal segment, before the `:id` routes.
-// Scenario prose rides the same corpus: the board's `scenarios` fold is slim ({name, tags}), so a yatsu
+// Scenario prose rides the same corpus: the board's `scenarios` fold is slim ({name, tags}), so a measurable
 // node's row here carries its declared scenarios' description/expected (+ per-scenario code) — one fetch
 // serves both the palette's scenario plane and the focus-panel preview.
 app.get('/api/specs/lite', (c) => {
-  const scByNode = new Map(yatsuNodes(repoRoot()).map((y) => [y.id, y.scenarios]))
+  const scByNode = new Map(evalNodes(repoRoot()).map((y) => [y.id, y.scenarios]))
   return c.json(loadSpecsLite().map((row) => {
     const sc = scByNode.get(row.id)
     return sc?.length
@@ -73,7 +73,7 @@ app.get('/api/specs/lite', (c) => {
       : row
   }))
 })
-// one node's body + parsed parts ([[board-lean]]): the board no longer ships either, so the detail view
+// one node's body + parsed parts ([[graph-lean]]): the board no longer ships either, so the detail view
 // fetches this when a node opens. 404 for an unknown id.
 app.get('/api/specs/:id/content', (c) => {
   const x = specContent(c.req.param('id'))
@@ -99,13 +99,13 @@ app.get('/api/edit', async (c) => {
   }
   return c.json({ patch })
 })
-// a node's eval timeline (read half of `spex yatsu`): yatsu-sidecar readings joined with a live freshness
-// flag, newest-first; `hasYatsu:false` when none declared. Contract belongs to [[spec-yatsu]].
+// a node's eval timeline (read half of `spex eval`): eval-sidecar readings joined with a live freshness
+// flag, newest-first; `hasEvalFile:false` when none declared. Contract belongs to [[spec-eval]].
 app.get('/api/specs/:id/evals', async (c) => c.json(await evalTimeline(c.req.param('id'))))
-// the eval seam's WRITE half over HTTP ([[spec-yatsu]] filing.ts): a programmatic caller files a manual@1
-// reading (verdict + optional transcript) through the SAME append the CLI uses. The dashboard does not
-// call this — [[event-detail]] reads readings and hosts remarks, never files.
-app.post('/api/specs/:id/yatsu/eval', async (c) => {
+// the eval seam's WRITE half over HTTP ([[spec-eval]] filing.ts) — the REST pair of the GET above: a
+// programmatic caller files a reading (verdict + optional transcript) through the SAME append the CLI
+// uses. The dashboard does not call this — [[event-detail]] reads readings and hosts remarks, never files.
+app.post('/api/specs/:id/evals', async (c) => {
   const b = await c.req.json().catch(() => null)
   if (!b || typeof b.scenario !== 'string') return c.json({ error: 'body needs { scenario, status, note?, transcript? }' }, 400)
   const r = fileHumanReading(c.req.param('id'), b)
@@ -116,7 +116,7 @@ app.post('/api/specs/:id/yatsu/eval', async (c) => {
 // HTTP Range is honored — a <video> can only SEEK when the server answers byte ranges (a browser clamps
 // currentTime to the seekable window, which stays [0,0] without them); one general mechanism at the
 // transport, so every evidence kind streams the same way.
-app.get('/api/yatsu/blob/:hash', (c) => {
+app.get('/api/evidence/:hash', (c) => {
   const r = readBlobByHash(c.req.param('hash'))
   if (!r.ok) return c.text(r.message, r.reason === 'invalid' ? 400 : 404)
   const total = r.bytes.length
@@ -131,10 +131,10 @@ app.get('/api/yatsu/blob/:hash', (c) => {
   return c.body(new Uint8Array(r.bytes), 200, base)
 })
 // the WRITE half of the blob store ([[annotator]]): the annotator captures a circled video frame to a PNG
-// and stashes the bytes here, content-addressed (same putBlob the yatsu cache uses). The returned hash is
+// and stashes the bytes here, content-addressed (same putBlob the eval cache uses). The returned hash is
 // what an anchored comment references (image link in the body, and the typed evidence[] on its thread) —
 // bytes never enter git. Raw body, sniffed by the same content-addressed name. Empty → 400, over cap → 413.
-app.post('/api/yatsu/blob', async (c) => {
+app.post('/api/evidence', async (c) => {
   const buf = Buffer.from(await c.req.arrayBuffer())
   if (buf.length === 0) return c.json({ error: 'empty blob' }, 400)
   if (buf.length > MAX_UPLOAD_BYTES) return c.json({ error: 'blob too large' }, 413)
@@ -147,7 +147,7 @@ app.get('/api/layout', async (c) => c.json(await resolveLayout()))
 app.get('/api/config', (c) => c.json(loadConfig()))
 // the named launcher profiles ([[launcher-select]]) the New-Session form's dropdown offers — `{ name, harness }`
 // only (the `cmd` is a host secret, never shipped to the browser) — plus the configured `default` NAME so the
-// dropdown pre-selects the SAME launcher a bare `spex new` uses (the CLI/config default), instead of the
+// dropdown pre-selects the SAME launcher a bare `spex session new` uses (the CLI/config default), instead of the
 // alphabetically-first one. Missing defaultLauncher is returned as an actionable config error, not hidden by
 // falling through to the built-in `claude` launcher.
 app.get('/api/launchers', (c) => c.json({
@@ -164,6 +164,13 @@ app.get('/api/issues', etag(), (c) =>
     stores: issueStores(),
     issues: mergedIssues({ host: resolveForgeHost(), state: residentForgeState() }, loadSpecsLite().map((s) => s.id)),
   }))
+// the single-thread read ([[issues]]) behind `spex issue show <id>` — the SAME findIssue lookup, from the
+// resident forge slice (instant view, background reconcile — the list route's freshness contract). A local
+// id, or a forge id (`<host>#<n>`); unknown → 404 (eval-remark threads are not issues, so they 404 here too).
+app.get('/api/issues/:id', (c) => {
+  const t = findIssue(c.req.param('id'), { host: resolveForgeHost(), state: residentForgeState() }, loadSpecsLite().map((s) => s.id))
+  return t ? c.json(t) : c.json({ error: `no issue '${c.req.param('id')}'` }, 404)
+})
 // the WRITE surface ([[local-issues]] / [[issues-view]]) — the human reply path, STORE-ROUTED through the one
 // reply verb ([[issues]] replyIssue): a local id git-commits to the trunk store, a forge id ('github#N')
 // posts a REAL comment through the driver; either way the text's @-mentions dispatch (a human summons an
@@ -215,7 +222,7 @@ app.post('/api/issues', async (c) => {
   const nodes = Array.isArray(body?.nodes) ? (body.nodes as unknown[]).filter((n): n is string => typeof n === 'string') : []
   const postBody = typeof body?.body === 'string' ? body.body : undefined
   const store = typeof body?.store === 'string' && body.store.trim() ? body.store.trim() : 'local'
-  // typed evidence[] — yatsu content-addressed hashes (the annotator's clip reference rides here, not prose)
+  // typed evidence[] — content-addressed evidence hashes (the annotator's clip reference rides here, not prose)
   const evidence = Array.isArray(body?.evidence) ? (body.evidence as unknown[]).filter((h): h is string => typeof h === 'string' && /^[0-9a-f]{64}$/.test(h)) : []
   try {
     const r = await createIssue(concern, { store, nodes, body: postBody, evidence, author: 'human' })
@@ -310,16 +317,16 @@ app.post('/api/uploads', async (c) => {
 // sessions: real tmux-backed Claude Code sessions. List + spawn, stream the live pane (WebSocket),
 // forward keystrokes, and close.
 app.get('/api/sessions', async (c) => c.json(await listSessions()))
-// edges derived live from `spex watch` monitors (A→B = agent A is watching B), not a stored subscription;
-// watch/unwatch register + heartbeat. A literal `graph` segment so it never collides with the `:id` routes.
-app.get('/api/sessions/graph', async (c) => c.json(await sessionGraph()))
-app.post('/api/sessions/graph/watch', async (c) => {
+// edges derived live from `spex session watch` monitors (A→B = agent A is watching B), not a stored subscription;
+// watch/unwatch register + heartbeat. A literal `edges` segment so it never collides with the `:id` routes.
+app.get('/api/sessions/edges', async (c) => c.json(await sessionGraph()))
+app.post('/api/sessions/edges/watch', async (c) => {
   const b = await c.req.json().catch(() => ({}))
   const selectors = Array.isArray(b?.selectors) ? b.selectors.map(String) : []
   const ok = registerWatch(String(b?.token || ''), String(b?.watcher || ''), selectors, Number(b?.ttlMs) || undefined)
   return c.json({ ok }, ok ? 200 : 400)
 })
-app.post('/api/sessions/graph/unwatch', async (c) => {
+app.post('/api/sessions/edges/unwatch', async (c) => {
   const b = await c.req.json().catch(() => ({}))
   const ok = deregisterWatch(String(b?.token || ''))
   return c.json({ ok }, ok ? 200 : 404)
@@ -339,28 +346,25 @@ app.post('/api/sessions', async (c) => {
   } catch (e) { return c.json({ error: String((e as Error).message || e) }, 400) }   // unknown launcher id → 400, not a 500
 })
 // one server-side merge bundle (ahead/dirty/diff(merge-base)/gates/proposal) for the manager cockpit;
-// dashboard and `spex review` are thin callers. 404 for an unknown id. See [[manager-cockpit]].
+// dashboard and `spex session review` are thin callers. 404 for an unknown id. See [[manager-cockpit]].
 app.get('/api/sessions/:id/review', async (c) => {
   const r = await reviewPayload(c.req.param('id'))
   return r ? c.json(r) : c.json({ error: 'no such session' }, 404)
 })
-// the [[review-proof]] EXPORT artifact: one self-contained HTML (diff + gates + evidence inlined as
-// data-URIs) for CI/share/bare-browser. `?format=json` returns the model; default = rendered HTML. The
-// dashboard's interactive face is the lean route below, never this. 404 unknown id.
-app.get('/api/sessions/:id/proof', async (c) => {
-  const m = await buildProofModel(c.req.param('id'))
-  if (!m) return c.text('no such session', 404)
-  if (c.req.query('format') === 'json') return c.json(m)
-  return c.html(renderProofHtml(m))
-})
-// the session EVAL model ([[review-proof]]'s interactive face): worktree-rooted rows only — no diff
-// enrichment, no inlined bytes; evidence streams lazily from /api/yatsu/blob. Each reading carries
-// `inSession` so the tab leads with what THIS session measured.
+// the ONE session eval read ([[session-eval]]): default = the lean interactive model — worktree-rooted
+// rows only, no diff enrichment, no inlined bytes (evidence streams lazily from /api/evidence), each
+// reading carrying `inSession` so the tab leads with what THIS session measured. `?format=html` = the
+// EXPORT artifact: one self-contained HTML (diff + gates + evidence inlined as data-URIs) for
+// CI/share/bare-browser — a heavier REPRESENTATION of the same read, not a second route. 404 unknown id.
 app.get('/api/sessions/:id/evals', async (c) => {
+  if (c.req.query('format') === 'html') {
+    const m = await buildExportModel(c.req.param('id'))
+    return m ? c.html(renderExportHtml(m)) : c.text('no such session', 404)
+  }
   const m = await buildSessionEvals(c.req.param('id'))
   return m ? c.json(m) : c.json({ error: 'no such session' }, 404)
 })
-// the session's live pane as text (one-shot snapshot) for a backend client (`spex capture`). Empty and fail
+// the session's live pane as text (one-shot snapshot) for a backend client (`spex session show --capture`). Empty and fail
 // stay distinct: an empty pane is 200 with empty body; unknown id → 404, offline (no live pane) → 409, error → 502.
 app.get('/api/sessions/:id/capture', async (c) => {
   const r = await captureSessionResult(c.req.param('id'))
@@ -369,10 +373,14 @@ app.get('/api/sessions/:id/capture', async (c) => {
   if (r.reason === 'offline') return c.text('session offline (no live pane)', 409)
   return c.text('capture failed', 502)
 })
-// the session's originating prompt (what it was asked to do), for a manager client; 404 if none recorded.
-app.get('/api/sessions/:id/prompt', async (c) => {
-  const p = await sessionPrompt(c.req.param('id'))
-  return p == null ? c.text('no prompt recorded', 404) : c.text(p)
+// the session RECORD detail (`spex session show`): the board row (status · node · branch · launcher · …)
+// plus the full originating prompt (the row itself carries only the preview). One id-addressed read backs
+// the CLI's show; 404 for an unknown id.
+app.get('/api/sessions/:id', async (c) => {
+  const id = c.req.param('id')
+  const row = (await listSessions()).find((s) => s.id === id)
+  if (!row) return c.json({ error: 'no such session' }, 404)
+  return c.json({ ...row, prompt: await sessionPrompt(id) })
 })
 // lifecycle transitions (thin callers of the session state machine)
 // relaunch ONLY if confirmed offline; demotes working→idle, keeps any declaration. The RESUME GUARD refuses
@@ -381,7 +389,7 @@ app.get('/api/sessions/:id/prompt', async (c) => {
 app.post('/api/sessions/:id/resume', async (c) => {
   const body = await c.req.json().catch(() => ({} as { force?: boolean }))
   const force = body?.force === true || c.req.query('force') === '1'
-  const r = await reopen(c.req.param('id'), { force })
+  const r = await resumeSession(c.req.param('id'), { force })
   return c.json(r, r.ok ? 200 : (r.refused ? 409 : 404))
 })
 // a dispatch to the session's own agent (it runs the merge), never a server merge — the server never touches
@@ -424,34 +432,37 @@ app.get('/api/sessions/:id/socket', upgradeWebSocket((c) => {
     onClose() { if (viewer) detachViewer(id, viewer) },
   }
 }))
-// the docked ❯ line input (and server-side merge dispatch) dispatch a whole prompt through the rendezvous
-// control socket. Socket-only + fail-loud: a prompt the agent doesn't confirm accepting returns 502 with the
-// reason (never a silent 200), so the dashboard/manager sees a dead dispatch instead of a false success.
-app.post('/api/sessions/:id/keys', async (c) => {
+// ONE input route, `kind` the discriminator — the transport split is an implementation fact, not API surface.
+// kind:"text" (the docked ❯ line, `spex session send`, the server-side merge dispatch) injects a whole prompt
+// through the rendezvous control socket — socket-only + fail-loud: a prompt the agent doesn't confirm
+// accepting returns 502 with the reason (never a silent 200), so a dead dispatch is seen, not a false success.
+// kind:"keys" is the LAST-RESORT raw face (`send --keys`, the dashboard's type mode): an ORDERED BATCH of
+// nav-mode key tokens over tmux send-keys, delivered in array order so tap order survives
+// ([[nav-mode-key-ordering]]); unstable by nature — callers try a plain text send first. An unknown kind is a
+// loud 400, never a guessed channel.
+app.post('/api/sessions/:id/input', async (c) => {
   const body = await c.req.json().catch(() => ({}))
-  // `from` (the sender's session id) rides only an agent-to-agent send → the backend records the comms
-  // edge ([[comms-edge]]); a raw human dispatch omits it and is not logged.
-  const r = await sendKeys(c.req.param('id'), typeof body?.text === 'string' ? body.text : '', typeof body?.from === 'string' ? body.from : undefined)
-  return c.json(r, r.ok ? 200 : 502)
+  if (body?.kind === 'text') {
+    // `from` (the sender's session id) rides only an agent-to-agent send → the backend records the comms
+    // edge ([[comms-edge]]); a raw human dispatch omits it and is not logged.
+    const r = await sendText(c.req.param('id'), typeof body?.text === 'string' ? body.text : '', typeof body?.from === 'string' ? body.from : undefined)
+    return c.json(r, r.ok ? 200 : 502)
+  }
+  if (body?.kind === 'keys') {
+    const keys = Array.isArray(body?.keys) ? body.keys.filter((k: unknown) => typeof k === 'string') : []
+    const ok = await rawKey(c.req.param('id'), keys)
+    return c.json({ ok }, ok ? 200 : 404)
+  }
+  return c.json({ error: 'input needs kind: "text" | "keys"' }, 400)
 })
-// the preserved tmux send-keys path (distinct from the ❯ prompt socket): the human drives the agent's
-// interactive TUI menus in real time. Accepts an ORDERED BATCH (`keys`, the client coalesces fast typing) or a
-// single `key`; rawKey delivers them in array order so tap order is preserved ([[nav-mode-key-ordering]]).
-app.post('/api/sessions/:id/rawkey', async (c) => {
-  const body = await c.req.json().catch(() => ({}))
-  const keys = Array.isArray(body?.keys) ? body.keys.filter((k: unknown) => typeof k === 'string')
-    : typeof body?.key === 'string' ? [body.key] : []
-  const ok = await rawKey(c.req.param('id'), keys)
-  return c.json({ ok }, ok ? 200 : 404)
-})
-// soft stop: kill the agent's tmux + socket but KEEP the worktree (relaunchable). Distinct from close, which
+// soft stop: kill the agent's tmux + socket but KEEP the worktree (resumable). Distinct from close, which
 // removes the worktree. {ok:false} = no such session.
-app.post('/api/sessions/:id/exit', async (c) => c.json({ ok: await exitSession(c.req.param('id')) }))
+app.post('/api/sessions/:id/stop', async (c) => c.json({ ok: await stopSession(c.req.param('id')) }))
 app.post('/api/sessions/:id/close', async (c) => c.json({ ok: await closeSession(c.req.param('id')) }))
 // set (or clear, with a blank) a session's display-name override; persists to the session's global record
 // (`session.json`) so it survives a restart. Unknown id → 404. That record sits INSIDE the watched store, but
 // the store watch is best-effort (it can fail to attach), so the route still nudges the stream explicitly
-// ([[board-stream]]) — the rename shows in ~150ms deterministically, never waiting out a cold tick.
+// ([[graph-stream]]) — the rename shows in ~150ms deterministically, never waiting out a cold tick.
 app.post('/api/sessions/:id/rename', async (c) => {
   const body = await c.req.json().catch(() => ({}))
   const ok = await renameSession(c.req.param('id'), typeof body?.name === 'string' ? body.name : '')
@@ -483,7 +494,7 @@ const port = Number(process.env.PORT || 8787)
 // @@@ loopback bind ([[public-mode]]) - this child is NEVER the internet face: the supervisor (and in public
 // mode the gateway) fronts it, and dials it only via 127.0.0.1. Binding loopback is what makes "loopback is
 // the trust boundary" true — without a hostname Node binds all interfaces and the child is reachable from
-// the LAN with no password, bypassing the gate entirely (measured: yatsu auth-boundary).
+// the LAN with no password, bypassing the gate entirely (measured: eval auth-boundary).
 const server = serve({ fetch: app.fetch, port, hostname: '127.0.0.1', serverOptions: {
   keepAliveTimeout: 10000, headersTimeout: 20000, requestTimeout: 60000, connectionsCheckingInterval: 10000,
 } })

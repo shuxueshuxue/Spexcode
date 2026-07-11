@@ -7,7 +7,7 @@ import { useT } from './i18n/index.jsx'
 
 // The ONE eval master-detail SHELL ([[evals-view]]): the split, the fold, the j/k walk, and the detail
 // slot — shared by BOTH eval master-detail homes (the Evals page below, and the session console's Eval
-// tab, [[review-proof]]'s SessionEval), so the two surfaces cannot drift apart on geometry or keys.
+// tab, [[session-eval]]'s SessionEval), so the two surfaces cannot drift apart on geometry or keys.
 // Controlled: the parent owns the selection (`sel` already fallback-resolved) and the visible key list;
 // the shell owns only what is purely shell — fold state, the j/k binding (capture; a key typed into an
 // input or carrying a modifier is never ours), and keeping the selected row scrolled into view.

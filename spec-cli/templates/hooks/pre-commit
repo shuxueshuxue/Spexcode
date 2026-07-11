@@ -30,7 +30,7 @@ spex_cli() {
 # @@@ tree-unchanged stamp - a commit whose tree EQUALS HEAD's tree (`git write-tree` over the commit's own
 # index — the hook's GIT_INDEX_FILE, a temp HEAD-tree index for `commit --only --allow-empty`) adds NO
 # content: it cannot smuggle code past the main-guard below and cannot introduce spec↔code drift, so the
-# whole hook passes it. This is `spex ack`'s empty Spec-OK stamp — the reason ack works on a trunk merge
+# whole hook passes it. This is `spex spec ack`'s empty Spec-OK stamp — the reason ack works on a trunk merge
 # commit (amending it would re-author the merge after MERGE_HEAD is gone and read as direct authoring) and
 # with a DIRTY real index (the lint shim below reads the real index via git.ts's env-strip, which would
 # otherwise block the stamp on the very drift it acknowledges). Deliberately a one-line tree compare, not an
@@ -60,7 +60,7 @@ trunk=$(spex_cli internal trunk 2>/dev/null | head -1)
 if [ "$branch" = "$trunk" ] && [ ! -f "$git_dir/MERGE_HEAD" ] && [ -z "${SPEXCODE_ALLOW_MAIN:-}" ]; then
   echo "✗ SpexCode: direct commits on $trunk (the trunk) are blocked." >&2
   echo "  Work in a worktree (.worktrees/<node>, branch node/<id>) and merge back." >&2
-  echo "  Merges and tree-unchanged stamps (spex ack) pass automatically; for seeding/topology: SPEXCODE_ALLOW_MAIN=1 git commit …" >&2
+  echo "  Merges and tree-unchanged stamps (spex spec ack) pass automatically; for seeding/topology: SPEXCODE_ALLOW_MAIN=1 git commit …" >&2
   exit 1
 fi
 
@@ -74,13 +74,13 @@ if [ -n "$spex_kind" ]; then
   spex_cli internal commit-surgery || echo "• SpexCode: footprint surgery skipped (error above) — a generated artifact may be staged; CI still enforces." >&2
 fi
 
-# @@@ spec-lint - the hook is just a thin shim over `spex lint`. It blocks on errors only (broken
+# @@@ spec-lint - the hook is just a thin shim over `spex spec lint`. It blocks on errors only (broken
 # spec↔code links); coverage/drift are warnings. Bypass with SPEXCODE_SKIP_LINT=1. It shims through the
 # shared spex_cli() resolved above (repoRoot() discovers the cwd's toplevel via git.ts, which strips the
 # hook's GIT_DIR, so lint validates THIS worktree's `.spec`).
 if [ -z "${SPEXCODE_SKIP_LINT:-}" ]; then
   if [ -n "$spex_kind" ]; then
-    spex_cli lint >&2
+    spex_cli spec lint >&2
     lint_rc=$?
     # exit 75 = the launcher's mid-merge guard (spex's own source holds conflict markers — transient).
     # Degrade to advisory rather than walling every commit behind a merge someone else is resolving.
@@ -90,11 +90,11 @@ if [ -z "${SPEXCODE_SKIP_LINT:-}" ]; then
       echo "✗ SpexCode: spec-lint failed — fix the spec↔code links or bypass with SPEXCODE_SKIP_LINT=1." >&2
       exit 1
     else
-      # @@@ yatsu backstop - reject a staged yatsu offender: a stray pixel blob copied into the tree (blobs
-      # belong in the shared git common dir, never committed) OR a malformed yatsu.md (a scenario schema
-      # violation). Logic lives in spec-yatsu; this is the lint-shim's twin. (this node's contract)
-      if ! spex_cli yatsu check-staged >&2; then
-        echo "✗ SpexCode: yatsu check-staged failed (see above) — fix it or bypass with SPEXCODE_SKIP_LINT=1." >&2
+      # @@@ eval backstop - reject a staged eval offender: a stray evidence blob copied into the tree (blobs
+      # belong in the shared git common dir, never committed) OR a malformed eval.md (a scenario schema
+      # violation). Logic lives in spec-eval; this is the lint-shim's twin. (this node's contract)
+      if ! spex_cli internal check-staged >&2; then
+        echo "✗ SpexCode: internal check-staged failed (see above) — fix it or bypass with SPEXCODE_SKIP_LINT=1." >&2
         exit 1
       fi
     fi

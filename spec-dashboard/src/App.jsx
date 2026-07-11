@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
-import { loadBoard, subscribeBoardLive, loadIssues, projectTitle, projectIcon, faviconHref } from './data.js'
+import { loadGraph, subscribeBoardLive, loadIssues, projectTitle, projectIcon, faviconHref } from './data.js'
 import { useIsMobile } from './useIsMobile.js'
 import { useT } from './i18n/index.jsx'
 
@@ -35,16 +35,16 @@ export default function App() {
   const reqSeq = useRef(0)
   const reload = useCallback(() => {
     const mine = ++reqSeq.current
-    return loadBoard()
+    return loadGraph()
       .then((b) => { if (mine === reqSeq.current && b) { setLoadFailed(false); setBoard(b) } })
       .catch(() => { if (mine === reqSeq.current) setLoadFailed(true) })
   }, [])
-  // push-first freshness ([[board-stream]]/[[board-delta]]): the delta stream carries whole boards (a full on
+  // push-first freshness ([[graph-stream]]/[[graph-delta]]): the delta stream carries whole boards (a full on
   // connect, then applied patches) straight into setBoard — no refetch per change. A pushed board is the
   // freshest by channel order, so it bumps the seq to invalidate any older in-flight fetch. The interval is
   // the cold FALLBACK and it ALWAYS runs — the client keeps no push-liveness detector, because a silently
   // dead stream (half-open tunnel, sleep-resume) looks exactly like a healthy quiet one and a detector that
-  // trusts it freezes the board. The poll's cost is zeroed instead: loadBoard sends If-None-Match and an
+  // trusts it freezes the board. The poll's cost is zeroed instead: loadGraph sends If-None-Match and an
   // unchanged board answers 304 → null → no repaint. Push dead in ANY mode = at most one poll period stale.
   useEffect(() => {
     reload()

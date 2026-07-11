@@ -20,7 +20,7 @@ code under-discovers exactly the user-facing intent the spec foregrounds.
 they encode, and the code files to read next.
 
 **Method:**
-1. Run `spex search "<the question>" --json` — the lexical floor's top candidate nodes
+1. Run `spex spec search "<the question>" --json` — the lexical floor's top candidate nodes
    (`{id,title,path,score,snippet}`). This is a deterministic keyword/IDF ranking — a starting point, NOT the
    final answer.
 2. READ the top candidates' `spec.md` files **in full** (the `path` field) — the body, not just the

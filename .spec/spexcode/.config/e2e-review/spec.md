@@ -9,7 +9,7 @@ desc: Use after an e2e run that recorded whole-session video with a timeline sid
 # e2e-review
 
 Turn a whole-session e2e recording into reviewable, per-scenario **video evidence** — filed through
-yatsu, reviewed in the dashboard. This skill imports a WORKFLOW (ported from gugu's `.agent/skills/e2e`,
+eval readings, reviewed in the dashboard. This skill imports a WORKFLOW (ported from gugu's `.agent/skills/e2e`,
 its ancestor); the tooling it once shipped (a standalone HTML annotator, a Range-serving HTTP script, a
 frame-PNG saver) is already product — the dashboard annotator, the blob route's Range support, the
 issue/evidence seams — so the skill never starts a second UI.
@@ -32,9 +32,9 @@ The same scenario appearing in several recordings (retry, another worker) resolv
    browser-seekable) plus `<scenario>.timeline.json` in SpexCode's step-timeline format (`{v:1, events:
    [{tMs, step}]}`, clip-relative — validated LOUD at filing). No title cards, no burned-in captions:
    the annotator renders scenario context live from the spec tree, so pixels stay evidence.
-2. **File** — map each clip to the spec node whose behavior it exercises (`spex search <topic>`; the
-   node's `yatsu.md` names its scenarios) and file your verdict WITH the clip:
-   `spex yatsu eval <node> --scenario <s> --pass|--fail --video <clip>.mp4 --timeline <clip>.timeline.json`.
+2. **File** — map each clip to the spec node whose behavior it exercises (`spex spec search <topic>`; the
+   node's `eval.md` names its scenarios) and file your verdict WITH the clip:
+   `spex eval add <node> --scenario <s> --pass|--fail --video <clip>.mp4 --timeline <clip>.timeline.json`.
 3. **Hand to the human** — the dashboard Evals page (`#/evals`), video-first: each clip plays in
    the annotator with its clickable step ruler; the human circles a region to file an issue on the
    responsible node (clip + timeline ride as typed evidence), disputes a verdict with their own manual
@@ -46,4 +46,4 @@ The same scenario appearing in several recordings (retry, another worker) resolv
 The split is mechanical; the FILING is not. A clip's verdict is your reading of the recording against
 the scenario's `expected` — watch before you file, and file `--fail` honestly when the loop broke.
 Scenario names come from the `▶` markers, so the emitter's vocabulary should match the governed
-node's `yatsu.md`; when they diverge, fix the emitter or the yatsu.md, never hand-rename clips.
+node's `eval.md`; when they diverge, fix the emitter or the eval.md, never hand-rename clips.

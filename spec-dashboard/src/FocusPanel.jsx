@@ -11,7 +11,7 @@ const MARK = { pass: '✓', fail: '✗', stalePass: '✓', staleFail: '✗', emp
 // a scenario row — a BUTTON that drills into the eval's routed detail address, so the glance is an entry
 // point, not a dead end. The `expected` is a clamped preview (the full prose lives in the eval detail), so a
 // long scenario never blows out the narrow column. The board's scenario fold is slim
-// ([[board-lean]]), so `prose` (expected + per-scenario code) joins from the lazily-fetched corpus — until it
+// ([[graph-lean]]), so `prose` (expected + per-scenario code) joins from the lazily-fetched corpus — until it
 // lands the row shows name/state/tags, then fills in.
 function ScenarioRow({ nodeId, s, prose, t, onNavigateAddress }) {
   const expected = prose?.expected ?? s.expected

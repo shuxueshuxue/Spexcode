@@ -26,8 +26,8 @@ import { Icon, IconButton } from './icons.jsx'
 // burned in — so every mark renders uniformly in the track. A remark's `resolved` bit renders in
 // the thread (settled when resolved, prominent while open). The composer authors through the CLI-parity
 // /api/remarks (L: the dashboard is a thin wrapper, no dashboard-only write). The pane READS readings and
-// hosts remarks — it never files a reading: verdicts land through the CLI eval seam (`spex yatsu eval`,
-// [[yatsu-core]]) with evidence, and render here as the header badge + A/B pips.
+// hosts remarks — it never files a reading: verdicts land through the CLI eval seam (`spex eval add`,
+// [[eval-core]]) with evidence, and render here as the header badge + A/B pips.
 //
 // A/B history ([[reproduce-before-fix]]): a scenario's readings are its lifecycle, and a bug fix leaves a
 // fail→pass PAIR — the A (reproduced bug) and the B (verified fix). The pane flips through that whole
@@ -116,7 +116,7 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite,
 
   // A/B history: this scenario's WHOLE reading history (newest-first), lazily fetched from the same
   // /api/specs/:id/evals timeline the eval tab uses — the board only folds the LATEST reading per scenario
-  // ([[board-lean]]), so walking the fail→pass poles needs this one extra read. `histIdx` indexes that list
+  // ([[graph-lean]]), so walking the fail→pass poles needs this one extra read. `histIdx` indexes that list
   // (0 = the latest, i.e. the `entry` the feed selected); `viewing` is the reading actually shown — the
   // entry until history lands, then the picked reading.
   const [history, setHistory] = useState(null)
@@ -210,7 +210,7 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite,
     setEvents([]); setAxis('time')
     if (!viewing.timelineBlob) return
     let on = true
-    fetch(`/api/yatsu/blob/${viewing.timelineBlob}`)
+    fetch(`/api/evidence/${viewing.timelineBlob}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => { const n = on && normalizeTimeline(j); if (n) { setEvents(n.events); setAxis(n.axis) } })
       .catch(() => {})
@@ -321,7 +321,7 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite,
     const st = stepAt(events, tMs)
     const hash = await grabFrame(rect)
     const lines = [anchorLine(tMs, st?.step)]
-    if (hash) lines.push(`![frame](/api/yatsu/blob/${hash})`)
+    if (hash) lines.push(`![frame](/api/evidence/${hash})`)
     if (st?.node && st.node !== entry.node) lines.push(`re: [[${st.node}]]`)
     lines.push('')
     setDraft({ seq: ++seq.current, body: lines.join('\n') })
@@ -475,7 +475,7 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite,
             <>
               <div className="an-player" ref={playerRef}>
               <div className={`an-stage ${playing ? 'playing' : 'paused'}`} ref={box} onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp}>
-                <video className="an-video" ref={vid} src={`/api/yatsu/blob/${videoEntry.hash}`} preload="metadata" playsInline />
+                <video className="an-video" ref={vid} src={`/api/evidence/${videoEntry.hash}`} preload="metadata" playsInline />
                 {liveRect && <div className="an-rect live" style={{ left: `${liveRect.x}%`, top: `${liveRect.y}%`, width: `${liveRect.w}%`, height: `${liveRect.h}%` }} />}
                 {!playing && !drag && <div className="an-bigplay" aria-hidden><Icon name="play" size={22} /></div>}
               </div>

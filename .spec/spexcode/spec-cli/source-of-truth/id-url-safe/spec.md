@@ -8,7 +8,7 @@ code:
   - spec-cli/src/specs.ts
 related:
   - spec-dashboard/src/data.js
-  - spec-yatsu/src/yatsu.ts
+  - spec-eval/src/scenarios.ts
 ---
 # id-url-safe
 
@@ -32,11 +32,11 @@ also pins the id to NFC: an id may be any script (a CJK dir name is a legal node
 NFD basenames, so without one canonical form a typed `[[中文节点]]` (NFC, what an IME emits) would fail the
 string-match against the very node it names.
 
-The mint is ONE, and every id producer shares it. `spec-yatsu`'s node walk mints its ids through the same
+The mint is ONE, and every id producer shares it. `spec-eval`'s node walk mints its ids through the same
 exported function, over the same universe (every spec node — a leaf that collides among spec nodes is
-disambiguated even when only one of them carries a yatsu.md), so `spex yatsu eval/show` answer to exactly
-the id the board and scan print. Before this, yatsu keyed nodes to the bare leaf name — a second id scheme
-that diverged on every collision: the canonical id read as "no yatsu node" while the bare leaf silently hit
+disambiguated even when only one of them carries a eval.md), so `spex eval add/show` answer to exactly
+the id the board and scan print. Before this, the eval engine keyed nodes to the bare leaf name — a second id scheme
+that diverged on every collision: the canonical id read as "no measurable node" while the bare leaf silently hit
 whichever colliding node the walk met first, so no colliding node could reliably take a reading.
 
 Because the mint guarantees it, every RESOLVE site is uniform and needs no special-casing:

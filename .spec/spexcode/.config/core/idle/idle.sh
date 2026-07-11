@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# On an idle_prompt notification, mark the session idle (the active-only guard in `session idle` keeps a
+# On an idle_prompt notification, mark the session idle (the active-only guard in `internal session-idle` keeps a
 # deliberate awaiting/asking/parked/error declaration from being clobbered). GATED on `governed`: only a
 # dashboard-launched session has board state to mark — a self-launched agent's idle is none of our business.
 # State lives in the per-session GLOBAL record session.json (keyed by the harness session_id, grouped per-
@@ -12,4 +12,4 @@ sid=$(hp_session_id "$payload"); [ -n "$sid" ] || exit 0
 sdir=$(hp_store_dir "$sid") || exit 0
 rec="$sdir/session.json"
 grep -q '"governed"[[:space:]]*:[[:space:]]*true' "$rec" 2>/dev/null || exit 0
-[ "$(hp_notification_type "$payload")" = idle_prompt ] && exec ${SPEX:-spex} session idle --session "$sid"
+[ "$(hp_notification_type "$payload")" = idle_prompt ] && exec ${SPEX:-spex} internal session-idle --session "$sid"

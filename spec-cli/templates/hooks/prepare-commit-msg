@@ -34,7 +34,7 @@ fi
 
 [ -z "$sid" ] && exit 0
 # Stamp via interpret-trailers (git's own sample-hook mechanism), NOT a raw printf append: appending after a
-# message that already carries a trailer block (e.g. `spex ack`'s Spec-OK) opens a new paragraph, and git then
+# message that already carries a trailer block (e.g. `spex spec ack`'s Spec-OK) opens a new paragraph, and git then
 # parses ONLY the last paragraph as trailers — the earlier trailers silently become body prose. interpret-trailers
 # appends into the existing block, keeping ONE parseable block. It needs the file newline-terminated first:
 # on an unterminated message (git merge -m writes MERGE_MSG without one) it folds the trailer into the subject

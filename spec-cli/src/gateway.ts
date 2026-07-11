@@ -173,7 +173,7 @@ export function startGateway(opts: GatewayOpts): void {
     socket.on('error', bail); up.on('error', bail)
   })
 
-  // `spex dashboard` passes an explicit host (loopback by default, --host to widen); `--public` passes
+  // `spex serve ui` passes an explicit host (loopback by default, --host to widen); `--public` passes
   // none → bind ALL interfaces (the original behaviour, IPv4+IPv6), so adding the local path never
   // narrows the public gateway's reach. The gate note keys on LOOPBACK, not on host-being-explicit:
   // an ungated loopback bind is normal, an ungated wide bind is announced — never silent.
@@ -186,7 +186,7 @@ export function startGateway(opts: GatewayOpts): void {
     if (!secure && !isLoopback && !opts.host) console.log('[gateway] (TLS off — --http)')
   }
   // a busy public port is a hard, loud, non-zero exit — the SAME contract as the supervisor's proxy
-  // (see [[spec-cli]] / listen.ts), so `spex serve` and `spex dashboard` fail a port clash identically.
+  // (see [[spec-cli]] / listen.ts), so `spex serve` and `spex serve ui` fail a port clash identically.
   listenOrExit(server, opts.publicPort, { host: opts.host, label: opts.label ?? 'gateway', cleanup: opts.onBindFail, onListen })
 }
 
@@ -271,7 +271,7 @@ export function ensureDashboardBuilt(repoRoot: string, distDir: string): void {
   }
 }
 
-// @@@ serveDashboardLocal - the engine behind `spex dashboard`: the SAME gateway as public mode, bound to
+// @@@ serveDashboardLocal - the engine behind `spex serve ui`: the SAME gateway as public mode, bound to
 // loopback by default with no TLS and no password — `--host` widens the bind to a chosen interface
 // (LAN/tailnet viewing) while staying plain HTTP; the internet face remains `spex serve --public`.
 // It serves the bundled dist and proxies /api + the terminal socket to a separately-run `spex serve`.

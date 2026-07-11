@@ -9,4 +9,4 @@ sid=$(hp_session_id "$payload"); [ -n "$sid" ] || exit 0
 sdir=$(hp_store_dir "$sid") || exit 0
 rec="$sdir/session.json"
 grep -q '"governed"[[:space:]]*:[[:space:]]*true' "$rec" 2>/dev/null || exit 0
-exec ${SPEX:-spex} session fail --session "$sid"
+exec ${SPEX:-spex} internal session-fail --session "$sid"

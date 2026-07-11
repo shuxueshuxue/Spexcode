@@ -47,7 +47,7 @@ type Config = {
     }
   }
   issues?: {
-    enabled?: boolean                // the [[local-issues]] issues-workflow on/off switch (default ON). OFF silences the post-merge nudge + hides the dashboard view; flip with `spex issues on|off`. (Pre-rename `proposals.enabled` still reads — localIssues.ts issuesEnabled.)
+    enabled?: boolean                // the [[local-issues]] issues-workflow on/off switch (default ON). OFF silences the post-merge nudge + hides the dashboard view; flip by editing this key (no CLI toggle verb — v0.3.0). A legacy `proposals.enabled` is NOT read; `spex doctor` reports it.
   }
   forge?: {
     host?: string                    // explicit forge host id ('github'|'gitlab'|…) overriding the origin-remote derivation ([[forge-host]] — read by spec-forge drivers.ts resolveForgeHost, not here). A project fact → committed spexcode.json.
@@ -198,7 +198,7 @@ export type RawRecord = {
 //       `SPEXCODE_SESSION_ID`.
 // Claude is UNCHANGED: its `sessionEnvVar` (CLAUDE_CODE_SESSION_ID) already EQUALS its record id, so tier (1)
 // resolves to that very id — the same value `SPEXCODE_SESSION_ID` would have returned; there is no shared
-// app-server to contaminate it. No worktree fallback. (sessions.ts's `ownSessionId` delegates here; spec-yatsu
+// app-server to contaminate it. No worktree fallback. (sessions.ts's `ownSessionId` delegates here; spec-eval
 // reads it to resolve the current node.)
 export function envSessionId(): string | null {
   for (const h of HARNESSES) {

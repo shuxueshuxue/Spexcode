@@ -15,7 +15,7 @@ export type LintConfig = {
   maxChildren: number        // breadth budget: warn at >= this many direct children
   driftErrorThreshold: number// commit-local gate HARD-BLOCKS a commit touching a node >= this many commits behind
   maxOwners: number          // warn when a file is governed (code:) by > this many nodes
-  scenarioTags: string[]     // the closed vocabulary a yatsu scenario's `tags:` must draw from; extend it to mint a new tag
+  scenarioTags: string[]     // the closed vocabulary an eval scenario's `tags:` must draw from; extend it to mint a new tag
 }
 const DEFAULT_CONFIG: LintConfig = {
   governedRoots: ['spec-dashboard/src', 'spec-cli/src'],
@@ -55,7 +55,7 @@ export function normalizeConfig(cfg: LintConfig): LintConfig {
 }
 
 // the source-file matcher, built from the configurable `sourceExtensions` knob. Coverage uses it to decide
-// which tracked files must be governed; yatsu's `yatsu-uncovered` reuses THE SAME knob so ONE setting
+// which tracked files must be governed; eval lint's `eval-coverage` reuses THE SAME knob so ONE setting
 // defines "source" for both coverage axes — a non-web project (Rust/Go/Python .rs/.go/.py) sets it once and
 // both the coverage warning and the loss-signal blind-spot check follow, with no second web-only allowlist.
 export const sourceExtRe = (extensions: string[]) => new RegExp(`\\.(${extensions.join('|')})$`)
@@ -140,7 +140,7 @@ export async function specLint(): Promise<Finding[]> {
         out.push({ level: 'error', rule: 'integrity', spec: s.id, file: f, msg: `spec '${s.id}' lists a missing file: ${f}` })
       owners.set(f, [...(owners.get(f) ?? []), s.id])
     }
-    // one-govern: a node is source of truth for at most ONE file, so drift/yatsu/ack have a single
+    // one-govern: a node is source of truth for at most ONE file, so drift/eval/ack have a single
     // unambiguous subject (see [[governed-related]]). >1 is a defect — pick the true subject, demote the
     // rest to related. ERROR (the node-side twin of too-many-owners' file-side bound). 0 is fine.
     if (s.code.length > 1)
@@ -148,7 +148,7 @@ export async function specLint(): Promise<Finding[]> {
   }
   // a file is COVERED if any node GOVERNS (code:) or merely REFERENCES (related:) it; integrity covers both.
   // `related:` is the coverage net: govern is a sharp ideally-one-file pointer, so most files are reached by
-  // related, not govern (see [[governed-related]]). It carries coverage but never drift/yatsu.
+  // related, not govern (see [[governed-related]]). It carries coverage but never drift, never eval freshness.
   const claimed = new Set<string>(owners.keys())
   for (const s of specs) for (const f of s.related) {
     if (!existsSync(join(root, f)))
@@ -224,7 +224,7 @@ export async function specLint(): Promise<Finding[]> {
 
   // related drift: the SOFT tier ([[governed-related]]). A referenced file moved ahead of the node's
   // version — a nudge that a dependency shifted. Same ancestry basis as govern drift, but WARN-only,
-  // never reaching the commit gate (driftGate reads govern) or yatsu. It is COMMON (shared substrate and
+  // never reaching the commit gate (driftGate reads govern) or eval freshness. It is COMMON (shared substrate and
   // faces change often without re-versioning every referrer), so per-file it is a wall; like
   // too-many-owners it collapses to ONE summary line, with the per-file detail riding the board
   // (relatedDriftFiles). It stays a soft edge, never a per-file interruption.
@@ -233,7 +233,7 @@ export async function specLint(): Promise<Finding[]> {
     const byNode = new Map<string, number>()
     for (const d of rd) byNode.set(d.id, (byNode.get(d.id) ?? 0) + 1)
     const worst = [...byNode].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([id, n]) => `${id}(${n})`).join(', ')
-    out.push({ level: 'warn', rule: 'related-drift', msg: `${rd.length} related file(s) across ${byNode.size} node(s) drifted ahead of their spec (SOFT — a dependency shifted, worth a glance; never blocks, no ack, no yatsu). Most: ${worst}` })
+    out.push({ level: 'warn', rule: 'related-drift', msg: `${rd.length} related file(s) across ${byNode.size} node(s) drifted ahead of their spec (SOFT — a dependency shifted, worth a glance; never blocks, no ack, no eval staleness). Most: ${worst}` })
   }
 
   return out
@@ -242,13 +242,13 @@ export async function specLint(): Promise<Finding[]> {
 export const DRIFT_GUIDANCE = `DRIFT — a governed file has moved ahead of its spec. A CHECKPOINT, not a chore: find WHERE the truth
 broke along  raw intent → expanded spec → code: link → code structure → implementation, fix THAT layer.
 
-  Inspect:  spex lint                                                       which files, against which spec
+  Inspect:  spex spec lint                                                       which files, against which spec
             the node's spec.md                                             its raw source + expanded spec
             git diff $(git log -1 --format=%H -- <spec.md>)..HEAD -- <file>   the code delta since the spec
 
 Diagnose, then apply the one honest remedy:
   • contract changed        → rewrite the spec body to the new intent, commit it (re-versions the node)
-  • only mechanics changed  → spex ack <node>   "checked — spec still valid"   (give a real reason)
+  • only mechanics changed  → spex spec ack <node>   "checked — spec still valid"   (give a real reason)
   • implementation is WRONG → the spec is right; fix the CODE back toward it, then ack
   • wrong code: link        → the node shouldn't own this file (or owns it too broadly); fix frontmatter
   • expanded spec ≠ raw     → the spec drifted from human intent; fix the expanded spec to serve the raw

@@ -59,7 +59,7 @@ write feature code and don't deep-read source — that's what workers are for. R
 this loop, then **dispatch immediately**: decompose the goal into worker-sized tasks and delegate
 each. There is no discovery phase.
 
-- **DISPATCH** — `spex new "<task>"` launches one worker. A session is bound to no node by default;
+- **DISPATCH** — `spex session new "<task>"` launches one worker. A session is bound to no node by default;
   the worker finds and reads its governing spec itself. The prompt's first `[[<id>]]` (or
   `--node <id>`, same effect) binds the session to that node: the branch is named
   `node/<id>-<shortid>`, the board attributes the session to it, and if the node exists one line
@@ -72,26 +72,26 @@ each. There is no discovery phase.
   of spec-driven dev, so reach for it; don't serialize out of caution. Contention on `main` is fine —
   git serializes the merges, and a conflict just means you re-merge. Never throttle parallel work to
   avoid conflicts.
-- **MONITOR** — `spex watch` streams the session lifecycle: `launched` → actionable transitions
+- **MONITOR** — `spex session watch` streams the session lifecycle: `launched` → actionable transitions
   (`review` / `done` / `offline` / `error` / `needs-input`) → `closed`. A booting worker reads
   `starting` (not `offline`) until its control socket is up, and `closed` fires only when a session is
   genuinely gone — so each event is trustworthy and needs no cross-checking against git.
-- **WAIT WITH `spex wait <id>`** — to wait on a dispatched worker, background `spex wait <id>`: it blocks
+- **WAIT WITH `spex session wait <id>`** — to wait on a dispatched worker, background `spex session wait <id>`: it blocks
   until the worker hits an actionable status, prints it, and **exits** (the exit is your wake-up — the
   harness re-invokes you when the backgrounded command finishes). It **draws the watcher→worker edge on the
   session graph** for the whole wait (so your supervision is visible, not an invisible spin) and is
   **guaranteed to terminate** (a `--timeout`, default 1200s, is the hard wall — a worker stuck in any
   non-actionable state can't hang you). Background one wait per worker; N waits draw N edges. One trap:
-  **never block on `spex watch`** — that's the human's *forever* stream, no `<id>`, and it freezes your turn.
-  (`spex review <id>` / `spex ls` still return a one-shot snapshot; `spex board` dumps the board JSON for a glance.)
-- **REVIEW** — `spex review <id>` prints the one review payload: commits ahead of `main`, the
+  **never block on `spex session watch`** — that's the human's *forever* stream, no `<id>`, and it freezes your turn.
+  (`spex session review <id>` / `spex session ls` still return a one-shot snapshot; `spex graph --json` dumps the board JSON for a glance.)
+- **REVIEW** — `spex session review <id>` prints the one review payload: commits ahead of `main`, the
   merge-base diff (the worker's real changes), and the merge/typecheck/lint gates. Decide from that —
   you don't hand-run git or read the source.
 - **MERGE** — `git -C <root> merge --no-ff <branch>`. Then **confirm the merge landed**: `git -C <root>
   log -1` must show `HEAD` advanced to the new merge commit **before** you go any further. Never close
   an unmerged branch — closing discards the work.
 - **CLOSE** — only **after** the merge is confirmed: `spex session close <id>`.
-- **GUIDE** — `spex session send <id> "<msg>"` corrects or steers a live worker. Keep `spex lint` at
+- **GUIDE** — `spex session send <id> "<msg>"` corrects or steers a live worker. Keep `spex spec lint` at
   **0 errors** across the tree.
 - **HELP** — lost? `spex help` is the command map, `spex help <cmd>` one command's usage, and
   `spex guide <topic>` the workflows/formats those commands assume. A `--help` probe is always safe:
@@ -125,7 +125,7 @@ each. There is no discovery phase.
 - **The body is a living current-state document, never a changelog.** It always describes the node's
   *present* intent; you rewrite it in place, you do not accrete `## vN` sections. (Markdown headings
   `## …` / `###` are fine for *structure* — what's banned is a heading whose text is a version, i.e.
-  `## vN …`.) `spex lint`'s **living** rule enforces this. Version evolution is read from git and
+  `## vN …`.) `spex spec lint`'s **living** rule enforces this. Version evolution is read from git and
   shown in the dashboard's **recent / history** tabs (each commit's reason, session, and line-diff).
 - **Git is the database.** A node's `version` is the number of **content commits** to its `spec.md`
   (`git log --follow`, *excluding pure renames* — moving a file in a reparent isn't a version); the
@@ -154,15 +154,15 @@ together — that is a project choice, not a git requirement.
 ## Architecture / data flow
 
 - `spec-cli/` — Hono backend, run with `tsx` (**no build step**; `npx tsc --noEmit` to type-check).
-  Reads `.spec` + git live. The dashboard's single source is **`GET /api/board`** (assembled
+  Reads `.spec` + git live. The dashboard's single source is **`GET /api/graph`** (assembled
   tree + overlay + sessions); other surfaces include `GET /api/specs`, `GET /api/specs/:id/history`
   (+ `/diff/:hash`), `GET /api/layout`, `GET /api/config` (the gathered config surfaces),
   `GET /api/slash-commands`, and the whole **`/api/sessions` state-machine** (list/create/review/
-  merge/resume/capture/prompt/close + the **`:id/socket` terminal WebSocket** and `graph` edges).
+  merge/resume/capture/prompt/close + the **`:id/socket` terminal WebSocket** and `edges`).
   Loader: `src/specs.ts`; git access: `src/git.ts`; sessions/launch: `src/sessions.ts`;
   portability seam: `src/layout.ts` (`resolveLayout()`, optional `spexcode.json` override for
   non-default layouts).
-- `spec-dashboard/` — Vite + React. `src/data.js`'s `loadBoard()` fetches **`/api/board`**; the x/y
+- `spec-dashboard/` — Vite + React. `src/data.js`'s `loadGraph()` fetches **`/api/graph`**; the x/y
   tidy-tree `layout()` is exported from `data.js` but **applied in `App.jsx`** (focus-driven
   drill-down — a pure view concern, the backend has no pixels). The live Sessions console is a **real
   terminal** (`SessionTerm.jsx`) over the `/api/sessions/:id/socket` WebSocket. `data.js` still carries
@@ -206,10 +206,10 @@ together — that is a project choice, not a git requirement.
 - Frontend: `npm run web` → Vite. **Port 5173 by default but not pinned** — it takes the next free
   port (e.g. 5174) and prints `Local: http://localhost:<port>/`; read that line for the real port.
   Vite proxies `/api` → :8787, so the backend must be running too.
-- `spex watch` — the **canonical session monitor**: streams actionable session transitions as they
-  happen (`spex ls` for a one-shot table). The dashboard's live Sessions console is the GUI
+- `spex session watch` — the **canonical session monitor**: streams actionable session transitions as they
+  happen (`spex session ls` for a one-shot table). The dashboard's live Sessions console is the GUI
   equivalent.
-- `spex lint` (CLI: `spec-cli/src/cli.ts` → `lint.ts`; or `npm run lint`) checks the spec↔code graph:
+- `spex spec lint` (CLI: `spec-cli/src/cli.ts` → `lint.ts`; or `npm run lint`) checks the spec↔code graph:
   **integrity** (error — a `code:` path doesn't exist), **living** (error — a body contains a `## vN`
   changelog heading instead of staying current-state; see "the body is a living document" above),
   **altitude** (warn — a body slid below contract altitude into a mechanics dump: over its line/char
@@ -220,24 +220,24 @@ together — that is a project choice, not a git requirement.
   go through `git.ts`'s `git()` helper, which strips the hook's exported `GIT_DIR`/`GIT_INDEX_FILE`
   (otherwise repo discovery resolves to the cwd and the lint silently sees zero specs).
 - A spec node declares the files it owns via a `code:` list in its frontmatter — that edge is what
-  `spex lint` and (later) the LLM judge anchor to.
+  `spex spec lint` and (later) the LLM judge anchor to.
 - To configure SpexCode's runtime settings (launchers, dashboard icon, lint budgets, layout), run
   **`spex guide config`** — the authoritative manual for every `spexcode.json` / `spexcode.local.json`
   field and which of the two files it belongs in (committed & portable vs. gitignored & host-specific).
-  Don't reverse-engineer the schema; mirror how `spex guide spec` / `spex guide yatsu` carry the authoring
+  Don't reverse-engineer the schema; mirror how `spex guide spec` / `spex guide eval` carry the authoring
   formats. Then edit the JSON directly — there is no `spex config set`.
 - Toolchain: **npm, not pnpm**; Node is pinned via `.nvmrc` (22).
 
-### Measuring a frontend node's yatsu — drive a real browser
+### Measuring a frontend node's eval scenario — drive a real browser
 
 A frontend scenario (a favicon, a rendered view, a tab title) is measured through the **actual running
-product**, never by reasoning about the code — and you never file a `spex yatsu eval --pass` off anything
+product**, never by reasoning about the code — and you never file a `spex eval add --pass` off anything
 weaker than the browser's real reading. The loop: run the worktree dashboard (`npm run dev` in
 `spec-dashboard`; a worktree has no `node_modules`, so symlink the main checkout's first), start a `spex
-serve` when the scenario needs a backend/config case (poll `/api/board` until it reflects your config — the
+serve` when the scenario needs a backend/config case (poll `/api/graph` until it reflects your config — the
 serve supervisor spawns a child that takes a few seconds to warm), then drive a headless browser to read the
 real DOM (`document.querySelector("link[rel~='icon']").href`, `document.title`) and screenshot it, and file
-with `spex yatsu eval <node> --scenario <name> --pass --image <png>`. A headless Chromium is available on the
+with `spex eval add <node> --scenario <name> --pass --image <png>`. A headless Chromium is available on the
 box; where its binary and the driver package live is a machine fact kept in local notes, not here.
 
 ### Worker auth — dispatched sessions launch via named launchers (config, not env)
@@ -288,7 +288,7 @@ after install, before the first commit.**
    worktree). Re-run it whenever the hook source changes.
 
 The hook is **advisory** — bypassable, and absent on any machine that skipped step 2. The real gate is
-**CI running `spex lint`**; treat the hook as fast local feedback, CI as enforcement.
+**CI running `spex spec lint`**; treat the hook as fast local feedback, CI as enforcement.
 
 Adopting SpexCode on an existing project (no restructure needed — the layout seam handles where things
 live):
@@ -296,7 +296,7 @@ live):
 1. Add `.spec/<area>/spec.md` nodes for the parts you want governed, each with a `code:` list pointing
    at the existing files.
 2. `npm run hooks`.
-3. Run `spex lint` — the **coverage** warnings are your adoption TODO: every source file not yet
+3. Run `spex spec lint` — the **coverage** warnings are your adoption TODO: every source file not yet
    claimed by a spec. Work the list down; promote coverage to an error once the graph is complete.
 4. If your layout differs from the default (main at root, worktrees in `.worktrees/`, `node/<id>`
    branches), drop a `spexcode.json` to point the tool at your structure instead of forking it.

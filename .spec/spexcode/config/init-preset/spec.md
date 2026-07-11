@@ -38,17 +38,17 @@ scenario, and measure a frontend scenario through the actual running product (a 
 that observation as the reading" rule, and a `reproduce-before-fix` plugin (`surface: system`) seeds the
 fail→pass A/B repair discipline. Both are generic — no repo-specific paths or tool locations — so they
 materialize into every adopter's `CLAUDE.md`/`AGENTS.md` contract block the same way they do here, and the
-seeded `core/stop-gate` hook's yatsu advisory nudges an uncovered/stale node at a clean-done stop. That is
+seeded `core/stop-gate` hook's eval advisory nudges an uncovered/stale node at a clean-done stop. That is
 the fix for the adoption gap where a fresh project's contract carried zero measurement prose and its
-workers browser-verified by instinct but never filed a yatsu reading.
+workers browser-verified by instinct but never filed a eval reading.
 
 **Templates are the canonical shipped seed; they must not fork from our own `.config`.** A published
 `spec-cli` cannot read this dev repo's live `.spec`, so `spex init` seeds strictly from
 `spec-cli/templates/spec/project/.config` — that template tree IS the canonical copy every adopter gets.
 Our own `.spec/spexcode/.config` is this repo's live instance and is a **superset** (it carries extra
 discipline like spec-first reading), but for the SHARED contract members — the [[core]] measurement prose,
-`reproduce-before-fix`, and the `core/stop-gate` hook (whose yatsu advisory is specified by
-[[yatsu-proactive]]) — the template must stay a faithful mirror of the live node. When the measurement
+`reproduce-before-fix`, and the `core/stop-gate` hook (whose eval advisory is specified by
+[[eval-proactive]]) — the template must stay a faithful mirror of the live node. When the measurement
 contract changes, update BOTH in the same node so an adopter's agents inherit exactly what ours do (the
 self-launch/fresh-adoption path is the main body, not a privileged second class). A drift between the two
 is the smell.

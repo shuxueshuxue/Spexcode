@@ -39,7 +39,7 @@ The local issue store is the **local store of [[issues]]** — the venue where a
 never written into it. Local and remote issues are the SAME data model under the SAME name — an issue — so
 this node owns only the local store's mechanism: the venue, the file format, the write
 verbs, the concurrency discipline, and the post-merge nudge. Reading is not this node's surface — the one
-read over every store (CLI `spex issues`, `GET /api/issues`, the board fold) is [[issues]]'s port.
+read over every store (CLI `spex issue ls`, `GET /api/issues`, the board fold) is [[issues]]'s port.
 
 The local issue store is **git-tracked data, not a spec node.** A thread reuses almost nothing of the spec-node
 contract — no title/hue/desc/code frontmatter, no parent-ancestor nesting, no lint, no drift, no
@@ -64,7 +64,7 @@ it to `.spec/.issues` on its first store touch after a toolchain update — the 
   ` :: <k=v>` tail; a plain reply has no tail and parses unchanged, and the remark write verbs
   (`remark`/`resolve`/`retract`) are thin siblings of `reply` over this same committed store. Its frontmatter carries `by`
   (author session), `status`, optional `nodes:` (the product nodes it concerns, linked `[[…]]`), optional
-  `evidence:` (yatsu content-addressed blob hashes — the typed reference a cross-node finding carries, per
+  `evidence:` (content-addressed evidence hashes — the typed reference a cross-node finding carries, per
   [[issues]] / [[video-evidence]]). The sentinel is **unforgeable**: user body text is
   neutralized on write, so a body that itself contains that marker can't spawn a phantom reply or truncate
   the thread.
@@ -92,7 +92,7 @@ it to `.spec/.issues` on its first store touch after a toolchain update — the 
   points **both** reads and writes at an isolated directory of plain `.md` files: no `git add/commit`, so it can
   **never** touch any shared main, and the primary-checkout predicate is moot (nothing is committed). This is the
   e2e/sandbox seam — a test rig sets it once and exercises the whole open/reply/remark surface against a temp dir
-  it throws away, mirroring how [[blob-put]]'s evidence cache and `SPEXCODE_HOME` keep test artifacts off the repo.
+  it throws away, mirroring how [[evidence-put]]'s evidence cache and `SPEXCODE_HOME` keep test artifacts off the repo.
   (Refuse-when-non-primary is the minimum honest fix that stops the dirtying today; the fuller ambition — a
   *worktree-independent* commit that lands the write on trunk from ANY checkout without a working-tree touch, e.g.
   `hash-object`+`commit-tree`+`update-ref` — is deferred: advancing the checked-out trunk **branch** ref leaves its
@@ -125,18 +125,18 @@ it to `.spec/.issues` on its first store touch after a toolchain update — the 
   declaration never carries a vacuous reminder — the line is earned by data, never boilerplate. And it is a
   **nudge, never a gate**: some issues rightly outlive their session (a taste concern awaiting the drain),
   and a failure in the store check is reported loud while the declaration still lands.
-- **Surface — the write verbs live on the ONE issues command.** `spex issues open "<concern>" [--node <id>…]
+- **Surface — the write verbs live on the ONE issues command.** `spex issue open "<concern>" [--node <id>…]
   [--evidence <hash>…] [--body -|<text>]` opens a thread (open is store-routed by [[issues]]'s creation
   port — its local default lands here; `--store <host>` bypasses this store for the forge driver);
-  `spex issues reply <id> --body -|<text>
+  `spex issue reply <id> --body -|<text>
   [--evidence <hash>…]` (the evidence a reply carries accrues onto the thread's `evidence[]`, deduped — an
-  anchored annotation's frame blob), and `spex issues close <id>` marks a local thread landed through
+  anchored annotation's frame blob), and `spex issue close <id>` marks a local thread landed through
   [[issues]]'s store-routed close. A new thread's `nodes:`
   are **inferred from the `[[node]]` topic links in its own text** (concern + body, [[mentions]]'s one
   in-text reference primitive), unioned with any explicit `--node` — a writer links nodes by writing them,
   so no caller needs a separate ids field. Read and write share one
   command because local and remote are one model — the store is a property of the issue, never a second
-  command family. There is deliberately no store-local read command — reading is `spex issues` ([[issues]]),
+  command family. There is deliberately no store-local read command — reading is `spex issue ls` ([[issues]]),
   the same list every store feeds. (The write verbs were historically a separate `spex propose` command;
   that alias is now removed — the top level is porcelain-only ([[cli-surface]]). A pre-rename deployment's
   `post-merge` hook — a per-clone copy calling `spex propose nudge` — prints one unknown-command line,
@@ -153,15 +153,17 @@ it to `.spec/.issues` on its first store touch after a toolchain update — the 
   ([[issues-view]]) is a thin caller: `POST /api/issues/:id/reply` and `POST /api/issues` (author `'human'`),
   plus `POST /api/issues/:id/promote` for the one local-to-forge move. All gated by the same on/off switch
   (403 when OFF).
-- **Opt-outable, default ON.** The issues workflow is a feature you can switch off: `spex issues on|off`
-  flips `spexcode.json`'s `issues.enabled` (the shared settings file every other toggle lives in),
-  effective immediately with no commit (config is read from the working tree). OFF silences the post-merge
+- **Opt-outable, default ON.** The issues workflow is a feature you can switch off: the single source of
+  truth is `spexcode.json`'s `issues.enabled` (the shared settings file every other toggle lives in),
+  effective immediately with no commit (config is read from the working tree). There is deliberately **no
+  CLI toggle verb** (v0.3.0 — "no `spex config set`" is this project's standing rule): flip the key by
+  editing the JSON; `spex doctor` reports the current state. OFF silences the post-merge
   nudge and hides the dashboard issues view; the raw write verbs stay usable, since running one is explicit
-  consent. The nudge text and the toggle both live in the CLI (`spex issues nudge <node>` prints nothing
-  when OFF), so the post-merge hook is a thin caller and the **dashboard's Settings toggle is a thin
-  wrapper over this same switch** — one source of truth, three consumers (CLI, hook, dashboard). (The key
-  was historically `proposals.enabled`; a pre-rename value still reads, and the next toggle write rewrites
-  it under `issues` — self-heal on touch, like the store-dir rename.)
+  consent. The nudge text and the switch-read both live in the CLI (`spex internal nudge <node>` prints
+  nothing when OFF), so the post-merge hook is a thin caller — one source of truth, three consumers (CLI,
+  hook, dashboard). (The key was historically `proposals.enabled`; that legacy key is NOT read — no
+  fallback, fail toward the default — and `spex doctor` flags it so an old settings file gets repaired,
+  never silently obeyed.)
 - **Dedup is the drain's job, not the write's.** A duplicate concern is a **signal** (recurrence), folded
   into one thread by a supervisor's judgment ([[supervisor]]) — never a write-time similarity match. And
   recurrence is weighed as **salience, not importance**: a sharp singleton outranks a popular gripe, so the

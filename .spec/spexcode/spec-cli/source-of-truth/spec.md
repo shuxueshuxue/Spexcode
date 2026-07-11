@@ -75,6 +75,6 @@ child: a git process that never exits (a wedged filesystem, a hijacked PATH git)
 generous timeout (`SPEXCODE_GIT_TIMEOUT_MS`, sized far above the slowest legitimate full-history walk) and
 the call fails like any other git failure — with a loud warning, since `gitA`'s `''` would otherwise
 disguise the pathology as an innocently-empty result. A caller's awaited promise therefore always settles;
-[[board-cache]]'s settle guarantee leans on this. It also scopes the pre-commit drift gate to the commit's own staged
+[[graph-cache]]'s settle guarantee leans on this. It also scopes the pre-commit drift gate to the commit's own staged
 paths. All three strip an inherited `GIT_DIR`/work-tree env so a hook can't misdirect the op. The HTTP
 entrypoint that serves the results belongs to [[spec-cli]].

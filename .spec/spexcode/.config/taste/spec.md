@@ -30,7 +30,7 @@ The principles, in the maintainer's own framing:
    locks) is hidden into the global store; what stays in-tree must be prose a human would accept.
 5. **Self-launch is the MAIN BODY.** A user on the most naive Claude Code / a directly-launched Codex — NO
    dashboard, NO server — must still get the FULL experience (prompt, hooks, every mechanism) through
-   `spex init`/`spex lint` + materialize→auto-discovery. The dashboard is one consumer that REDUCES to that
+   `spex init`/`spex spec lint` + materialize→auto-discovery. The dashboard is one consumer that REDUCES to that
    path plus a minimal governed delta. Adapting to this "unmanaged" usage is the forcing function that makes
    the architecture robust and unified — the point is NOT to add if-else per usage mode (that loses the forcing).
 6. **Memory hygiene** ([[memory-hygiene]]): never write session/role-specific content or identity markers to

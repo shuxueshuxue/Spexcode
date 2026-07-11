@@ -6,7 +6,7 @@ import { ScoreBadge, scenarioStates } from './score.jsx'
 import { useT } from './i18n/index.jsx'
 import { Icon } from './icons.jsx'
 
-// The session Eval tab ([[review-proof]]'s interactive face): the THIRD home of the ONE EventDetail
+// The session Eval tab ([[session-eval]]'s interactive face): the THIRD home of the ONE EventDetail
 // component ([[event-detail]], U1) — node popup (one node) · Evals page (project) · here (this session's
 // changed nodes, WORKTREE-rooted readings). The master-detail is the SAME shared shell the Evals page
 // renders ([[evals-view]]'s EvalMasterDetail — split, fold, j/k), so the two surfaces cannot drift:
@@ -110,7 +110,7 @@ export default function SessionEvalPane({ sessionId, specs = [], sessions = [], 
               <section className="fv-group" key={g.node.id}>
                 <header className="fv-group-head">
                   <span className="fv-group-title" style={{ color: `hsl(${g.node.hue} 60% 60%)` }}>{g.node.title}</span>
-                  {g.node.uncoveredFrontend && <span className="se-warn">{t('sessionEval.noYatsu')}</span>}
+                  {g.node.uncoveredFrontend && <span className="se-warn">{t('sessionEval.noEvalFile')}</span>}
                 </header>
                 {gRows.map((v, i) => {
                   // the attribution boundary: the first inherited row after the session's own ✦ rows gets a

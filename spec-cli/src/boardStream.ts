@@ -8,9 +8,9 @@ import { getBoard, invalidateBoard } from './boardCache.js'
 import { unitize, tagOf, diffUnits, type Units } from './boardDelta.js'
 
 // @@@ board-stream — the board's freshness is PUSHED, not polled. A dashboard subscribes here ONCE; in
-// plain mode it gets a bare `board-changed` and refetches /api/board (the legacy protocol, kept verbatim
+// plain mode it gets a bare `board-changed` and refetches /api/graph (the legacy protocol, kept verbatim
 // for old clients); in DELTA mode (`?mode=delta`) the server itself rebuilds on change and streams the
-// hash-chained patch ([[board-delta]]): a `board-full {to, board}` on connect, then `board-delta
+// hash-chained patch ([[graph-delta]]): a `board-full {to, board}` on connect, then `board-delta
 // {from, to, set, del}` per change — a few KB against the ~600KB snapshot, with a full-snapshot send
 // whenever the patch wouldn't win (bigger than the board, or the unit decomposition's id-uniqueness
 // precondition failed), so a delta subscriber is NEVER worse off than a full refetch.
@@ -48,7 +48,7 @@ async function rebuildAndBroadcast(): Promise<void> {
     do {
       dirty = false
       let board: unknown
-      // share the route's single-flight build ([[board-cache]]); fireChanged() already invalidated the
+      // share the route's single-flight build ([[graph-cache]]); fireChanged() already invalidated the
       // cache, so this gets a fresh build (or joins one a concurrent poll already started).
       try { board = await getBoard() } catch { for (const n of [...plainSubs]) { try { n() } catch { /* swept on abort */ } }; continue }
       const boardJson = JSON.stringify(board)
@@ -76,8 +76,8 @@ async function rebuildAndBroadcast(): Promise<void> {
 // delta subscribers the debounced fire rebuilds and broadcasts (plain subs then ride the same tag-moved
 // gate — no spurious refetches); without them it stays the zero-build legacy notify.
 function fireChanged(): void {
-  // invalidate the route's board cache ([[board-cache]]) on EVERY change signal, before the debounce guard
-  // — a plain-mode client that polls /api/board (no delta rebuild here) must still see fresh data on its
+  // invalidate the route's board cache ([[graph-cache]]) on EVERY change signal, before the debounce guard
+  // — a plain-mode client that polls /api/graph (no delta rebuild here) must still see fresh data on its
   // next poll, and a delta rebuild below re-reads the same now-stale cache.
   invalidateBoard()
   if (debounce) return
@@ -145,7 +145,7 @@ function stopSourcesIfIdle(): void {
   if (coldTick) { clearInterval(coldTick); coldTick = null }
 }
 
-// GET /api/board/stream — one SSE per dashboard tab, server→client only, with a periodic `ping` so an
+// GET /api/graph/stream — one SSE per dashboard tab, server→client only, with a periodic `ping` so an
 // idle proxy never times the connection out. On a backend hot-reload the stream drops and EventSource
 // auto-reconnects to the fresh child; a delta subscriber's reconnect lands a fresh `board-full`, so the
 // chain re-anchors with no client-side repair logic.

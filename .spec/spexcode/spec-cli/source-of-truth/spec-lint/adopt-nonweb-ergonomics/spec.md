@@ -20,7 +20,7 @@ must become a self-explanatory repair entrypoint or be normalized to what the ad
 ## expanded spec
 
 Three footguns, all of the class *config silently matches zero files*, fixed at the [[spec-lint]]
-coverage/config seam so both coverage and yatsu's uncovered check inherit the fix:
+coverage/config seam so both coverage and eval lint's coverage check inherit the fix:
 
 - **Zero-match is a repair entrypoint, not a dead end.** When coverage finds no source at all, the
   "governing NOTHING" warning echoes the *current* `sourceExtensions` and `governedRoots` values (so the

@@ -2,7 +2,7 @@
 // node) and `@session` (an ACTOR — a live session, or `@new` for a fresh worker). The same parser resolves
 // them in ANY input box; the resolve+dispatch live HERE (CLI-first) so the issues page, the composer, and an agent's
 // own prompt share one implementation. An `@` "just auto-sends a prompt": resolve it against the live board
-// sessions and dispatch via [[dispatch]]'s sendKeys / [[launch]]'s newSession — storage and delivery stay
+// sessions and dispatch via [[dispatch]]'s sendText / [[launch]]'s newSession — storage and delivery stay
 // separate, and sessions.ts is imported LAZILY so a mention-free post pays nothing.
 
 // ── parse (pure) ──────────────────────────────────────────────────────────────────────────────────────
@@ -17,8 +17,8 @@ const uniq = (xs: string[]): string[] => [...new Set(xs)]
 
 // ── CLI sigil tolerance ───────────────────────────────────────────────────────────────────────────────
 // In FREE TEXT the sigils are required — they are what marks a reference apart from prose. In a CLI
-// ARGUMENT the whole token IS the reference, so the sigil is optional: `spex review @graph` ≡
-// `spex review graph`, `spex yatsu eval [[cli-surface]]` ≡ `spex yatsu eval cli-surface`. One shared strip,
+// ARGUMENT the whole token IS the reference, so the sigil is optional: `spex session review @graph` ≡
+// `spex session review graph`, `spex eval add [[cli-surface]]` ≡ `spex eval add cli-surface`. One shared strip,
 // applied by the session-selector matcher and every node-arg read site, so the habit a user learns in the
 // dashboard's input boxes works verbatim on the CLI — never a second grammar to learn.
 export function stripRefSigil(token: string): string {
@@ -78,8 +78,8 @@ export type DispatchOutcome = { token: string; result: 'sent' | 'spawned' | 'off
 function mentionPrompt(threadId: string, node: string | null, author: string, text: string): string {
   const re = node ? ` (re: ${node})` : ''
   return `You were @-mentioned in issue thread "${threadId}"${re} by ${author}:\n\n  ${text.trim()}\n\n` +
-    `Read the thread and act as the comment asks (often just a look): \`spex issues --all\` lists them; ` +
-    `reply with \`spex issues reply ${threadId} --body -\`.`
+    `Read the thread and act as the comment asks (often just a look): \`spex issue ls --all\` lists them; ` +
+    `reply with \`spex issue reply ${threadId} --body -\`.`
 }
 // A non-open thread is settled work: a fresh worker spawned onto it must not re-implement what already
 // landed, so the prompt leads with the status and a verify-on-main-first instruction.
@@ -92,7 +92,7 @@ export function newWorkerPrompt(threadId: string, node: string | null, author: s
     : ''
   return `Issue thread "${threadId}"${on} @-mentioned @new (by ${author}) for a fresh look:\n\n  ${text.trim()}\n\n` +
     settled +
-    `Read the thread (\`spex issues --all\`, find ${threadId}) and act on it${node ? `; the relevant node is ${node}` : ''}.`
+    `Read the thread (\`spex issue ls --all\`, find ${threadId}) and act on it${node ? `; the relevant node is ${node}` : ''}.`
 }
 
 // Parse a committed issue post's text for `@` actors and deliver to each. Best-effort and LOUD: the thread is
@@ -104,7 +104,7 @@ export async function dispatchMentions(
 ): Promise<DispatchOutcome[]> {
   const { actors } = parseMentions(text)
   if (!actors.length) return []
-  const { sendKeys, listSessions, newSession } = await import('./sessions.js')
+  const { sendText, listSessions, newSession } = await import('./sessions.js')
   const sessions = await listSessions()
   const resolved = resolveActors(actors, sessions as unknown as ActorSession[])
   const out: DispatchOutcome[] = []
@@ -120,7 +120,7 @@ export async function dispatchMentions(
       } catch (e) { out.push({ token: r.token, result: 'failed', detail: e instanceof Error ? e.message : String(e) }) }
       continue
     }
-    const res = await sendKeys(r.session.id, mentionPrompt(ctx.threadId, ctx.node, ctx.author, text), 'issues')
+    const res = await sendText(r.session.id, mentionPrompt(ctx.threadId, ctx.node, ctx.author, text), 'issues')
     out.push(res.ok ? { token: r.token, result: 'sent', detail: r.session.id }
                     : { token: r.token, result: 'offline', detail: res.error })
   }
@@ -131,9 +131,9 @@ export async function dispatchMentions(
 // A committed reply is ALSO auto-delivered as a COURTESY — never an assignment — to a FALLBACK CHAIN of
 // candidates, in order, stopping at the FIRST one that can be reached: for a remark this is the reading's
 // filer session, then the node's governing session, then nobody (it still surfaces on the board via the
-// teeth). This is a NOTIFICATION chain only — it resolves NOTHING (resolve stays a deliberate `spex resolve`,
+// teeth). This is a NOTIFICATION chain only — it resolves NOTHING (resolve stays a deliberate `spex remark resolve`,
 // R3); it just reaches an agent who can act. It is the same delivery pipe as dispatchMentions (one
-// online-resolution + one sendKeys), with the same cuts that keep courtesy ≠ assignment: deliver ONLY to an
+// online-resolution + one sendText), with the same cuts that keep courtesy ≠ assignment: deliver ONLY to an
 // ONLINE session (an unreachable link is skipped for the next, NEVER spawns a worker, NEVER drains — only an
 // explicit @new spawns); SKIP a candidate that is the replier (no self-notify); a candidate already reached by
 // an explicit @-target of this same text counts as delivered, so the chain STOPS (no double-delivery, no
@@ -146,14 +146,14 @@ function originatorPrompt(threadId: string, node: string | null, replier: string
   const re = node ? ` (re: ${node})` : ''
   return `A new reply landed on a thread you originated — "${threadId}"${re}, from ${replier}:\n\n  ${text.trim()}\n\n` +
     `This is a courtesy heads-up (you started this thread), not an assignment. Look if it concerns you; ` +
-    `\`spex issues --all\` lists them, reply with \`spex issues reply ${threadId} --body -\`.`
+    `\`spex issue ls --all\` lists them, reply with \`spex issue reply ${threadId} --body -\`.`
 }
 
 // The pure fallback decision (testable without sessions.ts): walk the ordered chain (nulls/dupes/the-replier
 // pruned) and return the FIRST link that resolves to an online session — that is who the courtesy goes to. A
 // link already reached by an explicit @-target of this same text short-circuits to `reached` (stop, no
 // double-delivery — the actor already has it); an offline/absent link falls through to the next. `none` means
-// the chain ran dry (nobody online). This is the whole fallback logic; delivery is a thin sendKeys around it.
+// the chain ran dry (nobody online). This is the whole fallback logic; delivery is a thin sendText around it.
 export type LoopInPick =
   | { kind: 'deliver'; originator: string; session: ActorSession }
   | { kind: 'reached' }
@@ -177,7 +177,7 @@ export function pickLoopIn(
 
 // `chain` is the ordered fallback list. We deliver the courtesy to the first online link and STOP; an
 // offline/failed link falls through to the next. NOTIFICATION ONLY — this never touches a `resolved` bit
-// (resolve is a deliberate `spex resolve`), never spawns (only `@new` spawns).
+// (resolve is a deliberate `spex remark resolve`), never spawns (only `@new` spawns).
 export async function notifyOriginator(
   chain: (string | null)[],
   replier: string,
@@ -186,10 +186,10 @@ export async function notifyOriginator(
 ): Promise<LoopIn | null> {
   const seen = new Set<string>()
   if (!chain.some((c) => c && c !== replier && !seen.has(c) && (seen.add(c), true))) return null   // nothing to do → no session load
-  const { sendKeys, listSessions } = await import('./sessions.js')
+  const { sendText, listSessions } = await import('./sessions.js')
   const pick = pickLoopIn(chain, replier, await listSessions() as unknown as ActorSession[], ctx.alreadyDelivered)
   if (pick.kind !== 'deliver') return null                    // reached via @ / nobody online → silent
-  const res = await sendKeys(pick.session.id, originatorPrompt(ctx.threadId, ctx.node, replier, text), 'issues')
+  const res = await sendText(pick.session.id, originatorPrompt(ctx.threadId, ctx.node, replier, text), 'issues')
   return res.ok ? { originator: pick.originator } : null      // a failed send behaves like offline: silent
 }
 

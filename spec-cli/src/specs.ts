@@ -98,7 +98,7 @@ function walk(dir: string, parent: string | null, acc: Raw[]) {
 // as one path segment. So the disambiguation separator is '_': like '/' it never occurs inside a dir
 // basename (so the join stays unambiguous), but unlike '/' it is a URL/wikilink/DOM-safe unreserved char,
 // so a collision-qualified id (e.g. `.config_spec-scout`) stays a single token everywhere it is resolved.
-// Exported as the ONE mint every id producer shares: spec-yatsu mints its node ids through this same
+// Exported as the ONE mint every id producer shares: spec-eval mints its node ids through this same
 // function over this same universe (every spec node), so a colliding leaf carries one canonical id
 // system-wide instead of a second, diverging bare-leaf scheme.
 export function mintIds(segs: string[][]): string[] {
@@ -135,7 +135,7 @@ function raws(): Raw[] {
   return acc
 }
 
-// async twin of walk/raws for the HOT board build ([[board-cache]]): reading each spec.md through
+// async twin of walk/raws for the HOT board build ([[graph-cache]]): reading each spec.md through
 // fs/promises YIELDS the event loop between files, so a build never stalls a `/health` liveness probe the
 // way the sync walk (one ~450ms uninterrupted stretch) did. Same output as raws() — identical push order
 // (pre-order DFS, dir before children) and the same reId — so every caller reads the same nodes; only
@@ -170,14 +170,14 @@ function claimMatcher(file: string): (cf: string) => boolean {
   }
 }
 
-// spec node(s) that GOVERN a file (frontmatter `code:` — source of truth, drives drift/yatsu); reads only
+// spec node(s) that GOVERN a file (frontmatter `code:` — source of truth, drives drift + eval freshness); reads only
 // frontmatter (cheap, no git) so a per-edit hook can call it.
 export function specOwners(file: string): { id: string; desc: string }[] {
   const claims = claimMatcher(file)
   return raws().filter((r) => list(r.fm.code).some(claims)).map((r) => ({ id: r.id, desc: str(r.fm.desc) }))
 }
 
-// spec node(s) that REFERENCE a file (frontmatter `related:` — carries coverage, never drift/yatsu):
+// spec node(s) that REFERENCE a file (frontmatter `related:` — carries coverage, never drift, never eval freshness):
 // [[governed-related]]'s other half, same claim rule, same cheap frontmatter-only read.
 export function specRelated(file: string): { id: string; desc: string }[] {
   const claims = claimMatcher(file)
@@ -211,7 +211,7 @@ export function loadSpecsLite(): SpecLite[] {
 }
 
 // one node's body + parsed parts, filesystem-only (no git). The board omits both to stay lean
-// ([[board-lean]]); the detail view fetches them here when a node opens. null when the id isn't a node.
+// ([[graph-lean]]); the detail view fetches them here when a node opens. null when the id isn't a node.
 export function specContent(id: string): { body: string; parts: ReturnType<typeof parseParts> } | null {
   const r = raws().find((x) => x.id === id)
   return r ? { body: r.body.trim(), parts: parseParts(r.body) } : null
@@ -234,7 +234,7 @@ export async function loadSpecs() {
       .filter((d) => d.behind > 0)
     const drift = driftFiles.reduce((a, d) => a + d.behind, 0)
     // related drift is the SOFT tier ([[governed-related]]): same ancestry basis, but it stays OUT of
-    // `drift` — it never feeds status, the commit gate, or yatsu. It surfaces only as a lint warn nudge.
+    // `drift` — it never feeds status, the commit gate, or eval freshness. It surfaces only as a lint warn nudge.
     const relatedDriftFiles = related
       .map((f) => ({ file: f, behind: driftFor(didx, S, f) }))
       .filter((d) => d.behind > 0)

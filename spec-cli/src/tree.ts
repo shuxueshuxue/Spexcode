@@ -1,7 +1,7 @@
-// @@@ spex tree - the CLI's human-readable graph view: the same assembled board the dashboard's
+// @@@ spex graph - the CLI's human-readable graph view: the same assembled board the dashboard's
 // tidy-tree renders, as an indented terminal tree. Pure presentation over buildBoard()'s nodes —
 // no read path of its own; status colours and badge semantics mirror the dashboard (drift /
-// stale-yatsu / open-issues counts). Governed by the spex-tree spec node.
+// stale-eval / open-issues counts). Governed by the spex-tree spec node.
 
 // the subset of a board node this view consumes (buildBoard attaches more; we read only these).
 export type TreeNode = {
@@ -23,7 +23,7 @@ export type TreeOpts = { node?: string; depth?: number; color?: boolean }
 // from the warning yellow), drift=yellow (the dashboard's warning colour), pending=muted grey.
 const STATUS_ANSI: Record<string, string> = { merged: '32', active: '36', drift: '33', pending: '90' }
 
-// stale-yatsu count: declared scenarios whose LATEST reading exists but is no longer fresh.
+// stale-eval count: declared scenarios whose LATEST reading exists but is no longer fresh.
 // board `evals` is already latest-per-scenario, so this is a straight filter — the same freshness
 // axis the dashboard's grey ✓/✗ badges read (score.jsx readingScore).
 function staleYatsu(n: TreeNode): number {
@@ -48,7 +48,7 @@ function childrenIndex(nodes: TreeNode[]): Map<string | null, TreeNode[]> {
 function roots(nodes: TreeNode[], nodeId?: string): TreeNode[] {
   if (nodeId) {
     const hit = nodes.find((n) => n.id === nodeId)
-    if (!hit) throw new Error(`no spec node "${nodeId}" — spex tree lists every id; spex search <topic> finds one by intent`)
+    if (!hit) throw new Error(`no spec node "${nodeId}" — spex graph lists every id; spex spec search <topic> finds one by intent`)
     return [hit]
   }
   const ids = new Set(nodes.map((n) => n.id))
@@ -100,7 +100,7 @@ export function renderTree(nodes: TreeNode[], opts: TreeOpts = {}): string {
 }
 
 // the machine exit: the same filtered subtree as NESTED objects, badge counts precomputed — a
-// shaped view, not a replacement for `spex board` (which stays the full flat payload). Pruned
+// shaped view, not a replacement for `spex graph --json` (which stays the full flat payload). Pruned
 // children degrade to their ids, so --depth still tells the machine what exists below the cut.
 export function treeJson(nodes: TreeNode[], opts: TreeOpts = {}): object[] {
   const byParent = childrenIndex(nodes)

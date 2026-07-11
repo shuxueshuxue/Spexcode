@@ -40,7 +40,7 @@ import { stripRefSigil } from './mentions.js'
 //   queued → a prepared worktree held below the concurrency cap; the drainer launches it as a slot frees.
 //   (closed = the worktree AND the global record are removed; not a stored status)
 // The agent only ever PROPOSES (awaiting); merge/close are human-only. Every proposal is reversible — nothing
-// auto-disappears; to withdraw one you MESSAGE the session (mark-active clears it), and a relaunch (reopen)
+// auto-disappears; to withdraw one you MESSAGE the session (mark-active clears it), and a relaunch (resume)
 // deliberately does NOT touch it. `merges` is METADATA (how many times merged), shown as a badge, not a state.
 //
 // Launch rules (CLAUDE.md / memory): private `tmux -L <label>` socket + `--dangerously-skip-permissions`.
@@ -114,7 +114,7 @@ export type Session = {
   id: string; node: string | null; branch: string | null; path: string
   label: string; headline: string   // the DERIVED display strings ([[session-label]]) — the only names surfaces read
   raw: { name: string | null; title: string | null }   // the bare parts, for explicit consumers only (rename prefill)
-  parent: string | null   // the SPAWNING session's id ([[session-nesting]]) — set once at creation when `spex new` ran inside another session, else null; the frontend folds a child under it at read time
+  parent: string | null   // the SPAWNING session's id ([[session-nesting]]) — set once at creation when `spex session new` ran inside another session, else null; the frontend folds a child under it at read time
   harness: string   // which harness (claude|codex) runs this session — carried so liveness/occupancy route through its adapter
   launcher: string | null   // the launcher profile this session launched under ([[launcher-select]]); null only for old records predating launchers
   lifecycle: Lifecycle; proposal: Proposal | null; merges: number; status: DisplayStatus; liveness: Liveness; note: string | null
@@ -394,7 +394,7 @@ async function paneTitles(): Promise<Map<string, string>> {
 
 // @@@ sessionSignature - a CHEAP fingerprint of the two live board signals the session-store fs-watch can't
 // see, because they are tmux-derived, not file writes: LIVENESS (which sessions exist — a crash/offline) and
-// ACTIVITY (each pane's self-summary title). Two tmux calls, NO git and NO store walk, so [[board-stream]] can
+// ACTIVITY (each pane's self-summary title). Two tmux calls, NO git and NO store walk, so [[graph-stream]] can
 // poll this to push a `board-changed` the instant a worker dies or updates its headline, instead of the
 // dashboard waiting for its slow cold-path fallback. Sorted so it only moves on a real change.
 export async function sessionSignature(): Promise<string> {
@@ -487,7 +487,7 @@ export function liveness(rec: SessRec, snap: LiveSnap): Liveness {
 // show through: awaiting → its proposal label; parked/error/asking/queued → themselves; active/idle → their
 // liveness (offline/starting/unknown), else the active-only idle/working inference (the mark-active hook flips
 // idle → active on the next real work, self-correcting). The orthogonal liveness field is what the UI keys
-// terminal-mount and the relaunch panel on; this label is for badges and `spex ls`.
+// terminal-mount and the relaunch panel on; this label is for badges and `spex session ls`.
 function reconcile(rec: SessRec, snap: LiveSnap): DisplayStatus {
   if (rec.status === 'awaiting') return PROPOSAL_STATUS[rec.proposal || 'nothing']
   if (rec.status !== 'active' && rec.status !== 'idle') return rec.status  // parked | error | asking | queued (no tmux yet)
@@ -498,7 +498,7 @@ function reconcile(rec: SessRec, snap: LiveSnap): DisplayStatus {
 
 // resolve a session id to its record + worktree. Now a DIRECT store read (the record carries worktree_path),
 // not a scan of every worktree reading its `.session` — O(1) and exact. null when the id has no governed-or-not
-// record. Shape kept ({path, branch, rec}) so the many callers (rename/propose/reopen/merge/close/…) are unchanged.
+// record. Shape kept ({path, branch, rec}) so the many callers (rename/propose/resume/merge/close/…) are unchanged.
 async function findWorktree(id: string): Promise<{ path: string; branch: string | null; rec: SessRec } | null> {
   const rec = readRecord(id)
   if (!rec) return null
@@ -581,7 +581,7 @@ export async function listSessions(): Promise<Session[]> {
   const liveIds = new Set(ids)
   for (const k of [...lastKnownSession.keys()]) if (!liveIds.has(k)) lastKnownSession.delete(k)
   // @@@ creation order - order by birth (oldest first): each session keeps its slot for life and a new one
-  // simply appends — a stable spatial map across every surface (dashboard window, session tabs, `spex ls`).
+  // simply appends — a stable spatial map across every surface (dashboard window, session tabs, `spex session ls`).
   // `created` is the record's stored createdAt (set once at launch). A manual drag ([[session-reorder]])
   // overrides one row's slot via a pseudo-time `sortKey`, so sort by `sortKey ?? created`; id breaks ties so
   // same-instant births (or sort-keys) stay deterministic.
@@ -597,18 +597,18 @@ function guardSession(id: string, primary: () => Session | null, degraded: () =>
 }
 
 // @@@ session graph = LIVE monitors, not a stored relationship. An edge A→B means "agent A is RIGHT NOW
-// running `spex watch B` (the Monitor tool) over B" — derived from live watch registrations, never a
-// persisted subscription. When a `spex watch` process starts it registers here and heartbeats; the edge
+// running `spex session watch B` (the Monitor tool) over B" — derived from live watch registrations, never a
+// persisted subscription. When a `spex session watch` process starts it registers here and heartbeats; the edge
 // exists ONLY while that watch runs (deregistered on exit, dropped on a missed heartbeat). Single owner:
-// this in-memory map in the SERVER process — the watch process (a separate `spex watch`) talks to it over
-// HTTP (POST /api/sessions/graph/watch + …/unwatch). No datastore, no file: a backend restart starts
+// this in-memory map in the SERVER process — the watch process (a separate `spex session watch`) talks to it over
+// HTTP (POST /api/sessions/edges/watch + …/unwatch). No datastore, no file: a backend restart starts
 // empty and live watches re-register on their next heartbeat. Kept isolated from the board assembler.
 // an edge is either a LIVE monitor arrow (A→B = A watches B, directed) or a recorded comms link (A↔B =
 // they have exchanged `count` direct messages, undirected). The dashboard renders the two kinds apart.
 export type Edge = { from: string; to: string; kind: 'monitor' | 'comms'; count?: number }
 
 // @@@ comms log - direct agent talk ([[comms-edge]]), recorded per-worktree. `spex session send` goes
-// THROUGH the backend (sendKeys); on a delivered message that carries a sender, the backend appends one
+// THROUGH the backend (sendText); on a delivered message that carries a sender, the backend appends one
 // {peer, ts} line to the RECIPIENT's comms log — each message counted exactly once, on the side the backend
 // already resolved. Persisted (survives a backend restart, unlike the in-memory monitor registrations) and
 // untracked, in the session's GLOBAL store dir (`comms.ndjson`, keyed by session_id) — it dies with the
@@ -631,7 +631,7 @@ function readComms(id: string): string[] {
       .map((l) => { try { return String(JSON.parse(l).peer || '') } catch { return '' } }).filter(Boolean)
   } catch { return [] }
 }
-// keyed by an opaque per-watch token (one per `spex watch` process), so a single agent may run several
+// keyed by an opaque per-watch token (one per `spex session watch` process), so a single agent may run several
 // monitors without them clobbering each other. `selectors` is what the watch targets (resolved LIVE at
 // read time, not frozen here); empty / @all = a GLOBAL watcher. `expires` is the heartbeat backstop.
 type WatchReg = { watcher: string; selectors: string[]; expires: number }
@@ -644,7 +644,7 @@ export function registerWatch(token: string, watcher: string, selectors: string[
   watches.set(token, { watcher, selectors: selectors.filter(Boolean), expires: Date.now() + Math.max(1000, ttlMs) })
   return true
 }
-// deregister a watch (its `spex watch` exited); false if the token wasn't registered.
+// deregister a watch (its `spex session watch` exited); false if the token wasn't registered.
 export function deregisterWatch(token: string): boolean { return watches.delete(token) }
 // the still-live registrations, pruning any whose heartbeat lapsed — the backstop for a watch that died
 // without a clean unwatch (SIGKILL, a dropped connection, a backend that was down at exit time).
@@ -765,13 +765,13 @@ let apiBaseMemo: Promise<ApiBaseInfo> | null = null
 export const apiBaseInfo = (): Promise<ApiBaseInfo> => (apiBaseMemo ??= resolveApiBase())
 export const apiBase = async (): Promise<string> => (await apiBaseInfo()).url
 
-// @@@ watch registration (CLIENT side) - a `spex watch` process is separate from the server, so it
+// @@@ watch registration (CLIENT side) - a `spex session watch` process is separate from the server, so it
 // REPORTS itself to the backend's registration store over HTTP: register+heartbeat while it runs,
 // deregister on exit (see cli.ts `watch`). All best-effort — if the backend is down the watch still
 // streams its events; the graph edge just won't appear until a heartbeat lands. Never throws.
 // the agent's OWN session id from the HARNESS env var — the public name used across cli.ts/sessions.ts.
 // Single adapter-routed impl lives in layout.ts (`envSessionId`, iterating each adapter's sessionEnvVar);
-// re-exported here so callers keep one name. Used by `spex watch` + the agent-typed `spex session …`
+// re-exported here so callers keep one name. Used by `spex session watch` + the agent-typed `spex session …`
 // declarations; the hooks instead pass `--session <id>` from the payload, so they never depend on this.
 export const ownSessionId = envSessionId
 
@@ -798,8 +798,8 @@ async function postJSON(path: string, body: unknown): Promise<void> {
   } catch { /* best-effort: backend may be down; the next heartbeat / TTL reconciles */ }
 }
 export const reportWatch = (token: string, watcher: string, selectors: string[], ttlMs: number): Promise<void> =>
-  postJSON('/api/sessions/graph/watch', { token, watcher, selectors, ttlMs })
-export const reportUnwatch = (token: string): Promise<void> => postJSON('/api/sessions/graph/unwatch', { token })
+  postJSON('/api/sessions/edges/watch', { token, watcher, selectors, ttlMs })
+export const reportUnwatch = (token: string): Promise<void> => postJSON('/api/sessions/edges/unwatch', { token })
 
 // @@@ isBackendDown - a `client.ts` BackendError surfacing in the watch poll loop (whose session
 // `source` is the HTTP backend client). Matched by NAME, not `instanceof`, so sessions.ts never imports
@@ -810,7 +810,7 @@ export const isBackendDown = (e: unknown): boolean => e instanceof Error && e.na
 // @@@ isBackendUnreachable - the TRANSIENT subset of isBackendDown: the fetch itself failed (nothing
 // listening — ECONNREFUSED / "fetch failed"), which client.ts throws as a BackendError with NO HTTP
 // `status`. An HTTP BackendError (the backend answered non-2xx) DOES carry a status and is a real error, not
-// a momentary blip. The distinction matters to `spex wait`: a supervisor's backgrounded wait must survive
+// a momentary blip. The distinction matters to `spex session wait`: a supervisor's backgrounded wait must survive
 // the ~1s window where the supervisor reboots its hot-reloaded child behind the stable port, retrying until
 // the backend answers again or the deadline hits — never dying on the in-flight fetch that a sibling merge's
 // restart happens to interrupt. Read via a structural cast (no client.ts import — that would be a cycle).
@@ -1003,7 +1003,7 @@ export function superviseQueue(intervalMs = 3000): void {
 // the backend it answers acts on ITS OWN mainRoot, so a stale inherited SPEXCODE_API_URL (pointing at
 // another repo's backend) silently lands the write in the WRONG repo. Read/control-READS deliberately
 // point anywhere (viewer-points-anywhere, see remote-client); every MUTATING verb (new/merge/send/close/
-// rename/rawkey/reopen/exit) is bound to the caller's project. So before writing, compare the caller's
+// rename/input/resume/stop) is bound to the caller's project. So before writing, compare the caller's
 // repo root to the backend's served root and FAIL LOUD on a provable, same-host mismatch — never a silent
 // misroute. An explicit `--api`/`--port` flag SKIPS the guard: the flag is the one provably-deliberate
 // cross-project signal (that's the whole flag-beats-env thesis). The guard fires only on a positive
@@ -1032,19 +1032,19 @@ export async function assertProjectMatch(verb: string): Promise<void> {
   }
 }
 
-// @@@ createSession (dispatch via backend) - `spex new` / `spex session new` must launch the worker in the
+// @@@ createSession (dispatch via backend) - `spex session new` must launch the worker in the
 // BACKEND's process, not the caller's, because the backend is the single owner of the concurrency cap and the
-// launch QUEUE (drainQueue). An in-process launch by an agent that runs `spex new` (e.g. a supervisor) would
+// launch QUEUE (drainQueue). An in-process launch by an agent that runs `spex session new` (e.g. a supervisor) would
 // bypass that queue and the maxActive gate. (The launch COMMAND is not a process-env concern anymore — it
 // comes from the session's pinned launcher, resolved from project config [[launcher-select]], identical in
 // either process.) So the CLI POSTs to the running backend whenever one answers. Only when NO backend is
 // reachable do we fall back to launching in this process (with a stderr warning) — the backend's own POST
 // handler calls newSession directly, so it never re-enters this path.
 export async function createSession(node: string | null, prompt: string, launcher?: string): Promise<Session> {
-  await assertProjectMatch('spex new')
+  await assertProjectMatch('spex session new')
   // @@@ parent = the CALLER's own session ([[session-nesting]]). Resolve it HERE, in the caller's process,
   // via the SAME ownSessionId env read [[agent-reply-channel]] uses for its sender hint — NOT inside the
-  // backend, whose process env carries no acting session id. An agent that runs `spex new` stamps its own id;
+  // backend, whose process env carries no acting session id. An agent that runs `spex session new` stamps its own id;
   // a human in a plain shell has none → null → the new session is top-level (no phantom nesting).
   const parent = ownSessionId()
   let res: Response
@@ -1168,7 +1168,7 @@ export function bootstrapMaterialize(rec: SessRec, doMaterialize: (proj: string)
 // genuinely dead/unrecoverable agent never goes online, so after the timeout we return and the caller's own
 // deliver() fails loud exactly as before — this only closes the startup race, it adds no fallback.
 const SOCKET_READY_TIMEOUT_MS = 30000   // spans launchScript's bounded fast-fail relaunch window, so
-                                        // waitForReady (slot-hold + reopen) waits through a daemon-race retry
+                                        // waitForReady (slot-hold + resume) waits through a daemon-race retry
                                         // instead of returning before a recovering socket
 const SOCKET_POLL_MS = 200
 async function waitForReady(id: string, harness: Harness, timeoutMs = SOCKET_READY_TIMEOUT_MS): Promise<boolean> {
@@ -1182,11 +1182,11 @@ async function waitForReady(id: string, harness: Harness, timeoutMs = SOCKET_REA
   }
 }
 
-// @@@ reopen - bring the agent back up and settle its RESTING lifecycle. THREE rules:
+// @@@ resumeSession - bring the agent back up and settle its RESTING lifecycle. THREE rules:
 //   • RESUME GUARD ([[state]]): a relaunch KILLS the running agent (`kill-session` + fresh window), so it is a
 //     data-loss operation the moment the agent is actually ALIVE — the incident's kill-shot was restore-on-alive
-//     (the board LIED offline, the human relaunched, live workers died mid-work). So reopen re-derives the
-//     agent's liveness FRESH and, when the caller is guarding (the human relaunch panel / `spex session reopen`,
+//     (the board LIED offline, the human relaunched, live workers died mid-work). So resume re-derives the
+//     agent's liveness FRESH and, when the caller is guarding (the human relaunch panel / `spex session resume`,
 //     `guard` default true), REFUSES LOUD rather than relaunch a live agent — you steer a live agent by
 //     MESSAGING it, not by restoring it. Death must be PROVEN: an `unknown` probe (tmux timed out under load —
 //     the exact condition that started the incident) also refuses, since a live worker can't be ruled out. A
@@ -1200,11 +1200,11 @@ async function waitForReady(id: string, harness: Harness, timeoutMs = SOCKET_REA
 //     immediately after (mergeSession's merge) addresses a LIVE agent, not a racing boot.
 //   • lifecycle: the SAME active-only guard markIdle uses — a resumed agent that was WORKING (`active`) is now
 //     just sitting at its prompt → `idle`; EVERY deliberate declaration survives untouched (`awaiting` + its
-//     proposal, `asking`, `parked`, `error`, `queued`). reopen does NOT touch the `proposal` — resuming a
+//     proposal, `asking`, `parked`, `error`, `queued`). resume does NOT touch the `proposal` — resuming a
 //     session that is proposing a merge must NOT silently withdraw it. Only applied when we actually relaunch;
 //     a refusal leaves the record wholly untouched.
 // Fail-loud is unchanged: if the agent never comes online, the later deliver() fails loud.
-export async function reopen(id: string, opts: { force?: boolean; guard?: boolean } = {}): Promise<{ ok: boolean; error?: string; refused?: boolean }> {
+export async function resumeSession(id: string, opts: { force?: boolean; guard?: boolean } = {}): Promise<{ ok: boolean; error?: string; refused?: boolean }> {
   const { force = false, guard = true } = opts
   const wt = await findWorktree(id)
   if (!wt) return { ok: false, error: `no such session ${id}` }
@@ -1312,7 +1312,7 @@ function porcelainPath(line: string): string {
 // whether uncommitted non-runtime work remains, the merge/lint gates, and the agent's standing proposal.
 // ahead/dirty/diff/conflicts are computed against the SESSION's worktree (per id); lint reflects the CLI
 // package's OWN location (where this runs) — the spec-cli that's actually live. There is deliberately NO
-// build/typecheck/test gate: whether a change is SOUND is proven by the node's yatsu (measured through the
+// build/typecheck/test gate: whether a change is SOUND is proven by the node's eval scenarios (measured through the
 // real product), not by a language-specific automated checker — so the gates stay language-agnostic (git +
 // the spec↔code graph, which every governed project has, TS or Python or otherwise). null when no session
 // has that id.
@@ -1332,7 +1332,7 @@ export type ReviewPayload = {
 
 // @@@ lintGate - the spec↔code graph lint is a LOCATION gate: a function of the backend checkout's tree ALONE
 // (its .spec graph + governed files), not of which session is reviewed, and it costs a few seconds. Re-running
-// it on every reviewPayload — i.e. on every [[review-proof]] Proof-tab open, and once per session — is
+// it on every reviewPayload — i.e. on every [[session-eval]] Proof-tab open, and once per session — is
 // wasteful, so memoize it on a whole-repo fingerprint: `rev-parse HEAD` + `status --porcelain` + the mtimes of
 // the changed paths (covers committed state, the dirty SET, and dirty-file CONTENT). An identical fingerprint
 // reuses the last (in-flight) result — a re-open or a second session's proof is instant — while any commit or
@@ -1415,10 +1415,10 @@ function mergePrompt(mainPath: string, branch: string, reason: string): string {
 
 // @@@ mergeSession - the cockpit's ACT verb, the sequel to review — but a DISPATCH, not a server script: the
 // SESSION'S OWN agent lands the merge, never the server (it carries no `git merge` logic and never touches
-// main's tree). It reopens the session (clears the proposal, `--resume`s via reopen if tmux died —
+// main's tree). It resumes the session (clears the proposal, `--resume`s via resumeSession if tmux died —
 // which waits for the rendezvous socket, closing the just-relaunched-no-socket race) and dispatches mergePrompt
-// — that delivered prompt flips the lifecycle to active regardless of reopen's resting state
-// through sendKeys. The reason = the node branch's latest commit subject minus a leading `spec: ` (visible from
+// — that delivered prompt flips the lifecycle to active regardless of resume's resting state
+// through sendText. The reason = the node branch's latest commit subject minus a leading `spec: ` (visible from
 // the main checkout, no worktree path needed). Async + fail-loud: returns {dispatched:true} once the prompt is
 // CONFIRMED accepted, else {dispatched:false, reason} (the loud DispatchResult error). The server no longer
 // re-checks gates, runs git, bumps `merges`, or closes the session — review shows the gates; the agent verifies.
@@ -1428,16 +1428,16 @@ export async function mergeSession(id: string): Promise<{ dispatched: boolean; r
   const branch = wt.branch, main = mainRoot()
   // ensure-live, NOT the guarded human relaunch: an already-online agent is reused (the merge prompt just needs
   // a live socket), and only a confirmed-offline one is relaunched — so merge never refuses on a live agent.
-  const re = await reopen(id, { guard: false })
-  if (!re.ok) return { dispatched: false, reason: re.error || 'could not reopen session' }
+  const re = await resumeSession(id, { guard: false })
+  if (!re.ok) return { dispatched: false, reason: re.error || 'could not resume session' }
   const subject = (await gitA(['-C', main, 'log', '-1', '--format=%s', branch])).trim()
   const reason = subject.replace(/^spec:\s+/, '') || branch
-  const r = await sendKeys(id, mergePrompt(main, branch, reason))
+  const r = await sendText(id, mergePrompt(main, branch, reason))
   if (!r.ok) return { dispatched: false, reason: r.error }
   return { dispatched: true }
 }
 
-// @@@ stopAgentProcess - the shared teardown both exit and close begin with, so there is ONE kill path, not
+// @@@ stopAgentProcess - the shared teardown both stop and close begin with, so there is ONE kill path, not
 // two: kill the agent's tmux client, drop its boot-window stamp (else a just-launched id lingers in the grace
 // window reading `starting` instead of `offline`), and sweep its rendezvous socket. The socket lives in the OS
 // tmpdir (NOT the worktree), so worktree removal alone would leave it behind — closing many sessions over time
@@ -1449,22 +1449,22 @@ async function stopAgentProcess(id: string): Promise<void> {
   try { rmSync(rvSock(id), { force: true }) } catch { /* best-effort sweep; tmpdir socket, claude/OS may already be gone */ }
 }
 
-// @@@ exitSession - the SOFT stop (vs closeSession's removal): stops the agent process but LEAVES the durable
+// @@@ stopSession - the SOFT stop (vs closeSession's removal): stops the agent process but LEAVES the durable
 // worktree + branch + transcript intact. The session stays on the board, now reading `offline` (no tmux window)
-// whatever its lifecycle, so the relaunch panel offers to --resume the SAME conversation (see reopen). This is
+// whatever its lifecycle, so the relaunch panel offers to --resume the SAME conversation (see resumeSession). This is
 // "step away, come back later"; closeSession is "discard this work". An offline session occupies no slot, so
 // the freed capacity drains a queued session next (drainQueue).
-export async function exitSession(id: string): Promise<boolean> {
+export async function stopSession(id: string): Promise<boolean> {
   const wt = await findWorktree(id)
   await stopAgentProcess(id)
-  void drainQueue()   // an exit frees a slot — start the next queued session if any
+  void drainQueue()   // a stop frees a slot — start the next queued session if any
   return !!wt
 }
 
-// @@@ closeSession - the REMOVAL (human-confirmed): exit's soft stop PLUS removing the worktree + branch AND
+// @@@ closeSession - the REMOVAL (human-confirmed): stop's soft kill PLUS removing the worktree + branch AND
 // the session's whole global-store record dir — the work is gone, not just stopped. Same stop primitive as
-// exitSession (no duplicate kill path), then the git worktree/branch teardown that exit deliberately skips,
-// then the store sweep (exit KEEPS the record so the session stays on the board offline; close discards it).
+// stopSession (no duplicate kill path), then the git worktree/branch teardown that stop deliberately skips,
+// then the store sweep (stop KEEPS the record so the session stays on the board offline; close discards it).
 // The tree's materialize slot ([[runtime]] trees/<enc>) retires with the worktree — its key needs the live tree,
 // so it is resolved BEFORE the removal; both sweeps are best-effort (residue is swept at uninstall anyway).
 export async function closeSession(id: string): Promise<boolean> {
@@ -1483,7 +1483,7 @@ export async function closeSession(id: string): Promise<boolean> {
 }
 
 // @@@ captureSessionResult - the session's live pane as a one-shot snapshot (output), the server side of
-// `GET /api/sessions/:id/capture` that `spex capture` (a backend client) reads. A monitoring read MUST
+// `GET /api/sessions/:id/capture` that `spex session show --capture` (a backend client) reads. A monitoring read MUST
 // distinguish "I failed to read" from "the pane is genuinely empty" — the old captureSession collapsed
 // unknown-id, offline, and capture-error all to `''`, indistinguishable from an empty pane (a blank screen
 // that exits 0 is worse than useless to a manager). So the result is DISCRIMINATED: an empty pane is a
@@ -1507,8 +1507,8 @@ export async function captureSessionResult(id: string): Promise<CaptureResult> {
 // transition — review / done / close-pending (agent proposals), offline (process died), error — and the
 // removal. Per Monitor's "silence is not success" rule a vanished session pings too. Net feed:
 // launched → [actionable transitions] → closed. Each line names the suggested next action(s). Drop into Monitor:
-//   Monitor({ command: 'spex watch', persistent: true, description: 'spex session state changes' })
-// @@@ presentation + selection - shared by `spex ls` (pretty), `spex watch` (events) and the API.
+//   Monitor({ command: 'spex session watch', persistent: true, description: 'session state changes' })
+// @@@ presentation + selection - shared by `spex session ls` (pretty), `spex session watch` (events) and the API.
 export const STATUS_GLYPH: Record<DisplayStatus, string> = {
   working: '\u25cf', idle: '\u25cb', offline: '\u23fb', starting: '\u25d4', review: '\u25c6', done: '\u2713',
   'close-pending': '\u2715', parked: '\u29d6', error: '\u2717', asking: '\u2370', queued: '\u25cc', unknown: '\u2047',
@@ -1543,7 +1543,7 @@ export function selectSessions(all: Session[], selectors: string[], statuses?: s
 }
 
 // @@@ resolveSession - resolve ONE selector to ONE session against a board: the single-target counterpart of
-// selectSessions, for the control verbs (review/send/merge/close/reopen/capture/prompt). The backend matches
+// selectSessions, for the control verbs (review/send/merge/close/resume/show). The backend matches
 // ids EXACTLY, so a verb resolves the selector here first and then calls with the FULL id — a node/branch/
 // prefix selector drives a verb just as it filters `ls`. The result is DISCRIMINATED so a caller can fail
 // precisely: an exact full-id hit wins outright (never reported ambiguous just for prefixing a longer id);
@@ -1600,7 +1600,7 @@ export const NOTE_BOARD_LIMIT = 50
 const SHORT: Partial<Record<DisplayStatus, string>> = { 'close-pending': 'close' }
 
 // @@@ statusLegend - one-line glyph\u2192meaning key, BUILT from STATUS_GLYPH so it can never drift from
-// the glyphs the table actually prints. Shown under `spex ls` so the symbols are self-explanatory.
+// the glyphs the table actually prints. Shown under `spex session ls` so the symbols are self-explanatory.
 export function statusLegend(color = true): string {
   const c = (code: string, t: string) => (color ? `\x1b[${code}m${t}\x1b[0m` : t)
   const parts = (Object.keys(STATUS_GLYPH) as DisplayStatus[]).map(
@@ -1633,10 +1633,10 @@ const NEXT: Record<string, string> = {
   review: 'merge | close',
   done: 'merge | close',
   'close-pending': 'close',
-  offline: 'reopen (relaunch & resume)',
-  error: 'reopen (relaunch & retry) | capture | close',
-  asking: 'send "<msg>" | capture',
-  idle: 'send "<msg>" | capture',
+  offline: 'resume (relaunch the same conversation)',
+  error: 'resume (relaunch & retry) | show --capture | close',
+  asking: 'send "<msg>" | show --capture',
+  idle: 'send "<msg>" | show --capture',
   queued: 'waiting for a free slot — starts automatically | close',
 }
 export function sessionEvent(s: Session): string {
@@ -1646,18 +1646,18 @@ export function sessionEvent(s: Session): string {
 }
 // @@@ launchEvent - a session's FIRST sighting. A launch goes straight to 'working' (not actionable), so
 // without this the watch feed would be blind to new sessions starting. Emitted ONCE per id, regardless of
-// status, so `spex watch` is a complete lifecycle feed: launched → [actionable transitions] → closed.
+// status, so `spex session watch` is a complete lifecycle feed: launched → [actionable transitions] → closed.
 export function launchEvent(s: Session): string {
   const note = s.note ? ` — note: ${s.note}` : ''
   const asked = s.promptPreview ? ` · asked: ${s.promptPreview}` : ''
   return `[spex] launched · ${sessionLabel(s)} — act: capture | send "<msg>"${note}${asked}  [id ${s.id}]`
 }
 // @@@ source - the session board the poll reads. The CLI passes the BACKEND CLIENT (client.ts
-// clientListSessions), so `spex watch` streams whatever backend SPEXCODE_API_URL points at — including a
+// clientListSessions), so `spex session watch` streams whatever backend SPEXCODE_API_URL points at — including a
 // REMOTE machine's. It is REQUIRED (no local default): a forgotten source must be a compile error, never a
 // silent in-process read of the wrong (local) board — the exact false-green the 2-machine test guards.
 export type WatchOpts = { source: () => Promise<Session[]>; selectors?: string[]; statuses?: string[]; includeIdle?: boolean; intervalMs?: number; as?: string; until?: { timeoutMs: number } }
-// @@@ watch outcome - only the BOUNDED `until` mode resolves (that mode is what `spex wait` runs on); a
+// @@@ watch outcome - only the BOUNDED `until` mode resolves (that mode is what `spex session wait` runs on); a
 // plain watch (no `until`) streams forever and never resolves. The bound is what makes `wait` a one-shot
 // "block for a worker, then exit" that is GUARANTEED to return. The deadline is checked EVERY poll, before
 // EVERY sleep (and even when a poll throws), so a target stuck in ANY non-actionable state
@@ -1704,7 +1704,7 @@ export async function watchSessions(emit: (line: string) => void, opts: WatchOpt
         prev.delete(id)
         emit(`${tag}[spex] closed \u00b7 removed  [id ${id}]`)
       }
-      // BOUNDED mode (`until`, what `spex wait` runs): return the moment a watched target is actionable; an empty selected set
+      // BOUNDED mode (`until`, what `spex session wait` runs): return the moment a watched target is actionable; an empty selected set
       // means the target is gone (absent from the board), which it can never come back from. Both sit inside
       // the try, after the emit pass, so the caller still saw every transition before we hand control back.
       if (until) {
@@ -1720,7 +1720,7 @@ export async function watchSessions(emit: (line: string) => void, opts: WatchOpt
       //  • UNREACHABLE (no status — ECONNREFUSED / fetch failed) — nothing is listening, e.g. the supervisor
       //    is rebooting its hot-reloaded child behind the stable port on a sibling merge. This is TRANSIENT:
       //    record it, warn ONCE, and keep polling — the deadline (below) is the only hard wall, so a
-      //    backgrounded `spex wait` survives the ~1s restart instead of dying on the interrupted fetch.
+      //    backgrounded `spex session wait` survives the ~1s restart instead of dying on the interrupted fetch.
       if (until && isBackendDown(e) && !isBackendUnreachable(e)) return { backendDown: (e as Error).message, kind: 'http' }
       if (isBackendDown(e)) {
         downMsg = (e as Error).message
@@ -1728,7 +1728,7 @@ export async function watchSessions(emit: (line: string) => void, opts: WatchOpt
       }
     }
     // the HARD wall — checked every iteration, in EVERY state, even after a thrown poll, BEFORE the sleep: this
-    // guarantees `spex wait` can never hang on a worker stuck outside WATCH_ACTIONABLE — nor spin forever on a
+    // guarantees `spex session wait` can never hang on a worker stuck outside WATCH_ACTIONABLE — nor spin forever on a
     // backend that never comes back. Hitting the deadline while still unreachable reports THAT (`backendDown`),
     // not a false "no actionable status" timeout, so the manager sees the honest cause.
     if (until && Date.now() >= deadline) return downMsg ? { backendDown: downMsg, kind: 'unreachable' } : { timedOut: true }
@@ -1736,14 +1736,14 @@ export async function watchSessions(emit: (line: string) => void, opts: WatchOpt
   }
 }
 
-// @@@ sendKeys - PROMPT control for a session, delivered through the session's HARNESS ADAPTER
+// @@@ sendText - PROMPT control for a session, delivered through the session's HARNESS ADAPTER
 // ([[harness-adapter]]) — claude the rendezvous control socket (optimistic-after-liveness: the reply line flushes
 // to a live socket), codex app-server JSON-RPC into the visible TUI's thread. Either way there is NO silent
 // fallback: a prompt that can't be delivered — no socket / dead agent (claude), no app-server/thread (codex) — FAILS LOUD, returning
 // ok:false with a reason that propagates to the caller (API non-2xx, `spex session send`, the merge dispatch),
 // instead of reporting a false success. The harness is resolved from the record; an unknown id fails before any
 // harness transport is addressed. (The separate RAW nav-key channel keeps its own `tmux send-keys` path — see rawKey.)
-export async function sendKeys(id: string, text: string, from?: string): Promise<DispatchResult> {
+export async function sendText(id: string, text: string, from?: string): Promise<DispatchResult> {
   if (!text) return { ok: false, error: 'empty prompt — nothing to dispatch' }
   const rec = readRecord(id)
   if (!rec) return { ok: false, error: `no session record for ${id} — prompt NOT delivered` }

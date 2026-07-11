@@ -5,7 +5,7 @@
 # command's own output — a git-native nudge that costs no harness block-cap and reaches a self-launched agent
 # too. GUARDED to the `merge node/<id>:` commit, so an ordinary `git pull`/unrelated merge never nags.
 #
-# The nudge TEXT and the on/off toggle both live in the CLI (`spex issues nudge <node>` prints nothing when
+# The nudge TEXT and the on/off toggle both live in the CLI (`spex internal nudge <node>` prints nothing when
 # the feature is OFF in spexcode.json), so this hook is a THIN resolver + caller: resolve `spex` the same
 # three ways the pre-commit hook does, pass the merged node, echo whatever it prints. No CLI resolvable → no
 # nudge (safe degradation, same as the lint shim's advisory mode).
@@ -29,5 +29,5 @@ case "$subj" in
   *) exit 0 ;;
 esac
 node=$(printf '%s' "$subj" | sed -n 's#^merge \(node/[^:]*\):.*#\1#p')
-spex_run issues nudge "$node"
+spex_run internal nudge "$node"
 exit 0

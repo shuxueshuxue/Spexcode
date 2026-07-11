@@ -23,7 +23,7 @@ change this?"*
 
 **Diagnose** (read-only — no edits, no commits). For each target report two layers:
 
-- **Deterministic (git + `spex lint`):** *Lint* — errors/warnings naming this node (integrity, living, coverage, drift);
+- **Deterministic (git + `spex spec lint`):** *Lint* — errors/warnings naming this node (integrity, living, coverage, drift);
   *Drift* — whether its governed `code:` files moved ahead of its latest version, by how much; *Link-gap* — does `code:`
   name every implementing file? an unlinked file is invisible to lint and drift, so the spec silently stops governing it.
 - **Quality grade (judge the body, not the code):** score 1–5 — *declarative*, *refactor-resistant*, *edges*,
@@ -36,4 +36,4 @@ change this?"*
 requirement; rephrase, don't delete meaning), **raise don't hollow out** (keep every testable specific; cut only the
 how — too-thin is as broken as a mechanics dump), **cut redundancy** (say each thing once), **stay a living document**
 (rewrite in place, never a `## vN` history — git carries versions). Commit per node (`spec: <id> — tidy to contract
-altitude`) with a `Session:` trailer; run `spex lint` after each — it must stay at 0 errors.
+altitude`) with a `Session:` trailer; run `spex spec lint` after each — it must stay at 0 errors.

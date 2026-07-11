@@ -27,7 +27,7 @@ glance still answers "whose turn is it?" off the PARENT alone, never a muddled a
 `createSession` resolves its OWN session id through the same `ownSessionId` env read the [[comms-edge]]
 reply-hint uses (in the CLI's own process) and passes it as `parent` in the `POST /api/sessions` body;
 `newSession` writes it into the child's `session.json` ([[runtime]]) as a durable field, and it rides onto the
-public `Session` type and `/api/board`. A human running `spex new` from a plain shell has no session id →
+public `Session` type and `/api/graph`. A human running `spex new` from a plain shell has no session id →
 `parent` stays null, so no phantom nesting — the same no-sender rule [[agent-reply-channel]] already uses.
 
 **Nesting is DERIVED at read time, never a stored mutation on children.** Each session points only at its
@@ -64,4 +64,4 @@ supervises them (background `spex wait <child>`) and stays `parked` while they r
 it genuinely needs the human. Strengthened in the `supervisor` config plugin.
 
 Out of scope: any child mutation or stored tree (read-time only); the session graph's monitor/comms edges
-([[graph]], [[comms-edge]]) — nesting is a LIST fold, orthogonal to the live arrows.
+([[session-edges]], [[comms-edge]]) — nesting is a LIST fold, orthogonal to the live arrows.

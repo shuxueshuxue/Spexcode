@@ -31,7 +31,7 @@ are both covered with no hardcoded paths and a new harness is diagnosed for free
   a bare PATH; codex needs its `~/.codex` provider/auth. A missing one is the root cause behind a dozen
   confusing symptoms.
 - **contract** — the `surface:system` block is present in each harness's contract file (CLAUDE.md / AGENTS.md);
-  `spex doctor contract` prints that exact text for any agent.
+  `spex doctor --contract` prints that exact text for any agent.
 - **hooks** — the shim (→ `dispatch.sh`) is wired, the manifest exists in the global store
   ([[runtime-tier]]), and EVERY manifest handler script is readable in the worktree. That last check is the
   sharp one: a branch predating the hook consolidation has the shim but not the `.config/core/*` handlers,
@@ -39,13 +39,17 @@ are both covered with no hardcoded paths and a new harness is diagnosed for free
 - **trust** — codex's `trusted_hash` block is in `~/.codex/config.toml` (claude relies on folder-trust).
 - **git-hook floor** — pre-commit / prepare-commit-msg, enforcing for ANY agent regardless of harness.
 - **backend** — orchestration reachability; absent is NORMAL for a bring-your-own-agent.
+- **settings state** — doctor is also where a verb-less setting is READ: on an adopted repo the Repo
+  section reports the issues-workflow switch (`issues.enabled` — v0.3.0 removed the CLI toggle verbs, so
+  this report is the switch's one CLI surface) and flags a legacy `proposals.enabled` key in the trunk's
+  settings pair as no-longer-read, so an old file gets repaired instead of silently drifting.
 - **double-delivery** — did the contract land TWICE? The [[harness-select]] plugin-exclusivity invariant
   stops US emitting both a native and a plugin delivery, but cannot see a `spexcode` plugin bundle a user added
   out-of-band — so `doctor` catches THAT. By IDENTITY STAMP, never payload: a shim's `dispatch.sh` command line,
   a `plugin.json` `name:"spexcode"`, and our own materialized skill names. Per harness it counts three channels
   — `dispatch.sh` shims, same-named skills across the loose skillDir + plugin skills dirs, and total delivery
   sources (loose + each `spexcode` bundle under `<cfgdir>/plugins` + `~/<cfgdir>/plugins`, derived from the
-  adapter's shim path so a new harness scans for free); ANY channel >1 is a conflict. `spex doctor conflicts`
+  adapter's shim path so a new harness scans for free); ANY channel >1 is a conflict. `spex doctor --conflicts`
   runs JUST this check, exits non-zero on a live double-delivery, and prints the repair (remove one bundle, OR
   switch `harnesses` to a plugin target so materialize prunes the loose copy, OR uninstall the loose copy).
 

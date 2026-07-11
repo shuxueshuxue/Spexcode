@@ -6,7 +6,7 @@ nodes: needs-yatsu-eval
 created: 2026-07-04T03:21:08.397Z
 ---
 
-**What was compromised.** `needs-yatsu-eval` is `status: active` with real code (`spex forge eval-pending`), and its body describes the payoff loop in the **present tense**: it "surfaces `node → evaluation-pending`, the list `spex yatsu scan` folds in beside its own stale-reading findings." But that fold is **not wired**: grep of `spec-yatsu/src` finds zero references to eval-pending / needsYatsu / evaluation-pending. `spex yatsu scan` never calls it. The body itself then quietly defers the very thing it just asserted: *"Out of scope (later/sibling): wiring `spex yatsu scan` to actually call this (a [[spec-yatsu]] concern)."*
+**What was compromised.** `needs-yatsu-eval` is `status: active` with real code (`spex forge eval-pending`), and its body describes the payoff loop in the **present tense**: it "surfaces `node → evaluation-pending`, the list `spex yatsu scan` folds in beside its own stale-reading findings." But that fold is **not wired**: grep of `spec-yatsu/src` finds zero references to eval-pending / needsYatsu / evaluation-pending. `spex yatsu scan` never calls it. The body itself then quietly defers the very thing it just asserted: *"Out of scope (later/sibling): wiring `spex yatsu scan` to actually call this (a [[spec-eval]] concern)."*
 
 **Orphaned, not handed off.** The two nodes it defers to were checked: `yatsu-proactive` (`scan --changed`) and `yatsu-core` (the scan engine) — neither mentions folding in eval-pending. **No node currently owns the integration.** The signal ("this node owes a fresh eval") is produced by forge and reaches nothing.
 

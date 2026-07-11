@@ -55,4 +55,4 @@ freshness key
 `spexcode.json` + `spexcode.local.json`), so a selection edit alone moves the key, and the very next
 git-native anchor ([[commit-surgery]] — the commit/checkout/merge that carries the edit, or a manual
 `spex materialize`) re-materializes under the new set — a selection change SELF-HEALS through the product
-path, never via a harness event and never waiting for an unrelated `.config` edit.
+path, never via a harness event and never waiting for an unrelated `.plugins` edit.

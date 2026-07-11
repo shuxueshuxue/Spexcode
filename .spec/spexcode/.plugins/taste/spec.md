@@ -13,7 +13,7 @@ desc: SpexCode's engineering taste — load when making a design/architecture de
 SpexCode is **self-referential** — we build a spec-driven tool *with* the spec-driven tool, so the principles
 that guide its development must themselves live in the spec tree, not only in a chat that can be compacted away.
 These are the durable "tastes" (品味) the maintainer has stated while building it. Preserve the raw intent; let
-the campaign distill + refine, and let the rules that should govern every agent graduate into `.config`
+the campaign distill + refine, and let the rules that should govern every agent graduate into `.plugins`
 surface:system nodes (the way [[memory-hygiene]] / [[voice-before-ask]] already did).
 
 The principles, in the maintainer's own framing:
@@ -46,7 +46,7 @@ The principles, in the maintainer's own framing:
 10. **One frontend design language; unify the icons; NO emoji** (e.g. retire the attachment 📎).
 11. **Keep finding behavior-equivalent but simpler / more-unified approaches**, and sanity-check every change
     against these existing principles.
-12. **Self-reference**: sediment this guidance into the spec / `.config` / source so it is never lost.
+12. **Self-reference**: sediment this guidance into the spec / `.plugins` / source so it is never lost.
 13. **YATU** (You As The User): measure through the real product surface a user touches, not an internal helper.
 14. **Capabilities enter the ecosystem through the pillars we already stand on** (git / agent harness / test
     framework) — before adopting a new protocol or dependency, check whether an existing pillar already
@@ -59,6 +59,6 @@ The principles, in the maintainer's own framing:
 
 This node is the seed. The de-drift campaign distills these into a sharper checklist (the "20 tastes" + the
 issue-selection criteria), audits the tree against them, and graduates the agent-governing ones into
-`.config` surface:system so every launched agent inherits them. Until then, this node is the durable record —
+`.plugins` surface:system so every launched agent inherits them. Until then, this node is the durable record —
 read it when a design decision needs the project's own taste, and add to it (raw source first) when the
 maintainer states a new one.

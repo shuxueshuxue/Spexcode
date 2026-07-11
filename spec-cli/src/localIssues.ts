@@ -79,7 +79,7 @@ function requirePrimaryStore(action: string): void {
 }
 
 // the local issue store dir — a fixed path directly under the trunk's .spec (name-independent, unlike the
-// .config system which nests under the named root node), OR the disposable override. Every read and write goes here.
+// .plugins system which nests under the named root node), OR the disposable override. Every read and write goes here.
 const localStoreDir = (): string => overrideStoreDir() ?? join(mainCheckout(), LOCAL_STORE_REL)
 // the author's signature: the effective governed session id (envSessionId handles the claude/codex split).
 const currentSession = (): string => envSessionId() || 'unknown'

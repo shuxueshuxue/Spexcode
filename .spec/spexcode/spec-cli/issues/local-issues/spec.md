@@ -48,7 +48,7 @@ graph-exemptions to blind it again. Instead each thread is a **plain markdown fi
 `<root>/.spec/.issues/<id>.md`. Because that file is **not named `spec.md`**, the spec walk descends past
 it without making a node and `isSpecMd` ignores it: the local issue store is invisible to lint / drift / deriveStatus /
 overlay **structurally**, with no special-case exemption. It lives **inside `.spec`** (not a second
-top-level folder) so adopting SpexCode still adds one directory — matching how the reflexive `.config`
+top-level folder) so adopting SpexCode still adds one directory — matching how the reflexive `.plugins`
 system already nests there. (The dir was historically `.spec/.forum`; a pre-rename deployment self-migrates
 it to `.spec/.issues` on its first store touch after a toolchain update — the one-shot mechanism is
 [[issues-store-rename]].)

@@ -30,10 +30,10 @@ loads its CLAUDE.md + memory normally ([[sessions-core]] launch).
 artifacts each consumer reads cheaply. Its anchors are GIT-NATIVE only ([[commit-surgery]]): the explicit
 verbs (`spex init`, `spex materialize`), session-worktree creation, and the planted pre-commit /
 post-checkout / post-merge hooks — pre-commit's materialize is UNCONDITIONAL, so every materialize input
-(`.config` content, the persisted `spexcode.json`/`spexcode.local.json`, a contract file's trackedness, a
+(`.plugins` content, the persisted `spexcode.json`/`spexcode.local.json`, a contract file's trackedness, a
 toolchain update) is picked up no later than the next commit, and checkout/merge refresh what arrives from
 other branches. A harness event is never a trigger — the old dispatcher content-hash gate is retired, and
-`.config` edits are git-transactional (they take effect at the commit/checkout/merge that carries them,
+`.plugins` edits are git-transactional (they take effect at the commit/checkout/merge that carries them,
 like any other source). An environment with no planted hooks (CI, a cloud agent's fresh clone) runs
 `spex materialize` in its setup step. It materializes into the harness targets
 [[harness-select]] resolves from `spexcode.json` (default: every native harness), writing, idempotently and
@@ -41,7 +41,7 @@ scoped per project, for each SELECTED harness:
 
 - **the hook manifest** (persistent; the [[hook-dispatch]] dispatcher reads it) — in the materialized tree's
   own slot (`trees/<enc-worktree>/` under [[runtime]]'s `runtimeRoot`), NOT the worktree; per-tree because
-  the compile is a function of THAT tree's `.config` (one global slot let the last-materialized tree's hook set
+  the compile is a function of THAT tree's `.plugins` (one global slot let the last-materialized tree's hook set
   leak into every other tree's dispatch);
 - **the contract** — the tracked **docs guide** (`docs/AGENT_GUIDE.md` — the project's hand-written agent/
   contributor notes, the ONE piece of in-tree contract prose) FOLLOWED BY the `surface: system` bodies (in name

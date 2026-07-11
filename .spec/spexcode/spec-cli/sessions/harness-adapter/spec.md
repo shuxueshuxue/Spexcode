@@ -230,11 +230,11 @@ shell is `tool_name:"Bash"`** + `tool_input.command`. So `hp_code_path` accepts 
 detects a mutation by the `*** … File:` markers themselves (not by an `apply_patch` token), else takes the last
 path-like token (`sed -n 1p f.ts` → `f.ts`). A patch can bundle SEVERAL `*** … File:` markers (a multi-file
 edit), so `hp_code_path` emits ALL touched paths — one per line — and every consuming hook iterates them
-([[spec-first]] nudges if ANY is non-spec code; [[spec-of-file]] annotates EACH governed code file). The shared
+([[inject-spec-first]] nudges if ANY is non-spec code; [[inject-spec-of-file]] annotates EACH governed code file). The shared
 `hp_field` reads a top-level JSON string value as a real JSON string: the close quote is the first UNESCAPED `"`,
 so a `command` carrying a quoted literal (`sed -n "1,5p" f.ts`) is captured whole, not truncated at the inner
 quote. `hp_is_ask` maps Codex's `request_user_input` (and Claude's `AskUserQuestion`) onto the question capture.
-So [[spec-first]], [[spec-of-file]], and mark-active fire on Codex, not just Claude — the shared shim lives at
+So [[inject-spec-first]], [[inject-spec-of-file]], and mark-active fire on Codex, not just Claude — the shared shim lives at
 the main checkout, but its commands run `dispatch.sh` with the thread cwd as `proj`, so each worktree gates
 against its own tree even though one project-scoped server (and one shared shim) drives them all. The session-id +
 global-store resolution every handler repeated is folded into the same helper (`hp_session_id`, `hp_store_dir`).
@@ -277,8 +277,8 @@ The Codex impl of the adapter must encode these (measured against a real self-la
   f`); an **edit is a distinct tool `tool_name:"apply_patch"`** whose `tool_input.command` is the **bare patch
   envelope** — `*** Begin Patch` / `*** Update File: <path>` / … — carrying NO literal `apply_patch` token and
   NO `file_path`. So the adapter keys the mutation off the `*** … File:` markers (NOT an `apply_patch` token)
-  and accepts both `apply_patch` and `Bash` as code-touch tools; otherwise [[spec-of-file]] and an edit-first
-  [[spec-first]] are INERT on codex (the first cut had both bugs — proven live, then fixed). The store/dispatch
+  and accepts both `apply_patch` and `Bash` as code-touch tools; otherwise [[inject-spec-of-file]] and an edit-first
+  [[inject-spec-first]] are INERT on codex (the first cut had both bugs — proven live, then fixed). The store/dispatch
   layer itself is sound (mark-active flip, declare/commit gate, silent non-governed Stop all work once hooks
   fire) — but that was first "proven" on a STANDALONE `.codex` in the cwd, which the interactive/`exec` flow
   AUTO-TRUSTS, masking the dispatched-worker gap: a linked-worktree thread on the shared app-server needs the

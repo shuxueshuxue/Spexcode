@@ -27,7 +27,7 @@ node through the exported mint (`mintIds` in `specs.ts`): its leaf dir name, or 
 collides — the shortest parent-qualified suffix that disambiguates. That suffix joins its path segments
 with `_`, never `/`: like `/` the underscore never occurs inside a dir basename, so the join stays
 unambiguous, but unlike `/` it is a URL-unreserved, wikilink-, and DOM-safe char. So a disambiguated id
-like `.config_spec-scout` is still one token — the same shape a non-colliding id already wears. The mint
+like `.plugins_spec-scout` is still one token — the same shape a non-colliding id already wears. The mint
 also pins the id to NFC: an id may be any script (a CJK dir name is a legal node id), and macOS hands out
 NFD basenames, so without one canonical form a typed `[[中文节点]]` (NFC, what an IME emits) would fail the
 string-match against the very node it names.
@@ -50,7 +50,7 @@ Because the mint guarantees it, every RESOLVE site is uniform and needs no speci
   letter/number plus `-_.` — script-agnostic, so a CJK id mentions like an ASCII one).
 - **corpus / search / DOM keys** — the id is used verbatim as a plain string; a single token is safe.
 
-Before this, `reId` joined colliding suffixes with `/`, minting ids like `.config/spec-scout`. The tree
+Before this, `reId` joined colliding suffixes with `/`, minting ids like `.plugins/spec-scout`. The tree
 row rendered, but opening the node 404'd every `:id` fetch (the `/` split the route), so the graph
 could point at a node no detail view could load. Correcting the separator at the mint repairs every
 resolve site at once — the root, not the symptoms.

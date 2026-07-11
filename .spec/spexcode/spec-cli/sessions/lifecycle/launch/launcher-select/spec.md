@@ -40,7 +40,7 @@ the committed file — a launcher name is portable, its `cmd` is a machine fact.
 
 **Selection at create time.** `spex new "…" --launcher <name>` picks it on the CLI (threaded through
 `createSession`/`newSession` and the `POST /api/sessions` body); the dashboard New-Session form shows a
-launcher dropdown sourced from `GET /api/launchers`, with the selected launcher's harness shown only as a
+launcher dropdown sourced from `GET /api/settings`, with the selected launcher's harness shown only as a
 derived vendor glyph beside the select. That endpoint reports BOTH the `{ name, harness }` list AND the
 configured `default` name (`{ launchers, default }`). The dropdown's INITIAL selection is always a visible
 launcher choice: a still-valid remembered (per-browser) pick wins, else the configured `default`, else the

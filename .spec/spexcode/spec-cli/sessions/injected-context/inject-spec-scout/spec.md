@@ -1,17 +1,17 @@
 ---
-title: spec-scout
+title: inject-spec-scout
 status: active
 hue: 280
 desc: An on-demand spec-consult sub-agent (the spec analog of Explore) — ask it a behaviour/topic question and it surfaces the governing spec node(s), the user-story they encode, and the code to read, so reaching the spec is as cheap as grepping the code.
 code:
-  - .spec/spexcode/.config/spec-scout/spec.md
+  - .spec/spexcode/.plugins/spec-scout/spec.md
 ---
 
-# spec-scout
+# inject-spec-scout
 
 ## raw source
 
-The three existing injections ([[spec-pointer]], [[spec-first]], [[spec-of-file]]) are all **passive**: they
+The three existing injections ([[spec-pointer]], [[inject-spec-first]], [[inject-spec-of-file]]) are all **passive**: they
 point at a path, nudge once, or annotate an edit. Each assumes the agent already knows **which** node is its
 ground truth. For a *behaviour question* not bound to one node — "what happens on `/exit`?" — that assumption
 breaks: the agent doesn't know which spec is relevant, and there is **no spec search**, so it falls back to
@@ -52,10 +52,10 @@ shape: agents ALREADY hand-roll spec search (`grep .spec` + `spex board`), so no
   own `code:` files — taken straight from the frontmatter of the body it just read, never a separate index
   and never harvested without the prose that scopes them. Reading the whole body is the job, not a step to
   skip: specs run ~1/20th the size of the code they govern, so reading more of them is cheap. It surfaces
-  spec intent; it does not review code, nor replace [[spec-first]]'s grounding gate (the Stop gate stays the
+  spec intent; it does not review code, nor replace [[inject-spec-first]]'s grounding gate (the Stop gate stays the
   enforcer).
 
-Built as a `surface: agent` config node (the `.config` sibling: agent prompt + `desc:` trigger + read-only
+Built as a `surface: agent` config node (the `.plugins` sibling: agent prompt + `desc:` trigger + read-only
 `tools:`) that [[harness-delivery]]'s materialize writes into each harness's agent dir (Claude
 `.claude/agents/`; a harness lacking the primitive gets none — the [[harness-adapter]] `agentDir`, the
 `skillDir` analog) as a generated, gitignored artifact, not a committed file. **On-demand** (spawned when a

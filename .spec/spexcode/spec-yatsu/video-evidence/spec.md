@@ -28,7 +28,7 @@ keyboard timing) *records a `--video`* — a still of a moving thing proves the 
 state* (layout, an icon, copy, one frame) screenshots `--image`; *backend/CLI* files a `--result`
 transcript. The rule lives on three surfaces that must agree: `spex guide yatsu`'s MEASURING AND FILING
 section (the manual, with the full flag row — repeatable `--image`, `--result`, `--video [--timeline]`),
-`spex help yatsu`'s usage block (the map), and the `.config/core` system prompt's yatsu paragraph (the
+`spex help yatsu`'s usage block (the map), and the `.plugins/core` system prompt's yatsu paragraph (the
 always-on clue every dispatched or self-launched agent carries). Guide and help must show `--video` in
 the eval usage they print — a manual that only teaches `--image` is how the gap happened.
 

@@ -1,19 +1,19 @@
 ---
-title: spec-of-file
+title: inject-spec-of-file
 status: active
 hue: 280
 desc: A per-edit PostToolUse annotation that fires only when ACTIONABLE — the first edit of an over-owned (> maxOwners) or uncovered file flags it at the edit; a sanely-owned file is left silent.
 code:
-  - .spec/spexcode/.config/core/spec-of-file/spec-of-file.sh
+  - .spec/spexcode/.plugins/core/spec-of-file/spec-of-file.sh
 related:
-  - spec-cli/templates/spec/project/.config/core/spec-of-file/spec-of-file.sh
+  - spec-cli/templates/spec/project/.plugins/core/spec-of-file/spec-of-file.sh
 ---
 
-# spec-of-file
+# inject-spec-of-file
 
 ## raw source
 
-[[spec-first]] grounds a session once, at its first code access — but on a long session that single nudge
+[[inject-spec-first]] grounds a session once, at its first code access — but on a long session that single nudge
 scrolls away, and a file's actual owner is invisible at the moment you change it. Keep the contract in view
 *at the edit*: when a session edits a file, tell it which spec governs that file. The danger is noise — a
 per-write announcement over a 50-edit refactor is exactly the signal agents learn to tune out — so it must
@@ -21,7 +21,7 @@ fire **once per file, never per write**, and never block.
 
 ## expanded spec
 
-A PostToolUse hook (`spec-of-file.sh`), wired on PostToolUse via `settingsJson`. Like [[spec-first]], it is
+A PostToolUse hook (`spec-of-file.sh`), wired on PostToolUse via `settingsJson`. Like [[inject-spec-first]], it is
 NOT gated on `governed` — spec-awareness serves any agent. On the first `Edit` / `Write` / `NotebookEdit` of a
 given file it emits **non-blocking** `additionalContext` naming the file's governing spec; a ledger dedupes so
 each file is annotated **once per session**. That ledger is a sibling file in the session's GLOBAL store dir
@@ -44,13 +44,13 @@ speaks ONLY when there is something to act on, so the annotation stays rare inst
   module (or merge the nodes, or give it a single foundation owner + relate)." The [[governed-related]]
   guardrail, surfaced live the moment an over-owned file is touched.
 - **uncovered** (no owner) → give it a home before it drifts.
-- **sanely owned** (1..maxOwners) → **silent**. [[spec-first]] and the [[spec-pointer]] already grounded the
+- **sanely owned** (1..maxOwners) → **silent**. [[inject-spec-first]] and the [[spec-pointer]] already grounded the
   agent; re-announcing a known owner on every edit is exactly the noise this annotation must not become —
   the lesson that an earlier always-on version of this hook taught.
 
 Non-blocking and once-per-file by design: a pervasive signal earns its keep only by staying rare and
 precise, or it becomes the noise it was meant to cure. The enforcer is still the Stop gate; this annotates.
 
-This node owns both copies of the hook body: the dogfood `.config` source that governs SpexCode itself and
+This node owns both copies of the hook body: the dogfood `.plugins` source that governs SpexCode itself and
 the `spex init` template that fresh adopters receive. They must move together so the behavior a user installs
 matches the behavior SpexCode uses on itself.

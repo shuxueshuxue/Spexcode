@@ -117,18 +117,18 @@ export function faviconHref(icon) {
   return 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">${icon}</text></svg>`)
 }
 
-// the command presets (config nodes with `surface: command`) the backend serves at /api/config.
-export async function loadConfig() {
-  const res = await apiFetch('/api/config')
+// the command presets (plugin nodes with `surface: command`) the backend serves at /api/plugins.
+export async function loadPlugins() {
+  const res = await apiFetch('/api/plugins')
   return res.json()
 }
 
-// the named launcher profiles ([[launcher-select]]) the backend serves at /api/launchers:
-// `{ launchers: [{ name, harness }], default: '<name>' }` (never the host `cmd`) — `default` is the configured
-// `defaultLauncher` so the New-Session dropdown pre-selects the SAME launcher a bare `spex new` uses. Built-in
+// the resolved runtime settings the backend serves at /api/settings: `{ layout, launchers: [{ name, harness }],
+// default: '<name>' }` (never the host `cmd`) — `default` is the configured `defaultLauncher` so the New-Session
+// dropdown pre-selects the SAME launcher a bare `spex session new` uses ([[launcher-select]]). Built-in
 // `claude`/`codex` profiles keep the picker present even when the project defines no extra launchers.
-export async function loadLaunchers() {
-  const res = await apiFetch('/api/launchers')
+export async function loadSettings() {
+  const res = await apiFetch('/api/settings')
   return res.json()
 }
 

@@ -114,7 +114,7 @@ hp_store_dir() {
 
 # the TOOLCHAIN's own version fingerprint — the toolchain side of the content key. The materialized artifacts
 # are a function of (config content, toolchain), so a TOOLCHAIN update must move the key too, or an updated
-# deploy never self-heals its stale contract/shims/manifest until someone happens to edit .config (the field
+# deploy never self-heals its stale contract/shims/manifest until someone happens to edit .plugins (the field
 # lesson: a toolchain update does NOT self-heal). A source checkout answers with the git TREE hash of the
 # package dir (moves exactly when the toolchain's content moves, not on every repo commit); an npm install
 # (no .git) answers with the package.json hash (npm bumps the version). env-stripped git — a git hook's
@@ -127,7 +127,7 @@ hp_toolchain_version() {
 }
 
 # the deterministic content fingerprint of EVERYTHING the materialize is a function of: the EDITABLE config
-# roots (.config + config md/sh), the PERSISTED POLICY files (the MAIN checkout's spexcode.json +
+# roots (.plugins + plugin-system md/sh), the PERSISTED POLICY files (the MAIN checkout's spexcode.json +
 # spexcode.local.json — the `harnesses` set materialize reads via readConfig(mainCheckout)), and the
 # toolchain version above. Since the dispatch-gate retired ([[commit-surgery]] — materialize anchors on
 # git-native events only), this is a FRESHNESS STAMP materialize records after each pass, a diagnostic
@@ -138,7 +138,7 @@ hp_config_hash() {
   gcd=$(env -u GIT_DIR -u GIT_INDEX_FILE git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) \
     || gcd=$(realpath "$(env -u GIT_DIR -u GIT_INDEX_FILE git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null)
   { hp_toolchain_version
-    find .spec/*/.config .spec/*/config \( -name '*.md' -o -name '*.sh' \) -type f -print0 2>/dev/null \
+    find .spec/*/.plugins .spec/*/plugin-system \( -name '*.md' -o -name '*.sh' \) -type f -print0 2>/dev/null \
       | sort -z | xargs -0 cat 2>/dev/null
     [ -n "$gcd" ] && cat "$(dirname "$gcd")/spexcode.json" "$(dirname "$gcd")/spexcode.local.json" 2>/dev/null
   } | sha256sum | cut -d' ' -f1

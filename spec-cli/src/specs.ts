@@ -97,7 +97,7 @@ function walk(dir: string, parent: string | null, acc: Raw[]) {
 // single token — never a '/'-joined path, which would break every `:id` route and fetch that treats an id
 // as one path segment. So the disambiguation separator is '_': like '/' it never occurs inside a dir
 // basename (so the join stays unambiguous), but unlike '/' it is a URL/wikilink/DOM-safe unreserved char,
-// so a collision-qualified id (e.g. `.config_spec-scout`) stays a single token everywhere it is resolved.
+// so a collision-qualified id (e.g. `.plugins_spec-scout`) stays a single token everywhere it is resolved.
 // Exported as the ONE mint every id producer shares: spec-yatsu mints its node ids through this same
 // function over this same universe (every spec node), so a colliding leaf carries one canonical id
 // system-wide instead of a second, diverging bare-leaf scheme.
@@ -292,7 +292,7 @@ export async function specDiffAt(id: string, hash: string) {
   return latestDiff(node.relPath, hash)
 }
 
-// config presets - REFLEXIVE, SKILL-SHAPED preset nodes whose folder IS a skill bundle: `spec.md`'s
+// plugin presets - REFLEXIVE, SKILL-SHAPED preset nodes whose folder IS a skill bundle: `spec.md`'s
 // body is the agent prompt/contract (with a {{targets}} placeholder the launcher fills with the
 // @-referenced nodes), and the SAME folder may co-locate auxiliary files — scripts, assets — that the
 // preset ships for the agent to run deterministically. So each preset reports its folder `dir`
@@ -302,19 +302,19 @@ export async function specDiffAt(id: string, hash: string) {
 // harness lifecycle events the node binds, its deterministic intra-event order, and whether it intends to
 // block (honored only on block-capable events). See loadHookConfig + the hook compiler/dispatcher.
 export type ConfigPreset = { name: string; title: string; desc: string; kind: string; dir: string; files: string[]; body: string; events: string[]; order: number; block: boolean; tools: string[] }
-// field-driven surface - a config plugin is a FLAT direct child of a config root (`<root>/<name>/spec.md`)
+// field-driven surface - a plugin is a FLAT direct child of a plugin root (`<root>/<name>/spec.md`)
 // that carries a `surface: system|command|hook|skill|agent` frontmatter field naming where it plugs in. There are no
 // `command/`/`system/`/`hook/`/`skill/`/`agent/` bucket dirs (those were graph-invisible grouping dirs with no spec.md, so
 // the spec graph skipped them — path != graph); the surface is a FIELD on the node, so the plugin is a real
-// graph child of its root. BOTH config roots participate: `.config` (the instance — DIY dev-flow plugins) and
-// `config` (the project system spec). loadConfig gathers the `command` surface, loadSystemConfig the `system`
+// graph child of its root. BOTH plugin roots participate: `.plugins` (the instance — DIY dev-flow plugins) and
+// `plugin-system` (the project system spec). loadConfig gathers the `command` surface, loadSystemConfig the `system`
 // surface, loadHookConfig the `hook` surface, loadSkillConfig the `skill` surface, loadAgentConfig the `agent`
 // surface (sub-agent definitions); each scans the children under every root and filters by the field. The plugins also show on the board as ordinary spec nodes (via loadSpecs).
 // root node - the spec tree's single top-level node: the one directory directly under .spec/ that
 // holds a spec.md. The dogfood repo names it 'spexcode'; a repo scaffolded by `spex init` names it
 // 'project' (or whatever the adopter renames it to). Detected DYNAMICALLY so the config loaders resolve
 // the ACTUAL root's config dirs — never a hardcoded 'spexcode', which silently returned [] in an adopter
-// repo, so their .config/core contract never loaded and their launched agents got no system prompt.
+// repo, so their .plugins/core contract never loaded and their launched agents got no system prompt.
 // Returns null when .spec holds no such directory. (resolveLayout's `main` is a checkout PATH, not the
 // root node NAME, so it can't serve this — a tiny filesystem probe is the right seam.)
 function rootNode(): string | null {
@@ -325,10 +325,20 @@ function rootNode(): string | null {
   return null
 }
 // resolved at call time (not module-eval) so it tracks the live tree.
+// @@@ legacy-tree refusal - v0.3.0 renamed the plugin instance root `.config` → `.plugins`. A pre-0.3.0
+// tree would otherwise load an EMPTY plugin surface — no contract block, no hooks, no commands — and the
+// launched agents would silently run ungoverned. So refuse loudly: existence-only probe (never a dual
+// read of legacy content), pointing at the one-shot migrator. Delete this check in 0.4.0.
 function configRoots(): string[] {
   const root = rootNode()
   if (!root) return []
-  return ['.config', 'config'].map((r) => join(SPEC_DIR, root, r))
+  if (existsSync(join(SPEC_DIR, root, '.config')) && !existsSync(join(SPEC_DIR, root, '.plugins'))) {
+    throw new Error(
+      `.spec/${root}/.config exists but .spec/${root}/.plugins does not — this spec tree predates the v0.3.0 ` +
+      `plugin rename (.config → .plugins). Refusing to load an empty plugin surface (agents would launch ` +
+      `ungoverned). Run \`spex doctor --migrate\` to migrate the tree.`)
+  }
+  return ['.plugins', 'plugin-system'].map((r) => join(SPEC_DIR, root, r))
 }
 // co-located bundle files = everything under the node folder except its spec.md, repo-relative, recursive.
 function bundleFiles(dir: string): string[] {
@@ -343,9 +353,9 @@ function bundleFiles(dir: string): string[] {
   walk(dir)
   return out.sort()
 }
-// gather the preset nodes under a config root that declare `surface: <surface>`. The scan is RECURSIVE —
+// gather the preset nodes under a plugin root that declare `surface: <surface>`. The scan is RECURSIVE —
 // `surface` is a FIELD, not a path (the design's core tenet), so a plugin may live at ANY depth and a
-// grouping parent may itself be a plugin (e.g. `.config/core` is a `surface: system` contract whose CHILDREN
+// grouping parent may itself be a plugin (e.g. `.plugins/core` is a `surface: system` contract whose CHILDREN
 // are `surface: hook` nodes). The field filter keeps it safe: a node only gathers if it declares THIS
 // surface, so descending past a matched node never double-counts (children carry a different surface). For
 // `system`/`command` the result is identical to the old one-level scan on the current tree — every existing

@@ -18,7 +18,7 @@ accepts any of the three; none (or @all) means every session.`
 
 const ROUTING_NOTE = `Backend routing: every backend-touching verb accepts --api <url> (--port <n> = localhost sugar) to name
 its backend explicitly — the flag always wins. Bare, it resolves: worker env / the cwd project's live
-recorded backend / fallback / :8787 (spex guide config → BACKEND ROUTING).`
+recorded backend / fallback / :8787 (spex guide settings → BACKEND ROUTING).`
 
 const DOT_NOTE = `\`.\` as a node argument means the node THIS worktree works on (the session's bound node, else the
 node/<id> branch). Every read supports --json.`
@@ -46,9 +46,9 @@ derived status, title, and attention badges (drift:N · stale:N · issues:N · g
     line: 'init [dir]            adopt SpexCode on a repo: seed .spec + hooks + materialize  [--preset name]',
     body: `Usage: spex init [dir=cwd] [--preset default|careful]
 
-Scaffolds adoption in one shot: seeds a starter .spec tree (project root + .config plugins), plants
+Scaffolds adoption in one shot: seeds a starter .spec tree (project root + .plugins plugins), plants
 spexcode.json, installs the git hooks, and materializes the harness artifacts (contract block +
-shims). Additive — never overwrites your files. --preset picks the .config plugin tier (cumulative).
+shims). Additive — never overwrites your files. --preset picks the .plugins plugin tier (cumulative).
 Footprint is fixed: materialized artifacts are never tracked — hidden via the per-clone .git/info/exclude, with
 a tracked/mixed CLAUDE.md/AGENTS.md covered by the clean/smudge filter (see spex guide footprint).`,
     see: 'spex guide (the full setup workflow) · spex uninstall (the inverse) · spex spec lint (adoption TODO)',
@@ -57,7 +57,7 @@ a tracked/mixed CLAUDE.md/AGENTS.md covered by the clean/smudge filter (see spex
     line: 'materialize           re-materialize the harness artifacts (contract block · shims) for cwd’s project',
     body: `Usage: spex materialize
 
-Materializes the surface:system config nodes into the managed <!-- spexcode --> block of
+Materializes the surface:system plugin nodes into the managed <!-- spexcode --> block of
 CLAUDE.md/AGENTS.md plus the .claude/.codex shims, and prints the content hash. The materialize anchors on
 git-native events only (init · this verb · session-worktree creation · the pre-commit/post-checkout/
 post-merge hooks) — run it by hand after a toolchain update, or in the setup step of any clone that
@@ -81,7 +81,7 @@ repair, instead of you diffing materialized files by hand.`,
     body: `Usage: spex uninstall [dir=cwd] [--hooks]
 
 Removes every SpexCode-GENERATED artifact (harness shims · contract blocks · trust entries ·
-exclude/ignore blocks · global store · plugin bundle) and never your .spec/.config data or your own
+exclude/ignore blocks · global store · plugin bundle) and never your .spec/.plugins data or your own
 prose. Git hooks are preserved unless --hooks.`,
     see: 'spex init (re-adopt later — your .spec survives)',
   },
@@ -94,7 +94,7 @@ prose. Git hooks are preserved unless --hooks.`,
 \`serve\` (or \`serve api\`) runs the backend for the repo at cwd behind a zero-downtime supervisor
 (hot-reloads on source change; the public port never gaps). On a successful bind it RECORDS its
 endpoint in the per-project runtime tier — that's how a bare \`spex\` run from this project's tree
-finds this backend (spex guide config → BACKEND ROUTING). --public exposes it on a public IP behind
+finds this backend (spex guide settings → BACKEND ROUTING). --public exposes it on a public IP behind
 a password + self-signed TLS (own cert via --tls-cert/--tls-key; --http drops TLS).
 
 \`serve ui\` is a SEPARATE process: it serves the bundled dashboard on its own port and proxies /api +
@@ -265,7 +265,7 @@ path. Bytes go to stdout by default (pipe-friendly); -o writes a file.`,
     body: `Usage: spex guide            the human setup workflow (install once, adopt a repo, serve)
        spex guide spec       the spec.md file format + every lint rule
        spex guide yatsu      the scenario file format + how loss is measured and filed
-       spex guide config     every spexcode.json / spexcode.local.json field, and which file it belongs in
+       spex guide settings   every spexcode.json / spexcode.local.json field, and which file it belongs in
        spex guide footprint  the footprint model: never-tracked artifacts, exclude + content filter, anchors
 
 guide is the SKILL layer — workflows and formats. Command usage lives here in help
@@ -291,7 +291,7 @@ Machine plumbing — called by generated hooks and launch scripts, never typed b
   codex-turn   <sock> <threadId> <text…>  fire a follow-up turn on an owned thread (tests/scripts)
 
 If you reached for one of these by hand, the porcelain you want is probably elsewhere: the trunk
-name also lives at GET /api/layout; sessions are driven with spex session new / session send;
+name also lives at GET /api/settings (.layout); sessions are driven with spex session new / session send;
 your own state is declared with spex session done|park|ask.`,
     see: 'spex help (the porcelain map)',
   },
@@ -346,6 +346,6 @@ Conventions (stated once, hold everywhere)
   ${ROUTING_NOTE.split('\n').join('\n  ')}
   ${MENTION_NOTE.split('\n').join('\n  ')}
 
-Concepts & best practice live in the guide: spex guide (setup) · guide spec · guide yatsu · guide config.
+Concepts & best practice live in the guide: spex guide (setup) · guide spec · guide yatsu · guide settings.
 Machine plumbing (hook/launch-script callees) lives under \`spex internal\` — not part of your vocabulary.`
 }

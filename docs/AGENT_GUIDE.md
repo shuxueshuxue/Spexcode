@@ -35,7 +35,7 @@ Manager (the human reviewer, after reviewing the proposal):
 **Why you don't restate the ritual when dispatching.** A dispatched worker gets a **task-focused**
 launch prompt. The ritual still reaches the worker through product *mechanism*, not prose: the
 backend creates the `node/<id>` branch, the `prepare-commit-msg` hook stamps the `Session:` trailer,
-the commit-before-declare contract is the **`.config/core`** node — materialized (with this guide)
+the commit-before-declare contract is the **`.plugins/core`** node — materialized (with this guide)
 into the worktree's `CLAUDE.md`/`AGENTS.md` contract block that the harness **auto-discovers**, the
 SAME path for a dispatched and a self-launched agent, not a launch-time `--append-system-prompt`
 (there is no baked `CORE_CONTRACT` constant — the contract is *data*, a config node) — and the
@@ -103,15 +103,15 @@ each. There is no discovery phase.
   the nearest ancestor directory that also has a `spec.md`. The tree root is **`.spec/spexcode`**
   (the project). Its children are the package nodes — `spec-cli` (Hono backend + source-of-truth
   guards), `spec-dashboard` (UI), and `spec-forge` (a built, read-only forge **link tracer**) — plus
-  the **reflexive config system** (`.config` and `config`, next bullet). A node is a
+  the **reflexive plugin system** (`.plugins` and `plugin-system`, next bullet). A node is a
   *directory*, not a file — that's what lets it both nest (children = subdirs) and co-locate assets;
   the id lives in the dir name, so the file is always `spec.md` (never `<id>.md` — that would
   duplicate the id).
-- **The config system is reflexive** — SpexCode's own dev-flow behavior is itself spec nodes, managed
-  by the same dogfood ritual. Two roots sit under `spexcode`: **`.config`** holds the concrete
+- **The plugin system is reflexive** — SpexCode's own dev-flow behavior is itself spec nodes, managed
+  by the same dogfood ritual. Two roots sit under `spexcode`: **`.plugins`** holds the concrete
   *instance* plugins (`core` + `forge-link` + `memory-hygiene` + `voice-before-ask` are `surface:
-  system`; `extract` + `regroup` + `supervisor` + `tidy` are `surface: command`); **`config`** holds the *spec of
-  the config system* itself (`surface`). Each plugin is a **flat** child carrying a `surface`
+  system`; `extract` + `regroup` + `supervisor` + `tidy` are `surface: command`); **`plugin-system`** holds the *spec of
+  the plugin system* itself (`surface`). Each plugin is a **flat** child carrying a `surface`
   frontmatter **field** — `surface: system` materializes its body (in name order) into the
   `<!-- spexcode -->` managed block of the worktree's `CLAUDE.md`/`AGENTS.md`, where the harness
   **auto-discovers** it as always-on context (not a launch-time `--append-system-prompt`); `surface:
@@ -121,7 +121,7 @@ each. There is no discovery phase.
   surfaces; only built/active plugins gather (a `pending` plugin renders on the board but reaches no
   surface).
 - `spec.md` = frontmatter (`title`, `status` ∈ merged|active|pending, `session`, `hue`, `desc`,
-  optional `code:` list; config nodes also carry a `surface` field) + a markdown body.
+  optional `code:` list; plugin nodes also carry a `surface` field) + a markdown body.
 - **The body is a living current-state document, never a changelog.** It always describes the node's
   *present* intent; you rewrite it in place, you do not accrete `## vN` sections. (Markdown headings
   `## …` / `###` are fine for *structure* — what's banned is a heading whose text is a version, i.e.
@@ -156,7 +156,8 @@ together — that is a project choice, not a git requirement.
 - `spec-cli/` — Hono backend, run with `tsx` (**no build step**; `npx tsc --noEmit` to type-check).
   Reads `.spec` + git live. The dashboard's single source is **`GET /api/board`** (assembled
   tree + overlay + sessions); other surfaces include `GET /api/specs`, `GET /api/specs/:id/history`
-  (+ `/diff/:hash`), `GET /api/layout`, `GET /api/config` (the gathered config surfaces),
+  (+ `/diff/:hash`), `GET /api/settings` (the resolved layout + launcher profiles), `GET /api/plugins`
+  (the gathered command-surface plugins),
   `GET /api/slash-commands`, and the whole **`/api/sessions` state-machine** (list/create/review/
   merge/resume/capture/prompt/close + the **`:id/socket` terminal WebSocket** and `graph` edges).
   Loader: `src/specs.ts`; git access: `src/git.ts`; sessions/launch: `src/sessions.ts`;
@@ -222,10 +223,10 @@ together — that is a project choice, not a git requirement.
 - A spec node declares the files it owns via a `code:` list in its frontmatter — that edge is what
   `spex spec lint` and (later) the LLM judge anchor to.
 - To configure SpexCode's runtime settings (launchers, dashboard icon, lint budgets, layout), run
-  **`spex guide config`** — the authoritative manual for every `spexcode.json` / `spexcode.local.json`
+  **`spex guide settings`** — the authoritative manual for every `spexcode.json` / `spexcode.local.json`
   field and which of the two files it belongs in (committed & portable vs. gitignored & host-specific).
   Don't reverse-engineer the schema; mirror how `spex guide spec` / `spex guide yatsu` carry the authoring
-  formats. Then edit the JSON directly — there is no `spex config set`.
+  formats. Then edit the JSON directly — there is no imperative settings verb.
 - Toolchain: **npm, not pnpm**; Node is pinned via `.nvmrc` (22).
 
 ### Measuring a frontend node's yatsu — drive a real browser
@@ -244,7 +245,7 @@ box; where its binary and the driver package live is a machine fact kept in loca
 
 The backend launches every dispatched worker with the session's **launcher** — a named `{ harness, cmd }`
 profile from `sessions.launchers` in `spexcode.json` / `spexcode.local.json`, picked at create time
-(`--launcher <name>` / the dashboard dropdown, else `sessions.defaultLauncher`). `spex guide config`'s
+(`--launcher <name>` / the dashboard dropdown, else `sessions.defaultLauncher`). `spex guide settings`'s
 LAUNCHERS section is the authoritative manual. Config is read live at create time, so a JSON edit
 takes effect on the very next dispatch — **no backend restart needed**.
 
@@ -302,9 +303,9 @@ live):
    branches), drop a `spexcode.json` to point the tool at your structure instead of forking it.
 
 `spex init` does steps 1–4's scaffolding in one shot: it seeds a starter `.spec/` tree (a root `project`
-node + the default `.config` plugins), plants a starter `spexcode.json`, installs the hooks, and
+node + the default `.plugins` plugins), plants a starter `spexcode.json`, installs the hooks, and
 **materializes** the harness artifacts — the `<!-- spexcode -->` contract block in `CLAUDE.md`/`AGENTS.md`
-(this guide's prose FOLLOWED BY the `surface: system` config bodies, which the harness auto-discovers) and
+(this guide's prose FOLLOWED BY the `surface: system` plugin bodies, which the harness auto-discovers) and
 the `.claude`/`.codex` shims (the `settings.json` hooks). Those materialized artifacts are **generated and
 never tracked** (hidden via the per-clone `.git/info/exclude`) — regenerated per clone, kept fresh by the
 git-native anchors (an unconditional materialize in pre-commit, plus post-checkout/post-merge refreshes;
@@ -312,7 +313,7 @@ no harness event ever triggers a materialize) — so a
 fresh clone re-runs `spex init`/`spex materialize` rather than pulling them from git. This is the same
 materialize that makes a self-launched agent already know the whole dev flow; the settings an agent tunes after
 adoption (launchers, dashboard icon, lint budgets) all live in those two `spexcode.json` /
-`spexcode.local.json` files, documented in full by **`spex guide config`**.
+`spexcode.local.json` files, documented in full by **`spex guide settings`**.
 
 ## Naming
 

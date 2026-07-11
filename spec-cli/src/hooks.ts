@@ -1,7 +1,7 @@
 import { loadHookConfig } from './specs.js'
 
 // @@@ hook manifest - the harness-agnostic hook system has THREE parts: (1) the discovered handlers —
-// `surface: hook` nodes under .config/core/* (spec-governed content, each shipping one co-located .sh);
+// `surface: hook` nodes under .plugins/core/* (spec-governed content, each shipping one co-located .sh);
 // (2) this COMPILER, which flattens them into a flat per-session manifest; (3) a pure-shell dispatcher
 // (spec-cli/hooks/dispatch.sh) the committed .claude/.codex shim binds to every harness event. The compiler
 // is the ONLY step that parses spec frontmatter, so it runs ONCE at SessionStart and the hot-path dispatcher

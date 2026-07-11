@@ -27,7 +27,7 @@ The same scenario appearing in several recordings (retry, another worker) resolv
 
 ## the loop
 
-1. **Split** — `node .spec/<root>/.config/e2e-review/split-recordings.mjs <recordings-dir> <out-dir>`
+1. **Split** — `node .spec/<root>/.plugins/e2e-review/split-recordings.mjs <recordings-dir> <out-dir>`
    (`--ffmpeg <path>` if ffmpeg isn't on PATH). Each scenario becomes `<scenario>.mp4` (h264 faststart,
    browser-seekable) plus `<scenario>.timeline.json` in SpexCode's step-timeline format (`{v:1, events:
    [{tMs, step}]}`, clip-relative — validated LOUD at filing). No title cards, no burned-in captions:

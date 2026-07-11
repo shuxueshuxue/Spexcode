@@ -8,7 +8,7 @@ scenarios:
       claude, `codex` → codex) with a `defaultLauncher`. Load the dashboard, open the New-Session box, and
       read the DOM: assert a launcher `<select class="si-launcher-select">` is present, one `<option>` per
       available profile, and that the `.si-agent-picker` harness radiogroup is ABSENT. Cross-check the source
-      data at `GET /api/launchers`. Then, on a freshly-initialized project (whose seeded config carries only
+      data at `GET /api/settings`. Then, on a freshly-initialized project (whose seeded config carries only
       the default `claude` and `codex` launchers) with `sessions.defaultLauncher: "claude"`, confirm the same
       select renders exactly those two seeded options and the harness radios are still absent. Screenshot the New box.
     expected: >-
@@ -17,7 +17,7 @@ scenarios:
       sends (backend derives the harness from it). Fresh-init project (only the seeded `claude`/`codex`
       launchers) → the same dropdown is present with exactly those two options — ordinary config entries, NOT
       env-derived built-ins — and no plain harness radios render.
-      `GET /api/launchers` returns the same `{name, harness}` list the dropdown renders. A launcher subsumes
+      `GET /api/settings` returns the same `{name, harness}` launchers list the dropdown renders. A launcher subsumes
       the harness axis; picking one is the single choice the human makes.
     code: spec-dashboard/src/SessionInterface.jsx
     related: spec-cli/src/index.ts
@@ -30,13 +30,13 @@ scenarios:
       `sessions.launchers = { "aaa": …, "reclaude": … }` with `sessions.defaultLauncher: "reclaude"`. With
       localStorage CLEARED (no remembered `si.launcher`), load the dashboard, open the New-Session box, and
       read the dropdown's selected value: `document.querySelector('.si-launcher-select').value`. Cross-check
-      the source at `GET /api/launchers` — it must report `{ launchers:[…], default:"reclaude" }`. Then set
+      the source at `GET /api/settings` — it must report `{ launchers:[…], default:"reclaude" }`. Then set
       a remembered pick (`localStorage.setItem('si.launcher','aaa')`), reload, and confirm the still-valid
       remembered pick now wins over the default. Screenshot the composer in the fresh (defaulted) state.
     expected: >-
       On a fresh browser (no remembered pick) the dropdown pre-selects `reclaude` — the configured
       `defaultLauncher` — NOT `aaa` (the alphabetically-first), so the dashboard default AGREES with the CLI
-      default (`spex new` with no `--launcher` also uses `reclaude`). `GET /api/launchers` returns
+      default (`spex new` with no `--launcher` also uses `reclaude`). `GET /api/settings` returns
       `{ launchers, default }` with `default:"reclaude"`. When a still-valid launcher is remembered in
       localStorage that remembered pick wins instead; only when nothing is remembered (or the remembered one
       no longer exists) does the configured default drive the initial selection. When no valid configured

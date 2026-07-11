@@ -14,7 +14,7 @@ rewritten in place — never a `## vN` changelog; version history is git's job).
 "intent + implementation, in one commit."
 
 If you only ever touch code and never the spec it belongs to, you're working against the grain. Find
-the governing node first (`spex search <topic>`), read its body — that's the contract — then make the
+the governing node first (`spex spec search <topic>`), read its body — that's the contract — then make the
 code honor it, or edit the spec first if you're changing the intent.
 
 ## Set up a checkout
@@ -31,10 +31,10 @@ npm run hooks          # install the per-clone git hooks (main-guard + the sessi
 `npm run hooks` is **not optional and not one-time-global** — git never clones `.git/hooks/`, so every
 fresh clone (and every worktree) needs it. Re-run it whenever the hook source under
 `spec-cli/templates/hooks/` changes. The hook is advisory local feedback; the real gate is CI running
-`spex lint`.
+`spex spec lint`.
 
 The dev loop runs from source, with hot-reload (this is what separates a contributor from an installed
-user, who runs `spex serve` / `spex dashboard`):
+user, who runs `spex serve` / `spex serve ui`):
 
 ```sh
 npm run api            # backend on :8787, hot-reloads on spec-cli/src changes
@@ -44,14 +44,14 @@ npm run web            # the dashboard via Vite (HMR), proxying /api → :8787
 > Note: the live, multi-agent *session* features (dispatching workers, the board's live terminals) shell
 > out to a coding-agent harness — **Claude Code or Codex** — and **tmux**; see the prerequisites in
 > [`README.md`](../README.md). You
-> do **not** need either to work on the governance layer (`spex lint`, the spec tree, the dashboard, the
+> do **not** need either to work on the governance layer (`spex spec lint`, the spec tree, the dashboard, the
 > git-as-database reader). Most contributions never touch the session layer.
 
 ## The contribution ritual, for a human
 
 1. Branch `node/<id>` off `main` (`<id>` = a short kebab-case name for the change).
 2. Make the code change **and** add/update the `spec.md` that states its intent — in the same change.
-3. `spex lint` must be **0 errors** (warnings are guidance). Type-check with `npx tsc --noEmit` in
+3. `spex spec lint` must be **0 errors** (warnings are guidance). Type-check with `npx tsc --noEmit` in
    `spec-cli` if you touched the backend.
 4. Commit on the node branch: `spec: <id> — <reason>`.
 5. Open a PR from your `node/<id>` branch (or, inside the tool's own session flow,

@@ -2,7 +2,7 @@
 title: blob-get
 status: active
 hue: 140
-desc: "`spex blob get <hash> [-o <file>]` — blob put's symmetric read: hash in, bytes out; local cache first, backend endpoint on a miss, both gone → fail loud naming each path."
+desc: "`spex evidence get <hash> [-o <file>]` — blob put's symmetric read: hash in, bytes out; local cache first, backend endpoint on a miss, both gone → fail loud naming each path."
 code:
   - spec-yatsu/src/cli.ts
 related:
@@ -15,7 +15,7 @@ related:
 
 [[blob-put]] gave the CLI the write half of evidence transport — bytes in, hash out — but no read: a
 user holding a hash (from `yatsu show`, an issue thread's `--evidence`) could only guess at the cache's
-internal path or screen-scrape the dashboard. `spex blob get <hash> [-o <file>]` is the symmetric twin:
+internal path or screen-scrape the dashboard. `spex evidence get <hash> [-o <file>]` is the symmetric twin:
 hash in, bytes out.
 
 Two read paths, both pre-existing — the verb invents no third mechanism:

@@ -2,7 +2,7 @@
 title: forge-cli
 status: active
 hue: 280
-desc: Exposes spec-forge's reads on the real `spex` CLI — `spex forge links` (node → linked issues/PRs) and `spex forge eval-pending` (node → evaluation owed). Read-only; reading is live.
+desc: Exposes spec-forge's reads on the real `spex` CLI — `spex issue links` (node → linked issues/PRs) and `spex issue links --pending` (node → evaluation owed). Read-only; reading is live.
 code:
   - spec-forge/src/cli.ts
 related:
@@ -12,20 +12,21 @@ related:
 
 The capstone of [[spec-forge]]: it makes the tracer *usable*. Until now the [[port]] and [[links]] were
 exercised only by a standalone proof script; this exposes spec-forge's reads on the real product surface as
-`spex forge <sub>`, so a human or agent reaches the same resolution through the CLI they already use.
+`spex issue links`, so a human or agent reaches the same resolution through the CLI they already use — the
+forge is a value (`--store <host>`), never a command drawer ([[cli-surface]]).
 
 **Surface:**
 
-- `spex forge links [--host github] [--node <id>] [--json]` — read the host's open issues/PRs through the
+- `spex issue links [--store github] [--node <id>] [--json]` — read the host's open issues/PRs through the
   chosen driver, resolve them against the real node ids ([[links]]), and print `node → linked work`. A
   header line reports both the link counts and how many issues/PRs were scanned (so an empty result is
   legible: nothing linked vs nothing to scan). `--node` narrows to one node; `--json` emits the raw
   resolved structure.
-- `spex forge eval-pending [--host github] [--node <id>] [--json]` — the same read, resolved instead to the
+- `spex issue links --pending [--store github] [--node <id>] [--json]` — the same read, resolved instead to the
   open issues flagged `needs-yatsu-eval`, printed as `node → evaluation owed` with the same header and
   `--node`/`--json` flags so the two reports read alike. The flag-recognition and node-resolution semantics
   are [[needs-yatsu-eval]]'s; this is only its CLI exposure. `--json` emits the raw `NodeEvalPending[]` —
-  the shape `spex yatsu scan` consumes.
+  the shape `spex eval lint` consumes.
 
 Both verbs share one read — select the host's driver **through the `ForgeDriver` port** (a registry keyed by
 each driver's own `host`, never a hardcoded vendor branch — a second host is one registry entry), load the

@@ -7,7 +7,7 @@ desc: Reverse-engineer a faithful spec tree out of existing code — responsibil
 kind: mutating
 ---
 Reverse-engineer a spec tree for the target source area(s) below — code that has no specs yet. Aim for a
-tree where every governed file is claimed and `spex lint` is clean, with bodies at contract altitude and in
+tree where every governed file is claimed and `spex spec lint` is clean, with bodies at contract altitude and in
 the codebase's own primary language (a predominantly-Chinese repo → Chinese specs).
 
 {{targets}}
@@ -46,7 +46,7 @@ Then grow nodes under that spine:
 extract it: a **real user-path** scenario — a goal and the steps to reach it through the running app (never a
 bare render-check), covering a failure/empty/edge state — with a **description** of those steps and the
 **expected** zero-loss result. Frontend scenarios are measured by looking (YATU) — a screenshot filed with
-`spex yatsu eval <node> --image <png> --pass`. Backend nodes don't need one yet; run `spex yatsu scan` to
+`spex eval add <node> --image <png> --pass`. Backend nodes don't need one yet; run `spex eval lint` to
 list the frontend nodes still uncovered.
 
 **Extract incrementally — don't plan the whole tree before writing.** For a large area (hundreds of files),
@@ -57,4 +57,4 @@ one subtree uncommitted, so progress survives context limits.
 
 Confirm `spexcode.json`'s `governedRoots` points at the real source dirs first — lint reads silently empty
 otherwise. Commit one node per commit (`spec: <id> — extract from <area>`) with a `Session:` trailer, and
-run `spex lint` after each: it must reach 0 errors, 0 coverage warnings, 0 altitude warnings.
+run `spex spec lint` after each: it must reach 0 errors, 0 coverage warnings, 0 altitude warnings.

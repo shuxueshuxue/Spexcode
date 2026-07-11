@@ -1,4 +1,4 @@
-// throwaway benchmark harness for spec-search — drives the REAL `spex search --json` over the holdout
+// throwaway benchmark harness for spec-search — drives the REAL `spex spec search --json` over the holdout
 // cases and reports recall@1, recall@3, MRR. The cases live in the node's yatsu.md.
 //
 // Labels are node LEAF names, matched with the same de-collision rule the loader applies (specs.ts reId):
@@ -36,7 +36,7 @@ const matches = (id, label) => id === label || id.endsWith('_' + label)
 let r1 = 0, r3 = 0, mrr = 0
 const rows = []
 for (const [name, query, expect] of CASES) {
-  const out = execFileSync('node', [BIN, 'search', query, '--json', '--limit', '10'], { encoding: 'utf8' })
+  const out = execFileSync('node', [BIN, 'spec', 'search', query, '--json', '--limit', '10'], { encoding: 'utf8' })
   const results = JSON.parse(out)
   const ids = results.map((x) => x.id)
   const rank = ids.findIndex((id) => expect.some((label) => matches(id, label))) + 1   // 1-based; 0 = not found
@@ -55,9 +55,9 @@ for (const row of rows) {
 
 // CJK-positive: the corpus is mostly English but a few nodes carry Chinese prose — the root `spexcode`
 // node's body repeats 节点 throughout. A per-CJK-character tokenizer must let a Chinese content word reach
-// that node; `spex search "节点"` MUST return `spexcode` in results (the bug: the old tokenizer split on
+// that node; `spex spec search "节点"` MUST return `spexcode` in results (the bug: the old tokenizer split on
 // [^a-z0-9]+ and discarded all CJK, so every Chinese query dead-ended at zero results).
-const cjkPos = JSON.parse(execFileSync('node', [BIN, 'search', '节点', '--json', '--limit', '10'], { encoding: 'utf8' }))
+const cjkPos = JSON.parse(execFileSync('node', [BIN, 'spec', 'search', '节点', '--json', '--limit', '10'], { encoding: 'utf8' }))
 const cjkPosRank = cjkPos.map((x) => x.id).findIndex((id) => matches(id, 'spexcode')) + 1
 const cjkPosPass = cjkPosRank >= 1
 console.log(`${cjkPosPass ? `✓${cjkPosRank}` : '✗ '} cjk-positive          want=spexcode(节点)                rank=${cjkPosRank || '—'}  top3: ${cjkPos.slice(0, 3).map((x) => x.id).join(', ')}`)
@@ -66,14 +66,14 @@ console.log(`${cjkPosPass ? `✓${cjkPosRank}` : '✗ '} cjk-positive          w
 // nothing, and the zero-result message must still carry the corpus-is-English translate-and-retry fact
 // (fail-loud) plus the browse-all next step — CJK support does not suppress the honest zero-result route.
 // (No nearest titles: a CJK query has nothing to be lexically near.)
-const cjk = execFileSync('node', [BIN, 'search', '会话'], { encoding: 'utf8' })
-const cjkPass = cjk.includes('corpus is English') && cjk.includes('spex tree')
+const cjk = execFileSync('node', [BIN, 'spec', 'search', '会话'], { encoding: 'utf8' })
+const cjkPass = cjk.includes('corpus is English') && cjk.includes('spex graph')
 console.log(`${cjkPass ? '✓ ' : '✗ '} cjk-zero-result       want=corpus-is-English + spex-tree  ${cjkPass ? 'both present' : 'MISSING: ' + cjk.trim()}`)
 
 // zero-result typo routing: an English typo that matches nothing must surface the nearest node titles
 // (per-word edit distance) plus the browse-all next step, so a typo routes forward instead of dead-ending.
-const typo = execFileSync('node', [BIN, 'search', 'kyeboard'], { encoding: 'utf8' })
-const typoPass = typo.includes('nearest titles') && typo.includes('keyboard-nav') && typo.includes('spex tree')
+const typo = execFileSync('node', [BIN, 'spec', 'search', 'kyeboard'], { encoding: 'utf8' })
+const typoPass = typo.includes('nearest titles') && typo.includes('keyboard-nav') && typo.includes('spex graph')
 console.log(`${typoPass ? '✓ ' : '✗ '} typo-zero-result      want=nearest-titles(keyboard-nav) + spex-tree  ${typoPass ? 'both present' : 'MISSING: ' + typo.trim()}`)
 
 console.log('—'.repeat(72))

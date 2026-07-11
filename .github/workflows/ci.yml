@@ -14,7 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0            # spex lint reads git history (drift / the version timeline)
+          fetch-depth: 0            # spex spec lint reads git history (drift / the version timeline)
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc

@@ -9,7 +9,7 @@ kind: mutating
 Reverse-engineer a spec tree for the target source area(s) below — or **re-run to reconcile** an
 already-extracted area, the same pass that closes the gaps code growth opens (an unclaimed governed file, a
 frontend node missing its loss signal, a thin scenario). Extraction is not a one-shot. Aim for a tree where
-every governed file is claimed and `spex lint` is clean, bodies at contract altitude and in the codebase's
+every governed file is claimed and `spex spec lint` is clean, bodies at contract altitude and in the codebase's
 own primary language (a predominantly-Chinese repo → Chinese specs).
 
 {{targets}}
@@ -50,7 +50,7 @@ bare render-check), covering a failure/empty/edge state — with a **description
 **expected** zero-loss result, and **≥1 `tags`** classifying it (a surface like `frontend-e2e`/`backend-api`/
 `cli`, a device like `desktop`/`mobile`) drawn from the configured library (`lint.scenarioTags`); a tag
 outside the library fails `scan`, so use an existing one or extend the library. Frontend scenarios are measured by looking (YATU) — a screenshot filed with
-`spex yatsu eval <node> --image <png> --pass`. Backend nodes don't need one yet; run `spex yatsu scan` to
+`spex eval add <node> --image <png> --pass`. Backend nodes don't need one yet; run `spex eval lint` to
 list the frontend nodes still uncovered. On a **re-run** this is also where you sharpen — give an uncovered
 node its first scenario, tighten a thin one (a bare render-check, or a stale `expected`); `spex guide yatsu`
 has the schema.
@@ -62,5 +62,5 @@ subtree at a time (write the leaf, list its files, lint, COMMIT) before the next
 subtree uncommitted, so progress survives context limits.
 
 Confirm `spexcode.json`'s `governedRoots` points at the real source dirs first — lint reads silently empty
-otherwise. Commit one node per commit (`spec: <id> — extract from <area>`) and run `spex lint` after each:
+otherwise. Commit one node per commit (`spec: <id> — extract from <area>`) and run `spex spec lint` after each:
 0 errors, 0 coverage/altitude warnings.

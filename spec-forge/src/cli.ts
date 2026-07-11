@@ -14,10 +14,12 @@ const has = (args: string[], name: string) => args.includes(`--${name}`)
 async function readForge(
   args: string[],
 ): Promise<{ driver: ForgeDriver; nodeIds: string[]; issues: ForgeIssue[]; prs: ForgePR[] } | null> {
-  const host = flag(args, 'host') ?? resolveForgeHost()
+  // the forge is a VALUE, never a command ([[cli-surface]]): `--store <host>` names it, mirroring the
+  // store axis every other issue verb uses.
+  const host = flag(args, 'store') ?? resolveForgeHost()
   const driver = forgeDriverFor(host)
   if (!driver) {
-    console.error(`forge: unknown host '${host}' (known: ${FORGE_DRIVERS.map((d) => d.host).join(', ')})`)
+    console.error(`spex issue links: unknown --store '${host}' (known: ${FORGE_DRIVERS.map((d) => d.host).join(', ')})`)
     return null
   }
   const nodeIds = (await loadSpecs()).map((s) => s.id)
@@ -49,7 +51,7 @@ async function links(args: string[]): Promise<number> {
 
   const only = flag(args, 'node')
   if (only) {
-    if (!nodeIds.includes(only)) { console.error(`forge: no such node '${only}'`); return 1 }
+    if (!nodeIds.includes(only)) { console.error(`spex issue links: no such node '${only}'`); return 1 }
     resolved = resolved.filter((n) => n.node === only)
   }
 
@@ -81,7 +83,7 @@ async function evalPending(args: string[]): Promise<number> {
 
   const only = flag(args, 'node')
   if (only) {
-    if (!nodeIds.includes(only)) { console.error(`forge: no such node '${only}'`); return 1 }
+    if (!nodeIds.includes(only)) { console.error(`spex issue links: no such node '${only}'`); return 1 }
     resolved = resolved.filter((n) => n.node === only)
   }
 
@@ -95,10 +97,9 @@ async function evalPending(args: string[]): Promise<number> {
   return 0
 }
 
-export async function runForge(args: string[]): Promise<number> {
-  const sub = args[0]
-  if (sub === 'links') return links(args.slice(1))
-  if (sub === 'eval-pending') return evalPending(args.slice(1))
-  console.error('spex forge: links [--host github] [--node <id>] [--json] | eval-pending [--host github] [--node <id>] [--json]')
-  return 2
+// `spex issue links [--pending]` ([[cli-surface]]): the read-only forge→spec trace, folded into the issue
+// drawer (the forge drawer is dissolved — a forge is a value, `--store`). Bare = every linked node's open
+// issues/PRs; --pending narrows to the threads still awaiting an eval reading (the old eval-pending view).
+export async function runIssueLinks(args: string[]): Promise<number> {
+  return has(args, 'pending') ? evalPending(args) : links(args)
 }

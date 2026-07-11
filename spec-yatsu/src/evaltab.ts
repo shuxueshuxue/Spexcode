@@ -18,7 +18,7 @@ export type EvidenceView = { hash: string; kind: EvidenceKind; state: 'present' 
 // per-reading display attachment.
 export type RemarkView = {
   rid: string
-  ref: string             // `<thread-id>#<rid>` — the address `spex resolve`/`spex retract` take
+  ref: string             // `<thread-id>#<rid>` — the address `spex remark resolve`/`spex remark retract` take
   by: string
   at: string
   body: string
@@ -145,7 +145,7 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
   const ynode = (ctx?.ynodes ?? yatsuNodes(root)).find((n) => n.id === id)
   if (!ynode) return { node: id, hasYatsu: false, scenarios: [], readings: [], retractions: [], dangling: [] }
   // the governed `code:` files are the freshness CODE axis; read them from the canonical spec loader so a
-  // reparent/rename is seen the same way `spex lint` and `spex yatsu eval` see it (joined by directory).
+  // reparent/rename is seen the same way `spex spec lint` and `spex eval add` see it (joined by directory).
   const specs = ctx?.specs ?? await loadSpecs()
   const codeFiles = specs.find((s) => dirname(s.path) === relative(root, ynode.dir))?.code ?? []
   const idx = ctx?.idx ?? await driftIndex(root)

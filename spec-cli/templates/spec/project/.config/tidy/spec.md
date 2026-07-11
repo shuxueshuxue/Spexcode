@@ -22,4 +22,4 @@ For each target, in its own commit:
 - **Cut redundancy and narration** — say each thing once, at the altitude a maintainer needs.
 - **Stay a living document** — rewrite in place; never add `## vN` history (git carries versions).
 
-Commit per node (`spec: <id> — tidy to contract altitude`) with a `Session:` trailer. Run `spex lint` after each — it must stay at 0 errors.
+Commit per node (`spec: <id> — tidy to contract altitude`) with a `Session:` trailer. Run `spex spec lint` after each — it must stay at 0 errors.

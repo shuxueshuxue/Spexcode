@@ -1,7 +1,7 @@
 ---
 title: review-proof
 hue: 150
-desc: A session's fully-derived evaluation — the console's Eval tab (the shared eval components, session-scoped, tiered loading) and its CLI twin `spex eval <SEL>`, over the same worktree-rooted engine that renders the self-contained HTML as an EXPORT artifact (`--export`). No agent authoring.
+desc: A session's fully-derived evaluation — the console's Eval tab (the shared eval components, session-scoped, tiered loading) and its CLI twin `spex eval ls --session <SEL>`, over the same worktree-rooted engine that renders the self-contained HTML as an EXPORT artifact (`--export`). No agent authoring.
 code:
   - spec-yatsu/src/proof.ts
 related:
@@ -62,7 +62,7 @@ baseline** — other sessions' latest readings — under an explicit divider nam
 the list to the session's own alone. The rows are the DECLARED scenarios' current score, the same
 latest-per-scenario computation every eval face reads (each row carrying its ✓/✗, muted when stale) — a
 retired scenario's residual reading contributes no row. A gates strip (the same
-`reviewPayload` numbers `spex review` prints — lint memoized on the checkout fingerprint,
+`reviewPayload` numbers `spex session review` prints — lint memoized on the checkout fingerprint,
 [[manager-cockpit]]) sits above; there is NO build/typecheck/test gate, because soundness is proven by
 measuring the real product, not by a language-specific checker. When the session has no worktree/diff the
 tab shows a clean empty placeholder.
@@ -71,16 +71,15 @@ The **self-contained HTML** (`renderProofHtml`: evidence inlined as data-URIs, e
 diff + before/after drill-down) remains as the **export artifact** — CI attachments, sharing, a bare
 browser — behind the tab's `export ↗` link (labelled as the export it is, tooltip naming the self-contained
 HTML report), `GET /api/sessions/:id/proof` (`?format=json` = the model), and
-`spex eval <SEL> --export` (`--out`/`--open`, a backend client that works against a remote backend
+`spex eval ls --session <SEL> --export` (`--out`/`--open`, a backend client that works against a remote backend
 unchanged). Inlining everything is the right shape for a file that must stand alone, and the wrong shape
 for an interactive tab — that is the whole split.
 
-**The CLI mirrors the vocabulary, not just the artifact.** `spex eval <SEL>` is the Eval tab's CLI twin:
+**The CLI mirrors the vocabulary, not just the artifact.** `spex eval ls --session <SEL>` is the Eval tab's CLI twin:
 it reads the same lean `/evals` model and renders the same attention order as text — blind spots lead,
 the session's own readings ✦-marked, the inherited baseline under its named divider, an uncovered
 frontend node flagged — so a terminal-bound manager reads the measured loss without the dashboard.
 `proof` is no longer a user-facing word at all: the export rides the eval read as its `--export`
 flag (named for what the artifact IS — an export — not for the legacy noun), and the old
-`spex review proof` spelling survives only as a deprecated alias that runs and echoes
-the canonical form. The read/write split stays intact: `spex eval` READS a session's evaluation;
-filing a reading remains `spex yatsu eval`.
+`spex review proof` spelling is gone — a signpost names the canonical form and exits non-zero, never running ([[cli-surface]]). The read/write split stays intact: `spex eval ls --session` READS a session's evaluation;
+filing a reading remains `spex eval add`.

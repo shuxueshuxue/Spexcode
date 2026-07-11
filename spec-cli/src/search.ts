@@ -25,7 +25,7 @@ export function nearestTitles(query: string, n = 3): { id: string; title: string
     return dp[b.length]
   }
   const qws = words(query)
-  if (!qws.length) return []   // nothing to be "near" (e.g. a pure-CJK query) — the caller still points at spex tree
+  if (!qws.length) return []   // nothing to be "near" (e.g. a pure-CJK query) — the caller still points at spex graph
   return loadSpecsLite()
     .map((s) => {
       const tws = [...new Set(words(`${s.title} ${s.id}`))]

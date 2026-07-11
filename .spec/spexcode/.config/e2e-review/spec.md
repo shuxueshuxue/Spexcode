@@ -32,9 +32,9 @@ The same scenario appearing in several recordings (retry, another worker) resolv
    browser-seekable) plus `<scenario>.timeline.json` in SpexCode's step-timeline format (`{v:1, events:
    [{tMs, step}]}`, clip-relative — validated LOUD at filing). No title cards, no burned-in captions:
    the annotator renders scenario context live from the spec tree, so pixels stay evidence.
-2. **File** — map each clip to the spec node whose behavior it exercises (`spex search <topic>`; the
+2. **File** — map each clip to the spec node whose behavior it exercises (`spex spec search <topic>`; the
    node's `yatsu.md` names its scenarios) and file your verdict WITH the clip:
-   `spex yatsu eval <node> --scenario <s> --pass|--fail --video <clip>.mp4 --timeline <clip>.timeline.json`.
+   `spex eval add <node> --scenario <s> --pass|--fail --video <clip>.mp4 --timeline <clip>.timeline.json`.
 3. **Hand to the human** — the dashboard Evals page (`#/evals`), video-first: each clip plays in
    the annotator with its clickable step ruler; the human circles a region to file an issue on the
    responsible node (clip + timeline ride as typed evidence), disputes a verdict with their own manual

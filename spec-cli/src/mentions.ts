@@ -17,8 +17,8 @@ const uniq = (xs: string[]): string[] => [...new Set(xs)]
 
 // ── CLI sigil tolerance ───────────────────────────────────────────────────────────────────────────────
 // In FREE TEXT the sigils are required — they are what marks a reference apart from prose. In a CLI
-// ARGUMENT the whole token IS the reference, so the sigil is optional: `spex review @graph` ≡
-// `spex review graph`, `spex yatsu eval [[cli-surface]]` ≡ `spex yatsu eval cli-surface`. One shared strip,
+// ARGUMENT the whole token IS the reference, so the sigil is optional: `spex session review @graph` ≡
+// `spex session review graph`, `spex eval add [[cli-surface]]` ≡ `spex eval add cli-surface`. One shared strip,
 // applied by the session-selector matcher and every node-arg read site, so the habit a user learns in the
 // dashboard's input boxes works verbatim on the CLI — never a second grammar to learn.
 export function stripRefSigil(token: string): string {
@@ -78,8 +78,8 @@ export type DispatchOutcome = { token: string; result: 'sent' | 'spawned' | 'off
 function mentionPrompt(threadId: string, node: string | null, author: string, text: string): string {
   const re = node ? ` (re: ${node})` : ''
   return `You were @-mentioned in issue thread "${threadId}"${re} by ${author}:\n\n  ${text.trim()}\n\n` +
-    `Read the thread and act as the comment asks (often just a look): \`spex issues --all\` lists them; ` +
-    `reply with \`spex issues reply ${threadId} --body -\`.`
+    `Read the thread and act as the comment asks (often just a look): \`spex issue ls --all\` lists them; ` +
+    `reply with \`spex issue reply ${threadId} --body -\`.`
 }
 // A non-open thread is settled work: a fresh worker spawned onto it must not re-implement what already
 // landed, so the prompt leads with the status and a verify-on-main-first instruction.
@@ -92,7 +92,7 @@ export function newWorkerPrompt(threadId: string, node: string | null, author: s
     : ''
   return `Issue thread "${threadId}"${on} @-mentioned @new (by ${author}) for a fresh look:\n\n  ${text.trim()}\n\n` +
     settled +
-    `Read the thread (\`spex issues --all\`, find ${threadId}) and act on it${node ? `; the relevant node is ${node}` : ''}.`
+    `Read the thread (\`spex issue ls --all\`, find ${threadId}) and act on it${node ? `; the relevant node is ${node}` : ''}.`
 }
 
 // Parse a committed issue post's text for `@` actors and deliver to each. Best-effort and LOUD: the thread is
@@ -131,7 +131,7 @@ export async function dispatchMentions(
 // A committed reply is ALSO auto-delivered as a COURTESY — never an assignment — to a FALLBACK CHAIN of
 // candidates, in order, stopping at the FIRST one that can be reached: for a remark this is the reading's
 // filer session, then the node's governing session, then nobody (it still surfaces on the board via the
-// teeth). This is a NOTIFICATION chain only — it resolves NOTHING (resolve stays a deliberate `spex resolve`,
+// teeth). This is a NOTIFICATION chain only — it resolves NOTHING (resolve stays a deliberate `spex remark resolve`,
 // R3); it just reaches an agent who can act. It is the same delivery pipe as dispatchMentions (one
 // online-resolution + one sendKeys), with the same cuts that keep courtesy ≠ assignment: deliver ONLY to an
 // ONLINE session (an unreachable link is skipped for the next, NEVER spawns a worker, NEVER drains — only an
@@ -146,7 +146,7 @@ function originatorPrompt(threadId: string, node: string | null, replier: string
   const re = node ? ` (re: ${node})` : ''
   return `A new reply landed on a thread you originated — "${threadId}"${re}, from ${replier}:\n\n  ${text.trim()}\n\n` +
     `This is a courtesy heads-up (you started this thread), not an assignment. Look if it concerns you; ` +
-    `\`spex issues --all\` lists them, reply with \`spex issues reply ${threadId} --body -\`.`
+    `\`spex issue ls --all\` lists them, reply with \`spex issue reply ${threadId} --body -\`.`
 }
 
 // The pure fallback decision (testable without sessions.ts): walk the ordered chain (nulls/dupes/the-replier
@@ -177,7 +177,7 @@ export function pickLoopIn(
 
 // `chain` is the ordered fallback list. We deliver the courtesy to the first online link and STOP; an
 // offline/failed link falls through to the next. NOTIFICATION ONLY — this never touches a `resolved` bit
-// (resolve is a deliberate `spex resolve`), never spawns (only `@new` spawns).
+// (resolve is a deliberate `spex remark resolve`), never spawns (only `@new` spawns).
 export async function notifyOriginator(
   chain: (string | null)[],
   replier: string,

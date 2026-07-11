@@ -53,9 +53,11 @@ firecoder-scout.md
 # spexcode:start
 .claude/agents/spec-scout.md
 .claude/settings.json
+.claude/skills/distill/SKILL.md
 .claude/skills/e2e-review/SKILL.md
 .claude/skills/taste/SKILL.md
 .codex/hooks.json
+.codex/skills/distill/SKILL.md
 .codex/skills/e2e-review/SKILL.md
 .codex/skills/taste/SKILL.md
 .session

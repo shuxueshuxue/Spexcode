@@ -43,7 +43,10 @@ is honest for both without ref-scanning beyond the one HEAD walk. The fallback k
 promise too: its git lookups are memoized over immutable objects — a full sha names a fixed tree
 forever, so a (sha, path) resolution never invalidates — and a rebuild over a fully-orphaned corpus
 (an adopter history rewrite) pays in-memory lookups, scaling with distinct anchors, never with
-readings × rebuilds. Among *parallel* version commits
+readings × rebuilds. That promise binds every such memo's bound: sized above the largest adopter
+reading corpus — one entry per (reading, path) worst case — since a bound below the corpus's
+distinct keys turns the fixed-order rebuild into whole-memo eviction thrash, memoized in name but
+forking every pass. Among *parallel* version commits
 of one node (two branches each re-versioning it), the base stays the walk-newest row — an ambiguity
 only a merge resolves.
 

@@ -322,7 +322,7 @@ ${ROUTING_NOTE}`,
 Scaffolds adoption in one shot: seeds a starter .spec tree (project root + .config plugins), plants
 spexcode.json, installs the git hooks, and materializes the harness artifacts (contract block +
 shims). Additive — never overwrites your files. --preset picks the .config plugin tier (cumulative).
-Footprint needs no vote: materialized artifacts are never tracked — hidden via the per-clone .git/info/exclude, with
+Footprint is fixed: materialized artifacts are never tracked — hidden via the per-clone .git/info/exclude, with
 a tracked/mixed CLAUDE.md/AGENTS.md covered by the clean/smudge filter (see spex guide footprint).`,
     see: 'spex guide (the full setup workflow) · spex uninstall (the inverse) · spex lint (adoption TODO)',
   },

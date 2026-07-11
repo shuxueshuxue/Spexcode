@@ -1,6 +1,6 @@
 ---
 title: distill
-surface: skill
+surface: skill, command
 status: active
 hue: 210
 desc: Use when the human wants to inherit a past or dead session's knowledge and work — "distill session X / 继承那个 session 的经验 / 接手它的工作 / 把之前 session 的东西捞回来 / harvest, salvage a finished session". Given a session id, read its transcript from disk (NEVER resume or re-prompt it — its cache is cold and a re-prime is expensive), distill goal · decisions · traps · next steps into the current session, and if its worktree/branch never merged, carry the work over and retire the resources.

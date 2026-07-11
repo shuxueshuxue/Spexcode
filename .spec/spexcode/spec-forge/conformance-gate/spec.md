@@ -1,5 +1,5 @@
 ---
-title: CI-Gate-Spex-forge
+title: conformance-gate
 status: pending
 hue: 280
 desc: PENDING design — the INWARD half of the [[deliver-port]] framework: an external PR enters as a from-PR session and is delivered a VERDICT (Check + comment). The scoping parent; its children are the forge + verdict drivers. No code yet.
@@ -8,7 +8,7 @@ related:
   - spec-yatsu/src/proof.ts
   - spec-cli/src/sessions.ts
 ---
-# CI-Gate-Spex-forge
+# conformance-gate
 
 A **pending** design contract — the scope, not the implementation. It marries the two halves the tree
 already carries: [[ci-gate]] (the non-bypassable CI backstop running `spex lint` + `tsc`) and

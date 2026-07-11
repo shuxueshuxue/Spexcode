@@ -194,5 +194,5 @@ outside the tree, uncommittable (no .gitignore). A gone blob renders as `miss or
 backstop rejects a stray blob or a malformed yatsu.md. `spec-cli/src/cli.ts` carries only a thin
 `yatsu` route ([[forge-cli]] shape) — yatsu-core's sole stake in that shared hub.
 
-Out of scope (sibling nodes): the dashboard eval-tab read side and the forge `needs-yatsu-eval` half of
+Out of scope (sibling nodes): the dashboard eval-tab read side and the forge `needs-eval` half of
 scan. Computer-use and backend measurement are future measuring hands, not code paths here.

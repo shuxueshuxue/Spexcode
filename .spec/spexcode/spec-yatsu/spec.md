@@ -51,6 +51,6 @@ Only nodes that declare a scenario are in scope — a node with no surface to me
 
 ## What's next
 The **computer-use "stupid user"** is the agent's most thorough measuring hand — it just looks. **Backend
-yatsu** measures loss through real APIs ([[freshness]] reconcile waiting). Nothing in yatsu ever learns
+yatsu** measures loss through real APIs ([[forge-cache]] reconcile waiting). Nothing in yatsu ever learns
 *how* to test: the spec defines the loss, the agent measures it, the optimizer drives it down, yatsu
 keeps score.

@@ -139,7 +139,7 @@ remark fires.
 (a drag-**circle** on the paused frame, the composer's **⏱** stamp, the keyboard's **`a`**) are ONE act
 through one capture: grab the current frame to the blob store (the circle burns its rect in; ⏱/`a` take
 the clean frame) and anchor a remark carrying it — the `▶m:ss · step` line, the frame as a
-`![frame](/api/yatsu/blob/<hash>)` image link in the body, and — when the step's owning node differs — a
+`![frame](/api/evidence/<hash>)` image link in the body, and — when the step's owning node differs — a
 `[[node]]` routing line (circle/`a` prefill the composer; ⏱ stamps the head of the draft in place,
 keeping the prose, and a re-stamp at a new moment replaces the anchor line AND its riding frame together,
 so an anchor and its frame never disagree — only a frame sitting right under the anchor line is the

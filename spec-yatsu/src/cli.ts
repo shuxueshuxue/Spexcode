@@ -542,7 +542,7 @@ export async function runEval(args: string[]): Promise<number> {
 
 export { checkStaged }
 
-// `spex evidence put <file|->` / `spex evidence get <hash> [-o <file>]` ([[blob-put]], [[blob-get]]) — the bare
+// `spex evidence put <file|->` / `spex evidence get <hash> [-o <file>]` ([[evidence-put]], [[evidence-get]]) — the bare
 // evidence-transport pair: put stashes bytes in the shared content-addressed cache and prints the hash,
 // WITHOUT filing a reading (`eval add --video` couples the two); get is its symmetric read — hash in,
 // bytes out. putBlob is idempotent by content, so re-putting re-seeds a checkout whose cache lacks a blob
@@ -567,7 +567,7 @@ function blobPut(file: string): number {
 }
 
 // the read half: ① the local content-addressed cache (the evidence usually IS on this disk — no backend
-// needed), ② on a local miss the same GET /api/yatsu/blob/:hash the dashboard streams from (the blob may
+// needed), ② on a local miss the same GET /api/evidence/:hash the dashboard streams from (the blob may
 // have been pruned here, or put on another machine sharing the backend), ③ both missed → fail loud naming
 // both paths. No third read mechanism — this reuses readBlobByHash and the existing endpoint verbatim.
 async function blobGet(args: string[]): Promise<number> {
@@ -580,7 +580,7 @@ async function blobGet(args: string[]): Promise<number> {
   if (local.ok) return emitBlob(local.bytes, out)
   if (local.reason === 'invalid') { console.error(`spex evidence get: bad hash '${hash}' — a blob hash is 64 hex chars`); return 2 }
   const { apiBase } = await import('../../spec-cli/src/sessions.js')
-  const url = `${await apiBase()}/api/yatsu/blob/${hash}`
+  const url = `${await apiBase()}/api/evidence/${hash}`
   let backendMiss: string
   try {
     const r = await fetch(url)

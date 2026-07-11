@@ -1,13 +1,13 @@
 import type { ForgeIssue, ForgePR } from './port.js'
 import { resolveLinks, type LinkedIssue } from './links.js'
 
-export const NEEDS_YATSU_EVAL = 'needs-yatsu-eval'
+export const NEEDS_EVAL = 'needs-eval'
 
-// a bare-marker body line: the name alone, case-insensitive, any indent, optional trailing colon — content after it (`needs-yatsu-eval: foo`) is NOT a match
-const BODY_MARKER = new RegExp(`^\\s*${NEEDS_YATSU_EVAL}\\s*:?\\s*$`, 'im')
+// a bare-marker body line: the name alone, case-insensitive, any indent, optional trailing colon — content after it (`needs-eval: foo`) is NOT a match
+const BODY_MARKER = new RegExp(`^\\s*${NEEDS_EVAL}\\s*:?\\s*$`, 'im')
 
-export function isNeedsYatsuEval(issue: ForgeIssue): boolean {
-  if (issue.labels.some((l) => l.trim().toLowerCase() === NEEDS_YATSU_EVAL)) return true
+export function isNeedsEval(issue: ForgeIssue): boolean {
+  if (issue.labels.some((l) => l.trim().toLowerCase() === NEEDS_EVAL)) return true
   return BODY_MARKER.test(issue.body || '')
 }
 
@@ -19,7 +19,7 @@ export function resolveEvalPending(
   prs: ForgePR[],
   nodeIds: string[],
 ): NodeEvalPending[] {
-  const flagged = new Set(issues.filter(isNeedsYatsuEval).map((i) => i.number))
+  const flagged = new Set(issues.filter(isNeedsEval).map((i) => i.number))
   if (!flagged.size) return []
   const out: NodeEvalPending[] = []
   for (const { node, issues: linked } of resolveLinks(issues, prs, nodeIds)) {

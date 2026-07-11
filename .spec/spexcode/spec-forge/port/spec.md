@@ -22,14 +22,14 @@ where the `Spec: <id>` marker lives; author/createdAt are what lets a forge issu
 thread as the same object in the unified Issue port, spec-cli's [[issues]], with a `by` and a `created`).
 It also carries the issue's **comments** (`ForgeComment[]`: author, createdAt, body — exactly what becomes
 a unified Issue's `replies[]`), riding the same list reads, not a second fetch path: the gh list
-asks for the `comments` JSON field (heavier per call, covered by [[freshness]]'s TTL), and the incremental
+asks for the `comments` JSON field (heavier per call, covered by [[forge-cache]]'s TTL), and the incremental
 window — whose REST rows carry only a comment *count* — fetches each **commented** updated issue's thread
 alongside (a since-window is a handful of issues, so that stays a handful of calls).
 `ForgePR` adds `headRefName` (the `node/<id>` branch = a free structural link)
 and `closesIssues` (the issue numbers it closes, for transitive linking). These vendor-neutral shapes are
 what let one port cover any host. A driver may also offer the **optional
 incremental window** `listIssuesSince(sinceISO)` — only issues updated since that moment — which lets
-[[freshness]]'s resident cache merge small deltas instead of full-listing every cycle; a driver without it
+[[forge-cache]]'s resident cache merge small deltas instead of full-listing every cycle; a driver without it
 is simply always full-listed. State casing is normalized to lowercase **at the driver** — platform
 differences (gh's GraphQL `OPEN` vs REST `open`) die at the adapter, never downstream.
 
@@ -43,7 +43,7 @@ an empty forge.
 a `gh pr list` JSON field that older `gh` builds don't know. Only the **transitive** link needs it; the two
 core links (the `node/<id>` PR branch and the `Spec:` issue marker) read baseline fields. So a `gh` too old
 for that one field must degrade **only** transitive linking, never take the whole driver down — otherwise
-[[freshness]]'s resident cache swallows the throw and the dashboard goes blank ([[dashboard-issues]]). The
+[[forge-cache]]'s resident cache swallows the throw and the dashboard goes blank ([[dashboard-issues]]). The
 driver asks for the field and, **only** on gh's specific "unknown JSON field" rejection, retries without it
 (`closesIssues` empty) and warns once; every other failure (no `gh`, no auth, no repo) still throws loud —
 the degrade is that narrow field-version case alone, never a blanket swallow.
@@ -59,7 +59,7 @@ forge; gh wraps `gh issue create`) and `createComment({number, body}) → {url}`
 forge issue from any SpexCode surface; gh wraps `gh issue comment`) and
 `closeIssue({number}) → {url}` (the store-routed lifecycle close: closing a forge issue from the unified
 Issues page; gh wraps `gh issue close`). All fail loud. The **tracer**
-(links/freshness/the board fold) remains read-only end to end, and the deeper contract is untouched:
+(links/forge-cache/the board fold) remains read-only end to end, and the deeper contract is untouched:
 nothing here ever writes a node's version or status (which stays git-derived) — a created issue or
 comment or closed issue is execution-plane work, never graph state.
 

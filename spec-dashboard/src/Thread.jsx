@@ -20,7 +20,7 @@ import { Icon } from './icons.jsx'
 // first line reads `▶m:ss · <step>` IS anchored to that video moment. The renderer linkifies it (click =
 // seek the clip); the composer over a clip grows a ⏱ affordance that stamps the current frame, and a
 // circled frame — or any attached blob, a clip included — rides the body as a
-// `![…](/api/yatsu/blob/<hash>)` link — the SAME hash the send derives as the thread's typed
+// `![…](/api/evidence/<hash>)` link — the SAME hash the send derives as the thread's typed
 // `evidence[]`, so the body is the one raw-readable source. Each linked blob renders through the ONE
 // shared evidence renderer ([[event-detail]]'s Evidence.jsx, kind sniffed from the served Content-Type):
 // a video PLAYS in the thread, an image shows, a pruned blob is the honest sentinel. The reply stays
@@ -224,7 +224,7 @@ export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = nul
   const stampAnchor = async () => {
     const a = await anchorNow?.()
     if (!a) return
-    const head = anchorLine(a.tMs, a.step) + (a.frame ? `\n![frame](/api/yatsu/blob/${a.frame})` : '')
+    const head = anchorLine(a.tMs, a.step) + (a.frame ? `\n![frame](/api/evidence/${a.frame})` : '')
     setBody((b) => {
       const ex = parseAnchor(b)
       const rest = (ex ? ex.rest : b).replace(HEAD_FRAME_RE, '')

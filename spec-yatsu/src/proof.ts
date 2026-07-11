@@ -518,7 +518,7 @@ footer{margin-top:48px;padding-top:20px;border-top:1px solid var(--line);color:v
 // ---- the session EVAL model ([[review-proof]]'s interactive face) ----
 // The lean, TIERED counterpart of buildProofModel: the same worktree-rooted marshaling, but rows only —
 // no diff enrichment, no inlined evidence bytes (the dashboard's Eval tab rides the shared eval
-// components: blobs stream lazily from /api/yatsu/blob on open). Each reading carries `inSession`
+// components: blobs stream lazily from /api/evidence on open). Each reading carries `inSession`
 // (this session filed it, or its codeSha is one of the branch's own commits — a diagnostic session
 // that changed no code still owns the readings it filed at the merge-base) so the tab can lead with
 // what THIS session measured, ✦-marked, over the inherited baseline.

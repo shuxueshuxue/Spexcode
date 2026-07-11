@@ -55,7 +55,11 @@ caller supplies the forge slice at the freshness its surface warrants — the se
 resident cache: instant view, background reconcile) for `GET /api/issues` and the board fold, the CLI
 (`spex issue ls [--node] [--store] [--all] [--json]`) via a live driver pull that **degrades loudly
 to local-only** (one stderr note) when the forge is unreachable — local reading never hostages on a
-network. The board fold attaches each node's merged issues (`issues` / open subset `openIssues`), so every
+network. The **single-thread detail is the same read, narrowed** (`findIssue`): `spex issue show <id>` and
+`GET /api/issues/:id` both find the id inside the merged, eval-remark-free set — never a second lookup
+path, so an eval-remark thread is invisible to `show` exactly as it is to the list — with the same
+per-surface freshness (live pull on the CLI, resident slice on the server; a local id skips the forge
+slice entirely). The board fold attaches each node's merged issues (`issues` / open subset `openIssues`), so every
 per-node surface — tile badge, focus panel, node-info Issues tab, the [[issues-view]] page — reads the
 same mixed set with no second path.
 

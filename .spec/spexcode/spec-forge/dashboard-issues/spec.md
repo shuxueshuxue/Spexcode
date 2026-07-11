@@ -13,7 +13,7 @@ related:
 # dashboard-issues
 
 The dashboard surface [[spec-forge]] deferred: on each node, the **open issues that work toward it**.
-[[links]] inverts a forge's open work into `node → { issues, prs }`, [[freshness]]'s resident `ForgeCache`
+[[links]] inverts a forge's open work into `node → { issues, prs }`, [[forge-cache]]'s resident `ForgeCache`
 keeps it fresh; this node owns the display fold, on the two planes' contract:
 a node *defines*, an issue *does*, so the work appears **beside** the node, never *as* node state. A node's
 status stays git-derived — the two authorities never cross.
@@ -31,7 +31,7 @@ The badge is WORK, distinct from the derived status dot.
 ## expanded spec
 
 **Backend — a resident cache, folded into the board.** A process-lifetime `ForgeCache` (the resident
-wiring around [[freshness]]'s pure cache) serves the dashboard without a blocking forge call on the request
+wiring around [[forge-cache]]'s pure cache) serves the dashboard without a blocking forge call on the request
 path. Its contract: a view is **always instant** (the last successful reconcile), and a stale read triggers
 a **background** reconcile (a TTL backs off both success and failure). The TTL sits **near the dashboard's
 poll cadence** (~15s), so an externally-posted issue surfaces within about one poll — "post a github issue
@@ -63,6 +63,6 @@ never the card's primary destination. The badge renders in the node tile
 number/state/title stay raw forge data.
 
 Out of scope (future siblings): surfacing open **PRs** the same way; any live push of forge deltas
-([[freshness]]'s deferred source layer). Frontend behaviour is **measured by looking**: the `frontend-e2e` yatsu scenario
+([[forge-cache]]'s deferred source layer). Frontend behaviour is **measured by looking**: the `frontend-e2e` yatsu scenario
 `open-count-badge-on-tile` screenshots the rendered board — the ◆N badge on a tile with open issues, no
 on-node popover — and files image-evidenced readings.

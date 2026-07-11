@@ -1,16 +1,18 @@
 ---
-title: freshness
+title: forge-cache
 status: active
 hue: 280
-desc: The deterministic incremental-view-maintenance core — a delta-fed cache that keeps node → { issues, prs } fresh without a cold full pull, with reconcile as the source of truth. Sources (poll, webhook) are interchangeable and deferred.
+desc: The forge-side resident cache — the deterministic incremental-view-maintenance core — a delta-fed cache that keeps node → { issues, prs } fresh without a cold full pull, with reconcile as the source of truth. Sources (poll, webhook) are interchangeable and deferred.
 code:
   - spec-forge/src/cache.ts
 related:
   - spec-forge/src/cache.test.ts
 ---
-# freshness
+# forge-cache
 
 Keeping the [[links]] view fresh — incrementally, or live for a dashboard — is **not a product choice**.
+(The node is named for what it IS — the forge-side cache; the bare word *freshness* belongs to the eval
+axis — a reading's staleness against code — and means only that everywhere else in the tree.)
 `resolveLinks(issues, prs, nodeIds)` is already a **pure function**, so the problem is the classic one of
 **incremental view maintenance**: keep `output = f(state)` current as `state` changes, instead of paying
 for a cold full pull on every look. This node owns that deterministic core; it sits beside [[links]] and,

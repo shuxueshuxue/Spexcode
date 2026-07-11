@@ -254,17 +254,69 @@ const fl = (args: string[], name: string): string | undefined => {
 }
 const hasFlag = (args: string[], name: string) => args.includes(`--${name}`)
 
+// the CLI's live forge pull — `ls` and `show` own their freshness (a live driver read), degrading LOUDLY
+// to local-only (one stderr note) when the forge is unreachable: local reading never hostages on a network.
+async function liveForgeSlice(verb: string): Promise<ForgeSlice | null> {
+  try {
+    const host = resolveForgeHost()
+    const driver = forgeDriverFor(host)
+    if (!driver) throw new Error(`no driver for this repo's forge host '${host}' (known: ${FORGE_DRIVERS.map((d) => d.host).join(', ')})`)
+    const [issues, prs] = await Promise.all([driver.listIssues(), driver.listPRs()])
+    return { host: driver.host, state: { issues, prs } }
+  } catch (e) {
+    console.error(`spex issue ${verb}: forge unreachable — local only (${e instanceof Error ? e.message.split('\n')[0] : e})`)
+    return null
+  }
+}
+
+// the single-issue read behind `spex issue show` AND `GET /api/issues/:id` — find the thread in the SAME
+// merged, eval-remark-free read every issue surface consumes (never a second lookup path: an eval-remark
+// thread is not an issue, so `show` can't see one either). A local id needs no forge slice; a forge id
+// (`<host>#<n>`) reads from the caller-supplied slice (live pull on the CLI, resident cache on the server).
+export function findIssue(id: string, forge: ForgeSlice | null, nodeIds: string[]): Issue | undefined {
+  return mergedIssues(id.includes('#') ? forge : null, nodeIds).find((i) => i.id === id)
+}
+
+function renderIssue(t: Issue): string {
+  const L: string[] = []
+  L.push(`${t.concern}  [${t.id}]`)
+  L.push(`  ${[t.store, t.status, t.nodes.length ? `re: ${t.nodes.join(', ')}` : '', t.by ? `by ${t.by}` : '', t.created].filter(Boolean).join('  ·  ')}`)
+  if (t.url) L.push(`  ${t.url}`)
+  if (t.evidence.length) L.push(`  evidence: ${t.evidence.join(', ')}`)
+  L.push('', t.body)
+  for (const r of t.replies) {
+    L.push('', `── ${isRemark(r) ? `remark ${t.id}#${r.rid}${r.resolved ? ` (resolved by ${r.resolvedBy})` : ' (unresolved)'}` : 'reply'}: ${r.by} @ ${r.at} ──`)
+    L.push(r.body)
+  }
+  return L.join('\n')
+}
+
 // `spex issue <verb>` — the ONE issue surface, a noun drawer ([[cli-surface]]). `ls` is THE read over
 // every store: the drain view a supervisor/human works from, `[--node id] [--store local|<host>] [--all]
-// [--json]`. The write verbs (open|reply|on|off|status — localIssues.ts) are store-routed (`open --store
-// <host>` / a `<host>#<n>` id go through the driver); `close` is the store-routed lifecycle verb (the SAME
-// closeIssue the dashboard's Close button calls); `promote` is the one cross-store verb; `links` is the
-// read-only forge→spec trace (spec-forge). The list imposes NO salience ranking — replies are a signal
-// the drain WEIGHS by judgment, never an automatic priority order. The forge slice is a LIVE pull; an
-// unreachable forge degrades loudly to local-only (one stderr note) — local reading never hostages on a
-// network. (`nudge` left this drawer for `spex internal nudge` — only the post-merge hook calls it.)
+// [--json]`; `show <id>` is the single-thread detail (the same read GET /api/issues/:id serves). The
+// write verbs (open|reply — localIssues.ts) are store-routed (`open --store <host>` / a `<host>#<n>` id
+// go through the driver); `close` is the store-routed lifecycle verb (the SAME closeIssue the dashboard's
+// Close button calls); `promote` is the one cross-store verb; `links` is the read-only forge→spec trace
+// (spec-forge). The list imposes NO salience ranking — replies are a signal the drain WEIGHS by judgment,
+// never an automatic priority order. The forge slice is a LIVE pull that degrades loudly to local-only.
+// (`nudge` left this drawer for `spex internal nudge` — only the post-merge hook calls it; the old
+// on|off|status toggle verbs are gone — the switch is the `issues.enabled` settings key.)
 export async function runIssues(args: string[]): Promise<number> {
   if (ISSUE_WRITE_SUBS.has(args[0])) return runIssueWrite(args)
+  if (args[0] === 'on' || args[0] === 'off' || args[0] === 'status') {
+    // v0.3.0 signpost — report the new home, never run ([[cli-surface]]: a removed spelling only points).
+    console.error(`spex: \`spex issue ${args[0]}\` was removed in v0.3.0 — the switch is the \`issues.enabled\` key in spexcode.json (edit the JSON; \`spex guide config\` documents it, \`spex doctor\` reports its state)`)
+    return 2
+  }
+  if (args[0] === 'show') {
+    const id = args[1]
+    if (!id || id.startsWith('--')) { console.error('usage: spex issue show <issue-id> [--json]   (a local id, or a forge id like github#12)'); return 2 }
+    const nodeIds = loadSpecsLite().map((s) => s.id)
+    const t = findIssue(id, id.includes('#') ? await liveForgeSlice('show') : null, nodeIds)
+    if (!t) { console.error(`spex issue show: no issue '${id}' (see \`spex issue ls --all\`)`); return 1 }
+    console.log(hasFlag(args, 'json') ? JSON.stringify(t, null, 2) : renderIssue(t))
+    return 0
+  }
   if (args[0] === 'links') {
     const { runIssueLinks } = await import('../../spec-forge/src/cli.js')
     return runIssueLinks(args.slice(1))
@@ -299,21 +351,12 @@ export async function runIssues(args: string[]): Promise<number> {
     }
   }
   if (args[0] !== 'ls') {
-    console.error(`spex issue: unknown verb '${args[0]}' — ls | open | reply | close | promote | links | on | off | status  (spex help issue)`)
+    console.error(`spex issue: unknown verb '${args[0]}' — ls | show | open | reply | close | promote | links  (spex help issue)`)
     return 2
   }
   args = args.slice(1)
   const nodeIds = loadSpecsLite().map((s) => s.id)
-  let forge: ForgeSlice | null = null
-  try {
-    const host = resolveForgeHost()
-    const driver = forgeDriverFor(host)
-    if (!driver) throw new Error(`no driver for this repo's forge host '${host}' (known: ${FORGE_DRIVERS.map((d) => d.host).join(', ')})`)
-    const [issues, prs] = await Promise.all([driver.listIssues(), driver.listPRs()])
-    forge = { host: driver.host, state: { issues, prs } }
-  } catch (e) {
-    console.error(`spex issue ls: forge unreachable — listing local only (${e instanceof Error ? e.message.split('\n')[0] : e})`)
-  }
+  const forge = await liveForgeSlice('ls')
   let issues = mergedIssues(forge, nodeIds)
   const node = fl(args, 'node')
   const store = fl(args, 'store')
@@ -330,6 +373,6 @@ export async function runIssues(args: string[]): Promise<number> {
     if (p.replies.length) console.log(`    ${p.replies.length} reply(ies) in thread`)
     if (p.url) console.log(`    ${p.url}`)
   }
-  if (!issuesEnabled()) console.log('\n(the issues workflow is OFF — `spex issue on` to re-enable writes/nudges)')
+  if (!issuesEnabled()) console.log('\n(the issues workflow is OFF — set `"issues": { "enabled": true }` in spexcode.json to re-enable writes/nudges)')
   return 0
 }

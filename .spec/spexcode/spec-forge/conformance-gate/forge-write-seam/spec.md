@@ -27,7 +27,7 @@ one registry entry.
 **Why this is not a read-only violation.** A Check and a comment are the forge's **execution plane**. The
 contract [[spec-forge]] protects is "never write a node's git-derived **status/version**" — and this never
 does. Definition stays in the graph, flows back only through git on merge; this writes only execution
-output. The two planes stay un-crossed (see [[CI-Gate-Spex-forge]]).
+output. The two planes stay un-crossed (see [[conformance-gate]]).
 
 **Drivers behind the seam.** The first is **github** (extends the existing `gh` driver: `gh api` for the
 Checks endpoint, `gh pr comment` for the sticky comment). A **gitlab** driver (MR note + commit status)

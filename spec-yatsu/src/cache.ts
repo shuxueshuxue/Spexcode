@@ -6,9 +6,11 @@ import { gitCommonDir } from '../../spec-cli/src/layout.js'
 export const MISS_BLOB = 'miss original file'
 
 // every cache fn takes an optional `dir` (defaulting to the live cache dir) so the logic is testable
-// against a temp dir without a git repo.
+// against a temp dir without a git repo. The dir is a PER-CLONE cache (never tracked): renaming it
+// (yatsu-blobs → evidence, v0.3.0) migrated no bytes — a missing blob re-fills via `spex evidence put`
+// (putBlob is idempotent by content) or streams from the backend on a `get` miss.
 export function cacheDir(): string {
-  return join(gitCommonDir(), 'spexcode', 'yatsu-blobs')
+  return join(gitCommonDir(), 'spexcode', 'evidence')
 }
 
 // a content-addressed blob name = the sha256 of its bytes (64 hex). The backstop recognises a stray one.
@@ -60,9 +62,11 @@ export function getBlob(sha: string | null, dir = cacheDir()): Buffer | null {
   return hasBlob(sha, dir) ? readFileSync(blobPath(sha!, dir)) : null
 }
 
-// is a staged repo path a stray content-addressed blob? (a 64-hex basename, or anything under a
-// yatsu-blobs dir). The pre-commit backstop rejects these so pixels never leak into git history.
+// is a staged repo path a stray content-addressed blob? (a 64-hex basename anywhere, or anything under a
+// copied-in cache dir — matched by its full `spexcode/evidence/` signature, never a bare `evidence/`
+// segment, which would false-positive legitimate repo dirs). The pre-commit backstop rejects these so
+// pixels never leak into git history.
 export function isStrayBlob(path: string): boolean {
   const base = path.slice(path.lastIndexOf('/') + 1)
-  return BLOB_NAME.test(base) || path.includes('/yatsu-blobs/')
+  return BLOB_NAME.test(base) || path.includes('spexcode/evidence/')
 }

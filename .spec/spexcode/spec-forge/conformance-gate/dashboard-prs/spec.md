@@ -10,7 +10,7 @@ related:
 ---
 # dashboard-prs
 
-The dashboard half of [[CI-Gate-Spex-forge]], and the open-PR sibling [[dashboard-issues]] explicitly
+The dashboard half of [[conformance-gate]], and the open-PR sibling [[dashboard-issues]] explicitly
 deferred ("surfacing open **PRs** the same way" — out of scope there, this node here). Near-zero new
 display: it reuses the surfaces that already exist.
 
@@ -18,7 +18,7 @@ display: it reuses the surfaces that already exist.
 
 - **PR badge** — on each node a PR touches, a glance badge like the open-issue badge, in its own hue so the
   status dot / drift badge / issue badge / PR badge never blur. Fed the same way issues are: folded onto
-  `/api/board` from the resident [[freshness]] cache (open PRs already read there as session/overlay
+  `/api/board` from the resident [[forge-cache]] cache (open PRs already read there as session/overlay
   state — this makes them a node-bound count).
 - **PR review lane** — open PRs in the gate shown beside sessions-in-review, each carrying its gate verdict
   (`pending / conforms / diverges / blocked`). The CI gate is the headless twin of the
@@ -32,5 +32,5 @@ node state — a node's status stays git-derived. Silent by construction with no
 [[dashboard-issues]].
 
 Out of scope: the verdict content ([[conformance-judge]]), the gate orchestration ([[forge-gate]]), and any
-live webhook push (that is [[freshness]]'s deferred source layer). Frontend is asserted by contract — there
+live webhook push (that is [[forge-cache]]'s deferred source layer). Frontend is asserted by contract — there
 is no browser/e2e harness here.

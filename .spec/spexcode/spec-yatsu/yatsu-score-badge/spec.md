@@ -56,7 +56,7 @@ note/legacy reading — makes it the empty blind-spot colour the scoreboard exis
 declared scenario is a **fresh pass** and it is green ✓. Because the fold now ranges over DECLARED scenarios,
 not just the readings that happen to exist, a node with an unmeasured scenario reads as the blind spot it is.
 
-**Freshness is the same live signal the tab and `spex yatsu scan` use** ([[freshness]]): it arrives on each
+**Freshness is the same live signal the tab and `spex yatsu scan` use** ([[yatsu-core]]'s scenario-freshness derivation): it arrives on each
 reading's `fresh` flag — this node never recomputes it. A scenario's freshness can be scoped to its own
 `code` files ([[yatsu-core]]); this node just reads the resulting per-reading `fresh`. A `note` and a legacy
 pre-verdict reading carry no ✓/✗, so they read as a blind spot here while their textual verdict badge still

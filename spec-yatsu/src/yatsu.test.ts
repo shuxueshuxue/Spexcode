@@ -453,9 +453,10 @@ test('cache: gc drops everything not in the keep set', () => {
   assert.deepEqual(listBlobs(dir), [])
 })
 
-test('cache: isStrayBlob recognises a 64-hex basename or a yatsu-blobs path', () => {
+test('cache: isStrayBlob recognises a 64-hex basename or a copied-in cache-dir path', () => {
   assert.equal(isStrayBlob('.spec/n/' + 'a'.repeat(64)), true)
-  assert.equal(isStrayBlob('some/yatsu-blobs/whatever.png'), true)
+  assert.equal(isStrayBlob('some/spexcode/evidence/whatever.png'), true)
+  assert.equal(isStrayBlob('docs/evidence/report.png'), false)   // a bare `evidence/` dir is a legit repo path
   assert.equal(isStrayBlob('spec-yatsu/src/cache.ts'), false)
   assert.equal(isStrayBlob('.spec/n/yatsu.evals.ndjson'), false)
 })

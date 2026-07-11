@@ -5,7 +5,7 @@ import { etag } from 'hono/etag'
 import { createNodeWebSocket } from '@hono/node-ws'
 import { loadSpecs, loadSpecsLite, specContent, specHistory, specDiffAt, loadConfig } from './specs.js'
 import { issuesEnabled, remarkOnHost, resolveRemark, retractRemark } from './localIssues.js'
-import { closeIssue, createIssue, issueStores, mergedIssues, promote, replyIssue } from './issues.js'
+import { closeIssue, createIssue, findIssue, issueStores, mergedIssues, promote, replyIssue } from './issues.js'
 import { residentForgeState, refreshForgeNow } from '../../spec-forge/src/resident.js'
 import { resolveForgeHost } from '../../spec-forge/src/drivers.js'
 import { summarize } from './mentions.js'
@@ -116,7 +116,7 @@ app.post('/api/specs/:id/yatsu/eval', async (c) => {
 // HTTP Range is honored — a <video> can only SEEK when the server answers byte ranges (a browser clamps
 // currentTime to the seekable window, which stays [0,0] without them); one general mechanism at the
 // transport, so every evidence kind streams the same way.
-app.get('/api/yatsu/blob/:hash', (c) => {
+app.get('/api/evidence/:hash', (c) => {
   const r = readBlobByHash(c.req.param('hash'))
   if (!r.ok) return c.text(r.message, r.reason === 'invalid' ? 400 : 404)
   const total = r.bytes.length
@@ -134,7 +134,7 @@ app.get('/api/yatsu/blob/:hash', (c) => {
 // and stashes the bytes here, content-addressed (same putBlob the yatsu cache uses). The returned hash is
 // what an anchored comment references (image link in the body, and the typed evidence[] on its thread) —
 // bytes never enter git. Raw body, sniffed by the same content-addressed name. Empty → 400, over cap → 413.
-app.post('/api/yatsu/blob', async (c) => {
+app.post('/api/evidence', async (c) => {
   const buf = Buffer.from(await c.req.arrayBuffer())
   if (buf.length === 0) return c.json({ error: 'empty blob' }, 400)
   if (buf.length > MAX_UPLOAD_BYTES) return c.json({ error: 'blob too large' }, 413)
@@ -164,6 +164,13 @@ app.get('/api/issues', etag(), (c) =>
     stores: issueStores(),
     issues: mergedIssues({ host: resolveForgeHost(), state: residentForgeState() }, loadSpecsLite().map((s) => s.id)),
   }))
+// the single-thread read ([[issues]]) behind `spex issue show <id>` — the SAME findIssue lookup, from the
+// resident forge slice (instant view, background reconcile — the list route's freshness contract). A local
+// id, or a forge id (`<host>#<n>`); unknown → 404 (eval-remark threads are not issues, so they 404 here too).
+app.get('/api/issues/:id', (c) => {
+  const t = findIssue(c.req.param('id'), { host: resolveForgeHost(), state: residentForgeState() }, loadSpecsLite().map((s) => s.id))
+  return t ? c.json(t) : c.json({ error: `no issue '${c.req.param('id')}'` }, 404)
+})
 // the WRITE surface ([[local-issues]] / [[issues-view]]) — the human reply path, STORE-ROUTED through the one
 // reply verb ([[issues]] replyIssue): a local id git-commits to the trunk store, a forge id ('github#N')
 // posts a REAL comment through the driver; either way the text's @-mentions dispatch (a human summons an
@@ -354,7 +361,7 @@ app.get('/api/sessions/:id/proof', async (c) => {
   return c.html(renderProofHtml(m))
 })
 // the session EVAL model ([[review-proof]]'s interactive face): worktree-rooted rows only — no diff
-// enrichment, no inlined bytes; evidence streams lazily from /api/yatsu/blob. Each reading carries
+// enrichment, no inlined bytes; evidence streams lazily from /api/evidence. Each reading carries
 // `inSession` so the tab leads with what THIS session measured.
 app.get('/api/sessions/:id/evals', async (c) => {
   const m = await buildSessionEvals(c.req.param('id'))

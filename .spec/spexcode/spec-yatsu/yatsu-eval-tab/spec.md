@@ -28,7 +28,7 @@ Two halves behind one tab. The **read engine** ([[spec-cli]], in `evaltab.ts`) c
 read knows. A node's measurement timeline is every reading from its `yatsu.evals.ndjson` sidecar (scenario,
 the read's codeSha, an evidence LIST — each `{hash, kind}` resolved to its live blob state — **verdict**, ts) joined with the scenario's **expected**
 (from the live yatsu.md — what zero loss looks like) and a **freshness flag**, derived live from git by the
-same [[freshness]] machinery scan uses: a reading is *current* until its governed code or its scenario
+same freshness machinery scan uses ([[yatsu-core]]'s scenario-freshness derivation): a reading is *current* until its governed code or its scenario
 moved past the sha it was taken at, otherwise *stale* (and which axis moved); a code-stale
 reading also carries the code axis's per-file drift detail (`codeDrift` — which governed files moved, +how many
 commits) so the [[event-detail]] stale readout can name it, never re-deriving git in the browser;
@@ -40,7 +40,7 @@ scenario onto the node's `evals` and the declared set slim (`{name, tags}`), so 
 (a never-measured scenario still counts as loss). The FULL timeline — each scenario's
 `expected` and per-scenario `code` included — is served by `/api/specs/:id/evals`, lazy-loaded when the tab
 opens. The board attach stays cheap by reusing the board's specs + `driftIndex` and one shared yatsu walk.
-Bytes are never folded anywhere: `/api/yatsu/blob` serves each evidence entry by its content hash from the
+Bytes are never folded anywhere: `/api/evidence` serves each evidence entry by its content hash from the
 shared cache, fetched **lazily on expand**, with a per-entry **miss original file** signal when the bytes are gone, MIME
 sniffed from the content.
 
@@ -69,5 +69,5 @@ rows lead the timeline. The one presence-distinct empty state survives: a node w
 
 **The seam / out of scope:** the **forge issue-events** half of the timeline — each tracked issue appearing
 twice (open, close) and linking out to its forge-hosted image rather than a local blob — arrives with the
-needs-yatsu-eval forge node; the tab joins it at read time then. Backend and computer-use measuring hands, and
+[[needs-eval]] forge node; the tab joins it at read time then. Backend and computer-use measuring hands, and
 the cache cleanup surface, stay with their own nodes.

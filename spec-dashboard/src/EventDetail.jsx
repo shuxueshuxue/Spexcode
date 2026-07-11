@@ -210,7 +210,7 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite,
     setEvents([]); setAxis('time')
     if (!viewing.timelineBlob) return
     let on = true
-    fetch(`/api/yatsu/blob/${viewing.timelineBlob}`)
+    fetch(`/api/evidence/${viewing.timelineBlob}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => { const n = on && normalizeTimeline(j); if (n) { setEvents(n.events); setAxis(n.axis) } })
       .catch(() => {})
@@ -321,7 +321,7 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite,
     const st = stepAt(events, tMs)
     const hash = await grabFrame(rect)
     const lines = [anchorLine(tMs, st?.step)]
-    if (hash) lines.push(`![frame](/api/yatsu/blob/${hash})`)
+    if (hash) lines.push(`![frame](/api/evidence/${hash})`)
     if (st?.node && st.node !== entry.node) lines.push(`re: [[${st.node}]]`)
     lines.push('')
     setDraft({ seq: ++seq.current, body: lines.join('\n') })
@@ -475,7 +475,7 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite,
             <>
               <div className="an-player" ref={playerRef}>
               <div className={`an-stage ${playing ? 'playing' : 'paused'}`} ref={box} onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp}>
-                <video className="an-video" ref={vid} src={`/api/yatsu/blob/${videoEntry.hash}`} preload="metadata" playsInline />
+                <video className="an-video" ref={vid} src={`/api/evidence/${videoEntry.hash}`} preload="metadata" playsInline />
                 {liveRect && <div className="an-rect live" style={{ left: `${liveRect.x}%`, top: `${liveRect.y}%`, width: `${liveRect.w}%`, height: `${liveRect.h}%` }} />}
                 {!playing && !drag && <div className="an-bigplay" aria-hidden><Icon name="play" size={22} /></div>}
               </div>

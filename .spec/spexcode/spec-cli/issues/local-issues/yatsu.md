@@ -4,26 +4,26 @@ scenarios:
     tags: [cli]
     code: spec-cli/src/localIssues.ts
     description: >-
-      Hammer the write path: (a) fire many `spex issues open` concurrently and many `issues reply` at the
+      Hammer the write path: (a) fire many `spex issue open` concurrently and many `issue reply` at the
       SAME thread concurrently; (b) post a body whose line is exactly the reply sentinel
       `<!-- reply: x @ y -->` (a forgery attempt) with real body text after it.
     expected: >-
       (a) EVERY concurrent write lands and is git-committed (none left uncommitted, none lost to a
       read-modify-write race) — the store lock serializes the whole read-mutate-write-commit and the
       `--no-verify` commit keeps each fast. (b) The forged sentinel does NOT become a phantom reply and does
-      NOT truncate the body (user content is neutralized on write); a genuine `reply` still parses. `spex lint`
+      NOT truncate the body (user content is neutralized on write); a genuine `reply` still parses. `spex spec lint`
       stays 0-error throughout.
   - name: issue-round-trip
     tags: [cli]
     code: spec-cli/src/localIssues.ts
     related: [spec-cli/src/issues.ts]
     description: >-
-      Through the real CLI, open a local issue (`spex issues open "<concern>" --node <id> --evidence <hash>
-      --body <text>`), then read it (`spex issues` — the one read over every store), then have another
-      session reply to it and close it (`spex issues reply|close <id>`). Read back with
-      `spex issues --all --store local --json`.
+      Through the real CLI, open a local issue (`spex issue open "<concern>" --node <id> --evidence <hash>
+      --body <text>`), then read it (`spex issue ls` — the one read over every store), then have another
+      session reply to it and close it (`spex issue reply|close <id>`). Read back with
+      `spex issue ls --all --store local --json`.
     expected: >-
-      open prints the minted id and commits the thread; `spex issues` lists the open concern store-tagged
+      open prints the minted id and commits the thread; `spex issue ls` lists the open concern store-tagged
       `local` with its author + linked node; reply and close each report success; the final `--json` shows
       the concern with store=local, by=author, status=landed, the evidence hash, and the reply (by/at/body)
       — every write round-trips faithfully through the unified read.
@@ -32,10 +32,10 @@ scenarios:
     code: spec-cli/src/localIssues.ts
     related: [spec-cli/src/specs.ts, spec-cli/src/git.ts]
     description: >-
-      After threads exist under `.spec/.issues/`, run `spex lint` and inspect the board/spec set. The
+      After threads exist under `.spec/.issues/`, run `spex spec lint` and inspect the board/spec set. The
       store file is a plain `<id>.md`, not `spec.md`.
     expected: >-
-      `spex lint` stays 0-error; no `.spec/.issues/` entry appears as a spec node (the walk never nodes it) and no
+      `spex spec lint` stays 0-error; no `.spec/.issues/` entry appears as a spec node (the walk never nodes it) and no
       ghost node appears on the board overlay (`isSpecMd` ignores a non-`spec.md` path) — the store is
       structurally invisible to lint/drift/deriveStatus with NO special-case exemption.
   - name: store-only-commit-on-trunk
@@ -43,7 +43,7 @@ scenarios:
     code: spec-cli/src/localIssues.ts
     related: [spec-cli/templates/hooks/pre-commit]
     description: >-
-      On the trunk, let `spex issues open` commit a store file directly (the writer uses `git commit
+      On the trunk, let `spex issue open` commit a store file directly (the writer uses `git commit
       --no-verify`). Then try a plain `git commit` (hook active) on the trunk that touches a non-store path,
       and one that touches ONLY a store file.
     expected: >-
@@ -59,7 +59,7 @@ scenarios:
       Through the real CLI (store routed to a disposable dir via SPEXCODE_ISSUES_DIR), open one issue
       whose concern/body carry `[[node]]` links but NO --node flag, one with an explicit --node X plus a
       body linking [[Y]], and one with plain prose (no links, no flag). Read each back with
-      `spex issues --all --store local --json`.
+      `spex issue ls --all --store local --json`.
     expected: >-
       The link-only thread's nodes are exactly the ids inside its `[[…]]` links (concern + body, deduped);
       the mixed thread carries the UNION of the explicit --node and the linked id; the plain thread has no
@@ -68,7 +68,7 @@ scenarios:
     tags: [cli]
     code: spec-cli/src/localIssues.ts
     description: >-
-      Through the real CLI, close an ALREADY-closed local thread again (`spex issues close <landed-id>`) —
+      Through the real CLI, close an ALREADY-closed local thread again (`spex issue close <landed-id>`) —
       a no-change store write (the serialized bytes equal the stored state). Then make a genuinely new
       write to confirm the normal path still commits.
     expected: >-
@@ -105,22 +105,26 @@ scenarios:
   - name: feature-toggle
     tags: [cli]
     code: spec-cli/src/localIssues.ts
-    related: [spec-cli/templates/hooks/post-merge, spec-cli/src/layout.ts]
+    related: [spec-cli/templates/hooks/post-merge, spec-cli/src/layout.ts, spec-cli/src/doctor.ts]
     description: >-
-      Read `spex issues status` with no config (default). Then `spex issues off`, inspect spexcode.json,
-      merge a node branch. Then `spex issues on` and merge another node branch.
+      With no config, read the switch through its surfaces (`spex doctor` Repo section; `spex internal
+      nudge <node>`). Then set `"issues": { "enabled": false }` in spexcode.json (there is no CLI toggle
+      verb — the JSON is the switch) and re-read: the nudge, `spex issue ls`'s footer, and doctor. Then
+      restore true. Also run the removed spellings (`spex issue on|off|status`) and put a legacy
+      `"proposals": { "enabled": false }` key in spexcode.json.
     expected: >-
-      Default status is ON with no config needed. `off` writes `issues.enabled: false` to spexcode.json and
-      `status` reports OFF; the next node merge prints NO nudge (and `spex issues nudge <node>` is empty). `on`
-      restores the nudge on the following merge — the git hook honors the switch through the CLI, with
-      spexcode.json the single source of truth (a pre-rename `proposals.enabled` value still reads).
+      Default is ON with no config. With enabled:false, `spex internal nudge <node>` prints empty, `spex
+      issue ls` appends a one-line OFF note naming the settings key, and doctor reports OFF — effective
+      immediately, no restart. `spex issue on|off|status` are signposts: they report the settings-key home
+      and exit 2 without flipping anything. The legacy `proposals.enabled` key is NOT read (state stays
+      default ON) and doctor flags it as a legacy key to rename — no silent fallback.
 ---
 
 # measuring local-issues
 
 YATU through the real `spex` CLI and real `git`, never an internal helper. The store's whole value is that
 an agent's taste survives session end, so the measurement drives the same surface an agent touches: `spex
-issues open`/`reply`/`close` for the round-trip, `spex lint` + the board for the data-not-contract
+issue open`/`reply`/`close` for the round-trip, `spex spec lint` + the board for the data-not-contract
 invariant, a real `git commit` on the trunk for the main-guard exception, and a real `git merge --no-ff`
 for the post-merge nudge. Backend evidence is the command transcript (`--result`), captured in a throwaway
 repo so a measurement never writes to the live trunk.

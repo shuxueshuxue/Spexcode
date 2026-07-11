@@ -7,9 +7,9 @@ export type FileResult = { ok: true; reading: Reading } | { ok: false; error: st
 
 // the eval seam over DATA (no argv, no file paths): a caller with a verdict in hand — the HTTP eval route,
 // a programmatic filer — appends through the SAME seam the CLI uses. Optional evidence arrives as text (a
-// report referencing the clip by hash) → a transcript blob in the same content-addressed cache; the
-// evaluator is the human hand, manual@1. yatsu still runs nothing — this only records. The dashboard files
-// nothing through this: [[event-detail]] is read-side on readings.
+// report referencing the clip by hash) → a transcript blob in the same content-addressed cache. yatsu
+// still runs nothing — this only records. The dashboard files nothing through this: [[event-detail]] is
+// read-side on readings.
 export function fileHumanReading(
   nodeId: string,
   input: { scenario: string; status: 'pass' | 'fail'; note?: string; transcript?: string; by?: string },
@@ -31,7 +31,6 @@ export function fileHumanReading(
     scenario: sc.name,
     codeSha: headSha(root),
     ...(blob ? { evidence: [{ hash: blob, kind: (buf && isJsonBlob(buf) ? 'data' : 'transcript') as EvidenceKind }] } : {}),
-    evaluator: 'manual@1',
     // the filing session (caller-passed — the human annotator has no reachable session, so it stays absent
     // there and the eval-comment loop-in is silent, per [[mentions]])
     ...(input.by ? { by: input.by } : {}),

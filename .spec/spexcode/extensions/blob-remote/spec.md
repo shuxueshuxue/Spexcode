@@ -48,7 +48,7 @@ seam an open-core project can monetize.
 - **Not a multi-tenant SpexCode server.** Collaboration stays "everyone runs their own"; a shared server
   running permission-skipping agents for multiple users is a trust surface we refuse. [[public-mode]]'s
   shared-password fast-lane remains the only auth in core.
-- **Not user identity.** Attribution stays session-based (commit trailers, evaluator tags). If teams later
+- **Not user identity.** Attribution stays session-based (commit trailers, the reading's `by` session). If teams later
   need human-level identity, it rides on that as a thin layer — never as accounts gating sessions.
 - **Not required for the public board.** A read-only shared board is a separate consumer that merely
   becomes *good* once blobs resolve; it is not this node's contract.

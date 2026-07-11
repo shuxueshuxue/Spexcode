@@ -22,10 +22,10 @@ codeSha it was authored against. This node gives that bit **teeth** — it makes
 actually *cost* something in the one loss signal the optimizer reads — and lifts the (node,scenario)↔eval
 join **server-side** so every surface reads the SAME overlay.
 
-## The teeth — the 4th, non-git freshness axis
+## The teeth — the non-git freshness axis
 
-Freshness was three git-derived axes (`code` | `scenario` | `evaluator`): a reading stales when a governed
-file, the scenario's content, or the evaluator version moves past its codeSha. The remark adds a fourth
+Freshness has two git-derived axes (`code` | `scenario`): a reading stales when a governed
+file or the scenario's content moves past its codeSha. The remark adds an
 axis that is **not** git-derived — it is read from the trunk issue store's remark track:
 
 > **clean ⟺ latest reading passes ∧ no code drift ∧ every remark resolved ∧ the latest reading post-dates

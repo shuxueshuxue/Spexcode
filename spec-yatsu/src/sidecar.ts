@@ -22,8 +22,8 @@ export type Evidence = { hash: string; kind: EvidenceKind }
 // (timeline.ts) mapping clip moments to named steps — it anchors the reading's VIDEO evidence entry.
 // `by` is the SESSION that filed this reading (the filer, from envSessionId) — the ORIGINATOR an eval-comment
 // thread loops in on a reply ([[mentions]] implicit loop-in). Pure additive: a legacy reading without it simply
-// has no originator → silent. `evaluator` is WHO/WHAT measured (a tag like `manual@1`); `by` is the reachable
-// session behind the filing — two different axes.
+// has no originator → silent. WHO measured is deliberately NOT a schema axis — the agent is the measuring
+// hand; the retired `evaluator` tag survives on old lines only, read-tolerated like the scalar blob.
 export type Reading = {
   scenario: string
   codeSha: string
@@ -32,7 +32,8 @@ export type Reading = {
   blob?: string | null
   blobKind?: EvidenceKind
   timelineBlob?: string
-  evaluator: string
+  // legacy instrument tag (always 'manual@1') — read for old readings, never written by new filings.
+  evaluator?: string
   by?: string
   verdict?: Verdict
   ts: string
@@ -65,10 +66,9 @@ export function isJsonBlob(b: Buffer): boolean {
 
 // a RETRACTION is the sanctioned inverse of a filing — itself an appended event, never a deleted line
 // (the sidecar stays append-only; git shows who retracted what, when). `retracts` is the target reading's
-// `ts` within `scenario` (its natural key). Deliberately NO `evaluator` field: an old reader's line filter
-// (which requires an evaluator string) skips a retraction entirely, so version skew degrades to "the
-// retraction isn't applied yet", never to a mis-rendered reading. `by` is the retracting session; `note`
-// says why (a botched e2e filing, a wrong verdict).
+// `ts` within `scenario` (its natural key). The two event kinds are told apart POSITIVELY — a retraction
+// carries `retracts`, a reading carries `codeSha`; neither is recognized by another field's absence. `by`
+// is the retracting session; `note` says why (a botched e2e filing, a wrong verdict).
 export type Retraction = { retracts: string; scenario: string; note?: string; by?: string; ts: string }
 
 // parse the sidecar RAW: one event per non-blank line — a Reading, or a Retraction (a line carrying a
@@ -85,7 +85,7 @@ export function readSidecar(sidecarPath: string): { readings: Reading[]; retract
       const r = JSON.parse(t)
       if (!r || typeof r.scenario !== 'string') continue
       if (typeof r.retracts === 'string') retractions.push(r as Retraction)
-      else if (typeof r.evaluator === 'string') readings.push(r as Reading)
+      else if (typeof r.codeSha === 'string') readings.push(r as Reading)
     } catch { /* skip a malformed line */ }
   }
   return { readings, retractions }

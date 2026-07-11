@@ -152,7 +152,8 @@ export default {
     popup: {
       switch: 'switch pane (spec / history)',
       scroll: 'scroll · reveal the next version',
-      enter: 'cross to the node’s session',
+      lens: 'walk the tree behind the popup — it follows the focus',
+      enter: 'inert — the popup is a reading surface',
       esc: 'close the popup',
     },
     statusRows: {
@@ -228,7 +229,7 @@ export default {
     openIssues: ({ n }) => `${n} open`,
     closedIssues: ({ n }) => `${n} closed`,
     noIssues: 'no issues linked to this node yet.',
-    hint: '←→/hl/tab switch · j/k/↑↓ scroll · ⏎ session · esc back',
+    hint: '←→/hl/tab switch · j/k/↑↓ scroll · ⇧+nav walk the tree · esc back',
     statusLabel: 'status:',
     versionLabel: 'version:',
     lastEditedBy: 'last edited by:',

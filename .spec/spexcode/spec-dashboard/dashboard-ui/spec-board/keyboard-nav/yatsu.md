@@ -33,6 +33,27 @@ scenarios:
     code:
       - spec-dashboard/src/Dashboard.jsx
       - spec-dashboard/src/keymap.js
+  - name: lens-follows-focus
+    tags: [frontend-e2e, desktop]
+    description: >-
+      Open the dashboard, focus a node that has several siblings, and press `i` to open the node-info
+      popup. With the popup OPEN, press `Shift+j`: focus moves to the next sibling AND the popup
+      re-renders onto that sibling (its title/spec replace the old node's) — it does not close, and the
+      board pans behind it. Press `Shift+j` again for the next sibling, `Shift+k` back, `Shift+h` to
+      the parent. Then press a plain `j` (no modifier): the popup pane SCROLLS and focus does NOT move
+      — unmodified keys keep their popup meanings. Record the whole run as a video (this is a
+      multi-step interaction) and file with
+      `spex yatsu eval keyboard-nav --scenario lens-follows-focus --video <webm> --pass`.
+    expected: >-
+      The node-info popup is a lens, not a modal: Shift+h/j/k/l (and Shift+arrows) perform the same
+      relationship walk as the bare board while the popup is open, and the popup follows the focus —
+      each Shift+j lands on the next sibling and the popup shows that node at once, so a run of sibling
+      docs is read without ever closing it. Unmodified popup keys are untouched: plain j/k scroll the
+      pane, h/l/Tab switch panes, Esc closes, Enter stays inert. Across a lens move the selected pane
+      persists, falling back to the new node's own default pane when it lacks the selected one.
+    code:
+      - spec-dashboard/src/Dashboard.jsx
+      - spec-dashboard/src/keymap.js
   - name: enter-in-info-popup-is-inert
     tags: [frontend-e2e, desktop]
     description: >-
@@ -154,4 +175,5 @@ wheel against it mid-flight, screenshot that the wheel position holds — and sc
 shared momentum scroller (`scroll.js`). The modified-shortcuts scenario probes the real browser event
 stream after the app's capture handler has run: base keys that are graph bindings must remain browser
 shortcuts when Ctrl/⌘/Alt modifies them, while the deliberately declared modified app shortcut still
-opens search.
+opens search. The **lens-follows-focus** scenario is dynamic — a multi-step keyboard interaction whose
+point is the popup *changing* as focus walks — so its evidence is a **video** of the run, not a still.

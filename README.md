@@ -110,8 +110,11 @@ on the machine.
 spex new "make the settings page remember the last tab" --node settings
 ```
 
-launches a worker session in its own worktree on branch `node/settings`. The worker reads the
-governing spec before touching code, makes the change, rewrites the spec body to match, commits
+launches a worker session in its own worktree, on a branch named after the node
+(`node/settings-…`). The `--node` flag — or a `[[settings]]` mention in the prompt, same effect —
+only *binds* the session to the node: branch naming and board attribution, nothing more. The worker
+still finds and reads the governing spec itself before touching code, makes the change, rewrites
+the spec body to match, commits
 both (a hook stamps the `Session:` trailer), then proposes a merge and stops. Workers never merge
 themselves. The merge stays with the manager: when you fire it, the session's own agent runs the
 actual `git merge`, so conflicts land on the one who knows the work. The same dispatch is a

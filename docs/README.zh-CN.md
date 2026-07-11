@@ -99,8 +99,10 @@ spex dashboard           # 看板 UI,:5173,代理到后端
 spex new "让设置页记住上次打开的标签" --node settings
 ```
 
-会在 `node/settings` 分支的独立 worktree 里启动一个 worker 会话。worker 动代码之前先读管辖 spec,
-做出改动,把 spec 正文改写到和实现一致,把两者一起 commit(hook 自动盖 `Session:` 戳),然后提出
+会在独立 worktree 里启动一个 worker 会话,分支以节点命名(`node/settings-…`)。`--node`(或在 prompt
+里写 `[[settings]]`,效果相同)只是把会话*绑定*到节点:分支命名和看板归属显示,仅此而已。worker 仍然
+自己找到并读完管辖 spec 再动代码,做出改动,把 spec 正文改写到和实现一致,把两者一起 commit(hook 自动盖
+`Session:` 戳),然后提出
 merge 并停下。worker 不自己 merge。合并留在管理者手里:你按下 merge 时,实际的 git merge 由这个
 会话自己的 agent 执行,冲突落在最懂这份活的人手里。同样的派工在看板网页上就是一个按钮(board 的
 new-session 输入框);命令行形态是 agent 之间互相委派时用的。

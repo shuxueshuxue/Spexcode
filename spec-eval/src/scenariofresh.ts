@@ -53,8 +53,13 @@ const blockByOid = new Map<string, Map<string, string>>()
 async function fileChains(root: string, wanted: Set<string>): Promise<Map<string, { hash: string; oid: string }[]>> {
   const chains = new Map<string, { hash: string; oid: string }[]>()
   const alias = new Map<string, string>()
+  // DUAL pathspec — the live name AND the archived one ([[eval-core]]): this walk reads IMMUTABLE history,
+  // and pre-rename commits touched files literally named yatsu.md, so an archive answers only to its
+  // archive name. A single '*eval.md' pathspec truncates every chain at the yatsu.md→eval.md rename commit,
+  // making the rename read as each scenario's birth — a change-commit newer than every pre-rename reading's
+  // codeSha — and false-stales whole adopter corpora (the scenariofresh.test.ts regression pins this).
   const out = await gitA(['-C', root, '-c', 'core.quotePath=false', 'log',
-    '--raw', '--no-abbrev', '--full-history', '-M', `--format=${RS}%H`, '--', '*eval.md'])
+    '--raw', '--no-abbrev', '--full-history', '-M', `--format=${RS}%H`, '--', '*eval.md', '*yatsu.md'])
   for (const rec of out.split(RS)) {
     const nl = rec.indexOf('\n')
     if (nl < 0) continue

@@ -387,7 +387,7 @@ export default {
     offlineSubBefore: 'the worktree and its session ',
     offlineSubAfter: ' are intact. relaunch to resume the same conversation.',
     typeInd: '⌨ type mode',
-    typeHelp: 'keys (incl. ⌃/⌥/⌘ combos) go to the session · ⌥/⌘+I, Esc-Esc, or click to exit',
+    typeHelp: 'keys (incl. ⌃/⌥/⌘ combos) go to the session · ⌥/⌘+I or click to exit',
     typeExit: 'click to exit type mode',
     msgOffline: 'relaunch to message this session',
     msgPlaceholder: 'message this session · ⏎ to send',

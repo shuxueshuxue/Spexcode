@@ -48,9 +48,17 @@ what this design refuses is not fine-grained privacy but the bit-flip *represent
 - **Switching is migration, honestly.** private→public = move the node dir into `.spec/` and commit;
   public→private is the reverse, carrying residence's standing WARN that pushed history cannot be
   recalled. No bit pretends this is reversible.
-- **Deferred:** worker visibility (a dispatched worktree's checkout has no private root — copy vs
-  read-only mount, decided when the pain is measured); materializing private `surface:` config nodes;
-  a seeding affordance that plants the dir, its git init, and the ignore entry in one step.
+- **Outside the session lifecycle, by design.** A session is bound to a node by NAME only ([[launch]]'s
+  node-binding is metadata — branch naming and attribution; no machinery ever feeds spec content to a
+  session), so there is nothing to guard: a worktree simply does not contain the private root, and that
+  absence is the contract, not a gap. Private nodes are edited by an agent in the TRUNK checkout,
+  committed directly to the private repo — never through a worker's branch/merge pipeline. The honest
+  leak surfaces are the same as for any agent-readable local file (the launcher's model API, an agent
+  copying content into a public file), and no repo mechanism can close those; what git physics does
+  close is the merge channel: an excluded path is unstageable, so a worker's branch carries zero
+  private bytes.
+- **Deferred:** materializing private `surface:` config nodes; a seeding affordance that plants the
+  dir, its separate-gitdir init, and the ignore entry in one step.
 
 Until built, the owner's interim posture is the design's poor-man's version: exclude a dir per-clone
 and `git init` inside it — backup-history without dashboard-history.

@@ -2,12 +2,14 @@
 title: surface
 status: active
 hue: 260
-desc: A config node's surface is a frontmatter FIELD — surface: system|command|hook|skill|agent — not its location; discovered recursively under a config root.
+desc: A config node's surface is a frontmatter FIELD — one or more of system|command|hook|skill|agent (comma-listed when several) — not its location; discovered recursively under a config root.
 code:
 ---
 # surface
 
-A config node's **surface** — where it plugs in — is a `surface` **frontmatter field**, one of five values:
+A config node's **surface** — where it plugs in — is a `surface` **frontmatter field** naming one or MORE
+of five values (comma-separated when several: the node plugs into EVERY surface it lists, one body serving
+each — e.g. a plugin that is both an on-demand skill and a new-session command preset):
 
 - `surface: command` — a **command** preset, offered in the new-session `/` dropdown.
 - `surface: system` — a **system** contract: its body is materialized (in name order) into the
@@ -41,7 +43,7 @@ project system spec). A node that declares no `surface` (e.g. this doc node, or 
 reaches no surface at all.
 
 In [[source-of-truth]]'s `specs.ts`, `loadSurface(s)` walks each root recursively and keeps the nodes whose
-`surface` field equals `s`: `loadConfig` gathers command ([[spec-cli]]'s `/api/config`, the
+`surface` field lists `s` (membership, not equality): `loadConfig` gathers command ([[spec-cli]]'s `/api/config`, the
 [[session-console]] `/` palette), `loadSystemConfig` gathers system ([[sessions]]'s launcher), and
 `loadHookConfig` gathers hook (compiled into the dispatch manifest), `loadSkillConfig` gathers skill
 (rendered to a per-harness `SKILL.md` by [[harness-delivery]]'s materialize), and `loadAgentConfig` gathers

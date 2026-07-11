@@ -74,7 +74,7 @@ Requires Node ≥ 22 and git. This part is plain tooling — no AI involved yet.
 ```sh
 npm i -g spexcode        # installs the `spex` command
 cd your-repo
-spex init                # seeds .spec/, installs git hooks, renders the agent contract
+spex init                # seeds .spec/, installs git hooks, materializes the agent contract
 spex serve               # API backend on :8787
 spex dashboard           # board UI on :5173, proxying to the backend
 ```

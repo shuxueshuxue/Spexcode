@@ -13,18 +13,19 @@ scenarios:
     tags: [backend-api]
     description: >-
       Two worktrees of one project diverge in `.config`: tree B adds a `surface: hook` node bound to
-      SessionStart (a marker script), tree A stays stock. Materialize B, then materialize A (A renders LAST),
+      SessionStart (a marker script), tree A stays stock. Materialize B, then materialize A (A materializes
+      LAST),
       then fire a SessionStart dispatch with cwd = B.
     expected: >-
       B's dispatch runs B's OWN compiled hook set — the marker fires — because each tree's manifest lives in
       its own slot (`<runtime>/trees/<enc-worktree>/hooks-manifest`), keyed by the dispatching tree's
-      `rev-parse --show-toplevel`. A's later render lands in A's slot and can never overwrite what B's
+      `rev-parse --show-toplevel`. A's later materialize lands in A's slot and can never overwrite what B's
       sessions dispatch (the old single global slot was last-writer-wins across trees).
   - name: pre-slot-tree-falls-back-to-legacy-manifest
     tags: [backend-api]
     description: >-
       Simulate a worktree from before the per-tree slots: no `trees/<enc>` slot exists for it, but the legacy
-      global `<runtime>/hooks-manifest` (a pre-migration render) is present. Fire a dispatch from that tree,
+      global `<runtime>/hooks-manifest` (a pre-migration materialize left it) is present. Fire a dispatch from that tree,
       then run any git-native anchor (`spex materialize`) in it and dispatch again.
     expected: >-
       The slot-less dispatch falls back to the legacy global manifest — hooks (Stop gate included) keep
@@ -48,4 +49,4 @@ manifest equals the legacy map (so dashboard hooks are unchanged); a dispatch re
 worktree (per-tree slots — two trees with divergent `.config` never trade hook sets), with the legacy
 global manifest as the migration-window fallback for a not-yet-slotted tree; real blocking rides the stdout
 decision JSON the dispatcher passes through verbatim. Measure the manifest by byte-diff; measure isolation
-by rendering two divergent trees and dispatching from each.
+by materializing two divergent trees and dispatching from each.

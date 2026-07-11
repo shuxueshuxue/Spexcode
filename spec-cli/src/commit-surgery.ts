@@ -10,7 +10,7 @@ import { HARNESSES } from './harness.js'
 //     the worktree: `git add -p`'s partial staging survives byte-for-byte; only the block is removed);
 //   - a staged generated/machine artifact that HEAD does not track → evict it (its tracked contribution is
 //     zero bytes by definition — an empty husk is worse than absence);
-//   - anything HEAD already tracks is never deleted by a hook — a legacy committed render heals by the
+//   - anything HEAD already tracks is never deleted by a hook — a legacy committed artifact heals by the
 //     block-strip above, converging history toward pristine without a surprise deletion commit.
 // Both operations carry zero intent ambiguity (the block's content is never the user's; a wholly-ours file
 // holds no user byte), so there is no question to ask and no rejection — one printed note per repair, and
@@ -67,7 +67,7 @@ export function commitSurgery(proj = process.cwd()): void {
       if (blob === null) continue
       const stripped = stripSpexcodeBlock(blob)
       if (stripped === blob) continue                               // no block staged — clean already did its job
-      if (!stripped.trim() && !inHead(p)) evict(p, 'wholly a spexcode render')
+      if (!stripped.trim() && !inHead(p)) evict(p, 'wholly a spexcode materialized artifact')
       else replaceBlob(p, stripped)
     } else if (machine.has(p) || p.startsWith('.worktrees/')) {
       if (!inHead(p)) evict(p, 'a machine-local spexcode file')
@@ -75,7 +75,7 @@ export function commitSurgery(proj = process.cwd()): void {
     } else if (generatedDirs.some((d) => p.startsWith(d))) {
       if (inHead(p)) continue                                       // historically tracked — the host's call
       const blob = stagedBlob(p)
-      if (blob !== null && blob.includes(GENERATED_MARK)) evict(p, 'a generated skill/agent render')
+      if (blob !== null && blob.includes(GENERATED_MARK)) evict(p, 'a generated skill/agent artifact')
     }
   }
 }

@@ -30,12 +30,12 @@ scenarios:
     tags: [cli]
     description: >-
       Adopt with the default set (both natives delivered), then narrow spexcode.json `harnesses` to
-      ["codex"]. First fire a harness lifecycle event through dispatch.sh (must render NOTHING — the
+      ["codex"]. First fire a harness lifecycle event through dispatch.sh (must materialize NOTHING — the
       dispatcher is not a trigger), then bring the edit to a git-native anchor ([[commit-surgery]]): the
       pre-commit hook's unconditional materialize, or `spex materialize`. Inspect the .claude artifacts.
     expected: >-
-      The harness event leaves everything byte-unchanged. The anchor render then prunes claude's artifacts
-      (.claude gone, CLAUDE.md render gone / block stripped) under the narrowed set. A selection change
+      The harness event leaves everything byte-unchanged. The anchor materialize then prunes claude's artifacts
+      (.claude gone, the generated CLAUDE.md gone / block stripped) under the narrowed set. A selection change
       self-heals at the next git transition — never via a harness event, never waiting for an unrelated
       .config edit.
 ---

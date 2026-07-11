@@ -76,7 +76,7 @@ function maxActive(): number {
 // rvSock is imported only for the two NON-delivery uses that remain product-level: building the launch env var
 // (rvEnv, below) and the best-effort socket sweep on close.
 // env prefix put in front of the spawned agent so it creates this session's rendezvous control socket — and
-// so its hooks + materialize render to the SAME store the backend uses. SPEXCODE_HOME/CODEX_HOME are
+// so its hooks + materialize write to the SAME store the backend uses. SPEXCODE_HOME/CODEX_HOME are
 // propagated when set, because the session inherits the tmux SERVER's env (not the backend's), so without this
 // an overridden home would silently leak the session's hook-state + codex-trust to the default ~/.spexcode /
 // ~/.codex. Deterministic: the session's store = the backend's store, never the ambient env's.
@@ -1077,8 +1077,9 @@ export async function newSession(node: string | null, prompt: string, parent: st
   const branch = `node/${slug}`
   const path = join(mainRoot(), '.worktrees', slug)
   await gitA(['-C', mainRoot(), 'worktree', 'add', '-b', branch, path, mainBranch()])
-  // the checkout delivers the tracked spec sources and the materialize below delivers the renders; the ONE
-  // thing git cannot carry is the machine-local spexcode.local.json — copied as a snapshot ([[render-policy]];
+  // the checkout delivers the tracked spec sources and the materialize below delivers the materialized
+  // artifacts; the ONE
+  // thing git cannot carry is the machine-local spexcode.local.json — copied as a snapshot ([[residence]];
   // no-op when the main checkout has none).
   seedWorktreeHostState(mainRoot(), path)
   // prepared but NOT launched: enters the queue as `queued`. drainQueue() below launches it at once when a
@@ -1100,7 +1101,7 @@ export async function newSession(node: string | null, prompt: string, parent: st
   }
   writeRecord(rec)
   writePromptFile(id, prompt)   // capture the ORIGINATING prompt (the human/manager's ask) as store metadata (best-effort)
-  // render the harness-discovered artifacts INTO the worktree (CLAUDE.md/AGENTS.md contract block, .claude/.codex
+  // materialize the harness-discovered artifacts INTO the worktree (CLAUDE.md/AGENTS.md contract block, .claude/.codex
   // shims, manifest to the global store) so the launched agent gets the contract + hooks the SAME way a
   // self-launched one does — by auto-discovery, not CLI injection. This is why the launch line below carries no
   // --append-system-prompt / --settings, and why we no longer hide CLAUDE.md: hiding it suppressed the agent's
@@ -1124,9 +1125,9 @@ export async function newSession(node: string | null, prompt: string, parent: st
   return toSession(after, queued ? 'queued' : 'working', queued ? 'offline' : 'starting')
 }
 
-// @@@ bootstrapMaterialize - the creation-time materialize is BOOTSTRAP, not best-effort: it is what renders
+// @@@ bootstrapMaterialize - the creation-time materialize is BOOTSTRAP, not best-effort: it is what writes
 // the worktree's .claude/.codex shims (the settings.json hook wiring) in the first place, and every
-// lifecycle dispatch RIDES ON those hooks — so when this render fails, no hook ever fires,
+// lifecycle dispatch RIDES ON those hooks — so when this materialize fails, no hook ever fires,
 // and the worker comes up ungoverned (no contract block, no stop-gate) with nothing saying so. Fail loud
 // instead: log the cause + worktree, and stamp the failure on the record's `note` so the board/watch surface
 // it. The launch still proceeds — a visibly degraded worker the human can close + re-dispatch beats a refused
@@ -1137,7 +1138,7 @@ export function bootstrapMaterialize(rec: SessRec, doMaterialize: (proj: string)
     doMaterialize(rec.worktreePath)
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
-    console.error(`spex: materialize failed for worktree ${rec.worktreePath} — hooks/contract not rendered, worker launches UNGOVERNED: ${msg}`)
+    console.error(`spex: materialize failed for worktree ${rec.worktreePath} — hooks/contract not materialized, worker launches UNGOVERNED: ${msg}`)
     writeRecord({ ...rec, note: `materialize failed at creation — worker ungoverned (no hooks/contract): ${msg}` })
   }
 }
@@ -1260,7 +1261,7 @@ export function markIdle(sessionId?: string): boolean {
 // states block a declaration: (1) any uncommitted working-tree change, or (2) 0 commits ahead of main
 // (nothing committed to merge). Since the global-store refactor, SpexCode writes NO per-session files into
 // the worktree (the runtime lives in ~/.spexcode), and the only in-tree SpexCode artifacts are exclude-
-// hidden renders or filter-covered contract blocks ([[render-policy]]), so
+// hidden materialized artifacts or filter-covered contract blocks ([[residence]]), so
 // neither shows as an uncommitted change — the worktree is pristine and EVERY dirty path is genuine spec/code
 // work, no runtime-file filtering needed.
 // Runs from cwd = the session worktree; ALL git goes through git() so the hook's exported GIT_DIR/GIT_INDEX_FILE
@@ -1449,7 +1450,7 @@ export async function exitSession(id: string): Promise<boolean> {
 // the session's whole global-store record dir — the work is gone, not just stopped. Same stop primitive as
 // exitSession (no duplicate kill path), then the git worktree/branch teardown that exit deliberately skips,
 // then the store sweep (exit KEEPS the record so the session stays on the board offline; close discards it).
-// The tree's render slot ([[runtime]] trees/<enc>) retires with the worktree — its key needs the live tree,
+// The tree's materialize slot ([[runtime]] trees/<enc>) retires with the worktree — its key needs the live tree,
 // so it is resolved BEFORE the removal; both sweeps are best-effort (residue is swept at uninstall anyway).
 export async function closeSession(id: string): Promise<boolean> {
   const wt = await findWorktree(id)

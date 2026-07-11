@@ -2,15 +2,16 @@ import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync } fro
 import { dirname, join } from 'node:path'
 import { git } from './git.js'
 
-// @@@ worktree-sources ([[render-policy]]) - a fresh session worktree is fed by THREE transports, one per
+// @@@ worktree-sources ([[residence]]) - a fresh session worktree is fed by THREE transports, one per
 // source kind, and the kind decides the transport — never a mode branch:
 //   - TRACKED project state (`.spec`, `spexcode.json`) arrives by GIT CHECKOUT: the sources are always
 //     tracked (git is the database), so `git worktree add` alone delivers them. No symlink — a link is a
 //     WRITE-SEMANTICS declaration (write-through to the main tree), and spec writes go back through the
 //     branch/merge ritual, not through a side channel.
-//   - RENDERS (contract blocks, shims, skills) are DERIVED — transported by re-render, not by link or copy:
+//   - MATERIALIZED ARTIFACTS (contract blocks, shims, skills) are DERIVED — transported by re-materialize,
+//     not by link or copy:
 //     sessions.ts materializes into the worktree at creation, and the git-native anchors (pre-commit /
-//     post-checkout / post-merge — [[commit-surgery]]) re-render on change.
+//     post-checkout / post-merge — [[commit-surgery]]) re-materialize on change.
 //   - HOST state (`spexcode.local.json`, machine-local and never tracked) is COPIED — a snapshot: the worker
 //     reads the same launchers/policy the host had at dispatch, but its writes land on its own copy and die
 //     with the worktree, never on the host's real config (a worker once wrote "its" test config through the
@@ -32,7 +33,7 @@ export function seedWorktreeHostState(main: string, wt: string): void {
 // what we seed, we hide: a seeded entry git still sees is force-add bait (a real PR once carried seeded
 // files into a product repo). `.git/info/exclude` lives in the COMMON git dir, so one write hides the entry
 // in every linked worktree AND the main checkout. Only entries seeded by THIS call and reported un-ignored
-// by `git check-ignore` are written: idempotent across dispatches, and a repo whose render already ignores
+// by `git check-ignore` are written: idempotent across dispatches, and a repo whose materialize already ignores
 // the overlay (materialize's block under any policy) writes nothing — the self-heal for a half-configured repo.
 function hideSeededFromGit(wt: string, seeded: string[]): void {
   for (const f of seeded) {

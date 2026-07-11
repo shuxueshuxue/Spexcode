@@ -47,13 +47,14 @@ when the package is installed outside the dogfood repo — never a hardcoded rep
 literal restated in the code, which is how the message once claimed a `["src"]` starter while the template
 seeded `["."]` (the first-minute lie a real field adoption hit).
 
-**Adoption asks no footprint question.** The retired `--render` vote is gone: renders are never tracked
-([[render-policy]]), so init's own materialize covers a host-TRACKED contract file with the clean/smudge
+**Adoption asks no footprint question.** The retired `--render` vote is gone: materialized artifacts are
+never tracked
+([[residence]]), so init's own materialize covers a host-TRACKED contract file with the clean/smudge
 filter on the spot — clean status, no "mystery M", no decision hint — and hides wholly-ours artifacts in
 the per-clone exclude without touching the host's `.gitignore`. A lingering `render`/`private` field in a
 pre-existing config is ignored with a loud non-fatal notice; nothing about it is ever fatal to adoption.
 
-**An illegal harness-target set fails loud, up front.** Before rendering, `init` validates the project's
+**An illegal harness-target set fails loud, up front.** Before materializing, `init` validates the project's
 [[harness-select]] `harnesses` set (from the just-planted/existing `spexcode.json`) and aborts with a stated
 reason on an illegal one — a plugin paired with a native harness, or a plugin with no landing folder — rather
 than letting the later materialize swallow it as a soft "skipped" warning. A fresh starter `spexcode.json`

@@ -20,7 +20,7 @@ import { git } from './git.js'
 // dispatch.sh's first argument (`bash <dispatch> <id> <Event>`). dispatch.sh exports SPEXCODE_HARNESS, so a
 // hook subprocess learns its harness deterministically from the shim that wired it — never from guessing the
 // payload shape. On the TS side the harness is derived from the selected launcher or ALL adapters at once
-// (materialize renders every harness's artifacts).
+// (materialize writes every harness's artifacts).
 
 export type HarnessId = 'claude' | 'codex'
 export type HarnessLivenessRecord = { session: string; harnessSessionId?: string | null }
@@ -159,7 +159,7 @@ export interface Harness {
 // its existing importers.
 export type DispatchResult = { ok: boolean; error?: string }
 export type HarnessDeliveryRecord = { session: string; worktreePath?: string; harnessSessionId?: string | null; runtimeDir?: string }
-// the on-demand surface artifacts a materialize render wrote, by node NAME — so clean() knows EXACTLY which
+// the on-demand surface artifacts a materialize pass wrote, by node NAME — so clean() knows EXACTLY which
 // skill subdirs / agent files are SpexCode's to remove (name-scoped, never a blind wipe of a dir the user may
 // also populate). materialize passes the live skill/agent node names; clean reconstructs the same paths.
 export type HarnessArtifacts = { skills: readonly string[]; agents: readonly string[] }
@@ -771,7 +771,7 @@ export function removeManagedBlock(file: string, comment: readonly [string, stri
   // remove ONLY our block plus the blank lines writeManagedBlock inserted around it; do NOT normalize the
   // user's OWN whitespace elsewhere — this must leave every other byte intact so it is a faithful INVERSE of
   // writeManagedBlock's append. A global `\n{3,}→\n\n` collapse used to sit here and mutated pre-existing
-  // blank-line runs in the user's file, which broke the policy round-trip ([[render-policy]]): a mode flip
+  // blank-line runs in the user's file, which broke the policy round-trip ([[residence]]): a mode flip
   // and back left a spurious one-line diff on a .gitignore that had internal blank lines. The leading-newline
   // strip is GUARDED the same way: it exists only for a block sitting at the TOP of the file (whose '\n'
   // replacement would otherwise become a leading blank) — a host file that BEGINS with its own blank lines
@@ -1045,7 +1045,7 @@ export const codexHarness: Harness = {
   resumeArg: (rec) => (rec.harnessSessionId ? `--resume ${rec.harnessSessionId}` : ''),
 }
 
-// every adapter — materialize iterates this to render each harness's artifacts in one pass.
+// every adapter — materialize iterates this to write each harness's artifacts in one pass.
 export const HARNESSES: readonly Harness[] = [claudeHarness, codexHarness]
 
 // the legacy/default adapter for old records and config defaults. New launches derive harness from a launcher.

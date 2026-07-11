@@ -11,7 +11,7 @@ code:
 ## raw source
 
 When a user launches their OWN claude/codex — no SpexCode process in the launch — the whole workflow has
-to reach that agent through files the harness auto-discovers: the artifacts [[materialize]] renders. So
+to reach that agent through files the harness auto-discovers: the artifacts [[materialize]] writes. So
 the question "is this agent actually governed, or silently running free?" has a concrete answer, and
 `spex doctor` is the command that gives it. It DIAGNOSES the materialized contract for the current agent —
 and, behind an explicit gate, will REPAIR it — keeping every footprint visible and reversible, so Spex
@@ -24,7 +24,7 @@ plugin bundle the user installed independently or left behind, doubling every ho
 ## expanded spec
 
 Bare `spex doctor` reports, per layer, whether the workflow truly reaches THIS agent. It loops the
-[[harness-adapter]]'s `HARNESSES` (the same adapters [[materialize]] renders through), so claude and codex
+[[harness-adapter]]'s `HARNESSES` (the same adapters [[materialize]] delivers through), so claude and codex
 are both covered with no hardcoded paths and a new harness is diagnosed for free:
 
 - **preconditions** — without these nothing downstream fires: `spex` (and the harness CLI) must RESOLVE on

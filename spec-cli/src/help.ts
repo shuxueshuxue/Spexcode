@@ -157,10 +157,11 @@ Control another session (all take SEL):
       key surface is UNSTABLE and can confirm dangerous dialogs — don't reach for it unless a plain
       \`session send\` text provably cannot land.
   spex session rename <SEL> "<name>"     set the display name ("" clears)
-  spex session capture <SEL>             the live pane as text
-  spex session prompt <SEL>              the session's originating prompt
-  spex session reopen <SEL> [--force]    relaunch ONLY if confirmed offline (--force for a wedged one)
-  spex session exit <SEL>                soft stop: kill the agent, KEEP the worktree (resumable)
+  spex session show <SEL> [--capture] [--json]
+      The session record: status · node · branch · launcher · the full originating prompt.
+      --capture prints the LIVE PANE as text instead (empty pane = exit 0; unknown session = exit 2).
+  spex session resume <SEL> [--force]    relaunch ONLY if confirmed offline (--force for a wedged one)
+  spex session stop <SEL>                soft stop: kill the agent, KEEP the worktree (resumable)
   spex session close <SEL>               retire the session and its worktree
 
 Worker verbs (declare YOUR OWN state — a claim the board and your supervisor act on):
@@ -171,10 +172,10 @@ Worker verbs (declare YOUR OWN state — a claim the board and your supervisor a
 Human escape hatch:
   spex session attach <SEL>              sit in the worker's REAL tmux (detach: C-b d). INTERACTIVE
                                          AND BLOCKING — an agent must NEVER run it in a turn: use
-                                         capture/send. LOCAL-only (fails loud on a remote backend).
+                                         show --capture / send. LOCAL-only (fails loud on a remote backend).
 
 ${SEL_NOTE}
-Manager verbs that WRITE (send/rename/reopen/exit/close/merge) are PROJECT-BOUND: a backend serving
+Manager verbs that WRITE (send/rename/resume/stop/close/merge) are PROJECT-BOUND: a backend serving
 another project's repo refuses loudly — name the target with --api <url> to drive it on purpose.
 ${MENTION_NOTE}`,
     see: 'spex eval ls --session <SEL> (the session’s measured loss) · spex help eval',

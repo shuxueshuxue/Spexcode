@@ -16,8 +16,8 @@ scenarios:
     description: >
       Write a multi-paragraph prompt file deliberately loaded with the shell hazards the flag exists to
       dodge (backticks, `$()`, `$VAR`, mixed quotes), launch a real session with
-      `spex new --prompt-file <file>` through the running backend, then read the session's recorded
-      originating prompt back (`spex session prompt <id>`) and byte-compare it to the file. Close the
+      `spex session new --prompt-file <file>` through the running backend, then read the session's recorded
+      originating prompt back (`spex session show <id> --json`, the `prompt` field) and byte-compare it to the file. Close the
       probe session after.
     expected: |
       The launch succeeds and the readback is byte-identical to the file — every hazard character intact,

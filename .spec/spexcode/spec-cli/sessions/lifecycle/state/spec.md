@@ -97,26 +97,26 @@ review+`online` (process alive, rendezvous socket open, the terminal mounts); do
 review+`offline` (the relaunch panel). A stable review+`online` session genuinely exists — a doer
 proposes, then idles awaiting the merge — not just a test artifact.
 
-Offline is reachable on purpose, not only by a crash. **`exit`** is the human-only *soft stop* — the inverse
-of `reopen`: it kills the agent's tmux + rendezvous socket but **leaves the worktree, branch, transcript, and
+Offline is reachable on purpose, not only by a crash. **`stop`** is the human-only *soft stop* — the inverse
+of `resume`: it kills the agent's tmux + rendezvous socket but **leaves the worktree, branch, transcript, and
 the global record**, so the session simply reads `offline` and the relaunch panel offers to `--resume` the same
 conversation. Because it touches no `session.json`, the lifecycle the agent last authored survives the stop
-untouched — whereas `close` removes the worktree AND sweeps the global record dir. **`reopen`** is the inverse
-of `exit`, and it is symmetric: it brings the agent back up (relaunching it `--resume`d into the same
+untouched — whereas `close` removes the worktree AND sweeps the global record dir. **`resume`** is the inverse
+of `stop`, and it is symmetric: it brings the agent back up (relaunching it `--resume`d into the same
 conversation only when it is genuinely offline; the frontend exposes this solely as the offline relaunch panel)
 and settles the **resting** lifecycle under the SAME active-only guard `idle` uses — a resumed agent that was
 `active` (working) is now just sitting at its prompt → `idle`, while every deliberate declaration survives the
-resume untouched (`awaiting` and **its proposal**, `asking`, `parked`, `error`). reopen deliberately does NOT
+resume untouched (`awaiting` and **its proposal**, `asking`, `parked`, `error`). resume deliberately does NOT
 touch the proposal: resuming a session that is proposing a merge must not silently withdraw it — proposals are
 reversible only by MESSAGING the session (mark-active clears them), never as a hidden side-effect of a relaunch.
-So reopen never itself makes the agent work; the `merge` dispatch, which reopens ONLY to relaunch a dead agent
+So resume never itself makes the agent work; the `merge` dispatch, which resumes ONLY to relaunch a dead agent
 so the dispatch hits a live one, then sends the merge prompt — and THAT prompt is what flips the lifecycle to
 `active` (and clears the now-obsolete proposal) through mark-active.
 
 **The resume guard — restore-on-alive must be impossible.** Relaunch is a *kill-then-respawn*, so it destroys
 a running agent's in-flight work the instant the agent is actually alive. That was the incident's kill-shot:
 the board lied (a live worker read `offline`), the human hit relaunch, and live claude processes died mid-task.
-So reopen re-derives the agent's liveness **freshly** (the same listener-verified probe above, not a possibly-
+So resume re-derives the agent's liveness **freshly** (the same listener-verified probe above, not a possibly-
 stale board reading) and **REFUSES LOUD** rather than relaunch a live agent — the API answers `409` and the
 dashboard's relaunch panel shows the refusal, never a silent no-op. You steer a live agent by **messaging** it,
 not by restoring it. Death must be **proven**: an `unknown` probe (the tmux timeout that starts under load)
@@ -126,7 +126,7 @@ alive process (the one case where a deliberate kill is the repair). Only a **con
 send the merge prompt to, so an already-`online` one is a satisfied no-op (never a refusal) and only a
 confirmed-offline one is relaunched — the guard protects the human relaunch, not the internal ensure-live.
 Contrast **`close`**, the other human-only terminal verb: it *removes* the worktree, discarding the work. Both
-are human-only and direct (not agent proposals); exit is fully reversible (relaunch), close is not. An exited
+are human-only and direct (not agent proposals); stop is fully reversible (relaunch), close is not. A stopped
 session occupies no working-set slot ([[launch]]) — offline never does — so the freed capacity drains a queued
 one. The one
 *inferred* refinement stays orthogonal and narrow: an `online` `active` session reads `idle` if the

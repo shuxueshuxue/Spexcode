@@ -359,7 +359,10 @@ function loadSurface(surface: 'command' | 'system' | 'hook' | 'skill' | 'agent')
       // @@@ skip pending - a `status: pending` plugin is DECLARED INTENT, not yet active. It renders on the
       // board (via loadSpecs) but must NOT gather: neither a command preset, nor folded into a system prompt,
       // nor a live hook. Only built/active plugins surface here, so pending stubs stay inert.
-      if (str(fm.surface) === surface && str(fm.status) !== 'pending') {
+      // the surface field may name SEVERAL surfaces (comma-separated or a YAML list) — the node plugs
+      // into every one it lists, so the match is membership, not equality.
+      const surfaces = list(fm.surface).flatMap((v) => String(v).split(',')).map((v) => v.trim()).filter(Boolean)
+      if (surfaces.includes(surface) && str(fm.status) !== 'pending') {
         out.push({
           name,
           title: str(fm.title, name),

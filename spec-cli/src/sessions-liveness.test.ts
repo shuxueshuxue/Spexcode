@@ -13,7 +13,7 @@ const rec = (over: Partial<SessRec> = {}): SessRec => ({
   sortKey: null, createdAt: 1, harness: 'claude', harnessSessionId: null, launcher: null, launchCmd: null,
   ...over,
 })
-const snap = (over: Partial<LiveSnap> = {}): LiveSnap => ({ probeFailed: false, windows: new Map(), sockets: new Set(), ...over })
+const snap = (over: Partial<LiveSnap> = {}): LiveSnap => ({ probeFailed: false, windows: new Map(), sockets: new Set(), unproven: new Set(), ...over })
 
 test('probe FAILURE reads unknown, never a false offline (board honesty under load)', () => {
   const r = rec()
@@ -32,6 +32,16 @@ test('claude online requires a live listener, not just a tmux window (listener-v
   assert.equal(liveness(rec(), snap({ windows: withWindow, sockets: new Set() })), 'offline')
   // no window at all → offline regardless of a lingering socket
   assert.equal(liveness(rec(), snap({ windows: new Map(), sockets: new Set([id]) })), 'offline')
+})
+
+test('an UNPROVEN listener probe reads unknown, never a false offline (issue #40 — wedged/thrashed, not dead)', () => {
+  const id = 'sess-live-1'
+  const withWindow = new Map([[id, {}]])
+  // window up, listener probe could not conclude (timeout under load / EAGAIN off a full backlog) → unknown:
+  // the agent may be alive-but-busy, and a supervisor acting on a false offline would kill a live worker.
+  assert.equal(liveness(rec(), snap({ windows: withWindow, unproven: new Set([id]) })), 'unknown')
+  // but a PROVEN-dead listener (refused/absent — not in either set) still reads offline as before.
+  assert.equal(liveness(rec(), snap({ windows: withWindow })), 'offline')
 })
 
 test('resume replays the PINNED launcher command, immune to a since-changed default (resume-launcher-pin)', () => {

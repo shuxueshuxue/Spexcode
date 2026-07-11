@@ -87,3 +87,13 @@ transient: the wait warns once and **keeps polling** within its timeout, riding 
 dying the instant a sibling merge lands; only exhausting the *whole* timeout still-unreachable fails (as
 backend-down, not a false timeout). An **HTTP error** (reachable but broken — a `BackendError` *with* a
 status) is a real terminal condition and still **fails loud at once**.
+
+**A transport failure is never a session verdict.** `wait`'s stdout line is the one thing a supervisor acts
+on, so its vocabulary is split in two: a **session status** (`review`, `done`, `offline`, …) may only ever
+relay a **successful backend answer** — `offline` in particular only when that answer says the session's
+tmux/agent is genuinely gone — while a **backend failure** exits with its own transport-scoped token
+**outside** that vocabulary: `backend-unreachable` (the whole budget spent retrying an unreachable backend)
+or `backend-error` (reachable but broken, immediate), each with the failure detail on stderr. The exit codes
+keep the outcomes machine-distinct: `0` actionable status, `1` plain timeout (backend fine, session never
+actionable), `2` target gone, `3` backend failure. A slow or dead board can therefore delay a wait's answer,
+but can never make it *claim* anything about the session (the false-`offline` supervisor trap, issue #40).

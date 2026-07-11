@@ -135,7 +135,7 @@ function raws(): Raw[] {
   return acc
 }
 
-// async twin of walk/raws for the HOT board build ([[board-cache]]): reading each spec.md through
+// async twin of walk/raws for the HOT board build ([[graph-cache]]): reading each spec.md through
 // fs/promises YIELDS the event loop between files, so a build never stalls a `/health` liveness probe the
 // way the sync walk (one ~450ms uninterrupted stretch) did. Same output as raws() — identical push order
 // (pre-order DFS, dir before children) and the same reId — so every caller reads the same nodes; only
@@ -211,7 +211,7 @@ export function loadSpecsLite(): SpecLite[] {
 }
 
 // one node's body + parsed parts, filesystem-only (no git). The board omits both to stay lean
-// ([[board-lean]]); the detail view fetches them here when a node opens. null when the id isn't a node.
+// ([[graph-lean]]); the detail view fetches them here when a node opens. null when the id isn't a node.
 export function specContent(id: string): { body: string; parts: ReturnType<typeof parseParts> } | null {
   const r = raws().find((x) => x.id === id)
   return r ? { body: r.body.trim(), parts: parseParts(r.body) } : null

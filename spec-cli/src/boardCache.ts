@@ -1,13 +1,13 @@
 import { buildBoard } from './board.js'
 
-// @@@ board-cache — single-flight + cache for the hot /api/board build ([[board-lean]]). Assembling the
+// @@@ graph-cache — single-flight + cache for the hot /api/graph build ([[graph-lean]]). Assembling the
 // board is expensive (two full-history git-log walks cold, a full `.spec` fs walk every build), so the
 // route MUST NOT rebuild per request: index.ts once ran `buildBoard()` inline on EVERY poll, so a normal
 // dashboard's overlapping polls (+ SSE-triggered refetches) multiplied into N simultaneous builds and
 // starved the event loop — one real user could wedge the backend. Here ONE build is shared by all
 // concurrent callers (a promise memo — this IS the max-concurrent-builds cap: at most one runs) and its
 // result is cached until a REAL change invalidates it. The cache is invalidated by the SAME freshness
-// signals [[board-stream]] already watches (session-store writes, git-ref moves, the cold tick), via
+// signals [[graph-stream]] already watches (session-store writes, git-ref moves, the cold tick), via
 // invalidateBoard(). So a poll storm costs ONE build, a quiet stretch costs ZERO, and the SSE rebuild and
 // the route share the very same in-flight build.
 
@@ -22,7 +22,7 @@ const BUDGET_MS = Number(process.env.SPEXCODE_BOARD_BUDGET_MS || 1500)
 // below, so a never-settling buildBoard() would pin the single-flight forever — every later read (even of a
 // perfectly good cached board) short-circuits into the pinned promise before `valid` is consulted,
 // invalidation can't help, no log ever fires, and only a restart cures it (the live wedge: hung git
-// children → /api/board 503 forever, silently). So the build races a generous watchdog that REJECTS loudly;
+// children → /api/graph 503 forever, silently). So the build races a generous watchdog that REJECTS loudly;
 // the rejection flows through the SAME finally → inflight clears → the next read retries fresh. Sitting at
 // the single-flight boundary, this one wall bounds every never-settle cause — including ones with no child
 // process at all (fs/promises under libuv threadpool starvation); git.ts's per-child timeouts merely make
@@ -47,7 +47,7 @@ export function invalidateBoard(): void {
 // build shares the in-flight promise; a caller after a completed build gets the cached value until the
 // next invalidation. A change that lands WHILE a build runs (gen moved) leaves the cache invalid so the
 // NEXT read rebuilds — the just-finished build still returns to its waiters (freshest available when they
-// asked), never cached as current. Mirrors [[board-stream]]'s building/dirty loop.
+// asked), never cached as current. Mirrors [[graph-stream]]'s building/dirty loop.
 export function getBoard(): Promise<Board> {
   if (inflight) return inflight
   if (valid && cached) return Promise.resolve(cached)
@@ -63,7 +63,7 @@ export function getBoard(): Promise<Board> {
         // CLI process open.
         new Promise<never>((_, reject) => {
           watchdog = setTimeout(() => {
-            console.warn(`spec-cli: /api/board build did not settle within ${BUILD_TIMEOUT_MS}ms — wedged build abandoned so the next read can retry`)
+            console.warn(`spec-cli: /api/graph build did not settle within ${BUILD_TIMEOUT_MS}ms — wedged build abandoned so the next read can retry`)
             reject(new Error(`board build did not settle within ${BUILD_TIMEOUT_MS}ms`))
           }, BUILD_TIMEOUT_MS)
           watchdog.unref?.()
@@ -76,7 +76,7 @@ export function getBoard(): Promise<Board> {
     } finally {
       clearTimeout(watchdog)
       const ms = Date.now() - t0
-      if (ms > BUDGET_MS) console.warn(`spec-cli: /api/board build took ${ms}ms (budget ${BUDGET_MS}ms) — hot path is slow`)
+      if (ms > BUDGET_MS) console.warn(`spec-cli: /api/graph build took ${ms}ms (budget ${BUDGET_MS}ms) — hot path is slow`)
       inflight = null
     }
   })()
@@ -84,9 +84,9 @@ export function getBoard(): Promise<Board> {
   return p
 }
 
-// the SERIALIZED board for the /api/board route — JSON.stringify runs ONCE per build, not once per poll,
+// the SERIALIZED board for the /api/graph route — JSON.stringify runs ONCE per build, not once per poll,
 // so a poll storm of cache hits costs zero serialization CPU (only the etag hash for the 304 path). The SSE
-// path still takes the object (getBoard) because it decomposes it into delta units ([[board-delta]]).
+// path still takes the object (getBoard) because it decomposes it into delta units ([[graph-delta]]).
 export async function getBoardJson(): Promise<string> {
   const board = await getBoard()
   if (board === cached && cachedJson !== null) return cachedJson

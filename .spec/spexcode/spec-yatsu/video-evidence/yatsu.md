@@ -13,7 +13,7 @@ scenarios:
       The expanded reading shows a `<video class="eval-video" controls>` element that plays the clip
       (not an `<img>`, not a download link). `GET /api/evidence/<hash>` returns Content-Type
       `video/webm` (or `video/mp4`) — the MIME sniffed from the bytes, so the browser plays it inline.
-      The reading round-trips through the sidecar as `blobKind: "video"` and rides `/api/board` like any
+      The reading round-trips through the sidecar as `blobKind: "video"` and rides `/api/graph` like any
       other reading; `spex yatsu show` labels its evidence `video <hash>…`. Image and transcript
       evidence are unchanged.
     code: spec-dashboard/src/NodeView.jsx

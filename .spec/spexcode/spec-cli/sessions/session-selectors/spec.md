@@ -40,7 +40,7 @@ exact-wins-over-prefix rule. Because the strip lives in the ONE matcher, every s
 tolerates the sigil at once, and tolerance never widens what matches.
 
 **Two shapes over the one predicate.** `selectSessions` is the MANY shape — the list / stream / graph filter
-([[graph]], `spex ls`): empty selectors (or `@all`) means everything, with an optional status filter on top.
+([[session-edges]], `spex ls`): empty selectors (or `@all`) means everything, with an optional status filter on top.
 `resolveSession` is the ONE shape — the single-target lookup the control verbs need. Its result is
 DISCRIMINATED so a caller fails precisely: `ok` (one match), `ambiguous` (a prefix or node hitting several —
 carried so the user can be told which), `none` (nothing). An exact full-id match wins outright, so a full id

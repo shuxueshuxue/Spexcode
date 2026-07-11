@@ -4,7 +4,7 @@ scenarios:
     description: >
       From a REAL terminal on the backend machine (a wrapper tmux pane works — unset TMUX inside it),
       run `spex session attach <SEL>` against a live session. The terminal must show the worker's actual
-      tmux screen (compare with `spex session capture <SEL>`); C-b d must detach, leaving the worker
+      tmux screen (compare with `spex session show <SEL> --capture`); C-b d must detach, leaving the worker
       running, with the pre-attach detach hint visible in the shell scrollback.
     expected: >
       A one-line hint ("attaching to <id> — detach with C-b d") prints, the worker's real screen takes
@@ -18,7 +18,7 @@ scenarios:
       before touching the network.
     expected: >
       Exit 2 with a message naming the remote URL, the reason (a terminal can't be attached over HTTP),
-      and the alternatives — attach on that machine (ssh) or capture/send/rawkey remotely. Never a silent
+      and the alternatives — attach on that machine (ssh) or show --capture / send remotely. Never a silent
       attach onto the LOCAL tmux socket.
     tags: [cli]
   - name: no-tty-agent-refusal
@@ -27,14 +27,14 @@ scenarios:
       way an agent would wrongly run it inside a turn).
     expected: >
       Refused up front with exit 2: the message says attach is interactive and blocking, tells an agent
-      never to run it in a turn, and points at capture/send/rawkey — not tmux's bare "not a terminal".
+      never to run it in a turn, and points at show --capture / send — not tmux's bare "not a terminal".
     tags: [cli]
   - name: offline-fail-loud
     description: >
       From a real terminal, attach a selector that resolves on the board but has NO live tmux session
       (an offline session; reproducible with the SPEXCODE_TMUX test override pointed at an empty socket).
     expected: >
-      Non-zero exit with a loud "offline — no live tmux session to attach" naming `spex session reopen`
+      Non-zero exit with a loud "offline — no live tmux session to attach" naming `spex session resume`
       as the repair. A dead attach must never read as an empty screen.
     tags: [cli]
 ---

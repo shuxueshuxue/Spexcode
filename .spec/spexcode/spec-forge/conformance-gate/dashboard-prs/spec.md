@@ -18,7 +18,7 @@ display: it reuses the surfaces that already exist.
 
 - **PR badge** — on each node a PR touches, a glance badge like the open-issue badge, in its own hue so the
   status dot / drift badge / issue badge / PR badge never blur. Fed the same way issues are: folded onto
-  `/api/board` from the resident [[forge-cache]] cache (open PRs already read there as session/overlay
+  `/api/graph` from the resident [[forge-cache]] cache (open PRs already read there as session/overlay
   state — this makes them a node-bound count).
 - **PR review lane** — open PRs in the gate shown beside sessions-in-review, each carrying its gate verdict
   (`pending / conforms / diverges / blocked`). The CI gate is the headless twin of the

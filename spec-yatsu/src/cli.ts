@@ -10,7 +10,6 @@ import { staleAxes, contentProbeFor } from './freshness.js'
 import { scenarioIndex } from './scenariofresh.js'
 import { loadEvalRemarkTracks, trackKey } from '../../spec-cli/src/issues.js'
 import { stripRefSigil } from '../../spec-cli/src/mentions.js'
-import { evaluatorTag } from './evaluator.js'
 import { putBlob, blobPath, listBlobs, gc, isStrayBlob } from './cache.js'
 import { validateTimeline, normalizeTimeline } from './timeline.js'
 import { evalTimeline, readBlobByHash, type EvalTimeline } from './evaltab.js'
@@ -303,7 +302,6 @@ async function evalCmd(args: string[]): Promise<number> {
     codeSha: headSha(root),
     ...(evidence.length ? { evidence } : {}),
     ...(timelineBlob ? { timelineBlob } : {}),
-    evaluator: evaluatorTag(),
     // the filing session — the originator an eval-comment thread loops in ([[mentions]]); absent if unknown
     ...((envSessionId() ?? undefined) ? { by: envSessionId()! } : {}),
     verdict,
@@ -313,7 +311,7 @@ async function evalCmd(args: string[]): Promise<number> {
   const ev = evidence.length
     ? evidence.map((e) => `${e.kind} ${e.hash.slice(0, 12)}…`).join(', ') + (timelineBlob ? ' +timeline' : '')
     : 'no evidence'
-  console.log(`  ✓ '${id}' scenario '${scenario.name}' → ${verdictText(verdict)} @ ${reading.codeSha.slice(0, 7)} [${reading.evaluator}] (${ev})`)
+  console.log(`  ✓ '${id}' scenario '${scenario.name}' → ${verdictText(verdict)} @ ${reading.codeSha.slice(0, 7)} (${ev})`)
   console.log(`spex yatsu eval: 1 measurement filed`)
 
   // @@@mis-anchor guard - a codeSha names a COMMIT, never a working tree: filed over uncommitted governed
@@ -423,7 +421,7 @@ async function retractCmd(args: string[]): Promise<number> {
   const now = left.length
     ? `latest is now ${left[left.length - 1].ts} (${verdictText(left[left.length - 1].verdict)})`
     : 'the scenario is unmeasured again (yatsu-missing)'
-  console.log(`  ⟲ '${id}' scenario '${scenario}' reading @ ${target.ts} (${verdictText(target.verdict)} [${target.evaluator}]) retracted — ${now}`)
+  console.log(`  ⟲ '${id}' scenario '${scenario}' reading @ ${target.ts} (${verdictText(target.verdict)}) retracted — ${now}`)
   console.log('spex yatsu retract: 1 reading retracted (an appended event — commit the sidecar so the retraction is attributed)')
   return 0
 }
@@ -521,7 +519,7 @@ export function formatTimeline(tl: EvalTimeline): string {
     const ev = list.length
       ? list.map((e) => e.state === 'miss' ? 'miss original file' : `${e.kind} ${(e.hash ?? '').slice(0, 12)}…`).join(', ')
       : 'no evidence'
-    const head = `  ${r.scenario.padEnd(w)}  ${verdictText(r.verdict)}  ${badge}  ${r.evaluator}  ${r.codeSha.slice(0, 7)}  ${ev}  ${r.ts}`
+    const head = `  ${r.scenario.padEnd(w)}  ${verdictText(r.verdict)}  ${badge}  ${r.codeSha.slice(0, 7)}  ${ev}  ${r.ts}`
     return r.expected ? [head, `  ${' '.repeat(w)}  expected: ${r.expected}`] : [head]
   })
   return [`spex yatsu show: '${tl.node}' — ${tl.readings.length} reading(s), newest first`, '', ...lines, ...retractLines].join('\n')

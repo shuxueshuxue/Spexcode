@@ -36,7 +36,7 @@ thread). The pane is a **WORKSPACE, not a scroll stack** — the review act is a
 (*circle a moment on the clip, say what's wrong, circle the next*), and a layout that stacks
 media→thread→composer vertically forces a scroll ping-pong between the frame (top) and the composer
 (bottom) on every mark. So the pane splits into three fixed regions, the annotator shape: a **slim HEADER
-band** (scenario · node · the verdict badge · evaluator/timestamp · the FILER's liveness · the A/B strip
+band** (scenario · node · the verdict badge · timestamp · the FILER's liveness · the A/B strip
 right-aligned), a center
 **MEDIA STAGE**, and an always-visible **RIGHT RAIL** carrying the remark track with the composer **docked
 at the rail's foot**. The docked composer is the console-❯-box SHAPE ([[issues-view]]'s shared thread
@@ -102,7 +102,7 @@ expected, the verdict note, and the header's verdict badge all re-render for the
 **A stale reading is shown, so the detail EXPLAINS its staleness.** Because the feeds no longer hide stale
 readings ([[evals-feed]]), a stale one is routinely the viewed reading — and a bare "stale" is not enough to
 act on. So the stage carries a small **stale readout** for a non-fresh viewed reading: the freshness axes that
-moved since it (`code · scenario · evaluator · remark`), and for the **code** axis which governed files drifted
+moved since it (`code · scenario · remark`), and for the **code** axis which governed files drifted
 and by **how many commits** (`EvalsFeed.jsx +3`) — the per-file drift count is [[yatsu-core]]'s `codeDrift`,
 attached to the reading by `evalTimeline` (the frontend has no git). It is reporting only: it never decides
 freshness, it names a decision already made, so a reviewer sees *why* a reading is behind and by how far. Every

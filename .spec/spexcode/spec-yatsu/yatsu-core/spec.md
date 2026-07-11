@@ -13,7 +13,6 @@ related:
   - spec-yatsu/src/scenariofresh.ts
   - spec-yatsu/src/scenariofresh.test.ts
   - spec-yatsu/src/cache.ts
-  - spec-yatsu/src/evaluator.ts
   - spec-yatsu/src/filing.ts
 ---
 # yatsu-core
@@ -52,13 +51,15 @@ is the `yatsu-owners` smell (split it). Measurements live apart in a flat
 (scenario, codeSha, an **evidence LIST** (each entry
 a typed `{hash, kind ∈ image|video|transcript|data}` — the render taxonomy ([[evidence-kind-taxonomy]])),
 the video entry's optional timelineBlob ([[step-timeline]]),
-evaluator, an optional **`by`** (the SESSION that filed
+an optional **`by`** (the SESSION that filed
 it, from envSessionId), **verdict**, ts) — the second git-as-database axis: a reading commit is a *measurement
-event*, not a spec version, so history and attribution apply unchanged. `by` is a different axis than
-`evaluator`: `evaluator` is WHO/WHAT measured (a tag like `manual@1`), `by` is the reachable session behind the
+event*, not a spec version, so history and attribution apply unchanged. `by` is the reachable session behind the
 filing — the ORIGINATOR an eval-comment thread loops in on a reply ([[mentions]]). It is purely additive: a
-legacy reading without it simply has no originator, so the loop-in stays silent; a human `manual@1` filing
-has no reachable session and omits it too.
+legacy reading without it simply has no originator, so the loop-in stays silent; a human filing through the
+HTTP route has no reachable session and omits it too. WHO measured is deliberately NOT a schema axis: the
+agent is the measuring hand, and the retired per-reading `evaluator` tag (constant `manual@1` on every
+reading ever filed) carried zero signal — legacy lines still hold the key, read-tolerated like the scalar
+`blob`, rendered if present, never written again.
 
 The sanctioned undo appends a **retraction** — `{retracts: <target reading's ts>, scenario, note?, by?, ts}`
 — never deletes or rewrites a line, so a botched filing (a junk e2e/smoke run, a wrong verdict) is reversible
@@ -67,9 +68,9 @@ retraction event says who withdrew it and why, and git carries both. Every score
 **effective view** (readings minus the retracted, joined by (scenario, ts)) through one seam
 (`readReadings`), so a retract undoes the filing on freshness, scan, clean's referenced-blob set, the eval
 tab, and the proof at once — the previous reading becomes the latest again, or the scenario honestly returns
-to `yatsu-missing`; a retracted reading's blobs simply fall out of the referenced set at the next clean. A
-retraction line deliberately carries **no `evaluator`** field: a version-skewed old reader (whose line filter
-requires one) skips it whole, degrading to "retraction not applied yet", never to a mis-rendered reading; a
+to `yatsu-missing`; a retracted reading's blobs simply fall out of the referenced set at the next clean. The
+two event kinds are told apart **positively** — a retraction carries `retracts`, a reading carries `codeSha`;
+neither is ever recognized by another field's *absence* — and a
 retraction matching no reading is inert. The trace stays navigable: the timeline carries the retraction
 events beside the effective readings, and `show` renders each as a `⟲ retracted` line.
 
@@ -83,9 +84,9 @@ run: several stills beside the recorded clip. Backward-compatible: a legacy **sc
 `blobKind`) reads as a one-entry list, so old readings still render; one filed before verdicts existed — or a
 legacy note-only reading — renders as *legacy*.
 
-**Freshness is derived live from git, never stored.** A reading goes stale on four axes since its codeSha —
-three git-derived (a governed `code:` file changed, its scenario's *content* changed, or the evaluator
-version moved) plus a fourth, **non-git** axis, the REMARK ([[remark-teeth]]): an unresolved remark on the
+**Freshness is derived live from git, never stored.** A reading goes stale on three axes since its codeSha —
+two git-derived (a governed `code:` file changed, or its scenario's *content* changed) plus a
+**non-git** axis, the REMARK ([[remark-teeth]]): an unresolved remark on the
 scenario ages it like a drift event, and a resolved one keeps it stale until a reading taken *after* the
 resolve exists. The scenario-content axis is **per-scenario and semantic, not per-file**: because a scenario is the unit of
 measurement, a reading stales only when ITS OWN measurement contract moved — the **semantic fields,
@@ -165,8 +166,7 @@ The surface mirrors the code-drift report:
   HEAD *is* the code measured. ③ **Only then file the reading**: codeSha=HEAD names committed, verified
   code, the guard stays silent, and the eval sidecar appends as the last layer of evidence. The sha anchor
   can only land after the commit; the confidence must land before it. The seam has a **write half over data** too (filing.ts): a caller with a
-  verdict but no argv — the HTTP eval route, a programmatic filer — appends through the SAME seam
-  (evaluator `manual@1` for a human hand). Filing is the CLI/agent surface: [[event-detail]] reads
+  verdict but no argv — the HTTP eval route, a programmatic filer — appends through the SAME seam. Filing is the CLI/agent surface: [[event-detail]] reads
   readings and hosts remarks, it files nothing.
 - **retract [.|<node>] [--scenario N] [--last | --ts <iso>] [--note <why>]** — the sanctioned inverse of
   eval: withdraw a botched filing by APPENDING a retraction event (see above), never by deleting its line.
@@ -176,9 +176,9 @@ The surface mirrors the code-drift report:
   already-retracted target — fails LOUD; its flag set is closed like eval's.
 - **clean [--keep-latest|--all]** — GC the evidence cache (blobs no reading references, by default).
 
-The **evaluator** is metadata only — a tag `<name>@<version>` (e.g. `manual@1`) recording WHO measured, the
-evaluator freshness axis. No executor seam: a measuring hand (human or future computer-use) is a tag, never
-code yatsu calls.
+There is **no executor seam and no per-reading instrument schema**: a measuring hand (human or future
+computer-use) is never code yatsu calls, and it earns a schema field only when a second kind of hand
+actually exists — attribution today is the `by` session plus the commit trailer, nothing else.
 
 **A yatsu node's id IS its canonical spec id** — minted by the same rule, over the same universe, as the
 spec loader ([[id-url-safe]]'s exported mint: the leaf dir name, or on a leaf collision the shortest
@@ -195,4 +195,4 @@ backstop rejects a stray blob or a malformed yatsu.md. `spec-cli/src/cli.ts` car
 `yatsu` route ([[forge-cli]] shape) — yatsu-core's sole stake in that shared hub.
 
 Out of scope (sibling nodes): the dashboard eval-tab read side and the forge `needs-yatsu-eval` half of
-scan. Computer-use and backend measurement are future evaluators, not code paths here.
+scan. Computer-use and backend measurement are future measuring hands, not code paths here.

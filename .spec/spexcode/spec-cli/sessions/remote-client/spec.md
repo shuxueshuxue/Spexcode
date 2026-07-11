@@ -60,7 +60,7 @@ The split is load-bearing and is the whole point. State **producers** stay **loc
 `idle` and the lifecycle hooks write the agent's OWN per-session record in the GLOBAL store directly (keyed
 by session_id — see [[state]]), so an agent must be able to declare its own state even with no backend up. The
 backend learns that state by ENUMERATING the store, not by a write of its own. **Launch**
-(`spex new`) keeps its own already-justified path (it needs the backend's auth env — see [[launch]]). Only
+(`spex session new`) keeps its own already-justified path (it needs the backend's auth env — see [[launch]]). Only
 the verbs that observe or drive live tmux route here.
 
 **One availability rule, FAIL LOUD.** Unlike a best-effort telemetry POST, an unreachable backend throws a
@@ -70,7 +70,7 @@ and keeps streaming (a backend blip must not read as "all sessions fine"); `wait
 reporting a false timeout.
 
 **Failure stays distinct from emptiness.** A monitoring read must let a manager tell "I couldn't read" from
-"the screen is blank": `capture` returns a genuinely empty pane as success, but maps unknown-session,
+"the screen is blank": `show --capture` returns a genuinely empty pane as success, but maps unknown-session,
 offline (no live pane), and a capture error to distinct non-zero outcomes — a blank screen that exits 0 is
 never confused with a read that failed.
 
@@ -79,9 +79,10 @@ board, an agent manager must be able to do by typing — the backend endpoint al
 the CLI's job is only the thin verb over it. `rename` is the right-click rename ([[session-rename]]) as a
 verb: it sets the display-name override (an explicit `""` clears it back to the derived label; a *missing*
 argument is a usage error, never a silent clear), and an unknown session exits non-zero off the endpoint's
-404. `rawkey` is type mode as a verb — the raw `tmux send-keys` channel (never the prompt socket), which is
-how a manager un-wedges a worker stuck in an interactive TUI dialog the prompt channel cannot drive (a
-select menu wanting one Enter or arrow). It takes whitespace-separated key tokens in the frontend's own
+404. `send --keys` is type mode as a flag — the raw `tmux send-keys` channel (never the prompt socket), which
+is how a manager un-wedges a worker stuck in an interactive TUI dialog the prompt channel cannot drive (a
+select menu wanting one Enter or arrow), and the **last resort** every surface teaching it marks it as: try a
+plain `send` text first. It takes whitespace-separated key tokens in the frontend's own
 vocabulary (named keys, single printable chars, `C-`/`M-`/`S-` combos), delivered as ONE ordered batch so
 strike order survives ([[nav-mode-key-ordering]]); nothing-delivered (unknown session, no live pane, or no
 valid token) exits non-zero — a dead keystroke never reads as a pressed one.

@@ -22,7 +22,7 @@ scenarios:
       - spec-dashboard/src/FocusPanel.jsx
       - spec-dashboard/src/IssueCard.jsx
 ---
-# yatsu.md — address-routing
+# eval.md — address-routing
 
 Measure the actual navigation chain, not the helper in isolation: use a browser, click real search rows and
 panel/card entries, and record the route plus rendered destination. This node owns the cross-cutting address

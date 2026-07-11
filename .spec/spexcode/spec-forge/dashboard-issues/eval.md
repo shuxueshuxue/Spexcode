@@ -15,7 +15,7 @@ scenarios:
     code:
       - spec-dashboard/src/SpecNode.jsx
 ---
-# yatsu.md — dashboard-issues
+# eval.md — dashboard-issues
 
 Product surface, measured by **looking** (YATU): the agent screenshots the rendered board showing the
 ◆N open-issue glance badge on a tile, and confirms the bound-work DETAIL now lives in the focus panel

@@ -67,5 +67,5 @@ poll + SSE subscription — the section fetches nothing of its own — and lates
 `scenarioStates`, the same computation behind the node badge, the focus panel, and the eval tab; the feed
 never re-derives the current score its own way. At scale the board fold itself converges to the same
 semantics — latest reading per scenario plus a history count, the full timeline served per node on
-demand — one convergence shared by this feed, the node eval tab, and [[board-lean]];
+demand — one convergence shared by this feed, the node eval tab, and [[graph-lean]];
 `clean --keep-latest` already aligns the evidence bytes with it.

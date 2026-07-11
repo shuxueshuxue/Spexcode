@@ -3,7 +3,7 @@ scenarios:
   - name: cap-counts-only-the-working-set
     tags: [backend-api]
     description: >
-      Measure the concurrency cap through the REAL backend board (`/api/board`, i.e. `spex board`) — the
+      Measure the concurrency cap through the REAL backend board (`/api/graph`, i.e. `spex graph --json`) — the
       same status truth the dashboard renders. With the cap N = `spexcode.json` `sessions.maxActive`, look at
       a board that has MORE live sessions than N, where several are `idle`/`asking`/`review`/`done` (waiting
       on the human) alongside the `working`/`parked` ones, plus some `queued`. Confirm which sessions occupy
@@ -63,7 +63,7 @@ scenarios:
 
 # launch — yatsu
 
-Measured through the **real backend board** (`/api/board` = `spex board`), the same status source the
+Measured through the **real backend board** (`/api/graph` = `spex graph --json`), the same status source the
 dashboard renders — never an internal counter. The launch script itself is also a backend-owned surface: it
 is the exact file the worker pane runs. The loss being scored is the cap contract and launch bring-up
 honesty: a slot is **compute** pressure, so only live `working`/`parked` agents hold one (everything

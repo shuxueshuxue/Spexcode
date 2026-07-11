@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 
-// the lazily-fetched prose corpus ([[board-lean]]): the board omits node `body` and slims `scenarios` to
+// the lazily-fetched prose corpus ([[graph-lean]]): the board omits node `body` and slims `scenarios` to
 // {name, tags}, so every surface that shows or ranks prose joins it from ONE `/api/specs/lite` fetch — off
 // the board's hot poll. `bodies` is {id → spec prose}; `scenarios` is {id → {scenario name → {description,
 // expected, code?}}}. Module-cached stale-while-revalidate: the last corpus seeds instantly (ranking and

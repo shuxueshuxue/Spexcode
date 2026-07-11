@@ -39,7 +39,7 @@ validator** rejects a malformed eval.md LOUD — at `scan` and the pre-commit ga
 tag drawn from a **closed vocabulary** — the library configured in `lint.scenarioTags` (spexcode.json). A tag
 outside the library is rejected with the repair the author owns: pick an existing tag, or **extend the
 library** to mint a new one. The library is data, not a fixed enum baked in code, so the project grows its
-own classification deliberately; the tags ride into `/api/board` so every surface that shows a scenario
+own classification deliberately; the tags ride into `/api/graph` so every surface that shows a scenario
 ([[focus-panel]], the search palette, [[eval-tab]]) renders them as a uniform chip.
 
 A scenario is the unit of measurement, so its **freshness is its own**: its optional `code` subset is its

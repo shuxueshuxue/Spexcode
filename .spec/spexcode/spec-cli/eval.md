@@ -37,7 +37,7 @@ scenarios:
       Drive the connection-reaping contract through the REAL backend. Start the child server, then open a raw
       socket that sends PARTIAL headers and never completes the request (an abandoned/slow client — the shape
       every client-side timeout-kill leaves behind), and observe when the SERVER closes it. Separately, confirm
-      an ACTIVE long-lived response is NOT reaped: open the board-stream SSE (`/api/board/stream`) and hold it
+      an ACTIVE long-lived response is NOT reaped: open the board-stream SSE (`/api/graph/stream`) and hold it
       idle past the timeout — it must stay open. File the transcript with `spex yatsu eval spec-cli --scenario
       server-reaps-abandoned-connections --result <txt> --pass`.
     expected: >-
@@ -52,7 +52,7 @@ scenarios:
   - name: board-conditional-request
     tags: [backend-api]
     description: >-
-      Drive the board's conditional-request contract through the real backend. GET `/api/board`
+      Drive the board's conditional-request contract through the real backend. GET `/api/graph`
       once and capture the response status, the `ETag` header, and the body size. Then GET it
       again sending `If-None-Match: <that ETag>`, and once more sending a deliberately stale
       `If-None-Match` value. File the transcript with
@@ -64,7 +64,7 @@ scenarios:
       endpoint speaks standard conditional-request HTTP, with no special-casing of the poll path.
     code: spec-cli/src/index.ts
 ---
-# yatsu.md — spec-cli
+# eval.md — spec-cli
 
 This node's `/api/edit` route is measured through the real backend HTTP surface (YATU): the AGENT hits the
 live endpoint against a worktree holding a genuinely-untracked new node and files the transcript as a

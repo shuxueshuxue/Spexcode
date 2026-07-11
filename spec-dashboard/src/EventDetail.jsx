@@ -116,7 +116,7 @@ export default function EventDetail({ entry, specs = [], sessions = [], onWrite,
 
   // A/B history: this scenario's WHOLE reading history (newest-first), lazily fetched from the same
   // /api/specs/:id/evals timeline the eval tab uses — the board only folds the LATEST reading per scenario
-  // ([[board-lean]]), so walking the fail→pass poles needs this one extra read. `histIdx` indexes that list
+  // ([[graph-lean]]), so walking the fail→pass poles needs this one extra read. `histIdx` indexes that list
   // (0 = the latest, i.e. the `entry` the feed selected); `viewing` is the reading actually shown — the
   // entry until history lands, then the picked reading.
   const [history, setHistory] = useState(null)

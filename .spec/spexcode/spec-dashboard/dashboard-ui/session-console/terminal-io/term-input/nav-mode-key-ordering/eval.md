@@ -21,7 +21,7 @@ scenarios:
       overtake each other either. Zero loss = the captured prompt line equals the struck sequence character-
       for-character, with none dropped, duplicated, or reordered.
 ---
-# yatsu.md — nav-mode-key-ordering
+# eval.md — nav-mode-key-ordering
 
 The contract is measured through the **real raw-key channel** the dashboard's type mode uses —
 `POST /api/sessions/:id/rawkey` into a live tmux pane — not an internal probe or a stubbed sender. YATU: fire

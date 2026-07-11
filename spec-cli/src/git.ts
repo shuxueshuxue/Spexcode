@@ -6,7 +6,7 @@ import { join, isAbsolute, resolve } from 'node:path'
 const US = '\x1f', RS = '\x1e'
 
 // @@@ bounded git children - a git child that never exits (wedged fs, a hijacked PATH git, a dead network
-// mount) must not pin its awaiter forever: [[board-cache]]'s settle guarantee starts at this seam. Every
+// mount) must not pin its awaiter forever: [[graph-cache]]'s settle guarantee starts at this seam. Every
 // shared helper passes a generous timeout (an order of magnitude above the slowest legitimate full-history
 // walk) with SIGKILL — same pattern sessions.ts's tmux/ps probes already use — so a hung child dies and the
 // call fails like any other git failure instead of hanging its caller's promise. The kill is warned loudly:

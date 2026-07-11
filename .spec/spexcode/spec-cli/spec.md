@@ -94,15 +94,15 @@ the upstream half-open forever (the leak). A truly silent abandon that never sen
 child by its idle timeout, whose close then propagates back through the proxy — so no raw idle timeout is put
 on the proxy itself, which would blind it to a legitimately-idle WS/SSE.
 
-Read routes: `/api/board` (the assembled board — merged tree + per-worktree overlay + session list, the
-dashboard's single source, identical to `spex board`) and its push companion `/api/board/stream`
-([[board-stream]]), an SSE that fires on session-store change so the dashboard reloads on real transitions
-instead of a tight poll. `/api/board` stays a **conditional-request** endpoint: it `ETag`s the body so a
+Read routes: `/api/graph` (the assembled board — merged tree + per-worktree overlay + session list, the
+dashboard's single source, identical to `spex graph --json`) and its push companion `/api/graph/stream`
+([[graph-stream]]), an SSE that fires on session-store change so the dashboard reloads on real transitions
+instead of a tight poll. `/api/graph` stays a **conditional-request** endpoint: it `ETag`s the body so a
 reload that finds nothing changed costs a bodyless `304`, not the whole transfer — a standard HTTP capability,
 not a special case (the board is still rebuilt each request; the cost saved is the wire, not the git read). `/api/specs` (live via `loadSpecs`),
 `/api/specs/:id/history` + `/api/specs/:id/diff/:hash` (a node's timeline and any version's spec.md
 line-diff), `/api/specs/lite` + `/api/specs/:id/content` (filesystem-only body reads the lean board
-([[board-lean]]) offloads: the whole search corpus, and one node's `{body, parts}` on open), `/api/edit`
+([[graph-lean]]) offloads: the whole search corpus, and one node's `{body, parts}` on open), `/api/edit`
 (a node's in-flight working-tree delta vs its fork point, reviewable from the
 board — incl. a **brand-new, still-untracked node** as an all-additions diff, so a just-created uncommitted
 node shows its body not nothing), `/api/layout` (the resolved
@@ -115,7 +115,7 @@ bundle), `capture` (the live pane as text), and `prompt`. `merge` is a **dispatc
 agent**, not a server merge — it returns `{dispatched}` and never touches main's tree. The ❯ box
 (`keys`) dispatches a whole prompt over the rendezvous control socket, fail-loud (an unconfirmed prompt is
 502, never a silent 200); `rawkey` keeps tmux send-keys for nav; `socket` streams pane bytes.
-`/api/sessions/graph` edges are DERIVED from live `spex watch` monitors (`watch`/`unwatch` register +
+`/api/sessions/edges` edges are DERIVED from live `spex watch` monitors (`watch`/`unwatch` register +
 heartbeat), not a stored subscription. `/api/uploads` writes a pasted file to this (worker) machine's
 /tmp and returns its path. At boot the server also runs `superviseQueue()` to launch queued sessions.
 

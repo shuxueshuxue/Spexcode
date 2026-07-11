@@ -211,7 +211,7 @@ export function evalNodes(root: string): EvalNode[] {
   return assembleNodes(root, specDirs, hits)
 }
 
-// async twin of evalNodes for the HOT board build ([[board-cache]]): reading each eval.md through
+// async twin of evalNodes for the HOT board build ([[graph-cache]]): reading each eval.md through
 // fs/promises YIELDS the event loop between files, so the walk no longer stalls a `/health` probe in one
 // ~600ms uninterrupted stretch. Same output (canonical ids, id-sorted) as evalNodes; only buildBoard uses
 // it, other callers keep the sync form.

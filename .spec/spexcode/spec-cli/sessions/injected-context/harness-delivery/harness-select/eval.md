@@ -39,7 +39,7 @@ scenarios:
       self-heals at the next git transition — never via a harness event, never waiting for an unrelated
       .config edit.
 ---
-# yatsu.md — harness-select
+# eval.md — harness-select
 
 Loss is read through the CLI surface a real adopter touches (YATU): `spex materialize` / `spex init` on a
 project whose spexcode.json carries a `harnesses` set. Two things must hold: an ILLEGAL set fails loud with an

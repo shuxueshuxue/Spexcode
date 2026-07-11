@@ -42,7 +42,7 @@ scenarios:
       signal both harnesses propagate, with the stdout JSON as the reason payload (per the governing spec).
       mark-active still ran (its side effect happened) regardless of spec-first's block — all handlers run.
 ---
-# yatsu.md — hook-dispatch
+# eval.md — hook-dispatch
 
 The dispatch layer is measured through the real session round-trip (YATU). Invariants: the persistent
 manifest equals the legacy map (so dashboard hooks are unchanged); a dispatch reads the manifest of ITS OWN

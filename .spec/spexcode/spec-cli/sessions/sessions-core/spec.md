@@ -39,7 +39,7 @@ session objects it assembles carry their display strings pre-derived (`label`/`h
 bare name parts under `raw` — that naming seam's contract (chains, wire shape, enforcement) is
 [[session-label]]'s. Cross-feature defaults that must be read by the backend at runtime live here as the
 shared implementation seam — for example [[launch]]'s `sessions.maxActive` fallback value — while the feature
-node still owns the user-facing policy and slot semantics. Each session feature ([[state]], [[launch]], [[dispatch]], [[comms-edge]], [[graph]],
+node still owns the user-facing policy and slot semantics. Each session feature ([[state]], [[launch]], [[dispatch]], [[comms-edge]], [[session-edges]],
 [[session-selectors]], [[agent-reply-channel]], [[spec-pointer]]) specializes a slice of it and lists it
 under `related:`, so a change here attributes its drift and eval staleness to this one owner instead of all of them
 (see [[governed-related]]). That several features hold no code of their own is the honest signal that

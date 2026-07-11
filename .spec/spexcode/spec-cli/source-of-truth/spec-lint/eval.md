@@ -27,7 +27,7 @@ scenarios:
       yatsu)`, not one line per file; it adds 0 errors and the run still exits clean (the gate is
       unaffected).
 ---
-# yatsu.md — spec-lint
+# eval.md — spec-lint
 
 Measured through the real `spex lint` CLI (this worktree's `spec-cli/src/lint.ts`, run with tsx), on
 this repo's own `.spec` tree. Two tiers of the [[governed-related]] link are pinned: the node-side

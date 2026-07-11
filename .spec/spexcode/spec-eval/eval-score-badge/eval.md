@@ -25,7 +25,7 @@ scenarios:
       scenario with mixed tags (public-mode: backend-api / frontend-e2e+desktop) shows exactly those;
       NODE rows carry no chips. The chip element and CSS are one shared definition, not per-surface.
 ---
-# yatsu.md — eval-score-badge
+# eval.md — eval-score-badge
 
 This feature is verified by **looking** at the graph (YATU): the score badge is a visual claim, so its
 loss is read with a real screenshot of the rendered board, judged against the expected, and filed as a

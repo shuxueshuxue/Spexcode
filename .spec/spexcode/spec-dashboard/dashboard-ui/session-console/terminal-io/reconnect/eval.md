@@ -19,7 +19,7 @@ scenarios:
       reopens — no resurrection.
     code: spec-dashboard/src/resilientSocket.js
 ---
-# yatsu.md — reconnect
+# eval.md — reconnect
 
 The reconnect is a thin TRANSPORT concern, and the node's own contract makes the loss headlessly measurable:
 the WebSocket impl and the timers are INJECTABLE, so the whole state machine — escalating-vs-capped backoff,

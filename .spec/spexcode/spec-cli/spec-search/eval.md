@@ -100,7 +100,7 @@ scenarios:
       corpus-is-English hint + `spex tree` pointer. Both achieved by the general per-CJK-character tokenizer,
       no benchmark-specific branch. Filed via search.bench.mjs's cjk-positive + cjk-zero-result checks.
 ---
-# yatsu.md — spec-search
+# eval.md — spec-search
 
 The lexical floor is measured the way a consumer uses it: through the REAL `spex search --json` surface
 (YATU), never by calling `searchSpecs` with a hand-picked corpus. The loss being watched is **retrieval

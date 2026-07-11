@@ -170,7 +170,7 @@ scenarios:
       converges to it; the viewer receives bytes). A viewer that never resizes stays blank forever — the
       first-paint path holds zero timers, so a frame arrives only as the pure consequence of a resize event.
 ---
-# yatsu.md — live-view
+# eval.md — live-view
 
 The live terminal's product surface is measured through the **real bridge API** the dashboard drives
 (`attachViewer` / `resizeBridge` over the per-session WebSocket) plus tmux's own reported window size —

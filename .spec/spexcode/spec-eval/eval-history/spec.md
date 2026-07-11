@@ -14,7 +14,7 @@ related:
 A terminal agent should get a node's evaluation timeline the SAME way the dashboard does — not through a
 second implementation it can drift from. The dashboard already folds [[eval-tab]]'s `evalTimeline()`
 onto the board; give the CLI the matching face so `spex eval ls` and the eval tab are two views of one
-engine — the way `spex board` and `/api/board` stay byte-identical because both call `buildBoard`.
+engine — the way `spex graph --json` and `/api/graph` stay byte-identical because both call `buildBoard`.
 
 ## expanded spec
 

@@ -29,7 +29,7 @@ scenarios:
       naming the retirement, the removal recipe, and `spex guide footprint`. Removing the field retires
       the notice. Never an exit-nonzero for a retired word.
 ---
-# yatsu.md — spex-init
+# eval.md — spex-init
 
 Loss is read through the adoption surface itself (YATU): a throwaway git repo, the real `spex init` /
 `spex materialize`, and the CLI's own stdout/exit codes plus git's reports as the reading. What init PRINTS

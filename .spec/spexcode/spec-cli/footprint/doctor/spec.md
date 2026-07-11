@@ -39,6 +39,10 @@ are both covered with no hardcoded paths and a new harness is diagnosed for free
 - **trust** — codex's `trusted_hash` block is in `~/.codex/config.toml` (claude relies on folder-trust).
 - **git-hook floor** — pre-commit / prepare-commit-msg, enforcing for ANY agent regardless of harness.
 - **backend** — orchestration reachability; absent is NORMAL for a bring-your-own-agent.
+- **settings state** — doctor is also where a verb-less setting is READ: on an adopted repo the Repo
+  section reports the issues-workflow switch (`issues.enabled` — v0.3.0 removed the CLI toggle verbs, so
+  this report is the switch's one CLI surface) and flags a legacy `proposals.enabled` key in the trunk's
+  settings pair as no-longer-read, so an old file gets repaired instead of silently drifting.
 - **double-delivery** — did the contract land TWICE? The [[harness-select]] plugin-exclusivity invariant
   stops US emitting both a native and a plugin delivery, but cannot see a `spexcode` plugin bundle a user added
   out-of-band — so `doctor` catches THAT. By IDENTITY STAMP, never payload: a shim's `dispatch.sh` command line,

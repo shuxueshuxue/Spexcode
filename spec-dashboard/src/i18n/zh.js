@@ -151,7 +151,8 @@ export default {
     popup: {
       switch: '切换页签（规格 / 历史）',
       scroll: '滚动 · 展开下一版本',
-      enter: '进入该节点的会话',
+      lens: '穿透弹窗在树上移动——弹窗跟随焦点',
+      enter: '无操作——弹窗是纯阅读界面',
       esc: '关闭弹窗',
     },
     statusRows: {
@@ -223,7 +224,7 @@ export default {
     openIssues: ({ n }) => `${n} 个待办`,
     closedIssues: ({ n }) => `${n} 个已关闭`,
     noIssues: '尚无关联到此节点的 issue。',
-    hint: '←→/hl/tab 切换 · j/k/↑↓ 滚动 · ⏎ 会话 · esc 返回',
+    hint: '←→/hl/tab 切换 · j/k/↑↓ 滚动 · ⇧+方向 树上移动 · esc 返回',
     statusLabel: '状态：',
     versionLabel: '版本：',
     lastEditedBy: '最后编辑者：',

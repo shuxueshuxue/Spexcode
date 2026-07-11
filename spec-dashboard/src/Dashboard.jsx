@@ -373,6 +373,16 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
       }
       if (overlay) {
         if (e.key === 'Escape') { e.preventDefault(); setOverlay(false); return }
+        // the popup is a LENS, not a modal ([[keyboard-nav]]): Shift+nav (⇧h/j/k/l, ⇧arrows) walks the
+        // tree exactly like the bare board — the popup stays open and follows the new focus (NodeView is
+        // keyed by focus.id; the pane survives via NodeView's own fallback). Shift+Tab stays pane-cycling:
+        // Tab never matches a nav binding, so it falls through to its own branch below.
+        if (e.shiftKey) {
+          if (firesKey('nav.up', e.key))     return go(upTarget, e)
+          if (firesKey('nav.down', e.key))   return go(downTarget, e)
+          if (firesKey('nav.parent', e.key)) return go(parent, e)
+          if (firesKey('nav.child', e.key))  return go(rightTarget, e)
+        }
         if (e.key === 'Tab') { e.preventDefault(); e.stopPropagation(); cyclePane(e.shiftKey ? -1 : 1); return }
         // ←/→ or h/l cycle the panes (like Tab and 1/2)
         if (e.key === 'ArrowLeft'  || e.key === 'h') { e.preventDefault(); e.stopPropagation(); cyclePane(-1); return }

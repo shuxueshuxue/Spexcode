@@ -9,7 +9,7 @@ test('lock hint hides cycle keys when there is only one changed node', () => {
 })
 
 test('lock hint keeps uppercase reverse key without an extra modifier label', () => {
-  const keysFor = (id) => id === 'board.cycle' ? ['o'] : ['O']
+  const keysFor = (id) => id === 'graph.cycle' ? ['o'] : ['O']
 
   assert.deepEqual(lockCycleKeyLabels(keysFor), {
     next: 'o',

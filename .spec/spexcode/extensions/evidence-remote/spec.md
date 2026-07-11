@@ -1,10 +1,10 @@
 ---
-title: blob-remote
+title: evidence-remote
 status: pending
 hue: 150
-desc: A shared content-addressed blob remote — teammates see each other's evidence bytes; the hosted instance is the commercialization seam. PENDING.
+desc: A shared content-addressed evidence remote — teammates see each other's evidence bytes; the hosted instance is the commercialization seam. PENDING.
 ---
-# blob-remote
+# evidence-remote
 
 **Status: pending.** This node is the *intent*; the remote service will be its **own repository** (an
 [[extensions]] satellite — no in-repo code here, link added once the repo exists). The thin client seam it

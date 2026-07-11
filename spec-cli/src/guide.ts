@@ -21,10 +21,10 @@ the rest, you don't hand-author the spec tree or wire the dashboard yourself.
      spex serve                                  # http://localhost:8787  (PORT=<n> for another endpoint)
    Serve a different repo by running it from there; two repos at once = two \`spex serve\` on two PORTs.
 
-4. Open the dashboard — the SAME board for every project, pointed per project
-     spex serve ui                              # serves the bundled board on :5173, proxying /api
+4. Open the dashboard — the SAME dashboard for every project, pointed per project
+     spex serve ui                              # serves the bundled dashboard on :5173, proxying /api
    Point it at another backend with --api-port (pairs with \`spex serve --port\`); one dashboard per
-   project. The board is a viewer — which backend it proxies is the only "which project" knob.
+   project. The dashboard is a viewer — which backend it proxies is the only "which project" knob.
    Loopback-only by default: viewing from another machine needs \`--host 0.0.0.0\` (or a specific
    interface) — still plain HTTP with no gate, so bind wide only on a LAN/tailnet you trust (for
    the internet, use \`spex serve --public\` instead).
@@ -53,8 +53,8 @@ version history is git's job, never a changelog in the body.
 
 FRONTMATTER (YAML between the opening and closing --- lines; every field optional, sensible defaults):
   title    display name. Defaults to the dir id.
-  desc     one-line summary shown on the board.
-  hue      board colour, 0–360. Default 210.
+  desc     one-line summary shown on the graph.
+  hue      node colour on the graph, 0–360. Default 210.
   status   pending | active | merged | drift. Usually DERIVED from git state — rarely hand-set.
   code:    files this node GOVERNS (is source of truth for) — ideally ONE, a YAML list of repo-relative
            paths/dirs/*-globs. Drives drift + eval freshness. Many nodes MAY govern the same file (ordinary
@@ -75,23 +75,32 @@ BODY (Markdown after the frontmatter): the contract — intent, invariants, outw
 code does it. Two optional level-2 headings split ground truth from detail:
   ## raw source      human-authored, rarely-changed intent — the loss function's target.
   ## expanded spec   agent-authored detail that must keep serving the raw source.
-Bodies without those headings are read whole. Link sibling nodes with [[node-id]] (a dangling link is
-fine — it marks a node worth writing).
+Bodies without those headings are read whole. Link sibling nodes with [[node-id]] — every link must name
+a REAL node (lint's mention rule; backtick a placeholder like \`[[node]]\` so it reads as sample text).
 
 WHAT lint CHECKS (spex spec lint; the pre-commit hook gates on errors):
-  integrity (error)  every code: path exists.
-  living    (error)  no "## vN" changelog headings — the body is current-state.
-  altitude  (warn)   the body stays high-altitude: line/char budgets (~50 lines / 4200 chars), low
-                     code-identifier density, no step-by-step phrasing. Over budget = rewrite higher.
-  coverage  (warn)   every source file is claimed by ≥1 node — via code: OR related: (related is the net).
-  drift     (warn)   a governed file has commits newer than the node's spec version — it may be stale.
-                     Remedy: edit the spec to the new intent (re-versions the node), OR \`spex spec ack <node>
-                     --reason "…"\` when only mechanics changed and the contract still holds.
-  owners    (warn)   a file governed by > maxOwners nodes (default 3) does too much — SPLIT it so each
-                     governor owns its own module (or merge the nodes, or give it one foundation owner).
+  integrity  (error)  every code:/related: path exists.
+  one-govern (error)  a node governs (code:) at most ONE file — keep the true subject, move the rest
+                      to related:.
+  living     (error)  no "## vN" changelog headings — the body is current-state.
+  id-format  (error)  a node id is lowercase url-safe ascii ([a-z0-9-]) and its leaf dir name is
+                      unique tree-wide.
+  mention    (error)  every [[node-id]] in prose names a real node (fenced/backticked samples exempt).
+  altitude   (warn)   the body stays high-altitude: line/char budgets (~50 lines / 4200 chars), low
+                      code-identifier density, no step-by-step phrasing. Over budget = rewrite higher.
+  breadth    (warn)   a node with >= maxChildren direct children (default 8) — altitude's structural
+                      twin; is an intermediate grouping layer missing?
+  coverage   (warn)   every source file is claimed by ≥1 node — via code: OR related: (related is the net).
+  drift      (warn)   a governed file has commits newer than the node's spec version — it may be stale.
+                      Remedy: edit the spec to the new intent (re-versions the node), OR \`spex spec ack <node>
+                      --reason "…"\` when only mechanics changed and the contract still holds.
+  related-drift (warn) a related: file moved ahead of the node — a soft nudge, one summary line, never blocks.
+  owners     (warn)   a file governed by > maxOwners nodes (default 3) does too much — SPLIT it so each
+                      governor owns its own module (or merge the nodes, or give it one foundation owner).
+  confusable-id (warn) two leaf ids one edit apart read as the same word — rename one to read apart.
 
 LIFECYCLE: author each node on a node/<id> branch, one node per commit; \`spex spec lint\` must reach 0 errors
-before merge. \`spex init\` seeds the first tree; \`spex guide eval\` covers the sibling loss-signal file.`
+before merge. \`spex init\` seeds the first tree; \`spex guide eval\` covers the sibling eval.md, the measurement file.`
 
 const EVAL = `spex guide eval — the eval.md file format
 
@@ -127,7 +136,7 @@ tag, or no scenarios at all is rejected LOUD: \`spex eval lint\` reports it as \
 pre-commit \`internal check-staged\` BLOCKS the commit.
 
 BODY (after the frontmatter): prose naming the measurement method — YATU ("You As The User"): the agent
-looks at / calls the real product surface, not an internal helper chosen to make the proof easy.
+looks at / calls the real product surface, not an internal helper chosen to make the evidence easy.
 
 MEASURING AND FILING: the agent runs the scenario however it likes (a browser run, an API
 transcript, a by-hand pass), compares the result to \`expected\`, and files it:
@@ -148,7 +157,7 @@ PICK THE EVIDENCE KIND BY WHAT THE BEHAVIOUR DOES OVER TIME:
                       an action trace \`index\` (the set is OPEN — an unknown axis just renders as a bare number).
                       \`at\` = the position on that axis, \`step\` = a short name for that moment; copy this shape:
                         { "v": 2, "axis": "time",
-                          "events": [ { "at": 0, "step": "open board" },
+                          "events": [ { "at": 0, "step": "open graph" },
                                       { "at": 1200, "step": "type query" } ] }
                       The run exports it: in whatever drives the evidence — Playwright, a computer-use hand, a
                       CLI harness stamping line numbers — take a baseline and at EACH real step push
@@ -162,20 +171,20 @@ PICK THE EVIDENCE KIND BY WHAT THE BEHAVIOUR DOES OVER TIME:
                       \`data\` — rendered as a validatable data block, not flattened into scrolling transcript
                       text; free-form output stays a transcript. You pick the flag; the KIND follows the bytes.
 The flags combine in ONE filing — several stills can ride beside the clip of the same run.
-ANCHOR DISCIPLINE: a reading's \`codeSha\` is HEAD at filing time, and a git sha names only a COMMIT — an
+ANCHOR DISCIPLINE: an eval's \`codeSha\` is HEAD at filing time, and a git sha names only a COMMIT — an
 uncommitted change has none. So measure the tree you are about to commit, COMMIT it, then file; confidence
 is earned on the working tree, but the anchor can only land after the commit. Filing from a dirty tree
-mis-anchors the reading (its sha lacks the change it measured) and it goes stale the moment you commit.
+mis-anchors the eval (its sha lacks the change it measured) and it goes stale the moment you commit.
 
 A botched filing (a junk e2e/smoke run, a wrong verdict) is undone through the SAME surface:
   spex eval retract <node> [--scenario <name>] [--last | --ts <iso>] [--note <why>]
 retract APPENDS a retraction event to the sidecar (never deletes a line — the trace stays, git records
-who/when/why); the scoreboard then drops the retracted reading everywhere: the previous reading becomes
+who/when/why); the scoreboard then drops the retracted eval everywhere: the previous eval becomes
 the latest again, or the scenario honestly returns to \`missing\`. Default target is the scenario's latest
-reading (\`--last\` makes that explicit; repeat to peel junk back one filing at a time); \`--ts\` pins one.
+eval (\`--last\` makes that explicit; repeat to peel junk back one filing at a time); \`--ts\` pins one.
 
-THE SCOREBOARD: readings live in evals.ndjson beside the eval.md — one JSON line per measurement
-(a second git-as-database axis). Freshness is derived live from git: a reading goes STALE when a governed
+THE SCOREBOARD: evals live in evals.ndjson beside the eval.md — one JSON line per measurement
+(a second git-as-database axis). Freshness is derived live from git: an eval goes STALE when a governed
 code file or the scenario (the eval.md) moves since it was filed.
   spex eval lint [--changed]     the measurement layer's findings — PURE ADVISORY, always exit 0 (spec
                                  lint's errors block commits; a measurement gap never blocks anyone):
@@ -183,7 +192,7 @@ code file or the scenario (the eval.md) moves since it was filed.
                                  measured) · eval-dangling (orphaned remark track) · eval-coverage
                                  (governed source, no eval.md — spec lint's coverage, one rule per layer) ·
                                  eval-owners (a file governed by > maxOwners scenarios — split it)
-  spex eval ls <node>            the reading timeline (verdict · freshness · evidence), newest first
+  spex eval ls <node>            the eval timeline (verdict · freshness · evidence), newest first
   spex eval scenario ls [<node>] the declared contracts; --unmeasured = the blind-spot worklist
   spex eval clean                GC the content-addressed evidence cache`
 
@@ -222,8 +231,8 @@ Example — a repo whose trunk is \`staging\`, not \`main\`:
 ── DASHBOARD (spexcode.json — portable project identity) ──
   dashboard.title   browser-tab name. Default: the repo-root basename.
   dashboard.icon    browser-tab favicon: an emoji ("🔭") OR an Iconify name ("mdi:rocket-launch").
-  dashboard.apiUrl  the per-project backend the board proxies to (read frontend-side). For a SHARED
-                    install prefer the API_URL env var; apiUrl here is the default only when the board
+  dashboard.apiUrl  the per-project backend the dashboard proxies to (read frontend-side). For a SHARED
+                    install prefer the API_URL env var; apiUrl here is the default only when the dashboard
                     lives inside the project.
 Example:
   { "dashboard": { "title": "MyApp specs", "icon": "mdi:rocket-launch" } }
@@ -290,9 +299,9 @@ resolves its backend per this ladder, flag first:
                              health-probes before trusting (a dead record is ignored).
   3.  the other side as fallback (human with no live record → env; worker with no env → record).
   4.  default http://127.0.0.1:$PORT||8787.
-WRITES are project-bound: every mutating verb (new/merge/send/close/rename/reopen/exit) refuses
+WRITES are project-bound: every mutating verb (new/merge/send/close/rename/resume/stop) refuses
 loudly when the resolved backend serves a DIFFERENT same-host project — an explicit --api/--port skips
-the guard (the flag is the proof of intent). Reads point anywhere.
+the guard (the flag is the declaration of intent). Reads point anywhere.
 
 ── ISSUES (spexcode.json — portable policy) ──
   issues.enabled      the issues-workflow on/off switch (default ON). OFF silences the post-merge nudge and
@@ -339,7 +348,7 @@ const FOOTPRINT = `spex guide footprint — what SpexCode plants in a repo, and 
 SpexCode claims software engineering's HEAD (the recording of intent) and TAIL (the storage of
 measurement) and leaves the MIDDLE — construction — to the harness/agent/test framework; freshness
 stitches the two ends into a closed loop. The footprint follows: the head+tail (.spec, spexcode.json,
-readings) is the ASSET and lives in git like source; everything else is derived wiring or a machine fact.
+evals) is the ASSET and lives in git like source; everything else is derived wiring or a machine fact.
 Materialized artifacts carry no facts, so they are NEVER tracked — there is exactly one residence
 behavior, decided per KIND (and, for a contract file, by its live CONTENT).
 
@@ -350,7 +359,7 @@ behavior, decided per KIND (and, for a contract file, by its live CONTENT).
                   bundles — NEVER tracked; always in the per-clone exclude.
   artifacts       the CLAUDE.md/AGENTS.md contract blocks + materialized skills/agents — derived, NEVER
                   tracked; hidden via .git/info/exclude. The host's tracked .gitignore is never touched.
-  run residue     .worktrees/, the global store (~/.spexcode), .git/spexcode blobs — never tracked;
+  run residue     .worktrees/, the global store (~/.spexcode), .git/spexcode evidence — never tracked;
                   out-of-tree, or exclude-ruled where in-tree.
 
 ── A CONTRACT FILE'S RESIDENCE IS A LIVE CONTENT FACT (re-judged at every materialize) ──
@@ -366,8 +375,8 @@ behavior, decided per KIND (and, for a contract file, by its live CONTENT).
 ── THE GIT-NATIVE ANCHORS (no harness event ever triggers a materialize) ──
   spex init / spex materialize / session-worktree creation — the explicit passes;
   pre-commit    the correctness anchor: an UNCONDITIONAL materialize (masks provably fresh at the only
-                moment history is written) + staged-index surgery — a staged blob carrying the sentinel
-                block is cleaned IN PLACE (partial staging survives; source is the staged blob), a
+                moment history is written) + staged-index surgery — a staged file carrying the sentinel
+                block is cleaned IN PLACE (partial staging survives; source is the staged content), a
                 HEAD-untracked generated artifact is unstaged. Repairs and proceeds, never rejects.
   post-checkout/post-merge   freshness anchors: .spec/.plugins edits are git-transactional — they take
                 effect at the commit/checkout/merge that carries them, like any other source change.
@@ -399,7 +408,7 @@ remote, give it a different git HOME instead of untracking it. The manual recipe
      (e.g. .git/spexcode/<name>.git) — the dir then holds only a one-line .git pointer file, so the
      spec loader never walks an object store;
   4. commit the node's changes through that inner repo.
-The effect, honestly: filesystem-derived surfaces see the node (board, search, lint); git-derived
+The effect, honestly: filesystem-derived surfaces see the node (graph, search, lint); git-derived
 views are blind to it (version count, the history tab, drift), and a dispatched worker's worktree
 checkout does not contain it. Those gaps are what the pending spec-local design (a first-class
 private overlay root) closes — not built yet. Cautions: \`git clean -fdx\` in the outer repo deletes

@@ -15,7 +15,7 @@ scenarios:
       with their prose (fetched on open); a search over a body-only token (e.g. `zombie`) returns that node;
       the `/api/specs/lite` and `/api/specs/:id/content` requests return 200; the console is clean. Zero loss =
       the board shrinks with the graph overview, the two-part detail view, and body-ranked search all unchanged.
-    code: [spec-cli/src/board.ts, spec-dashboard/src/NodeView.jsx, spec-dashboard/src/SpecSearch.jsx]
+    code: [spec-cli/src/graph.ts, spec-dashboard/src/NodeView.jsx, spec-dashboard/src/SpecSearch.jsx]
   - name: detail-shows-spinner-while-body-loads
     tags: [frontend-e2e, desktop]
     description: >
@@ -40,7 +40,7 @@ scenarios:
       board); the eval tab shows the complete reading history (rows > the board's per-scenario summary
       count); badges/stats/search are pixel-identical since they always reduced to latest-per-scenario; a
       failed timeline fetch degrades to the summary readings, never an endless spinner.
-    code: [spec-cli/src/board.ts, spec-dashboard/src/NodeView.jsx]
+    code: [spec-cli/src/graph.ts, spec-dashboard/src/NodeView.jsx]
   - name: scenario-prose-off-the-board
     tags: [frontend-e2e, backend-api]
     description: >
@@ -56,7 +56,7 @@ scenarios:
       the focus panel previews render with prose from the corpus; the evals feed and score badges are
       unchanged (they always reduced to name+state); the console is clean. Zero loss = the board sheds the
       prose while every prose surface still shows it.
-    code: [spec-cli/src/board.ts, spec-cli/src/index.ts, spec-dashboard/src/corpus.js, spec-dashboard/src/SpecSearch.jsx, spec-dashboard/src/FocusPanel.jsx]
+    code: [spec-cli/src/graph.ts, spec-cli/src/index.ts, spec-dashboard/src/corpus.js, spec-dashboard/src/SpecSearch.jsx, spec-dashboard/src/FocusPanel.jsx]
 ---
 # graph-lean — measurement
 

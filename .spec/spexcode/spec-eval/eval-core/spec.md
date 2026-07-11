@@ -105,7 +105,7 @@ through the wrong modality, and it still reads fresh — accepted because the re
 (image/video/transcript/data) already records how it was ACTUALLY measured, so a modality mismatch stays
 visible to a human and to review, while the false-positive cost of staling a whole tree on a tags sweep is
 paid instantly and everywhere. Git has no
-sub-file history, so this is built ([[scenariofresh]]): per scenario NAME, the commits where that block's
+sub-file history, so this is built (`scenariofresh.ts`): per scenario NAME, the commits where that block's
 **semantic projection**
 changed, rename-followed — a bare `git mv` reparent leaves the block byte-identical, so it records no change
 and never stales (the same content-not-path rule a reparented spec node follows). A block version is keyed by

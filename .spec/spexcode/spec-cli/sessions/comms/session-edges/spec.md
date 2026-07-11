@@ -33,7 +33,7 @@ are [[comms-edge]]'s). Each watcher's **selectors are resolved live** with the s
 ls`/`session watch` use, so a **global** watcher links to **every** session (incl. ones launched after the watch
 started) and a node/branch selector picks up future matches too. Self-edges, edges touching a non-live
 session, and duplicate A→B all drop out. This stays **isolated from the graph assembler** — nothing here
-touches `buildBoard` or the spec tree; the dashboard's [[session-graph]] is its observational surface.
+touches `buildBoard` or the spec tree; `GET /api/sessions/edges` is its read surface.
 
 ### `spex session watch` — the lifecycle event stream
 

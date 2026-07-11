@@ -171,7 +171,7 @@ Next steps:
   2. lint.governedRoots in spexcode.json (currently ${rootsNow}) names what \`spex spec lint\` governs —
      ["."] governs the whole git-tracked tree (tests excluded); narrow it to explicit source roots
      when you want a curated graph.
-  3. Start the backend and open the board:
+  3. Start the backend and open the dashboard:
        spex serve                       # http://localhost:8787
   4. \`spex spec lint\` should report 0 errors. Coverage warnings are your adoption TODO (source files no
      spec node claims yet). You're adopting SpexCode — the spec tree is now ground truth.

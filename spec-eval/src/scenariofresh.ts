@@ -59,7 +59,7 @@ async function fileChains(root: string, wanted: Set<string>): Promise<Map<string
   // making the rename read as each scenario's birth — a change-commit newer than every pre-rename reading's
   // codeSha — and false-stales whole adopter corpora (the scenariofresh.test.ts regression pins this).
   const out = await gitA(['-C', root, '-c', 'core.quotePath=false', 'log',
-    '--raw', '--no-abbrev', '--full-history', '-M', `--format=${RS}%H`, '--', '*eval.md', '*yatsu.md'])
+    '--raw', '--no-abbrev', '--full-history', '-M', `--format=${RS}%H`, '--', '*eval.md', '*yatsu.md']) // dead-words-ok: archived pathspec — immutable pre-rename history is read under its archived name
   for (const rec of out.split(RS)) {
     const nl = rec.indexOf('\n')
     if (nl < 0) continue
@@ -209,7 +209,7 @@ export function scenarioBlocksAt(root: string, rev: string, path: string): Map<s
   const hit = blockByOid.get(oid)
   if (hit) return hit
   try {
-    const m = blockContent(git(['-C', root, 'cat-file', 'blob', oid]))
+    const m = blockContent(git(['-C', root, 'cat-file', 'blob', oid])) // dead-words-ok: git plumbing — 'blob' is git's object type, not our vocabulary
     blockByOid.set(oid, m)
     return m
   } catch { return null }

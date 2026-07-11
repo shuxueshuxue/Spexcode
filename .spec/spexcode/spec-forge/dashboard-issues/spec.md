@@ -6,7 +6,7 @@ desc: Surfaces each node's bound issues on the dashboard — an OPEN-count badge
 code:
   - spec-forge/src/resident.ts
 related:
-  - spec-cli/src/board.ts
+  - spec-cli/src/graph.ts
   - spec-dashboard/src/IssueCard.jsx
   - spec-dashboard/src/SpecNode.jsx
 ---

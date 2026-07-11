@@ -4,7 +4,7 @@ status: active
 hue: 280
 desc: Durable worktree sessions — the subsystem overview; lifecycle/comms/injected-context own the detail.
 code:
-  - spec-cli/src/board.ts
+  - spec-cli/src/graph.ts
 ---
 
 # sessions
@@ -49,7 +49,7 @@ The subsystem divides into governed concerns:
 
 ### Surface
 
-One surface stays with the overview. `buildBoard` (`board.ts`) assembles the dashboard's runtime state — the
+One surface stays with the overview. `buildBoard` (`graph.ts`) assembles the dashboard's runtime state — the
 merged spec tree, the per-worktree overlay (a ghost/added node nests by directory ancestry, so a worktree
 introducing a whole new subtree renders as one tree, not a flat scatter), the session list, and the
 backend's own project identity (the browser-tab name) — in one module, served identically at HTTP

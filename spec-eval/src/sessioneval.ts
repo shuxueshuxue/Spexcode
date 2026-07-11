@@ -333,9 +333,9 @@ function renderReading(r: ExportReading): string {
     : ev.kind === 'data' ? `<pre class="transcript data">${esc(ev.text)}</pre>`
     : ev.kind === 'miss' ? `<div class="noev">⌀ miss original file — the evidence bytes were pruned</div>`
     : `<div class="noev">attested without a capture</div>`
-  const stale = r.fresh ? '' : `<span class="stale" title="${esc(r.staleAxes.join(', '))} changed since the reading">stale</span>`
+  const stale = r.fresh ? '' : `<span class="stale" title="${esc(r.staleAxes.join(', '))} changed since this eval">stale</span>`
   const note = r.verdict?.note ? `<div class="rnote"><b>note</b> ${esc(r.verdict.note)}</div>` : ''
-  return `<div class="reading">
+  return `<div class="eval-entry">
     <div class="rhead">
       ${scoreBadge(r.score, r.fresh ? undefined : `stale: ${r.staleAxes.join(', ')}`)}
       <span class="scenario">${esc(r.scenario)}</span>
@@ -377,8 +377,8 @@ function renderNode(n: ExportNode): string {
   const fileList = n.files.length ? `<div class="files">${n.files.map(renderFile).join('')}</div>` : ''
   let proof: string
   if (n.readings.length) proof = n.readings.map(renderReading).join('')
-  else if (n.uncoveredFrontend) proof = `<div class="blindspot">⚠ a frontend node with no eval.md — no loss signal measured. Give it a scenario so this change can be proven.</div>`
-  else if (n.hasEvalFile) proof = `<div class="blindspot">declares scenarios but has no reading yet — measure with <code>spex eval add ${esc(n.id)}</code></div>`
+  else if (n.uncoveredFrontend) proof = `<div class="blindspot">⚠ a frontend node with no eval.md — its loss is unmeasured. Give it a scenario so this change can be verified.</div>`
+  else if (n.hasEvalFile) proof = `<div class="blindspot">declares scenarios but has no eval yet — measure with <code>spex eval add ${esc(n.id)}</code></div>`
   else proof = `<div class="noev">no measurable surface (no eval.md)</div>`
   return `<article class="node" style="--hue:${n.hue}">
     <div class="nhead">
@@ -390,7 +390,7 @@ function renderNode(n: ExportNode): string {
     </div>
     ${n.desc ? `<div class="ndesc">${esc(n.desc)}</div>` : ''}
     ${fileList}
-    <div class="readings">${proof}</div>
+    <div class="eval-list">${proof}</div>
   </article>`
 }
 
@@ -398,7 +398,7 @@ export function renderExportHtml(m: ExportModel): string {
   const idShort = m.id.slice(0, 8)
   const ribbon = [
     ...m.gates.map((g) => `<span class="chip ${g.ok ? 'ok' : 'bad'}" title="${esc(g.detail)}">${g.ok ? '✓' : '✗'} ${esc(g.label)}</span>`),
-    m.score.total ? `<span class="chip ${m.score.passed === m.score.total ? 'ok' : 'warn'}" title="scenarios fresh-passing (of those measured); ${m.score.fresh}/${m.score.total} fresh">★ ${m.score.passed}/${m.score.total} passing</span>` : `<span class="chip warn" title="no eval readings on the changed nodes">★ no measured loss</span>`,
+    m.score.total ? `<span class="chip ${m.score.passed === m.score.total ? 'ok' : 'warn'}" title="scenarios fresh-passing (of those measured); ${m.score.fresh}/${m.score.total} fresh">★ ${m.score.passed}/${m.score.total} passing</span>` : `<span class="chip warn" title="no evals filed on the changed nodes">★ no measured loss</span>`,
   ].join('')
   const gates = m.gates.map((g) => `<li class="${g.ok ? 'ok' : 'bad'}"><span class="gmark">${g.ok ? '✓' : '✗'}</span><span class="glabel">${esc(g.label)}</span><span class="gdetail">${esc(g.detail)}</span></li>`).join('')
   const otherBlock = m.otherFiles.length
@@ -409,10 +409,10 @@ export function renderExportHtml(m: ExportModel): string {
 <html lang="en"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>proof · ${esc(m.title)}</title>
+<title>evals · ${esc(m.title)}</title>
 <style>${STYLE}</style>
 </head><body>
-<main class="proof">
+<main class="evals">
   <header class="masthead">
     <div class="eyebrow">SpexCode · session eval export</div>
     <h1 class="claim">${esc(m.title)}</h1>
@@ -441,7 +441,7 @@ const STYLE = `
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
 code,pre,.mono{font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace}
 code{background:#0006;padding:.05em .35em;border-radius:4px;font-size:.88em;color:#aee1d2}
-.proof{max-width:920px;margin:0 auto;padding:40px 24px 80px}
+.evals{max-width:920px;margin:0 auto;padding:40px 24px 80px}
 .masthead{padding:30px 30px 26px;border:1px solid var(--line);border-radius:16px;background:radial-gradient(1200px 240px at 0% 0%,#16352c66,transparent),linear-gradient(160deg,#141b26,#0d121a);box-shadow:0 20px 60px -30px #000}
 .eyebrow{font:600 11px/1 ui-monospace,monospace;letter-spacing:.18em;text-transform:uppercase;color:var(--accent)}
 .claim{margin:14px 0 10px;font-size:30px;line-height:1.2;font-weight:700;color:#eef3fa;letter-spacing:-.01em}
@@ -485,8 +485,8 @@ h2{margin:42px 0 16px;font-size:14px;letter-spacing:.14em;text-transform:upperca
 .side-h{font:600 10px/1 ui-monospace,monospace;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);padding:0 0 6px}
 .side pre{margin:0;padding:10px 12px;background:#05080d;border:1px solid var(--line);border-radius:8px;max-height:440px;overflow:auto;font:11px/1.5 ui-monospace,monospace;color:#aebccd;white-space:pre}
 .abs{color:var(--dim);font-style:italic}
-.readings{margin-top:8px}
-.reading{margin-top:14px;padding:14px 16px;border:1px solid var(--line);border-radius:10px;background:var(--panel2)}
+.eval-list{margin-top:8px}
+.eval-entry{margin-top:14px;padding:14px 16px;border:1px solid var(--line);border-radius:10px;background:var(--panel2)}
 .rhead{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .scenario{font-weight:600;color:#dde7f1}
 .rmeta{margin-left:auto;font:11px/1 ui-monospace,monospace;color:var(--dim)}

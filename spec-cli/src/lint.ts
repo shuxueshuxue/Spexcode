@@ -156,6 +156,62 @@ export async function specLint(): Promise<Finding[]> {
     claimed.add(f)
   }
 
+  // id-format: a node id (its leaf dir basename) is lowercase url-safe ASCII — [a-z0-9-] — and UNIQUE
+  // tree-wide (ERROR). Uniqueness is what keeps the leaf THE id: on a collision the mint ([[id-url-safe]])
+  // must parent-qualify with `_`, so every surface suddenly speaks a longer id than the dir name — legal to
+  // the machinery, illegible to people. The charset is the authored NORM, stricter than what the resolve
+  // layer survives (the mint stays script-agnostic; see [[id-url-safe]]): an id also names a `node/<id>`
+  // branch and a URL segment, so it must need no escaping anywhere. One optional leading dot is allowed —
+  // the reflexive plugin root `.plugins` is dot-prefixed by design.
+  const ID_RE = /^\.?[a-z0-9-]+$/
+  const leafOf = (p: string) => { const segs = p.split('/'); return segs[segs.length - 2] }
+  const byLeaf = new Map<string, string[]>()
+  for (const s of specs) {
+    const leaf = leafOf(s.path)
+    byLeaf.set(leaf, [...(byLeaf.get(leaf) ?? []), s.path])
+    if (!ID_RE.test(leaf))
+      out.push({ level: 'error', rule: 'id-format', spec: s.id, msg: `node dir '${leaf}' is not a valid id — an id is lowercase url-safe ascii ([a-z0-9-], one optional leading dot); rename the directory` })
+  }
+  for (const [leaf, paths] of byLeaf) {
+    if (paths.length > 1)
+      out.push({ level: 'error', rule: 'id-format', msg: `leaf id '${leaf}' names ${paths.length} nodes [${paths.map((p) => p.replace(/\/spec\.md$/, '')).join(', ')}] — a leaf id is unique tree-wide; rename all but one` })
+  }
+
+  // confusable-id: two leaf ids one edit apart read as the same word (WARN — a typo in either reaches a
+  // real, wrong node). Deliberately conservative: distance exactly 1, so hierarchy naming like
+  // graph/graph-delivery (a whole suffix apart) and verb pairs like evidence-put/evidence-get (distance 2)
+  // never warn — better to miss a borderline pair than to nag legitimate siblings.
+  const lev1 = (a: string, b: string): boolean => {
+    if (Math.abs(a.length - b.length) > 1 || a === b) return false
+    let i = 0
+    while (i < a.length && i < b.length && a[i] === b[i]) i++
+    return a.slice(i + 1) === b.slice(i + 1) || a.slice(i + 1) === b.slice(i) || a.slice(i) === b.slice(i + 1)
+  }
+  const leaves = [...byLeaf.keys()]
+  for (let i = 0; i < leaves.length; i++) for (let j = i + 1; j < leaves.length; j++) {
+    if (lev1(leaves[i], leaves[j]))
+      out.push({ level: 'warn', rule: 'confusable-id', msg: `leaf ids '${leaves[i]}' and '${leaves[j]}' are one edit apart — easily confused; if they are distinct concepts, rename one to read apart` })
+  }
+
+  // mention: a `[[id]]` in a body must name a real node (ERROR — a dangling mention is a broken edge in
+  // the very graph the tree exists to keep honest). Checked against the SAME minted ids every other
+  // surface resolves ([[id-url-safe]]). Prose only: a fenced block or inline `code span` is sample text
+  // (`[[node]]`, `[[<id>]]` placeholders live there), not a reference.
+  const idSet = new Set(specs.map((s) => s.id))
+  const MENTION_RE = /\[\[(\.?[\p{L}\p{N}_-]+)\]\]/gu
+  for (const s of specs) {
+    let inFence = false
+    for (const rawLine of s.body.split('\n')) {
+      if (/^\s*```/.test(rawLine)) { inFence = !inFence; continue }
+      if (inFence) continue
+      const line = rawLine.replace(/`[^`]*`/g, '')
+      for (const m of line.matchAll(MENTION_RE)) {
+        if (!idSet.has(m[1]))
+          out.push({ level: 'error', rule: 'mention', spec: s.id, msg: `'${s.id}' mentions [[${m[1]}]] — no such node; retarget or drop it (backtick it if it is sample text)` })
+      }
+    }
+  }
+
   // living: a spec body describes the node's CURRENT intent — it is not a changelog. Version history
   // (every content commit, its reason/session/line-diff) is read from git and shown in the dashboard's
   // recent/history tabs, so a `## vN`-style heading in the body is duplicated, drift-prone state.

@@ -4,19 +4,19 @@ status: active
 hue: 185
 desc: The graph's incremental push — snapshots decompose into keyed units and changes ship as hash-chained patches, provably equivalent to a full refetch and never bigger than one.
 code:
-  - spec-cli/src/boardDelta.ts
+  - spec-cli/src/graphDelta.ts
 related:
-  - spec-cli/src/boardStream.ts
+  - spec-cli/src/graphStream.ts
   - spec-dashboard/src/data.js
   - spec-dashboard/src/App.jsx
-  - spec-cli/src/boardDelta.test.ts
+  - spec-cli/src/graphDelta.test.ts
 ---
 
 # graph-delta
 
 ## raw source
 
-The push channel ([[graph-stream]]) cut *when* the dashboard refetches, but every `board-changed` still cost
+The push channel ([[graph-stream]]) cut *when* the dashboard refetches, but every `graph-changed` still cost
 a whole `/api/graph` round trip — measured at ~570KB and a ~0.7s server-side rebuild, of which a typical
 session flip actually changes a few KB (the payload is ~82% eval history that only moves when a
 reading is filed). Ship the change, not the snapshot: the server that already knows *that* the graph changed
@@ -38,7 +38,7 @@ is a bijection wherever ids are collision-free (the precondition is *checked* pe
 downgrades that send to a full, so a patch is only ever chained between faithfully-decomposable snapshots);
 apply∘diff is the identity on unit maps; and by induction over one connection's ordered events, every graph
 the client renders **is** some true server snapshot — never a blend of two. The property tests in
-`boardDelta.test.ts` are the executable half of that argument.
+`graphDelta.test.ts` are the executable half of that argument.
 
 **Guaranteed win, literally.** The server ships `min(patch, full)`: a patch that fails to beat the snapshot
 it patches (a mass change, a churn burst like a forge-cache refresh) is replaced by the snapshot itself, so
@@ -48,6 +48,6 @@ refetches. The full snapshot itself — the first paint and the resync path — 
 (its evals cut took it ~576KB → ~270KB), and the two compose: leaner fulls, thinner deltas.
 
 The transport that carries these frames — event sources, debounce, subscriber gating, the legacy
-`board-changed` mode — stays [[graph-stream]]'s contract; the client wiring (apply mirror, fallback
+`graph-changed` mode — stays [[graph-stream]]'s contract; the client wiring (apply mirror, fallback
 stand-down) stays [[dashboard-shell]]'s. This node owns the algebra: units, tags, diff, apply, and the
 equivalence obligations anything touching them must keep true.

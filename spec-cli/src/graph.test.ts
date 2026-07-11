@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert'
-import { latestPerScenario, slimScenarios } from './board.js'
+import { latestPerScenario, slimScenarios } from './graph.js'
 
 // Pins the board's eval-summary contract ([[graph-lean]]): the fold keeps the latest reading per scenario
 // as the VERBATIM object — a filter, never a projection. Optional per-kind fields (the annotator's

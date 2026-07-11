@@ -6,7 +6,7 @@ desc: The project's self-identifying name (a configured dashboard.title, else th
 code:
   - spec-dashboard/index.html
 related:
-  - spec-cli/src/board.ts
+  - spec-cli/src/graph.ts
   - spec-cli/src/layout.ts
   - spec-dashboard/src/data.js
   - spec-dashboard/src/App.jsx
@@ -41,7 +41,7 @@ board loads it falls back to the plain `spec-dashboard` label.
 `index.html` ships a plain `SpexCode` `<title>` as the pre-load fallback — what the tab
 reads before the first board arrives, and if the backend is unreachable.
 
-The `project` field is tab-title's only stake in `board.ts`: it is produced by the shared `buildBoard`
+The `project` field is tab-title's only stake in `graph.ts`: it is produced by the shared `buildBoard`
 ([[sessions]]), which also assembles the tree and the session list and carries sibling per-node folds
 ([[dashboard-issues]] issues, [[eval-tab]] evals). A change there that leaves the `project`
 derivation untouched — e.g. adding the eval fold — is that feature's stake, not tab-title's drift.

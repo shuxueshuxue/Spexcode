@@ -2,7 +2,7 @@
 title: ci-gate
 status: active
 hue: 100
-desc: The non-bypassable backstop — CI runs spec-lint + typecheck on every push and PR, so enforcement never depends on a per-clone hook.
+desc: The non-bypassable backstop — CI runs spec-lint + the dead-words gate + typecheck on every push and PR, so enforcement never depends on a per-clone hook.
 code:
   - .github/workflows/ci.yml
 ---
@@ -19,7 +19,8 @@ CI is the **non-bypassable** layer that runs on the forge, not on a developer's 
   and a node branch is checked before it lands.
 - **What** — the same gates the manager weighs at review plus the published-user smoke: **`spex lint`**
   (fails the build on *errors* — a broken spec↔code link or a changelog body; coverage and drift stay
-  advisory warnings), the **`tsc --noEmit`** type check on the CLI package, and a **pack/install smoke**
+  advisory warnings), the **[[dead-words]] gate** (fails the build if a retired v0.3.0 word resurfaces on a
+  command/route/label/file/node surface — prose exempt), the **`tsc --noEmit`** type check on the CLI package, and a **pack/install smoke**
   that builds the npm tarball, installs it into a clean consumer project, runs `npx spex --help`, then runs
   `spex init` inside a fresh git repo and checks that `.spec/project/spec.md` and `spexcode.json` landed.
   Full git history is fetched because lint derives the version timeline and drift from git.

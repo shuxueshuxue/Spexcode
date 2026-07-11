@@ -17,7 +17,7 @@ scenarios:
       re-running, nor clear it by passive receipt.
   - name: board-reflects-remark-axis
     tags: [backend-api]
-    code: spec-cli/src/board.ts
+    code: spec-cli/src/graph.ts
     related: [spec-eval/src/evaltab.ts, spec-cli/src/issues.ts]
     description: >-
       With an unresolved remark on a scenario, hit `GET /api/graph` on a running backend and read the

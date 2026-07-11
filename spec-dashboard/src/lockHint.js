@@ -6,7 +6,7 @@ export function showLockCycleKeys(count) {
 
 export function lockCycleKeyLabels(keysFor) {
   return {
-    next: keyCap((keysFor('board.cycle') || [])[0] || 'o'),
-    prev: keyCap((keysFor('board.cycleRev') || [])[0] || 'O'),
+    next: keyCap((keysFor('graph.cycle') || [])[0] || 'o'),
+    prev: keyCap((keysFor('graph.cycleRev') || [])[0] || 'O'),
   }
 }

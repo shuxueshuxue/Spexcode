@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert'
-import { unitize, tagOf, diffUnits, applyDelta, boardFromUnits, unitValues } from './boardDelta.js'
+import { unitize, tagOf, diffUnits, applyDelta, boardFromUnits, unitValues } from './graphDelta.js'
 
 // Executable evidence for the two lemmas the incremental push stands on (see the board-delta spec node's
 // equivalence.md): RECONSTRUCTION — boardFromUnits(unitize(B)) = B whenever unitize reports ok; ROUND-TRIP —

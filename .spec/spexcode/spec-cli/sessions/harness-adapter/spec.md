@@ -41,7 +41,7 @@ surface:
 
 - **slashCommands()** — the `/` menu, computed the way THAT harness computes its own (Claude: a captured
   built-in set + `.claude/commands/**` + skills; Codex: its built-ins + `~/.codex/prompts/**` + plugin
-  commands). Decoupled from execution — see [[slash-commands]] (today Claude-only; becomes the Claude impl).
+  commands). Decoupled from execution — see `slash-commands.ts` (today Claude-only; becomes the Claude impl).
 - **events / shim** — which lifecycle events to bind, and the per-harness hook shim that points each at the
   dispatcher (`.claude/settings.json` vs `.codex/hooks.json`). The shim's LOCATION is a divergence point too:
   Claude reads `.claude/settings.json` from the worktree, but Codex discovers a LINKED worktree's PROJECT hooks
@@ -216,7 +216,7 @@ surface:
 
 Most of this was **consolidation**: the event/snake maps, the Codex trust writer, and the shim writers were
 scattered in [[harness-delivery]]'s materialize; `CLAUDE_CMD` in [[sessions-core]]; the Claude `/` menu in
-[[slash-commands]]. They now live in `harness.ts` (`claudeHarness` / `codexHarness`, gathered in `HARNESSES`),
+`slash-commands.ts`. They now live in `harness.ts` (`claudeHarness` / `codexHarness`, gathered in `HARNESSES`),
 which materialize loops over and sessions resolves by the selected launcher's `harness` — there is no
 `if (codex)` left in product code. The genuinely NEW Codex pieces: the Codex `/` menu (taken from the pinned codex-rs source the
 same discovered-not-guessed way), and the **tool mapping** that closes the inert-on-codex gap.

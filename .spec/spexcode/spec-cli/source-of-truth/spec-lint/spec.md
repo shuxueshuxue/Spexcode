@@ -18,17 +18,31 @@ drift from its spec silently. The missing edge is a `code:` list in each node's 
 files it owns, plus a linter over that graph. Keep the spec↔code **graph** honest; whether the code
 still matches what the spec *says* is the LLM judge's job, async, not in the commit path. It also flags a
 body slid **below contract altitude** into a mechanics dump, and a node fanned out into too many direct
-children — one comprehensibility ceiling, on depth and breadth.
+children — one comprehensibility ceiling, on depth and breadth. The graph's NAMES are part of
+its honesty too: an id is an unambiguous coordinate, a `[[mention]]` must resolve, and a retired
+vocabulary must stay retired.
 
 ## expanded spec
 
-`spex lint` (the `spex` CLI, `cli.ts` → `lint.ts`, over `loadSpecs()` from `specs.ts`) checks seven
-rules:
+`spex lint` (the `spex` CLI, `cli.ts` → `lint.ts`, over `loadSpecs()` from `specs.ts`) checks the graph.
+Errors block; warns advise. The full registry (every rule, its level, its one-line meaning) is printed by
+`spex help spec` and `spex guide spec` — the manual lists ALL rules, always:
 
 - **integrity** (error): every file a spec lists in `code:` exists — broken links block.
+- **one-govern** (error): a node governs (`code:`) at most ONE file, so drift/eval/ack have one
+  unambiguous subject; keep the true subject, demote the rest to `related:` ([[governed-related]]).
 - **living** (error): a body stays current-state, with no `## vN` changelog headings — version history
   is read from git (recent/history tabs), not duplicated in prose. Fence-aware: a `## v2` inside a ```
   block is sample text, not a violation.
+- **id-format** (error): a node's id — its leaf dir basename — is lowercase url-safe ascii
+  (`[a-z0-9-]`, one optional leading dot for the reflexive `.plugins` root) and **unique tree-wide**.
+  Uniqueness keeps the leaf THE id: on a collision the mint ([[id-url-safe]]) must parent-qualify, and
+  every surface suddenly speaks a longer id than the dir name. The charset is the authored norm — an id
+  also names a `node/<id>` branch and a URL segment, so it must need no escaping anywhere; the resolve
+  machinery stays script-agnostic underneath.
+- **mention** (error): every `[[id]]` in body PROSE names a real node — a dangling mention is a broken
+  edge in the very graph the tree keeps honest. Retarget it or drop it; a placeholder (`[[node]]`,
+  `[[<id>]]`) belongs in a fence or inline code span, which the rule exempts as sample text.
 - **coverage** (warn): every source file is claimed by ≥1 spec via `code:` **or** `related:`. Source is
   enumerated from **git-tracked** files (`git ls-files`), so `governedRoots: ["."]` safely means the whole
   project (node_modules/build/nested-worktrees are never in the index). What counts as source is the
@@ -38,6 +52,8 @@ rules:
 - **drift** (warn): a governed file has commits not reachable from its spec's latest version — true git
   ancestry ([[drift-by-ancestry]]), never a log-position/date guess → maybe stale. A file
   governed by several nodes drifts **every** owner — shared governance is ordinary, and each has a stake.
+- **related-drift** (warn): the SOFT tier — a `related:` file moved ahead of the node; one summary line,
+  never the commit gate, never eval freshness.
 - **altitude** (warn): a body states *intent and contract*, not a re-narration of the implementation.
   The rule can't judge meaning, so it fires on cheap proxies of a mechanics dump — grown long (lines /
   chars over a soft budget), thick with code identifiers, or step-by-step how-to. Budgets default so
@@ -49,6 +65,14 @@ rules:
   breadth's mirror on the file (too many owners, not too many children; below the cap is ordinary). Remedy
   blames the FILE: **split** it so each governor owns a module, or merge the nodes, or give it a single
   foundation owner + **`related:`**. See [[governed-related]].
+- **confusable-id** (warn): two leaf ids exactly one edit apart read as the same word — a typo in either
+  reaches a real, wrong node. Deliberately conservative (distance 1 only): hierarchy naming like
+  graph/graph-delivery and verb pairs like evidence-put/evidence-get never warn — better to miss a
+  borderline pair than to nag legitimate siblings.
+
+Beside the graph rules sits the **vocabulary backstop**, [[dead-words]]: a CI grep gate over the RENAMED
+concepts' old names, scoped to product surfaces (strings, file names, node dir names) with prose exempt —
+lint keeps the graph honest, dead-words keeps its language from regressing.
 
 Reusable as a **product**, not a SpexCode-only script: every project-shaped value (roots, extensions,
 budgets, the breadth limit) is read from an optional **`spexcode.json`** (`lint` key), defaulting to values

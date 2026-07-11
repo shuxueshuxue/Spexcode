@@ -42,7 +42,7 @@ export default {
   nav: {
     railLabel: 'main navigation',
     graph: 'Spec Node Graph (⌥1)',
-    sessions: 'Session Board (⌥2)',
+    sessions: 'Sessions (⌥2)',
     evals: 'Evals (⌥3 / ⌥F)',
     issues: 'Issues (⌥4)',
     settings: 'Settings (⌥5)',
@@ -51,7 +51,7 @@ export default {
   hud: {
     helpTitle: 'help — keymap & legend (?)',
     loading: 'loading specs from git…',
-    loadError: 'backend unreachable — the board failed to load.',
+    loadError: 'backend unreachable — the graph failed to load.',
     retry: 'retry',
   },
 
@@ -59,7 +59,7 @@ export default {
     title: 'evals',
     kind: { video: 'video', image: 'image', all: 'all' },
     summary: ({ n }) => `${n} current`,
-    empty: 'no current readings match — measure a scenario or switch the filter.',
+    empty: 'no current evals match — measure a scenario or switch the filter.',
     annotate: 'open & annotate',
   },
 
@@ -67,7 +67,7 @@ export default {
     fold: 'fold the list — the detail owns the width',
     unfold: 'unfold the list',
     liveChip: ({ n }) => `${n} live`,
-    liveChipTitle: 'only issues/readings a LIVE session is behind',
+    liveChipTitle: 'only issues/evals a LIVE session is behind',
   },
 
   annotator: {
@@ -81,8 +81,8 @@ export default {
     capturing: 'capturing frame…',
     failed: 'failed — is the backend up?',
     comments: ({ n }) => (n ? `review track (${n})` : 'review track'),
-    abOlder: 'older reading (‹ toward the A / reproduced bug)',
-    abNewer: 'newer reading (toward the B / verified fix ›)',
+    abOlder: 'older eval (‹ toward the A / reproduced bug)',
+    abNewer: 'newer eval (toward the B / verified fix ›)',
     abLatest: 'latest',
     abPos: ({ i, n }) => `${i} / ${n}`,
   },
@@ -96,7 +96,7 @@ export default {
     resolveTitle: 'resolve this remark — a second party’s judgment that it is addressed (monotonic: no un-resolve)',
     retract: 'retract',
     retractTitle: 'withdraw your own unresolved remark — removes it from the thread',
-    anchorDegraded: 'this step is gone from the current reading — the m:ss is the frozen original, not seekable',
+    anchorDegraded: 'this step is gone from the current eval — the m:ss is the frozen original, not seekable',
     originatorIssue: 'open the session that filed this issue: {by}',
     originatorEval: 'open the session that filed this eval: {by}',
   },
@@ -107,7 +107,7 @@ export default {
     btnTitle: "switch to this session's eval tab — the measured eval evidence, the diff, and the merge gates",
     none: 'no evaluation for this session yet',
     sessionN: ({ n }) => `✦ this session: ${n}`,
-    inherited: 'inherited · latest readings by other sessions',
+    inherited: 'inherited · latest evals by other sessions',
     export: 'export',
     exportTitle: 'export this evaluation as a self-contained HTML report',
     empty: 'nothing measured for this session yet.',
@@ -127,14 +127,14 @@ export default {
   legend: {
     title: 'help · keymap & legend',
     close: 'close (esc or ?)',
-    secBoard: 'board keys',
+    secBoard: 'graph keys',
     secPopup: 'node-info popup',
     secStatus: 'status dot',
     secOp: 'overlay op',
     secOpSub: "(a worktree's pending change)",
     secBadges: 'badges',
     secRing: 'node ring',
-    board: {
+    graph: {
       move: 'move up / down the focused column (siblings)',
       parent: 'to the parent',
       child: 'to the nearest child',
@@ -153,7 +153,7 @@ export default {
       switch: 'switch pane (spec / history)',
       scroll: 'scroll · reveal the next version',
       lens: 'walk the tree behind the popup — it follows the focus',
-      enter: 'inert — the popup is a reading surface',
+      enter: 'inert — the popup is a read-only surface',
       esc: 'close the popup',
     },
     statusRows: {
@@ -249,10 +249,10 @@ export default {
     eval: {
       noScenarios: 'no scenarios declared — this node has no eval.md to measure.',
       noReadings: 'no measurements yet — run `spex eval add` to file one. The declared scenarios:',
-      staleAxes: ({ axes }) => `stale: ${axes} moved since this reading`,
+      staleAxes: ({ axes }) => `stale: ${axes} moved since this eval`,
       staleLabel: 'stale:',
-      staleReadoutTitle: 'this reading is behind — the axes that moved since it, and for the code axis which governed files drifted and by how many commits (+N)',
-      danglingTitle: 'this scenario was renamed or deleted — its remarks have no reading to attach to, but stay resolvable via their refs',
+      staleReadoutTitle: 'this eval is behind — the axes that moved since it, and for the code axis which governed files drifted and by how many commits (+N)',
+      danglingTitle: 'this scenario was renamed or deleted — its remarks have no eval to attach to, but stay resolvable via their refs',
       danglingGone: 'scenario gone',
       pass: '✓ pass',
       fail: '✗ fail',
@@ -274,7 +274,7 @@ export default {
   // never a sum of badges), except coverage which counts SCENARIOS (the unit of eval loss). Each chip's
   // title says what it counts; clicking WALKS focus through the nodes behind it, one per click.
   stats: {
-    aria: 'board statistics',
+    aria: 'graph statistics',
     totalTitle: ({ n }) => `${n} spec node${n === 1 ? '' : 's'} in the tree`,
     statusTitle: ({ n, status }) => `${n} ${status} — click to walk them`,
     driftTitle: ({ n }) => `${n} node${n === 1 ? '' : 's'} whose code is ahead of its spec — click to walk them`,
@@ -294,7 +294,7 @@ export default {
     stalePass: 'stale — last measured a pass, now out of date',
     staleFail: 'stale — last measured a fail, now out of date',
     empty: 'no current score — never measured, or no pass/fail verdict',
-    missing: 'not measured yet — no reading filed for this scenario',
+    missing: 'not measured yet — no eval filed for this scenario',
     count: ({ satisfied, total, outstanding }) =>
       `${satisfied} of ${total} scenario${total === 1 ? '' : 's'} satisfied (fresh & passing)` +
       (outstanding ? ` · ${outstanding} outstanding — failing, stale, or unmeasured` : ''),
@@ -308,7 +308,7 @@ export default {
     noScenarios: 'no scenarios — this node declares no eval.md to measure.',
     noIssues: 'no issues linked to this node.',
     noFocus: 'no node focused.',
-    openEval: 'open this eval detail — the full reading timeline',
+    openEval: 'open this eval detail — the full eval timeline',
     open: ({ n }) => `${n} open`,
     closed: ({ n }) => `${n} closed`,
     tracks: ({ files }) => `tracks ${files}`,
@@ -342,7 +342,7 @@ export default {
     issuesOff: 'The issues workflow is off.',
     issuesEmpty: 'No issues yet.',
     issuesLoading: 'loading issues…',
-    issuesFocusNode: 'focus this node on the board',
+    issuesFocusNode: 'focus this node on the graph',
     issuesReplies: ({ n }) => `${n} ${n === 1 ? 'reply' : 'replies'}`,
     issuesOpenOnForge: 'open on forge ↗',
     // the human write path ([[issues-view]]) — a reply composer + a New local-issue affordance.
@@ -438,7 +438,7 @@ export default {
     liveEditors: ({ n }) => `${n} live editor${n === 1 ? '' : 's'}`,
     changing: ({ n }) => `changing ${n} node${n === 1 ? '' : 's'}`,
     noChanges: 'no pending spec changes',
-    noSessions: 'no live sessions — start one from a desktop board',
+    noSessions: 'no live sessions — start one from the desktop dashboard',
     back: 'back',
   },
 }

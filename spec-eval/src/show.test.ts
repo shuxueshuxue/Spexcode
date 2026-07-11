@@ -18,7 +18,7 @@ const timeline = (readings: EvalEntry[], over: Partial<EvalTimeline> = {}): Eval
 
 test('formatTimeline: empty states stay distinct by hasEvalFile', () => {
   assert.match(formatTimeline(timeline([], { hasEvalFile: false })), /declares no scenarios \(no eval\.md\)/)
-  assert.match(formatTimeline(timeline([])), /scenarios but no reading yet/)
+  assert.match(formatTimeline(timeline([])), /scenarios but no eval yet/)
 })
 
 test('formatTimeline: renders readings in given (newest-first) order, one row each', () => {
@@ -26,7 +26,7 @@ test('formatTimeline: renders readings in given (newest-first) order, one row ea
     reading({ scenario: 'newest' }),
     reading({ scenario: 'oldest' }),
   ]))
-  assert.match(out, /2 reading\(s\), newest first/)
+  assert.match(out, /2 eval\(s\), newest first/)
   assert.ok(out.indexOf('newest') < out.indexOf('oldest'), 'array order is preserved (newest leads)')
 })
 
@@ -79,8 +79,8 @@ test('formatTimeline: a mixed reading lists every evidence entry (N images + a v
 test('formatTimeline: retraction events render as the undo trace — beside readings, and even when all readings are retracted', () => {
   const retractions = [{ retracts: 't9', scenario: 's', note: 'botched smoke run', by: 'sess-1', ts: 't10' }]
   const withReadings = formatTimeline(timeline([reading({})], { retractions }))
-  assert.match(withReadings, /⟲ retracted: scenario 's' reading @ t9 — botched smoke run {2}by sess-1/)
+  assert.match(withReadings, /⟲ retracted: scenario 's' eval @ t9 — botched smoke run {2}by sess-1/)
   const allRetracted = formatTimeline(timeline([], { retractions }))
-  assert.match(allRetracted, /no reading yet/)          // effective view is honestly unmeasured…
+  assert.match(allRetracted, /no eval yet/)          // effective view is honestly unmeasured…
   assert.match(allRetracted, /⟲ retracted: scenario 's'/)   // …but the trace still shows
 })

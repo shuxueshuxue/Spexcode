@@ -8,7 +8,7 @@ The desktop reading of the spec tree is one **graph page**, not a handful of wid
 
 The react-flow canvas draws on a **clean `--paper` background** — no grid or dot pattern behind the tree — so the tiles and their edges are the only marks on the page.
 
-- [[node-graph]] — the drill-down tidy-tree itself, the centre of the view; its bottom-left tally HUD ([[board-stats]]) mounts inside the tree shell.
+- [[node-graph]] — the drill-down tidy-tree itself, the centre of the view; its bottom-left tally HUD ([[graph-stats]]) mounts inside the tree shell.
 - [[focus-panel]] — the right column that follows focus and lists the node's Issues and Scenarios.
 - [[work-pane]] — the `i` node popup, the focused node's full reference record, opened over the page.
 - [[keyboard-nav]] — relationship navigation: arrows walk focus by edge, not geometry, the camera following.

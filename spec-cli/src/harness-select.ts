@@ -30,14 +30,14 @@ export function resolveHarnessTargets(raw: unknown): HarnessTarget[] {
   for (const m of raw) {
     if (typeof m === 'string') {
       if (m === 'plugin')
-        throw new Error(`spexcode.json "harnesses": a plugin target needs an EXPLICIT landing folder — write {"plugin":"<folder>"} (e.g. {"plugin":".zcode"}), not the bare string "plugin", because each host agent scans a different plugins dir.`)
+        throw new Error(`spexcode.json "harnesses": a plugin target needs an EXPLICIT landing folder — write {"plugin":"<folder>"} (e.g. {"plugin":".zcode"}), not the bare string "plugin", because each host agent reads a different plugins dir.`)
       if (!KNOWN.includes(m))
         throw new Error(`spexcode.json "harnesses": unknown harness id "${m}" — known native ids are ${KNOWN.join(', ')}, or use {"plugin":"<folder>"}.`)
       targets.push({ kind: 'native', id: m as HarnessId })
     } else if (m && typeof m === 'object' && !Array.isArray(m) && 'plugin' in m) {
       const folder = (m as { plugin?: unknown }).plugin
       if (typeof folder !== 'string' || !folder.trim())
-        throw new Error(`spexcode.json "harnesses": a {"plugin":…} target needs a NON-EMPTY folder string (e.g. {"plugin":".zcode"}) — each host agent scans a different plugins dir, so the folder must be explicit.`)
+        throw new Error(`spexcode.json "harnesses": a {"plugin":…} target needs a NON-EMPTY folder string (e.g. {"plugin":".zcode"}) — each host agent reads a different plugins dir, so the folder must be explicit.`)
       targets.push({ kind: 'plugin', folder: folder.trim() })
     } else {
       throw new Error(`spexcode.json "harnesses": each member must be a native id string (${KNOWN.join(', ')}) or a {"plugin":"<folder>"} object — got ${JSON.stringify(m)}.`)

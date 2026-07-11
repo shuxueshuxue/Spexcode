@@ -13,13 +13,13 @@ scenarios:
     tags: [frontend-e2e]
   - name: delta-beats-snapshot
     description: >
-      Subscribe to /api/graph/stream?mode=delta directly, read the board-full size, then make a small
+      Subscribe to /api/graph/stream?mode=delta directly, read the graph-full size, then make a small
       real change (add/remove one session record in the store) and read the next event's size and its
       from/to chain against the held tag.
     expected: >
-      A small change arrives as board-delta at a small fraction of the board-full size (measured ~8.6KB
+      A small change arrives as graph-delta at a small fraction of the graph-full size (measured ~8.6KB
       vs ~570KB), with from matching the held tag; a change burst or precondition violation may arrive
-      as board-full instead, but no event ever exceeds the full snapshot's size.
+      as graph-full instead, but no event ever exceeds the full snapshot's size.
     tags: [backend-api]
 ---
 

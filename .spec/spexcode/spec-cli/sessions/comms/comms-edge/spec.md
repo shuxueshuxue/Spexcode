@@ -50,6 +50,6 @@ with NO sender id, so it is the connection notice itself and is not double-count
 comms edge. The graph's monitor edge still appears instantly from the registration; the handshake adds the
 in-context connection the registration alone can't — `wait` (the one-shot subscription) does not greet.
 
-Out of scope: the monitor-edge lifecycle and drag-to-watch gesture ([[session-graph]]); the rendezvous
+Out of scope: the monitor-edge lifecycle ([[session-edges]]); the rendezvous
 delivery mechanism itself ([[dispatch]]); persistence beyond the worktree (a durable cross-session audit
 log would be a central store, deliberately not built here).

@@ -25,12 +25,12 @@ each time it is opened**. This is the optimizer's measured loss, marshaled at th
 
 ## expanded spec
 
-**One engine, thin faces** (the [[eval-history]] / `buildBoard` pattern). The engine is `proof.ts` in
-[[spec-eval]] — a proof IS the marshaled *evaluation*, so it lives with the evaluation package and is the
+**One engine, thin faces** (the [[eval-history]] / `buildBoard` pattern). The engine is `sessioneval.ts` in
+[[spec-eval]] — the marshaled *evaluation* lives with the evaluation package and is the
 one place the eval engine reaches into the review state ([[manager-cockpit]]'s `reviewPayload`). It runs ONLY on the
-backend: `buildProofModel(id)` joins the payload's diff (grouped per spec node) with each changed node's
+backend: `buildExportModel(id)` joins the payload's diff (grouped per spec node) with each changed node's
 [[eval-tab]] timeline (latest reading per scenario — verdict, expected, the content-addressed
-evidence) and the gates; `renderProofHtml(model)` emits ONE self-contained HTML document, evidence inlined
+evidence) and the gates; `renderExportHtml(model)` emits ONE self-contained HTML document, evidence inlined
 as data-URIs ([[eval-core]]'s cache) so it stands alone as a plain file. The eval timelines are rooted at
 the **session's worktree**, so freshness and readings reflect that branch, not the backend's checkout. The
 headline is DERIVED (the node, else the branch) — there is no agent-authored claim, manifest, or narrative.
@@ -67,10 +67,11 @@ retired scenario's residual reading contributes no row. A gates strip (the same
 measuring the real product, not by a language-specific checker. When the session has no worktree/diff the
 tab shows a clean empty placeholder.
 
-The **self-contained HTML** (`renderProofHtml`: evidence inlined as data-URIs, every changed file's
+The **self-contained HTML** (`renderExportHtml`: evidence inlined as data-URIs, every changed file's
 diff + before/after drill-down) remains as the **export artifact** — CI attachments, sharing, a bare
 browser — behind the tab's `export ↗` link (labelled as the export it is, tooltip naming the self-contained
-HTML report), `GET /api/sessions/:id/proof` (`?format=json` = the model), and
+HTML report — the same `GET /api/sessions/:id/evals` route with `?format=html`; bare, it serves the lean
+JSON model), and
 `spex eval ls --session <SEL> --export` (`--out`/`--open`, a backend client that works against a remote backend
 unchanged). Inlining everything is the right shape for a file that must stand alone, and the wrong shape
 for an interactive tab — that is the whole split.

@@ -8,7 +8,7 @@ import FocusPanel from './FocusPanel.jsx'
 import SessionWindow, { LockGlyph } from './SessionWindow.jsx'
 import Legend from './Legend.jsx'
 import SpecSearch from './SpecSearch.jsx'
-import BoardStats from './BoardStats.jsx'
+import GraphStats from './GraphStats.jsx'
 import SideBar from './SideBar.jsx'
 import TooltipLayer from './Tooltip.jsx'
 import { useRoute, navigate } from './route.js'
@@ -65,7 +65,7 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
   const [overlay, setOverlay] = useState(false)   // node-info popup (opened by `i`)
   const [pane, setPane] = useState('spec')
   const [legend, setLegend] = useState(false)     // centered help modal: keymap + visual vocabulary (`?`)
-  const [search, setSearch] = useState(null)      // search palette mode: null | 'board' (`/`, nodes lead) | 'sessions' (⌘/Ctrl+/, sessions lead)
+  const [search, setSearch] = useState(null)      // search palette mode: null | 'nodes' (`/`, nodes lead) | 'sessions' (⌘/Ctrl+/, sessions lead)
   const [sessionSel, setSessionSel] = useState('new') // persisted across open/close: last tab/session
   const [highlightId, setHighlightId] = useState(null) // session whose overlays are emphasised
   const [seed, setSeed] = useState(null)          // one-shot text a board chord pre-fills the New Session input with
@@ -368,7 +368,7 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
       if (page === 'evals' || page === 'issues') return
       // the settings page: `,` toggles back home; typing inside its shortcut-capture stays its own
       if (page === 'settings') {
-        if (firesKey('board.settings', e.key)) { e.preventDefault(); e.stopPropagation(); navigate('graph') }
+        if (firesKey('graph.settings', e.key)) { e.preventDefault(); e.stopPropagation(); navigate('graph') }
         return
       }
       if (overlay) {
@@ -411,10 +411,10 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
         }
         return
       }
-      if (firesKey('board.help', e.key)) { e.preventDefault(); setLegend(true); return }
+      if (firesKey('graph.help', e.key)) { e.preventDefault(); setLegend(true); return }
       if (e.key === 'Escape' && highlightId) { e.preventDefault(); e.stopPropagation(); setHighlightId(null); return }
-      if (firesKey('board.settings', e.key)) { e.preventDefault(); navigate('settings'); return }
-      if (firesKey('board.search', e.key)) { e.preventDefault(); e.stopPropagation(); setSearch('board'); return }
+      if (firesKey('graph.settings', e.key)) { e.preventDefault(); navigate('settings'); return }
+      if (firesKey('graph.search', e.key)) { e.preventDefault(); e.stopPropagation(); setSearch('nodes'); return }
       // chord buffer: a leader (n/d) holds, the next letter fires (CHORDS); a non-match or a 700ms lull clears it and falls through
       if (!e.metaKey && !e.ctrlKey && !e.altKey && /^[a-zA-Z]$/.test(e.key)) {
         const cur = chordRef.current
@@ -437,25 +437,25 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
       if (firesKey('nav.parent', e.key)) return go(parent, e)
       if (firesKey('nav.child', e.key))  return go(rightTarget, e)
       // zoom & cycle are keyboard board ops too — they engage kbdMode so the mouse steps aside the same way.
-      if (firesKey('board.zoomIn', e.key)) { e.preventDefault(); setKbdMode(true); centerOn(focus, clamp(getViewport().zoom * 1.2), 160) }
-      else if (firesKey('board.zoomOut', e.key)) { e.preventDefault(); setKbdMode(true); centerOn(focus, clamp(getViewport().zoom / 1.2), 160) }
-      else if (firesKey('board.zoomReset', e.key)) { e.preventDefault(); setKbdMode(true); centerOn(focus, 0.85, 200) }
-      else if (firesKey('board.info', e.key)) { e.preventDefault(); setOverlay(true) }
+      if (firesKey('graph.zoomIn', e.key)) { e.preventDefault(); setKbdMode(true); centerOn(focus, clamp(getViewport().zoom * 1.2), 160) }
+      else if (firesKey('graph.zoomOut', e.key)) { e.preventDefault(); setKbdMode(true); centerOn(focus, clamp(getViewport().zoom / 1.2), 160) }
+      else if (firesKey('graph.zoomReset', e.key)) { e.preventDefault(); setKbdMode(true); centerOn(focus, 0.85, 200) }
+      else if (firesKey('graph.info', e.key)) { e.preventDefault(); setOverlay(true) }
       // overlay cycle: o / O walk focus through changed nodes (scope follows the lock), wrapping
-      else if (firesKey('board.cycle', e.key) || firesKey('board.cycleRev', e.key)) {
+      else if (firesKey('graph.cycle', e.key) || firesKey('graph.cycleRev', e.key)) {
         e.preventDefault()
         if (!cycleNodes.length) return
         setKbdMode(true)
-        const next = cycleNext(cycleNodes, focus.id, firesKey('board.cycleRev', e.key) ? -1 : 1, (n) => n.id)
+        const next = cycleNext(cycleNodes, focus.id, firesKey('graph.cycleRev', e.key) ? -1 : 1, (n) => n.id)
         if (next) setFocusId(next.id)
       }
       // Enter is folded into board.info above — from the graph it opens the node-info popup, the same as `i`;
       // crossing into an existing session is the right-click node-menu's job ([[node-menu]]), not a keystroke.
       // [-key (the [[node]] mention opener): jump to a
       // FRESH New Session on the focus ([[<id>]] pre-seeded), unconditional — never enters an existing session
-      else if (firesKey('board.fresh', e.key)) { e.preventDefault(); startNew(`[[${focus.id}]] `) }
+      else if (firesKey('graph.fresh', e.key)) { e.preventDefault(); startNew(`[[${focus.id}]] `) }
       // f-key: open the Evals page ([[evals-view]]) — the leading loss surface — from the board; the rail is the other entry
-      else if (firesKey('board.evals', e.key)) { e.preventDefault(); navigate('evals') }
+      else if (firesKey('graph.evals', e.key)) { e.preventDefault(); navigate('evals') }
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
@@ -550,7 +550,7 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
 
         <SessionWindow sessions={sessions} activeId={highlightId} onPick={onPickSession} onOpenSession={openSession} />
 
-        <BoardStats specs={specs} focusId={focusId} onJump={setFocusId} />
+        <GraphStats specs={specs} focusId={focusId} onJump={setFocusId} />
 
         <NodeContextMenu
           menu={nodeMenu} onClose={() => setNodeMenu(null)}

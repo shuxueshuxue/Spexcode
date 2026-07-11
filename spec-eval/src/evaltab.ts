@@ -242,7 +242,7 @@ export type BlobResult =
   | { ok: false; reason: 'invalid' | 'miss'; message: string }
 
 export function readBlobByHash(hash: string, dir?: string): BlobResult {
-  if (!HEX64.test(hash)) return { ok: false, reason: 'invalid', message: 'bad blob hash' }
+  if (!HEX64.test(hash)) return { ok: false, reason: 'invalid', message: 'bad evidence hash' }
   const bytes = getBlob(hash, dir)   // undefined dir → the live cache (cache.ts default); a temp dir in tests
   if (!bytes) return { ok: false, reason: 'miss', message: MISS_BLOB }
   return { ok: true, bytes, mime: sniffBlobMime(bytes) }

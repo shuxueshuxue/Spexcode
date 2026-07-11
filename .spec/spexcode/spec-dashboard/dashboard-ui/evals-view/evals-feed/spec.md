@@ -7,7 +7,7 @@ code:
   - spec-dashboard/src/EvalsFeed.jsx
 related:
   - spec-eval/src/evaltab.ts
-  - spec-cli/src/board.ts
+  - spec-cli/src/graph.ts
   - spec-dashboard/src/App.jsx
 ---
 # evals-feed

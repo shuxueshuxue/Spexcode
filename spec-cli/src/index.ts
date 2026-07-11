@@ -466,7 +466,7 @@ app.post('/api/sessions/:id/close', async (c) => c.json({ ok: await closeSession
 app.post('/api/sessions/:id/rename', async (c) => {
   const body = await c.req.json().catch(() => ({}))
   const ok = await renameSession(c.req.param('id'), typeof body?.name === 'string' ? body.name : '')
-  if (ok) notifyBoardChanged()
+  if (ok) notifyBoardChanged('sessions')
   return c.json({ ok }, ok ? 200 : 404)
 })
 

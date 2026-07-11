@@ -23,21 +23,28 @@ the *compute* was neither coalesced nor cached.
 
 ## expanded spec
 
-The graph is built **once per change, not once per poll**. `getBoard()` is the one seam every graph read
-goes through, and it holds two guarantees:
+The graph is built **once per change, not once per poll — and only as much of it as the change touched**.
+`getBoard()` is the one seam every graph read goes through, and it holds three guarantees:
 
-- **Single-flight.** One `buildBoard()` runs at a time; concurrent callers share the in-flight promise.
-  This IS the max-concurrent-builds cap — a poll storm can never fan out into N builds, it joins the one.
+- **Single-flight.** One assembly runs at a time; concurrent callers share the in-flight promise. This IS
+  the max-concurrent-builds cap — a poll storm can never fan out into N builds, it joins the one.
+- **Scoped invalidation (the dirty bit carries a domain).** `invalidateBoard(scope)` marks the cache
+  'sessions'-dirty or 'full'-dirty, escalating (sessions∪full=full) and never downgrading. A
+  'sessions'-dirty read with a cached graph takes the SPLICE path — `spliceSessions(prev)`: one fresh
+  `listSessions()`, prev's per-path ops reused, every node/eval/issue unit returned byte-identical — so a
+  lifecycle write never re-walks 180 spec files to ship a 1KB patch (the measured waste this scoping
+  removed: ~250ms of unrelated fs work per push). A 'full' dirty (a ref move, a worktree/.spec event, the
+  patrol) runs the whole `buildBoard()`. The splice runs under the SAME single-flight promise, watchdog
+  and generation rules as a full build; a 'full' invalidation landing mid-splice leaves the cache
+  full-dirty for the next read. The equivalence obligation — a splice is indistinguishable from a full
+  rebuild whenever only session state moved — is pinned by test, and the patrol's repair accounting
+  ([[graph-stream]]) is the live alarm if it ever breaks.
 - **Cache until change.** A completed build is served verbatim until a real change invalidates it, so a
-  quiet poll storm costs ZERO builds (100 cached reads measured at ~0.1ms total). Invalidation reuses the
-  EXACT signals [[graph-stream]] already watches — a session-store write, a git-ref move, the cold tick —
-  which now call `invalidateBoard()` before their debounce fires. So the cache can never lag a change the
-  stream would push: a plain-mode poller sees fresh data on its next poll, and the SSE rebuild re-reads
-  the same now-stale cache. A change that lands MID-build leaves the cache invalid (a generation counter
-  detects it) so the next read rebuilds — the just-finished build still returns to its own waiters
-  (freshest available when they asked), never cached as current. This mirrors [[graph-stream]]'s
-  building/dirty loop, and the two now share ONE build: `rebuildAndBroadcast` calls `getBoard()`, so a
-  route poll and the delta rebuild collapse into a single assembly.
+  quiet poll storm costs ZERO builds (100 cached reads measured at ~0.1ms total). Invalidation is called
+  by the EXACT signals [[graph-stream]] watches, before their debounce fires, so the cache can never lag
+  a change the stream would push; a change landing MID-build leaves the cache dirty (generation counter)
+  so the next read rebuilds, while the just-finished build still answers its own waiters. The stream and
+  the route share ONE build: `rebuildAndBroadcast` calls `getBoard()`.
 
 **The serialization is cached too.** `getBoardJson()` runs `JSON.stringify` once per build; a poll storm
 of cache hits pays zero serialization CPU (only the ETag hash for the 304 path). The SSE path keeps the

@@ -6,9 +6,11 @@
 // separate, and sessions.ts is imported LAZILY so a mention-free post pays nothing.
 
 // ── parse (pure) ──────────────────────────────────────────────────────────────────────────────────────
-// `@<token>` at a word boundary is an actor; `[[<id>]]` is a topic. Tokens are [A-Za-z0-9_-]; a session id,
-// a short label/prefix, or the literal `new`. Both forms are deduped in first-seen order.
-const ACTOR_RE = /(?:^|\s)@([A-Za-z0-9_-]+)/g
+// `@<token>` at a word boundary is an actor; `[[<id>]]` is a topic. Token chars are any unicode
+// letter/number plus [_-] (a CJK session handle or node id is first-class — same charset the launch-side
+// MENTION and the dashboard's MENTION_RE use); a session id, a short label/prefix, or the literal `new`.
+// Both forms are deduped in first-seen order.
+const ACTOR_RE = /(?:^|\s)@([\p{L}\p{N}_-]+)/gu
 const NODE_RE = /\[\[([^\]\s]+)\]\]/g
 
 const uniq = (xs: string[]): string[] => [...new Set(xs)]

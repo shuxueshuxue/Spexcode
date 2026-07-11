@@ -49,6 +49,16 @@ scenarios:
       and the JS bundle both under a third); the SSE stream carries NO content-encoding (the exclusion —
       an event must never sit in a zlib buffer) and the triggered event still arrives on the debounce
       scale. The upstream is untouched: only the gateway compresses.
+  - name: gateway-full-loop
+    tags: [frontend-e2e, desktop]
+    description: >
+      通过公网 gateway（bj01.ezfrp.com:20703）走完整用户环：登录页 → 密码登录 → dashboard graph 页 →
+      sessions 页 → UI 表单创建 new session → worker 真实启动并走完生命周期。headless 浏览器驱动
+      真实公网入口，不走 localhost。
+    expected: |
+      登录 302→/ 成功；graph 页渲染 SVG 节点树；new session 表单提交后 session 出现在 RUNNING 列表；
+      对应 worker 进程真实启动、完成任务并自声明（ask/done）；全程无 5xx、无空白页。
+    code: spec-cli/src/gateway.ts
 ---
 # public-mode loss
 

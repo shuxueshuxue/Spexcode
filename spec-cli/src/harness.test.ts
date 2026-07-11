@@ -352,20 +352,27 @@ test('baseCmd resolves the launcher command the pin freezes: the named-launcher 
   assert.equal(codexHarness.baseCmd(undefined), 'codex --yolo')
 })
 
-test('rendezvousListening: a live listener reads true; a stale socket file / absent path reads false', async () => {
+test('rendezvousListening: tri-state — live listener, proven-dead stale file/absent path, unproven timeout', async () => {
   const id = `unit-rv-${process.pid}-${Date.now()}`
-  // absent path → false, fast (ENOENT)
-  assert.equal(await rendezvousListening(id, 500), false)
-  // a real listener on the id's rvSock → true
+  // absent path → 'dead', fast (ENOENT — proven: nothing ever listened here)
+  assert.equal(await rendezvousListening(id, 500), 'dead')
+  // a real listener on the id's rvSock → 'live'
   const srv = createServer(() => {})
   await new Promise<void>((res) => srv.listen(rvSock(id), () => res()))
   try {
-    assert.equal(await rendezvousListening(id, 500), true)
+    assert.equal(await rendezvousListening(id, 500), 'live')
+    // a TIMEOUT is UNPROVEN, never dead (issue #40): block the prober's own event loop past the probe budget,
+    // so the expired timer fires before the pending connect event — the exact thrashed-backend condition that
+    // read every live worker as offline. The listener here is LIVE the whole time.
+    const p = rendezvousListening(id, 50)
+    const until = Date.now() + 150
+    while (Date.now() < until) { /* block the loop past the 50ms probe budget */ }
+    assert.equal(await p, 'unproven')
   } finally {
     await new Promise<void>((res) => srv.close(() => res()))
   }
-  // after close the socket FILE lingers but nothing listens → false (the exact stale-file-reads-dead case)
-  if (existsSync(rvSock(id))) assert.equal(await rendezvousListening(id, 500), false)
+  // after close the socket FILE lingers but nothing listens → 'dead' (the exact stale-file case: ECONNREFUSED)
+  if (existsSync(rvSock(id))) assert.equal(await rendezvousListening(id, 500), 'dead')
 })
 
 test('paneTreeRunsCodex: codex-ish descendants read live; a bare/unrelated tree does not', () => {

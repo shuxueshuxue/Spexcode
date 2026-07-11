@@ -510,7 +510,15 @@ if (cmd === 'serve') {
   }))
   if ('reached' in r) { console.log(r.reached); process.exit(0) }
   if ('gone' in r) { console.error(`spex wait: no such (living) session ${id}`); process.exit(2) }
-  if ('backendDown' in r) { console.error(`spex wait: ${r.backendDown}`); process.exit(1) }   // fail loud, not a false timeout
+  // a backend failure is a verdict about the TRANSPORT, never the session ([[graph]], issue #40): it prints
+  // its own outcome token on stdout — a word OUTSIDE the session-status vocabulary, so a supervisor reading
+  // the one status line can never mistake "I could not reach the board" for "the session is offline" — and
+  // exits 3, distinct from the plain no-actionable-status timeout (1) and the vanished target (2).
+  if ('backendDown' in r) {
+    console.error(`spex wait: ${r.backendDown}`)
+    console.log(r.kind === 'unreachable' ? 'backend-unreachable' : 'backend-error')
+    process.exit(3)
+  }
   console.error(`spex wait: timeout — ${id} did not reach an actionable status within ${timeoutSec}s`)
   process.exit(1)
 } else if (cmd === 'new') {

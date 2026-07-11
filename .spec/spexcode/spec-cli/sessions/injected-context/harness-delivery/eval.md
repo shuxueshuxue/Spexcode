@@ -71,7 +71,7 @@ scenarios:
       path stays pure bash with zero node boots. The git-native anchor then brings the AGENTS.md/CLAUDE.md
       block and the manifest current: .config edits are git-transactional ([[commit-surgery]]).
 ---
-# yatsu.md — harness-delivery
+# eval.md — harness-delivery
 
 Loss is measured through the REAL self-launch surface (YATU): a user-launched codex/claude on a clean,
 isolated home must get the full SpexCode system (the assembled guide + contract + hooks + zero-prompt trust)

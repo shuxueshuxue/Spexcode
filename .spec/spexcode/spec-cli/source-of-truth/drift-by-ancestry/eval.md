@@ -49,7 +49,7 @@ scenarios:
       in fact (the z-code adopter: 322+ off-history readings, ~22s REPEAT /api/board rebuilds,
       ~45s of spawnSync under the code-axis probes).
 ---
-# yatsu.md — drift-by-ancestry
+# eval.md — drift-by-ancestry
 
 Measured through the real `spex lint` CLI on a scratch branchy-history repo: the drift signal must
 agree with `git rev-list V..HEAD -- <file>` (true DAG reachability), never with a commit-date-ordered

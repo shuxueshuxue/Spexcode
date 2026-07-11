@@ -36,7 +36,7 @@ scenarios:
     expected: >
       The board reflects the change within ~15s (one fallback-poll period) — a silently dead push
       channel degrades to poll freshness, never to a frozen board. And while nothing changes, the
-      always-on poll costs nothing: /api/board answers the If-None-Match request with a bodyless
+      always-on poll costs nothing: /api/graph answers the If-None-Match request with a bodyless
       304. Zero loss = no silent-death mode can stall the board past the poll period, and the poll
       that guarantees it is free when the board is quiet.
     code: [spec-dashboard/src/App.jsx, spec-dashboard/src/data.js]

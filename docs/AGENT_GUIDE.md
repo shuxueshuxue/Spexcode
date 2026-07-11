@@ -154,15 +154,15 @@ together — that is a project choice, not a git requirement.
 ## Architecture / data flow
 
 - `spec-cli/` — Hono backend, run with `tsx` (**no build step**; `npx tsc --noEmit` to type-check).
-  Reads `.spec` + git live. The dashboard's single source is **`GET /api/board`** (assembled
+  Reads `.spec` + git live. The dashboard's single source is **`GET /api/graph`** (assembled
   tree + overlay + sessions); other surfaces include `GET /api/specs`, `GET /api/specs/:id/history`
   (+ `/diff/:hash`), `GET /api/layout`, `GET /api/config` (the gathered config surfaces),
   `GET /api/slash-commands`, and the whole **`/api/sessions` state-machine** (list/create/review/
-  merge/resume/capture/prompt/close + the **`:id/socket` terminal WebSocket** and `graph` edges).
+  merge/resume/capture/prompt/close + the **`:id/socket` terminal WebSocket** and `edges`).
   Loader: `src/specs.ts`; git access: `src/git.ts`; sessions/launch: `src/sessions.ts`;
   portability seam: `src/layout.ts` (`resolveLayout()`, optional `spexcode.json` override for
   non-default layouts).
-- `spec-dashboard/` — Vite + React. `src/data.js`'s `loadBoard()` fetches **`/api/board`**; the x/y
+- `spec-dashboard/` — Vite + React. `src/data.js`'s `loadGraph()` fetches **`/api/graph`**; the x/y
   tidy-tree `layout()` is exported from `data.js` but **applied in `App.jsx`** (focus-driven
   drill-down — a pure view concern, the backend has no pixels). The live Sessions console is a **real
   terminal** (`SessionTerm.jsx`) over the `/api/sessions/:id/socket` WebSocket. `data.js` still carries
@@ -234,7 +234,7 @@ A frontend scenario (a favicon, a rendered view, a tab title) is measured throug
 product**, never by reasoning about the code — and you never file a `spex eval add --pass` off anything
 weaker than the browser's real reading. The loop: run the worktree dashboard (`npm run dev` in
 `spec-dashboard`; a worktree has no `node_modules`, so symlink the main checkout's first), start a `spex
-serve` when the scenario needs a backend/config case (poll `/api/board` until it reflects your config — the
+serve` when the scenario needs a backend/config case (poll `/api/graph` until it reflects your config — the
 serve supervisor spawns a child that takes a few seconds to warm), then drive a headless browser to read the
 real DOM (`document.querySelector("link[rel~='icon']").href`, `document.title`) and screenshot it, and file
 with `spex eval add <node> --scenario <name> --pass --image <png>`. A headless Chromium is available on the

@@ -38,7 +38,7 @@ scenarios:
       - spec-dashboard/src/NodeView.jsx
       - spec-dashboard/src/styles.css
 ---
-# yatsu.md — eval-tab
+# eval.md — eval-tab
 
 Product surface, measured by **looking** (YATU): the agent opens the dashboard, opens a node's eval tab in
 the two states that have no reading to expand (none measured, and some-but-not-all measured), and

@@ -5,7 +5,7 @@ scenarios:
     description: >-
       Through the running dashboard (a real browser pointed at a backend), read `document.title`, the
       session-board left-list header, and the graph HUD brand (the shell-prompt line pinned top-left over
-      the node graph) after the first `/api/board` poll lands. Do it twice: once for a project whose
+      the node graph) after the first `/api/graph` poll lands. Do it twice: once for a project whose
       `spexcode.json` sets NO `dashboard.title` (so the name defaults to the backend repo root's folder
       basename), and once with `dashboard.title` set in that `spexcode.json`. Also load the raw `index.html`
       (or the page before any board arrives) to see the pre-load fallback.
@@ -23,10 +23,10 @@ scenarios:
       - spec-dashboard/src/App.jsx
       - spec-dashboard/src/SessionInterface.jsx
 ---
-# yatsu.md — tab-title
+# eval.md — tab-title
 
 Measured through the real rendered dashboard (YATU): load it against a backend and read the actual
 `document.title` and the board header the user sees, comparing to the project name the backend reports in
-its `/api/board` `project` field. The loss watched is indistinguishable tabs/headers when several
+its `/api/graph` `project` field. The loss watched is indistinguishable tabs/headers when several
 per-project boards are open at once — every viewer must self-identify which backend it serves, defaulting to
 the launch folder and overridable by `dashboard.title`.

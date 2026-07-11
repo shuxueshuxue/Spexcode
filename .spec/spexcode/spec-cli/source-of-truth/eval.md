@@ -5,7 +5,7 @@ scenarios:
     code: spec-cli/src/specs.ts
     related: [spec-cli/src/git.ts]
     description: >-
-      In an isolated spex-init repo, take one node through three git moves and read `spex board` after
+      In an isolated spex-init repo, take one node through three git moves and read `spex graph --json` after
       each: (1) edit its spec.md body and commit with a `Session: <id>` trailer; (2) commit a pure
       rename/reparent of the node's directory (basename unchanged); (3) inspect the repo for any
       persisted derivation state beside `.spec`.
@@ -18,7 +18,7 @@ scenarios:
 
 # measuring source-of-truth
 
-YATU through the real CLI (`spex board`) against an isolated repo: the loss being watched is any drift
+YATU through the real CLI (`spex graph --json`) against an isolated repo: the loss being watched is any drift
 between git history and the board's derived facts — a version that doesn't match the content-commit
 count, attribution that doesn't come from the `Session:` trailer, a rename that fabricates a version, or
 any state file that would make the dashboard a second store instead of a read-time aggregator over git.

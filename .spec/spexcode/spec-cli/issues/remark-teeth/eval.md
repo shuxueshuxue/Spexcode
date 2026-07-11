@@ -20,7 +20,7 @@ scenarios:
     code: spec-cli/src/board.ts
     related: [spec-eval/src/evaltab.ts, spec-cli/src/issues.ts]
     description: >-
-      With an unresolved remark on a scenario, hit `GET /api/board` on a running backend and read the
+      With an unresolved remark on a scenario, hit `GET /api/graph` on a running backend and read the
       node's `evals` entry for that scenario.
     expected: >-
       The reading carries `fresh: false` and `staleAxes: ["remark"]`, and the trunk remark track is

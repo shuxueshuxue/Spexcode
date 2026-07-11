@@ -114,7 +114,7 @@ scenarios:
       reading session.json + the commit trailer.
     code: spec-cli/src/harness.ts
 ---
-# yatsu.md — harness-adapter
+# eval.md — harness-adapter
 
 The adapter's whole job is that the user-facing spec hooks ([[spec-first]], [[spec-of-file]], mark-active) behave
 identically whichever harness the user runs. The load-bearing, easy-to-miss divergence is codex's **two-tool code

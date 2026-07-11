@@ -35,7 +35,7 @@ The subsystem divides into governed concerns:
   status machine + liveness), [[runtime]] (the per-session global store under `~/.spexcode`).
 - **[[comms]]** — the inter-agent mesh over one rendezvous socket: [[dispatch]] (deliver a prompt; merge as
   a dispatched prompt), [[agent-reply-channel]] (reply hint), [[comms-edge]] (recorded talk + graph edge),
-  [[graph]] (the live watch network).
+  [[session-edges]] (the live watch network).
 - **[[injected-context]]** — what a launched session is fed to start spec-aware: [[spec-pointer]] (the live
   spec path, never the body) and [[spec-first]] (the read-before-write nudge).
 - **[[session-selectors]]** — one selector grammar (id · prefix · node · branch) so every command names the
@@ -53,7 +53,7 @@ One surface stays with the overview. `buildBoard` (`board.ts`) assembles the das
 merged spec tree, the per-worktree overlay (a ghost/added node nests by directory ancestry, so a worktree
 introducing a whole new subtree renders as one tree, not a flat scatter), the session list, and the
 backend's own project identity (the browser-tab name) — in one module, served identically at HTTP
-`/api/board` and `spex board` (the frontend only adds x/y pixels). It is also the shared hub where sibling
+`/api/graph` and `spex graph --json` (the frontend only adds x/y pixels). It is also the shared hub where sibling
 features fold their per-node sidecars onto these nodes ([[dashboard-issues]] issues, [[eval-tab]]
 evals) and behind which the live pane is read as text at `…/capture` (which [[remote-client]]'s `spex
 capture` reads) — so such a fold is that feature's stake, not `sessions`' drift.

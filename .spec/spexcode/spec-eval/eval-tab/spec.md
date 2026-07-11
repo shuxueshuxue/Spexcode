@@ -34,9 +34,9 @@ reading also carries the code axis's per-file drift detail (`codeDrift` — whic
 commits) so the [[event-detail]] stale readout can name it, never re-deriving git in the browser;
 newest-first.
 
-The board carries this timeline as a **summary** ([[board-lean]]): `buildBoard` folds the latest reading per
+The board carries this timeline as a **summary** ([[graph-lean]]): `buildBoard` folds the latest reading per
 scenario onto the node's `evals` and the declared set slim (`{name, tags}`), so every overview surface — the
-[[eval-score-badge]] tile count, the [[focus-panel]] — counts the WHOLE set off the one `/api/board` poll
+[[eval-score-badge]] tile count, the [[focus-panel]] — counts the WHOLE set off the one `/api/graph` poll
 (a never-measured scenario still counts as loss). The FULL timeline — each scenario's
 `expected` and per-scenario `code` included — is served by `/api/specs/:id/evals`, lazy-loaded when the tab
 opens. The board attach stays cheap by reusing the board's specs + `driftIndex` and one shared eval-file walk.

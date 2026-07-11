@@ -13,7 +13,7 @@ import { resolveLayout, mainBranch } from './layout.js'
 import { getBoardJson } from './boardCache.js'
 import { boardStream, notifyBoardChanged } from './boardStream.js'
 import { gitA, gitTry, repoRoot } from './git.js'
-import { newSession, listSessions, sendKeys, rawKey, exitSession, closeSession, reopen, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, superviseQueue } from './sessions.js'
+import { newSession, listSessions, sendText, rawKey, stopSession, closeSession, resumeSession, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, superviseQueue } from './sessions.js'
 import { defaultHarness, HARNESSES, launcherList, launcherDefault } from './harness.js'
 import { evalTimeline, readBlobByHash } from '../../spec-eval/src/evaltab.js'
 import { putBlob } from '../../spec-eval/src/cache.js'
@@ -32,33 +32,33 @@ const app = new Hono()
 app.use('/api/*', cors())
 const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app })
 
-app.get('/', (c) => c.text('spec-cli — GET /api/board · /api/specs · /api/specs/:id/history · /api/layout · /api/sessions · /api/slash-commands'))
+app.get('/', (c) => c.text('spec-cli — GET /api/graph · /api/specs · /api/specs/:id/history · /api/layout · /api/sessions · /api/slash-commands'))
 // the supervisor's readiness gate (supervise.ts): a bare git-free 200 so a booting child reports ready the
 // instant Hono is listening. Not under /api/* — loopback-only (supervisor→child), no CORS needed.
 app.get('/health', (c) => c.text('ok'))
-// the assembled board (merged tree + overlay + sessions) — the dashboard's single source. Same data
-// as `spex graph --json`; the frontend only adds x/y pixels on top. Freshness is PUSH-first ([[board-stream]]): the
-// dashboard reloads on a `/api/board/stream` event, not a tight poll, so the route is a conditional-request
+// the assembled graph (merged tree + overlay + sessions) — the dashboard's single source. Same data
+// as `spex graph --json`; the frontend only adds x/y pixels on top. Freshness is PUSH-first ([[graph-stream]]): the
+// dashboard reloads on a `/api/graph/stream` event, not a tight poll, so the route is a conditional-request
 // endpoint: `etag()` hashes the serialized body, and a reload whose `If-None-Match` matches gets a bodyless 304
 // instead of the full transfer (~1 MB on the dogfood board — it scales with the node count). The 304 saves the
-// WIRE only; the COMPUTE is saved by [[board-cache]]: getBoard() is single-flight + cached, so a poll storm
+// WIRE only; the COMPUTE is saved by [[graph-cache]]: getBoard() is single-flight + cached, so a poll storm
 // shares ONE build instead of each running its own — the poll-frequency cut (push channel) and the
 // build-coalescing cut compound. A hard timeout bounds a wedged build to a loud 503 rather than an
 // unboundedly-held connection (the wall sits well above the legitimately-several-seconds cold first build);
 // a merely-slow single-flight build keeps running and caches for the next poll, while a NEVER-settling one
-// is bounded by [[board-cache]]'s own build watchdog, so the next poll retries a fresh build.
+// is bounded by [[graph-cache]]'s own build watchdog, so the next poll retries a fresh build.
 const BOARD_TIMEOUT_MS = Number(process.env.SPEXCODE_BOARD_TIMEOUT_MS || 20000)
-app.get('/api/board', etag(), async (c) => {
+app.get('/api/graph', etag(), async (c) => {
   const timeout = Symbol('timeout')
   const json = await Promise.race([getBoardJson(), new Promise<typeof timeout>((r) => setTimeout(() => r(timeout), BOARD_TIMEOUT_MS))])
-  if (json === timeout) return c.json({ error: 'board build timed out' }, 503)
+  if (json === timeout) return c.json({ error: 'graph build timed out' }, 503)
   return c.body(json as string, 200, { 'content-type': 'application/json; charset=UTF-8' })
 })
-// the board's push channel: an SSE that fires `board-changed` on any session-store write, so the dashboard
-// reloads the instant status moves instead of waiting for its slow fallback poll ([[board-stream]]).
-app.get('/api/board/stream', (c) => boardStream(c))
+// the graph's push channel: an SSE that fires `board-changed` on any session-store write, so the dashboard
+// reloads the instant status moves instead of waiting for its slow fallback poll ([[graph-stream]]).
+app.get('/api/graph/stream', (c) => boardStream(c))
 app.get('/api/specs', async (c) => c.json(await loadSpecs()))
-// the search corpus ([[board-lean]]): a filesystem-only {id,title,path,desc,body} for every node, NO git. The
+// the search corpus ([[graph-lean]]): a filesystem-only {id,title,path,desc,body} for every node, NO git. The
 // board omits `body` to stay lean, so the search palette fetches this ONCE when it opens (cached client-side)
 // to rank nodes over their prose — off the board's hot poll. A literal segment, before the `:id` routes.
 // Scenario prose rides the same corpus: the board's `scenarios` fold is slim ({name, tags}), so a measurable
@@ -73,7 +73,7 @@ app.get('/api/specs/lite', (c) => {
       : row
   }))
 })
-// one node's body + parsed parts ([[board-lean]]): the board no longer ships either, so the detail view
+// one node's body + parsed parts ([[graph-lean]]): the board no longer ships either, so the detail view
 // fetches this when a node opens. 404 for an unknown id.
 app.get('/api/specs/:id/content', (c) => {
   const x = specContent(c.req.param('id'))
@@ -311,15 +311,15 @@ app.post('/api/uploads', async (c) => {
 // forward keystrokes, and close.
 app.get('/api/sessions', async (c) => c.json(await listSessions()))
 // edges derived live from `spex session watch` monitors (A→B = agent A is watching B), not a stored subscription;
-// watch/unwatch register + heartbeat. A literal `graph` segment so it never collides with the `:id` routes.
-app.get('/api/sessions/graph', async (c) => c.json(await sessionGraph()))
-app.post('/api/sessions/graph/watch', async (c) => {
+// watch/unwatch register + heartbeat. A literal `edges` segment so it never collides with the `:id` routes.
+app.get('/api/sessions/edges', async (c) => c.json(await sessionGraph()))
+app.post('/api/sessions/edges/watch', async (c) => {
   const b = await c.req.json().catch(() => ({}))
   const selectors = Array.isArray(b?.selectors) ? b.selectors.map(String) : []
   const ok = registerWatch(String(b?.token || ''), String(b?.watcher || ''), selectors, Number(b?.ttlMs) || undefined)
   return c.json({ ok }, ok ? 200 : 400)
 })
-app.post('/api/sessions/graph/unwatch', async (c) => {
+app.post('/api/sessions/edges/unwatch', async (c) => {
   const b = await c.req.json().catch(() => ({}))
   const ok = deregisterWatch(String(b?.token || ''))
   return c.json({ ok }, ok ? 200 : 404)
@@ -357,7 +357,7 @@ app.get('/api/sessions/:id/evals', async (c) => {
   const m = await buildSessionEvals(c.req.param('id'))
   return m ? c.json(m) : c.json({ error: 'no such session' }, 404)
 })
-// the session's live pane as text (one-shot snapshot) for a backend client (`spex session capture`). Empty and fail
+// the session's live pane as text (one-shot snapshot) for a backend client (`spex session show --capture`). Empty and fail
 // stay distinct: an empty pane is 200 with empty body; unknown id → 404, offline (no live pane) → 409, error → 502.
 app.get('/api/sessions/:id/capture', async (c) => {
   const r = await captureSessionResult(c.req.param('id'))
@@ -366,10 +366,14 @@ app.get('/api/sessions/:id/capture', async (c) => {
   if (r.reason === 'offline') return c.text('session offline (no live pane)', 409)
   return c.text('capture failed', 502)
 })
-// the session's originating prompt (what it was asked to do), for a manager client; 404 if none recorded.
-app.get('/api/sessions/:id/prompt', async (c) => {
-  const p = await sessionPrompt(c.req.param('id'))
-  return p == null ? c.text('no prompt recorded', 404) : c.text(p)
+// the session RECORD detail (`spex session show`): the board row (status · node · branch · launcher · …)
+// plus the full originating prompt (the row itself carries only the preview). One id-addressed read backs
+// the CLI's show; 404 for an unknown id.
+app.get('/api/sessions/:id', async (c) => {
+  const id = c.req.param('id')
+  const row = (await listSessions()).find((s) => s.id === id)
+  if (!row) return c.json({ error: 'no such session' }, 404)
+  return c.json({ ...row, prompt: await sessionPrompt(id) })
 })
 // lifecycle transitions (thin callers of the session state machine)
 // relaunch ONLY if confirmed offline; demotes working→idle, keeps any declaration. The RESUME GUARD refuses
@@ -378,7 +382,7 @@ app.get('/api/sessions/:id/prompt', async (c) => {
 app.post('/api/sessions/:id/resume', async (c) => {
   const body = await c.req.json().catch(() => ({} as { force?: boolean }))
   const force = body?.force === true || c.req.query('force') === '1'
-  const r = await reopen(c.req.param('id'), { force })
+  const r = await resumeSession(c.req.param('id'), { force })
   return c.json(r, r.ok ? 200 : (r.refused ? 409 : 404))
 })
 // a dispatch to the session's own agent (it runs the merge), never a server merge — the server never touches
@@ -421,34 +425,37 @@ app.get('/api/sessions/:id/socket', upgradeWebSocket((c) => {
     onClose() { if (viewer) detachViewer(id, viewer) },
   }
 }))
-// the docked ❯ line input (and server-side merge dispatch) dispatch a whole prompt through the rendezvous
-// control socket. Socket-only + fail-loud: a prompt the agent doesn't confirm accepting returns 502 with the
-// reason (never a silent 200), so the dashboard/manager sees a dead dispatch instead of a false success.
-app.post('/api/sessions/:id/keys', async (c) => {
+// ONE input route, `kind` the discriminator — the transport split is an implementation fact, not API surface.
+// kind:"text" (the docked ❯ line, `spex session send`, the server-side merge dispatch) injects a whole prompt
+// through the rendezvous control socket — socket-only + fail-loud: a prompt the agent doesn't confirm
+// accepting returns 502 with the reason (never a silent 200), so a dead dispatch is seen, not a false success.
+// kind:"keys" is the LAST-RESORT raw face (`send --keys`, the dashboard's type mode): an ORDERED BATCH of
+// nav-mode key tokens over tmux send-keys, delivered in array order so tap order survives
+// ([[nav-mode-key-ordering]]); unstable by nature — callers try a plain text send first. An unknown kind is a
+// loud 400, never a guessed channel.
+app.post('/api/sessions/:id/input', async (c) => {
   const body = await c.req.json().catch(() => ({}))
-  // `from` (the sender's session id) rides only an agent-to-agent send → the backend records the comms
-  // edge ([[comms-edge]]); a raw human dispatch omits it and is not logged.
-  const r = await sendKeys(c.req.param('id'), typeof body?.text === 'string' ? body.text : '', typeof body?.from === 'string' ? body.from : undefined)
-  return c.json(r, r.ok ? 200 : 502)
+  if (body?.kind === 'text') {
+    // `from` (the sender's session id) rides only an agent-to-agent send → the backend records the comms
+    // edge ([[comms-edge]]); a raw human dispatch omits it and is not logged.
+    const r = await sendText(c.req.param('id'), typeof body?.text === 'string' ? body.text : '', typeof body?.from === 'string' ? body.from : undefined)
+    return c.json(r, r.ok ? 200 : 502)
+  }
+  if (body?.kind === 'keys') {
+    const keys = Array.isArray(body?.keys) ? body.keys.filter((k: unknown) => typeof k === 'string') : []
+    const ok = await rawKey(c.req.param('id'), keys)
+    return c.json({ ok }, ok ? 200 : 404)
+  }
+  return c.json({ error: 'input needs kind: "text" | "keys"' }, 400)
 })
-// the preserved tmux send-keys path (distinct from the ❯ prompt socket): the human drives the agent's
-// interactive TUI menus in real time. Accepts an ORDERED BATCH (`keys`, the client coalesces fast typing) or a
-// single `key`; rawKey delivers them in array order so tap order is preserved ([[nav-mode-key-ordering]]).
-app.post('/api/sessions/:id/rawkey', async (c) => {
-  const body = await c.req.json().catch(() => ({}))
-  const keys = Array.isArray(body?.keys) ? body.keys.filter((k: unknown) => typeof k === 'string')
-    : typeof body?.key === 'string' ? [body.key] : []
-  const ok = await rawKey(c.req.param('id'), keys)
-  return c.json({ ok }, ok ? 200 : 404)
-})
-// soft stop: kill the agent's tmux + socket but KEEP the worktree (relaunchable). Distinct from close, which
+// soft stop: kill the agent's tmux + socket but KEEP the worktree (resumable). Distinct from close, which
 // removes the worktree. {ok:false} = no such session.
-app.post('/api/sessions/:id/exit', async (c) => c.json({ ok: await exitSession(c.req.param('id')) }))
+app.post('/api/sessions/:id/stop', async (c) => c.json({ ok: await stopSession(c.req.param('id')) }))
 app.post('/api/sessions/:id/close', async (c) => c.json({ ok: await closeSession(c.req.param('id')) }))
 // set (or clear, with a blank) a session's display-name override; persists to the session's global record
 // (`session.json`) so it survives a restart. Unknown id → 404. That record sits INSIDE the watched store, but
 // the store watch is best-effort (it can fail to attach), so the route still nudges the stream explicitly
-// ([[board-stream]]) — the rename shows in ~150ms deterministically, never waiting out a cold tick.
+// ([[graph-stream]]) — the rename shows in ~150ms deterministically, never waiting out a cold tick.
 app.post('/api/sessions/:id/rename', async (c) => {
   const body = await c.req.json().catch(() => ({}))
   const ok = await renameSession(c.req.param('id'), typeof body?.name === 'string' ? body.name : '')

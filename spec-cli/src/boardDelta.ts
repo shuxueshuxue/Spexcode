@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 
 // @@@ board-delta — the pure core of the board's incremental push: decompose a board snapshot into a keyed
-// UNIT MAP, tag it, and diff two unit maps into a minimal {set, del} patch. The transport ([[board-stream]])
+// UNIT MAP, tag it, and diff two unit maps into a minimal {set, del} patch. The transport ([[graph-stream]])
 // chains these patches over SSE (`from`/`to` tags) so a subscribed dashboard applies a few KB per change
 // instead of refetching the full ~600KB snapshot; the client-side mirror of apply/reconstruct lives in the
 // dashboard's data layer. Everything here is pure and synchronous — no fs, no git, no stream — so the

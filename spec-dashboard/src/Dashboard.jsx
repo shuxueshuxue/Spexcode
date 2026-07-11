@@ -592,7 +592,7 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
       <FocusPanel node={focus} onNavigateAddress={onNavigateAddress} />
       </div>
 
-      {/* key on focus.id: remount when the open overlay switches nodes, so the lazily-fetched body ([[board-lean]])
+      {/* key on focus.id: remount when the open overlay switches nodes, so the lazily-fetched body ([[graph-lean]])
           never renders one node's prose under another's header while the new fetch is in flight. */}
       {overlay && <NodeView key={focus.id} node={focus} pane={pane} setPane={setPane} onClose={() => setOverlay(false)} />}
       {/* the console mounts immediately (warm terminals) — its chunk just arrives a beat after the shell;
@@ -637,7 +637,7 @@ function Dashboard({ specs, sessions, reload, project, issuesData, reloadIssues 
           <Settings />
         </Suspense>
       )}
-      {/* the one shared search palette ([[session-board-search]]) — mounted at APP level, not inside a
+      {/* the one shared search palette ([[session-search]]) — mounted at APP level, not inside a
           routed page: it must float above whichever page is showing (the graph's `/`, the session board's
           ⌘+/ and Search pill), and a page's display:none must never swallow it. */}
       {search && <SpecSearch specs={specs} sessions={sessions} onPick={onSearchPick} onClose={() => setSearch(null)} boost={search === 'sessions' ? 'session' : null} />}

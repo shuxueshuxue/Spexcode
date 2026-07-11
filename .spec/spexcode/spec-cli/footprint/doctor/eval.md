@@ -21,7 +21,7 @@ scenarios:
       identity stamp (plugin.json name, the dispatch.sh shim, our skill names), never payload.
     code: spec-cli/src/doctor.ts
 ---
-# yatsu.md — self
+# eval.md — self
 
 `doctor`'s double-delivery check is measured through the real `spex doctor --conflicts` CLI (YATU): the agent
 plants a genuine second discovery channel — a `spexcode` plugin bundle beside the loose native delivery —

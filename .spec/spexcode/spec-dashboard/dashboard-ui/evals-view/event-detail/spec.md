@@ -108,7 +108,7 @@ attached to the reading by `evalTimeline` (the frontend has no git). It is repor
 freshness, it names a decision already made, so a reviewer sees *why* a reading is behind and by how far. Every
 other affordance is freshness-blind — a remark is authored on a stale reading exactly as on a fresh one (the
 composer never consults freshness); staleness changes what the loss signal *says*, never what the human can *do*. The board folds only the latest reading per scenario
-([[board-lean]]), so the full history is lazily fetched from the SAME `/api/specs/:id/evals` timeline the
+([[graph-lean]]), so the full history is lazily fetched from the SAME `/api/specs/:id/evals` timeline the
 [[eval-tab]] uses (no new endpoint, no board bloat); the strip shows only when a scenario has more
 than one reading (a fresh scenario is just its single reading). The remark track in the rail is
 per-SCENARIO, not per-reading, so it stays stable as you flip — it spans the whole A/B. New readings

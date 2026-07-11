@@ -82,23 +82,28 @@ const SIGNPOSTS: Record<string, string> = {
   review: 'spex session review',
   merge: 'spex session merge',
   send: 'spex session send',
-  reopen: 'spex session reopen',
+  reopen: 'spex session resume',
   done: 'spex session done',
   park: 'spex session park',
   ask: 'spex session ask',
-  exit: 'spex session exit',
+  exit: 'spex session stop',
   close: 'spex session close',
-  capture: 'spex session capture',
+  capture: 'spex session show <SEL> --capture',
   attach: 'spex session attach',
   rename: 'spex session rename',
-  prompt: 'spex session prompt',
+  prompt: 'spex session show <SEL>',
   rawkey: 'spex session send <SEL> --keys "<keys>"',
   resolve: 'spex remark resolve <ref>',
   retract: 'spex remark retract <ref>',
 }
-// the session drawer's removed sub-spellings: rawkey folded into send; the hook-only verbs moved to internal.
+// the session drawer's removed sub-spellings: rawkey folded into send; capture/prompt folded into show;
+// exit/reopen respelled stop/resume; the hook-only verbs moved to internal.
 const SESSION_SIGNPOSTS: Record<string, string> = {
   rawkey: 'spex session send <SEL> --keys "<keys>"',
+  exit: 'spex session stop <SEL>',
+  reopen: 'spex session resume <SEL> [--force]',
+  capture: 'spex session show <SEL> --capture',
+  prompt: 'spex session show <SEL>',
   state: 'spex internal session-state',
   fail: 'spex internal session-fail',
   idle: 'spex internal session-idle',
@@ -126,7 +131,7 @@ async function launchMonitorReminder(id: string): Promise<void> {
   } else {
     console.error(`  \`spex session watch\` — the live stream of actionable session transitions (or \`spex session wait ${id}\` to block on this one)`)
   }
-  console.error(`  talk to it: \`spex session send ${id} "<msg>"\` — never raw tmux keystrokes`)
+  console.error(`  talk to it: \`spex session send ${id} "<msg>"\` — plain text; \`send --keys\` is a LAST RESORT (unstable raw TUI keys — only when a text send provably can't land)`)
 }
 
 const greeted = new Set<string>()
@@ -326,7 +331,7 @@ if (cmd === 'serve') {
 } else if (cmd === 'graph') {
   // @@@ graph - the ONE assembled view (tree + worktree overlay + sessions), both faces of it: bare (with
   // --focus/--depth) renders the human-readable status-coloured tree; --json dumps the full payload —
-  // identical to GET /api/board, machine food. Colour degrades cleanly: off unless stdout is a tty, and
+  // identical to GET /api/graph, machine food. Colour degrades cleanly: off unless stdout is a tty, and
   // NO_COLOR always wins.
   if (flag('node') !== undefined) { console.error('spex graph: --node was renamed — use --focus <id>'); process.exit(2) }
   const { buildBoard } = await import('./board.js')
@@ -640,7 +645,7 @@ if (cmd === 'serve') {
     const { clientListSessions } = await import('./client.js')
     const [id] = positionals(4)
     if (!id) { console.error('usage: spex session wait <id> [--timeout SECONDS] [--interval SECONDS] [--idle]'); process.exit(2) }
-    // point-of-use turn-freeze warning ([[graph]]): a managed agent that runs this wait in the FOREGROUND
+    // point-of-use turn-freeze warning ([[session-edges]]): a managed agent that runs this wait in the FOREGROUND
     // freezes its whole turn until the target turns actionable — a warning that used to live only in help
     // prose, now said where it matters. Foreground vs background is invisible from here, so the hint prints
     // for ANY managed-agent shell (harmless in a background transcript), on stderr, and changes nothing else.
@@ -657,7 +662,7 @@ if (cmd === 'serve') {
     }))
     if ('reached' in r) { console.log(r.reached); process.exit(0) }
     if ('gone' in r) { console.error(`spex session wait: no such (living) session ${id}`); process.exit(2) }
-    // a backend failure is a verdict about the TRANSPORT, never the session ([[graph]], issue #40): it prints
+    // a backend failure is a verdict about the TRANSPORT, never the session ([[session-edges]], issue #40): it prints
     // its own outcome token on stdout — a word OUTSIDE the session-status vocabulary, so a supervisor reading
     // the one status line can never mistake "I could not reach the board" for "the session is offline" — and
     // exits 3, distinct from the plain no-actionable-status timeout (1) and the vanished target (2).
@@ -704,15 +709,15 @@ if (cmd === 'serve') {
     // read/control subs that route through the backend. Lazily imported.
     const c = await import('./client.js')
     const id = process.argv[4]
-    if (sub === 'reopen') {
+    if (sub === 'resume') {
       // bring the agent back up (relaunch ONLY if confirmed offline, the backend owns it); demotes a working
-      // `active` to idle but leaves a standing declaration/proposal untouched (see sessions.ts reopen()). The
-      // RESUME GUARD refuses a relaunch on a LIVE/unproven agent (that would kill a live worker) — `--force`
+      // `active` to idle but leaves a standing declaration/proposal untouched (see sessions.ts resumeSession()).
+      // The RESUME GUARD refuses a relaunch on a LIVE/unproven agent (that would kill a live worker) — `--force`
       // overrides for a genuinely wedged process. A following prompt is what actually re-drives it.
       const full = await resolveSelectorOrExit(id)
-      const r = await c.clientReopen(full, process.argv.includes('--force'))
-      if (r.ok) console.log(`${full} -> reopened`)
-      else { console.error(`spex session reopen: ${r.error || `no such session ${full}`}`); process.exit(2) }
+      const r = await c.clientResume(full, process.argv.includes('--force'))
+      if (r.ok) console.log(`${full} -> resumed`)
+      else { console.error(`spex session resume: ${r.error || `no such session ${full}`}`); process.exit(2) }
     } else if (sub === 'done') {
       // sugar for awaiting; --propose merge|nothing|close, optional --note
       const { s, sess, mark, noRecord, noteEcho } = await stateKit()
@@ -736,11 +741,11 @@ if (cmd === 'serve') {
       // (waiting on a background task, self-resumes): an asking agent resumes only when the human replies.
       const { s, sess, mark, noRecord, noteEcho } = await stateKit()
       console.log(mark(() => s.markState('asking', { note: flag('note'), sessionId: sess })) ? `asking${DECLARED}${noteEcho(flag('note'))}` : noRecord())
-    } else if (sub === 'exit') {
+    } else if (sub === 'stop') {
       // the SOFT stop: kill the agent's tmux + socket but KEEP the worktree, so the session goes offline and
-      // can be resumed (reopen/relaunch). Distinct from `close`, which removes the worktree.
+      // can be resumed (`session resume`). Distinct from `close`, which removes the worktree.
       const full = await resolveSelectorOrExit(id)
-      console.log(await c.clientExit(full) ? `exited ${full} (worktree kept — resumable)` : `no such session ${full}`)
+      console.log(await c.clientStop(full) ? `stopped ${full} (worktree kept — resumable)` : `no such session ${full}`)
     } else if (sub === 'close') {
       const full = await resolveSelectorOrExit(id)
       console.log(await c.clientClose(full) ? `closed ${full}` : `no such session ${full}`)
@@ -755,7 +760,7 @@ if (cmd === 'serve') {
         // ordered batch ([[nav-mode-key-ordering]]). Fail-loud: nothing delivered exits non-zero.
         const keys = (flag('keys') ?? '').split(/\s+/).filter(Boolean)
         if (keys.length === 0) { console.error('usage: spex session send <SEL> --keys "<keys>"   (e.g. "Up Up Enter", "C-r", single chars — last resort; try a plain send first)'); process.exit(2) }
-        if (await c.clientRawkey(full, keys)) { console.log(`sent ${keys.length} key${keys.length === 1 ? '' : 's'} -> ${full}`); process.exit(0) }
+        if (await c.clientSendRawKeys(full, keys)) { console.log(`sent ${keys.length} key${keys.length === 1 ? '' : 's'} -> ${full}`); process.exit(0) }
         console.error(`spex session send --keys: nothing delivered to ${full} (offline, unknown session, or no valid key token)`)
         process.exit(1)
       }
@@ -778,13 +783,34 @@ if (cmd === 'serve') {
       const r = await c.clientSend(full, s.withSenderHint(process.argv[5] ?? '', sender), senderId ?? undefined)
       console.log(r.ok ? 'sent' : `dispatch failed: ${r.error}`)
       process.exit(r.ok ? 0 : 1)
-    } else if (sub === 'capture') {
-      // the session's live pane (output) over HTTP — fail and empty stay DISTINCT: a real empty pane prints
-      // nothing and exits 0; unknown id / offline / capture-error each exit non-zero with a named reason.
+    } else if (sub === 'show') {
+      // the session RECORD as one per-id read (status · node · branch · launcher · the full originating
+      // prompt); --capture swaps in the LIVE PANE face of the same read. The pane contract is unchanged from
+      // the verb it absorbed — fail and empty stay DISTINCT: a real empty pane prints nothing and exits 0;
+      // unknown id exits 2, offline / capture-error exit 1, each with a named reason.
       const full = await resolveSelectorOrExit(id)
-      const r = await c.clientCapture(full)
-      if (r.ok) { process.stdout.write(r.pane) }
-      else { console.error(`spex session capture: ${r.reason}`); process.exit(r.status === 404 ? 2 : 1) }
+      if (has('capture')) {
+        const r = await c.clientCapture(full)
+        if (r.ok) { process.stdout.write(r.pane) }
+        else { console.error(`spex session show --capture: ${r.reason}`); process.exit(r.status === 404 ? 2 : 1) }
+      } else {
+        const r = await c.clientShow(full)
+        if (!r.ok) { console.error(`spex session show: no such session ${full}`); process.exit(2) }
+        if (has('json')) { console.log(JSON.stringify(r.session, null, 2)) }
+        else {
+          const x = r.session
+          console.log(`${x.label}  [${x.id}]`)
+          console.log(`  status   : ${x.status}  (lifecycle ${x.lifecycle} · liveness ${x.liveness})`)
+          console.log(`  node     : ${x.node ?? '—'}`)
+          console.log(`  branch   : ${x.branch ?? '—'}`)
+          console.log(`  launcher : ${x.launcher ?? '—'}  (harness ${x.harness})`)
+          console.log(`  worktree : ${x.path}`)
+          console.log(`  created  : ${new Date(x.created).toISOString()}`)
+          if (x.note) console.log(`  note     : ${x.note}`)
+          if (x.proposal) console.log(`  proposal : ${x.proposal}`)
+          console.log(x.prompt ? `  prompt   |\n${x.prompt.replace(/\n$/, '').split('\n').map((l) => `    ${l}`).join('\n')}` : '  prompt   : (none recorded)')
+        }
+      }
     } else if (sub === 'rename') {
       // set the session's display-name override — the right-click rename ([[session-rename]]) as a verb, so an
       // agent manager can fix a label without the GUI. An EXPLICIT "" clears back to the derived label; a
@@ -801,14 +827,8 @@ if (cmd === 'serve') {
       const { assertLocalBackend, attachSession } = await import('./attach.js')
       await assertLocalBackend()
       await attachSession(await resolveSelectorOrExit(id))
-    } else if (sub === 'prompt') {
-      // print the session's full ORIGINATING prompt (what it was asked to do), captured at launch.
-      const full = await resolveSelectorOrExit(id)
-      const r = await c.clientPrompt(full)
-      if (!r.ok) { console.error(`no prompt recorded for ${full}`); process.exit(1) }
-      process.stdout.write(r.prompt.endsWith('\n') ? r.prompt : r.prompt + '\n')
     } else {
-      console.error(`spex session: unknown verb '${sub}' — new | ls | watch | wait | review | merge | send | rename | reopen | exit | close | capture | prompt | attach | done | park | ask  (spex help session)`)
+      console.error(`spex session: unknown verb '${sub}' — new | ls | show | watch | wait | review | merge | send | rename | resume | stop | close | attach | done | park | ask  (spex help session)`)
       process.exit(2)
     }
   }

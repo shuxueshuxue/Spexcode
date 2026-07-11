@@ -31,7 +31,7 @@ scenarios:
       PRUNES the plugin bundle and writes the native CLAUDE.md block + .claude/settings.json shim. The prune is
       identity-gated on the bundle's own plugin.json, so a foreign plugin sharing the folder is never touched.
 ---
-# yatsu.md — plugin-harness
+# eval.md — plugin-harness
 
 Loss is read through the CLI surface a real adopter touches (YATU): `spex materialize` on a project whose
 spexcode.json names a `{"plugin":"<folder>"}` target. Three things must hold: the emit produces a complete,

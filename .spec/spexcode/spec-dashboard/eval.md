@@ -11,7 +11,7 @@ scenarios:
       The spec-graph board renders every node card with its version and freshness badge; the
       filed reading carries the screenshot as image evidence and a pass verdict.
 ---
-# yatsu.md — spec-dashboard
+# eval.md — spec-dashboard
 
 The dashboard's product surface is measured by **looking** (YATU): the agent screenshots the rendered
 spec-graph board through the running app and files it as a reading — image evidence with a verdict, the

@@ -38,7 +38,7 @@ function buildEntries(specs, sessions, corpus) {
       // one-line summary, body = the spec prose. So the palette ranks a node by the maths `spex search` runs —
       // prose reached via BM25, not the old whole-query substring. (Path is shown in `sub` but, like the floor,
       // no longer a search field — its segments are the node names/prose already in name+body.)
-      // body is no longer on the board ([[board-lean]]) — it comes from the lazily-fetched corpus (`bodies`),
+      // body is no longer on the board ([[graph-lean]]) — it comes from the lazily-fetched corpus (`bodies`),
       // falling back to any body still on the node (a fixture, or before the corpus lands).
       name: `${s.title || s.id} ${s.id}`, desc: s.desc || '', body: bodies?.[s.id] ?? s.body ?? '',
     })
@@ -53,7 +53,7 @@ function buildEntries(specs, sessions, corpus) {
       })
     }
     for (const sc of scenarioStates(s.scenarios, s.evals)) {
-      // scenario prose is off the board too ([[board-lean]]) — the ranked body joins the scenario's
+      // scenario prose is off the board too ([[graph-lean]]) — the ranked body joins the scenario's
       // description+expected from the same corpus fetch, falling back to any prose still on the node.
       const prose = corpus?.scenarios?.[s.id]?.[sc.name]
       entries.push({
@@ -114,7 +114,7 @@ function rank(entries, query, planes) {
 
 export default function SpecSearch({ specs, sessions, onPick, onClose, boost = null }) {
   const t = useT()
-  // the prose corpus ([[board-lean]], corpus.js): node bodies + scenario description/expected, fetched when
+  // the prose corpus ([[graph-lean]], corpus.js): node bodies + scenario description/expected, fetched when
   // the palette opens (a fresh mount revalidates), seeded instantly from the shared module cache.
   const corpus = useSpecCorpus()
   const [q, setQ] = useState('')

@@ -114,7 +114,7 @@ scenarios:
     code:
       - spec-dashboard/src/styles.css
 ---
-# yatsu.md — session-activity
+# eval.md — session-activity
 
 Product surface, measured by **looking** (YATU): the agent screenshots the rendered session window and
 confirms each live row is the compact one-line face whose headline is the worker's pane-title self-summary

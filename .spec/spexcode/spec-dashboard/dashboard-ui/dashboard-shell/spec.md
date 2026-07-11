@@ -68,10 +68,10 @@ never an eternal spinner — the pre-first-board window is the only reader; once
 refetch keeps the last good board and the stream/poll below keep retrying on their own.
 
 **Push-first board — freshest-issued wins.** The shell keeps the board fresh through three paths. The
-primary is the **delta subscription** ([[board-stream]]/[[board-delta]]): whole boards arrive over the push
+primary is the **delta subscription** ([[graph-stream]]/[[graph-delta]]): whole boards arrive over the push
 channel — a full on connect, then patches the data layer applies to its unit-map mirror — straight into
 state, no refetch per change; a patch whose chain tag mismatches reopens the stream and re-anchors on the
-fresh full. Second, an **on-demand** `reload()` (`/api/board`): a session close/rename calls it so every
+fresh full. Second, an **on-demand** `reload()` (`/api/graph`): a session close/rename calls it so every
 surface reflects the change at once, and an old backend that only speaks bare `board-changed` downgrades the
 subscription to exactly this refetch path. Third, a **slow fallback poll that always runs**. The shell deliberately keeps NO push-liveness detector: a
 silently dead stream (a half-open tunnel, a sleep-resume, a network switch) delivers no data and no error

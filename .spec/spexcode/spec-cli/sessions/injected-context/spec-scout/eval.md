@@ -22,7 +22,7 @@ scenarios:
       code-trace MISSES (the session's opening question was answered wrong from code; only the spec node
       corrected it — this agent makes that correction the cheap default).
 ---
-# yatsu.md — spec-scout
+# eval.md — spec-scout
 
 The loss watched is **does the agent return the USER-STORY governor, not the code-central node?** Its whole
 reason to exist is that `spex search`'s lexical ranking (and a plain code grep) can miss the node a user's

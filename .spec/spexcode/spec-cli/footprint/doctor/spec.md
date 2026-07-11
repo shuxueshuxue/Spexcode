@@ -54,7 +54,9 @@ are both covered with no hardcoded paths and a new harness is diagnosed for free
   switch `harnesses` to a plugin target so materialize prunes the loose copy, OR uninstall the loose copy).
 
 Each layer gets a verdict (enforced / advisory-only / absent / conflict) plus a footprint audit of every
-materialized artifact and any slot held by something not ours. `spex doctor install [--agent claude]
+materialized artifact and any slot held by something not ours. Doctor also carries the one MUTATING flag:
+`spex doctor --migrate`, the term-limited 0.2.x→0.3.0 adopter migrator ([[migrate]] — the repair verb
+behind this diagnosis: the legacy-tree refusal names it). `spex doctor install [--agent claude]
 [--minimal]` will wire the materialized artifacts for a user's own agent ADDITIVELY (merging managed blocks,
 never clobbering) with a manifest, and `uninstall` reverses exactly that — STAGED until the hooks degrade
 safely without a managed session. `--agent` is the adapter seam: it resolves a harness by id, so codex

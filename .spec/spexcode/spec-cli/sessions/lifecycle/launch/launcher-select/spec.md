@@ -25,8 +25,8 @@ built-in tier resolved from an env var or a `claudeCmd`/`codexCmd` config field:
 ordinary named launchers (`claude` = `{harness: claude, cmd: 'claude --dangerously-skip-permissions'}`,
 `codex` = `{harness: codex, cmd: 'codex --yolo'}`), after which they are edited, renamed, or removed like any
 other entry. A project that must run workers under an auth wrapper (reclaude) sets that launcher's `cmd` in
-the gitignored `spexcode.local.json` — there is NO runtime env (`SPEXCODE_CLAUDE_CMD`/`SPEXCODE_CODEX_CMD`)
-that rewrites a launcher's command. So the dropdown lists exactly the config's real launchers, and two names
+the gitignored `spexcode.local.json` — there is NO runtime env that rewrites a launcher's command. So the
+dropdown lists exactly the config's real launchers, and two names
 can never resolve to the same command as ghost duplicates. Because a launcher NAMES a harness, picking a
 launcher is the ONLY user-facing launch selection. The old free-standing harness pick is gone.
 

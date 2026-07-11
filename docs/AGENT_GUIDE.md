@@ -245,8 +245,7 @@ box; where its binary and the driver package live is a machine fact kept in loca
 The backend launches every dispatched worker with the session's **launcher** — a named `{ harness, cmd }`
 profile from `sessions.launchers` in `spexcode.json` / `spexcode.local.json`, picked at create time
 (`--launcher <name>` / the dashboard dropdown, else `sessions.defaultLauncher`). `spex guide config`'s
-LAUNCHERS section is the authoritative manual. The old `SPEXCODE_CLAUDE_CMD` env override is **retired**:
-the product ignores it entirely, setting it is a no-op. Config is read live at create time, so a JSON edit
+LAUNCHERS section is the authoritative manual. Config is read live at create time, so a JSON edit
 takes effect on the very next dispatch — **no backend restart needed**.
 
 In a **non-interactive** shell the seeded default `claude` cmd can resolve to an expired binary instead of

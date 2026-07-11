@@ -53,21 +53,21 @@ board badge, the [[issues-view]] Issues page list — is free of it by construct
 `loadEvalRemarkTracks` keeps only those, feeding the eval scoreboard instead. Each
 caller supplies the forge slice at the freshness its surface warrants — the server ([[dashboard-issues]]'s
 resident cache: instant view, background reconcile) for `GET /api/issues` and the board fold, the CLI
-(`spex issues [--node] [--store] [--all] [--json]`) via a live driver pull that **degrades loudly
+(`spex issue ls [--node] [--store] [--all] [--json]`) via a live driver pull that **degrades loudly
 to local-only** (one stderr note) when the forge is unreachable — local reading never hostages on a
 network. The board fold attaches each node's merged issues (`issues` / open subset `openIssues`), so every
 per-node surface — tile badge, focus panel, node-info Issues tab, the [[issues-view]] page — reads the
 same mixed set with no second path.
 
 **Writes stay where they're owned — and store-routed verbs stay one port, on BOTH surfaces.** Creation is
-ONE verb over every store (`createIssue` — `spex issues open [--store <store>]` and `POST /api/issues` are
+ONE verb over every store (`createIssue` — `spex issue open [--store <store>]` and `POST /api/issues` are
 the same routing): it defaults to local (the [[local-issues]] committed write), and a forge store choice —
 the dashboard New form's compact store picker, or the CLI's `--store <host>` — creates the real forge issue
 through that store's driver, no local→forge promote round-trip when a concern is born forge-visible. The
 created forge issue body carries the same `Spec: <nodes>` marker used by promotion, derived from the
 author's `[[node]]` prose links (unioned with explicit `--node` ids), so the tracer links it back on the
 next read; no surface-only node field appears. **Replying is ONE
-verb over both stores** (`replyIssue` — `spex issues reply <id>` and `POST /api/issues/:id/reply` are the
+verb over both stores** (`replyIssue` — `spex issue reply <id>` and `POST /api/issues/:id/reply` are the
 same routing): a local id goes through the local issue store's committed write, a forge id (`<host>#<n>`) posts a
 **real comment** through the driver's `createComment` — the [[port]]'s second write verb, the same seam
 discipline as promotion (the driver stays the only network toucher; the tracer stays read-only; a failed
@@ -83,7 +83,7 @@ to nobody, so a forge reply loops in no one. Freshness after a forge write
 stays caller-owned: the server forces its resident slice's read-back before answering (the comment shown
 is the read-back, never a local echo); the CLI's next read is a live pull anyway.
 The explicit local→forge migration verb is **promotion** —
-`spex issues promote <id>`: a local concern that outgrows the repo (needs CI or external visibility) moves
+`spex issue promote <id>`: a local concern that outgrows the repo (needs CI or external visibility) moves
 to the forge as one recorded action instead of a lossy hand-copy. It composes the forge issue from the
 thread itself — concern → title; body + the `Spec: <nodes>` marker + the evidence hashes + a provenance
 footer — and creates it through the [[port]]'s driver (the driver stays the only thing that touches the
@@ -96,7 +96,7 @@ throughout: a forge issue is execution, never node state. Promotion is human-rea
 Promote affordance is a thin `POST /api/issues/:id/promote` over this same verb (the provenance footer and
 permalink reply carry the caller's surface-derived identity — a session id from the CLI, `'human'` from
 the dashboard).
-**Closing is ONE verb over both stores, on both surfaces too** (`closeIssue` — `spex issues close <id>`
+**Closing is ONE verb over both stores, on both surfaces too** (`closeIssue` — `spex issue close <id>`
 and `POST /api/issues/:id/close` behind the dashboard's Close button are the same routing). A local id
 marks the thread `landed` through the local store; a forge id (`<host>#<n>`) calls the driver's
 `closeIssue` — so an agent can close a github issue with the same verb the human clicks. The server forces

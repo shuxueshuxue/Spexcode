@@ -31,7 +31,7 @@ are both covered with no hardcoded paths and a new harness is diagnosed for free
   a bare PATH; codex needs its `~/.codex` provider/auth. A missing one is the root cause behind a dozen
   confusing symptoms.
 - **contract** — the `surface:system` block is present in each harness's contract file (CLAUDE.md / AGENTS.md);
-  `spex doctor contract` prints that exact text for any agent.
+  `spex doctor --contract` prints that exact text for any agent.
 - **hooks** — the shim (→ `dispatch.sh`) is wired, the manifest exists in the global store
   ([[runtime-tier]]), and EVERY manifest handler script is readable in the worktree. That last check is the
   sharp one: a branch predating the hook consolidation has the shim but not the `.config/core/*` handlers,
@@ -45,7 +45,7 @@ are both covered with no hardcoded paths and a new harness is diagnosed for free
   a `plugin.json` `name:"spexcode"`, and our own materialized skill names. Per harness it counts three channels
   — `dispatch.sh` shims, same-named skills across the loose skillDir + plugin skills dirs, and total delivery
   sources (loose + each `spexcode` bundle under `<cfgdir>/plugins` + `~/<cfgdir>/plugins`, derived from the
-  adapter's shim path so a new harness scans for free); ANY channel >1 is a conflict. `spex doctor conflicts`
+  adapter's shim path so a new harness scans for free); ANY channel >1 is a conflict. `spex doctor --conflicts`
   runs JUST this check, exits non-zero on a live double-delivery, and prints the repair (remove one bundle, OR
   switch `harnesses` to a plugin target so materialize prunes the loose copy, OR uninstall the loose copy).
 

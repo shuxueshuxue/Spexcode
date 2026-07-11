@@ -39,7 +39,7 @@ The local issue store is the **local store of [[issues]]** — the venue where a
 never written into it. Local and remote issues are the SAME data model under the SAME name — an issue — so
 this node owns only the local store's mechanism: the venue, the file format, the write
 verbs, the concurrency discipline, and the post-merge nudge. Reading is not this node's surface — the one
-read over every store (CLI `spex issues`, `GET /api/issues`, the board fold) is [[issues]]'s port.
+read over every store (CLI `spex issue ls`, `GET /api/issues`, the board fold) is [[issues]]'s port.
 
 The local issue store is **git-tracked data, not a spec node.** A thread reuses almost nothing of the spec-node
 contract — no title/hue/desc/code frontmatter, no parent-ancestor nesting, no lint, no drift, no
@@ -125,18 +125,18 @@ it to `.spec/.issues` on its first store touch after a toolchain update — the 
   declaration never carries a vacuous reminder — the line is earned by data, never boilerplate. And it is a
   **nudge, never a gate**: some issues rightly outlive their session (a taste concern awaiting the drain),
   and a failure in the store check is reported loud while the declaration still lands.
-- **Surface — the write verbs live on the ONE issues command.** `spex issues open "<concern>" [--node <id>…]
+- **Surface — the write verbs live on the ONE issues command.** `spex issue open "<concern>" [--node <id>…]
   [--evidence <hash>…] [--body -|<text>]` opens a thread (open is store-routed by [[issues]]'s creation
   port — its local default lands here; `--store <host>` bypasses this store for the forge driver);
-  `spex issues reply <id> --body -|<text>
+  `spex issue reply <id> --body -|<text>
   [--evidence <hash>…]` (the evidence a reply carries accrues onto the thread's `evidence[]`, deduped — an
-  anchored annotation's frame blob), and `spex issues close <id>` marks a local thread landed through
+  anchored annotation's frame blob), and `spex issue close <id>` marks a local thread landed through
   [[issues]]'s store-routed close. A new thread's `nodes:`
   are **inferred from the `[[node]]` topic links in its own text** (concern + body, [[mentions]]'s one
   in-text reference primitive), unioned with any explicit `--node` — a writer links nodes by writing them,
   so no caller needs a separate ids field. Read and write share one
   command because local and remote are one model — the store is a property of the issue, never a second
-  command family. There is deliberately no store-local read command — reading is `spex issues` ([[issues]]),
+  command family. There is deliberately no store-local read command — reading is `spex issue ls` ([[issues]]),
   the same list every store feeds. (The write verbs were historically a separate `spex propose` command;
   that alias is now removed — the top level is porcelain-only ([[cli-surface]]). A pre-rename deployment's
   `post-merge` hook — a per-clone copy calling `spex propose nudge` — prints one unknown-command line,
@@ -153,11 +153,11 @@ it to `.spec/.issues` on its first store touch after a toolchain update — the 
   ([[issues-view]]) is a thin caller: `POST /api/issues/:id/reply` and `POST /api/issues` (author `'human'`),
   plus `POST /api/issues/:id/promote` for the one local-to-forge move. All gated by the same on/off switch
   (403 when OFF).
-- **Opt-outable, default ON.** The issues workflow is a feature you can switch off: `spex issues on|off`
+- **Opt-outable, default ON.** The issues workflow is a feature you can switch off: `spex issue on|off`
   flips `spexcode.json`'s `issues.enabled` (the shared settings file every other toggle lives in),
   effective immediately with no commit (config is read from the working tree). OFF silences the post-merge
   nudge and hides the dashboard issues view; the raw write verbs stay usable, since running one is explicit
-  consent. The nudge text and the toggle both live in the CLI (`spex issues nudge <node>` prints nothing
+  consent. The nudge text and the toggle both live in the CLI (`spex internal nudge <node>` prints nothing
   when OFF), so the post-merge hook is a thin caller and the **dashboard's Settings toggle is a thin
   wrapper over this same switch** — one source of truth, three consumers (CLI, hook, dashboard). (The key
   was historically `proposals.enabled`; a pre-rename value still reads, and the next toggle write rewrites

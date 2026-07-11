@@ -88,10 +88,9 @@ installs are deterministic. Machine-local artifacts never enter the tree: a host
 lives in the gitignored `spexcode.local.json`'s `sessions.launchers` entry (`readConfig` overlays it on
 committed `spexcode.json`; no env override — [[launcher-select]]), so a host-specific launcher path has a
 *durable* home surviving restarts,
-never committed. That same gitignored overlay is where a HOST-personal [[render-policy]] vote lives (`"render":
-"hidden"` — machine-local by construction, so one dogfooder's invisibility choice never enters the shared
-config; the project-level `committed` vote sits in the committed `spexcode.json` instead, and the retired
-`private` toggle is read as `hidden` with a loud migration notice). A launch generates NO per-session SpexCode files in the worktree: the
+never committed. (The old HOST-personal render vote that lived in this overlay is retired with the whole
+axis — [[render-policy]]: renders are never tracked, and a lingering `render`/`private` field is ignored
+with a loud notice.) A launch generates NO per-session SpexCode files in the worktree: the
 record and the launcher products (prompt, launch, launch.sh, recorded comms) live in the per-user global
 store ([[runtime]]), keyed by session_id, outside the tree — so nothing per-session is left to ignore or
 commit (the contract instead reaches the agent by materializing into the worktree's OWN tracked

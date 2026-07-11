@@ -52,7 +52,7 @@ always-on contract is a spec edit, not a code change. There is **no `--append-sy
 `CLAUDE.md` is **no longer hidden** (the old rename-to-`CLAUDE.spexhidden.md` isolation is gone): hiding it
 also suppressed the agent's own MEMORY load, so with the contract delivered by discovery the agent loads its
 `CLAUDE.md` + memory normally. This creation-time render is **bootstrap, not best-effort**: it is what wires
-the worktree's hooks in the first place, and the dispatch gate's re-render rides ON those hooks — so a failed
+the worktree's hooks in the first place, and every lifecycle dispatch rides ON those hooks — so a failed
 render means no hook ever fires and the worker would come up ungoverned (no contract, no stop-gate) with
 nothing saying so. A materialize failure therefore **fails loud**: the cause + worktree path are logged and
 the failure is stamped on the session record's `note` (the board/watch surface it). The launch still proceeds

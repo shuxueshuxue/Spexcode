@@ -139,8 +139,8 @@ export function spexcodeHome(): string {
 export function encodeProject(root: string): string {
   return root.replace(/[/.]/g, '-')
 }
-// this project's per-PROJECT runtime tier — the materialized hook manifest + content-hash marker (and the
-// gate's lock) — living alongside sessions/ under the SAME global per-project dir, so NOTHING SpexCode renders
+// this project's per-PROJECT runtime tier — the materialized hook manifest + content-hash marker —
+// living alongside sessions/ under the SAME global per-project dir, so NOTHING SpexCode renders
 // stays in the worktree (not even the manifest; the worktree holds only the harness-discovered CLAUDE.md/
 // AGENTS.md + shims, which must sit in-tree). proj-aware for `spex init <dir>` / materialize(proj); cwd-based
 // default for the hooks/board. The shell hooks mirror this as hp_runtime_dir.

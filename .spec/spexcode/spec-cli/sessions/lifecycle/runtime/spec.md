@@ -48,10 +48,14 @@ a file in that dir:
 override → `~/.spexcode`), `encodeProject()` / `projectKey()`, `runtimeRoot()` (the per-PROJECT tier:
 `projects/<enc>`), `sessionsRoot()` (its `sessions/` child — the board's enumeration dir), `sessionStoreDir(id)`,
 `sessionRecordPath(id)`, `sessionArtifactPath(id, name)`, plus `readRawRecord` / `listSessionIds` for the board.
-The store has TWO tiers under one per-project dir: the per-session dirs above, AND the per-project runtime that
-[[hook-dispatch]] / [[harness-delivery]] render — the hook manifest, the gate's content-hash marker, the
-materialize lock — plus the Codex app-server socket/pid/log/lock when Codex is launched through SpexCode.
-Those project-level artifacts live in `runtimeRoot()` too, NOT the worktree. So the worktree holds ZERO
+The store has TWO tiers under one per-project dir: the per-session dirs above, AND the per-TREE render
+slots — `trees/<enc(worktree-toplevel)>/` — that [[hook-dispatch]] / [[harness-delivery]] render into.
+Each slot holds the artifacts that are a pure function of THAT tree's `.config` (the hook manifest, the
+content-hash freshness stamp, the plugin-folder ledger), keyed by the same `encodeProject` transform
+applied to the worktree's `rev-parse --show-toplevel` — the sessions pattern (shared global root, slotted
+by identity) applied to trees, so two worktrees with divergent `.config` never trade hook sets. The
+project tier also carries the Codex app-server socket/pid/log/lock when Codex is launched through
+SpexCode. All of it lives under `runtimeRoot()`, NOT the worktree. So the worktree holds ZERO
 SpexCode-rendered runtime; the only in-tree artifacts are the harness-discovered contract files (CLAUDE.md/
 AGENTS.md block) + shims, which MUST sit in-tree for the harness to find them. `sessions.ts` writes through `storeDir(id)` (mkdir-and-return) and the full typed
 `readRecord` / `writeRecord`; the shell hooks reimplement the SAME path scheme in bash (the one cross-language
@@ -65,9 +69,10 @@ it with sed, not jq ([[state]]).
 record id. Codex hook payloads and spawned commands carry the acting thread id, while the shared app-server env
 may carry a stale `SPEXCODE_SESSION_ID`; those Codex ids are resolved through `harness_session_id` before a
 governed record is written. Self-launched agents with no governed record may still get raw-id sentinel dirs for
-spec-discipline hooks, but board lifecycle hooks no-op without `governed:true`. `close` removes the worktree AND
-sweeps the whole per-session store dir; `exit` keeps both, so an offline session is still on the board and
-`--resume`-able. Codex's project app-server is not swept by closing one session because several Codex sessions
+spec-discipline hooks, but board lifecycle hooks no-op without `governed:true`. `close` removes the worktree,
+sweeps the whole per-session store dir AND that worktree's `trees/` render slot (computed before the
+removal — the slot key needs the live tree); `exit` keeps all of them, so an offline session is still on
+the board and `--resume`-able. Codex's project app-server is not swept by closing one session because several Codex sessions
 and several `spexcode serve` processes in the same project may be using the same control plane; routing is by
 `harness_session_id`, not by socket ownership.
 

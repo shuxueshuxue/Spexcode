@@ -37,8 +37,9 @@ It removes, for the resolved project:
   `.git/info/exclude`), any legacy skip-worktree bit, and the [[content-filter]] — in the one order that
   matters: blocks leave the working files before the filter config goes, so no block residue surfaces as an
   uncommitted change.
-- **the global per-project store** — `runtimeRoot(proj)` (`~/.spexcode/projects/<enc>/`): the hook manifest, the
-  content-hash marker, the gate lock, and the project's session records. This is SpexCode's per-project runtime
+- **the global per-project store** — `runtimeRoot(proj)` (`~/.spexcode/projects/<enc>/`): the per-tree render
+  slots (`trees/<enc-worktree>/` — hook manifest, content-hash stamp, plugin-folder ledger), any legacy
+  pre-slot manifest, and the project's session records. This is SpexCode's per-project runtime
   tier ([[runtime]]), not the user's spec asset, so the whole dir is ours to delete.
 - **any spexcode plugin bundle** — a `plugins/spexcode` directory or a `.claude-plugin/plugin.json` whose
   `name == spexcode`, under the project's plugin-host folders. Identity-gated, so a user's other plugins are

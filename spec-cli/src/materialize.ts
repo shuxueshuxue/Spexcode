@@ -6,7 +6,7 @@ import { loadSystemConfig, loadSkillConfig, loadAgentConfig, loadConfig } from '
 import { compileManifest } from './hooks.js'
 import { writeManagedBlock, removeManagedBlock, HARNESSES, type HarnessArtifacts } from './harness.js'
 import { git } from './git.js'
-import { runtimeRoot, mainCheckout, readConfig } from './layout.js'
+import { runtimeRoot, treeSlotDir, mainCheckout, readConfig } from './layout.js'
 import { resolveHarnessTargets, partitionHarnesses } from './harness-select.js'
 import { emitPlugin, cleanPlugin, pluginBundleDir, pluginVersion } from './plugin-harness.js'
 import { plantContractFilter, removeContractFilter, settleIndexStat } from './contract-filter.js'
@@ -37,9 +37,12 @@ const DISPATCH = join(PKG, 'hooks', 'dispatch.sh')
 // resolution AND the mid-merge guard (a conflicted source tree degrades to one line + exit 75, not an
 // esbuild stacktrace), so every hook-baked callback inherits both.
 const SPEX = join(PKG, 'bin', 'spex.mjs')
-// the manifest + content-hash marker render into the GLOBAL per-project store (layout.runtimeRoot), NOT the
-// worktree — the worktree keeps zero SpexCode-rendered runtime; only the harness-discovered contract files +
-// shims (which the harness must find in-tree) are written under proj below.
+// the manifest + content-hash marker + plugin-folder ledger render into the rendered TREE's own slot of the
+// GLOBAL per-project store (layout.treeSlotDir — trees/<enc-worktree>), NOT the worktree and NOT one shared
+// per-project file: each is a pure function of ONE tree's .config, and the old single slot let the last-
+// materialized tree's hook set reach every other tree's dispatch ([[hook-dispatch]]). The worktree keeps
+// zero SpexCode-rendered runtime; only the harness-discovered contract files + shims (which the harness
+// must find in-tree) are written under proj below.
 
 // the deterministic content fingerprint of the config roots + THE RENDERER ITSELF (`hp_config_hash` in the
 // shell mirror, harness.sh). Stamped as a freshness record after every render; it folds in
@@ -165,7 +168,7 @@ export function dematerialize(proj = process.cwd(), arts: HarnessArtifacts = { s
 
 // the whole pay-per-change render. proj defaults to cwd. Returns the new content-hash it stamped.
 export function materialize(proj = process.cwd()): string {
-  const rt = runtimeRoot(proj)                                            // global per-project store, not the worktree
+  const rt = treeSlotDir(proj)                                            // this tree's slot in the global store, not the worktree
   mkdirSync(rt, { recursive: true })
   // (1) hook manifest (persistent — the dispatcher reads it; regenerated only here, on change).
   writeFileSync(join(rt, 'hooks-manifest'), compileManifest())
@@ -252,7 +255,11 @@ export function materialize(proj = process.cwd()): string {
   //     global store records the folders emitted last run; any prev folder absent from the current set is
   //     clean()ed, then the current folders are emitted and the ledger rewritten.
   const ledger = join(rt, 'plugin-folders')
-  const prevFolders = existsSync(ledger) ? readFileSync(ledger, 'utf8').split('\n').map((l) => l.trim()).filter(Boolean) : []
+  // migration: a tree last rendered pre-slot left its ledger as the project-global file — read it once as
+  // the prev set so a deselected folder is still pruned; every write lands in the slot from here on.
+  const legacyLedger = join(runtimeRoot(proj), 'plugin-folders')
+  const ledgerSrc = existsSync(ledger) ? ledger : legacyLedger
+  const prevFolders = existsSync(ledgerSrc) ? readFileSync(ledgerSrc, 'utf8').split('\n').map((l) => l.trim()).filter(Boolean) : []
   const curFolders = plugins.map((p) => p.folder)
   for (const f of prevFolders) if (!curFolders.includes(f)) cleanPlugin(proj, f)
   if (plugins.length) {

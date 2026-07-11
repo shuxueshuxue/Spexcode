@@ -39,8 +39,10 @@ like any other source). An environment with no planted hooks (CI, a cloud agent'
 [[harness-select]] resolves from `spexcode.json` (default: every native harness), writing, idempotently and
 scoped per project, for each SELECTED harness:
 
-- **the hook manifest** (persistent; the [[hook-dispatch]] dispatcher reads it) — in the GLOBAL per-project
-  store ([[runtime]]'s `runtimeRoot`), NOT the worktree;
+- **the hook manifest** (persistent; the [[hook-dispatch]] dispatcher reads it) — in the rendered tree's
+  own slot (`trees/<enc-worktree>/` under [[runtime]]'s `runtimeRoot`), NOT the worktree; per-tree because
+  the compile is a function of THAT tree's `.config` (one global slot let the last-rendered tree's hook set
+  leak into every other tree's dispatch);
 - **the contract** — the tracked **docs guide** (`docs/AGENT_GUIDE.md` — the project's hand-written agent/
   contributor notes, the ONE piece of in-tree contract prose) FOLLOWED BY the `surface: system` bodies (in name
   order), assembled and written as a `<!-- spexcode:start -->…<!-- spexcode:end -->` block into `<repo>/AGENTS.md`
@@ -68,8 +70,8 @@ scoped per project, for each SELECTED harness:
   codex-rs algorithm), so a user-self-launched codex skips its trust prompts entirely.
   Trust is global-only by codex's security design (a repo cannot declare itself trusted) — the one
   necessary scoped global write; everything else is project-local.
-- **the content-hash marker** (same global store), stamped LAST — a freshness record (a crash mid-render
-  leaves it stale, diagnosably); the unconditional pre-commit render heals regardless.
+- **the content-hash marker** (same per-tree slot as the manifest), stamped LAST — a freshness record (a
+  crash mid-render leaves it stale, diagnosably); the unconditional pre-commit render heals regardless.
 
 The render obeys the **forgetting law**: materialize(P₂) ∘ materialize(P₁) = materialize(P₂) — whatever a
 prior policy (harness set, a retired render-vote mode, or older legacy modes) wrote, one render under the
@@ -84,8 +86,8 @@ prune pass — the erase already forgot it and only selected harnesses are asser
 `clean()` remains the per-harness surgical inverse the erase is built from). The erase order carries one
 constraint: managed blocks leave the working contract files BEFORE the content filter's config goes
 ([[content-filter]] edge 3). A plugin target stays exclusive ([[plugin-harness]]); its bundle FOLDERS are
-arbitrary paths no stamp can enumerate, so they keep the one small ledger of last-emitted folders — the
-single landing point outside the stamp-erasable set.
+arbitrary paths no stamp can enumerate, so they keep the one small ledger of last-emitted folders (in the
+same per-tree slot as the manifest) — the single landing point outside the stamp-erasable set.
 
 Placement is harness-fact, not preference (verified): Codex auto-discovers ONLY the repo-root `./AGENTS.md`
 (never `.codex/AGENTS.md`); Claude discovers `./CLAUDE.md` or `./.claude/CLAUDE.md`. The render's ignore

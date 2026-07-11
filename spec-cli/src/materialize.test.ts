@@ -359,10 +359,11 @@ function makeBareRepo(prefix: string) {
   // fire ONE harness lifecycle event through the real dispatcher — must NEVER trigger a render now.
   const fireEvent = (cwd: string) =>
     execFileSync('bash', [DISPATCH, 'codex', 'SessionStart'], { cwd, encoding: 'utf8', env: { ...env, SPEX: `${TSX} ${CLI}` }, input: '{}' })
+  // the content-hash stamp sits in the RENDERED TREE's slot (trees/<enc(tree)>) — here the main checkout's.
   const runtimeHash = () => {
     const projects = join(home, 'projects')
     const enc = readdirSync(projects)[0]
-    return readFileSync(join(projects, enc, 'content-hash'), 'utf8').trim()
+    return readFileSync(join(projects, enc, 'trees', proj.replace(/[/.]/g, '-'), 'content-hash'), 'utf8').trim()
   }
   g('init', '-q', '-b', 'main')
   g('config', 'user.email', 't@t.co'); g('config', 'user.name', 't')
@@ -423,4 +424,37 @@ test('harness selection is persistent + self-healing at the git-native anchors: 
   // idempotence over the harness dimension: a manual render changes nothing
   spex(proj, 'materialize')
   assert.ok(!existsSync(join(proj, '.claude')) && !existsSync(join(proj, 'CLAUDE.md')), 'manual re-render is byte-stable on the narrowed set')
+})
+
+// [[hook-dispatch]] / [[runtime]] — per-tree render slots: the manifest (+ content-hash + ledger) is a pure
+// function of ONE tree's .config, so each tree renders into its own trees/<enc(toplevel)> slot. The old
+// single global file was last-writer-wins across worktrees — tree A's render silently replaced the hook set
+// tree B's sessions dispatched (cross-tree hook bleed).
+test('per-tree render slots: a divergent worktree renders into its own slot; another tree\'s later render never rewrites it', { skip: !gitAvailable() && 'git not available' }, () => {
+  const { proj, env, g, spex } = makeBareRepo('spex-slots-')
+  g('add', '-A'); g('commit', '-qm', 'init')
+  spex(proj, 'init', '.')
+  g('add', '-A'); g('commit', '-qm', 'adopt', '--no-verify')
+  // worktree with a DIVERGENT .config: one extra surface:hook node bound to SessionStart
+  const wt = join(proj, '.worktrees', 'wt')
+  g('worktree', 'add', '-q', wt, '-b', 'node/wt')
+  const probe = join(wt, '.spec', 'project', '.config', 'probe')
+  mkdirSync(probe, { recursive: true })
+  writeFileSync(join(probe, 'spec.md'), '---\ntitle: probe\nsurface: hook\nstatus: active\nevents:\n- SessionStart\norder: 10\nblock: false\n---\nmarker\n')
+  writeFileSync(join(probe, 'probe.sh'), '#!/usr/bin/env bash\necho PROBE\n')
+  spex(wt, 'materialize')
+  const slotOf = (tree: string) => {
+    const projects = join(env.SPEXCODE_HOME, 'projects')
+    return join(projects, readdirSync(projects)[0], 'trees', tree.replace(/[/.]/g, '-'))
+  }
+  const wtManifest = readFileSync(join(slotOf(wt), 'hooks-manifest'), 'utf8')
+  assert.ok(wtManifest.includes('probe.sh'), "the worktree's slot compiled the worktree's own .config")
+  const mainManifest = readFileSync(join(slotOf(proj), 'hooks-manifest'), 'utf8')
+  assert.ok(!mainManifest.includes('probe.sh'), "main's slot (from init) never saw the worktree-only node")
+  // the OTHER tree renders LAST — under the old single slot this was the clobber
+  spex(proj, 'materialize')
+  assert.equal(readFileSync(join(slotOf(wt), 'hooks-manifest'), 'utf8'), wtManifest,
+    "main's later render lands in main's slot and leaves the worktree's manifest untouched")
+  assert.ok(existsSync(join(slotOf(wt), 'content-hash')) && existsSync(join(slotOf(proj), 'content-hash')),
+    'each tree carries its own content-hash stamp')
 })

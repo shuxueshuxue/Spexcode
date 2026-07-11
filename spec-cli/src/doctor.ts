@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 import { homedir } from 'node:os'
 import { loadSystemConfig, loadSkillConfig } from './specs.js'
-import { runtimeRoot, envSessionId, readAliasedRawRecord } from './layout.js'
+import { runtimeRoot, treeSlotDir, envSessionId, readAliasedRawRecord } from './layout.js'
 
 // this file lives at <pkgRoot>/src/self.ts, so `..` is the package root — the same derivation init.ts/
 // materialize.ts use (never a hardcoded repo path), so the git-hook template lookup survives a relocated install.
@@ -255,14 +255,20 @@ async function doctor(): Promise<number> {
     const shim = read(h.shimFile(base))
     line(`${h.id} shim`, /dispatch\.sh/.test(shim) ? `wired (${h.shimFile(base).replace(base + '/', '')})` : 'NOT wired (no dispatch shim)')
   }
+  // manifest resolution mirrors dispatch.sh: this tree's render slot first, then the legacy global file
+  // (a pre-slot tree's migration-window fallback) — so the doctor reads exactly what a dispatch would.
   let manifestText = ''
-  try { manifestText = read(join(runtimeRoot(base), 'hooks-manifest')) } catch { /* non-git / no store */ }
+  let manifestHome = 'tree slot'
+  try { manifestText = read(join(treeSlotDir(base), 'hooks-manifest')) } catch { /* non-git / no store */ }
+  if (!manifestText) {
+    try { manifestText = read(join(runtimeRoot(base), 'hooks-manifest')); manifestHome = 'legacy global file (pre-slot render — re-run `spex materialize`)' } catch { /* neither */ }
+  }
   if (!manifestText) {
     line('manifest', 'MISSING from the global store — materialize never ran (hooks fire but find no manifest)')
   } else {
     const scripts = manifestScripts(manifestText)
     const missing = scripts.filter((s) => !existsSync(join(base, s)))
-    line('manifest', `${scripts.length} handler(s) in the global store`)
+    line('manifest', `${scripts.length} handler(s) in the ${manifestHome}`)
     line('handlers', missing.length === 0 ? 'all readable in the worktree' : `${missing.length} MISSING in the worktree → those hooks SILENTLY NO-OP:`)
     for (const m of missing) L.push(`      ✗ ${m}`)
   }

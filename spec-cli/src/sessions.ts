@@ -9,7 +9,7 @@ import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, type Review
 import { loadSpecs } from './specs.js'
 import { defaultHarness, defaultLauncher, harnessById, resolveLauncher, rvSock, rendezvousListening, type Harness, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
 import { materialize } from './materialize.js'
-import { mainBranch, gitCommonDir, readConfig, runtimeRoot, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, readAliasedRawRecord, envSessionId, type RawRecord } from './layout.js'
+import { mainBranch, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, readAliasedRawRecord, envSessionId, type RawRecord } from './layout.js'
 import { stripRefSigil } from './mentions.js'
 
 // @@@ sessions - the WORKTREE is the durable unit; tmux is a disposable runtime handle. The per-session
@@ -1449,12 +1449,17 @@ export async function exitSession(id: string): Promise<boolean> {
 // the session's whole global-store record dir — the work is gone, not just stopped. Same stop primitive as
 // exitSession (no duplicate kill path), then the git worktree/branch teardown that exit deliberately skips,
 // then the store sweep (exit KEEPS the record so the session stays on the board offline; close discards it).
+// The tree's render slot ([[runtime]] trees/<enc>) retires with the worktree — its key needs the live tree,
+// so it is resolved BEFORE the removal; both sweeps are best-effort (residue is swept at uninstall anyway).
 export async function closeSession(id: string): Promise<boolean> {
   const wt = await findWorktree(id)
   await stopAgentProcess(id)
   if (wt) {
+    let slot: string | null = null
+    try { slot = treeSlotDir(wt.path) } catch { /* tree already unresolvable — nothing to key the slot by */ }
     await gitA(['-C', mainRoot(), 'worktree', 'remove', '--force', wt.path])
     if (wt.branch) await gitA(['-C', mainRoot(), 'branch', '-D', wt.branch])
+    if (slot) { try { rmSync(slot, { recursive: true, force: true }) } catch { /* best-effort GC */ } }
   }
   try { rmSync(sessionStoreDir(id), { recursive: true, force: true }) } catch { /* best-effort sweep of the global record */ }
   void drainQueue()   // a close frees a slot — start the next queued session if any

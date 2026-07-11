@@ -29,12 +29,24 @@ export SPEXCODE_HARNESS="$harness"
 export SPEXCODE_HARNESS_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/harness.sh"
 . "$SPEXCODE_HARNESS_LIB"
 proj="${CLAUDE_PROJECT_DIR:-$PWD}"
-# the manifest + content-hash marker live in the GLOBAL per-project store (mirrors layout.runtimeRoot),
-# NOT the worktree — so the worktree carries zero SpexCode-rendered runtime. Empty if git can't resolve.
+# the manifest lives in THIS tree's render slot of the GLOBAL per-project store (mirrors layout.treeSlotDir),
+# NOT the worktree — and per tree, so a dispatch can only read the manifest of the tree it fires in
+# ([[hook-dispatch]]). Slot key = this cwd's rev-parse --show-toplevel through hp_tree_dir. Empty if git
+# can't resolve.
 rt="$(cd "$proj" 2>/dev/null && hp_runtime_dir)" || rt=""
+slot="$(cd "$proj" 2>/dev/null && hp_tree_dir)" || slot=""
 
 # --- dispatch ---------------------------------------------------------------------------------------------
-manifest="${SPEX_HOOK_MANIFEST:-$rt/hooks-manifest}"
+if [ -n "${SPEX_HOOK_MANIFEST:-}" ]; then
+  manifest="$SPEX_HOOK_MANIFEST"
+else
+  # migration window: a tree last rendered by a pre-slot toolchain has no slot until its next git-native
+  # anchor — fall back to the legacy global manifest (its exact pre-migration behavior) so no hook (the
+  # Stop gate included) silently no-ops. The legacy file is never written again; the next anchor plants the
+  # slot and this branch goes dead.
+  manifest="$slot/hooks-manifest"
+  [ -f "$manifest" ] || manifest="$rt/hooks-manifest"
+fi
 [ -f "$manifest" ] || exit 0          # no manifest yet (materialize never ran) → nothing to dispatch
 input="$(cat 2>/dev/null || true)"    # capture stdin ONCE; each handler gets its own copy
 err="/tmp/.spex-hook-$$.err"          # per-dispatch (pid-unique) stderr capture; no cross-session race

@@ -139,16 +139,28 @@ export function spexcodeHome(): string {
 export function encodeProject(root: string): string {
   return root.replace(/[/.]/g, '-')
 }
-// this project's per-PROJECT runtime tier — the materialized hook manifest + content-hash marker —
-// living alongside sessions/ under the SAME global per-project dir, so NOTHING SpexCode renders
-// stays in the worktree (not even the manifest; the worktree holds only the harness-discovered CLAUDE.md/
-// AGENTS.md + shims, which must sit in-tree). proj-aware for `spex init <dir>` / materialize(proj); cwd-based
-// default for the hooks/board. The shell hooks mirror this as hp_runtime_dir.
+// this project's per-PROJECT runtime tier — the sessions/ records AND the per-TREE render slots (below) —
+// living under the SAME global per-project dir, so NOTHING SpexCode renders stays in the worktree (the
+// worktree holds only the harness-discovered CLAUDE.md/AGENTS.md + shims, which must sit in-tree).
+// proj-aware for `spex init <dir>` / materialize(proj); cwd-based default for the hooks/board. The shell
+// hooks mirror this as hp_runtime_dir.
 export function runtimeRoot(proj?: string): string {
   const gcd = proj
     ? git(['-C', proj, 'rev-parse', '--path-format=absolute', '--git-common-dir']).trim()
     : gitCommonDir()
   return join(spexcodeHome(), 'projects', encodeProject(dirname(gcd)))
+}
+// the per-WORKTREE render slot — <runtime>/trees/<enc(worktree-toplevel)> — holding the materialize
+// products that are a pure function of ONE tree's .config (hooks-manifest, content-hash, plugin-folders).
+// Slotted per tree exactly like sessions/<id> is slotted per session: the old single global file made the
+// last-materialized tree win, so dispatch ran tree A's compiled hook set inside tree B's sessions
+// ([[hook-dispatch]]). Key = the sessions encodeProject transform over `rev-parse --show-toplevel`, the
+// SAME derivation dispatch.sh's shell mirror (hp_tree_dir) runs from its own cwd — so writer and reader
+// land on the same slot from the same tree, and only from the same tree. Throws when `wt` is not a live
+// git tree (fail loud); a best-effort caller (the close-time GC) wraps it.
+export function treeSlotDir(wt: string): string {
+  const top = git(['-C', wt, 'rev-parse', '--show-toplevel']).trim()
+  return join(runtimeRoot(wt), 'trees', encodeProject(top || wt))
 }
 // this project's per-session records dir, one session's dir, its structured record, and a sibling artifact —
 // all keyed by session_id under <home>/projects/<enc>/sessions/.

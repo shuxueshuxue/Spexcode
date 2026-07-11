@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 
-// [[spex-init]] / [[render-policy]] — the ADOPTION SURFACE: what `spex init` prints must be TRUE of what it
+// [[spex-init]] / [[residence]] — the ADOPTION SURFACE: what `spex init` prints must be TRUE of what it
 // planted (the success message once claimed governedRoots ["src"] while the template seeded ["."] — the
 // first-minute lie a real field e2e hit). Footprint needs NO vote at adoption: a host-tracked contract
 // file goes straight through the content filter (clean status, no decision hint, no mystery M), and a
@@ -57,7 +57,7 @@ test('adoption needs no vote: a host-TRACKED contract file goes straight through
   assert.ok(!g('show', ':CLAUDE.md').includes('spexcode:start'), 'index stays pristine (clean filter planted at init)')
   const dirty = g('status', '--short').trim().split('\n').filter((l) => l && !l.startsWith('??'))
   assert.deepEqual(dirty, [], `no modified tracked file after adoption (no mystery M): ${dirty}`)
-  // renders + machine facts land in the per-clone exclude; the host has no .gitignore to touch
+  // materialized artifacts + machine facts land in the per-clone exclude; the host has no .gitignore to touch
   const excl = readFileSync(join(proj, '.git', 'info', 'exclude'), 'utf8')
   assert.ok(excl.includes('spexcode:start') && excl.includes('.claude/settings.json'), 'exclude block planted')
   assert.ok(!existsSync(join(proj, '.gitignore')), 'init never creates or edits a host .gitignore')

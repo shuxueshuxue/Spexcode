@@ -4,7 +4,7 @@ import { HARNESSES, type Harness, type HarnessId } from './harness.js'
 // SpexCode system into. The selection is persistent config (spexcode.json's `harnesses`), NOT a one-shot
 // flag, because materialize re-runs at every git-native anchor ([[commit-surgery]]), so the intent
 // must live where every re-materialize can read it. This module owns ONLY the vocabulary + validation; the
-// per-harness write/clean mechanics live on the [[harness-adapter]], the render loop on [[harness-delivery]].
+// per-harness write/clean mechanics live on the [[harness-adapter]], the materialize loop on [[harness-delivery]].
 
 // a resolved DELIVERY TARGET. Either a NATIVE harness (claude/codex — its adapter writes shims/contract/trust
 // directly), or a PLUGIN bundle dropped into a host-agent-scanned folder. The plugin EMITTER is a later node;

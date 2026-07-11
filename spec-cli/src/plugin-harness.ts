@@ -2,7 +2,7 @@ import { writeFileSync, mkdirSync, readFileSync, existsSync, rmSync, copyFileSyn
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-// @@@ plugin-harness - the PLUGIN BUNDLE emitter: render the whole SpexCode system into ONE self-contained
+// @@@ plugin-harness - the PLUGIN BUNDLE emitter: materialize the whole SpexCode system into ONE self-contained
 // Claude-plugin bundle dropped into the host-agent-scanned folder [[harness-select]] resolved (e.g. `.zcode` /
 // `.claude` → <folder>/plugins/spexcode/). It is the plugin-target counterpart of the native per-harness
 // write [[harness-adapter]] does — chosen INSTEAD of the natives (plugin exclusivity), so [[harness-delivery]]'s
@@ -29,11 +29,12 @@ const PLUGIN_ROOT = '${CLAUDE_PLUGIN_ROOT}'
 // never invokes the extras, so binding all is harmless and one emit serves every host.
 const PLUGIN_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop', 'StopFailure', 'Notification'] as const
 
-// the gathered surface artifacts this render writes into the bundle. contract = the assembled guide+system
+// the gathered surface artifacts this materialize writes into the bundle. contract = the assembled guide+system
 // block (the SAME string the native path folds into CLAUDE.md, here delivered as additionalContext); skills/
-// agents/commands are the already-rendered file CONTENTS (reusing materialize's renderSkill/renderAgent), keyed
+// agents/commands are the already-materialized file CONTENTS (reusing materialize's skillArtifact/agentArtifact),
+// keyed
 // by node name; spex is the baked tsx+cli invocation the dispatcher gate calls; version stamps plugin.json.
-export type PluginRender = {
+export type PluginBundle = {
   contract: string
   skills: { name: string; content: string }[]
   agents: { name: string; content: string }[]
@@ -78,7 +79,7 @@ function pluginHooksJson(spex: string): string {
   return JSON.stringify({ hooks }, null, 2)
 }
 
-// the SessionStart hook OUTPUT carrying the contract as additionalContext. JSON-encoded HERE, at render time,
+// the SessionStart hook OUTPUT carrying the contract as additionalContext. JSON-encoded HERE, at materialize time,
 // so the runtime hook is a trivial `cat` — never a fragile shell escaping of arbitrary contract prose.
 function contractContextJson(contract: string): string {
   return JSON.stringify({ hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: contract } }, null, 2)
@@ -89,14 +90,14 @@ function contractContextJson(contract: string): string {
 const INJECT_SH = `#!/usr/bin/env bash
 # Emit the SpexCode contract as SessionStart additionalContext — the harness-neutral contract injection (the
 # superpowers pattern; Claude/z-code normalize hookSpecificOutput.additionalContext) that replaces a plugin
-# host's missing --append-system-prompt. The JSON was rendered at materialize time, so this is a trivial cat.
+# host's missing --append-system-prompt. The JSON was written at materialize time, so this is a trivial cat.
 here="$(cd "$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
 [ -f "$here/contract-context.json" ] && cat "$here/contract-context.json"
 exit 0
 `
 
 // emit (or idempotently re-emit) the whole bundle into <folder>/plugins/spexcode.
-export function emitPlugin(proj: string, folder: string, r: PluginRender): void {
+export function emitPlugin(proj: string, folder: string, r: PluginBundle): void {
   const bundle = pluginBundleDir(proj, folder)
   const meta = join(bundle, '.claude-plugin')
   const hooksDir = join(bundle, 'hooks')
@@ -110,7 +111,7 @@ export function emitPlugin(proj: string, folder: string, r: PluginRender): void 
   writeFileSync(join(hooksDir, 'inject-contract.sh'), INJECT_SH)
   writeFileSync(join(hooksDir, 'contract-context.json'), contractContextJson(r.contract))
   writeFileSync(join(hooksDir, 'hooks.json'), pluginHooksJson(r.spex))
-  // skills / agents / commands — the Claude-plugin layout, the SAME rendered contents as the native dirs.
+  // skills / agents / commands — the Claude-plugin layout, the SAME materialized contents as the native dirs.
   for (const s of r.skills) writeBundleFile(join(bundle, 'skills', s.name, 'SKILL.md'), s.content)
   for (const a of r.agents) writeBundleFile(join(bundle, 'agents', `${a.name}.md`), a.content)
   for (const c of r.commands) writeBundleFile(join(bundle, 'commands', `${c.name}.md`), c.content)

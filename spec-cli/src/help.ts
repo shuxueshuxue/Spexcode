@@ -77,7 +77,7 @@ session list. Identical to GET /api/board; needs the backend (spex serve) reacha
        spex guide spec       the spec.md file format + every lint rule
        spex guide yatsu      the yatsu.md scenario format + how loss is measured and filed
        spex guide config     every spexcode.json / spexcode.local.json field, and which file it belongs in
-       spex guide footprint  the footprint model: never-tracked renders, exclude + content filter, anchors
+       spex guide footprint  the footprint model: never-tracked artifacts, exclude + content filter, anchors
 
 guide is the SKILL layer — workflows and formats. Command usage lives here in help
 (\`spex help <cmd>\`); guide carries what the commands assume you know.`,
@@ -319,7 +319,7 @@ ${ROUTING_NOTE}`,
 Scaffolds adoption in one shot: seeds a starter .spec tree (project root + .config plugins), plants
 spexcode.json, installs the git hooks, and materializes the harness artifacts (contract block +
 shims). Additive — never overwrites your files. --preset picks the .config plugin tier (cumulative).
-Footprint needs no vote: renders are never tracked — hidden via the per-clone .git/info/exclude, with
+Footprint needs no vote: materialized artifacts are never tracked — hidden via the per-clone .git/info/exclude, with
 a tracked/mixed CLAUDE.md/AGENTS.md covered by the clean/smudge filter (see spex guide footprint).`,
     see: 'spex guide (the full setup workflow) · spex uninstall (the inverse) · spex lint (adoption TODO)',
   },
@@ -333,27 +333,27 @@ prose. Git hooks are preserved unless --hooks.`,
     see: 'spex init (re-adopt later — your .spec survives)',
   },
   materialize: {
-    line: 'materialize           re-render the harness artifacts (contract block · shims) for cwd’s project',
+    line: 'materialize           re-materialize the harness artifacts (contract block · shims) for cwd’s project',
     body: `Usage: spex materialize
 
-Renders the surface:system config nodes into the managed <!-- spexcode --> block of
-CLAUDE.md/AGENTS.md plus the .claude/.codex shims, and prints the content hash. The render anchors on
+Materializes the surface:system config nodes into the managed <!-- spexcode --> block of
+CLAUDE.md/AGENTS.md plus the .claude/.codex shims, and prints the content hash. The materialize anchors on
 git-native events only (init · this verb · session-worktree creation · the pre-commit/post-checkout/
 post-merge hooks) — run it by hand after a toolchain update, or in the setup step of any clone that
 has no spex-planted hooks yet (CI, a cloud agent): the artifacts are generated and excluded, so they
 never arrive via git.`,
-    see: 'spex doctor (verify the render actually reaches an agent)',
+    see: 'spex doctor (verify the materialized artifacts actually reach an agent)',
   },
   doctor: {
     line: 'doctor                diagnose whether the workflow actually reaches this agent — per-layer, per-harness',
     body: `Usage: spex doctor             per-layer coverage report: preconditions · git-hook floor · contract ·
-                               hooks + handler existence · backend — for every harness materialize renders
+                               hooks + handler existence · backend — for every harness materialize delivers to
        spex doctor contract    print the composed surface:system text any agent here reads
        spex doctor conflicts   detect double-delivery (loose artifacts beside the managed ones)
 
 Run it when a worker seems to be missing its contract or hooks — it names the broken layer and the
 repair, instead of you diffing materialized files by hand.`,
-    see: 'spex materialize (re-render the artifacts doctor checks)',
+    see: 'spex materialize (re-materialize the artifacts doctor checks)',
   },
   serve: {
     line: 'serve                 run the API backend (default :8787)  [--port N] [--public --password pw]',

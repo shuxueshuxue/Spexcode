@@ -395,10 +395,10 @@ export function loadSystemConfig(): ConfigPreset[] { return loadSurface('system'
 // the hook handlers (compiled into the per-session hook manifest the dispatcher reads). Each carries its
 // `events`/`order`/`block` binding + co-located script `files`.
 export function loadHookConfig(): ConfigPreset[] { return loadSurface('hook') }
-// the skill bundles (rendered into each harness's auto-discovered SKILL.md dir). Each node's `desc` is the
+// the skill bundles (materialized into each harness's auto-discovered SKILL.md dir). Each node's `desc` is the
 // load-trigger and its `body` is the on-demand instructions; loadSurface passes the folder basename as `name`.
 export function loadSkillConfig(): ConfigPreset[] { return loadSurface('skill') }
-// the sub-agent definitions (rendered into each harness's auto-discovered agent dir, e.g. claude's
+// the sub-agent definitions (materialized into each harness's auto-discovered agent dir, e.g. claude's
 // .claude/agents/<name>.md). Like a skill, the node's `desc` is the on-demand load-trigger and its `body` is the
 // agent's system prompt; additionally its `tools` field is the harness tool allowlist for the spawned agent.
 export function loadAgentConfig(): ConfigPreset[] { return loadSurface('agent') }

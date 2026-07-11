@@ -70,7 +70,7 @@ hp_session_id() {
 
 # the per-PROJECT GLOBAL runtime dir (mirrors spec-cli/src/layout.ts `runtimeRoot`): <store>/projects/<enc>,
 # keyed by the project (dirname of the ABSOLUTE git-common-dir, so the answer is identical from main or any
-# worktree). The per-session dirs and the per-tree render slots (hp_tree_dir) live under it.
+# worktree). The per-session dirs and the per-tree materialize slots (hp_tree_dir) live under it.
 # Echoes the dir; returns non-zero (echoing nothing) when git can't resolve, so a caller can `|| exit 0`.
 hp_runtime_dir() {
   local gcd
@@ -79,7 +79,7 @@ hp_runtime_dir() {
   printf '%s/projects/%s' "${SPEXCODE_HOME:-$HOME/.spexcode}" "$(printf '%s' "$(dirname "$gcd")" | sed 's#[/.]#-#g')"
 }
 
-# the per-WORKTREE render slot (mirrors layout.ts `treeSlotDir`): <runtime>/trees/<enc(worktree-toplevel)> —
+# the per-WORKTREE materialize slot (mirrors layout.ts `treeSlotDir`): <runtime>/trees/<enc(worktree-toplevel)> —
 # where THIS tree's materialized hook manifest + content-hash marker live. Keyed by the cwd's own
 # `rev-parse --show-toplevel` through the same enc transform, so a dispatch can only ever read the manifest
 # of the tree it fires in ([[hook-dispatch]] — the old single global file let the last-materialized tree's
@@ -112,32 +112,32 @@ hp_store_dir() {
   printf '%s' "$direct"
 }
 
-# the RENDERER's own version fingerprint — the toolchain side of the content key. The rendered artifacts are a
-# function of (config content, renderer), so a TOOLCHAIN update must move the key too, or an updated deploy
-# never self-heals its stale contract/shims/manifest until someone happens to edit .config (the field lesson:
-# a toolchain update does NOT self-heal). A source checkout answers with the git TREE hash of the package dir
-# (moves exactly when the toolchain's content moves, not on every repo commit); an npm install (no .git)
-# answers with the package.json hash (npm bumps the version). env-stripped git — a git hook's exported
-# GIT_DIR must not misdirect repo discovery (same rule as git.ts's git()).
+# the TOOLCHAIN's own version fingerprint — the toolchain side of the content key. The materialized artifacts
+# are a function of (config content, toolchain), so a TOOLCHAIN update must move the key too, or an updated
+# deploy never self-heals its stale contract/shims/manifest until someone happens to edit .config (the field
+# lesson: a toolchain update does NOT self-heal). A source checkout answers with the git TREE hash of the
+# package dir (moves exactly when the toolchain's content moves, not on every repo commit); an npm install
+# (no .git) answers with the package.json hash (npm bumps the version). env-stripped git — a git hook's
+# exported GIT_DIR must not misdirect repo discovery (same rule as git.ts's git()).
 SPEXCODE_HP_PKG="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd)"
-hp_renderer_version() {
+hp_toolchain_version() {
   ( cd "$SPEXCODE_HP_PKG" 2>/dev/null && env -u GIT_DIR -u GIT_INDEX_FILE git rev-parse 'HEAD:./' 2>/dev/null ) \
     || sha256sum "$SPEXCODE_HP_PKG/package.json" 2>/dev/null | cut -d' ' -f1 \
     || echo unversioned
 }
 
-# the deterministic content fingerprint of EVERYTHING the render is a function of: the EDITABLE config
+# the deterministic content fingerprint of EVERYTHING the materialize is a function of: the EDITABLE config
 # roots (.config + config md/sh), the PERSISTED POLICY files (the MAIN checkout's spexcode.json +
 # spexcode.local.json — the `harnesses` set materialize reads via readConfig(mainCheckout)), and the
-# renderer version above. Since the dispatch-gate retired ([[commit-surgery]] — materialize anchors on
-# git-native events only), this is a FRESHNESS STAMP materialize records after each render, a diagnostic
-# (is the last render current?) rather than a trigger. Run with cwd = the project. ONE definition:
-# materialize.ts shells to it. env-stripped git, same rule as hp_renderer_version.
+# toolchain version above. Since the dispatch-gate retired ([[commit-surgery]] — materialize anchors on
+# git-native events only), this is a FRESHNESS STAMP materialize records after each pass, a diagnostic
+# (is the last materialize current?) rather than a trigger. Run with cwd = the project. ONE definition:
+# materialize.ts shells to it. env-stripped git, same rule as hp_toolchain_version.
 hp_config_hash() {
   local gcd
   gcd=$(env -u GIT_DIR -u GIT_INDEX_FILE git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) \
     || gcd=$(realpath "$(env -u GIT_DIR -u GIT_INDEX_FILE git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null)
-  { hp_renderer_version
+  { hp_toolchain_version
     find .spec/*/.config .spec/*/config \( -name '*.md' -o -name '*.sh' \) -type f -print0 2>/dev/null \
       | sort -z | xargs -0 cat 2>/dev/null
     [ -n "$gcd" ] && cat "$(dirname "$gcd")/spexcode.json" "$(dirname "$gcd")/spexcode.local.json" 2>/dev/null

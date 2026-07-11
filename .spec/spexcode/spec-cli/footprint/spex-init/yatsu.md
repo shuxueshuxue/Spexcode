@@ -25,7 +25,7 @@ scenarios:
       Put a legacy `"render"` (any word, including garbage) or `"private": true` in a pre-existing config
       and run `spex init .` / `spex materialize`.
     expected: >-
-      Adoption and every render still SUCCEED — the field is inert — with a loud, non-fatal stderr notice
+      Adoption and every materialize still SUCCEED — the field is inert — with a loud, non-fatal stderr notice
       naming the retirement, the removal recipe, and `spex guide footprint`. Removing the field retires
       the notice. Never an exit-nonzero for a retired word.
 ---

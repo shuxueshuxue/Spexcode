@@ -10,14 +10,14 @@ type Config = {
   mainBranch?: string              // source-of-truth BRANCH worktrees fork from (default: auto-detected — see mainBranch())
   branchPrefix?: string            // how a branch names its node (default: "node/")
   preset?: string                  // the SELECTED init preset — which cumulative .config tier `spex init` seeds (default 'default'; seed-time only, no launcher gate; read by init.ts; see [[init-preset]])
-  // RETIRED ([[render-policy]]) — the old three-word footprint vote. Renders carry no facts and are never
+  // RETIRED ([[residence]]) — the old three-word footprint vote. Materialized artifacts carry no facts and are never
   // tracked now (one residence behavior: the per-clone exclude, plus the content filter for a mixed
   // contract file), so the field is IGNORED with a loud non-fatal notice (materialize's retiredAxisNotice);
   // it stays in the type only so the notice can read it. The schema deliberately has NO knob for the spec
   // DATA: `.spec` + spexcode.json are ALWAYS tracked ("git is the database") — the vocabulary itself makes
   // "untrack the spec" unsayable.
   render?: string
-  // RETIRED (render-policy compat): the old private-overlay toggle — ignored with the same loud notice;
+  // RETIRED (residence compat): the old private-overlay toggle — ignored with the same loud notice;
   // its data-untrack semantics are long gone. See `spex guide footprint` MIGRATIONS.
   private?: boolean
   // which harness targets `spex materialize` delivers into — native ids ('claude'|'codex') or a {plugin:"<folder>"}
@@ -139,8 +139,8 @@ export function spexcodeHome(): string {
 export function encodeProject(root: string): string {
   return root.replace(/[/.]/g, '-')
 }
-// this project's per-PROJECT runtime tier — the sessions/ records AND the per-TREE render slots (below) —
-// living under the SAME global per-project dir, so NOTHING SpexCode renders stays in the worktree (the
+// this project's per-PROJECT runtime tier — the sessions/ records AND the per-TREE materialize slots (below) —
+// living under the SAME global per-project dir, so NOTHING SpexCode materializes stays in the worktree (the
 // worktree holds only the harness-discovered CLAUDE.md/AGENTS.md + shims, which must sit in-tree).
 // proj-aware for `spex init <dir>` / materialize(proj); cwd-based default for the hooks/board. The shell
 // hooks mirror this as hp_runtime_dir.
@@ -150,7 +150,7 @@ export function runtimeRoot(proj?: string): string {
     : gitCommonDir()
   return join(spexcodeHome(), 'projects', encodeProject(dirname(gcd)))
 }
-// the per-WORKTREE render slot — <runtime>/trees/<enc(worktree-toplevel)> — holding the materialize
+// the per-WORKTREE materialize slot — <runtime>/trees/<enc(worktree-toplevel)> — holding the materialize
 // products that are a pure function of ONE tree's .config (hooks-manifest, content-hash, plugin-folders).
 // Slotted per tree exactly like sessions/<id> is slotted per session: the old single global file made the
 // last-materialized tree win, so dispatch ran tree A's compiled hook set inside tree B's sessions

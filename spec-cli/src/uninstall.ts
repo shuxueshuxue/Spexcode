@@ -8,8 +8,8 @@ import { loadSkillConfig, loadAgentConfig } from './specs.js'
 import { dematerialize } from './materialize.js'
 
 // @@@ spex-uninstall - materialize(∅) plus the store: the in-tree/global-config backout IS dematerialize (the
-// same identity-stamped erase phase every render runs first — the forgetting law's empty policy), and this
-// command adds only what a render never owns per-run: the global per-project store, the plugin-bundle sweep,
+// same identity-stamped erase phase every materialize runs first — the forgetting law's empty policy), and this
+// command adds only what a materialize never owns per-run: the global per-project store, the plugin-bundle sweep,
 // and the optional git hooks. EVERY removal is gated on a SpexCode IDENTITY STAMP (the managed-block
 // sentinels, the shim's own dispatch.sh command line, the trust sentinels, the generated mark / name-scoped
 // on-demand paths, the plugin name stamp), so it can only ever delete what SpexCode itself generated. The one
@@ -100,10 +100,10 @@ export function uninstall(targetArg: string | undefined, opts: { hooks?: boolean
 
   // 1+2. materialize(∅): every harness's artifacts (contract block, shim, trust, skills/agents), the managed
   //    .gitignore + info/exclude blocks, any legacy skip-worktree bit, and the content filter — the SAME
-  //    erase phase every render runs, asserted against the empty policy. One inverse, never a parallel one.
+  //    erase phase every materialize runs, asserted against the empty policy. One inverse, never a parallel one.
   dematerialize(proj, arts)
 
-  // 3. the global per-project store — the per-tree render slots (trees/<enc>: manifest + content-hash +
+  // 3. the global per-project store — the per-tree materialize slots (trees/<enc>: manifest + content-hash +
   //    plugin ledger), any legacy pre-slot manifest, and the session records. This is the runtime tier,
   //    not the user's spec asset, so the whole dir is ours.
   let store: string | null = null

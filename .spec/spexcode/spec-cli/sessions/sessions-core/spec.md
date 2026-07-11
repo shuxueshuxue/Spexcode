@@ -32,7 +32,8 @@ would trade that for a dependency and a name nobody wrote). Worst case the slug 
 kept unique by the session short-id suffix. Worktree
 prep also copies the machine-local `spexcode.local.json` snapshot from the main checkout into every fresh
 session worktree — the one source git cannot deliver, since the tracked spec data arrives by checkout and
-the renders by re-render (the transport-by-kind policy and its helper module belong to [[render-policy]];
+the materialized artifacts by re-materialize (the transport-by-kind policy and its helper module belong
+to [[residence]];
 here it is the one call after `worktree add`). The
 session objects it assembles carry their display strings pre-derived (`label`/`headline`) and hide the
 bare name parts under `raw` — that naming seam's contract (chains, wire shape, enforcement) is

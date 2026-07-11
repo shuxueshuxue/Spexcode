@@ -39,8 +39,8 @@ scenarios:
       No vote, no hint, no mystery-M: status is clean immediately (tracked contracts covered by the
       clean/smudge filter, index pristine, working tree carries the block), the host .gitignore is
       byte-untouched, the managed ignore block lives ONLY in per-clone .git/info/exclude (machine facts +
-      run residue + wholly-ours renders; never a tracked contract file's name), and the second render is
-      byte-stable (idempotence).
+      run residue + wholly-ours materialized artifacts; never a tracked contract file's name), and the
+      second materialize is byte-stable (idempotence).
     tags: [backend-api, cli]
     code: spec-cli/src/materialize.ts
     related: [spec-cli/src/materialize.test.ts]
@@ -49,21 +49,22 @@ scenarios:
       On an adopted host, set every legacy footprint field a real deployment might still carry —
       render:"committed", render:"hidden", an unknown word, private:true — and run `spex materialize`
       through the real CLI, capturing stderr and the resulting residence state each time. Also plant a
-      legacy managed block in the TRACKED .gitignore (the old ignored-mode home) and re-render.
+      legacy managed block in the TRACKED .gitignore (the old ignored-mode home) and re-materialize.
     expected: >
       Every value is IGNORED with a loud, non-fatal stderr notice naming the removal recipe and `spex
-      guide footprint` — never a failure, and the residence state is byte-identical to the no-field render
-      (one behavior). The legacy .gitignore block is erased by the next render (forgetting law), leaving
+      guide footprint` — never a failure, and the residence state is byte-identical to the no-field
+      materialize (one behavior). The legacy .gitignore block is erased by the next materialize
+      (forgetting law), leaving
       an honest one-time `M .gitignore` migration diff and the host's own rules intact.
     tags: [backend-api, cli]
     code: spec-cli/src/materialize.ts
   - name: user-prose-kind-transition
     description: >
       The common adoption path: init on a repo with NO contract file (CLAUDE.md is generated, wholly ours,
-      excluded), then the user (or their agent) writes their own prose into CLAUDE.md. Re-render, read
+      excluded), then the user (or their agent) writes their own prose into CLAUDE.md. Re-materialize, read
       check-ignore/status/attributes, then run the user's own `git add CLAUDE.md` and read the index.
     expected: >
-      Wholly-ours: excluded, invisible in status. The moment user prose enters, the next render WITHDRAWS
+      Wholly-ours: excluded, invisible in status. The moment user prose enters, the next materialize WITHDRAWS
       the exclude entry (user content is never hidden) and pre-arms the clean filter; the file surfaces as
       honestly untracked (??). Their add succeeds — the staged blob carries their prose and NO sentinel
       block; the working tree keeps prose + block. SpexCode never staged or committed anything itself.
@@ -78,8 +79,8 @@ scenarios:
       pulls); B a real prose edit pushed through the filtered tracked CLAUDE.md; C a leak attempt — force-
       stage an artifact and a block-carrying blob, then commit with the planted hooks; D `spex uninstall`.
     expected: >
-      A: spec data reaches the teammate, renders don't (no ignore-block in any tracked file, no render in
-      the push), adopter AND teammate status clean, no decision hint anywhere. B: the teammate receives
+      A: spec data reaches the teammate, materialized artifacts don't (no ignore-block in any tracked file,
+      no artifact in the push), adopter AND teammate status clean, no decision hint anywhere. B: the teammate receives
       the prose edit without ever seeing the block; HEAD stays pristine. C: the pre-commit surgery strips
       the block from the staged blob and evicts the artifact — the commit lands clean with a printed note,
       no rejection. D: uninstall leaves zero residue — host CLAUDE.md byte-identical to its own prose, the

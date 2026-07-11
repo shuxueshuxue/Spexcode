@@ -35,7 +35,7 @@ third baked id beyond the native two: `plugin`, written by the [[plugin-harness]
 no `Harness` adapter of its own (it is a DELIVERY form, not a runtime) — `dispatch.sh` accepts it and `harness.sh`
 routes it through the **claude family** (a plugin host like z-code/Claude shares Claude's payload shape) via the
 default case, so the shell side needs no separate `plugin)` arm. On the TS
-side the harness is derived from the selected launcher or ALL adapters at once (materialize renders every
+side the harness is derived from the selected launcher or ALL adapters at once (materialize writes every
 harness's artifacts). The Adapter owns exactly these divergence points — its whole
 surface:
 
@@ -65,7 +65,7 @@ surface:
   not unimplemented.
 - **contract file(s)** — where the `surface: system` block is materialized ([[harness-delivery]]): Claude
   `./CLAUDE.md` or `./.claude/CLAUDE.md`; Codex ONLY the repo-root `./AGENTS.md`.
-- **render dirs** — the auto-discovered dirs the on-demand surfaces materialize into, or null when the harness
+- **artifact dirs** — the auto-discovered dirs the on-demand surfaces materialize into, or null when the harness
   lacks that primitive: `skillDir` for `surface: skill` (`SKILL.md`s — claude `.claude/skills/`, codex
   `.codex/skills/`) and `agentDir` for `surface: agent` (sub-agent `<name>.md`s — claude `.claude/agents/`;
   Codex has no file-discovered agent-definition primitive → null, so materialize skips it). Each is ONE

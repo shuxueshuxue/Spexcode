@@ -23,7 +23,7 @@ scenarios:
       filter config/attributes, and .git/spexcode/.
     expected: >
       (1) git keeps working — the configured command degrades to identity, no per-operation fatal. (2) the
-      new contract text reaches the working file (the re-render IS the re-smudge), status stays clean, the
+      new contract text reaches the working file (the re-materialize IS the re-smudge), status stays clean, the
       index never sees the block. (3) uninstall strips the block BEFORE the config goes: no uncommitted-
       modification residue, the host file returns to its exact pristine bytes, config unset, shim + block
       content removed, the user's .spec untouched.

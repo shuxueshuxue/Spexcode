@@ -44,15 +44,15 @@ test('a failed creation-time materialize is reported loud and stamped on the rec
       status: 'queued', proposal: null, merges: 0, note: null, sortKey: null, createdAt: 1,
       harness: 'claude', harnessSessionId: null, launcher: 'reclaude', launchCmd: 'claude',
     }
-    bootstrapMaterialize(rec, () => { throw new Error('render exploded') })
+    bootstrapMaterialize(rec, () => { throw new Error('materialize exploded') })
 
     const logged = errors.join('\n')
     assert.match(logged, /materialize failed/)
     assert.match(logged, /\/tmp\/spex-mat-fail-worktree/)
-    assert.match(logged, /render exploded/)
+    assert.match(logged, /materialize exploded/)
     assert.match(logged, /UNGOVERNED/)
     const stored = readFileSync(sessionRecordPath('mat-fail-test'), 'utf8')
-    assert.match(stored, /"note": "materialize failed at creation — worker ungoverned \(no hooks\/contract\): render exploded"/)
+    assert.match(stored, /"note": "materialize failed at creation — worker ungoverned \(no hooks\/contract\): materialize exploded"/)
   } finally {
     console.error = prevError
     if (prevHome === undefined) delete process.env.SPEXCODE_HOME

@@ -38,8 +38,8 @@ test('codex mark-active resolves by payload thread id despite contaminated SPEXC
   const hook = join(repo, '.spec', 'spexcode', '.config', 'core', 'mark-active', 'mark-active.sh')
   writeFileSync(join(dir, 'hooks', 'mark-active.sh'), `#!/usr/bin/env bash\nbash ${JSON.stringify(hook)}\n`)
   writeFileSync(join(runtime, 'hooks-manifest'), 'PreToolUse\t10\tfalse\thooks/mark-active.sh\n')
-  // no content-hash pinning needed: the dispatcher never renders ([[commit-surgery]] — the old gate is
-  // retired), so the handcrafted manifest can never be re-rendered away by a dispatch.
+  // no content-hash pinning needed: the dispatcher never materializes ([[commit-surgery]] — the old gate is
+  // retired), so the handcrafted manifest can never be re-materialized away by a dispatch.
   writeFileSync(join(runtime, 'sessions', 'id_A', 'session.json'), JSON.stringify({
     session_id: 'id_A', governed: true, status: 'asking', proposal: 'old', note: 'wrong',
   }, null, 2))

@@ -19,7 +19,7 @@ spex_run() {
 }
 
 # @@@ footprint refresh ([[commit-surgery]]) - a merge is one of the three git transitions that can move the
-# render's inputs (.spec/.config content, contract-file trackedness), so re-materialize here — git-native
+# materialize's inputs (.spec/.config content, contract-file trackedness), so re-materialize here — git-native
 # anchors only, never a harness event. Quiet, best-effort: a failed refresh self-heals at the next anchor.
 spex_run internal refresh-footprint >/dev/null 2>&1 || true
 

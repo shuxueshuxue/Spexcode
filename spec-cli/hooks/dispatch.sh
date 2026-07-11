@@ -12,12 +12,12 @@
 #   tsx+cli) is inherited from the shim env.
 #
 # The old (1) GATE — an auto-materialize when the config content-hash moved — is RETIRED ([[commit-surgery]]):
-# a harness event is never a materialize trigger; the render's anchors are git-native only (spex verbs,
+# a harness event is never a materialize trigger; the materialize anchors are git-native only (spex verbs,
 # session-worktree creation, and the pre-commit/post-checkout/post-merge hooks). .config edits are
 # git-transactional: they take effect at the commit/checkout/merge that carries them, like any other source.
 set -u
 # args: `<harness> <Event>`. A harness id as $1 (claude|codex|plugin) is consumed; otherwise we keep $1 as the
-# event and default the harness to claude — so a stale shim still rendered as `dispatch.sh <Event>` keeps working.
+# event and default the harness to claude — so a stale shim still written as `dispatch.sh <Event>` keeps working.
 # `plugin` is the bundle form ([[plugin-harness]]): it parses payloads as the claude family in harness.sh (z-code/
 # Claude share Claude's tool names + file_path), so it joins the claude branch there via the default case.
 harness=claude
@@ -29,7 +29,7 @@ export SPEXCODE_HARNESS="$harness"
 export SPEXCODE_HARNESS_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/harness.sh"
 . "$SPEXCODE_HARNESS_LIB"
 proj="${CLAUDE_PROJECT_DIR:-$PWD}"
-# the manifest lives in THIS tree's render slot of the GLOBAL per-project store (mirrors layout.treeSlotDir),
+# the manifest lives in THIS tree's materialize slot of the GLOBAL per-project store (mirrors layout.treeSlotDir),
 # NOT the worktree — and per tree, so a dispatch can only read the manifest of the tree it fires in
 # ([[hook-dispatch]]). Slot key = this cwd's rev-parse --show-toplevel through hp_tree_dir. Empty if git
 # can't resolve.
@@ -40,7 +40,7 @@ slot="$(cd "$proj" 2>/dev/null && hp_tree_dir)" || slot=""
 if [ -n "${SPEX_HOOK_MANIFEST:-}" ]; then
   manifest="$SPEX_HOOK_MANIFEST"
 else
-  # migration window: a tree last rendered by a pre-slot toolchain has no slot until its next git-native
+  # migration window: a tree last materialized by a pre-slot toolchain has no slot until its next git-native
   # anchor — fall back to the legacy global manifest (its exact pre-migration behavior) so no hook (the
   # Stop gate included) silently no-ops. The legacy file is never written again; the next anchor plants the
   # slot and this branch goes dead.

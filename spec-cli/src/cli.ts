@@ -401,7 +401,7 @@ if (cmd === 'serve') {
   const run = cmd === 'remark' ? m.runRemark : cmd === 'resolve' ? m.runResolve : m.runRetract
   await flushExit(await run(process.argv.slice(3)))
 } else if (cmd === 'materialize') {
-  // @@@ materialize - the render: surface nodes → manifest + AGENTS.md/CLAUDE.md block + shims + Codex
+  // @@@ materialize - surface nodes → manifest + AGENTS.md/CLAUDE.md block + shims + Codex
   // trust, for cwd's project. Anchored on git-native events only ([[commit-surgery]]): this verb, init,
   // session-worktree creation, and the planted pre-commit/post-checkout/post-merge hooks.
   const { materialize } = await import('./materialize.js')
@@ -410,7 +410,7 @@ if (cmd === 'serve') {
   // @@@ doctor - the diagnosis surface ([[doctor]], né `self` — renamed: "self" read as the tool itself /
   // the global install, while the report is about THIS agent's wiring): does the materialized workflow
   // actually reach this agent? Bare `doctor` reports per-layer coverage (preconditions · git-hook floor ·
-  // contract · hooks+handler-existence · backend) over the same HARNESSES materialize renders through;
+  // contract · hooks+handler-existence · backend) over the same HARNESSES materialize delivers through;
   // `contract` prints the surface:system text; `conflicts` just the double-delivery check. Thin route.
   const { runDoctor } = await import('./doctor.js')
   await flushExit(await runDoctor(process.argv.slice(3)))
@@ -766,7 +766,7 @@ if (cmd === 'serve') {
     commitSurgery()
   } else if (sub === 'refresh-footprint') {
     // the post-checkout / post-merge freshness anchor ([[commit-surgery]]): a quiet materialize after a git
-    // state transition (the only events that can move the render's inputs — .spec/.config arrive by commit,
+    // state transition (the only events that can move the materialize's inputs — .spec/.config arrive by commit,
     // merge, or checkout). Best-effort and silent on success; hooks call it fire-and-forget.
     const { materialize } = await import('./materialize.js')
     try { materialize() } catch (e) { console.error(`spexcode: footprint refresh failed (${(e as Error).message})`); process.exit(1) }

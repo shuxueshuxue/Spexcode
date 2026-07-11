@@ -324,11 +324,12 @@ Example — govern your own source dir and loosen the altitude budget:
               'default'; seed-time only, read by init.ts).
   harnesses   which harness targets \`spex materialize\` delivers into — native ids ("claude"|"codex") or a
               { "plugin": "<folder>" } bundle. Default (omitted): all native harnesses. PERSISTENT and
-              git-transactional: the edit takes effect at the next git-native render anchor (the commit
+              git-transactional: the edit takes effect at the next git-native materialize anchor (the commit
               that carries it, a checkout/merge that receives it, or a manual \`spex materialize\`) — a
-              deselected harness's artifacts are pruned by that render.
-  render      RETIRED (the old three-word footprint vote) — ignored with a loud notice. Renders are never
-              tracked; there is exactly one residence behavior. Remove the field. \`spex guide footprint\`.
+              deselected harness's artifacts are pruned by that pass.
+  render      RETIRED (the old three-word footprint vote) — ignored with a loud notice. Materialized
+              artifacts are never tracked; there is exactly one residence behavior. Remove the field.
+              \`spex guide footprint\`.
   private     RETIRED (old private-overlay toggle) — ignored with a loud notice, same as \`render\`; its
               data-untrack semantics are gone. See \`spex guide footprint\` MIGRATIONS.`
 
@@ -338,20 +339,20 @@ SpexCode claims software engineering's HEAD (the recording of intent) and TAIL (
 measurement) and leaves the MIDDLE — construction — to the harness/agent/test framework; freshness
 stitches the two ends into a closed loop. The footprint follows: the head+tail (.spec, spexcode.json,
 readings) is the ASSET and lives in git like source; everything else is derived wiring or a machine fact.
-Renders carry no facts, so they are NEVER tracked — the old render vote is retired; there is exactly one
-residence behavior, decided per KIND (and, for a contract file, by its live CONTENT).
+Materialized artifacts carry no facts, so they are NEVER tracked — the old render vote is retired; there
+is exactly one residence behavior, decided per KIND (and, for a contract file, by its live CONTENT).
 
 ── THE FOUR KINDS (all fixed) ──
   spec data       .spec/ (incl .config/) + spexcode.json — ALWAYS tracked. Git is the database; there is
                   deliberately NO way to say "untrack the spec" in this schema.
   machine facts   spexcode.local.json, the hook shims (.claude/settings.json, .codex/hooks.json), plugin
                   bundles — NEVER tracked; always in the per-clone exclude.
-  renders         the CLAUDE.md/AGENTS.md contract blocks + rendered skills/agents — derived, NEVER
+  artifacts       the CLAUDE.md/AGENTS.md contract blocks + materialized skills/agents — derived, NEVER
                   tracked; hidden via .git/info/exclude. The host's tracked .gitignore is never touched.
   run residue     .worktrees/, the global store (~/.spexcode), .git/spexcode blobs — never tracked;
                   out-of-tree, or exclude-ruled where in-tree.
 
-── A CONTRACT FILE'S RESIDENCE IS A LIVE CONTENT FACT (re-judged at every render) ──
+── A CONTRACT FILE'S RESIDENCE IS A LIVE CONTENT FACT (re-judged at every materialize) ──
   host-tracked          → the clean/smudge content filter: the repo keeps the pristine host prose, your
                           working tree carries prose + block, status stays clean.
   untracked, wholly ours→ one exclude entry. The exclude is the ignored-bit DECLARATION the rest of git
@@ -361,8 +362,8 @@ residence behavior, decided per KIND (and, for a contract file, by its live CONT
                           IF you choose to \`git add\` it, the block is stripped automatically — tracking
                           is always your act; SpexCode never stages or commits anything for you.
 
-── THE GIT-NATIVE ANCHORS (no harness event ever triggers a render) ──
-  spex init / spex materialize / session-worktree creation — the explicit renders;
+── THE GIT-NATIVE ANCHORS (no harness event ever triggers a materialize) ──
+  spex init / spex materialize / session-worktree creation — the explicit passes;
   pre-commit    the correctness anchor: an UNCONDITIONAL materialize (masks provably fresh at the only
                 moment history is written) + staged-index surgery — a staged blob carrying the sentinel
                 block is cleaned IN PLACE (partial staging survives; source is the staged blob), a
@@ -370,16 +371,16 @@ residence behavior, decided per KIND (and, for a contract file, by its live CONT
   post-checkout/post-merge   freshness anchors: .spec/.config edits are git-transactional — they take
                 effect at the commit/checkout/merge that carries them, like any other source change.
 An environment with no spex-planted hooks (CI, a cloud agent's fresh clone, a teammate who hasn't
-installed) simply runs \`spex materialize\` in its setup step — there is no committed-render mode.
+installed) simply runs \`spex materialize\` in its setup step — there is no committed-artifact mode.
 TRACK ≠ PUSH: none of this ever touches remotes; where commits GO is branch/remote policy.
 
 ── GUARANTEES (the forgetting law) ──
-materialize(P₂) ∘ materialize(P₁) = materialize(P₂): every render first ERASES all landing points by
+materialize(P₂) ∘ materialize(P₁) = materialize(P₂): every materialize first ERASES all landing points by
 SpexCode's own identity stamps, then re-asserts — legacy states (a .gitignore managed block, a committed
-render, the retired vote's homes) are forgotten by the same pass. \`spex uninstall\` is the empty render
-plus the global store: a total backout that never touches your .spec/.config or prose. Fresh clones and
-session worktrees are self-sufficient: data by checkout, renders by re-render, the machine snapshot
-(spexcode.local.json) by copy.
+artifact, the retired vote's homes) are forgotten by the same pass. \`spex uninstall\` is the empty
+materialize plus the global store: a total backout that never touches your .spec/.config or prose. Fresh
+clones and session worktrees are self-sufficient: data by checkout, materialized artifacts by
+re-materialize, the machine snapshot (spexcode.local.json) by copy.
 
 ── THE CONTENT FILTER (mixed-content contract files) ──
 Per-clone only — git config filter.spexcode.* + .git/info/attributes + a shim under .git/spexcode/ —
@@ -390,7 +391,7 @@ block is invisible to git.
 
 ── MIGRATIONS ──
   render: "..." (retired)   remove the field from spexcode.json / spexcode.local.json — it is ignored
-                            with a loud notice. A previously COMMITTED render heals at your next commit
+                            with a loud notice. A previously COMMITTED artifact heals at your next commit
                             touching it (pre-commit strips the block from the staged blob); or run
                             \`spex materialize\` + commit the block's removal once.
   private: true (retired)   same — remove it; its data-untrack semantics are long gone.

@@ -44,9 +44,10 @@ the agent from one verb, picked by an optional topic:
   restates the type's own field comments, it does not invent fields), so an agent can configure SpexCode
   for a user who doesn't know the schema by editing the JSON directly. There is deliberately no imperative
   `spex config set` — the guide + a direct edit is the whole surface.
-- **`footprint` → the share-axis MODEL manual.** The [[render-policy]] model as an operator's handbook: the
-  four artifact kinds and their fixed track facts, the three `render` words with a decision guide, the
-  migration recipes (the retired `private: true` → `"render": "hidden"`; a legacy untracked spec tree →
+- **`footprint` → the share-axis MODEL manual.** The [[residence]] model as an operator's handbook: the
+  four artifact kinds and their fixed track facts (materialized artifacts never tracked — no vote), the
+  removal recipes for the retired fields (a lingering `render`/`private` is ignored with a loud notice; a
+  legacy untracked spec tree →
   `git add .spec spexcode.json` with the pushed-history WARN), how the [[content-filter]] behaves on a
   host-tracked contract file, and the forgetting-law guarantees (any-order switching, `spex uninstall` as
   the empty policy). `config` documents the FIELD; `footprint` teaches the MODEL the field selects.

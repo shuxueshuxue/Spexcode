@@ -29,10 +29,10 @@ can never double-inject.
 Everything the filter needs is PER-CLONE — zero repo footprint: `git config filter.spexcode.smudge/clean`,
 a managed block in `.git/info/attributes` binding each covered file, and a shim + block-content pair under
 `<git-common>/spexcode/` (a dir shared with other per-clone spexcode data — only our two files are ever
-ours to remove). The block-content file is what smudge injects, so the render and future checkouts always
+ours to remove). The block-content file is what smudge injects, so the materialize and future checkouts always
 agree.
 
-**Where it is planted — mixed content, present or imminent.** The kind detection ([[render-policy]]) binds
+**Where it is planted — mixed content, present or imminent.** The kind detection ([[residence]]) binds
 the filter for a contract file that is host-TRACKED, and PRE-ARMS it for an untracked contract file the
 user's own prose has entered: arming costs nothing while the file stays untracked (no pipeline events
 fire), and it makes the user's eventual `git add` — through any route, `-p` included; the block never even
@@ -45,7 +45,7 @@ Three field-verified edges the mechanism must hold:
    before exec, degrading to `cat` (identity) when the shim is missing — a bare missing filter command
    makes git spray fatals on EVERY operation touching the file.
 2. **No self-propagation + the phantom-`M`.** git re-smudges only on checkout, so a changed contract does
-   not propagate by itself: the re-render writes the managed block straight into the working file (the
+   not propagate by itself: the re-materialize writes the managed block straight into the working file (the
    block write IS the re-smudge) and refreshes the shim's block-content file. And a filtered path can never
    be verified by stat alone, so `git status` reports it modified FOREVER without content-checking (while
    `git diff` runs the filter and shows nothing) — settled by a content-GUARDED `git add --renormalize`:

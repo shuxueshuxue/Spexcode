@@ -24,7 +24,7 @@ scenarios:
       skills), so a clone never carries a committed copy —
       only docs/AGENT_GUIDE.md is tracked, and no .gitignore is created or edited. Each file's
       `<!-- spexcode:start -->…<!-- spexcode:end -->` block
-      equals the AGENT_GUIDE.md guide followed by the surface:system bodies in name order; the next render
+      equals the AGENT_GUIDE.md guide followed by the surface:system bodies in name order; the next materialize
       reflects the edited body. The writeManagedBlock primitive still preserves any bytes outside the markers.
   - name: exclude-block-checkout-invariant
     tags: [backend-api]
@@ -51,14 +51,14 @@ scenarios:
   - name: content-key-covers-renderer
     tags: [cli]
     description: >-
-      The freshness stamp is a function of (config content, renderer). With the .config unchanged: source
+      The freshness stamp is a function of (config content, toolchain). With the .config unchanged: source
       the shipped harness.sh from a package root, compute hp_config_hash,
       change the package's content (a version bump / source change), and compute it again; then also edit a
       .config body and compute a third time.
     expected: >-
       The stamp MOVES on the toolchain change alone and again on the config edit, and is byte-stable when
-      neither input changed — so a stale stamp is a truthful diagnostic ("the last render predates this
-      toolchain/config") that doctor/debugging can trust. A key that ignores the renderer would read an
+      neither input changed — so a stale stamp is a truthful diagnostic ("the last materialize predates this
+      toolchain/config") that doctor/debugging can trust. A key that ignores the toolchain would read an
       out-of-date deploy as fresh.
   - name: dispatcher-never-renders
     tags: [backend-api]
@@ -67,7 +67,7 @@ scenarios:
       editor) and fire a harness tool event through dispatch.sh; then bring the edit to a git-native anchor
       (commit it, or run `spex materialize`).
     expected: >-
-      The harness event renders NOTHING — the contract file and manifest are byte-unchanged, the hook hot
+      The harness event materializes NOTHING — the contract file and manifest are byte-unchanged, the hook hot
       path stays pure bash with zero node boots. The git-native anchor then brings the AGENTS.md/CLAUDE.md
       block and the manifest current: .config edits are git-transactional ([[commit-surgery]]).
 ---
@@ -77,6 +77,6 @@ Loss is measured through the REAL self-launch surface (YATU): a user-launched co
 isolated home must get the full SpexCode system (the assembled guide + contract + hooks + zero-prompt trust)
 with no step after `spex init`. The contract files (AGENTS.md/CLAUDE.md) are SpexCode-owned GENERATED
 artifacts — never tracked, exclude-hidden, regenerated per clone/launch — so the only tracked contract
-prose is the docs/AGENT_GUIDE.md source the render folds in. Verify the contract reaches the model via `codex debug
+prose is the docs/AGENT_GUIDE.md source the materialize folds in. Verify the contract reaches the model via `codex debug
 prompt-input` (no model call needed); verify trust via a real TUI launch (zero prompts). Always use isolated
 SPEXCODE_HOME/CODEX_HOME — never the real user config.

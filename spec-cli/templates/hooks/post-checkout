@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # @@@ footprint refresh (post-checkout) ([[commit-surgery]]) - a branch checkout is one of the three git
-# transitions that can move the materialize's inputs: .spec/.config content changes across branches, and a
+# transitions that can move the materialize's inputs: .spec/.plugins content changes across branches, and a
 # contract file's TRACKEDNESS can flip (switching to a branch that tracks CLAUDE.md checks out the pristine
 # index prose — the re-materialize here writes the block back into the working file, binds the clean/smudge
 # filter, and withdraws the exclude entry; the kind-transition heals itself). Git-native anchors only —

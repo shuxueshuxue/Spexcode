@@ -39,7 +39,7 @@ const DISPATCH = join(PKG, 'hooks', 'dispatch.sh')
 const SPEX = join(PKG, 'bin', 'spex.mjs')
 // the manifest + content-hash marker + plugin-folder ledger land in the materialized TREE's own slot of the
 // GLOBAL per-project store (layout.treeSlotDir — trees/<enc-worktree>), NOT the worktree and NOT one shared
-// per-project file: each is a pure function of ONE tree's .config, and the old single slot let the last-
+// per-project file: each is a pure function of ONE tree's .plugins, and the old single slot let the last-
 // materialized tree's hook set reach every other tree's dispatch ([[hook-dispatch]]). The worktree keeps
 // zero SpexCode-materialized runtime; only the harness-discovered contract files + shims (which the harness
 // must find in-tree) are written under proj below.

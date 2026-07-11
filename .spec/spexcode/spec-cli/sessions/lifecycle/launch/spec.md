@@ -76,7 +76,7 @@ else the local-port default) carrying no project identity. So a **stale inherite
 at another repo's backend would silently land the session in the WRONG repo — the exact decoupling the
 [[remote-client]] *read/control* verbs exploit on purpose (point anywhere to monitor any machine) becomes a
 correctness hole the moment the verb *mutates*. The fix lives at the client launch seam: before POSTing,
-`spex new` compares the **caller's cwd repo root** to the backend's **served root** (`GET /api/layout` `.main`)
+`spex new` compares the **caller's cwd repo root** to the backend's **served root** (`GET /api/settings` `.layout.main`)
 and **refuses, loud**, on a provable same-host mismatch — `cwd is in <A> but the backend serves <B>`, with the
 repair (`cd <A> && spex serve`, or point the env at it). It fires only on a positive mismatch: no local repo,
 an unreachable backend, or a served root that isn't a resolvable local path (a genuinely remote backend) all

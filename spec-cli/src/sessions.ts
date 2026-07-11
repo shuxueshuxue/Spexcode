@@ -831,7 +831,7 @@ export const slugify = (s: string | null) =>
 // the FIRST `[[<id>]]` topic reference ([[mentions]]: `[[node]]` is a topic, `@` is now an actor/session).
 // When there is none, the session is node-agnostic and we label it by the first few words of the prompt.
 // The OPTIONAL leading dot is load-bearing: a node id is its dir basename, so a dot-prefixed config root
-// (`.config`) keeps the dot — without `\.?` here `[[.config]]` captures nothing and never resolves to a node.
+// (`.plugins`) keeps the dot — without `\.?` here `[[.plugins]]` captures nothing and never resolves to a node.
 // Token chars are ANY unicode letter/number (slugify's already-made choice): a CJK dir name is a legal node
 // id, so `[[中文节点]]` must bind the session exactly like an ASCII id — ASCII-only here silently launched
 // node-agnostic.
@@ -1016,8 +1016,8 @@ export async function assertProjectMatch(verb: string): Promise<void> {
   try { localMain = realpathSync(mainRoot()) } catch { return }   // caller not in a repo → can't prove a mismatch
   let served: string | null = null
   try {
-    const r = await fetch(`${url}/api/layout`)
-    if (r.ok) served = (await r.json() as { main?: string }).main ?? null
+    const r = await fetch(`${url}/api/settings`)
+    if (r.ok) served = (await r.json() as { layout?: { main?: string } }).layout?.main ?? null
   } catch { return }                                              // backend unreachable → the write itself surfaces it (fail-loud there)
   if (!served || !isAbsolute(served)) return                      // unknown / config-aliased root → don't risk a false refusal
   let backendMain: string

@@ -4,7 +4,7 @@ status: active
 hue: 280
 desc: Two orthogonal axes — agent-authored lifecycle and runtime-derived liveness — that never override each other; plus the gating hooks that force the lifecycle write.
 code:
-  - .spec/spexcode/.config/core/stop-gate/stop-gate.sh
+  - .spec/spexcode/.plugins/core/stop-gate/stop-gate.sh
 related:
   - spec-cli/src/sessions.ts
   - spec-cli/src/cli.ts
@@ -150,7 +150,7 @@ record — or none at all — they no-op (the Stop gate exits 0 SILENTLY), becau
 to feed, so the Stop gate must NOT misfire its declare-demand. mark-active edits the record directly in shell (the
 hot path stays jq-free); the non-hot writers (idle/StopFailure, and the Stop gate's auto-declare) shell to `spex
 session … --session <id>` so the TS layer owns the JSON — they pass the id explicitly because there is no worktree
-`.session` to fall back on. The **spec-discipline** hooks ([[spec-first]], [[spec-of-file]]) are NOT gated on
+`.session` to fall back on. The **spec-discipline** hooks ([[inject-spec-first]], [[inject-spec-of-file]]) are NOT gated on
 `governed` — they serve any agent, keeping their once-per-session sentinel/ledger as sibling files in the same
 global session dir (created on demand even for a session with no `session.json`). So board state is a managed-
 session concern; spec-awareness is universal.

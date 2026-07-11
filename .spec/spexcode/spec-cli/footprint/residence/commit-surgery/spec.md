@@ -18,11 +18,11 @@ related:
 "The masks must never be stale" is a temporal invariant no gate can guarantee — so it is replaced by an
 EVENT-anchored one: the materialized artifacts are provably fresh at the only moments freshness matters.
 History is written
-at exactly one gate (commit), and a clone's materialize inputs (.spec/.config content, a contract file's
+at exactly one gate (commit), and a clone's materialize inputs (.spec/.plugins content, a contract file's
 trackedness) move only through git's own transitions (commit, checkout, merge) or the user's editor. So
 the anchors are git-native and ONLY git-native: the spex verbs (init/materialize), session-worktree
 creation, and the planted pre-commit / post-checkout / post-merge hooks. The harness is a READER of the
-materialized files, never a trigger — the old dispatch-gate auto-materialize is retired, and `.config` edits
+materialized files, never a trigger — the old dispatch-gate auto-materialize is retired, and `.plugins` edits
 became git-transactional: they take effect at the commit/checkout/merge that carries them, like any other
 source change.
 
@@ -57,7 +57,7 @@ necessarily carries the repair.
 trackedness (switching to a branch that tracks CLAUDE.md checks out the pristine index prose): the
 post-checkout re-materialize writes the block back into the working file, binds the filter, and withdraws the
 exclude entry — the kind transition heals itself; file checkouts (flag 0) are skipped. post-merge
-re-materializes after received `.spec`/`.config` changes. Both are quiet and best-effort: a missed refresh
+re-materializes after received `.spec`/`.plugins` changes. Both are quiet and best-effort: a missed refresh
 self-heals at the next anchor, pre-commit being the backstop.
 
 **Known self-hosting residue.** The hook resolves `spex` PATH-first, so on a branch that CHANGES

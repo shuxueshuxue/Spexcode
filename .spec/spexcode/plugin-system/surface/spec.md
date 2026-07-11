@@ -2,12 +2,12 @@
 title: surface
 status: active
 hue: 260
-desc: A config node's surface is a frontmatter FIELD — one or more of system|command|hook|skill|agent (comma-listed when several) — not its location; discovered recursively under a config root.
+desc: A plugin node's surface is a frontmatter FIELD — one or more of system|command|hook|skill|agent (comma-listed when several) — not its location; discovered recursively under a plugin root.
 code:
 ---
 # surface
 
-A config node's **surface** — where it plugs in — is a `surface` **frontmatter field** naming one or MORE
+A plugin node's **surface** — where it plugs in — is a `surface` **frontmatter field** naming one or MORE
 of five values (comma-separated when several: the node plugs into EVERY surface it lists, one body serving
 each — e.g. a plugin that is both an on-demand skill and a new-session command preset):
 
@@ -34,16 +34,16 @@ each — e.g. a plugin that is both an on-demand skill and a new-session command
   exactly as a harness with no skill primitive gets no `SKILL.md`. The canonical example is [[spec-scout]].
 
 The surface is a FIELD, not a path: a plugin carrying it is a real graph node and is discovered
-**recursively** under a config root — so a grouping plugin may itself be a plugin whose children carry a
-different surface (e.g. [[.config]]'s `core` is a `system` contract whose children are `hook` handlers).
+**recursively** under a plugin root — so a grouping plugin may itself be a plugin whose children carry a
+different surface (e.g. [[.plugins]]'s `core` is a `system` contract whose children are `hook` handlers).
 There are no `command/`/`system/`/`hook/` bucket dirs. Changing a surface is a one-line frontmatter edit.
 
-Both config roots participate: [[.config]] (the instance — the DIY dev-flow plugins) and [[config]] (the
+Both plugin roots participate: [[.plugins]] (the instance — the DIY dev-flow plugins) and [[plugin-system]] (the
 project system spec). A node that declares no `surface` (e.g. this doc node, or any non-plugin folder)
 reaches no surface at all.
 
 In [[source-of-truth]]'s `specs.ts`, `loadSurface(s)` walks each root recursively and keeps the nodes whose
-`surface` field lists `s` (membership, not equality): `loadConfig` gathers command ([[spec-cli]]'s `/api/config`, the
+`surface` field lists `s` (membership, not equality): `loadConfig` gathers command ([[spec-cli]]'s `/api/plugins`, the
 [[session-console]] `/` palette), `loadSystemConfig` gathers system ([[sessions]]'s launcher), and
 `loadHookConfig` gathers hook (compiled into the dispatch manifest), `loadSkillConfig` gathers skill
 (materialized to a per-harness `SKILL.md` by [[harness-delivery]]'s materialize), and `loadAgentConfig` gathers

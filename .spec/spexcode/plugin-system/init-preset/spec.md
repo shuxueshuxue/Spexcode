@@ -2,11 +2,11 @@
 title: init-preset
 status: active
 hue: 100
-desc: The preset system — default preset = the live .config instance set; non-default presets (careful) are cumulative template packages selection stacks on at `spex init`; selection only matters at seed time.
+desc: The preset system — default preset = the live .plugins instance set; non-default presets (careful) are cumulative template packages selection stacks on at `spex init`; selection only matters at seed time.
 code:
   - spec-cli/templates/presets
 related:
-  - spec-cli/templates/spec/project/.config
+  - spec-cli/templates/spec/project/.plugins
 ---
 # init-preset
 
@@ -14,25 +14,25 @@ The init preset is the **policy** half of adoption — *which* plugins a project
 *mechanism* (the CLI scaffold that copies template files into a target tree) belongs to [[spex-init]];
 this node describes only the preset **system**.
 
-**Default preset = the instance.** The lean default preset *is* the [[.config]] instance set — the
+**Default preset = the instance.** The lean default preset *is* the [[.plugins]] instance set — the
 dev-flow plugins SpexCode actually runs (the contract, the commands, the scout). It is also the seed a
-plain `spex init` plants, shipped as the `spec-cli/templates/spec/project/.config` mirror of that live
-tree. The dotted [[.config]] (the instance) and the un-dotted [[config]] (this spec of the config
-system) stay strictly distinct: a **non-default** preset NEVER lives in `.config`.
+plain `spex init` plants, shipped as the `spec-cli/templates/spec/project/.plugins` mirror of that live
+tree. The dotted [[.plugins]] (the instance) and the un-dotted [[plugin-system]] (this spec of the plugin
+system) stay strictly distinct: a **non-default** preset NEVER lives in `.plugins`.
 
 **Non-default presets are template packages.** A more cautious tier — `careful` — is a separate
 **source package** under `spec-cli/templates/presets/<name>/`, mirroring the default template layout (a
-`.config/<plugin>` subtree). It is shippable CLI code, *not* a spec node in this repo and never part of
-the live `.config` the launcher walks. Its first member is `clarify-before-code` — surface a misread as
+`.plugins/<plugin>` subtree). It is shippable CLI code, *not* a spec node in this repo and never part of
+the live `.plugins` the launcher walks. Its first member is `clarify-before-code` — surface a misread as
 a stated assumption in the proposal, blocking the human only on a load-bearing ambiguity.
 
 **Cumulative.** The tiers form a chain, lean → cautious: `careful` is a strict superset of `default`.
-Selecting `careful` seeds the default `.config` set AND stacks the careful package on top of it.
+Selecting `careful` seeds the default `.plugins` set AND stacks the careful package on top of it.
 
 **The measurement contract ships in DEFAULT, not `careful`.** A loss signal that is blind from day one is
 not a "careful-only" concern — it is the premise the whole optimizer rests on, and adoption coverage is
 weakest exactly when the project is fresh, so a plain `spex init` must already push its workers to measure.
-So the default `.config` seed carries the measurement discipline directly: the [[core]] contract body folds
+So the default `.plugins` seed carries the measurement discipline directly: the [[core]] contract body folds
 in the "keep the loss signal honest — re-measure what you changed, give an obvious frontend change a
 scenario, and measure a frontend scenario through the actual running product (a real browser), then FILE
 that observation as the reading" rule, and a `reproduce-before-fix` plugin (`surface: system`) seeds the
@@ -42,10 +42,10 @@ seeded `core/stop-gate` hook's eval advisory nudges an uncovered/stale node at a
 the fix for the adoption gap where a fresh project's contract carried zero measurement prose and its
 workers browser-verified by instinct but never filed a eval reading.
 
-**Templates are the canonical shipped seed; they must not fork from our own `.config`.** A published
+**Templates are the canonical shipped seed; they must not fork from our own `.plugins`.** A published
 `spec-cli` cannot read this dev repo's live `.spec`, so `spex init` seeds strictly from
-`spec-cli/templates/spec/project/.config` — that template tree IS the canonical copy every adopter gets.
-Our own `.spec/spexcode/.config` is this repo's live instance and is a **superset** (it carries extra
+`spec-cli/templates/spec/project/.plugins` — that template tree IS the canonical copy every adopter gets.
+Our own `.spec/spexcode/.plugins` is this repo's live instance and is a **superset** (it carries extra
 discipline like spec-first reading), but for the SHARED contract members — the [[core]] measurement prose,
 `reproduce-before-fix`, and the `core/stop-gate` hook (whose eval advisory is specified by
 [[eval-proactive]]) — the template must stay a faithful mirror of the live node. When the measurement
@@ -57,5 +57,5 @@ is the smell.
 (or an existing `spexcode.json` `preset` field); the named package is copied in on top of the default.
 There is **no** per-plugin `preset:` field — membership is *which package directory a plugin lives in*,
 not a frontmatter flag — and **no** launcher-side preset gate: once seeded, the running repo simply
-gathers whatever ended up in its `.config`, so the whole notion of a preset is spent at `spex init` and
+gathers whatever ended up in its `.plugins`, so the whole notion of a preset is spent at `spex init` and
 invisible thereafter.

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import SessionTerm from './SessionTerm.jsx'
-import { loadConfig, loadLaunchers } from './data.js'
+import { loadPlugins, loadSettings } from './data.js'
 import { labelColor } from './color.js'
 import { sessionForest } from './session.js'
 import { MENTION_RE, specPath, highlight, nodeMentionAt, actorMentionAt, MentionMenu } from './mentions.jsx'
@@ -85,7 +85,7 @@ function matchSlash(cmds, query) {
 // dropdown descriptions read as sentences — capitalise the first letter (idempotent; CC's already are).
 const capDesc = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s)
 
-// the New Session `/` palette over config presets — same prefix-rank shape as matchSlash.
+// the New Session `/` palette over command presets — same prefix-rank shape as matchSlash.
 function matchConfig(presets, query) {
   const q = query.toLowerCase()
   const scored = []
@@ -115,12 +115,12 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [selecting, setSelecting] = useState(false)  // multi-select mode ([[session-multi-select]]): rows become checkboxes, not tabs
   const [picked, setPicked] = useState(() => new Set()) // the ids ticked for bulk close while `selecting`
   const [slashCmds, setSlashCmds] = useState([])   // the `/` command list (built-in + user/project/skill), fetched once
-  const [presets, setPresets] = useState([])       // the config presets (GET /api/config) — the New Session box's `/` palette
+  const [presets, setPresets] = useState([])       // the command presets (GET /api/plugins) — the New Session box's `/` palette
   // bottom-input drafts, keyed by session id — each session tab keeps its OWN typed-but-unsent line, never
   // a single shared box. Survives tab switches and close/reopen (the panel stays mounted, see `open`).
   const [drafts, setDrafts] = useState({})
   // named launcher profiles ([[launcher-select]]) — a launcher fuses (harness, cmd), so this is the sole launch
-  // choice. Fetched from /api/launchers; built-in claude/codex profiles mean the list is never intentionally empty.
+  // choice. Fetched from /api/settings; built-in claude/codex profiles mean the list is never intentionally empty.
   const [launchers, setLaunchers] = useState([])
   const [launcher, setLauncher] = useState(() => { try { return localStorage.getItem('si.launcher') || '' } catch { return '' } })
   const pickLauncher = (name) => { setLauncher(name); try { localStorage.setItem('si.launcher', name) } catch {} }
@@ -190,10 +190,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     fetch(`/api/slash-commands?harness=${harness}`).then((r) => r.json()).then((d) => { if (Array.isArray(d)) setSlashCmds(d) }).catch(() => {})
   }, [selSession?.harness])
 
-  // fetch the config presets once — the New Session box's `/` palette (tidy/health/…). Picking one composes
+  // fetch the command presets once — the New Session box's `/` palette (tidy/health/…). Picking one composes
   // its body into the launch prompt (see submit); listing is display-only, like the slash menu.
   useEffect(() => {
-    loadConfig().then((d) => { if (Array.isArray(d)) setPresets(d) }).catch(() => {})
+    loadPlugins().then((d) => { if (Array.isArray(d)) setPresets(d) }).catch(() => {})
   }, [])
   // fetch the configured launcher profiles once; if a project has any, the New box picks one by name (the pick
   // rides in the POST body as `launcher`). Initial selection HONORS the config default so the dashboard agrees
@@ -201,7 +201,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // valid) → configured `default` → first. Without this the dropdown silently pre-selected the alphabetically
   // first launcher, disagreeing with the config default — a user "testing claude-glm" could get another launcher.
   useEffect(() => {
-    loadLaunchers().then((d) => {
+    loadSettings().then((d) => {
       const list = d?.launchers
       if (!Array.isArray(list) || !list.length) return
       setLaunchers(list)
@@ -212,7 +212,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       })
     }).catch(() => {})
   }, [])
-  // /api/config returns only command-surface nodes, so the presets ARE the launchable set — no client filter.
+  // /api/plugins returns only command-surface nodes, so the presets ARE the launchable set — no client filter.
   const commandPresets = presets
 
   // type mode binds to ONE live session's menu — leaving the tab (or it going offline) exits it, so raw
@@ -419,7 +419,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       requestAnimationFrame(() => { const el = msgRef.current; if (el) { el.focus(); el.setSelectionRange(caret, caret) } })
       return
     }
-    // config preset → the New prompt (composed at launch); a `[[`-mention/`@`-actor → whichever box is
+    // command preset → the New prompt (composed at launch); a `[[`-mention/`@`-actor → whichever box is
     // active: the New prompt (resolved at launch) or a running session's ❯ inbox (resolved at send). An
     // actor inserts `@<id> ` (the id, so the server/CLI resolver matches) — text expansion only, no dispatch.
     const insert = menu.kind === 'config' ? `/${item.name} `

@@ -124,8 +124,8 @@ test('content-filter edges: missing shim degrades to cat; a contract change re-m
   writeFileSync(shim, shimBytes)   // restore
 
   // edge ②: a surface:system edit must reach the working file on re-materialize AND leave status clean
-  const sysNode = execFileSync('bash', ['-c', `grep -l '^surface: system' '${join(proj, '.spec')}'/*/.config/*/spec.md | sort | head -1`], { encoding: 'utf8' }).trim()
-  assert.ok(sysNode, 'seeded .config has a surface:system node to edit')
+  const sysNode = execFileSync('bash', ['-c', `grep -l '^surface: system' '${join(proj, '.spec')}'/*/.plugins/*/spec.md | sort | head -1`], { encoding: 'utf8' }).trim()
+  assert.ok(sysNode, 'seeded .plugins has a surface:system node to edit')
   writeFileSync(sysNode, readFileSync(sysNode, 'utf8') + '\nEDGE-TWO-PROPAGATED\n')
   g('add', '.spec'); g('commit', '-qm', 'config edit (data is tracked — committed like any source)', '--no-verify')
   spex('materialize')
@@ -289,7 +289,7 @@ test('codex worktree materialize plants the .codex anchor + unconditional projec
   g('config', 'user.email', 't@t.co'); g('config', 'user.name', 't')
   writeFileSync(join(proj, 'README.md'), '# app\n')
   g('add', '-A'); g('commit', '-qm', 'init')
-  spex(proj, 'init', '.')                                  // seeds .spec (incl .config/core) + materializes at main
+  spex(proj, 'init', '.')                                  // seeds .spec (incl .plugins/core) + materializes at main
   g('add', '-A'); g('commit', '-qm', 'adopt', '--no-verify')
 
   const wt = join(proj, '.worktrees', 'wt')
@@ -387,8 +387,8 @@ test('harness selection chain: a codex-only repo NEVER grows .claude — init, m
   // leg 2 — manual spex materialize
   spex(proj, 'materialize')
   noClaude(proj, 'manual materialize')
-  // leg 3 — the DE-HARNESSED dispatcher: a .config edit + a harness event must NOT re-materialize
-  const cfgNode = execFileSync('bash', ['-c', `ls '${join(proj, '.spec', 'project', '.config')}'/*/spec.md | head -1`], { encoding: 'utf8' }).trim()
+  // leg 3 — the DE-HARNESSED dispatcher: a .plugins edit + a harness event must NOT re-materialize
+  const cfgNode = execFileSync('bash', ['-c', `ls '${join(proj, '.spec', 'project', '.plugins')}'/*/spec.md | head -1`], { encoding: 'utf8' }).trim()
   writeFileSync(cfgNode, readFileSync(cfgNode, 'utf8') + '\nGATE-LEG\n')
   const before = runtimeHash()
   fireEvent(proj)
@@ -427,7 +427,7 @@ test('harness selection is persistent + self-healing at the git-native anchors: 
 })
 
 // [[hook-dispatch]] / [[runtime]] — per-tree materialize slots: the manifest (+ content-hash + ledger) is a pure
-// function of ONE tree's .config, so each tree materializes into its own trees/<enc(toplevel)> slot. The old
+// function of ONE tree's .plugins, so each tree materializes into its own trees/<enc(toplevel)> slot. The old
 // single global file was last-writer-wins across worktrees — tree A's materialize silently replaced the hook set
 // tree B's sessions dispatched (cross-tree hook bleed).
 test('per-tree materialize slots: a divergent worktree materializes into its own slot; another tree\'s later materialize never rewrites it', { skip: !gitAvailable() && 'git not available' }, () => {
@@ -435,10 +435,10 @@ test('per-tree materialize slots: a divergent worktree materializes into its own
   g('add', '-A'); g('commit', '-qm', 'init')
   spex(proj, 'init', '.')
   g('add', '-A'); g('commit', '-qm', 'adopt', '--no-verify')
-  // worktree with a DIVERGENT .config: one extra surface:hook node bound to SessionStart
+  // worktree with a DIVERGENT .plugins: one extra surface:hook node bound to SessionStart
   const wt = join(proj, '.worktrees', 'wt')
   g('worktree', 'add', '-q', wt, '-b', 'node/wt')
-  const probe = join(wt, '.spec', 'project', '.config', 'probe')
+  const probe = join(wt, '.spec', 'project', '.plugins', 'probe')
   mkdirSync(probe, { recursive: true })
   writeFileSync(join(probe, 'spec.md'), '---\ntitle: probe\nsurface: hook\nstatus: active\nevents:\n- SessionStart\norder: 10\nblock: false\n---\nmarker\n')
   writeFileSync(join(probe, 'probe.sh'), '#!/usr/bin/env bash\necho PROBE\n')
@@ -448,7 +448,7 @@ test('per-tree materialize slots: a divergent worktree materializes into its own
     return join(projects, readdirSync(projects)[0], 'trees', tree.replace(/[/.]/g, '-'))
   }
   const wtManifest = readFileSync(join(slotOf(wt), 'hooks-manifest'), 'utf8')
-  assert.ok(wtManifest.includes('probe.sh'), "the worktree's slot compiled the worktree's own .config")
+  assert.ok(wtManifest.includes('probe.sh'), "the worktree's slot compiled the worktree's own .plugins")
   const mainManifest = readFileSync(join(slotOf(proj), 'hooks-manifest'), 'utf8')
   assert.ok(!mainManifest.includes('probe.sh'), "main's slot (from init) never saw the worktree-only node")
   // the OTHER tree materializes LAST — under the old single slot this was the clobber

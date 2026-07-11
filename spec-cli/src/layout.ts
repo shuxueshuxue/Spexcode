@@ -9,7 +9,7 @@ type Config = {
   main?: string                    // path to the source-of-truth checkout (default: the `main` worktree)
   mainBranch?: string              // source-of-truth BRANCH worktrees fork from (default: auto-detected — see mainBranch())
   branchPrefix?: string            // how a branch names its node (default: "node/")
-  preset?: string                  // the SELECTED init preset — which cumulative .config tier `spex init` seeds (default 'default'; seed-time only, no launcher gate; read by init.ts; see [[init-preset]])
+  preset?: string                  // the SELECTED init preset — which cumulative .plugins tier `spex init` seeds (default 'default'; seed-time only, no launcher gate; read by init.ts; see [[init-preset]])
   // RETIRED ([[residence]]) — the old three-word footprint vote. Materialized artifacts carry no facts and are never
   // tracked now (one residence behavior: the per-clone exclude, plus the content filter for a mixed
   // contract file), so the field is IGNORED with a loud non-fatal notice (materialize's retiredAxisNotice);
@@ -130,7 +130,7 @@ export function mainCheckout(proj?: string): string {
 // agents in one folder never clobber, and grouped PER PROJECT (mirroring Claude's ~/.claude/projects/<enc>/)
 // so the board enumerates ONE directory. This is the single seam that knows where the store sits; sessions.ts
 // and the shell hooks resolve through the SAME scheme (the hooks reimplement it in bash, so any change here
-// must be mirrored in .config/core/*/). SPEXCODE_HOME overrides the root for test isolation.
+// must be mirrored in .plugins/core/*/). SPEXCODE_HOME overrides the root for test isolation.
 export function spexcodeHome(): string {
   return process.env.SPEXCODE_HOME || join(homedir(), '.spexcode')
 }
@@ -151,7 +151,7 @@ export function runtimeRoot(proj?: string): string {
   return join(spexcodeHome(), 'projects', encodeProject(dirname(gcd)))
 }
 // the per-WORKTREE materialize slot — <runtime>/trees/<enc(worktree-toplevel)> — holding the materialize
-// products that are a pure function of ONE tree's .config (hooks-manifest, content-hash, plugin-folders).
+// products that are a pure function of ONE tree's .plugins (hooks-manifest, content-hash, plugin-folders).
 // Slotted per tree exactly like sessions/<id> is slotted per session: the old single global file made the
 // last-materialized tree win, so dispatch ran tree A's compiled hook set inside tree B's sessions
 // ([[hook-dispatch]]). Key = the sessions encodeProject transform over `rev-parse --show-toplevel`, the

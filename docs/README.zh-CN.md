@@ -167,7 +167,7 @@ spex eval add settings --scenario remembers-tab --pass --image proof.png
 `spexcode.json`(提交进仓库,可移植:布局、lint 预算、看板标识、launcher 名字)和
 `spexcode.local.json`(gitignore,单机:launcher 绝对路径,以及给你参与但不拥有的仓库用的
 `private: true` 覆盖)承载全部设置。暂时没有 `spex config set`:两个文件直接手改(或让 agent 改),每个字段的文档在
-`spex guide config`。其他手册:`spex guide`(工作流)、`spex guide spec`、
+`spex guide settings`。其他手册:`spex guide`(工作流)、`spex guide spec`、
 `spex guide eval`;`spex help` 列出全部命令。
 
 ## 参与开发

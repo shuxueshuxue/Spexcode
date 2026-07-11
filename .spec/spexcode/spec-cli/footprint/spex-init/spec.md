@@ -19,12 +19,12 @@ What it plants, both resolved from the CLI package's OWN location via `import.me
 when the package is installed outside the dogfood repo — never a hardcoded repo path):
 
 - **The seed spec tree** — `templates/spec/*` copied into `<dir>/.spec/`: a root `project` node plus a
-  default `.config` of dev-flow plugins, each a flat child carrying a `surface` field (the `system`
-  contract `core` + `forge-link`, and the `command` presets), a verbatim copy of the dogfood `.config`
-  node so a fresh adopt ships the *current* set. That default `.config` is the **default preset**; with
+  default `.plugins` of dev-flow plugins, each a flat child carrying a `surface` field (the `system`
+  contract `core` + `forge-link`, and the `command` presets), a verbatim copy of the dogfood `.plugins`
+  node so a fresh adopt ships the *current* set. That default `.plugins` is the **default preset**; with
   `--preset <name>` the named non-default package under `templates/presets/<name>/` is copied in **on top**
   — cumulative, so `careful` stacks its plugins over the default set. The spexcode-only plugins live only
-  in the dogfood `.config`, never in the template, so they are never seeded. [[init-preset]] owns which
+  in the dogfood `.plugins`, never in the template, so they are never seeded. [[init-preset]] owns which
   sets exist; this command owns the copy.
 - **The git hooks** — `templates/hooks/*` (the main-guard + footprint-surgery pre-commit, the
   footprint-refresh post-checkout/post-merge anchors ([[commit-surgery]]), and the session-stamp

@@ -1,13 +1,13 @@
 ---
-title: spec-first
+title: inject-spec-first
 status: active
 hue: 280
 desc: A one-shot PreToolUse nudge — read your node's spec (and its neighbors) before you read or edit code, reconcile against it, never silently diverge.
 code:
-  - .spec/spexcode/.config/core/spec-first/spec-first.sh
+  - .spec/spexcode/.plugins/core/spec-first/spec-first.sh
 ---
 
-# spec-first
+# inject-spec-first
 
 ## raw source
 
@@ -45,4 +45,4 @@ existing intent; the one forbidden move is code that silently diverges.*
 
 Its own sentinel keeps it from racing `mark-active`'s state write on the same event. Fail-open: an access made
 through `bash cat/sed` slips past — this *reminds*, it does not enforce (the Stop gate is the enforcer). Its
-edit-time twin [[spec-of-file]] names the governing spec at each edit.
+edit-time twin [[inject-spec-of-file]] names the governing spec at each edit.

@@ -10,11 +10,11 @@ import { resolveHarnessTargets } from './harness-select.js'
 const pkgRoot = fileURLToPath(new URL('..', import.meta.url))
 const TEMPLATES = join(pkgRoot, 'templates')
 
-// the cumulative preset chain, lean → cautious (see [[init-preset]]). `default` is the live `.config`
+// the cumulative preset chain, lean → cautious (see [[init-preset]]). `default` is the live `.plugins`
 // instance set (planted from templates/spec); every higher tier is a SEPARATE package under
 // templates/presets/<tier>/ that seeding stacks ON TOP — a superset, so selecting `careful` seeds the
 // default set PLUS the careful package. Selection matters ONLY here at seed time; the running repo just
-// walks whatever `.config` ended up planted, so there is no launcher-side preset gate.
+// walks whatever `.plugins` ended up planted, so there is no launcher-side preset gate.
 const PRESET_TIERS = ['default', 'careful'] as const
 const presetRank = (name: string): number => (PRESET_TIERS as readonly string[]).indexOf(name)
 
@@ -86,16 +86,16 @@ export async function specInit(targetArg: string | undefined, presetArg?: string
     console.warn(`• .spec already exists at ${specDest} — skipping spec scaffold (won't overwrite an existing tree).`)
   } else {
     const planted = copyTreeNoClobber(join(TEMPLATES, 'spec'), specDest, targetDir)
-    console.log(`✓ seeded ${planted.length} spec file(s) under .spec/ (root 'project' node + default .config)`)
+    console.log(`✓ seeded ${planted.length} spec file(s) under .spec/ (root 'project' node + default .plugins)`)
     // 1a. stack the selected preset's package(s) ON TOP of the default set — cumulative, so every tier from
     // just above `default` up to the selection is planted. Each lives under templates/presets/<tier>/ mirroring
-    // the default layout (its `.config/<plugin>` lands in the seeded project node's `.config`). See [[init-preset]].
+    // the default layout (its `.plugins/<plugin>` lands in the seeded project node's `.plugins`). See [[init-preset]].
     for (let r = 1; r <= presetRank(selected); r++) {
       const tier = PRESET_TIERS[r]
       const pkg = join(TEMPLATES, 'presets', tier)
       if (!existsSync(pkg)) { console.warn(`• preset '${tier}' has no package at ${pkg} — skipped.`); continue }
       const added = copyTreeNoClobber(pkg, join(specDest, 'project'), targetDir)
-      console.log(`✓ seeded preset '${tier}' (${added.length} file(s)) into .config`)
+      console.log(`✓ seeded preset '${tier}' (${added.length} file(s)) into .plugins`)
     }
   }
 
@@ -148,7 +148,7 @@ export async function specInit(targetArg: string | undefined, presetArg?: string
   // steps: the hook manifest (in the GLOBAL per-project store, not the worktree), the AGENTS.md/CLAUDE.md
   // <spexcode> contract block (user content preserved), the .claude/.codex shims, and the Codex trust (global,
   // scoped) so codex self-launch is prompt-free. Runs with cwd = the target so the loaders read the just-seeded
-  // .config. Idempotent — the planted git hooks (pre-commit/post-checkout/post-merge) keep it fresh
+  // .plugins. Idempotent — the planted git hooks (pre-commit/post-checkout/post-merge) keep it fresh
   // thereafter on the git-native anchors ([[commit-surgery]]); no harness event ever triggers a materialize.
   const prevCwd = process.cwd()
   try {

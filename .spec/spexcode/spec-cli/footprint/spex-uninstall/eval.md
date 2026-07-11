@@ -7,14 +7,14 @@ scenarios:
       user prose; an AGENTS.md that is WHOLLY the managed block; a `.gitignore` with a user entry plus the
       managed `#` block; a `.claude/settings.json` shim stamped with `dispatch.sh`; a codex trust block in
       the global `~/.codex/config.toml` next to a foreign key; a `plugins/spexcode` bundle next to a
-      foreign plugin; and the user's `.spec`/`.config` data. Run `spex uninstall` (no flags), then check
+      foreign plugin; and the user's `.spec`/`.plugins` data. Run `spex uninstall` (no flags), then check
       what survived.
     expected: >
       Every SpexCode-generated artifact is gone — the CLAUDE.md managed block stripped (its user prose
       kept), the wholly-ours AGENTS.md deleted, the `.gitignore` block stripped (the user entry kept), the
       stamped shim removed, the codex trust block removed (the foreign key kept), the `plugins/spexcode`
       bundle removed (the foreign plugin kept), and the global per-project store deleted. The user's
-      `.spec`/`.config` data is untouched, and the git hooks remain (only `--hooks` removes the
+      `.spec`/`.plugins` data is untouched, and the git hooks remain (only `--hooks` removes the
       spexcode-stamped ones). A second run is a clean no-op.
     tags: [cli]
     code: spec-cli/src/uninstall.ts

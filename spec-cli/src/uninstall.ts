@@ -13,7 +13,7 @@ import { dematerialize } from './materialize.js'
 // and the optional git hooks. EVERY removal is gated on a SpexCode IDENTITY STAMP (the managed-block
 // sentinels, the shim's own dispatch.sh command line, the trust sentinels, the generated mark / name-scoped
 // on-demand paths, the plugin name stamp), so it can only ever delete what SpexCode itself generated. The one
-// inviolable rule: the user's spec ASSET (.spec/.config) is NEVER touched — uninstall removes only generated
+// inviolable rule: the user's spec ASSET (.spec/.plugins) is NEVER touched — uninstall removes only generated
 // WIRING, not the spec graph that wiring served.
 
 // the standard plugin-host folders a host agent scans (in addition to any named in spexcode.json's `harnesses`).
@@ -85,7 +85,7 @@ export function uninstall(targetArg: string | undefined, opts: { hooks?: boolean
   const proj = resolve(targetArg ?? process.cwd())
   console.log(`spex uninstall → ${proj}`)
 
-  // cwd = the project so the .config loaders read THIS tree's surface nodes (the live skill/agent names tell
+  // cwd = the project so the .plugins loaders read THIS tree's surface nodes (the live skill/agent names tell
   // each adapter's clean() exactly which name-scoped on-demand files were its to remove).
   const prevCwd = process.cwd()
   let arts: HarnessArtifacts = { skills: [], agents: [] }
@@ -93,7 +93,7 @@ export function uninstall(targetArg: string | undefined, opts: { hooks?: boolean
     process.chdir(proj)
     arts = { skills: loadSkillConfig().map((s) => s.name), agents: loadAgentConfig().map((a) => a.name) }
   } catch {
-    // no readable .config (already partly torn down, or never adopted) — clean still strips the harness wiring.
+    // no readable .plugins (already partly torn down, or never adopted) — clean still strips the harness wiring.
   } finally {
     process.chdir(prevCwd)
   }
@@ -140,6 +140,6 @@ export function uninstall(targetArg: string | undefined, opts: { hooks?: boolean
 
   console.log(`
 SpexCode wiring removed. Your spec data is untouched:
-  • .spec/ and .config/ remain — your spec graph is YOURS, never deleted by uninstall.
+  • .spec/ and .plugins/ remain — your spec graph is YOURS, never deleted by uninstall.
   • To re-adopt later: \`spex init\` regenerates the shims, contract, trust, and global store.`)
 }

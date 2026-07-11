@@ -26,7 +26,7 @@ Input: a session id — SpexCode's, a bare harness id (claude / codex thread), o
 
 ## 2 · digest the transcript — mechanical first, model second
 
-`node .spec/<root>/.config/distill/digest.mjs <id-or-path>` locates the transcript (claude:
+`node .spec/<root>/.plugins/distill/digest.mjs <id-or-path>` locates the transcript (claude:
 `$CLAUDE_CONFIG_DIR` and every `~/.claude*` config dir → `projects/*/<id>.jsonl`; codex: `$CODEX_HOME` or
 `~/.codex` → `sessions/**/rollout-*<id>.jsonl`) and prints a compact digest: the human's prompts in full,
 the agent's own text, tool calls as one-liners, error results, and a footer with the files it edited and

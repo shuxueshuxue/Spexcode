@@ -116,7 +116,7 @@ scenarios:
 ---
 # eval.md — harness-adapter
 
-The adapter's whole job is that the user-facing spec hooks ([[spec-first]], [[spec-of-file]], mark-active) behave
+The adapter's whole job is that the user-facing spec hooks ([[inject-spec-first]], [[inject-spec-of-file]], mark-active) behave
 identically whichever harness the user runs. The load-bearing, easy-to-miss divergence is codex's **two-tool code
 model** — a shell read is `tool_name:"Bash"`, but an edit is a distinct `tool_name:"apply_patch"` carrying the bare
 patch envelope — which a synthetic Bash-only payload does not exercise (the first cut shipped green against synthetic

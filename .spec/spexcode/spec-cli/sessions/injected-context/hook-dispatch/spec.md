@@ -22,8 +22,8 @@ under the config roots. A **compiler** flattens them into a flat manifest (`even
 written PERSISTENTLY into the materialized tree's OWN slot — `<runtime>/trees/<enc-worktree>/hooks-manifest`
 under the per-project GLOBAL store ([[runtime]]; shell mirror `hp_tree_dir`), NOT the worktree, so
 materializing leaves zero SpexCode runtime in the tree. The slot is PER WORKTREE because the manifest is a
-pure function of the `.config` content of the tree that materialized it: the old single global file made the
-LAST materialize win, so when two trees' `.config` diverged (any node branch editing `.config` vs main),
+pure function of the `.plugins` content of the tree that materialized it: the old single global file made the
+LAST materialize win, so when two trees' `.plugins` diverged (any node branch editing `.plugins` vs main),
 dispatch ran tree A's compiled hook set inside tree B's sessions — cross-session hook bleed. The slot key
 is the sessions-store `encodeProject` transform applied to the worktree's `rev-parse --show-toplevel`;
 the dispatcher derives it from its own cwd, so a dispatch can only ever read the manifest of the tree it
@@ -33,7 +33,7 @@ NOT a materialize trigger — the old content-hash gate (an auto-`spex materiali
 config fingerprint moved, serialized by a mkdir mutex) is RETIRED ([[commit-surgery]]): a harness event
 never materializes. The manifest and every other artifact refresh at the git-native anchors (the spex verbs,
 session-worktree creation, the pre-commit / post-checkout / post-merge hooks), which keeps the hook hot
-path pure bash with zero node boots and makes `.config` edits git-transactional — they take effect at the
+path pure bash with zero node boots and makes `.plugins` edits git-transactional — they take effect at the
 commit/checkout/merge that carries them, like any other source change.
 
 **Migration window (pre-slot trees).** A worktree last materialized by a pre-slot toolchain has no slot until
@@ -54,7 +54,7 @@ when the handler wrote its `decision:block` to stdout and left stderr empty, the
 `reason` and forwards it to stderr; else codex would see exit 2 with no continuation. A handler that did not
 declare blocking can never block its event; a missing manifest dispatches nothing.
 
-This is the substrate the spec-aware injections ([[spec-first]], [[spec-of-file]]) and the lifecycle gates
+This is the substrate the spec-aware injections ([[inject-spec-first]], [[inject-spec-of-file]]) and the lifecycle gates
 ride on. Which nodes plug in is a [[surface]] field decision, not a code change here; adding or retiring a
 hook is a spec edit. The contract text (the `surface: system` bodies) is materialized by the same pass
 into the AGENTS.md/CLAUDE.md block ([[harness-delivery]]); only the event HOOKS converge through this

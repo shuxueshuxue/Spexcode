@@ -13,7 +13,7 @@
 #
 # The old (1) GATE — an auto-materialize when the config content-hash moved — is RETIRED ([[commit-surgery]]):
 # a harness event is never a materialize trigger; the materialize anchors are git-native only (spex verbs,
-# session-worktree creation, and the pre-commit/post-checkout/post-merge hooks). .config edits are
+# session-worktree creation, and the pre-commit/post-checkout/post-merge hooks). .plugins edits are
 # git-transactional: they take effect at the commit/checkout/merge that carries them, like any other source.
 set -u
 # args: `<harness> <Event>`. A harness id as $1 (claude|codex|plugin) is consumed; otherwise we keep $1 as the

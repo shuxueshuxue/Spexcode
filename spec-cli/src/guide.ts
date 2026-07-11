@@ -38,7 +38,7 @@ the rest, you don't hand-author the spec tree or wire the dashboard yourself.
 Look these up on demand — the formats an agent authors, and the settings it configures:
   spex guide spec       the spec.md format (frontmatter + body + the rules lint enforces)
   spex guide eval       the eval.md format (scenario schema + how loss is measured and filed)
-  spex guide config     the spexcode.json / spexcode.local.json settings (launchers, dashboard icon, lint
+  spex guide settings   the spexcode.json / spexcode.local.json settings (launchers, dashboard icon, lint
                         budgets, layout) — every field, and which of the two files it belongs in
   spex guide footprint  the footprint model — what SpexCode plants in a repo, and who sees it
                         (committed | ignored | hidden), and every migration recipe`
@@ -63,10 +63,10 @@ FRONTMATTER (YAML between the opening and closing --- lines; every field optiona
   related: files this node REFERENCES but does not own — a YAML list, same path forms. Carries coverage
            (never drift, never eval freshness, nothing to ack); it is the many-to-many net that claims the files
            govern doesn't. Every listed path must exist (lint integrity error otherwise).
-  surface  config/.config nodes only: system (folded into every agent's prompt) | command (a /command) |
+  surface  plugin-system/.plugins nodes only: system (folded into every agent's prompt) | command (a /command) |
            hook (a lifecycle hook handler — a co-located script the dispatcher runs on the harness events
            in events:, ordered by order:, blocking when block: true). hook nodes may nest under a grouping
-           plugin (e.g. .config/core/<id>); surface is a field, discovered recursively.
+           plugin (e.g. .plugins/core/<id>); surface is a field, discovered recursively.
   events   hook surface only: harness lifecycle events this node binds (YAML list — PreToolUse, Stop, …).
   order    hook surface only: integer; the dispatcher runs same-event hooks low to high.
   block    hook surface only: true if the hook may block its event (honored only on block-capable events).
@@ -187,10 +187,10 @@ code file or the scenario (the eval.md) moves since it was filed.
   spex eval scenario ls [<node>] the declared contracts; --unmeasured = the blind-spot worklist
   spex eval clean                GC the content-addressed evidence cache`
 
-const CONFIG = `spex guide config — SpexCode's runtime settings (spexcode.json / spexcode.local.json)
+const SETTINGS = `spex guide settings — SpexCode's runtime settings (spexcode.json / spexcode.local.json)
 
 SpexCode reads its runtime settings from TWO optional JSON files at the repo root. There is no imperative
-\`spex config set\` — an agent CONFIGURES SpexCode by EDITING these files directly. The two split by
+settings verb — an agent CONFIGURES SpexCode by EDITING these files directly. The two split by
 PORTABILITY, and picking the right one is the whole discipline:
 
   spexcode.json         COMMITTED — portable, shared by everyone on the repo. Layout, policy, dashboard
@@ -326,7 +326,7 @@ Example — govern your own source dir and loosen the altitude budget:
   { "lint": { "governedRoots": ["src"], "altitude": { "lineBudget": 70 } } }
 
 ── OTHER (spexcode.json unless noted) ──
-  preset      the SELECTED init preset — which cumulative .config tier \`spex init\` seeds (default
+  preset      the SELECTED init preset — which cumulative .plugins tier \`spex init\` seeds (default
               'default'; seed-time only, read by init.ts).
   harnesses   which harness targets \`spex materialize\` delivers into — native ids ("claude"|"codex") or a
               { "plugin": "<folder>" } bundle. Default (omitted): all native harnesses. PERSISTENT and
@@ -344,7 +344,7 @@ Materialized artifacts carry no facts, so they are NEVER tracked — there is ex
 behavior, decided per KIND (and, for a contract file, by its live CONTENT).
 
 ── THE FOUR KINDS (all fixed) ──
-  spec data       .spec/ (incl .config/) + spexcode.json — ALWAYS tracked. Git is the database; there is
+  spec data       .spec/ (incl .plugins/) + spexcode.json — ALWAYS tracked. Git is the database; there is
                   deliberately NO way to say "untrack the spec" in this schema.
   machine facts   spexcode.local.json, the hook shims (.claude/settings.json, .codex/hooks.json), plugin
                   bundles — NEVER tracked; always in the per-clone exclude.
@@ -369,7 +369,7 @@ behavior, decided per KIND (and, for a contract file, by its live CONTENT).
                 moment history is written) + staged-index surgery — a staged blob carrying the sentinel
                 block is cleaned IN PLACE (partial staging survives; source is the staged blob), a
                 HEAD-untracked generated artifact is unstaged. Repairs and proceeds, never rejects.
-  post-checkout/post-merge   freshness anchors: .spec/.config edits are git-transactional — they take
+  post-checkout/post-merge   freshness anchors: .spec/.plugins edits are git-transactional — they take
                 effect at the commit/checkout/merge that carries them, like any other source change.
 An environment with no spex-planted hooks (CI, a cloud agent's fresh clone, a teammate who hasn't
 installed) simply runs \`spex materialize\` in its setup step — there is no committed-artifact mode.
@@ -379,7 +379,7 @@ TRACK ≠ PUSH: none of this ever touches remotes; where commits GO is branch/re
 materialize(P₂) ∘ materialize(P₁) = materialize(P₂): every materialize first ERASES all landing points by
 SpexCode's own identity stamps, then re-asserts — legacy states (a .gitignore managed block, a committed
 artifact) are forgotten by the same pass. \`spex uninstall\` is the empty
-materialize plus the global store: a total backout that never touches your .spec/.config or prose. Fresh
+materialize plus the global store: a total backout that never touches your .spec/.plugins or prose. Fresh
 clones and session worktrees are self-sufficient: data by checkout, materialized artifacts by
 re-materialize, the machine snapshot (spexcode.local.json) by copy.
 
@@ -413,7 +413,7 @@ not a flag flip.
                             elsewhere cannot be recalled.
   back out entirely         \`spex uninstall\` (add --hooks to also remove the spexcode git hooks).`
 
-const TOPICS: Record<string, string> = { spec: SPEC, eval: EVAL, config: CONFIG, footprint: FOOTPRINT }
+const TOPICS: Record<string, string> = { spec: SPEC, eval: EVAL, settings: SETTINGS, footprint: FOOTPRINT }
 
 // every guide page ends by naming the OTHER help layer, so a reader never dead-ends here: guide is
 // the skill layer (workflows · formats · settings); command usage lives in help.ts's two layers.

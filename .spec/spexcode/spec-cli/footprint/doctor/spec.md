@@ -34,7 +34,7 @@ are both covered with no hardcoded paths and a new harness is diagnosed for free
   `spex doctor --contract` prints that exact text for any agent.
 - **hooks** — the shim (→ `dispatch.sh`) is wired, the manifest exists in the global store
   ([[runtime-tier]]), and EVERY manifest handler script is readable in the worktree. That last check is the
-  sharp one: a branch predating the hook consolidation has the shim but not the `.config/core/*` handlers,
+  sharp one: a branch predating the hook consolidation has the shim but not the `.plugins/core/*` handlers,
   so hooks fire and silently no-op.
 - **trust** — codex's `trusted_hash` block is in `~/.codex/config.toml` (claude relies on folder-trust).
 - **git-hook floor** — pre-commit / prepare-commit-msg, enforcing for ANY agent regardless of harness.

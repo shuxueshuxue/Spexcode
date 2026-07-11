@@ -322,9 +322,10 @@ if (cmd === 'serve') {
   } else console.log(overviewHelp())
 } else if (cmd === 'guide') {
   const { guideText } = await import('./guide.js')
+  if (process.argv[3] === 'config') signpost('spex guide config', 'spex guide settings')
   const text = guideText(process.argv[3])
   if (text === null) {
-    console.error(`spex guide: no topic '${process.argv[3]}'${process.argv[3] === 'yatsu' ? " — renamed: `spex guide eval`" : ''}. Topics: spec, eval, config, footprint. Run \`spex guide\` (no topic) for the setup workflow, \`spex help\` for the command map.`)
+    console.error(`spex guide: no topic '${process.argv[3]}'${process.argv[3] === 'yatsu' ? " — renamed: `spex guide eval`" : ''}. Topics: spec, eval, settings, footprint. Run \`spex guide\` (no topic) for the setup workflow, \`spex help\` for the command map.`)
     process.exit(2)
   }
   console.log(text)
@@ -472,7 +473,7 @@ if (cmd === 'serve') {
   await specInit(positionals(3)[0], flag('preset'))
 } else if (cmd === 'uninstall') {
   // the surgical inverse of init: remove every SpexCode-generated artifact (harness shims/contract/trust, the
-  // .gitignore block, the global store, any plugin bundle) — NEVER the user's .spec/.config data or their own
+  // .gitignore block, the global store, any plugin bundle) — NEVER the user's .spec/.plugins data or their own
   // prose. Git hooks preserved unless --hooks. spex uninstall [targetDir] [--hooks]
   const { uninstall } = await import('./uninstall.js')
   uninstall(positionals(3)[0], { hooks: has('hooks') })
@@ -841,7 +842,7 @@ if (cmd === 'serve') {
     // print the resolved source-of-truth branch (layout.ts mainBranch(): config override → the main
     // checkout's current branch → 'main'). The pre-commit main-guard captures this so it blocks direct
     // commits on whatever the repo's trunk is actually named, never a hardcoded 'main'. One value, one
-    // line; GET /api/layout exposes the same resolution.
+    // line; GET /api/settings exposes the same resolution (`.layout`).
     const { mainBranch } = await import('./layout.js')
     console.log(mainBranch())
   } else if (sub === 'codex-launch') {
@@ -885,7 +886,7 @@ if (cmd === 'serve') {
     commitSurgery()
   } else if (sub === 'refresh-footprint') {
     // the post-checkout / post-merge freshness anchor ([[commit-surgery]]): a quiet materialize after a git
-    // state transition (the only events that can move the materialize's inputs — .spec/.config arrive by commit,
+    // state transition (the only events that can move the materialize's inputs — .spec/.plugins arrive by commit,
     // merge, or checkout). Best-effort and silent on success; hooks call it fire-and-forget.
     const { materialize } = await import('./materialize.js')
     try { materialize() } catch (e) { console.error(`spexcode: footprint refresh failed (${(e as Error).message})`); process.exit(1) }

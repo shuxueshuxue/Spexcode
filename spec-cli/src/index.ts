@@ -13,7 +13,7 @@ import { resolveLayout, mainBranch } from './layout.js'
 import { getBoardJson } from './boardCache.js'
 import { boardStream, notifyBoardChanged } from './boardStream.js'
 import { gitA, gitTry, repoRoot } from './git.js'
-import { newSession, listSessions, sendKeys, rawKey, exitSession, closeSession, reopen, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, superviseQueue } from './sessions.js'
+import { newSession, listSessions, sendText, rawKey, stopSession, closeSession, resumeSession, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, superviseQueue } from './sessions.js'
 import { defaultHarness, HARNESSES, launcherList, launcherDefault } from './harness.js'
 import { evalTimeline, readBlobByHash } from '../../spec-yatsu/src/evaltab.js'
 import { putBlob } from '../../spec-yatsu/src/cache.js'
@@ -360,7 +360,7 @@ app.get('/api/sessions/:id/evals', async (c) => {
   const m = await buildSessionEvals(c.req.param('id'))
   return m ? c.json(m) : c.json({ error: 'no such session' }, 404)
 })
-// the session's live pane as text (one-shot snapshot) for a backend client (`spex session capture`). Empty and fail
+// the session's live pane as text (one-shot snapshot) for a backend client (`spex session show --capture`). Empty and fail
 // stay distinct: an empty pane is 200 with empty body; unknown id → 404, offline (no live pane) → 409, error → 502.
 app.get('/api/sessions/:id/capture', async (c) => {
   const r = await captureSessionResult(c.req.param('id'))
@@ -369,10 +369,14 @@ app.get('/api/sessions/:id/capture', async (c) => {
   if (r.reason === 'offline') return c.text('session offline (no live pane)', 409)
   return c.text('capture failed', 502)
 })
-// the session's originating prompt (what it was asked to do), for a manager client; 404 if none recorded.
-app.get('/api/sessions/:id/prompt', async (c) => {
-  const p = await sessionPrompt(c.req.param('id'))
-  return p == null ? c.text('no prompt recorded', 404) : c.text(p)
+// the session RECORD detail (`spex session show`): the board row (status · node · branch · launcher · …)
+// plus the full originating prompt (the row itself carries only the preview). One id-addressed read backs
+// the CLI's show; 404 for an unknown id.
+app.get('/api/sessions/:id', async (c) => {
+  const id = c.req.param('id')
+  const row = (await listSessions()).find((s) => s.id === id)
+  if (!row) return c.json({ error: 'no such session' }, 404)
+  return c.json({ ...row, prompt: await sessionPrompt(id) })
 })
 // lifecycle transitions (thin callers of the session state machine)
 // relaunch ONLY if confirmed offline; demotes working→idle, keeps any declaration. The RESUME GUARD refuses
@@ -381,7 +385,7 @@ app.get('/api/sessions/:id/prompt', async (c) => {
 app.post('/api/sessions/:id/resume', async (c) => {
   const body = await c.req.json().catch(() => ({} as { force?: boolean }))
   const force = body?.force === true || c.req.query('force') === '1'
-  const r = await reopen(c.req.param('id'), { force })
+  const r = await resumeSession(c.req.param('id'), { force })
   return c.json(r, r.ok ? 200 : (r.refused ? 409 : 404))
 })
 // a dispatch to the session's own agent (it runs the merge), never a server merge — the server never touches
@@ -424,29 +428,32 @@ app.get('/api/sessions/:id/socket', upgradeWebSocket((c) => {
     onClose() { if (viewer) detachViewer(id, viewer) },
   }
 }))
-// the docked ❯ line input (and server-side merge dispatch) dispatch a whole prompt through the rendezvous
-// control socket. Socket-only + fail-loud: a prompt the agent doesn't confirm accepting returns 502 with the
-// reason (never a silent 200), so the dashboard/manager sees a dead dispatch instead of a false success.
-app.post('/api/sessions/:id/keys', async (c) => {
+// ONE input route, `kind` the discriminator — the transport split is an implementation fact, not API surface.
+// kind:"text" (the docked ❯ line, `spex session send`, the server-side merge dispatch) injects a whole prompt
+// through the rendezvous control socket — socket-only + fail-loud: a prompt the agent doesn't confirm
+// accepting returns 502 with the reason (never a silent 200), so a dead dispatch is seen, not a false success.
+// kind:"keys" is the LAST-RESORT raw face (`send --keys`, the dashboard's type mode): an ORDERED BATCH of
+// nav-mode key tokens over tmux send-keys, delivered in array order so tap order survives
+// ([[nav-mode-key-ordering]]); unstable by nature — callers try a plain text send first. An unknown kind is a
+// loud 400, never a guessed channel.
+app.post('/api/sessions/:id/input', async (c) => {
   const body = await c.req.json().catch(() => ({}))
-  // `from` (the sender's session id) rides only an agent-to-agent send → the backend records the comms
-  // edge ([[comms-edge]]); a raw human dispatch omits it and is not logged.
-  const r = await sendKeys(c.req.param('id'), typeof body?.text === 'string' ? body.text : '', typeof body?.from === 'string' ? body.from : undefined)
-  return c.json(r, r.ok ? 200 : 502)
+  if (body?.kind === 'text') {
+    // `from` (the sender's session id) rides only an agent-to-agent send → the backend records the comms
+    // edge ([[comms-edge]]); a raw human dispatch omits it and is not logged.
+    const r = await sendText(c.req.param('id'), typeof body?.text === 'string' ? body.text : '', typeof body?.from === 'string' ? body.from : undefined)
+    return c.json(r, r.ok ? 200 : 502)
+  }
+  if (body?.kind === 'keys') {
+    const keys = Array.isArray(body?.keys) ? body.keys.filter((k: unknown) => typeof k === 'string') : []
+    const ok = await rawKey(c.req.param('id'), keys)
+    return c.json({ ok }, ok ? 200 : 404)
+  }
+  return c.json({ error: 'input needs kind: "text" | "keys"' }, 400)
 })
-// the preserved tmux send-keys path (distinct from the ❯ prompt socket): the human drives the agent's
-// interactive TUI menus in real time. Accepts an ORDERED BATCH (`keys`, the client coalesces fast typing) or a
-// single `key`; rawKey delivers them in array order so tap order is preserved ([[nav-mode-key-ordering]]).
-app.post('/api/sessions/:id/rawkey', async (c) => {
-  const body = await c.req.json().catch(() => ({}))
-  const keys = Array.isArray(body?.keys) ? body.keys.filter((k: unknown) => typeof k === 'string')
-    : typeof body?.key === 'string' ? [body.key] : []
-  const ok = await rawKey(c.req.param('id'), keys)
-  return c.json({ ok }, ok ? 200 : 404)
-})
-// soft stop: kill the agent's tmux + socket but KEEP the worktree (relaunchable). Distinct from close, which
+// soft stop: kill the agent's tmux + socket but KEEP the worktree (resumable). Distinct from close, which
 // removes the worktree. {ok:false} = no such session.
-app.post('/api/sessions/:id/exit', async (c) => c.json({ ok: await exitSession(c.req.param('id')) }))
+app.post('/api/sessions/:id/stop', async (c) => c.json({ ok: await stopSession(c.req.param('id')) }))
 app.post('/api/sessions/:id/close', async (c) => c.json({ ok: await closeSession(c.req.param('id')) }))
 // set (or clear, with a blank) a session's display-name override; persists to the session's global record
 // (`session.json`) so it survives a restart. Unknown id → 404. That record sits INSIDE the watched store, but

@@ -1,5 +1,25 @@
 ---
 scenarios:
+  - name: session-verb-chain-v030
+    tags: [cli, backend-api]
+    description: >-
+      The v0.3.0 session-verb surface, end to end through the real CLI against a throwaway backend with a
+      real dispatched worker: `session new` → poll `show --json` to online → `show` (record detail:
+      status·node·branch·launcher·prompt) → `show --json` (prompt round-trips byte-identical) →
+      `show --capture` (live pane) → `show` on an unknown id → `send <SEL> "<text>"` → the last-resort
+      `send --keys` face (type chars into the live TUI, prove them on the captured pane, erase them; an
+      invalid token batch fails) → every removed spelling (`exit`/`reopen`/`capture`/`prompt`/`rawkey`/
+      `state`) → `stop` (worktree kept, pane gone) → `resume` (same conversation relaunches) → `resume`
+      again on the now-live agent → `close`.
+    expected: >-
+      Every step lands with its contract exit code: show 0 / unknown 2; --capture empty-ok 0, unknown 2,
+      offline 1; send text 0; send --keys 0 with the typed chars visible on the pane, 1 when nothing
+      delivers; each removed spelling exits 2 with a one-line signpost naming the new spelling and NO side
+      effect (worker stays online); stop exits 0 and the session reads liveness offline with its worktree
+      intact; resume exits 0 and the worker comes back online; resume on the live agent REFUSES loud
+      (exit 2, the resume guard); close exits 0 and a following show exits 2. The dashboard sessions page
+      tracks the arc live: the worker terminal while online, the relaunch panel while stopped.
+    code: [spec-cli/src/cli.ts, spec-cli/src/client.ts, spec-cli/src/index.ts, spec-cli/src/sessions.ts]
   - name: worktree-has-zero-session
     tags: [backend-api]
     description: >-
@@ -165,11 +185,11 @@ scenarios:
     tags: [backend-api]
     description: >-
       With a governed session whose claude child is genuinely ALIVE, invoke the human relaunch — `POST
-      /api/sessions/:id/resume` (reopen) / `spex session reopen` — WITHOUT force. Then repeat with `--force`,
-      and separately exercise the merge dispatch (reopen guard:false) on the same live agent.
+      /api/sessions/:id/resume` / `spex session resume` — WITHOUT force. Then repeat with `--force`,
+      and separately exercise the merge dispatch (resume guard:false) on the same live agent.
     expected: >-
-      A (fail) — pre-fix reopen trusted a possibly-stale board liveness and would kill+relaunch a live agent
-      SILENTLY (the incident's kill-shot: restore-on-alive killed live workers mid-work). B (pass) — reopen
+      A (fail) — pre-fix resume trusted a possibly-stale board liveness and would kill+relaunch a live agent
+      SILENTLY (the incident's kill-shot: restore-on-alive killed live workers mid-work). B (pass) — resume
       re-derives liveness FRESH (the listener-verified probe) and REFUSES LOUD on a live agent: the API answers
       409 and the dashboard relaunch panel shows the refusal, the live worker is untouched. An `unknown`
       (probe-failed) liveness ALSO refuses — death is unproven. `--force` is the ONLY way to relaunch an alive

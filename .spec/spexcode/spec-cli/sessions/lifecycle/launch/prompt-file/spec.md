@@ -19,11 +19,11 @@ coordination, ~15 workers in one night). The tool should accept the file directl
 
 ## expanded spec
 
-`spex new` (and its `spex session new` mirror) accepts **`--prompt-file <path>`**: the task prompt is
+`spex session new` accepts **`--prompt-file <path>`**: the task prompt is
 the file's contents, read verbatim by the CLI **before** the create POST — the backend and everything
-downstream (launch artifact, `spex session prompt`) see exactly the same prompt text an inline caller
+downstream (launch artifact, `spex session show`) see exactly the same prompt text an inline caller
 would have sent; nothing else about [[launch]] changes. `--prompt-file -` reads the prompt from
-**stdin**, so `spex new --prompt-file - <<'EOF' …` works without a temp file.
+**stdin**, so `spex session new --prompt-file - <<'EOF' …` works without a temp file.
 
 Fail-loud, never guess:
 

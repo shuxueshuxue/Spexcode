@@ -8,10 +8,9 @@ desc: Use when the human wants to inherit a past or dead session's knowledge and
 
 # distill
 
-Inherit a finished (or dead) session's **mind and desk** without waking it. The mind is its transcript on
-disk; the desk is its worktree/branch. The one iron rule: **never resume, reopen, send to, or otherwise
-re-prompt the old session** — its prompt cache is cold, so any turn against it pays a full re-prime.
-Everything below is read-only file access and ordinary git.
+Inherit a finished (or dead) session's **mind and desk** without waking it — mind = its transcript on disk,
+desk = its worktree/branch. The one iron rule: **never resume, reopen, send to, or otherwise re-prompt the
+old session** (cold cache: any turn pays a full re-prime). Everything below is read-only files and plain git.
 
 ## 1 · resolve the session
 
@@ -22,8 +21,8 @@ Input: a session id — SpexCode's, a bare harness id (claude / codex thread), o
   `branch`, `harness`, `harness_session_id`, `status`, `title`; the originating goal is
   `spex session prompt <id>`. For a claude-harness session the transcript id IS the SpexCode session id;
   for codex it is `harness_session_id`.
-- **Any other session**: treat the arg as the harness's own id. The transcript itself carries `cwd` (and
-  claude a `gitBranch`) per line — the digest header surfaces them; that is your join to its desk.
+- **Any other session**: treat the arg as the harness's own id. The transcript carries `cwd` (and, unless
+  the worktree was detached, a branch) — the digest header surfaces them; that is your join to its desk.
 
 ## 2 · digest the transcript — mechanical first, model second
 
@@ -33,8 +32,8 @@ Input: a session id — SpexCode's, a bare harness id (claude / codex thread), o
 the agent's own text, tool calls as one-liners, error results, and a footer with the files it edited and
 the raw transcript path. It exits loud when nothing is found — do not fall back to resuming the session.
 
-Read the digest yourself when it is small; a big one (thousands of lines) goes to a subagent that returns
-only the distillation below, so the inheritance never floods your own context.
+Read the digest yourself when small; big (>~100 KB) → a subagent returns only the distillation below, so
+the inheritance never floods your own context. Its ⚠ error lines and footer are step 3's trap material.
 
 ## 3 · distill — forward-looking, not narrative
 
@@ -54,9 +53,11 @@ your reply, and work from, what the transcript knows that git does not:
 
 The SpexCode record names the worktree/branch; otherwise the digest's `cwd` may be a linked worktree
 (`git -C <cwd> rev-parse --git-common-dir`). Salvage inside that repo — it need not be the one you sit in.
+Cross-check the digest's files-edited footer against that worktree: a manager-style session's edits often
+live OUTSIDE it (main-checkout config, other repos) — those need a by-hand look, not the recipe below.
 
-- **Already merged** (`git merge-base --is-ancestor <branch> <trunk>`) → nothing to salvage; note the
-  merge and go to cleanup.
+- **Already merged** (`git merge-base --is-ancestor <branch> <trunk>`) → nothing to salvage; note it and
+  go to cleanup. A tip that EQUALS the merge-base carried no commits — say "never committed", not "merged".
 - **Unmerged commits** → carry them onto your current branch: `git cherry-pick <base>..<branch>` (keeps
   authorship and `Session:` trailers); fall back to applying `git diff <base> <branch>` when the history
   is too messy to replay.
@@ -69,6 +70,5 @@ The SpexCode record names the worktree/branch; otherwise the digest's `cwd` may 
 Cleanup discards state — verify the salvaged commits are in your tree (or the branch genuinely merged) first.
 
 - SpexCode session: `spex session close <id>` retires the session and its worktree in one verb.
-- Bare worktree: `git worktree remove <wt>` (+ `git branch -D <branch>` once its content is confirmed
-  carried or merged).
+- Bare worktree: `git worktree remove <wt>`, + `git branch -D <branch>` once confirmed carried or merged.
 - In doubt, keep the resources and say so — a kept worktree costs disk; a wrong cleanup costs the work.

@@ -30,7 +30,9 @@ using SpexCode.
 The four kinds, each with a FIXED track/transport fact (no votes anywhere):
 
 - **Spec data** — `.spec/` (including `.config/`) + `spexcode.json`: ALWAYS tracked. Git is the database;
-  no configuration can untrack them ("untrack the spec" is unsayable in the schema).
+  no configuration can untrack them ("untrack the spec" is unsayable in the schema). Wanting spec data off
+  the SHARED REMOTE is a different question with a different answer: change the node's git HOME, never its
+  tracking — that design is [[spec-local]] (a private overlay root that is its own git repository; pending).
 - **Machine facts** — `spexcode.local.json`, the hook shims (`.claude/settings.json`, `.codex/hooks.json`),
   plugin bundles (they bake this install's paths): NEVER tracked; always in the per-clone exclude.
 - **Materialized artifacts** — the contract blocks in CLAUDE.md/AGENTS.md and the materialized
